@@ -65,13 +65,13 @@ func main() {
 	bootStart := time.Now()
 
 	// ═══════════════════════════════════════════════════
-	// 1. WebSocket Live Stream
+	// 1. WebSocket Live Stream (Coinbase)
 	// ═══════════════════════════════════════════════════
-	binanceClient := marketdata.NewBinanceClient()
+	coinbaseClient := marketdata.NewCoinbaseClient()
 	go func() {
-		err := binanceClient.Connect(ctx, []string{"btcusdt"})
+		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
 		if err != nil {
-			log.Fatalf("Fatal error connecting to Binance: %v", err)
+			log.Fatalf("Fatal error connecting to Coinbase: %v", err)
 		}
 	}()
 
@@ -136,7 +136,7 @@ func main() {
 	// 10. Multi-Strategy Orchestrator (UPGRADED)
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
-		binanceClient,
+		coinbaseClient,
 		allStrategies,
 		riskEngine,
 		paperExecute,
@@ -148,10 +148,10 @@ func main() {
 	)
 
 	// ═══════════════════════════════════════════════════
-	// 11. WARMUP — Pre-fill strategy buffers from Binance REST
+	// 11. WARMUP — Pre-fill strategy buffers from Coinbase REST
 	// ═══════════════════════════════════════════════════
 	log.Println("[WARMUP] Fetching historical candles to pre-fill strategy buffers...")
-	warmupData, err := marketdata.FetchWarmupCandles("BTCUSDT", 500, 100)
+	warmupData, err := marketdata.FetchWarmupCandles("BTC-USD")
 	if err != nil {
 		log.Printf("[WARMUP] ⚠️  Warmup failed (will warm up from live data): %v", err)
 	} else {
@@ -274,7 +274,7 @@ func main() {
 
 	log.Println("Hardware Kill Signal: Shutting down entire engine loop...")
 	cancel()
-	binanceClient.Close()
+	coinbaseClient.Close()
 	time.Sleep(1 * time.Second)
 	log.Println("Systems offline.")
 }

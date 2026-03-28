@@ -5,32 +5,33 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
-// WarmupData holds historical candles fetched from Binance REST API
+// WarmupData holds historical candles fetched from Coinbase REST API
 // for pre-filling strategy price buffers on engine startup.
 type WarmupData struct {
 	Candles1m []Candle
 	Candles5m []Candle
 }
 
-// FetchWarmupCandles retrieves historical 1m and 5m klines from Binance
-// to instantly warm up all strategy buffers instead of waiting for live data.
-// This eliminates the warmup delay entirely on cold start / Render restart.
-func FetchWarmupCandles(symbol string, count1m int, count5m int) (*WarmupData, error) {
-	log.Printf("[WARMUP] Fetching %d x 1m and %d x 5m candles from Binance REST...", count1m, count5m)
+func FetchWarmupCandles(symbol string) (*WarmupData, error) {
+	log.Printf("[WARMUP] Fetching real-time 1m and 5m candles from Coinbase REST...")
 
-	candles1m, err := fetchKlines(symbol, "1m", count1m)
+	// Coinbase API limit is 300 per granular request.
+	candles1m, err := fetchKlines(symbol, "60")
 	if err != nil {
 		return nil, fmt.Errorf("warmup 1m fetch failed: %w", err)
 	}
 
-	candles5m, err := fetchKlines(symbol, "5m", count5m)
+	candles5m, err := fetchKlines(symbol, "300")
 	if err != nil {
 		return nil, fmt.Errorf("warmup 5m fetch failed: %w", err)
 	}
+
+	// Important: Coinbase returns descending time (newest first). Must reverse it!
+	reverseCandles(candles1m)
+	reverseCandles(candles5m)
 
 	log.Printf("[WARMUP] ✅ Loaded %d x 1m candles and %d x 5m candles", len(candles1m), len(candles5m))
 	return &WarmupData{
@@ -39,76 +40,75 @@ func FetchWarmupCandles(symbol string, count1m int, count5m int) (*WarmupData, e
 	}, nil
 }
 
-// fetchKlines calls the Binance REST klines endpoint.
-// Response format: [[openTime, open, high, low, close, volume, closeTime, ...], ...]
-func fetchKlines(symbol, interval string, limit int) ([]Candle, error) {
+// fetchKlines calls the Coinbase REST candles endpoint.
+// Response format: [[ time (unix secs), low, high, open, close, volume ], ...]
+func fetchKlines(symbol, granularity string) ([]Candle, error) {
 	url := fmt.Sprintf(
-		"https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&limit=%d",
-		symbol, interval, limit,
+		"https://api.exchange.coinbase.com/products/%s/candles?granularity=%s",
+		symbol, granularity,
 	)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(url)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "AntigravityEngine/4.0")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("binance API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("coinbase API returned status %d", resp.StatusCode)
 	}
 
-	var raw [][]json.RawMessage
+	var raw [][]float64
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("JSON decode failed: %w", err)
 	}
 
 	candles := make([]Candle, 0, len(raw))
 	for _, kline := range raw {
-		if len(kline) < 7 {
+		if len(kline) < 6 {
 			continue
 		}
 
-		openTime := parseJSONInt64(kline[0])
-		open := parseJSONFloat64(kline[1])
-		high := parseJSONFloat64(kline[2])
-		low := parseJSONFloat64(kline[3])
-		closeP := parseJSONFloat64(kline[4])
-		volume := parseJSONFloat64(kline[5])
-		closeTime := parseJSONInt64(kline[6])
+		timeSecs := int64(kline[0])
+		low := kline[1]
+		high := kline[2]
+		open := kline[3]
+		closeP := kline[4]
+		volume := kline[5]
+
+		openTime := time.Unix(timeSecs, 0)
+
+		// Determine length of candle in seconds based on granularity parameter
+		var d time.Duration
+		if granularity == "60" {
+			d = 1 * time.Minute
+		} else {
+			d = 5 * time.Minute
+		}
+		
+		closeTime := openTime.Add(d)
 
 		candles = append(candles, Candle{
-			Symbol:    "BTCUSDT",
+			Symbol:    symbol,
 			Open:      open,
 			High:      high,
 			Low:       low,
 			Close:     closeP,
 			Volume:    volume,
-			OpenTime:  time.UnixMilli(openTime),
-			CloseTime: time.UnixMilli(closeTime),
+			OpenTime:  openTime,
+			CloseTime: closeTime,
 		})
 	}
 
 	return candles, nil
 }
 
-func parseJSONFloat64(raw json.RawMessage) float64 {
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		v, _ := strconv.ParseFloat(s, 64)
-		return v
+func reverseCandles(c []Candle) {
+	for i, j := 0, len(c)-1; i < j; i, j = i+1, j-1 {
+		c[i], c[j] = c[j], c[i]
 	}
-	var f float64
-	json.Unmarshal(raw, &f)
-	return f
-}
-
-func parseJSONInt64(raw json.RawMessage) int64 {
-	var i int64
-	if err := json.Unmarshal(raw, &i); err == nil {
-		return i
-	}
-	var f float64
-	json.Unmarshal(raw, &f)
-	return int64(f)
 }
