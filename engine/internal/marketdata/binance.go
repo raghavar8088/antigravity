@@ -5,13 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/gorilla/websocket"
 )
 
-const binanceWSBase = "wss://stream.binance.com:9443/ws"
+func getBinanceWSBase() string {
+	url := os.Getenv("BINANCE_WS_URL")
+	if url == "" {
+		return "wss://stream.binance.com:9443/ws"
+	}
+	return url
+}
 
 type BinanceClient struct {
 	conn *websocket.Conn
@@ -30,7 +37,7 @@ func (b *BinanceClient) Connect(ctx context.Context, symbols []string) error {
 	for _, s := range symbols {
 		streams = append(streams, fmt.Sprintf("%s@trade", strings.ToLower(s)))
 	}
-	url := fmt.Sprintf("%s/%s", binanceWSBase, strings.Join(streams, "/"))
+	url := fmt.Sprintf("%s/%s", getBinanceWSBase(), strings.Join(streams, "/"))
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
