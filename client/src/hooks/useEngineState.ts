@@ -6,8 +6,10 @@ export default function useEngineState() {
   const [balance, setBalance] = useState(1000.00);
 
   useEffect(() => {
-    // Attempting to ping the actual Phase 4 Golang Engine running locally
-    fetch("http://localhost:8080/health")
+    // Dynamically connect to either Local Engine or Cloud Render Engine 
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    
+    fetch(`${API_URL}/health`)
       .then(res => {
         if (res.ok) setEngineOnline(true);
       })

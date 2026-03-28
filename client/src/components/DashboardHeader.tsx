@@ -9,7 +9,8 @@ export default function DashboardHeader({ online, balance, dailyPnL, onResetSucc
     if (!confirm('Reset the paper trading account to its initial state?')) return;
     setIsResetting(true);
     try {
-      const res = await fetch('http://localhost:8080/api/admin/reset', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const res = await fetch(`${API_URL}/api/admin/reset`, {
         method: 'POST',
       });
       if (!res.ok) throw new Error('Reset failed');
