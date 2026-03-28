@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
+	"sync"
 
 	"antigravity-engine/internal/strategy"
 )
@@ -16,11 +18,16 @@ type RiskProfile struct {
 }
 
 type RiskEngine struct {
+	mu      sync.RWMutex
 	profile RiskProfile
-	
-	// Trackers (In a real system, these pull from DB or Redis state)
+
+	// Trackers
 	currentExposureBTC float64
 	currentLossUSD     float64
+	dailyPnL           float64
+
+	// Dynamic sizing
+	lastATR float64 // Updated from market data
 }
 
 func NewRiskEngine(p RiskProfile) *RiskEngine {
@@ -33,6 +40,9 @@ func NewRiskEngine(p RiskProfile) *RiskEngine {
 
 // Validate safely checks if an algorithmic signal is allowed to hit the exchange.
 func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	// 1. Symbol Check (Strictly Bitcoin)
 	if sig.Symbol != "BTCUSDT" {
 		return errors.New("RISK_VIOLATION: Antigravity only supports BTC pairs")
@@ -42,7 +52,7 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 	if sig.Action == strategy.ActionBuy {
 		proposedExposure := r.currentExposureBTC + sig.TargetSize
 		if proposedExposure > r.profile.MaxPositionBTC {
-			return fmt.Errorf("RISK_VIOLATION: Max position exceeded (Has %.2f, Wants %.2f, Max %.2f)", 
+			return fmt.Errorf("RISK_VIOLATION: Max position exceeded (Has %.4f, Wants %.4f, Max %.4f)",
 				r.currentExposureBTC, sig.TargetSize, r.profile.MaxPositionBTC)
 		}
 
@@ -52,9 +62,19 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 		}
 	}
 
-	// 3. Drawdown Check
-	if r.currentLossUSD >= (r.profile.MaxCapitalUSD * r.profile.MaxDailyLossPct) {
-		return errors.New("RISK_VIOLATION: Circuit Breaker! Maximum daily loss limit triggered")
+	// 3. Drawdown Check — circuit breaker
+	maxLoss := r.profile.MaxCapitalUSD * r.profile.MaxDailyLossPct
+	if r.dailyPnL < 0 && math.Abs(r.dailyPnL) >= maxLoss {
+		return fmt.Errorf("RISK_VIOLATION: Circuit Breaker! Daily loss $%.2f exceeds limit $%.2f", r.dailyPnL, maxLoss)
+	}
+
+	// 4. Correlation guard — if exposure is already > 60% of max, require stronger conviction
+	exposureRatio := r.currentExposureBTC / r.profile.MaxPositionBTC
+	if exposureRatio > 0.6 && sig.Action == strategy.ActionBuy {
+		if sig.Confidence < 0.8 {
+			return fmt.Errorf("RISK_VIOLATION: High exposure (%.0f%%), requires confidence > 0.8 (got %.2f)",
+				exposureRatio*100, sig.Confidence)
+		}
 	}
 
 	return nil
@@ -62,13 +82,49 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 
 // NotifyFill updates internal risk metrics after successful execution.
 func (r *RiskEngine) NotifyFill(sig strategy.Signal) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if sig.Action == strategy.ActionBuy {
 		r.currentExposureBTC += sig.TargetSize
 	} else if sig.Action == strategy.ActionSell {
 		r.currentExposureBTC -= sig.TargetSize
 		if r.currentExposureBTC < 0 {
-			r.currentExposureBTC = 0 // Prevent invalid negative state without explicit shorting
+			r.currentExposureBTC = 0
 		}
 	}
-	log.Printf("[RISK MIDDLEWARE] Updated internal exposure: %.4f BTC", r.currentExposureBTC)
+	log.Printf("[RISK MIDDLEWARE] Updated exposure: %.4f BTC", r.currentExposureBTC)
+}
+
+// RecordPnL tracks realized PnL for daily loss limit.
+func (r *RiskEngine) RecordPnL(pnl float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dailyPnL += pnl
+	if pnl < 0 {
+		r.currentLossUSD += math.Abs(pnl)
+	}
+}
+
+// GetExposure returns current BTC exposure.
+func (r *RiskEngine) GetExposure() float64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.currentExposureBTC
+}
+
+// GetDailyPnL returns cumulative daily PnL.
+func (r *RiskEngine) GetDailyPnL() float64 {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.dailyPnL
+}
+
+// ResetDaily clears daily counters.
+func (r *RiskEngine) ResetDaily() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.dailyPnL = 0
+	r.currentLossUSD = 0
+	log.Println("[RISK ENGINE] Daily counters reset")
 }
