@@ -65,6 +65,33 @@ func holdSignal() []Signal {
 }
 
 // =============================================================================
+// 0. Test Execution Scalper (Forces an immediate trade for testing)
+// =============================================================================
+type TestExecutionScalper struct {
+	baseScalper
+	hasTraded bool
+}
+
+func NewTestScalper() *TestExecutionScalper {
+	return &TestExecutionScalper{
+		baseScalper: baseScalper{name: "Test_Execution_Dumb_Scalper", maxBuf: 10},
+	}
+}
+
+func (s *TestExecutionScalper) OnTick(tick marketdata.Tick) []Signal { 
+	if !s.hasTraded {
+		s.hasTraded = true
+		// Fire a BUY immediately with a tight stop-loss/take-profit to close it out quickly
+		return buySignalCustom(tick.Symbol, 0.05, 0.05) 
+	}
+	return holdSignal()
+}
+
+func (s *TestExecutionScalper) OnCandle(candle marketdata.Tick) []Signal {
+	return s.OnTick(candle)
+}
+
+// =============================================================================
 // 1. EMA Crossover Scalper
 // Fast EMA crosses above Slow EMA → Buy. Crosses below → Sell.
 // =============================================================================

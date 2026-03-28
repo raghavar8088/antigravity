@@ -12,6 +12,9 @@ type RegistryEntry struct {
 
 func BuildAllScalpers() []RegistryEntry {
 	return []RegistryEntry{
+		// ══════════ TEST ══════════
+		{NewTestScalper(), "Test", "tick"},
+
 		// ══════════ ORIGINAL 20 ══════════
 		// Trend
 		{NewEMACrossScalper(8, 21), "Trend", "1m"},
