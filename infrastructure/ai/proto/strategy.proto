@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package strategy;
+
+// Output instructions for the Go compiler
+option go_package = "antigravity-engine/internal/strategy/pb";
+
+// The Intelligence Bridge separating Go Execution from Python Math
+service AIService {
+  rpc EvaluateTick (TickRequest) returns (SignalResponse) {}
+}
+
+// The exact mapping of the Phase 2 WebSocket Tick struct
+message TickRequest {
+  string symbol = 1;
+  double price = 2;
+  int64 timestamp_ms = 3;
+}
+
+// The exact mapping of the Phase 3 Signal output struct
+message SignalResponse {
+  string action = 1;      // "BUY", "SELL", "HOLD"
+  double target_size = 2; // Quantity to mathematically risk
+  double confidence = 3;  // Neural-net probability 0.0-1.0 (Optional)
+}

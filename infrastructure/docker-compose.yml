@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: antigravity_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=antigravity
+      - POSTGRES_PASSWORD=password123
+      - POSTGRES_DB=antigravity
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: antigravity_cache
+    ports:
+      - "6379:6379"
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: antigravity_prometheus
+    ports:
+      - "9090:9090"
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: antigravity_grafana
+    ports:
+      - "3001:3000" # Expose grafana dashboard publicly
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: always
+
+volumes:
+  pgdata:
