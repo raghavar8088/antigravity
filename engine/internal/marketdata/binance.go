@@ -21,8 +21,9 @@ func getBinanceWSBase() string {
 }
 
 type BinanceClient struct {
-	conn *websocket.Conn
-	ch   chan Tick
+	conn    *websocket.Conn
+	ch      chan Tick
+	symbols []string
 }
 
 func NewBinanceClient() *BinanceClient {
@@ -32,27 +33,55 @@ func NewBinanceClient() *BinanceClient {
 }
 
 func (b *BinanceClient) Connect(ctx context.Context, symbols []string) error {
-	// Construct the stream URL: /ws/btcusdt@trade
+	b.symbols = symbols
+	go b.keepConnected(ctx)
+	return nil
+}
+
+func (b *BinanceClient) keepConnected(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		err := b.dial()
+		if err != nil {
+			log.Printf("Binance dial error: %v. Retrying in 5s...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		b.listen(ctx) // Blocks until the connection breaks
+
+		log.Println("Binance stream disconnected. Reconnecting in 5s...")
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (b *BinanceClient) dial() error {
 	streams := []string{}
-	for _, s := range symbols {
+	for _, s := range b.symbols {
 		streams = append(streams, fmt.Sprintf("%s@trade", strings.ToLower(s)))
 	}
 	url := fmt.Sprintf("%s/%s", getBinanceWSBase(), strings.Join(streams, "/"))
 
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to dial binance: %w", err)
+		return err
 	}
 	b.conn = conn
-
 	log.Printf("Connected to Binance stream: %s", url)
-
-	go b.listen(ctx)
 	return nil
 }
 
 func (b *BinanceClient) listen(ctx context.Context) {
-	defer b.Close()
+	defer func() {
+		if b.conn != nil {
+			b.conn.Close()
+		}
+	}()
 
 	for {
 		select {
@@ -61,17 +90,17 @@ func (b *BinanceClient) listen(ctx context.Context) {
 		default:
 			_, message, err := b.conn.ReadMessage()
 			if err != nil {
-				log.Println("Binance read error:", err)
-				return // Typically we trigger a reconnect here
+				log.Printf("Binance read error (connection dropped): %v", err)
+				return // Triggers auto-reconnect in keepConnected
 			}
 
 			var payload struct {
-				E int64  `json:"E"` // Event time
-				S string `json:"s"` // Symbol
-				P string `json:"p"` // Price
-				Q string `json:"q"` // Quantity
-				T int64  `json:"t"` // Trade ID
-				M bool   `json:"m"` // Is the buyer the market maker? (True means SELL market order, False means BUY market order)
+				E int64  `json:"E"`
+				S string `json:"s"`
+				P string `json:"p"`
+				Q string `json:"q"`
+				T int64  `json:"t"`
+				M bool   `json:"m"`
 			}
 
 			if err := json.Unmarshal(message, &payload); err == nil {
