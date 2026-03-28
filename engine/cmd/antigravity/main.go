@@ -18,6 +18,7 @@ import (
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
 	"antigravity-engine/internal/strategy"
@@ -55,8 +56,8 @@ var globalLogs = &RingLogger{max: 100}
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   ANTIGRAVITY ENGINE v4.0 — DIAGNOSTIC EDITION         ║")
-	fmt.Println("║   40 Strategies | 1m/5m Candles | Warmup | $100K       ║")
+	fmt.Println("║   ANTIGRAVITY ENGINE v5.0 — PERSISTENT EDITION         ║")
+	fmt.Println("║   41 Strategies | DB State | Panic Recovery | $100K    ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -119,7 +120,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 7. Signal Aggregator (15s cooldown per strategy)
 	// ═══════════════════════════════════════════════════
-	aggregator := trading.NewSignalAggregator(15) // Reduced from 30s for faster trading
+	aggregator := trading.NewSignalAggregator(15)
 
 	// ═══════════════════════════════════════════════════
 	// 8. Trade Journal
@@ -127,13 +128,31 @@ func main() {
 	journal := execution.NewTradeJournal(500)
 
 	// ═══════════════════════════════════════════════════
-	// 9. Candle Aggregator (NEW — converts ticks → 1m/5m candles)
+	// 9. Candle Aggregator
 	// ═══════════════════════════════════════════════════
 	candleAgg := marketdata.NewCandleAggregator()
 	log.Println("[INIT] ✅ Candle Aggregator ready (1m + 5m intervals)")
 
 	// ═══════════════════════════════════════════════════
-	// 10. Multi-Strategy Orchestrator (UPGRADED)
+	// 9b. DATABASE PERSISTENCE — Restore state from Neon PostgreSQL
+	// ═══════════════════════════════════════════════════
+	var dbStore *persistence.Store
+	dbStore, err = persistence.NewStore(ctx)
+	if err != nil {
+		log.Printf("[DB] ⚠️  Database not available (will use fresh state): %v", err)
+	} else {
+		// Restore previous state on boot
+		state, loadErr := dbStore.LoadState(ctx)
+		if loadErr == nil && state.Balance != 100000 {
+			paperExecute.RestoreBalance(state.Balance, state.TotalFees)
+			log.Printf("[DB] ♻️  Restored engine state from %s", state.SavedAt.Format(time.RFC3339))
+		} else {
+			log.Println("[DB] Fresh start — no previous state to restore")
+		}
+	}
+
+	// ═══════════════════════════════════════════════════
+	// 10. Multi-Strategy Orchestrator
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
 		coinbaseClient,
@@ -160,8 +179,16 @@ func main() {
 
 	log.Printf("[BOOT] Engine fully initialized in %s", time.Since(bootStart).Round(time.Millisecond))
 
-	// Start the orchestrator
-	go orchestrator.Run(ctx)
+	// Start the orchestrator with panic recovery
+	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
+
+	// ═══════════════════════════════════════════════════
+	// 11b. STATE SAVER — Periodic DB snapshots
+	// ═══════════════════════════════════════════════════
+	if dbStore != nil {
+		saver := persistence.NewStateSaver(dbStore, paperExecute, posMgr, journal)
+		go safeGo("StateSaver", func() { saver.Run(ctx) })
+	}
 
 	// ═══════════════════════════════════════════════════
 	// 12. HTTP API Server
@@ -275,7 +302,10 @@ func main() {
 	log.Println("Hardware Kill Signal: Shutting down entire engine loop...")
 	cancel()
 	coinbaseClient.Close()
-	time.Sleep(1 * time.Second)
+	if dbStore != nil {
+		dbStore.Close()
+	}
+	time.Sleep(2 * time.Second) // Allow state saver final flush
 	log.Println("Systems offline.")
 }
 
@@ -315,5 +345,23 @@ func keepAlive(ctx context.Context) {
 				log.Println("[KEEP-ALIVE] ✅ Self-ping OK — engine stays warm")
 			}
 		}
+	}
+}
+
+// safeGo wraps a goroutine function with panic recovery.
+// If the goroutine panics, it logs the error and restarts automatically.
+func safeGo(name string, fn func()) {
+	for {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[⚠️ PANIC RECOVERED] %s crashed: %v — restarting in 5s...", name, r)
+				}
+			}()
+			fn()
+		}()
+		// If fn returned normally (context cancelled), don't restart
+		log.Printf("[%s] Goroutine exited normally", name)
+		return
 	}
 }

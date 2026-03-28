@@ -108,3 +108,10 @@ func (p *PaperClient) ResetAccount() error {
 	p.totalFeesPaid = 0
 	return nil
 }
+
+// RestoreBalance restores balance and fees from database on restart.
+func (p *PaperClient) RestoreBalance(balance, fees float64) {
+	p.balanceUSD = balance
+	p.totalFeesPaid = fees
+	log.Printf("[PAPER EXEC] ♻️  Restored balance: $%.2f | Fees: $%.4f", balance, fees)
+}
