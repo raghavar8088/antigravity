@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/execution"
@@ -22,9 +24,38 @@ import (
 	"antigravity-engine/internal/trading"
 )
 
+// RingLogger stores the last N log lines in memory
+type RingLogger struct {
+	mu    sync.Mutex
+	lines []string
+	max   int
+}
+
+func (r *RingLogger) Write(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lines = append(r.lines, string(p))
+	if len(r.lines) > r.max {
+		r.lines = r.lines[1:]
+	}
+	fmt.Print(string(p)) // Also print to stdout for Render
+	return len(p), nil
+}
+
+func (r *RingLogger) GetLogs() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cp := make([]string, len(r.lines))
+	copy(cp, r.lines)
+	return cp
+}
+
+var globalLogs = &RingLogger{max: 100}
+
 func main() {
+	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   ANTIGRAVITY ENGINE v3.0 — CANDLE-AWARE EDITION       ║")
+	fmt.Println("║   ANTIGRAVITY ENGINE v4.0 — DIAGNOSTIC EDITION         ║")
 	fmt.Println("║   40 Strategies | 1m/5m Candles | Warmup | $100K       ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
@@ -204,6 +235,15 @@ func main() {
 		json.NewEncoder(w).Encode(response)
 	})
 
+	// GET /api/logs — Diagnostic memory buffer
+	http.HandleFunc("/api/logs", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions { return }
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"logs": globalLogs.GetLogs(),
+		})
+	})
+
 	go func() {
 		fmt.Println("═══════════════════════════════════════════")
 		fmt.Println("  REST API Engine listening on :8080")
@@ -213,6 +253,7 @@ func main() {
 		fmt.Println("    GET  /api/positions    — Open positions")
 		fmt.Println("    GET  /api/trades       — Trade journal")
 		fmt.Println("    GET  /api/stats        — Aggregate stats")
+		fmt.Println("    GET  /api/logs         — Last 100 system logs")
 		fmt.Println("    POST /api/admin/kill   — Kill switch")
 		fmt.Println("    POST /api/admin/reset  — Reset account")
 		fmt.Println("═══════════════════════════════════════════")
