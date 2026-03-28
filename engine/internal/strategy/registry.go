@@ -69,6 +69,34 @@ func BuildAllScalpers() []RegistryEntry {
 	}
 }
 
+// StrategyGroups organizes strategies by their intended processing timeframe.
+type StrategyGroups struct {
+	Tick []RegistryEntry // Processed on every raw tick
+	M1   []RegistryEntry // Processed on 1-minute candle close
+	M5   []RegistryEntry // Processed on 5-minute candle close
+	H1   []RegistryEntry // Processed on simulated hourly (every 12th 5m candle)
+}
+
+// GroupByTimeframe separates strategies into processing groups.
+// This is critical: candle-based strategies MUST only receive candle data,
+// not raw ticks, or their indicators will be meaningless.
+func GroupByTimeframe(entries []RegistryEntry) StrategyGroups {
+	var groups StrategyGroups
+	for _, e := range entries {
+		switch e.Timeframe {
+		case "tick":
+			groups.Tick = append(groups.Tick, e)
+		case "5m":
+			groups.M5 = append(groups.M5, e)
+		case "1h":
+			groups.H1 = append(groups.H1, e)
+		default: // "1m" and anything else
+			groups.M1 = append(groups.M1, e)
+		}
+	}
+	return groups
+}
+
 func GetStrategyNames() []string {
 	entries := BuildAllScalpers()
 	names := make([]string, len(entries))

@@ -24,12 +24,14 @@ import (
 
 func main() {
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   ANTIGRAVITY ENGINE v2.0 — MULTI-STRATEGY EDITION     ║")
-	fmt.Println("║   40 Parallel Strategies | Trailing SL/TP | $100K      ║")
+	fmt.Println("║   ANTIGRAVITY ENGINE v3.0 — CANDLE-AWARE EDITION       ║")
+	fmt.Println("║   40 Strategies | 1m/5m Candles | Warmup | $100K       ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	bootStart := time.Now()
 
 	// ═══════════════════════════════════════════════════
 	// 1. WebSocket Live Stream
@@ -84,9 +86,9 @@ func main() {
 	posMgr := positions.NewManager()
 
 	// ═══════════════════════════════════════════════════
-	// 7. Signal Aggregator (30s cooldown per strategy)
+	// 7. Signal Aggregator (15s cooldown per strategy)
 	// ═══════════════════════════════════════════════════
-	aggregator := trading.NewSignalAggregator(30)
+	aggregator := trading.NewSignalAggregator(15) // Reduced from 30s for faster trading
 
 	// ═══════════════════════════════════════════════════
 	// 8. Trade Journal
@@ -94,7 +96,13 @@ func main() {
 	journal := execution.NewTradeJournal(500)
 
 	// ═══════════════════════════════════════════════════
-	// 9. Multi-Strategy Orchestrator
+	// 9. Candle Aggregator (NEW — converts ticks → 1m/5m candles)
+	// ═══════════════════════════════════════════════════
+	candleAgg := marketdata.NewCandleAggregator()
+	log.Println("[INIT] ✅ Candle Aggregator ready (1m + 5m intervals)")
+
+	// ═══════════════════════════════════════════════════
+	// 10. Multi-Strategy Orchestrator (UPGRADED)
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
 		binanceClient,
@@ -105,11 +113,27 @@ func main() {
 		posMgr,
 		tracker,
 		journal,
+		candleAgg,
 	)
+
+	// ═══════════════════════════════════════════════════
+	// 11. WARMUP — Pre-fill strategy buffers from Binance REST
+	// ═══════════════════════════════════════════════════
+	log.Println("[WARMUP] Fetching historical candles to pre-fill strategy buffers...")
+	warmupData, err := marketdata.FetchWarmupCandles("BTCUSDT", 500, 100)
+	if err != nil {
+		log.Printf("[WARMUP] ⚠️  Warmup failed (will warm up from live data): %v", err)
+	} else {
+		orchestrator.WarmupStrategies(warmupData)
+	}
+
+	log.Printf("[BOOT] Engine fully initialized in %s", time.Since(bootStart).Round(time.Millisecond))
+
+	// Start the orchestrator
 	go orchestrator.Run(ctx)
 
 	// ═══════════════════════════════════════════════════
-	// 10. HTTP API Server
+	// 12. HTTP API Server
 	// ═══════════════════════════════════════════════════
 	killswitch := admin.NewKillSwitch(cancel, paperExecute)
 
@@ -127,13 +151,13 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":     "ok",
-			"service":    "antigravity-engine-v2",
+			"service":    "antigravity-engine-v3",
 			"strategies": len(allStrategies),
-			"uptime":     time.Since(time.Now()).String(),
+			"uptime":     time.Since(bootStart).String(),
 		})
 	})
 
-	// ───── NEW API ENDPOINTS ─────
+	// ───── API ENDPOINTS ─────
 
 	// GET /api/strategies — Live strategy performance data
 	http.HandleFunc("/api/strategies", func(w http.ResponseWriter, r *http.Request) {
@@ -165,14 +189,17 @@ func main() {
 		if r.Method == http.MethodOptions { return }
 		aggStats := journal.GetAggregateStats()
 
+		ticks, candles := candleAgg.GetStats()
 		response := map[string]interface{}{
-			"aggregate":    aggStats,
-			"balance":      paperExecute.GetBalanceUSD(),
-			"exposure":     riskEngine.GetExposure(),
-			"dailyPnl":     riskEngine.GetDailyPnL(),
-			"totalFees":    paperExecute.GetTotalFees(),
-			"lastPrice":    paperExecute.GetLastPrice(),
-			"openPositions": len(posMgr.GetOpenPositions()),
+			"aggregate":      aggStats,
+			"balance":        paperExecute.GetBalanceUSD(),
+			"exposure":       riskEngine.GetExposure(),
+			"dailyPnl":       riskEngine.GetDailyPnL(),
+			"totalFees":      paperExecute.GetTotalFees(),
+			"lastPrice":      paperExecute.GetLastPrice(),
+			"openPositions":  len(posMgr.GetOpenPositions()),
+			"ticksProcessed": ticks,
+			"candlesClosed":  candles,
 		}
 		json.NewEncoder(w).Encode(response)
 	})
@@ -194,6 +221,11 @@ func main() {
 		}
 	}()
 
+	// ═══════════════════════════════════════════════════
+	// 13. KEEP-ALIVE — Prevent Render free tier from sleeping
+	// ═══════════════════════════════════════════════════
+	go keepAlive(ctx)
+
 	// Hardware Fallback Hook
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -212,4 +244,35 @@ func setCORS(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Content-Type", "application/json")
+}
+
+// keepAlive pings the engine's own /health endpoint every 10 minutes
+// to prevent Render free tier from spinning down the service.
+// When the service sleeps, ALL strategy price buffers are lost.
+func keepAlive(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	healthURL := fmt.Sprintf("http://localhost:%s/health", port)
+
+	log.Printf("[KEEP-ALIVE] Self-ping enabled every 10m → %s", healthURL)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			resp, err := http.Get(healthURL)
+			if err != nil {
+				log.Printf("[KEEP-ALIVE] Ping failed: %v", err)
+			} else {
+				resp.Body.Close()
+				log.Println("[KEEP-ALIVE] ✅ Self-ping OK — engine stays warm")
+			}
+		}
+	}
 }

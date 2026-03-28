@@ -14,21 +14,24 @@ import (
 )
 
 // Orchestrator is the multi-strategy parallel trading engine.
-// It fans out every tick to all 40 strategies, collects signals,
-// filters through aggregation, validates via risk, and executes.
+// It correctly separates tick-based strategies from candle-based strategies,
+// ensuring each strategy type receives the data it was designed for.
 type Orchestrator struct {
 	client     marketdata.MarketDataClient
 	strategies []strategy.RegistryEntry
+	groups     strategy.StrategyGroups
 	risk       *risk.RiskEngine
 	exec       *execution.PaperClient
 	aggregator *SignalAggregator
 	posMgr     *positions.Manager
 	tracker    *risk.StrategyTracker
 	journal    *execution.TradeJournal
+	candleAgg  *marketdata.CandleAggregator
 
 	// Internal state
-	lastPrice float64
-	mu        sync.RWMutex
+	lastPrice    float64
+	h1Counter    int // Counts 5m candles to simulate 1h (every 12th)
+	mu           sync.RWMutex
 }
 
 func NewOrchestrator(
@@ -40,21 +43,65 @@ func NewOrchestrator(
 	pm *positions.Manager,
 	tracker *risk.StrategyTracker,
 	journal *execution.TradeJournal,
+	candleAgg *marketdata.CandleAggregator,
 ) *Orchestrator {
+	groups := strategy.GroupByTimeframe(strats)
+	log.Printf("[ORCHESTRATOR] Strategy groups: %d tick, %d 1m, %d 5m, %d 1h",
+		len(groups.Tick), len(groups.M1), len(groups.M5), len(groups.H1))
+
 	return &Orchestrator{
 		client:     c,
 		strategies: strats,
+		groups:     groups,
 		risk:       r,
 		exec:       e,
 		aggregator: agg,
 		posMgr:     pm,
 		tracker:    tracker,
 		journal:    journal,
+		candleAgg:  candleAgg,
 	}
 }
 
+// WarmupStrategies pre-fills strategy price buffers with historical candle data.
+// This eliminates the warmup delay on cold start / Render restart.
+func (o *Orchestrator) WarmupStrategies(warmup *marketdata.WarmupData) {
+	if warmup == nil {
+		log.Println("[WARMUP] No warmup data provided, strategies will warm up from live data")
+		return
+	}
+
+	log.Printf("[WARMUP] Feeding %d historical 1m candles to %d strategies...",
+		len(warmup.Candles1m), len(o.groups.M1))
+
+	// Feed 1m candles to 1m strategies
+	for _, candle := range warmup.Candles1m {
+		tick := candle.ToTick()
+		for _, entry := range o.groups.M1 {
+			entry.Strategy.OnTick(tick)
+		}
+		// Also feed to 1h strategies (they use candle data too)
+		for _, entry := range o.groups.H1 {
+			entry.Strategy.OnTick(tick)
+		}
+	}
+
+	log.Printf("[WARMUP] Feeding %d historical 5m candles to %d strategies...",
+		len(warmup.Candles5m), len(o.groups.M5))
+
+	// Feed 5m candles to 5m strategies
+	for _, candle := range warmup.Candles5m {
+		tick := candle.ToTick()
+		for _, entry := range o.groups.M5 {
+			entry.Strategy.OnTick(tick)
+		}
+	}
+
+	log.Println("[WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.")
+}
+
 // Run is the infinite heartbeat of Antigravity Live Trading.
-// It processes every incoming tick through all 40 strategies in parallel.
+// It processes ticks and candles through their respective strategy groups.
 func (o *Orchestrator) Run(ctx context.Context) {
 	log.Printf("[MASTER LOOP] Booting Multi-Strategy Orchestrator with %d strategies...", len(o.strategies))
 	ticks := o.client.GetTickChannel()
@@ -65,18 +112,28 @@ func (o *Orchestrator) Run(ctx context.Context) {
 	// Background: re-enable cooled-down strategies every minute
 	go o.strategyCooldownChecker(ctx)
 
+	// Background: process 1m candle closes
+	go o.process1mCandles(ctx)
+
+	// Background: process 5m candle closes
+	go o.process5mCandles(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("[MASTER LOOP] Gracefully halting execution loop...")
 			return
 		case t := <-ticks:
-			o.processTick(ctx, t)
+			o.processTickPipeline(ctx, t)
 		}
 	}
 }
 
-func (o *Orchestrator) processTick(ctx context.Context, t marketdata.Tick) {
+// processTickPipeline handles every raw tick:
+// 1. Updates market state + position SL/TP
+// 2. Feeds tick to candle aggregator (which emits candles on channels)
+// 3. Runs ONLY tick-timeframe strategies on the raw tick
+func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tick) {
 	// 1. Update market state
 	o.exec.UpdateMarketState(t.Price)
 	o.mu.Lock()
@@ -86,12 +143,62 @@ func (o *Orchestrator) processTick(ctx context.Context, t marketdata.Tick) {
 	// 2. Check SL/TP/trailing on all open positions
 	o.posMgr.CheckStopLossAndTakeProfit(t.Price)
 
-	// 3. Fan out tick to ALL strategies concurrently
+	// 3. Feed tick to candle aggregator (it emits 1m/5m candles on channels)
+	o.candleAgg.Feed(t)
+
+	// 4. Run ONLY tick-based strategies (OrderFlow, TickVelocity, VolumeSpike, GapFill)
+	if len(o.groups.Tick) == 0 {
+		return
+	}
+	o.processStrategyGroup(o.groups.Tick, t)
+}
+
+// process1mCandles listens for closed 1-minute candles and runs all 1m strategies.
+func (o *Orchestrator) process1mCandles(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case candle := <-o.candleAgg.Candles1m:
+			tick := candle.ToTick()
+			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
+				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
+			o.processStrategyGroup(o.groups.M1, tick)
+		}
+	}
+}
+
+// process5mCandles listens for closed 5-minute candles and runs all 5m + 1h strategies.
+func (o *Orchestrator) process5mCandles(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case candle := <-o.candleAgg.Candles5m:
+			tick := candle.ToTick()
+			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
+				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
+			o.processStrategyGroup(o.groups.M5, tick)
+
+			// Simulate 1h candle: run 1h strategies every 12th 5m candle
+			o.h1Counter++
+			if o.h1Counter >= 12 {
+				o.h1Counter = 0
+				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
+				o.processStrategyGroup(o.groups.H1, tick)
+			}
+		}
+	}
+}
+
+// processStrategyGroup runs a group of strategies against a tick/candle and
+// processes any resulting signals through aggregation, risk, and execution.
+func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t marketdata.Tick) {
 	var wg sync.WaitGroup
 	var sigMu sync.Mutex
 	var rawSignals []AggregatedSignal
 
-	for _, entry := range o.strategies {
+	for _, entry := range entries {
 		wg.Add(1)
 		go func(e strategy.RegistryEntry) {
 			defer wg.Done()
@@ -119,13 +226,13 @@ func (o *Orchestrator) processTick(ctx context.Context, t marketdata.Tick) {
 	}
 	wg.Wait()
 
-	// 4. Aggregate and filter signals
+	// Aggregate and filter signals
 	if len(rawSignals) == 0 {
 		return
 	}
 	approved := o.aggregator.FilterSignals(rawSignals)
 
-	// 5. Execute approved signals
+	// Execute approved signals
 	for _, aggSig := range approved {
 		sig := aggSig.Signal
 
@@ -133,18 +240,22 @@ func (o *Orchestrator) processTick(ctx context.Context, t marketdata.Tick) {
 		o.tracker.RecordSignal(aggSig.StrategyName)
 
 		// Risk validation
-		err := o.risk.Validate(sig, t.Price)
+		o.mu.RLock()
+		currentPrice := o.lastPrice
+		o.mu.RUnlock()
+
+		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			continue
 		}
 
 		// Apply slippage (0.01% adverse)
-		execPrice := t.Price
+		execPrice := currentPrice
 		if sig.Action == strategy.ActionBuy {
-			execPrice = t.Price * 1.0001 // Buy slightly higher
+			execPrice = currentPrice * 1.0001 // Buy slightly higher
 		} else {
-			execPrice = t.Price * 0.9999 // Sell slightly lower
+			execPrice = currentPrice * 0.9999 // Sell slightly lower
 		}
 
 		// Execute
