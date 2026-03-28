@@ -43,8 +43,8 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// 1. Symbol Check (Strictly Bitcoin)
-	if sig.Symbol != "BTCUSDT" {
+	// 1. Symbol Check (Bitcoin pairs — supports both Binance and Coinbase formats)
+	if sig.Symbol != "BTCUSDT" && sig.Symbol != "BTC-USD" && sig.Symbol != "BTC-USDT" {
 		return errors.New("RISK_VIOLATION: Antigravity only supports BTC pairs")
 	}
 
