@@ -18,7 +18,7 @@ type JournalEntry struct {
 	GrossPnL     float64       `json:"grossPnl"`
 	Fees         float64       `json:"fees"`
 	NetPnL       float64       `json:"netPnl"`
-	Reason       string        `json:"reason"` // STOP_LOSS, TAKE_PROFIT, TRAILING_STOP, TIME_EXIT, BREAK_EVEN
+	Reason       string        `json:"reason"` // STOP_LOSS, TAKE_PROFIT, TRAILING_STOP, BREAK_EVEN, MANUAL
 	EntryTime    time.Time     `json:"entryTime"`
 	ExitTime     time.Time     `json:"exitTime"`
 	Duration     time.Duration `json:"duration"`
@@ -114,13 +114,13 @@ func (j *TradeJournal) GetAllTrades() []JournalEntry {
 
 // AggregateStats holds overall performance numbers.
 type AggregateStats struct {
-	TotalTrades int     `json:"totalTrades"`
-	TotalWins   int     `json:"totalWins"`
-	TotalLosses int     `json:"totalLosses"`
-	WinRate     float64 `json:"winRate"`
-	TotalPnL    float64 `json:"totalPnl"`
-	BestTrade   float64 `json:"bestTrade"`
-	WorstTrade  float64 `json:"worstTrade"`
+	TotalTrades  int     `json:"totalTrades"`
+	TotalWins    int     `json:"totalWins"`
+	TotalLosses  int     `json:"totalLosses"`
+	WinRate      float64 `json:"winRate"`
+	TotalPnL     float64 `json:"totalPnl"`
+	BestTrade    float64 `json:"bestTrade"`
+	WorstTrade   float64 `json:"worstTrade"`
 	ProfitFactor float64 `json:"profitFactor"`
 }
 

@@ -89,11 +89,19 @@ func strategyPriority(sig AggregatedSignal) float64 {
 	switch sig.StrategyName {
 	case "TripleFilter_Alpha_Scalp":
 		score += 1.4
+	case "OrderFlow_Pressure_Pro_Scalp":
+		score += 1.35
 	case "ATR_Breakout_Scalp":
 		score += 1.3
 	case "VolSqueeze_Explosion_Scalp":
 		score += 1.2
+	case "VolumeBreakout_Impulse_Scalp":
+		score += 1.2
 	case "Donchian_Breakout_Scalp":
+		score += 1.1
+	case "Pullback_Continuation_Pro_Scalp":
+		score += 1.1
+	case "VolumeWeighted_Trend_Scalp":
 		score += 1.1
 	case "PriceChannel_Breakout_Scalp":
 		score += 1.0

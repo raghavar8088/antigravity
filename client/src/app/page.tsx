@@ -242,7 +242,7 @@ export default function Home() {
           entry: t.entryPrice,
           exit: t.exitPrice,
           pnl: t.netPnl,
-          reason: t.reason === "TAKE_PROFIT" ? "TP_HIT" : t.reason === "STOP_LOSS" || t.reason === "TRAILING_STOP" || t.reason === "BREAK_EVEN" ? "SL_HIT" : "MANUAL",
+          reason: t.reason === "TAKE_PROFIT" ? "TP_HIT" : t.reason === "STOP_LOSS" || t.reason === "TRAILING_STOP" || t.reason === "BREAK_EVEN" ? "SL_HIT" : t.reason === "TIME_EXIT" ? "TIMEOUT" : "MANUAL",
           duration: t.duration > 0 ? `${Math.floor(t.duration / 1e9 / 60)}m ${Math.floor((t.duration / 1e9) % 60)}s` : "—",
           time: new Date(t.exitTime).toLocaleTimeString(),
         }))} />

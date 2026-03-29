@@ -59,7 +59,7 @@ type ManagerConfig struct {
 	TrailingStopPct    float64       // Trailing stop distance (e.g. 0.4 = 0.4%)
 	BreakEvenThreshold float64       // Move SL to entry after this % profit (e.g. 0.3%)
 	PartialTPRatio     float64       // Close this fraction at TP1 (e.g. 0.5 = 50%)
-	MaxDuration        time.Duration // Auto-close after this duration
+	MaxDuration        time.Duration // Reserved for optional max-hold logic
 	MaxPerStrategy     int           // Max concurrent positions per strategy
 }
 
@@ -75,7 +75,7 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
-	return &Manager{
+	manager := &Manager{
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
@@ -87,6 +87,8 @@ func NewManager() *Manager {
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
+	manager.config.MaxDuration = 0
+	return manager
 }
 
 // CanOpenPosition checks if a strategy is allowed to open another position.
@@ -162,7 +164,7 @@ func (m *Manager) CheckStopLossAndTakeProfit(currentPrice float64) {
 		}
 
 		// --- Time-based exit ---
-		if time.Since(pos.OpenedAt) > m.config.MaxDuration {
+		if m.config.MaxDuration > 0 && time.Since(pos.OpenedAt) > m.config.MaxDuration {
 			pnl := m.calculatePnL(pos, currentPrice)
 			pos.Status = "TIME_EXIT"
 			log.Printf("[⏰ TIME EXIT] %s | %s held for %s | PnL: $%.4f",
