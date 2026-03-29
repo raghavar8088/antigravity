@@ -18,7 +18,7 @@ export type StrategyData = {
   status: string;
 };
 
-export default function useStrategies() {
+export default function useStrategies(refreshKey = 0) {
   const [strategies, setStrategies] = useState<StrategyData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +42,7 @@ export default function useStrategies() {
     fetchStrategies();
     const interval = setInterval(fetchStrategies, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshKey]);
 
   return { strategies, loading };
 }

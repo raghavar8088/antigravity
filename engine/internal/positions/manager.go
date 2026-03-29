@@ -79,11 +79,11 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.4,              // 0.4% trailing stop
-			BreakEvenThreshold: 0.3,              // Move to break-even after 0.3% profit
-			PartialTPRatio:     0.5,              // Close 50% at TP1
-			MaxDuration:        15 * time.Minute, // 15 min max hold for scalps
-			MaxPerStrategy:     2,                // Max 2 positions per strategy
+			TrailingStopPct:    0.10,            // 0.10% trailing stop (matches tighter SL)
+			BreakEvenThreshold: 0.08,            // Move to break-even after 0.08% profit
+			PartialTPRatio:     0.5,             // Close 50% at TP1
+			MaxDuration:        5 * time.Minute, // 5 min max hold — true scalping
+			MaxPerStrategy:     2,               // Max 2 positions per strategy
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
@@ -424,6 +424,16 @@ func (m *Manager) GetPositionCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.positions)
+}
+
+// Reset wipes all open positions from memory without emitting close events.
+// Used by the account reset flow so the DB and in-memory state stay in sync.
+func (m *Manager) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.positions = make(map[string]*Position)
+	m.nextID = 1
+	log.Println("[POSITION MANAGER] 🔄 All positions cleared for account reset")
 }
 
 func genID(n int) string {

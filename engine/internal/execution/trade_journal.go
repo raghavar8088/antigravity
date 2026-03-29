@@ -187,3 +187,18 @@ func (j *TradeJournal) RestoreTrades(trades []JournalEntry, totalTrades, totalWi
 	log.Printf("[TRADE JOURNAL] ♻️  Restored %d trades (W/L: %d/%d, PnL: $%.2f)",
 		len(trades), totalWins, totalLosses, totalPnL)
 }
+
+// Reset wipes all trade history and aggregate counters from memory.
+// Used by the account reset flow so the dashboard reflects a clean slate.
+func (j *TradeJournal) Reset() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.entries = make([]JournalEntry, 0)
+	j.totalTrades = 0
+	j.totalWins = 0
+	j.totalLosses = 0
+	j.totalPnL = 0
+	j.bestTrade = 0
+	j.worstTrade = 0
+	log.Println("[TRADE JOURNAL] 🔄 All trades cleared for account reset")
+}

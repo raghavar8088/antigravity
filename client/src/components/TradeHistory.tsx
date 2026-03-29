@@ -10,7 +10,7 @@ interface HistoricalTrade {
   entry: number;
   exit: number;
   pnl: number;
-  reason: "TP_HIT" | "SL_HIT" | "MANUAL";
+  reason: "TP_HIT" | "SL_HIT" | "TIMEOUT" | "MANUAL";
   duration: string;
   time: string;
 }
@@ -99,15 +99,17 @@ export default function TradeHistory({ history = DEFAULT_TRADE_HISTORY }: { hist
                  <td className="py-3 px-2 font-mono text-xs">${t.exit.toFixed(2)}</td>
                  <td className="py-3 px-2 font-mono text-xs text-gray-400">{t.duration}</td>
                  <td className="py-3 px-2">
-                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
-                     t.reason === "TP_HIT" 
-                       ? "bg-green-500/10 text-green-400 border border-green-500/20" 
-                       : t.reason === "SL_HIT"
-                       ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                       : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
-                   }`}>
-                     {t.reason === "TP_HIT" ? "🎯 TP HIT" : t.reason === "SL_HIT" ? "🛑 SL HIT" : "✋ MANUAL"}
-                   </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                      t.reason === "TP_HIT" 
+                        ? "bg-green-500/10 text-green-400 border border-green-500/20" 
+                        : t.reason === "SL_HIT"
+                        ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                        : t.reason === "TIMEOUT"
+                        ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
+                        : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
+                    }`}>
+                      {t.reason === "TP_HIT" ? "🎯 TP HIT" : t.reason === "SL_HIT" ? "🛑 SL HIT" : t.reason === "TIMEOUT" ? "⏰ TIMEOUT" : "✋ MANUAL"}
+                    </span>
                  </td>
                  <td className={`py-3 px-2 text-right font-mono text-xs font-bold ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                    {t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}

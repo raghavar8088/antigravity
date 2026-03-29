@@ -128,3 +128,14 @@ func (r *RiskEngine) ResetDaily() {
 	r.currentLossUSD = 0
 	log.Println("[RISK ENGINE] Daily counters reset")
 }
+
+// Reset clears all runtime risk counters so the engine starts from a clean slate.
+func (r *RiskEngine) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.currentExposureBTC = 0
+	r.currentLossUSD = 0
+	r.dailyPnL = 0
+	r.lastATR = 0
+	log.Println("[RISK ENGINE] Full state reset")
+}

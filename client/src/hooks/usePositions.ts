@@ -23,7 +23,7 @@ export type LivePosition = {
   originalSize: number;
 };
 
-export default function usePositions() {
+export default function usePositions(refreshKey = 0) {
   const [positions, setPositions] = useState<LivePosition[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +47,7 @@ export default function usePositions() {
     fetchPositions();
     const interval = setInterval(fetchPositions, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshKey]);
 
   return { positions, loading };
 }

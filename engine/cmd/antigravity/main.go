@@ -14,7 +14,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
@@ -217,7 +216,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 12. HTTP API Server
 	// ═══════════════════════════════════════════════════
-	killswitch := admin.NewKillSwitch(cancel, paperExecute)
+	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
@@ -229,7 +228,9 @@ func main() {
 	// Health check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":     "ok",
@@ -244,7 +245,9 @@ func main() {
 	// GET /api/strategies — Live strategy performance data
 	http.HandleFunc("/api/strategies", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		stats := tracker.GetAllStats()
 		json.NewEncoder(w).Encode(stats)
 	})
@@ -252,7 +255,9 @@ func main() {
 	// GET /api/positions — Open positions with live SL/TP
 	http.HandleFunc("/api/positions", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		openPositions := posMgr.GetOpenPositions()
 		json.NewEncoder(w).Encode(openPositions)
 	})
@@ -260,7 +265,9 @@ func main() {
 	// GET /api/trades — Completed trade journal
 	http.HandleFunc("/api/trades", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		trades := journal.GetRecentTrades(100)
 		json.NewEncoder(w).Encode(trades)
 	})
@@ -268,7 +275,9 @@ func main() {
 	// GET /api/stats — Aggregate performance statistics
 	http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		aggStats := journal.GetAggregateStats()
 
 		ticks, candles := candleAgg.GetStats()
@@ -289,7 +298,9 @@ func main() {
 	// GET /api/logs — Diagnostic memory buffer
 	http.HandleFunc("/api/logs", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
-		if r.Method == http.MethodOptions { return }
+		if r.Method == http.MethodOptions {
+			return
+		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"logs": globalLogs.GetLogs(),
 		})

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardHeader from "@/components/DashboardHeader";
 import StrategyCard from "@/components/StrategyCard";
 import MarketTicker from "@/components/MarketTicker";
@@ -90,12 +90,22 @@ type RunningTrade = {
 };
 
 export default function Home() {
+  const [resetRefreshKey, setResetRefreshKey] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const { engineOnline, balance: engineBalance } = useEngineState();
   const btc = useLiveBTCPrice();
-  const { strategies: liveStrategies } = useStrategies();
-  const { positions: livePositions } = usePositions();
-  const { trades: liveTrades, stats: liveStats } = useTrades();
+  const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
+  const { positions: livePositions } = usePositions(resetRefreshKey);
+  const { trades: liveTrades, stats: liveStats } = useTrades(resetRefreshKey);
   const [fallbackStrategies] = useState(DEFAULT_STRATEGIES);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Use live data if available, otherwise fallback
   const hasLiveStrategies = liveStrategies.length > 0;
@@ -114,7 +124,7 @@ export default function Home() {
   const runningTrades: RunningTrade[] = livePositions.length > 0
     ? livePositions.map(p => {
         const openTime = new Date(p.openedAt);
-        const elapsed = Math.floor((Date.now() - openTime.getTime()) / 1000);
+        const elapsed = Math.floor((currentTime - openTime.getTime()) / 1000);
         const mins = Math.floor(elapsed / 60);
         const secs = elapsed % 60;
         return {
@@ -145,7 +155,7 @@ export default function Home() {
   const activeCount = displayStrategies.filter(s => s.status === "RUNNING").length;
 
   const handleReset = () => {
-    // Reset is handled by the API
+    setResetRefreshKey((current) => current + 1);
   };
 
   return (

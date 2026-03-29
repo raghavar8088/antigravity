@@ -40,7 +40,7 @@ export type EngineStats = {
   openPositions: number;
 };
 
-export default function useTrades() {
+export default function useTrades(refreshKey = 0) {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
   const [stats, setStats] = useState<EngineStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function useTrades() {
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshKey]);
 
   return { trades, stats, loading };
 }

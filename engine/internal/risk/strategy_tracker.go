@@ -243,3 +243,25 @@ func (t *StrategyTracker) ResetDaily() {
 	}
 	log.Println("[STRATEGY TRACKER] Daily stats reset completed")
 }
+
+// Reset clears all strategy performance state while preserving static metadata.
+func (t *StrategyTracker) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for _, s := range t.stats {
+		s.TotalTrades = 0
+		s.Wins = 0
+		s.Losses = 0
+		s.ConsecutiveLosses = 0
+		s.DailyPnL = 0
+		s.TotalPnL = 0
+		s.Disabled = false
+		s.DisabledUntil = time.Time{}
+		s.SignalCount = 0
+		s.LastSignalTime = time.Time{}
+		s.Status = "RUNNING"
+	}
+
+	log.Println("[STRATEGY TRACKER] Full state reset")
+}

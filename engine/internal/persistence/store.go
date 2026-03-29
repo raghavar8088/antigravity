@@ -142,6 +142,33 @@ func (s *Store) SaveState(ctx context.Context, state *EngineState) error {
 	return err
 }
 
+// ResetState writes a clean default state to the database, effectively
+// zeroing out the account so the next engine restart starts fresh.
+func (s *Store) ResetState(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.pool.Exec(ctx, `
+		UPDATE engine_state SET
+			balance = 100000,
+			position_btc = 0,
+			total_fees = 0,
+			positions_json = '[]',
+			trades_json = '[]',
+			total_trades = 0,
+			total_wins = 0,
+			total_losses = 0,
+			total_pnl = 0,
+			saved_at = NOW()
+		WHERE id = 1
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to reset state in database: %w", err)
+	}
+	log.Println("[DB] 🔄 Account state reset to factory defaults in database")
+	return nil
+}
+
 // Close shuts down the database connection pool.
 func (s *Store) Close() {
 	if s.pool != nil {
