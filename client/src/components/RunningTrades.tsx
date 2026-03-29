@@ -1,5 +1,7 @@
 "use client";
 
+import { formatUSD } from "@/lib/money";
+
 interface RunningTrade {
   id: string;
   strategy: string;
@@ -82,7 +84,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                     <span className="animate-pulse">{t.elapsed}</span>
                   </td>
                   <td className={`py-3 px-2 font-mono text-xs font-bold ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                    {pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}
+                    {formatUSD(pnl, { signed: true })}
                   </td>
                   <td className="py-3 px-2">
                     <div className="w-20 h-2 bg-gray-800 rounded-full overflow-hidden relative">

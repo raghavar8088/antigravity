@@ -12,6 +12,7 @@ import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import useStrategies from "@/hooks/useStrategies";
 import usePositions from "@/hooks/usePositions";
 import useTrades from "@/hooks/useTrades";
+import { formatUSD } from "@/lib/money";
 
 type StrategyCardView = {
   name: string;
@@ -248,7 +249,7 @@ export default function Home() {
         <div className="glass-panel p-6 flex flex-col justify-center">
           <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.15em] mb-1">Total Strategy PnL</p>
           <p className={`text-3xl font-mono font-bold ${totalStrategyPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-            {totalStrategyPnl >= 0 ? "+" : ""}${totalStrategyPnl.toFixed(2)}
+            {formatUSD(totalStrategyPnl, { signed: true })}
           </p>
         </div>
         <div className="glass-panel p-6 flex flex-col justify-center">

@@ -100,3 +100,26 @@ func TestOpenPositionReversesShortStopLossAndTakeProfit(t *testing.T) {
 		t.Fatalf("expected take profit 99.6, got %.4f", pos.TakeProfit)
 	}
 }
+
+func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
+	mgr := NewManager()
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   0.10,
+		TakeProfitPct: 1.00,
+	}
+
+	pos := mgr.OpenPosition(sig, 100, "TakeProfitFloor")
+
+	if math.Abs(pos.StopLossPct-1.0) > floatTolerance {
+		t.Fatalf("expected reversed stop loss pct 1.0, got %.4f", pos.StopLossPct)
+	}
+	if math.Abs(pos.TakeProfitPct-0.35) > floatTolerance {
+		t.Fatalf("expected take profit floor 0.35, got %.4f", pos.TakeProfitPct)
+	}
+	if math.Abs(pos.TakeProfit-100.35) > floatTolerance {
+		t.Fatalf("expected take profit 100.35, got %.4f", pos.TakeProfit)
+	}
+}

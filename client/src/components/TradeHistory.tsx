@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatUSD } from "@/lib/money";
 
 type ExitReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
 
@@ -63,7 +64,7 @@ export default function TradeHistory({ history = DEFAULT_TRADE_HISTORY }: { hist
         <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Net PnL</p>
           <p className={`text-xl font-mono font-bold ${totalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-            {totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}
+            {formatUSD(totalPnl, { signed: true })}
           </p>
         </div>
         <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/30">
@@ -120,7 +121,7 @@ export default function TradeHistory({ history = DEFAULT_TRADE_HISTORY }: { hist
                     </span>
                   </td>
                   <td className={`py-3 px-2 text-right font-mono text-xs font-bold ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-                    {t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}
+                    {formatUSD(t.pnl, { signed: true })}
                   </td>
                 </tr>
               ))}

@@ -60,6 +60,7 @@ type ManagerConfig struct {
 	TrailingStopPct    float64 // Trailing stop distance (e.g. 0.4 = 0.4%)
 	BreakEvenThreshold float64 // Move SL to entry after this % profit (e.g. 0.3%)
 	PartialTPRatio     float64 // Close this fraction at TP1 (e.g. 0.5 = 50%)
+	MinTakeProfitPct   float64 // Floor TP distance to avoid fee-level micro exits
 	MaxPerStrategy     int     // Max concurrent positions per strategy
 	ReverseTargets     bool    // Swap incoming TP and SL distances for all strategies
 }
@@ -83,6 +84,7 @@ func NewManager() *Manager {
 			TrailingStopPct:    0.35, // Activate trailing only after profit clears fee drag
 			BreakEvenThreshold: 0.30, // Move stop only after the trade has a real cushion
 			PartialTPRatio:     0.5,  // Close 50% at TP1
+			MinTakeProfitPct:   0.35, // Keep TP above round-trip fee noise
 			MaxPerStrategy:     2,    // Max 2 positions per strategy
 			ReverseTargets:     true, // Run the live book with TP and SL reversed
 		},
@@ -116,6 +118,11 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 	takeProfitPct := sig.TakeProfitPct
 	if m.config.ReverseTargets {
 		stopLossPct, takeProfitPct = takeProfitPct, stopLossPct
+	}
+	if takeProfitPct < m.config.MinTakeProfitPct {
+		log.Printf("[TP FLOOR] %s | %s TP %.3f%% -> %.3f%%",
+			stratName, sig.Action, takeProfitPct, m.config.MinTakeProfitPct)
+		takeProfitPct = m.config.MinTakeProfitPct
 	}
 
 	var stopLoss, takeProfit float64
