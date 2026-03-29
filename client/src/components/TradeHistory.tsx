@@ -10,7 +10,7 @@ interface HistoricalTrade {
   entry: number;
   exit: number;
   pnl: number;
-  reason: "TP_HIT" | "SL_HIT" | "TIMEOUT" | "MANUAL";
+  reason: "TP_HIT" | "SL_HIT" | "MANUAL";
   duration: string;
   time: string;
 }
@@ -104,11 +104,9 @@ export default function TradeHistory({ history = DEFAULT_TRADE_HISTORY }: { hist
                         ? "bg-green-500/10 text-green-400 border border-green-500/20" 
                         : t.reason === "SL_HIT"
                         ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                        : t.reason === "TIMEOUT"
-                        ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
                         : "bg-gray-500/10 text-gray-400 border border-gray-500/20"
                     }`}>
-                      {t.reason === "TP_HIT" ? "🎯 TP HIT" : t.reason === "SL_HIT" ? "🛑 SL HIT" : t.reason === "TIMEOUT" ? "⏰ TIMEOUT" : "✋ MANUAL"}
+                      {t.reason === "TP_HIT" ? "🎯 TP HIT" : t.reason === "SL_HIT" ? "🛑 SL HIT" : "✋ MANUAL"}
                     </span>
                  </td>
                  <td className={`py-3 px-2 text-right font-mono text-xs font-bold ${t.pnl >= 0 ? "text-green-400" : "text-red-400"}`}>

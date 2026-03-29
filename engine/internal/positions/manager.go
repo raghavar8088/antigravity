@@ -28,25 +28,24 @@ type Position struct {
 	TrailingActive bool    `json:"trailingActive"`
 	TrailingDist   float64 `json:"trailingDist"`   // Trailing stop distance in %
 	HighWaterMark  float64 `json:"highWaterMark"`  // Best price seen since entry (for trailing)
-	LowWaterMark   float64 `json:"lowWaterMark"`   // Worst price (for short trailing)
+	LowWaterMark   float64 `json:"lowWaterMark"`   // Worst price seen since entry (for short trailing)
 	BreakEvenMoved bool    `json:"breakEvenMoved"` // Whether SL has been moved to break-even
 	PartialClosed  bool    `json:"partialClosed"`  // Whether partial TP1 has been taken
 	OriginalSize   float64 `json:"originalSize"`   // Size before partial close
 }
 
-// CloseReason describes why a position was automatically closed.
+// CloseReason describes why a position was closed.
 type CloseReason string
 
 const (
 	ReasonStopLoss     CloseReason = "STOP_LOSS"
 	ReasonTakeProfit   CloseReason = "TAKE_PROFIT"
 	ReasonTrailingStop CloseReason = "TRAILING_STOP"
-	ReasonTimeExit     CloseReason = "TIME_EXIT"
 	ReasonBreakEven    CloseReason = "BREAK_EVEN"
 	ReasonManual       CloseReason = "MANUAL"
 )
 
-// CloseEvent is emitted when a position hits SL or TP.
+// CloseEvent is emitted when a position closes.
 type CloseEvent struct {
 	Position  Position
 	Reason    CloseReason
@@ -56,11 +55,10 @@ type CloseEvent struct {
 
 // ManagerConfig holds configuration for position management.
 type ManagerConfig struct {
-	TrailingStopPct    float64       // Trailing stop distance (e.g. 0.4 = 0.4%)
-	BreakEvenThreshold float64       // Move SL to entry after this % profit (e.g. 0.3%)
-	PartialTPRatio     float64       // Close this fraction at TP1 (e.g. 0.5 = 50%)
-	MaxDuration        time.Duration // Reserved for optional max-hold logic
-	MaxPerStrategy     int           // Max concurrent positions per strategy
+	TrailingStopPct    float64 // Trailing stop distance (e.g. 0.4 = 0.4%)
+	BreakEvenThreshold float64 // Move SL to entry after this % profit (e.g. 0.3%)
+	PartialTPRatio     float64 // Close this fraction at TP1 (e.g. 0.5 = 50%)
+	MaxPerStrategy     int     // Max concurrent positions per strategy
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -75,20 +73,17 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
-	manager := &Manager{
+	return &Manager{
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.10,            // 0.10% trailing stop (matches tighter SL)
-			BreakEvenThreshold: 0.08,            // Move to break-even after 0.08% profit
-			PartialTPRatio:     0.5,             // Close 50% at TP1
-			MaxDuration:        5 * time.Minute, // 5 min max hold — true scalping
-			MaxPerStrategy:     2,               // Max 2 positions per strategy
+			TrailingStopPct:    0.10, // 0.10% trailing stop (matches tighter SL)
+			BreakEvenThreshold: 0.08, // Move to break-even after 0.08% profit
+			PartialTPRatio:     0.5,  // Close 50% at TP1
+			MaxPerStrategy:     2,    // Max 2 positions per strategy
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
-	manager.config.MaxDuration = 0
-	return manager
 }
 
 // CanOpenPosition checks if a strategy is allowed to open another position.
@@ -113,9 +108,7 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 	id := genID(m.nextID)
 	m.nextID++
 
-	// Calculate absolute SL/TP price levels from percentage
 	var stopLoss, takeProfit float64
-
 	if sig.Action == strategy.ActionBuy {
 		stopLoss = entryPrice * (1 - sig.StopLossPct/100)
 		takeProfit = entryPrice * (1 + sig.TakeProfitPct/100)
@@ -153,24 +146,13 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 }
 
 // CheckStopLossAndTakeProfit evaluates all open positions against the current live price.
-// This is called on EVERY incoming WebSocket tick for maximum precision.
+// This is called on every incoming market tick for maximum precision.
 func (m *Manager) CheckStopLossAndTakeProfit(currentPrice float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for id, pos := range m.positions {
 		if pos.Status != "OPEN" {
-			continue
-		}
-
-		// --- Time-based exit ---
-		if m.config.MaxDuration > 0 && time.Since(pos.OpenedAt) > m.config.MaxDuration {
-			pnl := m.calculatePnL(pos, currentPrice)
-			pos.Status = "TIME_EXIT"
-			log.Printf("[⏰ TIME EXIT] %s | %s held for %s | PnL: $%.4f",
-				id, pos.StrategyName, time.Since(pos.OpenedAt).Round(time.Second), pnl)
-			m.emitClose(pos, ReasonTimeExit, currentPrice, pnl)
-			delete(m.positions, id)
 			continue
 		}
 
@@ -183,27 +165,23 @@ func (m *Manager) CheckStopLossAndTakeProfit(currentPrice float64) {
 }
 
 func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
-	// Update high water mark
 	if price > pos.HighWaterMark {
 		pos.HighWaterMark = price
 	}
 
 	profitPct := ((price - pos.EntryPrice) / pos.EntryPrice) * 100
 
-	// --- Break-even move ---
 	if !pos.BreakEvenMoved && profitPct >= m.config.BreakEvenThreshold {
-		pos.StopLoss = pos.EntryPrice * 1.0001 // Tiny buffer above entry
+		pos.StopLoss = pos.EntryPrice * 1.0001
 		pos.BreakEvenMoved = true
-		log.Printf("[🔒 BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
+		log.Printf("[BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
 	}
 
-	// --- Trailing stop activation ---
 	if profitPct >= m.config.TrailingStopPct && !pos.TrailingActive {
 		pos.TrailingActive = true
-		log.Printf("[📈 TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
+		log.Printf("[TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
 	}
 
-	// --- Update trailing stop level ---
 	if pos.TrailingActive {
 		trailingLevel := pos.HighWaterMark * (1 - pos.TrailingDist/100)
 		if trailingLevel > pos.StopLoss {
@@ -211,28 +189,22 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 		}
 	}
 
-	// --- Partial take profit (TP1 = 50%) ---
 	if !pos.PartialClosed && price >= pos.TakeProfit {
 		partialSize := pos.Size * m.config.PartialTPRatio
 		partialPnL := (price - pos.EntryPrice) * partialSize
 		pos.Size -= partialSize
 		pos.PartialClosed = true
-
-		// Move stop to break-even for remainder
 		pos.StopLoss = pos.EntryPrice * 1.0001
 		pos.BreakEvenMoved = true
-
-		// Set new TP2 at 2x original distance
 		newTPDist := pos.TakeProfitPct * 2
 		pos.TakeProfit = pos.EntryPrice * (1 + newTPDist/100)
 		pos.TrailingActive = true
 
-		log.Printf("[🎯 PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC → TP2: $%.2f",
+		log.Printf("[PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC -> TP2: $%.2f",
 			id, partialSize, price, partialPnL, pos.Size, pos.TakeProfit)
 		return
 	}
 
-	// --- Stop loss check ---
 	if price <= pos.StopLoss {
 		pnl := m.calculatePnL(pos, price)
 		reason := ReasonStopLoss
@@ -243,18 +215,17 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 			reason = ReasonBreakEven
 		}
 		pos.Status = string(reason)
-		log.Printf("[🛑 %s] %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f",
+		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
 			reason, id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, reason, price, pnl)
 		delete(m.positions, id)
 		return
 	}
 
-	// --- Full take profit (TP2 or no partial) ---
 	if pos.PartialClosed && price >= pos.TakeProfit {
 		pnl := m.calculatePnL(pos, price)
 		pos.Status = "TP_HIT"
-		log.Printf("[🎯 FULL TP] %s | Entry: $%.2f → Exit: $%.2f | PnL: +$%.4f",
+		log.Printf("[FULL TP] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
 			id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, ReasonTakeProfit, price, pnl)
 		delete(m.positions, id)
@@ -262,27 +233,23 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 }
 
 func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
-	// Update low water mark
 	if price < pos.LowWaterMark {
 		pos.LowWaterMark = price
 	}
 
 	profitPct := ((pos.EntryPrice - price) / pos.EntryPrice) * 100
 
-	// --- Break-even move ---
 	if !pos.BreakEvenMoved && profitPct >= m.config.BreakEvenThreshold {
 		pos.StopLoss = pos.EntryPrice * 0.9999
 		pos.BreakEvenMoved = true
-		log.Printf("[🔒 BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
+		log.Printf("[BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
 	}
 
-	// --- Trailing stop activation ---
 	if profitPct >= m.config.TrailingStopPct && !pos.TrailingActive {
 		pos.TrailingActive = true
-		log.Printf("[📈 TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
+		log.Printf("[TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
 	}
 
-	// --- Update trailing stop level ---
 	if pos.TrailingActive {
 		trailingLevel := pos.LowWaterMark * (1 + pos.TrailingDist/100)
 		if trailingLevel < pos.StopLoss {
@@ -290,7 +257,6 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 		}
 	}
 
-	// --- Partial take profit ---
 	if !pos.PartialClosed && price <= pos.TakeProfit {
 		partialSize := pos.Size * m.config.PartialTPRatio
 		partialPnL := (pos.EntryPrice - price) * partialSize
@@ -302,12 +268,11 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 		pos.TakeProfit = pos.EntryPrice * (1 - newTPDist/100)
 		pos.TrailingActive = true
 
-		log.Printf("[🎯 PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC",
+		log.Printf("[PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC",
 			id, partialSize, price, partialPnL, pos.Size)
 		return
 	}
 
-	// --- Stop loss check ---
 	if price >= pos.StopLoss {
 		pnl := m.calculatePnL(pos, price)
 		reason := ReasonStopLoss
@@ -318,18 +283,17 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 			reason = ReasonBreakEven
 		}
 		pos.Status = string(reason)
-		log.Printf("[🛑 %s] %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f",
+		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
 			reason, id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, reason, price, pnl)
 		delete(m.positions, id)
 		return
 	}
 
-	// --- Full take profit ---
 	if pos.PartialClosed && price <= pos.TakeProfit {
 		pnl := m.calculatePnL(pos, price)
 		pos.Status = "TP_HIT"
-		log.Printf("[🎯 FULL TP] %s | Entry: $%.2f → Exit: $%.2f | PnL: +$%.4f",
+		log.Printf("[FULL TP] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
 			id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, ReasonTakeProfit, price, pnl)
 		delete(m.positions, id)
@@ -367,7 +331,7 @@ func (m *Manager) GetOpenPositions() []Position {
 	return result
 }
 
-// ClosePosition manually closes a position (e.g. from Kill Switch).
+// ClosePosition manually closes a position (for example from the kill switch).
 func (m *Manager) ClosePosition(id string, exitPrice float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -380,7 +344,7 @@ func (m *Manager) ClosePosition(id string, exitPrice float64) {
 	}
 }
 
-// CloseAllPositions force-closes all open positions (for kill switch).
+// CloseAllPositions force-closes all open positions.
 func (m *Manager) CloseAllPositions(exitPrice float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -397,8 +361,6 @@ func (m *Manager) CloseAllPositions(exitPrice float64) {
 }
 
 // RestorePositions loads previously-saved positions back into the manager.
-// This is called on engine boot to restore state from the database,
-// ensuring positions survive Render free-tier restarts.
 func (m *Manager) RestorePositions(restored []Position) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -413,12 +375,11 @@ func (m *Manager) RestorePositions(restored []Position) {
 		count++
 	}
 
-	// Set nextID past any restored IDs to avoid collisions
 	if count > 0 {
-		m.nextID = count + 1000 // Large offset to avoid ID collision
+		m.nextID = count + 1000
 	}
 
-	log.Printf("[POSITION MANAGER] ♻️  Restored %d open positions from database", count)
+	log.Printf("[POSITION MANAGER] Restored %d open positions from database", count)
 }
 
 // GetPositionCount returns the number of currently open positions.
@@ -429,13 +390,12 @@ func (m *Manager) GetPositionCount() int {
 }
 
 // Reset wipes all open positions from memory without emitting close events.
-// Used by the account reset flow so the DB and in-memory state stay in sync.
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.positions = make(map[string]*Position)
 	m.nextID = 1
-	log.Println("[POSITION MANAGER] 🔄 All positions cleared for account reset")
+	log.Println("[POSITION MANAGER] All positions cleared for account reset")
 }
 
 func genID(n int) string {
