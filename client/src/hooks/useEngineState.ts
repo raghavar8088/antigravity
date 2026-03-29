@@ -1,17 +1,17 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+
+const FALLBACK_BALANCE = 100000.0;
 
 export default function useEngineState() {
   const [engineOnline, setEngineOnline] = useState(false);
-  const [balance, setBalance] = useState(1000.00);
 
   useEffect(() => {
-    // Dynamically connect to either Local Engine or Cloud Render Engine 
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-    
+
     fetch(`${API_URL}/health`)
-      .then(res => {
-        if (res.ok) setEngineOnline(true);
+      .then((res) => {
+        setEngineOnline(res.ok);
       })
       .catch(() => {
         setEngineOnline(false);
@@ -20,6 +20,6 @@ export default function useEngineState() {
 
   return {
     engineOnline,
-    balance,
+    balance: FALLBACK_BALANCE,
   };
 }

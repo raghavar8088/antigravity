@@ -8,8 +8,15 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
+const (
+	minSelectiveScore  = 2.0
+	minDominanceRatio  = 1.15
+	minDominanceLead   = 0.35
+	maxApprovedSignals = 1
+)
+
 // FilterSignalsSelective chooses the dominant side for the current batch and
-// only forwards a small diversified subset of stronger strategies.
+// only forwards a small, high-conviction subset of stronger strategies.
 func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal) []AggregatedSignal {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -35,7 +42,8 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 			}
 		}
 
-		sideScore[sig.Signal.Action] += strategyPriority(sig)
+		score := strategyPriority(sig)
+		sideScore[sig.Signal.Action] += score
 		eligible = append(eligible, sig)
 	}
 
@@ -44,8 +52,18 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 	}
 
 	dominantAction := strategy.ActionBuy
+	dominantScore := sideScore[strategy.ActionBuy]
+	opposingScore := sideScore[strategy.ActionSell]
 	if sideScore[strategy.ActionSell] > sideScore[strategy.ActionBuy] {
 		dominantAction = strategy.ActionSell
+		dominantScore = sideScore[strategy.ActionSell]
+		opposingScore = sideScore[strategy.ActionBuy]
+	}
+
+	if opposingScore > 0 && (dominantScore < opposingScore*minDominanceRatio || dominantScore-opposingScore < minDominanceLead) {
+		a.filteredSignals += int64(len(eligible))
+		log.Printf("[AGGREGATOR] SKIPPED batch: weak consensus | buyScore=%.2f sellScore=%.2f", sideScore[strategy.ActionBuy], sideScore[strategy.ActionSell])
+		return nil
 	}
 
 	sort.SliceStable(eligible, func(i, j int) bool {
@@ -55,7 +73,12 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 	var approved []AggregatedSignal
 	usedCategories := make(map[string]struct{})
 	for _, sig := range eligible {
+		score := strategyPriority(sig)
 		if sig.Signal.Action != dominantAction {
+			a.filteredSignals++
+			continue
+		}
+		if score < minSelectiveScore {
 			a.filteredSignals++
 			continue
 		}
@@ -63,7 +86,7 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 			a.filteredSignals++
 			continue
 		}
-		if len(approved) >= 2 {
+		if len(approved) >= maxApprovedSignals {
 			a.filteredSignals++
 			continue
 		}
@@ -74,7 +97,7 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 		approved = append(approved, sig)
 
 		log.Printf("[AGGREGATOR] APPROVED: %s -> %s %.4f %s | score=%.2f",
-			sig.StrategyName, sig.Signal.Action, sig.Signal.TargetSize, sig.Signal.Symbol, strategyPriority(sig))
+			sig.StrategyName, sig.Signal.Action, sig.Signal.TargetSize, sig.Signal.Symbol, score)
 	}
 
 	return approved

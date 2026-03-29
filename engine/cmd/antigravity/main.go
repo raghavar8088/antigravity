@@ -56,7 +56,7 @@ func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║")
-	fmt.Println("║   91 Strategies | Full State Restore | Panic Recovery  ║")
+	fmt.Println("║   24 Curated Strategies | Full State Restore | Panic Recovery  ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -283,8 +283,10 @@ func main() {
 		ticks, candles := candleAgg.GetStats()
 		response := map[string]interface{}{
 			"aggregate":      aggStats,
-			"balance":        paperExecute.GetBalanceUSD(),
-			"exposure":       riskEngine.GetExposure(),
+			"balance":        paperExecute.GetEquityUSD(),
+			"cashBalance":    paperExecute.GetBalanceUSD(),
+			"exposure":       riskEngine.GetAbsoluteExposure(),
+			"netPosition":    riskEngine.GetExposure(),
 			"dailyPnl":       riskEngine.GetDailyPnL(),
 			"totalFees":      paperExecute.GetTotalFees(),
 			"lastPrice":      paperExecute.GetLastPrice(),

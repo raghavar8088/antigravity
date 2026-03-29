@@ -33,7 +33,9 @@ export type AggregateStats = {
 export type EngineStats = {
   aggregate: AggregateStats;
   balance: number;
+  cashBalance: number;
   exposure: number;
+  netPosition: number;
   dailyPnl: number;
   totalFees: number;
   lastPrice: number;

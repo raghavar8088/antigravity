@@ -1,7 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
 interface RunningTrade {
   id: string;
   strategy: string;
@@ -15,13 +13,6 @@ interface RunningTrade {
 }
 
 export default function RunningTrades({ currentPrice, trades }: { currentPrice: number; trades: RunningTrade[] }) {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => setElapsed(e => e + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   if (trades.length === 0) {
     return (
       <div className="py-14 text-center text-sm text-gray-400">
@@ -55,7 +46,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
             </tr>
           </thead>
           <tbody>
-            {trades.map((t, i) => {
+            {trades.map((t) => {
               const markPrice = currentPrice > 0 ? currentPrice : t.entry;
               const sl = t.side === "LONG" ? t.entry * (1 - t.slPct / 100) : t.entry * (1 + t.slPct / 100);
               const tp = t.side === "LONG" ? t.entry * (1 + t.tpPct / 100) : t.entry * (1 - t.tpPct / 100);
@@ -63,20 +54,21 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
               const totalRange = tp - sl;
               const pricePos = totalRange !== 0 ? ((markPrice - sl) / totalRange) * 100 : 50;
               const clamped = Math.max(0, Math.min(100, pricePos));
+              const sideClasses = t.side === "LONG" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400";
 
               return (
-                <tr key={i} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors group">
+                <tr key={t.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors group">
                   <td className="py-3 px-2 font-mono text-xs text-gray-500">{t.id}</td>
                   <td className="py-3 px-2 font-mono text-xs text-blue-400">{t.strategy}</td>
                   <td className="py-3 px-2">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-green-500/10 text-green-400">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider ${sideClasses}`}>
                       {t.side}
                     </span>
                   </td>
                   <td className="py-3 px-2 font-mono text-xs">{t.size}</td>
                   <td className="py-3 px-2 font-mono text-xs">${t.entry.toFixed(2)}</td>
                   <td className={`py-3 px-2 font-mono text-xs transition-colors duration-150 ${pnl >= 0 ? "text-green-300" : "text-red-300"}`}>
-                    ${markPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    ${markPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-3 px-2">
                     <span className="font-mono text-xs text-red-400">${sl.toFixed(2)}</span>
@@ -98,9 +90,9 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                         <div className="w-1/2 bg-gradient-to-r from-red-500/20 to-transparent"></div>
                         <div className="w-1/2 bg-gradient-to-l from-green-500/20 to-transparent"></div>
                       </div>
-                      <div 
+                      <div
                         className={`absolute h-full w-1.5 rounded-full transition-all duration-500 ${pnl >= 0 ? "bg-green-400 shadow-[0_0_6px_#10b981]" : "bg-red-400 shadow-[0_0_6px_#ef4444]"}`}
-                        style={{ left: `${clamped}%`, transform: 'translateX(-50%)' }}
+                        style={{ left: `${clamped}%`, transform: "translateX(-50%)" }}
                       ></div>
                     </div>
                   </td>

@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+const (
+	poorPerformanceMinTrades  = 6
+	poorPerformanceMinWinRate = 0.35
+)
+
 // StrategyStats tracks live performance metrics for a single strategy.
 type StrategyStats struct {
 	Name              string    `json:"name"`
@@ -19,10 +24,10 @@ type StrategyStats struct {
 	TotalPnL          float64   `json:"totalPnl"`
 	Disabled          bool      `json:"disabled"`
 	DisabledUntil     time.Time `json:"disabledUntil"`
-	Allocation        float64   `json:"allocation"` // USD budget for this strategy
+	Allocation        float64   `json:"allocation"`
 	SignalCount       int64     `json:"signalCount"`
 	LastSignalTime    time.Time `json:"lastSignalTime"`
-	Status            string    `json:"status"` // "RUNNING", "DISABLED", "COOLDOWN"
+	Status            string    `json:"status"`
 }
 
 // StrategyTracker maintains per-strategy performance state.
@@ -40,24 +45,29 @@ type StrategyTracker struct {
 func NewStrategyTracker(strategyNames []string, categories []string, timeframes []string, totalCapital float64) *StrategyTracker {
 	stats := make(map[string]*StrategyStats)
 
-	// Weighted allocation by category
 	categoryWeights := map[string]float64{
-		"Trend":          1.5,
-		"Mean Reversion": 1.3,
-		"Breakout":       1.2,
-		"Momentum":       1.1,
-		"Microstructure": 1.0,
-		"Velocity":       0.9,
-		"Statistical":    1.2,
-		"Volatility":     1.0,
-		"Smart Money":    1.1,
-		"Price Action":   1.0,
-		"Adaptive":       1.3,
+		"Trend":              1.5,
+		"Mean Reversion":     1.3,
+		"Mean Rev Elite":     1.25,
+		"Breakout":           1.2,
+		"Breakout Elite":     1.2,
+		"Momentum":           1.1,
+		"Momentum Elite":     1.1,
+		"Microstructure":     1.0,
+		"Velocity":           0.9,
+		"Statistical":        1.1,
+		"Volatility":         0.95,
+		"Time-of-Day":        0.95,
+		"Smart Money":        1.0,
+		"Price Action":       1.0,
+		"Price Action Elite": 1.0,
+		"Adaptive":           1.15,
+		"Adaptive Elite":     1.15,
+		"Multi-Signal":       1.3,
 	}
 
-	// Calculate total weight
 	totalWeight := 0.0
-	for i, name := range strategyNames {
+	for i := range strategyNames {
 		cat := "Unknown"
 		if i < len(categories) {
 			cat = categories[i]
@@ -67,10 +77,8 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 			w = 1.0
 		}
 		totalWeight += w
-		_ = name
 	}
 
-	// Distribute capital proportionally
 	for i, name := range strategyNames {
 		cat := "Unknown"
 		tf := "1m"
@@ -84,7 +92,10 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 		if !ok {
 			w = 1.0
 		}
-		allocation := (w / totalWeight) * totalCapital
+		allocation := 0.0
+		if totalWeight > 0 {
+			allocation = (w / totalWeight) * totalCapital
+		}
 
 		stats[name] = &StrategyStats{
 			Name:       name,
@@ -95,13 +106,18 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 		}
 	}
 
+	perStrategyCapital := totalCapital
+	if len(strategyNames) > 0 {
+		perStrategyCapital = totalCapital / float64(len(strategyNames))
+	}
+
 	log.Printf("[STRATEGY TRACKER] Initialized %d strategies with $%.2f total capital (weighted allocation)", len(strategyNames), totalCapital)
 
 	return &StrategyTracker{
 		stats:                stats,
-		maxConsecutiveLosses: 5,
-		cooldownDuration:     10 * time.Minute,
-		dailyLossLimit:       totalCapital / float64(len(strategyNames)) * 0.5, // 50% of allocation as daily loss limit
+		maxConsecutiveLosses: 3,
+		cooldownDuration:     20 * time.Minute,
+		dailyLossLimit:       perStrategyCapital * 0.02,
 	}
 }
 
@@ -112,11 +128,9 @@ func (t *StrategyTracker) IsEnabled(strategyName string) bool {
 
 	s, ok := t.stats[strategyName]
 	if !ok {
-		return true // Unknown strategy, allow
+		return true
 	}
 
-	// If disabled but cooldown expired, allow trading
-	// (ReEnableExpired will clean up the Disabled flag on next tick)
 	if s.Disabled && time.Now().After(s.DisabledUntil) {
 		return true
 	}
@@ -151,6 +165,13 @@ func (t *StrategyTracker) RecordSignal(strategyName string) {
 	}
 }
 
+func (t *StrategyTracker) disableStrategy(s *StrategyStats, status, reason string) {
+	s.Disabled = true
+	s.DisabledUntil = time.Now().Add(t.cooldownDuration)
+	s.Status = status
+	log.Printf("[STRATEGY TRACKER] Disabled strategy %s: %s. Cooldown until %s", s.Name, reason, s.DisabledUntil.Format("15:04:05"))
+}
+
 // RecordTradeResult updates a strategy's stats after a trade closes.
 func (t *StrategyTracker) RecordTradeResult(strategyName string, pnl float64) {
 	t.mu.Lock()
@@ -173,22 +194,22 @@ func (t *StrategyTracker) RecordTradeResult(strategyName string, pnl float64) {
 		s.ConsecutiveLosses++
 	}
 
-	// Check consecutive loss threshold
 	if s.ConsecutiveLosses >= t.maxConsecutiveLosses {
-		s.Disabled = true
-		s.DisabledUntil = time.Now().Add(t.cooldownDuration)
-		s.Status = "COOLDOWN"
-		log.Printf("[STRATEGY TRACKER] ⚠️ DISABLED strategy %s after %d consecutive losses. Cooldown until %s",
-			s.Name, s.ConsecutiveLosses, s.DisabledUntil.Format("15:04:05"))
+		t.disableStrategy(s, "COOLDOWN", "hit consecutive loss limit")
+		return
 	}
 
-	// Check daily loss limit
 	if s.DailyPnL < -t.dailyLossLimit {
-		s.Disabled = true
-		s.DisabledUntil = time.Now().Add(t.cooldownDuration)
-		s.Status = "DAILY_LIMIT"
-		log.Printf("[STRATEGY TRACKER] 🛑 DISABLED strategy %s: daily loss $%.2f exceeds limit $%.2f",
-			s.Name, s.DailyPnL, t.dailyLossLimit)
+		t.disableStrategy(s, "DAILY_LIMIT", "exceeded daily loss limit")
+		return
+	}
+
+	if s.TotalTrades >= poorPerformanceMinTrades {
+		winRate := float64(s.Wins) / float64(s.TotalTrades)
+		if s.TotalPnL < 0 && winRate < poorPerformanceMinWinRate {
+			t.disableStrategy(s, "UNDERPERFORMING", "poor live win rate and negative PnL")
+			return
+		}
 	}
 }
 
@@ -223,7 +244,7 @@ func (t *StrategyTracker) GetWinRate(name string) float64 {
 
 	s, ok := t.stats[name]
 	if !ok || s.TotalTrades == 0 {
-		return 0.5 // Default 50% for new strategies
+		return 0.5
 	}
 	return float64(s.Wins) / float64(s.TotalTrades)
 }
