@@ -136,8 +136,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 9b. DATABASE PERSISTENCE — Restore state from Neon PostgreSQL
 	// ═══════════════════════════════════════════════════
-	var dbStore *persistence.Store
-	dbStore, err = persistence.NewStore(ctx)
+	dbStore, err := persistence.NewStore(ctx)
 	if err != nil {
 		log.Printf("[DB] ⚠️  Database not available (will use fresh state): %v", err)
 	} else {

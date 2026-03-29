@@ -115,9 +115,10 @@ func (t *StrategyTracker) IsEnabled(strategyName string) bool {
 		return true // Unknown strategy, allow
 	}
 
-	// Check cooldown expiry
+	// If disabled but cooldown expired, allow trading
+	// (ReEnableExpired will clean up the Disabled flag on next tick)
 	if s.Disabled && time.Now().After(s.DisabledUntil) {
-		return false // Still need write lock to re-enable
+		return true
 	}
 
 	return !s.Disabled

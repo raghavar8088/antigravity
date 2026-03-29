@@ -109,6 +109,33 @@ func (p *PaperClient) ResetAccount() error {
 	return nil
 }
 
+// SettlePosition updates the paper balance when a position is closed
+// (via SL, TP, trailing stop, or time exit). This is the missing piece
+// that credits USD back after a BUY position closes, or debits for SHORT closes.
+func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float64) {
+	if side == strategy.ActionBuy {
+		// Closing a LONG position: sell BTC back at exit price
+		revenue := size * exitPrice
+		fee := revenue * p.feeRate
+		p.balanceUSD += revenue - fee
+		p.positionBTC -= size
+		if p.positionBTC < 0 {
+			p.positionBTC = 0
+		}
+		p.totalFeesPaid += fee
+		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
+			size, exitPrice, fee, p.balanceUSD)
+	} else {
+		// Closing a SHORT position: buy BTC back at exit price
+		cost := size * exitPrice
+		fee := cost * p.feeRate
+		p.balanceUSD -= cost + fee
+		p.totalFeesPaid += fee
+		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
+			size, exitPrice, fee, p.balanceUSD)
+	}
+}
+
 // RestoreBalance restores balance and fees from database on restart.
 func (p *PaperClient) RestoreBalance(balance, fees float64) {
 	p.balanceUSD = balance

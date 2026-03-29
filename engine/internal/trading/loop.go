@@ -239,6 +239,12 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		// Record signal in tracker
 		o.tracker.RecordSignal(aggSig.StrategyName)
 
+		// Position limit check: prevent stacking too many positions per strategy
+		if !o.posMgr.CanOpenPosition(aggSig.StrategyName) {
+			log.Printf("[POSITION LIMIT] %s already at max positions — skipping", aggSig.StrategyName)
+			continue
+		}
+
 		// Risk validation
 		o.mu.RLock()
 		currentPrice := o.lastPrice
@@ -283,6 +289,11 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case event := <-o.posMgr.CloseEvents:
+			// ═══ FIX: Settle paper balance (credit USD back) ═══
+			// Without this, every BUY drains the balance permanently
+			// because no SELL ever executes to return the USD.
+			o.exec.SettlePosition(event.Position.Side, event.Position.Size, event.ExitPrice)
+
 			// Record in trade journal
 			entry := execution.JournalEntry{
 				ID:           event.Position.ID,
@@ -311,6 +322,10 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 				closeSig.Action = strategy.ActionBuy
 			}
 			o.risk.NotifyFill(closeSig)
+
+			log.Printf("[✅ TRADE CLOSED] %s | %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f | Reason: %s",
+				event.Position.StrategyName, event.Position.Side,
+				event.Position.EntryPrice, event.ExitPrice, event.PnL, event.Reason)
 		}
 	}
 }
