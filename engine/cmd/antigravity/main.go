@@ -78,8 +78,8 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 2. Build ALL 40 Strategies
 	// ═══════════════════════════════════════════════════
-	allStrategies := strategy.BuildAllScalpers()
-	log.Printf("[INIT] Loaded %d scalping strategies", len(allStrategies))
+	allStrategies := strategy.BuildCuratedScalpers()
+	log.Printf("[INIT] Loaded %d curated live strategies", len(allStrategies))
 
 	// Extract names, categories, timeframes for tracker
 	names := make([]string, len(allStrategies))

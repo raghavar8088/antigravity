@@ -29,9 +29,9 @@ type Orchestrator struct {
 	candleAgg  *marketdata.CandleAggregator
 
 	// Internal state
-	lastPrice    float64
-	h1Counter    int // Counts 5m candles to simulate 1h (every 12th)
-	mu           sync.RWMutex
+	lastPrice float64
+	h1Counter int // Counts 5m candles to simulate 1h (every 12th)
+	mu        sync.RWMutex
 }
 
 func NewOrchestrator(
@@ -230,7 +230,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 	if len(rawSignals) == 0 {
 		return
 	}
-	approved := o.aggregator.FilterSignals(rawSignals)
+	approved := o.aggregator.FilterSignalsSelective(rawSignals)
 
 	// Execute approved signals
 	for _, aggSig := range approved {
