@@ -394,6 +394,38 @@ func (m *Manager) CloseAllPositions(exitPrice float64) {
 	}
 }
 
+// RestorePositions loads previously-saved positions back into the manager.
+// This is called on engine boot to restore state from the database,
+// ensuring positions survive Render free-tier restarts.
+func (m *Manager) RestorePositions(restored []Position) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	count := 0
+	for i := range restored {
+		pos := restored[i]
+		if pos.Status != "OPEN" {
+			continue
+		}
+		m.positions[pos.ID] = &pos
+		count++
+	}
+
+	// Set nextID past any restored IDs to avoid collisions
+	if count > 0 {
+		m.nextID = count + 1000 // Large offset to avoid ID collision
+	}
+
+	log.Printf("[POSITION MANAGER] ♻️  Restored %d open positions from database", count)
+}
+
+// GetPositionCount returns the number of currently open positions.
+func (m *Manager) GetPositionCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.positions)
+}
+
 func genID(n int) string {
 	return fmt.Sprintf("POS-%s-%d", time.Now().Format("150405"), n)
 }

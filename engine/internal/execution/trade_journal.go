@@ -160,3 +160,30 @@ func (j *TradeJournal) GetAggregateStats() AggregateStats {
 		ProfitFactor: profitFactor,
 	}
 }
+
+// RestoreTrades loads previously-saved trades back into the journal.
+// This is called on engine boot to restore trade history from the database,
+// so the dashboard shows correct lifetime stats even after restarts.
+func (j *TradeJournal) RestoreTrades(trades []JournalEntry, totalTrades, totalWins, totalLosses int, totalPnL float64) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	j.entries = trades
+	j.totalTrades = totalTrades
+	j.totalWins = totalWins
+	j.totalLosses = totalLosses
+	j.totalPnL = totalPnL
+
+	// Recalculate best/worst from entries
+	for _, e := range trades {
+		if e.NetPnL > j.bestTrade {
+			j.bestTrade = e.NetPnL
+		}
+		if e.NetPnL < j.worstTrade {
+			j.worstTrade = e.NetPnL
+		}
+	}
+
+	log.Printf("[TRADE JOURNAL] ♻️  Restored %d trades (W/L: %d/%d, PnL: $%.2f)",
+		len(trades), totalWins, totalLosses, totalPnL)
+}

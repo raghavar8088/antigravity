@@ -56,8 +56,8 @@ var globalLogs = &RingLogger{max: 100}
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   ANTIGRAVITY ENGINE v5.0 — PERSISTENT EDITION         ║")
-	fmt.Println("║   41 Strategies | DB State | Panic Recovery | $100K    ║")
+	fmt.Println("║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║")
+	fmt.Println("║   91 Strategies | Full State Restore | Panic Recovery  ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,17 +134,42 @@ func main() {
 	log.Println("[INIT] ✅ Candle Aggregator ready (1m + 5m intervals)")
 
 	// ═══════════════════════════════════════════════════
-	// 9b. DATABASE PERSISTENCE — Restore state from Neon PostgreSQL
+	// 9b. DATABASE PERSISTENCE — FULL state restore from Neon PostgreSQL
 	// ═══════════════════════════════════════════════════
 	dbStore, err := persistence.NewStore(ctx)
 	if err != nil {
 		log.Printf("[DB] ⚠️  Database not available (will use fresh state): %v", err)
 	} else {
-		// Restore previous state on boot
+		// ── Restore ALL state on boot ──
 		state, loadErr := dbStore.LoadState(ctx)
 		if loadErr == nil && state.Balance != 100000 {
+			// 1. Restore paper balance + fees
 			paperExecute.RestoreBalance(state.Balance, state.TotalFees)
-			log.Printf("[DB] ♻️  Restored engine state from %s", state.SavedAt.Format(time.RFC3339))
+
+			// 2. Restore open positions from DB
+			var restoredPositions []positions.Position
+			if len(state.Positions) > 2 { // Not empty "[]"
+				if err := json.Unmarshal(state.Positions, &restoredPositions); err != nil {
+					log.Printf("[DB] ⚠️  Failed to parse positions: %v", err)
+				} else {
+					posMgr.RestorePositions(restoredPositions)
+				}
+			}
+
+			// 3. Restore trade journal from DB
+			var restoredTrades []execution.JournalEntry
+			if len(state.Trades) > 2 { // Not empty "[]"
+				if err := json.Unmarshal(state.Trades, &restoredTrades); err != nil {
+					log.Printf("[DB] ⚠️  Failed to parse trades: %v", err)
+				} else {
+					journal.RestoreTrades(restoredTrades,
+						state.TotalTrades, state.TotalWins, state.TotalLosses, state.TotalPnL)
+				}
+			}
+
+			log.Printf("[DB] ♻️  FULL state restored from %s | Balance: $%.2f | Positions: %d | Trades: %d",
+				state.SavedAt.Format(time.RFC3339), state.Balance,
+				posMgr.GetPositionCount(), state.TotalTrades)
 		} else {
 			log.Println("[DB] Fresh start — no previous state to restore")
 		}
@@ -320,7 +345,7 @@ func setCORS(w http.ResponseWriter) {
 // to prevent Render free tier from spinning down the service.
 // When the service sleeps, ALL strategy price buffers are lost.
 func keepAlive(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	defer ticker.Stop()
 
 	port := os.Getenv("PORT")
@@ -329,7 +354,7 @@ func keepAlive(ctx context.Context) {
 	}
 	healthURL := fmt.Sprintf("http://localhost:%s/health", port)
 
-	log.Printf("[KEEP-ALIVE] Self-ping enabled every 10m → %s", healthURL)
+	log.Printf("[KEEP-ALIVE] Self-ping enabled every 2m → %s", healthURL)
 
 	for {
 		select {

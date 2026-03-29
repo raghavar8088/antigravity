@@ -36,10 +36,10 @@ func NewStateSaver(
 
 // Run starts the periodic save loop. Call this in a goroutine.
 func (s *StateSaver) Run(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("[STATE SAVER] Saving engine state every 30s to Neon PostgreSQL")
+	log.Println("[STATE SAVER] Saving engine state every 15s to Neon PostgreSQL")
 
 	for {
 		select {
