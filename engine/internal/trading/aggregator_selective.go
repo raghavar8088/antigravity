@@ -136,6 +136,10 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 0.95
 	case "PriceChannel_Breakout_Scalp":
 		score += 1.0
+	case "Chart_Wedge_Breakout_Scalp":
+		score += 1.05
+	case "Chart_DoubleTap_Reversal_Scalp":
+		score += 0.95
 	case "ADX_Trend_Scalp":
 		score += 1.0
 	case "EMA_Cross_Scalp":

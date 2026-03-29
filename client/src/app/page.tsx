@@ -6,6 +6,7 @@ import StrategyCard from "@/components/StrategyCard";
 import MarketTicker from "@/components/MarketTicker";
 import RunningTrades from "@/components/RunningTrades";
 import TradeHistory from "@/components/TradeHistory";
+import PerformanceCharts from "@/components/PerformanceCharts";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import useStrategies from "@/hooks/useStrategies";
@@ -34,6 +35,8 @@ type RunningTrade = {
 };
 
 type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
+type ChartPricePoint = { time: number; price: number };
+type ChartEquityPoint = { time: number; equity: number };
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
@@ -58,6 +61,8 @@ const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "RSI_BB_Confluence_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "TripleFilter_Alpha_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "Exhaustion_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Chart_DoubleTap_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Chart_Wedge_Breakout_Scalp", category: "Price Action Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "AdaptiveRSI_Dynamic_Scalp", category: "Adaptive Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "KAMA_Adaptive_Scalp", category: "Adaptive", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
 ];
@@ -192,6 +197,39 @@ export default function Home() {
 
   const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? tradeDailyPnl;
   const activeCount = displayStrategies.filter((strategy) => strategy.status === "RUNNING").length;
+  const priceSeries: ChartPricePoint[] = btc.recentPrices.length > 0
+    ? btc.recentPrices
+    : btc.price > 0
+      ? [{ time: currentTime, price: btc.price }]
+      : [];
+  const strategyBars = displayStrategies.map((strategy) => ({
+    name: strategy.name,
+    pnl: strategy.profit,
+  }));
+
+  const baselineBalance = liveStats
+    ? liveStats.balance - liveStats.aggregate.totalPnl
+    : 100000;
+
+  const equitySeries: ChartEquityPoint[] = [];
+  let cumulativeEquity = baselineBalance;
+  const orderedTrades = [...liveTrades].sort(
+    (left, right) => new Date(left.exitTime).getTime() - new Date(right.exitTime).getTime()
+  );
+
+  for (const trade of orderedTrades) {
+    cumulativeEquity += trade.netPnl;
+    equitySeries.push({
+      time: new Date(trade.exitTime).getTime(),
+      equity: cumulativeEquity,
+    });
+  }
+
+  if (equitySeries.length === 0 && balance > 0) {
+    equitySeries.push({ time: currentTime, equity: balance });
+  } else if (equitySeries.length > 0 && balance > 0) {
+    equitySeries.push({ time: currentTime, equity: balance });
+  }
 
   const handleReset = () => {
     setResetRefreshKey((current) => current + 1);
@@ -220,6 +258,8 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      <PerformanceCharts priceSeries={priceSeries} equitySeries={equitySeries} strategyBars={strategyBars} />
 
       {liveStats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

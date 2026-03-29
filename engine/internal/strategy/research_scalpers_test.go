@@ -129,3 +129,62 @@ func TestOpeningRangeBreakoutScalperSignalsLong(t *testing.T) {
 		t.Fatalf("expected opening range breakout strategy to emit a buy signal")
 	}
 }
+
+func TestChartWedgeBreakoutScalperSignalsLong(t *testing.T) {
+	strat := NewChartWedgeBreakoutScalper()
+	start := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	var prices []float64
+	var volumes []float64
+
+	// Wide range first.
+	for i := 0; i < 24; i++ {
+		if i%2 == 0 {
+			prices = append(prices, 101.10)
+		} else {
+			prices = append(prices, 99.20)
+		}
+		volumes = append(volumes, 1.0)
+	}
+
+	// Compressed range next.
+	for i := 0; i < 24; i++ {
+		if i%2 == 0 {
+			prices = append(prices, 100.18)
+		} else {
+			prices = append(prices, 99.94)
+		}
+		volumes = append(volumes, 1.05)
+	}
+
+	// Breakout candle.
+	prices = append(prices, 101.05)
+	volumes = append(volumes, 2.2)
+
+	signals := feedStrategy(strat, start, prices, volumes)
+	if !hasAction(signals, ActionBuy) {
+		t.Fatalf("expected chart wedge breakout strategy to emit a buy signal")
+	}
+}
+
+func TestChartDoubleTapReversalScalperSignalsLong(t *testing.T) {
+	strat := NewChartDoubleTapReversalScalper()
+	start := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	prices := []float64{
+		100.20, 100.05, 100.25, 100.10, 100.30, 100.15, 100.28, 100.12,
+		100.26, 100.08, 100.22, 100.02, 100.18, 99.95, 100.12, 99.90,
+		100.08, 99.86, 100.05, 99.82, 99.45, 99.20, 99.05, 99.55,
+		100.05, 100.30, 99.95, 99.70, 99.45, 99.25, 99.12, 99.04, 99.10,
+	}
+	volumes := make([]float64, len(prices))
+	for i := range volumes {
+		volumes[i] = 1.0
+	}
+	volumes[len(volumes)-1] = 1.5
+
+	signals := feedStrategy(strat, start, prices, volumes)
+	if !hasAction(signals, ActionBuy) {
+		t.Fatalf("expected chart double tap strategy to emit a buy signal")
+	}
+}

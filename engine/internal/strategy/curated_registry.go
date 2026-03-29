@@ -27,6 +27,8 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewRSIBBScalper(), "Mean Rev Elite", "1m"},
 		{NewTripleFilterScalper(), "Multi-Signal", "1m"},
 		{NewExhaustionScalper(10), "Price Action Elite", "1m"},
+		{NewChartDoubleTapReversalScalper(), "Price Action Elite", "1m"},
+		{NewChartWedgeBreakoutScalper(), "Price Action Elite", "5m"},
 		{NewAdaptiveRSIScalper(14), "Adaptive Elite", "1m"},
 		{NewKAMAScalper(10), "Adaptive", "1m"},
 	}

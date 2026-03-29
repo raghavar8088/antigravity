@@ -10,6 +10,7 @@ interface LivePriceState {
   volume24h: number;
   ticksPerSecond: number;
   connected: boolean;
+  recentPrices: { time: number; price: number }[];
 }
 
 export default function useLiveBTCPrice(): LivePriceState {
@@ -22,6 +23,7 @@ export default function useLiveBTCPrice(): LivePriceState {
     volume24h: 0,
     ticksPerSecond: 0,
     connected: false,
+    recentPrices: [],
   });
 
   const tickCounter = useRef(0);
@@ -32,14 +34,16 @@ export default function useLiveBTCPrice(): LivePriceState {
     fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
       .then((res) => res.json())
       .then((data) => {
+        const initialPrice = parseFloat(data.lastPrice);
         setState((prev) => ({
           ...prev,
-          price: parseFloat(data.lastPrice),
-          prevPrice: parseFloat(data.lastPrice),
+          price: initialPrice,
+          prevPrice: initialPrice,
           change24h: parseFloat(data.priceChangePercent),
           high24h: parseFloat(data.highPrice),
           low24h: parseFloat(data.lowPrice),
           volume24h: parseFloat(data.volume),
+          recentPrices: [{ time: Date.now(), price: initialPrice }],
         }));
       })
       .catch(console.error);
@@ -62,6 +66,7 @@ export default function useLiveBTCPrice(): LivePriceState {
         ...prev,
         prevPrice: prev.price,
         price: newPrice,
+        recentPrices: [...prev.recentPrices, { time: Date.now(), price: newPrice }].slice(-240),
       }));
     };
 
