@@ -42,3 +42,49 @@ func TestStrategyTrackerDisablesUnderperformingStrategy(t *testing.T) {
 		t.Fatalf("expected UNDERPERFORMING or COOLDOWN status, got %s", stats.Status)
 	}
 }
+
+func TestStrategyTrackerSizingMultiplierDefaultsAndUnknown(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+
+	if got := tracker.GetSizingMultiplier("UNKNOWN"); got != 1.0 {
+		t.Fatalf("expected default multiplier 1.0 for unknown strategy, got %.2f", got)
+	}
+
+	if got := tracker.GetSizingMultiplier("A"); got != 0.85 {
+		t.Fatalf("expected cold-start multiplier 0.85, got %.2f", got)
+	}
+}
+
+func TestStrategyTrackerSizingMultiplierBoostsStrongWinners(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+
+	for i := 0; i < 8; i++ {
+		tracker.RecordTradeResult("A", 8)
+	}
+
+	got := tracker.GetSizingMultiplier("A")
+	if got <= 1.3 {
+		t.Fatalf("expected strong winners to be boosted above 1.3, got %.2f", got)
+	}
+	if got > 1.6 {
+		t.Fatalf("expected multiplier clamp at 1.6 max, got %.2f", got)
+	}
+}
+
+func TestStrategyTrackerSizingMultiplierPenalizesLossStreaksAndDisable(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+
+	tracker.RecordTradeResult("A", -5)
+	tracker.RecordTradeResult("A", -5)
+	mid := tracker.GetSizingMultiplier("A")
+	if mid >= 0.6 {
+		t.Fatalf("expected loss streak penalty to reduce sizing below 0.6, got %.2f", mid)
+	}
+
+	// Third loss triggers cooldown/disable; disabled strategies return min multiplier.
+	tracker.RecordTradeResult("A", -5)
+	disabled := tracker.GetSizingMultiplier("A")
+	if disabled != 0.35 {
+		t.Fatalf("expected disabled strategy multiplier 0.35, got %.2f", disabled)
+	}
+}

@@ -13,6 +13,12 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
+const (
+	minExecutionSizeBTC  = 0.001
+	maxAllocationUsage   = 0.60
+	sizeChangeEpsilonBTC = 1e-9
+)
+
 // Orchestrator is the multi-strategy parallel trading engine.
 // It correctly separates tick-based strategies from candle-based strategies,
 // ensuring each strategy type receives the data it was designed for.
@@ -249,6 +255,32 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		o.mu.RLock()
 		currentPrice := o.lastPrice
 		o.mu.RUnlock()
+
+		// Dynamic sizing: reward stable winners, reduce weak performers.
+		baseSize := sig.TargetSize
+		sizeMultiplier := o.tracker.GetSizingMultiplier(aggSig.StrategyName)
+		sig.TargetSize = baseSize * sizeMultiplier
+
+		// Capital cap: keep each strategy within a fraction of its allocation bucket.
+		if currentPrice > 0 {
+			if stats, ok := o.tracker.GetStats(aggSig.StrategyName); ok && stats.Allocation > 0 {
+				maxSizeByAllocation := (stats.Allocation * maxAllocationUsage) / currentPrice
+				if maxSizeByAllocation > 0 && sig.TargetSize > maxSizeByAllocation {
+					sig.TargetSize = maxSizeByAllocation
+				}
+			}
+		}
+
+		if sig.TargetSize < minExecutionSizeBTC {
+			log.Printf("[SIZE ENGINE] %s size too small after scaling (%.6f BTC) — skipping",
+				aggSig.StrategyName, sig.TargetSize)
+			continue
+		}
+
+		if sig.TargetSize-baseSize > sizeChangeEpsilonBTC || baseSize-sig.TargetSize > sizeChangeEpsilonBTC {
+			log.Printf("[SIZE ENGINE] %s resized %.4f -> %.4f BTC (x%.2f)",
+				aggSig.StrategyName, baseSize, sig.TargetSize, sizeMultiplier)
+		}
 
 		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {

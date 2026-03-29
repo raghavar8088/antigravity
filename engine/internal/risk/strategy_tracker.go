@@ -2,6 +2,7 @@ package risk
 
 import (
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -9,6 +10,17 @@ import (
 const (
 	poorPerformanceMinTrades  = 6
 	poorPerformanceMinWinRate = 0.35
+
+	defaultSizingMultiplier      = 1.0
+	coldStartSizingMultiplier    = 0.85
+	minSizingMultiplier          = 0.35
+	maxSizingMultiplier          = 1.60
+	maxEarlyBoostMultiplier      = 1.05
+	lossStreakPenaltyPerLoss     = 0.15
+	strongAvgPnLThresholdUSD     = 4.0
+	mildAvgPnLThresholdUSD       = 1.0
+	strongAvgPnLPenaltyThreshold = -4.0
+	mildAvgPnLPenaltyThreshold   = -1.0
 )
 
 // StrategyStats tracks live performance metrics for a single strategy.
@@ -247,6 +259,52 @@ func (t *StrategyTracker) GetWinRate(name string) float64 {
 		return 0.5
 	}
 	return float64(s.Wins) / float64(s.TotalTrades)
+}
+
+// GetSizingMultiplier returns a dynamic position-size multiplier for a strategy.
+// It scales up consistent winners and scales down weak or unstable performers.
+func (t *StrategyTracker) GetSizingMultiplier(name string) float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	s, ok := t.stats[name]
+	if !ok {
+		return defaultSizingMultiplier
+	}
+	if s.Disabled {
+		return minSizingMultiplier
+	}
+	if s.TotalTrades == 0 {
+		return coldStartSizingMultiplier
+	}
+
+	winRate := float64(s.Wins) / float64(s.TotalTrades)
+	avgPnL := s.TotalPnL / float64(s.TotalTrades)
+
+	multiplier := defaultSizingMultiplier
+
+	// Win-rate contribution centered at 50%.
+	multiplier += (winRate - 0.5)
+
+	switch {
+	case avgPnL >= strongAvgPnLThresholdUSD:
+		multiplier += 0.15
+	case avgPnL >= mildAvgPnLThresholdUSD:
+		multiplier += 0.05
+	case avgPnL <= strongAvgPnLPenaltyThreshold:
+		multiplier -= 0.15
+	case avgPnL <= mildAvgPnLPenaltyThreshold:
+		multiplier -= 0.05
+	}
+
+	multiplier -= float64(s.ConsecutiveLosses) * lossStreakPenaltyPerLoss
+
+	// Avoid over-boosting while sample size is still small.
+	if s.TotalTrades < poorPerformanceMinTrades && multiplier > maxEarlyBoostMultiplier {
+		multiplier = maxEarlyBoostMultiplier
+	}
+
+	return math.Max(minSizingMultiplier, math.Min(maxSizingMultiplier, multiplier))
 }
 
 // ResetDaily resets daily counters (call at midnight UTC).
