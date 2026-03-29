@@ -312,6 +312,9 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 			// Update strategy tracker
 			o.tracker.RecordTradeResult(event.Position.StrategyName, event.PnL)
 
+			// Update risk engine daily PnL tracker
+			o.risk.RecordPnL(event.PnL)
+
 			// Update risk engine (reduce exposure)
 			closeSig := strategy.Signal{
 				Symbol:     event.Position.Symbol,
