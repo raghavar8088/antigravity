@@ -32,6 +32,51 @@ func SMA(prices []float64) float64 {
 	return sum / float64(len(prices))
 }
 
+// StdDev calculates the standard deviation over the entire slice.
+func StdDev(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	mean := SMA(values)
+	variance := 0.0
+	for _, value := range values {
+		variance += (value - mean) * (value - mean)
+	}
+	return math.Sqrt(variance / float64(len(values)))
+}
+
+// RollingVWAP calculates a rolling volume-weighted average price.
+func RollingVWAP(prices, volumes []float64, period int) float64 {
+	if len(prices) == 0 || len(volumes) == 0 {
+		return 0
+	}
+
+	start := 0
+	if period > 0 && len(prices) > period {
+		start = len(prices) - period
+	}
+
+	priceWindow := prices[start:]
+	volumeWindow := volumes
+	if len(volumeWindow) > len(priceWindow) {
+		volumeWindow = volumeWindow[len(volumeWindow)-len(priceWindow):]
+	}
+	if len(priceWindow) > len(volumeWindow) {
+		priceWindow = priceWindow[len(priceWindow)-len(volumeWindow):]
+	}
+
+	numerator := 0.0
+	denominator := 0.0
+	for i := range priceWindow {
+		numerator += priceWindow[i] * volumeWindow[i]
+		denominator += volumeWindow[i]
+	}
+	if denominator == 0 {
+		return 0
+	}
+	return numerator / denominator
+}
+
 // RSI calculates the Relative Strength Index.
 func RSI(prices []float64, period int) float64 {
 	if len(prices) < period+1 {
@@ -130,6 +175,28 @@ func StochasticRSI(prices []float64, rsiPeriod, stochPeriod int) float64 {
 	}
 	currentRSI := rsiValues[len(rsiValues)-1]
 	return ((currentRSI - minRSI) / (maxRSI - minRSI)) * 100
+}
+
+// CloseStochastic calculates a close-based stochastic oscillator using the
+// highest and lowest closes in the lookback window.
+func CloseStochastic(prices []float64, period int) float64 {
+	if len(prices) < period {
+		return 50
+	}
+	slice := prices[len(prices)-period:]
+	highest, lowest := slice[0], slice[0]
+	for _, price := range slice {
+		if price > highest {
+			highest = price
+		}
+		if price < lowest {
+			lowest = price
+		}
+	}
+	if highest == lowest {
+		return 50
+	}
+	return ((prices[len(prices)-1] - lowest) / (highest - lowest)) * 100
 }
 
 // WilliamsR calculates Williams %R oscillator.

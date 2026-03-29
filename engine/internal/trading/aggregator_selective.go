@@ -93,22 +93,32 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 1.35
 	case "ATR_Breakout_Scalp":
 		score += 1.3
+	case "OpeningRange_Breakout_Scalp":
+		score += 1.25
 	case "VolSqueeze_Explosion_Scalp":
 		score += 1.2
 	case "VolumeBreakout_Impulse_Scalp":
 		score += 1.2
+	case "ATR_Volume_Impulse_Scalp":
+		score += 1.15
 	case "Donchian_Breakout_Scalp":
 		score += 1.1
 	case "Pullback_Continuation_Pro_Scalp":
 		score += 1.1
 	case "VolumeWeighted_Trend_Scalp":
 		score += 1.1
+	case "VWAP_RSI2_Reversion_Scalp":
+		score += 1.0
+	case "MACD_VWAP_Flip_Scalp":
+		score += 0.95
 	case "PriceChannel_Breakout_Scalp":
 		score += 1.0
 	case "ADX_Trend_Scalp":
 		score += 1.0
 	case "EMA_Cross_Scalp":
 		score += 0.9
+	case "Bollinger_RSI_Fade_Scalp":
+		score += 0.8
 	case "KAMA_Adaptive_Scalp":
 		score += 0.8
 	case "AdaptiveRSI_Dynamic_Scalp":
@@ -117,6 +127,8 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 0.7
 	case "RSI_BB_Confluence_Scalp":
 		score += 0.7
+	case "Stochastic_Range_Scalp":
+		score += 0.65
 	case "LinReg_Statistical_Scalp":
 		score += 0.6
 	case "RangeCompress_Breakout_Scalp":
@@ -126,7 +138,7 @@ func strategyPriority(sig AggregatedSignal) float64 {
 	}
 
 	switch sig.Category {
-	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend":
+	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend", "Time-of-Day":
 		score += 0.2
 	}
 
