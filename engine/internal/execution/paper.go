@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"fmt"
 	"log"
 
 	"antigravity-engine/internal/strategy"
@@ -15,7 +16,7 @@ type PaperClient struct {
 	lastKnownPrice float64
 
 	// Fee simulation
-	feeRate float64 // Per-side fee (e.g. 0.001 = 0.1%)
+	feeRate       float64 // Per-side fee (e.g. 0.001 = 0.1%)
 	totalFeesPaid float64
 }
 
@@ -50,7 +51,7 @@ func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
 
 		if totalCost > p.balanceUSD {
 			log.Printf("[PAPER EXEC] INSUFFICIENT FUNDS! Wants $%.2f, has $%.2f", totalCost, p.balanceUSD)
-			return nil
+			return fmt.Errorf("insufficient funds: wants %.2f, has %.2f", totalCost, p.balanceUSD)
 		}
 
 		p.balanceUSD -= totalCost
@@ -109,9 +110,9 @@ func (p *PaperClient) ResetAccount() error {
 	return nil
 }
 
-// SettlePosition updates the paper balance when a position is closed
-// (via SL, TP, trailing stop, or time exit). This is the missing piece
-// that credits USD back after a BUY position closes, or debits for SHORT closes.
+// SettlePosition updates the paper balance when a position is closed or
+// partially reduced, crediting USD back after a long close or debiting for a
+// short cover.
 func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float64) {
 	if side == strategy.ActionBuy {
 		// Closing a LONG position: sell BTC back at exit price

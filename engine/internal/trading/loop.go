@@ -293,6 +293,12 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 			// Without this, every BUY drains the balance permanently
 			// because no SELL ever executes to return the USD.
 			o.exec.SettlePosition(event.Position.Side, event.Position.Size, event.ExitPrice)
+			netPnL := execution.CalculateNetPnL(
+				event.PnL,
+				event.Position.EntryPrice,
+				event.ExitPrice,
+				event.Position.Size,
+			)
 
 			// Record in trade journal
 			entry := execution.JournalEntry{
@@ -310,10 +316,10 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 			o.journal.RecordTrade(entry)
 
 			// Update strategy tracker
-			o.tracker.RecordTradeResult(event.Position.StrategyName, event.PnL)
+			o.tracker.RecordTradeResult(event.Position.StrategyName, netPnL)
 
 			// Update risk engine daily PnL tracker
-			o.risk.RecordPnL(event.PnL)
+			o.risk.RecordPnL(netPnL)
 
 			// Update risk engine (reduce exposure)
 			closeSig := strategy.Signal{

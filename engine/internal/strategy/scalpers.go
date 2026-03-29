@@ -30,8 +30,8 @@ const defaultQty = 0.01 // Conservative BTC position size for scalping
 
 // Default SL/TP for scalping: tight stops suited to BTC's short-term volatility
 // BTC moves ~0.1-0.3% per minute → 0.15% SL and 0.25% TP get hit within minutes
-const defaultStopLossPct = 0.10   // 0.10% stop-loss
-const defaultTakeProfitPct = 0.15 // 0.15% take-profit
+const defaultStopLossPct = 0.18   // 0.18% stop-loss
+const defaultTakeProfitPct = 0.65 // 0.65% take-profit
 
 func buySignal(symbol string) []Signal {
 	return []Signal{{
@@ -79,11 +79,11 @@ func NewTestScalper() *TestExecutionScalper {
 	}
 }
 
-func (s *TestExecutionScalper) OnTick(tick marketdata.Tick) []Signal { 
+func (s *TestExecutionScalper) OnTick(tick marketdata.Tick) []Signal {
 	if !s.hasTraded {
 		s.hasTraded = true
 		// Fire a BUY immediately with a tight stop-loss/take-profit to close it out quickly
-		return buySignalCustom(tick.Symbol, 0.05, 0.05) 
+		return buySignalCustom(tick.Symbol, 0.05, 0.05)
 	}
 	return holdSignal()
 }
@@ -140,8 +140,8 @@ func (s *EMACrossScalper) OnCandle(candle marketdata.Tick) []Signal {
 // =============================================================================
 type RSIReversalScalper struct {
 	baseScalper
-	period    int
-	oversold  float64
+	period     int
+	oversold   float64
 	overbought float64
 }
 
@@ -359,7 +359,7 @@ func (s *MomentumScalper) OnCandle(candle marketdata.Tick) []Signal {
 // =============================================================================
 type MeanReversionScalper struct {
 	baseScalper
-	period    int
+	period     int
 	zThreshold float64
 }
 
@@ -437,8 +437,8 @@ func (s *IchimokuScalper) OnCandle(candle marketdata.Tick) []Signal {
 // =============================================================================
 type ADXTrendScalper struct {
 	baseScalper
-	adxPeriod   int
-	emaPeriod   int
+	adxPeriod    int
+	emaPeriod    int
 	adxThreshold float64
 }
 
@@ -794,11 +794,11 @@ func (s *ROCReversalScalper) OnCandle(candle marketdata.Tick) []Signal {
 // =============================================================================
 type OrderFlowScalper struct {
 	baseScalper
-	buyTicks   int
-	sellTicks  int
-	window     int
-	threshold  float64
-	tickCount  int
+	buyTicks  int
+	sellTicks int
+	window    int
+	threshold float64
+	tickCount int
 }
 
 func NewOrderFlowScalper(window int, threshold float64) *OrderFlowScalper {
@@ -814,7 +814,7 @@ func (s *OrderFlowScalper) OnTick(tick marketdata.Tick) []Signal { return s.OnCa
 func (s *OrderFlowScalper) OnCandle(candle marketdata.Tick) []Signal {
 	s.feed(candle.Price)
 	s.tickCount++
-	
+
 	// Classify as buy or sell tick
 	if len(s.prices) >= 2 {
 		if s.prices[len(s.prices)-1] >= s.prices[len(s.prices)-2] {
@@ -823,7 +823,7 @@ func (s *OrderFlowScalper) OnCandle(candle marketdata.Tick) []Signal {
 			s.sellTicks++
 		}
 	}
-	
+
 	// Evaluate window
 	if s.tickCount%s.window == 0 {
 		total := s.buyTicks + s.sellTicks
@@ -833,7 +833,7 @@ func (s *OrderFlowScalper) OnCandle(candle marketdata.Tick) []Signal {
 		buyRatio := float64(s.buyTicks) / float64(total)
 		s.buyTicks = 0
 		s.sellTicks = 0
-		
+
 		if buyRatio > s.threshold {
 			return buySignal(candle.Symbol) // Heavy buying pressure
 		}

@@ -45,6 +45,8 @@ const (
 	ReasonManual       CloseReason = "MANUAL"
 )
 
+const feeAwareBreakEvenBufferPct = 0.20
+
 // CloseEvent is emitted when a position closes.
 type CloseEvent struct {
 	Position  Position
@@ -77,8 +79,8 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.10, // 0.10% trailing stop (matches tighter SL)
-			BreakEvenThreshold: 0.08, // Move to break-even after 0.08% profit
+			TrailingStopPct:    0.35, // Activate trailing only after profit clears fee drag
+			BreakEvenThreshold: 0.30, // Move stop only after the trade has a real cushion
 			PartialTPRatio:     0.5,  // Close 50% at TP1
 			MaxPerStrategy:     2,    // Max 2 positions per strategy
 		},
@@ -172,7 +174,7 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 	profitPct := ((price - pos.EntryPrice) / pos.EntryPrice) * 100
 
 	if !pos.BreakEvenMoved && profitPct >= m.config.BreakEvenThreshold {
-		pos.StopLoss = pos.EntryPrice * 1.0001
+		pos.StopLoss = pos.EntryPrice * (1 + feeAwareBreakEvenBufferPct/100)
 		pos.BreakEvenMoved = true
 		log.Printf("[BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
 	}
@@ -192,9 +194,10 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 	if !pos.PartialClosed && price >= pos.TakeProfit {
 		partialSize := pos.Size * m.config.PartialTPRatio
 		partialPnL := (price - pos.EntryPrice) * partialSize
+		m.emitPartialTakeProfit(pos, partialSize, price, partialPnL)
 		pos.Size -= partialSize
 		pos.PartialClosed = true
-		pos.StopLoss = pos.EntryPrice * 1.0001
+		pos.StopLoss = pos.EntryPrice * (1 + feeAwareBreakEvenBufferPct/100)
 		pos.BreakEvenMoved = true
 		newTPDist := pos.TakeProfitPct * 2
 		pos.TakeProfit = pos.EntryPrice * (1 + newTPDist/100)
@@ -240,7 +243,7 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 	profitPct := ((pos.EntryPrice - price) / pos.EntryPrice) * 100
 
 	if !pos.BreakEvenMoved && profitPct >= m.config.BreakEvenThreshold {
-		pos.StopLoss = pos.EntryPrice * 0.9999
+		pos.StopLoss = pos.EntryPrice * (1 - feeAwareBreakEvenBufferPct/100)
 		pos.BreakEvenMoved = true
 		log.Printf("[BREAK-EVEN] %s | SL moved to entry $%.2f", id, pos.StopLoss)
 	}
@@ -260,9 +263,10 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 	if !pos.PartialClosed && price <= pos.TakeProfit {
 		partialSize := pos.Size * m.config.PartialTPRatio
 		partialPnL := (pos.EntryPrice - price) * partialSize
+		m.emitPartialTakeProfit(pos, partialSize, price, partialPnL)
 		pos.Size -= partialSize
 		pos.PartialClosed = true
-		pos.StopLoss = pos.EntryPrice * 0.9999
+		pos.StopLoss = pos.EntryPrice * (1 - feeAwareBreakEvenBufferPct/100)
 		pos.BreakEvenMoved = true
 		newTPDist := pos.TakeProfitPct * 2
 		pos.TakeProfit = pos.EntryPrice * (1 - newTPDist/100)
@@ -318,6 +322,15 @@ func (m *Manager) emitClose(pos *Position, reason CloseReason, exitPrice, pnl fl
 	default:
 		log.Printf("[WARNING] CloseEvents channel full, dropping event for %s", pos.ID)
 	}
+}
+
+func (m *Manager) emitPartialTakeProfit(pos *Position, partialSize, exitPrice, pnl float64) {
+	partial := *pos
+	partial.ID = pos.ID + "-TP1"
+	partial.Size = partialSize
+	partial.Status = "TP_PARTIAL"
+	partial.PartialClosed = true
+	m.emitClose(&partial, ReasonTakeProfit, exitPrice, pnl)
 }
 
 // GetOpenPositions returns a snapshot of currently open positions.
