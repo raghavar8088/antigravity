@@ -224,7 +224,18 @@ export default function Home() {
             <span className="text-sm text-gray-400 font-mono">({liveTrades.length} completed)</span>
           )}
         </h2>
-        <TradeHistory />
+        <TradeHistory history={liveTrades.map(t => ({
+          id: t.id,
+          strategy: t.strategyName,
+          side: t.side === "BUY" ? "LONG" : "SHORT",
+          size: t.size,
+          entry: t.entryPrice,
+          exit: t.exitPrice,
+          pnl: t.netPnl,
+          reason: t.reason === "TAKE_PROFIT" ? "TP_HIT" : t.reason === "STOP_LOSS" || t.reason === "TRAILING_STOP" || t.reason === "BREAK_EVEN" ? "SL_HIT" : "MANUAL",
+          duration: t.duration > 0 ? `${Math.floor(t.duration / 1e9 / 60)}m ${Math.floor((t.duration / 1e9) % 60)}s` : "—",
+          time: new Date(t.exitTime).toLocaleTimeString(),
+        }))} />
       </div>
 
       {/* Strategy Grid — All 40 */}
