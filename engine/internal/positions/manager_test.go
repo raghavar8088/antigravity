@@ -1,10 +1,13 @@
 package positions
 
 import (
+	"math"
 	"testing"
 
 	"antigravity-engine/internal/strategy"
 )
+
+const floatTolerance = 1e-9
 
 func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	mgr := NewManager()
@@ -43,5 +46,57 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	}
 	if !positions[0].PartialClosed {
 		t.Fatal("expected position to be marked partial closed")
+	}
+}
+
+func TestOpenPositionReversesLongStopLossAndTakeProfit(t *testing.T) {
+	mgr := NewManager()
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   0.5,
+		TakeProfitPct: 1.5,
+	}
+
+	pos := mgr.OpenPosition(sig, 100, "ReverseLong")
+
+	if pos.StopLossPct != 1.5 {
+		t.Fatalf("expected reversed stop loss pct 1.5, got %.2f", pos.StopLossPct)
+	}
+	if pos.TakeProfitPct != 0.5 {
+		t.Fatalf("expected reversed take profit pct 0.5, got %.2f", pos.TakeProfitPct)
+	}
+	if math.Abs(pos.StopLoss-98.5) > floatTolerance {
+		t.Fatalf("expected stop loss 98.5, got %.4f", pos.StopLoss)
+	}
+	if math.Abs(pos.TakeProfit-100.5) > floatTolerance {
+		t.Fatalf("expected take profit 100.5, got %.4f", pos.TakeProfit)
+	}
+}
+
+func TestOpenPositionReversesShortStopLossAndTakeProfit(t *testing.T) {
+	mgr := NewManager()
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionSell,
+		TargetSize:    1,
+		StopLossPct:   0.4,
+		TakeProfitPct: 1.2,
+	}
+
+	pos := mgr.OpenPosition(sig, 100, "ReverseShort")
+
+	if pos.StopLossPct != 1.2 {
+		t.Fatalf("expected reversed stop loss pct 1.2, got %.2f", pos.StopLossPct)
+	}
+	if pos.TakeProfitPct != 0.4 {
+		t.Fatalf("expected reversed take profit pct 0.4, got %.2f", pos.TakeProfitPct)
+	}
+	if math.Abs(pos.StopLoss-101.2) > floatTolerance {
+		t.Fatalf("expected stop loss 101.2, got %.4f", pos.StopLoss)
+	}
+	if math.Abs(pos.TakeProfit-99.6) > floatTolerance {
+		t.Fatalf("expected take profit 99.6, got %.4f", pos.TakeProfit)
 	}
 }

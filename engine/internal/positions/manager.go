@@ -61,6 +61,7 @@ type ManagerConfig struct {
 	BreakEvenThreshold float64 // Move SL to entry after this % profit (e.g. 0.3%)
 	PartialTPRatio     float64 // Close this fraction at TP1 (e.g. 0.5 = 50%)
 	MaxPerStrategy     int     // Max concurrent positions per strategy
+	ReverseTargets     bool    // Swap incoming TP and SL distances for all strategies
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -83,6 +84,7 @@ func NewManager() *Manager {
 			BreakEvenThreshold: 0.30, // Move stop only after the trade has a real cushion
 			PartialTPRatio:     0.5,  // Close 50% at TP1
 			MaxPerStrategy:     2,    // Max 2 positions per strategy
+			ReverseTargets:     true, // Run the live book with TP and SL reversed
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
@@ -110,13 +112,19 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 	id := genID(m.nextID)
 	m.nextID++
 
+	stopLossPct := sig.StopLossPct
+	takeProfitPct := sig.TakeProfitPct
+	if m.config.ReverseTargets {
+		stopLossPct, takeProfitPct = takeProfitPct, stopLossPct
+	}
+
 	var stopLoss, takeProfit float64
 	if sig.Action == strategy.ActionBuy {
-		stopLoss = entryPrice * (1 - sig.StopLossPct/100)
-		takeProfit = entryPrice * (1 + sig.TakeProfitPct/100)
+		stopLoss = entryPrice * (1 - stopLossPct/100)
+		takeProfit = entryPrice * (1 + takeProfitPct/100)
 	} else {
-		stopLoss = entryPrice * (1 + sig.StopLossPct/100)
-		takeProfit = entryPrice * (1 - sig.TakeProfitPct/100)
+		stopLoss = entryPrice * (1 + stopLossPct/100)
+		takeProfit = entryPrice * (1 - takeProfitPct/100)
 	}
 
 	pos := &Position{
@@ -127,8 +135,8 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 		Size:          sig.TargetSize,
 		StopLoss:      stopLoss,
 		TakeProfit:    takeProfit,
-		StopLossPct:   sig.StopLossPct,
-		TakeProfitPct: sig.TakeProfitPct,
+		StopLossPct:   stopLossPct,
+		TakeProfitPct: takeProfitPct,
 		StrategyName:  stratName,
 		OpenedAt:      time.Now(),
 		Status:        "OPEN",
@@ -139,10 +147,15 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 	}
 
 	m.positions[id] = pos
-	log.Printf("[POSITION OPENED] %s | %s %.4f BTC @ $%.2f | SL: $%.2f (%.1f%%) | TP: $%.2f (%.1f%%) | Strategy: %s",
+	mode := ""
+	if m.config.ReverseTargets {
+		mode = " | reverse-targets"
+	}
+	log.Printf("[POSITION OPENED%s] %s | %s %.4f BTC @ $%.2f | SL: $%.2f (%.1f%%) | TP: $%.2f (%.1f%%) | Strategy: %s",
+		mode,
 		id, sig.Action, sig.TargetSize, entryPrice,
-		stopLoss, sig.StopLossPct,
-		takeProfit, sig.TakeProfitPct, stratName)
+		stopLoss, stopLossPct,
+		takeProfit, takeProfitPct, stratName)
 
 	return pos
 }
