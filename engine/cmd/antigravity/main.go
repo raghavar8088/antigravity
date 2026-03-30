@@ -288,7 +288,6 @@ func main() {
 			"exposure":       riskEngine.GetAbsoluteExposure(),
 			"netPosition":    riskEngine.GetExposure(),
 			"dailyPnl":       riskEngine.GetDailyPnL(),
-			"totalFees":      paperExecute.GetTotalFees(),
 			"lastPrice":      paperExecute.GetLastPrice(),
 			"openPositions":  len(posMgr.GetOpenPositions()),
 			"ticksProcessed": ticks,

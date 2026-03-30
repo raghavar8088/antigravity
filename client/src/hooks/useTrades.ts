@@ -37,7 +37,6 @@ export type EngineStats = {
   exposure: number;
   netPosition: number;
   dailyPnl: number;
-  totalFees: number;
   lastPrice: number;
   openPositions: number;
 };

@@ -47,15 +47,12 @@ func NewTradeJournal(maxEntries int) *TradeJournal {
 }
 
 func calculateFees(entryPrice, exitPrice, size float64) float64 {
-	feeRate := 0.001 // 0.1% per side
-	entryFee := entryPrice * size * feeRate
-	exitFee := exitPrice * size * feeRate
-	return entryFee + exitFee
+	return 0
 }
 
-// CalculateNetPnL returns realized PnL after the standard simulated round-trip fees.
+// CalculateNetPnL returns realized PnL in zero-fee mode.
 func CalculateNetPnL(grossPnL, entryPrice, exitPrice, size float64) float64 {
-	return grossPnL - calculateFees(entryPrice, exitPrice, size)
+	return grossPnL
 }
 
 // RecordTrade adds a completed trade to the journal.
@@ -64,7 +61,7 @@ func (j *TradeJournal) RecordTrade(entry JournalEntry) {
 	defer j.mu.Unlock()
 
 	entry.Fees = calculateFees(entry.EntryPrice, entry.ExitPrice, entry.Size)
-	entry.NetPnL = entry.GrossPnL - entry.Fees
+	entry.NetPnL = entry.GrossPnL
 	entry.Duration = entry.ExitTime.Sub(entry.EntryTime)
 
 	j.entries = append(j.entries, entry)

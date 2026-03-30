@@ -15,10 +15,6 @@ type PaperClient struct {
 	balanceUSD     float64
 	positionBTC    float64 // Signed net BTC position; negative values represent shorts.
 	lastKnownPrice float64
-
-	// Fee simulation
-	feeRate       float64 // Per-side fee (e.g. 0.001 = 0.1%)
-	totalFeesPaid float64
 }
 
 func NewPaperClient(startingUSD float64) *PaperClient {
@@ -27,7 +23,6 @@ func NewPaperClient(startingUSD float64) *PaperClient {
 		balanceUSD:     startingUSD,
 		positionBTC:    0,
 		lastKnownPrice: 0,
-		feeRate:        0.001, // 0.1% Binance taker fee
 	}
 }
 
@@ -58,20 +53,17 @@ func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
 
 	if sig.Action == strategy.ActionBuy {
 		cost := sig.TargetSize * execPrice
-		fee := cost * p.feeRate
-		totalCost := cost + fee
 
-		if totalCost > p.balanceUSD {
-			log.Printf("[PAPER EXEC] INSUFFICIENT FUNDS! Wants $%.2f, has $%.2f", totalCost, p.balanceUSD)
-			return fmt.Errorf("insufficient funds: wants %.2f, has %.2f", totalCost, p.balanceUSD)
+		if cost > p.balanceUSD {
+			log.Printf("[PAPER EXEC] INSUFFICIENT FUNDS! Wants $%.2f, has $%.2f", cost, p.balanceUSD)
+			return fmt.Errorf("insufficient funds: wants %.2f, has %.2f", cost, p.balanceUSD)
 		}
 
-		p.balanceUSD -= totalCost
+		p.balanceUSD -= cost
 		p.positionBTC += sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
-		p.totalFeesPaid += fee
-		log.Printf("[PAPER EXEC] BUY %.4f BTC @ $%.2f (fee: $%.4f) | Balance: $%.2f",
-			sig.TargetSize, execPrice, fee, p.balanceUSD)
+		log.Printf("[PAPER EXEC] BUY %.4f BTC @ $%.2f | Balance: $%.2f",
+			sig.TargetSize, execPrice, p.balanceUSD)
 
 	} else if sig.Action == strategy.ActionSell {
 		if p.positionBTC <= 0 {
@@ -79,15 +71,11 @@ func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
 		}
 
 		revenue := sig.TargetSize * execPrice
-		fee := revenue * p.feeRate
-		netRevenue := revenue - fee
-
 		p.positionBTC -= sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
-		p.balanceUSD += netRevenue
-		p.totalFeesPaid += fee
-		log.Printf("[PAPER EXEC] SELL %.4f BTC @ $%.2f (fee: $%.4f) | Balance: $%.2f",
-			sig.TargetSize, execPrice, fee, p.balanceUSD)
+		p.balanceUSD += revenue
+		log.Printf("[PAPER EXEC] SELL %.4f BTC @ $%.2f | Balance: $%.2f",
+			sig.TargetSize, execPrice, p.balanceUSD)
 	}
 
 	return nil
@@ -113,7 +101,7 @@ func (p *PaperClient) GetEquityUSD() float64 {
 }
 
 func (p *PaperClient) GetTotalFees() float64 {
-	return p.totalFeesPaid
+	return 0
 }
 
 func (p *PaperClient) GetLastPrice() float64 {
@@ -124,7 +112,6 @@ func (p *PaperClient) ResetAccount() error {
 	p.positionBTC = 0
 	p.balanceUSD = p.initialUSD
 	p.lastKnownPrice = 0
-	p.totalFeesPaid = 0
 	return nil
 }
 
@@ -135,29 +122,24 @@ func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float
 	if side == strategy.ActionBuy {
 		// Closing a LONG position: sell BTC back at exit price
 		revenue := size * exitPrice
-		fee := revenue * p.feeRate
-		p.balanceUSD += revenue - fee
+		p.balanceUSD += revenue
 		p.positionBTC -= size
 		p.positionBTC = clampNearZero(p.positionBTC)
-		p.totalFeesPaid += fee
-		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
-			size, exitPrice, fee, p.balanceUSD)
+		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Balance: $%.2f",
+			size, exitPrice, p.balanceUSD)
 	} else {
 		// Closing a SHORT position: buy BTC back at exit price
 		cost := size * exitPrice
-		fee := cost * p.feeRate
-		p.balanceUSD -= cost + fee
+		p.balanceUSD -= cost
 		p.positionBTC += size
 		p.positionBTC = clampNearZero(p.positionBTC)
-		p.totalFeesPaid += fee
-		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
-			size, exitPrice, fee, p.balanceUSD)
+		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Balance: $%.2f",
+			size, exitPrice, p.balanceUSD)
 	}
 }
 
 // RestoreBalance restores balance and fees from database on restart.
 func (p *PaperClient) RestoreBalance(balance, fees float64) {
 	p.balanceUSD = balance
-	p.totalFeesPaid = fees
-	log.Printf("[PAPER EXEC] Restored balance: $%.2f | Fees: $%.4f", balance, fees)
+	log.Printf("[PAPER EXEC] Restored balance: $%.2f | Fees ignored in zero-fee mode (was: $%.4f)", balance, fees)
 }

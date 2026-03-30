@@ -263,7 +263,7 @@ export default function Home() {
       <PerformanceCharts priceSeries={priceSeries} equitySeries={equitySeries} strategyBars={strategyBars} />
 
       {liveStats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="glass-panel p-4 text-center">
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Win Rate</p>
             <p className={`text-2xl font-mono font-bold ${liveStats.aggregate.winRate >= 50 ? "text-green-400" : "text-red-400"}`}>
@@ -283,10 +283,6 @@ export default function Home() {
           <div className="glass-panel p-4 text-center">
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Best Trade</p>
             <p className="text-2xl font-mono font-bold text-green-400">+${liveStats.aggregate.bestTrade.toFixed(2)}</p>
-          </div>
-          <div className="glass-panel p-4 text-center">
-            <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Fees Paid</p>
-            <p className="text-2xl font-mono font-bold text-orange-400">${liveStats.totalFees.toFixed(2)}</p>
           </div>
         </div>
       )}
