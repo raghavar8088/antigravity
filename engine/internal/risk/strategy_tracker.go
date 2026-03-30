@@ -21,6 +21,15 @@ const (
 	mildAvgPnLThresholdUSD       = 1.0
 	strongAvgPnLPenaltyThreshold = -4.0
 	mildAvgPnLPenaltyThreshold   = -1.0
+
+	defaultExecutionWeight      = 1.0
+	coldStartExecutionWeight    = 0.90
+	minExecutionWeight          = 0.20
+	maxExecutionWeight          = 1.35
+	matureExecutionMinTrades    = 8
+	matureExecutionMinWinRate   = 0.42
+	strongExecutionWinRate      = 0.60
+	executionLossPenaltyPerLoss = 0.12
 )
 
 // StrategyStats tracks live performance metrics for a single strategy.
@@ -305,6 +314,49 @@ func (t *StrategyTracker) GetSizingMultiplier(name string) float64 {
 	}
 
 	return math.Max(minSizingMultiplier, math.Min(maxSizingMultiplier, multiplier))
+}
+
+// GetExecutionWeight returns a quality weight used by the execution layer.
+// Unlike sizing multipliers, this can aggressively de-prioritize weak strategies.
+func (t *StrategyTracker) GetExecutionWeight(name string) float64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	s, ok := t.stats[name]
+	if !ok {
+		return defaultExecutionWeight
+	}
+	if s.Disabled {
+		return minExecutionWeight
+	}
+	if s.TotalTrades == 0 {
+		return coldStartExecutionWeight
+	}
+
+	winRate := float64(s.Wins) / float64(s.TotalTrades)
+	avgPnL := s.TotalPnL / float64(s.TotalTrades)
+	weight := defaultExecutionWeight
+
+	// Harder quality checks once we have meaningful sample size.
+	if s.TotalTrades >= matureExecutionMinTrades {
+		if winRate < matureExecutionMinWinRate && s.TotalPnL < 0 {
+			weight -= 0.25
+		}
+		if winRate >= strongExecutionWinRate && avgPnL > 0 {
+			weight += 0.20
+		}
+	}
+
+	if avgPnL < 0 {
+		weight -= 0.10
+	}
+	weight -= float64(s.ConsecutiveLosses) * executionLossPenaltyPerLoss
+
+	if s.Allocation > 0 && s.DailyPnL < -(s.Allocation*0.004) {
+		weight -= 0.20
+	}
+
+	return math.Max(minExecutionWeight, math.Min(maxExecutionWeight, weight))
 }
 
 // ResetDaily resets daily counters (call at midnight UTC).

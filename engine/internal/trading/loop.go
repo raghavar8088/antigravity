@@ -3,6 +3,7 @@ package trading
 import (
 	"context"
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -23,6 +24,15 @@ const (
 	minSignalTakeProfitPct   = 0.45
 	maxSignalStopLossPct     = 1.20
 	defaultSignalStopLossPct = 0.30
+
+	minExecutionWeightToTrade = 0.45
+	marketHistoryMaxSamples   = 320
+
+	marketRegimeUnknown  = "UNKNOWN"
+	marketRegimeTrend    = "TREND"
+	marketRegimeRange    = "RANGE"
+	marketRegimeVolatile = "VOLATILE"
+	marketRegimeMixed    = "MIXED"
 )
 
 // Orchestrator is the multi-strategy parallel trading engine.
@@ -41,9 +51,11 @@ type Orchestrator struct {
 	candleAgg  *marketdata.CandleAggregator
 
 	// Internal state
-	lastPrice float64
-	h1Counter int // Counts 5m candles to simulate 1h (every 12th)
-	mu        sync.RWMutex
+	lastPrice    float64
+	h1Counter    int // Counts 5m candles to simulate 1h (every 12th)
+	priceWindow  []float64
+	volumeWindow []float64
+	mu           sync.RWMutex
 }
 
 func NewOrchestrator(
@@ -62,16 +74,18 @@ func NewOrchestrator(
 		len(groups.Tick), len(groups.M1), len(groups.M5), len(groups.H1))
 
 	return &Orchestrator{
-		client:     c,
-		strategies: strats,
-		groups:     groups,
-		risk:       r,
-		exec:       e,
-		aggregator: agg,
-		posMgr:     pm,
-		tracker:    tracker,
-		journal:    journal,
-		candleAgg:  candleAgg,
+		client:       c,
+		strategies:   strats,
+		groups:       groups,
+		risk:         r,
+		exec:         e,
+		aggregator:   agg,
+		posMgr:       pm,
+		tracker:      tracker,
+		journal:      journal,
+		candleAgg:    candleAgg,
+		priceWindow:  make([]float64, 0, marketHistoryMaxSamples),
+		volumeWindow: make([]float64, 0, marketHistoryMaxSamples),
 	}
 }
 
@@ -150,6 +164,18 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	o.exec.UpdateMarketState(t.Price)
 	o.mu.Lock()
 	o.lastPrice = t.Price
+	o.priceWindow = append(o.priceWindow, t.Price)
+	if len(o.priceWindow) > marketHistoryMaxSamples {
+		o.priceWindow = o.priceWindow[len(o.priceWindow)-marketHistoryMaxSamples:]
+	}
+	vol := t.Quantity
+	if vol <= 0 {
+		vol = 1
+	}
+	o.volumeWindow = append(o.volumeWindow, vol)
+	if len(o.volumeWindow) > marketHistoryMaxSamples {
+		o.volumeWindow = o.volumeWindow[len(o.volumeWindow)-marketHistoryMaxSamples:]
+	}
 	o.mu.Unlock()
 
 	// 2. Check SL/TP/trailing on all open positions
@@ -243,6 +269,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		return
 	}
 	approved := o.aggregator.FilterSignalsSelective(rawSignals)
+	regime := o.classifyMarketRegime()
 
 	// Execute approved signals
 	for _, aggSig := range approved {
@@ -262,10 +289,23 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		currentPrice := o.lastPrice
 		o.mu.RUnlock()
 
+		if !isCategoryAlignedWithRegime(aggSig.Category, regime) {
+			log.Printf("[REGIME FILTER] %s skipped in %s regime (%s category)",
+				aggSig.StrategyName, regime, aggSig.Category)
+			continue
+		}
+
 		// Dynamic sizing: reward stable winners, reduce weak performers.
 		baseSize := sig.TargetSize
 		sizeMultiplier := o.tracker.GetSizingMultiplier(aggSig.StrategyName)
-		sig.TargetSize = baseSize * sizeMultiplier
+		executionWeight := o.tracker.GetExecutionWeight(aggSig.StrategyName)
+		if executionWeight < minExecutionWeightToTrade {
+			log.Printf("[QUALITY FILTER] %s skipped due to weak execution weight %.2f",
+				aggSig.StrategyName, executionWeight)
+			continue
+		}
+		sig.TargetSize = baseSize * sizeMultiplier * executionWeight
+		sig.Confidence = adjustConfidenceByExecutionWeight(sig.Confidence, executionWeight)
 
 		// Capital cap: keep each strategy within a fraction of its allocation bucket.
 		if currentPrice > 0 {
@@ -284,8 +324,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		if sig.TargetSize-baseSize > sizeChangeEpsilonBTC || baseSize-sig.TargetSize > sizeChangeEpsilonBTC {
-			log.Printf("[SIZE ENGINE] %s resized %.4f -> %.4f BTC (x%.2f)",
-				aggSig.StrategyName, baseSize, sig.TargetSize, sizeMultiplier)
+			log.Printf("[SIZE ENGINE] %s resized %.4f -> %.4f BTC (size x%.2f, quality x%.2f)",
+				aggSig.StrategyName, baseSize, sig.TargetSize, sizeMultiplier, executionWeight)
 		}
 
 		baseStopLossPct := sig.StopLossPct
@@ -443,4 +483,87 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, bool) {
 	}
 
 	return adjusted, true
+}
+
+func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) float64 {
+	adjusted := confidence
+	if adjusted == 0 {
+		adjusted = 1.0
+	}
+
+	if executionWeight < 1 {
+		adjusted *= 0.80 + 0.20*executionWeight
+	} else {
+		adjusted *= 1.0 + (executionWeight-1.0)*0.25
+	}
+
+	if adjusted > 1.5 {
+		return 1.5
+	}
+	if adjusted < 0 {
+		return 0
+	}
+	return adjusted
+}
+
+func (o *Orchestrator) classifyMarketRegime() string {
+	o.mu.RLock()
+	if len(o.priceWindow) < 80 {
+		o.mu.RUnlock()
+		return marketRegimeUnknown
+	}
+	prices := append([]float64(nil), o.priceWindow...)
+	o.mu.RUnlock()
+
+	fast := strategy.EMA(prices, 21)
+	slow := strategy.EMA(prices, 55)
+	atrFast := strategy.ATR(prices, 14)
+	atrSlow := strategy.ATR(prices, 55)
+	if atrSlow <= 0 {
+		return marketRegimeUnknown
+	}
+
+	trendStrength := math.Abs(fast-slow) / (atrSlow * 3.0)
+	volRatio := atrFast / atrSlow
+
+	switch {
+	case trendStrength >= 0.75 && volRatio >= 0.85:
+		return marketRegimeTrend
+	case volRatio >= 1.45 && trendStrength < 0.70:
+		return marketRegimeVolatile
+	case trendStrength <= 0.40 && volRatio <= 1.10:
+		return marketRegimeRange
+	default:
+		return marketRegimeMixed
+	}
+}
+
+func isCategoryAlignedWithRegime(category, regime string) bool {
+	switch regime {
+	case marketRegimeUnknown, marketRegimeMixed:
+		return true
+	case marketRegimeTrend:
+		switch category {
+		case "Trend", "Trend Elite", "Breakout", "Breakout Elite", "Momentum", "Momentum Elite",
+			"Time-of-Day", "Microstructure", "Multi-Signal", "Price Action", "Price Action Elite":
+			return true
+		}
+		return false
+	case marketRegimeRange:
+		switch category {
+		case "Mean Reversion", "Mean Rev Elite", "Statistical", "Adaptive", "Adaptive Elite",
+			"Oscillator Elite", "Price Action", "Price Action Elite", "Multi-Signal":
+			return true
+		}
+		return false
+	case marketRegimeVolatile:
+		switch category {
+		case "Volatility", "Volatility Elite", "Breakout", "Breakout Elite", "Microstructure",
+			"Time-of-Day", "Multi-Signal", "Momentum Elite":
+			return true
+		}
+		return false
+	default:
+		return true
+	}
 }

@@ -88,3 +88,39 @@ func TestStrategyTrackerSizingMultiplierPenalizesLossStreaksAndDisable(t *testin
 		t.Fatalf("expected disabled strategy multiplier 0.35, got %.2f", disabled)
 	}
 }
+
+func TestStrategyTrackerExecutionWeightDefaults(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+
+	if got := tracker.GetExecutionWeight("UNKNOWN"); got != 1.0 {
+		t.Fatalf("expected default execution weight 1.0 for unknown strategy, got %.2f", got)
+	}
+	if got := tracker.GetExecutionWeight("A"); got != 0.90 {
+		t.Fatalf("expected cold-start execution weight 0.90, got %.2f", got)
+	}
+}
+
+func TestStrategyTrackerExecutionWeightBoostsStrongMatureStrategy(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+	for i := 0; i < 10; i++ {
+		tracker.RecordTradeResult("A", 7)
+	}
+
+	got := tracker.GetExecutionWeight("A")
+	if got <= 1.1 {
+		t.Fatalf("expected mature strong strategy weight above 1.1, got %.2f", got)
+	}
+}
+
+func TestStrategyTrackerExecutionWeightPenalizesWeakMatureStrategy(t *testing.T) {
+	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
+	results := []float64{-5, 2, -6, -3, -4, 1, -2, -3, -1, -2}
+	for _, pnl := range results {
+		tracker.RecordTradeResult("A", pnl)
+	}
+
+	got := tracker.GetExecutionWeight("A")
+	if got >= 0.8 {
+		t.Fatalf("expected weak mature strategy weight below 0.8, got %.2f", got)
+	}
+}
