@@ -17,6 +17,12 @@ const (
 	minExecutionSizeBTC  = 0.001
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
+
+	minExecutableConfidence  = 0.85
+	minRewardToRiskRatio     = 1.35
+	minSignalTakeProfitPct   = 0.45
+	maxSignalStopLossPct     = 1.20
+	defaultSignalStopLossPct = 0.30
 )
 
 // Orchestrator is the multi-strategy parallel trading engine.
@@ -282,6 +288,20 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				aggSig.StrategyName, baseSize, sig.TargetSize, sizeMultiplier)
 		}
 
+		baseStopLossPct := sig.StopLossPct
+		baseTakeProfitPct := sig.TakeProfitPct
+		sanitizedSig, allowed := sanitizeSignalForProfit(sig)
+		if !allowed {
+			log.Printf("[PROFIT FILTER] %s dropped due to low confidence %.2f",
+				aggSig.StrategyName, sig.Confidence)
+			continue
+		}
+		sig = sanitizedSig
+		if sig.StopLossPct != baseStopLossPct || sig.TakeProfitPct != baseTakeProfitPct {
+			log.Printf("[PROFIT FILTER] %s adjusted SL/TP %.2f%%/%.2f%% -> %.2f%%/%.2f%%",
+				aggSig.StrategyName, baseStopLossPct, baseTakeProfitPct, sig.StopLossPct, sig.TakeProfitPct)
+		}
+
 		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
@@ -391,4 +411,36 @@ func (o *Orchestrator) GetLastPrice() float64 {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.lastPrice
+}
+
+func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, bool) {
+	adjusted := sig
+
+	if adjusted.Confidence == 0 {
+		adjusted.Confidence = 1.0
+	}
+	if adjusted.Confidence < minExecutableConfidence {
+		return adjusted, false
+	}
+
+	if adjusted.StopLossPct <= 0 {
+		adjusted.StopLossPct = defaultSignalStopLossPct
+	}
+	if adjusted.StopLossPct > maxSignalStopLossPct {
+		adjusted.StopLossPct = maxSignalStopLossPct
+	}
+
+	if adjusted.TakeProfitPct <= 0 {
+		adjusted.TakeProfitPct = minSignalTakeProfitPct
+	}
+
+	minTakeProfitByRR := adjusted.StopLossPct * minRewardToRiskRatio
+	if adjusted.TakeProfitPct < minTakeProfitByRR {
+		adjusted.TakeProfitPct = minTakeProfitByRR
+	}
+	if adjusted.TakeProfitPct < minSignalTakeProfitPct {
+		adjusted.TakeProfitPct = minSignalTakeProfitPct
+	}
+
+	return adjusted, true
 }

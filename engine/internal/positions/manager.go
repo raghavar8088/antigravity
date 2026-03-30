@@ -81,12 +81,12 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.35, // Activate trailing only after profit clears fee drag
-			BreakEvenThreshold: 0.30, // Move stop only after the trade has a real cushion
-			PartialTPRatio:     0.5,  // Close 50% at TP1
-			MinTakeProfitPct:   0.35, // Keep TP above round-trip fee noise
-			MaxPerStrategy:     2,    // Max 2 positions per strategy
-			ReverseTargets:     true, // Run the live book with TP and SL reversed
+			TrailingStopPct:    0.35,  // Activate trailing only after profit clears fee drag
+			BreakEvenThreshold: 0.30,  // Move stop only after the trade has a real cushion
+			PartialTPRatio:     0.5,   // Close 50% at TP1
+			MinTakeProfitPct:   0.35,  // Keep TP above round-trip fee noise
+			MaxPerStrategy:     2,     // Max 2 positions per strategy
+			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}

@@ -51,6 +51,7 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 
 func TestOpenPositionReversesLongStopLossAndTakeProfit(t *testing.T) {
 	mgr := NewManager()
+	mgr.config.ReverseTargets = true
 	sig := strategy.Signal{
 		Symbol:        "BTC-USD",
 		Action:        strategy.ActionBuy,
@@ -77,6 +78,7 @@ func TestOpenPositionReversesLongStopLossAndTakeProfit(t *testing.T) {
 
 func TestOpenPositionReversesShortStopLossAndTakeProfit(t *testing.T) {
 	mgr := NewManager()
+	mgr.config.ReverseTargets = true
 	sig := strategy.Signal{
 		Symbol:        "BTC-USD",
 		Action:        strategy.ActionSell,
@@ -103,6 +105,7 @@ func TestOpenPositionReversesShortStopLossAndTakeProfit(t *testing.T) {
 
 func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
 	mgr := NewManager()
+	mgr.config.ReverseTargets = true
 	sig := strategy.Signal{
 		Symbol:        "BTC-USD",
 		Action:        strategy.ActionBuy,
@@ -121,5 +124,31 @@ func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
 	}
 	if math.Abs(pos.TakeProfit-100.35) > floatTolerance {
 		t.Fatalf("expected take profit 100.35, got %.4f", pos.TakeProfit)
+	}
+}
+
+func TestOpenPositionUsesNormalTargetsByDefault(t *testing.T) {
+	mgr := NewManager()
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   0.4,
+		TakeProfitPct: 1.1,
+	}
+
+	pos := mgr.OpenPosition(sig, 100, "DefaultTargets")
+
+	if math.Abs(pos.StopLossPct-0.4) > floatTolerance {
+		t.Fatalf("expected stop loss pct 0.4, got %.4f", pos.StopLossPct)
+	}
+	if math.Abs(pos.TakeProfitPct-1.1) > floatTolerance {
+		t.Fatalf("expected take profit pct 1.1, got %.4f", pos.TakeProfitPct)
+	}
+	if math.Abs(pos.StopLoss-99.6) > floatTolerance {
+		t.Fatalf("expected stop loss 99.6, got %.4f", pos.StopLoss)
+	}
+	if math.Abs(pos.TakeProfit-101.1) > floatTolerance {
+		t.Fatalf("expected take profit 101.1, got %.4f", pos.TakeProfit)
 	}
 }
