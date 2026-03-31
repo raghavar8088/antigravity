@@ -110,6 +110,7 @@ func BuildAllScalpers() []RegistryEntry {
 		{NewMassIndexScalper(25), "Volume Elite", "1m"},
 		// Multi-Signal Elite
 		{NewTripleFilterScalper(), "Multi-Signal", "1m"},
+		{NewSentimentConfluenceProScalper(), "Multi-Signal", "1m"},
 		{NewElderRayScalper(13), "Multi-Signal", "1m"},
 		{NewMultiMAScalper(), "Multi-Signal", "1m"},
 		{NewQuadSniperScalper(), "Multi-Signal", "1m"},

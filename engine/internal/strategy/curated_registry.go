@@ -26,6 +26,7 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewZScoreBandScalper(30, 2.0), "Mean Rev Elite", "1m"},
 		{NewRSIBBScalper(), "Mean Rev Elite", "1m"},
 		{NewTripleFilterScalper(), "Multi-Signal", "1m"},
+		{NewSentimentConfluenceProScalper(), "Multi-Signal", "1m"},
 		{NewExhaustionScalper(10), "Price Action Elite", "1m"},
 		{NewChartDoubleTapReversalScalper(), "Price Action Elite", "1m"},
 		{NewChartWedgeBreakoutScalper(), "Price Action Elite", "5m"},

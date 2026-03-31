@@ -38,6 +38,10 @@ type RunningTrade = {
 type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
+type MarketSentiment = {
+  label: "STRONG BUY" | "BULLISH" | "NEUTRAL" | "BEARISH" | "STRONG SELL";
+  colorClass: string;
+};
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
@@ -61,6 +65,7 @@ const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "ZScoreBand_MeanRev_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "RSI_BB_Confluence_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "TripleFilter_Alpha_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Sentiment_Confluence_Pro_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "Exhaustion_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "Chart_DoubleTap_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
   { name: "Chart_Wedge_Breakout_Scalp", category: "Price Action Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
@@ -126,6 +131,78 @@ function formatDuration(durationNs: number): string {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${mins}m ${secs}s`;
+}
+
+function calcEMA(series: number[], period: number): number[] {
+  if (series.length === 0) return [];
+  const k = 2 / (period + 1);
+  const out: number[] = [series[0]];
+  for (let i = 1; i < series.length; i++) {
+    out.push(series[i] * k + out[i - 1] * (1 - k));
+  }
+  return out;
+}
+
+function calcRSILast(series: number[], period = 14): number {
+  if (series.length < period + 1) return 50;
+  let gains = 0;
+  let losses = 0;
+  for (let i = series.length - period; i < series.length; i++) {
+    const change = series[i] - series[i - 1];
+    if (change > 0) gains += change;
+    if (change < 0) losses -= change;
+  }
+  if (losses === 0) return 100;
+  const rs = (gains / period) / (losses / period);
+  return 100 - 100 / (1 + rs);
+}
+
+function calcMACDHistLast(series: number[]): number {
+  if (series.length < 35) return 0;
+  const fast = calcEMA(series, 12);
+  const slow = calcEMA(series, 26);
+  const macd = fast.map((value, index) => value - slow[index]);
+  const signal = calcEMA(macd, 9);
+  return macd[macd.length - 1] - signal[signal.length - 1];
+}
+
+function calcMarketSentiment(series: number[]): MarketSentiment {
+  if (series.length < 40) {
+    return { label: "NEUTRAL", colorClass: "text-gray-300" };
+  }
+
+  const last = series[series.length - 1];
+  const rsi = calcRSILast(series, 14);
+  const macdHist = calcMACDHistLast(series);
+  const ema9Series = calcEMA(series, 9);
+  const ema21Series = calcEMA(series, 21);
+  const fairValueSeries = calcEMA(series, 55);
+  const ema9 = ema9Series[ema9Series.length - 1] ?? last;
+  const ema21 = ema21Series[ema21Series.length - 1] ?? last;
+  const fairValue = fairValueSeries[fairValueSeries.length - 1] ?? last;
+
+  let bullishCloses = 0;
+  for (let i = Math.max(1, series.length - 5); i < series.length; i++) {
+    if (series[i] > series[i - 1]) bullishCloses++;
+  }
+
+  let score = 0;
+  if (rsi > 60) score += 2;
+  else if (rsi < 40) score -= 2;
+  if (macdHist > 0) score += 2;
+  else if (macdHist < 0) score -= 2;
+  if (ema9 > ema21) score += 1;
+  else score -= 1;
+  if (bullishCloses >= 4) score += 2;
+  else if (bullishCloses <= 1) score -= 2;
+  if (last > fairValue) score += 1;
+  else score -= 1;
+
+  if (score >= 4) return { label: "STRONG BUY", colorClass: "text-green-300" };
+  if (score >= 2) return { label: "BULLISH", colorClass: "text-emerald-300" };
+  if (score <= -4) return { label: "STRONG SELL", colorClass: "text-red-300" };
+  if (score <= -2) return { label: "BEARISH", colorClass: "text-rose-300" };
+  return { label: "NEUTRAL", colorClass: "text-gray-300" };
 }
 
 export default function Home() {
@@ -203,6 +280,7 @@ export default function Home() {
     : btc.price > 0
       ? [{ time: currentTime, price: btc.price }]
       : [];
+  const marketSentiment = calcMarketSentiment(priceSeries.map((point) => point.price));
   const strategyBars = displayStrategies.map((strategy) => ({
     name: strategy.name,
     pnl: strategy.profit,
@@ -240,11 +318,17 @@ export default function Home() {
     <main className="min-h-screen p-6 max-w-[1600px] mx-auto space-y-6">
       <DashboardHeader online={engineOnline} balance={balance} dailyPnL={tradeDailyPnl} onResetSuccess={handleReset} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <MarketTicker price={btc.price} prevPrice={btc.prevPrice} change={btc.change24h} connected={btc.connected} ticksPerSecond={btc.ticksPerSecond} />
         <div className="glass-panel p-6 flex flex-col justify-center">
           <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.15em] mb-1">Active Strategies</p>
           <p className="text-4xl font-mono font-bold text-white">{activeCount}<span className="text-lg text-gray-500">/{displayStrategies.length}</span></p>
+        </div>
+        <div className="glass-panel p-6 flex flex-col justify-center">
+          <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.15em] mb-1">Market Sentiment</p>
+          <p className={`text-3xl font-mono font-bold ${marketSentiment.colorClass}`}>
+            {marketSentiment.label}
+          </p>
         </div>
         <div className="glass-panel p-6 flex flex-col justify-center">
           <p className="text-xs text-gray-400 font-bold uppercase tracking-[0.15em] mb-1">Total Strategy PnL</p>

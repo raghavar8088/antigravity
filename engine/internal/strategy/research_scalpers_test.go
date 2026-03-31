@@ -188,3 +188,69 @@ func TestChartDoubleTapReversalScalperSignalsLong(t *testing.T) {
 		t.Fatalf("expected chart double tap strategy to emit a buy signal")
 	}
 }
+
+func TestSentimentConfluenceProScalperSignalsLong(t *testing.T) {
+	strat := NewSentimentConfluenceProScalper()
+	start := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+
+	var prices []float64
+	var volumes []float64
+	price := 100.0
+
+	for i := 0; i < 70; i++ {
+		step := 0.08
+		if i >= 45 {
+			step = 0.14
+		}
+		price += step
+		prices = append(prices, price)
+		volumes = append(volumes, 1.0)
+	}
+	for i := 0; i < 8; i++ {
+		price += 0.22
+		prices = append(prices, price)
+		if i == 7 {
+			volumes = append(volumes, 2.4)
+		} else {
+			volumes = append(volumes, 1.2)
+		}
+	}
+
+	signals := feedStrategy(strat, start, prices, volumes)
+	if !hasAction(signals, ActionBuy) {
+		t.Fatalf("expected sentiment confluence strategy to emit a buy signal")
+	}
+}
+
+func TestSentimentConfluenceProScalperSignalsShort(t *testing.T) {
+	strat := NewSentimentConfluenceProScalper()
+	start := time.Date(2026, 1, 3, 2, 0, 0, 0, time.UTC)
+
+	var prices []float64
+	var volumes []float64
+	price := 100.0
+
+	for i := 0; i < 70; i++ {
+		step := 0.08
+		if i >= 45 {
+			step = 0.14
+		}
+		price -= step
+		prices = append(prices, price)
+		volumes = append(volumes, 1.0)
+	}
+	for i := 0; i < 8; i++ {
+		price -= 0.22
+		prices = append(prices, price)
+		if i == 7 {
+			volumes = append(volumes, 2.4)
+		} else {
+			volumes = append(volumes, 1.2)
+		}
+	}
+
+	signals := feedStrategy(strat, start, prices, volumes)
+	if !hasAction(signals, ActionSell) {
+		t.Fatalf("expected sentiment confluence strategy to emit a sell signal")
+	}
+}
