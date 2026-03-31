@@ -1,0 +1,35 @@
+btc_symbol: BTC/USDT
+timeframe: 1m
+risk_per_trade: 0.01
+daily_loss_limit: -0.03
+max_daily_trades: 50
+three_strikes_limit: 3
+maker_fee: 0.0002
+taker_fee: 0.0005
+slippage_per_btc: 10.0
+preferred_order_type: LIMIT
+mechanical_session_timezone: Asia/Kolkata
+mechanical_session_start: "05:30"
+ny_timezone: America/New_York
+ema_gap_threshold: 5.0
+liquidity_swing_lookback: 5
+structure_lookback: 12
+breakout_reentry_lookback: 24
+enable_volatility_envelopes: true
+enable_stochastic_squeeze: true
+stochastic_k_period: 7
+stochastic_smooth_k: 3
+stochastic_smooth_d: 10
+stochastic_time_stop_candles: 5
+stochastic_oversold_threshold: 20.0
+stochastic_overbought_threshold: 80.0
+strategy_priority:
+  - mechanical_1m_btc_vwap_ema_rsi
+  - stochastic_momentum_squeeze
+  - four_hour_range_reentry
+  - ny_open_session_range_breakout
+  - smc_fvg_liquidity_grab
+  - three_ema_williams_fractal
+  - sr_ema_crossover_sniper
+  - bollinger_band_bounce
+  - keltner_channel_breakout
