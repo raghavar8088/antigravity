@@ -50,8 +50,8 @@ type CandleAggregator struct {
 	current5mStart time.Time
 
 	// Stats
-	totalTicks    int64
-	totalCandles  int64
+	totalTicks   int64
+	totalCandles int64
 }
 
 // NewCandleAggregator creates a new aggregator with buffered output channels.
@@ -62,13 +62,20 @@ func NewCandleAggregator() *CandleAggregator {
 	}
 }
 
+func tickTimestamp(t Tick) time.Time {
+	if t.TimeMs > 0 {
+		return time.UnixMilli(t.TimeMs).UTC()
+	}
+	return time.Now().UTC()
+}
+
 // Feed processes a raw tick and emits candles when intervals close.
 func (a *CandleAggregator) Feed(t Tick) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	a.totalTicks++
-	now := time.Now()
+	now := tickTimestamp(t)
 
 	// ─── 1-Minute Candle ───
 	minute1Start := now.Truncate(1 * time.Minute)

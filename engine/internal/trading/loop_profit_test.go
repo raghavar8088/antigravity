@@ -101,16 +101,19 @@ func TestClassifyMarketRegime(t *testing.T) {
 	}
 
 	o.priceWindow = makeLinearSeries(100, 1.0, 120)
+	o.volumeWindow = makeConstantSeries(1.0, 120)
 	if got := o.classifyMarketRegime(); got != marketRegimeTrend {
 		t.Fatalf("expected trend regime, got %s", got)
 	}
 
 	o.priceWindow = makeRangeSeries(100, 0.25, 120)
+	o.volumeWindow = makeConstantSeries(1.0, 120)
 	if got := o.classifyMarketRegime(); got != marketRegimeRange {
 		t.Fatalf("expected range regime, got %s", got)
 	}
 
 	o.priceWindow = makeVolatileSeries(100, 120)
+	o.volumeWindow = makeConstantSeries(1.0, 120)
 	if got := o.classifyMarketRegime(); got != marketRegimeVolatile {
 		t.Fatalf("expected volatile regime, got %s", got)
 	}
@@ -168,6 +171,14 @@ func makeVolatileSeries(center float64, n int) []float64 {
 		} else {
 			out[i] = center - 3.0
 		}
+	}
+	return out
+}
+
+func makeConstantSeries(value float64, n int) []float64 {
+	out := make([]float64, n)
+	for i := range out {
+		out[i] = value
 	}
 	return out
 }

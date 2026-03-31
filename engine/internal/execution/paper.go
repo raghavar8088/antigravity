@@ -42,15 +42,35 @@ func (p *PaperClient) UpdateMarketState(price float64) {
 	p.lastKnownPrice = price
 }
 
-func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
-	// Apply slippage (0.01% adverse)
+func (p *PaperClient) executionPrice(mode OrderMode, action strategy.Action) float64 {
 	execPrice := p.lastKnownPrice
-	if sig.Action == strategy.ActionBuy {
-		execPrice = p.lastKnownPrice * 1.0001
-	} else if sig.Action == strategy.ActionSell {
-		execPrice = p.lastKnownPrice * 0.9999
+	switch mode {
+	case OrderModePostOnly:
+		if action == strategy.ActionBuy {
+			return p.lastKnownPrice * 0.99995
+		}
+		if action == strategy.ActionSell {
+			return p.lastKnownPrice * 1.00005
+		}
+	case OrderModeIOC:
+		if action == strategy.ActionBuy {
+			return p.lastKnownPrice * 1.00012
+		}
+		if action == strategy.ActionSell {
+			return p.lastKnownPrice * 0.99988
+		}
+	default:
+		if action == strategy.ActionBuy {
+			return p.lastKnownPrice * 1.0001
+		}
+		if action == strategy.ActionSell {
+			return p.lastKnownPrice * 0.9999
+		}
 	}
+	return execPrice
+}
 
+func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode OrderMode) error {
 	if sig.Action == strategy.ActionBuy {
 		cost := sig.TargetSize * execPrice
 
@@ -62,23 +82,42 @@ func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
 		p.balanceUSD -= cost
 		p.positionBTC += sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
-		log.Printf("[PAPER EXEC] BUY %.4f BTC @ $%.2f | Balance: $%.2f",
-			sig.TargetSize, execPrice, p.balanceUSD)
+		log.Printf("[PAPER EXEC] %s BUY %.4f BTC @ $%.2f | Balance: $%.2f",
+			mode, sig.TargetSize, execPrice, p.balanceUSD)
 
 	} else if sig.Action == strategy.ActionSell {
 		if p.positionBTC <= 0 {
-			log.Printf("[PAPER EXEC] SHORT %.4f BTC @ $%.2f", sig.TargetSize, execPrice)
+			log.Printf("[PAPER EXEC] %s SHORT %.4f BTC @ $%.2f", mode, sig.TargetSize, execPrice)
 		}
 
 		revenue := sig.TargetSize * execPrice
 		p.positionBTC -= sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
 		p.balanceUSD += revenue
-		log.Printf("[PAPER EXEC] SELL %.4f BTC @ $%.2f | Balance: $%.2f",
-			sig.TargetSize, execPrice, p.balanceUSD)
+		log.Printf("[PAPER EXEC] %s SELL %.4f BTC @ $%.2f | Balance: $%.2f",
+			mode, sig.TargetSize, execPrice, p.balanceUSD)
 	}
 
 	return nil
+}
+
+func (p *PaperClient) ExecuteSignal(sig strategy.Signal, mode OrderMode) (FillResult, error) {
+	execPrice := p.executionPrice(mode, sig.Action)
+	if execPrice <= 0 {
+		return FillResult{}, fmt.Errorf("no market price available for execution")
+	}
+	if err := p.applyFill(sig, execPrice, mode); err != nil {
+		return FillResult{}, err
+	}
+	return FillResult{
+		ExecPrice: execPrice,
+		OrderMode: mode,
+	}, nil
+}
+
+func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
+	_, err := p.ExecuteSignal(sig, OrderModeMarket)
+	return err
 }
 
 func (p *PaperClient) GetPosition(symbol string) float64 {

@@ -52,3 +52,42 @@ func TestPaperClientTracksShortExposureAndEquity(t *testing.T) {
 		t.Fatalf("expected profitable short to increase equity, got %.5f", client.GetEquityUSD())
 	}
 }
+
+func TestExecuteSignalUsesRouteSpecificPricing(t *testing.T) {
+	sig := strategy.Signal{
+		Symbol:     "BTC-USD",
+		Action:     strategy.ActionBuy,
+		TargetSize: 0.1,
+	}
+
+	postOnly := NewPaperClient(100000)
+	postOnly.UpdateMarketState(100)
+	postFill, err := postOnly.ExecuteSignal(sig, OrderModePostOnly)
+	if err != nil {
+		t.Fatalf("unexpected post-only execution error: %v", err)
+	}
+	if postFill.ExecPrice >= 100 {
+		t.Fatalf("expected post-only buy to improve price below mark, got %.5f", postFill.ExecPrice)
+	}
+
+	ioc := NewPaperClient(100000)
+	ioc.UpdateMarketState(100)
+	iocFill, err := ioc.ExecuteSignal(sig, OrderModeIOC)
+	if err != nil {
+		t.Fatalf("unexpected IOC execution error: %v", err)
+	}
+
+	market := NewPaperClient(100000)
+	market.UpdateMarketState(100)
+	marketFill, err := market.ExecuteSignal(sig, OrderModeMarket)
+	if err != nil {
+		t.Fatalf("unexpected market execution error: %v", err)
+	}
+
+	if !(postFill.ExecPrice < marketFill.ExecPrice && marketFill.ExecPrice < iocFill.ExecPrice) {
+		t.Fatalf(
+			"expected post-only < market < ioc pricing, got post=%.5f market=%.5f ioc=%.5f",
+			postFill.ExecPrice, marketFill.ExecPrice, iocFill.ExecPrice,
+		)
+	}
+}

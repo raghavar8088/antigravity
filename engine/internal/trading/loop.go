@@ -348,26 +348,23 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			continue
 		}
 
-		// Apply slippage (0.01% adverse)
-		execPrice := currentPrice
-		if sig.Action == strategy.ActionBuy {
-			execPrice = currentPrice * 1.0001 // Buy slightly higher
-		} else {
-			execPrice = currentPrice * 0.9999 // Sell slightly lower
-		}
+		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
 
 		// Execute
-		err = o.exec.PlaceMarketOrder(sig)
+		fill, err := o.exec.ExecuteSignal(sig, orderMode)
 		if err != nil {
 			log.Printf("[EXECUTION FAILED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			continue
 		}
+		execPrice := fill.ExecPrice
 
 		// Notify risk engine
 		o.risk.NotifyFill(sig)
 
 		// Open tracked position with SL/TP
 		o.posMgr.OpenPosition(sig, execPrice, aggSig.StrategyName)
+
+		log.Printf("[EXECUTION ROUTE] %s used %s in %s regime", aggSig.StrategyName, fill.OrderMode, regime)
 
 		log.Printf("[✅ TRADE EXECUTED] %s | %s %.4f BTC @ $%.2f | Strategy: %s",
 			sig.Action, sig.Symbol, sig.TargetSize, execPrice, aggSig.StrategyName)
@@ -508,30 +505,36 @@ func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) floa
 
 func (o *Orchestrator) classifyMarketRegime() string {
 	o.mu.RLock()
-	if len(o.priceWindow) < 80 {
+	if len(o.priceWindow) < 80 || len(o.volumeWindow) < 80 {
 		o.mu.RUnlock()
 		return marketRegimeUnknown
 	}
 	prices := append([]float64(nil), o.priceWindow...)
+	volumes := append([]float64(nil), o.volumeWindow...)
 	o.mu.RUnlock()
 
+	latestPrice := prices[len(prices)-1]
 	fast := strategy.EMA(prices, 21)
 	slow := strategy.EMA(prices, 55)
+	adx := strategy.ADX(prices, 14)
+	vwap := strategy.RollingVWAP(prices, volumes, 55)
 	atrFast := strategy.ATR(prices, 14)
 	atrSlow := strategy.ATR(prices, 55)
-	if atrSlow <= 0 {
+	if atrSlow <= 0 || vwap <= 0 {
 		return marketRegimeUnknown
 	}
 
 	trendStrength := math.Abs(fast-slow) / (atrSlow * 3.0)
 	volRatio := atrFast / atrSlow
+	priceVsVWAPPct := math.Abs((latestPrice - vwap) / vwap * 100)
+	trendAlignedWithVWAP := (latestPrice >= vwap && fast >= slow) || (latestPrice <= vwap && fast <= slow)
 
 	switch {
-	case trendStrength >= 0.75 && volRatio >= 0.85:
+	case adx >= 25 && trendStrength >= 0.55 && trendAlignedWithVWAP:
 		return marketRegimeTrend
-	case volRatio >= 1.45 && trendStrength < 0.70:
+	case volRatio >= 1.45 && adx < 25 && trendStrength < 0.70:
 		return marketRegimeVolatile
-	case trendStrength <= 0.40 && volRatio <= 1.10:
+	case adx <= 20 && trendStrength <= 0.40 && volRatio <= 1.10 && priceVsVWAPPct <= 0.18:
 		return marketRegimeRange
 	default:
 		return marketRegimeMixed
