@@ -8,8 +8,12 @@ interface RunningTrade {
   side: string;
   size: number;
   entry: number;
-  slPct: number;
-  tpPct: number;
+  stopLoss: number;
+  takeProfit: number;
+  originalSize: number;
+  trailingActive: boolean;
+  breakEvenMoved: boolean;
+  partialClosed: boolean;
   openTime: string;
   elapsed: string;
 }
@@ -37,11 +41,12 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
               <th className="py-3 px-2">ID</th>
               <th className="py-3 px-2">Strategy</th>
               <th className="py-3 px-2">Side</th>
-              <th className="py-3 px-2">Size</th>
               <th className="py-3 px-2">Entry</th>
               <th className="py-3 px-2">Mark</th>
-              <th className="py-3 px-2"><span className="text-red-400">Stop Loss</span></th>
-              <th className="py-3 px-2"><span className="text-green-400">Take Profit</span></th>
+              <th className="py-3 px-2"><span className="text-red-400">Stop</span></th>
+              <th className="py-3 px-2"><span className="text-green-400">Target</span></th>
+              <th className="py-3 px-2">Size</th>
+              <th className="py-3 px-2">Flags</th>
               <th className="py-3 px-2">Elapsed</th>
               <th className="py-3 px-2">PnL</th>
               <th className="py-3 px-2 text-right">Progress</th>
@@ -50,13 +55,14 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
           <tbody>
             {trades.map((t) => {
               const markPrice = currentPrice > 0 ? currentPrice : t.entry;
-              const sl = t.side === "LONG" ? t.entry * (1 - t.slPct / 100) : t.entry * (1 + t.slPct / 100);
-              const tp = t.side === "LONG" ? t.entry * (1 + t.tpPct / 100) : t.entry * (1 - t.tpPct / 100);
               const pnl = t.side === "LONG" ? (markPrice - t.entry) * t.size : (t.entry - markPrice) * t.size;
-              const totalRange = tp - sl;
-              const pricePos = totalRange !== 0 ? ((markPrice - sl) / totalRange) * 100 : 50;
+              const totalRange = t.takeProfit - t.stopLoss;
+              const pricePos = totalRange !== 0 ? ((markPrice - t.stopLoss) / totalRange) * 100 : 50;
               const clamped = Math.max(0, Math.min(100, pricePos));
               const sideClasses = t.side === "LONG" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400";
+              const risk = Math.abs(t.entry - t.stopLoss);
+              const reward = Math.abs(t.takeProfit - t.entry);
+              const rewardToRisk = risk > 0 ? reward / risk : 0;
 
               return (
                 <tr key={t.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors group">
@@ -67,18 +73,41 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                       {t.side}
                     </span>
                   </td>
-                  <td className="py-3 px-2 font-mono text-xs">{t.size}</td>
                   <td className="py-3 px-2 font-mono text-xs">${t.entry.toFixed(2)}</td>
                   <td className={`py-3 px-2 font-mono text-xs transition-colors duration-150 ${pnl >= 0 ? "text-green-300" : "text-red-300"}`}>
                     ${markPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-3 px-2">
-                    <span className="font-mono text-xs text-red-400">${sl.toFixed(2)}</span>
-                    <span className="text-[9px] text-red-500/50 ml-1">-{t.slPct}%</span>
+                    <span className="font-mono text-xs text-red-400">${t.stopLoss.toFixed(2)}</span>
                   </td>
                   <td className="py-3 px-2">
-                    <span className="font-mono text-xs text-green-400">${tp.toFixed(2)}</span>
-                    <span className="text-[9px] text-green-500/50 ml-1">+{t.tpPct}%</span>
+                    <span className="font-mono text-xs text-green-400">${t.takeProfit.toFixed(2)}</span>
+                    <span className="ml-2 text-[10px] font-mono text-violet-300">{rewardToRisk.toFixed(2)}R</span>
+                  </td>
+                  <td className="py-3 px-2 font-mono text-xs text-zinc-300">
+                    {t.size.toFixed(4)} BTC
+                    {t.originalSize > t.size && (
+                      <span className="ml-2 text-[10px] text-zinc-500">from {t.originalSize.toFixed(4)}</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-2">
+                    <div className="flex flex-wrap gap-1">
+                      {t.trailingActive && (
+                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                          Trail
+                        </span>
+                      )}
+                      {t.breakEvenMoved && (
+                        <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
+                          BE
+                        </span>
+                      )}
+                      {t.partialClosed && (
+                        <span className="rounded bg-fuchsia-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-fuchsia-300">
+                          TP1
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-2 font-mono text-xs text-gray-400">
                     <span className="animate-pulse">{t.elapsed}</span>

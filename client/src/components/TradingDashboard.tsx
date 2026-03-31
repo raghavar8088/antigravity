@@ -1,0 +1,743 @@
+"use client";
+
+import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
+import ActivityFeed from "@/components/ActivityFeed";
+import DashboardHeader from "@/components/DashboardHeader";
+import MarketChart from "@/components/MarketChart";
+import MarketTickerCard from "@/components/MarketTickerCard";
+import PerformanceCharts from "@/components/PerformanceCharts";
+import RunningTrades from "@/components/RunningTrades";
+import SignalInsightCard from "@/components/SignalInsightCard";
+import StrategyCard from "@/components/StrategyCard";
+import TradeHistory from "@/components/TradeHistory";
+import useEngineLogs from "@/hooks/useEngineLogs";
+import useEngineState from "@/hooks/useEngineState";
+import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
+import usePositions from "@/hooks/usePositions";
+import useStrategies from "@/hooks/useStrategies";
+import useTrades from "@/hooks/useTrades";
+import { formatUSD } from "@/lib/money";
+import { calcMarketSentiment, detectMarketSignal } from "@/lib/marketSignal";
+
+type StrategyCardView = {
+  name: string;
+  category: string;
+  timeframe: string;
+  status: string;
+  exposure: number;
+  profit: number;
+};
+
+type FeedTone = "info" | "buy" | "sell" | "win" | "loss" | "admin";
+
+type FeedEntry = {
+  id: string;
+  message: string;
+  tone: FeedTone;
+  time: number;
+};
+
+type RunningTradeView = {
+  id: string;
+  strategy: string;
+  side: string;
+  size: number;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  originalSize: number;
+  trailingActive: boolean;
+  breakEvenMoved: boolean;
+  partialClosed: boolean;
+  openTime: string;
+  elapsed: string;
+};
+
+type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
+
+type ChartPricePoint = { time: number; price: number };
+type ChartEquityPoint = { time: number; equity: number };
+
+const SOUND_STORAGE_KEY = "antigravity.sound.enabled";
+
+const DEFAULT_STRATEGIES: StrategyCardView[] = [
+  { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "ADX_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "VolumeWeighted_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Pullback_Continuation_Pro_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "VWAP_RSI2_Reversion_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Bollinger_RSI_Fade_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "MACD_VWAP_Flip_Scalp", category: "Momentum Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Stochastic_Range_Scalp", category: "Mean Reversion", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Donchian_Breakout_Scalp", category: "Breakout", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "ATR_Breakout_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "ATR_Volume_Impulse_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "VolSqueeze_Explosion_Scalp", category: "Volatility", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "RangeCompress_Breakout_Scalp", category: "Volatility", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "OpeningRange_Breakout_Scalp", category: "Time-of-Day", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "VolumeBreakout_Impulse_Scalp", category: "Breakout Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "OrderFlow_Pressure_Pro_Scalp", category: "Microstructure", timeframe: "tick", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "LinReg_Statistical_Scalp", category: "Statistical", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "ZScoreBand_MeanRev_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "RSI_BB_Confluence_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "TripleFilter_Alpha_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Sentiment_Confluence_Pro_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Exhaustion_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Chart_DoubleTap_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "Chart_Wedge_Breakout_Scalp", category: "Price Action Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "AdaptiveRSI_Dynamic_Scalp", category: "Adaptive Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "KAMA_Adaptive_Scalp", category: "Adaptive", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+];
+
+const CATEGORY_ORDER = [
+  "Trend",
+  "Mean Rev Elite",
+  "Mean Reversion",
+  "Momentum Elite",
+  "Breakout",
+  "Breakout Elite",
+  "Volatility",
+  "Time-of-Day",
+  "Microstructure",
+  "Statistical",
+  "Multi-Signal",
+  "Price Action Elite",
+  "Adaptive Elite",
+  "Adaptive",
+];
+
+const CAT_COLORS: Record<string, string> = {
+  Trend: "bg-blue-500",
+  "Mean Rev Elite": "bg-fuchsia-500",
+  "Mean Reversion": "bg-violet-500",
+  "Momentum Elite": "bg-cyan-500",
+  Breakout: "bg-orange-500",
+  "Breakout Elite": "bg-amber-500",
+  Volatility: "bg-rose-500",
+  "Time-of-Day": "bg-sky-500",
+  Microstructure: "bg-emerald-500",
+  Statistical: "bg-indigo-500",
+  "Multi-Signal": "bg-yellow-500",
+  "Price Action Elite": "bg-red-500",
+  "Adaptive Elite": "bg-lime-500",
+  Adaptive: "bg-teal-500",
+};
+
+function mapTradeReason(reason: string): TradeReason {
+  switch (reason) {
+    case "TAKE_PROFIT":
+      return "TP_HIT";
+    case "STOP_LOSS":
+      return "SL_HIT";
+    case "TRAILING_STOP":
+      return "TRAILING_STOP";
+    case "BREAK_EVEN":
+      return "BREAK_EVEN";
+    default:
+      return "MANUAL";
+  }
+}
+
+function readStoredSound(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  const value = window.localStorage.getItem(SOUND_STORAGE_KEY);
+  return value === null ? true : value === "true";
+}
+
+function formatDuration(durationNs: number): string {
+  if (durationNs <= 0) {
+    return "-";
+  }
+
+  const totalSeconds = Math.floor(durationNs / 1e9);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function beep(kind: "buy" | "sell" | "win" | "loss") {
+  try {
+    const webkitAudioContext = (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioContextConstructor = window.AudioContext || webkitAudioContext;
+    if (!AudioContextConstructor) {
+      return;
+    }
+
+    const context = new AudioContextConstructor();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+
+    const frequency = kind === "buy"
+      ? 880
+      : kind === "sell"
+        ? 520
+        : kind === "win"
+          ? 960
+          : 420;
+
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime);
+    gain.gain.setValueAtTime(0.08, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.22);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.22);
+  } catch {
+    // Ignore audio failures.
+  }
+}
+
+function makeFeedEntry(message: string, tone: FeedTone): FeedEntry {
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    message,
+    tone,
+    time: Date.now(),
+  };
+}
+
+function SummaryCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: string;
+}) {
+  return (
+    <div className="glass-panel p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+      <div className={`mt-2 text-2xl font-mono font-bold ${accent}`}>{value}</div>
+    </div>
+  );
+}
+
+export default function TradingDashboard() {
+  const [resetRefreshKey, setResetRefreshKey] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [activeTab, setActiveTab] = useState<"trade" | "stats" | "history" | "feed">("trade");
+  const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
+  const [feed, setFeed] = useState<FeedEntry[]>([]);
+
+  const { engineOnline, balance: engineBalance } = useEngineState();
+  const market = useLiveBTCMarket();
+  const deferredCandles = useDeferredValue(market.candles);
+  const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
+  const { positions: livePositions } = usePositions(resetRefreshKey);
+  const { trades: liveTrades, stats: liveStats } = useTrades(resetRefreshKey);
+  const { logs: engineLogs } = useEngineLogs(resetRefreshKey);
+
+  const previousConnectionState = useRef<string>("");
+  const previousExchange = useRef<string>("");
+  const previousPositionIds = useRef<string[]>([]);
+  const previousTradeIds = useRef<string[]>([]);
+  const positionsHydrated = useRef(false);
+  const tradesHydrated = useRef(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(SOUND_STORAGE_KEY, String(isSoundOn));
+    }
+  }, [isSoundOn]);
+
+  const pushFeed = (message: string, tone: FeedTone = "info") => {
+    startTransition(() => {
+      setFeed((previous) => [makeFeedEntry(message, tone), ...previous].slice(0, 80));
+    });
+  };
+
+  useEffect(() => {
+    if (previousExchange.current === market.exchange) {
+      return;
+    }
+    previousExchange.current = market.exchange;
+    pushFeed(
+      `Streaming market data from ${market.exchange === "binance" ? "Binance" : "Bybit"}.`,
+      "info",
+    );
+  }, [market.exchange]);
+
+  useEffect(() => {
+    if (previousConnectionState.current === market.connectionState) {
+      return;
+    }
+
+    previousConnectionState.current = market.connectionState;
+    if (market.connectionState === "live") {
+      pushFeed(`Market feed connected on ${market.exchange}.`, "info");
+      return;
+    }
+    if (market.connectionState === "reconnecting") {
+      pushFeed(`Market feed reconnecting on ${market.exchange}.`, "info");
+      return;
+    }
+    if (market.connectionState === "error" && market.connectionError) {
+      pushFeed(`Market feed error: ${market.connectionError}`, "loss");
+    }
+  }, [market.connectionError, market.connectionState, market.exchange]);
+
+  useEffect(() => {
+    if (!positionsHydrated.current) {
+      positionsHydrated.current = true;
+      previousPositionIds.current = livePositions.map((position) => position.id);
+      return;
+    }
+
+    const previousIds = new Set(previousPositionIds.current);
+    for (const position of livePositions) {
+      if (previousIds.has(position.id)) {
+        continue;
+      }
+
+      const side = position.side === "BUY" ? "LONG" : "SHORT";
+      pushFeed(
+        `${side} ${position.strategyName} opened @ ${formatUSD(position.entryPrice)}`,
+        position.side === "BUY" ? "buy" : "sell",
+      );
+      if (isSoundOn) {
+        beep(position.side === "BUY" ? "buy" : "sell");
+      }
+    }
+    previousPositionIds.current = livePositions.map((position) => position.id);
+  }, [isSoundOn, livePositions]);
+
+  useEffect(() => {
+    if (!tradesHydrated.current) {
+      tradesHydrated.current = true;
+      previousTradeIds.current = liveTrades.map((trade) => trade.id);
+      return;
+    }
+
+    const previousIds = new Set(previousTradeIds.current);
+    for (const trade of liveTrades) {
+      if (previousIds.has(trade.id)) {
+        continue;
+      }
+
+      const positive = trade.netPnl >= 0;
+      pushFeed(
+        `${trade.strategyName} closed ${positive ? "green" : "red"} ${formatUSD(trade.netPnl, { signed: true })}`,
+        positive ? "win" : "loss",
+      );
+      if (isSoundOn) {
+        beep(positive ? "win" : "loss");
+      }
+    }
+    previousTradeIds.current = liveTrades.map((trade) => trade.id);
+  }, [isSoundOn, liveTrades]);
+
+  const displayStrategies: StrategyCardView[] = liveStrategies.length > 0
+    ? liveStrategies.map((strategy) => ({
+        name: strategy.name,
+        category: strategy.category,
+        timeframe: strategy.timeframe,
+        status: strategy.disabled ? "DISABLED" : "RUNNING",
+        exposure: 0,
+        profit: strategy.totalPnl,
+      }))
+    : DEFAULT_STRATEGIES;
+
+  const displayCategories = [...new Set(displayStrategies.map((strategy) => strategy.category))].sort((left, right) => {
+    const leftIndex = CATEGORY_ORDER.indexOf(left);
+    const rightIndex = CATEGORY_ORDER.indexOf(right);
+
+    if (leftIndex === -1 && rightIndex === -1) {
+      return left.localeCompare(right);
+    }
+    if (leftIndex === -1) {
+      return 1;
+    }
+    if (rightIndex === -1) {
+      return -1;
+    }
+    return leftIndex - rightIndex;
+  });
+
+  const runningTrades: RunningTradeView[] = livePositions.map((position) => {
+    const openedAt = new Date(position.openedAt);
+    const elapsedSeconds = Math.max(0, Math.floor((currentTime - openedAt.getTime()) / 1000));
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+
+    return {
+      id: position.id,
+      strategy: position.strategyName,
+      side: position.side === "BUY" ? "LONG" : "SHORT",
+      size: position.size,
+      entry: position.entryPrice,
+      stopLoss: position.stopLoss,
+      takeProfit: position.takeProfit,
+      originalSize: position.originalSize,
+      trailingActive: position.trailingActive,
+      breakEvenMoved: position.breakEvenMoved,
+      partialClosed: position.partialClosed,
+      openTime: openedAt.toLocaleTimeString(),
+      elapsed: `${minutes}m ${seconds}s`,
+    };
+  });
+
+  const balance = liveStats?.balance ?? engineBalance;
+  const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
+  const closedPnl = liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const unrealized = livePositions.reduce((sum, position) => {
+    const markPrice = price > 0 ? price : position.entryPrice;
+    const pnl = position.side === "BUY"
+      ? (markPrice - position.entryPrice) * position.size
+      : (position.entryPrice - markPrice) * position.size;
+    return sum + pnl;
+  }, 0);
+  const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
+  const priceSeries: ChartPricePoint[] = market.recentPrices.length > 0
+    ? market.recentPrices
+    : price > 0
+      ? [{ time: currentTime, price }]
+      : [];
+  const secondsSinceLastMarketEvent = market.lastMarketEventAt
+    ? Math.max(0, Math.floor((currentTime - market.lastMarketEventAt) / 1000))
+    : null;
+  const marketSentiment = calcMarketSentiment(priceSeries.map((point) => point.price));
+  const latestSignal = detectMarketSignal(deferredCandles);
+  const strategyBars = displayStrategies.map((strategy) => ({
+    name: strategy.name,
+    pnl: strategy.profit,
+  }));
+
+  const baselineBalance = liveStats
+    ? liveStats.balance - liveStats.aggregate.totalPnl
+    : 100000;
+
+  const equitySeries: ChartEquityPoint[] = [];
+  let cumulativeEquity = baselineBalance;
+  const orderedTrades = [...liveTrades].sort(
+    (left, right) => new Date(left.exitTime).getTime() - new Date(right.exitTime).getTime(),
+  );
+
+  for (const trade of orderedTrades) {
+    cumulativeEquity += trade.netPnl;
+    equitySeries.push({
+      time: new Date(trade.exitTime).getTime(),
+      equity: cumulativeEquity,
+    });
+  }
+
+  if (equitySeries.length === 0 && balance > 0) {
+    equitySeries.push({ time: currentTime, equity: balance });
+  } else if (equitySeries.length > 0 && balance > 0) {
+    equitySeries.push({ time: currentTime, equity: balance });
+  }
+
+  const streak = (() => {
+    if (liveTrades.length === 0) {
+      return "0";
+    }
+
+    const lastWasWin = liveTrades[0].netPnl >= 0;
+    let count = 0;
+    for (const trade of liveTrades) {
+      const currentWasWin = trade.netPnl >= 0;
+      if (currentWasWin !== lastWasWin) {
+        break;
+      }
+      count += 1;
+    }
+    return `${count}${lastWasWin ? "W" : "L"}`;
+  })();
+
+  const strategyBreakdown = (() => {
+    const byStrategy = new Map<string, { wins: number; losses: number; pnl: number }>();
+
+    for (const trade of liveTrades) {
+      const entry = byStrategy.get(trade.strategyName) ?? { wins: 0, losses: 0, pnl: 0 };
+      if (trade.netPnl >= 0) {
+        entry.wins += 1;
+      } else {
+        entry.losses += 1;
+      }
+      entry.pnl += trade.netPnl;
+      byStrategy.set(trade.strategyName, entry);
+    }
+
+    return [...byStrategy.entries()].sort((left, right) => right[1].pnl - left[1].pnl);
+  })();
+
+  const handleReset = () => {
+    setResetRefreshKey((current) => current + 1);
+  };
+
+  const handleAdminEvent = (message: string, tone: "admin" | "info") => {
+    pushFeed(message, tone);
+    setResetRefreshKey((current) => current + 1);
+  };
+
+  return (
+    <main className="min-h-screen max-w-[1600px] mx-auto space-y-6 p-6">
+      <DashboardHeader
+        online={engineOnline}
+        balance={balance}
+        dailyPnL={liveStats?.dailyPnl ?? closedPnl + unrealized}
+        openPositions={livePositions.length}
+        onResetSuccess={handleReset}
+        onAdminEvent={handleAdminEvent}
+      />
+
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+        <div className="xl:col-span-2">
+          <MarketTickerCard
+            price={market.price}
+            prevPrice={market.prevPrice}
+            change={market.change24h}
+            connected={market.connected}
+            ticksPerSecond={market.ticksPerSecond}
+            exchange={market.exchange}
+            connectionState={market.connectionState}
+            high24h={market.high24h}
+            low24h={market.low24h}
+            volume24h={market.volume24h}
+            secondsSinceLastEvent={secondsSinceLastMarketEvent}
+          />
+        </div>
+        <SummaryCard label="Market Sentiment" value={marketSentiment.label} accent={marketSentiment.colorClass} />
+        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-green-400" : "text-red-400"} />
+        <SummaryCard label="Open Positions" value={`${livePositions.length}`} accent="text-sky-300" />
+        <SummaryCard label="Net Exposure" value={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC`} accent="text-violet-300" />
+      </div>
+
+      <div className="glass-panel p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {(["binance", "bybit"] as const).map((exchange) => (
+            <button
+              key={exchange}
+              onClick={() => market.setExchange(exchange)}
+              className={`rounded-xl border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
+                market.exchange === exchange
+                  ? "border-sky-400/40 bg-sky-500/15 text-sky-200"
+                  : "border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              {exchange === "binance" ? "Binance" : "Bybit"}
+            </button>
+          ))}
+          <button
+            onClick={() => setIsSoundOn((current) => !current)}
+            className={`rounded-xl border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
+              isSoundOn
+                ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+                : "border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+            }`}
+          >
+            {isSoundOn ? "Sound On" : "Sound Off"}
+          </button>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-2 text-xs font-mono text-zinc-400">
+            Feed {market.connectionState}
+            {market.connectionError ? ` | ${market.connectionError}` : ""}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {[
+            { key: "trade", label: "Trade" },
+            { key: "stats", label: "Stats" },
+            { key: "history", label: `History (${liveTrades.length})` },
+            { key: "feed", label: `Feed (${feed.length})` },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as "trade" | "stats" | "history" | "feed")}
+              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
+                activeTab === tab.key
+                  ? "bg-white text-zinc-950"
+                  : "border border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
+        <SummaryCard
+          label="Win Rate"
+          value={`${(liveStats?.aggregate.winRate ?? 0).toFixed(1)}%`}
+          accent={(liveStats?.aggregate.winRate ?? 0) >= 50 ? "text-green-400" : "text-red-400"}
+        />
+        <SummaryCard
+          label="Profit Factor"
+          value={(liveStats?.aggregate.profitFactor ?? 0).toFixed(2)}
+          accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
+        />
+        <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
+        <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
+        <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
+        <SummaryCard label="Ticks / Candles" value={`${liveStats?.ticksProcessed ?? 0} / ${liveStats?.candlesClosed ?? 0}`} accent="text-sky-300" />
+      </div>
+
+      {activeTab === "trade" && (
+        <div className="grid grid-cols-1 xl:grid-cols-[1.7fr,1fr] gap-6">
+          <div className="space-y-6">
+            <div>
+              <div className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                Market Chart
+              </div>
+              <MarketChart
+                candles={deferredCandles}
+                currentPrice={price}
+                positions={livePositions.map((position) => ({
+                  id: position.id,
+                  strategy: position.strategyName,
+                  side: position.side === "BUY" ? "LONG" : "SHORT",
+                  entry: position.entryPrice,
+                  stopLoss: position.stopLoss,
+                  takeProfit: position.takeProfit,
+                }))}
+              />
+            </div>
+
+            <div className="glass-panel p-6">
+              <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
+                <span className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-bold tracking-widest text-green-400">LIVE</span>
+                Running Positions
+                <span className="text-sm font-mono text-gray-500">({livePositions.length} active)</span>
+              </h2>
+              <RunningTrades currentPrice={price} trades={runningTrades} />
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <SignalInsightCard signal={latestSignal} />
+            <ActivityFeed entries={feed.slice(0, 12)} />
+          </div>
+        </div>
+      )}
+
+      {activeTab === "stats" && (
+        <div className="space-y-6">
+          <PerformanceCharts priceSeries={priceSeries} equitySeries={equitySeries} strategyBars={strategyBars} />
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <SummaryCard label="Best Trade" value={formatUSD(liveStats?.aggregate.bestTrade ?? 0, { signed: true })} accent="text-green-400" />
+            <SummaryCard label="Worst Trade" value={formatUSD(liveStats?.aggregate.worstTrade ?? 0, { signed: true })} accent="text-red-400" />
+            <SummaryCard label="Total Return" value={`${(((balance - 100000) / 100000) * 100).toFixed(2)}%`} accent={balance >= 100000 ? "text-green-400" : "text-red-400"} />
+            <SummaryCard label="Total Strategy PnL" value={formatUSD(totalStrategyPnl, { signed: true })} accent={totalStrategyPnl >= 0 ? "text-green-400" : "text-red-400"} />
+          </div>
+
+          <div className="space-y-6">
+            {displayCategories.map((category) => {
+              const categoryStrategies = displayStrategies.filter((strategy) => strategy.category === category);
+              if (categoryStrategies.length === 0) {
+                return null;
+              }
+
+              return (
+                <div key={category} className="glass-panel p-6">
+                  <h2 className="mb-4 flex items-center gap-2 text-lg font-bold">
+                    <span className={`h-2 w-2 rounded-full ${CAT_COLORS[category] || "bg-gray-500"} animate-pulse`}></span>
+                    {category}
+                    <span className="ml-2 text-xs font-mono text-gray-500">{categoryStrategies.length} strategies</span>
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {categoryStrategies.map((strategy) => (
+                      <StrategyCard
+                        key={strategy.name}
+                        name={strategy.name}
+                        status={strategy.status}
+                        exposure={strategy.exposure}
+                        profit={strategy.profit}
+                        timeframe={strategy.timeframe}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "history" && (
+        <div className="space-y-6">
+          {strategyBreakdown.length > 0 && (
+            <div className="glass-panel p-6">
+              <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                Strategy Breakdown
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {strategyBreakdown.map(([strategyName, stats]) => (
+                  <div
+                    key={strategyName}
+                    className={`rounded-xl border px-3 py-2 text-sm ${
+                      stats.pnl >= 0
+                        ? "border-green-500/20 bg-green-500/10 text-green-200"
+                        : "border-red-500/20 bg-red-500/10 text-red-200"
+                    }`}
+                  >
+                    <span className="font-semibold text-white">{strategyName}</span>
+                    <span className="ml-2 text-zinc-400">{stats.wins}W/{stats.losses}L</span>
+                    <span className="ml-2 font-mono">{formatUSD(stats.pnl, { signed: true })}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="glass-panel p-6">
+            <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
+              <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
+              Trade History
+              <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+            </h2>
+            <TradeHistory
+              history={liveTrades.map((trade) => ({
+                id: trade.id,
+                strategy: trade.strategyName,
+                side: trade.side === "BUY" ? "LONG" : "SHORT",
+                size: trade.size,
+                entry: trade.entryPrice,
+                exit: trade.exitPrice,
+                pnl: trade.netPnl,
+                reason: mapTradeReason(trade.reason),
+                duration: formatDuration(trade.duration),
+                time: new Date(trade.exitTime).toLocaleTimeString(),
+              }))}
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === "feed" && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <ActivityFeed entries={feed} />
+
+          <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70">
+            <div className="border-b border-zinc-800/80 px-5 py-4">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                Engine Log Buffer
+              </h3>
+            </div>
+            <div className="max-h-[420px] overflow-y-auto p-5">
+              {engineLogs.length === 0 ? (
+                <div className="text-sm text-zinc-500">No engine logs available yet.</div>
+              ) : (
+                <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-6 text-zinc-300">
+                  {engineLogs.join("")}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}

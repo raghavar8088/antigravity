@@ -8,14 +8,29 @@ export default function useEngineState() {
 
   useEffect(() => {
     const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    let cancelled = false;
 
-    fetch(`${API_URL}/health`)
-      .then((res) => {
-        setEngineOnline(res.ok);
-      })
-      .catch(() => {
-        setEngineOnline(false);
-      });
+    const checkHealth = () => {
+      fetch(`${API_URL}/health`)
+        .then((res) => {
+          if (!cancelled) {
+            setEngineOnline(res.ok);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setEngineOnline(false);
+          }
+        });
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   return {

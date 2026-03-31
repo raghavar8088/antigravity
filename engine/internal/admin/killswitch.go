@@ -18,6 +18,7 @@ import (
 type KillSwitchController struct {
 	cancelFunc context.CancelFunc
 	engine     execution.Engine
+	paper      *execution.PaperClient
 	journal    *execution.TradeJournal
 	posMgr     *positions.Manager
 	dbStore    *persistence.Store
@@ -30,6 +31,7 @@ func NewKillSwitch(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	eng execution.Engine,
+	paper *execution.PaperClient,
 	journal *execution.TradeJournal,
 	posMgr *positions.Manager,
 	dbStore *persistence.Store,
@@ -40,6 +42,7 @@ func NewKillSwitch(
 		ctx:        ctx,
 		cancelFunc: cancel,
 		engine:     eng,
+		paper:      paper,
 		journal:    journal,
 		posMgr:     posMgr,
 		dbStore:    dbStore,
@@ -98,6 +101,55 @@ func (k *KillSwitchController) HandleTrigger(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "Systems Halted",
 		"message": "Market execution loop forcibly terminated and positions closed.",
+	})
+}
+
+// HandleCloseAll closes all open paper positions at the current market price
+// while keeping the engine running.
+func (k *KillSwitchController) HandleCloseAll(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if k.paper == nil {
+		http.Error(w, "Paper execution engine unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	exitPrice := k.paper.GetLastPrice()
+	if exitPrice <= 0 {
+		http.Error(w, "No live market price available yet", http.StatusConflict)
+		return
+	}
+
+	openPositions := k.posMgr.GetOpenPositions()
+	if len(openPositions) == 0 {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":          "No Positions",
+			"message":         "There are no open positions to close.",
+			"closedPositions": 0,
+			"exitPrice":       exitPrice,
+		})
+		return
+	}
+
+	k.posMgr.CloseAllPositions(exitPrice)
+	log.Printf("[ADMIN] Force-closed %d open positions at $%.2f", len(openPositions), exitPrice)
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":          "Positions Closed",
+		"message":         "All open paper positions were closed at the current market price.",
+		"closedPositions": len(openPositions),
+		"exitPrice":       exitPrice,
 	})
 }
 

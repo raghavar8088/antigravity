@@ -216,13 +216,14 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 12. HTTP API Server
 	// ═══════════════════════════════════════════════════
-	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
+	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
 
 	// Admin endpoints
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)
+	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)
 	http.HandleFunc("/api/admin/reset", killswitch.HandleReset)
 
 	// Health check
@@ -318,6 +319,7 @@ func main() {
 		fmt.Println("    GET  /api/stats        — Aggregate stats")
 		fmt.Println("    GET  /api/logs         — Last 100 system logs")
 		fmt.Println("    POST /api/admin/kill   — Kill switch")
+		fmt.Println("    POST /api/admin/close-all — Close all open paper positions")
 		fmt.Println("    POST /api/admin/reset  — Reset account")
 		fmt.Println("═══════════════════════════════════════════")
 		if err := http.ListenAndServe(":8080", nil); err != nil {

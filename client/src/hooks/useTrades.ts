@@ -39,6 +39,8 @@ export type EngineStats = {
   dailyPnl: number;
   lastPrice: number;
   openPositions: number;
+  ticksProcessed: number;
+  candlesClosed: number;
 };
 
 export default function useTrades(refreshKey = 0) {
