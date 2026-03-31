@@ -47,7 +47,6 @@ type RunningTradeView = {
   takeProfit: number;
   originalSize: number;
   trailingActive: boolean;
-  breakEvenMoved: boolean;
   partialClosed: boolean;
   openTime: string;
   elapsed: string;
@@ -59,6 +58,7 @@ type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 
 const SOUND_STORAGE_KEY = "antigravity.sound.enabled";
+const INITIAL_BALANCE = 100000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
@@ -381,16 +381,16 @@ export default function TradingDashboard() {
       takeProfit: position.takeProfit,
       originalSize: position.originalSize,
       trailingActive: position.trailingActive,
-      breakEvenMoved: position.breakEvenMoved,
       partialClosed: position.partialClosed,
       openTime: openedAt.toLocaleTimeString(),
       elapsed: `${minutes}m ${seconds}s`,
     };
   });
 
-  const balance = liveStats?.balance ?? engineBalance;
-  const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
   const closedPnl = liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
+  const balance = liveStats?.balance ?? totalStrategyPnl + engineBalance;
+  const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
   const unrealized = livePositions.reduce((sum, position) => {
     const markPrice = price > 0 ? price : position.entryPrice;
     const pnl = position.side === "BUY"
@@ -398,7 +398,6 @@ export default function TradingDashboard() {
       : (position.entryPrice - markPrice) * position.size;
     return sum + pnl;
   }, 0);
-  const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
   const priceSeries: ChartPricePoint[] = market.recentPrices.length > 0
     ? market.recentPrices
     : price > 0
@@ -414,9 +413,7 @@ export default function TradingDashboard() {
     pnl: strategy.profit,
   }));
 
-  const baselineBalance = liveStats
-    ? liveStats.balance - liveStats.aggregate.totalPnl
-    : 100000;
+  const baselineBalance = INITIAL_BALANCE;
 
   const equitySeries: ChartEquityPoint[] = [];
   let cumulativeEquity = baselineBalance;
@@ -486,7 +483,7 @@ export default function TradingDashboard() {
       <DashboardHeader
         online={engineOnline}
         balance={balance}
-        dailyPnL={liveStats?.dailyPnl ?? closedPnl + unrealized}
+        dailyPnL={liveStats?.dailyPnl ?? closedPnl}
         openPositions={livePositions.length}
         onResetSuccess={handleReset}
         onAdminEvent={handleAdminEvent}
@@ -629,7 +626,7 @@ export default function TradingDashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <SummaryCard label="Best Trade" value={formatUSD(liveStats?.aggregate.bestTrade ?? 0, { signed: true })} accent="text-green-400" />
             <SummaryCard label="Worst Trade" value={formatUSD(liveStats?.aggregate.worstTrade ?? 0, { signed: true })} accent="text-red-400" />
-            <SummaryCard label="Total Return" value={`${(((balance - 100000) / 100000) * 100).toFixed(2)}%`} accent={balance >= 100000 ? "text-green-400" : "text-red-400"} />
+            <SummaryCard label="Total Return" value={`${(((balance - INITIAL_BALANCE) / INITIAL_BALANCE) * 100).toFixed(2)}%`} accent={balance >= INITIAL_BALANCE ? "text-green-400" : "text-red-400"} />
             <SummaryCard label="Total Strategy PnL" value={formatUSD(totalStrategyPnl, { signed: true })} accent={totalStrategyPnl >= 0 ? "text-green-400" : "text-red-400"} />
           </div>
 

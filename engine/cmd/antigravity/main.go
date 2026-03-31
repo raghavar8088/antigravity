@@ -52,6 +52,8 @@ func (r *RingLogger) GetLogs() []string {
 
 var globalLogs = &RingLogger{max: 100}
 
+const initialPaperBalanceUSD = 100000.0
+
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
@@ -95,21 +97,21 @@ func main() {
 	// 3. Risk Engine (Expanded for $100K)
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
-		MaxPositionBTC:  2.0,       // Max 2 BTC total exposure
-		MaxCapitalUSD:   100000.00, // $100,000 paper balance
-		MaxDailyLossPct: 0.05,      // 5% daily loss circuit breaker ($5,000)
+		MaxPositionBTC:  2.0,                    // Max 2 BTC total exposure
+		MaxCapitalUSD:   initialPaperBalanceUSD, // $100,000 paper balance
+		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($5,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
 
 	// ═══════════════════════════════════════════════════
 	// 4. Strategy Tracker (Per-Strategy Performance)
 	// ═══════════════════════════════════════════════════
-	tracker := risk.NewStrategyTracker(names, categories, timeframes, 100000.0)
+	tracker := risk.NewStrategyTracker(names, categories, timeframes, initialPaperBalanceUSD)
 
 	// ═══════════════════════════════════════════════════
 	// 5. Paper Executor ($100K)
 	// ═══════════════════════════════════════════════════
-	paperExecute := execution.NewPaperClient(100000.0)
+	paperExecute := execution.NewPaperClient(initialPaperBalanceUSD)
 
 	// ═══════════════════════════════════════════════════
 	// 6. Position Manager (Trailing SL/TP)
@@ -141,7 +143,7 @@ func main() {
 	} else {
 		// ── Restore ALL state on boot ──
 		state, loadErr := dbStore.LoadState(ctx)
-		if loadErr == nil && state.Balance != 100000 {
+		if loadErr == nil && state.Balance != initialPaperBalanceUSD {
 			// 1. Restore paper balance + fees
 			paperExecute.RestoreBalance(state.Balance, state.TotalFees)
 
@@ -280,11 +282,13 @@ func main() {
 			return
 		}
 		aggStats := journal.GetAggregateStats()
+		realizedBalance := initialPaperBalanceUSD + aggStats.TotalPnL
 
 		ticks, candles := candleAgg.GetStats()
 		response := map[string]interface{}{
 			"aggregate":      aggStats,
-			"balance":        paperExecute.GetEquityUSD(),
+			"balance":        realizedBalance,
+			"equity":         paperExecute.GetEquityUSD(),
 			"cashBalance":    paperExecute.GetBalanceUSD(),
 			"exposure":       riskEngine.GetAbsoluteExposure(),
 			"netPosition":    riskEngine.GetExposure(),

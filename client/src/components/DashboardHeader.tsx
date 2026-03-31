@@ -100,7 +100,7 @@ export default function DashboardHeader({
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-center w-full xl:w-auto">
         <div className="text-right">
-          <p className="text-sm text-gray-400 font-semibold uppercase tracking-wider">Total Equity</p>
+          <p className="text-sm text-gray-400 font-semibold uppercase tracking-wider">Account Balance</p>
           <p className="text-2xl font-bold font-mono text-white">${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
         </div>
 

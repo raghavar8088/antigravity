@@ -12,7 +12,6 @@ interface RunningTrade {
   takeProfit: number;
   originalSize: number;
   trailingActive: boolean;
-  breakEvenMoved: boolean;
   partialClosed: boolean;
   openTime: string;
   elapsed: string;
@@ -95,11 +94,6 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                       {t.trailingActive && (
                         <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-300">
                           Trail
-                        </span>
-                      )}
-                      {t.breakEvenMoved && (
-                        <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sky-300">
-                          BE
                         </span>
                       )}
                       {t.partialClosed && (

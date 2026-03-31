@@ -47,6 +47,36 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	if !positions[0].PartialClosed {
 		t.Fatal("expected position to be marked partial closed")
 	}
+	if positions[0].BreakEvenMoved {
+		t.Fatal("expected partial take profit to avoid moving stop to break even")
+	}
+}
+
+func TestLongPositionDoesNotAutoMoveToBreakEven(t *testing.T) {
+	mgr := NewManager()
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   1,
+		TakeProfitPct: 1,
+	}
+
+	pos := mgr.OpenPosition(sig, 100, "NoBreakEven")
+	originalStop := pos.StopLoss
+
+	mgr.CheckStopLossAndTakeProfit(100.31)
+
+	positions := mgr.GetOpenPositions()
+	if len(positions) != 1 {
+		t.Fatalf("expected one open position, got %d", len(positions))
+	}
+	if math.Abs(positions[0].StopLoss-originalStop) > floatTolerance {
+		t.Fatalf("expected stop loss to remain %.4f, got %.4f", originalStop, positions[0].StopLoss)
+	}
+	if positions[0].BreakEvenMoved {
+		t.Fatal("expected break-even flag to remain disabled")
+	}
 }
 
 func TestOpenPositionReversesLongStopLossAndTakeProfit(t *testing.T) {
