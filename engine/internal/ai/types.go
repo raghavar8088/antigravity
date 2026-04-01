@@ -47,6 +47,18 @@ type AIDecision struct {
 	FinalReasoning string      `json:"finalReasoning"`
 	Executed       bool        `json:"executed"`
 	Regime         string      `json:"regime"`
+	AuditLogs      []AuditLog  `json:"auditLogs,omitempty"` // Manual strategy signals audited by AI
+}
+
+// AuditLog tracks a specific strategy signal that was reviewed by the AI.
+type AuditLog struct {
+	ID           string    `json:"id"`
+	StrategyName string    `json:"strategyName"`
+	Action       string    `json:"action"`
+	Approved     bool      `json:"approved"`
+	Reason       string    `json:"reason"`
+	Confidence   float64   `json:"confidence"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // MarketContext is the data snapshot sent to Claude agents.
@@ -82,14 +94,32 @@ type CandleSummary struct {
 // InsightStore holds the last N AI decisions in memory for the API.
 type InsightStore struct {
 	decisions []AIDecision
+	auditLogs []AuditLog
 	maxSize   int
 }
 
 func NewInsightStore(maxSize int) *InsightStore {
 	return &InsightStore{
 		decisions: make([]AIDecision, 0, maxSize),
+		auditLogs: make([]AuditLog, 0, 100),
 		maxSize:   maxSize,
 	}
+}
+
+func (s *InsightStore) AddAudit(l AuditLog) {
+	s.auditLogs = append([]AuditLog{l}, s.auditLogs...)
+	if len(s.auditLogs) > 100 {
+		s.auditLogs = s.auditLogs[:100]
+	}
+}
+
+func (s *InsightStore) GetAuditLogs(n int) []AuditLog {
+	if n > len(s.auditLogs) {
+		n = len(s.auditLogs)
+	}
+	result := make([]AuditLog, n)
+	copy(result, s.auditLogs[:n])
+	return result
 }
 
 func (s *InsightStore) Add(d AIDecision) {

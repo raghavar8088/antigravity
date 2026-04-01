@@ -632,6 +632,7 @@ export default function TradingDashboard() {
               message={aiInsights.message}
               latest={aiInsights.latest}
               recent={aiInsights.recent}
+              auditLogs={aiInsights.auditLogs}
             />
             <SignalInsightCard signal={latestSignal} />
             <ActivityFeed entries={feed.slice(0, 12)} />

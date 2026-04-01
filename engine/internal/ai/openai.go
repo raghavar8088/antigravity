@@ -140,3 +140,8 @@ func (c *OpenAIClient) ChatForSignal(ctx context.Context, system, prompt string)
 func (c *OpenAIClient) ChatForRisk(ctx context.Context, system, prompt string) (string, error) {
 	return c.Chat(ctx, modelRiskGPT, system, prompt, 400)
 }
+
+// ChatForAudit calls gpt-4o-mini for high-speed signal vetting/auditing.
+func (c *OpenAIClient) ChatForAudit(ctx context.Context, system, prompt string) (string, error) {
+	return c.Chat(ctx, modelSignalsGPT, system, prompt, 350)
+}

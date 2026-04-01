@@ -25,7 +25,7 @@ const (
 	minRewardToRiskRatio     = 1.50 // Raised: require better reward vs risk (was 1.35)
 	minSignalTakeProfitPct   = 0.55 // Raised: ensure TP is worth chasing after slippage (was 0.45)
 	maxSignalStopLossPct     = 0.80 // Lowered: tighter max SL, keep losses small (was 1.20)
-	defaultSignalStopLossPct = 0.20 // Lowered: tighter default SL (was 0.30)
+	defaultSignalStopLossPct = 0.50 // RAISED: widened from 0.20 to prevent whipsaws
 
 	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
 	marketHistoryMaxSamples   = 320
@@ -589,6 +589,47 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
+		
+		// ══════════════════════════════════════════════════════════════════════
+		// AI SIGNAL AUDIT — GPT-4o/Gemini Veto Layer
+		// ══════════════════════════════════════════════════════════════════════
+		if o.aiAgent != nil && o.aiAgent.IsAvailable() {
+			// Build market context for the audit
+			o.mu.RLock()
+			prices := append([]float64(nil), o.priceWindow...)
+			volumes := append([]float64(nil), o.volumeWindow...)
+			o.mu.RUnlock()
+			
+			o.candleHistMu.Lock()
+			candles := append([]ai.CandleSummary(nil), o.candleHistory...)
+			o.candleHistMu.Unlock()
+
+			market := ai.MarketContext{
+				Symbol:        sig.Symbol,
+				Price:         currentPrice,
+				Regime:        regime,
+				RSI:           computeRSI(prices, 14),
+				ATR:           strategy.ATR(prices, 14),
+				VWAP:          strategy.RollingVWAP(prices, volumes, 55),
+				ADX:           strategy.ADX(prices, 14),
+				EMAFast:       strategy.EMA(prices, 9),
+				EMASlow:       strategy.EMA(prices, 21),
+				RecentCandles: candles,
+				OpenPositions: len(o.posMgr.GetOpenPositions()),
+				Balance:       o.exec.GetEquityUSD(),
+				DailyPnL:      o.risk.GetDailyPnL(),
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			approved, reason, _ := o.aiAgent.AuditSignal(ctx, market, aggSig.StrategyName, string(sig.Action))
+			cancel()
+
+			if !approved {
+				log.Printf("[AI AUDIT VETO] %s %s REJECTED: %s", aggSig.StrategyName, sig.Action, reason)
+				continue
+			}
+			log.Printf("[AI AUDIT PASS] %s %s APPROVED: %s", aggSig.StrategyName, sig.Action, reason)
+		}
 
 		// Execute
 		fill, err := o.exec.ExecuteSignal(sig, orderMode)

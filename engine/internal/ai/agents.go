@@ -76,6 +76,24 @@ JSON schema:
   "adjusted_size": number (may reduce the proposed size for safety)
 }`
 
+const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity, an autonomous BTC scalping engine.
+Your role: Review a proposed signal from a manual technical strategy (e.g., EMA Cross, RSI).
+Decide if the signal is high-probability or a "trap" based on the provided market context.
+
+Criteria for VETO:
+- High RSI (+70) for a BUY signal, or Low RSI (-30) for a SELL.
+- Moving Average misalignment (e.g. BUY signal when price is below both EMAs).
+- Low volatility (ATR) making the spread/fees non-viable.
+- Contradicting the Macro Analyst's bias.
+
+CRITICAL: Respond ONLY with a valid JSON object. No markdown.
+JSON schema:
+{
+  "approved": boolean,
+  "confidence": number (0.0 to 1.0),
+  "reason": "1 sentence explanation of why you approved or vetoed"
+}`
+
 // ─────────────────────────────────────────────────────────────────
 // PROMPT BUILDER — formats MarketContext into LLM-readable text
 // ─────────────────────────────────────────────────────────────────
@@ -205,6 +223,49 @@ type riskAgentResponse struct {
 	VetoReason     string  `json:"veto_reason"`
 	Reasoning      string  `json:"reasoning"`
 	AdjustedSize   float64 `json:"adjusted_size"`
+}
+
+type auditAgentResponse struct {
+	Approved   bool    `json:"approved"`
+	Confidence float64 `json:"confidence"`
+	Reason     string  `json:"reason"`
+}
+
+func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	
+	// Quick poll of GPT-4o-mini for audit
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Should we execute it? Be strict.", 
+		buildMarketPrompt(market), strategyName, action)
+	
+	raw, err := o.openai.ChatForAudit(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT] Error: %v", err)
+		return true, "Audit failed (neutral)", 0.5 // Default to true if AI is down to avoid blocking
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		log.Printf("[AI AUDIT] Parse error: %v | raw: %s", err, raw)
+		return true, "Audit parse error (neutral)", 0.4
+	}
+
+	log.Printf("[AI AUDIT] %s %s -> %v | %s (%.0fms)", 
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	// Store in store
+	o.insights.AddAudit(AuditLog{
+		ID:           fmt.Sprintf("AUD-%d", time.Now().UnixNano()/1e6),
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+	})
+
+	return resp.Approved, resp.Reason, resp.Confidence
 }
 
 func runBullAgent(ctx context.Context, client *OpenAIClient, market MarketContext) AgentSignal {

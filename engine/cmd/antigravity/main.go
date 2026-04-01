@@ -348,11 +348,13 @@ func main() {
 		}
 		latest := aiOrchestrator.GetInsights().Latest()
 		recent := aiOrchestrator.GetInsights().GetRecent(20)
+		audits := aiOrchestrator.GetInsights().GetAuditLogs(10)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"enabled":       true,
 			"geminiEnabled": aiOrchestrator.GeminiEnabled(),
 			"latest":        latest,
 			"recent":        recent,
+			"auditLogs":     audits,
 		})
 	})
 

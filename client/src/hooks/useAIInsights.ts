@@ -34,6 +34,17 @@ export type AIDecision = {
   finalReasoning: string;
   executed: boolean;
   regime: string;
+  auditLogs?: AuditLog[];
+};
+
+export type AuditLog = {
+  id: string;
+  strategyName: string;
+  action: "BUY" | "SELL" | "HOLD";
+  approved: boolean;
+  reason: string;
+  confidence: number;
+  timestamp: string;
 };
 
 type AIInsightsState = {
@@ -42,6 +53,7 @@ type AIInsightsState = {
   message?: string;
   latest: AIDecision | null;
   recent: AIDecision[];
+  auditLogs: AuditLog[];
   loading: boolean;
 };
 
@@ -53,6 +65,7 @@ export default function useAIInsights(refreshKey = 0): AIInsightsState {
     geminiEnabled: false,
     latest: null,
     recent: [],
+    auditLogs: [],
     loading: true,
   });
 
@@ -71,6 +84,7 @@ export default function useAIInsights(refreshKey = 0): AIInsightsState {
             message: data.message,
             latest: data.latest ?? null,
             recent: data.recent ?? [],
+            auditLogs: data.auditLogs ?? [],
             loading: false,
           });
         }
