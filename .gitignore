@@ -1,4 +1,19 @@
-.venv/
+# Go cache
+.gocache/
+bin/
+*.exe
+*.test
+*.prof
+
+# Node cache
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
@@ -6,7 +21,16 @@ __pycache__/
 .Python
 env/
 venv/
-.ipynb_checkpoints/
-*.log
-*.sqlite3
-config/.env
+.venv/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Engine Temp
+engine/cmd/antigravity/main.go.*
+engine/internal/**/*.go.*
+dev-server.err
+dev-server2.err
