@@ -8,7 +8,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"antigravity-engine/internal/persistence"
 )
+
 
 // ─────────────────────────────────────────────────────────────────
 // SYSTEM PROMPTS — each agent has a distinct identity and role
@@ -255,11 +258,12 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 		return true, "Audit parse error", 0.4
 	}
 
-	log.Printf("[AI AUDIT] %s %s -> %v | %s (%.0fms)", 
+	log.Printf("[AI AUDIT ✅ OPENAI] %s %s -> %v | %s (%.0fms)", 
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
+	auditID := fmt.Sprintf("AUD-OA-%d", time.Now().UnixNano()/1e6)
 	o.insights.AddAudit(AuditLog{
-		ID:           fmt.Sprintf("AUD-%d", time.Now().UnixNano()/1e6),
+		ID:           auditID,
 		StrategyName: strategyName,
 		Action:       action,
 		Approved:     resp.Approved,
@@ -268,15 +272,21 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 		Timestamp:    time.Now(),
 	})
 
+	if o.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(ctx, auditID, strategyName, action, resp.Approved, resp.Reason, resp.Confidence, "openai")
+	}
+
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
 // AuditSignalWithFallback tries OpenAI first, then Groq, then Gemini, then OpenRouter.
-// It enforces a throttle to stay within free tier rate limits.
-func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+// It returns (approved, reason, confidence, provider).
+func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64, string) {
 	// 1. Check for immediate fallback if no AI is available
 	if !o.openai.IsAvailable() && !o.groq.IsAvailable() && !o.gemini.IsAvailable() && !o.openrouter.IsAvailable() {
-		return true, "No AI Auditor available (running technicals only)", 0.5
+		return true, "No AI Auditor available (running technicals only)", 0.5, "NONE"
 	}
 
 	// 2. Throttling/Queueing logic
@@ -290,7 +300,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.openai.IsAvailable() {
 		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
 		if !isFatalError(reason) {
-			return approved, reason, conf
+			return approved, reason, conf, "openai"
 		}
 		log.Printf("[AI AUDIT FALLBACK] OpenAI failed (Quota/Error) -> trying Groq...")
 	}
@@ -299,17 +309,18 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.groq.IsAvailable() {
 		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action)
 		if !isFatalError(reason) {
-			return approved, reason, conf
+			return approved, reason, conf, "groq"
 		}
 		log.Printf("[AI AUDIT FALLBACK] Groq failed -> trying OpenRouter...")
 	}
 
 	// 5. Try OpenRouter (Resilient Fallback)
 	if o.openrouter.IsAvailable() {
-		return o.runOpenRouterAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action)
+		return approved, reason, conf, "openrouter"
 	}
 
-	return true, "Vetting layer unavailable (neutral pass)", 0.5
+	return true, "Vetting layer unavailable (neutral pass)", 0.5, "NONE"
 }
 
 func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
@@ -332,8 +343,9 @@ func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market 
 	log.Printf("[AI AUDIT ✅ OPENROUTER] %s %s -> %v | %s (%.0fms)", 
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
+	auditID := fmt.Sprintf("AUD-OR-%d", time.Now().UnixNano()/1e6)
 	o.insights.AddAudit(AuditLog{
-		ID:           fmt.Sprintf("AUD-OR-%d", time.Now().UnixNano()/1e6),
+		ID:           auditID,
 		StrategyName: strategyName,
 		Action:       action,
 		Approved:     resp.Approved,
@@ -341,6 +353,12 @@ func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market 
 		Confidence:   resp.Confidence,
 		Timestamp:    time.Now(),
 	})
+
+	if o.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(ctx, auditID, strategyName, action, resp.Approved, "[🌐 OpenRouter] "+resp.Reason, resp.Confidence, "openrouter")
+	}
 
 	return resp.Approved, resp.Reason, resp.Confidence
 }
@@ -356,7 +374,7 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 		return nil
 	}
 	if len(signals) == 1 {
-		approved, _, _ := o.AuditSignalWithFallback(ctx, market, signals[0], "BUY/SELL")
+		approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, signals[0], "BUY/SELL")
 		return map[string]bool{signals[0]: approved}
 	}
 
@@ -370,7 +388,7 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			approved, _, _ := o.AuditSignalWithFallback(ctx, market, name, "BUY/SELL")
+			approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, name, "BUY/SELL")
 			mu.Lock()
 			results[name] = approved
 			mu.Unlock()
@@ -401,8 +419,9 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 	log.Printf("[AI AUDIT ✅ GROQ] %s %s -> %v | %s (%.0fms)", 
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
+	auditID := fmt.Sprintf("AUD-G-%d", time.Now().UnixNano()/1e6)
 	o.insights.AddAudit(AuditLog{
-		ID:           fmt.Sprintf("AUD-G-%d", time.Now().UnixNano()/1e6),
+		ID:           auditID,
 		StrategyName: strategyName,
 		Action:       action,
 		Approved:     resp.Approved,
@@ -410,6 +429,12 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 		Confidence:   resp.Confidence,
 		Timestamp:    time.Now(),
 	})
+
+	if o.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(ctx, auditID, strategyName, action, resp.Approved, "[⚡ Groq-Free] "+resp.Reason, resp.Confidence, "groq")
+	}
 
 	return resp.Approved, resp.Reason, resp.Confidence
 }
@@ -572,17 +597,19 @@ type MultiAgentOrchestrator struct {
 	groq       *GroqClient
 	openrouter *OpenRouterClient
 	insights   *InsightStore
+	store      *persistence.Store // Persistence for AI logs
 	mu         sync.Mutex
 	auditMu    sync.Mutex
 	idSeq      int
 }
 
-func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, store *persistence.Store) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
 		openai:     openai,
 		gemini:     gemini,
 		groq:       groq,
 		openrouter: openrouter,
+		store:      store,
 		insights:   NewInsightStore(50),
 	}
 }
@@ -597,6 +624,26 @@ func (o *MultiAgentOrchestrator) GeminiEnabled() bool {
 
 func (o *MultiAgentOrchestrator) GetInsights() *InsightStore {
 	return o.insights
+}
+
+// AddHistoricalAudit populates the in-memory store from database records on startup.
+func (o *MultiAgentOrchestrator) AddHistoricalAudit(data map[string]interface{}) {
+	approved, _ := data["approved"].(bool)
+	conf, _ := data["confidence"].(float64)
+	ts, _ := data["timestamp"].(time.Time)
+
+	logEntry := AuditLog{
+		ID:           fmt.Sprintf("%v", data["id"]),
+		StrategyName: fmt.Sprintf("%v", data["strategyName"]),
+		Action:       fmt.Sprintf("%v", data["action"]),
+		Approved:     approved,
+		Reason:       fmt.Sprintf("%v", data["reason"]),
+		Confidence:   conf,
+		Timestamp:    ts,
+		Provider:     fmt.Sprintf("%v", data["provider"]),
+	}
+
+	o.insights.AddAudit(logEntry)
 }
 
 func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContext) AIDecision {

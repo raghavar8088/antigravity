@@ -1,6 +1,9 @@
 package ai
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 // AgentRole identifies which agent produced a result.
 type AgentRole string
@@ -9,29 +12,29 @@ const (
 	RoleBull  AgentRole = "BULL"
 	RoleBear  AgentRole = "BEAR"
 	RoleRisk  AgentRole = "RISK"
-	RoleMacro AgentRole = "MACRO" // Gemini Flash top-down analyst
+	RoleMacro AgentRole = "MACRO"
 )
 
 // AgentSignal is the raw output from Bull or Bear agent.
 type AgentSignal struct {
-	Role        AgentRole `json:"role"`
-	ShouldTrade bool      `json:"shouldTrade"`
-	Confidence  float64   `json:"confidence"`
-	Thesis      string    `json:"thesis"`
-	SizeBTC     float64   `json:"sizeBtc"`
-	StopLossPct float64   `json:"stopLossPct"`
-	TakeProfitPct float64 `json:"takeProfitPct"`
-	Error       string    `json:"error,omitempty"`
+	Role          AgentRole `json:"role"`
+	ShouldTrade   bool      `json:"shouldTrade"`
+	Confidence    float64   `json:"confidence"`
+	Thesis        string    `json:"thesis"`
+	SizeBTC       float64   `json:"sizeBtc"`
+	StopLossPct   float64   `json:"stopLossPct"`
+	TakeProfitPct float64   `json:"takeProfitPct"`
+	Error         string    `json:"error,omitempty"`
 }
 
 // RiskVerdict is the Risk Agent's output after reviewing Bull/Bear signals.
 type RiskVerdict struct {
-	Approved      bool   `json:"approved"`
-	ApprovedAction string `json:"approvedAction"` // BUY, SELL, HOLD
-	VetoReason    string `json:"vetoReason,omitempty"`
-	Reasoning     string `json:"reasoning"`
-	AdjustedSize  float64 `json:"adjustedSize"`
-	Error         string `json:"error,omitempty"`
+	Approved       bool    `json:"approved"`
+	ApprovedAction string  `json:"approvedAction"` // BUY, SELL, HOLD
+	VetoReason     string  `json:"vetoReason,omitempty"`
+	Reasoning      string  `json:"reasoning"`
+	AdjustedSize   float64 `json:"adjustedSize"`
+	Error          string  `json:"error,omitempty"`
 }
 
 // AIDecision is the final combined output of all four agents (Bull, Bear, Macro, Risk).
@@ -41,44 +44,32 @@ type AIDecision struct {
 	Price          float64     `json:"price"`
 	BullSignal     AgentSignal `json:"bullSignal"`
 	BearSignal     AgentSignal `json:"bearSignal"`
-	MacroSignal    AgentSignal `json:"macroSignal"` // Gemini top-down analyst
+	MacroSignal    AgentSignal `json:"macroSignal"`
 	RiskVerdict    RiskVerdict `json:"riskVerdict"`
-	FinalAction    string      `json:"finalAction"` // BUY, SELL, HOLD
+	FinalAction    string      `json:"finalAction"`
 	FinalReasoning string      `json:"finalReasoning"`
 	Executed       bool        `json:"executed"`
 	Regime         string      `json:"regime"`
-	AuditLogs      []AuditLog  `json:"auditLogs,omitempty"` // Manual strategy signals audited by AI
-}
-
-// AuditLog tracks a specific strategy signal that was reviewed by the AI.
-type AuditLog struct {
-	ID           string    `json:"id"`
-	StrategyName string    `json:"strategyName"`
-	Action       string    `json:"action"`
-	Approved     bool      `json:"approved"`
-	Reason       string    `json:"reason"`
-	Confidence   float64   `json:"confidence"`
-	Timestamp    time.Time `json:"timestamp"`
 }
 
 // MarketContext is the data snapshot sent to Claude agents.
 type MarketContext struct {
-	Symbol        string
-	Price         float64
-	Regime        string
-	RSI           float64
-	ATR           float64
-	VWAP          float64
-	ADX           float64
-	EMAFast       float64
-	EMASlow       float64
-	RecentCandles []CandleSummary
-	OpenPositions int
-	LongPositions int
-	ShortPositions int
-	Balance        float64
-	DailyPnL       float64
-	TotalPnL       float64
+	Symbol            string
+	Price             float64
+	Regime            string
+	RSI               float64
+	ATR               float64
+	VWAP              float64
+	ADX               float64
+	EMAFast           float64
+	EMASlow           float64
+	RecentCandles     []CandleSummary
+	OpenPositions     int
+	LongPositions     int
+	ShortPositions    int
+	Balance           float64
+	DailyPnL          float64
+	TotalPnL          float64
 	ConsecutiveLosses int
 }
 
@@ -91,8 +82,21 @@ type CandleSummary struct {
 	Volume float64 `json:"v"`
 }
 
+// AuditLog tracks a specific strategy signal that was reviewed by the AI.
+type AuditLog struct {
+	ID           string    `json:"id"`
+	Timestamp    time.Time `json:"timestamp"`
+	StrategyName string    `json:"strategyName"`
+	Action       string    `json:"action"`
+	Approved     bool      `json:"approved"`
+	Reason       string    `json:"reason"`
+	Confidence   float64   `json:"confidence"`
+	Provider     string    `json:"provider"` // Tracks which AI (OpenAI, Groq, etc)
+}
+
 // InsightStore holds the last N AI decisions in memory for the API.
 type InsightStore struct {
+	mu        sync.RWMutex
 	decisions []AIDecision
 	auditLogs []AuditLog
 	maxSize   int
@@ -107,6 +111,8 @@ func NewInsightStore(maxSize int) *InsightStore {
 }
 
 func (s *InsightStore) AddAudit(l AuditLog) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.auditLogs = append([]AuditLog{l}, s.auditLogs...)
 	if len(s.auditLogs) > 100 {
 		s.auditLogs = s.auditLogs[:100]
@@ -114,6 +120,8 @@ func (s *InsightStore) AddAudit(l AuditLog) {
 }
 
 func (s *InsightStore) GetAuditLogs(n int) []AuditLog {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if n > len(s.auditLogs) {
 		n = len(s.auditLogs)
 	}
@@ -123,6 +131,8 @@ func (s *InsightStore) GetAuditLogs(n int) []AuditLog {
 }
 
 func (s *InsightStore) Add(d AIDecision) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.decisions = append([]AIDecision{d}, s.decisions...)
 	if len(s.decisions) > s.maxSize {
 		s.decisions = s.decisions[:s.maxSize]
@@ -130,6 +140,8 @@ func (s *InsightStore) Add(d AIDecision) {
 }
 
 func (s *InsightStore) GetRecent(n int) []AIDecision {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if n > len(s.decisions) {
 		n = len(s.decisions)
 	}
@@ -139,6 +151,8 @@ func (s *InsightStore) GetRecent(n int) []AIDecision {
 }
 
 func (s *InsightStore) Latest() *AIDecision {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if len(s.decisions) == 0 {
 		return nil
 	}

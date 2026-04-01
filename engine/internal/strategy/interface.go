@@ -15,10 +15,14 @@ const (
 type Signal struct {
 	Symbol        string
 	Action        Action
-	TargetSize    float64 // The amount of BTC to transact
-	Confidence    float64 // Optional AI/ML probability metric
-	StopLossPct   float64 // Auto stop-loss distance from entry (e.g. 0.5 = 0.5%)
-	TakeProfitPct float64 // Auto take-profit distance from entry (e.g. 1.0 = 1.0%)
+	TargetSize    float64
+	Confidence    float64
+	StopLossPct   float64
+	TakeProfitPct float64
+	
+	// AI Attribution fields — populated by the Supreme Court
+	AIDecisionID string // Which AI approved this? (openai, groq, etc)
+	AIReasoning  string // Short snippet of the AI's reason
 }
 
 // Strategy represents the absolute core of Antigravity intelligence.

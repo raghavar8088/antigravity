@@ -81,6 +81,25 @@ func NewStore(ctx context.Context) (*Store, error) {
 	}
 
 	log.Println("[DB] ✅ State table ready")
+	
+	// Create ai_audit_logs table — for AI Performance Tracking & History
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS ai_audit_logs (
+			id TEXT PRIMARY KEY,
+			timestamp TIMESTAMPTZ NOT NULL,
+			strategy_name TEXT NOT NULL,
+			action TEXT NOT NULL,
+			approved BOOLEAN NOT NULL,
+			reason TEXT NOT NULL,
+			confidence DOUBLE PRECISION NOT NULL,
+			provider TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ai_audit_logs table: %w", err)
+	}
+	log.Println("[DB] ✅ AI Audit log table ready")
+
 	return &Store{pool: pool}, nil
 }
 
@@ -167,6 +186,58 @@ func (s *Store) ResetState(ctx context.Context) error {
 	}
 	log.Println("[DB] 🔄 Account state reset to factory defaults in database")
 	return nil
+}
+
+// SaveAuditLog persists a single AI vetting decision to the database.
+func (s *Store) SaveAuditLog(ctx context.Context, id, strategy, action string, approved bool, reason string, confidence float64, provider string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO ai_audit_logs (id, timestamp, strategy_name, action, approved, reason, confidence, provider)
+		VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (id) DO NOTHING
+	`, id, strategy, action, approved, reason, confidence, provider)
+	return err
+}
+
+// LoadAuditLogs retrieves the latest N AI decisions from the database.
+func (s *Store) LoadAuditLogs(ctx context.Context, limit int) ([]map[string]interface{}, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, timestamp, strategy_name, action, approved, reason, confidence, provider
+		FROM ai_audit_logs
+		ORDER BY timestamp DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var id, strategy, action, reason, provider string
+		var approved bool
+		var confidence float64
+		var timestamp time.Time
+		if err := rows.Scan(&id, &timestamp, &strategy, &action, &approved, &reason, &confidence, &provider); err != nil {
+			return nil, err
+		}
+		logs = append(logs, map[string]interface{}{
+			"id":           id,
+			"timestamp":    timestamp,
+			"strategyName": strategy,
+			"action":       action,
+			"approved":     approved,
+			"reason":       reason,
+			"confidence":   confidence,
+			"provider":     provider,
+		})
+	}
+	return logs, nil
 }
 
 // Close shuts down the database connection pool.

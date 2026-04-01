@@ -622,8 +622,12 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 
 			// We now use AuditSignalWithFallback which handles the global chain (Groq/OpenRouter/Gemini)
 			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second) 
-			approved, reason, _ := o.aiAgent.AuditSignalWithFallback(ctx, market, aggSig.StrategyName, string(sig.Action))
+			approved, reason, _, provider := o.aiAgent.AuditSignalWithFallback(ctx, market, aggSig.StrategyName, string(sig.Action))
 			cancel()
+			
+			// Attach AI Attribution for later trade recording
+			sig.AIDecisionID = provider
+			sig.AIReasoning = reason
 
 			if !approved {
 				log.Printf("[AI AUDIT VETO] %s %s REJECTED: %s", aggSig.StrategyName, sig.Action, reason)

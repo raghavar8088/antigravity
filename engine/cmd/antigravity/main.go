@@ -202,16 +202,24 @@ func main() {
 	var aiOrchestrator *ai.MultiAgentOrchestrator
 	
 	if openAIClient.IsAvailable() || groqClient.IsAvailable() || openRouterClient.IsAvailable() {
-		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient)
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient, dbStore)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
 		
+		// Restore AI History from DB
+		if dbStore != nil {
+			hist, _ := dbStore.LoadAuditLogs(ctx, 50)
+			for _, h := range hist {
+				aiOrchestrator.AddHistoricalAudit(h)
+			}
+		}
+
 		aiSystem := "AI Supreme Court [Technicals + Macro]"
 		if !openAIClient.IsAvailable() && (groqClient.IsAvailable() || openRouterClient.IsAvailable()) {
-			aiSystem = "AI Supreme Court [Technicals + Macro] — 100% FREE RESILIENCE MODE (Groq/OpenRouter)"
+			aiSystem = "AI Supreme Court — 100% FREE RESILIENCE MODE (Groq/OpenRouter)"
 		}
-		log.Printf("[AI] ✅ %s initialized", aiSystem)
+		log.Printf("[AI] ✅ %s initialized (History restored)", aiSystem)
 	} else {
-		log.Println("[AI] ⚠️  AI Keys not set — running rules-only mode (set OPENAI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY)")
+		log.Println("[AI] ⚠️  AI Keys not set — running rules-only mode")
 	}
 
 	// ═══════════════════════════════════════════════════
