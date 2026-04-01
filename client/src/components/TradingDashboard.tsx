@@ -660,6 +660,54 @@ export default function TradingDashboard() {
             />
           </div>
 
+          <div className="glass-panel p-6">
+            <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-gray-400">Category Performance</h2>
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-700/50">
+                  <tr>
+                    <th className="py-2 px-3">Category</th>
+                    <th className="py-2 px-3 text-center">Strategies</th>
+                    <th className="py-2 px-3 text-center">W</th>
+                    <th className="py-2 px-3 text-center">L</th>
+                    <th className="py-2 px-3 text-center">Win%</th>
+                    <th className="py-2 px-3 text-right">PnL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayCategories.map((cat) => {
+                    const cats = displayStrategies.filter((s) => s.category === cat);
+                    const w = cats.reduce((sum, s) => sum + (s.wins ?? 0), 0);
+                    const l = cats.reduce((sum, s) => sum + (s.losses ?? 0), 0);
+                    const pnl = cats.reduce((sum, s) => sum + (s.profit ?? 0), 0);
+                    const wr = w + l > 0 ? (w / (w + l)) * 100 : null;
+                    return (
+                      <tr key={cat} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors">
+                        <td className="py-2 px-3 font-mono text-gray-300 flex items-center gap-2">
+                          <span className={`h-1.5 w-1.5 rounded-full ${CAT_COLORS[cat] || "bg-gray-500"}`}></span>
+                          {cat}
+                        </td>
+                        <td className="py-2 px-3 text-center text-gray-500">{cats.length}</td>
+                        <td className="py-2 px-3 text-center text-emerald-400 font-mono">{w}</td>
+                        <td className="py-2 px-3 text-center text-rose-400 font-mono">{l}</td>
+                        <td className="py-2 px-3 text-center font-mono font-bold">
+                          {wr !== null ? (
+                            <span className={wr >= 50 ? "text-green-400" : "text-red-400"}>{wr.toFixed(1)}%</span>
+                          ) : (
+                            <span className="text-gray-600">–</span>
+                          )}
+                        </td>
+                        <td className={`py-2 px-3 text-right font-mono font-bold ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {pnl >= 0 ? "+" : ""}{formatUSD(pnl)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="space-y-6">
             {displayCategories.map((category) => {
               const categoryStrategies = displayStrategies.filter((strategy) => strategy.category === category);

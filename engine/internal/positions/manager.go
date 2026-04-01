@@ -60,6 +60,7 @@ type ManagerConfig struct {
 	MinTakeProfitPct   float64 // Floor TP distance to avoid fee-level micro exits
 	MaxPerStrategy     int     // Max concurrent positions per strategy
 	ReverseTargets     bool    // Swap incoming TP and SL distances for all strategies
+	MaxPositionAgeMins float64 // Auto-expire positions older than this (0 = disabled)
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -84,6 +85,7 @@ func NewManager() *Manager {
 			MinTakeProfitPct:   0.35,  // Keep TP above round-trip fee noise
 			MaxPerStrategy:     2,     // Max 2 positions per strategy
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
+			MaxPositionAgeMins: 45,    // Auto-expire stale scalps after 45 minutes
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
@@ -326,6 +328,33 @@ func (m *Manager) emitPartialTakeProfit(pos *Position, partialSize, exitPrice, p
 	partial.Status = "TP_PARTIAL"
 	partial.PartialClosed = true
 	m.emitClose(&partial, ReasonTakeProfit, exitPrice, pnl)
+}
+
+// CheckExpiredPositions force-closes any position that has been open longer than
+// MaxPositionAgeMins. Called on every tick so scalps never get stuck overnight.
+func (m *Manager) CheckExpiredPositions(currentPrice float64) {
+	if m.config.MaxPositionAgeMins <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	maxAge := time.Duration(m.config.MaxPositionAgeMins * float64(time.Minute))
+	now := time.Now()
+	for id, pos := range m.positions {
+		if pos.Status != "OPEN" {
+			continue
+		}
+		if now.Sub(pos.OpenedAt) < maxAge {
+			continue
+		}
+		pnl := m.calculatePnL(pos, currentPrice)
+		pos.Status = "EXPIRED"
+		log.Printf("[EXPIRED] %s | %s open for %.0fm | Exit @ $%.2f | PnL: $%.4f",
+			id, pos.StrategyName, now.Sub(pos.OpenedAt).Minutes(), currentPrice, pnl)
+		m.emitClose(pos, ReasonManual, currentPrice, pnl)
+		delete(m.positions, id)
+	}
 }
 
 // GetOpenPositions returns a snapshot of currently open positions.

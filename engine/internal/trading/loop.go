@@ -180,6 +180,7 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 
 	// 2. Check SL/TP/trailing on all open positions
 	o.posMgr.CheckStopLossAndTakeProfit(t.Price)
+	o.posMgr.CheckExpiredPositions(t.Price)
 
 	// 3. Feed tick to candle aggregator (it emits 1m/5m candles on channels)
 	o.candleAgg.Feed(t)

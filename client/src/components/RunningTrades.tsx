@@ -26,11 +26,21 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
     );
   }
 
+  const totalUnrealized = trades.reduce((sum, t) => {
+    const mark = currentPrice > 0 ? currentPrice : t.entry;
+    return sum + (t.side === "LONG" ? (mark - t.entry) * t.size : (t.entry - mark) * t.size);
+  }, 0);
+
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
-        <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{trades.length} Active Scalps Running</span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
+          <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{trades.length} Active Scalps Running</span>
+        </div>
+        <span className={`text-xs font-mono font-bold px-2 py-1 rounded ${totalUnrealized >= 0 ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+          Unrealized: {totalUnrealized >= 0 ? "+" : ""}{formatUSD(totalUnrealized)}
+        </span>
       </div>
 
       <div className="w-full overflow-x-auto">
@@ -48,6 +58,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
               <th className="py-3 px-2">Flags</th>
               <th className="py-3 px-2">Elapsed</th>
               <th className="py-3 px-2">PnL</th>
+              <th className="py-3 px-2">%</th>
               <th className="py-3 px-2 text-right">Progress</th>
             </tr>
           </thead>
@@ -55,6 +66,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
             {trades.map((t) => {
               const markPrice = currentPrice > 0 ? currentPrice : t.entry;
               const pnl = t.side === "LONG" ? (markPrice - t.entry) * t.size : (t.entry - markPrice) * t.size;
+              const pnlPct = t.entry > 0 ? (t.side === "LONG" ? (markPrice - t.entry) / t.entry : (t.entry - markPrice) / t.entry) * 100 : 0;
               const totalRange = t.takeProfit - t.stopLoss;
               const pricePos = totalRange !== 0 ? ((markPrice - t.stopLoss) / totalRange) * 100 : 50;
               const clamped = Math.max(0, Math.min(100, pricePos));
@@ -108,6 +120,9 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                   </td>
                   <td className={`py-3 px-2 font-mono text-xs font-bold ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>
                     {formatUSD(pnl, { signed: true })}
+                  </td>
+                  <td className={`py-3 px-2 font-mono text-xs ${pnlPct >= 0 ? "text-green-400" : "text-red-400"}`}>
+                    {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
                   </td>
                   <td className="py-3 px-2">
                     <div className="w-20 h-2 bg-gray-800 rounded-full overflow-hidden relative">
