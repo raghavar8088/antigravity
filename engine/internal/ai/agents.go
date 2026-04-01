@@ -668,10 +668,19 @@ func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, m
 func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
 	// 1. Primary: Gemini
 	sig := runMacroAgent(ctx, o.gemini, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
-	// 2. Fallback: OpenRouter (Llama 3 Instruct)
-	log.Printf("[AI FALLBACK] Macro analyst (Gemini) failed: %v. Trying OpenRouter...", sig.Error)
+	// 2. Fallback 1: Groq (Llama 3 70B)
+	log.Printf("[AI FALLBACK] Macro analyst (Gemini) failed: %v. Trying Groq...", sig.Error)
+	sig = runMacroAgent(ctx, o.groq, market)
+	if sig.Error == "" {
+		return sig
+	}
+
+	// 3. Fallback 2: OpenRouter (Llama 3 Instruct)
+	log.Printf("[AI FALLBACK] Macro analyst (Groq) failed: %v. Trying OpenRouter...", sig.Error)
 	return runMacroAgent(ctx, o.openrouter, market)
 }
 
