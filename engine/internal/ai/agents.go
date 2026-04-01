@@ -682,10 +682,21 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 	)
 
 	if !bullSig.ShouldTrade && !bearSig.ShouldTrade && !macroSig.ShouldTrade {
+		reasoning := "Council (OpenAI+Gemini) recommended HOLD."
+		// Append errors if any agent failed, to help debug "Why it's zero"
+		var errors []string
+		if bullSig.Error != "" { errors = append(errors, "OpenAI Bull: "+bullSig.Error) }
+		if bearSig.Error != "" { errors = append(errors, "OpenAI Bear: "+bearSig.Error) }
+		if macroSig.Error != "" { errors = append(errors, "Gemini Macro: "+macroSig.Error) }
+		
+		if len(errors) > 0 {
+			reasoning = "⚠️ AI ERRORS:\n" + strings.Join(errors, "\n")
+		}
+
 		decision := o.buildDecision(market, bullSig, bearSig, macroSig, RiskVerdict{
 			Approved:       false,
 			ApprovedAction: "HOLD",
-			Reasoning:      "Council (OpenAI+Gemini) recommended HOLD.",
+			Reasoning:      reasoning,
 		})
 		o.insights.Add(decision)
 		return decision
@@ -724,10 +735,20 @@ func (o *MultiAgentOrchestrator) buildDecision(
 		macroLine = fmt.Sprintf("\n\nMACRO [Gemini, conf:%.0f%%]: %s", macro.Confidence*100, macro.Thesis)
 	}
 
+	bullLine := fmt.Sprintf("BULL [conf:%.0f%%]: %s", bull.Confidence*100, bull.Thesis)
+	if bull.Error != "" {
+		bullLine = fmt.Sprintf("BULL: ⚠️ ERROR [%s]", bull.Error)
+	}
+
+	bearLine := fmt.Sprintf("BEAR [conf:%.0f%%]: %s", bear.Confidence*100, bear.Thesis)
+	if bear.Error != "" {
+		bearLine = fmt.Sprintf("BEAR: ⚠️ ERROR [%s]", bear.Error)
+	}
+
 	reasoning := fmt.Sprintf(
-		"BULL [conf:%.0f%%]: %s\n\nBEAR [conf:%.0f%%]: %s%s\n\nRISK: %s",
-		bull.Confidence*100, bull.Thesis,
-		bear.Confidence*100, bear.Thesis,
+		"%s\n\n%s%s\n\nRISK: %s",
+		bullLine,
+		bearLine,
 		macroLine,
 		risk.Reasoning,
 	)
