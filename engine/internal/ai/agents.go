@@ -439,7 +439,29 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-func runBullAgent(ctx context.Context, client *OpenAIClient, market MarketContext) AgentSignal {
+// ─────────────────────────────────────────────────────────────────
+// AGENT INTERFACES
+// ─────────────────────────────────────────────────────────────────
+
+type SignalClient interface {
+	ChatForSignal(ctx context.Context, system, prompt string) (string, error)
+	IsAvailable() bool
+}
+
+type RiskClient interface {
+	ChatForRisk(ctx context.Context, system, prompt string) (string, error)
+	IsAvailable() bool
+}
+
+type MacroClient interface {
+	ChatForMacro(ctx context.Context, system, prompt string) (string, error)
+	IsAvailable() bool
+}
+
+func runBullAgent(ctx context.Context, client SignalClient, market MarketContext) AgentSignal {
+	if client == nil || !client.IsAvailable() {
+		return AgentSignal{Role: RoleBull, Error: "provider unavailable"}
+	}
 	prompt := buildMarketPrompt(market) + "\n\nShould we open a LONG (BUY) position right now? Be rigorous."
 	raw, err := client.ChatForSignal(ctx, bullSystemPrompt, prompt)
 	if err != nil {
@@ -463,7 +485,10 @@ func runBullAgent(ctx context.Context, client *OpenAIClient, market MarketContex
 	}
 }
 
-func runBearAgent(ctx context.Context, client *OpenAIClient, market MarketContext) AgentSignal {
+func runBearAgent(ctx context.Context, client SignalClient, market MarketContext) AgentSignal {
+	if client == nil || !client.IsAvailable() {
+		return AgentSignal{Role: RoleBear, Error: "provider unavailable"}
+	}
 	prompt := buildMarketPrompt(market) + "\n\nShould we open a SHORT (SELL) position right now? Be rigorous."
 	raw, err := client.ChatForSignal(ctx, bearSystemPrompt, prompt)
 	if err != nil {
@@ -487,19 +512,19 @@ func runBearAgent(ctx context.Context, client *OpenAIClient, market MarketContex
 	}
 }
 
-func runMacroAgent(ctx context.Context, gemini *GeminiClient, market MarketContext) AgentSignal {
-	if !gemini.IsAvailable() {
+func runMacroAgent(ctx context.Context, client MacroClient, market MarketContext) AgentSignal {
+	if client == nil || !client.IsAvailable() {
 		return AgentSignal{
 			Role:        RoleMacro,
 			ShouldTrade: false,
 			Confidence:  0,
-			Thesis:      "Gemini Macro Agent disabled (GEMINI_API_KEY not set)",
-			Error:       "GEMINI_API_KEY not configured",
+			Thesis:      "Macro Agent provider disabled / unavailable",
+			Error:       "provider not configured",
 		}
 	}
 
 	prompt := buildMarketPrompt(market) + "\n\nProvide your top-down macro assessment. Is the backdrop favorable for scalping right now?"
-	raw, err := gemini.ChatForMacro(ctx, macroSystemPrompt, prompt)
+	raw, err := client.ChatForMacro(ctx, macroSystemPrompt, prompt)
 	if err != nil {
 		return AgentSignal{Role: RoleMacro, Error: err.Error()}
 	}
@@ -526,14 +551,17 @@ func runMacroAgent(ctx context.Context, gemini *GeminiClient, market MarketConte
 	}
 }
 
-func runRiskAgent(ctx context.Context, client *OpenAIClient, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
+func runRiskAgent(ctx context.Context, client RiskClient, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
+	if client == nil || !client.IsAvailable() {
+		return RiskVerdict{Approved: false, ApprovedAction: "HOLD", Error: "provider unavailable"}
+	}
 	bullJSON, _ := json.MarshalIndent(bull, "", "  ")
 	bearJSON, _ := json.MarshalIndent(bear, "", "  ")
 	macroJSON, _ := json.MarshalIndent(macro, "", "  ")
 
 	macroSection := ""
 	if macro.Error == "" {
-		macroSection = fmt.Sprintf("\nMACRO ANALYST (Gemini) ASSESSMENT:\n%s\n", string(macroJSON))
+		macroSection = fmt.Sprintf("\nMACRO ANALYST ASSESSMENT:\n%s\n", string(macroJSON))
 	}
 
 	prompt := fmt.Sprintf(`%s
@@ -603,6 +631,65 @@ type MultiAgentOrchestrator struct {
 	idSeq      int
 }
 
+// ─────────────────────────────────────────────────────────────────
+// RESILIENT AGENT WRAPPERS (MULTI-AI FALLBACK)
+// ─────────────────────────────────────────────────────────────────
+
+func (o *MultiAgentOrchestrator) runBullAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
+	// 1. Primary: OpenAI
+	sig := runBullAgent(ctx, o.openai, market)
+	if sig.Error == "" { return sig }
+
+	// 2. Fallback 1: Groq (Ultra-fast, Llama 3)
+	log.Printf("[AI FALLBACK] Bull agent (OpenAI) failed: %v. Trying Groq...", sig.Error)
+	sig = runBullAgent(ctx, o.groq, market)
+	if sig.Error == "" { return sig }
+
+	// 3. Fallback 2: OpenRouter (Resilient, Multiple models)
+	log.Printf("[AI FALLBACK] Bull agent (Groq) failed: %v. Trying OpenRouter...", sig.Error)
+	return runBullAgent(ctx, o.openrouter, market)
+}
+
+func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
+	// 1. Primary: OpenAI
+	sig := runBearAgent(ctx, o.openai, market)
+	if sig.Error == "" { return sig }
+
+	// 2. Fallback 1: Groq
+	log.Printf("[AI FALLBACK] Bear agent (OpenAI) failed: %v. Trying Groq...", sig.Error)
+	sig = runBearAgent(ctx, o.groq, market)
+	if sig.Error == "" { return sig }
+
+	// 3. Fallback 2: OpenRouter
+	log.Printf("[AI FALLBACK] Bear agent (Groq) failed: %v. Trying OpenRouter...", sig.Error)
+	return runBearAgent(ctx, o.openrouter, market)
+}
+
+func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
+	// 1. Primary: Gemini
+	sig := runMacroAgent(ctx, o.gemini, market)
+	if sig.Error == "" { return sig }
+
+	// 2. Fallback: OpenRouter (Llama 3 Instruct)
+	log.Printf("[AI FALLBACK] Macro analyst (Gemini) failed: %v. Trying OpenRouter...", sig.Error)
+	return runMacroAgent(ctx, o.openrouter, market)
+}
+
+func (o *MultiAgentOrchestrator) runRiskAgentWithFallback(ctx context.Context, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
+	// 1. Primary: OpenAI
+	v := runRiskAgent(ctx, o.openai, bull, bear, macro, market)
+	if v.Error == "" { return v }
+
+	// 2. Fallback 1: Groq
+	log.Printf("[AI FALLBACK] Risk agent (OpenAI) failed: %v. Trying Groq...", v.Error)
+	v = runRiskAgent(ctx, o.groq, bull, bear, macro, market)
+	if v.Error == "" { return v }
+
+	// 3. Fallback 2: OpenRouter
+	log.Printf("[AI FALLBACK] Risk agent (Groq) failed: %v. Trying OpenRouter...", v.Error)
+	return runRiskAgent(ctx, o.openrouter, bull, bear, macro, market)
+}
+
 func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, store *persistence.Store) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
 		openai:     openai,
@@ -661,15 +748,15 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		bullSig = runBullAgent(agentCtx, o.openai, market)
+		bullSig = o.runBullAgentWithFallback(agentCtx, market)
 	}()
 	go func() {
 		defer wg.Done()
-		bearSig = runBearAgent(agentCtx, o.openai, market)
+		bearSig = o.runBearAgentWithFallback(agentCtx, market)
 	}()
 	go func() {
 		defer wg.Done()
-		macroSig = runMacroAgent(agentCtx, o.gemini, market)
+		macroSig = o.runMacroAgentWithFallback(agentCtx, market)
 	}()
 	wg.Wait()
 
@@ -702,7 +789,7 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 		return decision
 	}
 
-	riskVerdict := runRiskAgent(agentCtx, o.openai, bullSig, bearSig, macroSig, market)
+	riskVerdict := o.runRiskAgentWithFallback(agentCtx, bullSig, bearSig, macroSig, market)
 	log.Printf("[AI] Risk: approved=%v action=%s (%.0fms total)",
 		riskVerdict.Approved, riskVerdict.ApprovedAction,
 		float64(time.Since(start).Milliseconds()),

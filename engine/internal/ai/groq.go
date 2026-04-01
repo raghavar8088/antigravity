@@ -97,3 +97,18 @@ func (c *GroqClient) ChatForAudit(ctx context.Context, system, prompt string) (s
 
 	return oaResp.Choices[0].Message.Content, nil
 }
+
+// ChatForSignal calls llama-3-70b/8b for ultra-fast trading signal generation.
+func (c *GroqClient) ChatForSignal(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt) // Shares the same logic as auditing
+}
+
+// ChatForRisk calls llama-3-70b for fast risk arbitration.
+func (c *GroqClient) ChatForRisk(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt)
+}
+
+// ChatForMacro provides macro context if Gemini is down.
+func (c *GroqClient) ChatForMacro(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt)
+}

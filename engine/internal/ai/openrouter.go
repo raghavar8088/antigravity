@@ -98,3 +98,18 @@ func (c *OpenRouterClient) ChatForAudit(ctx context.Context, system, prompt stri
 
 	return oaResp.Choices[0].Message.Content, nil
 }
+
+// ChatForSignal uses the highest quality free models for trading signals.
+func (c *OpenRouterClient) ChatForSignal(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt)
+}
+
+// ChatForRisk uses the highest quality free models for safety vetting.
+func (c *OpenRouterClient) ChatForRisk(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt)
+}
+
+// ChatForMacro provides macro context if Gemini is down.
+func (c *OpenRouterClient) ChatForMacro(ctx context.Context, system, prompt string) (string, error) {
+	return c.ChatForAudit(ctx, system, prompt)
+}
