@@ -28,6 +28,10 @@ export type AggregateStats = {
   bestTrade: number;
   worstTrade: number;
   profitFactor: number;
+  avgWin: number;
+  avgLoss: number;
+  maxDrawdown: number;
+  avgDurationMs: number;
 };
 
 export type EngineStats = {

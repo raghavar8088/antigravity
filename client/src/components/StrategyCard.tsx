@@ -6,10 +6,14 @@ type StrategyCardProps = {
   exposure: number;
   profit: number;
   timeframe?: string;
+  wins?: number;
+  losses?: number;
 };
 
-export default function StrategyCard({ name, status, exposure, profit, timeframe }: StrategyCardProps) {
+export default function StrategyCard({ name, status, exposure, profit, timeframe, wins = 0, losses = 0 }: StrategyCardProps) {
   const isRunning = status === "RUNNING";
+  const totalTrades = wins + losses;
+  const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : null;
 
   return (
     <div
@@ -21,25 +25,44 @@ export default function StrategyCard({ name, status, exposure, profit, timeframe
     >
       <div className="flex justify-between items-center mb-2">
         <h3 className="font-bold font-mono text-xs tracking-wide text-white truncate mr-2">{name}</h3>
-        <span
-          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-widest whitespace-nowrap ${
-            isRunning
-              ? "bg-green-500/20 text-green-400 border border-green-500/30"
-              : "bg-gray-600/50 text-gray-400 border border-gray-500/30"
-          }`}
-        >
-          {status}
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {winRate !== null && totalTrades > 0 && (
+            <span
+              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm tracking-widest ${
+                winRate >= 50
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+              }`}
+            >
+              {winRate.toFixed(0)}%
+            </span>
+          )}
+          <span
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-widest ${
+              isRunning
+                ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                : "bg-gray-600/50 text-gray-400 border border-gray-500/30"
+            }`}
+          >
+            {status}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 text-xs mt-3 pt-3 border-t border-gray-700/50">
+      <div className="grid grid-cols-4 gap-1 text-xs mt-3 pt-3 border-t border-gray-700/50">
         <div>
           <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">TF</p>
           <p className="font-mono text-gray-300">{timeframe || "1m"}</p>
         </div>
         <div>
+          <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">W/L</p>
+          <p className="font-mono text-gray-200">
+            {totalTrades > 0 ? `${wins}/${losses}` : "–"}
+          </p>
+        </div>
+        <div>
           <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">Exp</p>
-          <p className="font-mono text-gray-200">{exposure.toFixed(3)} BTC</p>
+          <p className="font-mono text-gray-200">{exposure.toFixed(3)}</p>
         </div>
         <div>
           <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-wider mb-0.5">PnL</p>

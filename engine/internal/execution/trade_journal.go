@@ -119,14 +119,18 @@ func (j *TradeJournal) GetAllTrades() []JournalEntry {
 
 // AggregateStats holds overall performance numbers.
 type AggregateStats struct {
-	TotalTrades  int     `json:"totalTrades"`
-	TotalWins    int     `json:"totalWins"`
-	TotalLosses  int     `json:"totalLosses"`
-	WinRate      float64 `json:"winRate"`
-	TotalPnL     float64 `json:"totalPnl"`
-	BestTrade    float64 `json:"bestTrade"`
-	WorstTrade   float64 `json:"worstTrade"`
-	ProfitFactor float64 `json:"profitFactor"`
+	TotalTrades   int     `json:"totalTrades"`
+	TotalWins     int     `json:"totalWins"`
+	TotalLosses   int     `json:"totalLosses"`
+	WinRate       float64 `json:"winRate"`
+	TotalPnL      float64 `json:"totalPnl"`
+	BestTrade     float64 `json:"bestTrade"`
+	WorstTrade    float64 `json:"worstTrade"`
+	ProfitFactor  float64 `json:"profitFactor"`
+	AvgWin        float64 `json:"avgWin"`
+	AvgLoss       float64 `json:"avgLoss"`
+	MaxDrawdown   float64 `json:"maxDrawdown"`
+	AvgDurationMs int64   `json:"avgDurationMs"`
 }
 
 // GetAggregateStats returns summary statistics.
@@ -139,30 +143,69 @@ func (j *TradeJournal) GetAggregateStats() AggregateStats {
 		winRate = float64(j.totalWins) / float64(j.totalTrades) * 100
 	}
 
-	// Calculate profit factor
+	// Calculate profit factor, avg win/loss, max drawdown, avg duration
 	grossProfit := 0.0
 	grossLoss := 0.0
+	winCount := 0
+	lossCount := 0
+	var totalDurationMs int64
+
+	peak := 0.0
+	cumPnL := 0.0
+	maxDrawdown := 0.0
+
 	for _, e := range j.entries {
 		if e.NetPnL >= 0 {
 			grossProfit += e.NetPnL
+			winCount++
 		} else {
 			grossLoss += -e.NetPnL
+			lossCount++
+		}
+		totalDurationMs += e.Duration.Milliseconds()
+
+		cumPnL += e.NetPnL
+		if cumPnL > peak {
+			peak = cumPnL
+		}
+		if drawdown := peak - cumPnL; drawdown > maxDrawdown {
+			maxDrawdown = drawdown
 		}
 	}
+
 	profitFactor := 0.0
 	if grossLoss > 0 {
 		profitFactor = grossProfit / grossLoss
 	}
 
+	avgWin := 0.0
+	if winCount > 0 {
+		avgWin = grossProfit / float64(winCount)
+	}
+
+	avgLoss := 0.0
+	if lossCount > 0 {
+		avgLoss = grossLoss / float64(lossCount)
+	}
+
+	avgDurationMs := int64(0)
+	if len(j.entries) > 0 {
+		avgDurationMs = totalDurationMs / int64(len(j.entries))
+	}
+
 	return AggregateStats{
-		TotalTrades:  j.totalTrades,
-		TotalWins:    j.totalWins,
-		TotalLosses:  j.totalLosses,
-		WinRate:      winRate,
-		TotalPnL:     j.totalPnL,
-		BestTrade:    j.bestTrade,
-		WorstTrade:   j.worstTrade,
-		ProfitFactor: profitFactor,
+		TotalTrades:   j.totalTrades,
+		TotalWins:     j.totalWins,
+		TotalLosses:   j.totalLosses,
+		WinRate:       winRate,
+		TotalPnL:      j.totalPnL,
+		BestTrade:     j.bestTrade,
+		WorstTrade:    j.worstTrade,
+		ProfitFactor:  profitFactor,
+		AvgWin:        avgWin,
+		AvgLoss:       avgLoss,
+		MaxDrawdown:   maxDrawdown,
+		AvgDurationMs: avgDurationMs,
 	}
 }
 

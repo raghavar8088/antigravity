@@ -32,5 +32,13 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewChartWedgeBreakoutScalper(), "Price Action Elite", "5m"},
 		{NewAdaptiveRSIScalper(14), "Adaptive Elite", "1m"},
 		{NewKAMAScalper(10), "Adaptive", "1m"},
+		{NewTrendMomentumScoreScalper(), "Multi-Signal", "1m"},
+		{NewVWAPBounceScalper(), "Trend", "1m"},
+		{NewSessionOpenMomentumScalper(), "Time-of-Day", "1m"},
+		{NewRSIMACDDivergenceScalper(), "Price Action Elite", "1m"},
+		{NewTripleTrendConfluenceScalper(), "Trend", "1m"},
+		{NewVolumeDeltaSpikeScalper(), "Microstructure", "1m"},
+		{NewMACDZeroCrossConfluenceScalper(), "Momentum Elite", "1m"},
+		{NewBollingerWalkScalper(), "Trend", "1m"},
 	}
 }

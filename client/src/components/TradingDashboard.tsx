@@ -26,6 +26,8 @@ type StrategyCardView = {
   status: string;
   exposure: number;
   profit: number;
+  wins: number;
+  losses: number;
 };
 
 type FeedTone = "info" | "buy" | "sell" | "win" | "loss" | "admin";
@@ -61,32 +63,40 @@ const SOUND_STORAGE_KEY = "antigravity.sound.enabled";
 const INITIAL_BALANCE = 100000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
-  { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "ADX_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "VolumeWeighted_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Pullback_Continuation_Pro_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "VWAP_RSI2_Reversion_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Bollinger_RSI_Fade_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "MACD_VWAP_Flip_Scalp", category: "Momentum Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Stochastic_Range_Scalp", category: "Mean Reversion", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Donchian_Breakout_Scalp", category: "Breakout", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "ATR_Breakout_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "ATR_Volume_Impulse_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "VolSqueeze_Explosion_Scalp", category: "Volatility", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "RangeCompress_Breakout_Scalp", category: "Volatility", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "OpeningRange_Breakout_Scalp", category: "Time-of-Day", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "VolumeBreakout_Impulse_Scalp", category: "Breakout Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "OrderFlow_Pressure_Pro_Scalp", category: "Microstructure", timeframe: "tick", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "LinReg_Statistical_Scalp", category: "Statistical", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "ZScoreBand_MeanRev_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "RSI_BB_Confluence_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "TripleFilter_Alpha_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Sentiment_Confluence_Pro_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Exhaustion_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Chart_DoubleTap_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "Chart_Wedge_Breakout_Scalp", category: "Price Action Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "AdaptiveRSI_Dynamic_Scalp", category: "Adaptive Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
-  { name: "KAMA_Adaptive_Scalp", category: "Adaptive", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0 },
+  { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "ADX_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VolumeWeighted_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Pullback_Continuation_Pro_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VWAP_Bounce_Pro_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VWAP_RSI2_Reversion_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Bollinger_RSI_Fade_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "MACD_VWAP_Flip_Scalp", category: "Momentum Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Stochastic_Range_Scalp", category: "Mean Reversion", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Donchian_Breakout_Scalp", category: "Breakout", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "ATR_Breakout_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "ATR_Volume_Impulse_Scalp", category: "Breakout Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VolSqueeze_Explosion_Scalp", category: "Volatility", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "RangeCompress_Breakout_Scalp", category: "Volatility", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "OpeningRange_Breakout_Scalp", category: "Time-of-Day", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VolumeBreakout_Impulse_Scalp", category: "Breakout Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "OrderFlow_Pressure_Pro_Scalp", category: "Microstructure", timeframe: "tick", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "LinReg_Statistical_Scalp", category: "Statistical", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "ZScoreBand_MeanRev_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "RSI_BB_Confluence_Scalp", category: "Mean Rev Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "TripleFilter_Alpha_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Sentiment_Confluence_Pro_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "TrendMomentum_Score_Scalp", category: "Multi-Signal", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Exhaustion_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Chart_DoubleTap_Reversal_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "Chart_Wedge_Breakout_Scalp", category: "Price Action Elite", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "RSI_MACD_Divergence_Scalp", category: "Price Action Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "AdaptiveRSI_Dynamic_Scalp", category: "Adaptive Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "KAMA_Adaptive_Scalp", category: "Adaptive", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "SessionOpen_Momentum_Scalp", category: "Time-of-Day", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "TripleTrend_Confluence_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "VolumeDelta_Spike_Scalp", category: "Microstructure", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "MACD_ZeroCross_Confluence_Scalp", category: "Momentum Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "BollingerWalk_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
 ];
 
 const CATEGORY_ORDER = [
@@ -346,6 +356,8 @@ export default function TradingDashboard() {
         status: strategy.disabled ? "DISABLED" : "RUNNING",
         exposure: 0,
         profit: strategy.totalPnl,
+        wins: strategy.wins,
+        losses: strategy.losses,
       }))
     : DEFAULT_STRATEGIES;
 
@@ -630,6 +642,24 @@ export default function TradingDashboard() {
             <SummaryCard label="Total Strategy PnL" value={formatUSD(totalStrategyPnl, { signed: true })} accent={totalStrategyPnl >= 0 ? "text-green-400" : "text-red-400"} />
           </div>
 
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <SummaryCard label="Avg Win" value={formatUSD(liveStats?.aggregate.avgWin ?? 0, { signed: true })} accent="text-emerald-400" />
+            <SummaryCard label="Avg Loss" value={formatUSD(-(liveStats?.aggregate.avgLoss ?? 0), { signed: true })} accent="text-rose-400" />
+            <SummaryCard label="Max Drawdown" value={formatUSD(-(liveStats?.aggregate.maxDrawdown ?? 0), { signed: true })} accent={(liveStats?.aggregate.maxDrawdown ?? 0) > 0 ? "text-orange-400" : "text-zinc-400"} />
+            <SummaryCard
+              label="Avg Duration"
+              value={(() => {
+                const ms = liveStats?.aggregate.avgDurationMs ?? 0;
+                if (ms <= 0) return "\u2013";
+                const totalSecs = Math.floor(ms / 1000);
+                const mins = Math.floor(totalSecs / 60);
+                const secs = totalSecs % 60;
+                return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+              })()}
+              accent="text-sky-300"
+            />
+          </div>
+
           <div className="space-y-6">
             {displayCategories.map((category) => {
               const categoryStrategies = displayStrategies.filter((strategy) => strategy.category === category);
@@ -653,6 +683,8 @@ export default function TradingDashboard() {
                         exposure={strategy.exposure}
                         profit={strategy.profit}
                         timeframe={strategy.timeframe}
+                        wins={strategy.wins}
+                        losses={strategy.losses}
                       />
                     ))}
                   </div>

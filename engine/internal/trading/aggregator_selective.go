@@ -162,6 +162,23 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 0.6
 	case "Exhaustion_Reversal_Scalp":
 		score += 0.4
+	// Pro2 strategies — calibrated vs existing baseline
+	case "TrendMomentum_Score_Scalp":
+		score += 1.30
+	case "VWAP_Bounce_Pro_Scalp":
+		score += 1.15
+	case "TripleTrend_Confluence_Scalp":
+		score += 1.25
+	case "MACD_ZeroCross_Confluence_Scalp":
+		score += 1.20
+	case "VolumeDelta_Spike_Scalp":
+		score += 1.15
+	case "SessionOpen_Momentum_Scalp":
+		score += 1.20
+	case "RSI_MACD_Divergence_Scalp":
+		score += 1.05
+	case "BollingerWalk_Trend_Scalp":
+		score += 1.0
 	}
 
 	switch sig.Category {
