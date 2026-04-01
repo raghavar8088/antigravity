@@ -198,19 +198,20 @@ func main() {
 	openAIClient := ai.NewOpenAIClient()
 	geminiClient := ai.NewGeminiClient()
 	groqClient := ai.NewGroqClient()
+	openRouterClient := ai.NewOpenRouterClient()
 	var aiOrchestrator *ai.MultiAgentOrchestrator
 	
-	if openAIClient.IsAvailable() || groqClient.IsAvailable() {
-		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient)
+	if openAIClient.IsAvailable() || groqClient.IsAvailable() || openRouterClient.IsAvailable() {
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
 		
 		aiSystem := "AI Supreme Court [Technicals + Macro]"
-		if !openAIClient.IsAvailable() && groqClient.IsAvailable() {
-			aiSystem = "AI Supreme Court [Technicals + Macro] — 100% FREE MODE (Groq)"
+		if !openAIClient.IsAvailable() && (groqClient.IsAvailable() || openRouterClient.IsAvailable()) {
+			aiSystem = "AI Supreme Court [Technicals + Macro] — 100% FREE RESILIENCE MODE (Groq/OpenRouter)"
 		}
 		log.Printf("[AI] ✅ %s initialized", aiSystem)
 	} else {
-		log.Println("[AI] ⚠️  AI Keys not set — running rules-only mode (set OPENAI_API_KEY or GROQ_API_KEY to enable AI vetting)")
+		log.Println("[AI] ⚠️  AI Keys not set — running rules-only mode (set OPENAI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY)")
 	}
 
 	// ═══════════════════════════════════════════════════

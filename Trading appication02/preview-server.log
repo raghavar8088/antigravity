@@ -1,0 +1,6 @@
+
+> btc-scalper-autotrader@1.0.0 preview
+> vite preview --host --port 4000
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m4000[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.31.243:[1m4000[22m/[39m

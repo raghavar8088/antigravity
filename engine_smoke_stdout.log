@@ -1,0 +1,65 @@
+╔══════════════════════════════════════════════════════════╗
+║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║
+║   91 Strategies | Full State Restore | Panic Recovery  ║
+╚══════════════════════════════════════════════════════════╝
+2026/03/29 18:48:20 [INIT] Loaded 24 curated live strategies
+2026/03/29 18:48:20 [STRATEGY TRACKER] Initialized 24 strategies with $100000.00 total capital (weighted allocation)
+2026/03/29 18:48:20 [INIT] ✅ Candle Aggregator ready (1m + 5m intervals)
+2026/03/29 18:48:20 [DB] ⚠️  Database not available (will use fresh state): DATABASE_URL not set
+2026/03/29 18:48:20 [ORCHESTRATOR] Strategy groups: 1 tick, 19 1m, 4 5m, 0 1h
+2026/03/29 18:48:20 [WARMUP] Fetching historical candles to pre-fill strategy buffers...
+2026/03/29 18:48:20 [WARMUP] Fetching real-time 1m and 5m candles from Coinbase REST...
+2026/03/29 18:48:22 [WARMUP] ✅ Loaded 350 x 1m candles and 350 x 5m candles
+2026/03/29 18:48:22 [WARMUP] Feeding 350 historical 1m candles to 19 strategies...
+2026/03/29 18:48:22 Connected to Coinbase stream: wss://ws-feed.exchange.coinbase.com
+2026/03/29 18:48:22 [WARMUP] Feeding 350 historical 5m candles to 4 strategies...
+2026/03/29 18:48:22 [WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.
+2026/03/29 18:48:22 [BOOT] Engine fully initialized in 2.335s
+2026/03/29 18:48:22 [MASTER LOOP] Booting Multi-Strategy Orchestrator with 24 strategies...
+═══════════════════════════════════════════
+  REST API Engine listening on :8080
+  Endpoints:
+    GET  /health          — Engine health
+    GET  /api/strategies   — Strategy stats
+    GET  /api/positions    — Open positions
+    GET  /api/trades       — Trade journal
+    GET  /api/stats        — Aggregate stats
+    GET  /api/logs         — Last 100 system logs
+    POST /api/admin/kill   — Kill switch
+    POST /api/admin/reset  — Reset account
+2026/03/29 18:48:22 [KEEP-ALIVE] Self-ping enabled every 2m → http://localhost:8080/health
+═══════════════════════════════════════════
+2026/03/29 18:49:00 [CANDLE 1m] Closed: O=66572.24 H=66573.99 L=66556.15 C=66571.71 Vol=0.5764 Trades=93
+2026/03/29 18:49:00 [AGGREGATOR] APPROVED: TripleFilter_Alpha_Scalp -> SELL 0.0100 BTC-USD | score=2.60
+2026/03/29 18:49:00 [AGGREGATOR] APPROVED: ADX_Trend_Scalp -> SELL 0.0100 BTC-USD | score=2.20
+2026/03/29 18:49:00 [PAPER EXEC] SHORT 0.0100 BTC @ $66565.05
+2026/03/29 18:49:00 [PAPER EXEC] SELL 0.0100 BTC @ $66565.05 (fee: $0.6657) | Balance: $100664.98
+2026/03/29 18:49:00 [RISK MIDDLEWARE] Updated exposure: 0.0000 BTC
+2026/03/29 18:49:00 [POSITION OPENED] POS-184900-1 | SELL 0.0100 BTC @ $66565.05 | SL: $66831.31 (0.4%) | TP: $65766.27 (1.2%) | Strategy: TripleFilter_Alpha_Scalp
+2026/03/29 18:49:00 [✅ TRADE EXECUTED] SELL | BTC-USD 0.0100 BTC @ $66565.05 | Strategy: TripleFilter_Alpha_Scalp
+2026/03/29 18:49:00 [PAPER EXEC] SHORT 0.0100 BTC @ $66565.05
+2026/03/29 18:49:00 [PAPER EXEC] SELL 0.0100 BTC @ $66565.05 (fee: $0.6657) | Balance: $101329.97
+2026/03/29 18:49:00 [RISK MIDDLEWARE] Updated exposure: 0.0000 BTC
+2026/03/29 18:49:00 [POSITION OPENED] POS-184900-2 | SELL 0.0100 BTC @ $66565.05 | SL: $66684.87 (0.2%) | TP: $66132.38 (0.7%) | Strategy: ADX_Trend_Scalp
+2026/03/29 18:49:00 [✅ TRADE EXECUTED] SELL | BTC-USD 0.0100 BTC @ $66565.05 | Strategy: ADX_Trend_Scalp
+2026/03/29 18:50:00 [CANDLE 1m] Closed: O=66571.71 H=66588.24 L=66571.70 C=66580.18 Vol=0.9492 Trades=183
+2026/03/29 18:50:00 [CANDLE 5m] Closed: O=66572.24 H=66588.24 L=66556.15 C=66580.18 Vol=1.5256
+2026/03/29 18:50:00 [AGGREGATOR] APPROVED: ADX_Trend_Scalp -> BUY 0.0100 BTC-USD | score=2.20
+2026/03/29 18:50:00 [AGGREGATOR] APPROVED: AdaptiveRSI_Dynamic_Scalp -> BUY 0.0100 BTC-USD | score=1.70
+2026/03/29 18:50:00 [PAPER EXEC] BUY 0.0100 BTC @ $66586.12 (fee: $0.6659) | Balance: $100663.44
+2026/03/29 18:50:00 [RISK MIDDLEWARE] Updated exposure: 0.0100 BTC
+2026/03/29 18:50:00 [POSITION OPENED] POS-185000-3 | BUY 0.0100 BTC @ $66586.12 | SL: $66466.26 (0.2%) | TP: $67018.93 (0.7%) | Strategy: ADX_Trend_Scalp
+2026/03/29 18:50:00 [✅ TRADE EXECUTED] BUY | BTC-USD 0.0100 BTC @ $66586.12 | Strategy: ADX_Trend_Scalp
+2026/03/29 18:50:00 [PAPER EXEC] BUY 0.0100 BTC @ $66586.12 (fee: $0.6659) | Balance: $99996.92
+2026/03/29 18:50:00 [RISK MIDDLEWARE] Updated exposure: 0.0200 BTC
+2026/03/29 18:50:00 [POSITION OPENED] POS-185000-4 | BUY 0.0100 BTC @ $66586.12 | SL: $66319.77 (0.4%) | TP: $67251.98 (1.0%) | Strategy: AdaptiveRSI_Dynamic_Scalp
+2026/03/29 18:50:00 [✅ TRADE EXECUTED] BUY | BTC-USD 0.0100 BTC @ $66586.12 | Strategy: AdaptiveRSI_Dynamic_Scalp
+2026/03/29 18:50:22 [KEEP-ALIVE] ✅ Self-ping OK — engine stays warm
+2026/03/29 18:51:01 [CANDLE 1m] Closed: O=66579.46 H=66581.24 L=66562.26 C=66581.24 Vol=0.8739 Trades=188
+2026/03/29 18:51:01 [AGGREGATOR] APPROVED: ADX_Trend_Scalp -> BUY 0.0100 BTC-USD | score=2.20
+2026/03/29 18:51:01 [AGGREGATOR] APPROVED: AdaptiveRSI_Dynamic_Scalp -> BUY 0.0100 BTC-USD | score=1.70
+2026/03/29 18:51:01 [POSITION LIMIT] ADX_Trend_Scalp already at max positions — skipping
+2026/03/29 18:51:01 [PAPER EXEC] BUY 0.0100 BTC @ $66587.90 (fee: $0.6659) | Balance: $99330.37
+2026/03/29 18:51:01 [RISK MIDDLEWARE] Updated exposure: 0.0300 BTC
+2026/03/29 18:51:01 [POSITION OPENED] POS-185101-5 | BUY 0.0100 BTC @ $66587.90 | SL: $66321.55 (0.4%) | TP: $67253.78 (1.0%) | Strategy: AdaptiveRSI_Dynamic_Scalp
+2026/03/29 18:51:01 [✅ TRADE EXECUTED] BUY | BTC-USD 0.0100 BTC @ $66587.90 | Strategy: AdaptiveRSI_Dynamic_Scalp

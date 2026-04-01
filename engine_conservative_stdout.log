@@ -1,0 +1,38 @@
+╔══════════════════════════════════════════════════════════╗
+║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║
+║   24 Curated Strategies | Full State Restore | Panic Recovery  ║
+╚══════════════════════════════════════════════════════════╝
+2026/03/29 19:37:28 [INIT] Loaded 24 curated live strategies
+2026/03/29 19:37:28 [STRATEGY TRACKER] Initialized 24 strategies with $100000.00 total capital (weighted allocation)
+2026/03/29 19:37:28 [INIT] ✅ Candle Aggregator ready (1m + 5m intervals)
+2026/03/29 19:37:28 [DB] ⚠️  Database not available (will use fresh state): DATABASE_URL not set
+2026/03/29 19:37:28 [ORCHESTRATOR] Strategy groups: 1 tick, 19 1m, 4 5m, 0 1h
+2026/03/29 19:37:28 [WARMUP] Fetching historical candles to pre-fill strategy buffers...
+2026/03/29 19:37:28 [WARMUP] Fetching real-time 1m and 5m candles from Coinbase REST...
+2026/03/29 19:37:29 [WARMUP] ✅ Loaded 350 x 1m candles and 350 x 5m candles
+2026/03/29 19:37:29 [WARMUP] Feeding 350 historical 1m candles to 19 strategies...
+2026/03/29 19:37:29 [WARMUP] Feeding 350 historical 5m candles to 4 strategies...
+2026/03/29 19:37:29 [WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.
+2026/03/29 19:37:29 [BOOT] Engine fully initialized in 768ms
+2026/03/29 19:37:29 [MASTER LOOP] Booting Multi-Strategy Orchestrator with 24 strategies...
+═══════════════════════════════════════════
+  REST API Engine listening on :8080
+  Endpoints:
+    GET  /health          — Engine health
+    GET  /api/strategies   — Strategy stats
+    GET  /api/positions    — Open positions
+    GET  /api/trades       — Trade journal
+    GET  /api/stats        — Aggregate stats
+    GET  /api/logs         — Last 100 system logs
+    POST /api/admin/kill   — Kill switch
+    POST /api/admin/reset  — Reset account
+═══════════════════════════════════════════
+2026/03/29 19:37:29 [KEEP-ALIVE] Self-ping enabled every 2m → http://localhost:8080/health
+2026/03/29 19:37:30 Connected to Coinbase stream: wss://ws-feed.exchange.coinbase.com
+2026/03/29 19:38:00 [CANDLE 1m] Closed: O=66430.96 H=66476.41 L=66430.96 C=66458.10 Vol=5.0558 Trades=537
+2026/03/29 19:38:00 [AGGREGATOR] APPROVED: TripleFilter_Alpha_Scalp -> SELL 0.0100 BTC-USD | score=2.60
+2026/03/29 19:38:00 [PAPER EXEC] SHORT 0.0100 BTC @ $66451.47
+2026/03/29 19:38:00 [PAPER EXEC] SELL 0.0100 BTC @ $66451.47 (fee: $0.6645) | Balance: $100663.85
+2026/03/29 19:38:00 [RISK MIDDLEWARE] Updated net exposure: -0.0100 BTC
+2026/03/29 19:38:00 [POSITION OPENED] POS-193800-1 | SELL 0.0100 BTC @ $66451.47 | SL: $66717.28 (0.4%) | TP: $65654.06 (1.2%) | Strategy: TripleFilter_Alpha_Scalp
+2026/03/29 19:38:00 [✅ TRADE EXECUTED] SELL | BTC-USD 0.0100 BTC @ $66451.47 | Strategy: TripleFilter_Alpha_Scalp

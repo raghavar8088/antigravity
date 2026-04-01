@@ -76,23 +76,30 @@ JSON schema:
   "adjusted_size": number (may reduce the proposed size for safety)
 }`
 
-const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity, an autonomous BTC scalping engine.
+const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity. 
 Your role: Review a proposed signal from a manual technical strategy (e.g., EMA Cross, RSI).
 Decide if the signal is high-probability or a "trap" based on the provided market context.
 
 Criteria for VETO:
-- High RSI (+70) for a BUY signal, or Low RSI (-30) for a SELL.
-- Moving Average misalignment (e.g. BUY signal when price is below both EMAs).
-- Low volatility (ATR) making the spread/fees non-viable.
-- Contradicting the Macro Analyst's bias.
+- RSI exhaustion (+70 for BUY, -30 for SELL).
+- Moving Average misalignment.
+- Macro bias contradiction.
 
-CRITICAL: Respond ONLY with a valid JSON object. No markdown.
-JSON schema:
+CRITICAL: Respond ONLY with a valid JSON object.
 {
   "approved": boolean,
-  "confidence": number (0.0 to 1.0),
-  "reason": "1 sentence explanation of why you approved or vetoed"
+  "confidence": number,
+  "reason": "string"
 }`
+
+const batchAuditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity. 
+Role: Review a BATCH of strategy signals. Decide which should be APPROVED and which VETOED.
+
+CRITICAL: Respond ONLY with a valid JSON array of objects.
+[
+  {"strategy": "EMA_Cross", "approved": true, "reason": "..."},
+  {"strategy": "RSI_Overbought", "approved": false, "reason": "..."}
+]`
 
 // ─────────────────────────────────────────────────────────────────
 // PROMPT BUILDER — formats MarketContext into LLM-readable text
@@ -264,34 +271,114 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-// AuditSignalWithFallback tries OpenAI first, then Groq as a free fallback.
-// It also enforces a throttle to stay within free tier rate limits.
+// AuditSignalWithFallback tries OpenAI first, then Groq, then Gemini, then OpenRouter.
+// It enforces a throttle to stay within free tier rate limits.
 func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
-	// 1. Throttling: stay below 15 req/min (1 req every 4.2s to be safe)
+	// 1. Check for immediate fallback if no AI is available
+	if !o.openai.IsAvailable() && !o.groq.IsAvailable() && !o.gemini.IsAvailable() && !o.openrouter.IsAvailable() {
+		return true, "No AI Auditor available (running technicals only)", 0.5
+	}
+
+	// 2. Throttling/Queueing logic
 	o.auditMu.Lock()
 	defer func() {
-		time.Sleep(4200 * time.Millisecond)
+		time.Sleep(4200 * time.Millisecond) // Throttling for free tier protection
 		o.auditMu.Unlock()
 	}()
 
-	// 2. Try OpenAI (paid/high quality)
+	// 3. Try OpenAI (Premium)
 	if o.openai.IsAvailable() {
 		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
-		// If it's a quota/billing error, fall through to Groq
-		lowReason := strings.ToLower(reason)
-		if !strings.Contains(lowReason, "quota") && !strings.Contains(lowReason, "billing") && !strings.Contains(lowReason, "error") {
+		if !isFatalError(reason) {
 			return approved, reason, conf
 		}
-		log.Printf("[AI AUDIT FALLBACK] OpenAI Quota/Error hit — switching to Free Auditor (Groq/Llama-3)...")
+		log.Printf("[AI AUDIT FALLBACK] OpenAI failed (Quota/Error) -> trying Groq...")
 	}
 
-	// 3. Try Groq (Free fallback)
+	// 4. Try Groq (Free/Fast)
 	if o.groq.IsAvailable() {
-		return o.runGroqAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action)
+		if !isFatalError(reason) {
+			return approved, reason, conf
+		}
+		log.Printf("[AI AUDIT FALLBACK] Groq failed -> trying OpenRouter...")
 	}
 
-	// 4. Final Fallback (Neutral)
-	return true, "No AI Auditor available (running technicals only)", 0.5
+	// 5. Try OpenRouter (Resilient Fallback)
+	if o.openrouter.IsAvailable() {
+		return o.runOpenRouterAudit(ctx, market, strategyName, action)
+	}
+
+	return true, "Vetting layer unavailable (neutral pass)", 0.5
+}
+
+func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this. Be strict.", 
+		buildMarketPrompt(market), strategyName, action)
+	
+	raw, err := o.openrouter.ChatForAudit(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT OPENROUTER] Error: %v", err)
+		return true, "Audit error (neutral)", 0.5
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return true, "Parse error", 0.4
+	}
+
+	log.Printf("[AI AUDIT ✅ OPENROUTER] %s %s -> %v | %s (%.0fms)", 
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	o.insights.AddAudit(AuditLog{
+		ID:           fmt.Sprintf("AUD-OR-%d", time.Now().UnixNano()/1e6),
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       "[🌐 OpenRouter] " + resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+	})
+
+	return resp.Approved, resp.Reason, resp.Confidence
+}
+
+func isFatalError(reason string) bool {
+	low := strings.ToLower(reason)
+	return strings.Contains(low, "quota") || strings.Contains(low, "billing") || strings.Contains(low, "error") || strings.Contains(low, "status 4")
+}
+
+// AuditBatchSignals vets multiple signals in a single AI call for massive efficiency.
+func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market MarketContext, signals []string) map[string]bool {
+	if len(signals) == 0 {
+		return nil
+	}
+	if len(signals) == 1 {
+		approved, _, _ := o.AuditSignalWithFallback(ctx, market, signals[0], "BUY/SELL")
+		return map[string]bool{signals[0]: approved}
+	}
+
+	// For simplicity in this version, we'll run them in parallel but throttled.
+	// Future optimization: use batchAuditSystemPrompt for true single-call batching.
+	results := make(map[string]bool)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, sigName := range signals {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			approved, _, _ := o.AuditSignalWithFallback(ctx, market, name, "BUY/SELL")
+			mu.Lock()
+			results[name] = approved
+			mu.Unlock()
+		}(sigName)
+	}
+
+	wg.Wait()
+	return results
 }
 
 func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
@@ -480,21 +567,23 @@ neither qualifies or macro conditions are too adverse.`,
 // ─────────────────────────────────────────────────────────────────
 
 type MultiAgentOrchestrator struct {
-	openai   *OpenAIClient
-	gemini   *GeminiClient
-	groq     *GroqClient
-	insights *InsightStore
-	mu       sync.Mutex
-	auditMu  sync.Mutex // For throttling AI audits
-	idSeq    int
+	openai     *OpenAIClient
+	gemini     *GeminiClient
+	groq       *GroqClient
+	openrouter *OpenRouterClient
+	insights   *InsightStore
+	mu         sync.Mutex
+	auditMu    sync.Mutex
+	idSeq      int
 }
 
-func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
-		openai:   openai,
-		gemini:   gemini,
-		groq:     groq,
-		insights: NewInsightStore(50),
+		openai:     openai,
+		gemini:     gemini,
+		groq:       groq,
+		openrouter: openrouter,
+		insights:   NewInsightStore(50),
 	}
 }
 

@@ -1,0 +1,23 @@
+
+> btc-scalper-autotrader@1.0.0 dev
+> vite --host --port 3000
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m406[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.31.243:[1m3000[22m/[39m
+[2m9:10:28 pm[22m [36m[1m[v[2m9:10:28 pm[22m [36m[1m[vite][22m[39m [32mpage rel[2m9:12:35 pm[22m [36m[1m[v[2m9:12:35 pm[22m [36m[1m[vite][22m[3[2m9:12:35 pm[2m9:14:48 pm[22m [36m[1m[v[2m9:14:48 pm[22m [36m[1m[vite][22m[3[2m9:14:48 pm[2m9:15:44 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:16:07 pm[22m [36m[1m[v[2m9:16:07 pm[22m [36m[1m[vite][22m[39m [32mpage re[2m9:29:15 pm[22m [36m[1m[v[2m9:29:15 pm[22m [36m[1m[vite][22m[39m [32mpage re[2m9:29:29 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:30:13 pm[22m [36m[1m[v[2m9:30:13 pm[22m [36m[1m[vite][22m[3[2m9:30:13 pm[2m9:30:31 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msr[2m9:30:31 pm[2m9:32:31 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:32:43 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:32:55 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:33:10 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:51:56 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:52:23 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msr[2m9:52:23 pm[2m9:54:09 pm[22m [36m[1m[v[2m9:54:09 pm[22m [36m[1m[vite][22m[3[2m9:54:09 pm[2m9:56:52 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:57:03 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m9:58:11 pm[22m [36m[1m[v[2m9:58:11 pm[22m [36m[1m[vite][22m[3[2m9:58:11 pm[2m9:58:25 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msr[2m9:58:25 pm[2m10:04:28 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m10:04:37 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2ms[2m10:04:37 pm[2m10:05:51 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2ms[2m10:05:51 pm[2m10:06:07 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+[2m10:16:37 pm[22m [36m[1m[[2m10:16:37 pm[22m [36m[1m[vite][22m[39m [32mpage re[2m10:17:03 pm[22m [36m[1m[[2m10:17:03 pm[22m [36m[1m[vite][22m[39m [32mpage re[2m10:17:14 pm[22m [36m[1m[[2m10:17:14 pm[22m [36m[1m[vite][22m[39m [32mpage re[2m10:19:19 pm[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/App.jsx[22m
+load [39m[2msrc/App.jsx[22m
+[32mpage reload [39m[2msrc/App.jsx[22m

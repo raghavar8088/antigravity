@@ -1,0 +1,33 @@
+╔══════════════════════════════════════════════════════════╗
+║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║
+║   24 Curated Strategies | Full State Restore | Panic Recovery  ║
+╚══════════════════════════════════════════════════════════╝
+2026/03/29 19:19:14 [INIT] Loaded 24 curated live strategies
+2026/03/29 19:19:14 [STRATEGY TRACKER] Initialized 24 strategies with $100000.00 total capital (weighted allocation)
+2026/03/29 19:19:14 [INIT] ✅ Candle Aggregator ready (1m + 5m intervals)
+2026/03/29 19:19:14 [DB] ⚠️  Database not available (will use fresh state): DATABASE_URL not set
+2026/03/29 19:19:14 [ORCHESTRATOR] Strategy groups: 1 tick, 19 1m, 4 5m, 0 1h
+2026/03/29 19:19:14 [WARMUP] Fetching historical candles to pre-fill strategy buffers...
+2026/03/29 19:19:14 [WARMUP] Fetching real-time 1m and 5m candles from Coinbase REST...
+2026/03/29 19:19:15 Connected to Coinbase stream: wss://ws-feed.exchange.coinbase.com
+2026/03/29 19:19:17 [WARMUP] ✅ Loaded 350 x 1m candles and 350 x 5m candles
+2026/03/29 19:19:17 [WARMUP] Feeding 350 historical 1m candles to 19 strategies...
+2026/03/29 19:19:17 [WARMUP] Feeding 350 historical 5m candles to 4 strategies...
+2026/03/29 19:19:17 [WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.
+2026/03/29 19:19:17 [BOOT] Engine fully initialized in 2.836s
+2026/03/29 19:19:17 [MASTER LOOP] Booting Multi-Strategy Orchestrator with 24 strategies...
+═══════════════════════════════════════════
+  REST API Engine listening on :8080
+  Endpoints:
+    GET  /health          — Engine health
+    GET  /api/strategies   — Strategy stats
+    GET  /api/positions    — Open positions
+    GET  /api/trades       — Trade journal
+    GET  /api/stats        — Aggregate stats
+    GET  /api/logs         — Last 100 system logs
+    POST /api/admin/kill   — Kill switch
+    POST /api/admin/reset  — Reset account
+═══════════════════════════════════════════
+2026/03/29 19:19:17 [KEEP-ALIVE] Self-ping enabled every 2m → http://localhost:8080/health
+2026/03/29 19:20:03 [CANDLE 1m] Closed: O=66549.73 H=66555.23 L=66545.66 C=66555.23 Vol=0.3764 Trades=108
+2026/03/29 19:20:03 [CANDLE 5m] Closed: O=66549.73 H=66555.23 L=66545.66 C=66555.23 Vol=0.3764

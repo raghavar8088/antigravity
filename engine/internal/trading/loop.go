@@ -591,7 +591,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
 		
 		// ══════════════════════════════════════════════════════════════════════
-		// AI SIGNAL AUDIT — GPT-4o/Gemini Veto Layer
+		// AI SIGNAL AUDIT — GPT-4o/Gemini/Groq Veto Layer
 		// ══════════════════════════════════════════════════════════════════════
 		if o.aiAgent != nil && o.aiAgent.IsAvailable() {
 			// Build market context for the audit
@@ -620,7 +620,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				DailyPnL:      o.risk.GetDailyPnL(),
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second) // Increased: account for throttling delay
+			// We now use AuditSignalWithFallback which handles the global chain (Groq/OpenRouter/Gemini)
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second) 
 			approved, reason, _ := o.aiAgent.AuditSignalWithFallback(ctx, market, aggSig.StrategyName, string(sig.Action))
 			cancel()
 
@@ -631,7 +632,9 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			log.Printf("[AI AUDIT PASS] %s %s APPROVED: %s", aggSig.StrategyName, sig.Action, reason)
 		}
 
-		// Execute
+		// ══════════════════════════════════════════════════════════════════════
+		// 13. EXECUTION — Fill via Coinbase Advanced Trad (Live/Paper)
+		// ══════════════════════════════════════════════════════════════════════
 		fill, err := o.exec.ExecuteSignal(sig, orderMode)
 		if err != nil {
 			log.Printf("[EXECUTION FAILED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
