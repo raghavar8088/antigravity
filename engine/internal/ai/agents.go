@@ -233,34 +233,93 @@ type auditAgentResponse struct {
 
 func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
 	start := time.Now()
-	
-	// Quick poll of GPT-4o-mini for audit
 	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Should we execute it? Be strict.", 
 		buildMarketPrompt(market), strategyName, action)
 	
 	raw, err := o.openai.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
-		log.Printf("[AI AUDIT] Error: %v", err)
-		return true, "Audit failed (neutral)", 0.5 // Default to true if AI is down to avoid blocking
+		log.Printf("[AI AUDIT ERROR] %v", err)
+		return true, fmt.Sprintf("Audit error: %v", err), 0.5
 	}
 
 	raw = extractJSON(raw)
 	var resp auditAgentResponse
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
-		log.Printf("[AI AUDIT] Parse error: %v | raw: %s", err, raw)
-		return true, "Audit parse error (neutral)", 0.4
+		return true, "Audit parse error", 0.4
 	}
 
 	log.Printf("[AI AUDIT] %s %s -> %v | %s (%.0fms)", 
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
-	// Store in store
 	o.insights.AddAudit(AuditLog{
 		ID:           fmt.Sprintf("AUD-%d", time.Now().UnixNano()/1e6),
 		StrategyName: strategyName,
 		Action:       action,
 		Approved:     resp.Approved,
 		Reason:       resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+	})
+
+	return resp.Approved, resp.Reason, resp.Confidence
+}
+
+// AuditSignalWithFallback tries OpenAI first, then Groq as a free fallback.
+// It also enforces a throttle to stay within free tier rate limits.
+func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	// 1. Throttling: stay below 15 req/min (1 req every 4.2s to be safe)
+	o.auditMu.Lock()
+	defer func() {
+		time.Sleep(4200 * time.Millisecond)
+		o.auditMu.Unlock()
+	}()
+
+	// 2. Try OpenAI (paid/high quality)
+	if o.openai.IsAvailable() {
+		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
+		// If it's a quota/billing error, fall through to Groq
+		lowReason := strings.ToLower(reason)
+		if !strings.Contains(lowReason, "quota") && !strings.Contains(lowReason, "billing") && !strings.Contains(lowReason, "error") {
+			return approved, reason, conf
+		}
+		log.Printf("[AI AUDIT FALLBACK] OpenAI Quota/Error hit — switching to Free Auditor (Groq/Llama-3)...")
+	}
+
+	// 3. Try Groq (Free fallback)
+	if o.groq.IsAvailable() {
+		return o.runGroqAudit(ctx, market, strategyName, action)
+	}
+
+	// 4. Final Fallback (Neutral)
+	return true, "No AI Auditor available (running technicals only)", 0.5
+}
+
+func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.", 
+		buildMarketPrompt(market), strategyName, action)
+	
+	raw, err := o.groq.ChatForAudit(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT GROQ] Error: %v", err)
+		return true, "Groq audit failed (neutral)", 0.5
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return true, "Groq parse error (neutral)", 0.4
+	}
+
+	log.Printf("[AI AUDIT ✅ GROQ] %s %s -> %v | %s (%.0fms)", 
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	o.insights.AddAudit(AuditLog{
+		ID:           fmt.Sprintf("AUD-G-%d", time.Now().UnixNano()/1e6),
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       "[⚡ Groq-Free] " + resp.Reason,
 		Confidence:   resp.Confidence,
 		Timestamp:    time.Now(),
 	})
@@ -423,15 +482,18 @@ neither qualifies or macro conditions are too adverse.`,
 type MultiAgentOrchestrator struct {
 	openai   *OpenAIClient
 	gemini   *GeminiClient
+	groq     *GroqClient
 	insights *InsightStore
 	mu       sync.Mutex
+	auditMu  sync.Mutex // For throttling AI audits
 	idSeq    int
 }
 
-func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
 		openai:   openai,
 		gemini:   gemini,
+		groq:     groq,
 		insights: NewInsightStore(50),
 	}
 }

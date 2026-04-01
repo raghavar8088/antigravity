@@ -197,17 +197,20 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	openAIClient := ai.NewOpenAIClient()
 	geminiClient := ai.NewGeminiClient()
+	groqClient := ai.NewGroqClient()
 	var aiOrchestrator *ai.MultiAgentOrchestrator
-	if openAIClient.IsAvailable() {
-		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient)
+	
+	if openAIClient.IsAvailable() || groqClient.IsAvailable() {
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
-		if geminiClient != nil && geminiClient.IsAvailable() {
-			log.Println("[AI] ✅ 4-agent system initialized: OpenAI Bull + Bear + Gemini Macro + OpenAI Risk")
-		} else {
-			log.Println("[AI] ✅ 3-agent system initialized (Bull + Bear + Risk) | Add GEMINI_API_KEY to enable Macro Agent")
+		
+		aiSystem := "AI Supreme Court [Technicals + Macro]"
+		if !openAIClient.IsAvailable() && groqClient.IsAvailable() {
+			aiSystem = "AI Supreme Court [Technicals + Macro] — 100% FREE MODE (Groq)"
 		}
+		log.Printf("[AI] ✅ %s initialized", aiSystem)
 	} else {
-		log.Println("[AI] ⚠️  OPENAI_API_KEY not set — running rules-only mode (set key to enable GPT trading)")
+		log.Println("[AI] ⚠️  AI Keys not set — running rules-only mode (set OPENAI_API_KEY or GROQ_API_KEY to enable AI vetting)")
 	}
 
 	// ═══════════════════════════════════════════════════

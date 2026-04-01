@@ -1,0 +1,127 @@
+package strategy
+
+import (
+	"math"
+
+	"antigravity-engine/internal/marketdata"
+)
+
+// SentimentConfluenceProScalper converts multi-indicator sentiment into a
+// single directional score and trades only when both momentum and volume agree.
+type SentimentConfluenceProScalper struct {
+	baseScalper
+	volumes       []float64
+	cooldownBars  int
+	lastSignalBar int
+}
+
+func NewSentimentConfluenceProScalper() *SentimentConfluenceProScalper {
+	return &SentimentConfluenceProScalper{
+		baseScalper:  baseScalper{name: "Sentiment_Confluence_Pro_Scalp", maxBuf: defaultBufSize},
+		cooldownBars: 6,
+	}
+}
+
+func (s *SentimentConfluenceProScalper) OnTick(tick marketdata.Tick) []Signal { return s.OnCandle(tick) }
+
+func (s *SentimentConfluenceProScalper) OnCandle(candle marketdata.Tick) []Signal {
+	s.feed(candle.Price)
+
+	volume := candle.Quantity
+	if volume <= 0 {
+		volume = 1.0
+	}
+	s.volumes = appendRollingFloat(s.volumes, volume, defaultBufSize)
+
+	n := len(s.prices)
+	if n < 60 || len(s.volumes) < 30 {
+		return holdSignal()
+	}
+	if n-s.lastSignalBar < s.cooldownBars {
+		return holdSignal()
+	}
+
+	rsi := RSI(s.prices, 14)
+	fastEMA := EMA(s.prices, 9)
+	slowEMA := EMA(s.prices, 21)
+	_, _, macdHist := MACD(s.prices, 12, 26, 9)
+	vwap := RollingVWAP(s.prices, s.volumes, 40)
+	if vwap == 0 {
+		return holdSignal()
+	}
+
+	bullishCloses := 0
+	for i := n - 5; i < n; i++ {
+		if i > 0 && s.prices[i] > s.prices[i-1] {
+			bullishCloses++
+		}
+	}
+
+	score := 0.0
+	if rsi > 60 {
+		score += 2
+	} else if rsi < 40 {
+		score -= 2
+	}
+	if macdHist > 0 {
+		score += 2
+	} else if macdHist < 0 {
+		score -= 2
+	}
+	if fastEMA > slowEMA {
+		score += 1
+	} else {
+		score -= 1
+	}
+	if bullishCloses >= 4 {
+		score += 2
+	} else if bullishCloses <= 1 {
+		score -= 2
+	}
+	if candle.Price > vwap {
+		score += 1
+	} else {
+		score -= 1
+	}
+
+	avgVolume := tailAverage(s.volumes, 20)
+	if avgVolume == 0 {
+		return holdSignal()
+	}
+	volRatio := volume / avgVolume
+	if volRatio < 1.05 {
+		return holdSignal()
+	}
+
+	atr := ATR(s.prices, 14)
+	if atr <= 0 || candle.Price <= 0 {
+		return holdSignal()
+	}
+
+	atrPct := (atr / candle.Price) * 100
+	stopLossPct := atrPct * 1.15
+	if stopLossPct < 0.22 {
+		stopLossPct = 0.22
+	}
+	if stopLossPct > 0.75 {
+		stopLossPct = 0.75
+	}
+
+	takeProfitPct := stopLossPct * 2.0
+	if volRatio > 1.30 {
+		takeProfitPct = stopLossPct * 2.2
+	}
+
+	confidence := 0.92 + math.Min(math.Abs(score)*0.04, 0.24) + math.Min(math.Max(volRatio-1.0, 0)*0.12, 0.14)
+
+	if score >= 4 && fastEMA > slowEMA && macdHist > 0 {
+		s.lastSignalBar = n
+		return signalWithConfidence(candle.Symbol, ActionBuy, stopLossPct, takeProfitPct, confidence)
+	}
+	if score <= -4 && fastEMA < slowEMA && macdHist < 0 {
+		s.lastSignalBar = n
+		return signalWithConfidence(candle.Symbol, ActionSell, stopLossPct, takeProfitPct, confidence)
+	}
+
+	return holdSignal()
+}

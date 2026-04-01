@@ -1,0 +1,5 @@
+./aggregator.go
+./aggregator_selective.go
+./loop.go
+./aggregator_selective_test.go
+./loop_profit_test.go

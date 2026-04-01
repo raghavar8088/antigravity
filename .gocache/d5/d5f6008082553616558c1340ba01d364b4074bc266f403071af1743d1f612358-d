@@ -1,0 +1,11 @@
+./curated_registry.go
+./external_ai.go
+./indicators.go
+./interface.go
+./moving_average.go
+./profit_composites.go
+./registry.go
+./scalpers.go
+./scalpers_advanced.go
+./scalpers_elite.go
+./scalpers_elite2.go

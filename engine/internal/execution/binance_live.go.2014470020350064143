@@ -1,0 +1,109 @@
+package execution
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+
+	"antigravity-engine/internal/exchange"
+	"antigravity-engine/internal/strategy"
+)
+
+// BinanceLiveClient bridges the generic `Engine` interface specifically to Binance REST APIs.
+// This is the absolute core of REAL execution.
+type BinanceLiveClient struct {
+	auth *exchange.Authenticator
+	http *http.Client
+	
+	baseURL string
+}
+
+func NewBinanceLiveClient(key, secret string) *BinanceLiveClient {
+	return &BinanceLiveClient{
+		auth:    exchange.NewAuthenticator(key, secret),
+		http:    &http.Client{Timeout: 5 * time.Second},
+		baseURL: "https://api.binance.com", // Base URL for Spot accounts
+	}
+}
+
+func (b *BinanceLiveClient) ExecuteSignal(sig strategy.Signal, mode OrderMode) (FillResult, error) {
+	log.Printf("[LIVE EXEC] Attempting %s %s on Binance for %.4f %s", mode, sig.Action, sig.TargetSize, sig.Symbol)
+	if mode == OrderModePostOnly {
+		return FillResult{}, fmt.Errorf("post-only live routing requires a priced limit order and is not wired yet")
+	}
+
+	endpoint := "/api/v3/order"
+	
+	// Build Binance standard URL query requirements
+	params := url.Values{}
+	params.Add("symbol", sig.Symbol)
+	params.Add("side", string(sig.Action)) // BUY or SELL
+	orderType := "MARKET"
+	switch mode {
+	case OrderModeIOC:
+		orderType = "MARKET"
+	default:
+		orderType = "MARKET"
+	}
+	params.Add("type", orderType)
+	params.Add("quantity", fmt.Sprintf("%.5f", sig.TargetSize))
+	params.Add("timestamp", fmt.Sprintf("%d", time.Now().UnixMilli()))
+
+	// Cryptographically secure the payload against our Secret Key
+	signedQuery, err := b.auth.SignBinanceRequest(params)
+	if err != nil {
+		return fmt.Errorf("failed to sign order request: %w", err)
+	}
+
+	fullURL := fmt.Sprintf("%s%s?%s", b.baseURL, endpoint, signedQuery)
+
+	req, err := http.NewRequest("POST", fullURL, nil)
+	if err != nil {
+		return err
+	}
+	
+	// Inject standard Access Keys
+	req.Header.Add("X-MBX-APIKEY", b.auth.APIKey)
+
+	resp, err := b.http.Do(req)
+	if err != nil {
+		return FillResult{}, fmt.Errorf("NETWORK ERROR: Execution layer failed to reach Binance: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return FillResult{}, fmt.Errorf("EXCHANGE ERROR: Binance rejected order with HTTP %d", resp.StatusCode)
+	}
+
+	log.Printf("[LIVE EXEC] SUCCESS! Routed %s %.4f %s to Binance.", mode, sig.TargetSize, sig.Symbol)
+	return FillResult{
+		ExecPrice: 0,
+		OrderMode: mode,
+	}, nil
+}
+
+// PlaceMarketOrder physically routes a verified internal algorithmic request to the public internet.
+func (b *BinanceLiveClient) PlaceMarketOrder(sig strategy.Signal) error {
+	_, err := b.ExecuteSignal(sig, OrderModeMarket)
+	return err
+}
+
+// GetPosition queries physical exchange holdings (e.g. Free wallet balance + Locked open sell orders)
+func (b *BinanceLiveClient) GetPosition(symbol string) float64 {
+	log.Println("[LIVE EXEC] Note: Invoked GetPosition REST Ping. Returning mocked live amount 0.0")
+	// In production, this fires GET /api/v3/account to check "free" vs "locked" balances
+	return 0.0
+}
+
+func (b *BinanceLiveClient) GetBalanceUSD() float64 {
+	// Normally fetches USDT free balances exclusively
+	return 0.0
+}
+
+func (b *BinanceLiveClient) ResetAccount() error {
+	// Live clients do not support an account reset via the mock admin interface.
+	// This is intentionally a no-op for real exchange integration.
+	return nil
+}

@@ -620,8 +620,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				DailyPnL:      o.risk.GetDailyPnL(),
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-			approved, reason, _ := o.aiAgent.AuditSignal(ctx, market, aggSig.StrategyName, string(sig.Action))
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second) // Increased: account for throttling delay
+			approved, reason, _ := o.aiAgent.AuditSignalWithFallback(ctx, market, aggSig.StrategyName, string(sig.Action))
 			cancel()
 
 			if !approved {

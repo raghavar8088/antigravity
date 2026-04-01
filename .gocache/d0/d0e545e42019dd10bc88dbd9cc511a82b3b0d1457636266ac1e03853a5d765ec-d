@@ -1,0 +1,5 @@
+./binance_live.go
+./interface.go
+./paper.go
+./trade_journal.go
+./paper_test.go
