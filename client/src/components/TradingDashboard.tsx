@@ -10,6 +10,9 @@ import RunningTrades from "@/components/RunningTrades";
 import SignalInsightCard from "@/components/SignalInsightCard";
 import StrategyCard from "@/components/StrategyCard";
 import TradeHistory from "@/components/TradeHistory";
+import AIInsightPanel from "@/components/AIInsightPanel";
+import FearGreedWidget from "@/components/FearGreedWidget";
+import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
@@ -240,6 +243,7 @@ export default function TradingDashboard() {
   const { positions: livePositions } = usePositions(resetRefreshKey);
   const { trades: liveTrades, stats: liveStats } = useTrades(resetRefreshKey);
   const { logs: engineLogs } = useEngineLogs(resetRefreshKey);
+  const aiInsights = useAIInsights(resetRefreshKey);
 
   const previousConnectionState = useRef<string>("");
   const previousExchange = useRef<string>("");
@@ -621,6 +625,13 @@ export default function TradingDashboard() {
           </div>
 
           <div className="space-y-6">
+            <FearGreedWidget />
+            <AIInsightPanel
+              enabled={aiInsights.enabled}
+              message={aiInsights.message}
+              latest={aiInsights.latest}
+              recent={aiInsights.recent}
+            />
             <SignalInsightCard signal={latestSignal} />
             <ActivityFeed entries={feed.slice(0, 12)} />
           </div>

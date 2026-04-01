@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"antigravity-engine/internal/admin"
+	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/persistence"
@@ -192,6 +193,19 @@ func main() {
 	)
 
 	// ═══════════════════════════════════════════════════
+	// 10b. AI MULTI-AGENT SYSTEM — Claude-powered trading
+	// ═══════════════════════════════════════════════════
+	claudeClient := ai.NewClaudeClient()
+	var aiOrchestrator *ai.MultiAgentOrchestrator
+	if claudeClient.IsAvailable() {
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(claudeClient)
+		orchestrator.SetAIOrchestrator(aiOrchestrator)
+		log.Println("[AI] ✅ Claude multi-agent system initialized (Bull + Bear + Risk agents)")
+	} else {
+		log.Println("[AI] ⚠️  ANTHROPIC_API_KEY not set — running rules-only mode (set key to enable Claude trading)")
+	}
+
+	// ═══════════════════════════════════════════════════
 	// 11. WARMUP — Pre-fill strategy buffers from Coinbase REST
 	// ═══════════════════════════════════════════════════
 	log.Println("[WARMUP] Fetching historical candles to pre-fill strategy buffers...")
@@ -309,6 +323,29 @@ func main() {
 		}
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"logs": globalLogs.GetLogs(),
+		})
+	})
+
+	// GET /api/ai/insights — Recent Claude multi-agent decisions
+	http.HandleFunc("/api/ai/insights", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if aiOrchestrator == nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"enabled":  false,
+				"message":  "AI agents disabled — set ANTHROPIC_API_KEY to enable Claude trading",
+				"insights": []interface{}{},
+			})
+			return
+		}
+		latest := aiOrchestrator.GetInsights().Latest()
+		recent := aiOrchestrator.GetInsights().GetRecent(20)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"enabled": true,
+			"latest":  latest,
+			"recent":  recent,
 		})
 	})
 

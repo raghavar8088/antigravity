@@ -2,11 +2,13 @@ package trading
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"math"
 	"sync"
 	"time"
 
+	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/positions"
@@ -50,6 +52,14 @@ type Orchestrator struct {
 	journal    *execution.TradeJournal
 	candleAgg  *marketdata.CandleAggregator
 
+	// AI multi-agent layer (nil when ANTHROPIC_API_KEY not set)
+	aiAgent    *ai.MultiAgentOrchestrator
+	aiCandleCh chan marketdata.Candle
+
+	// Candle history for AI context (last 20 × 5m candles)
+	candleHistory []ai.CandleSummary
+	candleHistMu  sync.Mutex
+
 	// Internal state
 	lastPrice    float64
 	h1Counter    int // Counts 5m candles to simulate 1h (every 12th)
@@ -87,6 +97,14 @@ func NewOrchestrator(
 		priceWindow:  make([]float64, 0, marketHistoryMaxSamples),
 		volumeWindow: make([]float64, 0, marketHistoryMaxSamples),
 	}
+}
+
+// SetAIOrchestrator attaches the multi-agent AI system to the orchestrator.
+// Called after construction so the constructor signature stays unchanged.
+func (o *Orchestrator) SetAIOrchestrator(agent *ai.MultiAgentOrchestrator) {
+	o.aiAgent = agent
+	o.aiCandleCh = make(chan marketdata.Candle, 10)
+	log.Println("[AI] Multi-agent orchestrator attached — Claude will trade on every 5m candle")
 }
 
 // WarmupStrategies pre-fills strategy price buffers with historical candle data.
@@ -143,6 +161,12 @@ func (o *Orchestrator) Run(ctx context.Context) {
 
 	// Background: process 5m candle closes
 	go o.process5mCandles(ctx)
+
+	// Background: AI multi-agent decisions (only when API key is set)
+	if o.aiAgent != nil && o.aiAgent.IsAvailable() {
+		go o.processAIDecisions(ctx)
+		log.Println("[AI] 🤖 Claude multi-agent trading loop ACTIVE")
+	}
 
 	for {
 		select {
@@ -226,8 +250,223 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
 				o.processStrategyGroup(o.groups.H1, tick)
 			}
+
+			// Record candle in history for AI context
+			o.recordCandleHistory(candle)
+
+			// Forward to AI channel (non-blocking — drop if AI is busy)
+			if o.aiCandleCh != nil {
+				select {
+				case o.aiCandleCh <- candle:
+				default:
+					log.Println("[AI] Candle dropped — AI agent still processing previous candle")
+				}
+			}
 		}
 	}
+}
+
+// recordCandleHistory stores the last 20 × 5m candles for AI context.
+func (o *Orchestrator) recordCandleHistory(candle marketdata.Candle) {
+	o.candleHistMu.Lock()
+	defer o.candleHistMu.Unlock()
+	o.candleHistory = append(o.candleHistory, ai.CandleSummary{
+		Open:   candle.Open,
+		High:   candle.High,
+		Low:    candle.Low,
+		Close:  candle.Close,
+		Volume: candle.Volume,
+	})
+	if len(o.candleHistory) > 20 {
+		o.candleHistory = o.candleHistory[len(o.candleHistory)-20:]
+	}
+}
+
+// processAIDecisions runs the Claude multi-agent debate on every 5m candle.
+// This goroutine runs independently so it never blocks the main trading loop.
+func (o *Orchestrator) processAIDecisions(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-o.aiCandleCh:
+			o.runAIDecision(ctx)
+		}
+	}
+}
+
+// runAIDecision builds market context and calls the multi-agent orchestrator.
+func (o *Orchestrator) runAIDecision(ctx context.Context) {
+	o.mu.RLock()
+	price := o.lastPrice
+	prices := append([]float64(nil), o.priceWindow...)
+	volumes := append([]float64(nil), o.volumeWindow...)
+	o.mu.RUnlock()
+
+	if price <= 0 || len(prices) < 20 {
+		return
+	}
+
+	o.candleHistMu.Lock()
+	candles := append([]ai.CandleSummary(nil), o.candleHistory...)
+	o.candleHistMu.Unlock()
+
+	// Compute indicators for AI context
+	regime := o.classifyMarketRegime()
+	rsi := computeRSI(prices, 14)
+	atr := strategy.ATR(prices, 14)
+	vwap := strategy.RollingVWAP(prices, volumes, 55)
+	adx := strategy.ADX(prices, 14)
+	emaFast := strategy.EMA(prices, 9)
+	emaSlow := strategy.EMA(prices, 21)
+
+	// Count open positions by direction
+	openPos := o.posMgr.GetOpenPositions()
+	longs, shorts := 0, 0
+	for _, p := range openPos {
+		if string(p.Side) == "BUY" {
+			longs++
+		} else {
+			shorts++
+		}
+	}
+
+	// Get account stats
+	equityUSD := o.exec.GetEquityUSD()
+	dailyPnL := o.risk.GetDailyPnL()
+
+	market := ai.MarketContext{
+		Symbol:            "BTC-USD",
+		Price:             price,
+		Regime:            regime,
+		RSI:               rsi,
+		ATR:               atr,
+		VWAP:              vwap,
+		ADX:               adx,
+		EMAFast:           emaFast,
+		EMASlow:           emaSlow,
+		RecentCandles:     candles,
+		OpenPositions:     len(openPos),
+		LongPositions:     longs,
+		ShortPositions:    shorts,
+		Balance:           equityUSD,
+		DailyPnL:          dailyPnL,
+	}
+
+	decision := o.aiAgent.Decide(ctx, market)
+
+	if !decision.RiskVerdict.Approved || decision.FinalAction == "HOLD" {
+		log.Printf("[AI] 🤖 %s → HOLD | %s", decision.ID, decision.RiskVerdict.Reasoning)
+		return
+	}
+
+	// Build a strategy.Signal from the AI decision and execute it
+	riskSig := decision.RiskVerdict
+	var activeSig AgentSignalForExec
+	if decision.FinalAction == "BUY" {
+		activeSig = AgentSignalForExec{
+			action:        strategy.ActionBuy,
+			size:          riskSig.AdjustedSize,
+			stopLossPct:   decision.BullSignal.StopLossPct,
+			takeProfitPct: decision.BullSignal.TakeProfitPct,
+			confidence:    decision.BullSignal.Confidence,
+		}
+	} else {
+		activeSig = AgentSignalForExec{
+			action:        strategy.ActionSell,
+			size:          riskSig.AdjustedSize,
+			stopLossPct:   decision.BearSignal.StopLossPct,
+			takeProfitPct: decision.BearSignal.TakeProfitPct,
+			confidence:    decision.BearSignal.Confidence,
+		}
+	}
+
+	// Sanitize size
+	if activeSig.size < minExecutionSizeBTC {
+		activeSig.size = minExecutionSizeBTC
+	}
+	if activeSig.size > 0.05 {
+		activeSig.size = 0.05
+	}
+
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        activeSig.action,
+		TargetSize:    activeSig.size,
+		Confidence:    activeSig.confidence,
+		StopLossPct:   activeSig.stopLossPct,
+		TakeProfitPct: activeSig.takeProfitPct,
+	}
+
+	// Sanitize SL/TP
+	sanitized, ok := sanitizeSignalForProfit(sig)
+	if !ok {
+		log.Printf("[AI] Signal sanitization failed — skipping")
+		return
+	}
+	sig = sanitized
+
+	// Risk engine validation
+	if err := o.risk.Validate(sig, price); err != nil {
+		log.Printf("[AI] Risk engine rejected AI signal: %v", err)
+		return
+	}
+
+	fill, err := o.exec.ExecuteSignal(sig, execution.OrderModeIOC)
+	if err != nil {
+		log.Printf("[AI] Execution failed: %v", err)
+		return
+	}
+
+	o.risk.NotifyFill(sig)
+	pos := o.posMgr.OpenPosition(sig, fill.ExecPrice, fmt.Sprintf("AI_%s", decision.ID))
+
+	// Mark this decision as executed
+	decision.Executed = true
+	o.aiAgent.GetInsights().Add(decision)
+
+	// Store AI reasoning in a special trade journal entry so it appears in history
+	_ = pos
+	log.Printf("[AI] ✅ %s EXECUTED %s %.4f BTC @ $%.2f | Bull: %s",
+		decision.ID, decision.FinalAction, sig.TargetSize, fill.ExecPrice,
+		truncate(decision.BullSignal.Thesis, 80))
+}
+
+// AgentSignalForExec holds execution parameters derived from the winning agent.
+type AgentSignalForExec struct {
+	action        strategy.Action
+	size          float64
+	stopLossPct   float64
+	takeProfitPct float64
+	confidence    float64
+}
+
+// computeRSI calculates RSI(n) from a price slice.
+func computeRSI(prices []float64, period int) float64 {
+	if len(prices) < period+1 {
+		return 50.0
+	}
+	gains, losses := 0.0, 0.0
+	for i := len(prices) - period; i < len(prices); i++ {
+		delta := prices[i] - prices[i-1]
+		if delta > 0 {
+			gains += delta
+		} else {
+			losses -= delta
+		}
+	}
+	if losses == 0 {
+		return 100.0
+	}
+	rs := (gains / float64(period)) / (losses / float64(period))
+	return 100 - (100 / (1 + rs))
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 // processStrategyGroup runs a group of strategies against a tick/candle and

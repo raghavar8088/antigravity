@@ -22,6 +22,13 @@ type JournalEntry struct {
 	EntryTime    time.Time     `json:"entryTime"`
 	ExitTime     time.Time     `json:"exitTime"`
 	Duration     time.Duration `json:"duration"`
+
+	// AI fields — populated when the trade was initiated by the AI agent system
+	AIDecisionID  string `json:"aiDecisionId,omitempty"`
+	AIReasoning   string `json:"aiReasoning,omitempty"`   // Full Bull/Bear/Risk debate summary
+	AIConfidence  float64 `json:"aiConfidence,omitempty"` // Risk agent's confidence
+	AIBullThesis  string `json:"aiBullThesis,omitempty"`
+	AIBearThesis  string `json:"aiBearThesis,omitempty"`
 }
 
 // TradeJournal maintains an in-memory log of all completed trades.
