@@ -58,7 +58,7 @@ func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║")
-	fmt.Println("║   24 Curated Strategies | Full State Restore | Panic Recovery  ║")
+	fmt.Println("║   35 Curated Strategies | Full State Restore | Panic Recovery  ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -391,19 +391,24 @@ func keepAlive(ctx context.Context) {
 }
 
 // safeGo wraps a goroutine function with panic recovery.
-// If the goroutine panics, it logs the error and restarts automatically.
+// If the goroutine panics, it logs the error and restarts after 5 seconds.
+// If fn returns normally (context cancelled), safeGo exits without restarting.
 func safeGo(name string, fn func()) {
 	for {
+		panicked := false
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Printf("[⚠️ PANIC RECOVERED] %s crashed: %v — restarting in 5s...", name, r)
+					panicked = true
 				}
 			}()
 			fn()
 		}()
-		// If fn returned normally (context cancelled), don't restart
-		log.Printf("[%s] Goroutine exited normally", name)
-		return
+		if !panicked {
+			log.Printf("[%s] Goroutine exited normally", name)
+			return
+		}
+		time.Sleep(5 * time.Second)
 	}
 }

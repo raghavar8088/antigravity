@@ -683,9 +683,11 @@ export default function TradingDashboard() {
                     const wr = w + l > 0 ? (w / (w + l)) * 100 : null;
                     return (
                       <tr key={cat} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors">
-                        <td className="py-2 px-3 font-mono text-gray-300 flex items-center gap-2">
-                          <span className={`h-1.5 w-1.5 rounded-full ${CAT_COLORS[cat] || "bg-gray-500"}`}></span>
-                          {cat}
+                        <td className="py-2 px-3 font-mono text-gray-300">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${CAT_COLORS[cat] || "bg-gray-500"}`}></span>
+                            {cat}
+                          </div>
                         </td>
                         <td className="py-2 px-3 text-center text-gray-500">{cats.length}</td>
                         <td className="py-2 px-3 text-center text-emerald-400 font-mono">{w}</td>

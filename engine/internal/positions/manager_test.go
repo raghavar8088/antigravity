@@ -3,6 +3,7 @@ package positions
 import (
 	"math"
 	"testing"
+	"time"
 
 	"antigravity-engine/internal/strategy"
 )
@@ -180,5 +181,84 @@ func TestOpenPositionUsesNormalTargetsByDefault(t *testing.T) {
 	}
 	if math.Abs(pos.TakeProfit-101.1) > floatTolerance {
 		t.Fatalf("expected take profit 101.1, got %.4f", pos.TakeProfit)
+	}
+}
+
+func TestCheckExpiredPositionsClosesStalePosition(t *testing.T) {
+	mgr := NewManager()
+	mgr.config.MaxPositionAgeMins = 0.001 // ~60ms — expires almost immediately
+
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   1,
+		TakeProfitPct: 2,
+	}
+	mgr.OpenPosition(sig, 100, "ExpiryTest")
+
+	// Position should still be alive immediately after opening.
+	if len(mgr.GetOpenPositions()) != 1 {
+		t.Fatal("expected one open position after open")
+	}
+
+	// Wait for the position to age past MaxPositionAgeMins.
+	time.Sleep(100 * time.Millisecond)
+	mgr.CheckExpiredPositions(100)
+
+	if len(mgr.GetOpenPositions()) != 0 {
+		t.Fatal("expected position to be expired and removed")
+	}
+
+	select {
+	case event := <-mgr.CloseEvents:
+		if event.Reason != ReasonManual {
+			t.Fatalf("expected MANUAL close reason for expiry, got %s", event.Reason)
+		}
+	default:
+		t.Fatal("expected a close event for the expired position")
+	}
+}
+
+func TestCheckExpiredPositionsSkipsYoungPosition(t *testing.T) {
+	mgr := NewManager()
+	mgr.config.MaxPositionAgeMins = 60 // 60 minutes — position won't expire
+
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   1,
+		TakeProfitPct: 2,
+	}
+	mgr.OpenPosition(sig, 100, "YoungPosition")
+	mgr.CheckExpiredPositions(100)
+
+	if len(mgr.GetOpenPositions()) != 1 {
+		t.Fatal("expected young position to survive expiry check")
+	}
+}
+
+func TestCheckExpiredPositionsDisabledWhenZero(t *testing.T) {
+	mgr := NewManager()
+	mgr.config.MaxPositionAgeMins = 0 // disabled
+
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    1,
+		StopLossPct:   1,
+		TakeProfitPct: 2,
+	}
+	// Manually backdate position to simulate old age.
+	pos := mgr.OpenPosition(sig, 100, "OldButDisabled")
+	mgr.mu.Lock()
+	mgr.positions[pos.ID].OpenedAt = time.Now().Add(-120 * time.Minute)
+	mgr.mu.Unlock()
+
+	mgr.CheckExpiredPositions(100)
+
+	if len(mgr.GetOpenPositions()) != 1 {
+		t.Fatal("expected expiry to be skipped when MaxPositionAgeMins=0")
 	}
 }
