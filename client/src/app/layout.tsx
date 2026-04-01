@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Antigravity | Command Center',
-  description: 'Autonomous Bitcoin Trading Engine',
+  title: 'AntiGravity · BTC Scalper',
+  description: 'Autonomous Bitcoin Scalping Engine',
 }
 
 export default function RootLayout({

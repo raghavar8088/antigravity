@@ -23,7 +23,7 @@ const (
 	mildAvgPnLPenaltyThreshold   = -1.0
 
 	defaultExecutionWeight      = 1.0
-	coldStartExecutionWeight    = 0.90
+	coldStartExecutionWeight    = 1.10 // Boosted: give new strategies a head start (was 0.90)
 	minExecutionWeight          = 0.20
 	maxExecutionWeight          = 1.35
 	matureExecutionMinTrades    = 8
@@ -136,9 +136,9 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 
 	return &StrategyTracker{
 		stats:                stats,
-		maxConsecutiveLosses: 3,
-		cooldownDuration:     20 * time.Minute,
-		dailyLossLimit:       perStrategyCapital * 0.02,
+		maxConsecutiveLosses: 5,                  // Raised: need 5 losses in a row to disable (was 3)
+		cooldownDuration:     10 * time.Minute,   // Shorter cooldown: recover faster (was 20 min)
+		dailyLossLimit:       perStrategyCapital * 0.05, // Raised: 5% daily loss limit per strategy (was 2%)
 	}
 }
 

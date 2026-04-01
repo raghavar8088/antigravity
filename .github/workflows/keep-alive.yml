@@ -1,0 +1,25 @@
+name: Keep Engine Alive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"    # Every 5 minutes, 24/7 (GitHub Actions minimum)
+  workflow_dispatch:          # Also allow manual trigger from GitHub UI
+
+jobs:
+  ping:
+    name: Ping Render Health
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Ping /health endpoint
+        run: |
+          echo "Pinging Render engine..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://antigravity-x7he.onrender.com/health)
+          echo "HTTP Status: $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Engine is alive and running."
+          else
+            echo "❌ Engine returned HTTP $STATUS — may be down or starting up."
+            exit 1
+          fi

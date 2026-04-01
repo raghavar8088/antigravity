@@ -1,32 +1,140 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0e17; /* Deep space dark */
-  --foreground: #e2e8f0;
-  --accent-blue: #3b82f6;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
+  /* Groww-inspired dark palette */
+  --bg:            #0D0D18;
+  --surface:       #12121E;
+  --surface-2:     #1A1A2C;
+  --surface-3:     #222235;
+  --border:        rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Groww brand colors */
+  --green:         #00D09C;
+  --green-dim:     rgba(0, 208, 156, 0.12);
+  --green-glow:    rgba(0, 208, 156, 0.25);
+  --red:           #F44336;
+  --red-dim:       rgba(244, 67, 54, 0.12);
+  --blue:          #5367FF;
+  --amber:         #F59E0B;
+
+  /* Typography */
+  --text-primary:   #F0F0FF;
+  --text-secondary: #9CA3AF;
+  --text-muted:     #4B5563;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08), transparent 25%),
-                    radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.05), transparent 25%);
-  font-family: 'Inter', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ── Card styles ── */
+.groww-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* backward-compat alias used by existing components */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
 }
 
+/* ── Groww stat card ── */
+.stat-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: background 0.15s;
+}
+.stat-card:hover {
+  background: var(--surface-3);
+}
+.stat-card .stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.stat-card .stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* ── Groww pill badge ── */
+.pill-green {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(0, 208, 156, 0.2);
+}
+.pill-red {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid rgba(244, 67, 54, 0.2);
+}
+
+/* ── Groww tab bar ── */
+.groww-tab {
+  padding: 8px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border-radius: 999px;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+}
+.groww-tab:hover {
+  color: var(--text-primary);
+  background: var(--surface-3);
+}
+.groww-tab.active {
+  background: var(--green-dim);
+  color: var(--green);
+  border-color: rgba(0, 208, 156, 0.25);
+}
+
+/* ── Text gradient → Groww green ── */
 .text-gradient {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #00D09C 0%, #00A87E 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 4px; }

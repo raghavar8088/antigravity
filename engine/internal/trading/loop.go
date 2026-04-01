@@ -19,13 +19,13 @@ const (
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
-	minExecutableConfidence  = 0.85
-	minRewardToRiskRatio     = 1.35
-	minSignalTakeProfitPct   = 0.45
-	maxSignalStopLossPct     = 1.20
-	defaultSignalStopLossPct = 0.30
+	minExecutableConfidence  = 0.80 // Lowered: allow slightly less certain signals (was 0.85)
+	minRewardToRiskRatio     = 1.50 // Raised: require better reward vs risk (was 1.35)
+	minSignalTakeProfitPct   = 0.55 // Raised: ensure TP is worth chasing after slippage (was 0.45)
+	maxSignalStopLossPct     = 0.80 // Lowered: tighter max SL, keep losses small (was 1.20)
+	defaultSignalStopLossPct = 0.20 // Lowered: tighter default SL (was 0.30)
 
-	minExecutionWeightToTrade = 0.45
+	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
 	marketHistoryMaxSamples   = 320
 
 	marketRegimeUnknown  = "UNKNOWN"

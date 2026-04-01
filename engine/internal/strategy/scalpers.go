@@ -30,8 +30,8 @@ const defaultQty = 0.01 // Conservative BTC position size for scalping
 
 // Default SL/TP for scalping: tight stops suited to BTC's short-term volatility
 // BTC moves ~0.1-0.3% per minute → 0.15% SL and 0.25% TP get hit within minutes
-const defaultStopLossPct = 0.18   // 0.18% stop-loss
-const defaultTakeProfitPct = 0.65 // 0.65% take-profit
+const defaultStopLossPct = 0.18   // 0.18% stop-loss (tight, keep losses small)
+const defaultTakeProfitPct = 0.90 // 0.90% take-profit (raised from 0.65 — bigger wins per trade)
 
 func buySignal(symbol string) []Signal {
 	return []Signal{{

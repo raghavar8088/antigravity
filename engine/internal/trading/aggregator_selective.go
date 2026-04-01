@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	minSelectiveScore  = 2.0
-	minDominanceRatio  = 1.15
-	minDominanceLead   = 0.35
-	maxApprovedSignals = 1
+	minSelectiveScore  = 1.5  // Lowered: allow more quality signals through
+	minDominanceRatio  = 1.05 // Lowered: less strict side consensus required
+	minDominanceLead   = 0.15 // Lowered: allow closer buy/sell battles to trade
+	maxApprovedSignals = 3    // Increased: allow up to 3 trades per batch (was 1)
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and

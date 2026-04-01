@@ -219,9 +219,9 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <div className="glass-panel p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</div>
-      <div className={`mt-2 text-2xl font-mono font-bold ${accent}`}>{value}</div>
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
+      <div className={`stat-value ${accent}`}>{value}</div>
     </div>
   );
 }
@@ -491,7 +491,7 @@ export default function TradingDashboard() {
   };
 
   return (
-    <main className="min-h-screen max-w-[1600px] mx-auto space-y-6 p-6">
+    <main className="min-h-screen max-w-[1600px] mx-auto space-y-5 p-5">
       <DashboardHeader
         online={engineOnline}
         balance={balance}
@@ -518,43 +518,43 @@ export default function TradingDashboard() {
           />
         </div>
         <SummaryCard label="Market Sentiment" value={marketSentiment.label} accent={marketSentiment.colorClass} />
-        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-green-400" : "text-red-400"} />
-        <SummaryCard label="Open Positions" value={`${livePositions.length}`} accent="text-sky-300" />
-        <SummaryCard label="Net Exposure" value={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC`} accent="text-violet-300" />
+        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-emerald-400" : "text-red-400"} />
+        <SummaryCard label="Open Positions" value={`${livePositions.length}`} accent="text-white" />
+        <SummaryCard label="Net Exposure" value={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC`} accent="text-white" />
       </div>
 
-      <div className="glass-panel p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="glass-panel px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+        {/* Controls */}
+        <div className="flex flex-wrap items-center gap-2">
           {(["binance", "bybit"] as const).map((exchange) => (
             <button
               key={exchange}
               onClick={() => market.setExchange(exchange)}
-              className={`rounded-xl border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
-                market.exchange === exchange
-                  ? "border-sky-400/40 bg-sky-500/15 text-sky-200"
-                  : "border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-              }`}
+              style={market.exchange === exchange
+                ? { background: "var(--green-dim)", color: "var(--green)", border: "1px solid rgba(0,208,156,0.25)", borderRadius: 8, padding: "5px 14px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", cursor: "pointer" }
+                : { background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 14px", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", cursor: "pointer" }
+              }
             >
               {exchange === "binance" ? "Binance" : "Bybit"}
             </button>
           ))}
           <button
             onClick={() => setIsSoundOn((current) => !current)}
-            className={`rounded-xl border px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
-              isSoundOn
-                ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
-                : "border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-            }`}
+            style={isSoundOn
+              ? { background: "rgba(83,103,255,0.12)", color: "#818CF8", border: "1px solid rgba(83,103,255,0.25)", borderRadius: 8, padding: "5px 14px", fontSize: 11, fontWeight: 700, cursor: "pointer" }
+              : { background: "var(--surface-2)", color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 14px", fontSize: 11, fontWeight: 600, cursor: "pointer" }
+            }
           >
-            {isSoundOn ? "Sound On" : "Sound Off"}
+            {isSoundOn ? "🔊 Sound" : "🔇 Muted"}
           </button>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-2 text-xs font-mono text-zinc-400">
-            Feed {market.connectionState}
-            {market.connectionError ? ` | ${market.connectionError}` : ""}
+          <div style={{ color: "var(--text-muted)", fontSize: 11, padding: "5px 12px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8 }}>
+            {market.connectionState === "live" ? "● Live" : `⚠ ${market.connectionState}`}
+            {market.connectionError ? ` · ${market.connectionError}` : ""}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        {/* Groww-style tab bar */}
+        <div className="flex items-center gap-1" style={{ background: "var(--surface-2)", borderRadius: 999, padding: 4, border: "1px solid var(--border)" }}>
           {[
             { key: "trade", label: "Trade" },
             { key: "stats", label: "Stats" },
@@ -564,11 +564,7 @@ export default function TradingDashboard() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as "trade" | "stats" | "history" | "feed")}
-              className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-all ${
-                activeTab === tab.key
-                  ? "bg-white text-zinc-950"
-                  : "border border-zinc-800 bg-zinc-950/70 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-              }`}
+              className={`groww-tab${activeTab === tab.key ? " active" : ""}`}
             >
               {tab.label}
             </button>
@@ -588,9 +584,9 @@ export default function TradingDashboard() {
           accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
         />
         <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
-        <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
+        <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-emerald-400" : "text-red-400"} />
         <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
-        <SummaryCard label="Ticks / Candles" value={`${liveStats?.ticksProcessed ?? 0} / ${liveStats?.candlesClosed ?? 0}`} accent="text-sky-300" />
+        <SummaryCard label="Ticks / Candles" value={`${liveStats?.ticksProcessed ?? 0} / ${liveStats?.candlesClosed ?? 0}`} accent="text-white" />
       </div>
 
       {activeTab === "trade" && (
@@ -614,11 +610,11 @@ export default function TradingDashboard() {
               />
             </div>
 
-            <div className="glass-panel p-6">
-              <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
-                <span className="rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-bold tracking-widest text-green-400">LIVE</span>
+            <div className="glass-panel p-5">
+              <h2 className="mb-4 flex items-center gap-3 text-base font-bold text-white">
+                <span className="pill-green">LIVE</span>
                 Running Positions
-                <span className="text-sm font-mono text-gray-500">({livePositions.length} active)</span>
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }} className="font-mono">({livePositions.length} active)</span>
               </h2>
               <RunningTrades currentPrice={price} trades={runningTrades} />
             </div>

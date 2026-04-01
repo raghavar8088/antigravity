@@ -25,119 +25,154 @@ export default function DashboardHeader({
     successMessage: string,
     resetAfter = false,
   ) => {
-    if (!confirm(confirmation)) {
-      return;
-    }
-
+    if (!confirm(confirmation)) return;
     setActiveAction(endpoint);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Reset failed");
+      const res = await fetch(`${API_URL}${endpoint}`, { method: "POST" });
+      if (!res.ok) throw new Error("Action failed");
       onAdminEvent?.(successMessage, "admin");
-      if (resetAfter) {
-        onResetSuccess?.();
-      }
-    } catch (error) {
-      console.error(error);
+      if (resetAfter) onResetSuccess?.();
+    } catch {
       onAdminEvent?.("Admin action failed. Check engine connectivity.", "admin");
     } finally {
       setActiveAction(null);
     }
   };
 
-  const handleReset = async () => {
-    await postAdminAction(
-      "/api/admin/reset",
-      "Reset the paper trading account to its initial state? This clears positions and history.",
-      "Paper account reset to a clean $100,000 state.",
-      true,
-    );
-  };
-
-  const handleKillSwitch = async () => {
-    await postAdminAction(
-      "/api/admin/kill",
-      "Trigger the kill switch? This halts the engine and attempts to flatten exposure.",
-      "Kill switch triggered. Engine halt requested.",
-    );
-  };
-
-  const handleCloseAll = async () => {
-    await postAdminAction(
-      "/api/admin/close-all",
-      "Close all open paper positions at the current market price?",
-      "All open paper positions were closed.",
-      true,
-    );
-  };
+  const handleReset = () =>
+    postAdminAction("/api/admin/reset", "Reset paper account to $100,000?", "Account reset to $100,000.", true);
+  const handleKillSwitch = () =>
+    postAdminAction("/api/admin/kill", "Trigger kill switch? Engine will halt.", "Kill switch triggered.");
+  const handleCloseAll = () =>
+    postAdminAction("/api/admin/close-all", "Close all open positions at market price?", "All positions closed.", true);
 
   const isBusy = activeAction !== null;
+  const isPositive = dailyPnL >= 0;
+  const invested = balance - dailyPnL;
+  const pnlPct = invested > 0 ? (dailyPnL / invested) * 100 : 0;
 
   return (
-    <header className="glass-panel p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          ANTI<span className="text-gradient">GRAVITY</span>
-        </h1>
-        <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
-          {online ? (
-            <>
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
-              ENGINE ONLINE
-            </>
-          ) : (
-            <>
-              <span className="w-2 h-2 bg-red-500 rounded-full shadow-[0_0_8px_#ef4444]"></span>
-              ENGINE OFFLINE
-            </>
-          )}
-          <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono ml-2">BTC/USDT ONLY</span>
-        </p>
-      </div>
+    <header
+      style={{
+        background: "var(--surface)",
+        borderBottom: "1px solid var(--border)",
+      }}
+      className="px-6 py-4"
+    >
+      <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
 
-      <div className="flex flex-col md:flex-row gap-4 md:gap-8 md:items-center w-full xl:w-auto">
-        <div className="text-right">
-          <p className="text-sm text-gray-400 font-semibold uppercase tracking-wider">Account Balance</p>
-          <p className="text-2xl font-bold font-mono text-white">${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+        {/* ── Logo + status ── */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            style={{ background: "var(--green-dim)", border: "1px solid rgba(0,208,156,0.25)" }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          >
+            <span style={{ color: "var(--green)" }} className="font-black text-sm tracking-tight">AG</span>
+          </div>
+          <div>
+            <div className="font-extrabold text-white text-base tracking-tight leading-none">
+              ANTI<span className="text-gradient">GRAVITY</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${online ? "animate-pulse" : ""}`}
+                style={{ background: online ? "var(--green)" : "var(--red)" }}
+              />
+              <span style={{ color: "var(--text-muted)" }} className="text-[10px] uppercase tracking-widest">
+                {online ? "Engine Live" : "Offline"} · BTC/USDT
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="text-right">
-          <p className="text-sm text-gray-400 font-semibold uppercase tracking-wider">Daily PnL</p>
-          <p className={`text-2xl font-bold font-mono ${dailyPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
-            {dailyPnL >= 0 ? "+" : ""}${dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-          </p>
+        {/* ── Groww-style portfolio value ── */}
+        <div className="flex flex-col items-center text-center">
+          <div style={{ color: "var(--text-muted)" }} className="text-[10px] uppercase tracking-widest mb-1 font-semibold">
+            Paper Portfolio
+          </div>
+          <div className="text-3xl font-extrabold text-white tabular-nums leading-none">
+            ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className={isPositive ? "pill-green" : "pill-red"}>
+              <span>{isPositive ? "▲" : "▼"}</span>
+              <span>
+                {isPositive ? "+" : ""}
+                {dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="opacity-60">
+                ({isPositive ? "+" : ""}{pnlPct.toFixed(2)}%)
+              </span>
+            </span>
+            <span style={{ color: "var(--text-muted)", fontSize: 10 }} className="uppercase tracking-widest">today</span>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 xl:ml-3">
+        {/* ── Admin actions ── */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {openPositions > 0 && (
             <button
               onClick={handleCloseAll}
               disabled={isBusy}
-              className="px-5 py-3 rounded-xl bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500 hover:text-zinc-950 transition-all font-bold uppercase tracking-widest text-sm outline-none focus:ring-4 focus:ring-amber-500/30 disabled:opacity-60"
+              style={{
+                border: "1px solid rgba(245,158,11,0.35)",
+                color: "#F59E0B",
+                borderRadius: 10,
+                padding: "7px 14px",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                background: "rgba(245,158,11,0.07)",
+                cursor: isBusy ? "not-allowed" : "pointer",
+                opacity: isBusy ? 0.6 : 1,
+                transition: "background 0.15s",
+              }}
             >
-              {activeAction === "/api/admin/close-all" ? "CLOSING..." : `CLOSE ALL (${openPositions})`}
+              {activeAction === "/api/admin/close-all" ? "Closing…" : `Close All (${openPositions})`}
             </button>
           )}
           <button
             onClick={handleKillSwitch}
             disabled={isBusy}
-            className="px-5 py-3 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white transition-all font-bold uppercase tracking-widest text-sm outline-none focus:ring-4 focus:ring-red-500/40 disabled:opacity-60 shadow-[0_0_15px_rgba(239,68,68,0.18)]"
+            style={{
+              border: "1px solid rgba(244,67,54,0.35)",
+              color: "var(--red)",
+              borderRadius: 10,
+              padding: "7px 14px",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              background: "var(--red-dim)",
+              cursor: isBusy ? "not-allowed" : "pointer",
+              opacity: isBusy ? 0.6 : 1,
+              transition: "background 0.15s",
+            }}
           >
-            {activeAction === "/api/admin/kill" ? "KILLING..." : "KILL SWITCH"}
+            {activeAction === "/api/admin/kill" ? "Killing…" : "Kill Switch"}
           </button>
           <button
             onClick={handleReset}
             disabled={isBusy}
-            className="px-5 py-3 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500 hover:text-white transition-all font-bold uppercase tracking-widest text-sm outline-none focus:ring-4 focus:ring-blue-500/40 disabled:opacity-60 shadow-[0_0_15px_rgba(59,130,246,0.18)]"
+            style={{
+              border: "1px solid rgba(0,208,156,0.3)",
+              color: "var(--green)",
+              borderRadius: 10,
+              padding: "7px 14px",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              background: "var(--green-dim)",
+              cursor: isBusy ? "not-allowed" : "pointer",
+              opacity: isBusy ? 0.6 : 1,
+              transition: "background 0.15s",
+            }}
           >
-            {activeAction === "/api/admin/reset" ? "RESETTING..." : "RESET ACCOUNT"}
+            {activeAction === "/api/admin/reset" ? "Resetting…" : "Reset Account"}
           </button>
         </div>
+
       </div>
     </header>
   );
 }
-

@@ -79,13 +79,13 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.35,  // Activate trailing only after profit clears fee drag
+			TrailingStopPct:    0.55,  // Trail activates only after 0.55% profit (near TP), locks in gains
 			BreakEvenThreshold: 0.00,  // Break-even exits disabled
-			PartialTPRatio:     0.5,   // Close 50% at TP1
-			MinTakeProfitPct:   0.35,  // Keep TP above round-trip fee noise
-			MaxPerStrategy:     2,     // Max 2 positions per strategy
+			PartialTPRatio:     1.0,   // Close FULL position at TP (no partial — removes half-open reversal risk)
+			MinTakeProfitPct:   0.45,  // Keep TP above round-trip fee noise
+			MaxPerStrategy:     3,     // Max 3 positions per strategy (was 2)
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 45,    // Auto-expire stale scalps after 45 minutes
+			MaxPositionAgeMins: 120,   // Auto-expire after 120 minutes (was 45 — gave slow winners time)
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
@@ -204,18 +204,14 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 		}
 	}
 
-	if !pos.PartialClosed && price >= pos.TakeProfit {
-		partialSize := pos.Size * m.config.PartialTPRatio
-		partialPnL := (price - pos.EntryPrice) * partialSize
-		m.emitPartialTakeProfit(pos, partialSize, price, partialPnL)
-		pos.Size -= partialSize
-		pos.PartialClosed = true
-		newTPDist := pos.TakeProfitPct * 2
-		pos.TakeProfit = pos.EntryPrice * (1 + newTPDist/100)
-		pos.TrailingActive = true
-
-		log.Printf("[PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC -> TP2: $%.2f",
-			id, partialSize, price, partialPnL, pos.Size, pos.TakeProfit)
+	// Full close at take profit — no partial TP to avoid half-open reversal risk
+	if price >= pos.TakeProfit {
+		pnl := m.calculatePnL(pos, price)
+		pos.Status = "TP_HIT"
+		log.Printf("[TAKE PROFIT] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
+			id, pos.EntryPrice, price, pnl)
+		m.emitClose(pos, ReasonTakeProfit, price, pnl)
+		delete(m.positions, id)
 		return
 	}
 
@@ -229,16 +225,6 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
 			reason, id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, reason, price, pnl)
-		delete(m.positions, id)
-		return
-	}
-
-	if pos.PartialClosed && price >= pos.TakeProfit {
-		pnl := m.calculatePnL(pos, price)
-		pos.Status = "TP_HIT"
-		log.Printf("[FULL TP] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
-			id, pos.EntryPrice, price, pnl)
-		m.emitClose(pos, ReasonTakeProfit, price, pnl)
 		delete(m.positions, id)
 	}
 }
@@ -262,18 +248,14 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 		}
 	}
 
-	if !pos.PartialClosed && price <= pos.TakeProfit {
-		partialSize := pos.Size * m.config.PartialTPRatio
-		partialPnL := (pos.EntryPrice - price) * partialSize
-		m.emitPartialTakeProfit(pos, partialSize, price, partialPnL)
-		pos.Size -= partialSize
-		pos.PartialClosed = true
-		newTPDist := pos.TakeProfitPct * 2
-		pos.TakeProfit = pos.EntryPrice * (1 - newTPDist/100)
-		pos.TrailingActive = true
-
-		log.Printf("[PARTIAL TP] %s | Closed %.4f BTC @ $%.2f | PnL: +$%.4f | Remaining: %.4f BTC",
-			id, partialSize, price, partialPnL, pos.Size)
+	// Full close at take profit — no partial TP to avoid half-open reversal risk
+	if price <= pos.TakeProfit {
+		pnl := m.calculatePnL(pos, price)
+		pos.Status = "TP_HIT"
+		log.Printf("[TAKE PROFIT] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
+			id, pos.EntryPrice, price, pnl)
+		m.emitClose(pos, ReasonTakeProfit, price, pnl)
+		delete(m.positions, id)
 		return
 	}
 
@@ -287,16 +269,6 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
 			reason, id, pos.EntryPrice, price, pnl)
 		m.emitClose(pos, reason, price, pnl)
-		delete(m.positions, id)
-		return
-	}
-
-	if pos.PartialClosed && price <= pos.TakeProfit {
-		pnl := m.calculatePnL(pos, price)
-		pos.Status = "TP_HIT"
-		log.Printf("[FULL TP] %s | Entry: $%.2f -> Exit: $%.2f | PnL: +$%.4f",
-			id, pos.EntryPrice, price, pnl)
-		m.emitClose(pos, ReasonTakeProfit, price, pnl)
 		delete(m.positions, id)
 	}
 }
