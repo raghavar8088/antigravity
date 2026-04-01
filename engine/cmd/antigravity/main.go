@@ -195,14 +195,19 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 10b. AI MULTI-AGENT SYSTEM — Claude-powered trading
 	// ═══════════════════════════════════════════════════
-	claudeClient := ai.NewClaudeClient()
+	openAIClient := ai.NewOpenAIClient()
+	geminiClient := ai.NewGeminiClient()
 	var aiOrchestrator *ai.MultiAgentOrchestrator
-	if claudeClient.IsAvailable() {
-		aiOrchestrator = ai.NewMultiAgentOrchestrator(claudeClient)
+	if openAIClient.IsAvailable() {
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
-		log.Println("[AI] ✅ Claude multi-agent system initialized (Bull + Bear + Risk agents)")
+		if geminiClient != nil && geminiClient.IsAvailable() {
+			log.Println("[AI] ✅ 4-agent system initialized: OpenAI Bull + Bear + Gemini Macro + OpenAI Risk")
+		} else {
+			log.Println("[AI] ✅ 3-agent system initialized (Bull + Bear + Risk) | Add GEMINI_API_KEY to enable Macro Agent")
+		}
 	} else {
-		log.Println("[AI] ⚠️  ANTHROPIC_API_KEY not set — running rules-only mode (set key to enable Claude trading)")
+		log.Println("[AI] ⚠️  OPENAI_API_KEY not set — running rules-only mode (set key to enable GPT trading)")
 	}
 
 	// ═══════════════════════════════════════════════════
@@ -334,18 +339,20 @@ func main() {
 		}
 		if aiOrchestrator == nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"enabled":  false,
-				"message":  "AI agents disabled — set ANTHROPIC_API_KEY to enable Claude trading",
-				"insights": []interface{}{},
+				"enabled":       false,
+				"geminiEnabled": false,
+				"message":       "AI agents disabled — set OPENAI_API_KEY to enable GPT trading",
+				"insights":      []interface{}{},
 			})
 			return
 		}
 		latest := aiOrchestrator.GetInsights().Latest()
 		recent := aiOrchestrator.GetInsights().GetRecent(20)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"enabled": true,
-			"latest":  latest,
-			"recent":  recent,
+			"enabled":       true,
+			"geminiEnabled": aiOrchestrator.GeminiEnabled(),
+			"latest":        latest,
+			"recent":        recent,
 		})
 	})
 

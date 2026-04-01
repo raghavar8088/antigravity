@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 export type AgentSignal = {
-  role: "BULL" | "BEAR";
+  role: "BULL" | "BEAR" | "MACRO";
   shouldTrade: boolean;
   confidence: number;
   thesis: string;
@@ -28,6 +28,7 @@ export type AIDecision = {
   price: number;
   bullSignal: AgentSignal;
   bearSignal: AgentSignal;
+  macroSignal: AgentSignal; // Gemini Flash top-down analyst
   riskVerdict: RiskVerdict;
   finalAction: "BUY" | "SELL" | "HOLD";
   finalReasoning: string;
@@ -37,6 +38,7 @@ export type AIDecision = {
 
 type AIInsightsState = {
   enabled: boolean;
+  geminiEnabled: boolean; // true when GEMINI_API_KEY is set
   message?: string;
   latest: AIDecision | null;
   recent: AIDecision[];
@@ -48,6 +50,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 export default function useAIInsights(refreshKey = 0): AIInsightsState {
   const [state, setState] = useState<AIInsightsState>({
     enabled: false,
+    geminiEnabled: false,
     latest: null,
     recent: [],
     loading: true,
@@ -64,6 +67,7 @@ export default function useAIInsights(refreshKey = 0): AIInsightsState {
         if (!cancelled) {
           setState({
             enabled: data.enabled ?? false,
+            geminiEnabled: data.geminiEnabled ?? false,
             message: data.message,
             latest: data.latest ?? null,
             recent: data.recent ?? [],

@@ -78,12 +78,29 @@ function ActionPill({ action }: { action: string }) {
   );
 }
 
-function DecisionCard({ decision, compact = false }: { decision: AIDecision; compact?: boolean }) {
+// Color palette per agent
+const AGENT_COLORS = {
+  bull:  "var(--green)",
+  bear:  "var(--red)",
+  // Gemini blue
+  macro: "#7C9FFF",
+};
+
+function DecisionCard({
+  decision,
+  compact = false,
+  geminiEnabled,
+}: {
+  decision: AIDecision;
+  compact?: boolean;
+  geminiEnabled?: boolean;
+}) {
   const ts = new Date(decision.timestamp);
   const timeStr = ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const bull = decision.bullSignal;
-  const bear = decision.bearSignal;
-  const risk = decision.riskVerdict;
+  const bull  = decision.bullSignal;
+  const bear  = decision.bearSignal;
+  const macro = decision.macroSignal;
+  const risk  = decision.riskVerdict;
 
   return (
     <div
@@ -117,14 +134,21 @@ function DecisionCard({ decision, compact = false }: { decision: AIDecision; com
 
       {!compact && (
         <>
-          {/* Agent signals */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {/* ── 3-column agent grid ── */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: geminiEnabled ? "1fr 1fr 1fr" : "1fr 1fr",
+              gap: 8,
+            }}
+          >
             {/* Bull */}
             <div style={{ background: "var(--surface-3)", borderRadius: 8, padding: "10px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <AgentBadge label="BULL" active={bull.shouldTrade} color="var(--green)" />
+                <AgentBadge label="BULL" active={bull.shouldTrade} color={AGENT_COLORS.bull} />
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>GPT-4o</span>
               </div>
-              <ConfidenceBar value={bull.confidence || 0} color="var(--green)" />
+              <ConfidenceBar value={bull.confidence || 0} color={AGENT_COLORS.bull} />
               {bull.thesis && (
                 <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
                   {bull.thesis}
@@ -138,9 +162,10 @@ function DecisionCard({ decision, compact = false }: { decision: AIDecision; com
             {/* Bear */}
             <div style={{ background: "var(--surface-3)", borderRadius: 8, padding: "10px 12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <AgentBadge label="BEAR" active={bear.shouldTrade} color="var(--red)" />
+                <AgentBadge label="BEAR" active={bear.shouldTrade} color={AGENT_COLORS.bear} />
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>GPT-4o</span>
               </div>
-              <ConfidenceBar value={bear.confidence || 0} color="var(--red)" />
+              <ConfidenceBar value={bear.confidence || 0} color={AGENT_COLORS.bear} />
               {bear.thesis && (
                 <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
                   {bear.thesis}
@@ -150,6 +175,25 @@ function DecisionCard({ decision, compact = false }: { decision: AIDecision; com
                 <p style={{ fontSize: 10, color: "var(--red)", marginTop: 4 }}>⚠ {bear.error}</p>
               )}
             </div>
+
+            {/* Macro */}
+            {geminiEnabled && (
+              <div style={{ background: "var(--surface-3)", borderRadius: 8, padding: "10px 12px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <AgentBadge label="MACRO" active={macro?.shouldTrade ?? false} color={AGENT_COLORS.macro} />
+                  <span style={{ fontSize: 9, color: AGENT_COLORS.macro, fontWeight: 600 }}>Gemini</span>
+                </div>
+                <ConfidenceBar value={macro?.confidence || 0} color={AGENT_COLORS.macro} />
+                {macro?.thesis && (
+                  <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
+                    {macro.thesis}
+                  </p>
+                )}
+                {macro?.error && !macro.thesis?.includes("disabled") && (
+                  <p style={{ fontSize: 10, color: "var(--red)", marginTop: 4 }}>⚠ {macro.error}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Risk verdict */}
@@ -166,9 +210,12 @@ function DecisionCard({ decision, compact = false }: { decision: AIDecision; com
           >
             <span style={{ fontSize: 13 }}>{risk.approved ? "✅" : "⛔"}</span>
             <div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: risk.approved ? "var(--green)" : "var(--red)", letterSpacing: "0.1em" }}>
-                RISK AGENT
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: risk.approved ? "var(--green)" : "var(--red)", letterSpacing: "0.1em" }}>
+                  RISK AGENT
+                </span>
+                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>GPT-4o</span>
+              </div>
               <p style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, lineHeight: 1.5 }}>
                 {risk.vetoReason || risk.reasoning}
               </p>
@@ -190,11 +237,13 @@ function DecisionCard({ decision, compact = false }: { decision: AIDecision; com
 
 export default function AIInsightPanel({
   enabled,
+  geminiEnabled,
   message,
   latest,
   recent,
 }: {
   enabled: boolean;
+  geminiEnabled: boolean;
   message?: string;
   latest: AIDecision | null;
   recent: AIDecision[];
@@ -205,7 +254,7 @@ export default function AIInsightPanel({
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <span style={{ fontSize: 16 }}>🤖</span>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
-            Claude AI Agents
+            GPT AI Agents
           </h2>
           <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", background: "var(--surface-3)", padding: "2px 8px", borderRadius: 999 }}>
             DISABLED
@@ -220,46 +269,66 @@ export default function AIInsightPanel({
           }}
         >
           <p style={{ fontSize: 11, color: "#F59E0B", lineHeight: 1.6 }}>
-            {message || "Set ANTHROPIC_API_KEY in Render environment to enable Claude multi-agent trading."}
+            {message || "Set OPENAI_API_KEY in Render environment to enable GPT multi-agent trading."}
           </p>
           <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
-            When enabled: Bull Agent + Bear Agent debate every 5m candle. Risk Agent arbitrates using the Trading Constitution. Claude executes approved trades alongside the rule-based strategies.
+            When enabled: Bull + Bear (GPT-4o-mini) debate every 5m candle. GPT-4o Risk Agent arbitrates using the Trading Constitution. Gemini Flash provides macro overlay.
           </p>
         </div>
       </div>
     );
   }
 
+  const agentLabel = geminiEnabled
+    ? "Bull · Bear · Macro (Gemini) · Risk"
+    : "Bull · Bear · Risk · every 5m";
+
   return (
     <div className="glass-panel p-5" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Panel header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span style={{ fontSize: 16 }}>🤖</span>
         <h2 style={{ fontSize: 13, fontWeight: 700, color: "white", letterSpacing: "0.05em" }}>
-          Claude AI Agents
+          GPT Agent Council
         </h2>
         <span
           style={{
             marginLeft: 4,
             fontSize: 10,
             fontWeight: 700,
-            color: "var(--green)",
-            background: "var(--green-dim)",
+            color: "#10A37F",
+            background: "rgba(16,163,127,0.1)",
             padding: "2px 8px",
             borderRadius: 999,
-            border: "1px solid rgba(0,208,156,0.25)",
+            border: "1px solid rgba(16,163,127,0.25)",
           }}
         >
-          ● LIVE
+          ● GPT-4o LIVE
         </span>
+        {/* Gemini badge */}
+        {geminiEnabled && (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#7C9FFF",
+              background: "rgba(124,159,255,0.1)",
+              padding: "2px 8px",
+              borderRadius: 999,
+              border: "1px solid rgba(124,159,255,0.25)",
+            }}
+          >
+            ✦ Gemini Macro
+          </span>
+        )}
         <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)" }}>
-          Bull · Bear · Risk · every 5m
+          {agentLabel}
         </span>
       </div>
 
       {/* Latest decision — expanded */}
       {latest ? (
-        <DecisionCard decision={latest} />
+        <DecisionCard decision={latest} geminiEnabled={geminiEnabled} />
       ) : (
         <div
           style={{
@@ -283,7 +352,7 @@ export default function AIInsightPanel({
             Recent Decisions
           </div>
           {recent.slice(1, 6).map((d) => (
-            <DecisionCard key={d.id} decision={d} compact />
+            <DecisionCard key={d.id} decision={d} compact geminiEnabled={geminiEnabled} />
           ))}
         </div>
       )}

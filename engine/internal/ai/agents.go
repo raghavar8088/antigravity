@@ -44,6 +44,24 @@ JSON schema:
   "take_profit_pct": number (0.30 to 2.00)
 }`
 
+const macroSystemPrompt = `You are the MACRO ANALYST AGENT for AntiGravity, an autonomous BTC scalping engine.
+Your role: Provide an independent top-down macro and market-structure perspective.
+You do NOT advocate for a specific trade direction — you assess the OVERALL CONDITIONS.
+Consider: trend regime, momentum exhaustion, risk-on/risk-off environment, and whether the
+current setup is favorable for short-term scalping at all.
+
+CRITICAL: Respond ONLY with a valid JSON object. No markdown, no explanation outside the JSON.
+JSON schema:
+{
+  "should_trade": boolean,
+  "confidence": number (0.0 to 1.0, how favorable is the macro backdrop for ANY scalp?),
+  "thesis": "string — 2-3 sentences top-down assessment of macro conditions",
+  "bias": "BULLISH" or "BEARISH" or "NEUTRAL",
+  "size_btc": number (0.001 to 0.05, suggested max size given macro risk),
+  "stop_loss_pct": number (0.10 to 0.80),
+  "take_profit_pct": number (0.30 to 2.00)
+}`
+
 const riskSystemPrompt = `You are the RISK AGENT for AntiGravity, an autonomous BTC scalping engine.
 Your role: Review proposed trades against the Trading Constitution. Protect capital above all else.
 You have final veto power. When in doubt, choose HOLD.
@@ -59,7 +77,7 @@ JSON schema:
 }`
 
 // ─────────────────────────────────────────────────────────────────
-// PROMPT BUILDER — formats MarketContext into Claude-readable text
+// PROMPT BUILDER — formats MarketContext into LLM-readable text
 // ─────────────────────────────────────────────────────────────────
 
 func buildMarketPrompt(ctx MarketContext) string {
@@ -150,7 +168,7 @@ func rsiLabel(rsi float64) string {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// AGENT IMPLEMENTATIONS
+// AGENT IMPLEMENTATIONS (OpenAI GPT-4o)
 // ─────────────────────────────────────────────────────────────────
 
 type bullAgentResponse struct {
@@ -171,6 +189,16 @@ type bearAgentResponse struct {
 	TakeProfitPct float64 `json:"take_profit_pct"`
 }
 
+type macroAgentResponse struct {
+	ShouldTrade   bool    `json:"should_trade"`
+	Confidence    float64 `json:"confidence"`
+	Thesis        string  `json:"thesis"`
+	Bias          string  `json:"bias"` // "BULLISH", "BEARISH", "NEUTRAL"
+	SizeBTC       float64 `json:"size_btc"`
+	StopLossPct   float64 `json:"stop_loss_pct"`
+	TakeProfitPct float64 `json:"take_profit_pct"`
+}
+
 type riskAgentResponse struct {
 	Approved       bool    `json:"approved"`
 	ApprovedAction string  `json:"approved_action"`
@@ -179,7 +207,7 @@ type riskAgentResponse struct {
 	AdjustedSize   float64 `json:"adjusted_size"`
 }
 
-func runBullAgent(ctx context.Context, client *ClaudeClient, market MarketContext) AgentSignal {
+func runBullAgent(ctx context.Context, client *OpenAIClient, market MarketContext) AgentSignal {
 	prompt := buildMarketPrompt(market) + "\n\nShould we open a LONG (BUY) position right now? Be rigorous."
 	raw, err := client.ChatForSignal(ctx, bullSystemPrompt, prompt)
 	if err != nil {
@@ -203,7 +231,7 @@ func runBullAgent(ctx context.Context, client *ClaudeClient, market MarketContex
 	}
 }
 
-func runBearAgent(ctx context.Context, client *ClaudeClient, market MarketContext) AgentSignal {
+func runBearAgent(ctx context.Context, client *OpenAIClient, market MarketContext) AgentSignal {
 	prompt := buildMarketPrompt(market) + "\n\nShould we open a SHORT (SELL) position right now? Be rigorous."
 	raw, err := client.ChatForSignal(ctx, bearSystemPrompt, prompt)
 	if err != nil {
@@ -227,9 +255,54 @@ func runBearAgent(ctx context.Context, client *ClaudeClient, market MarketContex
 	}
 }
 
-func runRiskAgent(ctx context.Context, client *ClaudeClient, bull, bear AgentSignal, market MarketContext) RiskVerdict {
+func runMacroAgent(ctx context.Context, gemini *GeminiClient, market MarketContext) AgentSignal {
+	if !gemini.IsAvailable() {
+		return AgentSignal{
+			Role:        RoleMacro,
+			ShouldTrade: false,
+			Confidence:  0,
+			Thesis:      "Gemini Macro Agent disabled (GEMINI_API_KEY not set)",
+			Error:       "GEMINI_API_KEY not configured",
+		}
+	}
+
+	prompt := buildMarketPrompt(market) + "\n\nProvide your top-down macro assessment. Is the backdrop favorable for scalping right now?"
+	raw, err := gemini.ChatForMacro(ctx, macroSystemPrompt, prompt)
+	if err != nil {
+		return AgentSignal{Role: RoleMacro, Error: err.Error()}
+	}
+
+	raw = extractJSON(raw)
+	var resp macroAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return AgentSignal{Role: RoleMacro, Error: fmt.Sprintf("parse error: %v | raw: %s", err, raw)}
+	}
+
+	thesis := resp.Thesis
+	if resp.Bias != "" {
+		thesis = fmt.Sprintf("[%s] %s", resp.Bias, resp.Thesis)
+	}
+
+	return AgentSignal{
+		Role:          RoleMacro,
+		ShouldTrade:   resp.ShouldTrade,
+		Confidence:    resp.Confidence,
+		Thesis:        thesis,
+		SizeBTC:       resp.SizeBTC,
+		StopLossPct:   resp.StopLossPct,
+		TakeProfitPct: resp.TakeProfitPct,
+	}
+}
+
+func runRiskAgent(ctx context.Context, client *OpenAIClient, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
 	bullJSON, _ := json.MarshalIndent(bull, "", "  ")
 	bearJSON, _ := json.MarshalIndent(bear, "", "  ")
+	macroJSON, _ := json.MarshalIndent(macro, "", "  ")
+
+	macroSection := ""
+	if macro.Error == "" {
+		macroSection = fmt.Sprintf("\nMACRO ANALYST (Gemini) ASSESSMENT:\n%s\n", string(macroJSON))
+	}
 
 	prompt := fmt.Sprintf(`%s
 
@@ -241,12 +314,15 @@ BULL AGENT PROPOSAL:
 
 BEAR AGENT PROPOSAL:
 %s
-
-Review both proposals. Approve the stronger one if it passes the constitution. Veto both if neither qualifies.`,
+%s
+Review all proposals. The Macro Agent gives the overall backdrop — use it to increase or decrease
+conviction. Approve the strongest directional signal if it passes the constitution. Veto all if
+neither qualifies or macro conditions are too adverse.`,
 		buildMarketPrompt(market),
 		ConstitutionRules(),
 		string(bullJSON),
 		string(bearJSON),
+		macroSection,
 	)
 
 	raw, err := client.ChatForRisk(ctx, riskSystemPrompt, prompt)
@@ -283,82 +359,86 @@ Review both proposals. Approve the stronger one if it passes the constitution. V
 // MULTI-AGENT ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────────
 
-// MultiAgentOrchestrator runs the Bull → Bear → Risk agent debate
-// and produces a final AIDecision on every 5m candle close.
 type MultiAgentOrchestrator struct {
-	client   *ClaudeClient
+	openai   *OpenAIClient
+	gemini   *GeminiClient
 	insights *InsightStore
 	mu       sync.Mutex
 	idSeq    int
 }
 
-func NewMultiAgentOrchestrator(client *ClaudeClient) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
-		client:   client,
+		openai:   openai,
+		gemini:   gemini,
 		insights: NewInsightStore(50),
 	}
 }
 
 func (o *MultiAgentOrchestrator) IsAvailable() bool {
-	return o != nil && o.client != nil && o.client.IsAvailable()
+	return o != nil && o.openai != nil && o.openai.IsAvailable()
+}
+
+func (o *MultiAgentOrchestrator) GeminiEnabled() bool {
+	return o != nil && o.gemini != nil && o.gemini.IsAvailable()
 }
 
 func (o *MultiAgentOrchestrator) GetInsights() *InsightStore {
 	return o.insights
 }
 
-// Decide runs all three agents in the correct order and returns the final decision.
-// Bull and Bear run in parallel; Risk runs after both complete.
 func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContext) AIDecision {
 	start := time.Now()
 
-	// Give agents a deadline — if Claude is slow, don't block the engine
-	agentCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	agentCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	// ── Step 1: Bull and Bear run in parallel ──
 	var (
-		bullSig AgentSignal
-		bearSig AgentSignal
-		wg      sync.WaitGroup
+		bullSig  AgentSignal
+		bearSig  AgentSignal
+		macroSig AgentSignal
+		wg       sync.WaitGroup
 	)
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		bullSig = runBullAgent(agentCtx, o.client, market)
+		bullSig = runBullAgent(agentCtx, o.openai, market)
 	}()
 	go func() {
 		defer wg.Done()
-		bearSig = runBearAgent(agentCtx, o.client, market)
+		bearSig = runBearAgent(agentCtx, o.openai, market)
+	}()
+	go func() {
+		defer wg.Done()
+		macroSig = runMacroAgent(agentCtx, o.gemini, market)
 	}()
 	wg.Wait()
 
-	log.Printf("[AI] Bull: trade=%v conf=%.2f | Bear: trade=%v conf=%.2f (%.0fms)",
+	log.Printf("[AI] OpenAI Bull: trade=%v conf=%.2f | Bear: trade=%v conf=%.2f | Gemini Macro: trade=%v conf=%.2f bias=%s (%.0fms)",
 		bullSig.ShouldTrade, bullSig.Confidence,
 		bearSig.ShouldTrade, bearSig.Confidence,
+		macroSig.ShouldTrade, macroSig.Confidence,
+		macroSig.Thesis,
 		float64(time.Since(start).Milliseconds()),
 	)
 
-	// If neither agent wants to trade, skip Risk (save API cost)
-	if !bullSig.ShouldTrade && !bearSig.ShouldTrade {
-		decision := o.buildDecision(market, bullSig, bearSig, RiskVerdict{
+	if !bullSig.ShouldTrade && !bearSig.ShouldTrade && !macroSig.ShouldTrade {
+		decision := o.buildDecision(market, bullSig, bearSig, macroSig, RiskVerdict{
 			Approved:       false,
 			ApprovedAction: "HOLD",
-			Reasoning:      "Both Bull and Bear agents recommend HOLD.",
+			Reasoning:      "Council (OpenAI+Gemini) recommended HOLD.",
 		})
 		o.insights.Add(decision)
-		log.Printf("[AI] Decision: HOLD (both agents quiet) — %.0fms total", float64(time.Since(start).Milliseconds()))
 		return decision
 	}
 
-	// ── Step 2: Risk Agent arbitrates ──
-	riskVerdict := runRiskAgent(agentCtx, o.client, bullSig, bearSig, market)
+	riskVerdict := runRiskAgent(agentCtx, o.openai, bullSig, bearSig, macroSig, market)
 	log.Printf("[AI] Risk: approved=%v action=%s (%.0fms total)",
 		riskVerdict.Approved, riskVerdict.ApprovedAction,
 		float64(time.Since(start).Milliseconds()),
 	)
 
-	decision := o.buildDecision(market, bullSig, bearSig, riskVerdict)
+	decision := o.buildDecision(market, bullSig, bearSig, macroSig, riskVerdict)
 	o.insights.Add(decision)
 	return decision
 }
@@ -367,6 +447,7 @@ func (o *MultiAgentOrchestrator) buildDecision(
 	market MarketContext,
 	bull AgentSignal,
 	bear AgentSignal,
+	macro AgentSignal,
 	risk RiskVerdict,
 ) AIDecision {
 	o.mu.Lock()
@@ -379,11 +460,16 @@ func (o *MultiAgentOrchestrator) buildDecision(
 		action = risk.ApprovedAction
 	}
 
-	// Build a human-readable summary of the full debate
+	macroLine := ""
+	if macro.Error == "" {
+		macroLine = fmt.Sprintf("\n\nMACRO [Gemini, conf:%.0f%%]: %s", macro.Confidence*100, macro.Thesis)
+	}
+
 	reasoning := fmt.Sprintf(
-		"BULL [conf:%.0f%%]: %s\n\nBEAR [conf:%.0f%%]: %s\n\nRISK: %s",
+		"BULL [conf:%.0f%%]: %s\n\nBEAR [conf:%.0f%%]: %s%s\n\nRISK: %s",
 		bull.Confidence*100, bull.Thesis,
 		bear.Confidence*100, bear.Thesis,
+		macroLine,
 		risk.Reasoning,
 	)
 	if risk.VetoReason != "" {
@@ -396,6 +482,7 @@ func (o *MultiAgentOrchestrator) buildDecision(
 		Price:          market.Price,
 		BullSignal:     bull,
 		BearSignal:     bear,
+		MacroSignal:    macro,
 		RiskVerdict:    risk,
 		FinalAction:    action,
 		FinalReasoning: reasoning,
@@ -403,11 +490,8 @@ func (o *MultiAgentOrchestrator) buildDecision(
 	}
 }
 
-// extractJSON pulls the JSON object out of a Claude response that may contain
-// markdown code fences or surrounding text.
 func extractJSON(raw string) string {
 	raw = strings.TrimSpace(raw)
-	// Remove ```json ... ``` wrapping
 	if idx := strings.Index(raw, "```json"); idx != -1 {
 		raw = raw[idx+7:]
 		if end := strings.Index(raw, "```"); end != -1 {
@@ -419,7 +503,6 @@ func extractJSON(raw string) string {
 			raw = raw[:end]
 		}
 	}
-	// Find the outermost { ... }
 	start := strings.Index(raw, "{")
 	end := strings.LastIndex(raw, "}")
 	if start != -1 && end != -1 && end > start {

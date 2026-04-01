@@ -628,6 +628,7 @@ export default function TradingDashboard() {
             <FearGreedWidget />
             <AIInsightPanel
               enabled={aiInsights.enabled}
+              geminiEnabled={aiInsights.geminiEnabled}
               message={aiInsights.message}
               latest={aiInsights.latest}
               recent={aiInsights.recent}

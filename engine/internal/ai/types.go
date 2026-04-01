@@ -6,9 +6,10 @@ import "time"
 type AgentRole string
 
 const (
-	RoleBull AgentRole = "BULL"
-	RoleBear AgentRole = "BEAR"
-	RoleRisk AgentRole = "RISK"
+	RoleBull  AgentRole = "BULL"
+	RoleBear  AgentRole = "BEAR"
+	RoleRisk  AgentRole = "RISK"
+	RoleMacro AgentRole = "MACRO" // Gemini Flash top-down analyst
 )
 
 // AgentSignal is the raw output from Bull or Bear agent.
@@ -33,13 +34,14 @@ type RiskVerdict struct {
 	Error         string `json:"error,omitempty"`
 }
 
-// AIDecision is the final combined output of all three agents.
+// AIDecision is the final combined output of all four agents (Bull, Bear, Macro, Risk).
 type AIDecision struct {
 	ID             string      `json:"id"`
 	Timestamp      time.Time   `json:"timestamp"`
 	Price          float64     `json:"price"`
 	BullSignal     AgentSignal `json:"bullSignal"`
 	BearSignal     AgentSignal `json:"bearSignal"`
+	MacroSignal    AgentSignal `json:"macroSignal"` // Gemini top-down analyst
 	RiskVerdict    RiskVerdict `json:"riskVerdict"`
 	FinalAction    string      `json:"finalAction"` // BUY, SELL, HOLD
 	FinalReasoning string      `json:"finalReasoning"`
