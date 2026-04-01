@@ -28,12 +28,19 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-y: scroll;
+  scroll-behavior: smooth;
+  overflow-anchor: auto;
+}
+
 body {
   color: var(--text-primary);
   background: var(--bg);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overflow-anchor: auto;
 }
 
 /* ── Card styles ── */

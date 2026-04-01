@@ -217,8 +217,11 @@ export default function MarketChart({
 
   if (candles.length < 20) {
     return (
-      <div className="h-[320px] rounded-2xl border border-zinc-800/80 bg-[#050816] flex items-center justify-center text-sm text-zinc-500">
-        Waiting for enough live candles to draw the chart...
+      <div className="h-[360px] rounded-2xl border border-zinc-800/80 bg-[#050816] flex items-center justify-center text-sm text-zinc-500 overflow-hidden">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+          Waiting for live BTC candles to stabilize layout...
+        </div>
       </div>
     );
   }

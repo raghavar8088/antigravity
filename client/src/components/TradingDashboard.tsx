@@ -495,7 +495,10 @@ export default function TradingDashboard() {
   };
 
   return (
-    <main className="min-h-screen max-w-[1600px] mx-auto space-y-5 p-5">
+    <main
+      className="min-h-[2000px] max-w-[1600px] mx-auto space-y-5 p-5"
+      style={{ overflowAnchor: "auto" }}
+    >
       <DashboardHeader
         online={engineOnline}
         balance={balance}
