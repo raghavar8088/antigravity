@@ -127,7 +127,8 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 8. Trade Journal
 	// ═══════════════════════════════════════════════════
-	journal := execution.NewTradeJournal(500)
+	// 8. Trade Journal (Expanded to 5,000 for full session history)
+	journal := execution.NewTradeJournal(5000)
 
 	// ═══════════════════════════════════════════════════
 	// 9. Candle Aggregator
@@ -302,7 +303,7 @@ func main() {
 		if r.Method == http.MethodOptions {
 			return
 		}
-		trades := journal.GetRecentTrades(100)
+		trades := journal.GetRecentTrades(5000)
 		json.NewEncoder(w).Encode(trades)
 	})
 
