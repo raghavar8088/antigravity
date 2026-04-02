@@ -40,12 +40,9 @@ export default function DashboardHeader({
     }
   };
 
-  const handleReset = () =>
-    postAdminAction("/api/admin/reset", "Reset paper account to $100,000?", "Account reset to $100,000.", true);
-  const handleKillSwitch = () =>
-    postAdminAction("/api/admin/kill", "Trigger kill switch? Engine will halt.", "Kill switch triggered.");
-  const handleCloseAll = () =>
-    postAdminAction("/api/admin/close-all", "Close all open positions at market price?", "All positions closed.", true);
+  const handleReset    = () => postAdminAction("/api/admin/reset",     "Reset paper account to $100,000?",       "Account reset to $100,000.", true);
+  const handleKillSwitch = () => postAdminAction("/api/admin/kill",    "Trigger kill switch? Engine will halt.", "Kill switch triggered.");
+  const handleCloseAll = () => postAdminAction("/api/admin/close-all", "Close all open positions at market price?", "All positions closed.", true);
 
   const isBusy = activeAction !== null;
   const isPositive = dailyPnL >= 0;
@@ -53,129 +50,138 @@ export default function DashboardHeader({
   const pnlPct = invested > 0 ? (dailyPnL / invested) * 100 : 0;
 
   return (
-    <header
-      style={{
-        background: "var(--surface)",
-        borderBottom: "1px solid var(--border)",
-      }}
-      className="px-6 py-4"
-    >
-      <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <header className="cockpit-header px-6 py-3">
+      <div className="max-w-[1700px] mx-auto flex items-center justify-between gap-6">
 
-        {/* ── Logo + status ── */}
-        <div className="flex items-center gap-3 shrink-0">
-          <img
-            src="/raig-logo.png"
-            alt="RAIG 888"
-            style={{ width: 52, height: 52, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(250,188,44,0.5))" }}
-          />
+        {/* ── RAIG Logo + Identity ── */}
+        <div className="flex items-center gap-4 shrink-0">
+          <div style={{ position: "relative" }}>
+            <img
+              src="/raig-logo.png"
+              alt="RAIG 888"
+              style={{
+                width: 48,
+                height: 48,
+                objectFit: "contain",
+                filter: "drop-shadow(0 0 12px rgba(212,175,55,0.6))",
+              }}
+            />
+          </div>
           <div>
-            <div className="font-black text-white text-lg tracking-tighter leading-none flex items-center gap-1">
-              RAIG <span style={{ color: "var(--green)", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" }}>AUTONOMOUS</span>
+            <div
+              style={{ fontFamily: "var(--font-display, 'Orbitron', sans-serif)", fontSize: 18, fontWeight: 900, letterSpacing: "0.08em", lineHeight: 1 }}
+              className="text-gold"
+            >
+              RAIG <span style={{ color: "#333", fontSize: 10 }}>888</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${online ? "animate-pulse" : ""}`}
-                style={{ background: online ? "var(--green)" : "var(--red)" }}
-              />
-              <span style={{ color: "var(--text-secondary)" }} className="text-[10px] uppercase tracking-widest font-bold">
-                {online ? "Engine Live" : "Offline"} · BTC/USDT
-              </span>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.25em", color: "var(--text-muted)", marginTop: 4, fontFamily: "var(--font-display, 'Orbitron', sans-serif)" }}>
+              AUTONOMOUS · AI · SCALPING
+            </div>
+          </div>
+
+          {/* Vertical divider */}
+          <div style={{ width: 1, height: 36, background: "var(--border-gold)", marginLeft: 8 }} />
+
+          {/* Status */}
+          <div className="flex items-center gap-2">
+            <div className={online ? "live-dot" : "live-dot-red"} />
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: online ? "var(--green)" : "var(--red)", letterSpacing: "0.15em", fontFamily: "var(--font-display)" }}>
+                {online ? "ENGINE LIVE" : "OFFLINE"}
+              </div>
+              <div style={{ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em" }}>BTC / USDT</div>
             </div>
           </div>
         </div>
 
-        {/* ── Groww-style portfolio value ── */}
-        <div className="flex flex-col items-center text-center">
-          <div style={{ color: "var(--text-muted)" }} className="text-[10px] uppercase tracking-widest mb-1 font-semibold">
-            Paper Portfolio
+        {/* ── Portfolio Value (center) ── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.22em", color: "var(--text-muted)", marginBottom: 4, fontFamily: "var(--font-display)" }}>
+            PAPER PORTFOLIO VALUE
           </div>
-          <div className="text-3xl font-extrabold text-white tabular-nums leading-none">
+          <div
+            className="mono"
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+              color: "var(--gold-bright)",
+              textShadow: "0 0 30px rgba(212,175,55,0.35)",
+              fontFamily: "var(--font-display)",
+            }}
+          >
             ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-2">
             <span className={isPositive ? "pill-green" : "pill-red"}>
               <span>{isPositive ? "▲" : "▼"}</span>
-              <span>
-                {isPositive ? "+" : ""}
-                {dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="opacity-60">
-                ({isPositive ? "+" : ""}{pnlPct.toFixed(2)}%)
-              </span>
+              <span>{isPositive ? "+" : ""}{dailyPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span style={{ opacity: 0.7 }}>({isPositive ? "+" : ""}{pnlPct.toFixed(2)}%)</span>
             </span>
-            <span style={{ color: "var(--text-muted)", fontSize: 10 }} className="uppercase tracking-widest">today</span>
+            <span style={{ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.12em", fontFamily: "var(--font-display)" }}>TODAY</span>
           </div>
         </div>
 
-        {/* ── Admin actions ── */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Always in DOM to keep header height stable; hidden when no positions */}
-          <button
-            onClick={handleCloseAll}
-            disabled={isBusy || openPositions === 0}
-            style={{
-              border: "1px solid rgba(245,158,11,0.35)",
-              color: "#F59E0B",
-              borderRadius: 10,
-              padding: "7px 14px",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              background: "rgba(245,158,11,0.07)",
-              cursor: (isBusy || openPositions === 0) ? "not-allowed" : "pointer",
-              opacity: openPositions === 0 ? 0 : isBusy ? 0.6 : 1,
-              pointerEvents: openPositions === 0 ? "none" : "auto",
-              transition: "opacity 0.2s",
-            }}
-          >
-            {activeAction === "/api/admin/close-all" ? "Closing…" : `Close All (${openPositions})`}
-          </button>
-          <button
-            onClick={handleKillSwitch}
-            disabled={isBusy}
-            style={{
-              border: "1px solid rgba(244,67,54,0.35)",
-              color: "var(--red)",
-              borderRadius: 10,
-              padding: "7px 14px",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              background: "var(--red-dim)",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              opacity: isBusy ? 0.6 : 1,
-              transition: "background 0.15s",
-            }}
-          >
-            {activeAction === "/api/admin/kill" ? "Killing…" : "Kill Switch"}
-          </button>
-          <button
-            onClick={handleReset}
-            disabled={isBusy}
-            style={{
-              border: "1px solid rgba(0,208,156,0.3)",
-              color: "var(--green)",
-              borderRadius: 10,
-              padding: "7px 14px",
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              background: "var(--green-dim)",
-              cursor: isBusy ? "not-allowed" : "pointer",
-              opacity: isBusy ? 0.6 : 1,
-              transition: "background 0.15s",
-            }}
-          >
-            {activeAction === "/api/admin/reset" ? "Resetting…" : "Reset Account"}
-          </button>
-        </div>
-<div style={{ marginLeft: "auto", borderLeft: "1px solid var(--border)", paddingLeft: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: "var(--gold)", letterSpacing: "0.1em" }}>SECURITY PROTOCOL</div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "white" }}>ACTIVE ENCRYPTION</div>
+        {/* ── System Stats ── */}
+        <div className="flex items-center gap-5 shrink-0">
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.18em", color: "var(--text-muted)", fontFamily: "var(--font-display)", marginBottom: 3 }}>OPEN</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: openPositions > 0 ? "var(--gold)" : "var(--text-muted)", fontFamily: "var(--font-display)", lineHeight: 1 }}>
+              {openPositions}
+            </div>
+            <div style={{ fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.1em" }}>POSITIONS</div>
+          </div>
+
+          <div style={{ width: 1, height: 32, background: "var(--border)" }} />
+
+          {/* ── Admin Controls ── */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCloseAll}
+              disabled={isBusy || openPositions === 0}
+              className="btn-gold"
+              style={{
+                opacity: openPositions === 0 ? 0.3 : isBusy ? 0.5 : 1,
+                pointerEvents: openPositions === 0 ? "none" : "auto",
+                fontSize: 9,
+                padding: "6px 12px",
+              }}
+            >
+              {activeAction === "/api/admin/close-all" ? "CLOSING…" : `CLOSE ALL (${openPositions})`}
+            </button>
+            <button
+              onClick={handleKillSwitch}
+              disabled={isBusy}
+              className="btn-danger"
+              style={{ fontSize: 9, padding: "6px 12px" }}
+            >
+              {activeAction === "/api/admin/kill" ? "KILLING…" : "KILL SWITCH"}
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={isBusy}
+              className="btn-primary"
+              style={{ fontSize: 9, padding: "6px 12px" }}
+            >
+              {activeAction === "/api/admin/reset" ? "RESETTING…" : "RESET"}
+            </button>
+          </div>
+
+          <div style={{ width: 1, height: 32, background: "var(--border)" }} />
+
+          {/* Security badge */}
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 7, fontWeight: 800, color: "var(--gold)", letterSpacing: "0.18em", fontFamily: "var(--font-display)" }}>SECURITY</div>
+            <div style={{ fontSize: 8, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.1em" }}>ENCRYPTED</div>
+            <div style={{ fontSize: 7, color: "var(--green)", letterSpacing: "0.1em" }}>● ACTIVE</div>
+          </div>
         </div>
 
       </div>
+
+      {/* Bottom gold line */}
+      <div style={{ height: 1, background: "linear-gradient(90deg, transparent, var(--gold-glow), rgba(0,255,136,0.2), var(--gold-glow), transparent)", marginTop: 8 }} />
     </header>
   );
 }

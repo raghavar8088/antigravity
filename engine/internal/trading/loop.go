@@ -22,12 +22,12 @@ const (
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
-	minExecutableConfidence    = 0.80 // Minimum strategy signal confidence to execute
-	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio       = 1.50 // Raised: require better reward vs risk (was 1.35)
-	minSignalTakeProfitPct     = 0.55 // Raised: ensure TP is worth chasing after slippage (was 0.45)
-	maxSignalStopLossPct       = 0.80 // Lowered: tighter max SL, keep losses small (was 1.20)
-	defaultSignalStopLossPct   = 0.50 // RAISED: widened from 0.20 to prevent whipsaws
+	minExecutableConfidence     = 0.72  // Lowered: allow well-setup signals with tighter geometry
+	minBridgeApprovalConfidence = 0.60  // Minimum ChatGPT confidence to honour a bridge approval
+	minRewardToRiskRatio        = 1.25  // Lowered: achievable at 45%+ win rate (was 1.50)
+	minSignalTakeProfitPct      = 0.18  // Ultra-tight TP — gets hit within 1-3 minutes on BTC
+	maxSignalStopLossPct        = 0.22  // Ultra-tight SL — cut losses fast before they compound
+	defaultSignalStopLossPct    = 0.15  // Default tight SL — noise filter, not a wide buffer
 
 	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
 	marketHistoryMaxSamples   = 320
@@ -1229,8 +1229,16 @@ func (o *Orchestrator) classifyMarketRegime() string {
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
 	switch regime {
-	case marketRegimeUnknown, marketRegimeMixed:
-		return true
+	case marketRegimeUnknown:
+		// Never trade when market structure is unclassified — too much noise
+		return false
+	case marketRegimeMixed:
+		// Only highest-conviction multi-signal strategies trade in mixed conditions
+		switch category {
+		case "Multi-Signal", "Trend", "Trend Elite":
+			return true
+		}
+		return false
 	case marketRegimeTrend:
 		switch category {
 		case "Trend", "Trend Elite", "Breakout", "Breakout Elite", "Momentum", "Momentum Elite",

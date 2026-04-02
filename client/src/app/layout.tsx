@@ -1,22 +1,21 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Orbitron } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-orbitron', weight: ['400','600','700','800','900'] })
 
 export const metadata: Metadata = {
-  title: 'AntiGravity · BTC Scalper',
-  description: 'Autonomous Bitcoin Scalping Engine',
+  title: 'RAIG 888 · Autonomous Trading Engine',
+  description: 'Military-Grade AI Bitcoin Scalping System',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={`${inter.variable} ${orbitron.variable} ${inter.className}`}>
+        {children}
+      </body>
     </html>
   )
 }

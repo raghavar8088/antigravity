@@ -28,10 +28,11 @@ func (b *baseScalper) feed(price float64) {
 const defaultBufSize = 500
 const defaultQty = 0.01 // Conservative BTC position size for scalping
 
-// Default SL/TP for scalping: tight stops suited to BTC's short-term volatility
-// BTC moves ~0.1-0.3% per minute → 0.15% SL and 0.25% TP get hit within minutes
-const defaultStopLossPct = 0.55   // 0.55% stop-loss (Widened: give trades room to breathe)
-const defaultTakeProfitPct = 0.90 // 0.90% take-profit (raised from 0.65 — bigger wins per trade)
+// Default SL/TP for scalping: ultra-tight stops matched to BTC's 1-3 minute price action.
+// BTC moves ~0.1-0.3% per minute → 0.15% SL and 0.25% TP get hit within 1-3 candles.
+// R:R = 1.67 — profitable at 38%+ win rate. Cut losers fast, let winners run briefly.
+const defaultStopLossPct = 0.15   // 0.15% stop-loss — cut noise, not trend
+const defaultTakeProfitPct = 0.25 // 0.25% take-profit — realistic 1-3 minute scalp target
 
 func buySignal(symbol string) []Signal {
 	return []Signal{{
