@@ -9,6 +9,8 @@ export default function DashboardHeader({
   openPositions,
   onResetSuccess,
   onAdminEvent,
+  combatMode = false,
+  onToggleCombat,
 }: {
   online: boolean;
   balance: number;
@@ -16,6 +18,8 @@ export default function DashboardHeader({
   openPositions: number;
   onResetSuccess?: () => void;
   onAdminEvent?: (message: string, tone: "admin" | "info") => void;
+  combatMode?: boolean;
+  onToggleCombat?: () => void;
 }) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
@@ -132,6 +136,18 @@ export default function DashboardHeader({
             </div>
             <div style={{ fontSize: 7, color: "var(--text-muted)", letterSpacing: "0.1em" }}>POSITIONS</div>
           </div>
+
+          <div style={{ width: 1, height: 32, background: "var(--border)" }} />
+
+          {/* ── Combat Mode Toggle ── */}
+          <button
+            onClick={onToggleCombat}
+            className={combatMode ? "combat-toggle-on" : "combat-toggle-off"}
+            title="Toggle Combat Mode (Space)"
+          >
+            <span>{combatMode ? "⚔️" : "🟢"}</span>
+            {combatMode ? "COMBAT" : "NORMAL"}
+          </button>
 
           <div style={{ width: 1, height: 32, background: "var(--border)" }} />
 

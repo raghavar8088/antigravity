@@ -236,6 +236,9 @@ export default function TradingDashboard() {
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [combatMode, setCombatMode] = useState(false);
+  const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
+  const milestoneRef = useRef<Set<number>>(new Set());
 
   const { engineOnline, balance: engineBalance } = useEngineState();
   const market = useLiveBTCMarket();
@@ -495,8 +498,93 @@ export default function TradingDashboard() {
     setResetRefreshKey((current) => current + 1);
   };
 
+  // ── Dynamic Color Intelligence ──────────────────────────────────
+  const dailyPnlValue = liveStats?.dailyPnl ?? closedPnl;
+  useEffect(() => {
+    const pct = (dailyPnlValue / INITIAL_BALANCE) * 100;
+    const root = document.documentElement;
+    if (pct >= 5) {
+      root.style.setProperty("--dynamic-glow", "rgba(0,255,136,0.22)");
+    } else if (pct >= 2) {
+      root.style.setProperty("--dynamic-glow", "rgba(0,255,136,0.12)");
+    } else if (pct >= 0.5) {
+      root.style.setProperty("--dynamic-glow", "rgba(0,255,136,0.06)");
+    } else if (pct <= -5) {
+      root.style.setProperty("--dynamic-glow", "rgba(255,59,48,0.18)");
+    } else if (pct <= -2) {
+      root.style.setProperty("--dynamic-glow", "rgba(255,59,48,0.10)");
+    } else if (pct <= -0.5) {
+      root.style.setProperty("--dynamic-glow", "rgba(255,59,48,0.05)");
+    } else {
+      root.style.setProperty("--dynamic-glow", "transparent");
+    }
+  }, [dailyPnlValue]);
+
+  // ── Combat Mode body class ──────────────────────────────────────
+  useEffect(() => {
+    if (combatMode) {
+      document.body.classList.add("combat-mode");
+    } else {
+      document.body.classList.remove("combat-mode");
+    }
+    return () => document.body.classList.remove("combat-mode");
+  }, [combatMode]);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────
+  // Space = Combat mode | M = Mute | 1/2/3/4 = Tabs
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      switch (e.key) {
+        case " ":
+          e.preventDefault();
+          setCombatMode((prev) => !prev);
+          break;
+        case "m":
+        case "M":
+          setIsSoundOn((prev) => !prev);
+          break;
+        case "1": setActiveTab("trade"); break;
+        case "2": setActiveTab("stats"); break;
+        case "3": setActiveTab("history"); break;
+        case "4": setActiveTab("feed"); break;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // ── Profit milestone animations ────────────────────────────────
+  useEffect(() => {
+    const milestones: [number, string][] = [
+      [101000,  "🟢 $1K PROFIT UNLOCKED!"],
+      [105000,  "⚡ $5K MILESTONE REACHED!"],
+      [110000,  "🔥 $10K — RAIG IS PRINTING!"],
+      [125000,  "💰 $25K — INSTITUTIONAL LEVEL!"],
+      [150000,  "🏆 $50K — ELITE TRADER STATUS!"],
+      [200000,  "👑 $100K — RAIG LEGEND MODE!"],
+    ];
+    for (const [threshold, label] of milestones) {
+      if (balance >= threshold && !milestoneRef.current.has(threshold)) {
+        milestoneRef.current.add(threshold);
+        setMilestoneToast(label);
+        const t = setTimeout(() => setMilestoneToast(null), 4000);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [balance]);
+
+  // ── Risk meter computation ─────────────────────────────────────
+  const riskPct = Math.min(100, Math.max(0, (livePositions.length / 5) * 100));
+  const riskLevel = riskPct >= 80 ? "danger" : riskPct >= 50 ? "warning" : "safe";
+  const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
+
   return (
     <main className="max-w-[1600px] mx-auto space-y-5 p-5 pb-20">
+      {milestoneToast && (
+        <div className="milestone-toast">{milestoneToast}</div>
+      )}
+
       <DashboardHeader
         online={engineOnline}
         balance={balance}
@@ -504,10 +592,65 @@ export default function TradingDashboard() {
         openPositions={livePositions.length}
         onResetSuccess={handleReset}
         onAdminEvent={handleAdminEvent}
+        combatMode={combatMode}
+        onToggleCombat={() => setCombatMode((prev) => !prev)}
       />
 
-      {/* NEW: AI Command Center (ChatGPT Arbitrator) */}
+      {/* AI Command Center */}
       <CommandCenter />
+
+      {/* ── Risk Visualization + Keyboard Hints ── */}
+      <div className="glass-panel px-5 py-3 flex flex-col md:flex-row items-center gap-4 justify-between">
+        {/* Risk Meter */}
+        <div className="flex items-center gap-4 flex-1">
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 8, fontWeight: 800, letterSpacing: "0.18em", color: "var(--text-muted)" }}>
+            RISK METER
+          </div>
+          <div style={{ flex: 1, maxWidth: 200 }}>
+            <div className="risk-meter-track">
+              <div
+                className={`risk-meter-fill ${riskLevel}`}
+                style={{ width: `${riskPct}%` }}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 800, fontFamily: "var(--font-display)", letterSpacing: "0.12em" }} className={`risk-label-${riskLevel}`}>
+            {riskLabel} · {livePositions.length} pos
+          </div>
+          {/* Drawdown indicator */}
+          {(() => {
+            const drawdown = ((INITIAL_BALANCE - balance) / INITIAL_BALANCE) * 100;
+            if (drawdown <= 0) return null;
+            return (
+              <div style={{ fontSize: 9, color: "var(--red)", fontFamily: "var(--font-display)", letterSpacing: "0.1em", fontWeight: 700 }}>
+                DD: {drawdown.toFixed(1)}%
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* AI Waveform indicator */}
+        <div className="flex items-center gap-3">
+          <div style={{ fontSize: 8, fontFamily: "var(--font-display)", color: "var(--text-muted)", letterSpacing: "0.15em" }}>RAIG AI</div>
+          <div className="ai-waveform">
+            {[1,2,3,4,5].map((i) => (
+              <div key={i} className="ai-waveform-bar" style={{ animationDelay: `${(i-1)*0.15}s` }} />
+            ))}
+          </div>
+          <div style={{ fontSize: 8, fontFamily: "var(--font-display)", color: "var(--green)", letterSpacing: "0.12em", fontWeight: 700 }}>ACTIVE</div>
+        </div>
+
+        {/* Keyboard hints */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span style={{ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em" }}>SHORTCUTS:</span>
+          {[["SPACE","COMBAT"],["M","MUTE"],["1-4","TABS"]].map(([key, label]) => (
+            <div key={key} className="flex items-center gap-1">
+              <span className="kbd">{key}</span>
+              <span style={{ fontSize: 7, color: "var(--text-muted)" }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-2">
