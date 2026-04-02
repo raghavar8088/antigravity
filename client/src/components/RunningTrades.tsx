@@ -56,6 +56,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
               <th className="py-3 px-2"><span className="text-green-400">Target</span></th>
               <th className="py-3 px-2">Size</th>
               <th className="py-3 px-2">Flags</th>
+              <th className="py-3 px-2">Opened</th>
               <th className="py-3 px-2">Elapsed</th>
               <th className="py-3 px-2">PnL</th>
               <th className="py-3 px-2">%</th>
@@ -114,6 +115,20 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                         </span>
                       )}
                     </div>
+                  </td>
+                  <td className="py-3 px-2 font-mono text-xs text-gray-400">
+                    {t.openTime ? (
+                      <div>
+                        <div className="text-zinc-200">
+                          {new Date(t.openTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </div>
+                        <div className="text-[10px] text-zinc-500">
+                          {new Date(t.openTime).toLocaleDateString([], { month: "short", day: "numeric" })}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-600">—</span>
+                    )}
                   </td>
                   <td className="py-3 px-2 font-mono text-xs text-gray-400">
                     <span className="animate-pulse">{t.elapsed}</span>
