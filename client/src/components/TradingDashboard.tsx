@@ -387,7 +387,8 @@ export default function TradingDashboard() {
 
   const runningTrades: RunningTradeView[] = livePositions.map((position) => {
     const openedAt = new Date(position.openedAt);
-    const elapsedSeconds = Math.max(0, Math.floor((currentTime - openedAt.getTime()) / 1000));
+    const validDate = !isNaN(openedAt.getTime());
+    const elapsedSeconds = validDate ? Math.max(0, Math.floor((currentTime - openedAt.getTime()) / 1000)) : 0;
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
 
@@ -402,8 +403,8 @@ export default function TradingDashboard() {
       originalSize: position.originalSize,
       trailingActive: position.trailingActive,
       partialClosed: position.partialClosed,
-      openTime: openedAt.toLocaleTimeString(),
-      elapsed: `${minutes}m ${seconds}s`,
+      openTime: validDate ? openedAt.toISOString() : "",
+      elapsed: validDate ? `${minutes}m ${seconds}s` : "—",
     };
   });
 
@@ -488,6 +489,16 @@ export default function TradingDashboard() {
 
     return [...byStrategy.entries()].sort((left, right) => right[1].pnl - left[1].pnl);
   })();
+
+  const topProfitable = [...displayStrategies]
+    .filter((s) => s.profit > 0)
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 5);
+
+  const topLosing = [...displayStrategies]
+    .filter((s) => s.profit < 0)
+    .sort((a, b) => a.profit - b.profit)
+    .slice(0, 5);
 
   const handleReset = () => {
     setResetRefreshKey((current) => current + 1);
@@ -669,7 +680,7 @@ export default function TradingDashboard() {
           />
         </div>
         <SummaryCard label="Market Sentiment" value={marketSentiment.label} accent={marketSentiment.colorClass} />
-        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-emerald-400" : "text-red-400"} />
+        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-green-400" : "text-red-400"} />
         <SummaryCard label="Open Positions" value={`${livePositions.length}`} accent="text-white" />
         <SummaryCard label="Net Exposure" value={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC`} accent="text-white" />
       </div>
@@ -723,7 +734,7 @@ export default function TradingDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <SummaryCard
           label="Win Rate"
           value={`${(liveStats?.aggregate.winRate ?? 0).toFixed(1)}%`}
@@ -735,17 +746,31 @@ export default function TradingDashboard() {
           accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
         />
         <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
-        <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-emerald-400" : "text-red-400"} />
+        <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
         <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
-        <SummaryCard label="Ticks / Candles" value={`${liveStats?.ticksProcessed ?? 0} / ${liveStats?.candlesClosed ?? 0}`} accent="text-white" />
       </div>
 
       {activeTab === "trade" && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1.7fr,1fr] gap-6">
-          <div className="space-y-6">
-            <div>
-              <div className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
-                Market Chart
+        <div className="space-y-5">
+
+          {/* ── MAIN ZONE: Chart 70% | AI Panel 30% ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr,420px] gap-5">
+
+            {/* Hero Chart */}
+            <div className="glass-panel overflow-hidden" style={{ minHeight: 480 }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "12px 16px 0",
+                fontFamily: "var(--font-display)", fontSize: 9, fontWeight: 800,
+                letterSpacing: "0.18em", color: "var(--text-muted)",
+              }}>
+                <span style={{ color: "var(--gold)" }}>▣</span>
+                BTC / USDT · LIVE CHART
+                {livePositions.length > 0 && (
+                  <span style={{ marginLeft: 8, color: "var(--green)", fontSize: 8 }}>
+                    ● {livePositions.length} OPEN
+                  </span>
+                )}
               </div>
               <MarketChart
                 candles={deferredCandles}
@@ -761,29 +786,102 @@ export default function TradingDashboard() {
               />
             </div>
 
-            <div className="glass-panel p-5">
-              <h2 className="mb-4 flex items-center gap-3 text-base font-bold text-white">
-                <span className="pill-green">LIVE</span>
-                Running Positions
-                <span style={{ color: "var(--text-muted)", fontSize: 12 }} className="font-mono">({livePositions.length} active)</span>
-              </h2>
-              <RunningTrades currentPrice={price} trades={runningTrades} />
+            {/* AI Panel 30% */}
+            <div className="space-y-4">
+              <FearGreedWidget />
+              <AIInsightPanel
+                enabled={aiInsights.enabled}
+                geminiEnabled={aiInsights.geminiEnabled}
+                message={aiInsights.message}
+                latest={aiInsights.latest}
+                recent={aiInsights.recent}
+                auditLogs={aiInsights.auditLogs}
+              />
+              <SignalInsightCard signal={latestSignal} />
+              <ActivityFeed entries={feed.slice(0, 8)} />
             </div>
           </div>
 
-          <div className="space-y-6">
-            <FearGreedWidget />
-            <AIInsightPanel
-              enabled={aiInsights.enabled}
-              geminiEnabled={aiInsights.geminiEnabled}
-              message={aiInsights.message}
-              latest={aiInsights.latest}
-              recent={aiInsights.recent}
-              auditLogs={aiInsights.auditLogs}
-            />
-            <SignalInsightCard signal={latestSignal} />
-            <ActivityFeed entries={feed.slice(0, 12)} />
+          {/* ── SECONDARY ZONE: Running Positions ── */}
+          <div className="glass-panel p-5">
+            <h2 className="mb-4 flex items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+              <span className="pill-green">LIVE</span>
+              RUNNING POSITIONS
+              <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }} className="font-mono">
+                ({livePositions.length} active)
+              </span>
+            </h2>
+            <RunningTrades currentPrice={price} trades={runningTrades} />
           </div>
+
+          {/* ── STRATEGY ZONE: Top 5 Profitable + Top 5 Losing ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+
+            {/* Top 5 Profitable */}
+            <div className="glass-panel p-5">
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 9, fontWeight: 800, letterSpacing: "0.18em", color: "var(--green)", marginBottom: 14 }}>
+                🟢 PROFITABLE STRATEGIES
+              </div>
+              {topProfitable.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "12px 0" }}>No profitable strategies yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {topProfitable.map((s) => {
+                    const total = s.wins + s.losses;
+                    const wr = total > 0 ? (s.wins / total) * 100 : 0;
+                    return (
+                      <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "rgba(0,255,136,0.04)", borderRadius: 8, border: "1px solid rgba(0,255,136,0.10)" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", fontFamily: "var(--font-display)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.name}
+                          </div>
+                          <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                            {s.wins}W / {s.losses}L · {wr.toFixed(0)}% WR · {s.timeframe}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--green)", fontFamily: "var(--font-display)", whiteSpace: "nowrap" }}>
+                          +{formatUSD(s.profit)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Top 5 Losing */}
+            <div className="glass-panel p-5">
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 9, fontWeight: 800, letterSpacing: "0.18em", color: "var(--red)", marginBottom: 14 }}>
+                🔴 LOSING STRATEGIES
+              </div>
+              {topLosing.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "12px 0" }}>No losing strategies yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {topLosing.map((s) => {
+                    const total = s.wins + s.losses;
+                    const wr = total > 0 ? (s.wins / total) * 100 : 0;
+                    return (
+                      <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "rgba(255,59,48,0.04)", borderRadius: 8, border: "1px solid rgba(255,59,48,0.10)" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", fontFamily: "var(--font-display)", letterSpacing: "0.06em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {s.name}
+                          </div>
+                          <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 2 }}>
+                            {s.wins}W / {s.losses}L · {wr.toFixed(0)}% WR · {s.timeframe}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--red)", fontFamily: "var(--font-display)", whiteSpace: "nowrap" }}>
+                          {formatUSD(s.profit)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -799,7 +897,7 @@ export default function TradingDashboard() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <SummaryCard label="Avg Win" value={formatUSD(liveStats?.aggregate.avgWin ?? 0, { signed: true })} accent="text-emerald-400" />
+            <SummaryCard label="Avg Win" value={formatUSD(liveStats?.aggregate.avgWin ?? 0, { signed: true })} accent="text-green-400" />
             <SummaryCard label="Avg Loss" value={formatUSD(-(liveStats?.aggregate.avgLoss ?? 0), { signed: true })} accent="text-rose-400" />
             <SummaryCard label="Max Drawdown" value={formatUSD(-(liveStats?.aggregate.maxDrawdown ?? 0), { signed: true })} accent={(liveStats?.aggregate.maxDrawdown ?? 0) > 0 ? "text-orange-400" : "text-zinc-400"} />
             <SummaryCard
@@ -846,7 +944,7 @@ export default function TradingDashboard() {
                           </div>
                         </td>
                         <td className="py-2 px-3 text-center text-gray-500">{cats.length}</td>
-                        <td className="py-2 px-3 text-center text-emerald-400 font-mono">{w}</td>
+                        <td className="py-2 px-3 text-center text-green-400 font-mono">{w}</td>
                         <td className="py-2 px-3 text-center text-rose-400 font-mono">{l}</td>
                         <td className="py-2 px-3 text-center font-mono font-bold">
                           {wr !== null ? (

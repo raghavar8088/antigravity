@@ -6,7 +6,22 @@
       "Bash(npx tsc:*)",
       "Bash(go test:*)",
       "Bash(go vet:*)",
-      "Bash(grep -n \"^func compute\\\\|^func hull\\\\|^func donchian\\\\|^func supertrend\\\\|^func keltner\\\\|^func heikin\" internal/strategy/*.go)"
+      "Bash(grep -n \"^func compute\\\\|^func hull\\\\|^func donchian\\\\|^func supertrend\\\\|^func keltner\\\\|^func heikin\" internal/strategy/*.go)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/trades?limit=20)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/trades/stats)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/trades?limit=50)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/health)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/state)",
+      "Bash(curl -s \"https://antigravity-x7he.onrender.com/api/stats\")",
+      "Bash(curl -s \"https://antigravity-x7he.onrender.com/api/positions\")",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/ai/insights)",
+      "Bash(curl -s https://antigravity-x7he.onrender.com/api/logs)",
+      "Bash(node -e \":*)",
+      "Bash(npm run:*)",
+      "Bash(node --check \"c:/Trading apllication/bridge/bridge.js\")",
+      "Bash(python3 -c ':*)",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path C:\\\\Users -Recurse -Filter 'raig-logo.png' -ErrorAction SilentlyContinue | Select-Object FullName\")",
+      "Bash(powershell.exe -Command \"Copy-Item 'C:\\\\Users\\\\ragha\\\\Downloads\\\\raig-logo.png' 'C:\\\\Trading apllication\\\\client\\\\public\\\\raig-logo.png'\")"
     ]
   }
 }
