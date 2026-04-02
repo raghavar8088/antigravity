@@ -286,7 +286,7 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 // It returns (approved, reason, confidence, provider).
 func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64, string) {
 	anyAvailable := o.groq.IsAvailable() || o.gemini.IsAvailable() || o.mistral.IsAvailable() ||
-		o.huggingface.IsAvailable() || o.openrouter.IsAvailable() || o.openai.IsAvailable()
+		o.huggingface.IsAvailable() || o.cloudflare.IsAvailable() || o.openrouter.IsAvailable() || o.openai.IsAvailable()
 	if !anyAvailable {
 		return true, "No AI Auditor available (running technicals only)", 0.5, "NONE"
 	}
@@ -330,10 +330,19 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 		if !isFatalError(reason) {
 			return approved, reason, conf, "huggingface"
 		}
-		log.Printf("[AI AUDIT FALLBACK] HuggingFace failed -> trying OpenRouter...")
+		log.Printf("[AI AUDIT FALLBACK] HuggingFace failed -> trying Cloudflare...")
 	}
 
-	// 5. OpenRouter — 20+ free models as backstop
+	// 5. Cloudflare Workers AI — Llama-3.1-70B free
+	if o.cloudflare.IsAvailable() {
+		approved, reason, conf := o.runCloudflareAudit(ctx, market, strategyName, action)
+		if !isFatalError(reason) {
+			return approved, reason, conf, "cloudflare"
+		}
+		log.Printf("[AI AUDIT FALLBACK] Cloudflare failed -> trying OpenRouter...")
+	}
+
+	// 6. OpenRouter — 20+ free models as backstop
 	if o.openrouter.IsAvailable() {
 		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action)
 		if !isFatalError(reason) {
@@ -546,6 +555,47 @@ func (o *MultiAgentOrchestrator) runHuggingFaceAudit(ctx context.Context, market
 		sCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = o.store.SaveAuditLog(sCtx, auditID, strategyName, action, resp.Approved, "[🤗 HuggingFace] "+resp.Reason, resp.Confidence, "huggingface")
+	}
+
+	return resp.Approved, resp.Reason, resp.Confidence
+}
+
+func (o *MultiAgentOrchestrator) runCloudflareAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action)
+
+	raw, err := o.cloudflare.ChatForAudit(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT CLOUDFLARE] Error: %v", err)
+		return true, "cloudflare error: " + err.Error(), 0.5
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return true, "cloudflare parse error (neutral)", 0.4
+	}
+
+	log.Printf("[AI AUDIT ✅ CLOUDFLARE] %s %s -> %v | %s (%.0fms)",
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	auditID := fmt.Sprintf("AUD-CF-%d", time.Now().UnixNano()/1e6)
+	o.insights.AddAudit(AuditLog{
+		ID:           auditID,
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       "[☁️ Cloudflare] " + resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+		Provider:     "cloudflare",
+	})
+
+	if o.store != nil {
+		sCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(sCtx, auditID, strategyName, action, resp.Approved, "[☁️ Cloudflare] "+resp.Reason, resp.Confidence, "cloudflare")
 	}
 
 	return resp.Approved, resp.Reason, resp.Confidence
@@ -779,6 +829,7 @@ type MultiAgentOrchestrator struct {
 	openrouter  *OpenRouterClient
 	mistral     *MistralClient
 	huggingface *HuggingFaceClient
+	cloudflare  *CloudflareClient
 	insights    *InsightStore
 	store       *persistence.Store
 	mu          sync.Mutex
@@ -803,7 +854,11 @@ func (o *MultiAgentOrchestrator) runBullAgentWithFallback(ctx context.Context, m
 	sig = runBullAgent(ctx, o.huggingface, market)
 	if sig.Error == "" { return sig }
 
-	log.Printf("[AI FALLBACK] Bull (HuggingFace) failed: %v. Trying OpenRouter...", sig.Error)
+	log.Printf("[AI FALLBACK] Bull (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
+	sig = runBullAgent(ctx, o.cloudflare, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Bull (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	sig = runBullAgent(ctx, o.openrouter, market)
 	if sig.Error == "" { return sig }
 
@@ -824,7 +879,11 @@ func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, m
 	sig = runBearAgent(ctx, o.huggingface, market)
 	if sig.Error == "" { return sig }
 
-	log.Printf("[AI FALLBACK] Bear (HuggingFace) failed: %v. Trying OpenRouter...", sig.Error)
+	log.Printf("[AI FALLBACK] Bear (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
+	sig = runBearAgent(ctx, o.cloudflare, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Bear (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	sig = runBearAgent(ctx, o.openrouter, market)
 	if sig.Error == "" { return sig }
 
@@ -849,7 +908,11 @@ func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, 
 	sig = runMacroAgent(ctx, o.huggingface, market)
 	if sig.Error == "" { return sig }
 
-	log.Printf("[AI FALLBACK] Macro (HuggingFace) failed: %v. Trying OpenRouter...", sig.Error)
+	log.Printf("[AI FALLBACK] Macro (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
+	sig = runMacroAgent(ctx, o.cloudflare, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Macro (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	return runMacroAgent(ctx, o.openrouter, market)
 }
 
@@ -870,7 +933,11 @@ func (o *MultiAgentOrchestrator) runRiskAgentWithFallback(ctx context.Context, b
 	v = runRiskAgent(ctx, o.huggingface, bull, bear, macro, market)
 	if v.Error == "" { return v }
 
-	log.Printf("[AI FALLBACK] Risk (HuggingFace) failed: %v. Trying OpenRouter...", v.Error)
+	log.Printf("[AI FALLBACK] Risk (HuggingFace) failed: %v. Trying Cloudflare...", v.Error)
+	v = runRiskAgent(ctx, o.cloudflare, bull, bear, macro, market)
+	if v.Error == "" { return v }
+
+	log.Printf("[AI FALLBACK] Risk (Cloudflare) failed: %v. Trying OpenRouter...", v.Error)
 	v = runRiskAgent(ctx, o.openrouter, bull, bear, macro, market)
 	if v.Error == "" { return v }
 
@@ -878,7 +945,7 @@ func (o *MultiAgentOrchestrator) runRiskAgentWithFallback(ctx context.Context, b
 	return runRiskAgent(ctx, o.openai, bull, bear, macro, market)
 }
 
-func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, mistral *MistralClient, huggingface *HuggingFaceClient, store *persistence.Store) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, mistral *MistralClient, huggingface *HuggingFaceClient, cloudflare *CloudflareClient, store *persistence.Store) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
 		openai:      openai,
 		gemini:      gemini,
@@ -886,6 +953,7 @@ func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq 
 		openrouter:  openrouter,
 		mistral:     mistral,
 		huggingface: huggingface,
+		cloudflare:  cloudflare,
 		store:       store,
 		insights:    NewInsightStore(50),
 	}
