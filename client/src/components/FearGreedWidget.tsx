@@ -56,7 +56,19 @@ function Arc({ value }: { value: number }) {
 export default function FearGreedWidget() {
   const fg = useFearGreed();
 
-  if (!fg) return null;
+  // Reserve fixed height while loading to prevent layout shift that causes page scroll jump
+  if (!fg) {
+    return (
+      <div
+        style={{
+          background: "var(--surface-2)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          height: 72,
+        }}
+      />
+    );
+  }
 
   const color = colorFor(fg.value);
 

@@ -111,27 +111,27 @@ export default function DashboardHeader({
 
         {/* ── Admin actions ── */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {openPositions > 0 && (
-            <button
-              onClick={handleCloseAll}
-              disabled={isBusy}
-              style={{
-                border: "1px solid rgba(245,158,11,0.35)",
-                color: "#F59E0B",
-                borderRadius: 10,
-                padding: "7px 14px",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                background: "rgba(245,158,11,0.07)",
-                cursor: isBusy ? "not-allowed" : "pointer",
-                opacity: isBusy ? 0.6 : 1,
-                transition: "background 0.15s",
-              }}
-            >
-              {activeAction === "/api/admin/close-all" ? "Closing…" : `Close All (${openPositions})`}
-            </button>
-          )}
+          {/* Always in DOM to keep header height stable; hidden when no positions */}
+          <button
+            onClick={handleCloseAll}
+            disabled={isBusy || openPositions === 0}
+            style={{
+              border: "1px solid rgba(245,158,11,0.35)",
+              color: "#F59E0B",
+              borderRadius: 10,
+              padding: "7px 14px",
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              background: "rgba(245,158,11,0.07)",
+              cursor: (isBusy || openPositions === 0) ? "not-allowed" : "pointer",
+              opacity: openPositions === 0 ? 0 : isBusy ? 0.6 : 1,
+              pointerEvents: openPositions === 0 ? "none" : "auto",
+              transition: "opacity 0.2s",
+            }}
+          >
+            {activeAction === "/api/admin/close-all" ? "Closing…" : `Close All (${openPositions})`}
+          </button>
           <button
             onClick={handleKillSwitch}
             disabled={isBusy}

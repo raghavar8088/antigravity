@@ -30,8 +30,8 @@
 
 html {
   overflow-y: scroll;
-  scroll-behavior: smooth;
-  overflow-anchor: auto;
+  /* No scroll-behavior: smooth — it makes browser scroll-anchor adjustments
+     visibly animate, which looks like the page is jumping on every data update */
 }
 
 body {
@@ -40,7 +40,6 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  overflow-anchor: auto;
 }
 
 /* ── Card styles ── */
