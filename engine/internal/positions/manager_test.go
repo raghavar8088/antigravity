@@ -28,28 +28,19 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 		if event.Reason != ReasonTakeProfit {
 			t.Fatalf("expected take profit event, got %s", event.Reason)
 		}
-		if event.Position.Size != 0.5 {
-			t.Fatalf("expected partial size 0.5, got %.2f", event.Position.Size)
+		if event.Position.Size != 1.0 {
+			t.Fatalf("expected full-size close at TP, got %.2f", event.Position.Size)
 		}
-		if event.Position.ID != pos.ID+"-TP1" {
-			t.Fatalf("expected partial id suffix, got %s", event.Position.ID)
+		if event.Position.ID != pos.ID {
+			t.Fatalf("expected original position id, got %s", event.Position.ID)
 		}
 	default:
-		t.Fatal("expected partial take profit event")
+		t.Fatal("expected take profit event")
 	}
 
 	positions := mgr.GetOpenPositions()
-	if len(positions) != 1 {
-		t.Fatalf("expected one remaining open position, got %d", len(positions))
-	}
-	if positions[0].Size != 0.5 {
-		t.Fatalf("expected remaining size 0.5, got %.2f", positions[0].Size)
-	}
-	if !positions[0].PartialClosed {
-		t.Fatal("expected position to be marked partial closed")
-	}
-	if positions[0].BreakEvenMoved {
-		t.Fatal("expected partial take profit to avoid moving stop to break even")
+	if len(positions) != 0 {
+		t.Fatalf("expected full TP close to remove the position, got %d open positions", len(positions))
 	}
 }
 
@@ -72,8 +63,8 @@ func TestLongPositionDoesNotAutoMoveToBreakEven(t *testing.T) {
 	if len(positions) != 1 {
 		t.Fatalf("expected one open position, got %d", len(positions))
 	}
-	if math.Abs(positions[0].StopLoss-originalStop) > floatTolerance {
-		t.Fatalf("expected stop loss to remain %.4f, got %.4f", originalStop, positions[0].StopLoss)
+	if positions[0].StopLoss <= originalStop {
+		t.Fatalf("expected trailing stop to lift stop loss above %.4f, got %.4f", originalStop, positions[0].StopLoss)
 	}
 	if positions[0].BreakEvenMoved {
 		t.Fatal("expected break-even flag to remain disabled")
@@ -150,11 +141,11 @@ func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
 	if math.Abs(pos.StopLossPct-1.0) > floatTolerance {
 		t.Fatalf("expected reversed stop loss pct 1.0, got %.4f", pos.StopLossPct)
 	}
-	if math.Abs(pos.TakeProfitPct-0.35) > floatTolerance {
-		t.Fatalf("expected take profit floor 0.35, got %.4f", pos.TakeProfitPct)
+	if math.Abs(pos.TakeProfitPct-0.20) > floatTolerance {
+		t.Fatalf("expected take profit floor 0.20, got %.4f", pos.TakeProfitPct)
 	}
-	if math.Abs(pos.TakeProfit-100.35) > floatTolerance {
-		t.Fatalf("expected take profit 100.35, got %.4f", pos.TakeProfit)
+	if math.Abs(pos.TakeProfit-100.20) > floatTolerance {
+		t.Fatalf("expected take profit 100.20, got %.4f", pos.TakeProfit)
 	}
 }
 

@@ -132,21 +132,24 @@ func (s *MACDVWAPFlipScalper) OnCandle(candle marketdata.Tick) []Signal {
 	fastEMA := EMA(s.prices, 8)
 	slowEMA := EMA(s.prices, 21)
 	atr := ATR(s.prices, 14)
+	adx := ADX(s.prices, 14)
+	rsi := RSI(s.prices, 14)
 	_, _, hist := MACD(s.prices, 5, 13, 6)
 	defer func() { s.prevHist = hist }()
 
-	if atr == 0 || vwap == 0 {
+	if atr == 0 || vwap == 0 || adx < 20 {
 		return holdSignal()
 	}
 
 	histStrength := math.Min(math.Abs(hist)/atr, 1.5)
 	confidence := 0.95 + histStrength*0.2
 
-	if s.prevHist <= 0 && hist > 0 && candle.Price > vwap && fastEMA > slowEMA {
-		return signalWithConfidence(candle.Symbol, ActionBuy, 0.30, 0.85, confidence)
+	// Require MACD flip + VWAP side + EMA alignment + ADX trend + RSI in healthy range
+	if s.prevHist <= 0 && hist > 0 && candle.Price > vwap && fastEMA > slowEMA && rsi > 45 && rsi < 72 {
+		return signalWithConfidence(candle.Symbol, ActionBuy, 0.20, 0.50, confidence)
 	}
-	if s.prevHist >= 0 && hist < 0 && candle.Price < vwap && fastEMA < slowEMA {
-		return signalWithConfidence(candle.Symbol, ActionSell, 0.30, 0.85, confidence)
+	if s.prevHist >= 0 && hist < 0 && candle.Price < vwap && fastEMA < slowEMA && rsi < 55 && rsi > 28 {
+		return signalWithConfidence(candle.Symbol, ActionSell, 0.20, 0.50, confidence)
 	}
 
 	return holdSignal()
@@ -226,8 +229,10 @@ func (s *ATRVolumeImpulseScalper) OnCandle(candle marketdata.Tick) []Signal {
 	}
 
 	atr := ATR(s.prices, 14)
+	adx := ADX(s.prices, 14)
+	rsi := RSI(s.prices, 14)
 	avgVolume := tailAverage(s.volumes, 20)
-	if atr == 0 || avgVolume == 0 {
+	if atr == 0 || avgVolume == 0 || adx < 20 {
 		return holdSignal()
 	}
 
@@ -237,11 +242,12 @@ func (s *ATRVolumeImpulseScalper) OnCandle(candle marketdata.Tick) []Signal {
 	volRatio := candle.Quantity / avgVolume
 	confidence := 0.95 + math.Min(volRatio*0.18, 0.4)
 
-	if trueRange > 1.4*atr && volRatio > 1.5 && candle.Price > upper {
-		return signalWithConfidence(candle.Symbol, ActionBuy, 0.35, 1.10, confidence)
+	// Confirm breakouts with trend strength and avoid overextended entries.
+	if trueRange > 1.4*atr && volRatio > 1.5 && candle.Price > upper && rsi > 50 && rsi < 70 {
+		return signalWithConfidence(candle.Symbol, ActionBuy, 0.22, 0.55, confidence)
 	}
-	if trueRange > 1.4*atr && volRatio > 1.5 && candle.Price < lower {
-		return signalWithConfidence(candle.Symbol, ActionSell, 0.35, 1.10, confidence)
+	if trueRange > 1.4*atr && volRatio > 1.5 && candle.Price < lower && rsi < 50 && rsi > 30 {
+		return signalWithConfidence(candle.Symbol, ActionSell, 0.22, 0.55, confidence)
 	}
 
 	return holdSignal()

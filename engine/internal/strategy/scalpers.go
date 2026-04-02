@@ -440,7 +440,10 @@ type ADXTrendScalper struct {
 	baseScalper
 	adxPeriod    int
 	emaPeriod    int
+	rsiPeriod    int
 	adxThreshold float64
+	prevAboveEMA bool
+	prevSet      bool
 }
 
 func NewADXTrendScalper() *ADXTrendScalper {
@@ -448,6 +451,7 @@ func NewADXTrendScalper() *ADXTrendScalper {
 		baseScalper:  baseScalper{name: "ADX_Trend_Scalp", maxBuf: defaultBufSize},
 		adxPeriod:    14,
 		emaPeriod:    9,
+		rsiPeriod:    14,
 		adxThreshold: 25,
 	}
 }
@@ -456,18 +460,33 @@ func (s *ADXTrendScalper) OnTick(tick marketdata.Tick) []Signal { return s.OnCan
 
 func (s *ADXTrendScalper) OnCandle(candle marketdata.Tick) []Signal {
 	s.feed(candle.Price)
-	if len(s.prices) < s.adxPeriod+2 {
+	if len(s.prices) < s.adxPeriod+s.rsiPeriod+2 {
 		return holdSignal()
 	}
 	adx := ADX(s.prices, s.adxPeriod)
 	if adx < s.adxThreshold {
-		return holdSignal() // No trade in weak/choppy markets
+		s.prevSet = false
+		return holdSignal()
 	}
 	ema := EMA(s.prices, s.emaPeriod)
-	if candle.Price > ema {
+	rsi := RSI(s.prices, s.rsiPeriod)
+	aboveEMA := candle.Price > ema
+
+	if !s.prevSet {
+		s.prevAboveEMA = aboveEMA
+		s.prevSet = true
+		return holdSignal()
+	}
+
+	crossedAbove := !s.prevAboveEMA && aboveEMA
+	crossedBelow := s.prevAboveEMA && !aboveEMA
+	s.prevAboveEMA = aboveEMA
+
+	// Only signal on EMA crossover + RSI confirmation (not overbought/oversold)
+	if crossedAbove && rsi > 45 && rsi < 70 {
 		return buySignal(candle.Symbol)
 	}
-	if candle.Price < ema {
+	if crossedBelow && rsi < 55 && rsi > 30 {
 		return sellSignal(candle.Symbol)
 	}
 	return holdSignal()

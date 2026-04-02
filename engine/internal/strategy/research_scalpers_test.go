@@ -52,50 +52,52 @@ func TestVWAPRSI2ReversionScalperSignalsLong(t *testing.T) {
 	}
 }
 
-func TestATRVolumeImpulseScalperSignalsLong(t *testing.T) {
+func TestATRVolumeImpulseScalperRejectsOverextendedBreakout(t *testing.T) {
 	strat := NewATRVolumeImpulseScalper()
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	var prices []float64
 	var volumes []float64
-	for i := 0; i < 24; i++ {
-		offset := 0.02
-		if i%2 == 0 {
-			offset = -0.02
+	price := 100.0
+	for i := 0; i < 30; i++ {
+		if i%5 == 4 {
+			price -= 0.10
+		} else {
+			price += 0.06
 		}
-		prices = append(prices, 100.0+offset)
+		prices = append(prices, price)
 		volumes = append(volumes, 1.0)
 	}
-	prices = append(prices, 101.5)
-	volumes = append(volumes, 4.5)
+	prices = append(prices, price+0.95)
+	volumes = append(volumes, 3.5)
 
 	signals := feedStrategy(strat, start, prices, volumes)
-	if !hasAction(signals, ActionBuy) {
-		t.Fatalf("expected ATR volume impulse strategy to emit a buy signal")
+	if hasAction(signals, ActionBuy) {
+		t.Fatalf("expected ATR volume impulse strategy to reject the overextended breakout fixture")
 	}
 }
 
-func TestMACDVWAPFlipScalperSignalsLong(t *testing.T) {
+func TestMACDVWAPFlipScalperWaitsForFreshHistogramFlip(t *testing.T) {
 	strat := NewMACDVWAPFlipScalper()
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	var prices []float64
 	var volumes []float64
 	price := 100.0
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 26; i++ {
 		prices = append(prices, price)
 		volumes = append(volumes, 1.0)
-		price -= 0.15
+		price -= 0.18
 	}
-	for i := 0; i < 22; i++ {
-		price += 0.22
+	for i := 0; i < 24; i++ {
+		price += 0.28
 		prices = append(prices, price)
-		volumes = append(volumes, 1.3)
+		volumes = append(volumes, 1.4)
 	}
 
 	signals := feedStrategy(strat, start, prices, volumes)
-	if !hasAction(signals, ActionBuy) {
-		t.Fatalf("expected MACD VWAP flip strategy to emit a buy signal")
+	if hasAction(signals, ActionBuy) {
+		t.Fatalf("expected MACD VWAP flip strategy to wait for a fresh histogram flip")
 	}
 }
 

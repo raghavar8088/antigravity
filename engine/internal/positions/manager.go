@@ -79,13 +79,13 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.55,  // Trail activates only after 0.55% profit (near TP), locks in gains
+			TrailingStopPct:    0.18,  // Trail activates after 0.18% profit — locks in partial gains without blocking TP
 			BreakEvenThreshold: 0.00,  // Break-even exits disabled
 			PartialTPRatio:     1.0,   // Close FULL position at TP (no partial — removes half-open reversal risk)
-			MinTakeProfitPct:   0.45,  // Keep TP above round-trip fee noise
+			MinTakeProfitPct:   0.20,  // Reduced: 0.45 was forcing TP too wide for scalpers, collapsing win rates
 			MaxPerStrategy:     2,     // Max 2 positions per strategy — prevent pile-up
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 60,    // Auto-expire after 60 minutes — cut dead weight faster
+			MaxPositionAgeMins: 10,    // Scalping: auto-expire after 10 min — no dead-weight positions
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}

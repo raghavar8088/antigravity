@@ -10,7 +10,7 @@ import (
 const signalTolerance = 1e-9
 
 func TestSanitizeSignalForProfitRejectsLowConfidence(t *testing.T) {
-	_, allowed := sanitizeSignalForProfit(strategy.Signal{
+	_, _, allowed := sanitizeSignalForProfit(strategy.Signal{
 		Confidence:    0.70,
 		StopLossPct:   0.30,
 		TakeProfitPct: 0.80,
@@ -22,7 +22,7 @@ func TestSanitizeSignalForProfitRejectsLowConfidence(t *testing.T) {
 }
 
 func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
-	sanitized, allowed := sanitizeSignalForProfit(strategy.Signal{
+	sanitized, _, allowed := sanitizeSignalForProfit(strategy.Signal{
 		Confidence: 1.0,
 	})
 
@@ -32,13 +32,14 @@ func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
 	if math.Abs(sanitized.StopLossPct-defaultSignalStopLossPct) > signalTolerance {
 		t.Fatalf("expected default stop loss %.2f, got %.4f", defaultSignalStopLossPct, sanitized.StopLossPct)
 	}
-	if math.Abs(sanitized.TakeProfitPct-minSignalTakeProfitPct) > signalTolerance {
-		t.Fatalf("expected default take profit %.2f, got %.4f", minSignalTakeProfitPct, sanitized.TakeProfitPct)
+	expectedTakeProfit := defaultSignalStopLossPct * minRewardToRiskRatio
+	if math.Abs(sanitized.TakeProfitPct-expectedTakeProfit) > signalTolerance {
+		t.Fatalf("expected default take profit %.4f, got %.4f", expectedTakeProfit, sanitized.TakeProfitPct)
 	}
 }
 
 func TestSanitizeSignalForProfitEnforcesRiskRewardAndStopCap(t *testing.T) {
-	sanitized, allowed := sanitizeSignalForProfit(strategy.Signal{
+	sanitized, _, allowed := sanitizeSignalForProfit(strategy.Signal{
 		Confidence:    1.0,
 		StopLossPct:   2.0,
 		TakeProfitPct: 0.5,
@@ -51,14 +52,14 @@ func TestSanitizeSignalForProfitEnforcesRiskRewardAndStopCap(t *testing.T) {
 		t.Fatalf("expected clamped stop loss %.2f, got %.4f", maxSignalStopLossPct, sanitized.StopLossPct)
 	}
 
-	expectedTakeProfit := maxSignalStopLossPct * minRewardToRiskRatio
+	expectedTakeProfit := 0.5
 	if math.Abs(sanitized.TakeProfitPct-expectedTakeProfit) > signalTolerance {
 		t.Fatalf("expected take profit %.4f, got %.4f", expectedTakeProfit, sanitized.TakeProfitPct)
 	}
 }
 
 func TestSanitizeSignalForProfitBackfillsMissingConfidence(t *testing.T) {
-	sanitized, allowed := sanitizeSignalForProfit(strategy.Signal{
+	sanitized, _, allowed := sanitizeSignalForProfit(strategy.Signal{
 		Confidence:    0,
 		StopLossPct:   0.4,
 		TakeProfitPct: 0.6,
@@ -132,11 +133,14 @@ func TestIsCategoryAlignedWithRegime(t *testing.T) {
 	if isCategoryAlignedWithRegime("Trend", marketRegimeRange) {
 		t.Fatal("expected Trend blocked in RANGE regime")
 	}
-	if !isCategoryAlignedWithRegime("Any", marketRegimeUnknown) {
-		t.Fatal("expected UNKNOWN regime to allow all categories")
+	if isCategoryAlignedWithRegime("Any", marketRegimeUnknown) {
+		t.Fatal("expected UNKNOWN regime to block all categories")
 	}
-	if !isCategoryAlignedWithRegime("Any", marketRegimeMixed) {
-		t.Fatal("expected MIXED regime to allow all categories")
+	if !isCategoryAlignedWithRegime("Trend", marketRegimeMixed) {
+		t.Fatal("expected MIXED regime to allow high-conviction trend categories")
+	}
+	if isCategoryAlignedWithRegime("Mean Reversion", marketRegimeMixed) {
+		t.Fatal("expected MIXED regime to block mean reversion categories")
 	}
 }
 

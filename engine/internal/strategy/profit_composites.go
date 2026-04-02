@@ -117,7 +117,7 @@ func (s *PullbackContinuationProScalper) OnCandle(candle marketdata.Tick) []Sign
 	}
 
 	avgVolume := tailAverage(s.volumes, 20)
-	if avgVolume == 0 || candle.Quantity < avgVolume*1.10 {
+	if avgVolume == 0 || candle.Quantity < avgVolume*1.40 {
 		return holdSignal()
 	}
 

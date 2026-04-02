@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	minSelectiveScore  = 1.5  // Lowered: allow more quality signals through
-	minDominanceRatio  = 1.05 // Lowered: less strict side consensus required
-	minDominanceLead   = 0.15 // Lowered: allow closer buy/sell battles to trade
-	maxApprovedSignals = 3    // Increased: allow up to 3 trades per batch (was 1)
+	minSelectiveScore  = 1.65 // Tightened: require stronger edge before any signal passes
+	minDominanceRatio  = 1.15 // Tightened: dominant side must clearly beat the opposing side
+	minDominanceLead   = 0.30 // Tightened: avoid trading nearly tied buy/sell batches
+	maxApprovedSignals = 2    // Keep capital concentrated in the best setups only
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and
@@ -109,76 +109,81 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score = 1.0
 	}
 
+	// Priorities calibrated against live performance data. Strong winners get a
+	// clear boost, while repeat losers stay below the selective threshold unless
+	// raw confidence improves materially.
 	switch sig.StrategyName {
-	case "TripleFilter_Alpha_Scalp":
+	// ── PROVEN WINNERS — boost ──────────────────────────────────────
+	case "TripleFilter_Alpha_Scalp": // +$20 live
+		score += 1.6
+	case "VolumeWeighted_Trend_Scalp": // +$16 live
+		score += 1.55
+	case "EMA_Cross_Scalp": // +$4.51 live
 		score += 1.4
-	case "OrderFlow_Pressure_Pro_Scalp":
+	case "ZScoreBand_MeanRev_Scalp": // +$4.32 live
 		score += 1.35
-	case "ATR_Breakout_Scalp":
+	case "OrderFlow_Pressure_Pro_Scalp": // +$2 live (low win rate but profitable)
 		score += 1.3
+	case "BollingerWalk_Trend_Scalp": // small positive
+		score += 1.25
+	case "Stochastic_Range_Scalp": // +$1.77 live
+		score += 1.2
+	case "RSI_BB_Confluence_Scalp": // +$3 live
+		score += 1.2
+	case "LinReg_Statistical_Scalp": // +$0.56 live
+		score += 1.15
+	case "Chart_DoubleTap_Reversal_Scalp": // +$1.63 live
+		score += 1.15
 	case "OpeningRange_Breakout_Scalp":
-		score += 1.25
+		score += 1.1
 	case "VolSqueeze_Explosion_Scalp":
-		score += 1.2
-	case "VolumeBreakout_Impulse_Scalp":
-		score += 1.2
-	case "ATR_Volume_Impulse_Scalp":
-		score += 1.15
-	case "Donchian_Breakout_Scalp":
 		score += 1.1
-	case "Pullback_Continuation_Pro_Scalp":
-		score += 1.1
-	case "VolumeWeighted_Trend_Scalp":
-		score += 1.1
-	case "VWAP_RSI2_Reversion_Scalp":
-		score += 1.0
-	case "MACD_VWAP_Flip_Scalp":
-		score += 0.95
-	case "PriceChannel_Breakout_Scalp":
-		score += 1.0
-	case "Chart_Wedge_Breakout_Scalp":
-		score += 1.05
-	case "Chart_DoubleTap_Reversal_Scalp":
-		score += 0.95
-	case "ADX_Trend_Scalp":
-		score += 1.0
-	case "EMA_Cross_Scalp":
-		score += 0.9
 	case "Bollinger_RSI_Fade_Scalp":
-		score += 0.8
-	case "KAMA_Adaptive_Scalp":
-		score += 0.8
-	case "AdaptiveRSI_Dynamic_Scalp":
-		score += 0.7
-	case "ZScoreBand_MeanRev_Scalp":
-		score += 0.7
-	case "RSI_BB_Confluence_Scalp":
-		score += 0.7
-	case "Stochastic_Range_Scalp":
-		score += 0.65
-	case "LinReg_Statistical_Scalp":
-		score += 0.6
-	case "RangeCompress_Breakout_Scalp":
-		score += 0.6
-	case "Exhaustion_Reversal_Scalp":
-		score += 0.4
-	// Pro2 strategies — calibrated vs existing baseline
-	case "TrendMomentum_Score_Scalp":
-		score += 1.30
-	case "VWAP_Bounce_Pro_Scalp":
-		score += 1.15
-	case "TripleTrend_Confluence_Scalp":
-		score += 1.25
-	case "MACD_ZeroCross_Confluence_Scalp":
-		score += 1.20
-	case "VolumeDelta_Spike_Scalp":
-		score += 1.15
-	case "SessionOpen_Momentum_Scalp":
-		score += 1.20
-	case "RSI_MACD_Divergence_Scalp":
 		score += 1.05
-	case "BollingerWalk_Trend_Scalp":
-		score += 1.0
+	case "AdaptiveRSI_Dynamic_Scalp": // small negative — borderline
+		score += 0.9
+	// Pro2 strategies
+	case "TrendMomentum_Score_Scalp":
+		score += 1.2
+	case "VWAP_RSI2_Reversion_Scalp": // -$1.42 live — reduced
+		score += 0.7
+	case "VWAP_Bounce_Pro_Scalp": // -$1.07 live — reduced
+		score += 0.75
+	case "TripleTrend_Confluence_Scalp": // -$1.43 live — reduced
+		score += 0.65
+	case "RSI_MACD_Divergence_Scalp": // -$2.06 live — reduced
+		score += 0.55
+	case "SessionOpen_Momentum_Scalp": // -$1.40 live — reduced
+		score += 0.65
+	// ── PROVEN LOSERS — heavily demoted ────────────────────────────
+	case "ATR_Volume_Impulse_Scalp": // -$19.65 live — WORST loser
+		score += 0.05
+	case "ATR_Breakout_Scalp": // -$15.43 live
+		score += 0.10
+	case "KAMA_Adaptive_Scalp": // -$14.36 live
+		score += 0.10
+	case "PriceChannel_Breakout_Scalp": // -$11.29 live
+		score += 0.12
+	case "MACD_VWAP_Flip_Scalp": // -$10.90 live
+		score += 0.15
+	case "Donchian_Breakout_Scalp": // -$7.84 live
+		score += 0.18
+	case "ADX_Trend_Scalp": // -$7.86 live (fixed entry logic now)
+		score += 0.25
+	case "Chart_Wedge_Breakout_Scalp": // -$6.41 live
+		score += 0.18
+	case "VolumeBreakout_Impulse_Scalp": // -$5.34 live
+		score += 0.20
+	case "Pullback_Continuation_Pro_Scalp": // -$4.27 live
+		score += 0.22
+	case "MACD_ZeroCross_Confluence_Scalp": // -$3.71 live
+		score += 0.20
+	case "VolumeDelta_Spike_Scalp": // -$3.44 live
+		score += 0.22
+	case "RangeCompress_Breakout_Scalp":
+		score += 0.25
+	case "Exhaustion_Reversal_Scalp":
+		score += 0.20
 	}
 
 	switch sig.Category {
