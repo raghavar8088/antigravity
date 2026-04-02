@@ -143,6 +143,37 @@ func main() {
 	if err != nil {
 		log.Printf("[DB] ⚠️  Database not available (will use fresh state): %v", err)
 	} else {
+		// ── UNLIMITED MODE HOOK ──
+		// Register a real-time save hook so every trade is persisted to the relational table immediately.
+		journal.OnTrade = func(entry execution.JournalEntry) {
+			// Convert to map for store interface
+			tradeMap := map[string]interface{}{
+				"id":           entry.ID,
+				"strategyName": entry.StrategyName,
+				"category":     entry.Category,
+				"side":         entry.Side,
+				"entryPrice":   entry.EntryPrice,
+				"exitPrice":    entry.ExitPrice,
+				"size":         entry.Size,
+				"grossPnl":     entry.GrossPnL,
+				"fees":         entry.Fees,
+				"netPnl":       entry.NetPnL,
+				"reason":       entry.Reason,
+				"entryTime":    entry.EntryTime,
+				"exitTime":     entry.ExitTime,
+				"duration":     entry.Duration,
+				"aiDecisionId": entry.AIDecisionID,
+				"aiProvider":   entry.AIProvider,
+				"aiReasoning":  entry.AIReasoning,
+				"aiConfidence": entry.AIConfidence,
+				"aiBullThesis": entry.AIBullThesis,
+				"aiBearThesis": entry.AIBearThesis,
+			}
+			if err := dbStore.SaveTrade(ctx, tradeMap); err != nil {
+				log.Printf("[DB] ⚠️  Failed to save trade %s to relational table: %v", entry.ID, err)
+			}
+		}
+
 		// ── Restore ALL state on boot ──
 		state, loadErr := dbStore.LoadState(ctx)
 		if loadErr == nil && state.Balance != initialPaperBalanceUSD {
@@ -173,6 +204,16 @@ func main() {
 			log.Printf("[DB] ♻️  FULL state restored from %s | Balance: $%.2f | Positions: %d | Trades: %d",
 				state.SavedAt.Format(time.RFC3339), state.Balance,
 				posMgr.GetPositionCount(), state.TotalTrades)
+
+			// ── MIGRATION ON BOOT ──
+			// If we range through existing restored trades and save them one-by-one, 
+			// the ON CONFLICT clause in SaveTrade ensures we migrate old BLOB data to the new table safely.
+			if len(restoredTrades) > 0 {
+				log.Printf("[DB] 🚚 Migrating %d trades to relational table...", len(restoredTrades))
+				for _, t := range restoredTrades {
+					journal.OnTrade(t)
+				}
+			}
 		} else {
 			log.Println("[DB] Fresh start — no previous state to restore")
 		}
@@ -297,13 +338,25 @@ func main() {
 		json.NewEncoder(w).Encode(openPositions)
 	})
 
-	// GET /api/trades — Completed trade journal
+	// GET /api/trades — Completed trade journal (UNLIMITED DB MODE)
 	http.HandleFunc("/api/trades", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
 		if r.Method == http.MethodOptions {
 			return
 		}
-		trades := journal.GetRecentTrades(5000)
+		
+		// If DB is available, fetch the latest 5,000 trades from the relational table.
+		if dbStore != nil {
+			trades, err := dbStore.GetTrades(context.Background(), 5000)
+			if err == nil {
+				json.NewEncoder(w).Encode(trades)
+				return
+			}
+			log.Printf("[API] ⚠️  Failed to fetch history from DB: %v", err)
+		}
+
+		// Fallback to in-memory summary if DB query fails.
+		trades := journal.GetRecentTrades(100)
 		json.NewEncoder(w).Encode(trades)
 	})
 

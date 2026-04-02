@@ -82,6 +82,37 @@ func NewStore(ctx context.Context) (*Store, error) {
 
 	log.Println("[DB] ✅ State table ready")
 	
+	// Create trades table — for UNLIMITED trade history
+	_, err = pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS trades (
+			id TEXT PRIMARY KEY,
+			timestamp TIMESTAMPTZ NOT NULL,
+			strategy_name TEXT NOT NULL,
+			category TEXT NOT NULL,
+			side TEXT NOT NULL,
+			entry_price DOUBLE PRECISION NOT NULL,
+			exit_price DOUBLE PRECISION NOT NULL,
+			size DOUBLE PRECISION NOT NULL,
+			gross_pnl DOUBLE PRECISION NOT NULL,
+			fees DOUBLE PRECISION NOT NULL,
+			net_pnl DOUBLE PRECISION NOT NULL,
+			reason TEXT NOT NULL,
+			entry_time TIMESTAMPTZ NOT NULL,
+			exit_time TIMESTAMPTZ NOT NULL,
+			duration_ms BIGINT NOT NULL,
+			ai_decision_id TEXT,
+			ai_provider TEXT,
+			ai_reasoning TEXT,
+			ai_confidence DOUBLE PRECISION,
+			ai_bull_thesis TEXT,
+			ai_bear_thesis TEXT
+		)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trades table: %w", err)
+	}
+	log.Println("[DB] ✅ Trades table ready (Unlimited Mode)")
+
 	// Create ai_audit_logs table — for AI Performance Tracking & History
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS ai_audit_logs (
@@ -199,6 +230,96 @@ func (s *Store) SaveAuditLog(ctx context.Context, id, strategy, action string, a
 		ON CONFLICT (id) DO NOTHING
 	`, id, strategy, action, approved, reason, confidence, provider)
 	return err
+}
+
+// SaveTrade persists a completed trade to the relational trades table.
+func (s *Store) SaveTrade(ctx context.Context, trade map[string]interface{}) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Convert duration to MS
+	dur, _ := trade["duration"].(time.Duration)
+	
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO trades (
+			id, timestamp, strategy_name, category, side,
+			entry_price, exit_price, size, gross_pnl, fees, net_pnl,
+			reason, entry_time, exit_time, duration_ms,
+			ai_decision_id, ai_provider, ai_reasoning, ai_confidence, ai_bull_thesis, ai_bear_thesis
+		) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		ON CONFLICT (id) DO NOTHING
+	`,
+		trade["id"], trade["strategyName"], trade["category"], trade["side"],
+		trade["entryPrice"], trade["exitPrice"], trade["size"], trade["grossPnl"],
+		trade["fees"], trade["netPnl"], trade["reason"],
+		trade["entryTime"], trade["exitTime"], dur.Milliseconds(),
+		trade["aiDecisionId"], trade["aiProvider"], trade["aiReasoning"],
+		trade["aiConfidence"], trade["aiBullThesis"], trade["aiBearThesis"],
+	)
+	return err
+}
+
+// GetTrades retrieves the latest N trades from the database.
+func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interface{}, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, entry_time, exit_time, strategy_name, category, side,
+		       entry_price, exit_price, size, gross_pnl, fees, net_pnl,
+		       reason, duration_ms, ai_decision_id, ai_provider, ai_reasoning,
+		       ai_confidence, ai_bull_thesis, ai_bear_thesis
+		FROM trades
+		ORDER BY exit_time DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query trades: %w", err)
+	}
+	defer rows.Close()
+
+	var trades []map[string]interface{}
+	for rows.Next() {
+		var id, strategy, category, side, reason, aiID, aiProvider, aiReason, aiBull, aiBear string
+		var entryP, exitP, size, grossP, fees, netP, aiConf float64
+		var durMS int64
+		var entryT, exitT time.Time
+		
+		err := rows.Scan(
+			&id, &entryT, &exitT, &strategy, &category, &side,
+			&entryP, &exitP, &size, &grossP, &fees, &netP,
+			&reason, &durMS, &aiID, &aiProvider, &aiReason,
+			&aiConf, &aiBull, &aiBear,
+		)
+		if err != nil {
+			return nil, err
+		}
+		
+		trades = append(trades, map[string]interface{}{
+			"id":           id,
+			"strategyName": strategy,
+			"category":     category,
+			"side":         side,
+			"entryPrice":   entryP,
+			"exitPrice":    exitP,
+			"size":         size,
+			"grossPnl":     grossP,
+			"fees":         fees,
+			"netPnl":       netP,
+			"reason":       reason,
+			"entryTime":    entryT,
+			"exitTime":     exitT,
+			"duration":     time.Duration(durMS) * time.Millisecond,
+			"time":         exitT.Format("15:04:05"), // Friendly string for legacy UI
+			"aiDecisionId": aiID,
+			"aiProvider":   aiProvider,
+			"aiReasoning":  aiReason,
+			"aiConfidence": aiConf,
+			"aiBullThesis": aiBull,
+			"aiBearThesis": aiBear,
+		})
+	}
+	return trades, nil
 }
 
 // LoadAuditLogs retrieves the latest N AI decisions from the database.

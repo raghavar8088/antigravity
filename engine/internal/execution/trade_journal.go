@@ -32,7 +32,6 @@ type JournalEntry struct {
 	AIBearThesis  string  `json:"aiBearThesis,omitempty"`
 }
 
-// TradeJournal maintains an in-memory log of all completed trades.
 type TradeJournal struct {
 	mu      sync.RWMutex
 	entries []JournalEntry
@@ -45,6 +44,9 @@ type TradeJournal struct {
 	totalPnL    float64
 	bestTrade   float64
 	worstTrade  float64
+	
+	// Persistence Hook
+	OnTrade func(entry JournalEntry) `json:"-"`
 }
 
 func NewTradeJournal(maxEntries int) *TradeJournal {
@@ -97,6 +99,11 @@ func (j *TradeJournal) RecordTrade(entry JournalEntry) {
 	log.Printf("[TRADE JOURNAL] Recorded: %s | %s %s | PnL: $%.2f (net: $%.2f) | Reason: %s | Duration: %s",
 		entry.StrategyName, entry.Side, entry.ID,
 		entry.GrossPnL, entry.NetPnL, entry.Reason, entry.Duration)
+
+	// Persist to relational DB table if hook is set
+	if j.OnTrade != nil {
+		go j.OnTrade(entry)
+	}
 }
 
 // GetRecentTrades returns the most recent N trades.
