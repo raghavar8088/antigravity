@@ -354,7 +354,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"enabled":       false,
 				"geminiEnabled": false,
-				"message":       "AI agents disabled — set OPENAI_API_KEY to enable GPT trading",
+				"message":       "AI agents disabled — set GROQ_API_KEY (free) or OPENAI_API_KEY to enable AI trading",
 				"insights":      []interface{}{},
 			})
 			return
@@ -371,9 +371,16 @@ func main() {
 		})
 	})
 
+	// Use PORT env var so the server and keepAlive both bind to the same port.
+	// Render sets PORT=10000; locally defaults to 8080.
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+
 	go func() {
-		fmt.Println("═══════════════════════════════════════════")
-		fmt.Println("  REST API Engine listening on :8080")
+		fmt.Printf("═══════════════════════════════════════════\n")
+		fmt.Printf("  REST API Engine listening on :%s\n", httpPort)
 		fmt.Println("  Endpoints:")
 		fmt.Println("    GET  /health          — Engine health")
 		fmt.Println("    GET  /api/strategies   — Strategy stats")
@@ -385,7 +392,7 @@ func main() {
 		fmt.Println("    POST /api/admin/close-all — Close all open paper positions")
 		fmt.Println("    POST /api/admin/reset  — Reset account")
 		fmt.Println("═══════════════════════════════════════════")
-		if err := http.ListenAndServe(":8080", nil); err != nil {
+		if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
 			log.Println("Admin Server error:", err)
 		}
 	}()

@@ -83,9 +83,9 @@ func NewManager() *Manager {
 			BreakEvenThreshold: 0.00,  // Break-even exits disabled
 			PartialTPRatio:     1.0,   // Close FULL position at TP (no partial — removes half-open reversal risk)
 			MinTakeProfitPct:   0.45,  // Keep TP above round-trip fee noise
-			MaxPerStrategy:     3,     // Max 3 positions per strategy (was 2)
+			MaxPerStrategy:     2,     // Max 2 positions per strategy — prevent pile-up
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 120,   // Auto-expire after 120 minutes (was 45 — gave slow winners time)
+			MaxPositionAgeMins: 60,    // Auto-expire after 60 minutes — cut dead weight faster
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
