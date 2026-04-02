@@ -4,7 +4,7 @@ package ai
 // Inspired by Anthropic's Constitutional AI — a set of principles the system
 // must follow regardless of what Bull or Bear agents recommend.
 const TradingConstitution = `
-ANTIGRAVITY TRADING CONSTITUTION
+RAIG TRADING CONSTITUTION
 ══════════════════════════════════
 
 These rules are ABSOLUTE and cannot be overridden by any agent signal.

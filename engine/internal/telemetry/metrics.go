@@ -7,22 +7,22 @@ import (
 
 var (
 	OrdersPlaced = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "antigravity_orders_total",
+		Name: "raig_orders_total",
 		Help: "Total number of orders successfully sent to the exchange",
 	}, []string{"symbol", "side"})
 
 	OrdersFailed = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "antigravity_orders_failed_total",
+		Name: "raig_orders_failed_total",
 		Help: "Total number of algorithmic orders physically rejected by risk or exchange",
 	})
 
 	CurrentExposure = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "antigravity_exposure_btc",
+		Name: "raig_exposure_btc",
 		Help: "Current Real-Time Bitcoin holding calculated in execution loop",
 	}, []string{"strategy"})
 
 	WebSocketLatency = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name:    "antigravity_ws_latency_ms",
+		Name:    "raig_ws_latency_ms",
 		Help:    "Latency in millisecond to process a live websocket tick",
 		Buckets: []float64{1, 5, 10, 50, 100, 500},
 	})

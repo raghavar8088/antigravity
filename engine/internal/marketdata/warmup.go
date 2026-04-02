@@ -50,7 +50,7 @@ func fetchKlines(symbol, granularity string) ([]Candle, error) {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("User-Agent", "AntigravityEngine/4.0")
+	req.Header.Set("User-Agent", "RAIGEngine/4.0")
 
 	resp, err := client.Do(req)
 	if err != nil {

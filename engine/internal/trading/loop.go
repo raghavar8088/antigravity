@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,11 +22,12 @@ const (
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
-	minExecutableConfidence  = 0.80 // Lowered: allow slightly less certain signals (was 0.85)
-	minRewardToRiskRatio     = 1.50 // Raised: require better reward vs risk (was 1.35)
-	minSignalTakeProfitPct   = 0.55 // Raised: ensure TP is worth chasing after slippage (was 0.45)
-	maxSignalStopLossPct     = 0.80 // Lowered: tighter max SL, keep losses small (was 1.20)
-	defaultSignalStopLossPct = 0.50 // RAISED: widened from 0.20 to prevent whipsaws
+	minExecutableConfidence    = 0.80 // Minimum strategy signal confidence to execute
+	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
+	minRewardToRiskRatio       = 1.50 // Raised: require better reward vs risk (was 1.35)
+	minSignalTakeProfitPct     = 0.55 // Raised: ensure TP is worth chasing after slippage (was 0.45)
+	maxSignalStopLossPct       = 0.80 // Lowered: tighter max SL, keep losses small (was 1.20)
+	defaultSignalStopLossPct   = 0.50 // RAISED: widened from 0.20 to prevent whipsaws
 
 	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
 	marketHistoryMaxSamples   = 320
@@ -60,12 +62,64 @@ type Orchestrator struct {
 	candleHistory []ai.CandleSummary
 	candleHistMu  sync.Mutex
 
-	// Internal state
-	lastPrice    float64
-	h1Counter    int // Counts 5m candles to simulate 1h (every 12th)
 	priceWindow  []float64
 	volumeWindow []float64
-	mu           sync.RWMutex
+
+	// Internal state
+	lastPrice float64
+	h1Counter int // Counts 5m candles to simulate 1h (every 12th)
+
+	// Heartbeat for automated bridge failover
+	lastBridgeHeartbeat time.Time
+	bridgeHeartbeatMu   sync.RWMutex
+
+	// Interactive AI: Pending signals waiting for UI submission
+	pendingSignals map[string]PendingSignal
+	pendingMu      sync.RWMutex
+
+	// Replay protection for browser verdict submissions
+	processedBridgeSignals map[string]time.Time
+	processedBridgeMu      sync.Mutex
+
+	lastBridgeEvent   string
+	lastBridgeEventAt time.Time
+	lastBridgeError   string
+	lastBridgeErrorAt time.Time
+	bridgeStateMu     sync.RWMutex
+
+	mu sync.RWMutex
+}
+
+// PendingSignal represents a strategy signal waiting for AI/User approval.
+type PendingSignal struct {
+	ID           string           `json:"id"`
+	Signal       strategy.Signal  `json:"signal"`
+	StrategyName string           `json:"strategyName"`
+	Category     string           `json:"category"`
+	Context      ai.MarketContext `json:"context"`
+	AutoPrompt   string           `json:"autoPrompt"`
+	CreatedAt    time.Time        `json:"createdAt"`
+}
+
+// BridgeDecision is the structured verdict returned by the browser bridge.
+type BridgeDecision struct {
+	Approved   bool    `json:"approved"`
+	Action     string  `json:"action"`
+	Confidence float64 `json:"confidence"`
+	Reason     string  `json:"reason"`
+	RawReply   string  `json:"rawReply"`
+}
+
+type BridgeStatus struct {
+	Online              bool      `json:"online"`
+	LastHeartbeat       time.Time `json:"lastHeartbeat"`
+	SecondsSinceBeat    int       `json:"secondsSinceBeat"`
+	PendingSignals      int       `json:"pendingSignals"`
+	ProcessedSignalKeys int       `json:"processedSignalKeys"`
+	LastEvent           string    `json:"lastEvent"`
+	LastEventAt         time.Time `json:"lastEventAt"`
+	LastError           string    `json:"lastError"`
+	LastErrorAt         time.Time `json:"lastErrorAt"`
 }
 
 func NewOrchestrator(
@@ -84,18 +138,21 @@ func NewOrchestrator(
 		len(groups.Tick), len(groups.M1), len(groups.M5), len(groups.H1))
 
 	return &Orchestrator{
-		client:       c,
-		strategies:   strats,
-		groups:       groups,
-		risk:         r,
-		exec:         e,
-		aggregator:   agg,
-		posMgr:       pm,
-		tracker:      tracker,
-		journal:      journal,
-		candleAgg:    candleAgg,
-		priceWindow:  make([]float64, 0, marketHistoryMaxSamples),
-		volumeWindow: make([]float64, 0, marketHistoryMaxSamples),
+		client:                 c,
+		strategies:             strats,
+		groups:                 groups,
+		risk:                   r,
+		exec:                   e,
+		aggregator:             agg,
+		posMgr:                 pm,
+		tracker:                tracker,
+		journal:                journal,
+		candleAgg:              candleAgg,
+		priceWindow:            make([]float64, 0, marketHistoryMaxSamples),
+		volumeWindow:           make([]float64, 0, marketHistoryMaxSamples),
+		pendingSignals:         make(map[string]PendingSignal),
+		processedBridgeSignals: make(map[string]time.Time),
+		lastBridgeHeartbeat:    time.Now(),
 	}
 }
 
@@ -144,10 +201,10 @@ func (o *Orchestrator) WarmupStrategies(warmup *marketdata.WarmupData) {
 	log.Println("[WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.")
 }
 
-// Run is the infinite heartbeat of Antigravity Live Trading.
+// Run is the infinite heartbeat of RAIG Autonomous Trading.
 // It processes ticks and candles through their respective strategy groups.
 func (o *Orchestrator) Run(ctx context.Context) {
-	log.Printf("[MASTER LOOP] Booting Multi-Strategy Orchestrator with %d strategies...", len(o.strategies))
+	log.Printf("[RAIG MASTER LOOP] 🛰️  Booting Protocols with %d active strategies...", len(o.strategies))
 	ticks := o.client.GetTickChannel()
 
 	// Background: process position close events (SL/TP/trailing)
@@ -167,6 +224,9 @@ func (o *Orchestrator) Run(ctx context.Context) {
 		go o.processAIDecisions(ctx)
 		log.Println("[AI] 🤖 Claude multi-agent trading loop ACTIVE")
 	}
+
+	// Background: Auto-fallback monitor for bridge failover
+	go o.autoFallbackMonitor(ctx)
 
 	for {
 		select {
@@ -336,21 +396,21 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 	dailyPnL := o.risk.GetDailyPnL()
 
 	market := ai.MarketContext{
-		Symbol:            "BTC-USD",
-		Price:             price,
-		Regime:            regime,
-		RSI:               rsi,
-		ATR:               atr,
-		VWAP:              vwap,
-		ADX:               adx,
-		EMAFast:           emaFast,
-		EMASlow:           emaSlow,
-		RecentCandles:     candles,
-		OpenPositions:     len(openPos),
-		LongPositions:     longs,
-		ShortPositions:    shorts,
-		Balance:           equityUSD,
-		DailyPnL:          dailyPnL,
+		Symbol:         "BTC-USD",
+		Price:          price,
+		Regime:         regime,
+		RSI:            rsi,
+		ATR:            atr,
+		VWAP:           vwap,
+		ADX:            adx,
+		EMAFast:        emaFast,
+		EMASlow:        emaSlow,
+		RecentCandles:  candles,
+		OpenPositions:  len(openPos),
+		LongPositions:  longs,
+		ShortPositions: shorts,
+		Balance:        equityUSD,
+		DailyPnL:       dailyPnL,
 	}
 
 	decision := o.aiAgent.Decide(ctx, market)
@@ -399,9 +459,9 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 	}
 
 	// Sanitize SL/TP
-	sanitized, ok := sanitizeSignalForProfit(sig)
+	sanitized, sanitizeReason, ok := sanitizeSignalForProfit(sig)
 	if !ok {
-		log.Printf("[AI] Signal sanitization failed — skipping")
+		log.Printf("[AI] Signal sanitization failed — skipping: %s", sanitizeReason)
 		return
 	}
 	sig = sanitized
@@ -570,10 +630,10 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 
 		baseStopLossPct := sig.StopLossPct
 		baseTakeProfitPct := sig.TakeProfitPct
-		sanitizedSig, allowed := sanitizeSignalForProfit(sig)
+		sanitizedSig, sanitizeReason, allowed := sanitizeSignalForProfit(sig)
 		if !allowed {
-			log.Printf("[PROFIT FILTER] %s dropped due to low confidence %.2f",
-				aggSig.StrategyName, sig.Confidence)
+			log.Printf("[PROFIT FILTER] %s dropped: %s",
+				aggSig.StrategyName, sanitizeReason)
 			continue
 		}
 		sig = sanitizedSig
@@ -589,17 +649,17 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
-		
+
 		// ══════════════════════════════════════════════════════════════════════
 		// AI SIGNAL AUDIT — GPT-4o/Gemini/Groq Veto Layer
 		// ══════════════════════════════════════════════════════════════════════
-		if o.aiAgent != nil && o.aiAgent.IsAvailable() {
+		if (o.aiAgent != nil && o.aiAgent.IsAvailable()) || o.IsBridgeOnline() {
 			// Build market context for the audit
 			o.mu.RLock()
 			prices := append([]float64(nil), o.priceWindow...)
 			volumes := append([]float64(nil), o.volumeWindow...)
 			o.mu.RUnlock()
-			
+
 			o.candleHistMu.Lock()
 			candles := append([]ai.CandleSummary(nil), o.candleHistory...)
 			o.candleHistMu.Unlock()
@@ -620,20 +680,26 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				DailyPnL:      o.risk.GetDailyPnL(),
 			}
 
-			// We now use AuditSignalWithFallback which handles the global chain (Groq/OpenRouter/Gemini)
-			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second) 
-			approved, reason, _, provider := o.aiAgent.AuditSignalWithFallback(ctx, market, aggSig.StrategyName, string(sig.Action))
-			cancel()
-			
-			// Attach AI Attribution for later trade recording
-			sig.AIDecisionID = provider
-			sig.AIReasoning = reason
+			// ══════════════════════════════════════════════════════════════════════
+			// INTERACTIVE MODE: Park the signal for Dashabord Command Center
+			// ══════════════════════════════════════════════════════════════════════
+			pendingID := fmt.Sprintf("SIG-%d", time.Now().UnixNano()/1e6)
 
-			if !approved {
-				log.Printf("[AI AUDIT VETO] %s %s REJECTED: %s", aggSig.StrategyName, sig.Action, reason)
-				continue
+			o.pendingMu.Lock()
+			o.pendingSignals[pendingID] = PendingSignal{
+				ID:           pendingID,
+				Signal:       sig,
+				StrategyName: aggSig.StrategyName,
+				Category:     aggSig.Category,
+				Context:      market,
+				AutoPrompt:   generateAutoPrompt(market, aggSig.StrategyName, string(sig.Action)),
+				CreatedAt:    time.Now(),
 			}
-			log.Printf("[AI AUDIT PASS] %s %s APPROVED: %s", aggSig.StrategyName, sig.Action, reason)
+			o.pendingMu.Unlock()
+
+			log.Printf("[COMMAND CENTER] 🛰️  Signal Parked: %s %s [%s] -> Waiting for UI submission",
+				aggSig.StrategyName, sig.Action, pendingID)
+			continue
 		}
 
 		// ══════════════════════════════════════════════════════════════════════
@@ -731,21 +797,353 @@ func (o *Orchestrator) strategyCooldownChecker(ctx context.Context) {
 	}
 }
 
+func (o *Orchestrator) RecordBridgeHeartbeat() {
+	o.bridgeHeartbeatMu.Lock()
+	defer o.bridgeHeartbeatMu.Unlock()
+	o.lastBridgeHeartbeat = time.Now()
+}
+
+func (o *Orchestrator) RecordBridgeEvent(event, level string) {
+	now := time.Now()
+	o.bridgeStateMu.Lock()
+	defer o.bridgeStateMu.Unlock()
+	o.lastBridgeEvent = strings.TrimSpace(event)
+	o.lastBridgeEventAt = now
+	if strings.EqualFold(level, "error") {
+		o.lastBridgeError = strings.TrimSpace(event)
+		o.lastBridgeErrorAt = now
+	}
+}
+
+func (o *Orchestrator) autoFallbackMonitor(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			o.bridgeHeartbeatMu.RLock()
+			bridgeOffline := time.Since(o.lastBridgeHeartbeat) > 15*time.Second
+			o.bridgeHeartbeatMu.RUnlock()
+
+			if bridgeOffline {
+				o.pendingMu.RLock()
+				// Collect IDs to process to avoid holding lock during AI call
+				var toProcess []string
+				now := time.Now()
+				for id, p := range o.pendingSignals {
+					if now.Sub(p.CreatedAt) > 45*time.Second {
+						toProcess = append(toProcess, id)
+					}
+				}
+				o.pendingMu.RUnlock()
+
+				if len(toProcess) > 0 && !o.hasBackendAIFallback() {
+					age := o.bridgeAge().Round(time.Second)
+					msg := fmt.Sprintf("Bridge offline for %s and no backend AI fallback is configured; keeping %d parked signal(s) queued", age, len(toProcess))
+					log.Printf("[FAILOVER] %s", msg)
+					o.RecordBridgeEvent(msg, "warn")
+					continue
+				}
+
+				for _, id := range toProcess {
+					log.Printf("[FAILOVER] 🔄 Bridge Offline (Last seen %s ago). Triggering Auto-Cloud Fallback for %s",
+						o.bridgeAge().Round(time.Second), id)
+					go func(sigID string) {
+						if err := o.ConfirmSignal(ctx, sigID, "AUTOMATIC_CLOUD_FALLBACK"); err != nil {
+							log.Printf("[FAILOVER] Auto fallback failed for %s: %v", sigID, err)
+						}
+					}(id)
+				}
+			}
+		}
+	}
+}
+
 // GetLastPrice returns the latest BTC price (for API endpoints).
+// GetPendingSignals returns the list of signals currently parked in the Command Center.
+func (o *Orchestrator) GetPendingSignals() []PendingSignal {
+	now := time.Now()
+
+	// Collect stale IDs under read lock first
+	o.pendingMu.RLock()
+	var stale []string
+	res := make([]PendingSignal, 0, len(o.pendingSignals))
+	for id, p := range o.pendingSignals {
+		if now.Sub(p.CreatedAt) > 5*time.Minute {
+			stale = append(stale, id)
+		} else {
+			res = append(res, p)
+		}
+	}
+	o.pendingMu.RUnlock()
+
+	// Promote to write lock only when there is something to delete
+	if len(stale) > 0 {
+		o.pendingMu.Lock()
+		for _, id := range stale {
+			delete(o.pendingSignals, id)
+		}
+		o.pendingMu.Unlock()
+	}
+
+	return res
+}
+
+// AddTestSignal - INJECTS a fake signal for local testing of the Robot
+func (o *Orchestrator) AddTestSignal() {
+	o.pendingMu.Lock()
+	defer o.pendingMu.Unlock()
+
+	now := time.Now()
+	id := fmt.Sprintf("test_%d", now.UnixNano())
+	ctx := ai.MarketContext{
+		Symbol:        "BTC-USD",
+		Price:         70000,
+		Regime:        marketRegimeTrend,
+		RSI:           61.5,
+		ADX:           28.0,
+		VWAP:          69880,
+		ATR:           245,
+		RecentCandles: []ai.CandleSummary{{High: 70120, Low: 69780, Close: 70040, Volume: 182.4}},
+	}
+	o.pendingSignals[id] = PendingSignal{
+		ID:           id,
+		StrategyName: "RAIG_COMBAT_SIMULATOR",
+		Signal: strategy.Signal{
+			Symbol:        "BTC-USD",
+			Action:        strategy.ActionBuy,
+			TargetSize:    0.002,
+			Confidence:    0.92,
+			StopLossPct:   0.45,
+			TakeProfitPct: 0.90,
+		},
+		Context:    ctx,
+		CreatedAt:  now,
+		AutoPrompt: generateAutoPrompt(ctx, "RAIG_COMBAT_SIMULATOR", string(strategy.ActionBuy)),
+	}
+	log.Println("[RAIG] TEST SIGNAL INJECTED INTO COMMAND CENTER.")
+}
+
+// ConfirmSignal triggers the AI Audit for a parked signal and executes if approved.
+func (o *Orchestrator) ConfirmSignal(ctx context.Context, pendingID, userPrompt string) error {
+	if !o.hasBackendAIFallback() {
+		return fmt.Errorf("backend AI fallback unavailable: configure an AI provider or keep the browser bridge online")
+	}
+
+	o.pendingMu.Lock()
+	p, ok := o.pendingSignals[pendingID]
+	if !ok {
+		o.pendingMu.Unlock()
+		return fmt.Errorf("signal %s not found or expired", pendingID)
+	}
+	delete(o.pendingSignals, pendingID)
+	o.pendingMu.Unlock()
+
+	// 1. Final AI Audit via Supreme Court (including User Feedback)
+	log.Printf("[COMMAND CENTER] 🧠 Submitting Signal %s to ChatGPT for final audit (Note: %s)", pendingID, userPrompt)
+
+	// We pass the userPrompt as the human feedback to the AI
+	approved, reason, _, provider := o.aiAgent.AuditSignalWithFallback(ctx, p.Context, p.StrategyName, string(p.Signal.Action), userPrompt)
+
+	if !approved {
+		log.Printf("[COMMAND CENTER] ⛔ ChatGPT REJECTED signal: %s", reason)
+		return fmt.Errorf("AI Rejection: %s", reason)
+	}
+
+	// 2. Execution
+	log.Printf("[COMMAND CENTER] ✅ ChatGPT APPROVED signal! Executing...")
+
+	p.Signal.AIDecisionID = provider
+	p.Signal.AIReasoning = fmt.Sprintf("[Human Input: %s] %s", userPrompt, reason)
+
+	fill, err := o.exec.ExecuteSignal(p.Signal, execution.OrderModeIOC)
+	if err != nil {
+		return fmt.Errorf("execution failed: %w", err)
+	}
+
+	// 3. Notify sub-systems
+	o.risk.NotifyFill(p.Signal)
+	o.posMgr.OpenPosition(p.Signal, fill.ExecPrice, p.StrategyName)
+
+	log.Printf("[✅ TRADE EXECUTED] %s %s APPROVED via Command Center!", p.StrategyName, p.Signal.Action)
+	return nil
+}
+
+// ConfirmSignalFromBridge executes a parked signal based on a browser-automation verdict.
+func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID string, decision BridgeDecision) error {
+	if err := validateBridgeDecision(decision); err != nil {
+		return fmt.Errorf("invalid bridge decision: %w", err)
+	}
+	if !o.markBridgeSignalProcessing(pendingID) {
+		return fmt.Errorf("duplicate bridge result for %s", pendingID)
+	}
+
+	o.pendingMu.Lock()
+	p, ok := o.pendingSignals[pendingID]
+	if !ok {
+		o.pendingMu.Unlock()
+		return fmt.Errorf("signal %s not found or expired", pendingID)
+	}
+	delete(o.pendingSignals, pendingID)
+	o.pendingMu.Unlock()
+
+	if !decision.Approved {
+		log.Printf("[COMMAND CENTER] Browser bridge rejected %s: %s", pendingID, decision.Reason)
+		return fmt.Errorf("bridge rejected signal: %s", decision.Reason)
+	}
+
+	action := strings.ToUpper(strings.TrimSpace(decision.Action))
+	if action != string(strategy.ActionBuy) && action != string(strategy.ActionSell) {
+		action = string(p.Signal.Action)
+	}
+	if action != string(p.Signal.Action) {
+		log.Printf("[COMMAND CENTER] Browser bridge action mismatch for %s: wanted %s got %s",
+			pendingID, p.Signal.Action, action)
+		return fmt.Errorf("bridge action mismatch: expected %s got %s", p.Signal.Action, action)
+	}
+
+	if decision.Confidence > 0 {
+		if decision.Confidence < minBridgeApprovalConfidence {
+			log.Printf("[COMMAND CENTER] ⛔ Bridge signal %s blocked: ChatGPT confidence %.2f below minimum %.2f",
+				pendingID, decision.Confidence, minBridgeApprovalConfidence)
+			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, minBridgeApprovalConfidence)
+		}
+		p.Signal.Confidence = decision.Confidence
+	}
+	sanitized, reason, allowed := sanitizeSignalForProfit(p.Signal)
+	if !allowed {
+		log.Printf("[COMMAND CENTER] ⛔ Bridge signal %s blocked by profit filter: %s (conf=%.2f)",
+			pendingID, reason, p.Signal.Confidence)
+		return fmt.Errorf("bridge signal blocked: %s", reason)
+	}
+	p.Signal = sanitized
+
+	if err := o.risk.Validate(p.Signal, p.Context.Price); err != nil {
+		return fmt.Errorf("risk rejected bridge signal: %w", err)
+	}
+
+	p.Signal.AIDecisionID = "browser-bridge"
+	p.Signal.AIReasoning = strings.TrimSpace(fmt.Sprintf("[Browser Bridge] %s", decision.Reason))
+
+	fill, err := o.exec.ExecuteSignal(p.Signal, execution.OrderModeIOC)
+	if err != nil {
+		return fmt.Errorf("execution failed: %w", err)
+	}
+
+	o.risk.NotifyFill(p.Signal)
+	o.posMgr.OpenPosition(p.Signal, fill.ExecPrice, p.StrategyName)
+
+	log.Printf("[✅ TRADE EXECUTED] %s %s APPROVED via Browser Bridge | conf=%.2f | reason=%s",
+		p.StrategyName, p.Signal.Action, p.Signal.Confidence, truncate(decision.Reason, 120))
+	return nil
+}
+
+func validateBridgeDecision(decision BridgeDecision) error {
+	if strings.TrimSpace(decision.Reason) == "" {
+		return fmt.Errorf("missing reason")
+	}
+	if decision.Confidence < 0 || decision.Confidence > 1 {
+		return fmt.Errorf("confidence %.4f out of range", decision.Confidence)
+	}
+	// Only validate action when the bridge is actually approving a trade
+	if decision.Approved {
+		action := strings.ToUpper(strings.TrimSpace(decision.Action))
+		if action != string(strategy.ActionBuy) && action != string(strategy.ActionSell) {
+			return fmt.Errorf("unsupported action %q", decision.Action)
+		}
+	}
+	return nil
+}
+
+func (o *Orchestrator) markBridgeSignalProcessing(signalID string) bool {
+	o.processedBridgeMu.Lock()
+	defer o.processedBridgeMu.Unlock()
+
+	now := time.Now()
+	for id, ts := range o.processedBridgeSignals {
+		if now.Sub(ts) > 10*time.Minute {
+			delete(o.processedBridgeSignals, id)
+		}
+	}
+	if _, exists := o.processedBridgeSignals[signalID]; exists {
+		return false
+	}
+	o.processedBridgeSignals[signalID] = now
+	return true
+}
+
+func (o *Orchestrator) hasBackendAIFallback() bool {
+	return o.aiAgent != nil && o.aiAgent.IsAvailable()
+}
+
+func (o *Orchestrator) bridgeAge() time.Duration {
+	o.bridgeHeartbeatMu.RLock()
+	defer o.bridgeHeartbeatMu.RUnlock()
+	return time.Since(o.lastBridgeHeartbeat)
+}
+
+func (o *Orchestrator) IsBridgeOnline() bool {
+	o.bridgeHeartbeatMu.RLock()
+	defer o.bridgeHeartbeatMu.RUnlock()
+	return time.Since(o.lastBridgeHeartbeat) < 15*time.Second
+}
+
+func (o *Orchestrator) GetBridgeStatus() BridgeStatus {
+	o.bridgeHeartbeatMu.RLock()
+	lastHeartbeat := o.lastBridgeHeartbeat
+	secondsSinceBeat := int(time.Since(lastHeartbeat).Seconds())
+	online := time.Since(lastHeartbeat) < 15*time.Second
+	o.bridgeHeartbeatMu.RUnlock()
+
+	o.pendingMu.RLock()
+	pendingCount := len(o.pendingSignals)
+	o.pendingMu.RUnlock()
+
+	o.processedBridgeMu.Lock()
+	processedCount := len(o.processedBridgeSignals)
+	o.processedBridgeMu.Unlock()
+
+	o.bridgeStateMu.RLock()
+	lastEvent := o.lastBridgeEvent
+	lastEventAt := o.lastBridgeEventAt
+	lastError := o.lastBridgeError
+	lastErrorAt := o.lastBridgeErrorAt
+	o.bridgeStateMu.RUnlock()
+
+	if secondsSinceBeat < 0 {
+		secondsSinceBeat = 0
+	}
+
+	return BridgeStatus{
+		Online:              online,
+		LastHeartbeat:       lastHeartbeat,
+		SecondsSinceBeat:    secondsSinceBeat,
+		PendingSignals:      pendingCount,
+		ProcessedSignalKeys: processedCount,
+		LastEvent:           lastEvent,
+		LastEventAt:         lastEventAt,
+		LastError:           lastError,
+		LastErrorAt:         lastErrorAt,
+	}
+}
+
 func (o *Orchestrator) GetLastPrice() float64 {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.lastPrice
 }
 
-func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, bool) {
+func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool) {
 	adjusted := sig
 
 	if adjusted.Confidence == 0 {
 		adjusted.Confidence = 1.0
 	}
 	if adjusted.Confidence < minExecutableConfidence {
-		return adjusted, false
+		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, minExecutableConfidence), false
 	}
 
 	if adjusted.StopLossPct <= 0 {
@@ -767,7 +1165,7 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, bool) {
 		adjusted.TakeProfitPct = minSignalTakeProfitPct
 	}
 
-	return adjusted, true
+	return adjusted, "", true
 }
 
 func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) float64 {
@@ -857,4 +1255,48 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 	default:
 		return true
 	}
+}
+
+func generateAutoPrompt(ctx ai.MarketContext, name, action string) string {
+	return fmt.Sprintf(`You are reviewing a BTC trading signal for execution safety.
+
+Return ONLY valid JSON with this schema:
+{
+  "approved": true,
+  "action": "%s",
+  "confidence": 0.0,
+  "reason": "short reason"
+}
+
+Rules:
+- Keep "action" exactly "%s" if approved.
+- Set "approved" false if this trade should be vetoed.
+- Confidence must be a number between 0.0 and 1.0.
+- Do not include markdown fences.
+
+### BITCOIN TRADING SIGNAL AUDIT ###
+STRATEGY: %s
+ACTION: %s
+PRICE: $%.2f
+RSI: %.1f
+ADX: %.1f
+VWAP: $%.2f
+ATR: $%.2f
+
+### RECENT 5M CANDLES ###
+(Oldest to Newest)
+%s
+
+### INSTRUCTION ###
+Analyze the data above and return the JSON decision now.`,
+		action, action, name, action, ctx.Price, ctx.RSI, ctx.ADX, ctx.VWAP, ctx.ATR,
+		buildCandleHistoryText(ctx))
+}
+
+func buildCandleHistoryText(ctx ai.MarketContext) string {
+	var sb strings.Builder
+	for i, c := range ctx.RecentCandles {
+		sb.WriteString(fmt.Sprintf("[%d] H:%.0f L:%.0f C:%.0f V:%.2f\n", i, c.High, c.Low, c.Close, c.Volume))
+	}
+	return sb.String()
 }

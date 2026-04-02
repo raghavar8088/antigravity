@@ -1,0 +1,322 @@
+{"ts":"2026-04-02T19:38:41.255Z","stage":"bridge_event_post_error","message":"Bridge process starting","level":"info","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:41.629Z","stage":"bridge_event_post_error","message":"Bridge connected to ChatGPT tab","level":"info","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:41.989Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:42.299Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:45.610Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:45.909Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:49.227Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:49.596Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:52.928Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:53.238Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:56.583Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:38:56.879Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:00.231Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:00.529Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:03.855Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:04.164Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:07.487Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:07.920Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:11.290Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:11.584Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:14.868Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:15.163Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:18.524Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:18.885Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:22.238Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:22.572Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:25.889Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:26.190Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:29.520Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:29.826Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:33.188Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:33.503Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:36.848Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:37.118Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:40.480Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:40.773Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:44.084Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:44.427Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:47.749Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:48.032Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:51.357Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:51.683Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:55.007Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:55.282Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:58.613Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:39:58.933Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:02.247Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:02.567Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:05.927Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:06.274Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:09.593Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:09.903Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:13.227Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:13.530Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:16.852Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:17.152Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:20.509Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:20.853Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:24.178Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:24.490Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:27.807Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:40:28.169Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:41:54.012Z","stage":"chatgpt_ready","signalId":"test_011152","url":"https://chatgpt.com/","title":"ChatGPT"}
+{"ts":"2026-04-02T19:42:24.889Z","stage":"bridge_error","error":"No JSON object found in ChatGPT response"}
+{"ts":"2026-04-02T19:42:27.901Z","stage":"chatgpt_ready","signalId":"test_011152","url":"https://chatgpt.com/c/69cec68d-7a98-83a7-b29b-9dd1fe03fa4e","title":"RAIG Combat Simulator Branding"}
+{"ts":"2026-04-02T19:42:57.823Z","stage":"bridge_error","error":"No JSON object found in ChatGPT response"}
+{"ts":"2026-04-02T19:42:57.827Z","stage":"bridge_event_post_error","message":"Bridge error: No JSON object found in ChatGPT response","level":"error","error":""}
+{"ts":"2026-04-02T19:43:00.830Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:00.833Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:03.849Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:03.852Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:06.858Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:06.861Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:09.866Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:09.868Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:12.880Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:12.882Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:15.899Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:15.901Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:18.906Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:18.909Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:21.926Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:21.929Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:24.943Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:24.948Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:27.962Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:27.965Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:30.984Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:30.987Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:34.001Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:34.003Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:37.020Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:37.022Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:40.029Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:40.031Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:43.037Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:43.040Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:46.043Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:46.046Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:49.052Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:49.054Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:52.059Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:52.061Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:55.073Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:55.075Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:43:58.081Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:43:58.083Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:01.086Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:01.089Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:04.108Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:04.110Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:07.119Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:07.121Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:10.140Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:10.142Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:13.156Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:13.158Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:16.170Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:16.172Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:19.175Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:19.177Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:22.181Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:22.183Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:25.197Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:25.210Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:28.222Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:28.226Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:31.250Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:31.256Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:34.272Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:34.276Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:37.283Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:37.287Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:40.305Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:40.308Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:43.314Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:43.317Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:46.323Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:46.326Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:49.332Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:49.334Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:52.350Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:52.353Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:55.360Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:55.362Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:44:58.368Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:44:58.369Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:01.383Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:01.385Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:04.391Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:04.393Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:07.409Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:07.412Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:10.419Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:10.423Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:13.432Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:13.434Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:16.448Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:16.450Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:19.455Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:45:19.457Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:45:46.978Z","stage":"bridge_event_post_error","message":"Bridge process starting","level":"info","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:47.352Z","stage":"bridge_event_post_error","message":"Bridge connected to ChatGPT tab","level":"info","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:47.641Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:48.466Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:51.772Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:52.071Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:55.369Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:55.683Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:58.999Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:45:59.301Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:02.621Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:02.922Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:06.213Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:06.481Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:09.794Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:10.119Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:13.387Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:13.691Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:17.035Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:17.342Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:20.666Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:20.982Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:24.289Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:24.581Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:27.921Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:28.233Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:31.523Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:31.832Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:35.131Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:35.442Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:38.764Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:39.092Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:42.426Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:42.722Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:46.037Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:46.332Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:49.635Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:49.890Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:53.217Z","stage":"bridge_error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:46:53.506Z","stage":"bridge_event_post_error","message":"Bridge error: Request failed with status code 404","level":"error","error":"Request failed with status code 404"}
+{"ts":"2026-04-02T19:48:04.045Z","stage":"chatgpt_ready","signalId":"SIG-1775159282640","url":"https://chatgpt.com/c/69cec68d-7a98-83a7-b29b-9dd1fe03fa4e","title":"RAIG Combat Simulator Branding"}
+{"ts":"2026-04-02T19:51:04.105Z","stage":"bridge_error","error":"Runtime.callFunctionOn timed out. Increase the 'protocolTimeout' setting in launch/connect calls for a higher timeout if needed."}
+{"ts":"2026-04-02T19:51:04.111Z","stage":"bridge_event_post_error","message":"Bridge error: Runtime.callFunctionOn timed out. Increase the 'protocolTimeout' setting in launch/connect calls for a higher timeout if needed.","level":"error","error":""}
+{"ts":"2026-04-02T19:51:07.119Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:07.121Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:10.133Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:10.135Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:13.150Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:13.153Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:16.163Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:16.168Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:19.173Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:19.176Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:22.190Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:22.193Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:25.210Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:25.214Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:28.231Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:28.238Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:31.248Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:31.255Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:34.275Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:34.287Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:37.296Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:37.298Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:40.302Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:40.305Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:43.314Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:43.318Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:46.327Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:46.329Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:49.337Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:49.339Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:52.343Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:52.345Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:55.351Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:55.353Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:51:58.366Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:51:58.369Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:01.375Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:01.378Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:04.385Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:04.387Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:07.393Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:07.395Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:10.398Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:10.400Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:13.409Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:13.413Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:16.419Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:16.423Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:19.435Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:19.438Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:22.447Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:22.449Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:25.460Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:25.464Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:28.479Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:28.482Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:31.487Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:31.489Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:34.503Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:34.505Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:37.508Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:37.511Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:40.524Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:40.528Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:43.540Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:43.543Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:46.548Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:46.550Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:49.567Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:49.570Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:52.574Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:52.576Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:55.582Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:55.586Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:52:58.603Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:52:58.605Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:53:01.611Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:53:01.615Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:53:04.622Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:53:04.625Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:53:07.629Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:53:07.631Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:53:10.641Z","stage":"bridge_error","error":""}
+{"ts":"2026-04-02T19:53:10.643Z","stage":"bridge_event_post_error","message":"Bridge error: ","level":"error","error":""}
+{"ts":"2026-04-02T19:54:22.031Z","stage":"chatgpt_ready","signalId":"test_012419","url":"https://chatgpt.com/","title":"ChatGPT"}
+{"ts":"2026-04-02T19:54:56.295Z","stage":"bridge_error","error":"Failed to submit prompt to ChatGPT"}
+{"ts":"2026-04-02T19:54:59.320Z","stage":"chatgpt_ready","signalId":"test_012419","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T19:55:22.927Z","stage":"bridge_error","error":"Failed to submit prompt to ChatGPT"}
+{"ts":"2026-04-02T19:55:25.947Z","stage":"chatgpt_ready","signalId":"test_012419","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T19:55:51.850Z","stage":"bridge_error","error":"Failed to submit prompt to ChatGPT"}
+{"ts":"2026-04-02T19:55:54.872Z","stage":"chatgpt_ready","signalId":"test_012419","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T19:56:23.700Z","stage":"parsed_verdict","signalId":"test_012419","strategyName":"RAIG_COMBAT_SIMULATOR","signalAction":"BUY","approved":false,"action":"BUY","confidence":0.01,"reason":"vetoed: no trading signal data provided for evaluation","rawReply":"{\"approved\":false,\"action\":\"BUY\",\"confidence\":0.01,\"reason\":\"vetoed: no trading signal data provided for evaluation\"}"}
+{"ts":"2026-04-02T19:56:23.709Z","stage":"submitted_to_engine","signalId":"test_012419","strategyName":"RAIG_COMBAT_SIMULATOR","approved":false,"action":"BUY","confidence":0.01}
+{"ts":"2026-04-02T19:59:00.243Z","stage":"chatgpt_ready","signalId":"SIG-1775159939051","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T19:59:41.711Z","stage":"parsed_verdict","signalId":"SIG-1775159939051","strategyName":"Stochastic_Range_Scalp","signalAction":"SELL","approved":false,"action":"SELL","confidence":0.39,"reason":"vetoed: extreme RSI and ADX indicate overextended move with high reversal risk and low ATR suggests weak follow-through","rawReply":"{\"approved\":false,\"action\":\"SELL\",\"confidence\":0.39,\"reason\":\"vetoed: extreme RSI and ADX indicate overextended move with high reversal risk and low ATR suggests weak follow-through\"}"}
+{"ts":"2026-04-02T19:59:41.716Z","stage":"submitted_to_engine","signalId":"SIG-1775159939051","strategyName":"Stochastic_Range_Scalp","approved":false,"action":"SELL","confidence":0.39}
+{"ts":"2026-04-02T19:59:59.776Z","stage":"chatgpt_ready","signalId":"SIG-1775159999115","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T20:02:08.569Z","stage":"bridge_error","error":"Timed out waiting for ChatGPT to finish responding"}
+{"ts":"2026-04-02T20:02:11.721Z","stage":"chatgpt_ready","signalId":"SIG-1775159999115","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T20:05:11.754Z","stage":"bridge_error","error":"Runtime.callFunctionOn timed out. Increase the 'protocolTimeout' setting in launch/connect calls for a higher timeout if needed."}
+{"ts":"2026-04-02T20:08:13.299Z","stage":"chatgpt_ready","signalId":"test_1775160492648564200","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T20:08:22.620Z","stage":"parsed_verdict","signalId":"test_1775160492648564200","strategyName":"RAIG_COMBAT_SIMULATOR","signalAction":"BUY","approved":true,"action":"BUY","confidence":0.63,"reason":"price above VWAP with ADX above 25 indicates trend strength and RSI is moderate, supporting continuation with acceptable volatility","rawReply":"{\"approved\":true,\"action\":\"BUY\",\"confidence\":0.63,\"reason\":\"price above VWAP with ADX above 25 indicates trend strength and RSI is moderate, supporting continuation with acceptable volatility\"}"}
+{"ts":"2026-04-02T20:08:22.625Z","stage":"submitted_to_engine","signalId":"test_1775160492648564200","strategyName":"RAIG_COMBAT_SIMULATOR","approved":true,"action":"BUY","confidence":0.63}
+{"ts":"2026-04-02T20:11:02.187Z","stage":"chatgpt_ready","signalId":"SIG-1775160660328","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T20:11:12.614Z","stage":"parsed_verdict","signalId":"SIG-1775160660328","strategyName":"VolumeDelta_Spike_Scalp","signalAction":"SELL","approved":false,"action":"SELL","confidence":0.47,"reason":"vetoed: extreme RSI and ADX indicate abnormal conditions and potential data distortion with very low ATR reducing reliability","rawReply":"{\"approved\":false,\"action\":\"SELL\",\"confidence\":0.47,\"reason\":\"vetoed: extreme RSI and ADX indicate abnormal conditions and potential data distortion with very low ATR reducing reliability\"}"}
+{"ts":"2026-04-02T20:11:12.619Z","stage":"submitted_to_engine","signalId":"SIG-1775160660328","strategyName":"VolumeDelta_Spike_Scalp","approved":false,"action":"SELL","confidence":0.47}
+{"ts":"2026-04-02T20:12:00.789Z","stage":"chatgpt_ready","signalId":"SIG-1775160719289","url":"https://chatgpt.com/c/69cec97a-14f8-83a4-a3f0-0a4646e09418","title":"BTC Signal Risk Assessment"}
+{"ts":"2026-04-02T20:12:21.578Z","stage":"parsed_verdict","signalId":"SIG-1775160719289","strategyName":"TripleFilter_Alpha_Scalp","signalAction":"SELL","approved":false,"action":"SELL","confidence":0.46,"reason":"vetoed: extremely low RSI and very high ADX suggest exhaustion or data anomaly with low ATR limiting reliable follow-through","rawReply":"{\"approved\":false,\"action\":\"SELL\",\"confidence\":0.46,\"reason\":\"vetoed: extremely low RSI and very high ADX suggest exhaustion or data anomaly with low ATR limiting reliable follow-through\"}"}
+{"ts":"2026-04-02T20:12:21.581Z","stage":"submitted_to_engine","signalId":"SIG-1775160719289","strategyName":"TripleFilter_Alpha_Scalp","approved":false,"action":"SELL","confidence":0.46}
+{"ts":"2026-04-02T20:13:00.732Z","stage":"chat_page_recover_start","reason":"chat page missing before submit"}
+{"ts":"2026-04-02T20:13:10.764Z","stage":"bridge_error","error":"Unable to recover ChatGPT page after: chat page missing before submit"}
+{"ts":"2026-04-02T20:13:13.779Z","stage":"chat_page_recover_start","reason":"chat page missing before submit"}
+{"ts":"2026-04-02T20:13:23.816Z","stage":"bridge_error","error":"Unable to recover ChatGPT page after: chat page missing before submit"}
+{"ts":"2026-04-02T20:13:26.837Z","stage":"chat_page_recover_start","reason":"chat page missing before submit"}
+{"ts":"2026-04-02T20:13:36.897Z","stage":"bridge_error","error":"Unable to recover ChatGPT page after: chat page missing before submit"}
+{"ts":"2026-04-02T20:13:39.908Z","stage":"chat_page_recover_start","reason":"chat page missing before submit"}
+{"ts":"2026-04-02T20:13:49.956Z","stage":"bridge_error","error":"Unable to recover ChatGPT page after: chat page missing before submit"}
+{"ts":"2026-04-02T20:13:52.969Z","stage":"chat_page_recover_start","reason":"chat page missing before submit"}

@@ -56,7 +56,7 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 
 	// 1. Symbol Check (Bitcoin pairs - supports both Binance and Coinbase formats)
 	if sig.Symbol != "BTCUSDT" && sig.Symbol != "BTC-USD" && sig.Symbol != "BTC-USDT" {
-		return errors.New("RISK_VIOLATION: Antigravity only supports BTC pairs")
+		return errors.New("RISK_VIOLATION: RAIG only supports BTC pairs")
 	}
 
 	proposedExposure := r.currentExposureBTC + signedDelta(sig.Action, sig.TargetSize)

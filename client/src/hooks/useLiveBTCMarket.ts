@@ -38,7 +38,7 @@ export type LiveBTCMarketState = {
   lastMarketEventAt: number | null;
 };
 
-const STORAGE_KEY = "antigravity.market.exchange";
+const STORAGE_KEY = "raig.market.exchange";
 const MARKET_SYMBOL = "BTCUSDT";
 const MAX_RECENT_PRICES = 240;
 const MAX_CANDLES = 240;

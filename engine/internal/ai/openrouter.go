@@ -69,7 +69,7 @@ func (c *OpenRouterClient) ChatForAudit(ctx context.Context, system, prompt stri
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("HTTP-Referer", "https://github.com/raghavar8088/antigravity") // Required by OpenRouter
-	req.Header.Set("X-Title", "Antigravity Trading Engine")
+	req.Header.Set("X-Title", "RAIG Trading Engine")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

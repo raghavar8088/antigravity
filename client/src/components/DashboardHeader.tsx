@@ -64,22 +64,21 @@ export default function DashboardHeader({
 
         {/* ── Logo + status ── */}
         <div className="flex items-center gap-3 shrink-0">
-          <div
-            style={{ background: "var(--green-dim)", border: "1px solid rgba(0,208,156,0.25)" }}
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          >
-            <span style={{ color: "var(--green)" }} className="font-black text-sm tracking-tight">AG</span>
-          </div>
+          <img
+            src="/raig-logo.png"
+            alt="RAIG 888"
+            style={{ width: 52, height: 52, objectFit: "contain", filter: "drop-shadow(0 0 8px rgba(250,188,44,0.5))" }}
+          />
           <div>
-            <div className="font-extrabold text-white text-base tracking-tight leading-none">
-              ANTI<span className="text-gradient">GRAVITY</span>
+            <div className="font-black text-white text-lg tracking-tighter leading-none flex items-center gap-1">
+              RAIG <span style={{ color: "var(--green)", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em" }}>AUTONOMOUS</span>
             </div>
             <div className="flex items-center gap-1.5 mt-1">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${online ? "animate-pulse" : ""}`}
                 style={{ background: online ? "var(--green)" : "var(--red)" }}
               />
-              <span style={{ color: "var(--text-muted)" }} className="text-[10px] uppercase tracking-widest">
+              <span style={{ color: "var(--text-secondary)" }} className="text-[10px] uppercase tracking-widest font-bold">
                 {online ? "Engine Live" : "Offline"} · BTC/USDT
               </span>
             </div>
@@ -170,6 +169,10 @@ export default function DashboardHeader({
           >
             {activeAction === "/api/admin/reset" ? "Resetting…" : "Reset Account"}
           </button>
+        </div>
+<div style={{ marginLeft: "auto", borderLeft: "1px solid var(--border)", paddingLeft: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+          <div style={{ fontSize: 9, fontWeight: 800, color: "var(--gold)", letterSpacing: "0.1em" }}>SECURITY PROTOCOL</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "white" }}>ACTIVE ENCRYPTION</div>
         </div>
 
       </div>

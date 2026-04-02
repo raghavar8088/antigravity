@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -55,12 +56,41 @@ var globalLogs = &RingLogger{max: 100}
 
 const initialPaperBalanceUSD = 100000.0
 
+// loadDotEnv reads a .env file from the repo root and sets any keys that are
+// not already present in the environment. Safe to call on Render (where real
+// env vars take precedence) and does nothing if the file is absent.
+func loadDotEnv() {
+	root := "../.." // relative to engine/cmd/antigravity
+	data, err := os.ReadFile(root + "/.env")
+	if err != nil {
+		return // no .env file — normal in production
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		if os.Getenv(key) == "" {
+			os.Setenv(key, val)
+		}
+	}
+	log.Println("[ENV] Loaded local .env file")
+}
+
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   ANTIGRAVITY ENGINE v6.0 — IMMORTAL EDITION           ║")
+	fmt.Println("║   RAIG ENGINE v6.0 — IMMORTAL EDITION                  ║")
 	fmt.Println("║   35 Curated Strategies | Full State Restore | Panic Recovery  ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
+
+	loadDotEnv()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -206,7 +236,7 @@ func main() {
 				posMgr.GetPositionCount(), state.TotalTrades)
 
 			// ── MIGRATION ON BOOT ──
-			// If we range through existing restored trades and save them one-by-one, 
+			// If we range through existing restored trades and save them one-by-one,
 			// the ON CONFLICT clause in SaveTrade ensures we migrate old BLOB data to the new table safely.
 			if len(restoredTrades) > 0 {
 				log.Printf("[DB] 🚚 Migrating %d trades to relational table...", len(restoredTrades))
@@ -251,7 +281,7 @@ func main() {
 		cloudflareClient.IsAvailable() {
 		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient, mistralClient, huggingFaceClient, cloudflareClient, dbStore)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
-		
+
 		// Restore AI History from DB
 		if dbStore != nil {
 			hist, _ := dbStore.LoadAuditLogs(ctx, 50)
@@ -315,7 +345,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":     "ok",
-			"service":    "antigravity-engine-v3",
+			"service":    "raig-engine-v3",
 			"strategies": len(allStrategies),
 			"uptime":     time.Since(bootStart).String(),
 		})
@@ -349,7 +379,7 @@ func main() {
 		if r.Method == http.MethodOptions {
 			return
 		}
-		
+
 		// If DB is available, fetch the latest 5,000 trades from the relational table.
 		if dbStore != nil {
 			trades, err := dbStore.GetTrades(context.Background(), 5000)
@@ -429,6 +459,140 @@ func main() {
 		})
 	})
 
+	// GET /api/ai/pending — Parked signals waiting for UI Command Center
+	http.HandleFunc("/api/ai/pending", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		pending := orchestrator.GetPendingSignals()
+		json.NewEncoder(w).Encode(pending)
+	})
+
+	// POST /api/ai/submit — Final submission from UI Command Center (ChatGPT Arbitrator)
+	http.HandleFunc("/api/ai/submit", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			ID     string `json:"id"`
+			Prompt string `json:"prompt"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		// Run in background but with a context that won't die immediately
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := orchestrator.ConfirmSignal(ctx, req.ID, req.Prompt); err != nil {
+				log.Printf("[AI SUBMIT] confirm failed for %s: %v", req.ID, err)
+			}
+		}()
+
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{"status": "processing"})
+	})
+
+	// POST /api/ai/bridge-result — Structured verdict from ChatGPT browser bridge
+	http.HandleFunc("/api/ai/bridge-result", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			ID         string  `json:"id"`
+			Approved   bool    `json:"approved"`
+			Action     string  `json:"action"`
+			Confidence float64 `json:"confidence"`
+			Reason     string  `json:"reason"`
+			RawReply   string  `json:"rawReply"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if req.ID == "" {
+			http.Error(w, "Missing signal id", http.StatusBadRequest)
+			return
+		}
+
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			err := orchestrator.ConfirmSignalFromBridge(ctx, req.ID, trading.BridgeDecision{
+				Approved:   req.Approved,
+				Action:     req.Action,
+				Confidence: req.Confidence,
+				Reason:     req.Reason,
+				RawReply:   req.RawReply,
+			})
+			if err != nil {
+				log.Printf("[BRIDGE] ⚠️  Failed to process browser verdict for %s: %v", req.ID, err)
+			}
+		}()
+
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{"status": "processing"})
+	})
+
+	// GET /api/ai/bridge-status — Check if the browser bridge is online
+	http.HandleFunc("/api/ai/bridge-heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		orchestrator.RecordBridgeHeartbeat()
+		w.WriteHeader(http.StatusOK)
+	})
+
+	http.HandleFunc("/api/ai/bridge-event", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req struct {
+			Message string `json:"message"`
+			Level   string `json:"level"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if req.Message != "" {
+			orchestrator.RecordBridgeEvent(req.Message, req.Level)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// POST /api/ai/test-signal — Trigger a fake signal for testing the Robot
+	http.HandleFunc("/api/ai/test-signal", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		orchestrator.AddTestSignal()
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "RAIG: TEST SIGNAL INJECTED. WATCH YOUR ROBOT!")
+	})
+
+	http.HandleFunc("/api/ai/bridge-status", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		json.NewEncoder(w).Encode(orchestrator.GetBridgeStatus())
+	})
+
 	// Use PORT env var so the server and keepAlive both bind to the same port.
 	// Render sets PORT=10000; locally defaults to 8080.
 	httpPort := os.Getenv("PORT")
@@ -438,20 +602,18 @@ func main() {
 
 	go func() {
 		fmt.Printf("═══════════════════════════════════════════\n")
-		fmt.Printf("  REST API Engine listening on :%s\n", httpPort)
-		fmt.Println("  Endpoints:")
-		fmt.Println("    GET  /health          — Engine health")
-		fmt.Println("    GET  /api/strategies   — Strategy stats")
-		fmt.Println("    GET  /api/positions    — Open positions")
-		fmt.Println("    GET  /api/trades       — Trade journal")
-		fmt.Println("    GET  /api/stats        — Aggregate stats")
-		fmt.Println("    GET  /api/logs         — Last 100 system logs")
-		fmt.Println("    POST /api/admin/kill   — Kill switch")
-		fmt.Println("    POST /api/admin/close-all — Close all open paper positions")
-		fmt.Println("    POST /api/admin/reset  — Reset account")
-		fmt.Println("═══════════════════════════════════════════")
+		fmt.Printf("   RAIG AUTONOMOUS TRADING ENGINE ONLINE\n")
+		fmt.Printf("   Listening on :%s\n", httpPort)
+		fmt.Printf("═══════════════════════════════════════════\n")
+		fmt.Println("  [RAIG CORE PROTOCOLS ACTIVE]")
+		fmt.Println("    GET    /health          — System Vital Check")
+		fmt.Println("    GET    /api/strategies   — Strategy Intelligence")
+		fmt.Println("    GET    /api/positions    — Active Engagements")
+		fmt.Println("    GET    /api/stats        — Performance Data")
+		fmt.Println("    POST   /api/admin/kill   — Global Kill Switch")
+		fmt.Printf("═══════════════════════════════════════════\n")
 		if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
-			log.Println("Admin Server error:", err)
+			log.Println("[RAIG] Server error:", err)
 		}
 	}()
 

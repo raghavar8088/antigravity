@@ -17,7 +17,7 @@ import (
 // SYSTEM PROMPTS — each agent has a distinct identity and role
 // ─────────────────────────────────────────────────────────────────
 
-const bullSystemPrompt = `You are the BULL AGENT for AntiGravity, an autonomous BTC scalping engine.
+const bullSystemPrompt = `You are the BULL AGENT for RAIG, an autonomous BTC scalping engine.
 Your role: Analyze market data and make the case for LONG (buy) positions.
 Be intellectually honest — if conditions are poor, say so. Quality over quantity.
 
@@ -32,7 +32,7 @@ JSON schema:
   "take_profit_pct": number (0.30 to 2.00)
 }`
 
-const bearSystemPrompt = `You are the BEAR AGENT for AntiGravity, an autonomous BTC scalping engine.
+const bearSystemPrompt = `You are the BEAR AGENT for RAIG, an autonomous BTC scalping engine.
 Your role: Analyze market data and make the case for SHORT (sell) positions.
 Be intellectually honest — if conditions are poor, say so. Quality over quantity.
 
@@ -47,7 +47,7 @@ JSON schema:
   "take_profit_pct": number (0.30 to 2.00)
 }`
 
-const macroSystemPrompt = `You are the MACRO ANALYST AGENT for AntiGravity, an autonomous BTC scalping engine.
+const macroSystemPrompt = `You are the MACRO ANALYST AGENT for RAIG, an autonomous BTC scalping engine.
 Your role: Provide an independent top-down macro and market-structure perspective.
 You do NOT advocate for a specific trade direction — you assess the OVERALL CONDITIONS.
 Consider: trend regime, momentum exhaustion, risk-on/risk-off environment, and whether the
@@ -65,7 +65,7 @@ JSON schema:
   "take_profit_pct": number (0.30 to 2.00)
 }`
 
-const riskSystemPrompt = `You are the RISK AGENT for AntiGravity, an autonomous BTC scalping engine.
+const riskSystemPrompt = `You are the RISK AGENT for RAIG, an autonomous BTC scalping engine.
 Your role: Review proposed trades against the Trading Constitution. Protect capital above all else.
 You have final veto power. When in doubt, choose HOLD.
 
@@ -79,7 +79,7 @@ JSON schema:
   "adjusted_size": number (may reduce the proposed size for safety)
 }`
 
-const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity. 
+const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for RAIG. 
 Your role: Review a proposed signal from a manual technical strategy (e.g., EMA Cross, RSI).
 Decide if the signal is high-probability or a "trap" based on the provided market context.
 
@@ -95,7 +95,7 @@ CRITICAL: Respond ONLY with a valid JSON object.
   "reason": "string"
 }`
 
-const batchAuditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for AntiGravity. 
+const batchAuditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for RAIG. 
 Role: Review a BATCH of strategy signals. Decide which should be APPROVED and which VETOED.
 
 CRITICAL: Respond ONLY with a valid JSON array of objects.
@@ -241,10 +241,10 @@ type auditAgentResponse struct {
 	Reason     string  `json:"reason"`
 }
 
-func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Should we execute it? Be strict.", 
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Should we execute it? Be strict.", 
+		buildMarketPrompt(market), strategyName, action, userNote)
 	
 	raw, err := o.openai.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -284,7 +284,7 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 // AuditSignalWithFallback tries all 5 providers in priority order.
 // Free providers are tried first to minimise cost.
 // It returns (approved, reason, confidence, provider).
-func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64, string) {
+func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64, string) {
 	anyAvailable := o.groq.IsAvailable() || o.gemini.IsAvailable() || o.mistral.IsAvailable() ||
 		o.huggingface.IsAvailable() || o.cloudflare.IsAvailable() || o.openrouter.IsAvailable() || o.openai.IsAvailable()
 	if !anyAvailable {
@@ -299,7 +299,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 1. Groq — fastest free tier (Llama 3 70B, 14,400 req/day)
 	if o.groq.IsAvailable() {
-		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "groq"
 		}
@@ -308,7 +308,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 2. Gemini — strong reasoning (1,500 req/day free)
 	if o.gemini.IsAvailable() {
-		approved, reason, conf := o.runGeminiAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runGeminiAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "gemini"
 		}
@@ -317,7 +317,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 3. Mistral — reliable free tier (mistral-small)
 	if o.mistral.IsAvailable() {
-		approved, reason, conf := o.runMistralAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runMistralAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "mistral"
 		}
@@ -326,7 +326,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 4. HuggingFace — Qwen2.5-72B free
 	if o.huggingface.IsAvailable() {
-		approved, reason, conf := o.runHuggingFaceAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runHuggingFaceAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "huggingface"
 		}
@@ -335,7 +335,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 5. Cloudflare Workers AI — Llama-3.1-70B free
 	if o.cloudflare.IsAvailable() {
-		approved, reason, conf := o.runCloudflareAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runCloudflareAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "cloudflare"
 		}
@@ -344,16 +344,16 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 	// 6. OpenRouter — 20+ free models as backstop
 	if o.openrouter.IsAvailable() {
-		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action)
+		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "openrouter"
 		}
 		log.Printf("[AI AUDIT FALLBACK] OpenRouter failed -> trying OpenAI...")
 	}
 
-	// 6. OpenAI — paid, last resort
+	// 7. OpenAI — paid, last resort
 	if o.openai.IsAvailable() {
-		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
+		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "openai"
 		}
@@ -362,10 +362,10 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	return true, "All AI providers exhausted (neutral pass)", 0.5, "NONE"
 }
 
-func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this. Be strict.", 
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this. Be strict.", 
+		buildMarketPrompt(market), strategyName, action, userNote)
 	
 	raw, err := o.openrouter.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -413,7 +413,7 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 		return nil
 	}
 	if len(signals) == 1 {
-		approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, signals[0], "BUY/SELL")
+		approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, signals[0], "BUY/SELL", "")
 		return map[string]bool{signals[0]: approved}
 	}
 
@@ -427,7 +427,7 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, name, "BUY/SELL")
+			approved, _, _, _ := o.AuditSignalWithFallback(ctx, market, name, "BUY/SELL", "")
 			mu.Lock()
 			results[name] = approved
 			mu.Unlock()
@@ -438,10 +438,10 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 	return results
 }
 
-func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.", 
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.", 
+		buildMarketPrompt(market), strategyName, action, userNote)
 	
 	raw, err := o.groq.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -478,10 +478,10 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-func (o *MultiAgentOrchestrator) runGeminiAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runGeminiAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action, userNote)
 
 	raw, err := o.gemini.ChatForRisk(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -519,10 +519,10 @@ func (o *MultiAgentOrchestrator) runGeminiAudit(ctx context.Context, market Mark
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-func (o *MultiAgentOrchestrator) runHuggingFaceAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runHuggingFaceAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action, userNote)
 
 	raw, err := o.huggingface.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -560,10 +560,10 @@ func (o *MultiAgentOrchestrator) runHuggingFaceAudit(ctx context.Context, market
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-func (o *MultiAgentOrchestrator) runCloudflareAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runCloudflareAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action, userNote)
 
 	raw, err := o.cloudflare.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
@@ -601,10 +601,10 @@ func (o *MultiAgentOrchestrator) runCloudflareAudit(ctx context.Context, market 
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-func (o *MultiAgentOrchestrator) runMistralAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+func (o *MultiAgentOrchestrator) runMistralAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
-		buildMarketPrompt(market), strategyName, action)
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action, userNote)
 
 	raw, err := o.mistral.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {

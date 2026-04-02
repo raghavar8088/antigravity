@@ -11,6 +11,7 @@ import SignalInsightCard from "@/components/SignalInsightCard";
 import StrategyCard from "@/components/StrategyCard";
 import TradeHistory from "@/components/TradeHistory";
 import AIInsightPanel from "@/components/AIInsightPanel";
+import CommandCenter from "@/components/CommandCenter";
 import FearGreedWidget from "@/components/FearGreedWidget";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
@@ -62,7 +63,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 
-const SOUND_STORAGE_KEY = "antigravity.sound.enabled";
+const SOUND_STORAGE_KEY = "raig.sound.enabled";
 const INITIAL_BALANCE = 100000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -504,6 +505,9 @@ export default function TradingDashboard() {
         onResetSuccess={handleReset}
         onAdminEvent={handleAdminEvent}
       />
+
+      {/* NEW: AI Command Center (ChatGPT Arbitrator) */}
+      <CommandCenter />
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-2">

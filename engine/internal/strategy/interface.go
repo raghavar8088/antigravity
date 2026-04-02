@@ -13,19 +13,19 @@ const (
 
 // Signal represents an intentional market order decision.
 type Signal struct {
-	Symbol        string
-	Action        Action
-	TargetSize    float64
-	Confidence    float64
-	StopLossPct   float64
-	TakeProfitPct float64
+	Symbol        string  `json:"symbol"`
+	Action        Action  `json:"action"`
+	TargetSize    float64 `json:"targetSize"`
+	Confidence    float64 `json:"confidence"`
+	StopLossPct   float64 `json:"stopLossPct"`
+	TakeProfitPct float64 `json:"takeProfitPct"`
 	
 	// AI Attribution fields — populated by the Supreme Court
-	AIDecisionID string // Which AI approved this? (openai, groq, etc)
-	AIReasoning  string // Short snippet of the AI's reason
+	AIDecisionID string `json:"aiDecisionId"` // Which AI approved this? (openai, groq, etc)
+	AIReasoning  string `json:"aiReasoning"`  // Short snippet of the AI's reason
 }
 
-// Strategy represents the absolute core of Antigravity intelligence.
+// Strategy represents the absolute core of RAIG intelligence.
 // Any algorithm (Rule-based, Mathematical indicator, or Deep Learning)
 // MUST implement this interface to generate active trading Signals.
 type Strategy interface {
