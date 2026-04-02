@@ -281,46 +281,67 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 	return resp.Approved, resp.Reason, resp.Confidence
 }
 
-// AuditSignalWithFallback tries OpenAI first, then Groq, then Gemini, then OpenRouter.
+// AuditSignalWithFallback tries all 5 providers in priority order.
+// Free providers are tried first to minimise cost.
 // It returns (approved, reason, confidence, provider).
 func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64, string) {
-	// 1. Check for immediate fallback if no AI is available
-	if !o.openai.IsAvailable() && !o.groq.IsAvailable() && !o.gemini.IsAvailable() && !o.openrouter.IsAvailable() {
+	anyAvailable := o.groq.IsAvailable() || o.gemini.IsAvailable() || o.mistral.IsAvailable() ||
+		o.openrouter.IsAvailable() || o.openai.IsAvailable()
+	if !anyAvailable {
 		return true, "No AI Auditor available (running technicals only)", 0.5, "NONE"
 	}
 
-	// 2. Throttling/Queueing logic
 	o.auditMu.Lock()
 	defer func() {
-		time.Sleep(4200 * time.Millisecond) // Throttling for free tier protection
+		time.Sleep(4200 * time.Millisecond) // Throttle to respect free-tier rate limits
 		o.auditMu.Unlock()
 	}()
 
-	// 3. Try OpenAI (Premium)
-	if o.openai.IsAvailable() {
-		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
-		if !isFatalError(reason) {
-			return approved, reason, conf, "openai"
-		}
-		log.Printf("[AI AUDIT FALLBACK] OpenAI failed (Quota/Error) -> trying Groq...")
-	}
-
-	// 4. Try Groq (Free/Fast)
+	// 1. Groq — fastest free tier (Llama 3 70B, 14,400 req/day)
 	if o.groq.IsAvailable() {
 		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action)
 		if !isFatalError(reason) {
 			return approved, reason, conf, "groq"
 		}
-		log.Printf("[AI AUDIT FALLBACK] Groq failed -> trying OpenRouter...")
+		log.Printf("[AI AUDIT FALLBACK] Groq failed -> trying Gemini...")
 	}
 
-	// 5. Try OpenRouter (Resilient Fallback)
+	// 2. Gemini — strong reasoning (1,500 req/day free)
+	if o.gemini.IsAvailable() {
+		approved, reason, conf := o.runGeminiAudit(ctx, market, strategyName, action)
+		if !isFatalError(reason) {
+			return approved, reason, conf, "gemini"
+		}
+		log.Printf("[AI AUDIT FALLBACK] Gemini failed -> trying Mistral...")
+	}
+
+	// 3. Mistral — reliable free tier (mistral-small)
+	if o.mistral.IsAvailable() {
+		approved, reason, conf := o.runMistralAudit(ctx, market, strategyName, action)
+		if !isFatalError(reason) {
+			return approved, reason, conf, "mistral"
+		}
+		log.Printf("[AI AUDIT FALLBACK] Mistral failed -> trying OpenRouter...")
+	}
+
+	// 4. OpenRouter — 20+ free models as backstop
 	if o.openrouter.IsAvailable() {
 		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action)
-		return approved, reason, conf, "openrouter"
+		if !isFatalError(reason) {
+			return approved, reason, conf, "openrouter"
+		}
+		log.Printf("[AI AUDIT FALLBACK] OpenRouter failed -> trying OpenAI...")
 	}
 
-	return true, "Vetting layer unavailable (neutral pass)", 0.5, "NONE"
+	// 5. OpenAI — paid, last resort
+	if o.openai.IsAvailable() {
+		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action)
+		if !isFatalError(reason) {
+			return approved, reason, conf, "openai"
+		}
+	}
+
+	return true, "All AI providers exhausted (neutral pass)", 0.5, "NONE"
 }
 
 func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
@@ -434,6 +455,88 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = o.store.SaveAuditLog(ctx, auditID, strategyName, action, resp.Approved, "[⚡ Groq-Free] "+resp.Reason, resp.Confidence, "groq")
+	}
+
+	return resp.Approved, resp.Reason, resp.Confidence
+}
+
+func (o *MultiAgentOrchestrator) runGeminiAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action)
+
+	raw, err := o.gemini.ChatForRisk(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT GEMINI] Error: %v", err)
+		return true, "gemini error: " + err.Error(), 0.5
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return true, "gemini parse error (neutral)", 0.4
+	}
+
+	log.Printf("[AI AUDIT ✅ GEMINI] %s %s -> %v | %s (%.0fms)",
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	auditID := fmt.Sprintf("AUD-GM-%d", time.Now().UnixNano()/1e6)
+	o.insights.AddAudit(AuditLog{
+		ID:           auditID,
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       "[♊ Gemini] " + resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+		Provider:     "gemini",
+	})
+
+	if o.store != nil {
+		sCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(sCtx, auditID, strategyName, action, resp.Approved, "[♊ Gemini] "+resp.Reason, resp.Confidence, "gemini")
+	}
+
+	return resp.Approved, resp.Reason, resp.Confidence
+}
+
+func (o *MultiAgentOrchestrator) runMistralAudit(ctx context.Context, market MarketContext, strategyName string, action string) (bool, string, float64) {
+	start := time.Now()
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nAudit this signal. Be strict.",
+		buildMarketPrompt(market), strategyName, action)
+
+	raw, err := o.mistral.ChatForAudit(ctx, auditSystemPrompt, prompt)
+	if err != nil {
+		log.Printf("[AI AUDIT MISTRAL] Error: %v", err)
+		return true, "mistral error: " + err.Error(), 0.5
+	}
+
+	raw = extractJSON(raw)
+	var resp auditAgentResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return true, "mistral parse error (neutral)", 0.4
+	}
+
+	log.Printf("[AI AUDIT ✅ MISTRAL] %s %s -> %v | %s (%.0fms)",
+		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
+
+	auditID := fmt.Sprintf("AUD-MS-%d", time.Now().UnixNano()/1e6)
+	o.insights.AddAudit(AuditLog{
+		ID:           auditID,
+		StrategyName: strategyName,
+		Action:       action,
+		Approved:     resp.Approved,
+		Reason:       "[🌬 Mistral] " + resp.Reason,
+		Confidence:   resp.Confidence,
+		Timestamp:    time.Now(),
+		Provider:     "mistral",
+	})
+
+	if o.store != nil {
+		sCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = o.store.SaveAuditLog(sCtx, auditID, strategyName, action, resp.Approved, "[🌬 Mistral] "+resp.Reason, resp.Confidence, "mistral")
 	}
 
 	return resp.Approved, resp.Reason, resp.Confidence
@@ -624,6 +727,7 @@ type MultiAgentOrchestrator struct {
 	gemini     *GeminiClient
 	groq       *GroqClient
 	openrouter *OpenRouterClient
+	mistral    *MistralClient
 	insights   *InsightStore
 	store      *persistence.Store // Persistence for AI logs
 	mu         sync.Mutex
@@ -636,75 +740,84 @@ type MultiAgentOrchestrator struct {
 // ─────────────────────────────────────────────────────────────────
 
 func (o *MultiAgentOrchestrator) runBullAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
-	// 1. Primary: OpenAI
-	sig := runBullAgent(ctx, o.openai, market)
+	// Priority: Groq (free/fast) → Mistral (free) → OpenRouter (free) → OpenAI (paid)
+	sig := runBullAgent(ctx, o.groq, market)
 	if sig.Error == "" { return sig }
 
-	// 2. Fallback 1: Groq (Ultra-fast, Llama 3)
-	log.Printf("[AI FALLBACK] Bull agent (OpenAI) failed: %v. Trying Groq...", sig.Error)
-	sig = runBullAgent(ctx, o.groq, market)
+	log.Printf("[AI FALLBACK] Bull agent (Groq) failed: %v. Trying Mistral...", sig.Error)
+	sig = runBullAgent(ctx, o.mistral, market)
 	if sig.Error == "" { return sig }
 
-	// 3. Fallback 2: OpenRouter (Resilient, Multiple models)
-	log.Printf("[AI FALLBACK] Bull agent (Groq) failed: %v. Trying OpenRouter...", sig.Error)
-	return runBullAgent(ctx, o.openrouter, market)
+	log.Printf("[AI FALLBACK] Bull agent (Mistral) failed: %v. Trying OpenRouter...", sig.Error)
+	sig = runBullAgent(ctx, o.openrouter, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Bull agent (OpenRouter) failed: %v. Trying OpenAI...", sig.Error)
+	return runBullAgent(ctx, o.openai, market)
 }
 
 func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
-	// 1. Primary: OpenAI
-	sig := runBearAgent(ctx, o.openai, market)
+	// Priority: Groq → Mistral → OpenRouter → OpenAI
+	sig := runBearAgent(ctx, o.groq, market)
 	if sig.Error == "" { return sig }
 
-	// 2. Fallback 1: Groq
-	log.Printf("[AI FALLBACK] Bear agent (OpenAI) failed: %v. Trying Groq...", sig.Error)
-	sig = runBearAgent(ctx, o.groq, market)
+	log.Printf("[AI FALLBACK] Bear agent (Groq) failed: %v. Trying Mistral...", sig.Error)
+	sig = runBearAgent(ctx, o.mistral, market)
 	if sig.Error == "" { return sig }
 
-	// 3. Fallback 2: OpenRouter
-	log.Printf("[AI FALLBACK] Bear agent (Groq) failed: %v. Trying OpenRouter...", sig.Error)
-	return runBearAgent(ctx, o.openrouter, market)
+	log.Printf("[AI FALLBACK] Bear agent (Mistral) failed: %v. Trying OpenRouter...", sig.Error)
+	sig = runBearAgent(ctx, o.openrouter, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Bear agent (OpenRouter) failed: %v. Trying OpenAI...", sig.Error)
+	return runBearAgent(ctx, o.openai, market)
 }
 
 func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
-	// 1. Primary: Gemini
+	// Primary: Gemini (best macro reasoning)
 	sig := runMacroAgent(ctx, o.gemini, market)
-	if sig.Error == "" {
-		return sig
-	}
+	if sig.Error == "" { return sig }
 
-	// 2. Fallback 1: Groq (Llama 3 70B)
 	log.Printf("[AI FALLBACK] Macro analyst (Gemini) failed: %v. Trying Groq...", sig.Error)
 	sig = runMacroAgent(ctx, o.groq, market)
-	if sig.Error == "" {
-		return sig
-	}
+	if sig.Error == "" { return sig }
 
-	// 3. Fallback 2: OpenRouter (Llama 3 Instruct)
-	log.Printf("[AI FALLBACK] Macro analyst (Groq) failed: %v. Trying OpenRouter...", sig.Error)
+	log.Printf("[AI FALLBACK] Macro analyst (Groq) failed: %v. Trying Mistral...", sig.Error)
+	sig = runMacroAgent(ctx, o.mistral, market)
+	if sig.Error == "" { return sig }
+
+	log.Printf("[AI FALLBACK] Macro analyst (Mistral) failed: %v. Trying OpenRouter...", sig.Error)
 	return runMacroAgent(ctx, o.openrouter, market)
 }
 
 func (o *MultiAgentOrchestrator) runRiskAgentWithFallback(ctx context.Context, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
-	// 1. Primary: OpenAI
-	v := runRiskAgent(ctx, o.openai, bull, bear, macro, market)
+	// Priority: Groq (fast) → Gemini (strong reasoning) → Mistral → OpenRouter → OpenAI
+	v := runRiskAgent(ctx, o.groq, bull, bear, macro, market)
 	if v.Error == "" { return v }
 
-	// 2. Fallback 1: Groq
-	log.Printf("[AI FALLBACK] Risk agent (OpenAI) failed: %v. Trying Groq...", v.Error)
-	v = runRiskAgent(ctx, o.groq, bull, bear, macro, market)
+	log.Printf("[AI FALLBACK] Risk agent (Groq) failed: %v. Trying Gemini...", v.Error)
+	v = runRiskAgent(ctx, o.gemini, bull, bear, macro, market)
 	if v.Error == "" { return v }
 
-	// 3. Fallback 2: OpenRouter
-	log.Printf("[AI FALLBACK] Risk agent (Groq) failed: %v. Trying OpenRouter...", v.Error)
-	return runRiskAgent(ctx, o.openrouter, bull, bear, macro, market)
+	log.Printf("[AI FALLBACK] Risk agent (Gemini) failed: %v. Trying Mistral...", v.Error)
+	v = runRiskAgent(ctx, o.mistral, bull, bear, macro, market)
+	if v.Error == "" { return v }
+
+	log.Printf("[AI FALLBACK] Risk agent (Mistral) failed: %v. Trying OpenRouter...", v.Error)
+	v = runRiskAgent(ctx, o.openrouter, bull, bear, macro, market)
+	if v.Error == "" { return v }
+
+	log.Printf("[AI FALLBACK] Risk agent (OpenRouter) failed: %v. Trying OpenAI...", v.Error)
+	return runRiskAgent(ctx, o.openai, bull, bear, macro, market)
 }
 
-func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, store *persistence.Store) *MultiAgentOrchestrator {
+func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq *GroqClient, openrouter *OpenRouterClient, mistral *MistralClient, store *persistence.Store) *MultiAgentOrchestrator {
 	return &MultiAgentOrchestrator{
 		openai:     openai,
 		gemini:     gemini,
 		groq:       groq,
 		openrouter: openrouter,
+		mistral:    mistral,
 		store:      store,
 		insights:   NewInsightStore(50),
 	}

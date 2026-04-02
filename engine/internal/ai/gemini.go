@@ -142,3 +142,13 @@ func (g *GeminiClient) Chat(ctx context.Context, system, userMessage string, max
 func (g *GeminiClient) ChatForMacro(ctx context.Context, system, prompt string) (string, error) {
 	return g.Chat(ctx, system, prompt, 700)
 }
+
+// ChatForSignal calls Gemini Flash for trading signal generation.
+func (g *GeminiClient) ChatForSignal(ctx context.Context, system, prompt string) (string, error) {
+	return g.Chat(ctx, system, prompt, 350)
+}
+
+// ChatForRisk calls Gemini Flash for risk arbitration.
+func (g *GeminiClient) ChatForRisk(ctx context.Context, system, prompt string) (string, error) {
+	return g.Chat(ctx, system, prompt, 400)
+}

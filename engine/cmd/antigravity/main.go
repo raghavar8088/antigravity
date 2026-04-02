@@ -241,10 +241,12 @@ func main() {
 	geminiClient := ai.NewGeminiClient()
 	groqClient := ai.NewGroqClient()
 	openRouterClient := ai.NewOpenRouterClient()
+	mistralClient := ai.NewMistralClient()
 	var aiOrchestrator *ai.MultiAgentOrchestrator
-	
-	if openAIClient.IsAvailable() || groqClient.IsAvailable() || openRouterClient.IsAvailable() {
-		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient, dbStore)
+
+	if openAIClient.IsAvailable() || groqClient.IsAvailable() || openRouterClient.IsAvailable() ||
+		geminiClient.IsAvailable() || mistralClient.IsAvailable() {
+		aiOrchestrator = ai.NewMultiAgentOrchestrator(openAIClient, geminiClient, groqClient, openRouterClient, mistralClient, dbStore)
 		orchestrator.SetAIOrchestrator(aiOrchestrator)
 		
 		// Restore AI History from DB
