@@ -85,7 +85,7 @@ func NewManager() *Manager {
 			MinTakeProfitPct:   0.20,  // Reduced: 0.45 was forcing TP too wide for scalpers, collapsing win rates
 			MaxPerStrategy:     2,     // Max 2 positions per strategy — prevent pile-up
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 10,    // Scalping: auto-expire after 10 min — no dead-weight positions
+			MaxPositionAgeMins: 0,     // Scalping: manual lock enforced for 10m, then stays open until SL/TP or manual close
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
@@ -345,6 +345,10 @@ func (m *Manager) ClosePosition(id string, exitPrice float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if pos, ok := m.positions[id]; ok {
+		if time.Since(pos.OpenedAt) < 10*time.Minute {
+			log.Printf("[MANUAL CLOSE BLOCKED] %s | Position must be open for at least 10 minutes (current age: %.2fm)", id, time.Since(pos.OpenedAt).Minutes())
+			return
+		}
 		pnl := m.calculatePnL(pos, exitPrice)
 		pos.Status = "CLOSED"
 		log.Printf("[POSITION CLOSED] %s | Manual exit @ $%.2f | PnL: $%.4f", id, exitPrice, pnl)
@@ -357,8 +361,13 @@ func (m *Manager) ClosePosition(id string, exitPrice float64) {
 func (m *Manager) CloseAllPositions(exitPrice float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	closedCount := 0
 	for id, pos := range m.positions {
 		if pos.Status != "OPEN" {
+			continue
+		}
+		if time.Since(pos.OpenedAt) < 10*time.Minute {
+			log.Printf("[SKIP FORCE CLOSE] %s | Less than 10m old (%.2fm)", id, time.Since(pos.OpenedAt).Minutes())
 			continue
 		}
 		pnl := m.calculatePnL(pos, exitPrice)
@@ -366,6 +375,10 @@ func (m *Manager) CloseAllPositions(exitPrice float64) {
 		log.Printf("[FORCE CLOSE] %s | Exit @ $%.2f | PnL: $%.4f", id, exitPrice, pnl)
 		m.emitClose(pos, ReasonManual, exitPrice, pnl)
 		delete(m.positions, id)
+		closedCount++
+	}
+	if closedCount == 0 && len(m.positions) > 0 {
+		log.Println("[ADMIN] No positions were closed because all are less than 10 minutes old.")
 	}
 }
 
