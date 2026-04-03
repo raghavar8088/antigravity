@@ -7,22 +7,13 @@ type FeedEntry = {
   time: number;
 };
 
-const toneClasses: Record<FeedEntry["tone"], string> = {
-  info: "text-slate-700",
-  buy: "text-blue-700",
-  sell: "text-rose-700",
-  win: "text-emerald-700",
-  loss: "text-red-700",
-  admin: "text-amber-700",
-};
-
-const toneDots: Record<FeedEntry["tone"], string> = {
-  info: "#1a73e8",
-  buy: "#1a73e8",
-  sell: "#d93025",
-  win: "#188038",
-  loss: "#d93025",
-  admin: "#b06000",
+const toneColors: Record<FeedEntry["tone"], string> = {
+  info: "var(--text-secondary)",
+  buy: "var(--accent)",
+  sell: "var(--red)",
+  win: "var(--green)",
+  loss: "var(--red)",
+  admin: "var(--amber)",
 };
 
 export default function ActivityFeed({ entries }: { entries: FeedEntry[] }) {
@@ -54,9 +45,9 @@ export default function ActivityFeed({ entries }: { entries: FeedEntry[] }) {
             <div className="flex items-start gap-3">
               <span
                 className="mt-1.5 h-2.5 w-2.5 rounded-full"
-                style={{ background: toneDots[entry.tone] }}
+                style={{ background: toneColors[entry.tone] }}
               />
-              <div className={`text-sm ${toneClasses[entry.tone]}`}>
+              <div className="text-sm" style={{ color: toneColors[entry.tone] }}>
                 {entry.message}
               </div>
             </div>

@@ -147,21 +147,6 @@ export default function DashboardHeader({
             type="button"
             onClick={() =>
               postAdminAction(
-                "/api/admin/clear-history",
-                "Clear completed trade history and strategy stats? Open positions and balance will be kept.",
-                "Trade history cleared.",
-                true,
-              )
-            }
-            disabled={isBusy}
-            className="btn-primary"
-          >
-            {activeAction === "/api/admin/clear-history" ? "Clearing" : "Clear History"}
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              postAdminAction(
                 "/api/admin/close-all",
                 "Close all open positions at market price?",
                 "All positions closed.",
@@ -186,6 +171,21 @@ export default function DashboardHeader({
             className="btn-danger"
           >
             {activeAction === "/api/admin/kill" ? "Stopping" : "Kill"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              postAdminAction(
+                "/api/admin/clear-history",
+                "Clear completed trade history and strategy stats? Open positions and balance will be kept.",
+                "Trade history cleared.",
+                true,
+              )
+            }
+            disabled={isBusy}
+            className="btn-primary"
+          >
+            {activeAction === "/api/admin/clear-history" ? "Clearing" : "Clear Trade History"}
           </button>
           <button
             type="button"

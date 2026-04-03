@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import type { MarketSignal } from "@/lib/marketSignal";
 
 export default function SignalInsightCard({ signal }: { signal: MarketSignal | null }) {
@@ -16,17 +17,17 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
     );
   }
 
-  const sideClasses = signal.side === "BUY"
-    ? "text-emerald-300"
+  const sideColor = signal.side === "BUY"
+    ? "var(--green)"
     : signal.side === "SELL"
-      ? "text-rose-300"
-      : "text-zinc-300";
+      ? "var(--red)"
+      : "var(--text-secondary)";
 
-  const confidenceClasses = signal.confidence >= 75
-    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+  const confidenceStyle: React.CSSProperties = signal.confidence >= 75
+    ? { background: "var(--green-dim)", color: "var(--green)", borderColor: "rgba(24,128,56,0.2)" }
     : signal.confidence >= 60
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : "bg-slate-100 text-slate-700 border-slate-200";
+      ? { background: "var(--amber-dim)", color: "var(--amber)", borderColor: "rgba(176,96,0,0.2)" }
+      : { background: "var(--surface-3)", color: "var(--text-secondary)", borderColor: "var(--border)" };
 
   return (
     <div className="glass-panel p-5">
@@ -34,10 +35,10 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
         <div className="text-xs font-medium uppercase tracking-[0.16em]" style={{ color: "var(--text-secondary)" }}>
           Live signal insight
         </div>
-        <div className={`text-lg font-medium ${sideClasses}`}>
+        <div className="text-lg font-medium" style={{ color: sideColor }}>
           {signal.side === "BUY" ? "BUY" : signal.side === "SELL" ? "SELL" : "NEUTRAL"} {signal.tag}
         </div>
-        <div className={`rounded-full border px-3 py-1 text-xs font-medium ${confidenceClasses}`}>
+        <div className="rounded-full border px-3 py-1 text-xs font-medium" style={confidenceStyle}>
           {signal.confidence}% confidence
         </div>
         <div className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
@@ -50,7 +51,8 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
           {signal.strategies.map((strategy) => (
             <span
               key={`${signal.tag}-${strategy}`}
-              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+              className="rounded-full border px-3 py-1 text-xs font-medium"
+              style={{ background: "var(--accent-dim)", color: "var(--accent)", borderColor: "rgba(26,115,232,0.2)" }}
             >
               {strategy}
             </span>
@@ -63,7 +65,8 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
           {signal.reasons.slice(0, 8).map((reason) => (
             <span
               key={`${signal.tag}-${reason}`}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700"
+              className="rounded-full border px-3 py-1 text-xs"
+              style={{ background: "var(--surface-3)", color: "var(--text-secondary)", borderColor: "var(--border)" }}
             >
               {reason}
             </span>

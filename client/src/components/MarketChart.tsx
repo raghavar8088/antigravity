@@ -72,7 +72,13 @@ export default function MarketChart({ candles, positions, currentPrice, height =
     const priceRange = maxPrice - minPrice || 1;
     const toY = (price: number) => padding.top + chartHeight - ((price - minPrice) / priceRange) * chartHeight;
 
-    context.fillStyle = "#ffffff";
+    const cssVars = getComputedStyle(document.documentElement);
+    const bgColor = cssVars.getPropertyValue("--surface").trim() || "#ffffff";
+    const gridColor = cssVars.getPropertyValue("--border-subtle").trim() || "rgba(60,64,67,0.10)";
+    const labelColor = cssVars.getPropertyValue("--text-muted").trim() || "#80868b";
+    const priceTextColor = cssVars.getPropertyValue("--text-primary").trim() || "#202124";
+
+    context.fillStyle = bgColor;
     context.fillRect(0, 0, width, height);
 
     for (let index = 0; index <= 4; index += 1) {
@@ -80,10 +86,10 @@ export default function MarketChart({ candles, positions, currentPrice, height =
       context.beginPath();
       context.moveTo(padding.left, y);
       context.lineTo(width - padding.right, y);
-      context.strokeStyle = "rgba(60, 64, 67, 0.10)";
+      context.strokeStyle = gridColor;
       context.stroke();
       const labelPrice = maxPrice - (priceRange / 4) * index;
-      context.fillStyle = "#5f6368";
+      context.fillStyle = labelColor;
       context.font = "11px Roboto Mono, monospace";
       context.textAlign = "right";
       context.fillText(labelPrice.toFixed(0), padding.left - 8, y + 4);
@@ -149,7 +155,7 @@ export default function MarketChart({ candles, positions, currentPrice, height =
       context.strokeStyle = "rgba(32, 33, 36, 0.36)";
       context.stroke();
       context.setLineDash([]);
-      context.fillStyle = "#202124";
+      context.fillStyle = priceTextColor;
       context.font = "bold 11px Roboto Mono, monospace";
       context.textAlign = "left";
       context.fillText(`PX ${currentPrice.toFixed(2)}`, padding.left + 6, y - 6);

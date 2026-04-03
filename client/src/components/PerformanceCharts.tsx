@@ -67,7 +67,7 @@ function buildAreaPath(points: ChartPoint[]): string {
 }
 
 function formatTimeLabel(timeMs: number): string {
-  return new Date(timeMs).toLocaleTimeString([], { hour12: false, minute: "2-digit", second: "2-digit" });
+  return new Date(timeMs).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function renderLineChart(
@@ -141,10 +141,10 @@ export default function PerformanceCharts({ priceSeries, equitySeries, strategyB
                       {positive ? "+" : ""}${strategy.pnl.toFixed(2)}
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-3)" }}>
                     <div
-                      className={`h-full rounded-full ${positive ? "bg-green-400/85" : "bg-red-400/85"}`}
-                      style={{ width }}
+                      className="h-full rounded-full"
+                      style={{ width, background: positive ? "var(--green)" : "var(--red)" }}
                     />
                   </div>
                 </div>

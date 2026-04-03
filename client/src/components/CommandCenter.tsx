@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface PendingSignal {
   id: string;
@@ -42,13 +42,19 @@ export default function CommandCenter() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
+  // Refs so polling callbacks can read current values without being dependencies
+  const inputRef = useRef(input);
+  const loadingRef = useRef(loading);
+  useEffect(() => { inputRef.current = input; }, [input]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+
   useEffect(() => {
     const fetchPending = async () => {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/pending`);
         const data = await res.json();
         setPending(data);
-        if (data.length > 0 && !input && !loading) {
+        if (data.length > 0 && !inputRef.current && !loadingRef.current) {
           const sig = data[0];
           setInput(`Review ${sig.strategyName} ${sig.signal.action} on ${sig.signal.symbol}.`);
         }
@@ -79,7 +85,7 @@ export default function CommandCenter() {
       clearInterval(timer);
       clearInterval(statusTimer);
     };
-  }, [input, loading]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

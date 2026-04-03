@@ -913,14 +913,6 @@ export default function TradingDashboard() {
             <RunningTrades currentPrice={price} trades={runningTrades} />
           </div>
 
-          <div className="glass-panel p-6">
-            <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
-              <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
-              Session Ledger
-              <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
-            </h2>
-            <TradeHistory history={historyItems} showSummary={false} />
-          </div>
         </div>
       )}
 
@@ -1153,7 +1145,7 @@ export default function TradingDashboard() {
             { key: "trade", label: "Trade" },
             { key: "stats", label: "Stats" },
             { key: "strategies", label: `Strategies (${strategyRows.length})` },
-            { key: "history", label: `History (${liveTrades.length})` },
+            { key: "history", label: `Session Ledger (${liveTrades.length})` },
             { key: "feed", label: `Feed (${feed.length})` },
           ].map((tab) => (
             <button
@@ -1588,7 +1580,7 @@ export default function TradingDashboard() {
           <div className="glass-panel p-6">
             <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
               <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
-              Trade History
+              Session Ledger
               <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
             </h2>
             <TradeHistory
