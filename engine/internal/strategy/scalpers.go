@@ -26,7 +26,7 @@ func (b *baseScalper) feed(price float64) {
 }
 
 const defaultBufSize = 500
-const defaultQty = 0.01 // Conservative BTC position size for scalping
+const defaultQty = 0.10 // 10x larger baseline BTC position size for scalping
 
 // Default SL/TP for scalping: ultra-tight stops matched to BTC's 1-3 minute price action.
 // BTC moves ~0.1-0.3% per minute → 0.15% SL and 0.25% TP get hit within 1-3 candles.

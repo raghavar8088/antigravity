@@ -44,7 +44,7 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	}
 }
 
-func TestLongPositionDoesNotAutoMoveToBreakEven(t *testing.T) {
+func TestLongPositionKeepsFixedStopLossAfterProfitMove(t *testing.T) {
 	mgr := NewManager()
 	sig := strategy.Signal{
 		Symbol:        "BTC-USD",
@@ -63,8 +63,11 @@ func TestLongPositionDoesNotAutoMoveToBreakEven(t *testing.T) {
 	if len(positions) != 1 {
 		t.Fatalf("expected one open position, got %d", len(positions))
 	}
-	if positions[0].StopLoss <= originalStop {
-		t.Fatalf("expected trailing stop to lift stop loss above %.4f, got %.4f", originalStop, positions[0].StopLoss)
+	if math.Abs(positions[0].StopLoss-originalStop) > floatTolerance {
+		t.Fatalf("expected stop loss to remain fixed at %.4f, got %.4f", originalStop, positions[0].StopLoss)
+	}
+	if positions[0].TrailingActive {
+		t.Fatal("expected trailing to remain disabled")
 	}
 	if positions[0].BreakEvenMoved {
 		t.Fatal("expected break-even flag to remain disabled")

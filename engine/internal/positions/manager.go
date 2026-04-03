@@ -24,11 +24,12 @@ type Position struct {
 	OpenedAt      time.Time       `json:"openedAt"`
 	Status        string          `json:"status"`
 
-	// Advanced features
+	// Legacy compatibility fields kept in the API/state shape even though
+	// positions are now managed with fixed SL/TP only.
 	TrailingActive bool    `json:"trailingActive"`
-	TrailingDist   float64 `json:"trailingDist"`   // Trailing stop distance in %
-	HighWaterMark  float64 `json:"highWaterMark"`  // Best price seen since entry (for trailing)
-	LowWaterMark   float64 `json:"lowWaterMark"`   // Worst price seen since entry (for short trailing)
+	TrailingDist   float64 `json:"trailingDist"`
+	HighWaterMark  float64 `json:"highWaterMark"`
+	LowWaterMark   float64 `json:"lowWaterMark"`
 	BreakEvenMoved bool    `json:"breakEvenMoved"` // Legacy compatibility flag; break-even auto-moves are disabled.
 	PartialClosed  bool    `json:"partialClosed"`  // Whether partial TP1 has been taken
 	OriginalSize   float64 `json:"originalSize"`   // Size before partial close
@@ -40,7 +41,7 @@ type CloseReason string
 const (
 	ReasonStopLoss     CloseReason = "STOP_LOSS"
 	ReasonTakeProfit   CloseReason = "TAKE_PROFIT"
-	ReasonTrailingStop CloseReason = "TRAILING_STOP"
+	ReasonTrailingStop CloseReason = "TRAILING_STOP" // Legacy reason kept for older records; no longer emitted for new trades.
 	ReasonManual       CloseReason = "MANUAL"
 )
 
@@ -54,7 +55,7 @@ type CloseEvent struct {
 
 // ManagerConfig holds configuration for position management.
 type ManagerConfig struct {
-	TrailingStopPct    float64 // Trailing stop distance (e.g. 0.4 = 0.4%)
+	TrailingStopPct    float64 // Legacy compatibility setting; trailing exits are disabled.
 	BreakEvenThreshold float64 // Reserved legacy setting; break-even exits are disabled.
 	PartialTPRatio     float64 // Close this fraction at TP1 (e.g. 0.5 = 50%)
 	MinTakeProfitPct   float64 // Floor TP distance to avoid fee-level micro exits
@@ -75,7 +76,7 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
-	return &Manager{
+	mgr := &Manager{
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
@@ -89,6 +90,9 @@ func NewManager() *Manager {
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
+	// Trailing exits are intentionally disabled so positions only auto-close via SL or TP.
+	mgr.config.TrailingStopPct = 1e9
+	return mgr
 }
 
 // CanOpenPosition checks if a strategy is allowed to open another position.

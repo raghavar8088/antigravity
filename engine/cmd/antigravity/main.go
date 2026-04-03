@@ -54,7 +54,7 @@ func (r *RingLogger) GetLogs() []string {
 
 var globalLogs = &RingLogger{max: 100}
 
-const initialPaperBalanceUSD = 100000.0
+const initialPaperBalanceUSD = 1000000.0
 
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
@@ -129,7 +129,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
 		MaxPositionBTC:  2.0,                    // Max 2 BTC total exposure
-		MaxCapitalUSD:   initialPaperBalanceUSD, // $100,000 paper balance
+		MaxCapitalUSD:   initialPaperBalanceUSD, // $1,000,000 paper balance
 		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($5,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
@@ -335,6 +335,7 @@ func main() {
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)
 	http.HandleFunc("/api/admin/reset", killswitch.HandleReset)
+	http.HandleFunc("/api/admin/clear-history", killswitch.HandleClearHistory)
 
 	// Health check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -402,7 +403,7 @@ func main() {
 			return
 		}
 		aggStats := journal.GetAggregateStats()
-		realizedBalance := initialPaperBalanceUSD + aggStats.TotalPnL
+		realizedBalance := paperExecute.GetBalanceUSD()
 
 		ticks, candles := candleAgg.GetStats()
 		response := map[string]interface{}{

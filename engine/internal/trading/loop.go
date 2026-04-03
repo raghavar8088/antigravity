@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	minExecutionSizeBTC  = 0.001
+	minExecutionSizeBTC  = 0.01
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
@@ -460,8 +460,8 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 	if activeSig.size < minExecutionSizeBTC {
 		activeSig.size = minExecutionSizeBTC
 	}
-	if activeSig.size > 0.05 {
-		activeSig.size = 0.05
+	if activeSig.size > 0.5 {
+		activeSig.size = 0.5
 	}
 
 	sig := strategy.Signal{
@@ -946,7 +946,7 @@ func (o *Orchestrator) AddTestSignal() {
 		Signal: strategy.Signal{
 			Symbol:        "BTC-USD",
 			Action:        strategy.ActionBuy,
-			TargetSize:    0.002,
+			TargetSize:    0.02,
 			Confidence:    0.92,
 			StopLossPct:   0.45,
 			TakeProfitPct: 0.90,

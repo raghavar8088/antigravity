@@ -170,13 +170,13 @@ func (k *KillSwitchController) HandleReset(w http.ResponseWriter, r *http.Reques
 
 	log.Println("[ADMIN] FULL ACCOUNT RESET requested - wiping all state...")
 
-	// 1. Reset in-memory paper trading balance ($100k starting)
+	// 1. Reset in-memory paper trading balance ($1M starting)
 	if err := k.engine.ResetAccount(); err != nil {
 		log.Printf("[ADMIN] Failed to reset paper engine: %v", err)
 		http.Error(w, "Failed to reset paper engine", http.StatusInternalServerError)
 		return
 	}
-	log.Println("[ADMIN] Paper balance reset to $100,000")
+	log.Println("[ADMIN] Paper balance reset to $1,000,000")
 
 	// 2. Wipe all open positions from memory
 	k.posMgr.Reset()
@@ -208,14 +208,68 @@ func (k *KillSwitchController) HandleReset(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	log.Println("[ADMIN] FULL RESET COMPLETE - Engine running with $100,000 fresh account")
+	log.Println("[ADMIN] FULL RESET COMPLETE - Engine running with $1,000,000 fresh account")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":      "Account Reset",
-		"message":     "All balances, positions, and trade history have been wiped. Starting fresh with $100,000.",
-		"newBalance":  100000.0,
+		"message":     "All balances, positions, and trade history have been wiped. Starting fresh with $1,000,000.",
+		"newBalance":  1000000.0,
 		"openTrades":  0,
 		"totalTrades": 0,
+	})
+}
+
+// HandleClearHistory clears completed trade history and performance counters
+// while leaving balances and open positions intact.
+func (k *KillSwitchController) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	openPositions := 0
+	if k.posMgr != nil {
+		openPositions = len(k.posMgr.GetOpenPositions())
+	}
+
+	log.Println("[ADMIN] TRADE HISTORY RESET requested - clearing journal and persisted trade records...")
+
+	if k.journal != nil {
+		k.journal.Reset()
+		log.Println("[ADMIN] Trade journal cleared")
+	}
+
+	if k.tracker != nil {
+		k.tracker.Reset()
+		log.Println("[ADMIN] Strategy tracker reset")
+	}
+
+	if k.riskEngine != nil {
+		k.riskEngine.ResetDaily()
+		log.Println("[ADMIN] Risk daily counters reset")
+	}
+
+	if k.dbStore != nil {
+		if err := k.dbStore.ClearTradeHistory(k.ctx); err != nil {
+			log.Printf("[ADMIN] Failed to clear trade history in database: %v", err)
+			http.Error(w, "Failed to clear trade history in database", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":               "Trade History Cleared",
+		"message":              "Completed trade history and performance counters were cleared. Balances and open positions were preserved.",
+		"openPositionsKept":    openPositions,
+		"totalTrades":          0,
+		"strategyStatsCleared": true,
 	})
 }

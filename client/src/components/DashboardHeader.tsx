@@ -147,6 +147,21 @@ export default function DashboardHeader({
             type="button"
             onClick={() =>
               postAdminAction(
+                "/api/admin/clear-history",
+                "Clear completed trade history and strategy stats? Open positions and balance will be kept.",
+                "Trade history cleared.",
+                true,
+              )
+            }
+            disabled={isBusy}
+            className="btn-primary"
+          >
+            {activeAction === "/api/admin/clear-history" ? "Clearing" : "Clear History"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              postAdminAction(
                 "/api/admin/close-all",
                 "Close all open positions at market price?",
                 "All positions closed.",
@@ -177,8 +192,8 @@ export default function DashboardHeader({
             onClick={() =>
               postAdminAction(
                 "/api/admin/reset",
-                "Reset paper account to $100,000?",
-                "Account reset to $100,000.",
+                "Reset paper account to $1,000,000?",
+                "Account reset to $1,000,000.",
                 true,
               )
             }

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const FALLBACK_BALANCE = 100000.0;
+const FALLBACK_BALANCE = 1000000.0;
 
 export default function useEngineState() {
   const [engineOnline, setEngineOnline] = useState(false);

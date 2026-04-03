@@ -12,7 +12,6 @@ import (
 	"antigravity-engine/internal/persistence"
 )
 
-
 // ─────────────────────────────────────────────────────────────────
 // SYSTEM PROMPTS — each agent has a distinct identity and role
 // ─────────────────────────────────────────────────────────────────
@@ -41,7 +40,7 @@ CRITICAL: Respond ONLY with a valid JSON object. No markdown, no explanation out
   "should_trade": boolean,
   "confidence": number (0.0 to 1.0),
   "thesis": "string — 1-2 sentences, cite specific indicator values",
-  "size_btc": number (0.001 to 0.01),
+  "size_btc": number (0.01 to 0.10),
   "stop_loss_pct": number (0.12 to 0.20),
   "take_profit_pct": number (0.20 to 0.32)
 }`
@@ -69,7 +68,7 @@ CRITICAL: Respond ONLY with a valid JSON object. No markdown, no explanation out
   "should_trade": boolean,
   "confidence": number (0.0 to 1.0),
   "thesis": "string — 1-2 sentences, cite specific indicator values",
-  "size_btc": number (0.001 to 0.01),
+  "size_btc": number (0.01 to 0.10),
   "stop_loss_pct": number (0.12 to 0.20),
   "take_profit_pct": number (0.20 to 0.32)
 }`
@@ -94,7 +93,7 @@ CRITICAL: Respond ONLY with a valid JSON object. No markdown, no explanation out
   "confidence": number (0.0 to 1.0),
   "thesis": "string — 1-2 sentences citing ADX, VWAP distance, ATR level",
   "bias": "BULLISH" or "BEARISH" or "NEUTRAL",
-  "size_btc": number (0.001 to 0.01),
+  "size_btc": number (0.01 to 0.10),
   "stop_loss_pct": number (0.12 to 0.20),
   "take_profit_pct": number (0.20 to 0.32)
 }`
@@ -120,7 +119,7 @@ CRITICAL: Respond ONLY with a valid JSON object. No markdown, no explanation out
   "approved_action": "BUY" or "SELL" or "HOLD",
   "veto_reason": "string or null",
   "reasoning": "1 sentence citing the specific values that drove this decision",
-  "adjusted_size": number (0.001 to 0.01 — reduce size if borderline conditions)
+  "adjusted_size": number (0.01 to 0.10 — reduce size if borderline conditions)
 }`
 
 const auditSystemPrompt = `You are the SENIOR SIGNAL AUDITOR for RAIG.
@@ -293,9 +292,9 @@ type auditAgentResponse struct {
 
 func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Should we execute it? Be strict.", 
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Should we execute it? Be strict.",
 		buildMarketPrompt(market), strategyName, action, userNote)
-	
+
 	raw, err := o.openai.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
 		log.Printf("[AI AUDIT ERROR] %v", err)
@@ -308,7 +307,7 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 		return true, "Audit parse error", 0.4
 	}
 
-	log.Printf("[AI AUDIT ✅ OPENAI] %s %s -> %v | %s (%.0fms)", 
+	log.Printf("[AI AUDIT ✅ OPENAI] %s %s -> %v | %s (%.0fms)",
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
 	auditID := fmt.Sprintf("AUD-OA-%d", time.Now().UnixNano()/1e6)
@@ -414,9 +413,9 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 
 func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this. Be strict.", 
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this. Be strict.",
 		buildMarketPrompt(market), strategyName, action, userNote)
-	
+
 	raw, err := o.openrouter.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
 		log.Printf("[AI AUDIT OPENROUTER] Error: %v", err)
@@ -429,7 +428,7 @@ func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market 
 		return true, "Parse error", 0.4
 	}
 
-	log.Printf("[AI AUDIT ✅ OPENROUTER] %s %s -> %v | %s (%.0fms)", 
+	log.Printf("[AI AUDIT ✅ OPENROUTER] %s %s -> %v | %s (%.0fms)",
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
 	auditID := fmt.Sprintf("AUD-OR-%d", time.Now().UnixNano()/1e6)
@@ -490,9 +489,9 @@ func (o *MultiAgentOrchestrator) AuditBatchSignals(ctx context.Context, market M
 
 func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
 	start := time.Now()
-	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.", 
+	prompt := fmt.Sprintf("%s\n\nPROPOSED SIGNAL:\nStrategy: %s\nAction: %s\n\nHUMAN TRADER NOTE: %s\n\nAudit this signal. Be strict.",
 		buildMarketPrompt(market), strategyName, action, userNote)
-	
+
 	raw, err := o.groq.ChatForAudit(ctx, auditSystemPrompt, prompt)
 	if err != nil {
 		log.Printf("[AI AUDIT GROQ] Error: %v", err)
@@ -505,7 +504,7 @@ func (o *MultiAgentOrchestrator) runGroqAudit(ctx context.Context, market Market
 		return true, "Groq parse error (neutral)", 0.4
 	}
 
-	log.Printf("[AI AUDIT ✅ GROQ] %s %s -> %v | %s (%.0fms)", 
+	log.Printf("[AI AUDIT ✅ GROQ] %s %s -> %v | %s (%.0fms)",
 		strategyName, action, resp.Approved, resp.Reason, float64(time.Since(start).Milliseconds()))
 
 	auditID := fmt.Sprintf("AUD-G-%d", time.Now().UnixNano()/1e6)
@@ -894,23 +893,33 @@ type MultiAgentOrchestrator struct {
 func (o *MultiAgentOrchestrator) runBullAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
 	// Priority: Groq → Mistral → HuggingFace → OpenRouter → OpenAI
 	sig := runBullAgent(ctx, o.groq, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bull (Groq) failed: %v. Trying Mistral...", sig.Error)
 	sig = runBullAgent(ctx, o.mistral, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bull (Mistral) failed: %v. Trying HuggingFace...", sig.Error)
 	sig = runBullAgent(ctx, o.huggingface, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bull (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
 	sig = runBullAgent(ctx, o.cloudflare, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bull (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	sig = runBullAgent(ctx, o.openrouter, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bull (OpenRouter) failed: %v. Trying OpenAI...", sig.Error)
 	return runBullAgent(ctx, o.openai, market)
@@ -919,23 +928,33 @@ func (o *MultiAgentOrchestrator) runBullAgentWithFallback(ctx context.Context, m
 func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
 	// Priority: Groq → Mistral → HuggingFace → OpenRouter → OpenAI
 	sig := runBearAgent(ctx, o.groq, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bear (Groq) failed: %v. Trying Mistral...", sig.Error)
 	sig = runBearAgent(ctx, o.mistral, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bear (Mistral) failed: %v. Trying HuggingFace...", sig.Error)
 	sig = runBearAgent(ctx, o.huggingface, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bear (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
 	sig = runBearAgent(ctx, o.cloudflare, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bear (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	sig = runBearAgent(ctx, o.openrouter, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Bear (OpenRouter) failed: %v. Trying OpenAI...", sig.Error)
 	return runBearAgent(ctx, o.openai, market)
@@ -944,23 +963,33 @@ func (o *MultiAgentOrchestrator) runBearAgentWithFallback(ctx context.Context, m
 func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, market MarketContext) AgentSignal {
 	// Primary: Gemini → Groq → Mistral → HuggingFace → OpenRouter
 	sig := runMacroAgent(ctx, o.gemini, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Macro (Gemini) failed: %v. Trying Groq...", sig.Error)
 	sig = runMacroAgent(ctx, o.groq, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Macro (Groq) failed: %v. Trying Mistral...", sig.Error)
 	sig = runMacroAgent(ctx, o.mistral, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Macro (Mistral) failed: %v. Trying HuggingFace...", sig.Error)
 	sig = runMacroAgent(ctx, o.huggingface, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Macro (HuggingFace) failed: %v. Trying Cloudflare...", sig.Error)
 	sig = runMacroAgent(ctx, o.cloudflare, market)
-	if sig.Error == "" { return sig }
+	if sig.Error == "" {
+		return sig
+	}
 
 	log.Printf("[AI FALLBACK] Macro (Cloudflare) failed: %v. Trying OpenRouter...", sig.Error)
 	return runMacroAgent(ctx, o.openrouter, market)
@@ -969,27 +998,39 @@ func (o *MultiAgentOrchestrator) runMacroAgentWithFallback(ctx context.Context, 
 func (o *MultiAgentOrchestrator) runRiskAgentWithFallback(ctx context.Context, bull, bear, macro AgentSignal, market MarketContext) RiskVerdict {
 	// Priority: Groq → Gemini → Mistral → HuggingFace → OpenRouter → OpenAI
 	v := runRiskAgent(ctx, o.groq, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (Groq) failed: %v. Trying Gemini...", v.Error)
 	v = runRiskAgent(ctx, o.gemini, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (Gemini) failed: %v. Trying Mistral...", v.Error)
 	v = runRiskAgent(ctx, o.mistral, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (Mistral) failed: %v. Trying HuggingFace...", v.Error)
 	v = runRiskAgent(ctx, o.huggingface, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (HuggingFace) failed: %v. Trying Cloudflare...", v.Error)
 	v = runRiskAgent(ctx, o.cloudflare, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (Cloudflare) failed: %v. Trying OpenRouter...", v.Error)
 	v = runRiskAgent(ctx, o.openrouter, bull, bear, macro, market)
-	if v.Error == "" { return v }
+	if v.Error == "" {
+		return v
+	}
 
 	log.Printf("[AI FALLBACK] Risk (OpenRouter) failed: %v. Trying OpenAI...", v.Error)
 	return runRiskAgent(ctx, o.openai, bull, bear, macro, market)
@@ -1080,10 +1121,16 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 		reasoning := "Council (OpenAI+Gemini) recommended HOLD."
 		// Append errors if any agent failed, to help debug "Why it's zero"
 		var errors []string
-		if bullSig.Error != "" { errors = append(errors, "OpenAI Bull: "+bullSig.Error) }
-		if bearSig.Error != "" { errors = append(errors, "OpenAI Bear: "+bearSig.Error) }
-		if macroSig.Error != "" { errors = append(errors, "Gemini Macro: "+macroSig.Error) }
-		
+		if bullSig.Error != "" {
+			errors = append(errors, "OpenAI Bull: "+bullSig.Error)
+		}
+		if bearSig.Error != "" {
+			errors = append(errors, "OpenAI Bear: "+bearSig.Error)
+		}
+		if macroSig.Error != "" {
+			errors = append(errors, "Gemini Macro: "+macroSig.Error)
+		}
+
 		if len(errors) > 0 {
 			reasoning = "⚠️ AI ERRORS:\n" + strings.Join(errors, "\n")
 		}

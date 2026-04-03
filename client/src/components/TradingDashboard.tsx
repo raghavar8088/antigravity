@@ -65,7 +65,7 @@ type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 
 const SOUND_STORAGE_KEY = "raig.sound.enabled";
-const INITIAL_BALANCE = 100000;
+const INITIAL_BALANCE = 1000000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },

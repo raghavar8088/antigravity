@@ -30,8 +30,8 @@ MARKET CONDITIONS
 12. Reduce position size by 50% during VOLATILE regime.
 
 EXECUTION QUALITY
-13. Minimum position size: 0.001 BTC. Veto anything smaller.
-14. Maximum position size: 0.05 BTC per trade.
+13. Minimum position size: 0.01 BTC. Veto anything smaller.
+14. Maximum position size: 0.50 BTC per trade.
 15. Stop loss must be between 0.10% and 0.80% of entry price.
 
 HUMAN OVERRIDE

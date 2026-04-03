@@ -14,16 +14,16 @@ import (
 
 // EngineState is the complete snapshot persisted to the database.
 type EngineState struct {
-	Balance       float64         `json:"balance"`
-	PositionBTC   float64         `json:"positionBtc"`
-	TotalFees     float64         `json:"totalFees"`
-	Positions     json.RawMessage `json:"positions"`
-	Trades        json.RawMessage `json:"trades"`
-	TotalTrades   int             `json:"totalTrades"`
-	TotalWins     int             `json:"totalWins"`
-	TotalLosses   int             `json:"totalLosses"`
-	TotalPnL      float64         `json:"totalPnl"`
-	SavedAt       time.Time       `json:"savedAt"`
+	Balance     float64         `json:"balance"`
+	PositionBTC float64         `json:"positionBtc"`
+	TotalFees   float64         `json:"totalFees"`
+	Positions   json.RawMessage `json:"positions"`
+	Trades      json.RawMessage `json:"trades"`
+	TotalTrades int             `json:"totalTrades"`
+	TotalWins   int             `json:"totalWins"`
+	TotalLosses int             `json:"totalLosses"`
+	TotalPnL    float64         `json:"totalPnl"`
+	SavedAt     time.Time       `json:"savedAt"`
 }
 
 // Store handles all database persistence operations.
@@ -55,7 +55,7 @@ func NewStore(ctx context.Context) (*Store, error) {
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS engine_state (
 			id INTEGER PRIMARY KEY DEFAULT 1,
-			balance DOUBLE PRECISION NOT NULL DEFAULT 100000,
+			balance DOUBLE PRECISION NOT NULL DEFAULT 1000000,
 			position_btc DOUBLE PRECISION NOT NULL DEFAULT 0,
 			total_fees DOUBLE PRECISION NOT NULL DEFAULT 0,
 			positions_json TEXT NOT NULL DEFAULT '[]',
@@ -72,6 +72,14 @@ func NewStore(ctx context.Context) (*Store, error) {
 		return nil, fmt.Errorf("failed to create state table: %w", err)
 	}
 
+	_, err = pool.Exec(ctx, `
+		ALTER TABLE engine_state
+		ALTER COLUMN balance SET DEFAULT 1000000
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update engine_state balance default: %w", err)
+	}
+
 	// Ensure a row exists
 	_, err = pool.Exec(ctx, `
 		INSERT INTO engine_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING
@@ -81,7 +89,7 @@ func NewStore(ctx context.Context) (*Store, error) {
 	}
 
 	log.Println("[DB] ✅ State table ready")
-	
+
 	// Create trades table — for UNLIMITED trade history
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS trades (
@@ -200,7 +208,7 @@ func (s *Store) ResetState(ctx context.Context) error {
 
 	_, err := s.pool.Exec(ctx, `
 		UPDATE engine_state SET
-			balance = 100000,
+			balance = 1000000,
 			position_btc = 0,
 			total_fees = 0,
 			positions_json = '[]',
@@ -216,6 +224,33 @@ func (s *Store) ResetState(ctx context.Context) error {
 		return fmt.Errorf("failed to reset state in database: %w", err)
 	}
 	log.Println("[DB] 🔄 Account state reset to factory defaults in database")
+	return nil
+}
+
+// ClearTradeHistory removes persisted trade-history records while preserving
+// balances, fees, and open-position state.
+func (s *Store) ClearTradeHistory(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := s.pool.Exec(ctx, `DELETE FROM trades`); err != nil {
+		return fmt.Errorf("failed to clear trades table: %w", err)
+	}
+
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE engine_state SET
+			trades_json = '[]',
+			total_trades = 0,
+			total_wins = 0,
+			total_losses = 0,
+			total_pnl = 0,
+			saved_at = NOW()
+		WHERE id = 1
+	`); err != nil {
+		return fmt.Errorf("failed to clear trade history from engine state: %w", err)
+	}
+
+	log.Println("[DB] 🧹 Trade history cleared from database")
 	return nil
 }
 
@@ -239,7 +274,7 @@ func (s *Store) SaveTrade(ctx context.Context, trade map[string]interface{}) err
 
 	// Convert duration to MS
 	dur, _ := trade["duration"].(time.Duration)
-	
+
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO trades (
 			id, timestamp, strategy_name, category, side,
@@ -284,7 +319,7 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 		var entryP, exitP, size, grossP, fees, netP, aiConf float64
 		var durMS int64
 		var entryT, exitT time.Time
-		
+
 		err := rows.Scan(
 			&id, &entryT, &exitT, &strategy, &category, &side,
 			&entryP, &exitP, &size, &grossP, &fees, &netP,
@@ -294,7 +329,7 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 		if err != nil {
 			return nil, err
 		}
-		
+
 		trades = append(trades, map[string]interface{}{
 			"id":           id,
 			"strategyName": strategy,
