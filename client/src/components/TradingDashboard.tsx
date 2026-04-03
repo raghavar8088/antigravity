@@ -305,6 +305,7 @@ export default function TradingDashboard() {
   const [activeModule, setActiveModule] = useState<"dashboard" | "engine">("dashboard");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
+  const [isClearingLedger, setIsClearingLedger] = useState(false);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [combatMode, setCombatMode] = useState(false);
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
@@ -488,7 +489,8 @@ export default function TradingDashboard() {
 
   const closedPnl = liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
-  const balance = liveStats?.balance ?? totalStrategyPnl + engineBalance;
+  const balance = liveStats?.equity ?? liveStats?.balance ?? totalStrategyPnl + engineBalance;
+  const tradeCount = Math.max(liveStats?.aggregate.totalTrades ?? 0, liveTrades.length);
   const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
   const unrealized = livePositions.reduce((sum, position) => {
     const markPrice = price > 0 ? price : position.entryPrice;
@@ -660,6 +662,26 @@ export default function TradingDashboard() {
     setResetRefreshKey((current) => current + 1);
   };
 
+  const handleClearLedger = async () => {
+    if (!confirm("Clear completed trade history and strategy stats? Open positions and balance will be kept.")) {
+      return;
+    }
+
+    setIsClearingLedger(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const response = await fetch(`${apiUrl}/api/admin/clear-history`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("action failed");
+      }
+      handleAdminEvent("Trade history cleared.", "admin");
+    } catch {
+      pushFeed("Admin action failed. Check engine connectivity.", "admin");
+    } finally {
+      setIsClearingLedger(false);
+    }
+  };
+
   // ── Dynamic Color Intelligence ──────────────────────────────────
   const dailyPnlValue = liveStats?.dailyPnl ?? closedPnl;
   useEffect(() => {
@@ -778,7 +800,7 @@ export default function TradingDashboard() {
         onToggleCombat={() => setCombatMode((prev) => !prev)}
       />
 
-      <div className="glass-panel px-5 py-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="glass-panel px-5 py-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div
           className="flex items-center gap-1 self-start"
           style={{ background: "var(--surface-2)", borderRadius: 999, padding: 4, border: "1px solid var(--border)" }}
@@ -796,7 +818,10 @@ export default function TradingDashboard() {
             </button>
           ))}
         </div>
-        <div className="text-xs md:text-sm" style={{ color: "var(--text-secondary)" }}>
+        <div
+          className="max-w-[760px] text-xs leading-5 md:text-sm lg:ml-auto lg:text-right"
+          style={{ color: "var(--text-secondary)" }}
+        >
           {activeModule === "dashboard"
             ? "Core view only: BTC price, live positions, equity, PnL, session ledger, and key stats."
             : "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."}
@@ -805,10 +830,10 @@ export default function TradingDashboard() {
 
       {activeModule === "dashboard" && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr,1fr] gap-5">
+          <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] items-start gap-5">
             <div className="glass-panel relative overflow-hidden p-6">
               <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
-              <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex flex-col gap-4">
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
                     BTC Price
@@ -824,14 +849,14 @@ export default function TradingDashboard() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-wrap gap-2">
                   <BadgePill label={engineOnline ? "Engine Online" : "Engine Offline"} tone={engineOnline ? "positive" : "negative"} />
                   <BadgePill label={connectionLabel} tone={connectionTone} />
                   <BadgePill label={market.exchange === "binance" ? "Binance Feed" : "Bybit Feed"} tone="info" />
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <CompactMetric
                   label="Runtime"
                   value={sessionRuntime}
@@ -857,7 +882,7 @@ export default function TradingDashboard() {
               <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                 Equity And PnL
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <CompactMetric
                   label="Equity"
                   value={formatUSD(balance)}
@@ -886,7 +911,7 @@ export default function TradingDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
             <SummaryCard
               label="Win Rate"
               value={`${winRateValue.toFixed(1)}%`}
@@ -897,7 +922,7 @@ export default function TradingDashboard() {
               value={(liveStats?.aggregate.profitFactor ?? 0).toFixed(2)}
               accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
             />
-            <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
+            <SummaryCard label="Trades" value={`${tradeCount}`} accent="text-white" />
             <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
             <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
           </div>
@@ -1170,7 +1195,7 @@ export default function TradingDashboard() {
           value={(liveStats?.aggregate.profitFactor ?? 0).toFixed(2)}
           accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
         />
-        <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
+        <SummaryCard label="Trades" value={`${tradeCount}`} accent="text-white" />
         <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
         <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
       </div>
@@ -1578,25 +1603,22 @@ export default function TradingDashboard() {
           )}
 
           <div className="glass-panel p-6">
-            <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
-              <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
-              Session Ledger
-              <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
-            </h2>
-            <TradeHistory
-              history={liveTrades.map((trade) => ({
-                id: trade.id,
-                strategy: trade.strategyName,
-                side: trade.side === "BUY" ? "LONG" : "SHORT",
-                size: trade.size,
-                entry: trade.entryPrice,
-                exit: trade.exitPrice,
-                pnl: trade.netPnl,
-                reason: mapTradeReason(trade.reason),
-                duration: formatDuration(trade.duration),
-                time: safeFormatDate(trade.exitTime),
-              }))}
-            />
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h2 className="flex items-center gap-3 text-xl font-bold">
+                <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
+                Session Ledger
+                <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+              </h2>
+              <button
+                type="button"
+                onClick={handleClearLedger}
+                disabled={isClearingLedger}
+                className="btn-primary"
+              >
+                {isClearingLedger ? "Clearing" : "Clear Session Ledger"}
+              </button>
+            </div>
+            <TradeHistory history={historyItems} />
           </div>
         </div>
       )}

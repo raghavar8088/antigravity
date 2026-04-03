@@ -370,10 +370,6 @@ func (m *Manager) CloseAllPositions(exitPrice float64) {
 		if pos.Status != "OPEN" {
 			continue
 		}
-		if time.Since(pos.OpenedAt) < 10*time.Minute {
-			log.Printf("[SKIP FORCE CLOSE] %s | Less than 10m old (%.2fm)", id, time.Since(pos.OpenedAt).Minutes())
-			continue
-		}
 		pnl := m.calculatePnL(pos, exitPrice)
 		pos.Status = "CLOSED"
 		log.Printf("[FORCE CLOSE] %s | Exit @ $%.2f | PnL: $%.4f", id, exitPrice, pnl)
