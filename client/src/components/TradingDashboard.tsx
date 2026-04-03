@@ -239,9 +239,9 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <div className="stat-card">
-      <div className="stat-label">{label}</div>
-      <div className={`stat-value ${accent}`}>{value}</div>
+    <div className="summary-card">
+      <div className="summary-label">{label}</div>
+      <div className={`summary-value ${accent}`}>{value}</div>
     </div>
   );
 }
@@ -256,15 +256,15 @@ function BadgePill({
   tone?: BadgeTone;
 }) {
   const toneClasses: Record<BadgeTone, string> = {
-    neutral: "border-zinc-700/80 bg-zinc-900/70 text-zinc-300",
-    positive: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
-    negative: "border-rose-500/25 bg-rose-500/10 text-rose-300",
-    info: "border-sky-500/25 bg-sky-500/10 text-sky-300",
-    warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+    neutral: "border-zinc-200 bg-white text-zinc-600",
+    positive: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    negative: "border-rose-200 bg-rose-50 text-rose-700",
+    info: "border-blue-200 bg-blue-50 text-blue-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-700",
   };
 
   return (
-    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${toneClasses[tone]}`}>
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${toneClasses[tone]}`}>
       {label}
     </span>
   );
@@ -274,7 +274,7 @@ function CompactMetric({
   label,
   value,
   detail,
-  accent = "text-white",
+  accent = "",
 }: {
   label: string;
   value: string;
@@ -282,15 +282,15 @@ function CompactMetric({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+    <div className="metric-card">
+      <div className="metric-label">
         {label}
       </div>
-      <div className={`mt-2 text-lg font-semibold ${accent}`}>
+      <div className={`metric-value ${accent}`}>
         {value}
       </div>
       {detail ? (
-        <div className="mt-1 text-xs text-zinc-500">
+        <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
           {detail}
         </div>
       ) : null}
@@ -720,7 +720,7 @@ export default function TradingDashboard() {
   const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
 
   return (
-    <main className="max-w-[1600px] mx-auto space-y-5 p-5 pb-20">
+    <main className="gmail-shell space-y-5">
       {milestoneToast && (
         <div className="milestone-toast">{milestoneToast}</div>
       )}
@@ -883,7 +883,7 @@ export default function TradingDashboard() {
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
             Market Bias
           </div>
-          <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/75 p-4">
+          <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Live Read
             </div>
@@ -893,32 +893,32 @@ export default function TradingDashboard() {
             <div className={`mt-2 text-sm font-semibold ${signalAccent}`}>
               {latestSignal ? `${latestSignal.side} ${latestSignal.tag}` : "Waiting for signal alignment"}
             </div>
-            <div className="mt-1 text-xs text-zinc-500">
+            <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               {latestSignal ? `${latestSignal.confidence}% confidence | B:${latestSignal.scoreBuy} S:${latestSignal.scoreSell}` : "No high-conviction signal yet"}
             </div>
           </div>
 
           <div className="mt-4 space-y-3">
-            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
+            <div className="rounded-xl border px-4 py-3" style={{ borderColor: "rgba(24, 128, 56, 0.14)", background: "var(--green-dim)" }}>
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                 Best Strategy
               </div>
               <div className="mt-2 text-sm font-semibold text-emerald-300">
                 {bestStrategy ? bestStrategy.name : "No profitable strategy yet"}
               </div>
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                 {bestStrategy ? `${formatUSD(bestStrategy.profit, { signed: true })} | ${bestStrategy.wins}W ${bestStrategy.losses}L` : "Waiting for trade history"}
               </div>
             </div>
 
-            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
+            <div className="rounded-xl border px-4 py-3" style={{ borderColor: "rgba(217, 48, 37, 0.14)", background: "var(--red-dim)" }}>
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                 Weakest Strategy
               </div>
               <div className="mt-2 text-sm font-semibold text-rose-300">
                 {weakestStrategy ? weakestStrategy.name : "No losing strategy yet"}
               </div>
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                 {weakestStrategy ? `${formatUSD(weakestStrategy.profit, { signed: true })} | ${weakestStrategy.wins}W ${weakestStrategy.losses}L` : "No drawdown leader"}
               </div>
             </div>
@@ -1183,10 +1183,10 @@ export default function TradingDashboard() {
           </div>
 
           <div className="glass-panel p-6">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-gray-400">Category Performance</h2>
+            <h2 className="mb-4 text-sm font-bold uppercase tracking-widest" style={{ color: "var(--text-secondary)" }}>Category Performance</h2>
             <div className="w-full overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-700/50">
+                <thead className="border-b text-[10px] uppercase tracking-widest" style={{ color: "var(--text-secondary)", borderColor: "var(--border-subtle)" }}>
                   <tr>
                     <th className="py-2 px-3">Category</th>
                     <th className="py-2 px-3 text-center">Strategies</th>
@@ -1204,21 +1204,21 @@ export default function TradingDashboard() {
                     const pnl = cats.reduce((sum, s) => sum + (s.profit ?? 0), 0);
                     const wr = w + l > 0 ? (w / (w + l)) * 100 : null;
                     return (
-                      <tr key={cat} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors">
-                        <td className="py-2 px-3 font-mono text-gray-300">
+                      <tr key={cat} className="border-b transition-colors" style={{ borderColor: "var(--border-subtle)" }}>
+                        <td className="py-2 px-3 font-mono" style={{ color: "var(--text-primary)" }}>
                           <div className="flex items-center gap-2">
                             <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${CAT_COLORS[cat] || "bg-gray-500"}`}></span>
                             {cat}
                           </div>
                         </td>
-                        <td className="py-2 px-3 text-center text-gray-500">{cats.length}</td>
-                        <td className="py-2 px-3 text-center text-green-400 font-mono">{w}</td>
-                        <td className="py-2 px-3 text-center text-rose-400 font-mono">{l}</td>
+                        <td className="py-2 px-3 text-center" style={{ color: "var(--text-secondary)" }}>{cats.length}</td>
+                        <td className="py-2 px-3 text-center font-mono" style={{ color: "var(--green)" }}>{w}</td>
+                        <td className="py-2 px-3 text-center font-mono" style={{ color: "var(--red)" }}>{l}</td>
                         <td className="py-2 px-3 text-center font-mono font-bold">
                           {wr !== null ? (
                             <span className={wr >= 50 ? "text-green-400" : "text-red-400"}>{wr.toFixed(1)}%</span>
                           ) : (
-                            <span className="text-gray-600">–</span>
+                            <span style={{ color: "var(--text-secondary)" }}>-</span>
                           )}
                         </td>
                         <td className={`py-2 px-3 text-right font-mono font-bold ${pnl >= 0 ? "text-green-400" : "text-red-400"}`}>

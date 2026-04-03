@@ -22,12 +22,12 @@ const (
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
-	minExecutableConfidence     = 0.72  // Lowered: allow well-setup signals with tighter geometry
-	minBridgeApprovalConfidence = 0.60  // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio        = 1.25  // Lowered: achievable at 45%+ win rate (was 1.50)
-	minSignalTakeProfitPct      = 0.18  // Ultra-tight TP — gets hit within 1-3 minutes on BTC
-	maxSignalStopLossPct        = 0.22  // Ultra-tight SL — cut losses fast before they compound
-	defaultSignalStopLossPct    = 0.15  // Default tight SL — noise filter, not a wide buffer
+	minExecutableConfidence     = 0.72 // Lowered: allow well-setup signals with tighter geometry
+	minBridgeApprovalConfidence = 0.60 // Minimum ChatGPT confidence to honour a bridge approval
+	minRewardToRiskRatio        = 1.25 // Lowered: achievable at 45%+ win rate (was 1.50)
+	minSignalTakeProfitPct      = 0.18 // Ultra-tight TP — gets hit within 1-3 minutes on BTC
+	maxSignalStopLossPct        = 0.22 // Ultra-tight SL — cut losses fast before they compound
+	defaultSignalStopLossPct    = 0.15 // Default tight SL — noise filter, not a wide buffer
 
 	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
 	marketHistoryMaxSamples   = 320
@@ -66,8 +66,9 @@ type Orchestrator struct {
 	volumeWindow []float64
 
 	// Internal state
-	lastPrice float64
-	h1Counter int // Counts 5m candles to simulate 1h (every 12th)
+	lastPrice  float64
+	m15Counter int // Counts 5m candles to simulate 15m (every 3rd 5m candle)
+	h1Counter  int // Counts 5m candles to simulate 1h (every 12th)
 
 	// Heartbeat for automated bridge failover
 	lastBridgeHeartbeat time.Time
@@ -134,8 +135,8 @@ func NewOrchestrator(
 	candleAgg *marketdata.CandleAggregator,
 ) *Orchestrator {
 	groups := strategy.GroupByTimeframe(strats)
-	log.Printf("[ORCHESTRATOR] Strategy groups: %d tick, %d 1m, %d 5m, %d 1h",
-		len(groups.Tick), len(groups.M1), len(groups.M5), len(groups.H1))
+	log.Printf("[ORCHESTRATOR] Strategy groups: %d tick, %d 1m, %d 5m, %d 15m, %d 1h",
+		len(groups.Tick), len(groups.M1), len(groups.M5), len(groups.M15), len(groups.H1))
 
 	return &Orchestrator{
 		client:                 c,
@@ -181,20 +182,26 @@ func (o *Orchestrator) WarmupStrategies(warmup *marketdata.WarmupData) {
 		for _, entry := range o.groups.M1 {
 			entry.Strategy.OnTick(tick)
 		}
-		// Also feed to 1h strategies (they use candle data too)
-		for _, entry := range o.groups.H1 {
-			entry.Strategy.OnTick(tick)
-		}
 	}
 
-	log.Printf("[WARMUP] Feeding %d historical 5m candles to %d strategies...",
-		len(warmup.Candles5m), len(o.groups.M5))
+	log.Printf("[WARMUP] Feeding %d historical 5m candles to %d 5m / %d 15m / %d 1h strategies...",
+		len(warmup.Candles5m), len(o.groups.M5), len(o.groups.M15), len(o.groups.H1))
 
-	// Feed 5m candles to 5m strategies
-	for _, candle := range warmup.Candles5m {
+	// Feed 5m candles to 5m strategies and simulate 15m / 1h closes.
+	for idx, candle := range warmup.Candles5m {
 		tick := candle.ToTick()
 		for _, entry := range o.groups.M5 {
 			entry.Strategy.OnTick(tick)
+		}
+		if (idx+1)%3 == 0 {
+			for _, entry := range o.groups.M15 {
+				entry.Strategy.OnTick(tick)
+			}
+		}
+		if (idx+1)%12 == 0 {
+			for _, entry := range o.groups.H1 {
+				entry.Strategy.OnTick(tick)
+			}
 		}
 	}
 
@@ -291,7 +298,7 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 	}
 }
 
-// process5mCandles listens for closed 5-minute candles and runs all 5m + 1h strategies.
+// process5mCandles listens for closed 5-minute candles and runs all 5m, 15m, and 1h strategies.
 func (o *Orchestrator) process5mCandles(ctx context.Context) {
 	for {
 		select {
@@ -302,6 +309,14 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
 			o.processStrategyGroup(o.groups.M5, tick)
+
+			// Simulate 15m candle: run 15m strategies every 3rd 5m candle.
+			o.m15Counter++
+			if o.m15Counter >= 3 {
+				o.m15Counter = 0
+				log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
+				o.processStrategyGroup(o.groups.M15, tick)
+			}
 
 			// Simulate 1h candle: run 1h strategies every 12th 5m candle
 			o.h1Counter++
@@ -547,6 +562,18 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			}
 
 			signals := e.Strategy.OnTick(t)
+			normalizedCategory := strategy.NormalizeCategory(e.Category, e.Strategy.Name())
+			executionWeight := o.tracker.GetExecutionWeight(e.Strategy.Name())
+			totalTrades := 0
+			winRate := 0.5
+			totalPnL := 0.0
+			if stats, ok := o.tracker.GetStats(e.Strategy.Name()); ok {
+				totalTrades = stats.TotalTrades
+				totalPnL = stats.TotalPnL
+				if stats.TotalTrades > 0 {
+					winRate = float64(stats.Wins) / float64(stats.TotalTrades)
+				}
+			}
 
 			for _, sig := range signals {
 				if sig.Action == strategy.ActionHold {
@@ -554,9 +581,13 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				}
 				sigMu.Lock()
 				rawSignals = append(rawSignals, AggregatedSignal{
-					Signal:       sig,
-					StrategyName: e.Strategy.Name(),
-					Category:     e.Category,
+					Signal:          sig,
+					StrategyName:    e.Strategy.Name(),
+					Category:        normalizedCategory,
+					ExecutionWeight: executionWeight,
+					TotalTrades:     totalTrades,
+					WinRate:         winRate,
+					TotalPnL:        totalPnL,
 				})
 				sigMu.Unlock()
 			}
@@ -1235,28 +1266,28 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 	case marketRegimeMixed:
 		// Only highest-conviction multi-signal strategies trade in mixed conditions
 		switch category {
-		case "Multi-Signal", "Trend", "Trend Elite":
+		case "Multi-Signal", "Trend", "Trend Elite", "Intraday":
 			return true
 		}
 		return false
 	case marketRegimeTrend:
 		switch category {
 		case "Trend", "Trend Elite", "Breakout", "Breakout Elite", "Momentum", "Momentum Elite",
-			"Time-of-Day", "Microstructure", "Multi-Signal", "Price Action", "Price Action Elite":
+			"Time-of-Day", "Microstructure", "Multi-Signal", "Price Action", "Price Action Elite", "Intraday":
 			return true
 		}
 		return false
 	case marketRegimeRange:
 		switch category {
 		case "Mean Reversion", "Mean Rev Elite", "Statistical", "Adaptive", "Adaptive Elite",
-			"Oscillator Elite", "Price Action", "Price Action Elite", "Multi-Signal":
+			"Oscillator Elite", "Price Action", "Price Action Elite", "Multi-Signal", "Intraday":
 			return true
 		}
 		return false
 	case marketRegimeVolatile:
 		switch category {
 		case "Volatility", "Volatility Elite", "Breakout", "Breakout Elite", "Microstructure",
-			"Time-of-Day", "Multi-Signal", "Momentum Elite":
+			"Time-of-Day", "Multi-Signal", "Momentum Elite", "Intraday":
 			return true
 		}
 		return false

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 
 interface PendingSignal {
   id: string;
@@ -41,29 +41,19 @@ export default function CommandCenter() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error"; msg: string } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Poll for pending signals
   useEffect(() => {
     const fetchPending = async () => {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/pending`);
         const data = await res.json();
         setPending(data);
-        
-        // Auto-fill if there is a new signal and input is empty
         if (data.length > 0 && !input && !loading) {
           const sig = data[0];
-          setInput(`Proposed ${sig.signal.action} for ${sig.signal.symbol} via ${sig.strategyName}. Audit and execute?`);
+          setInput(`Review ${sig.strategyName} ${sig.signal.action} on ${sig.signal.symbol}.`);
         }
-      } catch (e) {
-        console.error("Failed to fetch pending signals", e);
-      }
+      } catch {}
     };
-
-    const timer = setInterval(fetchPending, 3000);
-
-    // Bridge Status Polling
     const fetchStatus = async () => {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/bridge-status`);
@@ -79,10 +69,12 @@ export default function CommandCenter() {
           lastError: data.lastError ?? "",
           lastErrorAt: data.lastErrorAt ?? "",
         });
-      } catch (e) {}
+      } catch {}
     };
+    fetchPending();
+    fetchStatus();
+    const timer = setInterval(fetchPending, 3000);
     const statusTimer = setInterval(fetchStatus, 5000);
-
     return () => {
       clearInterval(timer);
       clearInterval(statusTimer);
@@ -92,204 +84,90 @@ export default function CommandCenter() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading || pending.length === 0) return;
-
     setLoading(true);
     setStatus(null);
     const signalId = pending[0].id;
-
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: signalId, prompt: input }),
       });
-
       if (res.ok) {
-        setStatus({ type: "success", msg: "Submitting to ChatGPT for final audit..." });
+        setStatus({ type: "success", msg: "Sent for final audit." });
         setInput("");
-        // Optimistic clear
-        setPending(prev => prev.filter(p => p.id !== signalId));
+        setPending((prev) => prev.filter((p) => p.id !== signalId));
       } else {
-        setStatus({ type: "error", msg: "Submission failed. Please try again." });
+        setStatus({ type: "error", msg: "Submission failed." });
       }
-    } catch (err) {
-      setStatus({ type: "error", msg: "Network error. Is the engine running?" });
+    } catch {
+      setStatus({ type: "error", msg: "Engine connection failed." });
     } finally {
       setLoading(false);
-      setTimeout(() => setStatus(null), 5000);
     }
   };
 
-  const heartbeatLabel = bridge.lastHeartbeat
-    ? new Date(bridge.lastHeartbeat).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    : "never";
-  const eventLabel = bridge.lastEventAt
-    ? `${bridge.lastEvent || "none"} (${new Date(bridge.lastEventAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`
-    : (bridge.lastEvent || "none");
-  const errorLabel = bridge.lastErrorAt
-    ? `${bridge.lastError || "none"} (${new Date(bridge.lastErrorAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`
-    : (bridge.lastError || "none");
-
   return (
-    <div className="glass-panel p-4 mb-4" style={{ border: "2px solid var(--accent-dim)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 15 }}>
-        <div style={{ 
-          width: 8, height: 8, borderRadius: "50%", 
-          background: pending.length > 0 ? "var(--green)" : "var(--text-muted)",
-          boxShadow: pending.length > 0 ? "0 0 10px var(--green)" : "none"
-        }} />
-        <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.05em", color: "white" }}>
-          AI COMMAND CENTER
-        </h2>
-        {pending.length > 0 && (
-          <span style={{ fontSize: 10, background: "var(--green-dim)", color: "var(--green)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
-            {pending.length} SIGNAL{pending.length > 1 ? "S" : ""} PENDING
-          </span>
-        )}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ 
-            width: 6, height: 6, borderRadius: "50%", 
-            background: bridge.online ? "var(--green)" : "var(--red)",
-            boxShadow: bridge.online ? "0 0 8px var(--green)" : "none"
-          }} />
-          <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            BRIDGE: {bridge.online ? "ONLINE" : "OFFLINE"}
-          </span>
+    <div className="glass-panel p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>AI command center</div>
+          <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>Bridge queue and manual review</div>
         </div>
+        <span className="rounded-full px-3 py-1 text-[11px] font-medium" style={{ background: bridge.online ? "var(--green-dim)" : "var(--red-dim)", color: bridge.online ? "var(--green)" : "var(--red)" }}>
+          {bridge.online ? "Bridge online" : "Bridge offline"}
+        </span>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 10,
-          marginBottom: 14,
-        }}
-      >
+      <div className="mb-4 grid gap-3 md:grid-cols-4">
         {[
-          { label: "Heartbeat", value: heartbeatLabel, tone: "var(--text-secondary)" },
-          { label: "Beat Age", value: `${bridge.secondsSinceBeat}s`, tone: bridge.online ? "var(--green)" : "var(--red)" },
-          { label: "Queued", value: `${bridge.pendingSignals}`, tone: bridge.pendingSignals > 0 ? "var(--green)" : "var(--text-secondary)" },
-          { label: "Replay Cache", value: `${bridge.processedSignalKeys}`, tone: "var(--text-secondary)" },
+          { label: "Heartbeat", value: bridge.lastHeartbeat ? new Date(bridge.lastHeartbeat).toLocaleTimeString() : "never" },
+          { label: "Beat age", value: `${bridge.secondsSinceBeat}s` },
+          { label: "Queued", value: `${bridge.pendingSignals}` },
+          { label: "Replay cache", value: `${bridge.processedSignalKeys}` },
         ].map((item) => (
-          <div
-            key={item.label}
-            style={{
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              borderRadius: 10,
-              padding: "9px 12px",
-            }}
-          >
-            <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {item.label}
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: item.tone, marginTop: 4 }}>
-              {item.value}
-            </div>
+          <div key={item.label} className="metric-card">
+            <div className="metric-label">{item.label}</div>
+            <div className="metric-value">{item.value}</div>
           </div>
         ))}
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-          marginBottom: 14,
-        }}
-      >
-        <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px" }}>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Last Bridge Event
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.4 }}>
-            {eventLabel}
-          </div>
-        </div>
-        <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 12px" }}>
-          <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Last Bridge Error
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: bridge.lastError ? "var(--red)" : "var(--text-secondary)", marginTop: 4, lineHeight: 1.4 }}>
-            {errorLabel}
-          </div>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} style={{ position: "relative" }}>
+      <form onSubmit={handleSubmit} className="space-y-3">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={pending.length > 0 ? "Type instructions or click Submit..." : "Waiting for strategy signals..."}
+          placeholder={pending.length > 0 ? "Add AI review instructions..." : "Waiting for pending signals..."}
           disabled={loading}
-          style={{
-            width: "100%",
-            background: "var(--surface-3)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            padding: "14px 100px 14px 20px",
-            fontSize: 14,
-            color: "white",
-            outline: "none",
-            transition: "border-color 0.2s",
-            boxShadow: "inset 0 2px 4px rgba(0,0,0,0.2)"
-          }}
-          onFocus={(e) => e.target.style.borderColor = "var(--accent)"}
-          onBlur={(e) => e.target.style.borderColor = "var(--border)"}
+          className="raig-input"
         />
-        
-        <button
-          type="submit"
-          disabled={loading || pending.length === 0}
-          style={{
-            position: "absolute",
-            right: 8,
-            top: 8,
-            bottom: 8,
-            padding: "0 20px",
-            background: pending.length > 0 ? "var(--accent)" : "var(--surface-4)",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: pending.length > 0 ? "pointer" : "not-allowed",
-            transition: "all 0.2s",
-            opacity: loading ? 0.7 : 1
-          }}
-        >
-          {loading ? "SENDING..." : "SUBMIT"}
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            {pending.length > 0 ? `${pending.length} signal${pending.length > 1 ? "s" : ""} ready for review.` : "No pending signals."}
+          </div>
+          <button type="submit" className="btn-primary" disabled={loading || pending.length === 0}>
+            {loading ? "Sending..." : "Submit"}
+          </button>
+        </div>
       </form>
 
-      {status && (
-        <div style={{ 
-          marginTop: 10, fontSize: 11, fontWeight: 600,
-          color: status.type === "success" ? "var(--green)" : "var(--red)",
-          display: "flex", alignItems: "center", gap: 6
-        }}>
-          <span>{status.type === "success" ? "✓" : "⚠"}</span>
-          {status.msg}
-        </div>
-      )}
+      {status && <div className="mt-3 text-sm" style={{ color: status.type === "success" ? "var(--green)" : "var(--red)" }}>{status.msg}</div>}
 
       {pending.length > 0 && (
-        <div style={{ marginTop: 15, display: "flex", gap: 10, overflowX: "auto", paddingBottom: 5 }}>
-          {pending.map(p => (
-            <div key={p.id} style={{ 
-              minWidth: 180, background: "var(--surface-2)", border: "1px solid var(--border)", 
-              borderRadius: 8, padding: "8px 12px", cursor: "pointer"
-            }} onClick={() => setInput(`Analyze ${p.strategyName} ${p.signal.action} for ${p.signal.symbol}. Should I take it?`)}>
-              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 4 }}>{p.id}</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: p.signal.action === "BUY" ? "var(--green)" : "var(--red)" }}>
-                  {p.signal.action} {p.signal.symbol}
-                </span>
-                <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>{p.strategyName}</span>
-              </div>
-            </div>
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+          {pending.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setInput(`Review ${p.strategyName} ${p.signal.action} on ${p.signal.symbol}.`)}
+              className="min-w-[220px] rounded-[18px] border p-3 text-left"
+              style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+            >
+              <div className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>{p.id}</div>
+              <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>{p.signal.action} {p.signal.symbol}</div>
+              <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{p.strategyName}</div>
+            </button>
           ))}
         </div>
       )}

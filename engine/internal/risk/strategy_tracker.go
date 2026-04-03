@@ -68,16 +68,20 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 
 	categoryWeights := map[string]float64{
 		"Trend":              1.5,
+		"Trend Elite":        1.45,
 		"Mean Reversion":     1.3,
 		"Mean Rev Elite":     1.25,
 		"Breakout":           1.2,
 		"Breakout Elite":     1.2,
 		"Momentum":           1.1,
 		"Momentum Elite":     1.1,
+		"Oscillator Elite":   1.05,
+		"Volume Elite":       1.0,
 		"Microstructure":     1.0,
 		"Velocity":           0.9,
 		"Statistical":        1.1,
 		"Volatility":         0.95,
+		"Volatility Elite":   1.0,
 		"Time-of-Day":        0.95,
 		"Smart Money":        1.0,
 		"Price Action":       1.0,
@@ -85,6 +89,7 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 		"Adaptive":           1.15,
 		"Adaptive Elite":     1.15,
 		"Multi-Signal":       1.3,
+		"Intraday":           1.15,
 	}
 
 	totalWeight := 0.0
@@ -136,8 +141,8 @@ func NewStrategyTracker(strategyNames []string, categories []string, timeframes 
 
 	return &StrategyTracker{
 		stats:                stats,
-		maxConsecutiveLosses: 5,                  // Raised: need 5 losses in a row to disable (was 3)
-		cooldownDuration:     10 * time.Minute,   // Shorter cooldown: recover faster (was 20 min)
+		maxConsecutiveLosses: 5,                         // Raised: need 5 losses in a row to disable (was 3)
+		cooldownDuration:     10 * time.Minute,          // Shorter cooldown: recover faster (was 20 min)
 		dailyLossLimit:       perStrategyCapital * 0.05, // Raised: 5% daily loss limit per strategy (was 2%)
 	}
 }

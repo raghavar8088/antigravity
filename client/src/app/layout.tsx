@@ -1,21 +1,30 @@
-import type { Metadata } from 'next'
-import { Inter, Orbitron } from 'next/font/google'
-import './globals.css'
+import type { Metadata } from "next";
+import { Roboto, Roboto_Mono } from "next/font/google";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const orbitron = Orbitron({ subsets: ['latin'], variable: '--font-orbitron', weight: ['400','600','700','800','900'] })
+const roboto = Roboto({
+  subsets: ["latin"],
+  variable: "--font-ui",
+  weight: ["400", "500", "700"],
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500", "700"],
+});
 
 export const metadata: Metadata = {
-  title: 'RAIG 888 · Autonomous Trading Engine',
-  description: 'Military-Grade AI Bitcoin Scalping System',
-}
+  title: "RAIG | Trading Workspace",
+  description: "RAIG Bitcoin trading workspace with live engine, AI review, and execution telemetry.",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${orbitron.variable} ${inter.className}`}>
+      <body className={`${roboto.variable} ${robotoMono.variable} ${roboto.className}`}>
         {children}
       </body>
     </html>
-  )
+  );
 }

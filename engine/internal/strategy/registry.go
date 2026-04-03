@@ -134,6 +134,7 @@ type StrategyGroups struct {
 	Tick []RegistryEntry // Processed on every raw tick
 	M1   []RegistryEntry // Processed on 1-minute candle close
 	M5   []RegistryEntry // Processed on 5-minute candle close
+	M15  []RegistryEntry // Processed on simulated 15-minute close (every 3rd 5m candle)
 	H1   []RegistryEntry // Processed on simulated hourly (every 12th 5m candle)
 }
 
@@ -148,6 +149,8 @@ func GroupByTimeframe(entries []RegistryEntry) StrategyGroups {
 			groups.Tick = append(groups.Tick, e)
 		case "5m":
 			groups.M5 = append(groups.M5, e)
+		case "15m":
+			groups.M15 = append(groups.M15, e)
 		case "1h":
 			groups.H1 = append(groups.H1, e)
 		default: // "1m" and anything else

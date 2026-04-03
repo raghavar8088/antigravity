@@ -109,6 +109,22 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score = 1.0
 	}
 
+	if sig.ExecutionWeight > 0 {
+		score += (sig.ExecutionWeight - 1.0) * 0.70
+	}
+	if sig.TotalTrades >= 8 {
+		switch {
+		case sig.TotalPnL > 0 && sig.WinRate >= 0.58:
+			score += 0.25
+		case sig.TotalPnL > 0 && sig.WinRate >= 0.50:
+			score += 0.10
+		case sig.TotalPnL < 0 && sig.WinRate < 0.40:
+			score -= 0.25
+		case sig.TotalPnL < 0 && sig.WinRate < 0.46:
+			score -= 0.10
+		}
+	}
+
 	// Priorities calibrated against live performance data. Strong winners get a
 	// clear boost, while repeat losers stay below the selective threshold unless
 	// raw confidence improves materially.
@@ -189,6 +205,8 @@ func strategyPriority(sig AggregatedSignal) float64 {
 	switch sig.Category {
 	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend", "Time-of-Day":
 		score += 0.2
+	case "Trend Elite", "Momentum Elite", "Mean Rev Elite", "Volatility Elite":
+		score += 0.15
 	}
 
 	return score

@@ -8,41 +8,64 @@ type FeedEntry = {
 };
 
 const toneClasses: Record<FeedEntry["tone"], string> = {
-  info: "text-zinc-300",
-  buy: "text-sky-300",
-  sell: "text-rose-300",
-  win: "text-emerald-300",
-  loss: "text-red-300",
-  admin: "text-amber-300",
+  info: "text-slate-700",
+  buy: "text-blue-700",
+  sell: "text-rose-700",
+  win: "text-emerald-700",
+  loss: "text-red-700",
+  admin: "text-amber-700",
+};
+
+const toneDots: Record<FeedEntry["tone"], string> = {
+  info: "#1a73e8",
+  buy: "#1a73e8",
+  sell: "#d93025",
+  win: "#188038",
+  loss: "#d93025",
+  admin: "#b06000",
 };
 
 export default function ActivityFeed({ entries }: { entries: FeedEntry[] }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-8 text-center text-sm text-zinc-500">
+      <div className="glass-panel p-8 text-center text-sm" style={{ color: "var(--text-secondary)" }}>
         Waiting for market and engine activity...
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70">
-      <div className="border-b border-zinc-800/80 px-5 py-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
-          Activity Feed
+    <div className="glass-panel">
+      <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+        <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          Activity feed
         </h3>
+        <div className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+          {entries.length} events
+        </div>
       </div>
-      <div className="max-h-[420px] overflow-y-auto px-5 py-3">
+      <div className="max-h-[420px] overflow-y-auto px-5 py-2">
         {entries.map((entry) => (
           <div
             key={entry.id}
-            className="flex items-center justify-between gap-4 border-b border-zinc-900/80 py-3 last:border-b-0"
+            className="flex items-start justify-between gap-4 border-b py-4 last:border-b-0"
+            style={{ borderColor: "var(--border-subtle)" }}
           >
-            <div className={`text-sm ${toneClasses[entry.tone]}`}>
-              {entry.message}
+            <div className="flex items-start gap-3">
+              <span
+                className="mt-1.5 h-2.5 w-2.5 rounded-full"
+                style={{ background: toneDots[entry.tone] }}
+              />
+              <div className={`text-sm ${toneClasses[entry.tone]}`}>
+                {entry.message}
+              </div>
             </div>
-            <div className="shrink-0 text-xs font-mono text-zinc-500">
-              {new Date(entry.time).toLocaleTimeString()}
+            <div className="shrink-0 text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+              {new Date(entry.time).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
             </div>
           </div>
         ))}

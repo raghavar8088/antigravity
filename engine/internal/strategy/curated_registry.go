@@ -1,10 +1,10 @@
 package strategy
 
-// BuildCuratedScalpers returns all 300 live strategies across scalping and intraday.
+// BuildCuratedScalpers returns the full 600-strategy live pack across scalping and intraday.
 // The signal aggregator's selective filter and priority scoring determine which
 // signals are ultimately forwarded for execution each cycle.
 func BuildCuratedScalpers() []RegistryEntry {
-	return []RegistryEntry{
+	entries := []RegistryEntry{
 		// ── ORIGINAL PROVEN STRATEGIES (35) ────────────────────────────────────
 		{NewEMACrossScalper(8, 21), "Trend", "1m"},
 		{NewADXTrendScalper(), "Trend", "1m"},
@@ -374,4 +374,6 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewID_CCIZeroCross50_5m(), "Intraday", "15m"},
 		{NewID_CCITrend50_5m(), "Intraday", "15m"},
 	}
+
+	return append(entries, buildExpansionPack()...)
 }

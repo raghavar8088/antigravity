@@ -10,10 +10,14 @@ import (
 
 // AggregatedSignal wraps a raw signal with the originating strategy name.
 type AggregatedSignal struct {
-	Signal       strategy.Signal
-	StrategyName string
-	Category     string
-	FiredAt      time.Time
+	Signal          strategy.Signal
+	StrategyName    string
+	Category        string
+	FiredAt         time.Time
+	ExecutionWeight float64
+	TotalTrades     int
+	WinRate         float64
+	TotalPnL        float64
 }
 
 // SignalAggregator collects signals from all strategies on each tick,
@@ -26,7 +30,7 @@ type SignalAggregator struct {
 	lastSignal  map[string]time.Time // strategyName -> last signal time
 
 	// Stats tracking for logging
-	totalSignals   int64
+	totalSignals    int64
 	filteredSignals int64
 }
 

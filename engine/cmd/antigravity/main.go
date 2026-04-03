@@ -120,7 +120,7 @@ func main() {
 	timeframes := make([]string, len(allStrategies))
 	for i, e := range allStrategies {
 		names[i] = e.Strategy.Name()
-		categories[i] = e.Category
+		categories[i] = strategy.NormalizeCategory(e.Category, e.Strategy.Name())
 		timeframes[i] = e.Timeframe
 	}
 

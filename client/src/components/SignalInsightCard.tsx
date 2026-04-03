@@ -5,11 +5,11 @@ import type { MarketSignal } from "@/lib/marketSignal";
 export default function SignalInsightCard({ signal }: { signal: MarketSignal | null }) {
   if (!signal) {
     return (
-      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Live Signal Insight
+      <div className="glass-panel p-5">
+        <div className="text-xs font-medium uppercase tracking-[0.16em]" style={{ color: "var(--text-secondary)" }}>
+          Live signal insight
         </div>
-        <div className="mt-4 text-sm text-zinc-500">
+        <div className="mt-4 text-sm" style={{ color: "var(--text-secondary)" }}>
           Waiting for enough live candle context to score the market.
         </div>
       </div>
@@ -23,24 +23,24 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
       : "text-zinc-300";
 
   const confidenceClasses = signal.confidence >= 75
-    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
     : signal.confidence >= 60
-      ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-      : "bg-zinc-500/15 text-zinc-300 border-zinc-500/30";
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : "bg-slate-100 text-slate-700 border-slate-200";
 
   return (
-    <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5">
+    <div className="glass-panel p-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Live Signal Insight
+        <div className="text-xs font-medium uppercase tracking-[0.16em]" style={{ color: "var(--text-secondary)" }}>
+          Live signal insight
         </div>
-        <div className={`text-lg font-semibold ${sideClasses}`}>
+        <div className={`text-lg font-medium ${sideClasses}`}>
           {signal.side === "BUY" ? "BUY" : signal.side === "SELL" ? "SELL" : "NEUTRAL"} {signal.tag}
         </div>
-        <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${confidenceClasses}`}>
+        <div className={`rounded-full border px-3 py-1 text-xs font-medium ${confidenceClasses}`}>
           {signal.confidence}% confidence
         </div>
-        <div className="text-xs font-mono text-zinc-500">
+        <div className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
           B:{signal.scoreBuy} S:{signal.scoreSell}
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
           {signal.strategies.map((strategy) => (
             <span
               key={`${signal.tag}-${strategy}`}
-              className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300"
+              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
             >
               {strategy}
             </span>
@@ -63,7 +63,7 @@ export default function SignalInsightCard({ signal }: { signal: MarketSignal | n
           {signal.reasons.slice(0, 8).map((reason) => (
             <span
               key={`${signal.tag}-${reason}`}
-              className="rounded-full border border-zinc-800 bg-zinc-900/80 px-3 py-1 text-xs text-zinc-300"
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700"
             >
               {reason}
             </span>
