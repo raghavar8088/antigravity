@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 
 type DashboardHeaderProps = {
@@ -73,9 +74,12 @@ export default function DashboardHeader({
               background: "rgba(26, 115, 232, 0.06)",
             }}
           >
-            <img
+            <Image
               src="/raig-logo.png"
               alt="RAIG"
+              width={28}
+              height={28}
+              priority
               style={{ width: 28, height: 28, objectFit: "contain" }}
             />
           </div>

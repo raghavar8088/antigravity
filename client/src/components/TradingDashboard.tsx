@@ -308,6 +308,7 @@ export default function TradingDashboard() {
   const [combatMode, setCombatMode] = useState(false);
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
   const milestoneRef = useRef<Set<number>>(new Set());
+  const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { engineOnline, balance: engineBalance } = useEngineState();
   const market = useLiveBTCMarket();
@@ -338,6 +339,14 @@ export default function TradingDashboard() {
       window.localStorage.setItem(SOUND_STORAGE_KEY, String(isSoundOn));
     }
   }, [isSoundOn]);
+
+  useEffect(() => {
+    return () => {
+      if (milestoneTimeoutRef.current !== null) {
+        clearTimeout(milestoneTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const pushFeed = (message: string, tone: FeedTone = "info") => {
     startTransition(() => {
@@ -704,14 +713,32 @@ export default function TradingDashboard() {
       [150000,  "🏆 $50K — ELITE TRADER STATUS!"],
       [200000,  "👑 $100K — RAIG LEGEND MODE!"],
     ];
+    let latestMilestoneLabel: string | null = null;
+
     for (const [threshold, label] of milestones) {
       if (balance >= threshold && !milestoneRef.current.has(threshold)) {
         milestoneRef.current.add(threshold);
-        setMilestoneToast(label);
-        const t = setTimeout(() => setMilestoneToast(null), 4000);
-        return () => clearTimeout(t);
+        latestMilestoneLabel = label;
       }
     }
+
+    if (!latestMilestoneLabel) {
+      return;
+    }
+
+    const milestoneLabel = latestMilestoneLabel;
+    const showTimer = setTimeout(() => {
+      setMilestoneToast(milestoneLabel);
+      if (milestoneTimeoutRef.current !== null) {
+        clearTimeout(milestoneTimeoutRef.current);
+      }
+      milestoneTimeoutRef.current = setTimeout(() => {
+        setMilestoneToast(null);
+        milestoneTimeoutRef.current = null;
+      }, 4000);
+    }, 0);
+
+    return () => clearTimeout(showTimer);
   }, [balance]);
 
   // ── Risk meter computation ─────────────────────────────────────
