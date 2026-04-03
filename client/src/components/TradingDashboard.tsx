@@ -32,6 +32,7 @@ type StrategyCardView = {
   profit: number;
   wins: number;
   losses: number;
+  totalTrades: number;
 };
 
 type FeedTone = "info" | "buy" | "sell" | "win" | "loss" | "admin";
@@ -101,7 +102,7 @@ const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "VolumeDelta_Spike_Scalp", category: "Microstructure", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
   { name: "MACD_ZeroCross_Confluence_Scalp", category: "Momentum Elite", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
   { name: "BollingerWalk_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
-];
+].map((strategy) => ({ ...strategy, totalTrades: 0 }));
 
 const CATEGORY_ORDER = [
   "Trend",
@@ -301,7 +302,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeTab, setActiveTab] = useState<"trade" | "stats" | "history" | "feed">("trade");
+  const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [combatMode, setCombatMode] = useState(false);
@@ -434,6 +435,7 @@ export default function TradingDashboard() {
         profit: strategy.totalPnl,
         wins: strategy.wins,
         losses: strategy.losses,
+        totalTrades: strategy.totalTrades || (strategy.wins + strategy.losses),
       }))
     : DEFAULT_STRATEGIES;
 
@@ -566,6 +568,30 @@ export default function TradingDashboard() {
     .sort((a, b) => a.profit - b.profit)
     .slice(0, 5);
 
+  const strategyRows = [...displayStrategies]
+    .map((strategy) => {
+      const totalTrades = strategy.totalTrades || (strategy.wins + strategy.losses);
+      const winRate = totalTrades > 0 ? (strategy.wins / totalTrades) * 100 : 0;
+      return {
+        ...strategy,
+        totalTrades,
+        winRate,
+      };
+    })
+    .sort((left, right) => {
+      if (right.profit !== left.profit) {
+        return right.profit - left.profit;
+      }
+      if (right.totalTrades !== left.totalTrades) {
+        return right.totalTrades - left.totalTrades;
+      }
+      return left.name.localeCompare(right.name);
+    });
+
+  const profitableStrategyCount = strategyRows.filter((strategy) => strategy.profit > 0).length;
+  const losingStrategyCount = strategyRows.filter((strategy) => strategy.profit < 0).length;
+  const totalStrategyTrades = strategyRows.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
+
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
   const bestStrategy = topProfitable[0] ?? null;
   const weakestStrategy = topLosing[0] ?? null;
@@ -644,7 +670,7 @@ export default function TradingDashboard() {
   }, [combatMode]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────
-  // Space = Combat mode | M = Mute | 1/2/3/4 = Tabs
+  // Space = Combat mode | M = Mute | 1/2/3/4/5 = Tabs
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -659,8 +685,9 @@ export default function TradingDashboard() {
           break;
         case "1": setActiveTab("trade"); break;
         case "2": setActiveTab("stats"); break;
-        case "3": setActiveTab("history"); break;
-        case "4": setActiveTab("feed"); break;
+        case "3": setActiveTab("strategies"); break;
+        case "4": setActiveTab("history"); break;
+        case "5": setActiveTab("feed"); break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -756,7 +783,7 @@ export default function TradingDashboard() {
         {/* Keyboard hints */}
         <div className="flex items-center gap-2 shrink-0">
           <span style={{ fontSize: 8, color: "var(--text-muted)", letterSpacing: "0.1em" }}>SHORTCUTS:</span>
-          {[["SPACE","COMBAT"],["M","MUTE"],["1-4","TABS"]].map(([key, label]) => (
+          {[["SPACE","COMBAT"],["M","MUTE"],["1-5","TABS"]].map(([key, label]) => (
             <div key={key} className="flex items-center gap-1">
               <span className="kbd">{key}</span>
               <span style={{ fontSize: 7, color: "var(--text-muted)" }}>{label}</span>
@@ -934,12 +961,13 @@ export default function TradingDashboard() {
           {[
             { key: "trade", label: "Trade" },
             { key: "stats", label: "Stats" },
+            { key: "strategies", label: `Strategies (${strategyRows.length})` },
             { key: "history", label: `History (${liveTrades.length})` },
             { key: "feed", label: `Feed (${feed.length})` },
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key as "trade" | "stats" | "history" | "feed")}
+              onClick={() => setActiveTab(tab.key as "trade" | "stats" | "strategies" | "history" | "feed")}
               className={`groww-tab${activeTab === tab.key ? " active" : ""}`}
             >
               {tab.label}
@@ -1235,6 +1263,107 @@ export default function TradingDashboard() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "strategies" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <SummaryCard label="All Strategies" value={`${strategyRows.length}`} accent="text-white" />
+            <SummaryCard label="Profitable" value={`${profitableStrategyCount}`} accent="text-green-400" />
+            <SummaryCard label="Losing" value={`${losingStrategyCount}`} accent="text-red-400" />
+            <SummaryCard label="Executed Trades" value={`${totalStrategyTrades}`} accent="text-sky-300" />
+          </div>
+
+          <div className="glass-panel p-6">
+            <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-zinc-400">
+                  Strategy Performance Ledger
+                </h2>
+                <div className="mt-2 text-sm text-zinc-500">
+                  Full strategy list with profit/loss, win percentage, and executed trades.
+                </div>
+              </div>
+              <div className="text-xs font-mono text-zinc-500">
+                Sorted by PnL, then trades
+              </div>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+              <table className="w-full min-w-[980px] text-left text-xs">
+                <thead className="border-b border-zinc-800/80 text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                  <tr>
+                    <th className="px-3 py-3">#</th>
+                    <th className="px-3 py-3">Strategy</th>
+                    <th className="px-3 py-3">Category</th>
+                    <th className="px-3 py-3">TF</th>
+                    <th className="px-3 py-3">Status</th>
+                    <th className="px-3 py-3 text-center">Trades</th>
+                    <th className="px-3 py-3 text-center">Wins</th>
+                    <th className="px-3 py-3 text-center">Losses</th>
+                    <th className="px-3 py-3 text-center">Win %</th>
+                    <th className="px-3 py-3 text-right">Profit / Loss</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {strategyRows.map((strategy, index) => (
+                    <tr
+                      key={strategy.name}
+                      className="border-b border-zinc-900/80 transition-colors hover:bg-white/5"
+                    >
+                      <td className="px-3 py-3 font-mono text-zinc-500">
+                        {index + 1}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="font-mono text-zinc-200">{strategy.name}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-900/80 px-2 py-1 text-[10px] text-zinc-400">
+                          {strategy.category}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-zinc-400">
+                        {strategy.timeframe}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold tracking-wider ${
+                          strategy.status === "RUNNING"
+                            ? "bg-green-500/10 text-green-400"
+                            : "bg-zinc-700/40 text-zinc-400"
+                        }`}>
+                          {strategy.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono text-zinc-200">
+                        {strategy.totalTrades}
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono text-green-400">
+                        {strategy.wins}
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono text-red-400">
+                        {strategy.losses}
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono font-bold">
+                        {strategy.totalTrades > 0 ? (
+                          <span className={strategy.winRate >= 50 ? "text-green-400" : "text-red-400"}>
+                            {strategy.winRate.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-zinc-600">-</span>
+                        )}
+                      </td>
+                      <td className={`px-3 py-3 text-right font-mono font-bold ${
+                        strategy.profit >= 0 ? "text-green-400" : "text-red-400"
+                      }`}>
+                        {formatUSD(strategy.profit, { signed: true })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
