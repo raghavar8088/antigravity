@@ -239,7 +239,7 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <div className="summary-card">
+    <div className="summary-card flex min-h-[112px] flex-col justify-between gap-3">
       <div className="summary-label">{label}</div>
       <div className={`summary-value ${accent}`}>{value}</div>
     </div>
@@ -282,18 +282,18 @@ function CompactMetric({
   accent?: string;
 }) {
   return (
-    <div className="metric-card">
-      <div className="metric-label">
-        {label}
-      </div>
-      <div className={`metric-value ${accent}`}>
-        {value}
-      </div>
-      {detail ? (
-        <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-          {detail}
+    <div className="metric-card flex min-h-[104px] flex-col justify-between gap-3">
+      <div>
+        <div className="metric-label">
+          {label}
         </div>
-      ) : null}
+        <div className={`metric-value ${accent}`}>
+          {value}
+        </div>
+      </div>
+      <div className="text-xs" style={{ color: "var(--text-secondary)", minHeight: 18 }}>
+        {detail ?? ""}
+      </div>
     </div>
   );
 }
@@ -831,32 +831,32 @@ export default function TradingDashboard() {
       {activeModule === "dashboard" && (
         <div className="space-y-5">
           <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] items-start gap-5">
-            <div className="glass-panel relative overflow-hidden p-6">
+            <div className="glass-panel relative overflow-hidden px-6 py-7 md:px-7">
               <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
-              <div className="flex flex-col gap-4">
-                <div>
+              <div className="flex flex-col gap-5">
+                <div className="px-1">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
                     BTC Price
                   </div>
-                  <div className="mt-3 flex flex-wrap items-end gap-4">
-                    <div className={`text-4xl font-semibold tracking-tight ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  <div className="mt-4 flex flex-wrap items-end gap-4">
+                    <div className={`text-[clamp(2.55rem,5vw,3.35rem)] font-semibold leading-none tracking-tight ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                       {formatUSD(price)}
                     </div>
-                    <div className={`pb-1 text-lg font-semibold ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                    <div className={`pb-1 text-xl font-semibold leading-none ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                       {market.change24h >= 0 ? "+" : ""}
                       {market.change24h.toFixed(2)}%
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 px-1">
                   <BadgePill label={engineOnline ? "Engine Online" : "Engine Offline"} tone={engineOnline ? "positive" : "negative"} />
                   <BadgePill label={connectionLabel} tone={connectionTone} />
                   <BadgePill label={market.exchange === "binance" ? "Binance Feed" : "Bybit Feed"} tone="info" />
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <CompactMetric
                   label="Runtime"
                   value={sessionRuntime}
@@ -878,11 +878,11 @@ export default function TradingDashboard() {
               </div>
             </div>
 
-            <div className="glass-panel p-5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            <div className="glass-panel px-5 py-6 md:px-6">
+              <div className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                 Equity And PnL
               </div>
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <CompactMetric
                   label="Equity"
                   value={formatUSD(balance)}
@@ -927,8 +927,8 @@ export default function TradingDashboard() {
             <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
           </div>
 
-          <div className="glass-panel p-5">
-            <h2 className="mb-4 flex items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+          <div className="glass-panel px-5 py-6 md:px-6">
+            <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
               <span className="pill-green">LIVE</span>
               RUNNING POSITIONS
               <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }} className="font-mono">

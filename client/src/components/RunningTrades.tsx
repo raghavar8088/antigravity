@@ -20,7 +20,18 @@ interface RunningTrade {
 
 export default function RunningTrades({ currentPrice, trades }: { currentPrice: number; trades: RunningTrade[] }) {
   if (trades.length === 0) {
-    return <div className="py-12 text-center text-sm" style={{ color: "var(--text-secondary)" }}>No active trades yet.</div>;
+    return (
+      <div
+        className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
+        style={{
+          color: "var(--text-secondary)",
+          borderColor: "var(--border)",
+          background: "var(--surface-2)",
+        }}
+      >
+        No active trades yet.
+      </div>
+    );
   }
 
   const totalUnrealized = trades.reduce((sum, t) => {
@@ -86,7 +97,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                         <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{t.strategy}</span>
                       </div>
                       <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                        {t.trailingActive ? "Trail active" : "Static risk"} {t.partialClosed ? "• TP1 done" : ""}
+                        {t.trailingActive ? "Trail active" : "Static risk"} {t.partialClosed ? "| TP1 done" : ""}
                       </div>
                     </div>
                   </td>
@@ -99,7 +110,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                     {t.openTime && t.openTime !== "-" ? (
                       <div>
                         <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(t.openTime)}</div>
-                        <div style={{ color: "var(--text-secondary)" }}>{formatShortDate(t.openTime)} • {t.elapsed}</div>
+                        <div style={{ color: "var(--text-secondary)" }}>{formatShortDate(t.openTime)} | {t.elapsed}</div>
                       </div>
                     ) : (
                       <span style={{ color: "var(--text-secondary)" }}>-</span>
@@ -110,7 +121,7 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                       {formatUSD(pnl, { signed: true })}
                     </div>
                     <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                      SL ${t.stopLoss.toFixed(2)} • TP ${t.takeProfit.toFixed(2)}
+                      SL ${t.stopLoss.toFixed(2)} | TP ${t.takeProfit.toFixed(2)}
                     </div>
                   </td>
                   <td className="px-4 py-3">
