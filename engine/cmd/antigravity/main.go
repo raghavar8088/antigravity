@@ -459,6 +459,20 @@ func main() {
 		})
 	})
 
+	// GET /api/ai/strategies — Structured AI strategy library and support summary
+	http.HandleFunc("/api/ai/strategies", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"total":      len(ai.GetAIStrategyLibrary()),
+			"summary":    ai.SummarizeAIStrategyLibrary(),
+			"categories": ai.GetAIStrategyCategories(),
+			"strategies": ai.GetAIStrategyLibrary(),
+		})
+	})
+
 	// GET /api/ai/pending — Parked signals waiting for UI Command Center
 	http.HandleFunc("/api/ai/pending", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
