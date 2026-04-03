@@ -4,7 +4,6 @@ import { startTransition, useDeferredValue, useEffect, useRef, useState } from "
 import ActivityFeed from "@/components/ActivityFeed";
 import DashboardHeader from "@/components/DashboardHeader";
 import MarketChart from "@/components/MarketChart";
-import MarketTickerCard from "@/components/MarketTickerCard";
 import PerformanceCharts from "@/components/PerformanceCharts";
 import RunningTrades from "@/components/RunningTrades";
 import SignalInsightCard from "@/components/SignalInsightCard";
@@ -21,6 +20,7 @@ import usePositions from "@/hooks/usePositions";
 import useStrategies from "@/hooks/useStrategies";
 import useTrades from "@/hooks/useTrades";
 import { formatUSD } from "@/lib/money";
+import { formatElapsed, safeFormatDate } from "@/lib/time";
 import { calcMarketSentiment, detectMarketSignal } from "@/lib/marketSignal";
 
 type StrategyCardView = {
@@ -171,6 +171,21 @@ function formatDuration(durationNs: number): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
+function formatElapsedSeconds(totalSeconds: number): string {
+  if (totalSeconds <= 0) {
+    return "0m 0s";
+  }
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m ${seconds}s`;
+}
+
 function beep(kind: "buy" | "sell" | "win" | "loss") {
   try {
     const webkitAudioContext = (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -230,8 +245,61 @@ function SummaryCard({
   );
 }
 
+type BadgeTone = "neutral" | "positive" | "negative" | "info" | "warning";
+
+function BadgePill({
+  label,
+  tone = "neutral",
+}: {
+  label: string;
+  tone?: BadgeTone;
+}) {
+  const toneClasses: Record<BadgeTone, string> = {
+    neutral: "border-zinc-700/80 bg-zinc-900/70 text-zinc-300",
+    positive: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+    negative: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+    info: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+    warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  };
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${toneClasses[tone]}`}>
+      {label}
+    </span>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  detail,
+  accent = "text-white",
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        {label}
+      </div>
+      <div className={`mt-2 text-lg font-semibold ${accent}`}>
+        {value}
+      </div>
+      {detail ? (
+        <div className="mt-1 text-xs text-zinc-500">
+          {detail}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
+  const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -389,8 +457,6 @@ export default function TradingDashboard() {
     const openedAt = new Date(position.openedAt);
     const validDate = !isNaN(openedAt.getTime());
     const elapsedSeconds = validDate ? Math.max(0, Math.floor((currentTime - openedAt.getTime()) / 1000)) : 0;
-    const minutes = Math.floor(elapsedSeconds / 60);
-    const seconds = elapsedSeconds % 60;
 
     return {
       id: position.id,
@@ -403,8 +469,8 @@ export default function TradingDashboard() {
       originalSize: position.originalSize,
       trailingActive: position.trailingActive,
       partialClosed: position.partialClosed,
-      openTime: validDate ? openedAt.toISOString() : "",
-      elapsed: validDate ? `${minutes}m ${seconds}s` : "—",
+      openTime: safeFormatDate(position.openedAt),
+      elapsed: formatElapsed(elapsedSeconds),
     };
   });
 
@@ -499,6 +565,42 @@ export default function TradingDashboard() {
     .filter((s) => s.profit < 0)
     .sort((a, b) => a.profit - b.profit)
     .slice(0, 5);
+
+  const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
+  const bestStrategy = topProfitable[0] ?? null;
+  const weakestStrategy = topLosing[0] ?? null;
+  const longOpenCount = livePositions.filter((position) => position.side === "BUY").length;
+  const shortOpenCount = livePositions.filter((position) => position.side === "SELL").length;
+  const longShortSummary = livePositions.length === 0
+    ? "No open exposure"
+    : `${longOpenCount} long / ${shortOpenCount} short`;
+  const connectionLabel = market.connectionState === "live"
+    ? "Feed Live"
+    : market.connectionState === "reconnecting"
+      ? "Feed Reconnecting"
+      : market.connectionState === "error"
+        ? "Feed Error"
+        : "Feed Pending";
+  const connectionTone: BadgeTone = market.connectionState === "live"
+    ? "positive"
+    : market.connectionState === "error"
+      ? "negative"
+      : "warning";
+  const soundTone: BadgeTone = isSoundOn ? "info" : "neutral";
+  const signalAccent = latestSignal?.side === "BUY"
+    ? "text-emerald-300"
+    : latestSignal?.side === "SELL"
+      ? "text-rose-300"
+      : "text-zinc-200";
+  const sessionHigh = market.high24h > 0 ? market.high24h : Math.max(...deferredCandles.slice(-60).map((candle) => candle.high), price || 0);
+  const sessionLow = market.low24h > 0 ? market.low24h : Math.min(...deferredCandles.slice(-60).map((candle) => candle.low), price || 0);
+  const activeStrategyCount = displayStrategies.filter((strategy) => strategy.status === "RUNNING").length;
+  const winRateValue = liveStats?.aggregate.winRate ?? 0;
+  const tradeBiasLabel = longOpenCount === shortOpenCount
+    ? "Balanced"
+    : longOpenCount > shortOpenCount
+      ? "Long Bias"
+      : "Short Bias";
 
   const handleReset = () => {
     setResetRefreshKey((current) => current + 1);
@@ -663,26 +765,138 @@ export default function TradingDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <div className="xl:col-span-2">
-          <MarketTickerCard
-            price={market.price}
-            prevPrice={market.prevPrice}
-            change={market.change24h}
-            connected={market.connected}
-            ticksPerSecond={market.ticksPerSecond}
-            exchange={market.exchange}
-            connectionState={market.connectionState}
-            high24h={market.high24h}
-            low24h={market.low24h}
-            volume24h={market.volume24h}
-            secondsSinceLastEvent={secondsSinceLastMarketEvent}
-          />
+      <div className="grid grid-cols-1 xl:grid-cols-[1.55fr,1fr,1fr] gap-5">
+        <div className="glass-panel relative overflow-hidden p-6">
+          <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                BTC Trader Cockpit
+              </div>
+              <div className="mt-3 flex flex-wrap items-end gap-4">
+                <div className={`text-4xl font-semibold tracking-tight ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  {formatUSD(price)}
+                </div>
+                <div className={`pb-1 text-lg font-semibold ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  {market.change24h >= 0 ? "+" : ""}{market.change24h.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <BadgePill label={engineOnline ? "Engine Online" : "Engine Offline"} tone={engineOnline ? "positive" : "negative"} />
+              <BadgePill label={connectionLabel} tone={connectionTone} />
+              <BadgePill label={market.exchange === "binance" ? "Binance Feed" : "Bybit Feed"} tone="info" />
+              <BadgePill label={isSoundOn ? "Sound On" : "Muted"} tone={soundTone} />
+              <BadgePill label={tradeBiasLabel} tone="warning" />
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <CompactMetric
+              label="Runtime"
+              value={sessionRuntime}
+              detail={`${activeStrategyCount} live strategies`}
+              accent="text-white"
+            />
+            <CompactMetric
+              label="Last Market Event"
+              value={secondsSinceLastMarketEvent === null ? "-" : `${secondsSinceLastMarketEvent}s`}
+              detail={`${market.ticksPerSecond} ticks/sec`}
+              accent={secondsSinceLastMarketEvent !== null && secondsSinceLastMarketEvent <= 3 ? "text-emerald-300" : "text-zinc-100"}
+            />
+            <CompactMetric
+              label="Session High / Low"
+              value={`${sessionHigh.toFixed(0)} / ${sessionLow.toFixed(0)}`}
+              detail={`Range ${(sessionHigh - sessionLow).toFixed(0)}`}
+              accent="text-sky-300"
+            />
+            <CompactMetric
+              label="Open Exposure"
+              value={longShortSummary}
+              detail={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC net`}
+              accent="text-white"
+            />
+          </div>
         </div>
-        <SummaryCard label="Market Sentiment" value={marketSentiment.label} accent={marketSentiment.colorClass} />
-        <SummaryCard label="Closed PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-green-400" : "text-red-400"} />
-        <SummaryCard label="Open Positions" value={`${livePositions.length}`} accent="text-white" />
-        <SummaryCard label="Net Exposure" value={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC`} accent="text-white" />
+
+        <div className="glass-panel p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            Session Ledger
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <CompactMetric
+              label="Balance"
+              value={formatUSD(balance)}
+              detail={`Base ${formatUSD(INITIAL_BALANCE)}`}
+              accent="text-white"
+            />
+            <CompactMetric
+              label="Closed PnL"
+              value={formatUSD(closedPnl, { signed: true })}
+              detail={`Return ${(((balance - INITIAL_BALANCE) / INITIAL_BALANCE) * 100).toFixed(2)}%`}
+              accent={closedPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
+            />
+            <CompactMetric
+              label="Unrealized"
+              value={formatUSD(unrealized, { signed: true })}
+              detail={`${livePositions.length} live positions`}
+              accent={unrealized >= 0 ? "text-emerald-300" : "text-rose-300"}
+            />
+            <CompactMetric
+              label="Win Rate"
+              value={`${winRateValue.toFixed(1)}%`}
+              detail={`PF ${(liveStats?.aggregate.profitFactor ?? 0).toFixed(2)} | ${streak}`}
+              accent={winRateValue >= 50 ? "text-emerald-300" : "text-amber-300"}
+            />
+          </div>
+        </div>
+
+        <div className="glass-panel p-5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            Market Bias
+          </div>
+          <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/75 p-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+              Live Read
+            </div>
+            <div className={`mt-2 text-2xl font-semibold ${marketSentiment.colorClass}`}>
+              {marketSentiment.label}
+            </div>
+            <div className={`mt-2 text-sm font-semibold ${signalAccent}`}>
+              {latestSignal ? `${latestSignal.side} ${latestSignal.tag}` : "Waiting for signal alignment"}
+            </div>
+            <div className="mt-1 text-xs text-zinc-500">
+              {latestSignal ? `${latestSignal.confidence}% confidence | B:${latestSignal.scoreBuy} S:${latestSignal.scoreSell}` : "No high-conviction signal yet"}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                Best Strategy
+              </div>
+              <div className="mt-2 text-sm font-semibold text-emerald-300">
+                {bestStrategy ? bestStrategy.name : "No profitable strategy yet"}
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">
+                {bestStrategy ? `${formatUSD(bestStrategy.profit, { signed: true })} | ${bestStrategy.wins}W ${bestStrategy.losses}L` : "Waiting for trade history"}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/75 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                Weakest Strategy
+              </div>
+              <div className="mt-2 text-sm font-semibold text-rose-300">
+                {weakestStrategy ? weakestStrategy.name : "No losing strategy yet"}
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">
+                {weakestStrategy ? `${formatUSD(weakestStrategy.profit, { signed: true })} | ${weakestStrategy.wins}W ${weakestStrategy.losses}L` : "No drawdown leader"}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="glass-panel px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
@@ -752,6 +966,32 @@ export default function TradingDashboard() {
 
       {activeTab === "trade" && (
         <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <CompactMetric
+              label="Live Signal"
+              value={latestSignal ? `${latestSignal.side} ${latestSignal.tag}` : "Standby"}
+              detail={latestSignal ? `${latestSignal.confidence}% confidence` : "Waiting for aligned candle structure"}
+              accent={signalAccent}
+            />
+            <CompactMetric
+              label="Trade Bias"
+              value={tradeBiasLabel}
+              detail={longShortSummary}
+              accent={longOpenCount >= shortOpenCount ? "text-sky-300" : "text-fuchsia-300"}
+            />
+            <CompactMetric
+              label="Session Range"
+              value={formatUSD(sessionHigh - sessionLow)}
+              detail={`${sessionLow.toFixed(0)} low | ${sessionHigh.toFixed(0)} high`}
+              accent="text-amber-300"
+            />
+            <CompactMetric
+              label="Lead Strategy"
+              value={bestStrategy ? bestStrategy.name : "No leader yet"}
+              detail={bestStrategy ? `${formatUSD(bestStrategy.profit, { signed: true })}` : "Need more closed trades"}
+              accent={bestStrategy ? "text-emerald-300" : "text-zinc-200"}
+            />
+          </div>
 
           {/* ── MAIN ZONE: Chart 70% | AI Panel 30% ── */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr,420px] gap-5">
@@ -1042,7 +1282,7 @@ export default function TradingDashboard() {
                 pnl: trade.netPnl,
                 reason: mapTradeReason(trade.reason),
                 duration: formatDuration(trade.duration),
-                time: new Date(trade.exitTime).toLocaleTimeString(),
+                time: safeFormatDate(trade.exitTime),
               }))}
             />
           </div>
