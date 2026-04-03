@@ -307,8 +307,8 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 			"fees":         fees,
 			"netPnl":       netP,
 			"reason":       reason,
-			"entryTime":    entryT,
-			"exitTime":     exitT,
+			"entryTime":    entryT.Format(time.RFC3339),
+			"exitTime":     exitT.Format(time.RFC3339),
 			"duration":     time.Duration(durMS) * time.Millisecond,
 			"time":         exitT.Format("15:04:05"), // Friendly string for legacy UI
 			"aiDecisionId": aiID,

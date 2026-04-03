@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatUSD } from "@/lib/money";
+import { formatShortDate, formatShortTime } from "@/lib/time";
 
 type ExitReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
 
@@ -103,7 +104,16 @@ export default function TradeHistory({ history = DEFAULT_TRADE_HISTORY }: { hist
             <tbody>
               {visibleTrades.map((t) => (
                 <tr key={t.id} className="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-2 font-mono text-xs text-gray-500">{t.time}</td>
+                  <td className="py-3 px-2 font-mono text-xs text-gray-500">
+                    {t.time !== "—" ? (
+                      <div className="flex flex-col">
+                        <span className="text-zinc-300">{formatShortTime(t.time)}</span>
+                        <span className="text-[10px] text-zinc-600">{formatShortDate(t.time)}</span>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="py-3 px-2 font-mono text-xs text-gray-500">{t.id}</td>
                   <td className="py-3 px-2 font-mono text-xs text-blue-400">{t.strategy}</td>
                   <td className="py-3 px-2">

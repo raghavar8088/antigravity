@@ -1,6 +1,7 @@
 "use client";
 
 import { formatUSD } from "@/lib/money";
+import { formatShortDate, formatShortTime } from "@/lib/time";
 
 interface RunningTrade {
   id: string;
@@ -117,13 +118,13 @@ export default function RunningTrades({ currentPrice, trades }: { currentPrice: 
                     </div>
                   </td>
                   <td className="py-3 px-2 font-mono text-xs text-gray-400">
-                    {t.openTime ? (
+                    {t.openTime !== "—" ? (
                       <div>
                         <div className="text-zinc-200">
-                          {new Date(t.openTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          {formatShortTime(t.openTime)}
                         </div>
                         <div className="text-[10px] text-zinc-500">
-                          {new Date(t.openTime).toLocaleDateString([], { month: "short", day: "numeric" })}
+                          {formatShortDate(t.openTime)}
                         </div>
                       </div>
                     ) : (

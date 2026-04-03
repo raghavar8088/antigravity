@@ -21,7 +21,8 @@
       "Bash(node --check \"c:/Trading apllication/bridge/bridge.js\")",
       "Bash(python3 -c ':*)",
       "Bash(powershell.exe -Command \"Get-ChildItem -Path C:\\\\Users -Recurse -Filter 'raig-logo.png' -ErrorAction SilentlyContinue | Select-Object FullName\")",
-      "Bash(powershell.exe -Command \"Copy-Item 'C:\\\\Users\\\\ragha\\\\Downloads\\\\raig-logo.png' 'C:\\\\Trading apllication\\\\client\\\\public\\\\raig-logo.png'\")"
+      "Bash(powershell.exe -Command \"Copy-Item 'C:\\\\Users\\\\ragha\\\\Downloads\\\\raig-logo.png' 'C:\\\\Trading apllication\\\\client\\\\public\\\\raig-logo.png'\")",
+      "Bash(grep -n \"func tailAverage\\\\|func appendRollingFloat\\\\|func signalWithConfidence\" \"c:/Trading apllication/engine/internal/strategy/\"*.go)"
     ]
   }
 }
