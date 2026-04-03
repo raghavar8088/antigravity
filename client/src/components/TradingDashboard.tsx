@@ -302,6 +302,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine">("dashboard");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [feed, setFeed] = useState<FeedEntry[]>([]);
@@ -636,6 +637,19 @@ export default function TradingDashboard() {
     : longOpenCount > shortOpenCount
       ? "Long Bias"
       : "Short Bias";
+  const totalReturnPct = ((balance - INITIAL_BALANCE) / INITIAL_BALANCE) * 100;
+  const historyItems = liveTrades.map((trade) => ({
+    id: trade.id,
+    strategy: trade.strategyName,
+    side: trade.side === "BUY" ? "LONG" : "SHORT",
+    size: trade.size,
+    entry: trade.entryPrice,
+    exit: trade.exitPrice,
+    pnl: trade.netPnl,
+    reason: mapTradeReason(trade.reason),
+    duration: formatDuration(trade.duration),
+    time: safeFormatDate(trade.exitTime),
+  }));
 
   const handleReset = () => {
     setResetRefreshKey((current) => current + 1);
@@ -679,7 +693,7 @@ export default function TradingDashboard() {
   }, [combatMode]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────
-  // Space = Combat mode | M = Mute | 1/2/3/4/5 = Tabs
+  // Space = Combat mode | M = Mute | 1/2 = Modules
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -692,11 +706,12 @@ export default function TradingDashboard() {
         case "M":
           setIsSoundOn((prev) => !prev);
           break;
-        case "1": setActiveTab("trade"); break;
-        case "2": setActiveTab("stats"); break;
-        case "3": setActiveTab("strategies"); break;
-        case "4": setActiveTab("history"); break;
-        case "5": setActiveTab("feed"); break;
+        case "1":
+          setActiveModule("dashboard");
+          break;
+        case "2":
+          setActiveModule("engine");
+          break;
       }
     };
     window.addEventListener("keydown", handler);
@@ -762,6 +777,155 @@ export default function TradingDashboard() {
         combatMode={combatMode}
         onToggleCombat={() => setCombatMode((prev) => !prev)}
       />
+
+      <div className="glass-panel px-5 py-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div
+          className="flex items-center gap-1 self-start"
+          style={{ background: "var(--surface-2)", borderRadius: 999, padding: 4, border: "1px solid var(--border)" }}
+        >
+          {[
+            { key: "dashboard", label: "Dashboard" },
+            { key: "engine", label: "Trade Engine" },
+          ].map((module) => (
+            <button
+              key={module.key}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine")}
+              className={`groww-tab${activeModule === module.key ? " active" : ""}`}
+            >
+              {module.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs md:text-sm" style={{ color: "var(--text-secondary)" }}>
+          {activeModule === "dashboard"
+            ? "Core view only: BTC price, live positions, equity, PnL, session ledger, and key stats."
+            : "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."}
+        </div>
+      </div>
+
+      {activeModule === "dashboard" && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr,1fr] gap-5">
+            <div className="glass-panel relative overflow-hidden p-6">
+              <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                    BTC Price
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-end gap-4">
+                    <div className={`text-4xl font-semibold tracking-tight ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {formatUSD(price)}
+                    </div>
+                    <div className={`pb-1 text-lg font-semibold ${market.change24h >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {market.change24h >= 0 ? "+" : ""}
+                      {market.change24h.toFixed(2)}%
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2">
+                  <BadgePill label={engineOnline ? "Engine Online" : "Engine Offline"} tone={engineOnline ? "positive" : "negative"} />
+                  <BadgePill label={connectionLabel} tone={connectionTone} />
+                  <BadgePill label={market.exchange === "binance" ? "Binance Feed" : "Bybit Feed"} tone="info" />
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <CompactMetric
+                  label="Runtime"
+                  value={sessionRuntime}
+                  detail={`${activeStrategyCount} live strategies`}
+                  accent="text-white"
+                />
+                <CompactMetric
+                  label="Last Market Event"
+                  value={secondsSinceLastMarketEvent === null ? "-" : `${secondsSinceLastMarketEvent}s`}
+                  detail={`${market.ticksPerSecond} ticks/sec`}
+                  accent={secondsSinceLastMarketEvent !== null && secondsSinceLastMarketEvent <= 3 ? "text-emerald-300" : "text-zinc-100"}
+                />
+                <CompactMetric
+                  label="Open Exposure"
+                  value={longShortSummary}
+                  detail={`${(liveStats?.exposure ?? 0).toFixed(4)} BTC net`}
+                  accent="text-white"
+                />
+              </div>
+            </div>
+
+            <div className="glass-panel p-5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Equity And PnL
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <CompactMetric
+                  label="Equity"
+                  value={formatUSD(balance)}
+                  detail={`Base ${formatUSD(INITIAL_BALANCE)}`}
+                  accent="text-white"
+                />
+                <CompactMetric
+                  label="PnL Today"
+                  value={formatUSD(liveStats?.dailyPnl ?? closedPnl, { signed: true })}
+                  detail={`${totalReturnPct.toFixed(2)}% vs base`}
+                  accent={(liveStats?.dailyPnl ?? closedPnl) >= 0 ? "text-emerald-300" : "text-rose-300"}
+                />
+                <CompactMetric
+                  label="Closed PnL"
+                  value={formatUSD(closedPnl, { signed: true })}
+                  detail={`${liveTrades.length} completed trades`}
+                  accent={closedPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
+                />
+                <CompactMetric
+                  label="Live Positions"
+                  value={`${livePositions.length}`}
+                  detail={tradeBiasLabel}
+                  accent="text-sky-300"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <SummaryCard
+              label="Win Rate"
+              value={`${winRateValue.toFixed(1)}%`}
+              accent={winRateValue >= 50 ? "text-green-400" : "text-red-400"}
+            />
+            <SummaryCard
+              label="Profit Factor"
+              value={(liveStats?.aggregate.profitFactor ?? 0).toFixed(2)}
+              accent={(liveStats?.aggregate.profitFactor ?? 0) >= 1 ? "text-green-400" : "text-red-400"}
+            />
+            <SummaryCard label="Trades" value={`${liveStats?.aggregate.totalTrades ?? liveTrades.length}`} accent="text-white" />
+            <SummaryCard label="Unrealized" value={formatUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-green-400" : "text-red-400"} />
+            <SummaryCard label="Streak" value={streak} accent="text-amber-300" />
+          </div>
+
+          <div className="glass-panel p-5">
+            <h2 className="mb-4 flex items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+              <span className="pill-green">LIVE</span>
+              RUNNING POSITIONS
+              <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }} className="font-mono">
+                ({livePositions.length} active)
+              </span>
+            </h2>
+            <RunningTrades currentPrice={price} trades={runningTrades} />
+          </div>
+
+          <div className="glass-panel p-6">
+            <h2 className="mb-4 flex items-center gap-3 text-xl font-bold">
+              <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
+              Session Ledger
+              <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+            </h2>
+            <TradeHistory history={historyItems} showSummary={false} />
+          </div>
+        </div>
+      )}
+
+      {activeModule === "engine" && (
+        <>
 
       {/* AI Command Center */}
       <CommandCenter />
@@ -1466,6 +1630,8 @@ export default function TradingDashboard() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </main>
   );

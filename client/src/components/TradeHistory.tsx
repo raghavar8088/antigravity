@@ -35,7 +35,13 @@ const reasonLabels: Record<ExitReason, string> = {
   MANUAL: "MANUAL",
 };
 
-export default function TradeHistory({ history = [] }: { history?: HistoricalTrade[] }) {
+export default function TradeHistory({
+  history = [],
+  showSummary = true,
+}: {
+  history?: HistoricalTrade[];
+  showSummary?: boolean;
+}) {
   const [showAll, setShowAll] = useState(false);
   const visibleTrades = showAll ? history : history.slice(0, 8);
   const totalTrades = history.length;
@@ -49,20 +55,22 @@ export default function TradeHistory({ history = [] }: { history?: HistoricalTra
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {[
-          { label: "Trades", value: `${totalTrades}`, tone: "var(--text-primary)" },
-          { label: "Win Rate", value: `${winRate.toFixed(1)}%`, tone: winRate >= 50 ? "var(--green)" : "var(--red)" },
-          { label: "Net PnL", value: formatUSD(totalPnl, { signed: true }), tone: totalPnl >= 0 ? "var(--green)" : "var(--red)" },
-          { label: "Profit Factor", value: profitFactor.toFixed(2), tone: profitFactor >= 1 ? "var(--green)" : "var(--red)" },
-          { label: "W / L", value: `${wins}/${losses}`, tone: "var(--text-primary)" },
-        ].map((item) => (
-          <div key={item.label} className="summary-card">
-            <div className="summary-label">{item.label}</div>
-            <div className="summary-value" style={{ color: item.tone }}>{item.value}</div>
-          </div>
-        ))}
-      </div>
+      {showSummary ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          {[
+            { label: "Trades", value: `${totalTrades}`, tone: "var(--text-primary)" },
+            { label: "Win Rate", value: `${winRate.toFixed(1)}%`, tone: winRate >= 50 ? "var(--green)" : "var(--red)" },
+            { label: "Net PnL", value: formatUSD(totalPnl, { signed: true }), tone: totalPnl >= 0 ? "var(--green)" : "var(--red)" },
+            { label: "Profit Factor", value: profitFactor.toFixed(2), tone: profitFactor >= 1 ? "var(--green)" : "var(--red)" },
+            { label: "W / L", value: `${wins}/${losses}`, tone: "var(--text-primary)" },
+          ].map((item) => (
+            <div key={item.label} className="summary-card">
+              <div className="summary-label">{item.label}</div>
+              <div className="summary-value" style={{ color: item.tone }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {history.length === 0 ? (
         <div className="py-12 text-center text-sm" style={{ color: "var(--text-secondary)" }}>No trade history yet.</div>
