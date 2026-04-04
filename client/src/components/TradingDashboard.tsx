@@ -302,7 +302,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine">("dashboard");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history">("dashboard");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -808,10 +808,11 @@ export default function TradingDashboard() {
           {[
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
+            { key: "history", label: "Trade History" },
           ].map((module) => (
             <button
               key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine")}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history")}
               className={`groww-tab${activeModule === module.key ? " active" : ""}`}
             >
               {module.label}
@@ -824,7 +825,9 @@ export default function TradingDashboard() {
         >
           {activeModule === "dashboard"
             ? "Core view only: BTC price, live positions, equity, PnL, session ledger, and key stats."
-            : "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."}
+            : activeModule === "engine"
+            ? "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."
+            : "Full session ledger with strategy breakdown and completed trade history."}
         </div>
       </div>
 
@@ -1646,6 +1649,53 @@ export default function TradingDashboard() {
         </div>
       )}
         </>
+      )}
+
+      {activeModule === "history" && (
+        <div className="space-y-6">
+          {strategyBreakdown.length > 0 && (
+            <div className="glass-panel p-6">
+              <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                Strategy Breakdown
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {strategyBreakdown.map(([strategyName, stats]) => (
+                  <div
+                    key={strategyName}
+                    className={`rounded-xl border px-3 py-2 text-sm ${
+                      stats.pnl >= 0
+                        ? "border-green-500/20 bg-green-500/10 text-green-200"
+                        : "border-red-500/20 bg-red-500/10 text-red-200"
+                    }`}
+                  >
+                    <span className="font-semibold text-white">{strategyName}</span>
+                    <span className="ml-2 text-zinc-400">{stats.wins}W/{stats.losses}L</span>
+                    <span className="ml-2 font-mono">{formatUSD(stats.pnl, { signed: true })}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="glass-panel p-6">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h2 className="flex items-center gap-3 text-xl font-bold">
+                <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
+                Session Ledger
+                <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+              </h2>
+              <button
+                type="button"
+                onClick={handleClearLedger}
+                disabled={isClearingLedger}
+                className="btn-primary"
+              >
+                {isClearingLedger ? "Clearing" : "Clear Session Ledger"}
+              </button>
+            </div>
+            <TradeHistory history={historyItems} />
+          </div>
+        </div>
       )}
     </main>
   );
