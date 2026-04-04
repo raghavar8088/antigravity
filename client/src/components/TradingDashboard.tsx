@@ -3,6 +3,7 @@
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
 import ActivityFeed from "@/components/ActivityFeed";
 import DashboardHeader from "@/components/DashboardHeader";
+import OptionsAccountHeader from "@/components/OptionsAccountHeader";
 import MarketChart from "@/components/MarketChart";
 import PerformanceCharts from "@/components/PerformanceCharts";
 import RunningTrades from "@/components/RunningTrades";
@@ -18,6 +19,7 @@ import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
+import useOptions from "@/hooks/useOptions";
 import usePositions from "@/hooks/usePositions";
 import useStrategies from "@/hooks/useStrategies";
 import useTrades from "@/hooks/useTrades";
@@ -68,6 +70,7 @@ type ChartEquityPoint = { time: number; equity: number };
 
 const SOUND_STORAGE_KEY = "raig.sound.enabled";
 const INITIAL_BALANCE = 1000000;
+const INITIAL_OPTIONS_BALANCE = 1000000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
@@ -315,6 +318,7 @@ export default function TradingDashboard() {
   const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { engineOnline, balance: engineBalance } = useEngineState();
+  const { positions: optionPositions, stats: optionStats } = useOptions();
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
   const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
@@ -785,6 +789,11 @@ export default function TradingDashboard() {
   const riskPct = Math.min(100, Math.max(0, (livePositions.length / 5) * 100));
   const riskLevel = riskPct >= 80 ? "danger" : riskPct >= 50 ? "warning" : "safe";
   const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
+  const optionsModuleActive = activeModule === "options" || activeModule === "chain";
+  const optionEquity = optionStats?.equity ?? INITIAL_OPTIONS_BALANCE;
+  const optionSessionPnl = optionEquity - INITIAL_OPTIONS_BALANCE;
+  const optionOpenPositions = Math.max(optionStats?.openPositions ?? 0, optionPositions.length);
+  const optionsOnline = optionStats !== null || optionPositions.length > 0;
 
   return (
     <main className="gmail-shell space-y-5">
@@ -792,16 +801,25 @@ export default function TradingDashboard() {
         <div className="milestone-toast">{milestoneToast}</div>
       )}
 
-      <DashboardHeader
-        online={engineOnline}
-        balance={balance}
-        dailyPnL={sessionPnl}
-        openPositions={livePositions.length}
-        onResetSuccess={handleReset}
-        onAdminEvent={handleAdminEvent}
-        combatMode={combatMode}
-        onToggleCombat={() => setCombatMode((prev) => !prev)}
-      />
+      {optionsModuleActive ? (
+        <OptionsAccountHeader
+          online={optionsOnline}
+          equity={optionEquity}
+          dailyPnL={optionSessionPnl}
+          openPositions={optionOpenPositions}
+        />
+      ) : (
+        <DashboardHeader
+          online={engineOnline}
+          balance={balance}
+          dailyPnL={sessionPnl}
+          openPositions={livePositions.length}
+          onResetSuccess={handleReset}
+          onAdminEvent={handleAdminEvent}
+          combatMode={combatMode}
+          onToggleCombat={() => setCombatMode((prev) => !prev)}
+        />
+      )}
 
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -893,25 +911,25 @@ export default function TradingDashboard() {
               </div>
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <CompactMetric
-                  label="Equity"
+                  label="Futures Equity"
                   value={formatUSD(balance)}
                   detail={`Base ${formatUSD(INITIAL_BALANCE)}`}
                   accent="text-white"
                 />
                 <CompactMetric
-                  label="PnL Today"
+                  label="Futures PnL Today"
                   value={formatUSD(sessionPnl, { signed: true })}
                   detail={`${totalReturnPct.toFixed(2)}% vs base`}
                   accent={sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
                 />
                 <CompactMetric
-                  label="Closed PnL"
+                  label="Futures Closed PnL"
                   value={formatUSD(closedPnl, { signed: true })}
                   detail={`${tradeCount} completed trades`}
                   accent={closedPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
                 />
                 <CompactMetric
-                  label="Live Positions"
+                  label="Live Futures Positions"
                   value={`${livePositions.length}`}
                   detail={tradeBiasLabel}
                   accent="text-sky-300"
