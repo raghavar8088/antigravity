@@ -132,7 +132,7 @@ export default function DashboardHeader({
             </div>
             <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
               {positive ? "+" : ""}
-              {pnlPct.toFixed(2)}%
+              {pnlPct.toFixed(Math.abs(pnlPct) < 0.01 && pnlPct !== 0 ? 4 : 2)}%
             </div>
           </div>
 
