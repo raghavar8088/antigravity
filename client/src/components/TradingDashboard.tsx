@@ -917,12 +917,6 @@ export default function TradingDashboard() {
                   accent="text-white"
                 />
                 <CompactMetric
-                  label="Futures PnL Today"
-                  value={formatUSD(sessionPnl, { signed: true })}
-                  detail={`${totalReturnPct.toFixed(2)}% vs base`}
-                  accent={sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
-                />
-                <CompactMetric
                   label="Futures Closed PnL"
                   value={formatUSD(closedPnl, { signed: true })}
                   detail={`${tradeCount} completed trades`}
