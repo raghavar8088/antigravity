@@ -341,5 +341,86 @@ func buildAllStrategies() []StrategyDef {
 			TakeProfitPct: 0.65, StopLossPct: 0.25,
 			PositionUSD: 600, Signal: "TRIPLE_BEAR", CooldownSecs: 360,
 		},
+
+		// ── STRATEGY 1: Consecutive Candle Momentum ───────────────────────────
+		// BTC momentum is autocorrelated — 4 consecutive bullish 1-min bars
+		// signal continuation. Captures the "momentum burst" pattern unique
+		// to high-liquidity crypto markets where algos chase moves.
+		{
+			Name: "ConsecBull_Momentum_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			PositionUSD: 550, Signal: "CONSEC_BULL_BARS", CooldownSecs: 300,
+		},
+		{
+			Name: "ConsecBear_Momentum_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			PositionUSD: 550, Signal: "CONSEC_BEAR_BARS", CooldownSecs: 300,
+		},
+
+		// ── STRATEGY 2: Volatility Compression Breakout ───────────────────────
+		// Options are cheap when vol is compressed. When price finally breaks out,
+		// you earn delta gains AND vega gains (IV expands with the move).
+		// Best risk-adjusted entry in options: buy cheap, ride the expansion.
+		{
+			Name: "VolCompress_Breakout_Call", Type: Call,
+			StrikePctOTM: 0.003, ExpiryMinutes: 90,
+			TakeProfitPct: 0.90, StopLossPct: 0.30,
+			PositionUSD: 500, Signal: "VOL_COMPRESS_BULL", CooldownSecs: 600,
+		},
+		{
+			Name: "VolCompress_Breakout_Put", Type: Put,
+			StrikePctOTM: 0.003, ExpiryMinutes: 90,
+			TakeProfitPct: 0.90, StopLossPct: 0.30,
+			PositionUSD: 500, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 600,
+		},
+
+		// ── STRATEGY 3: Session Open Momentum ────────────────────────────────
+		// BTC receives fresh institutional order flow at UTC 00:00, 08:00, 13:30, 20:00.
+		// The first directional move in the opening 3-18 minutes tends to persist
+		// for 60-90 minutes as resting orders are filled and momentum builds.
+		{
+			Name: "SessionOpen_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			PositionUSD: 600, Signal: "SESSION_OPEN_BULL", CooldownSecs: 720,
+		},
+		{
+			Name: "SessionOpen_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			PositionUSD: 600, Signal: "SESSION_OPEN_BEAR", CooldownSecs: 720,
+		},
+
+		// ── STRATEGY 4: Capitulation V-Reversal ──────────────────────────────
+		// Panic drops (>0.7% in 5 bars) trigger cascade stop-losses, clearing
+		// weak hands. When price snaps back firmly, the selling is exhausted.
+		// This targets the exact bottom of the V — high probability, high R:R.
+		// Only fires as a CALL (buy the dip recovery).
+		{
+			Name: "Capitulation_VReversal_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.75, StopLossPct: 0.28,
+			PositionUSD: 600, Signal: "CAPITULATION_RECOVERY", CooldownSecs: 600,
+		},
+
+		// ── STRATEGY 5: Overextension Fade ───────────────────────────────────
+		// After a 2%+ rapid move with RSI at extremes AND price at the Bollinger
+		// Band, the rubber band snaps back. Pure contrarian play — requires ALL
+		// three confirmations to prevent fighting strong trends.
+		// Buy puts when over-extended up, buy calls when over-extended down.
+		{
+			Name: "Overextension_Fade_Put", Type: Put,
+			StrikePctOTM: 0.003, ExpiryMinutes: 90,
+			TakeProfitPct: 0.80, StopLossPct: 0.30,
+			PositionUSD: 450, Signal: "OVEREXTENSION_FADE_UP", CooldownSecs: 900,
+		},
+		{
+			Name: "Overextension_Fade_Call", Type: Call,
+			StrikePctOTM: 0.003, ExpiryMinutes: 90,
+			TakeProfitPct: 0.80, StopLossPct: 0.30,
+			PositionUSD: 450, Signal: "OVEREXTENSION_FADE_DOWN", CooldownSecs: 900,
+		},
 	}
 }

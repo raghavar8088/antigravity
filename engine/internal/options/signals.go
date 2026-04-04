@@ -8,6 +8,8 @@ type SignalContext struct {
 	Prices   []float64 // 1-minute sampled price bars
 	IV       float64
 	BTCPrice float64
+	UTCHour  int // current UTC hour (0-23), for session-aware signals
+	UTCMin   int // current UTC minute (0-59)
 }
 
 type SignalFunc func(ctx SignalContext) bool
@@ -463,5 +465,190 @@ var Signals = map[string]SignalFunc{
 		riseFromLow := (hi - ctx.Prices[len(ctx.Prices)-6]) / ctx.Prices[len(ctx.Prices)-6]
 		rejection := (hi - ctx.BTCPrice) / hi
 		return riseFromLow > 0.003 && rejection > 0.0015 && ctx.BTCPrice < hi
+	},
+
+	// ── Strategy 1: Consecutive Candle Momentum ────────────────────────────────
+	// BTC momentum is autocorrelated: 4 consecutive bullish/bearish 1-min bars
+	// signal continuation of the move for the next 3-5 bars.
+	// This captures the "momentum burst" phenomenon seen in liquid crypto markets.
+	"CONSEC_BULL_BARS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 6 {
+			return false
+		}
+		n := len(ctx.Prices)
+		// All 4 recent bars must close higher than the previous bar
+		for i := n - 4; i < n; i++ {
+			if ctx.Prices[i] <= ctx.Prices[i-1] {
+				return false
+			}
+		}
+		// Total 4-bar gain must be meaningful (>0.35%) — filters noise
+		totalGain := (ctx.Prices[n-1] - ctx.Prices[n-5]) / ctx.Prices[n-5]
+		// RSI must not be deep overbought — leave room for the move to continue
+		rsiVal := rsi(ctx.Prices, 14)
+		return totalGain > 0.0035 && rsiVal < 72
+	},
+	"CONSEC_BEAR_BARS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 6 {
+			return false
+		}
+		n := len(ctx.Prices)
+		for i := n - 4; i < n; i++ {
+			if ctx.Prices[i] >= ctx.Prices[i-1] {
+				return false
+			}
+		}
+		totalLoss := (ctx.Prices[n-5] - ctx.Prices[n-1]) / ctx.Prices[n-5]
+		rsiVal := rsi(ctx.Prices, 14)
+		return totalLoss > 0.0035 && rsiVal > 28
+	},
+
+	// ── Strategy 2: Volatility Compression Breakout ────────────────────────────
+	// When price squeezes into a tight range (low realised vol), energy builds.
+	// The first directional move out of the compression tends to be explosive.
+	// Buying when options are cheap (vol compressed) gives: delta gain + vega gain.
+	"VOL_COMPRESS_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 65 {
+			return false
+		}
+		n := len(ctx.Prices)
+		// Compression: recent 10-bar std is less than 50% of the 60-bar historical std
+		recentStd := stddev(ctx.Prices[n-10:])
+		historicalStd := stddev(ctx.Prices[n-60:])
+		if historicalStd == 0 {
+			return false
+		}
+		compressed := recentStd < historicalStd*0.50
+		// Breakout: strong upward momentum breaking out of the compression
+		breakout := momentum(ctx.Prices, 5) > 0.003
+		rsiVal := rsi(ctx.Prices, 14)
+		return compressed && breakout && rsiVal < 68
+	},
+	"VOL_COMPRESS_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 65 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		historicalStd := stddev(ctx.Prices[n-60:])
+		if historicalStd == 0 {
+			return false
+		}
+		compressed := recentStd < historicalStd*0.50
+		breakout := momentum(ctx.Prices, 5) < -0.003
+		rsiVal := rsi(ctx.Prices, 14)
+		return compressed && breakout && rsiVal > 32
+	},
+
+	// ── Strategy 3: Session Open Momentum ─────────────────────────────────────
+	// BTC sees fresh institutional order flow at key UTC session opens.
+	// The direction of the first 5-15 minutes tends to persist for 60-90 minutes.
+	// Key opens: UTC 00:00 (Asia), 08:00 (Europe), 13:30 (NYSE), 20:00 (US evening).
+	"SESSION_OPEN_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		// Check within 3-18 minutes of a key session open
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		sessions := []int{0, 480, 810, 1200} // 00:00, 08:00, 13:30, 20:00
+		nearSession := false
+		for _, s := range sessions {
+			diff := totalMin - s
+			if diff >= 3 && diff <= 18 {
+				nearSession = true
+				break
+			}
+		}
+		if !nearSession {
+			return false
+		}
+		// Strong bullish momentum in the opening bars
+		mom := momentum(ctx.Prices, 10)
+		rsiVal := rsi(ctx.Prices, 14)
+		return mom > 0.004 && rsiVal < 65
+	},
+	"SESSION_OPEN_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		sessions := []int{0, 480, 810, 1200}
+		nearSession := false
+		for _, s := range sessions {
+			diff := totalMin - s
+			if diff >= 3 && diff <= 18 {
+				nearSession = true
+				break
+			}
+		}
+		if !nearSession {
+			return false
+		}
+		mom := momentum(ctx.Prices, 10)
+		rsiVal := rsi(ctx.Prices, 14)
+		return mom < -0.004 && rsiVal > 35
+	},
+
+	// ── Strategy 4: Capitulation V-Reversal ───────────────────────────────────
+	// Sharp panic drops (>0.7% in 5 bars) clear weak longs via stop-hunting.
+	// When price snaps back firmly (>0.35% recovery), the selling is exhausted
+	// and the path of least resistance flips back up.
+	// This targets the "V" bottom — one of the highest-probability setups in crypto.
+	"CAPITULATION_RECOVERY": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 {
+			return false
+		}
+		n := len(ctx.Prices)
+		// Find the lowest point in the 5-bar window ending 1 bar before current
+		window := ctx.Prices[n-7 : n-1]
+		lo := window[0]
+		for _, p := range window[1:] {
+			if p < lo {
+				lo = p
+			}
+		}
+		startPrice := ctx.Prices[n-8]
+		if startPrice == 0 || lo == 0 {
+			return false
+		}
+		// Drop from start to the low must be at least 0.7%
+		drop := (startPrice - lo) / startPrice
+		// Current price must have recovered at least 0.35% from the low
+		recovery := (ctx.BTCPrice - lo) / lo
+		// RSI not yet overbought — means the recovery can continue
+		rsiVal := rsi(ctx.Prices, 14)
+		return drop > 0.007 && recovery > 0.0035 && ctx.BTCPrice > lo && rsiVal < 55
+	},
+
+	// ── Strategy 5: Overextension Fade ────────────────────────────────────────
+	// BTC mean-reverts after rapid >2% moves in either direction.
+	// When RSI is at an extreme AND price is at the Bollinger Band AND
+	// the 30-minute move is outsized, the rubber band effect kicks in.
+	// Buy puts after excessive rallies, calls after excessive selloffs.
+	// This is a contrarian strategy — only valid with ALL three confirmations.
+	"OVEREXTENSION_FADE_UP": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		// 30-min move > 2.0% upward
+		mom30 := momentum(ctx.Prices, 30)
+		// RSI deeply overbought
+		rsiVal := rsi(ctx.Prices, 14)
+		// Price at or above upper Bollinger Band
+		atUpper := ctx.BTCPrice >= bbUpper(ctx.Prices, 20)*0.999
+		// Momentum starting to stall: last 3 bars not accelerating
+		mom3 := momentum(ctx.Prices, 3)
+		return mom30 > 0.020 && rsiVal > 76 && atUpper && mom3 < mom30/10
+	},
+	"OVEREXTENSION_FADE_DOWN": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		// 30-min move > 2.0% downward
+		mom30 := momentum(ctx.Prices, 30)
+		rsiVal := rsi(ctx.Prices, 14)
+		atLower := ctx.BTCPrice <= bbLower(ctx.Prices, 20)*1.001
+		mom3 := momentum(ctx.Prices, 3)
+		return mom30 < -0.020 && rsiVal < 24 && atLower && mom3 > mom30/10
 	},
 }

@@ -115,10 +115,13 @@ func (e *Engine) tick() {
 	// Estimate IV from minute bars (correct annualization for 1-min data)
 	iv := EstimateIV(e.minuteBars)
 
+	nowUTC := time.Now().UTC()
 	ctx := SignalContext{
 		Prices:   e.minuteBars, // minute-bar prices for indicators
 		IV:       iv,
 		BTCPrice: e.lastPrice,
+		UTCHour:  nowUTC.Hour(),
+		UTCMin:   nowUTC.Minute(),
 	}
 
 	// Count currently open positions to enforce global cap
