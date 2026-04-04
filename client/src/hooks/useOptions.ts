@@ -70,6 +70,16 @@ export default function useOptions(refreshKey = 0) {
   const [strategies, setStrategies] = useState<OptionStrategyStatus[]>([]);
   const [stats, setStats] = useState<OptionStats | null>(null);
 
+  const clearAll = () => {
+    setPositions([]);
+    setTrades([]);
+    setStats(null);
+    setStrategies((prev) => prev.map((s) => ({
+      ...s,
+      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, status: "READY" as const,
+    })));
+  };
+
   useEffect(() => {
     const fetch3 = async () => {
       try {
@@ -93,5 +103,5 @@ export default function useOptions(refreshKey = 0) {
     return () => clearInterval(interval);
   }, [refreshKey]);
 
-  return { positions, trades, strategies, stats };
+  return { positions, trades, strategies, stats, clearAll };
 }

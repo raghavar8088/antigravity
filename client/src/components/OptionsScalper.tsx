@@ -482,7 +482,7 @@ export default function OptionsScalper() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
-  const { positions, trades, strategies, stats } = useOptions(refreshKey);
+  const { positions, trades, strategies, stats, clearAll } = useOptions(refreshKey);
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -495,6 +495,7 @@ export default function OptionsScalper() {
     }
 
     setIsResetting(true);
+    clearAll(); // immediately zero out PnL in the UI
     try {
       const response = await fetch(`${API_URL}/api/options/reset`, { method: "POST" });
       if (!response.ok) {
@@ -584,6 +585,7 @@ export default function OptionsScalper() {
                   className="btn-primary text-sm"
                   onClick={async () => {
                     if (!confirm("Clear completed option trades and strategy stats? Open positions and balance will be kept.")) return;
+                    clearAll();
                     await fetch(`${API_URL}/api/options/clear-history`, { method: "POST" });
                     setRefreshKey((k) => k + 1);
                   }}
