@@ -10,6 +10,7 @@ import (
 )
 
 const initialOptionsBalance = 1000000.0 // $1,000,000 paper options account
+const maxConcurrentPositions = 12       // Never hold more than 12 options at once
 
 // strategyState holds the runtime state for a single strategy
 type strategyState struct {
@@ -17,19 +18,20 @@ type strategyState struct {
 	position    *OptionPosition
 	stats       StrategyStatus
 	lastTradeAt time.Time
-	priceBuffer []float64 // recent prices for signal evaluation
 }
 
 // Engine is the fully autonomous BTC option scalping engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
-	mu        sync.RWMutex
-	states    []*strategyState
-	trades    []OptionTrade
-	balance   float64
-	lastPrice float64
-	priceHist []float64 // shared price history for all strategies
-	tradeSeq  int
+	mu          sync.RWMutex
+	states      []*strategyState
+	trades      []OptionTrade
+	balance     float64
+	lastPrice   float64
+	priceHist   []float64 // raw tick prices (for current price + IV)
+	minuteBars  []float64 // 1-minute sampled prices (for indicators)
+	lastMinute  int64     // unix-minute of last sampled bar
+	tradeSeq    int
 }
 
 // NewEngine initialises the options engine with 50 strategies.
@@ -53,21 +55,34 @@ func NewEngine() *Engine {
 }
 
 // UpdatePrice feeds a new BTC price tick into the engine.
-// Call this every time the main engine receives a new price.
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	e.lastPrice = price
+
+	// Keep raw tick history (capped at 500 ticks) — used only for live pricing
 	e.priceHist = append(e.priceHist, price)
 	if len(e.priceHist) > 500 {
 		e.priceHist = e.priceHist[len(e.priceHist)-500:]
+	}
+
+	// Sample one price per minute into minuteBars for indicator computation.
+	// This ensures RSI/EMA/BB are computed on meaningful 1-minute candles,
+	// not on noisy sub-second tick data.
+	nowMin := time.Now().Unix() / 60
+	if nowMin > e.lastMinute {
+		e.lastMinute = nowMin
+		e.minuteBars = append(e.minuteBars, price)
+		if len(e.minuteBars) > 300 { // 300 minutes = 5 hours of history
+			e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
+		}
 	}
 }
 
 // Run is the main trading loop. Call it in a goroutine.
 func (e *Engine) Run(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	log.Println("[OPTIONS ENGINE] 🚀 BTC Option Scalper started — 50 strategies active")
@@ -87,23 +102,39 @@ func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.lastPrice <= 0 || len(e.priceHist) < 5 {
+	if e.lastPrice <= 0 {
 		return
 	}
 
-	iv := EstimateIV(e.priceHist)
+	// Need at least 30 minute bars before we start trading
+	// (allows indicators to warm up properly)
+	if len(e.minuteBars) < 30 {
+		return
+	}
+
+	// Estimate IV from minute bars (correct annualization for 1-min data)
+	iv := EstimateIV(e.minuteBars)
+
 	ctx := SignalContext{
-		Prices:   e.priceHist,
+		Prices:   e.minuteBars, // minute-bar prices for indicators
 		IV:       iv,
 		BTCPrice: e.lastPrice,
 	}
 
+	// Count currently open positions to enforce global cap
+	openCount := 0
 	for _, s := range e.states {
-		e.manageStrategy(s, ctx, iv)
+		if s.position != nil {
+			openCount++
+		}
+	}
+
+	for _, s := range e.states {
+		e.manageStrategy(s, ctx, iv, openCount)
 	}
 }
 
-func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64) {
+func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64, openCount int) {
 	now := time.Now()
 
 	// ── Manage open position ──────────────────────────────────────────────
@@ -130,6 +161,11 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64)
 		if exitReason != "" {
 			e.closePosition(s, exitReason, now)
 		}
+		return
+	}
+
+	// ── Enforce global position cap ───────────────────────────────────────
+	if openCount >= maxConcurrentPositions {
 		return
 	}
 
@@ -195,8 +231,8 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64)
 	s.stats.Status = "IN_POSITION"
 	s.stats.HasPosition = true
 
-	log.Printf("[OPTIONS] 📈 OPEN  %s %s | Strike: $%.0f | Expiry: %dm | Premium: $%.2f | Qty: %.2f",
-		s.def.Name, s.def.Type, strike, s.def.ExpiryMinutes, pr.Premium, quantity)
+	log.Printf("[OPTIONS] 📈 OPEN  %s %s | Strike: $%.0f | Expiry: %dm | Premium: $%.2f | Qty: %.2f | IV: %.1f%%",
+		s.def.Name, s.def.Type, strike, s.def.ExpiryMinutes, pr.Premium, quantity, iv*100)
 }
 
 func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
@@ -204,7 +240,6 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
 	returnPct := (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
 
-	// Credit back the option proceeds
 	e.balance += pos.CostBasis + netPnL
 
 	trade := OptionTrade{
@@ -260,7 +295,6 @@ func setCORSOptions(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 }
 
-// HandlePositions serves GET /api/options/positions
 func (e *Engine) HandlePositions(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
@@ -281,7 +315,6 @@ func (e *Engine) HandlePositions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(positions)
 }
 
-// HandleTrades serves GET /api/options/trades
 func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
@@ -294,7 +327,6 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	if trades == nil {
 		trades = []OptionTrade{}
 	}
-	// Return newest first
 	result := make([]OptionTrade, len(trades))
 	for i, t := range trades {
 		result[len(trades)-1-i] = t
@@ -302,7 +334,6 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// HandleStrategies serves GET /api/options/strategies
 func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
@@ -318,7 +349,6 @@ func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(statuses)
 }
 
-// HandleStats serves GET /api/options/stats
 func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
@@ -365,7 +395,6 @@ func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
-// HandleReset resets the options paper account
 func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {

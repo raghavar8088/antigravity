@@ -7,17 +7,14 @@ import (
 
 const riskFreeRate = 0.05 // 5% annual
 
-// normCDF is the standard normal cumulative distribution function
 func normCDF(x float64) float64 {
 	return 0.5 * math.Erfc(-x/math.Sqrt2)
 }
 
-// normPDF is the standard normal probability density function
 func normPDF(x float64) float64 {
 	return math.Exp(-0.5*x*x) / math.Sqrt(2*math.Pi)
 }
 
-// PriceResult holds the option price and Greeks
 type PriceResult struct {
 	Premium float64
 	Delta   float64
@@ -28,7 +25,7 @@ type PriceResult struct {
 
 // PriceOption calculates the Black-Scholes price and Greeks for a European option.
 func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType OptionType) PriceResult {
-	T := time.Until(expiry).Hours() / 8760.0 // Fraction of a year
+	T := time.Until(expiry).Hours() / 8760.0
 	if T <= 0 {
 		var intrinsic float64
 		if optType == Call {
@@ -69,20 +66,22 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 	}
 }
 
-// EstimateIV derives implied volatility from recent 1-minute price closes.
-func EstimateIV(prices []float64) float64 {
-	n := len(prices)
+// EstimateIV derives implied volatility from 1-minute bar prices.
+// Uses 525,600 minutes/year annualization (correct for minute-level data).
+func EstimateIV(minuteBars []float64) float64 {
+	n := len(minuteBars)
 	if n < 10 {
 		return 0.80
 	}
+	// Use last 60 minute bars = 1 hour of data
 	if n > 60 {
-		prices = prices[n-60:]
+		minuteBars = minuteBars[n-60:]
 	}
 
 	var returns []float64
-	for i := 1; i < len(prices); i++ {
-		if prices[i-1] > 0 {
-			returns = append(returns, math.Log(prices[i]/prices[i-1]))
+	for i := 1; i < len(minuteBars); i++ {
+		if minuteBars[i-1] > 0 {
+			returns = append(returns, math.Log(minuteBars[i]/minuteBars[i-1]))
 		}
 	}
 	if len(returns) < 2 {
@@ -102,12 +101,13 @@ func EstimateIV(prices []float64) float64 {
 	}
 	variance /= float64(len(returns))
 
-	annVol := math.Sqrt(variance * 525600) // 525,600 minutes per year
-	if annVol < 0.40 {
-		annVol = 0.40
+	// 525,600 minutes per year — correct annualization for 1-minute bars
+	annVol := math.Sqrt(variance * 525600)
+	if annVol < 0.30 {
+		annVol = 0.30
 	}
-	if annVol > 2.50 {
-		annVol = 2.50
+	if annVol > 3.00 {
+		annVol = 3.00
 	}
 	return annVol
 }
