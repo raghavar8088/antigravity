@@ -1060,7 +1060,7 @@ export default function TradingDashboard() {
 
         <div className="glass-panel p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-            Session Ledger
+            Trade History
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <CompactMetric
@@ -1173,7 +1173,7 @@ export default function TradingDashboard() {
             { key: "trade", label: "Trade" },
             { key: "stats", label: "Stats" },
             { key: "strategies", label: `Strategies (${strategyRows.length})` },
-            { key: "history", label: `Session Ledger (${liveTrades.length})` },
+            { key: "history", label: `Trade History (${liveTrades.length})` },
             { key: "feed", label: `Feed (${feed.length})` },
           ].map((tab) => (
             <button
@@ -1609,7 +1609,7 @@ export default function TradingDashboard() {
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <h2 className="flex items-center gap-3 text-xl font-bold">
                 <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
-                Session Ledger
+                Trade History
                 <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
               </h2>
               <button
@@ -1618,7 +1618,7 @@ export default function TradingDashboard() {
                 disabled={isClearingLedger}
                 className="btn-primary"
               >
-                {isClearingLedger ? "Clearing" : "Clear Session Ledger"}
+                {isClearingLedger ? "Clearing" : "Clear Trade History"}
               </button>
             </div>
             <TradeHistory history={historyItems} />
@@ -1681,7 +1681,7 @@ export default function TradingDashboard() {
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <h2 className="flex items-center gap-3 text-xl font-bold">
                 <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
-                Session Ledger
+                Trade History
                 <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
               </h2>
               <button
@@ -1690,7 +1690,7 @@ export default function TradingDashboard() {
                 disabled={isClearingLedger}
                 className="btn-primary"
               >
-                {isClearingLedger ? "Clearing" : "Clear Session Ledger"}
+                {isClearingLedger ? "Clearing" : "Clear Trade History"}
               </button>
             </div>
             <TradeHistory history={historyItems} />
