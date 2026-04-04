@@ -19,6 +19,7 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
@@ -316,6 +317,28 @@ func main() {
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
 	// ═══════════════════════════════════════════════════
+	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $50K paper account
+	// ═══════════════════════════════════════════════════
+	optionsEngine := options.NewEngine()
+
+	// Feed BTC price ticks into the options engine via the same Coinbase stream
+	go safeGo("OptionsPriceFeed", func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+				p := paperExecute.GetLastPrice()
+				if p > 0 {
+					optionsEngine.UpdatePrice(p)
+				}
+			}
+		}
+	})
+
+	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
+
+	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
 	// ═══════════════════════════════════════════════════
 	if dbStore != nil {
@@ -330,6 +353,13 @@ func main() {
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
+
+	// Options Scalper endpoints
+	http.HandleFunc("/api/options/positions", optionsEngine.HandlePositions)
+	http.HandleFunc("/api/options/trades", optionsEngine.HandleTrades)
+	http.HandleFunc("/api/options/strategies", optionsEngine.HandleStrategies)
+	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
+	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
 
 	// Admin endpoints
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)

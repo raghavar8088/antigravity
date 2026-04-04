@@ -12,6 +12,7 @@ import TradeHistory from "@/components/TradeHistory";
 import AIInsightPanel from "@/components/AIInsightPanel";
 import CommandCenter from "@/components/CommandCenter";
 import FearGreedWidget from "@/components/FearGreedWidget";
+import OptionsScalper from "@/components/OptionsScalper";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -302,7 +303,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history">("dashboard");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options">("dashboard");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -809,10 +810,11 @@ export default function TradingDashboard() {
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
+            { key: "options", label: "BTC Option Scalper" },
           ].map((module) => (
             <button
               key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history")}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options")}
               className={`groww-tab${activeModule === module.key ? " active" : ""}`}
             >
               {module.label}
@@ -827,7 +829,9 @@ export default function TradingDashboard() {
             ? "Core view only: BTC price, live positions, equity, PnL, session ledger, and key stats."
             : activeModule === "engine"
             ? "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."
-            : "Full session ledger with strategy breakdown and completed trade history."}
+            : activeModule === "history"
+            ? "Full session ledger with strategy breakdown and completed trade history."
+            : "50 autonomous BTC option scalping strategies on a separate $50,000 paper account."}
         </div>
       </div>
 
@@ -1697,6 +1701,8 @@ export default function TradingDashboard() {
           </div>
         </div>
       )}
+
+      {activeModule === "options" && <OptionsScalper />}
     </main>
   );
 }
