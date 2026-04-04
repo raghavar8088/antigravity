@@ -489,8 +489,7 @@ export default function TradingDashboard() {
     };
   });
 
-  const closedPnl = liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
-  const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
+  const closedPnl = liveStats?.aggregate?.totalPnl ?? liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const tradeCount = Math.max(liveStats?.aggregate.totalTrades ?? 0, liveTrades.length);
   const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
   const unrealized = livePositions.reduce((sum, position) => {
@@ -500,7 +499,9 @@ export default function TradingDashboard() {
       : (position.entryPrice - markPrice) * position.size;
     return sum + pnl;
   }, 0);
-  const balance = INITIAL_BALANCE + totalStrategyPnl + unrealized;
+  const derivedEquity = INITIAL_BALANCE + closedPnl + unrealized;
+  const balance = liveStats?.equity ?? derivedEquity;
+  const sessionPnl = balance - INITIAL_BALANCE;
   const priceSeries: ChartPricePoint[] = market.recentPrices.length > 0
     ? market.recentPrices
     : price > 0
@@ -641,7 +642,7 @@ export default function TradingDashboard() {
     : longOpenCount > shortOpenCount
       ? "Long Bias"
       : "Short Bias";
-  const totalReturnPct = ((balance - INITIAL_BALANCE) / INITIAL_BALANCE) * 100;
+  const totalReturnPct = (sessionPnl / INITIAL_BALANCE) * 100;
   const historyItems = liveTrades.map((trade) => ({
     id: trade.id,
     strategy: trade.strategyName,
@@ -685,7 +686,7 @@ export default function TradingDashboard() {
   };
 
   // ── Dynamic Color Intelligence ──────────────────────────────────
-  const dailyPnlValue = liveStats?.dailyPnl ?? closedPnl;
+  const dailyPnlValue = sessionPnl;
   useEffect(() => {
     const pct = (dailyPnlValue / INITIAL_BALANCE) * 100;
     const root = document.documentElement;
@@ -794,7 +795,7 @@ export default function TradingDashboard() {
       <DashboardHeader
         online={engineOnline}
         balance={balance}
-        dailyPnL={liveStats?.dailyPnl ?? closedPnl}
+        dailyPnL={sessionPnl}
         openPositions={livePositions.length}
         onResetSuccess={handleReset}
         onAdminEvent={handleAdminEvent}
@@ -802,11 +803,8 @@ export default function TradingDashboard() {
         onToggleCombat={() => setCombatMode((prev) => !prev)}
       />
 
-      <div className="glass-panel px-5 py-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div
-          className="flex items-center gap-1 self-start"
-          style={{ background: "var(--surface-2)", borderRadius: 999, padding: 4, border: "1px solid var(--border)" }}
-        >
+      <div className="glass-panel px-5 py-3 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {[
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
@@ -902,14 +900,14 @@ export default function TradingDashboard() {
                 />
                 <CompactMetric
                   label="PnL Today"
-                  value={formatUSD(liveStats?.dailyPnl ?? closedPnl, { signed: true })}
+                  value={formatUSD(sessionPnl, { signed: true })}
                   detail={`${totalReturnPct.toFixed(2)}% vs base`}
-                  accent={(liveStats?.dailyPnl ?? closedPnl) >= 0 ? "text-emerald-300" : "text-rose-300"}
+                  accent={sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
                 />
                 <CompactMetric
                   label="Closed PnL"
                   value={formatUSD(closedPnl, { signed: true })}
-                  detail={`${liveTrades.length} completed trades`}
+                  detail={`${tradeCount} completed trades`}
                   accent={closedPnl >= 0 ? "text-emerald-300" : "text-rose-300"}
                 />
                 <CompactMetric
@@ -1380,7 +1378,7 @@ export default function TradingDashboard() {
             <SummaryCard label="Best Trade" value={formatUSD(liveStats?.aggregate.bestTrade ?? 0, { signed: true })} accent="text-green-400" />
             <SummaryCard label="Worst Trade" value={formatUSD(liveStats?.aggregate.worstTrade ?? 0, { signed: true })} accent="text-red-400" />
             <SummaryCard label="Total Return" value={`${(((balance - INITIAL_BALANCE) / INITIAL_BALANCE) * 100).toFixed(2)}%`} accent={balance >= INITIAL_BALANCE ? "text-green-400" : "text-red-400"} />
-            <SummaryCard label="Total Strategy PnL" value={formatUSD(totalStrategyPnl, { signed: true })} accent={totalStrategyPnl >= 0 ? "text-green-400" : "text-red-400"} />
+            <SummaryCard label="Total Strategy PnL" value={formatUSD(closedPnl, { signed: true })} accent={closedPnl >= 0 ? "text-green-400" : "text-red-400"} />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
