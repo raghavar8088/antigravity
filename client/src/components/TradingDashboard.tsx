@@ -826,14 +826,14 @@ export default function TradingDashboard() {
           style={{ color: "var(--text-secondary)" }}
         >
           {activeModule === "dashboard"
-            ? "Core view only: BTC price, live positions, equity, PnL, session ledger, and key stats."
+            ? "FUTURES ACCOUNT — BTC price, live futures positions, equity, PnL, and key stats. Options data is fully separate."
             : activeModule === "engine"
-            ? "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."
+            ? "FUTURES ACCOUNT — Advanced charts, AI panels, controls, strategy analytics, and logs. No options data here."
             : activeModule === "history"
-            ? "Full session ledger with strategy breakdown and completed trade history."
+            ? "FUTURES ACCOUNT — Completed futures trade ledger and strategy breakdown. Options trades are logged separately."
             : activeModule === "options"
-            ? "50 autonomous BTC option scalping strategies on a separate $1,000,000 paper account."
-            : "Live BTC option chain — all strikes, calls & puts, full Greeks, IV smile. Delta Exchange layout."}
+            ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account. Zero overlap with futures."
+            : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
 

@@ -118,7 +118,7 @@ export default function DashboardHeader({
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="summary-card min-w-[170px]">
-            <div className="summary-label">Equity</div>
+            <div className="summary-label">Futures Equity</div>
             <div className="summary-value">${balance.toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
@@ -126,7 +126,7 @@ export default function DashboardHeader({
           </div>
 
           <div className="summary-card min-w-[170px]">
-            <div className="summary-label">PnL Today</div>
+            <div className="summary-label">Futures PnL Today</div>
             <div className={`summary-value ${positive ? "profit-positive" : "profit-negative"}`}>
               {formatSignedCurrency(dailyPnL)}
             </div>

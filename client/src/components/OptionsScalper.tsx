@@ -216,7 +216,7 @@ export default function OptionsScalper() {
   };
 
   const netPnL = stats?.totalPnl ?? 0;
-  const equity = stats?.equity ?? 50000;
+  const equity = stats?.equity ?? 1000000;
   const winRate = stats?.winRate ?? 0;
 
   return (
@@ -224,12 +224,20 @@ export default function OptionsScalper() {
       {/* Header */}
       <div className="glass-panel px-6 py-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.2em", color: "var(--text-muted)", textTransform: "uppercase" }}>
-            Module
+          <div className="flex items-center gap-2 flex-wrap">
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.2em", color: "var(--text-muted)", textTransform: "uppercase" }}>
+              Options Module
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", background: "rgba(168,85,247,0.12)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.25)", borderRadius: 6, padding: "2px 8px" }}>
+              SEPARATE ACCOUNT
+            </span>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 6, padding: "2px 8px" }}>
+              NOT FUTURES
+            </span>
           </div>
           <div className="mt-1 text-xl font-bold text-white">BTC Option Scalper</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-            50 autonomous option buying strategies — $50,000 paper account — separate from futures engine
+            50 autonomous option buying strategies · Independent $1,000,000 paper account · Zero overlap with futures engine
           </div>
         </div>
         <button
