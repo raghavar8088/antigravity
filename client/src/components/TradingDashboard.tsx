@@ -811,7 +811,7 @@ export default function TradingDashboard() {
       ) : (
         <DashboardHeader
           online={engineOnline}
-          balance={balance}
+          balance={INITIAL_BALANCE + closedPnl}
           dailyPnL={sessionPnl}
           openPositions={livePositions.length}
           onResetSuccess={handleReset}
@@ -912,7 +912,7 @@ export default function TradingDashboard() {
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <CompactMetric
                   label="Futures Equity"
-                  value={formatUSD(balance)}
+                  value={formatUSD(INITIAL_BALANCE + closedPnl)}
                   detail={`Base ${formatUSD(INITIAL_BALANCE)}`}
                   accent="text-white"
                 />

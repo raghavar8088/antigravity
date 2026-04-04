@@ -6,7 +6,7 @@ import { useState } from "react";
 type DashboardHeaderProps = {
   online: boolean;
   balance: number;
-  dailyPnL: number;
+  dailyPnL?: number;
   openPositions: number;
   onResetSuccess?: () => void;
   onAdminEvent?: (message: string, tone: "admin" | "info") => void;
@@ -14,17 +14,10 @@ type DashboardHeaderProps = {
   onToggleCombat?: () => void;
 };
 
-function formatSignedCurrency(value: number) {
-  return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 export default function DashboardHeader({
   online,
   balance,
-  dailyPnL,
   openPositions,
   onResetSuccess,
   onAdminEvent,
@@ -59,9 +52,6 @@ export default function DashboardHeader({
   };
 
   const isBusy = activeAction !== null;
-  const invested = balance - dailyPnL;
-  const pnlPct = invested > 0 ? (dailyPnL / invested) * 100 : 0;
-  const positive = dailyPnL >= 0;
 
   return (
     <header className="cockpit-header">
@@ -125,18 +115,7 @@ export default function DashboardHeader({
             })}</div>
           </div>
 
-          <div className="summary-card min-w-[170px]">
-            <div className="summary-label">Futures PnL Today</div>
-            <div className={`summary-value ${positive ? "profit-positive" : "profit-negative"}`}>
-              {formatSignedCurrency(dailyPnL)}
-            </div>
-            <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-              {positive ? "+" : ""}
-              {pnlPct.toFixed(Math.abs(pnlPct) < 0.01 && pnlPct !== 0 ? 4 : 2)}%
-            </div>
-          </div>
-
-          <div className="metric-card min-w-[120px]">
+<div className="metric-card min-w-[120px]">
             <div className="metric-label">Open</div>
             <div className="metric-value">{openPositions}</div>
           </div>
