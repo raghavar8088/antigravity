@@ -119,9 +119,12 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64)
 		gainPct := (result.Premium - pos.EntryPremium) / pos.EntryPremium
 
 		switch {
-		case gainPct >= s.def.TakeProfitPct:
+		// User-requested reverse logic for the options scalper:
+		// treat the configured stop-loss threshold as the take-profit trigger,
+		// and treat the configured take-profit threshold as the stop-loss trigger.
+		case gainPct >= s.def.StopLossPct:
 			exitReason = ExitTP
-		case gainPct <= -s.def.StopLossPct:
+		case gainPct <= -s.def.TakeProfitPct:
 			exitReason = ExitSL
 		case now.After(pos.ExpiryTime):
 			exitReason = ExitExpiry
