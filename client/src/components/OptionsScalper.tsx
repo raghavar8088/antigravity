@@ -211,7 +211,7 @@ export default function OptionsScalper() {
   const { positions, trades, strategies, stats } = useOptions();
 
   const handleReset = async () => {
-    if (!confirm("Reset the options paper account to $50,000? All history will be cleared.")) return;
+    if (!confirm("Reset the options paper account to $1,000,000? All history will be cleared.")) return;
     await fetch(`${API_URL}/api/options/reset`, { method: "POST" });
   };
 
@@ -246,8 +246,8 @@ export default function OptionsScalper() {
         <MetricCard
           label="Options Equity"
           value={`$${fmt(equity)}`}
-          sub={`Cash: $${fmt(stats?.balance ?? 50000)}`}
-          accent={equity >= 50000 ? "text-emerald-300" : "text-rose-300"}
+          sub={`Cash: $${fmt(stats?.balance ?? 1000000)}`}
+          accent={equity >= 1000000 ? "text-emerald-300" : "text-rose-300"}
         />
         <MetricCard
           label="Net PnL"

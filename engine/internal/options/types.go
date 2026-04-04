@@ -78,6 +78,7 @@ type StrategyStatus struct {
 	TotalPnL    float64 `json:"totalPnl"`
 	WinRate     float64 `json:"winRate"`
 	Status      string  `json:"status"` // READY | IN_POSITION | COOLING
+	HasPosition bool    `json:"hasPosition"`
 }
 
 // AggregateStats for the options engine

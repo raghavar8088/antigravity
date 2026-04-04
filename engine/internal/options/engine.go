@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const initialOptionsBalance = 50000.0 // $50,000 paper options account
+const initialOptionsBalance = 1000000.0 // $1,000,000 paper options account
 
 // strategyState holds the runtime state for a single strategy
 type strategyState struct {
