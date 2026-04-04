@@ -35,6 +35,30 @@ function formatElapsedSeconds(total: number) {
   return `${m}m ${s}s`;
 }
 
+function formatTradeDuration(entryTime: string, exitTime: string) {
+  const entry = new Date(entryTime);
+  const exit = new Date(exitTime);
+
+  if (Number.isNaN(entry.getTime()) || Number.isNaN(exit.getTime())) {
+    return "-";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor((exit.getTime() - entry.getTime()) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
+}
+
 // ── Design-system primitives (mirrors Dashboard) ─────────────────────────────
 
 function CompactMetric({ label, value, detail, accent = "" }: {
@@ -318,49 +342,133 @@ function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] })
 // ── Trade history ─────────────────────────────────────────────────────────────
 
 function TradesPanel({ trades }: { trades: OptionTrade[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visibleTrades = showAll ? trades : trades.slice(0, 10);
+  const totalTrades = trades.length;
+  const wins = trades.filter((trade) => trade.netPnl > 0).length;
+  const losses = trades.filter((trade) => trade.netPnl < 0).length;
+  const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+  const totalPnl = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const grossProfit = trades.filter((trade) => trade.netPnl > 0).reduce((sum, trade) => sum + trade.netPnl, 0);
+  const grossLoss = trades.filter((trade) => trade.netPnl < 0).reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+
   return (
     <div className="glass-panel px-5 py-6 md:px-6">
-      <h2 className="mb-5" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
-        COMPLETED OPTION TRADES
-        <span className="ml-3 font-mono font-normal" style={{ color: "var(--text-muted)", fontSize: 10 }}>({trades.length} total)</span>
-      </h2>
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+          OPTION TRADE HISTORY
+          <span className="ml-3 font-mono font-normal" style={{ color: "var(--text-muted)", fontSize: 10 }}>({totalTrades} total)</span>
+        </h2>
+        {trades.length > 10 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="btn-gold min-h-[32px] px-4 py-1.5 text-xs"
+          >
+            {showAll ? "Show Latest 10" : `Show All ${trades.length}`}
+          </button>
+        ) : null}
+      </div>
 
       {trades.length === 0 ? (
         <div className="rounded-2xl border border-dashed py-12 text-center" style={{ borderColor: "var(--border)", color: "var(--text-muted)", fontSize: 13 }}>
           No completed option trades yet.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left" style={{ minWidth: 860 }}>
-            <thead>
-              <tr className="border-b" style={{ borderColor: "var(--border)" }}>
-                {["Strategy", "Type", "Strike", "Entry", "Exit", "Return", "Reason", "Net PnL"].map((h, i) => (
-                  <th key={h} className={`py-2 px-3 text-[10px] font-bold uppercase tracking-widest ${i === 7 ? "text-right" : ""}`}
-                    style={{ color: "var(--text-muted)" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {trades.slice(0, 100).map((t) => (
-                <tr key={t.id} className="border-b transition-colors hover:bg-black/[0.015]" style={{ borderColor: "var(--border-subtle)" }}>
-                  <td className="py-2.5 px-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.strategyName}</td>
-                  <td className="py-2.5 px-3"><TypeBadge type={t.optionType} /></td>
-                  <td className="py-2.5 px-3 font-mono text-sm" style={{ color: "var(--text-primary)" }}>${fmt(t.strike, 0)}</td>
-                  <td className="py-2.5 px-3 font-mono text-sm" style={{ color: "var(--text-secondary)" }}>${fmt(t.entryPremium)}</td>
-                  <td className="py-2.5 px-3 font-mono text-sm" style={{ color: "var(--text-secondary)" }}>${fmt(t.exitPremium)}</td>
-                  <td className={`py-2.5 px-3 font-mono text-sm font-semibold ${t.returnPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtPct(t.returnPct, true)}
-                  </td>
-                  <td className="py-2.5 px-3"><ExitBadge reason={t.exitReason} /></td>
-                  <td className={`py-2.5 px-3 text-right font-mono text-sm font-bold ${t.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtUSD(t.netPnl, { signed: true })}
-                  </td>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <SummaryCard
+              label="Trades"
+              value={`${totalTrades}`}
+              accent="text-zinc-900"
+            />
+            <SummaryCard
+              label="Win Rate"
+              value={`${winRate.toFixed(1)}%`}
+              accent={winRate >= 50 ? "text-emerald-600" : "text-rose-600"}
+            />
+            <SummaryCard
+              label="Net PnL"
+              value={fmtUSD(totalPnl, { signed: true })}
+              accent={totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"}
+            />
+            <SummaryCard
+              label="Profit Factor"
+              value={profitFactor.toFixed(2)}
+              accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"}
+            />
+            <SummaryCard
+              label="W / L"
+              value={`${wins}/${losses}`}
+              accent="text-zinc-900"
+            />
+          </div>
+
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium">Strategy</th>
+                  <th className="px-4 py-3 font-medium">Contract</th>
+                  <th className="px-4 py-3 font-medium">Premium</th>
+                  <th className="px-4 py-3 font-medium">BTC Move</th>
+                  <th className="px-4 py-3 font-medium">Duration</th>
+                  <th className="px-4 py-3 font-medium">Reason</th>
+                  <th className="px-4 py-3 font-medium text-right">Return</th>
+                  <th className="px-4 py-3 font-medium text-right">Net PnL</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleTrades.map((t) => (
+                  <tr key={t.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                    <td className="px-4 py-3 text-xs">
+                      <div>
+                        <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(t.exitTime)}</div>
+                        <div style={{ color: "var(--text-secondary)" }}>{formatShortDate(t.exitTime)}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.strategyName}</div>
+                      <div className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{t.id}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <TypeBadge type={t.optionType} />
+                        <span className="font-mono" style={{ color: "var(--text-primary)" }}>${fmt(t.strike, 0)}</span>
+                      </div>
+                      <div style={{ color: "var(--text-secondary)", marginTop: 4 }}>
+                        {t.expiryMins}m expiry
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In ${fmt(t.entryPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Out ${fmt(t.exitPremium)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>
+                        {fmtUSD(t.entryBtcPrice)} {"->"} {fmtUSD(t.exitBtcPrice)}
+                      </div>
+                      <div style={{ color: "var(--text-secondary)" }}>
+                        Qty {fmt(t.quantity, 2)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {formatTradeDuration(t.entryTime, t.exitTime)}
+                    </td>
+                    <td className="px-4 py-3"><ExitBadge reason={t.exitReason} /></td>
+                    <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${t.returnPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {fmtPct(t.returnPct, true)}
+                    </td>
+                    <td className={`px-4 py-3 text-right font-mono text-sm font-bold ${t.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {fmtUSD(t.netPnl, { signed: true })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
