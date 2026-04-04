@@ -23,15 +23,15 @@ type strategyState struct {
 // Engine is the fully autonomous BTC option scalping engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
-	mu          sync.RWMutex
-	states      []*strategyState
-	trades      []OptionTrade
-	balance     float64
-	lastPrice   float64
-	priceHist   []float64 // raw tick prices (for current price + IV)
-	minuteBars  []float64 // 1-minute sampled prices (for indicators)
-	lastMinute  int64     // unix-minute of last sampled bar
-	tradeSeq    int
+	mu         sync.RWMutex
+	states     []*strategyState
+	trades     []OptionTrade
+	balance    float64
+	lastPrice  float64
+	priceHist  []float64 // raw tick prices (for current price + IV)
+	minuteBars []float64 // 1-minute sampled prices (for indicators)
+	lastMinute int64     // unix-minute of last sampled bar
+	tradeSeq   int
 }
 
 // NewEngine initialises the options engine with the live-approved strategy set.
@@ -356,8 +356,13 @@ func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	stats := e.aggregateStatsLocked()
+	json.NewEncoder(w).Encode(stats)
+}
+
+func (e *Engine) aggregateStatsLocked() AggregateStats {
 	var totalTrades, wins, losses, openCount int
-	var totalPnL, totalPremiumSpent, unrealizedPnL float64
+	var totalPnL, totalPremiumSpent, unrealizedPnL, openMarketValue float64
 
 	for _, s := range e.states {
 		totalTrades += s.stats.TotalTrades
@@ -368,6 +373,7 @@ func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 			openCount++
 			unrealizedPnL += s.position.UnrealizedPnL
 			totalPremiumSpent += s.position.CostBasis
+			openMarketValue += s.position.CurrentPremium * s.position.Quantity
 		}
 	}
 	for _, t := range e.trades {
@@ -379,9 +385,9 @@ func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 		winRate = float64(wins) / float64(totalTrades) * 100
 	}
 
-	stats := AggregateStats{
+	return AggregateStats{
 		Balance:           e.balance,
-		Equity:            e.balance + unrealizedPnL,
+		Equity:            e.balance + openMarketValue,
 		TotalTrades:       totalTrades,
 		OpenPositions:     openCount,
 		TotalWins:         wins,
@@ -391,7 +397,6 @@ func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 		TotalPremiumSpent: totalPremiumSpent,
 		UnrealizedPnL:     unrealizedPnL,
 	}
-	json.NewEncoder(w).Encode(stats)
 }
 
 func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {

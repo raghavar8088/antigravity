@@ -517,8 +517,8 @@ export default function OptionsScalper() {
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
   const closedPnl = stats?.totalPnl ?? trades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const unrealized = stats?.unrealizedPnl ?? positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
-  const equity = stats?.equity ?? INITIAL_OPTIONS_BALANCE + closedPnl + unrealized;
-  const sessionPnl = equity - INITIAL_OPTIONS_BALANCE;
+  const sessionPnl = closedPnl + unrealized;
+  const equity = INITIAL_OPTIONS_BALANCE + sessionPnl;
   const totalReturnPct = (sessionPnl / INITIAL_OPTIONS_BALANCE) * 100;
   const grossProfit = trades.filter((trade) => trade.netPnl > 0).reduce((sum, trade) => sum + trade.netPnl, 0);
   const grossLoss = trades.filter((trade) => trade.netPnl < 0).reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
@@ -711,7 +711,7 @@ export default function OptionsScalper() {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Total PnL</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Strategy PnL</div>
             <div className={`mt-1 text-2xl font-bold ${bestStrategy.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{fmtUSD(bestStrategy.totalPnl, { signed: true })}</div>
           </div>
           <div className="flex items-center gap-2 ml-auto">
