@@ -17,7 +17,7 @@ const (
 	ExitExpiry = "EXPIRY"
 )
 
-// StrategyDef configures one of the 50 option scalping strategies
+// StrategyDef configures one option scalping strategy
 type StrategyDef struct {
 	Name          string
 	Type          OptionType
