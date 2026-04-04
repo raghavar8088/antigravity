@@ -489,7 +489,6 @@ export default function TradingDashboard() {
 
   const closedPnl = liveTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const totalStrategyPnl = liveStats?.aggregate?.totalPnl ?? closedPnl;
-  const balance = liveStats?.equity ?? liveStats?.balance ?? totalStrategyPnl + engineBalance;
   const tradeCount = Math.max(liveStats?.aggregate.totalTrades ?? 0, liveTrades.length);
   const price = market.price > 0 ? market.price : liveStats?.lastPrice ?? 0;
   const unrealized = livePositions.reduce((sum, position) => {
@@ -499,6 +498,7 @@ export default function TradingDashboard() {
       : (position.entryPrice - markPrice) * position.size;
     return sum + pnl;
   }, 0);
+  const balance = INITIAL_BALANCE + totalStrategyPnl + unrealized;
   const priceSeries: ChartPricePoint[] = market.recentPrices.length > 0
     ? market.recentPrices
     : price > 0
