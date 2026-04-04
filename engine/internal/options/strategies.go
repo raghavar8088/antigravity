@@ -1,13 +1,36 @@
 package options
 
-// BuildStrategies returns all 50 BTC option scalping strategies.
+const (
+	minLiveExpiryMinutes = 60
+	maxLiveStrikePctOTM  = 0.005
+)
+
+// Strategy library for the BTC option scalper.
 // Each strategy is completely independent — it manages its own position,
 // uses its own signal, and does NOT share state with the main futures engine.
 //
 // R:R rules enforced: TakeProfitPct >= 2x StopLossPct on all strategies.
 // ATM options preferred for scalps (faster delta response).
 // OTM only used with higher TP targets and longer expiry.
+// BuildStrategies returns only the live-approved option-buying strategies.
+// Weakest long-premium setups are filtered out before runtime:
+// ultra-short expiries (< 60 minutes) and deeper OTM strikes (> 0.5%).
 func BuildStrategies() []StrategyDef {
+	all := buildAllStrategies()
+	filtered := make([]StrategyDef, 0, len(all))
+	for _, def := range all {
+		if isLiveApprovedStrategy(def) {
+			filtered = append(filtered, def)
+		}
+	}
+	return filtered
+}
+
+func isLiveApprovedStrategy(def StrategyDef) bool {
+	return def.ExpiryMinutes >= minLiveExpiryMinutes && def.StrikePctOTM <= maxLiveStrikePctOTM
+}
+
+func buildAllStrategies() []StrategyDef {
 	return []StrategyDef{
 		// ── MOMENTUM CALLS (1-10) ─────────────────────────────────────────────
 		{

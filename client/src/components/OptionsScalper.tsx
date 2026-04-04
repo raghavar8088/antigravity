@@ -287,20 +287,24 @@ function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] })
   const [showAll, setShowAll] = useState(false);
   const sorted = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl);
   const visible = showAll ? sorted : sorted.slice(0, 20);
+  const totalStrategies = strategies.length;
+  const topCount = Math.min(20, totalStrategies);
 
   return (
     <div className="glass-panel px-5 py-6 md:px-6">
       <div className="mb-5 flex items-center justify-between gap-3">
         <h2 style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
-          ALL 50 STRATEGIES - LEADERBOARD
+          ALL {totalStrategies} STRATEGIES - LEADERBOARD
         </h2>
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="btn-gold text-xs px-4 py-1.5 min-h-[32px]"
-        >
-          {showAll ? "Show Top 20" : "Show All 50"}
-        </button>
+        {totalStrategies > topCount ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="btn-gold text-xs px-4 py-1.5 min-h-[32px]"
+          >
+            {showAll ? `Show Top ${topCount}` : `Show All ${totalStrategies}`}
+          </button>
+        ) : null}
       </div>
 
       <div className="overflow-x-auto">
@@ -529,7 +533,8 @@ export default function OptionsScalper() {
   const exposureSummary = openCount === 0 ? "No open exposure" : `${callCount} calls / ${putCount} puts`;
   const bestStrategy = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl)[0] ?? null;
   const latestTrade = trades[0] ?? null;
-  const activeStrategies = strategies.filter((s) => s.status !== "COOLING").length || strategies.length;
+  const totalStrategies = strategies.length;
+  const activeStrategies = strategies.filter((s) => s.status !== "COOLING").length || totalStrategies;
 
   // ── Streak ──────────────────────────────────────────────────────
   const streak = (() => {
@@ -574,7 +579,7 @@ export default function OptionsScalper() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
                 <BadgePill label="Options Engine Online" tone="positive" />
-                <BadgePill label="50 Strategies Active" tone="info" />
+                <BadgePill label={`${totalStrategies} Strategies Active`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
                 <BadgePill label="Not Futures" tone="neutral" />
               </div>
@@ -620,7 +625,7 @@ export default function OptionsScalper() {
             <CompactMetric
               label="Open Exposure"
               value={exposureSummary}
-              detail={`${openCount} of 50 strategies in position`}
+              detail={`${openCount} of ${totalStrategies} strategies in position`}
               accent="text-zinc-900"
             />
           </div>

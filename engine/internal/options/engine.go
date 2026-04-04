@@ -34,7 +34,7 @@ type Engine struct {
 	tradeSeq    int
 }
 
-// NewEngine initialises the options engine with 50 strategies.
+// NewEngine initialises the options engine with the live-approved strategy set.
 func NewEngine() *Engine {
 	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
@@ -85,7 +85,7 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("[OPTIONS ENGINE] 🚀 BTC Option Scalper started — 50 strategies active")
+	log.Printf("[OPTIONS ENGINE] 🚀 BTC Option Scalper started — %d live-approved strategies active", len(e.states))
 
 	for {
 		select {
