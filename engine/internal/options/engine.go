@@ -106,12 +106,8 @@ func (e *Engine) tick() {
 		return
 	}
 
-	// Need at least 30 minute bars before we start trading
-	// (allows indicators to warm up properly)
-	if len(e.minuteBars) < 30 {
-		return
-	}
-
+	// Let each signal enforce its own lookback instead of blocking the whole
+	// engine behind a fixed 30-minute startup warmup.
 	// Estimate IV from minute bars (correct annualization for 1-min data)
 	iv := EstimateIV(e.minuteBars)
 
