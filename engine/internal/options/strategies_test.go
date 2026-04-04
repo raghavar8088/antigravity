@@ -12,16 +12,18 @@ func TestBuildStrategiesFiltersWeakShortExpiryAndOTMStrategies(t *testing.T) {
 	if len(live) == 0 {
 		t.Fatal("expected live-approved strategy set to be non-empty")
 	}
-	if len(live) >= len(all) {
-		t.Fatalf("expected live-approved set (%d) to be smaller than full library (%d)", len(live), len(all))
-	}
-
 	for _, def := range live {
 		if def.ExpiryMinutes < minLiveExpiryMinutes {
 			t.Fatalf("strategy %s should have been filtered for expiry %d", def.Name, def.ExpiryMinutes)
 		}
 		if def.StrikePctOTM > maxLiveStrikePctOTM {
 			t.Fatalf("strategy %s should have been filtered for strike pct %.4f", def.Name, def.StrikePctOTM)
+		}
+	}
+
+	for _, def := range all {
+		if def.ExpiryMinutes < minLiveExpiryMinutes || def.StrikePctOTM > maxLiveStrikePctOTM {
+			t.Fatalf("full strategy library still contains a weak live-disallowed strategy: %s", def.Name)
 		}
 	}
 }
