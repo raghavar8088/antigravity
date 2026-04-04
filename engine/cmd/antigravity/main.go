@@ -361,6 +361,9 @@ func main() {
 	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
 	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
 
+	// BTC Option Chain endpoint
+	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
+
 	// Admin endpoints
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)

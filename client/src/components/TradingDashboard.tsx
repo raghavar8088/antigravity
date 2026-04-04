@@ -13,6 +13,7 @@ import AIInsightPanel from "@/components/AIInsightPanel";
 import CommandCenter from "@/components/CommandCenter";
 import FearGreedWidget from "@/components/FearGreedWidget";
 import OptionsScalper from "@/components/OptionsScalper";
+import BTCOptionChain from "@/components/BTCOptionChain";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -303,7 +304,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options">("dashboard");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain">("dashboard");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -811,10 +812,11 @@ export default function TradingDashboard() {
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
             { key: "options", label: "BTC Option Scalper" },
+            { key: "chain", label: "BTC Option Chain" },
           ].map((module) => (
             <button
               key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options")}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain")}
               className={`groww-tab${activeModule === module.key ? " active" : ""}`}
             >
               {module.label}
@@ -831,7 +833,9 @@ export default function TradingDashboard() {
             ? "Trade Engine contains the advanced charts, AI panels, controls, strategy analytics, and logs."
             : activeModule === "history"
             ? "Full session ledger with strategy breakdown and completed trade history."
-            : "50 autonomous BTC option scalping strategies on a separate $50,000 paper account."}
+            : activeModule === "options"
+            ? "50 autonomous BTC option scalping strategies on a separate $1,000,000 paper account."
+            : "Live BTC option chain — all strikes, calls & puts, full Greeks, IV smile. Delta Exchange layout."}
         </div>
       </div>
 
@@ -1703,6 +1707,8 @@ export default function TradingDashboard() {
       )}
 
       {activeModule === "options" && <OptionsScalper />}
+
+      {activeModule === "chain" && <BTCOptionChain />}
     </main>
   );
 }
