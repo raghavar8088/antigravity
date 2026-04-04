@@ -94,3 +94,24 @@ type AggregateStats struct {
 	TotalPremiumSpent float64 `json:"totalPremiumSpent"`
 	UnrealizedPnL     float64 `json:"unrealizedPnl"`
 }
+
+// PersistedStrategyState stores the runtime state for one options strategy.
+type PersistedStrategyState struct {
+	Name        string          `json:"name"`
+	Position    *OptionPosition `json:"position,omitempty"`
+	Stats       StrategyStatus  `json:"stats"`
+	LastTradeAt time.Time       `json:"lastTradeAt"`
+}
+
+// PersistedState is the durable snapshot of the options engine.
+type PersistedState struct {
+	Balance    float64                  `json:"balance"`
+	LastPrice  float64                  `json:"lastPrice"`
+	LastMinute int64                    `json:"lastMinute"`
+	TradeSeq   int                      `json:"tradeSeq"`
+	PriceHist  []float64                `json:"priceHist"`
+	MinuteBars []float64                `json:"minuteBars"`
+	Trades     []OptionTrade            `json:"trades"`
+	Strategies []PersistedStrategyState `json:"strategies"`
+	SavedAt    time.Time                `json:"savedAt"`
+}

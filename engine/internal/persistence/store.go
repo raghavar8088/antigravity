@@ -26,6 +26,19 @@ type EngineState struct {
 	SavedAt     time.Time       `json:"savedAt"`
 }
 
+// OptionsState is the persisted snapshot for the BTC options engine.
+type OptionsState struct {
+	Balance    float64         `json:"balance"`
+	LastPrice  float64         `json:"lastPrice"`
+	LastMinute int64           `json:"lastMinute"`
+	TradeSeq   int             `json:"tradeSeq"`
+	PriceHist  json.RawMessage `json:"priceHist"`
+	MinuteBars json.RawMessage `json:"minuteBars"`
+	Trades     json.RawMessage `json:"trades"`
+	Strategies json.RawMessage `json:"strategies"`
+	SavedAt    time.Time       `json:"savedAt"`
+}
+
 // Store handles all database persistence operations.
 type Store struct {
 	pool *pgxpool.Pool
@@ -78,6 +91,22 @@ func NewStore(ctx context.Context) (*Store, error) {
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update engine_state balance default: %w", err)
+	}
+
+	for _, stmt := range []string{
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_last_minute BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_trade_seq INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_trades_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_strategies_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+	} {
+		if _, err = pool.Exec(ctx, stmt); err != nil {
+			return nil, fmt.Errorf("failed to migrate options columns: %w", err)
+		}
 	}
 
 	// Ensure a row exists
@@ -198,6 +227,79 @@ func (s *Store) SaveState(ctx context.Context, state *EngineState) error {
 		state.TotalTrades, state.TotalWins, state.TotalLosses, state.TotalPnL,
 	)
 	return err
+}
+
+// LoadOptionsState retrieves the last saved BTC options engine snapshot.
+func (s *Store) LoadOptionsState(ctx context.Context) (*OptionsState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var state OptionsState
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT options_balance, options_last_price, options_last_minute, options_trade_seq,
+		       options_price_hist_json, options_minute_bars_json,
+		       options_trades_json, options_strategies_json, options_saved_at
+		FROM engine_state WHERE id = 1
+	`).Scan(
+		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
+		&priceHistJSON, &minuteBarsJSON,
+		&tradesJSON, &strategiesJSON, &state.SavedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load options state: %w", err)
+	}
+
+	state.PriceHist = json.RawMessage(priceHistJSON)
+	state.MinuteBars = json.RawMessage(minuteBarsJSON)
+	state.Trades = json.RawMessage(tradesJSON)
+	state.Strategies = json.RawMessage(strategiesJSON)
+	return &state, nil
+}
+
+// SaveOptionsState persists the BTC options engine snapshot.
+func (s *Store) SaveOptionsState(ctx context.Context, state *OptionsState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	priceHistJSON := string(state.PriceHist)
+	if priceHistJSON == "" {
+		priceHistJSON = "[]"
+	}
+	minuteBarsJSON := string(state.MinuteBars)
+	if minuteBarsJSON == "" {
+		minuteBarsJSON = "[]"
+	}
+	tradesJSON := string(state.Trades)
+	if tradesJSON == "" {
+		tradesJSON = "[]"
+	}
+	strategiesJSON := string(state.Strategies)
+	if strategiesJSON == "" {
+		strategiesJSON = "[]"
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		UPDATE engine_state SET
+			options_balance = $1,
+			options_last_price = $2,
+			options_last_minute = $3,
+			options_trade_seq = $4,
+			options_price_hist_json = $5,
+			options_minute_bars_json = $6,
+			options_trades_json = $7,
+			options_strategies_json = $8,
+			options_saved_at = NOW()
+		WHERE id = 1
+	`,
+		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
+		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save options state: %w", err)
+	}
+	return nil
 }
 
 // ResetState writes a clean default state to the database, effectively

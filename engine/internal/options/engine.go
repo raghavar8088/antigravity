@@ -23,15 +23,16 @@ type strategyState struct {
 // Engine is the fully autonomous BTC option scalping engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
-	mu         sync.RWMutex
-	states     []*strategyState
-	trades     []OptionTrade
-	balance    float64
-	lastPrice  float64
-	priceHist  []float64 // raw tick prices (for current price + IV)
-	minuteBars []float64 // 1-minute sampled prices (for indicators)
-	lastMinute int64     // unix-minute of last sampled bar
-	tradeSeq   int
+	mu          sync.RWMutex
+	states      []*strategyState
+	trades      []OptionTrade
+	balance     float64
+	lastPrice   float64
+	priceHist   []float64 // raw tick prices (for current price + IV)
+	minuteBars  []float64 // 1-minute sampled prices (for indicators)
+	lastMinute  int64     // unix-minute of last sampled bar
+	tradeSeq    int
+	persistHook func(PersistedState)
 }
 
 // NewEngine initialises the options engine with the live-approved strategy set.
@@ -52,6 +53,159 @@ func NewEngine() *Engine {
 		states:  states,
 		balance: initialOptionsBalance,
 	}
+}
+
+// SetStateSaveHook registers a callback used to persist options state changes.
+func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.persistHook = fn
+}
+
+// ExportState returns a durable snapshot of the options engine.
+func (e *Engine) ExportState() PersistedState {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.exportStateLocked()
+}
+
+func (e *Engine) exportStateLocked() PersistedState {
+	trades := make([]OptionTrade, len(e.trades))
+	copy(trades, e.trades)
+
+	priceHist := make([]float64, len(e.priceHist))
+	copy(priceHist, e.priceHist)
+
+	minuteBars := make([]float64, len(e.minuteBars))
+	copy(minuteBars, e.minuteBars)
+
+	strategies := make([]PersistedStrategyState, len(e.states))
+	for i, s := range e.states {
+		var posCopy *OptionPosition
+		if s.position != nil {
+			cp := *s.position
+			posCopy = &cp
+		}
+		strategies[i] = PersistedStrategyState{
+			Name:        s.def.Name,
+			Position:    posCopy,
+			Stats:       s.stats,
+			LastTradeAt: s.lastTradeAt,
+		}
+	}
+
+	return PersistedState{
+		Balance:    e.balance,
+		LastPrice:  e.lastPrice,
+		LastMinute: e.lastMinute,
+		TradeSeq:   e.tradeSeq,
+		PriceHist:  priceHist,
+		MinuteBars: minuteBars,
+		Trades:     trades,
+		Strategies: strategies,
+		SavedAt:    time.Now().UTC(),
+	}
+}
+
+// RestoreState loads a previously persisted options-engine snapshot.
+func (e *Engine) RestoreState(state PersistedState) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if state.Balance > 0 {
+		e.balance = state.Balance
+	}
+	e.lastPrice = state.LastPrice
+	e.lastMinute = state.LastMinute
+	e.tradeSeq = state.TradeSeq
+	e.priceHist = append([]float64(nil), state.PriceHist...)
+	e.minuteBars = append([]float64(nil), state.MinuteBars...)
+	e.trades = append([]OptionTrade(nil), state.Trades...)
+
+	byName := make(map[string]PersistedStrategyState, len(state.Strategies))
+	for _, persisted := range state.Strategies {
+		byName[persisted.Name] = persisted
+	}
+
+	for _, s := range e.states {
+		persisted, ok := byName[s.def.Name]
+		if !ok {
+			s.position = nil
+			s.lastTradeAt = time.Time{}
+			s.stats = StrategyStatus{
+				Name:       s.def.Name,
+				OptionType: string(s.def.Type),
+				Status:     "READY",
+			}
+			continue
+		}
+
+		s.lastTradeAt = persisted.LastTradeAt
+		s.stats = persisted.Stats
+		if s.stats.Name == "" {
+			s.stats.Name = s.def.Name
+		}
+		if s.stats.OptionType == "" {
+			s.stats.OptionType = string(s.def.Type)
+		}
+
+		if persisted.Position != nil {
+			cp := *persisted.Position
+			s.position = &cp
+			s.stats.HasPosition = true
+			if s.stats.Status == "" || s.stats.Status == "READY" {
+				s.stats.Status = "IN_POSITION"
+			}
+		} else {
+			s.position = nil
+			s.stats.HasPosition = false
+			if s.stats.Status == "" || s.stats.Status == "IN_POSITION" {
+				s.stats.Status = "READY"
+			}
+		}
+	}
+}
+
+// ResetAccount wipes the options account in memory and returns the new snapshot.
+func (e *Engine) ResetAccount() PersistedState {
+	e.ResetAccount()
+
+	snapshot := e.exportStateLocked()
+	e.schedulePersistLocked(snapshot)
+	return snapshot
+}
+
+// ClearHistory removes completed-trade history while preserving open positions.
+func (e *Engine) ClearHistory() PersistedState {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.trades = nil
+	for _, s := range e.states {
+		s.stats.TotalTrades = 0
+		s.stats.Wins = 0
+		s.stats.Losses = 0
+		s.stats.TotalPnL = 0
+		s.stats.WinRate = 0
+		if s.position != nil {
+			s.stats.Status = "IN_POSITION"
+			s.stats.HasPosition = true
+		} else {
+			s.stats.Status = "READY"
+			s.stats.HasPosition = false
+		}
+	}
+
+	snapshot := e.exportStateLocked()
+	e.schedulePersistLocked(snapshot)
+	return snapshot
+}
+
+func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
+	if e.persistHook == nil {
+		return
+	}
+	go e.persistHook(snapshot)
 }
 
 // UpdatePrice feeds a new BTC price tick into the engine.
@@ -229,6 +383,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	s.position = pos
 	s.stats.Status = "IN_POSITION"
 	s.stats.HasPosition = true
+	e.schedulePersistLocked(e.exportStateLocked())
 
 	log.Printf("[OPTIONS] 📈 OPEN  %s %s | Strike: $%.0f | Expiry: %dm | Premium: $%.2f | Qty: %.2f | IV: %.1f%%",
 		s.def.Name, s.def.Type, strike, s.def.ExpiryMinutes, pr.Premium, quantity, iv*100)
@@ -276,6 +431,7 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 	s.position = nil
 	s.stats.Status = "COOLING"
 	s.stats.HasPosition = false
+	e.schedulePersistLocked(e.exportStateLocked())
 
 	symbol := "✅"
 	if netPnL < 0 {
@@ -435,17 +591,7 @@ func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.trades = nil
-	for _, s := range e.states {
-		s.stats.TotalTrades = 0
-		s.stats.Wins = 0
-		s.stats.Losses = 0
-		s.stats.TotalPnL = 0
-		s.stats.WinRate = 0
-	}
+	e.ClearHistory()
 	log.Println("[OPTIONS] 🗑️ Option trade history cleared")
 	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
 }

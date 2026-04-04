@@ -84,6 +84,69 @@ func loadDotEnv() {
 	log.Println("[ENV] Loaded local .env file")
 }
 
+func saveOptionsSnapshot(ctx context.Context, store *persistence.Store, snapshot options.PersistedState) error {
+	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
+	if err != nil {
+		return fmt.Errorf("marshal options price history: %w", err)
+	}
+	minuteBarsJSON, err := json.Marshal(snapshot.MinuteBars)
+	if err != nil {
+		return fmt.Errorf("marshal options minute bars: %w", err)
+	}
+	tradesJSON, err := json.Marshal(snapshot.Trades)
+	if err != nil {
+		return fmt.Errorf("marshal options trades: %w", err)
+	}
+	strategiesJSON, err := json.Marshal(snapshot.Strategies)
+	if err != nil {
+		return fmt.Errorf("marshal options strategies: %w", err)
+	}
+
+	return store.SaveOptionsState(ctx, &persistence.OptionsState{
+		Balance:    snapshot.Balance,
+		LastPrice:  snapshot.LastPrice,
+		LastMinute: snapshot.LastMinute,
+		TradeSeq:   snapshot.TradeSeq,
+		PriceHist:  priceHistJSON,
+		MinuteBars: minuteBarsJSON,
+		Trades:     tradesJSON,
+		Strategies: strategiesJSON,
+	})
+}
+
+func loadOptionsSnapshot(state *persistence.OptionsState) (options.PersistedState, error) {
+	snapshot := options.PersistedState{
+		Balance:    state.Balance,
+		LastPrice:  state.LastPrice,
+		LastMinute: state.LastMinute,
+		TradeSeq:   state.TradeSeq,
+		SavedAt:    state.SavedAt,
+	}
+
+	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
+		if err := json.Unmarshal(state.PriceHist, &snapshot.PriceHist); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal options price history: %w", err)
+		}
+	}
+	if len(state.MinuteBars) > 0 && string(state.MinuteBars) != "[]" {
+		if err := json.Unmarshal(state.MinuteBars, &snapshot.MinuteBars); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal options minute bars: %w", err)
+		}
+	}
+	if len(state.Trades) > 0 && string(state.Trades) != "[]" {
+		if err := json.Unmarshal(state.Trades, &snapshot.Trades); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal options trades: %w", err)
+		}
+	}
+	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
+		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal options strategies: %w", err)
+		}
+	}
+
+	return snapshot, nil
+}
+
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
@@ -320,6 +383,35 @@ func main() {
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $50K paper account
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
+	if dbStore != nil {
+		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
+			if err := saveOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
+				log.Printf("[DB] ⚠️  Failed to save options state: %v", err)
+			}
+		})
+
+		optState, loadErr := dbStore.LoadOptionsState(ctx)
+		if loadErr != nil {
+			log.Printf("[DB] ⚠️  Failed to load options state: %v", loadErr)
+		} else {
+			snapshot, snapshotErr := loadOptionsSnapshot(optState)
+			if snapshotErr != nil {
+				log.Printf("[DB] ⚠️  Failed to decode options state: %v", snapshotErr)
+			} else {
+				optionsEngine.RestoreState(snapshot)
+				restoredOpen := 0
+				for _, strategyState := range snapshot.Strategies {
+					if strategyState.Position != nil {
+						restoredOpen++
+					}
+				}
+				log.Printf(
+					"[DB] ♻️  Options state restored from %s | Balance: $%.2f | Open Positions: %d | Trades: %d",
+					optState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
+				)
+			}
+		}
+	}
 
 	// Feed BTC price ticks into the options engine via the same Coinbase stream
 	go safeGo("OptionsPriceFeed", func() {
