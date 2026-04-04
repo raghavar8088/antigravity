@@ -92,7 +92,7 @@ function PositionsTable({ positions }: { positions: OptionPosition[] }) {
               <th className="py-2 px-3 text-right">Unrealized PnL</th>
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ divideColor: "var(--border-subtle)" }}>
+          <tbody className="divide-y">
             {positions.map((pos) => (
               <tr key={pos.id} className="hover:bg-white/[0.02]">
                 <td className="py-2 px-3 font-medium text-white">{pos.strategyName}</td>
@@ -141,7 +141,7 @@ function TradesTable({ trades }: { trades: OptionTrade[] }) {
               <th className="py-2 px-3 text-right">Net PnL</th>
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ divideColor: "var(--border-subtle)" }}>
+          <tbody className="divide-y">
             {trades.slice(0, 100).map((t) => (
               <tr key={t.id} className="hover:bg-white/[0.02]">
                 <td className="py-2 px-3 font-medium text-white">{t.strategyName}</td>
@@ -185,7 +185,7 @@ function StrategiesTable({ strategies }: { strategies: OptionStrategyStatus[] })
               <th className="py-2 px-3 text-right">Total PnL</th>
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ divideColor: "var(--border-subtle)" }}>
+          <tbody className="divide-y">
             {strategies.map((s, i) => (
               <tr key={s.name} className="hover:bg-white/[0.02]">
                 <td className="py-2 px-3" style={{ color: "var(--text-muted)" }}>{i + 1}</td>

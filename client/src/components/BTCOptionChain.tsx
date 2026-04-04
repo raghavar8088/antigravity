@@ -39,7 +39,7 @@ function IVCell({ iv, side }: { iv: number; side: "call" | "put" }) {
   );
 }
 
-function ChainRowComponent({ row, atmRef }: { row: ChainRow; atmRef?: React.RefObject<HTMLTableRowElement> }) {
+function ChainRowComponent({ row, atmRef }: { row: ChainRow; atmRef?: React.RefObject<HTMLTableRowElement | null> }) {
   const c = row.call;
   const p = row.put;
 
@@ -274,7 +274,7 @@ export default function BTCOptionChain() {
               <ColHeader label="IV" align="left" />
             </tr>
           </thead>
-          <tbody className="divide-y" style={{ divideColor: "var(--border-subtle)" }}>
+          <tbody className="divide-y">
             {data.chain.map((row) => (
               <ChainRowComponent key={row.strike} row={row} atmRef={row.isAtm ? atmRowRef : undefined} />
             ))}
