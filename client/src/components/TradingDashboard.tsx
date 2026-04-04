@@ -307,7 +307,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain">("dashboard");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -824,10 +824,10 @@ export default function TradingDashboard() {
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {[
+            { key: "options", label: "BTC Option Scalper" },
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
-            { key: "options", label: "BTC Option Scalper" },
             { key: "chain", label: "BTC Option Chain" },
           ].map((module) => (
             <button
