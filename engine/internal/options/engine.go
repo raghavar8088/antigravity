@@ -392,6 +392,30 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 			Status:     "READY",
 		}
 	}
-	log.Println("[OPTIONS] 🔄 Options account reset to $50,000")
+	log.Println("[OPTIONS] 🔄 Options account reset to $1,000,000")
 	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+}
+
+func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
+	setCORSOptions(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.trades = nil
+	for _, s := range e.states {
+		s.stats.TotalTrades = 0
+		s.stats.Wins = 0
+		s.stats.Losses = 0
+		s.stats.TotalPnL = 0
+		s.stats.WinRate = 0
+	}
+	log.Println("[OPTIONS] 🗑️ Option trade history cleared")
+	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
 }

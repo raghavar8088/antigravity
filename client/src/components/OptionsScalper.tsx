@@ -570,11 +570,35 @@ export default function OptionsScalper() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 px-1">
-              <BadgePill label="Options Engine Online" tone="positive" />
-              <BadgePill label="50 Strategies Active" tone="info" />
-              <BadgePill label="Separate Account" tone="warning" />
-              <BadgePill label="Not Futures" tone="neutral" />
+            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+              <div className="flex flex-wrap gap-2">
+                <BadgePill label="Options Engine Online" tone="positive" />
+                <BadgePill label="50 Strategies Active" tone="info" />
+                <BadgePill label="Separate Account" tone="warning" />
+                <BadgePill label="Not Futures" tone="neutral" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isResetting}
+                  className="btn-primary text-sm"
+                  onClick={async () => {
+                    if (!confirm("Clear completed option trades and strategy stats? Open positions and balance will be kept.")) return;
+                    await fetch(`${API_URL}/api/options/clear-history`, { method: "POST" });
+                    setRefreshKey((k) => k + 1);
+                  }}
+                >
+                  Clear Option Trades
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={isResetting}
+                  className="btn-danger text-sm"
+                >
+                  {isResetting ? "Resetting…" : "Reset Options Account"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -693,14 +717,9 @@ export default function OptionsScalper() {
       {/* ── Trade history ── */}
       <TradesPanel trades={trades} />
 
-      {/* ── Footer controls ── */}
-      <div className="glass-panel px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Options paper account | Black-Scholes pricing | $1,000,000 starting balance | Fully separate from futures engine
-        </div>
-        <button type="button" onClick={handleReset} disabled={isResetting} className="btn-danger disabled:cursor-not-allowed disabled:opacity-60">
-          {isResetting ? "Resetting..." : "Reset Options Account"}
-        </button>
+      {/* ── Footer note ── */}
+      <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
+        Options paper account · Black-Scholes pricing · $1,000,000 starting balance · Fully separate from futures engine
       </div>
 
     </div>

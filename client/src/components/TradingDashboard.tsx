@@ -1636,14 +1636,30 @@ export default function TradingDashboard() {
                 Trade History
                 <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
               </h2>
-              <button
-                type="button"
-                onClick={handleClearLedger}
-                disabled={isClearingLedger}
-                className="btn-primary"
-              >
-                {isClearingLedger ? "Clearing" : "Clear Trade History"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClearLedger}
+                  disabled={isClearingLedger}
+                  className="btn-primary"
+                >
+                  {isClearingLedger ? "Clearing…" : "Clear Trade History"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isClearingLedger}
+                  className="btn-danger"
+                  onClick={() => {
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                    if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
+                    fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
+                      .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })
+                      .catch(() => handleAdminEvent("Reset failed. Check engine connectivity.", "admin"));
+                  }}
+                >
+                  Reset Account
+                </button>
+              </div>
             </div>
             <TradeHistory history={historyItems} />
           </div>
@@ -1708,14 +1724,30 @@ export default function TradingDashboard() {
                 Trade History
                 <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
               </h2>
-              <button
-                type="button"
-                onClick={handleClearLedger}
-                disabled={isClearingLedger}
-                className="btn-primary"
-              >
-                {isClearingLedger ? "Clearing" : "Clear Trade History"}
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClearLedger}
+                  disabled={isClearingLedger}
+                  className="btn-primary"
+                >
+                  {isClearingLedger ? "Clearing…" : "Clear Trade History"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isClearingLedger}
+                  className="btn-danger"
+                  onClick={() => {
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+                    if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
+                    fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
+                      .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })
+                      .catch(() => handleAdminEvent("Reset failed. Check engine connectivity.", "admin"));
+                  }}
+                >
+                  Reset Account
+                </button>
+              </div>
             </div>
             <TradeHistory history={historyItems} />
           </div>

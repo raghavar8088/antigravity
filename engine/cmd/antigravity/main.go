@@ -360,6 +360,7 @@ func main() {
 	http.HandleFunc("/api/options/strategies", optionsEngine.HandleStrategies)
 	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
 	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
+	http.HandleFunc("/api/options/clear-history", optionsEngine.HandleClearHistory)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
