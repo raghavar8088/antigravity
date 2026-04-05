@@ -292,7 +292,7 @@ func (e *Engine) HandleOptionChain(w http.ResponseWriter, r *http.Request) {
 
 	e.mu.RLock()
 	spot := e.lastPrice
-	priceHist := append([]float64{}, e.priceHist...)
+	minuteBarsCopy := append([]float64{}, e.minuteBars...)
 	e.mu.RUnlock()
 
 	if spot <= 0 {
@@ -301,7 +301,7 @@ func (e *Engine) HandleOptionChain(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().UTC()
 	expiries := generateExpiries(now)
-	baseIV := EstimateIV(priceHist) // annualised fraction
+	baseIV := EstimateIV(minuteBarsCopy) // annualised fraction from 1-min bars
 
 	// Parse requested expiry (default to nearest)
 	selectedValue := r.URL.Query().Get("expiry")

@@ -107,7 +107,10 @@ func bbMid(prices []float64, period int) float64 {
 	return mean / float64(period)
 }
 
-func vwapOf(prices []float64) float64 {
+// avgPrice computes the simple average of the given price slice.
+// Note: this is an SMA proxy for VWAP since volume data is not available
+// in SignalContext. In production with real volume, replace with true VWAP.
+func avgPrice(prices []float64) float64 {
 	if len(prices) == 0 {
 		return 0
 	}
@@ -327,7 +330,7 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 30 {
 			return false
 		}
-		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (ctx.BTCPrice - vw) / vw
 		// Must be 0.3% above VWAP AND have upward momentum
 		return deviation > 0.002 && momentum(ctx.Prices, 5) > 0.0015
@@ -336,7 +339,7 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 30 {
 			return false
 		}
-		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (vw - ctx.BTCPrice) / vw
 		return deviation > 0.002 && momentum(ctx.Prices, 5) < -0.0015
 	},
@@ -423,7 +426,7 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 30 {
 			return false
 		}
-		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
@@ -433,7 +436,7 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 30 {
 			return false
 		}
-		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
@@ -497,7 +500,7 @@ var Signals = map[string]SignalFunc{
 		}
 		drop := (startPrice - lo) / startPrice
 		recovery := (ctx.BTCPrice - lo) / lo
-		shortVWAP := vwapOf(ctx.Prices[n-15:])
+		shortVWAP := avgPrice(ctx.Prices[n-15:])
 		ema9 := ema(ctx.Prices, 9)
 		rsiVal := rsi(ctx.Prices, 14)
 		return drop > 0.0048 &&

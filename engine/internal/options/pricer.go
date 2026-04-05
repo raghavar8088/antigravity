@@ -51,7 +51,13 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 
 	gamma := normPDF(d1) / (spot * iv * sqrtT)
 	vega := spot * normPDF(d1) * sqrtT / 100
-	theta := -(spot*normPDF(d1)*iv/(2*sqrtT) + riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(d2)) / 365
+
+	var theta float64
+	if optType == Call {
+		theta = -(spot*normPDF(d1)*iv/(2*sqrtT) + riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(d2)) / 365
+	} else {
+		theta = -(spot*normPDF(d1)*iv/(2*sqrtT) - riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(-d2)) / 365
+	}
 
 	if premium < 0.01 {
 		premium = 0.01

@@ -317,11 +317,11 @@ func (e *Engine) tick() {
 	}
 
 	for _, s := range e.states {
-		e.manageStrategy(s, ctx, iv, openCount)
+		e.manageStrategy(s, ctx, iv, &openCount)
 	}
 }
 
-func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64, openCount int) {
+func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64, openCount *int) {
 	now := time.Now()
 
 	// ── Manage open position ──────────────────────────────────────────────
@@ -352,7 +352,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	}
 
 	// ── Enforce global position cap ───────────────────────────────────────
-	if openCount >= maxConcurrentPositions {
+	if *openCount >= maxConcurrentPositions {
 		return
 	}
 
@@ -397,8 +397,12 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	}
 
 	e.tradeSeq++
+	nameTag := s.def.Name
+	if len(nameTag) > 4 {
+		nameTag = nameTag[:4]
+	}
 	pos := &OptionPosition{
-		ID:             fmt.Sprintf("OPT-%04d-%s", e.tradeSeq, s.def.Name[:4]),
+		ID:             fmt.Sprintf("OPT-%04d-%s", e.tradeSeq, nameTag),
 		StrategyID:     s.def.ID,
 		StrategyName:   s.def.Name,
 		OptionType:     s.def.Type,
@@ -419,6 +423,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	s.stats.StrategyID = s.def.ID
 	s.stats.Status = "IN_POSITION"
 	s.stats.HasPosition = true
+	*openCount++ // Track the new position for remaining strategies in this tick
 	e.schedulePersistLocked(e.exportStateLocked())
 
 	log.Printf("[OPTIONS] 📈 OPEN  %s %s | Strike: $%.0f | Expiry: %dm | Premium: $%.2f | Qty: %.2f | IV: %.1f%%",
@@ -619,6 +624,7 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 			Status:     "READY",
 		}
 	}
+	e.schedulePersistLocked(e.exportStateLocked())
 	log.Println("[OPTIONS] 🔄 Options account reset to $1,000,000")
 	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
 }
