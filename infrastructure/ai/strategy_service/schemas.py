@@ -114,6 +114,81 @@ class StrategyConfigPatch(BaseModel):
     volume_spike_threshold: float | None = None
 
 
+class ExitManagementConfig(BaseModel):
+    enable_trailing_stop: bool = True
+    trailing_atr_multiple: float = 1.2
+    enable_break_even: bool = True
+    break_even_trigger_rr: float = 1.0
+    partial_take_profit_enabled: bool = False
+    partial_take_profit_rr: float = 1.5
+    partial_take_profit_fraction: float = 0.5
+
+
+class TelegramConfig(BaseModel):
+    enabled: bool = False
+    bot_token: str | None = None
+    chat_id: str | None = None
+
+
+class AllocationProfile(BaseModel):
+    strategy: str
+    weight: float
+    max_risk_multiplier: float = 1.0
+
+
+class EventWindow(BaseModel):
+    name: str
+    start_ts: datetime
+    end_ts: datetime
+    risk_mode: Literal["BLOCK", "REDUCE"] = "BLOCK"
+
+    @field_validator("start_ts", "end_ts", mode="before")
+    @classmethod
+    def validate_event_ts(cls, value: Any) -> datetime:
+        return _coerce_timestamp(value)
+
+
+class JournalEntry(BaseModel):
+    ts: datetime
+    strategy: str
+    side: Side
+    regime: str
+    entry_reason: str
+    exit_reason: str
+    pnl: float
+    winner: bool
+    notes: str = ""
+
+    @field_validator("ts", mode="before")
+    @classmethod
+    def validate_journal_ts(cls, value: Any) -> datetime:
+        return _coerce_timestamp(value)
+
+
+class StrategyHealthInfo(BaseModel):
+    strategy: str
+    enabled: bool = True
+    total_trades: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: float = 0.0
+    profit_factor: float = 0.0
+
+
+class DashboardStatus(BaseModel):
+    ts: datetime
+    regime: str
+    equity: float
+    daily_pnl: float
+    open_positions: int
+    consecutive_losses: int
+    trading_disabled: bool
+    leaderboard: list[StrategyHealthInfo] = Field(default_factory=list)
+    allocation_board: list[AllocationProfile] = Field(default_factory=list)
+    journal_summary: dict[str, Any] = Field(default_factory=dict)
+    latest_note: str | None = None
+
+
 class StrategyEvaluationRequest(BaseModel):
     symbol: str = "BTCUSDT"
     candles_1m: list[Candle] = Field(default_factory=list)
@@ -171,6 +246,22 @@ class ClosedTrade(BaseModel):
         return _coerce_timestamp(value)
 
 
+class OpenPosition(BaseModel):
+    id: str
+    strategy: str
+    side: Side
+    entry_price: float
+    stop_loss: float
+    take_profit: float
+    qty: float
+    opened_at: datetime
+
+    @field_validator("opened_at", mode="before")
+    @classmethod
+    def validate_opened_at(cls, value: Any) -> datetime:
+        return _coerce_timestamp(value)
+
+
 class ExecutionPlan(BaseModel):
     symbol: str
     strategy: str
@@ -216,6 +307,7 @@ class StrategyCycleRequest(BaseModel):
     daily_trades: int = 0
     consecutive_losses: int = 0
     trade_history: list[ClosedTrade] = Field(default_factory=list)
+    open_positions: list[OpenPosition] = Field(default_factory=list)
     config_path: str | None = None
     order_type: Literal["LIMIT", "MARKET"] | None = None
     allowed_strategies: list[str] = Field(default_factory=list)
@@ -232,6 +324,8 @@ class StrategyCycleResponse(BaseModel):
     blocked_reason: str | None = None
     execution_plan: ExecutionPlan | None = None
     performance: PerformanceMetrics
+    dashboard: DashboardStatus | None = None
+    position_updates: list[OpenPosition] = Field(default_factory=list)
 
 
 class BacktestTrade(BaseModel):
@@ -255,3 +349,13 @@ class BacktestReport(BaseModel):
     profit_factor: float
     max_drawdown_pct: float
     trades: list[BacktestTrade]
+
+
+class MonteCarloReport(BaseModel):
+    simulations: int
+    trades_per_simulation: int
+    avg_return_pct: float
+    worst_return_pct: float
+    best_return_pct: float
+    avg_max_drawdown_pct: float
+    worst_max_drawdown_pct: float

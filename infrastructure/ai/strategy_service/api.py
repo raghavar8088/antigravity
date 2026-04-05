@@ -11,8 +11,22 @@ from .schemas import (
     StrategyEvaluationRequest,
     StrategyEvaluationResponse,
     BacktestReport,
+    DashboardStatus,
+    EventWindow,
+    MonteCarloReport,
+)
+from .management import (
+    MonteCarloRiskTester,
 )
 from .backtest import Backtester
+
+
+# Persistent framework instance
+framework_instance = ApexScalpFramework.load()
+# Add the new persistent layers to the instance
+from .management import NewsEventProtectionLayer, TradeJournal
+framework_instance.event_layer = NewsEventProtectionLayer()
+framework_instance.journal = TradeJournal()
 
 
 app = FastAPI(
@@ -56,18 +70,41 @@ def evaluate_strategies(request: StrategyEvaluationRequest) -> StrategyEvaluatio
 
 @app.get("/framework/config")
 def framework_config() -> dict[str, object]:
-    framework = ApexScalpFramework.load()
-    return framework.config.as_dict()
+    return framework_instance.config.as_dict()
+
+
+@app.get("/framework/status", response_model=DashboardStatus | None)
+def framework_status() -> DashboardStatus | None:
+    return framework_instance.last_status
 
 
 @app.post("/framework/run-cycle", response_model=StrategyCycleResponse)
 def run_framework_cycle(request: StrategyCycleRequest) -> StrategyCycleResponse:
-    framework = ApexScalpFramework.load(request.config_path)
-    return framework.run_cycle(request)
+    # Use the persistent instance
+    return framework_instance.run_cycle(request)
 
 
 @app.post("/framework/backtest", response_model=BacktestReport)
-def run_backtest(requests: list[StrategyCycleRequest]) -> BacktestReport:
-    framework = ApexScalpFramework.load()
-    backtester = Backtester(framework)
-    return backtester.run(requests)
+def run_backtest(snapshots: list[StrategyCycleRequest]) -> BacktestReport:
+    backtester = Backtester(framework_instance) # Simplified for example
+    return backtester.run(snapshots)
+
+
+@app.post("/framework/events")
+def add_news_event(event: EventWindow) -> dict[str, str]:
+    framework_instance.event_layer.add_event(event)
+    return {"status": "event added", "name": event.name}
+
+
+@app.get("/framework/journal")
+def get_journal_summary() -> dict[str, Any]:
+    return framework_instance.journal.summarize()
+
+
+@app.post("/framework/monte-carlo", response_model=MonteCarloReport)
+def run_monte_carlo(simulations: int = 500) -> MonteCarloReport:
+    # Use real trade history from journal
+    pnls = [e.pnl for e in framework_instance.journal.entries]
+    balance = framework_instance.config.starting_equity if hasattr(framework_instance.config, 'starting_equity') else 10000.0
+    tester = MonteCarloRiskTester()
+    return tester.run(pnls, balance, simulations)

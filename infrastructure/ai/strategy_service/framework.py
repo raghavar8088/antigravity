@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, fields as dataclass_fields
+from dataclasses import asdict, dataclass, field, fields as dataclass_fields
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +18,19 @@ from .schemas import (
     StrategyCycleResponse,
     StrategyEvaluationRequest,
     StrategySignal,
+    ExitManagementConfig,
+    TelegramConfig,
+    DashboardStatus,
+)
+from .management import (
+    ExitManager,
+    StrategyScoringEngine,
+    TelegramAlerter,
+    StrategyPortfolioAllocator,
+    RegimeStrategyRouter,
+    NewsEventProtectionLayer,
+    TradeJournal,
+    MonteCarloRiskTester,
 )
 
 
@@ -71,6 +84,8 @@ class ApexScalpConfig:
     volatility_threshold: float = 0.03
     volume_spike_threshold: float = 2.0
     strategy_priority: list[str] | None = None
+    exit_management: ExitManagementConfig = field(default_factory=ExitManagementConfig)
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     config_source: str | None = None
 
     @classmethod
@@ -260,10 +275,23 @@ class PerformanceTracker:
 
 
 class StrategyManager:
-    def __init__(self, config: ApexScalpConfig, risk: RiskManager, execution: ExecutionEngine) -> None:
+    def __init__(
+        self,
+        config: ApexScalpConfig,
+        risk: RiskManager,
+        execution: ExecutionEngine,
+        scoring: StrategyScoringEngine | None = None,
+        telegram: TelegramAlerter | None = None,
+    ) -> None:
         self.config = config
         self.risk = risk
         self.execution = execution
+        self.scoring = scoring or StrategyScoringEngine()
+        self.telegram = telegram or TelegramAlerter(config.telegram)
+        self.allocator = StrategyPortfolioAllocator(self.scoring)
+        self.router = RegimeStrategyRouter()
+        self.event_layer = NewsEventProtectionLayer() # Note: In production this would be shared
+        self.journal = TradeJournal()
 
     def _build_strategy_request(self, request: StrategyCycleRequest) -> StrategyEvaluationRequest:
         base_config = self.config.to_strategy_config().model_dump()
@@ -308,8 +336,34 @@ class StrategyManager:
         return actionable[0]
 
     def run_cycle(self, request: StrategyCycleRequest) -> StrategyCycleResponse:
+        # 1. News Event Protection
+        blocked, block_reason = self.event_layer.is_blocked()
+        if blocked:
+            return StrategyCycleResponse(
+                symbol=request.symbol,
+                generated_at=datetime.now(timezone.utc),
+                loaded_config=self.config.as_dict(),
+                evaluations=[],
+                risk_gate_passed=False,
+                blocked_reason=block_reason,
+                performance=PerformanceTracker(request.trade_history).get_metrics(),
+            )
+
         strategy_request = self._build_strategy_request(request)
         evaluations = evaluate_all_strategies(strategy_request)
+        
+        # 2. Regime-Aware Strategy Routing
+        current_regime = evaluations[0].regime if evaluations else "NO_TRADE"
+        try:
+            regime_enum = Regime(current_regime)
+        except ValueError:
+            regime_enum = Regime.NO_TRADE
+
+        evaluations = [
+            e for e in evaluations 
+            if self.router.is_allowed(regime_enum, e.strategy)
+        ]
+
         performance = PerformanceTracker(request.trade_history).get_metrics()
         selected_signal = self._select_signal(evaluations, request.allowed_strategies)
         risk_gate_passed, blocked_reason = self.risk.validate_trade(
@@ -321,11 +375,14 @@ class StrategyManager:
 
         execution_plan = None
         if risk_gate_passed and selected_signal is not None:
-            quantity = self.risk.calculate_position_size(
+            # 3. Institutional Allocation & Position Sizing
+            base_quantity = self.risk.calculate_position_size(
                 request.balance,
                 float(selected_signal.entry_price or 0.0),
                 float(selected_signal.stop_loss or 0.0),
             )
+            weight = self.allocator.get_weight(selected_signal.strategy, regime_enum)
+            quantity = round(base_quantity * weight, 6)
             if quantity <= 0:
                 risk_gate_passed = False
                 blocked_reason = "Risk model produced a zero-sized position."
@@ -337,6 +394,62 @@ class StrategyManager:
                     order_type=request.order_type or self.config.preferred_order_type,
                     mode=request.execution_mode,
                 )
+
+        # 4. Management: Update open positions (Trailing Stops / Break-even)
+        position_updates = []
+        exit_manager = ExitManager(self.config.exit_management)
+        latest_price = request.candles_1m[-1].close if request.candles_1m else 0.0
+        # Simple ATR proxy for trailing stop if not provided in request
+        atr_proxy = 50.0 
+
+        for pos in request.open_positions:
+            new_sl = exit_manager.update_sl_if_needed(
+                pos.side,
+                pos.entry_price,
+                pos.stop_loss,
+                latest_price,
+                atr_proxy
+            )
+            if new_sl != pos.stop_loss:
+                pos.stop_loss = new_sl
+                position_updates.append(pos)
+
+        # 5. Management: Record trade history into scoring engine and journal
+        for trade in request.trade_history:
+            self.scoring.record_trade(trade.strategy, trade.realized_pnl)
+            # Simple conversion to JournalEntry
+            self.journal.record(JournalEntry(
+                ts=trade.closed_at or datetime.now(timezone.utc),
+                strategy=trade.strategy,
+                side=trade.side,
+                regime=current_regime or "UNKNOWN",
+                entry_reason="System trigger",
+                exit_reason="TP/SL",
+                pnl=trade.realized_pnl,
+                winner=trade.realized_pnl > 0
+            ))
+
+        # 6. Management: Telegram Alerters
+        if execution_plan:
+            self.telegram.send(
+                f"RAIG SIGNAL | {execution_plan.strategy} | {execution_plan.side} | "
+                f"Entry: {execution_plan.entry_price} | Qty: {execution_plan.quantity:.4f}"
+            )
+
+        # 7. Dashboard State
+        dashboard = DashboardStatus(
+            ts=datetime.now(timezone.utc),
+            regime=selected_signal.regime if selected_signal else "NO_TRADE",
+            equity=request.balance,
+            daily_pnl=request.daily_pnl,
+            open_positions=len(request.open_positions),
+            consecutive_losses=request.consecutive_losses,
+            trading_disabled=(request.daily_pnl_fraction is not None and request.daily_pnl_fraction <= self.config.daily_loss_limit),
+            leaderboard=self.scoring.get_leaderboard(),
+            allocation_board=self.allocator.leaderboard(regime_enum),
+            journal_summary=self.journal.summarize(),
+            latest_note=blocked_reason if not risk_gate_passed else "Trade cycle completed."
+        )
 
         loaded_config = self.config.as_dict()
         loaded_config["strategy_config"] = strategy_request.config.model_dump()
@@ -350,12 +463,17 @@ class StrategyManager:
             blocked_reason=blocked_reason,
             execution_plan=execution_plan,
             performance=performance,
+            dashboard=dashboard,
+            position_updates=position_updates,
         )
 
 
 class ApexScalpFramework:
     def __init__(self, config: ApexScalpConfig) -> None:
         self.config = config
+        self.scoring = StrategyScoringEngine()
+        self.telegram = TelegramAlerter(config.telegram)
+        self.last_status: DashboardStatus | None = None
 
     @classmethod
     def load(cls, config_path: str | None = None) -> ApexScalpFramework:
@@ -368,5 +486,18 @@ class ApexScalpFramework:
             consecutive_losses=request.consecutive_losses,
         )
         execution = PaperExecutionEngine(self.config)
-        manager = StrategyManager(self.config, risk, execution)
-        return manager.run_cycle(request)
+        manager = StrategyManager(
+            self.config, 
+            risk, 
+            execution, 
+            scoring=self.scoring, 
+            telegram=self.telegram
+        )
+        # Inherit persistent components if needed, but for now we'll let Manager handle them
+        # In a real app, allocator and journal would be persistent in the Framework class.
+        manager.event_layer = getattr(self, 'event_layer', manager.event_layer)
+        manager.journal = getattr(self, 'journal', manager.journal)
+        
+        response = manager.run_cycle(request)
+        self.last_status = response.dashboard
+        return response
