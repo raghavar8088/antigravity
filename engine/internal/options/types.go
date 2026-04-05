@@ -19,6 +19,7 @@ const (
 
 // StrategyDef configures one option scalping strategy
 type StrategyDef struct {
+	ID            int
 	Name          string
 	Type          OptionType
 	StrikePctOTM  float64 // 0=ATM, 0.01=1% OTM, negative=ITM
@@ -33,6 +34,7 @@ type StrategyDef struct {
 // OptionPosition represents an active option trade
 type OptionPosition struct {
 	ID             string     `json:"id"`
+	StrategyID     int        `json:"strategyId"`
 	StrategyName   string     `json:"strategyName"`
 	OptionType     OptionType `json:"optionType"`
 	Strike         float64    `json:"strike"`
@@ -51,6 +53,7 @@ type OptionPosition struct {
 // OptionTrade is a completed option trade
 type OptionTrade struct {
 	ID            string     `json:"id"`
+	StrategyID    int        `json:"strategyId"`
 	StrategyName  string     `json:"strategyName"`
 	OptionType    OptionType `json:"optionType"`
 	Strike        float64    `json:"strike"`
@@ -70,6 +73,7 @@ type OptionTrade struct {
 
 // StrategyStatus is the per-strategy runtime status
 type StrategyStatus struct {
+	StrategyID  int     `json:"strategyId"`
 	Name        string  `json:"name"`
 	OptionType  string  `json:"optionType"`
 	TotalTrades int     `json:"totalTrades"`

@@ -59,6 +59,19 @@ function formatTradeDuration(entryTime: string, exitTime: string) {
   return `${seconds}s`;
 }
 
+type StrategyNumberMap = Record<string, number>;
+
+function resolveStrategyNumber(name: string, strategyId: number | undefined, strategyNumbers: StrategyNumberMap) {
+  if (strategyId && strategyId > 0) return strategyId;
+  const number = strategyNumbers[name];
+  return number || 0;
+}
+
+function formatStrategyLabel(name: string, strategyId: number | undefined, strategyNumbers: StrategyNumberMap) {
+  const number = resolveStrategyNumber(name, strategyId, strategyNumbers);
+  return number ? `${number}. ${name}` : name;
+}
+
 // ── Design-system primitives (mirrors Dashboard) ─────────────────────────────
 
 function CompactMetric({ label, value, detail, accent = "" }: {
@@ -158,7 +171,7 @@ function PremiumBar({ entry, current }: { entry: number; current: number }) {
 
 // ── Live Positions table ─────────────────────────────────────────────────────
 
-function LivePositionsPanel({ positions }: { positions: OptionPosition[] }) {
+function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionPosition[]; strategyNumbers: StrategyNumberMap }) {
   const totalUnrealized = positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
   const callCount = positions.filter((position) => position.optionType === "CALL").length;
   const putCount = positions.filter((position) => position.optionType === "PUT").length;
@@ -228,7 +241,9 @@ function LivePositionsPanel({ positions }: { positions: OptionPosition[] }) {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <TypeBadge type={pos.optionType} />
-                          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{pos.strategyName}</span>
+                          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {formatStrategyLabel(pos.strategyName, pos.strategyId, strategyNumbers)}
+                          </span>
                         </div>
                         <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
                           Qty {fmt(pos.quantity, 4)} | Cost {fmtUSD(pos.costBasis)}
@@ -283,7 +298,7 @@ function LivePositionsPanel({ positions }: { positions: OptionPosition[] }) {
 
 // ── Strategies leaderboard ────────────────────────────────────────────────────
 
-function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] }) {
+function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionStrategyStatus[]; strategyNumbers: StrategyNumberMap }) {
   const [showAll, setShowAll] = useState(false);
   const sorted = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl);
   const visible = showAll ? sorted : sorted.slice(0, 20);
@@ -311,7 +326,7 @@ function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] })
         <table className="w-full text-left" style={{ minWidth: 720 }}>
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border)" }}>
-              {["#", "Strategy", "Type", "Status", "Trades", "W / L", "Win Rate", "Total PnL"].map((h, i) => (
+              {["ID", "Strategy", "Type", "Status", "Trades", "W / L", "Win Rate", "Total PnL"].map((h, i) => (
                 <th key={h} className={`py-2 px-3 text-[10px] font-bold uppercase tracking-widest ${i === 7 ? "text-right" : ""}`}
                   style={{ color: "var(--text-muted)" }}>
                   {h}
@@ -322,8 +337,8 @@ function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] })
           <tbody>
             {visible.map((s, i) => (
               <tr key={s.name} className="border-b transition-colors hover:bg-black/[0.015]" style={{ borderColor: "var(--border-subtle)" }}>
-                <td className="py-2.5 px-3 text-xs font-mono" style={{ color: "var(--text-muted)" }}>{i + 1}</td>
-                <td className="py-2.5 px-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{s.name}</td>
+                <td className="py-2.5 px-3 text-xs font-mono" style={{ color: "var(--text-muted)" }}>{resolveStrategyNumber(s.name, s.strategyId, strategyNumbers) || i + 1}</td>
+                <td className="py-2.5 px-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(s.name, s.strategyId, strategyNumbers)}</td>
                 <td className="py-2.5 px-3"><TypeBadge type={s.optionType} /></td>
                 <td className="py-2.5 px-3"><StatusBadge status={s.status} /></td>
                 <td className="py-2.5 px-3 text-sm font-mono" style={{ color: "var(--text-secondary)" }}>{s.totalTrades}</td>
@@ -345,7 +360,7 @@ function StrategiesPanel({ strategies }: { strategies: OptionStrategyStatus[] })
 
 // ── Trade history ─────────────────────────────────────────────────────────────
 
-function TradesPanel({ trades }: { trades: OptionTrade[] }) {
+function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strategyNumbers: StrategyNumberMap }) {
   const [showAll, setShowAll] = useState(false);
   const visibleTrades = showAll ? trades : trades.slice(0, 10);
   const totalTrades = trades.length;
@@ -434,7 +449,7 @@ function TradesPanel({ trades }: { trades: OptionTrade[] }) {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.strategyName}</div>
+                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(t.strategyName, t.strategyId, strategyNumbers)}</div>
                       <div className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{t.id}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
@@ -535,6 +550,10 @@ export default function OptionsScalper() {
   const latestTrade = trades[0] ?? null;
   const totalStrategies = strategies.length;
   const activeStrategies = strategies.filter((s) => s.status !== "COOLING").length || totalStrategies;
+  const strategyNumbers = strategies.reduce<StrategyNumberMap>((map, strategy, index) => {
+    map[strategy.name] = strategy.strategyId > 0 ? strategy.strategyId : index + 1;
+    return map;
+  }, {});
 
   // ── Streak ──────────────────────────────────────────────────────
   const streak = (() => {
@@ -619,7 +638,7 @@ export default function OptionsScalper() {
             <CompactMetric
               label="Last Closed Trade"
               value={latestTrade ? fmtUSD(latestTrade.netPnl, { signed: true }) : "No exits yet"}
-              detail={latestTrade ? `${latestTrade.strategyName} | ${latestTrade.exitReason}` : "Waiting for first completed options cycle"}
+              detail={latestTrade ? `${formatStrategyLabel(latestTrade.strategyName, latestTrade.strategyId, strategyNumbers)} | ${latestTrade.exitReason}` : "Waiting for first completed options cycle"}
               accent={latestTrade ? (latestTrade.netPnl >= 0 ? "text-emerald-600" : "text-rose-600") : "text-zinc-900"}
             />
             <CompactMetric
@@ -695,17 +714,17 @@ export default function OptionsScalper() {
       </div>
 
       {/* ── Live positions ── */}
-      <LivePositionsPanel positions={positions} />
+      <LivePositionsPanel positions={positions} strategyNumbers={strategyNumbers} />
 
       {/* ── Strategies leaderboard ── */}
-      <StrategiesPanel strategies={strategies} />
+      <StrategiesPanel strategies={strategies} strategyNumbers={strategyNumbers} />
 
       {/* ── Best strategy callout ── */}
       {bestStrategy && (
         <div className="glass-panel px-6 py-5 flex flex-wrap items-center gap-6 justify-between">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Top Performing Strategy</div>
-            <div className="mt-1 text-lg font-bold" style={{ color: "var(--text-primary)" }}>{bestStrategy.name}</div>
+            <div className="mt-1 text-lg font-bold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(bestStrategy.name, bestStrategy.strategyId, strategyNumbers)}</div>
             <div className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
               {bestStrategy.wins}W / {bestStrategy.losses}L | {bestStrategy.totalTrades > 0 ? fmtPct(bestStrategy.winRate) : "-"} win rate
             </div>
@@ -722,7 +741,7 @@ export default function OptionsScalper() {
       )}
 
       {/* ── Trade history ── */}
-      <TradesPanel trades={trades} />
+      <TradesPanel trades={trades} strategyNumbers={strategyNumbers} />
 
       {/* ── Footer note ── */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>

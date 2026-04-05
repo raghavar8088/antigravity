@@ -61,3 +61,16 @@ func TestAllLiveStrategiesReferenceKnownSignals(t *testing.T) {
 		}
 	}
 }
+
+func TestAllLiveStrategiesHaveStableUniqueIDs(t *testing.T) {
+	seen := make(map[int]string)
+	for _, def := range BuildStrategies() {
+		if def.ID <= 0 {
+			t.Fatalf("strategy %s is missing a permanent ID", def.Name)
+		}
+		if existing, ok := seen[def.ID]; ok {
+			t.Fatalf("duplicate strategy ID %d used by %s and %s", def.ID, existing, def.Name)
+		}
+		seen[def.ID] = def.Name
+	}
+}

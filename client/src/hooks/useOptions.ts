@@ -5,6 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export type OptionPosition = {
   id: string;
+  strategyId: number;
   strategyName: string;
   optionType: "CALL" | "PUT";
   strike: number;
@@ -22,6 +23,7 @@ export type OptionPosition = {
 
 export type OptionTrade = {
   id: string;
+  strategyId: number;
   strategyName: string;
   optionType: "CALL" | "PUT";
   strike: number;
@@ -40,6 +42,7 @@ export type OptionTrade = {
 };
 
 export type OptionStrategyStatus = {
+  strategyId: number;
   name: string;
   optionType: string;
   totalTrades: number;

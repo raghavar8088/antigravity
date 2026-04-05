@@ -43,6 +43,7 @@ func NewEngine() *Engine {
 		states[i] = &strategyState{
 			def: d,
 			stats: StrategyStatus{
+				StrategyID: d.ID,
 				Name:       d.Name,
 				OptionType: string(d.Type),
 				Status:     "READY",
@@ -121,6 +122,11 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.priceHist = append([]float64(nil), state.PriceHist...)
 	e.minuteBars = append([]float64(nil), state.MinuteBars...)
 	e.trades = append([]OptionTrade(nil), state.Trades...)
+	for i := range e.trades {
+		if e.trades[i].StrategyID == 0 {
+			e.trades[i].StrategyID = strategyIDs[e.trades[i].StrategyName]
+		}
+	}
 
 	byName := make(map[string]PersistedStrategyState, len(state.Strategies))
 	for _, persisted := range state.Strategies {
@@ -133,6 +139,7 @@ func (e *Engine) RestoreState(state PersistedState) {
 			s.position = nil
 			s.lastTradeAt = time.Time{}
 			s.stats = StrategyStatus{
+				StrategyID: s.def.ID,
 				Name:       s.def.Name,
 				OptionType: string(s.def.Type),
 				Status:     "READY",
@@ -145,12 +152,18 @@ func (e *Engine) RestoreState(state PersistedState) {
 		if s.stats.Name == "" {
 			s.stats.Name = s.def.Name
 		}
+		if s.stats.StrategyID == 0 {
+			s.stats.StrategyID = s.def.ID
+		}
 		if s.stats.OptionType == "" {
 			s.stats.OptionType = string(s.def.Type)
 		}
 
 		if persisted.Position != nil {
 			cp := *persisted.Position
+			if cp.StrategyID == 0 {
+				cp.StrategyID = s.def.ID
+			}
 			s.position = &cp
 			s.stats.HasPosition = true
 			if s.stats.Status == "" || s.stats.Status == "READY" {
@@ -168,7 +181,28 @@ func (e *Engine) RestoreState(state PersistedState) {
 
 // ResetAccount wipes the options account in memory and returns the new snapshot.
 func (e *Engine) ResetAccount() PersistedState {
-	e.ResetAccount()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.trades = nil
+	e.balance = initialOptionsBalance
+	e.lastPrice = 0
+	e.priceHist = nil
+	e.minuteBars = nil
+	e.lastMinute = 0
+	e.tradeSeq = 0
+
+	for _, s := range e.states {
+		s.position = nil
+		s.lastTradeAt = time.Time{}
+		s.stats = StrategyStatus{
+			StrategyID:  s.def.ID,
+			Name:        s.def.Name,
+			OptionType:  string(s.def.Type),
+			Status:      "READY",
+			HasPosition: false,
+		}
+	}
 
 	snapshot := e.exportStateLocked()
 	e.schedulePersistLocked(snapshot)
@@ -365,6 +399,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	e.tradeSeq++
 	pos := &OptionPosition{
 		ID:             fmt.Sprintf("OPT-%04d-%s", e.tradeSeq, s.def.Name[:4]),
+		StrategyID:     s.def.ID,
 		StrategyName:   s.def.Name,
 		OptionType:     s.def.Type,
 		Strike:         strike,
@@ -381,6 +416,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 
 	e.balance -= s.def.PositionUSD
 	s.position = pos
+	s.stats.StrategyID = s.def.ID
 	s.stats.Status = "IN_POSITION"
 	s.stats.HasPosition = true
 	e.schedulePersistLocked(e.exportStateLocked())
@@ -398,6 +434,7 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 
 	trade := OptionTrade{
 		ID:            pos.ID,
+		StrategyID:    s.def.ID,
 		StrategyName:  pos.StrategyName,
 		OptionType:    pos.OptionType,
 		Strike:        pos.Strike,
@@ -500,6 +537,9 @@ func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	statuses := make([]StrategyStatus, len(e.states))
 	for i, s := range e.states {
 		statuses[i] = s.stats
+		if statuses[i].StrategyID == 0 {
+			statuses[i].StrategyID = s.def.ID
+		}
 	}
 	json.NewEncoder(w).Encode(statuses)
 }
@@ -573,6 +613,7 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		s.position = nil
 		s.lastTradeAt = time.Time{}
 		s.stats = StrategyStatus{
+			StrategyID: s.def.ID,
 			Name:       s.def.Name,
 			OptionType: string(s.def.Type),
 			Status:     "READY",

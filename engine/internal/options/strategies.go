@@ -5,10 +5,61 @@ const (
 	maxLiveStrikePctOTM  = 0.005
 )
 
+var strategyIDs = map[string]int{
+	"MomentumBurst_Bull_Call":         1,
+	"MomentumBurst_Bear_Put":          2,
+	"ConsecCandle_Bull_Call":          3,
+	"ConsecCandle_Bear_Put":           4,
+	"RSI_Extreme_Oversold_Call":       5,
+	"RSI_Extreme_Overbought_Put":      6,
+	"RSI_Oversold_Recovery_Call":      7,
+	"RSI_Overbought_Fade_Put":         8,
+	"Overextension_Fade_Put":          9,
+	"Overextension_Fade_Call":         10,
+	"EMA_BullCross_Call":              11,
+	"EMA_BearCross_Put":               12,
+	"Resistance_Breakout_Call":        13,
+	"Support_Breakdown_Put":           14,
+	"Stoch_Oversold_Call":             15,
+	"Stoch_Overbought_Put":            16,
+	"Capitulation_VReversal_Call":     17,
+	"SessionOpen_Bull_Call":           18,
+	"SessionOpen_Bear_Put":            19,
+	"VolCompress_Breakout_Bull_Call":  20,
+	"VolCompress_Breakout_Bear_Put":   21,
+	"VWAP_Continuation_Bull_Call":     22,
+	"VWAP_Continuation_Bear_Put":      23,
+	"TripleConfluence_Bull_Call":      24,
+	"TripleConfluence_Bear_Put":       25,
+	"SharpReversal_TopFade_Put":       26,
+	"TrendAlignment_Bull_Call":        27,
+	"TrendAlignment_Bear_Put":         28,
+	"BandBounce_Reclaim_Call":         29,
+	"BandFade_Rejection_Put":          30,
+	"SharpReversal_BottomSnap_Call":   31,
+	"MomentumFollow_Bull_Call":        32,
+	"BBSqueeze_Release_Bull_Call":     33,
+	"BBSqueeze_Release_Bear_Put":      34,
+	"HighIV_Expansion_Bull_Call":      35,
+	"HighIV_Expansion_Bear_Put":       36,
+	"MomentumVWAP_Pro_Bull_Call":      37,
+	"MomentumVWAP_Pro_Bear_Put":       38,
+	"BreakoutTrend_Pro_Bull_Call":     39,
+	"BreakdownTrend_Pro_Bear_Put":     40,
+	"Capitulation_Reclaim_Elite_Call": 41,
+}
+
+func assignStrategyIDs(defs []StrategyDef) []StrategyDef {
+	for i := range defs {
+		defs[i].ID = strategyIDs[defs[i].Name]
+	}
+	return defs
+}
+
 // BuildStrategies returns the live-approved strategy set.
 // Filters out ultra-short expiries and deep OTM strikes.
 func BuildStrategies() []StrategyDef {
-	all := buildAllStrategies()
+	all := assignStrategyIDs(buildAllStrategies())
 	filtered := make([]StrategyDef, 0, len(all))
 	for _, def := range all {
 		if def.ExpiryMinutes >= minLiveExpiryMinutes && def.StrikePctOTM <= maxLiveStrikePctOTM {
