@@ -18,7 +18,7 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
-// buildAllStrategies defines 20 elite BTC option buying strategies.
+// buildAllStrategies defines 41 live-approved BTC option buying strategies.
 //
 // Design principles:
 //   - Each strategy uses a UNIQUE signal — zero clustering (no two strategies
@@ -227,6 +227,210 @@ func buildAllStrategies() []StrategyDef {
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
 			TakeProfitPct: 1.00, StopLossPct: 0.33,
 			PositionUSD: 600, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 720,
+		},
+
+		// ═══════════════════════════════════════════════════════════════════════
+		// CATEGORY E — SELECTIVE ALPHA OVERLAYS
+		// -----------------------------------------------------------------------
+		// Five additional high-quality overlays built from unused signals that
+		// already exist in the engine. These are intentionally selective:
+		//   - VWAP continuation catches clean trend continuation once price is
+		//     established away from fair value with momentum.
+		//   - Triple confluence requires reversal, momentum, and EMA alignment.
+		//   - Sharp reversal down captures failed upside bursts and intraday
+		//     blow-off rejection without waiting for a full overextension setup.
+		// They add trade diversity without relaxing the live-approved filters.
+		// ═══════════════════════════════════════════════════════════════════════
+
+		// Signal: price is > VWAP with directional follow-through.
+		// Cleaner continuation than raw breakout because the move is already
+		// holding above fair value instead of merely spiking through it.
+		{
+			Name: "VWAP_Continuation_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.68, StopLossPct: 0.24,
+			PositionUSD: 575, Signal: "VWAP_ABOVE", CooldownSecs: 540,
+		},
+		{
+			Name: "VWAP_Continuation_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.68, StopLossPct: 0.24,
+			PositionUSD: 575, Signal: "VWAP_BELOW", CooldownSecs: 540,
+		},
+
+		// Signal: oversold/overbought reversal, EMA cross, and momentum all agree.
+		// This is one of the cleanest "everything aligned" entries in the book.
+		{
+			Name: "TripleConfluence_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.80, StopLossPct: 0.26,
+			PositionUSD: 625, Signal: "TRIPLE_BULL", CooldownSecs: 720,
+		},
+		{
+			Name: "TripleConfluence_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.80, StopLossPct: 0.26,
+			PositionUSD: 625, Signal: "TRIPLE_BEAR", CooldownSecs: 720,
+		},
+
+		// Signal: fast upside burst rejects immediately and price rolls over.
+		// This catches intraday blow-off tops earlier than the slower
+		// overextension fade, with tighter risk and higher trade frequency.
+		{
+			Name: "SharpReversal_TopFade_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			PositionUSD: 575, Signal: "SHARP_REVERSAL_DOWN", CooldownSecs: 600,
+		},
+
+		// ═══════════════════════════════════════════════════════════════════════
+		// CATEGORY F — STRUCTURE AND REGIME ADD-ONS
+		// -----------------------------------------------------------------------
+		// Five more selective overlays from the strongest remaining unused
+		// signals. These add medium-frequency trend-following and reversal
+		// exposure without duplicating the existing top-tier setups.
+		// ═══════════════════════════════════════════════════════════════════════
+
+		// Signal: healthy upside trend with price above both medium EMAs and a
+		// fresh bullish EMA cross. This is cleaner than a naked breakout because
+		// structure and momentum are both aligned.
+		{
+			Name: "TrendAlignment_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			PositionUSD: 600, Signal: "EMA_ABOVE_BOTH", CooldownSecs: 600,
+		},
+		{
+			Name: "TrendAlignment_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			PositionUSD: 600, Signal: "EMA_BELOW_BOTH", CooldownSecs: 600,
+		},
+
+		// Signal: band-touch rejection with immediate recovery back inside the
+		// Bollinger envelope. This is a tighter, faster mean-reversion setup than
+		// the extreme RSI variants and gives the book more range-trading balance.
+		{
+			Name: "BandBounce_Reclaim_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.62, StopLossPct: 0.22,
+			PositionUSD: 525, Signal: "BB_LOWER_TOUCH", CooldownSecs: 480,
+		},
+		{
+			Name: "BandFade_Rejection_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.62, StopLossPct: 0.22,
+			PositionUSD: 525, Signal: "BB_UPPER_TOUCH", CooldownSecs: 480,
+		},
+
+		// Signal: sharp downside washout followed by immediate snapback. This is
+		// the upside counterpart to the existing sharp bearish rejection strategy.
+		{
+			Name: "SharpReversal_BottomSnap_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			PositionUSD: 575, Signal: "SHARP_REVERSAL_UP", CooldownSecs: 600,
+		},
+
+		// ═══════════════════════════════════════════════════════════════════════
+		// CATEGORY G — VOLATILITY AND SECOND-WAVE CONTINUATION
+		// -----------------------------------------------------------------------
+		// Final five overlays from the strongest remaining unused signals.
+		// These intentionally broaden the book into:
+		//   - medium-strength trend continuation,
+		//   - squeeze-release expansion,
+		//   - high-IV directional follow-through.
+		// They are slightly smaller than the flagship strategies because they
+		// trigger more often or sit one tier below the "strong momentum" set.
+		// ═══════════════════════════════════════════════════════════════════════
+
+		// Signal: moderate but real 5m/10m upside momentum with RSI still in a
+		// healthy trend zone. This picks up second-wave continuation that is too
+		// small for the strong-momentum strategy but still option-friendly.
+		{
+			Name: "MomentumFollow_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.60, StopLossPct: 0.22,
+			PositionUSD: 540, Signal: "BULL_MOMENTUM", CooldownSecs: 420,
+		},
+
+		// Signal: recent compression in Bollinger width followed by bullish
+		// breakout. This captures the first sustained expansion leg out of a
+		// coiled range before the slower vol-compress setups fully mature.
+		{
+			Name: "BBSqueeze_Release_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.66, StopLossPct: 0.23,
+			PositionUSD: 560, Signal: "BB_SQUEEZE_BULL", CooldownSecs: 540,
+		},
+		{
+			Name: "BBSqueeze_Release_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 75,
+			TakeProfitPct: 0.66, StopLossPct: 0.23,
+			PositionUSD: 560, Signal: "BB_SQUEEZE_BEAR", CooldownSecs: 540,
+		},
+
+		// Signal: already-elevated IV plus strong directional push. These are
+		// selective follow-through trades for environments where realized vol is
+		// expanding fast enough that long premium can still outperform.
+		{
+			Name: "HighIV_Expansion_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 60,
+			TakeProfitPct: 0.58, StopLossPct: 0.20,
+			PositionUSD: 500, Signal: "HIGH_IV_BULL", CooldownSecs: 480,
+		},
+		{
+			Name: "HighIV_Expansion_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 60,
+			TakeProfitPct: 0.58, StopLossPct: 0.20,
+			PositionUSD: 500, Signal: "HIGH_IV_BEAR", CooldownSecs: 480,
+		},
+
+		// CATEGORY H - HYBRID ALPHA FACTORY
+		// -----------------------------------------------------------------------
+		// Five higher-conviction hybrids built by combining the strongest
+		// existing edges into more selective entries. These are intended to be
+		// better than the prior add-ons, not just more numerous.
+
+		// Signal: strong directional momentum already established above/below
+		// VWAP. These are cleaner second-leg continuation entries than raw
+		// momentum alone because fair-value alignment confirms institutional flow.
+		{
+			Name: "MomentumVWAP_Pro_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.78, StopLossPct: 0.24,
+			PositionUSD: 650, Signal: "MOMENTUM_VWAP_BULL", CooldownSecs: 600,
+		},
+		{
+			Name: "MomentumVWAP_Pro_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.78, StopLossPct: 0.24,
+			PositionUSD: 650, Signal: "MOMENTUM_VWAP_BEAR", CooldownSecs: 600,
+		},
+
+		// Signal: structural breakout plus trend confirmation from medium EMAs.
+		// These should avoid many of the fake breakouts that hurt naked breakout
+		// buying.
+		{
+			Name: "BreakoutTrend_Pro_Bull_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.84, StopLossPct: 0.26,
+			PositionUSD: 675, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
+		},
+		{
+			Name: "BreakdownTrend_Pro_Bear_Put", Type: Put,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.84, StopLossPct: 0.26,
+			PositionUSD: 675, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
+		},
+
+		// Signal: panic washout followed by immediate VWAP and EMA reclaim.
+		// This is the highest-conviction long-premium reversal setup in the book.
+		{
+			Name: "Capitulation_Reclaim_Elite_Call", Type: Call,
+			StrikePctOTM: 0.0, ExpiryMinutes: 90,
+			TakeProfitPct: 0.95, StopLossPct: 0.28,
+			PositionUSD: 750, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 900,
 		},
 	}
 }

@@ -418,6 +418,94 @@ var Signals = map[string]SignalFunc{
 
 	// ── IV-based signals ──────────────────────────────────────────────────────
 	// High IV + directional momentum = vol expansion play
+	// Hybrid high-conviction signals combine multiple confirmed edges.
+	"MOMENTUM_VWAP_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
+		rsiVal := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > vw*1.0015 && mom5 > 0.0024 && mom10 > 0.0012 && rsiVal > 48 && rsiVal < 70
+	},
+	"MOMENTUM_VWAP_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := vwapOf(ctx.Prices[len(ctx.Prices)-30:])
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
+		rsiVal := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < vw*0.9985 && mom5 < -0.0024 && mom10 < -0.0012 && rsiVal > 30 && rsiVal < 52
+	},
+	"BREAKOUT_TREND_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		hi := 0.0
+		for _, p := range prev {
+			if p > hi {
+				hi = p
+			}
+		}
+		ema20 := ema(ctx.Prices, 20)
+		ema50 := ema(ctx.Prices, 50)
+		rsiVal := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > hi*1.0018 &&
+			ctx.BTCPrice > ema20 &&
+			ctx.BTCPrice > ema50 &&
+			momentum(ctx.Prices, 3) > 0.0018 &&
+			rsiVal > 52 && rsiVal < 72
+	},
+	"BREAKDOWN_TREND_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		lo := math.MaxFloat64
+		for _, p := range prev {
+			if p < lo {
+				lo = p
+			}
+		}
+		ema20 := ema(ctx.Prices, 20)
+		ema50 := ema(ctx.Prices, 50)
+		rsiVal := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < lo*0.9982 &&
+			ctx.BTCPrice < ema20 &&
+			ctx.BTCPrice < ema50 &&
+			momentum(ctx.Prices, 3) < -0.0018 &&
+			rsiVal > 28 && rsiVal < 48
+	},
+	"CAPITULATION_RECLAIM": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-7 : n-1]
+		lo := window[0]
+		for _, p := range window[1:] {
+			if p < lo {
+				lo = p
+			}
+		}
+		startPrice := ctx.Prices[n-8]
+		if startPrice == 0 || lo == 0 {
+			return false
+		}
+		drop := (startPrice - lo) / startPrice
+		recovery := (ctx.BTCPrice - lo) / lo
+		shortVWAP := vwapOf(ctx.Prices[n-15:])
+		ema9 := ema(ctx.Prices, 9)
+		rsiVal := rsi(ctx.Prices, 14)
+		return drop > 0.0048 &&
+			recovery > 0.0022 &&
+			ctx.BTCPrice > shortVWAP &&
+			ctx.BTCPrice > ema9 &&
+			rsiVal > 34 && rsiVal < 60
+	},
 	"HIGH_IV_BULL": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
 			return false

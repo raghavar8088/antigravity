@@ -45,3 +45,19 @@ func TestBuildStrategiesKeepsBothCallsAndPuts(t *testing.T) {
 		t.Fatalf("expected both calls and puts in live set, got calls=%d puts=%d", calls, puts)
 	}
 }
+
+func TestBuildStrategiesIncludesExpandedLiveBook(t *testing.T) {
+	live := BuildStrategies()
+
+	if len(live) < 41 {
+		t.Fatalf("expected at least 41 live strategies after expansion, got %d", len(live))
+	}
+}
+
+func TestAllLiveStrategiesReferenceKnownSignals(t *testing.T) {
+	for _, def := range BuildStrategies() {
+		if _, ok := Signals[def.Signal]; !ok {
+			t.Fatalf("strategy %s references unknown signal %s", def.Name, def.Signal)
+		}
+	}
+}
