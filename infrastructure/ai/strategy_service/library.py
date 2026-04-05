@@ -24,6 +24,9 @@ from .utils import (
     session_vwap,
     slope,
     stochastic_oscillator,
+    adx,
+    realized_volatility,
+    volume_spike,
 )
 
 
@@ -72,6 +75,21 @@ STRATEGY_DESCRIPTORS: list[StrategyDescriptor] = [
         name="keltner_channel_breakout",
         description="Momentum breakout strategy requiring consecutive closes outside the Keltner Channel.",
         required_timeframes=["1m or 5m"],
+    ),
+    StrategyDescriptor(
+        name="raig_breakout_vwap",
+        description="RAIG: Trend-aligned breakout above swing levels supported by VWAP and volume spikes.",
+        required_timeframes=["15m", "5m"],
+    ),
+    StrategyDescriptor(
+        name="raig_liquidity_sweep_reversal",
+        description="RAIG: High-probability reversal after liquidity sweeps of recent swing highs/lows.",
+        required_timeframes=["5m", "1m"],
+    ),
+    StrategyDescriptor(
+        name="raig_trend_pullback",
+        description="RAIG: Trend-following pullback entries into EMA and VWAP dynamic support/resistance.",
+        required_timeframes=["15m", "5m"],
     ),
 ]
 
@@ -639,7 +657,198 @@ def keltner_channel_breakout_strategy(request: StrategyEvaluationRequest) -> Str
     return _wait(name, "No Keltner breakout sequence detected.")
 
 
+def detect_market_regime(request: StrategyEvaluationRequest) -> str:
+    # Use 15m for regime detection as per RAIG reference
+    frame = candles_to_frame(request.candles_15m or request.candles_5m or request.candles_1m)
+    if len(frame) < 20:
+        return "NO_TRADE"
+
+    # Realized Volatility Check (window=20)
+    vol = realized_volatility(frame["close"], 20).iloc[-1]
+    if vol >= request.config.volatility_threshold:
+        return "HIGH_VOL"
+
+    # Trend Strength (ADX 14)
+    adx_val = adx(frame, 14).iloc[-1]
+    if adx_val < 15:
+        return "RANGE"
+
+    # Trend Direction (EMA 9/20)
+    ema_9 = ema(frame["close"], 9).iloc[-1]
+    ema_20 = ema(frame["close"], 20).iloc[-1]
+
+    if adx_val >= request.config.adx_threshold:
+        if ema_9 > ema_20:
+            return "TRENDING_BULL"
+        if ema_9 < ema_20:
+            return "TRENDING_BEAR"
+
+    return "NO_TRADE"
+
+
+def raig_breakout_vwap_strategy(request: StrategyEvaluationRequest, regime: str) -> StrategySignal:
+    name = "raig_breakout_vwap"
+    if regime not in {"TRENDING_BULL", "TRENDING_BEAR"}:
+        return _no_trade(name, f"Regime {regime} not suitable for breakout.")
+
+    frame_5m = candles_to_frame(request.candles_5m)
+    if len(frame_5m) < 20:
+        return _wait(name, "Need more 5m candles.")
+
+    # Volume Spike Detection
+    v_spike = volume_spike(frame_5m["volume"], 20, request.config.volume_spike_threshold).iloc[-1]
+    if not v_spike:
+        return _wait(name, "Waiting for volume spike.")
+
+    price = float(frame_5m["close"].iloc[-1])
+    vwap = session_vwap(frame_5m, request.config.mechanical_session_timezone, request.config.mechanical_session_start).iloc[-1]
+    swing_high = previous_swing_high(frame_5m, 10)
+    swing_low = previous_swing_low(frame_5m, 10)
+    atr_val = atr(frame_5m, 14).iloc[-1]
+
+    if regime == "TRENDING_BULL" and price > swing_high and price > vwap:
+        entry = price
+        stop = entry - 1.2 * atr_val
+        tp = entry + 2.6 * atr_val
+        return StrategySignal(
+            strategy=name,
+            state="LONG",
+            entry_price=entry,
+            stop_loss=stop,
+            take_profit=tp,
+            confidence=0.78,
+            regime=regime,
+            reason="Bullish breakout above swing high with VWAP support and volume spike.",
+        )
+
+    if regime == "TRENDING_BEAR" and price < swing_low and price < vwap:
+        entry = price
+        stop = entry + 1.2 * atr_val
+        tp = entry - 2.6 * atr_val
+        return StrategySignal(
+            strategy=name,
+            state="SHORT",
+            entry_price=entry,
+            stop_loss=stop,
+            take_profit=tp,
+            confidence=0.78,
+            regime=regime,
+            reason="Bearish breakdown below swing low with VWAP resistance and volume spike.",
+        )
+
+    return _wait(name, "Conditions for breakout not yet met.")
+
+
+def raig_liquidity_sweep_reversal_strategy(request: StrategyEvaluationRequest, regime: str) -> StrategySignal:
+    name = "raig_liquidity_sweep_reversal"
+    if regime == "HIGH_VOL":
+        return _no_trade(name, "Regime HIGH_VOL is too risky for reversals.")
+
+    frame_1m = candles_to_frame(request.candles_1m)
+    frame_5m = candles_to_frame(request.candles_5m)
+    if len(frame_1m) < 5 or len(frame_5m) < 20:
+        return _wait(name, "Need more candles.")
+
+    last = frame_1m.iloc[-1]
+    prev = frame_1m.iloc[-2]
+    atr_val = atr(frame_5m, 14).iloc[-1]
+    vwap = session_vwap(frame_5m, request.config.mechanical_session_timezone, request.config.mechanical_session_start).iloc[-1]
+    swing_high = previous_swing_high(frame_5m, 15)
+    swing_low = previous_swing_low(frame_5m, 15)
+
+    price = float(last["close"])
+    swept_high = prev["high"] > swing_high and last["close"] < prev["open"]
+    swept_low = prev["low"] < swing_low and last["close"] > prev["open"]
+
+    if swept_high and price < vwap:
+        entry = price
+        stop = max(float(prev["high"]), entry + 1.0 * atr_val)
+        tp = entry - 2.2 * atr_val
+        return StrategySignal(
+            strategy=name,
+            state="SHORT",
+            entry_price=entry,
+            stop_loss=stop,
+            take_profit=tp,
+            confidence=0.70,
+            regime=regime,
+            reason="Liquidity sweep above highs followed by bearish rejection under VWAP.",
+        )
+
+    if swept_low and price > vwap:
+        entry = price
+        stop = min(float(prev["low"]), entry - 1.0 * atr_val)
+        tp = entry + 2.2 * atr_val
+        return StrategySignal(
+            strategy=name,
+            state="LONG",
+            entry_price=entry,
+            stop_loss=stop,
+            take_profit=tp,
+            confidence=0.70,
+            regime=regime,
+            reason="Liquidity sweep below lows followed by bullish reclaim above VWAP.",
+        )
+
+    return _wait(name, "No liquidity sweep detected.")
+
+
+def raig_trend_pullback_strategy(request: StrategyEvaluationRequest, regime: str) -> StrategySignal:
+    name = "raig_trend_pullback"
+    if regime not in {"TRENDING_BULL", "TRENDING_BEAR"}:
+        return _no_trade(name, f"Regime {regime} not trending.")
+
+    frame_5m = candles_to_frame(request.candles_5m)
+    if len(frame_5m) < 20:
+        return _wait(name, "Need more 5m candles.")
+
+    ema_9 = ema(frame_5m["close"], 9).iloc[-1]
+    ema_20 = ema(frame_5m["close"], 20).iloc[-1]
+    price = float(frame_5m["close"].iloc[-1])
+    atr_val = atr(frame_5m, 14).iloc[-1]
+    vwap = session_vwap(frame_5m, request.config.mechanical_session_timezone, request.config.mechanical_session_start).iloc[-1]
+
+    if regime == "TRENDING_BULL":
+        # Price pulls back between EMA 20 and EMA 9
+        pullback = price >= ema_20 and price <= ema_9 * 1.002 and price >= vwap
+        if pullback:
+            entry = price
+            stop = entry - 1.1 * atr_val
+            tp = entry + 2.4 * atr_val
+            return StrategySignal(
+                strategy=name,
+                state="LONG",
+                entry_price=entry,
+                stop_loss=stop,
+                take_profit=tp,
+                confidence=0.74,
+                regime=regime,
+                reason="Bull trend pullback into EMA/VWAP support.",
+            )
+
+    if regime == "TRENDING_BEAR":
+        pullback = price <= ema_20 and price >= ema_9 * 0.998 and price <= vwap
+        if pullback:
+            entry = price
+            stop = entry + 1.1 * atr_val
+            tp = entry - 2.4 * atr_val
+            return StrategySignal(
+                strategy=name,
+                state="SHORT",
+                entry_price=entry,
+                stop_loss=stop,
+                take_profit=tp,
+                confidence=0.74,
+                regime=regime,
+                reason="Bear trend pullback into EMA/VWAP resistance.",
+            )
+
+    return _wait(name, "Not in a pullback zone.")
+
+
 def evaluate_all_strategies(request: StrategyEvaluationRequest) -> list[StrategySignal]:
+    regime = detect_market_regime(request)
+
     evaluations = [
         mechanical_1m_btc_strategy(request),
         four_hour_range_reentry_strategy(request),
@@ -647,6 +856,9 @@ def evaluate_all_strategies(request: StrategyEvaluationRequest) -> list[Strategy
         smc_fvg_liquidity_grab_strategy(request),
         ny_open_session_range_strategy(request),
         sr_ema_crossover_strategy(request),
+        raig_breakout_vwap_strategy(request, regime),
+        raig_liquidity_sweep_reversal_strategy(request, regime),
+        raig_trend_pullback_strategy(request, regime),
     ]
 
     if request.config.enable_stochastic_squeeze:
@@ -659,5 +871,16 @@ def evaluate_all_strategies(request: StrategyEvaluationRequest) -> list[Strategy
                 keltner_channel_breakout_strategy(request),
             ]
         )
+
+    # Attach regime and default confidence to all existing strategies
+    for eval in evaluations:
+        if not eval.regime:
+            eval.regime = regime
+        if eval.strategy.startswith("raig_"):
+            continue  # Already has confidence
+        if eval.state in {"LONG", "SHORT"}:
+            eval.confidence = 0.68  # Baseline for legacy strategies
+        else:
+            eval.confidence = 0.0
 
     return evaluations

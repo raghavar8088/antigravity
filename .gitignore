@@ -32,5 +32,7 @@ Thumbs.db
 # Engine Temp
 engine/cmd/antigravity/main.go.*
 engine/internal/**/*.go.*
+# Logs
+*.log
 dev-server.err
 dev-server2.err

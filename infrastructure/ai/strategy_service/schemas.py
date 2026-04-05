@@ -3,7 +3,27 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from enum import Enum
 from pydantic import AliasChoices, BaseModel, Field, field_validator
+
+
+class Side(str, Enum):
+    LONG = "LONG"
+    SHORT = "SHORT"
+
+
+class Regime(str, Enum):
+    TRENDING_BULL = "TRENDING_BULL"
+    TRENDING_BEAR = "TRENDING_BEAR"
+    RANGE = "RANGE"
+    HIGH_VOL = "HIGH_VOL"
+    NO_TRADE = "NO_TRADE"
+
+
+class OrderStatus(str, Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
 
 
 def _coerce_timestamp(value: Any) -> datetime:
@@ -67,6 +87,9 @@ class StrategyConfig(BaseModel):
     stochastic_time_stop_candles: int = 5
     stochastic_oversold_threshold: float = 20.0
     stochastic_overbought_threshold: float = 80.0
+    adx_threshold: float = 20.0
+    volatility_threshold: float = 0.03
+    volume_spike_threshold: float = 2.0
 
 
 class StrategyConfigPatch(BaseModel):
@@ -86,12 +109,16 @@ class StrategyConfigPatch(BaseModel):
     stochastic_time_stop_candles: int | None = None
     stochastic_oversold_threshold: float | None = None
     stochastic_overbought_threshold: float | None = None
+    adx_threshold: float | None = None
+    volatility_threshold: float | None = None
+    volume_spike_threshold: float | None = None
 
 
 class StrategyEvaluationRequest(BaseModel):
     symbol: str = "BTCUSDT"
     candles_1m: list[Candle] = Field(default_factory=list)
     candles_5m: list[Candle] = Field(default_factory=list)
+    candles_15m: list[Candle] = Field(default_factory=list)
     candles_30m: list[Candle] = Field(default_factory=list)
     candles_1h: list[Candle] = Field(default_factory=list)
     candles_4h: list[Candle] = Field(default_factory=list)
@@ -109,6 +136,8 @@ class StrategySignal(BaseModel):
     partial_take_profit: float | None = None
     partial_size_fraction: float | None = None
     reason: str
+    confidence: float = 0.5
+    regime: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -175,6 +204,7 @@ class StrategyCycleRequest(BaseModel):
     symbol: str = "BTCUSDT"
     candles_1m: list[Candle] = Field(default_factory=list)
     candles_5m: list[Candle] = Field(default_factory=list)
+    candles_15m: list[Candle] = Field(default_factory=list)
     candles_30m: list[Candle] = Field(default_factory=list)
     candles_1h: list[Candle] = Field(default_factory=list)
     candles_4h: list[Candle] = Field(default_factory=list)
@@ -202,3 +232,26 @@ class StrategyCycleResponse(BaseModel):
     blocked_reason: str | None = None
     execution_plan: ExecutionPlan | None = None
     performance: PerformanceMetrics
+
+
+class BacktestTrade(BaseModel):
+    ts: datetime
+    strategy: str
+    side: str
+    entry_price: float
+    exit_price: float
+    qty: float
+    pnl: float
+    winner: bool
+    reason: str
+
+
+class BacktestReport(BaseModel):
+    starting_equity: float
+    ending_equity: float
+    total_return_pct: float
+    total_trades: int
+    win_rate: float
+    profit_factor: float
+    max_drawdown_pct: float
+    trades: list[BacktestTrade]

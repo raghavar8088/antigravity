@@ -67,6 +67,9 @@ class ApexScalpConfig:
     stochastic_time_stop_candles: int = 5
     stochastic_oversold_threshold: float = 20.0
     stochastic_overbought_threshold: float = 80.0
+    adx_threshold: float = 20.0
+    volatility_threshold: float = 0.03
+    volume_spike_threshold: float = 2.0
     strategy_priority: list[str] | None = None
     config_source: str | None = None
 
@@ -105,6 +108,9 @@ class ApexScalpConfig:
             stochastic_time_stop_candles=self.stochastic_time_stop_candles,
             stochastic_oversold_threshold=self.stochastic_oversold_threshold,
             stochastic_overbought_threshold=self.stochastic_overbought_threshold,
+            adx_threshold=self.adx_threshold,
+            volatility_threshold=self.volatility_threshold,
+            volume_spike_threshold=self.volume_spike_threshold,
         )
 
     def as_dict(self) -> dict[str, object]:
@@ -267,6 +273,7 @@ class StrategyManager:
             symbol=request.symbol,
             candles_1m=request.candles_1m,
             candles_5m=request.candles_5m,
+            candles_15m=request.candles_15m,
             candles_30m=request.candles_30m,
             candles_1h=request.candles_1h,
             candles_4h=request.candles_4h,
@@ -287,9 +294,17 @@ class StrategyManager:
         if not actionable:
             return None
 
-        priority = self.config.strategy_priority or [item.strategy for item in actionable]
-        priority_rank = {name: index for index, name in enumerate(priority)}
-        actionable.sort(key=lambda item: priority_rank.get(item.strategy, len(priority_rank)))
+        # Sort by confidence (descending)
+        actionable.sort(key=lambda item: item.confidence, reverse=True)
+
+        # If we have a priority list, use it to break ties if needed (secondary sort)
+        if self.config.strategy_priority:
+            priority = self.config.strategy_priority
+            priority_rank = {name: index for index, name in enumerate(priority)}
+            # Note: Python's sort is stable, so we sort by priority first (rank) then by confidence (descending)
+            actionable.sort(key=lambda item: priority_rank.get(item.strategy, len(priority_rank)))
+            actionable.sort(key=lambda item: item.confidence, reverse=True)
+
         return actionable[0]
 
     def run_cycle(self, request: StrategyCycleRequest) -> StrategyCycleResponse:

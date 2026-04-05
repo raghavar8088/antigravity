@@ -7,11 +7,12 @@ from fastapi import FastAPI
 from .framework import ApexScalpFramework
 from .library import STRATEGY_DESCRIPTORS, evaluate_all_strategies
 from .schemas import (
-    StrategyCycleRequest,
     StrategyCycleResponse,
     StrategyEvaluationRequest,
     StrategyEvaluationResponse,
+    BacktestReport,
 )
+from .backtest import Backtester
 
 
 app = FastAPI(
@@ -63,3 +64,10 @@ def framework_config() -> dict[str, object]:
 def run_framework_cycle(request: StrategyCycleRequest) -> StrategyCycleResponse:
     framework = ApexScalpFramework.load(request.config_path)
     return framework.run_cycle(request)
+
+
+@app.post("/framework/backtest", response_model=BacktestReport)
+def run_backtest(requests: list[StrategyCycleRequest]) -> BacktestReport:
+    framework = ApexScalpFramework.load()
+    backtester = Backtester(framework)
+    return backtester.run(requests)

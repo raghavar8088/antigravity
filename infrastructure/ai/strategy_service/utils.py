@@ -245,3 +245,42 @@ def stochastic_oscillator(
     k_line = raw_k.rolling(smooth_k).mean()
     d_line = k_line.rolling(smooth_d).mean()
     return k_line.fillna(50.0), d_line.fillna(50.0)
+
+
+def adx(frame: pd.DataFrame, period: int = 14) -> pd.Series:
+    if len(frame) < period * 2:
+        return pd.Series(0.0, index=frame.index)
+
+    tr = true_range(frame)
+    up_move = frame["high"].diff()
+    down_move = frame["low"].shift(1) - frame["low"]
+
+    pos_dm = pd.Series(0.0, index=frame.index)
+    neg_dm = pd.Series(0.0, index=frame.index)
+
+    pos_mask = (up_move > down_move) & (up_move > 0)
+    neg_mask = (down_move > up_move) & (down_move > 0)
+
+    pos_dm[pos_mask] = up_move[pos_mask]
+    neg_dm[neg_mask] = down_move[neg_mask]
+
+    # Wilder's Smoothing
+    str_tr = tr.ewm(alpha=1 / period, adjust=False).mean()
+    str_pos_dm = pos_dm.ewm(alpha=1 / period, adjust=False).mean()
+    str_neg_dm = neg_dm.ewm(alpha=1 / period, adjust=False).mean()
+
+    pos_di = 100 * (str_pos_dm / str_tr.replace(0, np.nan))
+    neg_di = 100 * (str_neg_dm / str_tr.replace(0, np.nan))
+
+    dx = 100 * (abs(pos_di - neg_di) / (pos_di + neg_di).replace(0, np.nan))
+    return dx.ewm(alpha=1 / period, adjust=False).mean().fillna(0)
+
+
+def realized_volatility(series: pd.Series, window: int = 20) -> pd.Series:
+    log_returns = np.log(series / series.shift(1))
+    return log_returns.rolling(window=window).std().fillna(0)
+
+
+def volume_spike(series: pd.Series, period: int = 20, threshold: float = 2.0) -> pd.Series:
+    avg_vol = series.rolling(window=period).mean()
+    return (series > avg_vol * threshold).fillna(False)

@@ -22,7 +22,20 @@
       "Bash(python3 -c ':*)",
       "Bash(powershell.exe -Command \"Get-ChildItem -Path C:\\\\Users -Recurse -Filter 'raig-logo.png' -ErrorAction SilentlyContinue | Select-Object FullName\")",
       "Bash(powershell.exe -Command \"Copy-Item 'C:\\\\Users\\\\ragha\\\\Downloads\\\\raig-logo.png' 'C:\\\\Trading apllication\\\\client\\\\public\\\\raig-logo.png'\")",
-      "Bash(grep -n \"func tailAverage\\\\|func appendRollingFloat\\\\|func signalWithConfidence\" \"c:/Trading apllication/engine/internal/strategy/\"*.go)"
+      "Bash(grep -n \"func tailAverage\\\\|func appendRollingFloat\\\\|func signalWithConfidence\" \"c:/Trading apllication/engine/internal/strategy/\"*.go)",
+      "Bash(curl -s http://localhost:8080/api/trades)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s http://localhost:8080/api/stats)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8080/health)",
+      "Bash(xargs grep:*)",
+      "Bash(psql \"postgres://antigravity:password123@localhost:5432/antigravity\" -c \"SELECT balance, total_pnl, total_trades FROM engine_state WHERE id=1;\")",
+      "Bash(docker exec:*)",
+      "Bash(where docker:*)",
+      "Bash(where psql:*)",
+      "Bash(where pg_isready)",
+      "Bash(curl -s -X POST http://localhost:8080/api/admin/reset -w \"\\\\nHTTP %{http_code}\")",
+      "Bash(find \"c:/Trading apllication\" -name \"*.env*\" -not -path \"*/node_modules/*\" -exec grep -l \"API_URL\\\\|8080\" {} \\\\;)",
+      "Bash(npx next:*)"
     ]
   }
 }

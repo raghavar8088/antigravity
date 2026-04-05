@@ -8,6 +8,7 @@ type DashboardHeaderProps = {
   balance: number;
   dailyPnL?: number;
   openPositions: number;
+  regime?: string;
   onResetSuccess?: () => void;
   onAdminEvent?: (message: string, tone: "admin" | "info") => void;
   combatMode?: boolean;
@@ -15,10 +16,34 @@ type DashboardHeaderProps = {
 };
 
 
+function RegimeBadge({ regime }: { regime?: string }) {
+  if (!regime || regime === "NO_TRADE") return null;
+
+  const map: Record<string, { color: string; bg: string; label: string }> = {
+    TRENDING_BULL: { color: "var(--green)", bg: "var(--green-dim)", label: "Bull Trend" },
+    TRENDING_BEAR: { color: "var(--red)", bg: "var(--red-dim)", label: "Bear Trend" },
+    RANGE: { color: "var(--blue)", bg: "var(--blue-dim)", label: "Ranging" },
+    HIGH_VOL: { color: "var(--fuchsia)", bg: "var(--fuchsia-dim)", label: "High Vol" },
+  };
+
+  const current = map[regime] || { color: "var(--text-secondary)", bg: "var(--surface-3)", label: regime };
+
+  return (
+    <span
+      className="ml-2 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]"
+      style={{ background: current.bg, color: current.color, border: `1px solid ${current.color}22` }}
+    >
+      {current.label}
+    </span>
+  );
+}
+
+
 export default function DashboardHeader({
   online,
   balance,
   openPositions,
+  regime,
   onResetSuccess,
   onAdminEvent,
   combatMode = false,
@@ -89,8 +114,9 @@ export default function DashboardHeader({
         }}>
           <div className={online ? "live-dot" : "live-dot-red"} />
           <div className="flex-1">
-            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               {online ? "Engine live and monitoring BTC/USDT" : "Engine offline"}
+              <RegimeBadge regime={regime} />
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {online ? `${openPositions} open positions across the live book` : "Waiting for engine heartbeat"}
@@ -180,6 +206,20 @@ export default function DashboardHeader({
             className="btn-primary"
           >
             {activeAction === "/api/admin/reset" ? "Resetting" : "Reset"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              postAdminAction(
+                "/api/backtest-demo",
+                "Start RAIG BTC Alpha Backtest in terminal?",
+                "Backtest triggered. Check execution logs.",
+              )
+            }
+            disabled={isBusy}
+            className="btn-gold"
+          >
+            {activeAction === "/api/backtest-demo" ? "Processing" : "RAIG Backtest"}
           </button>
         </div>
       </div>

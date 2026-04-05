@@ -73,6 +73,9 @@ const INITIAL_BALANCE = 1000000;
 const INITIAL_OPTIONS_BALANCE = 1000000;
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
+  { name: "RAIG_Breakout_VWAP", category: "RAIG Alpha", timeframe: "15m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "RAIG_Liquidity_Sweep", category: "RAIG Alpha", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
+  { name: "RAIG_Trend_Pullback", category: "RAIG Alpha", timeframe: "5m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
   { name: "EMA_Cross_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
   { name: "ADX_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
   { name: "VolumeWeighted_Trend_Scalp", category: "Trend", timeframe: "1m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
@@ -110,6 +113,7 @@ const DEFAULT_STRATEGIES: StrategyCardView[] = [
 ].map((strategy) => ({ ...strategy, totalTrades: 0 }));
 
 const CATEGORY_ORDER = [
+  "RAIG Alpha",
   "Trend",
   "Mean Rev Elite",
   "Mean Reversion",
@@ -127,6 +131,7 @@ const CATEGORY_ORDER = [
 ];
 
 const CAT_COLORS: Record<string, string> = {
+  "RAIG Alpha": "bg-gradient-to-r from-amber-400 to-orange-500",
   Trend: "bg-blue-500",
   "Mean Rev Elite": "bg-fuchsia-500",
   "Mean Reversion": "bg-violet-500",
