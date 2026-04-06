@@ -44,13 +44,15 @@ export type OptionTrade = {
 export type OptionStrategyStatus = {
   strategyId: number;
   name: string;
+  category: string;
   optionType: string;
   totalTrades: number;
   wins: number;
   losses: number;
   totalPnl: number;
   winRate: number;
-  status: "READY" | "IN_POSITION" | "COOLING";
+  sizeMultiplier: number;
+  status: "READY" | "IN_POSITION" | "COOLING" | "DISABLED";
   hasPosition: boolean;
 };
 

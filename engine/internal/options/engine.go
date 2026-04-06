@@ -10,14 +10,15 @@ import (
 )
 
 const initialOptionsBalance = 1000000.0 // $1,000,000 paper options account
-const maxConcurrentPositions = 12       // Never hold more than 12 options at once
 
 // strategyState holds the runtime state for a single strategy
 type strategyState struct {
-	def         StrategyDef
-	position    *OptionPosition
-	stats       StrategyStatus
-	lastTradeAt time.Time
+	def               StrategyDef
+	position          *OptionPosition
+	stats             StrategyStatus
+	lastTradeAt       time.Time
+	consecutiveLosses int
+	disabledUntil     time.Time
 }
 
 // Engine is the fully autonomous BTC option scalping engine.
@@ -40,15 +41,7 @@ func NewEngine() *Engine {
 	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
-		states[i] = &strategyState{
-			def: d,
-			stats: StrategyStatus{
-				StrategyID: d.ID,
-				Name:       d.Name,
-				OptionType: string(d.Type),
-				Status:     "READY",
-			},
-		}
+		states[i] = newStrategyState(d)
 	}
 	return &Engine{
 		states:  states,
@@ -88,10 +81,12 @@ func (e *Engine) exportStateLocked() PersistedState {
 			posCopy = &cp
 		}
 		strategies[i] = PersistedStrategyState{
-			Name:        s.def.Name,
-			Position:    posCopy,
-			Stats:       s.stats,
-			LastTradeAt: s.lastTradeAt,
+			Name:              s.def.Name,
+			Position:          posCopy,
+			Stats:             s.stats,
+			LastTradeAt:       s.lastTradeAt,
+			ConsecutiveLosses: s.consecutiveLosses,
+			DisabledUntil:     s.disabledUntil,
 		}
 	}
 
@@ -138,16 +133,15 @@ func (e *Engine) RestoreState(state PersistedState) {
 		if !ok {
 			s.position = nil
 			s.lastTradeAt = time.Time{}
-			s.stats = StrategyStatus{
-				StrategyID: s.def.ID,
-				Name:       s.def.Name,
-				OptionType: string(s.def.Type),
-				Status:     "READY",
-			}
+			s.consecutiveLosses = 0
+			s.disabledUntil = time.Time{}
+			s.stats = newStrategyStatus(s.def)
 			continue
 		}
 
 		s.lastTradeAt = persisted.LastTradeAt
+		s.consecutiveLosses = persisted.ConsecutiveLosses
+		s.disabledUntil = persisted.DisabledUntil
 		s.stats = persisted.Stats
 		if s.stats.Name == "" {
 			s.stats.Name = s.def.Name
@@ -155,8 +149,14 @@ func (e *Engine) RestoreState(state PersistedState) {
 		if s.stats.StrategyID == 0 {
 			s.stats.StrategyID = s.def.ID
 		}
+		if s.stats.Category == "" {
+			s.stats.Category = s.def.Category
+		}
 		if s.stats.OptionType == "" {
 			s.stats.OptionType = string(s.def.Type)
+		}
+		if s.stats.SizeMultiplier == 0 {
+			s.stats.SizeMultiplier = sizeMultiplierFor(s)
 		}
 
 		if persisted.Position != nil {
@@ -195,13 +195,9 @@ func (e *Engine) ResetAccount() PersistedState {
 	for _, s := range e.states {
 		s.position = nil
 		s.lastTradeAt = time.Time{}
-		s.stats = StrategyStatus{
-			StrategyID:  s.def.ID,
-			Name:        s.def.Name,
-			OptionType:  string(s.def.Type),
-			Status:      "READY",
-			HasPosition: false,
-		}
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
+		s.stats = newStrategyStatus(s.def)
 	}
 
 	snapshot := e.exportStateLocked()
@@ -221,6 +217,9 @@ func (e *Engine) ClearHistory() PersistedState {
 		s.stats.Losses = 0
 		s.stats.TotalPnL = 0
 		s.stats.WinRate = 0
+		s.stats.SizeMultiplier = optionColdStartSizeMultiplier
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
 		if s.position != nil {
 			s.stats.Status = "IN_POSITION"
 			s.stats.HasPosition = true
@@ -307,6 +306,7 @@ func (e *Engine) tick() {
 		UTCHour:  nowUTC.Hour(),
 		UTCMin:   nowUTC.Minute(),
 	}
+	regime := classifyMarketRegime(e.minuteBars)
 
 	// Count currently open positions to enforce global cap
 	openCount := 0
@@ -317,11 +317,11 @@ func (e *Engine) tick() {
 	}
 
 	for _, s := range e.states {
-		e.manageStrategy(s, ctx, iv, &openCount)
+		e.manageStrategy(s, ctx, regime, iv, &openCount)
 	}
 }
 
-func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64, openCount *int) {
+func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, regime string, iv float64, openCount *int) {
 	now := time.Now()
 
 	// ── Manage open position ──────────────────────────────────────────────
@@ -356,12 +356,28 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 		return
 	}
 
+	if !s.disabledUntil.IsZero() {
+		if now.Before(s.disabledUntil) {
+			s.stats.Status = optionStatusDisabled
+			s.stats.SizeMultiplier = optionMinSizeMultiplier
+			return
+		}
+		s.disabledUntil = time.Time{}
+		s.consecutiveLosses = 0
+	}
+
 	// ── Check cooldown ────────────────────────────────────────────────────
 	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
 		s.stats.Status = "COOLING"
+		s.stats.SizeMultiplier = sizeMultiplierFor(s)
 		return
 	}
 	s.stats.Status = "READY"
+	s.stats.SizeMultiplier = sizeMultiplierFor(s)
+
+	if !isCategoryAlignedWithRegime(s.def.Category, regime) {
+		return
+	}
 
 	// ── Evaluate signal ───────────────────────────────────────────────────
 	fn, ok := Signals[s.def.Signal]
@@ -373,7 +389,15 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 	}
 
 	// ── Check balance ─────────────────────────────────────────────────────
-	if e.balance < s.def.PositionUSD {
+	if e.balance <= 0 {
+		return
+	}
+
+	positionUSD := s.def.PositionUSD * s.stats.SizeMultiplier
+	if positionUSD > e.balance {
+		positionUSD = e.balance
+	}
+	if positionUSD < s.def.PositionUSD*optionMinSizeMultiplier {
 		return
 	}
 
@@ -391,7 +415,7 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 		return
 	}
 
-	quantity := s.def.PositionUSD / pr.Premium
+	quantity := positionUSD / pr.Premium
 	if quantity <= 0 {
 		return
 	}
@@ -411,14 +435,14 @@ func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, iv float64,
 		EntryPremium:   pr.Premium,
 		CurrentPremium: pr.Premium,
 		Quantity:       quantity,
-		CostBasis:      s.def.PositionUSD,
+		CostBasis:      positionUSD,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
 		IV:             iv,
 		Delta:          pr.Delta,
 	}
 
-	e.balance -= s.def.PositionUSD
+	e.balance -= positionUSD
 	s.position = pos
 	s.stats.StrategyID = s.def.ID
 	s.stats.Status = "IN_POSITION"
@@ -458,21 +482,11 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 	}
 	e.trades = append(e.trades, trade)
 
-	s.stats.TotalTrades++
-	if netPnL > 0 {
-		s.stats.Wins++
-	} else {
-		s.stats.Losses++
-	}
-	s.stats.TotalPnL += netPnL
-	if s.stats.TotalTrades > 0 {
-		s.stats.WinRate = float64(s.stats.Wins) / float64(s.stats.TotalTrades) * 100
-	}
-
 	s.lastTradeAt = now
 	s.position = nil
 	s.stats.Status = "COOLING"
 	s.stats.HasPosition = false
+	s.recordTradeResultLocked(netPnL, now)
 	e.schedulePersistLocked(e.exportStateLocked())
 
 	symbol := "✅"
@@ -481,6 +495,39 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 	}
 	log.Printf("[OPTIONS] %s CLOSE %s | Reason: %s | PnL: $%.2f (%.1f%%)",
 		symbol, s.def.Name, reason, netPnL, returnPct)
+}
+
+func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
+	s.stats.TotalTrades++
+	s.stats.TotalPnL += netPnL
+	if netPnL > 0 {
+		s.stats.Wins++
+		s.consecutiveLosses = 0
+	} else {
+		s.stats.Losses++
+		s.consecutiveLosses++
+	}
+	if s.stats.TotalTrades > 0 {
+		s.stats.WinRate = float64(s.stats.Wins) / float64(s.stats.TotalTrades) * 100
+	}
+
+	if s.consecutiveLosses >= optionLossStreakDisableThreshold {
+		s.disabledUntil = now.Add(optionLossStreakCooldown)
+		s.stats.Status = optionStatusDisabled
+		s.stats.SizeMultiplier = optionMinSizeMultiplier
+		return
+	}
+
+	if s.stats.TotalTrades >= optionUnderperformingMinTrades &&
+		s.stats.TotalPnL < 0 &&
+		s.stats.WinRate < optionUnderperformingMaxWinRate {
+		s.disabledUntil = now.Add(optionUnderperformingCooldown)
+		s.stats.Status = optionStatusDisabled
+		s.stats.SizeMultiplier = optionMinSizeMultiplier
+		return
+	}
+
+	s.stats.SizeMultiplier = sizeMultiplierFor(s)
 }
 
 // ── API Handlers ─────────────────────────────────────────────────────────────
@@ -617,12 +664,9 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 	for _, s := range e.states {
 		s.position = nil
 		s.lastTradeAt = time.Time{}
-		s.stats = StrategyStatus{
-			StrategyID: s.def.ID,
-			Name:       s.def.Name,
-			OptionType: string(s.def.Type),
-			Status:     "READY",
-		}
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
+		s.stats = newStrategyStatus(s.def)
 	}
 	e.schedulePersistLocked(e.exportStateLocked())
 	log.Println("[OPTIONS] 🔄 Options account reset to $1,000,000")

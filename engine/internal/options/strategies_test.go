@@ -46,11 +46,27 @@ func TestBuildStrategiesKeepsBothCallsAndPuts(t *testing.T) {
 	}
 }
 
-func TestBuildStrategiesIncludesExpandedLiveBook(t *testing.T) {
-	live := BuildStrategies()
+func TestBuildStrategyLibraryIncludesExpandedLiveBook(t *testing.T) {
+	live := BuildStrategyLibrary()
 
 	if len(live) < 41 {
 		t.Fatalf("expected at least 41 live strategies after expansion, got %d", len(live))
+	}
+}
+
+func TestBuildStrategiesReturnsCuratedTopBook(t *testing.T) {
+	live := BuildStrategies()
+	if len(live) != len(activeStrategyNames) {
+		t.Fatalf("expected %d active strategies, got %d", len(activeStrategyNames), len(live))
+	}
+
+	for i, want := range activeStrategyNames {
+		if live[i].Name != want {
+			t.Fatalf("expected active strategy %d to be %s, got %s", i, want, live[i].Name)
+		}
+		if live[i].Category == "" {
+			t.Fatalf("expected %s to carry category metadata", live[i].Name)
+		}
 	}
 }
 

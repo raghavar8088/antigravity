@@ -21,6 +21,7 @@ const (
 type StrategyDef struct {
 	ID            int
 	Name          string
+	Category      string
 	Type          OptionType
 	StrikePctOTM  float64 // 0=ATM, 0.01=1% OTM, negative=ITM
 	ExpiryMinutes int     // Minutes to expiry at entry
@@ -73,16 +74,18 @@ type OptionTrade struct {
 
 // StrategyStatus is the per-strategy runtime status
 type StrategyStatus struct {
-	StrategyID  int     `json:"strategyId"`
-	Name        string  `json:"name"`
-	OptionType  string  `json:"optionType"`
-	TotalTrades int     `json:"totalTrades"`
-	Wins        int     `json:"wins"`
-	Losses      int     `json:"losses"`
-	TotalPnL    float64 `json:"totalPnl"`
-	WinRate     float64 `json:"winRate"`
-	Status      string  `json:"status"` // READY | IN_POSITION | COOLING
-	HasPosition bool    `json:"hasPosition"`
+	StrategyID     int     `json:"strategyId"`
+	Name           string  `json:"name"`
+	Category       string  `json:"category"`
+	OptionType     string  `json:"optionType"`
+	TotalTrades    int     `json:"totalTrades"`
+	Wins           int     `json:"wins"`
+	Losses         int     `json:"losses"`
+	TotalPnL       float64 `json:"totalPnl"`
+	WinRate        float64 `json:"winRate"`
+	SizeMultiplier float64 `json:"sizeMultiplier"`
+	Status         string  `json:"status"` // READY | IN_POSITION | COOLING | DISABLED
+	HasPosition    bool    `json:"hasPosition"`
 }
 
 // AggregateStats for the options engine
@@ -101,10 +104,12 @@ type AggregateStats struct {
 
 // PersistedStrategyState stores the runtime state for one options strategy.
 type PersistedStrategyState struct {
-	Name        string          `json:"name"`
-	Position    *OptionPosition `json:"position,omitempty"`
-	Stats       StrategyStatus  `json:"stats"`
-	LastTradeAt time.Time       `json:"lastTradeAt"`
+	Name              string          `json:"name"`
+	Position          *OptionPosition `json:"position,omitempty"`
+	Stats             StrategyStatus  `json:"stats"`
+	LastTradeAt       time.Time       `json:"lastTradeAt"`
+	ConsecutiveLosses int             `json:"consecutiveLosses"`
+	DisabledUntil     time.Time       `json:"disabledUntil"`
 }
 
 // PersistedState is the durable snapshot of the options engine.

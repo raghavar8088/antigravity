@@ -56,6 +56,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 	e := NewEngine()
 	entryTime := time.Now().Add(-10 * time.Minute)
 	expiry := time.Now().Add(65 * time.Minute)
+	strategyName := "RSI_Extreme_Oversold_Call"
 
 	snapshot := PersistedState{
 		Balance:    initialOptionsBalance - 250,
@@ -67,7 +68,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 		Trades: []OptionTrade{
 			{
 				ID:            "OPT-0001-TEST",
-				StrategyName:  "MomentumBurst_Bull_Call",
+				StrategyName:  strategyName,
 				OptionType:    Call,
 				Strike:        67000,
 				ExpiryMins:    75,
@@ -86,9 +87,9 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 		},
 		Strategies: []PersistedStrategyState{
 			{
-				Name: "MomentumBurst_Bull_Call",
+				Name: strategyName,
 				Stats: StrategyStatus{
-					Name:        "MomentumBurst_Bull_Call",
+					Name:        strategyName,
 					OptionType:  string(Call),
 					TotalTrades: 1,
 					Wins:        1,
@@ -101,7 +102,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 				LastTradeAt: entryTime,
 				Position: &OptionPosition{
 					ID:             "OPT-0012-Mome",
-					StrategyName:   "MomentumBurst_Bull_Call",
+					StrategyName:   strategyName,
 					OptionType:     Call,
 					Strike:         67000,
 					ExpiryTime:     expiry,
@@ -133,13 +134,13 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 
 	var restored *strategyState
 	for _, state := range e.states {
-		if state.def.Name == "MomentumBurst_Bull_Call" {
+		if state.def.Name == strategyName {
 			restored = state
 			break
 		}
 	}
 	if restored == nil || restored.position == nil {
-		t.Fatal("expected restored open position for MomentumBurst_Bull_Call")
+		t.Fatalf("expected restored open position for %s", strategyName)
 	}
 	if !restored.stats.HasPosition || restored.stats.TotalTrades != 1 {
 		t.Fatalf("expected restored strategy stats, got %+v", restored.stats)
@@ -149,9 +150,10 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 func TestClearHistoryKeepsOpenPositions(t *testing.T) {
 	e := NewEngine()
 	now := time.Now()
-	e.trades = []OptionTrade{{ID: "OPT-0001-TEST", StrategyName: "MomentumBurst_Bull_Call"}}
+	strategyName := "RSI_Extreme_Oversold_Call"
+	e.trades = []OptionTrade{{ID: "OPT-0001-TEST", StrategyName: strategyName}}
 	for _, state := range e.states {
-		if state.def.Name == "MomentumBurst_Bull_Call" {
+		if state.def.Name == strategyName {
 			state.position = &OptionPosition{
 				ID:             "OPT-OPEN-0001",
 				StrategyName:   state.def.Name,
@@ -186,7 +188,7 @@ func TestClearHistoryKeepsOpenPositions(t *testing.T) {
 		t.Fatalf("expected cleared trades, got %d", len(e.trades))
 	}
 	for _, state := range e.states {
-		if state.def.Name == "MomentumBurst_Bull_Call" {
+		if state.def.Name == strategyName {
 			if state.position == nil {
 				t.Fatal("expected open position to remain after clear history")
 			}
@@ -197,5 +199,48 @@ func TestClearHistoryKeepsOpenPositions(t *testing.T) {
 				t.Fatalf("expected position flags preserved, got %+v", state.stats)
 			}
 		}
+	}
+}
+
+func TestNewEngineUsesCuratedActiveBook(t *testing.T) {
+	e := NewEngine()
+	if len(e.states) != len(activeStrategyNames) {
+		t.Fatalf("expected %d active strategies, got %d", len(activeStrategyNames), len(e.states))
+	}
+}
+
+func TestRecordTradeResultDisablesUnderperformer(t *testing.T) {
+	state := newStrategyState(StrategyDef{
+		ID:       5,
+		Name:     "RSI_Extreme_Oversold_Call",
+		Category: "Mean Reversion",
+		Type:     Call,
+	})
+	now := time.Now()
+	for i := 0; i < optionUnderperformingMinTrades; i++ {
+		state.recordTradeResultLocked(-20, now)
+	}
+
+	if state.stats.Status != optionStatusDisabled {
+		t.Fatalf("expected strategy to be disabled, got %s", state.stats.Status)
+	}
+	if state.disabledUntil.IsZero() {
+		t.Fatal("expected disabledUntil to be set")
+	}
+	if state.stats.SizeMultiplier != optionMinSizeMultiplier {
+		t.Fatalf("expected min size multiplier %.2f, got %.2f", optionMinSizeMultiplier, state.stats.SizeMultiplier)
+	}
+}
+
+func TestClassifyMarketRegimeRecognizesTrend(t *testing.T) {
+	prices := make([]float64, 0, 80)
+	price := 100.0
+	for i := 0; i < 80; i++ {
+		price *= 1.0012
+		prices = append(prices, price)
+	}
+
+	if got := classifyMarketRegime(prices); got != optionMarketRegimeTrend {
+		t.Fatalf("expected trend regime, got %s", got)
 	}
 }

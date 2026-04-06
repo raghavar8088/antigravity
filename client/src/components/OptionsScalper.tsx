@@ -131,6 +131,7 @@ function StatusBadge({ status }: { status: string }) {
     READY:       "border-emerald-200 bg-emerald-50 text-emerald-700",
     IN_POSITION: "border-blue-200 bg-blue-50 text-blue-700",
     COOLING:     "border-amber-200 bg-amber-50 text-amber-700",
+    DISABLED:    "border-zinc-300 bg-zinc-100 text-zinc-600",
   };
   return (
     <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${map[status] ?? "border-zinc-200 bg-zinc-50 text-zinc-500"}`}>
@@ -549,7 +550,9 @@ export default function OptionsScalper() {
   const bestStrategy = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl)[0] ?? null;
   const latestTrade = trades[0] ?? null;
   const totalStrategies = strategies.length;
-  const activeStrategies = strategies.filter((s) => s.status !== "COOLING").length || totalStrategies;
+  const activeStrategies = strategies.length === 0
+    ? 0
+    : strategies.filter((s) => s.status !== "COOLING" && s.status !== "DISABLED").length;
   const strategyNumbers = strategies.reduce<StrategyNumberMap>((map, strategy, index) => {
     map[strategy.name] = strategy.strategyId > 0 ? strategy.strategyId : index + 1;
     return map;
@@ -598,7 +601,7 @@ export default function OptionsScalper() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
                 <BadgePill label="Options Engine Online" tone="positive" />
-                <BadgePill label={`${totalStrategies} Strategies Active`} tone="info" />
+                <BadgePill label={`${activeStrategies}/${totalStrategies} Enabled`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
                 <BadgePill label="Not Futures" tone="neutral" />
               </div>
@@ -632,7 +635,7 @@ export default function OptionsScalper() {
             <CompactMetric
               label="Session Runtime"
               value={sessionRuntime}
-              detail={`${activeStrategies} strategies scanning`}
+              detail={`${activeStrategies} strategies enabled`}
               accent="text-zinc-900"
             />
             <CompactMetric

@@ -5,6 +5,22 @@ const (
 	maxLiveStrikePctOTM  = 0.005
 )
 
+var activeStrategyNames = []string{
+	"RSI_Extreme_Oversold_Call",
+	"RSI_Extreme_Overbought_Put",
+	"BreakoutTrend_Pro_Bull_Call",
+	"BreakdownTrend_Pro_Bear_Put",
+	"Capitulation_VReversal_Call",
+}
+
+var optionStrategyCategories = map[string]string{
+	"RSI_Extreme_Oversold_Call":   "Mean Reversion",
+	"RSI_Extreme_Overbought_Put":  "Mean Reversion",
+	"BreakoutTrend_Pro_Bull_Call": "Breakout",
+	"BreakdownTrend_Pro_Bear_Put": "Breakout",
+	"Capitulation_VReversal_Call": "Capitulation",
+}
+
 var strategyIDs = map[string]int{
 	"MomentumBurst_Bull_Call":         1,
 	"MomentumBurst_Bear_Put":          2,
@@ -56,17 +72,37 @@ func assignStrategyIDs(defs []StrategyDef) []StrategyDef {
 	return defs
 }
 
-// BuildStrategies returns the live-approved strategy set.
-// Filters out ultra-short expiries and deep OTM strikes.
-func BuildStrategies() []StrategyDef {
+// BuildStrategyLibrary returns the full live-approved strategy library.
+// It keeps the curated definitions available for reporting and future promotion.
+func BuildStrategyLibrary() []StrategyDef {
 	all := assignStrategyIDs(buildAllStrategies())
 	filtered := make([]StrategyDef, 0, len(all))
 	for _, def := range all {
 		if def.ExpiryMinutes >= minLiveExpiryMinutes && def.StrikePctOTM <= maxLiveStrikePctOTM {
+			if category, ok := optionStrategyCategories[def.Name]; ok {
+				def.Category = category
+			}
 			filtered = append(filtered, def)
 		}
 	}
 	return filtered
+}
+
+// BuildStrategies returns the actively tradeable top-book for the options engine.
+func BuildStrategies() []StrategyDef {
+	library := BuildStrategyLibrary()
+	byName := make(map[string]StrategyDef, len(library))
+	for _, def := range library {
+		byName[def.Name] = def
+	}
+
+	active := make([]StrategyDef, 0, len(activeStrategyNames))
+	for _, name := range activeStrategyNames {
+		if def, ok := byName[name]; ok {
+			active = append(active, def)
+		}
+	}
+	return active
 }
 
 // buildAllStrategies defines 41 live-approved BTC option buying strategies.
