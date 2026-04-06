@@ -5,13 +5,24 @@ type OptionsAccountHeaderProps = {
   equity: number;
   dailyPnL: number;
   openPositions: number;
+  marketLabel?: string;
+  marketCode?: string;
+  accountLabel?: string;
+  currencyCode?: string;
+  locale?: string;
 };
 
-function formatSignedCurrency(value: number) {
-  return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toLocaleString(undefined, {
+function formatCurrency(value: number, currencyCode: string, locale: string) {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currencyCode,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })}`;
+  }).format(value);
+}
+
+function formatSignedCurrency(value: number, currencyCode: string, locale: string) {
+  return `${value >= 0 ? "+" : "-"}${formatCurrency(Math.abs(value), currencyCode, locale)}`;
 }
 
 export default function OptionsAccountHeader({
@@ -19,6 +30,11 @@ export default function OptionsAccountHeader({
   equity,
   dailyPnL,
   openPositions,
+  marketLabel = "BTC",
+  marketCode = "OPT",
+  accountLabel = "BTC options paper account",
+  currencyCode = "USD",
+  locale = "en-US",
 }: OptionsAccountHeaderProps) {
   const baseBalance = 1_000_000;
   const pnlPct = baseBalance > 0 ? (dailyPnL / baseBalance) * 100 : 0;
@@ -39,7 +55,7 @@ export default function OptionsAccountHeader({
               className="text-[11px] font-bold uppercase tracking-[0.18em]"
               style={{ color: "var(--amber)" }}
             >
-              OPT
+              {marketCode}
             </div>
           </div>
           <div>
@@ -47,7 +63,7 @@ export default function OptionsAccountHeader({
               RAIG Options Workspace
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              BTC options paper account
+              {accountLabel}
             </div>
           </div>
         </div>
@@ -62,11 +78,11 @@ export default function OptionsAccountHeader({
           <div className={online ? "live-dot" : "live-dot-red"} />
           <div className="flex-1">
             <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {online ? "Options engine live and monitoring BTC option strategies" : "Options engine offline"}
+              {online ? `Options engine live and monitoring ${marketLabel} option strategies` : "Options engine offline"}
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {online
-                ? `${openPositions} open BTC option positions in the separate options account`
+                ? `${openPositions} open ${marketLabel} option positions in the separate options account`
                 : "Waiting for options engine data"}
             </div>
           </div>
@@ -86,17 +102,14 @@ export default function OptionsAccountHeader({
           <div className="summary-card min-w-[170px]">
             <div className="summary-label">Options Equity</div>
             <div className="summary-value">
-              ${equity.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              {formatCurrency(equity, currencyCode, locale)}
             </div>
           </div>
 
           <div className="summary-card min-w-[170px]">
             <div className="summary-label">Options PnL Today</div>
             <div className={`summary-value ${positive ? "profit-positive" : "profit-negative"}`}>
-              {formatSignedCurrency(dailyPnL)}
+              {formatSignedCurrency(dailyPnL, currencyCode, locale)}
             </div>
             <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
               {positive ? "+" : ""}

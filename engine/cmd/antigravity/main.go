@@ -56,6 +56,7 @@ func (r *RingLogger) GetLogs() []string {
 var globalLogs = &RingLogger{max: 100}
 
 const initialPaperBalanceUSD = 1000000.0
+const defaultNifty50Anchor = 22500.0
 
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
@@ -80,6 +81,7 @@ func loadDotEnv() {
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val)
 		}
+
 	}
 	log.Println("[ENV] Loaded local .env file")
 }
@@ -145,6 +147,88 @@ func loadOptionsSnapshot(state *persistence.OptionsState) (options.PersistedStat
 	}
 
 	return snapshot, nil
+}
+
+func saveNiftyOptionsSnapshot(ctx context.Context, store *persistence.Store, snapshot options.PersistedState) error {
+	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options price history: %w", err)
+	}
+	minuteBarsJSON, err := json.Marshal(snapshot.MinuteBars)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options minute bars: %w", err)
+	}
+	tradesJSON, err := json.Marshal(snapshot.Trades)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options trades: %w", err)
+	}
+	strategiesJSON, err := json.Marshal(snapshot.Strategies)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options strategies: %w", err)
+	}
+
+	return store.SaveNiftyOptionsState(ctx, &persistence.NiftyOptionsState{
+		Balance:    snapshot.Balance,
+		LastPrice:  snapshot.LastPrice,
+		LastMinute: snapshot.LastMinute,
+		TradeSeq:   snapshot.TradeSeq,
+		PriceHist:  priceHistJSON,
+		MinuteBars: minuteBarsJSON,
+		Trades:     tradesJSON,
+		Strategies: strategiesJSON,
+	})
+}
+
+func loadNiftyOptionsSnapshot(state *persistence.NiftyOptionsState) (options.PersistedState, error) {
+	snapshot := options.PersistedState{
+		Balance:    state.Balance,
+		LastPrice:  state.LastPrice,
+		LastMinute: state.LastMinute,
+		TradeSeq:   state.TradeSeq,
+		SavedAt:    state.SavedAt,
+	}
+
+	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
+		if err := json.Unmarshal(state.PriceHist, &snapshot.PriceHist); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options price history: %w", err)
+		}
+	}
+	if len(state.MinuteBars) > 0 && string(state.MinuteBars) != "[]" {
+		if err := json.Unmarshal(state.MinuteBars, &snapshot.MinuteBars); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options minute bars: %w", err)
+		}
+	}
+	if len(state.Trades) > 0 && string(state.Trades) != "[]" {
+		if err := json.Unmarshal(state.Trades, &snapshot.Trades); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options trades: %w", err)
+		}
+	}
+	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
+		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
+			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options strategies: %w", err)
+		}
+	}
+
+	return snapshot, nil
+}
+
+func mapSyntheticNifty50Price(referencePrice, referenceAnchor, niftyAnchor float64) float64 {
+	if referencePrice <= 0 {
+		return 0
+	}
+	if referenceAnchor <= 0 {
+		referenceAnchor = referencePrice
+	}
+	if niftyAnchor <= 0 {
+		niftyAnchor = defaultNifty50Anchor
+	}
+
+	changePct := (referencePrice / referenceAnchor) - 1
+	scaledPrice := niftyAnchor * (1 + changePct*0.35)
+	if scaledPrice < 1000 {
+		return 1000
+	}
+	return scaledPrice
 }
 
 func main() {
@@ -383,6 +467,8 @@ func main() {
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $50K paper account
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
+	niftyOptionsEngine := options.NewEngine()
+	niftySyntheticAnchor := defaultNifty50Anchor
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
 			if err := saveOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
@@ -411,10 +497,42 @@ func main() {
 				)
 			}
 		}
+
+		niftyOptionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
+			if err := saveNiftyOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
+				log.Printf("[DB] WARN Failed to save NIFTY options state: %v", err)
+			}
+		})
+
+		niftyState, loadErr := dbStore.LoadNiftyOptionsState(ctx)
+		if loadErr != nil {
+			log.Printf("[DB] WARN Failed to load NIFTY options state: %v", loadErr)
+		} else {
+			snapshot, snapshotErr := loadNiftyOptionsSnapshot(niftyState)
+			if snapshotErr != nil {
+				log.Printf("[DB] WARN Failed to decode NIFTY options state: %v", snapshotErr)
+			} else {
+				niftyOptionsEngine.RestoreState(snapshot)
+				if snapshot.LastPrice > 0 {
+					niftySyntheticAnchor = snapshot.LastPrice
+				}
+				restoredOpen := 0
+				for _, strategyState := range snapshot.Strategies {
+					if strategyState.Position != nil {
+						restoredOpen++
+					}
+				}
+				log.Printf(
+					"[DB] RESTORE NIFTY options state from %s | Balance: INR %.2f | Open Positions: %d | Trades: %d",
+					niftyState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
+				)
+			}
+		}
 	}
 
-	// Feed BTC price ticks into the options engine via the same Coinbase stream
+	// Feed BTC price ticks into the options engines via the same Coinbase stream.
 	go safeGo("OptionsPriceFeed", func() {
+		var referenceAnchor float64
 		for {
 			select {
 			case <-ctx.Done():
@@ -423,12 +541,17 @@ func main() {
 				p := paperExecute.GetLastPrice()
 				if p > 0 {
 					optionsEngine.UpdatePrice(p)
+					if referenceAnchor <= 0 {
+						referenceAnchor = p
+					}
+					niftyOptionsEngine.UpdatePrice(mapSyntheticNifty50Price(p, referenceAnchor, niftySyntheticAnchor))
 				}
 			}
 		}
 	})
 
 	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
+	go safeGo("NiftyOptionsScalper", func() { niftyOptionsEngine.Run(ctx.Done()) })
 
 	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
@@ -453,6 +576,14 @@ func main() {
 	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
 	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
 	http.HandleFunc("/api/options/clear-history", optionsEngine.HandleClearHistory)
+
+	// NIFTY 50 Options Scalper endpoints
+	http.HandleFunc("/api/nifty-options/positions", niftyOptionsEngine.HandlePositions)
+	http.HandleFunc("/api/nifty-options/trades", niftyOptionsEngine.HandleTrades)
+	http.HandleFunc("/api/nifty-options/strategies", niftyOptionsEngine.HandleStrategies)
+	http.HandleFunc("/api/nifty-options/stats", niftyOptionsEngine.HandleStats)
+	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
+	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)

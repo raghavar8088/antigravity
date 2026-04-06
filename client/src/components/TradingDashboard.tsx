@@ -15,10 +15,12 @@ import CommandCenter from "@/components/CommandCenter";
 import FearGreedWidget from "@/components/FearGreedWidget";
 import OptionsScalper from "@/components/OptionsScalper";
 import BTCOptionChain from "@/components/BTCOptionChain";
+import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
+import useNiftyOptions from "@/hooks/useNiftyOptions";
 import useOptions from "@/hooks/useOptions";
 import usePositions from "@/hooks/usePositions";
 import useStrategies from "@/hooks/useStrategies";
@@ -312,7 +314,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain">("options");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain" | "nifty">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -324,6 +326,7 @@ export default function TradingDashboard() {
 
   const { engineOnline, balance: engineBalance } = useEngineState();
   const { positions: optionPositions, stats: optionStats } = useOptions();
+  const { positions: niftyOptionPositions, stats: niftyOptionStats } = useNiftyOptions();
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
   const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
@@ -794,11 +797,15 @@ export default function TradingDashboard() {
   const riskPct = Math.min(100, Math.max(0, (livePositions.length / 5) * 100));
   const riskLevel = riskPct >= 80 ? "danger" : riskPct >= 50 ? "warning" : "safe";
   const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
-  const optionsModuleActive = activeModule === "options" || activeModule === "chain";
-  const optionEquity = optionStats?.equity ?? INITIAL_OPTIONS_BALANCE;
+  const btcOptionsModuleActive = activeModule === "options" || activeModule === "chain";
+  const niftyOptionsModuleActive = activeModule === "nifty";
+  const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive;
+  const selectedOptionsStats = niftyOptionsModuleActive ? niftyOptionStats : optionStats;
+  const selectedOptionPositions = niftyOptionsModuleActive ? niftyOptionPositions : optionPositions;
+  const optionEquity = selectedOptionsStats?.equity ?? INITIAL_OPTIONS_BALANCE;
   const optionSessionPnl = optionEquity - INITIAL_OPTIONS_BALANCE;
-  const optionOpenPositions = Math.max(optionStats?.openPositions ?? 0, optionPositions.length);
-  const optionsOnline = optionStats !== null || optionPositions.length > 0;
+  const optionOpenPositions = Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
+  const optionsOnline = selectedOptionsStats !== null || selectedOptionPositions.length > 0;
 
   return (
     <main className="gmail-shell space-y-5">
@@ -812,6 +819,11 @@ export default function TradingDashboard() {
           equity={optionEquity}
           dailyPnL={optionSessionPnl}
           openPositions={optionOpenPositions}
+          marketLabel={niftyOptionsModuleActive ? "NIFTY 50" : "BTC"}
+          marketCode={niftyOptionsModuleActive ? "N50" : "OPT"}
+          accountLabel={niftyOptionsModuleActive ? "NIFTY 50 options paper account" : "BTC options paper account"}
+          currencyCode={niftyOptionsModuleActive ? "INR" : "USD"}
+          locale={niftyOptionsModuleActive ? "en-IN" : "en-US"}
         />
       ) : (
         <DashboardHeader
@@ -834,10 +846,11 @@ export default function TradingDashboard() {
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
             { key: "chain", label: "BTC Option Chain" },
+            { key: "nifty", label: "Nifty 50 Scalper" },
           ].map((module) => (
             <button
               key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain")}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty")}
               className={`groww-tab${activeModule === module.key ? " active" : ""}`}
             >
               {module.label}
@@ -856,6 +869,8 @@ export default function TradingDashboard() {
             ? "FUTURES ACCOUNT — Completed futures trade ledger and strategy breakdown. Options trades are logged separately."
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account. Zero overlap with futures."
+            : activeModule === "nifty"
+            ? "OPTIONS ACCOUNT — NIFTY 50 option scalper running the same autonomous setup on a separate ₹1,000,000 paper account. Zero overlap with futures."
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
@@ -1756,6 +1771,8 @@ export default function TradingDashboard() {
       {activeModule === "options" && <OptionsScalper />}
 
       {activeModule === "chain" && <BTCOptionChain />}
+
+      {activeModule === "nifty" && <Nifty50OptionScalper />}
     </main>
   );
 }
