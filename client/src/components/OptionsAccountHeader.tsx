@@ -10,6 +10,14 @@ type OptionsAccountHeaderProps = {
   accountLabel?: string;
   currencyCode?: string;
   locale?: string;
+  workspaceTitle?: string;
+  onlineLabel?: string;
+  offlineLabel?: string;
+  detailLabel?: string;
+  accountBadgeLabel?: string;
+  equityLabel?: string;
+  pnlLabel?: string;
+  openLabel?: string;
 };
 
 function formatCurrency(value: number, currencyCode: string, locale: string) {
@@ -35,10 +43,22 @@ export default function OptionsAccountHeader({
   accountLabel = "BTC options paper account",
   currencyCode = "USD",
   locale = "en-US",
+  workspaceTitle = "RAIG Options Workspace",
+  onlineLabel,
+  offlineLabel = "Options engine offline",
+  detailLabel,
+  accountBadgeLabel = "Separate Account",
+  equityLabel = "Options Equity",
+  pnlLabel = "Options PnL Today",
+  openLabel = "Open Options",
 }: OptionsAccountHeaderProps) {
   const baseBalance = 1_000_000;
   const pnlPct = baseBalance > 0 ? (dailyPnL / baseBalance) * 100 : 0;
   const positive = dailyPnL >= 0;
+  const resolvedOnlineLabel = onlineLabel ?? `Options engine live and monitoring ${marketLabel} option strategies`;
+  const resolvedDetailLabel =
+    detailLabel ??
+    `${openPositions} open ${marketLabel} option positions in the separate options account`;
 
   return (
     <header className="cockpit-header">
@@ -60,7 +80,7 @@ export default function OptionsAccountHeader({
           </div>
           <div>
             <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              RAIG Options Workspace
+              {workspaceTitle}
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {accountLabel}
@@ -78,11 +98,11 @@ export default function OptionsAccountHeader({
           <div className={online ? "live-dot" : "live-dot-red"} />
           <div className="flex-1">
             <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {online ? `Options engine live and monitoring ${marketLabel} option strategies` : "Options engine offline"}
+              {online ? resolvedOnlineLabel : offlineLabel}
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {online
-                ? `${openPositions} open ${marketLabel} option positions in the separate options account`
+                ? resolvedDetailLabel
                 : "Waiting for options engine data"}
             </div>
           </div>
@@ -94,20 +114,20 @@ export default function OptionsAccountHeader({
               color: "var(--amber)",
             }}
           >
-            Separate Account
+            {accountBadgeLabel}
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="summary-card min-w-[170px]">
-            <div className="summary-label">Options Equity</div>
+            <div className="summary-label">{equityLabel}</div>
             <div className="summary-value">
               {formatCurrency(equity, currencyCode, locale)}
             </div>
           </div>
 
           <div className="summary-card min-w-[170px]">
-            <div className="summary-label">Options PnL Today</div>
+            <div className="summary-label">{pnlLabel}</div>
             <div className={`summary-value ${positive ? "profit-positive" : "profit-negative"}`}>
               {formatSignedCurrency(dailyPnL, currencyCode, locale)}
             </div>
@@ -118,7 +138,7 @@ export default function OptionsAccountHeader({
           </div>
 
           <div className="metric-card min-w-[140px]">
-            <div className="metric-label">Open Options</div>
+            <div className="metric-label">{openLabel}</div>
             <div className="metric-value">{openPositions}</div>
           </div>
         </div>

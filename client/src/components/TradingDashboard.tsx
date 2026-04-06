@@ -16,10 +16,12 @@ import FearGreedWidget from "@/components/FearGreedWidget";
 import OptionsScalper from "@/components/OptionsScalper";
 import BTCOptionChain from "@/components/BTCOptionChain";
 import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
+import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
+import useNiftyStocks from "@/hooks/useNiftyStocks";
 import useNiftyOptions from "@/hooks/useNiftyOptions";
 import useOptions from "@/hooks/useOptions";
 import usePositions from "@/hooks/usePositions";
@@ -314,7 +316,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain" | "nifty">("options");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
@@ -327,6 +329,7 @@ export default function TradingDashboard() {
   const { engineOnline, balance: engineBalance } = useEngineState();
   const { positions: optionPositions, stats: optionStats } = useOptions();
   const { positions: niftyOptionPositions, stats: niftyOptionStats } = useNiftyOptions();
+  const { positions: niftyStockPositions, stats: niftyStockStats } = useNiftyStocks();
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
   const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
@@ -799,6 +802,7 @@ export default function TradingDashboard() {
   const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
   const btcOptionsModuleActive = activeModule === "options" || activeModule === "chain";
   const niftyOptionsModuleActive = activeModule === "nifty";
+  const niftyStocksModuleActive = activeModule === "niftyStocks";
   const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive;
   const selectedOptionsStats = niftyOptionsModuleActive ? niftyOptionStats : optionStats;
   const selectedOptionPositions = niftyOptionsModuleActive ? niftyOptionPositions : optionPositions;
@@ -806,6 +810,10 @@ export default function TradingDashboard() {
   const optionSessionPnl = optionEquity - INITIAL_OPTIONS_BALANCE;
   const optionOpenPositions = Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
   const optionsOnline = selectedOptionsStats !== null || selectedOptionPositions.length > 0;
+  const niftyStocksEquity = niftyStockStats?.equity ?? INITIAL_BALANCE;
+  const niftyStocksSessionPnl = niftyStocksEquity - INITIAL_BALANCE;
+  const niftyStocksOpenPositions = Math.max(niftyStockStats?.openPositions ?? 0, niftyStockPositions.length);
+  const niftyStocksOnline = niftyStockStats !== null || niftyStockPositions.length > 0;
 
   return (
     <main className="gmail-shell space-y-5">
@@ -825,6 +833,26 @@ export default function TradingDashboard() {
           currencyCode={niftyOptionsModuleActive ? "INR" : "USD"}
           locale={niftyOptionsModuleActive ? "en-IN" : "en-US"}
         />
+      ) : niftyStocksModuleActive ? (
+        <OptionsAccountHeader
+          online={niftyStocksOnline}
+          equity={niftyStocksEquity}
+          dailyPnL={niftyStocksSessionPnl}
+          openPositions={niftyStocksOpenPositions}
+          marketLabel="NIFTY 50"
+          marketCode="N50"
+          accountLabel="NIFTY 50 stocks paper account"
+          currencyCode="INR"
+          locale="en-IN"
+          workspaceTitle="RAIG NIFTY Stocks Workspace"
+          onlineLabel="Stocks engine live and monitoring NIFTY 50 stock strategies"
+          offlineLabel="Stocks engine offline"
+          detailLabel={`${niftyStocksOpenPositions} open NIFTY 50 stock positions in the separate stocks account`}
+          accountBadgeLabel="Stocks Account"
+          equityLabel="Stocks Equity"
+          pnlLabel="Stocks PnL Today"
+          openLabel="Open Stocks"
+        />
       ) : (
         <DashboardHeader
           online={engineOnline}
@@ -842,15 +870,16 @@ export default function TradingDashboard() {
         <div className="flex flex-wrap items-center gap-2">
           {[
             { key: "options", label: "BTC Option Scalper" },
+            { key: "chain", label: "BTC Option Chain" },
+            { key: "nifty", label: "Nifty 50 Scalper" },
+            { key: "niftyStocks", label: "Nifty 50 Stocks" },
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
-            { key: "chain", label: "BTC Option Chain" },
-            { key: "nifty", label: "Nifty 50 Scalper" },
           ].map((module) => (
             <button
               key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty")}
+              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks")}
               className={`groww-tab${activeModule === module.key ? " active" : ""}`}
             >
               {module.label}
@@ -871,6 +900,8 @@ export default function TradingDashboard() {
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account. Zero overlap with futures."
             : activeModule === "nifty"
             ? "OPTIONS ACCOUNT — NIFTY 50 option scalper running the same autonomous setup on a separate ₹1,000,000 paper account. Zero overlap with futures."
+            : activeModule === "niftyStocks"
+            ? "STOCKS ACCOUNT — NIFTY 50 stock scalper using a synthetic NIFTY feed, separate INR paper capital, and a strategy roster modeled on the BTC equity desk."
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
@@ -1773,6 +1804,8 @@ export default function TradingDashboard() {
       {activeModule === "chain" && <BTCOptionChain />}
 
       {activeModule === "nifty" && <Nifty50OptionScalper />}
+
+      {activeModule === "niftyStocks" && <Nifty50StocksScalper />}
     </main>
   );
 }

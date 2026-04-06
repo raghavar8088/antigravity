@@ -19,6 +19,7 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
@@ -468,6 +469,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
 	niftyOptionsEngine := options.NewEngine()
+	niftyStocksEngine := niftystocks.NewEngine()
 	niftySyntheticAnchor := defaultNifty50Anchor
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
@@ -544,7 +546,9 @@ func main() {
 					if referenceAnchor <= 0 {
 						referenceAnchor = p
 					}
-					niftyOptionsEngine.UpdatePrice(mapSyntheticNifty50Price(p, referenceAnchor, niftySyntheticAnchor))
+					syntheticNiftyPrice := mapSyntheticNifty50Price(p, referenceAnchor, niftySyntheticAnchor)
+					niftyOptionsEngine.UpdatePrice(syntheticNiftyPrice)
+					niftyStocksEngine.UpdatePrice(syntheticNiftyPrice)
 				}
 			}
 		}
@@ -584,6 +588,13 @@ func main() {
 	http.HandleFunc("/api/nifty-options/stats", niftyOptionsEngine.HandleStats)
 	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
 	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
+
+	http.HandleFunc("/api/nifty-stocks/positions", niftyStocksEngine.HandlePositions)
+	http.HandleFunc("/api/nifty-stocks/trades", niftyStocksEngine.HandleTrades)
+	http.HandleFunc("/api/nifty-stocks/strategies", niftyStocksEngine.HandleStrategies)
+	http.HandleFunc("/api/nifty-stocks/stats", niftyStocksEngine.HandleStats)
+	http.HandleFunc("/api/nifty-stocks/reset", niftyStocksEngine.HandleReset)
+	http.HandleFunc("/api/nifty-stocks/clear-history", niftyStocksEngine.HandleClearHistory)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
