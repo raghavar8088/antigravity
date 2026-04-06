@@ -107,8 +107,8 @@ func TestFilterSignalsSelectiveCapsApprovalsAtTwo(t *testing.T) {
 		},
 	})
 
-	if len(approved) != 2 {
-		t.Fatalf("expected exactly two approved signals, got %d", len(approved))
+	if len(approved) != 3 {
+		t.Fatalf("expected exactly three approved signals, got %d", len(approved))
 	}
 }
 

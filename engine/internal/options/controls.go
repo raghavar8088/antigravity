@@ -8,7 +8,12 @@ import (
 const (
 	maxConcurrentPositions = 3
 
-	optionStatusDisabled = "DISABLED"
+	optionStatusReady      = "READY"
+	optionStatusInPosition = "IN_POSITION"
+	optionStatusCooling    = "COOLING"
+	optionStatusWatchlist  = "WATCHLIST"
+	optionStatusShadowing  = "SHADOWING"
+	optionStatusDisabled   = "DISABLED"
 
 	optionMarketRegimeUnknown  = "UNKNOWN"
 	optionMarketRegimeTrend    = "TREND"
@@ -17,6 +22,12 @@ const (
 	optionMarketRegimeMixed    = "MIXED"
 
 	optionRegimeMinBars = 55
+
+	optionMaxActiveStrategies      = 5
+	optionMaxStrategiesPerCategory = 2
+	optionRosterRefreshInterval    = 30 * time.Second
+	optionActiveRetentionBonus     = 4.0
+	optionPromotionBuffer          = 2.5
 
 	optionLossStreakDisableThreshold = 3
 	optionLossStreakCooldown         = 90 * time.Minute
@@ -35,13 +46,17 @@ const (
 
 func newStrategyStatus(def StrategyDef) StrategyStatus {
 	return StrategyStatus{
-		StrategyID:     def.ID,
-		Name:           def.Name,
-		Category:       def.Category,
-		OptionType:     string(def.Type),
-		SizeMultiplier: optionColdStartSizeMultiplier,
-		Status:         "READY",
-		HasPosition:    false,
+		StrategyID:        def.ID,
+		Name:              def.Name,
+		Category:          def.Category,
+		OptionType:        string(def.Type),
+		RosterState:       StrategyRosterWatchlist,
+		Status:            optionStatusWatchlist,
+		Regime:            optionMarketRegimeUnknown,
+		AllocationUSD:     0,
+		SizeMultiplier:    0,
+		HasPosition:       false,
+		HasShadowPosition: false,
 	}
 }
 
@@ -116,27 +131,14 @@ func classifyMarketRegime(prices []float64) string {
 }
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
-	switch regime {
-	case optionMarketRegimeUnknown:
-		return false
-	case optionMarketRegimeTrend:
-		return category == "Breakout"
-	case optionMarketRegimeRange:
-		return category == "Mean Reversion" || category == "Capitulation"
-	case optionMarketRegimeVolatile:
-		return category == "Breakout" || category == "Capitulation"
-	case optionMarketRegimeMixed:
-		return category == "Breakout" || category == "Capitulation"
-	default:
-		return false
-	}
+	return regimeFitScore(category, regime) >= 0.75
 }
 
 func clamp(min, value, max float64) float64 {
 	return math.Max(min, math.Min(max, value))
 }
 
-func sizeMultiplierFor(s *strategyState) float64 {
+func liveSizeMultiplierFor(s *strategyState) float64 {
 	if !s.disabledUntil.IsZero() && time.Now().Before(s.disabledUntil) {
 		return optionMinSizeMultiplier
 	}
@@ -160,4 +162,8 @@ func sizeMultiplierFor(s *strategyState) float64 {
 	}
 
 	return clamp(optionMinSizeMultiplier, multiplier, optionMaxSizeMultiplier)
+}
+
+func sizeMultiplierFor(s *strategyState) float64 {
+	return liveSizeMultiplierFor(s)
 }

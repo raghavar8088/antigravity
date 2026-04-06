@@ -5,20 +5,48 @@ const (
 	maxLiveStrikePctOTM  = 0.005
 )
 
-var activeStrategyNames = []string{
-	"RSI_Extreme_Oversold_Call",
-	"RSI_Extreme_Overbought_Put",
-	"BreakoutTrend_Pro_Bull_Call",
-	"BreakdownTrend_Pro_Bear_Put",
-	"Capitulation_VReversal_Call",
-}
-
 var optionStrategyCategories = map[string]string{
-	"RSI_Extreme_Oversold_Call":   "Mean Reversion",
-	"RSI_Extreme_Overbought_Put":  "Mean Reversion",
-	"BreakoutTrend_Pro_Bull_Call": "Breakout",
-	"BreakdownTrend_Pro_Bear_Put": "Breakout",
-	"Capitulation_VReversal_Call": "Capitulation",
+	"MomentumBurst_Bull_Call":         "Momentum",
+	"MomentumBurst_Bear_Put":          "Momentum",
+	"ConsecCandle_Bull_Call":          "Momentum",
+	"ConsecCandle_Bear_Put":           "Momentum",
+	"RSI_Extreme_Oversold_Call":       "Mean Reversion",
+	"RSI_Extreme_Overbought_Put":      "Mean Reversion",
+	"RSI_Oversold_Recovery_Call":      "Mean Reversion",
+	"RSI_Overbought_Fade_Put":         "Mean Reversion",
+	"Overextension_Fade_Put":          "Mean Reversion",
+	"Overextension_Fade_Call":         "Mean Reversion",
+	"EMA_BullCross_Call":              "Breakout",
+	"EMA_BearCross_Put":               "Breakout",
+	"Resistance_Breakout_Call":        "Breakout",
+	"Support_Breakdown_Put":           "Breakout",
+	"Stoch_Oversold_Call":             "Mean Reversion",
+	"Stoch_Overbought_Put":            "Mean Reversion",
+	"Capitulation_VReversal_Call":     "Capitulation",
+	"SessionOpen_Bull_Call":           "Breakout",
+	"SessionOpen_Bear_Put":            "Breakout",
+	"VolCompress_Breakout_Bull_Call":  "Breakout",
+	"VolCompress_Breakout_Bear_Put":   "Breakout",
+	"VWAP_Continuation_Bull_Call":     "Momentum",
+	"VWAP_Continuation_Bear_Put":      "Momentum",
+	"TripleConfluence_Bull_Call":      "Hybrid",
+	"TripleConfluence_Bear_Put":       "Hybrid",
+	"SharpReversal_TopFade_Put":       "Mean Reversion",
+	"TrendAlignment_Bull_Call":        "Breakout",
+	"TrendAlignment_Bear_Put":         "Breakout",
+	"BandBounce_Reclaim_Call":         "Mean Reversion",
+	"BandFade_Rejection_Put":          "Mean Reversion",
+	"SharpReversal_BottomSnap_Call":   "Mean Reversion",
+	"MomentumFollow_Bull_Call":        "Momentum",
+	"BBSqueeze_Release_Bull_Call":     "Breakout",
+	"BBSqueeze_Release_Bear_Put":      "Breakout",
+	"HighIV_Expansion_Bull_Call":      "Breakout",
+	"HighIV_Expansion_Bear_Put":       "Breakout",
+	"MomentumVWAP_Pro_Bull_Call":      "Momentum",
+	"MomentumVWAP_Pro_Bear_Put":       "Momentum",
+	"BreakoutTrend_Pro_Bull_Call":     "Breakout",
+	"BreakdownTrend_Pro_Bear_Put":     "Breakout",
+	"Capitulation_Reclaim_Elite_Call": "Capitulation",
 }
 
 var strategyIDs = map[string]int{
@@ -88,21 +116,10 @@ func BuildStrategyLibrary() []StrategyDef {
 	return filtered
 }
 
-// BuildStrategies returns the actively tradeable top-book for the options engine.
+// BuildStrategies returns the actively tradeable strategy library for the options engine.
+// The roster manager decides which subset is ACTIVE at runtime.
 func BuildStrategies() []StrategyDef {
-	library := BuildStrategyLibrary()
-	byName := make(map[string]StrategyDef, len(library))
-	for _, def := range library {
-		byName[def.Name] = def
-	}
-
-	active := make([]StrategyDef, 0, len(activeStrategyNames))
-	for _, name := range activeStrategyNames {
-		if def, ok := byName[name]; ok {
-			active = append(active, def)
-		}
-	}
-	return active
+	return BuildStrategyLibrary()
 }
 
 // buildAllStrategies defines 41 live-approved BTC option buying strategies.

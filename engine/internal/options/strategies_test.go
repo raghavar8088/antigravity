@@ -54,18 +54,15 @@ func TestBuildStrategyLibraryIncludesExpandedLiveBook(t *testing.T) {
 	}
 }
 
-func TestBuildStrategiesReturnsCuratedTopBook(t *testing.T) {
+func TestBuildStrategiesReturnsFullTradeableLibrary(t *testing.T) {
 	live := BuildStrategies()
-	if len(live) != len(activeStrategyNames) {
-		t.Fatalf("expected %d active strategies, got %d", len(activeStrategyNames), len(live))
+	if len(live) < 41 {
+		t.Fatalf("expected full tradeable library, got %d strategies", len(live))
 	}
 
-	for i, want := range activeStrategyNames {
-		if live[i].Name != want {
-			t.Fatalf("expected active strategy %d to be %s, got %s", i, want, live[i].Name)
-		}
-		if live[i].Category == "" {
-			t.Fatalf("expected %s to carry category metadata", live[i].Name)
+	for _, def := range live {
+		if def.Category == "" {
+			t.Fatalf("expected %s to carry category metadata", def.Name)
 		}
 	}
 }

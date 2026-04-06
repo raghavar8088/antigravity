@@ -204,8 +204,18 @@ func TestClearHistoryKeepsOpenPositions(t *testing.T) {
 
 func TestNewEngineUsesCuratedActiveBook(t *testing.T) {
 	e := NewEngine()
-	if len(e.states) != len(activeStrategyNames) {
-		t.Fatalf("expected %d active strategies, got %d", len(activeStrategyNames), len(e.states))
+	if len(e.states) < 41 {
+		t.Fatalf("expected full strategy library, got %d states", len(e.states))
+	}
+
+	activeCount := 0
+	for _, state := range e.states {
+		if state.stats.RosterState == StrategyRosterActive {
+			activeCount++
+		}
+	}
+	if activeCount == 0 || activeCount > optionMaxActiveStrategies {
+		t.Fatalf("expected 1-%d active strategies, got %d", optionMaxActiveStrategies, activeCount)
 	}
 }
 
@@ -227,8 +237,11 @@ func TestRecordTradeResultDisablesUnderperformer(t *testing.T) {
 	if state.disabledUntil.IsZero() {
 		t.Fatal("expected disabledUntil to be set")
 	}
-	if state.stats.SizeMultiplier != optionMinSizeMultiplier {
-		t.Fatalf("expected min size multiplier %.2f, got %.2f", optionMinSizeMultiplier, state.stats.SizeMultiplier)
+	if state.stats.RosterState != StrategyRosterDisabled {
+		t.Fatalf("expected roster state %s, got %s", StrategyRosterDisabled, state.stats.RosterState)
+	}
+	if state.stats.SizeMultiplier != 0 {
+		t.Fatalf("expected disabled strategies to have zero live size, got %.2f", state.stats.SizeMultiplier)
 	}
 }
 

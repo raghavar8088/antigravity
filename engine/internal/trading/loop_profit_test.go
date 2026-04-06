@@ -32,7 +32,11 @@ func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
 	if math.Abs(sanitized.StopLossPct-defaultSignalStopLossPct) > signalTolerance {
 		t.Fatalf("expected default stop loss %.2f, got %.4f", defaultSignalStopLossPct, sanitized.StopLossPct)
 	}
+	// TP is the higher of: (SL × R:R) or the absolute floor minSignalTakeProfitPct
 	expectedTakeProfit := defaultSignalStopLossPct * minRewardToRiskRatio
+	if expectedTakeProfit < minSignalTakeProfitPct {
+		expectedTakeProfit = minSignalTakeProfitPct
+	}
 	if math.Abs(sanitized.TakeProfitPct-expectedTakeProfit) > signalTolerance {
 		t.Fatalf("expected default take profit %.4f, got %.4f", expectedTakeProfit, sanitized.TakeProfitPct)
 	}

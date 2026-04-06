@@ -11,12 +11,14 @@ import (
 
 const initialOptionsBalance = 1000000.0 // $1,000,000 paper options account
 
-// strategyState holds the runtime state for a single strategy
+// strategyState holds the runtime state for a single strategy.
 type strategyState struct {
 	def               StrategyDef
 	position          *OptionPosition
+	shadowPosition    *OptionPosition
 	stats             StrategyStatus
 	lastTradeAt       time.Time
+	shadowLastTradeAt time.Time
 	consecutiveLosses int
 	disabledUntil     time.Time
 }
@@ -24,29 +26,34 @@ type strategyState struct {
 // Engine is the fully autonomous BTC option scalping engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
-	mu          sync.RWMutex
-	states      []*strategyState
-	trades      []OptionTrade
-	balance     float64
-	lastPrice   float64
-	priceHist   []float64 // raw tick prices (for current price + IV)
-	minuteBars  []float64 // 1-minute sampled prices (for indicators)
-	lastMinute  int64     // unix-minute of last sampled bar
-	tradeSeq    int
-	persistHook func(PersistedState)
+	mu               sync.RWMutex
+	states           []*strategyState
+	trades           []OptionTrade
+	balance          float64
+	lastPrice        float64
+	priceHist        []float64 // raw tick prices (for current price + IV)
+	minuteBars       []float64 // 1-minute sampled prices (for indicators)
+	lastMinute       int64     // unix-minute of last sampled bar
+	tradeSeq         int
+	lastRosterEval   time.Time
+	lastRosterRegime string
+	persistHook      func(PersistedState)
 }
 
-// NewEngine initialises the options engine with the live-approved strategy set.
+// NewEngine initialises the options engine with the full strategy library.
 func NewEngine() *Engine {
 	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
 		states[i] = newStrategyState(d)
 	}
-	return &Engine{
+
+	engine := &Engine{
 		states:  states,
 		balance: initialOptionsBalance,
 	}
+	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
+	return engine
 }
 
 // SetStateSaveHook registers a callback used to persist options state changes.
@@ -80,11 +87,20 @@ func (e *Engine) exportStateLocked() PersistedState {
 			cp := *s.position
 			posCopy = &cp
 		}
+
+		var shadowPosCopy *OptionPosition
+		if s.shadowPosition != nil {
+			cp := *s.shadowPosition
+			shadowPosCopy = &cp
+		}
+
 		strategies[i] = PersistedStrategyState{
 			Name:              s.def.Name,
 			Position:          posCopy,
+			ShadowPosition:    shadowPosCopy,
 			Stats:             s.stats,
 			LastTradeAt:       s.lastTradeAt,
+			ShadowLastTradeAt: s.shadowLastTradeAt,
 			ConsecutiveLosses: s.consecutiveLosses,
 			DisabledUntil:     s.disabledUntil,
 		}
@@ -128,20 +144,29 @@ func (e *Engine) RestoreState(state PersistedState) {
 		byName[persisted.Name] = persisted
 	}
 
+	now := time.Now()
 	for _, s := range e.states {
+		s.position = nil
+		s.shadowPosition = nil
+		s.lastTradeAt = time.Time{}
+		s.shadowLastTradeAt = time.Time{}
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
+		s.stats = newStrategyStatus(s.def)
+
 		persisted, ok := byName[s.def.Name]
 		if !ok {
-			s.position = nil
-			s.lastTradeAt = time.Time{}
-			s.consecutiveLosses = 0
-			s.disabledUntil = time.Time{}
-			s.stats = newStrategyStatus(s.def)
 			continue
 		}
 
 		s.lastTradeAt = persisted.LastTradeAt
+		s.shadowLastTradeAt = persisted.ShadowLastTradeAt
 		s.consecutiveLosses = persisted.ConsecutiveLosses
 		s.disabledUntil = persisted.DisabledUntil
+		if !persisted.Stats.DisabledUntil.IsZero() {
+			s.disabledUntil = persisted.Stats.DisabledUntil
+		}
+
 		s.stats = persisted.Stats
 		if s.stats.Name == "" {
 			s.stats.Name = s.def.Name
@@ -155,8 +180,8 @@ func (e *Engine) RestoreState(state PersistedState) {
 		if s.stats.OptionType == "" {
 			s.stats.OptionType = string(s.def.Type)
 		}
-		if s.stats.SizeMultiplier == 0 {
-			s.stats.SizeMultiplier = sizeMultiplierFor(s)
+		if s.stats.RosterState == "" {
+			s.stats.RosterState = StrategyRosterWatchlist
 		}
 
 		if persisted.Position != nil {
@@ -165,18 +190,20 @@ func (e *Engine) RestoreState(state PersistedState) {
 				cp.StrategyID = s.def.ID
 			}
 			s.position = &cp
-			s.stats.HasPosition = true
-			if s.stats.Status == "" || s.stats.Status == "READY" {
-				s.stats.Status = "IN_POSITION"
-			}
-		} else {
-			s.position = nil
-			s.stats.HasPosition = false
-			if s.stats.Status == "" || s.stats.Status == "IN_POSITION" {
-				s.stats.Status = "READY"
-			}
 		}
+
+		if persisted.ShadowPosition != nil {
+			cp := *persisted.ShadowPosition
+			if cp.StrategyID == 0 {
+				cp.StrategyID = s.def.ID
+			}
+			s.shadowPosition = &cp
+		}
+
+		e.refreshStrategyPresentationLocked(s, now)
 	}
+
+	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
 // ResetAccount wipes the options account in memory and returns the new snapshot.
@@ -191,15 +218,20 @@ func (e *Engine) ResetAccount() PersistedState {
 	e.minuteBars = nil
 	e.lastMinute = 0
 	e.tradeSeq = 0
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
 
 	for _, s := range e.states {
 		s.position = nil
+		s.shadowPosition = nil
 		s.lastTradeAt = time.Time{}
+		s.shadowLastTradeAt = time.Time{}
 		s.consecutiveLosses = 0
 		s.disabledUntil = time.Time{}
 		s.stats = newStrategyStatus(s.def)
 	}
 
+	e.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
 	snapshot := e.exportStateLocked()
 	e.schedulePersistLocked(snapshot)
 	return snapshot
@@ -217,18 +249,24 @@ func (e *Engine) ClearHistory() PersistedState {
 		s.stats.Losses = 0
 		s.stats.TotalPnL = 0
 		s.stats.WinRate = 0
-		s.stats.SizeMultiplier = optionColdStartSizeMultiplier
+		s.stats.ShadowTrades = 0
+		s.stats.ShadowWins = 0
+		s.stats.ShadowLosses = 0
+		s.stats.ShadowPnL = 0
+		s.stats.ShadowWinRate = 0
+		s.stats.ShadowSignals = 0
+		s.stats.Score = 0
+		s.stats.DisableReason = ""
+		s.stats.DisabledUntil = time.Time{}
+		s.stats.LastPromotedAt = time.Time{}
+		s.stats.LastDemotedAt = time.Time{}
 		s.consecutiveLosses = 0
 		s.disabledUntil = time.Time{}
-		if s.position != nil {
-			s.stats.Status = "IN_POSITION"
-			s.stats.HasPosition = true
-		} else {
-			s.stats.Status = "READY"
-			s.stats.HasPosition = false
-		}
 	}
 
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
+	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), time.Now().UTC())
 	snapshot := e.exportStateLocked()
 	e.schedulePersistLocked(snapshot)
 	return snapshot
@@ -272,7 +310,7 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	log.Printf("[OPTIONS ENGINE] 🚀 BTC Option Scalper started — %d live-approved strategies active", len(e.states))
+	log.Printf("[OPTIONS ENGINE] BTC Option Scalper started with %d strategies in library", len(e.states))
 
 	for {
 		select {
@@ -293,22 +331,19 @@ func (e *Engine) tick() {
 		return
 	}
 
-	// Let each signal enforce its own lookback instead of blocking the whole
-	// engine behind a fixed 30-minute startup warmup.
-	// Estimate IV from minute bars (correct annualization for 1-min data)
 	iv := EstimateIV(e.minuteBars)
 
 	nowUTC := time.Now().UTC()
 	ctx := SignalContext{
-		Prices:   e.minuteBars, // minute-bar prices for indicators
+		Prices:   e.minuteBars,
 		IV:       iv,
 		BTCPrice: e.lastPrice,
 		UTCHour:  nowUTC.Hour(),
 		UTCMin:   nowUTC.Minute(),
 	}
 	regime := classifyMarketRegime(e.minuteBars)
+	e.refreshRosterLocked(regime, nowUTC)
 
-	// Count currently open positions to enforce global cap
 	openCount := 0
 	for _, s := range e.states {
 		if s.position != nil {
@@ -317,38 +352,20 @@ func (e *Engine) tick() {
 	}
 
 	for _, s := range e.states {
-		e.manageStrategy(s, ctx, regime, iv, &openCount)
+		e.manageStrategyRuntime(s, ctx, regime, iv, nowUTC, &openCount)
 	}
 }
 
-func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, regime string, iv float64, openCount *int) {
-	now := time.Now()
+func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 
 	// ── Manage open position ──────────────────────────────────────────────
 	if s.position != nil {
-		pos := s.position
-		result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
-		pos.CurrentPremium = result.Premium
-		pos.Delta = result.Delta
-		pos.UnrealizedPnL = (result.Premium - pos.EntryPremium) * pos.Quantity
-		pos.IV = iv
-
-		exitReason := ""
-		gainPct := (result.Premium - pos.EntryPremium) / pos.EntryPremium
-
-		switch {
-		case gainPct >= s.def.TakeProfitPct:
-			exitReason = ExitTP
-		case gainPct <= -s.def.StopLossPct:
-			exitReason = ExitSL
-		case now.After(pos.ExpiryTime):
-			exitReason = ExitExpiry
+		if exitReason := e.markToMarketPositionLocked(s.position, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
+			e.closePositionLocked(s, exitReason, now)
+			if *openCount > 0 {
+				*openCount--
+			}
 		}
-
-		if exitReason != "" {
-			e.closePosition(s, exitReason, now)
-		}
-		return
 	}
 
 	// ── Enforce global position cap ───────────────────────────────────────
@@ -497,12 +514,251 @@ func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
 		symbol, s.def.Name, reason, netPnL, returnPct)
 }
 
+func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
+	if s.position != nil {
+		if exitReason := e.markToMarketPositionLocked(s.position, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
+			e.closePositionLocked(s, exitReason, now)
+			if *openCount > 0 {
+				*openCount--
+			}
+		}
+	}
+
+	if s.shadowPosition != nil {
+		if exitReason := e.markToMarketPositionLocked(s.shadowPosition, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
+			e.closeShadowPositionLocked(s, exitReason, now)
+		}
+	}
+
+	if s.position == nil && s.shadowPosition == nil {
+		switch s.stats.RosterState {
+		case StrategyRosterActive:
+			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
+		default:
+			e.maybeOpenShadowPositionLocked(s, ctx, iv, now)
+		}
+	}
+
+	e.refreshStrategyPresentationLocked(s, now)
+}
+
+func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
+	if s.stats.RosterState != StrategyRosterActive {
+		return
+	}
+	if *openCount >= maxConcurrentPositions {
+		return
+	}
+	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
+		s.stats.RosterState = StrategyRosterDisabled
+		e.refreshStrategyPresentationLocked(s, now)
+		return
+	}
+	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
+		return
+	}
+	if !isCategoryAlignedWithRegime(s.def.Category, regime) {
+		return
+	}
+
+	fn, ok := Signals[s.def.Signal]
+	if !ok || !fn(ctx) {
+		return
+	}
+	if e.balance <= 0 {
+		return
+	}
+
+	positionUSD := s.stats.AllocationUSD
+	if positionUSD <= 0 {
+		positionUSD = s.def.PositionUSD
+	}
+	positionUSD *= s.stats.SizeMultiplier
+	if positionUSD > e.balance {
+		positionUSD = e.balance
+	}
+	if positionUSD < s.def.PositionUSD*optionMinSizeMultiplier {
+		return
+	}
+
+	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "")
+	if pos == nil {
+		return
+	}
+
+	e.balance -= positionUSD
+	s.position = pos
+	s.stats.HasPosition = true
+	s.stats.Status = optionStatusInPosition
+	*openCount++
+	e.schedulePersistLocked(e.exportStateLocked())
+
+	log.Printf("[OPTIONS] OPEN %s %s | roster=%s score=%.1f alloc=$%.0f size=%.2fx",
+		s.def.Name, s.def.Type, s.stats.RosterState, s.stats.Score, s.stats.AllocationUSD, s.stats.SizeMultiplier)
+}
+
+func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalContext, iv float64, now time.Time) {
+	if !s.shadowLastTradeAt.IsZero() && now.Sub(s.shadowLastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
+		return
+	}
+
+	fn, ok := Signals[s.def.Signal]
+	if !ok || !fn(ctx) {
+		return
+	}
+
+	s.stats.ShadowSignals++
+	pos := e.newOptionPositionLocked(s.def, s.def.PositionUSD, iv, now, "SHADOW")
+	if pos == nil {
+		return
+	}
+
+	s.shadowPosition = pos
+	s.stats.HasShadowPosition = true
+	s.stats.Status = optionStatusShadowing
+	e.schedulePersistLocked(e.exportStateLocked())
+}
+
+func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {
+	expiry := now.Add(time.Duration(def.ExpiryMinutes) * time.Minute)
+	var strike float64
+	if def.Type == Call {
+		strike = e.lastPrice * (1 + def.StrikePctOTM)
+	} else {
+		strike = e.lastPrice * (1 - def.StrikePctOTM)
+	}
+
+	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
+	if pr.Premium <= 0 {
+		return nil
+	}
+
+	quantity := positionUSD / pr.Premium
+	if quantity <= 0 {
+		return nil
+	}
+
+	e.tradeSeq++
+	nameTag := def.Name
+	if len(nameTag) > 4 {
+		nameTag = nameTag[:4]
+	}
+	idPrefix := "OPT"
+	if prefix != "" {
+		idPrefix = prefix
+	}
+
+	return &OptionPosition{
+		ID:             fmt.Sprintf("%s-%04d-%s", idPrefix, e.tradeSeq, nameTag),
+		StrategyID:     def.ID,
+		StrategyName:   def.Name,
+		OptionType:     def.Type,
+		Strike:         strike,
+		ExpiryTime:     expiry,
+		EntryPremium:   pr.Premium,
+		CurrentPremium: pr.Premium,
+		Quantity:       quantity,
+		CostBasis:      positionUSD,
+		EntryBTCPrice:  e.lastPrice,
+		EntryTime:      now,
+		IV:             iv,
+		Delta:          pr.Delta,
+	}
+}
+
+func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
+	result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
+	pos.CurrentPremium = result.Premium
+	pos.Delta = result.Delta
+	pos.UnrealizedPnL = (result.Premium - pos.EntryPremium) * pos.Quantity
+	pos.IV = iv
+
+	gainPct := 0.0
+	if pos.EntryPremium > 0 {
+		gainPct = (result.Premium - pos.EntryPremium) / pos.EntryPremium
+	}
+
+	switch {
+	case gainPct >= takeProfitPct:
+		return ExitTP
+	case gainPct <= -stopLossPct:
+		return ExitSL
+	case now.After(pos.ExpiryTime):
+		return ExitExpiry
+	default:
+		return ""
+	}
+}
+
+func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.Time) {
+	pos := s.position
+	if pos == nil {
+		return
+	}
+
+	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	returnPct := 0.0
+	if pos.EntryPremium > 0 {
+		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
+	}
+
+	e.balance += pos.CostBasis + netPnL
+	e.trades = append(e.trades, OptionTrade{
+		ID:            pos.ID,
+		StrategyID:    s.def.ID,
+		StrategyName:  pos.StrategyName,
+		OptionType:    pos.OptionType,
+		Strike:        pos.Strike,
+		ExpiryMins:    s.def.ExpiryMinutes,
+		EntryPremium:  pos.EntryPremium,
+		ExitPremium:   pos.CurrentPremium,
+		Quantity:      pos.Quantity,
+		CostBasis:     pos.CostBasis,
+		NetPnL:        netPnL,
+		ReturnPct:     returnPct,
+		EntryBTCPrice: pos.EntryBTCPrice,
+		ExitBTCPrice:  e.lastPrice,
+		EntryTime:     pos.EntryTime,
+		ExitTime:      now,
+		ExitReason:    reason,
+	})
+
+	s.lastTradeAt = now
+	s.position = nil
+	s.stats.HasPosition = false
+	s.recordTradeResultLocked(netPnL, now)
+	e.refreshStrategyPresentationLocked(s, now)
+	e.lastRosterEval = time.Time{}
+	e.schedulePersistLocked(e.exportStateLocked())
+
+	log.Printf("[OPTIONS] CLOSE %s | reason=%s pnl=$%.2f return=%.1f%%", s.def.Name, reason, netPnL, returnPct)
+}
+
+func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now time.Time) {
+	pos := s.shadowPosition
+	if pos == nil {
+		return
+	}
+
+	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	s.shadowLastTradeAt = now
+	s.shadowPosition = nil
+	s.stats.HasShadowPosition = false
+	s.recordShadowTradeResultLocked(netPnL)
+	e.refreshStrategyPresentationLocked(s, now)
+	e.lastRosterEval = time.Time{}
+	e.schedulePersistLocked(e.exportStateLocked())
+
+	log.Printf("[OPTIONS][SHADOW] CLOSE %s | reason=%s pnl=$%.2f", s.def.Name, reason, netPnL)
+}
+
 func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
 	s.stats.TotalTrades++
 	s.stats.TotalPnL += netPnL
 	if netPnL > 0 {
 		s.stats.Wins++
 		s.consecutiveLosses = 0
+		s.stats.DisableReason = ""
 	} else {
 		s.stats.Losses++
 		s.consecutiveLosses++
@@ -511,23 +767,68 @@ func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
 		s.stats.WinRate = float64(s.stats.Wins) / float64(s.stats.TotalTrades) * 100
 	}
 
-	if s.consecutiveLosses >= optionLossStreakDisableThreshold {
+	switch {
+	case s.consecutiveLosses >= optionLossStreakDisableThreshold:
 		s.disabledUntil = now.Add(optionLossStreakCooldown)
-		s.stats.Status = optionStatusDisabled
-		s.stats.SizeMultiplier = optionMinSizeMultiplier
-		return
-	}
-
-	if s.stats.TotalTrades >= optionUnderperformingMinTrades &&
+		s.stats.DisableReason = fmt.Sprintf("Loss streak reached %d", s.consecutiveLosses)
+	case s.stats.TotalTrades >= optionUnderperformingMinTrades &&
 		s.stats.TotalPnL < 0 &&
-		s.stats.WinRate < optionUnderperformingMaxWinRate {
+		s.stats.WinRate < optionUnderperformingMaxWinRate:
 		s.disabledUntil = now.Add(optionUnderperformingCooldown)
+		s.stats.DisableReason = "Live results fell below minimum edge thresholds"
+	default:
+		s.disabledUntil = time.Time{}
+	}
+
+	s.stats.DisabledUntil = s.disabledUntil
+	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
+		s.stats.RosterState = StrategyRosterDisabled
 		s.stats.Status = optionStatusDisabled
-		s.stats.SizeMultiplier = optionMinSizeMultiplier
+		s.stats.AllocationUSD = 0
+		s.stats.SizeMultiplier = 0
 		return
 	}
 
-	s.stats.SizeMultiplier = sizeMultiplierFor(s)
+	s.stats.SizeMultiplier = liveSizeMultiplierFor(s)
+}
+
+func (s *strategyState) recordShadowTradeResultLocked(netPnL float64) {
+	s.stats.ShadowTrades++
+	s.stats.ShadowPnL += netPnL
+	if netPnL > 0 {
+		s.stats.ShadowWins++
+	} else {
+		s.stats.ShadowLosses++
+	}
+	if s.stats.ShadowTrades > 0 {
+		s.stats.ShadowWinRate = float64(s.stats.ShadowWins) / float64(s.stats.ShadowTrades) * 100
+	}
+}
+
+func (e *Engine) refreshStrategyPresentationLocked(s *strategyState, now time.Time) {
+	s.stats.HasPosition = s.position != nil
+	s.stats.HasShadowPosition = s.shadowPosition != nil
+	s.stats.DisabledUntil = s.disabledUntil
+
+	switch {
+	case s.position != nil:
+		s.stats.Status = optionStatusInPosition
+	case s.shadowPosition != nil:
+		s.stats.Status = optionStatusShadowing
+	case !s.disabledUntil.IsZero() && now.Before(s.disabledUntil):
+		s.stats.Status = optionStatusDisabled
+		s.stats.RosterState = StrategyRosterDisabled
+	case s.stats.RosterState == StrategyRosterActive &&
+		!s.lastTradeAt.IsZero() &&
+		now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second:
+		s.stats.Status = optionStatusCooling
+	case s.stats.RosterState == StrategyRosterActive:
+		s.stats.Status = optionStatusReady
+	case s.stats.RosterState == StrategyRosterDisabled:
+		s.stats.Status = optionStatusDisabled
+	default:
+		s.stats.Status = optionStatusWatchlist
+	}
 }
 
 // ── API Handlers ─────────────────────────────────────────────────────────────
@@ -656,6 +957,10 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
+	e.ResetAccount()
+	log.Println("[OPTIONS] Options account reset to $1,000,000")
+	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	return
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

@@ -4,7 +4,7 @@ import "testing"
 
 func TestBuildCuratedScalpersHasUniqueNamesAndExpectedCount(t *testing.T) {
 	entries := BuildCuratedScalpers()
-	if got, want := len(entries), 600; got != want {
+	if got, want := len(entries), 589; got != want {
 		t.Fatalf("expected %d strategies, got %d", want, got)
 	}
 

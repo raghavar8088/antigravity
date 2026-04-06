@@ -80,18 +80,16 @@ func NewManager() *Manager {
 		positions: make(map[string]*Position),
 		nextID:    1,
 		config: ManagerConfig{
-			TrailingStopPct:    0.18,  // Trail activates after 0.18% profit — locks in partial gains without blocking TP
-			BreakEvenThreshold: 0.00,  // Break-even exits disabled
-			PartialTPRatio:     1.0,   // Close FULL position at TP (no partial — removes half-open reversal risk)
-			MinTakeProfitPct:   0.20,  // Reduced: 0.45 was forcing TP too wide for scalpers, collapsing win rates
+			TrailingStopPct:    0.18,  // Trail activates after 0.18% profit — moves SL to breakeven, locks partial gains
+			BreakEvenThreshold: 0.00,  // Break-even exits handled by trailing
+			PartialTPRatio:     1.0,   // Close FULL position at TP
+			MinTakeProfitPct:   0.30,  // Floor TP at 0.30% — enough room to profit after fees
 			MaxPerStrategy:     2,     // Max 2 positions per strategy — prevent pile-up
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 0,     // Scalping: manual lock enforced for 10m, then stays open until SL/TP or manual close
+			MaxPositionAgeMins: 45,    // Auto-close stale scalps after 45 min — free up capital
 		},
 		CloseEvents: make(chan CloseEvent, 200),
 	}
-	// Trailing exits are intentionally disabled so positions only auto-close via SL or TP.
-	mgr.config.TrailingStopPct = 1e9
 	return mgr
 }
 

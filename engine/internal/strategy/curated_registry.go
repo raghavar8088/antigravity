@@ -7,21 +7,21 @@ func BuildCuratedScalpers() []RegistryEntry {
 	entries := []RegistryEntry{
 		// ── ORIGINAL PROVEN STRATEGIES (35) ────────────────────────────────────
 		{NewEMACrossScalper(8, 21), "Trend", "1m"},
-		{NewADXTrendScalper(), "Trend", "1m"},
+		// ADX_Trend_Scalp removed — -$7.86 live loss
 		{NewVolumeWeightedTrendScalper(), "Trend", "1m"},
-		{NewPullbackContinuationProScalper(), "Trend", "1m"},
+		// Pullback_Continuation_Pro removed — -$4.27 live loss
 		{NewVWAPRSI2ReversionScalper(), "Mean Rev Elite", "1m"},
 		{NewBollingerRSIFadeScalper(), "Mean Rev Elite", "1m"},
-		{NewMACDVWAPFlipScalper(), "Momentum Elite", "1m"},
+		// MACD_VWAP_Flip removed — -$10.90 live loss
 		{NewStochasticRangeScalper(), "Mean Reversion", "1m"},
-		{NewDonchianScalper(20), "Breakout", "5m"},
-		{NewATRBreakoutScalper(14, 1.5), "Breakout Elite", "1m"},
-		{NewATRVolumeImpulseScalper(), "Breakout Elite", "1m"},
+		// Donchian_Breakout removed — -$7.84 live loss
+		// ATR_Breakout removed — -$15.43 live loss
+		// ATR_Volume_Impulse removed — -$19.65 live loss (worst loser)
 		{NewVolatilitySqueeze(), "Volatility", "1m"},
 		{NewRangeCompressionScalper(20, 0.3), "Volatility", "5m"},
-		{NewPriceChannelScalper(20), "Breakout Elite", "5m"},
+		// PriceChannel_Breakout removed — -$11.29 live loss
 		{NewOpeningRangeBreakoutScalper(16, 0, 15), "Time-of-Day", "1m"},
-		{NewVolumeBreakoutImpulseScalper(20), "Breakout Elite", "5m"},
+		// VolumeBreakout_Impulse removed — -$5.34 live loss
 		{NewOrderFlowPressureProScalper(80), "Microstructure", "tick"},
 		{NewLinRegScalper(30, 2.0), "Statistical", "1m"},
 		{NewZScoreBandScalper(30, 2.0), "Mean Rev Elite", "1m"},
@@ -32,14 +32,14 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewChartDoubleTapReversalScalper(), "Price Action Elite", "1m"},
 		{NewChartWedgeBreakoutScalper(), "Price Action Elite", "5m"},
 		{NewAdaptiveRSIScalper(14), "Adaptive Elite", "1m"},
-		{NewKAMAScalper(10), "Adaptive", "1m"},
+		// KAMA_Adaptive removed — -$14.36 live loss
 		{NewTrendMomentumScoreScalper(), "Multi-Signal", "1m"},
 		{NewVWAPBounceScalper(), "Trend", "1m"},
 		{NewSessionOpenMomentumScalper(), "Time-of-Day", "1m"},
 		{NewRSIMACDDivergenceScalper(), "Price Action Elite", "1m"},
 		{NewTripleTrendConfluenceScalper(), "Trend", "1m"},
-		{NewVolumeDeltaSpikeScalper(), "Microstructure", "1m"},
-		{NewMACDZeroCrossConfluenceScalper(), "Momentum Elite", "1m"},
+		// VolumeDelta_Spike removed — -$3.44 live loss
+		// MACD_ZeroCross_Confluence removed — -$3.71 live loss
 		{NewBollingerWalkScalper(), "Trend", "1m"},
 
 		// ── ELITE V2 — EMA Cross family (15) ───────────────────────────────────

@@ -131,6 +131,8 @@ function StatusBadge({ status }: { status: string }) {
     READY:       "border-emerald-200 bg-emerald-50 text-emerald-700",
     IN_POSITION: "border-blue-200 bg-blue-50 text-blue-700",
     COOLING:     "border-amber-200 bg-amber-50 text-amber-700",
+    WATCHLIST:   "border-zinc-200 bg-zinc-50 text-zinc-600",
+    SHADOWING:   "border-sky-200 bg-sky-50 text-sky-700",
     DISABLED:    "border-zinc-300 bg-zinc-100 text-zinc-600",
   };
   return (
@@ -138,6 +140,26 @@ function StatusBadge({ status }: { status: string }) {
       {status.replace("_", " ")}
     </span>
   );
+}
+
+function RosterBadge({ rosterState }: { rosterState: string }) {
+  const map: Record<string, string> = {
+    ACTIVE: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    WATCHLIST: "border-zinc-200 bg-zinc-50 text-zinc-600",
+    DISABLED: "border-rose-200 bg-rose-50 text-rose-700",
+  };
+  return (
+    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${map[rosterState] ?? "border-zinc-200 bg-zinc-50 text-zinc-500"}`}>
+      {rosterState}
+    </span>
+  );
+}
+
+function formatMaybeDate(value?: string) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return `${formatShortDate(value)} ${formatShortTime(value)}`;
 }
 
 function ExitBadge({ reason }: { reason: string }) {
@@ -301,7 +323,10 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
 
 function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionStrategyStatus[]; strategyNumbers: StrategyNumberMap }) {
   const [showAll, setShowAll] = useState(false);
-  const sorted = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl);
+  const sorted = [...strategies].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.totalPnl - a.totalPnl;
+  });
   const visible = showAll ? sorted : sorted.slice(0, 20);
   const totalStrategies = strategies.length;
   const topCount = Math.min(20, totalStrategies);
@@ -324,11 +349,11 @@ function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionSt
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left" style={{ minWidth: 720 }}>
+        <table className="w-full text-left" style={{ minWidth: 1280 }}>
           <thead>
             <tr className="border-b" style={{ borderColor: "var(--border)" }}>
-              {["ID", "Strategy", "Type", "Status", "Trades", "W / L", "Win Rate", "Total PnL"].map((h, i) => (
-                <th key={h} className={`py-2 px-3 text-[10px] font-bold uppercase tracking-widest ${i === 7 ? "text-right" : ""}`}
+              {["ID", "Strategy", "Type", "Roster", "Runtime", "Score", "Live", "Shadow", "Allocation", "Size", "PnL", "Notes"].map((h, i) => (
+                <th key={h} className={`py-2 px-3 text-[10px] font-bold uppercase tracking-widest ${i >= 8 && i <= 10 ? "text-right" : ""}`}
                   style={{ color: "var(--text-muted)" }}>
                   {h}
                 </th>
@@ -339,16 +364,37 @@ function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionSt
             {visible.map((s, i) => (
               <tr key={s.name} className="border-b transition-colors hover:bg-black/[0.015]" style={{ borderColor: "var(--border-subtle)" }}>
                 <td className="py-2.5 px-3 text-xs font-mono" style={{ color: "var(--text-muted)" }}>{resolveStrategyNumber(s.name, s.strategyId, strategyNumbers) || i + 1}</td>
-                <td className="py-2.5 px-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(s.name, s.strategyId, strategyNumbers)}</td>
+                <td className="py-2.5 px-3">
+                  <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(s.name, s.strategyId, strategyNumbers)}</div>
+                  <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{s.category}</div>
+                </td>
                 <td className="py-2.5 px-3"><TypeBadge type={s.optionType} /></td>
+                <td className="py-2.5 px-3"><RosterBadge rosterState={s.rosterState} /></td>
                 <td className="py-2.5 px-3"><StatusBadge status={s.status} /></td>
-                <td className="py-2.5 px-3 text-sm font-mono" style={{ color: "var(--text-secondary)" }}>{s.totalTrades}</td>
-                <td className="py-2.5 px-3 text-sm font-mono" style={{ color: "var(--text-secondary)" }}>{s.wins}W / {s.losses}L</td>
+                <td className="py-2.5 px-3 text-sm font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{s.score.toFixed(1)}</td>
                 <td className="py-2.5 px-3 text-sm font-mono" style={{ color: "var(--text-secondary)" }}>
-                  {s.totalTrades > 0 ? fmtPct(s.winRate) : "-"}
+                  {s.totalTrades}T | {s.wins}W / {s.losses}L
+                  <div className="text-[11px]">{s.totalTrades > 0 ? fmtPct(s.winRate) : "-"}</div>
+                </td>
+                <td className="py-2.5 px-3 text-sm font-mono" style={{ color: "var(--text-secondary)" }}>
+                  {s.shadowTrades}T | {s.shadowWins}W / {s.shadowLosses}L
+                  <div className={`${s.shadowPnl >= 0 ? "text-emerald-600" : "text-rose-600"} text-[11px] font-semibold`}>
+                    {s.shadowTrades > 0 ? fmtUSD(s.shadowPnl, { signed: true }) : "-"}
+                  </div>
+                </td>
+                <td className="py-2.5 px-3 text-right text-sm font-mono" style={{ color: "var(--text-secondary)" }}>
+                  {s.rosterState === "ACTIVE" ? fmtUSD(s.allocationUsd) : "-"}
+                </td>
+                <td className="py-2.5 px-3 text-right text-sm font-mono" style={{ color: "var(--text-secondary)" }}>
+                  {s.rosterState === "ACTIVE" ? `${s.sizeMultiplier.toFixed(2)}x` : "-"}
                 </td>
                 <td className={`py-2.5 px-3 text-right text-sm font-mono font-bold ${s.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                   {s.totalTrades > 0 ? fmtUSD(s.totalPnl, { signed: true }) : "-"}
+                </td>
+                <td className="py-2.5 px-3 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                  <div>{s.regime}</div>
+                  {s.disableReason ? <div>{s.disableReason}</div> : null}
+                  {s.disabledUntil ? <div>Until {formatMaybeDate(s.disabledUntil)}</div> : null}
                 </td>
               </tr>
             ))}
@@ -547,12 +593,15 @@ export default function OptionsScalper() {
   const callCount = positions.filter((p) => p.optionType === "CALL").length;
   const putCount  = positions.filter((p) => p.optionType === "PUT").length;
   const exposureSummary = openCount === 0 ? "No open exposure" : `${callCount} calls / ${putCount} puts`;
-  const bestStrategy = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl)[0] ?? null;
+  const bestStrategy = [...strategies].sort((a, b) => {
+    if (b.totalPnl !== a.totalPnl) return b.totalPnl - a.totalPnl;
+    return b.score - a.score;
+  })[0] ?? null;
   const latestTrade = trades[0] ?? null;
   const totalStrategies = strategies.length;
   const activeStrategies = strategies.length === 0
     ? 0
-    : strategies.filter((s) => s.status !== "COOLING" && s.status !== "DISABLED").length;
+    : strategies.filter((s) => s.rosterState === "ACTIVE").length;
   const strategyNumbers = strategies.reduce<StrategyNumberMap>((map, strategy, index) => {
     map[strategy.name] = strategy.strategyId > 0 ? strategy.strategyId : index + 1;
     return map;
@@ -601,7 +650,7 @@ export default function OptionsScalper() {
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
                 <BadgePill label="Options Engine Online" tone="positive" />
-                <BadgePill label={`${activeStrategies}/${totalStrategies} Enabled`} tone="info" />
+                <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
                 <BadgePill label="Not Futures" tone="neutral" />
               </div>
@@ -635,7 +684,7 @@ export default function OptionsScalper() {
             <CompactMetric
               label="Session Runtime"
               value={sessionRuntime}
-              detail={`${activeStrategies} strategies enabled`}
+              detail={`${activeStrategies} strategies funded`}
               accent="text-zinc-900"
             />
             <CompactMetric
@@ -647,7 +696,7 @@ export default function OptionsScalper() {
             <CompactMetric
               label="Open Exposure"
               value={exposureSummary}
-              detail={`${openCount} of ${totalStrategies} strategies in position`}
+              detail={`${openCount} of ${activeStrategies} live slots in position`}
               accent="text-zinc-900"
             />
           </div>
@@ -729,7 +778,7 @@ export default function OptionsScalper() {
             <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Top Performing Strategy</div>
             <div className="mt-1 text-lg font-bold" style={{ color: "var(--text-primary)" }}>{formatStrategyLabel(bestStrategy.name, bestStrategy.strategyId, strategyNumbers)}</div>
             <div className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-              {bestStrategy.wins}W / {bestStrategy.losses}L | {bestStrategy.totalTrades > 0 ? fmtPct(bestStrategy.winRate) : "-"} win rate
+              {bestStrategy.wins}W / {bestStrategy.losses}L | {bestStrategy.totalTrades > 0 ? fmtPct(bestStrategy.winRate) : "-"} win rate | score {bestStrategy.score.toFixed(1)}
             </div>
           </div>
           <div className="text-right">
@@ -738,6 +787,7 @@ export default function OptionsScalper() {
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <TypeBadge type={bestStrategy.optionType} />
+            <RosterBadge rosterState={bestStrategy.rosterState} />
             <StatusBadge status={bestStrategy.status} />
           </div>
         </div>

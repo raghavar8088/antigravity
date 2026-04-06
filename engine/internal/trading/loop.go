@@ -22,14 +22,14 @@ const (
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
 
-	minExecutableConfidence     = 0.72 // Lowered: allow well-setup signals with tighter geometry
-	minBridgeApprovalConfidence = 0.60 // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio        = 1.25 // Lowered: achievable at 45%+ win rate (was 1.50)
-	minSignalTakeProfitPct      = 0.18 // Ultra-tight TP — gets hit within 1-3 minutes on BTC
-	maxSignalStopLossPct        = 0.22 // Ultra-tight SL — cut losses fast before they compound
-	defaultSignalStopLossPct    = 0.15 // Default tight SL — noise filter, not a wide buffer
+	minExecutableConfidence     = 0.75 // Raised: require higher-quality entries
+	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
+	minRewardToRiskRatio        = 2.00 // 2:1 R:R — profitable at 40%+ win rate
+	minSignalTakeProfitPct      = 0.35 // Wider TP — captures real BTC moves, not just noise
+	maxSignalStopLossPct        = 0.18 // Tighter SL — cut losses before they compound
+	defaultSignalStopLossPct    = 0.12 // Tighter default SL — noise filter
 
-	minExecutionWeightToTrade = 0.25 // Lowered: allow newer/recovering strategies to trade (was 0.45)
+	minExecutionWeightToTrade = 0.30 // Raised: only strategies with demonstrated edge trade
 	marketHistoryMaxSamples   = 320
 
 	marketRegimeUnknown  = "UNKNOWN"
@@ -683,8 +683,12 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 
 		// ══════════════════════════════════════════════════════════════════════
 		// AI SIGNAL AUDIT — GPT-4o/Gemini/Groq Veto Layer
+		// Trusted proven-winner strategies with high confidence bypass parking
+		// and execute directly — they have demonstrated statistical edge.
+		// All other signals are parked for AI/bridge review.
 		// ══════════════════════════════════════════════════════════════════════
-		if (o.aiAgent != nil && o.aiAgent.IsAvailable()) || o.IsBridgeOnline() {
+		if ((o.aiAgent != nil && o.aiAgent.IsAvailable()) || o.IsBridgeOnline()) &&
+			!isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
 			// Build market context for the audit
 			o.mu.RLock()
 			prices := append([]float64(nil), o.priceWindow...)
@@ -712,7 +716,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			}
 
 			// ══════════════════════════════════════════════════════════════════════
-			// INTERACTIVE MODE: Park the signal for Dashabord Command Center
+			// INTERACTIVE MODE: Park the signal for Dashboard Command Center
 			// ══════════════════════════════════════════════════════════════════════
 			pendingID := fmt.Sprintf("SIG-%d", time.Now().UnixNano()/1e6)
 
@@ -731,6 +735,11 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			log.Printf("[COMMAND CENTER] 🛰️  Signal Parked: %s %s [%s] -> Waiting for UI submission",
 				aggSig.StrategyName, sig.Action, pendingID)
 			continue
+		}
+
+		if isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
+			log.Printf("[TRUSTED BYPASS] %s → executing directly (conf=%.2f, no parking)",
+				aggSig.StrategyName, sig.Confidence)
 		}
 
 		// ══════════════════════════════════════════════════════════════════════
@@ -1197,6 +1206,32 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool
 	}
 
 	return adjusted, "", true
+}
+
+// isTrustedStrategy returns true for proven-winner strategies that have
+// demonstrated a positive PnL edge in live trading. These bypass the AI/bridge
+// parking queue and execute directly when confidence >= 0.80.
+func isTrustedStrategy(name string, confidence float64) bool {
+	if confidence < 0.80 {
+		return false
+	}
+	switch name {
+	case "TripleFilter_Alpha_Scalp",
+		"VolumeWeighted_Trend_Scalp",
+		"EMA_Cross_Scalp",
+		"ZScoreBand_MeanRev_Scalp",
+		"OrderFlow_Pressure_Pro_Scalp",
+		"BollingerWalk_Trend_Scalp",
+		"Stochastic_Range_Scalp",
+		"RSI_BB_Confluence_Scalp",
+		"LinReg_Statistical_Scalp",
+		"Chart_DoubleTap_Reversal_Scalp",
+		"OpeningRange_Breakout_Scalp",
+		"VolSqueeze_Explosion_Scalp",
+		"TrendMomentum_Score_Scalp":
+		return true
+	}
+	return false
 }
 
 func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) float64 {

@@ -46,14 +46,30 @@ export type OptionStrategyStatus = {
   name: string;
   category: string;
   optionType: string;
+  rosterState: "ACTIVE" | "WATCHLIST" | "DISABLED";
+  score: number;
+  regime: string;
+  regimeFit: number;
+  allocationUsd: number;
   totalTrades: number;
   wins: number;
   losses: number;
   totalPnl: number;
   winRate: number;
+  shadowTrades: number;
+  shadowWins: number;
+  shadowLosses: number;
+  shadowPnl: number;
+  shadowWinRate: number;
+  shadowSignals: number;
   sizeMultiplier: number;
-  status: "READY" | "IN_POSITION" | "COOLING" | "DISABLED";
+  disableReason?: string;
+  disabledUntil?: string;
+  lastPromotedAt?: string;
+  lastDemotedAt?: string;
+  status: "READY" | "IN_POSITION" | "COOLING" | "DISABLED" | "WATCHLIST" | "SHADOWING";
   hasPosition: boolean;
+  hasShadowPosition: boolean;
 };
 
 export type OptionStats = {
@@ -81,7 +97,21 @@ export default function useOptions(refreshKey = 0) {
     setStats(null);
     setStrategies((prev) => prev.map((s) => ({
       ...s,
-      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, status: "READY" as const,
+      totalTrades: 0,
+      wins: 0,
+      losses: 0,
+      totalPnl: 0,
+      winRate: 0,
+      shadowTrades: 0,
+      shadowWins: 0,
+      shadowLosses: 0,
+      shadowPnl: 0,
+      shadowWinRate: 0,
+      shadowSignals: 0,
+      score: 0,
+      allocationUsd: 0,
+      sizeMultiplier: s.rosterState === "ACTIVE" ? s.sizeMultiplier : 0,
+      status: s.rosterState === "ACTIVE" ? "READY" as const : s.rosterState === "DISABLED" ? "DISABLED" as const : "WATCHLIST" as const,
     })));
   };
 

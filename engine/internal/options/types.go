@@ -72,20 +72,45 @@ type OptionTrade struct {
 	ExitReason    string     `json:"exitReason"`
 }
 
+// StrategyRosterState describes whether a strategy is funded, being observed, or sidelined.
+type StrategyRosterState string
+
+const (
+	StrategyRosterActive    StrategyRosterState = "ACTIVE"
+	StrategyRosterWatchlist StrategyRosterState = "WATCHLIST"
+	StrategyRosterDisabled  StrategyRosterState = "DISABLED"
+)
+
 // StrategyStatus is the per-strategy runtime status
 type StrategyStatus struct {
-	StrategyID     int     `json:"strategyId"`
-	Name           string  `json:"name"`
-	Category       string  `json:"category"`
-	OptionType     string  `json:"optionType"`
-	TotalTrades    int     `json:"totalTrades"`
-	Wins           int     `json:"wins"`
-	Losses         int     `json:"losses"`
-	TotalPnL       float64 `json:"totalPnl"`
-	WinRate        float64 `json:"winRate"`
-	SizeMultiplier float64 `json:"sizeMultiplier"`
-	Status         string  `json:"status"` // READY | IN_POSITION | COOLING | DISABLED
-	HasPosition    bool    `json:"hasPosition"`
+	StrategyID        int                 `json:"strategyId"`
+	Name              string              `json:"name"`
+	Category          string              `json:"category"`
+	OptionType        string              `json:"optionType"`
+	RosterState       StrategyRosterState `json:"rosterState"`
+	Status            string              `json:"status"` // READY | IN_POSITION | COOLING | WATCHLIST | SHADOWING | DISABLED
+	TotalTrades       int                 `json:"totalTrades"`
+	Wins              int                 `json:"wins"`
+	Losses            int                 `json:"losses"`
+	TotalPnL          float64             `json:"totalPnl"`
+	WinRate           float64             `json:"winRate"`
+	ShadowTrades      int                 `json:"shadowTrades"`
+	ShadowWins        int                 `json:"shadowWins"`
+	ShadowLosses      int                 `json:"shadowLosses"`
+	ShadowPnL         float64             `json:"shadowPnl"`
+	ShadowWinRate     float64             `json:"shadowWinRate"`
+	ShadowSignals     int                 `json:"shadowSignals"`
+	Score             float64             `json:"score"`
+	Regime            string              `json:"regime"`
+	RegimeFit         float64             `json:"regimeFit"`
+	AllocationUSD     float64             `json:"allocationUsd"`
+	SizeMultiplier    float64             `json:"sizeMultiplier"`
+	DisableReason     string              `json:"disableReason,omitempty"`
+	DisabledUntil     time.Time           `json:"disabledUntil,omitempty"`
+	LastPromotedAt    time.Time           `json:"lastPromotedAt,omitempty"`
+	LastDemotedAt     time.Time           `json:"lastDemotedAt,omitempty"`
+	HasPosition       bool                `json:"hasPosition"`
+	HasShadowPosition bool                `json:"hasShadowPosition"`
 }
 
 // AggregateStats for the options engine
@@ -106,8 +131,10 @@ type AggregateStats struct {
 type PersistedStrategyState struct {
 	Name              string          `json:"name"`
 	Position          *OptionPosition `json:"position,omitempty"`
+	ShadowPosition    *OptionPosition `json:"shadowPosition,omitempty"`
 	Stats             StrategyStatus  `json:"stats"`
 	LastTradeAt       time.Time       `json:"lastTradeAt"`
+	ShadowLastTradeAt time.Time       `json:"shadowLastTradeAt"`
 	ConsecutiveLosses int             `json:"consecutiveLosses"`
 	DisabledUntil     time.Time       `json:"disabledUntil"`
 }
