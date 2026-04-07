@@ -871,8 +871,8 @@ export default function TradingDashboard() {
           {[
             { key: "options", label: "BTC Option Scalper" },
             { key: "chain", label: "BTC Option Chain" },
-            { key: "nifty", label: "Nifty 50 Scalper" },
-            { key: "niftyStocks", label: "Nifty 50 Stocks" },
+            { key: "nifty", label: "Nifty 50 Option Scalper" },
+            { key: "niftyStocks", label: "Nifty 50 Equity" },
             { key: "dashboard", label: "Dashboard" },
             { key: "engine", label: "Trade Engine" },
             { key: "history", label: "Trade History" },
@@ -899,9 +899,9 @@ export default function TradingDashboard() {
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account. Zero overlap with futures."
             : activeModule === "nifty"
-            ? "OPTIONS ACCOUNT — NIFTY 50 option scalper running the same autonomous setup on a separate ₹1,000,000 paper account. Zero overlap with futures."
+            ? "OPTIONS ACCOUNT — Nifty 50 option scalper running autonomous strategies on a separate ₹1,000,000 paper account. Zero overlap with futures."
             : activeModule === "niftyStocks"
-            ? "STOCKS ACCOUNT — NIFTY 50 stock scalper using a synthetic NIFTY feed, separate INR paper capital, and a strategy roster modeled on the BTC equity desk."
+            ? "EQUITY ACCOUNT — Nifty 50 equity scalper using a synthetic NIFTY feed, separate ₹1,000,000 paper capital, and a dedicated stock strategy roster."
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
