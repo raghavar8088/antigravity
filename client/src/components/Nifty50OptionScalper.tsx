@@ -798,7 +798,7 @@ export default function Nifty50OptionScalper() {
 
       {/* ── Footer note ── */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        NIFTY 50 options paper account · Black-Scholes pricing · synthetic NIFTY feed mapped from BTC live moves · ₹1,000,000 starting balance
+        NIFTY 50 options paper account · Black-Scholes pricing · live NSE NIFTY 50 spot feed · ₹1,000,000 starting balance
       </div>
 
     </div>

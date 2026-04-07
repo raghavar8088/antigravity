@@ -57,7 +57,6 @@ func (r *RingLogger) GetLogs() []string {
 var globalLogs = &RingLogger{max: 100}
 
 const initialPaperBalanceUSD = 1000000.0
-const defaultNifty50Anchor = 22500.0
 
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
@@ -213,25 +212,6 @@ func loadNiftyOptionsSnapshot(state *persistence.NiftyOptionsState) (options.Per
 	return snapshot, nil
 }
 
-func mapSyntheticNifty50Price(referencePrice, referenceAnchor, niftyAnchor float64) float64 {
-	if referencePrice <= 0 {
-		return 0
-	}
-	if referenceAnchor <= 0 {
-		referenceAnchor = referencePrice
-	}
-	if niftyAnchor <= 0 {
-		niftyAnchor = defaultNifty50Anchor
-	}
-
-	changePct := (referencePrice / referenceAnchor) - 1
-	scaledPrice := niftyAnchor * (1 + changePct*0.35)
-	if scaledPrice < 1000 {
-		return 1000
-	}
-	return scaledPrice
-}
-
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
@@ -250,6 +230,7 @@ func main() {
 	// 1. WebSocket Live Stream (Coinbase)
 	// ═══════════════════════════════════════════════════
 	coinbaseClient := marketdata.NewCoinbaseClient()
+	nseIndexClient := marketdata.NewNSEIndexClient()
 	go func() {
 		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
 		if err != nil {
@@ -470,7 +451,6 @@ func main() {
 	optionsEngine := options.NewEngine()
 	niftyOptionsEngine := options.NewEngine()
 	niftyStocksEngine := niftystocks.NewEngine()
-	niftySyntheticAnchor := defaultNifty50Anchor
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
 			if err := saveOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
@@ -515,9 +495,6 @@ func main() {
 				log.Printf("[DB] WARN Failed to decode NIFTY options state: %v", snapshotErr)
 			} else {
 				niftyOptionsEngine.RestoreState(snapshot)
-				if snapshot.LastPrice > 0 {
-					niftySyntheticAnchor = snapshot.LastPrice
-				}
 				restoredOpen := 0
 				for _, strategyState := range snapshot.Strategies {
 					if strategyState.Position != nil {
@@ -532,9 +509,8 @@ func main() {
 		}
 	}
 
-	// Feed BTC price ticks into the options engines via the same Coinbase stream.
+	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {
-		var referenceAnchor float64
 		for {
 			select {
 			case <-ctx.Done():
@@ -543,13 +519,48 @@ func main() {
 				p := paperExecute.GetLastPrice()
 				if p > 0 {
 					optionsEngine.UpdatePrice(p)
-					if referenceAnchor <= 0 {
-						referenceAnchor = p
-					}
-					syntheticNiftyPrice := mapSyntheticNifty50Price(p, referenceAnchor, niftySyntheticAnchor)
-					niftyOptionsEngine.UpdatePrice(syntheticNiftyPrice)
-					niftyStocksEngine.UpdatePrice(syntheticNiftyPrice)
 				}
+			}
+		}
+	})
+
+	// Feed live NIFTY 50 spot quotes into the NIFTY modules from NSE.
+	go safeGo("Nifty50PriceFeed", func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		var feedPrimed bool
+		var lastErr string
+
+		pullQuote := func() {
+			quote, err := nseIndexClient.FetchNifty50Quote(ctx)
+			if err != nil {
+				if err.Error() != lastErr {
+					log.Printf("[NSE] WARN Failed to fetch live NIFTY 50 quote: %v", err)
+					lastErr = err.Error()
+				}
+				return
+			}
+
+			if !feedPrimed {
+				log.Printf("[NSE] Live NIFTY 50 quote online at %.2f (%s)", quote.Price, quote.ExchangeTime)
+				feedPrimed = true
+			} else if lastErr != "" {
+				log.Printf("[NSE] Live NIFTY 50 quote feed recovered at %.2f", quote.Price)
+			}
+
+			lastErr = ""
+			niftyOptionsEngine.UpdatePrice(quote.Price)
+			niftyStocksEngine.UpdatePrice(quote.Price)
+		}
+
+		pullQuote()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pullQuote()
 			}
 		}
 	})

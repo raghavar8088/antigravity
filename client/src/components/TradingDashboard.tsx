@@ -832,6 +832,8 @@ export default function TradingDashboard() {
           accountLabel={niftyOptionsModuleActive ? "NIFTY 50 options paper account" : "BTC options paper account"}
           currencyCode={niftyOptionsModuleActive ? "INR" : "USD"}
           locale={niftyOptionsModuleActive ? "en-IN" : "en-US"}
+          onlineLabel={niftyOptionsModuleActive ? "Options engine live on NSE NIFTY 50 spot data" : undefined}
+          detailLabel={niftyOptionsModuleActive ? `${optionOpenPositions} open NIFTY 50 option positions in the separate NIFTY account` : undefined}
         />
       ) : niftyStocksModuleActive ? (
         <OptionsAccountHeader
@@ -845,7 +847,7 @@ export default function TradingDashboard() {
           currencyCode="INR"
           locale="en-IN"
           workspaceTitle="RAIG NIFTY Stocks Workspace"
-          onlineLabel="Stocks engine live and monitoring NIFTY 50 stock strategies"
+          onlineLabel="Stocks engine live on NSE NIFTY 50 spot data"
           offlineLabel="Stocks engine offline"
           detailLabel={`${niftyStocksOpenPositions} open NIFTY 50 stock positions in the separate stocks account`}
           accountBadgeLabel="Stocks Account"
@@ -901,9 +903,9 @@ export default function TradingDashboard() {
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account. Zero overlap with futures."
             : activeModule === "nifty"
-            ? "OPTIONS ACCOUNT — Nifty 50 option scalper running autonomous strategies on a separate ₹1,000,000 paper account. Zero overlap with futures."
+            ? "OPTIONS ACCOUNT — Nifty 50 option scalper running autonomous strategies on live NSE NIFTY 50 spot data inside a separate ₹1,000,000 paper account. Zero overlap with futures."
             : activeModule === "niftyStocks"
-            ? "EQUITY ACCOUNT — Nifty 50 equity scalper using a synthetic NIFTY feed, separate ₹1,000,000 paper capital, and a dedicated stock strategy roster."
+            ? "EQUITY ACCOUNT — Nifty 50 equity scalper using live NSE NIFTY 50 spot data, separate ₹1,000,000 paper capital, and a dedicated stock strategy roster."
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>

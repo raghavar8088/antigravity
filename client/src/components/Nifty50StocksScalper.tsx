@@ -165,7 +165,7 @@ function PositionsPanel({ positions }: { positions: NiftyStockPosition[] }) {
           background: "var(--surface-2)",
         }}
       >
-        No NIFTY stock positions are open yet. The synthetic stocks engine is waiting for fresh setups.
+        No NIFTY stock positions are open yet. The live NSE-backed stocks engine is waiting for fresh setups.
       </div>
     );
   }
@@ -500,7 +500,7 @@ export default function Nifty50StocksScalper() {
                 {fmtINR(equity)}
               </div>
               <div className="mt-4 max-w-2xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                Separate paper scalper for synthetic NIFTY 50 stock movement, using the BTC equity desk as the reference design and a dedicated Rs.1,000,000 account.
+                Separate paper scalper for live NIFTY 50 spot movement from NSE, using the BTC equity desk as the reference design and a dedicated Rs.1,000,000 account.
               </div>
             </div>
           </div>
@@ -515,9 +515,9 @@ export default function Nifty50StocksScalper() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <MetricCard
-                  label="Synthetic NIFTY"
+                  label="Live NIFTY 50"
                   value={lastPrice > 0 ? fmtINR(lastPrice) : "Waiting"}
-                  detail={lastPrice > 0 ? "BTC-mapped reference feed" : "Engine warming up"}
+                  detail={lastPrice > 0 ? "Official NSE spot feed" : "Awaiting first NSE quote"}
                 />
                 <MetricCard
                   label="Open Positions"
@@ -617,7 +617,7 @@ export default function Nifty50StocksScalper() {
       </section>
 
       <section className="glass-panel px-5 py-5 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-        NIFTY 50 stocks paper account | Synthetic NIFTY feed mapped from live BTC movement | Dedicated stock strategy roster | Separate Rs.1,000,000 capital pool
+        NIFTY 50 stocks paper account | Live NSE NIFTY 50 spot feed | Dedicated stock strategy roster | Separate Rs.1,000,000 capital pool
       </section>
     </div>
   );
