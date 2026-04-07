@@ -58,6 +58,11 @@ var globalLogs = &RingLogger{max: 100}
 
 const initialPaperBalanceUSD = 1000000.0
 
+var (
+	deltaProbeClient    *marketdata.DeltaTickerClient
+	angelOneProbeClient *marketdata.AngelOneClient
+)
+
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
 // env vars take precedence) and does nothing if the file is absent.
@@ -232,6 +237,8 @@ func main() {
 	coinbaseClient := marketdata.NewCoinbaseClient()
 	nseIndexClient := marketdata.NewNSEIndexClient()
 	niftyMarketCache := NewNiftyMarketCache(240)
+	deltaProbeClient = marketdata.NewDeltaTickerClient()
+	angelOneProbeClient = marketdata.NewAngelOneClient()
 	go func() {
 		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
 		if err != nil {
@@ -450,7 +457,7 @@ func main() {
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $50K paper account
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
-	niftyOptionsEngine := options.NewEngine()
+	niftyOptionsEngine := options.NewNiftyEngine()
 	niftyStocksEngine := niftystocks.NewEngine()
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
@@ -601,6 +608,7 @@ func main() {
 	http.HandleFunc("/api/nifty-options/stats", niftyOptionsEngine.HandleStats)
 	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
 	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
+	http.HandleFunc("/api/nifty-option-chain", niftyOptionsEngine.HandleOptionChain)
 
 	http.HandleFunc("/api/nifty-stocks/positions", niftyStocksEngine.HandlePositions)
 	http.HandleFunc("/api/nifty-stocks/trades", niftyStocksEngine.HandleTrades)
@@ -609,6 +617,10 @@ func main() {
 	http.HandleFunc("/api/nifty-stocks/reset", niftyStocksEngine.HandleReset)
 	http.HandleFunc("/api/nifty-stocks/clear-history", niftyStocksEngine.HandleClearHistory)
 	http.HandleFunc("/api/nifty-market", niftyMarketCache.HandleQuote)
+
+	// Probe endpoints — connectivity tests for Delta Exchange and Angel One
+	http.HandleFunc("/api/probe/delta-btc", handleDeltaBTCProbe)
+	http.HandleFunc("/api/probe/angelone-nifty", handleAngelOneNiftyProbe)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
@@ -971,6 +983,91 @@ func keepAlive(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// handleDeltaBTCProbe fetches a live BTC ticker from Delta Exchange and returns it as JSON.
+func handleDeltaBTCProbe(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	quote, err := deltaProbeClient.FetchTicker(r.Context(), "BTCUSD")
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":     false,
+			"error":  err.Error(),
+			"source": "delta_exchange",
+			"symbol": "BTCUSD",
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"source":        "delta_exchange",
+		"symbol":        quote.Symbol,
+		"price":         quote.Price,
+		"open":          quote.Open,
+		"high":          quote.High,
+		"low":           quote.Low,
+		"mark_price":    quote.MarkPrice,
+		"spot_price":    quote.SpotPrice,
+		"volume":        quote.Volume,
+		"contract_type": quote.ContractType,
+		"exchange_time": quote.ExchangeTime,
+		"fetched_at":    quote.FetchedAt.Format(time.RFC3339),
+		"ok":            true,
+		"error":         "",
+	})
+}
+
+// handleAngelOneNiftyProbe fetches a live NIFTY 50 quote from Angel One and returns it as JSON.
+func handleAngelOneNiftyProbe(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	if !angelOneProbeClient.Enabled() {
+		missing := angelOneProbeClient.MissingEnv()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":         false,
+			"configured": false,
+			"error":      "missing env: " + strings.Join(missing, ", "),
+			"source":     "angel_one",
+		})
+		return
+	}
+
+	quote, err := angelOneProbeClient.FetchNiftyQuote(r.Context())
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":         false,
+			"configured": true,
+			"error":      err.Error(),
+			"source":     "angel_one",
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"source":         "angel_one",
+		"exchange":       quote.Exchange,
+		"symbol":         quote.TradingSymbol,
+		"symbol_token":   quote.SymbolToken,
+		"price":          quote.Price,
+		"open":           quote.Open,
+		"high":           quote.High,
+		"low":            quote.Low,
+		"close":          quote.Close,
+		"change":         quote.Change,
+		"percent_change": quote.PercentChange,
+		"exchange_time":  quote.ExchangeTime,
+		"fetched_at":     quote.FetchedAt.Format(time.RFC3339),
+		"configured":     true,
+		"ok":             true,
+		"error":          "",
+	})
 }
 
 // safeGo wraps a goroutine function with panic recovery.

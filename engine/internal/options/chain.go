@@ -11,7 +11,7 @@ import (
 
 // ChainLeg holds all displayable data for one side (call or put) of a strike
 type ChainLeg struct {
-	IV     float64 `json:"iv"`     // Annualised IV as percent (e.g. 75.3)
+	IV     float64 `json:"iv"` // Annualised IV as percent (e.g. 75.3)
 	Delta  float64 `json:"delta"`
 	Gamma  float64 `json:"gamma"`
 	Theta  float64 `json:"theta"`
@@ -135,6 +135,85 @@ func lastFridayOfQuarter(now time.Time) time.Time {
 	return lastFridayOfMonth(y+1, time.March)
 }
 
+func nextWeeklyExpiryForConfig(from time.Time, cfg ChainConfig) time.Time {
+	t := from.UTC()
+	t = time.Date(t.Year(), t.Month(), t.Day(), cfg.ExpiryHourUTC, 0, 0, 0, time.UTC)
+	for t.Weekday() != cfg.WeeklyExpiryWeekday {
+		t = t.Add(24 * time.Hour)
+	}
+	if t.Before(from.UTC()) {
+		t = t.Add(7 * 24 * time.Hour)
+	}
+	return t
+}
+
+func lastWeekdayOfMonthForConfig(year int, month time.Month, cfg ChainConfig) time.Time {
+	last := time.Date(year, month+1, 0, cfg.ExpiryHourUTC, 0, 0, 0, time.UTC)
+	for last.Weekday() != cfg.WeeklyExpiryWeekday {
+		last = last.Add(-24 * time.Hour)
+	}
+	return last
+}
+
+func lastWeekdayOfQuarterForConfig(now time.Time, cfg ChainConfig) time.Time {
+	qEnd := []time.Month{time.March, time.June, time.September, time.December}
+	y := now.Year()
+	for _, m := range qEnd {
+		t := lastWeekdayOfMonthForConfig(y, m, cfg)
+		if t.After(now.UTC()) {
+			return t
+		}
+	}
+	return lastWeekdayOfMonthForConfig(y+1, time.March, cfg)
+}
+
+func generateExpiriesForConfig(now time.Time, cfg ChainConfig) []ExpiryMeta {
+	weeklyCount := cfg.WeeklyCount
+	if weeklyCount <= 0 {
+		weeklyCount = 4
+	}
+
+	var expiries []ExpiryMeta
+	seen := map[string]bool{}
+
+	expiry := nextWeeklyExpiryForConfig(now, cfg)
+	for i := 0; i < weeklyCount; i++ {
+		key := expiry.Format("2006-01-02")
+		if !seen[key] {
+			expiries = append(expiries, ExpiryMeta{
+				Label: expiry.Format("2 Jan 06"),
+				Value: expiry.Format(time.RFC3339),
+				DTE:   int(math.Max(1, math.Ceil(expiry.Sub(now).Hours()/24))),
+			})
+			seen[key] = true
+		}
+		expiry = expiry.Add(7 * 24 * time.Hour)
+	}
+
+	eom := lastWeekdayOfMonthForConfig(now.Year(), now.Month(), cfg)
+	eomKey := eom.Format("2006-01-02")
+	if !seen[eomKey] {
+		expiries = append(expiries, ExpiryMeta{
+			Label: eom.Format("2 Jan 06") + " (EOM)",
+			Value: eom.Format(time.RFC3339),
+			DTE:   int(math.Max(1, math.Ceil(eom.Sub(now).Hours()/24))),
+		})
+		seen[eomKey] = true
+	}
+
+	quarterly := lastWeekdayOfQuarterForConfig(now, cfg)
+	quarterKey := quarterly.Format("2006-01-02")
+	if !seen[quarterKey] {
+		expiries = append(expiries, ExpiryMeta{
+			Label: quarterly.Format("2 Jan 06") + " (EOQ)",
+			Value: quarterly.Format(time.RFC3339),
+			DTE:   int(math.Max(1, math.Ceil(quarterly.Sub(now).Hours()/24))),
+		})
+	}
+
+	return expiries
+}
+
 // ── IV smile model ────────────────────────────────────────────────────────────
 
 // smileIV returns the implied volatility for a given strike, applying a
@@ -145,20 +224,23 @@ func lastFridayOfQuarter(now time.Time) time.Time {
 //	strike  – option strike
 //	optType – Call or Put
 func smileIV(baseIV, spot, strike float64, optType OptionType) float64 {
-	m := math.Log(strike / spot) // log-moneyness: 0=ATM, >0=OTM call, <0=OTM put
+	return smileIVForProfile(baseIV, spot, strike, optType, defaultOptionsMarketProfile)
+}
 
-	// Quadratic smile with negative skew
-	const smile = 2.5  // curvature
-	const skew = 0.25  // tilt: puts carry extra premium
-
-	iv := baseIV * math.Exp(smile*m*m-skew*m)
-
-	// Floor and cap to realistic BTC bounds
-	if iv < 0.30 {
-		iv = 0.30
+func smileIVForProfile(baseIV, spot, strike float64, optType OptionType, profile MarketProfile) float64 {
+	if spot <= 0 || strike <= 0 {
+		return profile.DefaultIV
 	}
-	if iv > 3.50 {
-		iv = 3.50
+
+	cfg := profile.ChainConfig
+	m := math.Log(strike / spot)
+	iv := baseIV * math.Exp(cfg.SmileFactor*m*m-cfg.SkewFactor*m)
+
+	if iv < profile.MinIV {
+		iv = profile.MinIV
+	}
+	if iv > profile.MaxIV*1.15 {
+		iv = profile.MaxIV * 1.15
 	}
 	return iv
 }
@@ -172,8 +254,15 @@ func pseudoSeed(key float64) int {
 }
 
 func simulateOI(strike, spot float64, dte int) int {
-	dist := math.Abs(math.Log(strike/spot)) // log-moneyness magnitude
-	base := 8000.0 * math.Exp(-10.0*dist) * math.Sqrt(float64(dte+1))
+	return simulateOIForConfig(strike, spot, dte, defaultOptionsMarketProfile.ChainConfig)
+}
+
+func simulateOIForConfig(strike, spot float64, dte int, cfg ChainConfig) int {
+	if strike <= 0 || spot <= 0 {
+		return 0
+	}
+	dist := math.Abs(math.Log(strike / spot))
+	base := cfg.OIBase * math.Exp(-cfg.OIDecay*dist) * math.Sqrt(float64(dte+1))
 	noise := 0.70 + float64(pseudoSeed(strike))/1000.0*0.60
 	v := int(base * noise)
 	if v < 0 {
@@ -183,7 +272,11 @@ func simulateOI(strike, spot float64, dte int) int {
 }
 
 func simulateVolume(oi int, strike float64) int {
-	noise := 0.05 + float64(pseudoSeed(strike+1))/1000.0*0.25
+	return simulateVolumeForConfig(oi, strike, defaultOptionsMarketProfile.ChainConfig)
+}
+
+func simulateVolumeForConfig(oi int, strike float64, cfg ChainConfig) int {
+	noise := cfg.VolumeNoiseFloor + float64(pseudoSeed(strike+1))/1000.0*cfg.VolumeNoiseRange
 	v := int(float64(oi) * noise)
 	if v < 0 {
 		v = 0
@@ -194,9 +287,13 @@ func simulateVolume(oi int, strike float64) int {
 // ── Bid / Ask spread ──────────────────────────────────────────────────────────
 
 func bidAsk(mark float64, logMoneyness float64) (bid, ask float64) {
-	spread := 0.012 + 0.12*math.Abs(logMoneyness) // 1.2% ATM, widens OTM
-	if spread > 0.15 {
-		spread = 0.15
+	return bidAskForConfig(mark, logMoneyness, defaultOptionsMarketProfile.ChainConfig)
+}
+
+func bidAskForConfig(mark float64, logMoneyness float64, cfg ChainConfig) (bid, ask float64) {
+	spread := cfg.SpreadBase + cfg.SpreadSlope*math.Abs(logMoneyness)
+	if spread > cfg.SpreadCap {
+		spread = cfg.SpreadCap
 	}
 	bid = mark * (1 - spread)
 	ask = mark * (1 + spread)
@@ -212,7 +309,14 @@ func bidAsk(mark float64, logMoneyness float64) (bid, ask float64) {
 // ── Chain builder ─────────────────────────────────────────────────────────────
 
 func round500(v float64) float64 {
-	return math.Round(v/500) * 500
+	return roundToIncrement(v, defaultOptionsMarketProfile.ChainConfig.StrikeIncrement)
+}
+
+func roundToIncrement(v float64, increment float64) float64 {
+	if increment <= 0 {
+		return v
+	}
+	return math.Round(v/increment) * increment
 }
 
 // BuildChain computes the full option chain for a given spot price, expiry, and base IV.
@@ -295,28 +399,24 @@ func (e *Engine) HandleOptionChain(w http.ResponseWriter, r *http.Request) {
 	minuteBarsCopy := append([]float64{}, e.minuteBars...)
 	e.mu.RUnlock()
 
+	profile := e.resolvedProfile()
 	if spot <= 0 {
-		spot = 67000 // fallback until first tick arrives
+		spot = profile.ChainConfig.FallbackSpot
 	}
 
 	now := time.Now().UTC()
-	expiries := generateExpiries(now)
-	baseIV := EstimateIV(minuteBarsCopy) // annualised fraction from 1-min bars
+	expiries := generateExpiriesForConfig(now, profile.ChainConfig)
+	baseIV := estimateIVWithBounds(minuteBarsCopy, profile.DefaultIV, profile.MinIV, profile.MaxIV)
 
 	// Parse requested expiry (default to nearest)
 	selectedValue := r.URL.Query().Get("expiry")
-	var selectedExpiry ExpiryMeta
-	if selectedValue == "" {
-		selectedExpiry = expiries[0]
-	} else {
+	selectedExpiry := expiries[0]
+	if selectedValue != "" {
 		for _, ex := range expiries {
 			if ex.Value == selectedValue {
 				selectedExpiry = ex
 				break
 			}
-		}
-		if selectedExpiry.Value == "" {
-			selectedExpiry = expiries[0]
 		}
 	}
 
@@ -326,7 +426,7 @@ func (e *Engine) HandleOptionChain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chain := BuildChain(spot, expiryTime, baseIV)
+	chain := buildChainForProfile(spot, expiryTime, baseIV, profile)
 
 	resp := ChainResponse{
 		UnderlyingPrice: spot,

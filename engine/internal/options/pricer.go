@@ -74,10 +74,10 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 
 // EstimateIV derives implied volatility from 1-minute bar prices.
 // Uses 525,600 minutes/year annualization (correct for minute-level data).
-func EstimateIV(minuteBars []float64) float64 {
+func estimateIVWithBounds(minuteBars []float64, defaultIV, minIV, maxIV float64) float64 {
 	n := len(minuteBars)
 	if n < 10 {
-		return 0.80
+		return defaultIV
 	}
 	// Use last 60 minute bars = 1 hour of data
 	if n > 60 {
@@ -91,7 +91,7 @@ func EstimateIV(minuteBars []float64) float64 {
 		}
 	}
 	if len(returns) < 2 {
-		return 0.80
+		return defaultIV
 	}
 
 	mean := 0.0
@@ -109,11 +109,22 @@ func EstimateIV(minuteBars []float64) float64 {
 
 	// 525,600 minutes per year — correct annualization for 1-minute bars
 	annVol := math.Sqrt(variance * 525600)
-	if annVol < 0.30 {
-		annVol = 0.30
+	if annVol < minIV {
+		annVol = minIV
 	}
-	if annVol > 3.00 {
-		annVol = 3.00
+	if annVol > maxIV {
+		annVol = maxIV
 	}
 	return annVol
+}
+
+// EstimateIV derives implied volatility from 1-minute bar prices.
+// It preserves the original BTC-oriented defaults for the main options engine.
+func EstimateIV(minuteBars []float64) float64 {
+	return estimateIVWithBounds(
+		minuteBars,
+		defaultOptionsMarketProfile.DefaultIV,
+		defaultOptionsMarketProfile.MinIV,
+		defaultOptionsMarketProfile.MaxIV,
+	)
 }

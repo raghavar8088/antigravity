@@ -29,6 +29,7 @@ type Engine struct {
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
+	marketProfile    MarketProfile
 	balance          float64
 	lastPrice        float64
 	priceHist        []float64 // raw tick prices (for current price + IV)
@@ -42,6 +43,16 @@ type Engine struct {
 
 // NewEngine initialises the options engine with the full strategy library.
 func NewEngine() *Engine {
+	return newEngineWithProfile(defaultOptionsMarketProfile)
+}
+
+// NewNiftyEngine initialises the NIFTY 50 options engine with NIFTY-specific
+// market modeling while preserving the same strategy library and persistence shape.
+func NewNiftyEngine() *Engine {
+	return newEngineWithProfile(niftyOptionsMarketProfile)
+}
+
+func newEngineWithProfile(profile MarketProfile) *Engine {
 	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
@@ -49,8 +60,9 @@ func NewEngine() *Engine {
 	}
 
 	engine := &Engine{
-		states:  states,
-		balance: initialOptionsBalance,
+		states:        states,
+		marketProfile: profile,
+		balance:       initialOptionsBalance,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
 	return engine
@@ -310,7 +322,8 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	log.Printf("[OPTIONS ENGINE] BTC Option Scalper started with %d strategies in library", len(e.states))
+	profile := e.resolvedProfile()
+	log.Printf("[OPTIONS ENGINE] %s started with %d strategies in library", profile.Name, len(e.states))
 
 	for {
 		select {
@@ -331,7 +344,8 @@ func (e *Engine) tick() {
 		return
 	}
 
-	iv := EstimateIV(e.minuteBars)
+	profile := e.resolvedProfile()
+	iv := estimateIVWithBounds(e.minuteBars, profile.DefaultIV, profile.MinIV, profile.MaxIV)
 
 	nowUTC := time.Now().UTC()
 	ctx := SignalContext{

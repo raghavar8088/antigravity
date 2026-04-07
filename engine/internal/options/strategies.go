@@ -191,15 +191,15 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "RSI_Extreme_Oversold_Call", Type: Call,
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.90, StopLossPct: 0.30,
-			PositionUSD: 700, Signal: "RSI_OVERSOLD_EXTREME", CooldownSecs: 600,
+			TakeProfitPct: 1.00, StopLossPct: 0.30,
+			PositionUSD: 790, Signal: "RSI_OVERSOLD_EXTREME", CooldownSecs: 600,
 		},
 		// Signal: RSI(14) crossed back below 80 from above.
 		{
 			Name: "RSI_Extreme_Overbought_Put", Type: Put,
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.90, StopLossPct: 0.30,
-			PositionUSD: 700, Signal: "RSI_OVERBOUGHT_EXTREME", CooldownSecs: 600,
+			TakeProfitPct: 1.00, StopLossPct: 0.30,
+			PositionUSD: 790, Signal: "RSI_OVERBOUGHT_EXTREME", CooldownSecs: 600,
 		},
 		// Signal: RSI crossed back above 30 from below (regular oversold exit).
 		{
@@ -518,14 +518,14 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "BreakoutTrend_Pro_Bull_Call", Type: Call,
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.84, StopLossPct: 0.26,
-			PositionUSD: 675, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
+			TakeProfitPct: 0.92, StopLossPct: 0.26,
+			PositionUSD: 740, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "BreakdownTrend_Pro_Bear_Put", Type: Put,
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.84, StopLossPct: 0.26,
-			PositionUSD: 675, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
+			TakeProfitPct: 0.92, StopLossPct: 0.26,
+			PositionUSD: 740, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
 		},
 
 		// Signal: panic washout followed by immediate VWAP and EMA reclaim.
@@ -533,8 +533,8 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "Capitulation_Reclaim_Elite_Call", Type: Call,
 			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.95, StopLossPct: 0.28,
-			PositionUSD: 750, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 900,
+			TakeProfitPct: 1.10, StopLossPct: 0.28,
+			PositionUSD: 850, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 900,
 		},
 	}
 }
