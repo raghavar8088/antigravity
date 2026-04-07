@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+// Probe endpoints are Next.js API routes — they run as Vercel serverless functions
+// and are available at /api/probe/* on both local dev and production Vercel.
+const DELTA_PROBE_URL = "/api/probe/delta-btc";
+const ANGEL_PROBE_URL = "/api/probe/angelone-nifty";
 
 export type DeltaProbeData = {
   source: string;
@@ -69,7 +72,7 @@ export default function useLiveDataLab(): LiveDataLabState {
     const fetchDelta = async () => {
       setDeltaLoading(true);
       try {
-        const response = await fetch(`${API_URL}/api/probe/delta-btc`);
+        const response = await fetch(DELTA_PROBE_URL);
         if (!response.ok) {
           setDeltaError(`HTTP ${response.status}`);
           return;
@@ -89,7 +92,7 @@ export default function useLiveDataLab(): LiveDataLabState {
     const fetchAngel = async () => {
       setAngelLoading(true);
       try {
-        const response = await fetch(`${API_URL}/api/probe/angelone-nifty`);
+        const response = await fetch(ANGEL_PROBE_URL);
         if (!response.ok) {
           setAngelError(`HTTP ${response.status}`);
           return;
