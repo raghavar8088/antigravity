@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Nifty50MarketHero from "@/components/Nifty50MarketHero";
+import useNiftyMarket from "@/hooks/useNiftyMarket";
 import useNiftyStocks, {
   NiftyStockPosition,
   NiftyStockStrategyStatus,
@@ -427,6 +429,7 @@ export default function Nifty50StocksScalper() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const market = useNiftyMarket();
   const { positions, trades, strategies, stats, clearAll } = useNiftyStocks(refreshKey);
 
   const equity = stats?.equity ?? INITIAL_STOCKS_BALANCE;
@@ -480,6 +483,11 @@ export default function Nifty50StocksScalper() {
 
   return (
     <div className="space-y-6">
+      <Nifty50MarketHero
+        market={market}
+        subtitle="Live NIFTY 50 index chart from NSE powering the stock scalper workspace."
+      />
+
       <section className="glass-panel overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_420px]">
           <div className="px-6 py-7 md:px-8">

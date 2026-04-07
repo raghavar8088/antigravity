@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import Nifty50MarketHero from "@/components/Nifty50MarketHero";
+import useNiftyMarket from "@/hooks/useNiftyMarket";
 import useNiftyOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useNiftyOptions";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
@@ -548,6 +550,7 @@ export default function Nifty50OptionScalper() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
+  const market = useNiftyMarket();
   const { positions, trades, strategies, stats, clearAll } = useNiftyOptions(refreshKey);
 
   useEffect(() => {
@@ -621,6 +624,10 @@ export default function Nifty50OptionScalper() {
 
   return (
     <div className="space-y-5">
+      <Nifty50MarketHero
+        market={market}
+        subtitle="Live NIFTY 50 index chart from NSE for the options scalper's underlying spot feed."
+      />
 
       {/* ── Hero: Options Equity ── */}
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] items-start gap-5">

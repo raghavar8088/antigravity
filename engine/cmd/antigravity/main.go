@@ -231,6 +231,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	coinbaseClient := marketdata.NewCoinbaseClient()
 	nseIndexClient := marketdata.NewNSEIndexClient()
+	niftyMarketCache := NewNiftyMarketCache(240)
 	go func() {
 		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
 		if err != nil {
@@ -550,6 +551,7 @@ func main() {
 			}
 
 			lastErr = ""
+			niftyMarketCache.Update(quote)
 			niftyOptionsEngine.UpdatePrice(quote.Price)
 			niftyStocksEngine.UpdatePrice(quote.Price)
 		}
@@ -606,6 +608,7 @@ func main() {
 	http.HandleFunc("/api/nifty-stocks/stats", niftyStocksEngine.HandleStats)
 	http.HandleFunc("/api/nifty-stocks/reset", niftyStocksEngine.HandleReset)
 	http.HandleFunc("/api/nifty-stocks/clear-history", niftyStocksEngine.HandleClearHistory)
+	http.HandleFunc("/api/nifty-market", niftyMarketCache.HandleQuote)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
