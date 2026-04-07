@@ -18,10 +18,12 @@ import (
 )
 
 const (
-	minExecutionSizeBTC  = 0.01
-	maxAllocationUsage   = 0.60
-	sizeChangeEpsilonBTC = 1e-9
-	fixedTradeCapitalUSD = 10000.0
+	minExecutionSizeBTC       = 0.01
+	maxAllocationUsage        = 0.60
+	sizeChangeEpsilonBTC      = 1e-9
+	futuresInitialCapitalUSD  = 1000000.0
+	futuresPositionCapitalPct = 0.01
+	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
 	minExecutableConfidence     = 0.75 // Raised: require higher-quality entries
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval

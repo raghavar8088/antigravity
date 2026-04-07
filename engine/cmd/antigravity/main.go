@@ -263,12 +263,12 @@ func main() {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// 3. Risk Engine (Expanded for $100K)
+	// 3. Risk Engine (configured for the $1,000,000 futures paper account)
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
 		MaxPositionBTC:  2.0,                    // Max 2 BTC total exposure
 		MaxCapitalUSD:   initialPaperBalanceUSD, // $1,000,000 paper balance
-		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($5,000)
+		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($50,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
 
@@ -278,7 +278,7 @@ func main() {
 	tracker := risk.NewStrategyTracker(names, categories, timeframes, initialPaperBalanceUSD)
 
 	// ═══════════════════════════════════════════════════
-	// 5. Paper Executor ($100K)
+	// 5. Paper Executor ($1,000,000 futures paper account)
 	// ═══════════════════════════════════════════════════
 	paperExecute := execution.NewPaperClient(initialPaperBalanceUSD)
 
@@ -454,7 +454,7 @@ func main() {
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
 	// ═══════════════════════════════════════════════════
-	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $50K paper account
+	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $1,000,000 paper account
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
 	niftyOptionsEngine := options.NewNiftyEngine()

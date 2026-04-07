@@ -897,11 +897,11 @@ export default function TradingDashboard() {
           style={{ color: "var(--text-secondary)" }}
         >
           {activeModule === "dashboard"
-            ? "FUTURES ACCOUNT — BTC price, live futures positions, equity, PnL, and key stats. Options data is fully separate."
+            ? "FUTURES ACCOUNT — BTC price, live futures positions, equity, PnL, and key stats inside the separate $1,000,000 paper account with 1% capital per position. Options data is fully separate."
             : activeModule === "engine"
-            ? "FUTURES ACCOUNT — Advanced charts, AI panels, controls, strategy analytics, and logs. No options data here."
+            ? "FUTURES ACCOUNT — Advanced charts, AI panels, controls, strategy analytics, and logs for the BTC futures desk, sized at 1% of the initial $1,000,000 capital per position. No options data here."
             : activeModule === "history"
-            ? "FUTURES ACCOUNT — Completed futures trade ledger and strategy breakdown. Options trades are logged separately."
+            ? "FUTURES ACCOUNT — Completed futures trade ledger and strategy breakdown for the 1% per-position BTC futures account. Options trades are logged separately."
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "nifty"
