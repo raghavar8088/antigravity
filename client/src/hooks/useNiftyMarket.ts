@@ -2,10 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Fetches live NIFTY 50 data from the Angel One serverless probe.
-// This runs on Vercel — no local Go engine needed.
-const ANGEL_PROBE_URL = "/api/probe/angelone-nifty";
-const MAX_SERIES = 120; // keep last 120 price points (~10 min at 5s interval)
+const SSE_URL = "/api/nifty/stream";
+const MAX_SERIES = 120; // keep last 120 price points (~4 min at 2s interval)
 
 export type NiftyMarketPoint = {
   time: number;
@@ -49,16 +47,11 @@ export default function useNiftyMarket() {
   const seriesRef = useRef<NiftyMarketPoint[]>([]);
 
   useEffect(() => {
-    let cancelled = false;
+    const source = new EventSource(SSE_URL);
 
-    const fetchMarket = async () => {
+    source.onmessage = (event) => {
       try {
-        const response = await fetch(ANGEL_PROBE_URL);
-        if (!response.ok) return;
-
-        const data = await response.json() as {
-          ok?: boolean;
-          configured?: boolean;
+        const data = JSON.parse(event.data as string) as {
           error?: string;
           price?: number;
           open?: number;
@@ -66,17 +59,15 @@ export default function useNiftyMarket() {
           low?: number;
           close?: number;
           change?: number;
-          percent_change?: number;
-          exchange_time?: string;
+          percentChange?: number;
+          fetched_at?: string;
         };
 
-        if (cancelled) return;
-
-        if (!data.ok) {
+        if (data.error) {
           setMarket((prev) => ({
             ...prev,
-            configured: data.configured ?? false,
-            error: data.error ?? "Angel One unavailable",
+            configured: true,
+            error: data.error ?? "stream error",
           }));
           return;
         }
@@ -84,7 +75,6 @@ export default function useNiftyMarket() {
         const price = Number(data.price ?? 0);
         const now = Date.now();
 
-        // Append to series (client-side price history)
         if (price > 0) {
           seriesRef.current = [
             ...seriesRef.current.slice(-(MAX_SERIES - 1)),
@@ -99,8 +89,8 @@ export default function useNiftyMarket() {
           low: Number(data.low ?? 0),
           close: Number(data.close ?? 0),
           change: Number(data.change ?? 0),
-          percentChange: Number(data.percent_change ?? 0),
-          exchangeTime: typeof data.exchange_time === "string" ? data.exchange_time : "",
+          percentChange: Number(data.percentChange ?? 0),
+          exchangeTime: typeof data.fetched_at === "string" ? data.fetched_at : "",
           updatedAt: now,
           series: seriesRef.current,
           source: "angel_one",
@@ -108,17 +98,15 @@ export default function useNiftyMarket() {
           error: "",
         });
       } catch {
-        // keep last good state
+        // keep last good state on parse error
       }
     };
 
-    fetchMarket();
-    const interval = window.setInterval(fetchMarket, 5000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+    source.onerror = () => {
+      // EventSource auto-reconnects — no action needed
     };
+
+    return () => source.close();
   }, []);
 
   return market;

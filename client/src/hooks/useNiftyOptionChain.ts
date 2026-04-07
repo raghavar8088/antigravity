@@ -4,19 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { ChainData } from "@/hooks/useOptionChain";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+export type NiftyChainData = ChainData & { source?: string };
 
 export default function useNiftyOptionChain() {
-  const [data, setData] = useState<ChainData | null>(null);
+  const [data, setData] = useState<NiftyChainData | null>(null);
   const [selectedExpiry, setSelectedExpiry] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const fetchChain = useCallback(async (expiry?: string) => {
     try {
       const qs = expiry ? `?expiry=${encodeURIComponent(expiry)}` : "";
-      const res = await fetch(`${API_URL}/api/nifty-option-chain${qs}`);
+      const res = await fetch(`/api/nifty/option-chain${qs}`);
       if (res.ok) {
-        const json: ChainData = await res.json();
+        const json: NiftyChainData = await res.json();
+        // If the response indicates an error, don't update chain data
+        if ((json as unknown as { ok?: boolean }).ok === false) {
+          return;
+        }
         setData(json);
         if (!selectedExpiry && json.selectedExpiry) {
           setSelectedExpiry(json.selectedExpiry);
@@ -31,7 +35,7 @@ export default function useNiftyOptionChain() {
 
   useEffect(() => {
     fetchChain(selectedExpiry || undefined);
-    const id = setInterval(() => fetchChain(selectedExpiry || undefined), 3000);
+    const id = setInterval(() => fetchChain(selectedExpiry || undefined), 30000);
     return () => clearInterval(id);
   }, [fetchChain, selectedExpiry]);
 

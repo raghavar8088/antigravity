@@ -134,7 +134,7 @@ export default function NiftyOptionChainPanel({
               {fmtMoney(data.underlyingPrice)}
             </div>
             <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-              Live synthetic weekly chain calibrated to the NIFTY spot feed.
+              Angel One live data · weekly NIFTY option chain.
             </div>
           </div>
           <div

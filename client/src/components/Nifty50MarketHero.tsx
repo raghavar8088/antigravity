@@ -6,6 +6,7 @@ import type { NiftyMarketState } from "@/hooks/useNiftyMarket";
 type Nifty50MarketHeroProps = {
   market: NiftyMarketState;
   subtitle?: string;
+  vix?: number;
 };
 
 type ChartPoint = {
@@ -88,6 +89,7 @@ function buildArea(points: ChartPoint[]) {
 export default function Nifty50MarketHero({
   market,
   subtitle = "Official NSE spot feed for the live NIFTY 50 index.",
+  vix,
 }: Nifty50MarketHeroProps) {
   const gradientId = useId().replace(/:/g, "");
   const visibleSeries = market.series.slice(-72);
@@ -140,6 +142,15 @@ export default function Nifty50MarketHero({
             <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
               NSE · NIFTY 50
             </span>
+            {vix != null && vix > 0 && (
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${
+                vix > 20 ? "border-rose-200 bg-rose-50 text-rose-700" :
+                vix > 15 ? "border-amber-200 bg-amber-50 text-amber-700" :
+                "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}>
+                VIX {vix.toFixed(2)}
+              </span>
+            )}
           </div>
         </div>
 

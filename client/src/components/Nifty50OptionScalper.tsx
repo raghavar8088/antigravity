@@ -5,6 +5,8 @@ import NiftyOptionChainPanel from "@/components/NiftyOptionChainPanel";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import useNiftyOptionChain from "@/hooks/useNiftyOptionChain";
 import useNiftyOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useNiftyOptions";
+import useNiftyVIX from "@/hooks/useNiftyVIX";
+import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -545,6 +547,137 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
   );
 }
 
+// ── Market Indicators panel ───────────────────────────────────────────────────
+
+function fmtTime(ts: number): string {
+  if (!ts) return "--:--";
+  return new Date(ts).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function fmtVol(v: number): string {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return String(Math.round(v));
+}
+
+function VixBadge({ vix }: { vix: number }) {
+  if (vix <= 0) return null;
+  const label = vix > 20 ? "High Volatility" : vix > 15 ? "Elevated" : "Low Volatility";
+  const cls = vix > 20
+    ? "border-rose-200 bg-rose-50 text-rose-700"
+    : vix > 15
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return (
+    <span className={`rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function MarketIndicatorsPanel({
+  vix, vixChange, vixPct, candles,
+}: {
+  vix: number;
+  vixChange: number;
+  vixPct: number;
+  candles: Candle[];
+}) {
+  const lastCandle = candles[candles.length - 1] ?? null;
+  const recentCandles = candles.slice(-5);
+  const vixColor = vix > 20 ? "text-rose-600" : vix > 15 ? "text-amber-600" : "text-emerald-600";
+
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <h2 style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+          MARKET INDICATORS
+        </h2>
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-blue-700">
+          Source: Angel One · Live
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {/* India VIX */}
+        <div className="metric-card flex flex-col gap-2 min-h-[104px]">
+          <div className="metric-label">India VIX</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`metric-value ${vixColor}`}>
+              {vix > 0 ? vix.toFixed(2) : "--"}
+            </span>
+            {vix > 0 && <VixBadge vix={vix} />}
+          </div>
+          {vix > 0 && (
+            <div className="text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+              {vixChange >= 0 ? "+" : ""}{vixChange.toFixed(2)} ({vixPct >= 0 ? "+" : ""}{vixPct.toFixed(2)}%)
+            </div>
+          )}
+        </div>
+
+        {/* Today candle count + last candle */}
+        <div className="metric-card flex flex-col gap-2 min-h-[104px]">
+          <div className="metric-label">Today&apos;s Candles</div>
+          <div className="metric-value text-zinc-900">{candles.length > 0 ? candles.length : "--"}</div>
+          {lastCandle && (
+            <div className="text-xs font-mono space-y-0.5" style={{ color: "var(--text-secondary)" }}>
+              <div>O <span className="text-zinc-700 font-semibold">{fmt(lastCandle.open, 2)}</span>{" "}
+                H <span className="text-emerald-600 font-semibold">{fmt(lastCandle.high, 2)}</span>{" "}
+                L <span className="text-rose-600 font-semibold">{fmt(lastCandle.low, 2)}</span>{" "}
+                C <span className="text-zinc-700 font-semibold">{fmt(lastCandle.close, 2)}</span>
+              </div>
+              <div>V <span className="text-zinc-700 font-semibold">{fmtVol(lastCandle.volume)}</span>{" "}
+                @ {fmtTime(lastCandle.time)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Last 5 candles mini table */}
+        <div className="metric-card flex flex-col gap-2 min-h-[104px] sm:col-span-2 xl:col-span-1">
+          <div className="metric-label">Recent Candles (last 5)</div>
+          {recentCandles.length === 0 ? (
+            <div className="text-xs" style={{ color: "var(--text-muted)" }}>Waiting for data...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px] font-mono tabular-nums" style={{ minWidth: 320 }}>
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+                    <th className="pb-1 text-left font-semibold pr-2">Time</th>
+                    <th className="pb-1 text-right font-semibold pr-2">O</th>
+                    <th className="pb-1 text-right font-semibold text-emerald-600 pr-2">H</th>
+                    <th className="pb-1 text-right font-semibold text-rose-600 pr-2">L</th>
+                    <th className="pb-1 text-right font-semibold pr-2">C</th>
+                    <th className="pb-1 text-right font-semibold">Vol</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...recentCandles].reverse().map((c) => (
+                    <tr key={c.time} style={{ color: "var(--text-secondary)" }}>
+                      <td className="pr-2 py-0.5">{fmtTime(c.time)}</td>
+                      <td className="pr-2 text-right text-zinc-700">{fmt(c.open, 0)}</td>
+                      <td className="pr-2 text-right text-emerald-600">{fmt(c.high, 0)}</td>
+                      <td className="pr-2 text-right text-rose-600">{fmt(c.low, 0)}</td>
+                      <td className={`pr-2 text-right font-semibold ${c.close >= c.open ? "text-emerald-600" : "text-rose-600"}`}>
+                        {fmt(c.close, 0)}
+                      </td>
+                      <td className="text-right">{fmtVol(c.volume)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export default function Nifty50OptionScalper() {
@@ -555,6 +688,8 @@ export default function Nifty50OptionScalper() {
   const market = useNiftyMarket();
   const optionChain = useNiftyOptionChain();
   const { positions, trades, strategies, stats, clearAll } = useNiftyOptions(refreshKey);
+  const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
+  const { candles } = useNiftyCandles();
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -639,7 +774,10 @@ export default function Nifty50OptionScalper() {
       <Nifty50MarketHero
         market={market}
         subtitle="Live NIFTY 50 index chart from NSE for the options scalper's underlying spot feed."
+        vix={vix}
       />
+
+      <MarketIndicatorsPanel vix={vix} vixChange={vixChange} vixPct={vixPct} candles={candles} />
 
       {/* ── Hero: Options Equity ── */}
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] items-start gap-5">
