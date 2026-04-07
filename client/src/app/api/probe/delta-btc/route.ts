@@ -44,7 +44,13 @@ export async function GET() {
     const r = payload.result;
     const fetchedAt = new Date().toISOString();
     const tsRaw = Number(r.timestamp);
-    const exchangeTime = tsRaw > 0 ? new Date(tsRaw * 1000).toISOString() : fetchedAt;
+    // Delta returns timestamps in microseconds (µs). Convert to ms for Date.
+    // Guard: if already in ms range (> 1e12) use as-is; if in s range multiply by 1000.
+    let exchangeTime = fetchedAt;
+    if (tsRaw > 0) {
+      const tsMs = tsRaw > 1e12 ? Math.floor(tsRaw / 1000) : tsRaw * 1000;
+      try { exchangeTime = new Date(tsMs).toISOString(); } catch { /* use fetchedAt */ }
+    }
 
     return NextResponse.json({
       ok: true,
