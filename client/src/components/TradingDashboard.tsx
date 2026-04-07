@@ -867,24 +867,26 @@ export default function TradingDashboard() {
       )}
 
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: "options", label: "BTC Option Scalper" },
-            { key: "chain", label: "BTC Option Chain" },
-            { key: "nifty", label: "Nifty 50 Option Scalper" },
-            { key: "niftyStocks", label: "Nifty 50 Equity" },
-            { key: "dashboard", label: "Dashboard" },
-            { key: "engine", label: "Trade Engine" },
-            { key: "history", label: "Trade History" },
-          ].map((module) => (
-            <button
-              key={module.key}
-              onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks")}
-              className={`groww-tab${activeModule === module.key ? " active" : ""}`}
-            >
-              {module.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2">
+            {[
+              { key: "options", label: "BTC Option Scalper" },
+              { key: "chain", label: "BTC Option Chain" },
+              { key: "nifty", label: "Nifty 50 Option Scalper" },
+              { key: "niftyStocks", label: "Nifty 50 Equity" },
+              { key: "dashboard", label: "Dashboard" },
+              { key: "engine", label: "Trade Engine" },
+              { key: "history", label: "Trade History" },
+            ].map((module) => (
+              <button
+                key={module.key}
+                onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks")}
+                className={`groww-tab${activeModule === module.key ? " active" : ""}`}
+              >
+                {module.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div
           className="max-w-[760px] text-xs leading-5 md:text-sm lg:ml-auto lg:text-right"
