@@ -870,10 +870,10 @@ export default function TradingDashboard() {
         <div className="overflow-x-auto pb-1">
           <div className="flex min-w-max items-center gap-2">
             {[
-              { key: "options", label: "BTC Option Scalper" },
-              { key: "chain", label: "BTC Option Chain" },
               { key: "nifty", label: "Nifty 50 Option Scalper" },
               { key: "niftyStocks", label: "Nifty 50 Equity" },
+              { key: "options", label: "BTC Option Scalper" },
+              { key: "chain", label: "BTC Option Chain" },
               { key: "dashboard", label: "Dashboard" },
               { key: "engine", label: "Trade Engine" },
               { key: "history", label: "Trade History" },
