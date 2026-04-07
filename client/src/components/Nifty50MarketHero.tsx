@@ -119,18 +119,26 @@ export default function Nifty50MarketHero({
             </div>
             <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
               {market.price > 0
-                ? `Day change ${formatChange(market.change)} | NSE time ${market.exchangeTime || formatClock(market.updatedAt)}`
+                ? `Day change ${formatChange(market.change)} | Updated ${formatClock(market.updatedAt)}`
                 : subtitle}
             </div>
+            {market.price > 0 && (market.open > 0 || market.high > 0) && (
+              <div className="mt-2 px-0.5 flex flex-wrap gap-4 text-xs font-mono" style={{ color: "var(--text-secondary)" }}>
+                {market.open > 0 && <span>O <span className="text-zinc-700 font-semibold">{formatIndex(market.open)}</span></span>}
+                {market.high > 0 && <span>H <span className="text-emerald-600 font-semibold">{formatIndex(market.high)}</span></span>}
+                {market.low > 0 && <span>L <span className="text-rose-600 font-semibold">{formatIndex(market.low)}</span></span>}
+                {market.close > 0 && <span>Prev Close <span className="text-zinc-700 font-semibold">{formatIndex(market.close)}</span></span>}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 px-1">
             <span className="pill-green">LIVE</span>
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-blue-700">
-              NSE Feed
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-orange-700">
+              Angel One
             </span>
             <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
-              Spot Index
+              NSE · NIFTY 50
             </span>
           </div>
         </div>
