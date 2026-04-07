@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	maxConcurrentPositions = 3
+	maxConcurrentPositions   = 3
+	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
 	optionStatusInPosition = "IN_POSITION"
@@ -23,21 +24,21 @@ const (
 
 	optionRegimeMinBars = 55
 
-	optionMaxActiveStrategies      = 5
-	optionMaxStrategiesPerCategory = 2
+	optionMaxActiveStrategies      = 7
+	optionMaxStrategiesPerCategory = 3
 	optionRosterRefreshInterval    = 30 * time.Second
-	optionActiveRetentionBonus     = 4.0
+	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
 
-	optionLossStreakDisableThreshold = 3
-	optionLossStreakCooldown         = 90 * time.Minute
+	optionLossStreakDisableThreshold = 4
+	optionLossStreakCooldown         = 70 * time.Minute
 	optionUnderperformingMinTrades   = 6
 	optionUnderperformingMaxWinRate  = 35.0
 	optionUnderperformingCooldown    = 6 * time.Hour
 
-	optionColdStartSizeMultiplier = 0.80
+	optionColdStartSizeMultiplier = 0.85
 	optionMinSizeMultiplier       = 0.45
-	optionMaxSizeMultiplier       = 1.25
+	optionMaxSizeMultiplier       = 1.40
 	optionEarlyMaxMultiplier      = 1.05
 	optionLossStreakPenalty       = 0.12
 	optionAvgPnLBoost             = 0.10
@@ -61,6 +62,7 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 }
 
 func newStrategyState(def StrategyDef) *strategyState {
+	def.PositionUSD = optionTradeAllocationUSD
 	return &strategyState{
 		def:   def,
 		stats: newStrategyStatus(def),
@@ -142,26 +144,7 @@ func liveSizeMultiplierFor(s *strategyState) float64 {
 	if !s.disabledUntil.IsZero() && time.Now().Before(s.disabledUntil) {
 		return optionMinSizeMultiplier
 	}
-	if s.stats.TotalTrades == 0 {
-		return optionColdStartSizeMultiplier
-	}
-
-	winRate := s.stats.WinRate / 100.0
-	avgPnL := s.stats.TotalPnL / float64(s.stats.TotalTrades)
-
-	multiplier := 0.90 + (winRate-0.50)*0.80
-	if avgPnL > 0 {
-		multiplier += optionAvgPnLBoost
-	} else if avgPnL < 0 {
-		multiplier -= optionAvgPnLPenalty
-	}
-	multiplier -= float64(s.consecutiveLosses) * optionLossStreakPenalty
-
-	if s.stats.TotalTrades < optionUnderperformingMinTrades && multiplier > optionEarlyMaxMultiplier {
-		multiplier = optionEarlyMaxMultiplier
-	}
-
-	return clamp(optionMinSizeMultiplier, multiplier, optionMaxSizeMultiplier)
+	return 1.0
 }
 
 func sizeMultiplierFor(s *strategyState) float64 {

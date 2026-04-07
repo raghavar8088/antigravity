@@ -21,6 +21,7 @@ const (
 	minExecutionSizeBTC  = 0.01
 	maxAllocationUsage   = 0.60
 	sizeChangeEpsilonBTC = 1e-9
+	fixedTradeCapitalUSD = 10000.0
 
 	minExecutableConfidence     = 0.75 // Raised: require higher-quality entries
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
@@ -456,6 +457,10 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 		}
 	}
 
+	if normalizedSize := targetSizeForCapital(price); normalizedSize > 0 {
+		activeSig.size = normalizedSize
+	}
+
 	// Sanitize size
 	if activeSig.size < minExecutionSizeBTC {
 		activeSig.size = minExecutionSizeBTC
@@ -626,16 +631,18 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			continue
 		}
 
-		// Dynamic sizing: reward stable winners, reduce weak performers.
+		// Enforce a fixed 1% capital budget per trade for the futures engine.
 		baseSize := sig.TargetSize
-		sizeMultiplier := o.tracker.GetSizingMultiplier(aggSig.StrategyName)
+		if normalizedSize := targetSizeForCapital(currentPrice); normalizedSize > 0 {
+			baseSize = normalizedSize
+		}
 		executionWeight := o.tracker.GetExecutionWeight(aggSig.StrategyName)
 		if executionWeight < minExecutionWeightToTrade {
 			log.Printf("[QUALITY FILTER] %s skipped due to weak execution weight %.2f",
 				aggSig.StrategyName, executionWeight)
 			continue
 		}
-		sig.TargetSize = baseSize * sizeMultiplier * executionWeight
+		sig.TargetSize = baseSize
 		sig.Confidence = adjustConfidenceByExecutionWeight(sig.Confidence, executionWeight)
 
 		// Capital cap: keep each strategy within a fraction of its allocation bucket.
@@ -655,8 +662,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		if sig.TargetSize-baseSize > sizeChangeEpsilonBTC || baseSize-sig.TargetSize > sizeChangeEpsilonBTC {
-			log.Printf("[SIZE ENGINE] %s resized %.4f -> %.4f BTC (size x%.2f, quality x%.2f)",
-				aggSig.StrategyName, baseSize, sig.TargetSize, sizeMultiplier, executionWeight)
+			log.Printf("[SIZE ENGINE] %s capped %.4f -> %.4f BTC under the 1%% capital rule",
+				aggSig.StrategyName, baseSize, sig.TargetSize)
 		}
 
 		baseStopLossPct := sig.StopLossPct
@@ -955,7 +962,7 @@ func (o *Orchestrator) AddTestSignal() {
 		Signal: strategy.Signal{
 			Symbol:        "BTC-USD",
 			Action:        strategy.ActionBuy,
-			TargetSize:    0.02,
+			TargetSize:    targetSizeForCapital(ctx.Price),
 			Confidence:    0.92,
 			StopLossPct:   0.45,
 			TakeProfitPct: 0.90,
@@ -998,6 +1005,9 @@ func (o *Orchestrator) ConfirmSignal(ctx context.Context, pendingID, userPrompt 
 
 	p.Signal.AIDecisionID = provider
 	p.Signal.AIReasoning = fmt.Sprintf("[Human Input: %s] %s", userPrompt, reason)
+	if normalizedSize := targetSizeForCapital(p.Context.Price); normalizedSize > 0 {
+		p.Signal.TargetSize = normalizedSize
+	}
 
 	fill, err := o.exec.ExecuteSignal(p.Signal, execution.OrderModeIOC)
 	if err != nil {
@@ -1052,6 +1062,9 @@ func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID st
 			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, minBridgeApprovalConfidence)
 		}
 		p.Signal.Confidence = decision.Confidence
+	}
+	if normalizedSize := targetSizeForCapital(p.Context.Price); normalizedSize > 0 {
+		p.Signal.TargetSize = normalizedSize
 	}
 	sanitized, reason, allowed := sanitizeSignalForProfit(p.Signal)
 	if !allowed {
@@ -1373,4 +1386,11 @@ func buildCandleHistoryText(ctx ai.MarketContext) string {
 		sb.WriteString(fmt.Sprintf("[%d] H:%.0f L:%.0f C:%.0f V:%.2f\n", i, c.High, c.Low, c.Close, c.Volume))
 	}
 	return sb.String()
+}
+
+func targetSizeForCapital(currentPrice float64) float64 {
+	if currentPrice <= 0 {
+		return 0
+	}
+	return fixedTradeCapitalUSD / currentPrice
 }

@@ -607,6 +607,17 @@ export default function OptionsScalper() {
     return map;
   }, {});
 
+  const currentRegime = strategies.length > 0 ? (strategies[0]?.regime ?? "UNKNOWN") : "UNKNOWN";
+
+  const bestTrade = trades.reduce<OptionTrade | null>((best, t) => (!best || t.netPnl > best.netPnl ? t : best), null);
+  const avgHoldSecs = trades.length > 0
+    ? trades.reduce((sum, t) => {
+        const entry = new Date(t.entryTime).getTime();
+        const exit = new Date(t.exitTime).getTime();
+        return sum + (Number.isNaN(exit - entry) ? 0 : (exit - entry) / 1000);
+      }, 0) / trades.length
+    : 0;
+
   // ── Streak ──────────────────────────────────────────────────────
   const streak = (() => {
     if (trades.length === 0) return "0";
@@ -653,6 +664,10 @@ export default function OptionsScalper() {
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
                 <BadgePill label="Not Futures" tone="neutral" />
+                <BadgePill
+                  label={`Regime: ${currentRegime}`}
+                  tone={currentRegime === "TREND" ? "positive" : currentRegime === "VOLATILE" ? "negative" : currentRegime === "RANGE" ? "info" : "neutral"}
+                />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -700,6 +715,39 @@ export default function OptionsScalper() {
               accent="text-zinc-900"
             />
           </div>
+
+          {/* ── Equity sparkline ── */}
+          {trades.length >= 2 && (() => {
+            const initial = INITIAL_OPTIONS_BALANCE;
+            const points: { x: number; y: number }[] = [];
+            let running = initial;
+            const sorted = [...trades].reverse(); // oldest first
+            for (const t of sorted) {
+              running += t.netPnl;
+              points.push({ x: 0, y: running });
+            }
+            const xs = points.map((_, i) => i);
+            const ys = points.map((p) => p.y);
+            const minY = Math.min(...ys, initial);
+            const maxY = Math.max(...ys, initial);
+            const range = maxY - minY || 1;
+            const W = 400; const H = 56;
+            const px = (i: number) => (i / Math.max(xs.length - 1, 1)) * W;
+            const py = (y: number) => H - ((y - minY) / range) * H;
+            const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${px(i).toFixed(1)} ${py(p.y).toFixed(1)}`).join(" ");
+            const color = running >= initial ? "#16a34a" : "#dc2626";
+            return (
+              <div className="mt-4 px-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                  Equity Curve · {trades.length} trades
+                </div>
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 56, display: "block" }}>
+                  <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
+                  <line x1="0" y1={py(initial).toFixed(1)} x2={W} y2={py(initial).toFixed(1)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3" />
+                </svg>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right: Equity & PnL grid */}
@@ -737,7 +785,7 @@ export default function OptionsScalper() {
       </div>
 
       {/* ── Summary stats row ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-4">
         <SummaryCard
           label="Win Rate"
           value={totalTrades > 0 ? `${winRate.toFixed(1)}%` : "-"}
@@ -762,6 +810,16 @@ export default function OptionsScalper() {
           label="Streak"
           value={streak}
           accent="text-amber-500"
+        />
+        <SummaryCard
+          label="Best Trade"
+          value={bestTrade ? fmtUSD(bestTrade.netPnl, { signed: true }) : "-"}
+          accent={bestTrade && bestTrade.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}
+        />
+        <SummaryCard
+          label="Avg Hold"
+          value={avgHoldSecs > 0 ? formatElapsedSeconds(Math.round(avgHoldSecs)) : "-"}
+          accent="text-zinc-900"
         />
       </div>
 
@@ -798,7 +856,7 @@ export default function OptionsScalper() {
 
       {/* ── Footer note ── */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Options paper account · Black-Scholes pricing · $1,000,000 starting balance · Fully separate from futures engine
+        Options paper account · Black-Scholes pricing · $1,000,000 starting balance · 1% capital per trade · Fully separate from futures engine
       </div>
 
     </div>

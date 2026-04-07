@@ -625,7 +625,7 @@ export default function Nifty50StocksScalper() {
       </section>
 
       <section className="glass-panel px-5 py-5 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-        NIFTY 50 stocks paper account | Live NSE NIFTY 50 spot feed | Dedicated stock strategy roster | Separate Rs.1,000,000 capital pool
+        NIFTY 50 stocks paper account | Live NSE NIFTY 50 spot feed | Dedicated stock strategy roster | Separate Rs.1,000,000 capital pool | 1% capital per trade
       </section>
     </div>
   );

@@ -12,6 +12,7 @@ import (
 
 const (
 	initialStocksBalance         = 1000000.0
+	tradeAllocationINR           = initialStocksBalance * 0.01
 	maxTradesKept                = 600
 	maxBarSamples                = 360
 	barIntervalSeconds     int64 = 5
@@ -61,14 +62,14 @@ func NewEngine() *Engine {
 
 func buildStrategies() []StrategyDef {
 	return []StrategyDef{
-		{ID: 1, Name: "RAIG_Trend_Pullback_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: 125000, StopLossPct: 0.55, TakeProfitPct: 1.25, CooldownMins: 2},
-		{ID: 2, Name: "EMA_Cross_Scalp_N50", Category: "Momentum", Bias: "BOTH", Signal: "EMA_CROSS", AllocationINR: 100000, StopLossPct: 0.45, TakeProfitPct: 1.00, CooldownMins: 2},
-		{ID: 3, Name: "VWAP_Bounce_Pro_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: 120000, StopLossPct: 0.50, TakeProfitPct: 1.10, CooldownMins: 2},
-		{ID: 4, Name: "OpeningRange_Breakout_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: 110000, StopLossPct: 0.60, TakeProfitPct: 1.35, CooldownMins: 3},
-		{ID: 5, Name: "Donchian_Breakout_N50", Category: "Breakout", Bias: "BOTH", Signal: "DONCHIAN", AllocationINR: 115000, StopLossPct: 0.55, TakeProfitPct: 1.30, CooldownMins: 3},
-		{ID: 6, Name: "RSI_BB_Confluence_N50", Category: "Mean Reversion", Bias: "BOTH", Signal: "RSI_BB", AllocationINR: 90000, StopLossPct: 0.45, TakeProfitPct: 0.90, CooldownMins: 2},
-		{ID: 7, Name: "Exhaustion_Reversal_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: 85000, StopLossPct: 0.50, TakeProfitPct: 0.95, CooldownMins: 2},
-		{ID: 8, Name: "TrendMomentum_Score_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: 130000, StopLossPct: 0.65, TakeProfitPct: 1.45, CooldownMins: 4},
+		{ID: 1, Name: "RAIG_Trend_Pullback_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.55, TakeProfitPct: 1.25, CooldownMins: 2},
+		{ID: 2, Name: "EMA_Cross_Scalp_N50", Category: "Momentum", Bias: "BOTH", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 1.00, CooldownMins: 2},
+		{ID: 3, Name: "VWAP_Bounce_Pro_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 1.10, CooldownMins: 2},
+		{ID: 4, Name: "OpeningRange_Breakout_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.35, CooldownMins: 3},
+		{ID: 5, Name: "Donchian_Breakout_N50", Category: "Breakout", Bias: "BOTH", Signal: "DONCHIAN", AllocationINR: tradeAllocationINR, StopLossPct: 0.55, TakeProfitPct: 1.30, CooldownMins: 3},
+		{ID: 6, Name: "RSI_BB_Confluence_N50", Category: "Mean Reversion", Bias: "BOTH", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 0.90, CooldownMins: 2},
+		{ID: 7, Name: "Exhaustion_Reversal_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 0.95, CooldownMins: 2},
+		{ID: 8, Name: "TrendMomentum_Score_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: tradeAllocationINR, StopLossPct: 0.65, TakeProfitPct: 1.45, CooldownMins: 4},
 	}
 }
 

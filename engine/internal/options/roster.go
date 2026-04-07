@@ -229,20 +229,6 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 		trySelect(false)
 	}
 
-	activeScores := make([]float64, 0, len(activeSet))
-	for _, s := range e.states {
-		if activeSet[s.def.Name] {
-			activeScores = append(activeScores, s.stats.Score)
-		}
-	}
-	avgActiveScore := 0.0
-	for _, score := range activeScores {
-		avgActiveScore += score
-	}
-	if len(activeScores) > 0 {
-		avgActiveScore /= float64(len(activeScores))
-	}
-
 	for _, s := range e.states {
 		prev := s.stats.RosterState
 		next := StrategyRosterWatchlist
@@ -269,12 +255,8 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 
 		switch next {
 		case StrategyRosterActive:
-			allocationFactor := 1.0
-			if avgActiveScore > 0 {
-				allocationFactor = clamp(0.75, s.stats.Score/avgActiveScore, 1.35)
-			}
-			s.stats.AllocationUSD = s.def.PositionUSD * allocationFactor
-			s.stats.SizeMultiplier = liveSizeMultiplierFor(s)
+			s.stats.AllocationUSD = s.def.PositionUSD
+			s.stats.SizeMultiplier = 1.0
 			if s.stats.DisableReason == "Rotated out of live roster" {
 				s.stats.DisableReason = ""
 			}
