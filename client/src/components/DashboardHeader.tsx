@@ -13,6 +13,7 @@ type DashboardHeaderProps = {
   onAdminEvent?: (message: string, tone: "admin" | "info") => void;
   combatMode?: boolean;
   onToggleCombat?: () => void;
+  actionsEnabled?: boolean;
 };
 
 
@@ -48,6 +49,7 @@ export default function DashboardHeader({
   onAdminEvent,
   combatMode = false,
   onToggleCombat,
+  actionsEnabled = false,
 }: DashboardHeaderProps) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
 
@@ -57,6 +59,9 @@ export default function DashboardHeader({
     successMessage: string,
     resetAfter = false,
   ) => {
+    if (!actionsEnabled) {
+      return;
+    }
     if (!confirm(confirmation)) return;
     setActiveAction(endpoint);
     try {
@@ -77,6 +82,9 @@ export default function DashboardHeader({
   };
 
   const isBusy = activeAction !== null;
+  const actionButtonTitle = actionsEnabled
+    ? "Action buttons are enabled."
+    : "Set Action to Yes to enable admin buttons.";
 
   return (
     <header className="cockpit-header">
@@ -158,7 +166,8 @@ export default function DashboardHeader({
                 true,
               )
             }
-            disabled={isBusy || openPositions === 0}
+            disabled={!actionsEnabled || isBusy || openPositions === 0}
+            title={actionButtonTitle}
             className="btn-gold"
           >
             {activeAction === "/api/admin/close-all" ? "Closing" : "Close All"}
@@ -172,7 +181,8 @@ export default function DashboardHeader({
                 "Kill switch triggered.",
               )
             }
-            disabled={isBusy}
+            disabled={!actionsEnabled || isBusy}
+            title={actionButtonTitle}
             className="btn-danger"
           >
             {activeAction === "/api/admin/kill" ? "Stopping" : "Kill"}
@@ -187,7 +197,8 @@ export default function DashboardHeader({
                 true,
               )
             }
-            disabled={isBusy}
+            disabled={!actionsEnabled || isBusy}
+            title={actionButtonTitle}
             className="btn-primary"
           >
             {activeAction === "/api/admin/clear-history" ? "Clearing" : "Clear Trade History"}
@@ -202,7 +213,8 @@ export default function DashboardHeader({
                 true,
               )
             }
-            disabled={isBusy}
+            disabled={!actionsEnabled || isBusy}
+            title={actionButtonTitle}
             className="btn-primary"
           >
             {activeAction === "/api/admin/reset" ? "Resetting" : "Reset"}
@@ -216,7 +228,8 @@ export default function DashboardHeader({
                 "Backtest triggered. Check execution logs.",
               )
             }
-            disabled={isBusy}
+            disabled={!actionsEnabled || isBusy}
+            title={actionButtonTitle}
             className="btn-gold"
           >
             {activeAction === "/api/backtest-demo" ? "Processing" : "RAIG Backtest"}

@@ -568,11 +568,18 @@ function EquitySparkline({ stats }: { stats: StocksEngineStats }) {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-export default function Nifty50StocksScalper() {
+type Nifty50StocksScalperProps = {
+  actionsEnabled?: boolean;
+};
+
+export default function Nifty50StocksScalper({ actionsEnabled = false }: Nifty50StocksScalperProps) {
   const market = useNiftyMarket();
   const { quotes, positions, trades, strategies, stats, reset } = useNiftyStocksEngine();
 
   const [isResetting, setIsResetting] = useState(false);
+  const actionButtonTitle = actionsEnabled
+    ? "Action buttons are enabled."
+    : "Set Action to Yes to enable reset and clear buttons.";
 
   const topStrategy = [...strategies]
     .filter((s) => s.totalTrades > 0)
@@ -581,6 +588,9 @@ export default function Nifty50StocksScalper() {
   const bestTrade = [...trades].sort((a, b) => b.netPnl - a.netPnl)[0] ?? null;
 
   const handleReset = () => {
+    if (!actionsEnabled) {
+      return;
+    }
     if (!confirm("Reset the NIFTY 50 Stocks Option Scalper? All positions, trades, and capital history will be cleared.")) {
       return;
     }
@@ -662,7 +672,8 @@ export default function Nifty50StocksScalper() {
             <button
               type="button"
               onClick={handleReset}
-              disabled={isResetting}
+              disabled={!actionsEnabled || isResetting}
+              title={actionButtonTitle}
               className="btn-gold w-full"
             >
               {isResetting ? "Resetting…" : "Reset Stock Options Account"}

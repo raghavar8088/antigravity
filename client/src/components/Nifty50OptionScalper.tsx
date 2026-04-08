@@ -680,7 +680,11 @@ function MarketIndicatorsPanel({
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function Nifty50OptionScalper() {
+type Nifty50OptionScalperProps = {
+  actionsEnabled?: boolean;
+};
+
+export default function Nifty50OptionScalper({ actionsEnabled = false }: Nifty50OptionScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -690,6 +694,9 @@ export default function Nifty50OptionScalper() {
   const { positions, trades, strategies, stats, clearAll, barCount, enginePrice } = useNiftyOptionsEngine(refreshKey);
   const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
   const { candles } = useNiftyCandles();
+  const actionButtonTitle = actionsEnabled
+    ? "Action buttons are enabled."
+    : "Set Action to Yes to enable reset and clear buttons.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -697,6 +704,9 @@ export default function Nifty50OptionScalper() {
   }, []);
 
   const handleReset = () => {
+    if (!actionsEnabled) {
+      return;
+    }
     if (!confirm("Reset the NIFTY 50 options paper account to ₹1,000,000? All history will be cleared.")) {
       return;
     }
@@ -810,9 +820,11 @@ export default function Nifty50OptionScalper() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={isResetting}
+                  disabled={!actionsEnabled || isResetting}
+                  title={actionButtonTitle}
                   className="btn-primary text-sm"
                   onClick={() => {
+                    if (!actionsEnabled) return;
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
                     setRefreshKey((k) => k + 1);
@@ -823,7 +835,8 @@ export default function Nifty50OptionScalper() {
                 <button
                   type="button"
                   onClick={handleReset}
-                  disabled={isResetting}
+                  disabled={!actionsEnabled || isResetting}
+                  title={actionButtonTitle}
                   className="btn-danger text-sm"
                 >
                   {isResetting ? "Resetting..." : "Reset NIFTY Account"}

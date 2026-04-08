@@ -320,6 +320,7 @@ export default function TradingDashboard() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
+  const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
   const [isClearingLedger, setIsClearingLedger] = useState(false);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
@@ -683,6 +684,9 @@ export default function TradingDashboard() {
   };
 
   const handleClearLedger = async () => {
+    if (!actionsEnabled) {
+      return;
+    }
     if (!confirm("Clear completed trade history and strategy stats? Open positions and balance will be kept.")) {
       return;
     }
@@ -701,6 +705,21 @@ export default function TradingDashboard() {
       setIsClearingLedger(false);
     }
   };
+
+  const handleResetFuturesAccount = () => {
+    if (!actionsEnabled || isClearingLedger) {
+      return;
+    }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
+    fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
+      .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })
+      .catch(() => handleAdminEvent("Reset failed. Check engine connectivity.", "admin"));
+  };
+
+  const actionToggleTitle = actionsEnabled
+    ? "Admin and reset actions are enabled."
+    : "Set Action to Yes to enable reset, clear, kill, and close-all buttons.";
 
   // ── Dynamic Color Intelligence ──────────────────────────────────
   const dailyPnlValue = sessionPnl;
@@ -867,33 +886,74 @@ export default function TradingDashboard() {
           onAdminEvent={handleAdminEvent}
           combatMode={combatMode}
           onToggleCombat={() => setCombatMode((prev) => !prev)}
+          actionsEnabled={actionsEnabled}
         />
       )}
 
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
-        <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-2">
-            {[
-              { key: "nifty", label: "Nifty 50 Option Scalper" },
-              { key: "niftyStocks", label: "Nifty 50 Equity" },
-              { key: "mcx", label: "Commodity Scalper" },
-              { key: "options", label: "BTC Option Scalper" },
-              { key: "chain", label: "BTC Option Chain" },
-              { key: "dashboard", label: "BTC Equity" },
-              { key: "liveDataLab", label: "Live Data Lab" },
-            ].map((module) => {
-              const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
-              const isActive = isBtcEquityGroup || activeModule === module.key;
-              return (
-                <button
-                  key={module.key}
-                  onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
-                  className={`groww-tab${isActive ? " active" : ""}`}
-                >
-                  {module.label}
-                </button>
-              );
-            })}
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="overflow-x-auto pb-1">
+            <div className="flex min-w-max items-center gap-2">
+              {[
+                { key: "nifty", label: "Nifty 50 Option Scalper" },
+                { key: "niftyStocks", label: "Nifty 50 Equity" },
+                { key: "mcx", label: "Commodity Scalper" },
+                { key: "options", label: "BTC Option Scalper" },
+                { key: "chain", label: "BTC Option Chain" },
+                { key: "dashboard", label: "BTC Equity" },
+                { key: "liveDataLab", label: "Live Data Lab" },
+              ].map((module) => {
+                const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
+                const isActive = isBtcEquityGroup || activeModule === module.key;
+                return (
+                  <button
+                    key={module.key}
+                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
+                    className={`groww-tab${isActive ? " active" : ""}`}
+                  >
+                    {module.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-3 rounded-[18px] border px-3 py-2"
+            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+            title={actionToggleTitle}
+          >
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
+              Action
+            </div>
+            <div className="inline-flex items-center rounded-full border p-1" style={{ borderColor: "var(--border-subtle)", background: "var(--surface-2)" }}>
+              <button
+                type="button"
+                onClick={() => setActionsEnabled(false)}
+                aria-pressed={!actionsEnabled}
+                className="rounded-full px-3 py-1 text-xs font-semibold transition"
+                style={{
+                  background: !actionsEnabled ? "var(--surface-3)" : "transparent",
+                  color: !actionsEnabled ? "var(--text-primary)" : "var(--text-secondary)",
+                }}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() => setActionsEnabled(true)}
+                aria-pressed={actionsEnabled}
+                className="rounded-full px-3 py-1 text-xs font-semibold transition"
+                style={{
+                  background: actionsEnabled ? "rgba(21, 128, 61, 0.16)" : "transparent",
+                  color: actionsEnabled ? "var(--green)" : "var(--text-secondary)",
+                }}
+              >
+                Yes
+              </button>
+            </div>
+            <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              {actionsEnabled ? "Enabled for reset and admin actions." : "No keeps reset, clear, kill, and close-all locked."}
+            </div>
           </div>
         </div>
         <div
@@ -1721,22 +1781,18 @@ export default function TradingDashboard() {
                 <button
                   type="button"
                   onClick={handleClearLedger}
-                  disabled={isClearingLedger}
+                  disabled={!actionsEnabled || isClearingLedger}
+                  title={actionToggleTitle}
                   className="btn-primary"
                 >
                   {isClearingLedger ? "Clearing…" : "Clear Trade History"}
                 </button>
                 <button
                   type="button"
-                  disabled={isClearingLedger}
+                  disabled={!actionsEnabled || isClearingLedger}
+                  title={actionToggleTitle}
                   className="btn-danger"
-                  onClick={() => {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-                    if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
-                    fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
-                      .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })
-                      .catch(() => handleAdminEvent("Reset failed. Check engine connectivity.", "admin"));
-                  }}
+                  onClick={handleResetFuturesAccount}
                 >
                   Reset Account
                 </button>
@@ -1809,22 +1865,18 @@ export default function TradingDashboard() {
                 <button
                   type="button"
                   onClick={handleClearLedger}
-                  disabled={isClearingLedger}
+                  disabled={!actionsEnabled || isClearingLedger}
+                  title={actionToggleTitle}
                   className="btn-primary"
                 >
                   {isClearingLedger ? "Clearing…" : "Clear Trade History"}
                 </button>
                 <button
                   type="button"
-                  disabled={isClearingLedger}
+                  disabled={!actionsEnabled || isClearingLedger}
+                  title={actionToggleTitle}
                   className="btn-danger"
-                  onClick={() => {
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-                    if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
-                    fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
-                      .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })
-                      .catch(() => handleAdminEvent("Reset failed. Check engine connectivity.", "admin"));
-                  }}
+                  onClick={handleResetFuturesAccount}
                 >
                   Reset Account
                 </button>
@@ -1835,15 +1887,15 @@ export default function TradingDashboard() {
         </div>
       )}
 
-      {activeModule === "options" && <OptionsScalper />}
+      {activeModule === "options" && <OptionsScalper actionsEnabled={actionsEnabled} />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
-      {activeModule === "nifty" && <Nifty50OptionScalper />}
+      {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} />}
 
-      {activeModule === "niftyStocks" && <Nifty50StocksScalper />}
+      {activeModule === "niftyStocks" && <Nifty50StocksScalper actionsEnabled={actionsEnabled} />}
 
-      {activeModule === "mcx" && <MCXCommodityScalper />}
+      {activeModule === "mcx" && <MCXCommodityScalper actionsEnabled={actionsEnabled} />}
 
       {activeModule === "liveDataLab" && <LiveDataLabPanel />}
     </main>

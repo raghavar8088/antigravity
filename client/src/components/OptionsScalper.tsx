@@ -543,12 +543,19 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function OptionsScalper() {
+type OptionsScalperProps = {
+  actionsEnabled?: boolean;
+};
+
+export default function OptionsScalper({ actionsEnabled = false }: OptionsScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
   const { positions, trades, strategies, stats, clearAll } = useOptions(refreshKey);
+  const actionButtonTitle = actionsEnabled
+    ? "Action buttons are enabled."
+    : "Set Action to Yes to enable reset and clear buttons.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -556,6 +563,9 @@ export default function OptionsScalper() {
   }, []);
 
   const handleReset = async () => {
+    if (!actionsEnabled) {
+      return;
+    }
     if (!confirm("Reset the options paper account to $1,000,000? All history will be cleared.")) {
       return;
     }
@@ -672,9 +682,11 @@ export default function OptionsScalper() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={isResetting}
+                  disabled={!actionsEnabled || isResetting}
+                  title={actionButtonTitle}
                   className="btn-primary text-sm"
                   onClick={async () => {
+                    if (!actionsEnabled) return;
                     if (!confirm("Clear completed option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
                     await fetch(`${API_URL}/api/options/clear-history`, { method: "POST" });
@@ -686,7 +698,8 @@ export default function OptionsScalper() {
                 <button
                   type="button"
                   onClick={handleReset}
-                  disabled={isResetting}
+                  disabled={!actionsEnabled || isResetting}
+                  title={actionButtonTitle}
                   className="btn-danger text-sm"
                 >
                   {isResetting ? "Resetting…" : "Reset Options Account"}

@@ -351,13 +351,20 @@ function TradeLedger({ trades }: { trades: MCXTrade[] }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function MCXCommodityScalper() {
+type MCXCommodityScalperProps = {
+  actionsEnabled?: boolean;
+};
+
+export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommodityScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
 
   const { positions, trades, strategies, stats, quotes, diagnostics, clearAll } = useMCXEngine(refreshKey);
+  const actionButtonTitle = actionsEnabled
+    ? "Action buttons are enabled."
+    : "Set Action to Yes to enable reset and clear buttons.";
 
   useEffect(() => {
     const id = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -365,6 +372,7 @@ export default function MCXCommodityScalper() {
   }, []);
 
   const handleReset = () => {
+    if (!actionsEnabled) return;
     if (!confirm("Reset the MCX Commodity paper account to ₹1,000,000? All history will be cleared.")) return;
     setIsResetting(true);
     clearAll();
@@ -434,15 +442,16 @@ export default function MCXCommodityScalper() {
               <BadgePill label="Paper Trading Only" tone="warning" />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" disabled={isResetting} className="btn-primary text-sm"
+              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm"
                 onClick={() => {
+                  if (!actionsEnabled) return;
                   if (!confirm("Clear completed MCX trades and strategy stats? Open positions and balance will be kept.")) return;
                   clearAll();
                   setRefreshKey((k) => k + 1);
                 }}>
                 Clear Trades
               </button>
-              <button type="button" onClick={handleReset} disabled={isResetting} className="btn-danger text-sm">
+              <button type="button" onClick={handleReset} disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm">
                 {isResetting ? "Resetting…" : "Reset Account"}
               </button>
             </div>
