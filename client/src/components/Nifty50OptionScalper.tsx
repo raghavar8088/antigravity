@@ -687,7 +687,7 @@ export default function Nifty50OptionScalper() {
   const [isResetting, setIsResetting] = useState(false);
   const market = useNiftyMarket();
   const optionChain = useNiftyOptionChain();
-  const { positions, trades, strategies, stats, clearAll } = useNiftyOptionsEngine(refreshKey);
+  const { positions, trades, strategies, stats, clearAll, barCount, enginePrice } = useNiftyOptionsEngine(refreshKey);
   const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
   const { candles } = useNiftyCandles();
 
@@ -797,7 +797,8 @@ export default function Nifty50OptionScalper() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
-                <BadgePill label="Options Engine Online" tone="positive" />
+                <BadgePill label={enginePrice > 0 ? `Feed ₹${enginePrice.toFixed(0)}` : "Feed: Connecting…"} tone={enginePrice > 0 ? "positive" : "neutral"} />
+                <BadgePill label={barCount >= 15 ? `${barCount} bars` : `Warming ${barCount}/15 bars`} tone={barCount >= 15 ? "info" : "warning"} />
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
                 <BadgePill label="Not Futures" tone="neutral" />

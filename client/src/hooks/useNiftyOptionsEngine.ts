@@ -153,58 +153,71 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
 
   switch (signal) {
     case "STRONG_BULL_MOM": {
+      // ~22 pts over 5 min on NIFTY@22000, short-term burst confirmation
       if (n < 15) return false;
-      const m5 = momentum(bars, 5), m10 = momentum(bars, 10);
+      const m5 = momentum(bars, 5);
+      const m3 = momentum(bars, 3);
       const r = rsi(bars, 14);
-      return m5 > 0.0015 && m10 > 0.0006 && r < 72;
+      return m5 > 0.0010 && m3 > 0.0004 && r < 72;
     }
     case "BULL_MOM": {
+      // ~11 pts over 5 min, price above EMA9
       if (n < 15) return false;
-      const m5 = momentum(bars, 5), m10 = momentum(bars, 10);
+      const m5 = momentum(bars, 5);
       const r = rsi(bars, 14);
-      return m5 > 0.0008 && m10 > 0.0003 && r < 68;
+      return m5 > 0.0005 && r < 68 && price > ema(bars, 9);
     }
     case "STRONG_BEAR_MOM": {
       if (n < 15) return false;
-      const m5 = momentum(bars, 5), m10 = momentum(bars, 10);
+      const m5 = momentum(bars, 5);
+      const m3 = momentum(bars, 3);
       const r = rsi(bars, 14);
-      return m5 < -0.0015 && m10 < -0.0006 && r > 28;
+      return m5 < -0.0010 && m3 < -0.0004 && r > 28;
     }
     case "BEAR_MOM": {
       if (n < 15) return false;
-      const m5 = momentum(bars, 5), m10 = momentum(bars, 10);
+      const m5 = momentum(bars, 5);
       const r = rsi(bars, 14);
-      return m5 < -0.0008 && m10 < -0.0003 && r > 32;
+      return m5 < -0.0005 && r > 32 && price < ema(bars, 9);
     }
     case "RSI_EXTREME_OS": {
+      // RSI deeply oversold zone + price bouncing (no crossover required)
       if (n < 20) return false;
-      const r = rsi(bars, 14), pr = rsi(bars.slice(0, -1), 14);
-      return pr < 25 && r >= 25;
+      const r = rsi(bars, 14);
+      return r < 28 && price > bars[n - 2];
     }
     case "RSI_OVERSOLD": {
+      // RSI in recovery zone, price reclaiming EMA9
       if (n < 20) return false;
-      const r = rsi(bars, 14), pr = rsi(bars.slice(0, -1), 14);
-      return pr < 34 && r >= 34 && r < 45;
+      const r = rsi(bars, 14);
+      const e9 = ema(bars, 9);
+      return r > 30 && r < 46 && price >= e9 && bars[n - 2] < e9;
     }
     case "RSI_EXTREME_OB": {
       if (n < 20) return false;
-      const r = rsi(bars, 14), pr = rsi(bars.slice(0, -1), 14);
-      return pr > 75 && r <= 75;
+      const r = rsi(bars, 14);
+      return r > 72 && price < bars[n - 2];
     }
     case "RSI_OVERBOUGHT": {
       if (n < 20) return false;
-      const r = rsi(bars, 14), pr = rsi(bars.slice(0, -1), 14);
-      return pr > 66 && r <= 66 && r > 55;
+      const r = rsi(bars, 14);
+      const e9 = ema(bars, 9);
+      return r > 54 && r < 70 && price <= e9 && bars[n - 2] > e9;
     }
     case "BB_LOWER_TOUCH": {
+      // Near or below lower band, bouncing with RSI not overbought
       if (n < 22) return false;
-      const prevPrice = bars[n - 2];
-      return prevPrice <= bbLower(bars, 20) && price > prevPrice && price < bbMid(bars, 20);
+      const bl = bbLower(bars, 20);
+      const bm = bbMid(bars, 20);
+      const r = rsi(bars, 14);
+      return bars[n - 2] <= bl * 1.003 && price > bars[n - 2] && price < bm && r < 52;
     }
     case "BB_UPPER_TOUCH": {
       if (n < 22) return false;
-      const prevPrice = bars[n - 2];
-      return prevPrice >= bbUpper(bars, 20) && price < prevPrice && price > bbMid(bars, 20);
+      const bu = bbUpper(bars, 20);
+      const bm = bbMid(bars, 20);
+      const r = rsi(bars, 14);
+      return bars[n - 2] >= bu * 0.997 && price < bars[n - 2] && price > bm && r > 48;
     }
     case "EMA_BULL_CROSS":
       return crossedAbove(bars, 9, 21);
@@ -219,41 +232,45 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
       return price < ema(bars, 20) && price < ema(bars, 50) && crossedBelow(bars, 9, 21);
     }
     case "RESIST_BREAK": {
+      // Price breaks 20-bar high with momentum confirmation
       if (n < 22) return false;
       const prev = bars.slice(n - 21, n - 1);
       const hi = Math.max(...prev);
-      return price > hi * 1.0008 && momentum(bars, 3) > 0.0006;
+      return price > hi * 1.0004 && momentum(bars, 3) > 0.0004;
     }
     case "SUPPORT_BREAK": {
       if (n < 22) return false;
       const prev = bars.slice(n - 21, n - 1);
       const lo = Math.min(...prev);
-      return price < lo * 0.9992 && momentum(bars, 3) < -0.0006;
+      return price < lo * 0.9996 && momentum(bars, 3) < -0.0004;
     }
     case "STOCH_OS": {
+      // Stoch deeply oversold + price bouncing (no crossover required)
       if (n < 20) return false;
-      const k = stochK(bars, 14), pk = stochK(bars.slice(0, -1), 14);
-      return pk < 25 && k >= 25 && rsi(bars, 14) < 55;
+      const k = stochK(bars, 14);
+      const r = rsi(bars, 14);
+      return k < 25 && price > bars[n - 2] && r < 55;
     }
     case "STOCH_OB": {
       if (n < 20) return false;
-      const k = stochK(bars, 14), pk = stochK(bars.slice(0, -1), 14);
-      return pk > 75 && k <= 75 && rsi(bars, 14) > 45;
+      const k = stochK(bars, 14);
+      const r = rsi(bars, 14);
+      return k > 75 && price < bars[n - 2] && r > 45;
     }
     case "CAPITUL_CALL": {
       if (n < 22) return false;
-      const prevPrice = bars[n - 2];
-      const isBBLower = prevPrice <= bbLower(bars, 20);
-      const isBouncing = price > prevPrice;
+      const bl = bbLower(bars, 20);
+      const isBBLower = bars[n - 2] <= bl * 1.002;
+      const isBouncing = price > bars[n - 2];
       const mom5 = momentum(bars, 5);
-      return isBBLower && isBouncing && mom5 > 0.001;
+      return isBBLower && isBouncing && mom5 > 0.0006;
     }
     case "BB_SQUEEZE_BULL": {
       if (n < 40) return false;
       const recentStd = stddev(bars.slice(-10));
       const priorStd = stddev(bars.slice(-30, -10));
-      const squeezed = priorStd > 0 && recentStd < priorStd * 0.75;
-      return squeezed && momentum(bars, 3) > 0.0008;
+      const squeezed = priorStd > 0 && recentStd < priorStd * 0.80;
+      return squeezed && momentum(bars, 3) > 0.0005;
     }
   }
   return false;
@@ -633,6 +650,8 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     buildDisplayStrategies(engRef.current),
   );
   const [stats, setStats] = useState<OptionStats>(() => buildDisplayStats(engRef.current));
+  const [barCount, setBarCount] = useState(0);
+  const [enginePrice, setEnginePrice] = useState(0);
 
   const pushDisplayState = useCallback(() => {
     const eng = engRef.current;
@@ -640,6 +659,8 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     setTrades(buildDisplayTrades(eng));
     setStrategies(buildDisplayStrategies(eng));
     setStats(buildDisplayStats(eng));
+    setBarCount(eng.minuteBars.length);
+    setEnginePrice(eng.lastPrice);
   }, []);
 
   // ── Engine tick (runs every TICK_MS) ──────────────────────────────────────
@@ -775,5 +796,5 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     pushDisplayState();
   }, [pushDisplayState]);
 
-  return { positions, trades, strategies, stats, clearAll };
+  return { positions, trades, strategies, stats, clearAll, barCount, enginePrice };
 }
