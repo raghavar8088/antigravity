@@ -27,6 +27,7 @@ import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
 import useNiftyStocks from "@/hooks/useNiftyStocks";
 import useNiftyOptions from "@/hooks/useNiftyOptions";
 import useOptions from "@/hooks/useOptions";
+import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
 import useStrategies from "@/hooks/useStrategies";
 import useTrades from "@/hooks/useTrades";
@@ -332,6 +333,7 @@ export default function TradingDashboard() {
 
   const { engineOnline, balance: engineBalance } = useEngineState();
   const { positions: optionPositions, stats: optionStats } = useOptions();
+  const { positions: optionSellingPositions, stats: optionSellingStats } = useOptionsSelling();
   const { positions: niftyOptionPositions, stats: niftyOptionStats } = useNiftyOptions();
   const { positions: niftyStockPositions, stats: niftyStockStats } = useNiftyStocks();
   const market = useLiveBTCMarket();
@@ -823,11 +825,12 @@ export default function TradingDashboard() {
   const riskLevel = riskPct >= 80 ? "danger" : riskPct >= 50 ? "warning" : "safe";
   const riskLabel = riskLevel === "danger" ? "HIGH RISK" : riskLevel === "warning" ? "MODERATE" : "SAFE";
   const btcOptionsModuleActive = activeModule === "options" || activeModule === "chain";
+  const btcOptionsSellingModuleActive = activeModule === "options-selling";
   const niftyOptionsModuleActive = activeModule === "nifty";
   const niftyStocksModuleActive = activeModule === "niftyStocks";
-  const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive;
-  const selectedOptionsStats = niftyOptionsModuleActive ? niftyOptionStats : optionStats;
-  const selectedOptionPositions = niftyOptionsModuleActive ? niftyOptionPositions : optionPositions;
+  const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive || btcOptionsSellingModuleActive;
+  const selectedOptionsStats = btcOptionsSellingModuleActive ? optionSellingStats : niftyOptionsModuleActive ? niftyOptionStats : optionStats;
+  const selectedOptionPositions = btcOptionsSellingModuleActive ? optionSellingPositions : niftyOptionsModuleActive ? niftyOptionPositions : optionPositions;
   const optionEquity = selectedOptionsStats?.equity ?? INITIAL_OPTIONS_BALANCE;
   const optionSessionPnl = optionEquity - INITIAL_OPTIONS_BALANCE;
   const optionOpenPositions = Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
@@ -836,6 +839,14 @@ export default function TradingDashboard() {
   const niftyStocksSessionPnl = niftyStocksEquity - INITIAL_BALANCE;
   const niftyStocksOpenPositions = Math.max(niftyStockStats?.openPositions ?? 0, niftyStockPositions.length);
   const niftyStocksOnline = niftyStockStats !== null || niftyStockPositions.length > 0;
+
+  const optionsHeaderMarketLabel = btcOptionsSellingModuleActive ? "BTC SELLING" : niftyOptionsModuleActive ? "NIFTY 50" : "BTC";
+  const optionsHeaderMarketCode = btcOptionsSellingModuleActive ? "SELL" : niftyOptionsModuleActive ? "N50" : "OPT";
+  const optionsHeaderAccountLabel = btcOptionsSellingModuleActive ? "BTC options selling paper account" : niftyOptionsModuleActive ? "NIFTY 50 options paper account" : "BTC options paper account";
+  const optionsHeaderCurrencyCode = niftyOptionsModuleActive ? "INR" : "USD";
+  const optionsHeaderLocale = niftyOptionsModuleActive ? "en-IN" : "en-US";
+  const optionsHeaderOnlineLabel = btcOptionsSellingModuleActive ? "Selling engine live — collecting theta decay on BTC options" : niftyOptionsModuleActive ? "Options engine live on NSE NIFTY 50 spot data" : undefined;
+  const optionsHeaderDetailLabel = btcOptionsSellingModuleActive ? `${optionOpenPositions} open short option positions in the selling account` : niftyOptionsModuleActive ? `${optionOpenPositions} open NIFTY 50 option positions in the separate NIFTY account` : undefined;
 
   return (
     <main className="gmail-shell space-y-5">
@@ -849,13 +860,18 @@ export default function TradingDashboard() {
           equity={optionEquity}
           dailyPnL={optionSessionPnl}
           openPositions={optionOpenPositions}
-          marketLabel={niftyOptionsModuleActive ? "NIFTY 50" : "BTC"}
-          marketCode={niftyOptionsModuleActive ? "N50" : "OPT"}
-          accountLabel={niftyOptionsModuleActive ? "NIFTY 50 options paper account" : "BTC options paper account"}
-          currencyCode={niftyOptionsModuleActive ? "INR" : "USD"}
-          locale={niftyOptionsModuleActive ? "en-IN" : "en-US"}
-          onlineLabel={niftyOptionsModuleActive ? "Options engine live on NSE NIFTY 50 spot data" : undefined}
-          detailLabel={niftyOptionsModuleActive ? `${optionOpenPositions} open NIFTY 50 option positions in the separate NIFTY account` : undefined}
+          marketLabel={optionsHeaderMarketLabel}
+          marketCode={optionsHeaderMarketCode}
+          accountLabel={optionsHeaderAccountLabel}
+          currencyCode={optionsHeaderCurrencyCode}
+          locale={optionsHeaderLocale}
+          onlineLabel={optionsHeaderOnlineLabel}
+          detailLabel={optionsHeaderDetailLabel}
+          workspaceTitle={btcOptionsSellingModuleActive ? "RAIG BTC Options Selling Workspace" : undefined}
+          accountBadgeLabel={btcOptionsSellingModuleActive ? "Selling Account" : undefined}
+          equityLabel={btcOptionsSellingModuleActive ? "Selling Equity" : undefined}
+          pnlLabel={btcOptionsSellingModuleActive ? "Selling PnL" : undefined}
+          openLabel={btcOptionsSellingModuleActive ? "Open Shorts" : undefined}
         />
       ) : niftyStocksModuleActive ? (
         <OptionsAccountHeader
