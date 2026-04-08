@@ -1,0 +1,504 @@
+"use client";
+import { useEffect, useState } from "react";
+import useMCXEngine from "@/hooks/useMCXEngine";
+import type { MCXPosition, MCXTrade, MCXStrategyStatus, MCXCommodityQuote } from "@/hooks/useMCXEngine";
+import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
+import { formatShortDate, formatShortTime } from "@/lib/time";
+
+const INITIAL_MCX_BALANCE = 1_000_000;
+
+// ── Formatters ───────────────────────────────────────────────────────────────
+
+function fmtINR(n: number, opts: { signed?: boolean; decimals?: number } = {}) {
+  const { signed = false, decimals = 2 } = opts;
+  const abs = Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  if (signed) return `${n >= 0 ? "+" : "-"}₹${abs}`;
+  return `₹${abs}`;
+}
+
+function fmtPct(n: number, signed = false, decimals = 1) {
+  const s = signed ? (n >= 0 ? "+" : "") : "";
+  return `${s}${Math.abs(n).toFixed(decimals)}%`;
+}
+
+function fmt(n: number, d = 2) {
+  return n.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+
+function formatElapsedSeconds(total: number) {
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s}s`;
+}
+
+function formatDuration(entryTime: string, exitTime: string) {
+  const diff = Math.max(0, Math.floor((new Date(exitTime).getTime() - new Date(entryTime).getTime()) / 1000));
+  const h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function fmtMaybeDate(v?: string) {
+  if (!v) return "-";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "-";
+  return `${formatShortDate(v)} ${formatShortTime(v)}`;
+}
+
+// ── Design primitives ────────────────────────────────────────────────────────
+
+function CompactMetric({ label, value, detail, accent = "" }: { label: string; value: string; detail?: string; accent?: string }) {
+  return (
+    <div className="metric-card flex min-h-[104px] flex-col justify-between gap-3">
+      <div>
+        <div className="metric-label">{label}</div>
+        <div className={`metric-value ${accent}`}>{value}</div>
+      </div>
+      <div className="text-xs" style={{ color: "var(--text-secondary)", minHeight: 18 }}>{detail ?? ""}</div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className="summary-card flex min-h-[112px] flex-col justify-between gap-3">
+      <div className="summary-label">{label}</div>
+      <div className={`summary-value ${accent}`}>{value}</div>
+    </div>
+  );
+}
+
+type BadgeTone = "neutral" | "positive" | "negative" | "info" | "warning";
+function BadgePill({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
+  const map: Record<BadgeTone, string> = {
+    neutral:  "border-zinc-200 bg-white text-zinc-600",
+    positive: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    negative: "border-rose-200 bg-rose-50 text-rose-700",
+    info:     "border-blue-200 bg-blue-50 text-blue-700",
+    warning:  "border-amber-200 bg-amber-50 text-amber-700",
+  };
+  return <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${map[tone]}`}>{label}</span>;
+}
+
+function TypeBadge({ type }: { type: string }) {
+  return (
+    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${
+      type === "CALL" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-600" : "border-rose-500/25 bg-rose-500/10 text-rose-600"
+    }`}>{type}</span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    READY:       "border-emerald-200 bg-emerald-50 text-emerald-700",
+    IN_POSITION: "border-blue-200 bg-blue-50 text-blue-700",
+    COOLING:     "border-amber-200 bg-amber-50 text-amber-700",
+    WARMING:     "border-zinc-200 bg-zinc-50 text-zinc-600",
+  };
+  return <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${map[status] ?? "border-zinc-200 bg-zinc-50 text-zinc-500"}`}>{status.replace("_", " ")}</span>;
+}
+
+function ExitBadge({ reason }: { reason: string }) {
+  const map: Record<string, string> = {
+    TP:     "border-emerald-200 bg-emerald-50 text-emerald-700",
+    SL:     "border-rose-200 bg-rose-50 text-rose-700",
+    EXPIRY: "border-zinc-200 bg-zinc-50 text-zinc-600",
+  };
+  return <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${map[reason] ?? "border-zinc-200 bg-zinc-50 text-zinc-500"}`}>{reason}</span>;
+}
+
+function PremiumBar({ entry, current }: { entry: number; current: number }) {
+  const pct = entry > 0 ? Math.min(200, Math.max(0, (current / entry) * 100)) : 0;
+  return (
+    <div className="w-full max-w-[80px]">
+      <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "var(--border)" }}>
+        <div className={`h-full rounded-full transition-all ${current >= entry ? "bg-emerald-500" : "bg-rose-500"}`}
+          style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Commodity quote card ─────────────────────────────────────────────────────
+
+function CommodityCard({ quote }: { quote: MCXCommodityQuote }) {
+  const commodity = MCX_COMMODITIES.find((c) => c.id === quote.id);
+  const isUp = quote.change >= 0;
+  const hasData = quote.ltp > 0;
+
+  return (
+    <div className={`rounded-2xl border p-4 ${commodity?.borderClass ?? "border-zinc-700/40"} ${commodity?.bgClass ?? "bg-zinc-900/40"}`}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">{commodity?.sector ?? ""}</div>
+          <div className={`text-sm font-bold mt-0.5 ${commodity?.colorClass ?? "text-white"}`}>{quote.name}</div>
+        </div>
+        <div className={`text-[10px] font-bold rounded-full px-2 py-0.5 border ${
+          hasData
+            ? isUp ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-rose-500/30 bg-rose-500/10 text-rose-400"
+            : "border-zinc-600/40 bg-zinc-800/40 text-zinc-500"
+        }`}>
+          {hasData ? (isUp ? "+" : "") + fmtPct(quote.changePct, false) : "—"}
+        </div>
+      </div>
+      <div className={`text-xl font-bold font-mono ${hasData ? (isUp ? "text-emerald-300" : "text-rose-300") : "text-zinc-500"}`}>
+        {hasData ? fmt(quote.ltp, 2) : "Connecting…"}
+      </div>
+      {hasData && (
+        <div className="mt-1 text-[10px] font-mono text-zinc-500 space-y-0.5">
+          <div className="flex gap-2">
+            <span>O: {fmt(quote.open, 1)}</span>
+            <span className="text-emerald-600">H: {fmt(quote.high, 1)}</span>
+            <span className="text-rose-600">L: {fmt(quote.low, 1)}</span>
+          </div>
+        </div>
+      )}
+      <div className="mt-2 flex items-center gap-1.5">
+        <div className={`h-1.5 w-1.5 rounded-full ${quote.barCount >= 15 ? "bg-emerald-400" : "bg-amber-400"} animate-pulse`} />
+        <span className="text-[9px] text-zinc-500 font-mono">{quote.barCount >= 15 ? `${quote.barCount} bars` : `Warming ${quote.barCount}/15`}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Positions panel ──────────────────────────────────────────────────────────
+
+function PositionsPanel({ positions }: { positions: MCXPosition[] }) {
+  const unrealized = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+        <span className="pill-green">LIVE</span>
+        RUNNING COMMODITY OPTION POSITIONS
+        <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>({positions.length} active)</span>
+      </h2>
+
+      {positions.length === 0 ? (
+        <div className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
+          style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          No open positions — engine is scanning for entry signals across 5 commodities.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>
+              {positions.filter((p) => p.optionType === "CALL").length} calls | {positions.filter((p) => p.optionType === "PUT").length} puts
+            </span>
+            <span className="rounded-full border px-3 py-1 text-xs font-medium"
+              style={{ background: unrealized >= 0 ? "var(--green-dim)" : "var(--red-dim)", color: unrealized >= 0 ? "var(--green)" : "var(--red)", borderColor: unrealized >= 0 ? "rgba(24,128,56,0.14)" : "rgba(217,48,37,0.14)" }}>
+              Unrealized {fmtINR(unrealized, { signed: true })}
+            </span>
+          </div>
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1000 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  {["Commodity", "Strategy", "Type", "Strike", "Entry ₹", "Mark ₹", "TP ₹", "SL ₹", "Lots", "Cost", "Unrealized P&L", "Progress"].map((h) => (
+                    <th key={h} className="px-4 py-3 font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((pos) => {
+                  const commodity = MCX_COMMODITIES.find((c) => c.id === pos.commodityId);
+                  return (
+                    <tr key={pos.id} className="border-t hover:bg-white/[0.02]" style={{ borderColor: "var(--border)" }}>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-bold ${commodity?.colorClass ?? "text-white"}`}>{pos.commodityName}</span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-zinc-400">{pos.strategyName}</td>
+                      <td className="px-4 py-3"><TypeBadge type={pos.optionType} /></td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-300">{fmt(pos.strike, 1)}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-300">{fmt(pos.entryPremium, 2)}</td>
+                      <td className="px-4 py-3 font-mono text-xs font-bold" style={{ color: pos.currentPremium >= pos.entryPremium ? "var(--green)" : "var(--red)" }}>
+                        {fmt(pos.currentPremium, 2)}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-emerald-600">{fmt(pos.tpPremium, 2)}</td>
+                      <td className="px-4 py-3 font-mono text-[11px] text-rose-600">{fmt(pos.slPremium, 2)}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-400">{pos.lots}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-400">{fmtINR(pos.costBasis)}</td>
+                      <td className="px-4 py-3 font-mono text-xs font-bold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                        {fmtINR(pos.unrealizedPnl, { signed: true })} ({fmtPct(pos.costBasis > 0 ? (pos.unrealizedPnl / pos.costBasis) * 100 : 0, true)})
+                      </td>
+                      <td className="px-4 py-3"><PremiumBar entry={pos.entryPremium} current={pos.currentPremium} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Strategy roster ──────────────────────────────────────────────────────────
+
+function StrategyRoster({ strategies }: { strategies: MCXStrategyStatus[] }) {
+  const byCommodity = MCX_COMMODITIES.map((c) => ({
+    commodity: c,
+    strats: strategies.filter((s) => s.commodityId === c.id),
+  }));
+
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+        STRATEGY ROSTER
+        <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
+          ({strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length}/{strategies.length} active)
+        </span>
+      </h2>
+
+      <div className="space-y-6">
+        {byCommodity.map(({ commodity, strats }) => (
+          <div key={commodity.id}>
+            <div className={`text-[10px] font-bold uppercase tracking-[0.18em] mb-2 ${commodity.colorClass}`}>
+              {commodity.name} — {commodity.sector}
+            </div>
+            <div className="overflow-x-auto rounded-[18px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <table className="w-full text-left text-sm" style={{ minWidth: 720 }}>
+                <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                  <tr className="text-[11px] uppercase tracking-[0.12em]">
+                    {["#", "Strategy", "Type", "Status", "Trades", "Win Rate", "Total P&L"].map((h) => (
+                      <th key={h} className="px-3 py-2 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {strats.map((s) => (
+                    <tr key={s.strategyId} className="border-t hover:bg-white/[0.02]" style={{ borderColor: "var(--border)" }}>
+                      <td className="px-3 py-2 font-mono text-[11px] text-zinc-500">{s.strategyId}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-zinc-300">{s.name}</td>
+                      <td className="px-3 py-2"><TypeBadge type={s.optionType} /></td>
+                      <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
+                      <td className="px-3 py-2 font-mono text-xs text-zinc-400">{s.totalTrades}</td>
+                      <td className="px-3 py-2 font-mono text-xs" style={{ color: s.winRate >= 50 ? "var(--green)" : s.totalTrades > 0 ? "var(--red)" : "var(--text-muted)" }}>
+                        {s.totalTrades > 0 ? fmtPct(s.winRate) : "-"}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs font-bold" style={{ color: s.totalPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                        {s.totalPnl !== 0 ? fmtINR(s.totalPnl, { signed: true }) : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Trade ledger ─────────────────────────────────────────────────────────────
+
+function TradeLedger({ trades }: { trades: MCXTrade[] }) {
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+        COMPLETED TRADES
+        <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>({trades.length} trades)</span>
+      </h2>
+
+      {trades.length === 0 ? (
+        <div className="flex min-h-[120px] items-center justify-center rounded-[20px] border border-dashed px-6 py-10 text-center text-sm"
+          style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          No completed trades yet.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <table className="w-full text-left text-sm" style={{ minWidth: 1020 }}>
+            <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+              <tr className="text-[11px] uppercase tracking-[0.12em]">
+                {["Time", "Commodity", "Strategy", "Type", "Strike", "Entry ₹", "Exit ₹", "Lots", "Net P&L", "Return", "Duration", "Exit"].map((h) => (
+                  <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map((t) => {
+                const commodity = MCX_COMMODITIES.find((c) => c.id === t.commodityId);
+                return (
+                  <tr key={t.id} className="border-t hover:bg-white/[0.02]" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-3 py-2 font-mono text-[11px] text-zinc-500">{fmtMaybeDate(t.exitTime)}</td>
+                    <td className="px-3 py-2"><span className={`text-xs font-bold ${commodity?.colorClass ?? "text-white"}`}>{t.commodityName}</span></td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-zinc-400">{t.strategyName}</td>
+                    <td className="px-3 py-2"><TypeBadge type={t.optionType} /></td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-300">{fmt(t.strike, 1)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-400">{fmt(t.entryPremium, 2)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-300">{fmt(t.exitPremium, 2)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-zinc-400">{t.lots}</td>
+                    <td className="px-3 py-2 font-mono text-xs font-bold" style={{ color: t.netPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                      {fmtINR(t.netPnl, { signed: true })}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs" style={{ color: t.returnPct >= 0 ? "var(--green)" : "var(--red)" }}>
+                      {fmtPct(t.returnPct, true)}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-zinc-500">{formatDuration(t.entryTime, t.exitTime)}</td>
+                    <td className="px-3 py-2"><ExitBadge reason={t.exitReason} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function MCXCommodityScalper() {
+  const [sessionStartedAt] = useState(() => Date.now());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const { positions, trades, strategies, stats, quotes, clearAll } = useMCXEngine(refreshKey);
+
+  useEffect(() => {
+    const id = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleReset = () => {
+    if (!confirm("Reset the MCX Commodity paper account to ₹1,000,000? All history will be cleared.")) return;
+    setIsResetting(true);
+    clearAll();
+    setRefreshKey((k) => k + 1);
+    setIsResetting(false);
+  };
+
+  // ── Derived values ───────────────────────────────────────────────────────
+  const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
+  const closedPnl = stats.totalPnl;
+  const unrealized = stats.unrealizedPnl;
+  const sessionPnl = closedPnl + unrealized;
+  const equity = INITIAL_MCX_BALANCE + sessionPnl;
+  const totalReturnPct = (sessionPnl / INITIAL_MCX_BALANCE) * 100;
+  const grossProfit = trades.filter((t) => t.netPnl > 0).reduce((s, t) => s + t.netPnl, 0);
+  const grossLoss = trades.filter((t) => t.netPnl < 0).reduce((s, t) => s + Math.abs(t.netPnl), 0);
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+  const winRate = stats.winRate;
+  const openCount = stats.openPositions;
+  const callCount = positions.filter((p) => p.optionType === "CALL").length;
+  const putCount = positions.filter((p) => p.optionType === "PUT").length;
+  const activeStrategies = strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length;
+  const totalStrategies = strategies.length;
+  const feedOk = quotes.some((q) => q.ltp > 0);
+
+  const bestCommodity = [...quotes].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))[0];
+
+  return (
+    <main className="space-y-5 pb-10">
+      {/* ── Header ── */}
+      <div className="glass-panel px-6 py-7 md:px-7 relative overflow-hidden">
+        <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+        <div className="flex flex-col gap-5">
+          <div className="px-1">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">MCX Commodity Scalper</div>
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <div className={`text-[clamp(2.2rem,4vw,3rem)] font-semibold leading-none tracking-tight ${sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                {fmtINR(equity)}
+              </div>
+              <div className={`pb-1 text-xl font-semibold leading-none ${sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                {sessionPnl >= 0 ? "+" : ""}{fmtPct(totalReturnPct, false)}
+              </div>
+            </div>
+            <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+              Session P&L {fmtINR(sessionPnl, { signed: true })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+            <div className="flex flex-wrap gap-2">
+              <BadgePill label={feedOk ? "MCX Feed Active" : "Feed: Connecting…"} tone={feedOk ? "positive" : "warning"} />
+              <BadgePill label={`${activeStrategies}/${totalStrategies} Strategies Live`} tone="info" />
+              <BadgePill label="5 Commodities" tone="neutral" />
+              <BadgePill label="Paper Trading Only" tone="warning" />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" disabled={isResetting} className="btn-primary text-sm"
+                onClick={() => {
+                  if (!confirm("Clear completed MCX trades and strategy stats? Open positions and balance will be kept.")) return;
+                  clearAll();
+                  setRefreshKey((k) => k + 1);
+                }}>
+                Clear Trades
+              </button>
+              <button type="button" onClick={handleReset} disabled={isResetting} className="btn-danger text-sm">
+                {isResetting ? "Resetting…" : "Reset Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Commodity price grid ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        {quotes.map((q) => <CommodityCard key={q.id} quote={q} />)}
+      </div>
+
+      {/* ── Summary metrics ── */}
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <CompactMetric
+          label="Session Runtime"
+          value={sessionRuntime}
+          detail={`${activeStrategies} strategies scanning`}
+          accent="text-zinc-900"
+        />
+        <CompactMetric
+          label="Closed P&L"
+          value={fmtINR(closedPnl, { signed: true })}
+          detail={`${stats.totalTrades} completed trade${stats.totalTrades !== 1 ? "s" : ""}`}
+          accent={closedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}
+        />
+        <CompactMetric
+          label="Unrealized P&L"
+          value={fmtINR(unrealized, { signed: true })}
+          detail={`${openCount} of ${activeStrategies} slots open${callCount > 0 || putCount > 0 ? ` (${callCount}C/${putCount}P)` : ""}`}
+          accent={unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}
+        />
+        <CompactMetric
+          label="Win Rate"
+          value={stats.totalTrades > 0 ? fmtPct(winRate) : "—"}
+          detail={`${stats.totalWins}W / ${stats.totalLosses}L · PF ${profitFactor > 0 ? fmt(profitFactor) : "—"}`}
+          accent={winRate >= 50 ? "text-emerald-600" : stats.totalTrades > 0 ? "text-rose-600" : "text-zinc-500"}
+        />
+      </div>
+
+      {/* ── 7 summary cards ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7 mt-1">
+        <SummaryCard label="Account Equity" value={fmtINR(equity)} accent={equity >= INITIAL_MCX_BALANCE ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Cash Balance" value={fmtINR(stats.balance)} accent="text-zinc-700" />
+        <SummaryCard label="Total Return" value={fmtPct(totalReturnPct, true)} accent={totalReturnPct >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Open Positions" value={String(openCount)} accent="text-blue-600" />
+        <SummaryCard label="Total Trades" value={String(stats.totalTrades)} accent="text-zinc-700" />
+        <SummaryCard label="Gross Profit" value={fmtINR(grossProfit)} accent="text-emerald-600" />
+        <SummaryCard label="Gross Loss" value={fmtINR(grossLoss)} accent="text-rose-600" />
+      </div>
+
+      {/* ── Live positions ── */}
+      <PositionsPanel positions={positions} />
+
+      {/* ── Strategy roster ── */}
+      <StrategyRoster strategies={strategies} />
+
+      {/* ── Trade ledger ── */}
+      <TradeLedger trades={trades} />
+
+      {/* ── Footer ── */}
+      <div className="glass-panel px-5 py-4 text-center">
+        <p className="text-[11px] leading-5" style={{ color: "var(--text-muted)" }}>
+          MCX commodity paper account · Simplified Black-Scholes option premium model · Angel One SmartAPI live MCX feed ·
+          ₹1,000,000 starting balance · 5 commodities (Crude Oil, Gold Mini, Silver Mini, Natural Gas, Copper) ·
+          {bestCommodity && bestCommodity.ltp > 0 ? ` Most active: ${bestCommodity.name} (${fmtPct(Math.abs(bestCommodity.changePct))} move) ·` : ""}
+          {" "}20 strategies · Paper trading only — no real orders placed
+        </p>
+      </div>
+    </main>
+  );
+}

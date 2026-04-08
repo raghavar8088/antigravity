@@ -1,0 +1,725 @@
+"use client";
+
+/**
+ * useMCXEngine
+ *
+ * Fully autonomous, client-side MCX commodity option scalping engine.
+ * - Polls /api/mcx/ltp every 5 seconds for all 5 commodities
+ * - Seeds 1-min bars from /api/mcx/candles on mount
+ * - Runs 20 signal-driven strategies (4 per commodity × 5 commodities)
+ * - Paper option positions with delta-based mark-to-market, TP/SL auto-exit
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MCX_COMMODITIES, MCX_COMMODITY_MAP, type MCXCommodity } from "@/lib/mcxCommodities";
+import type { MCXLTPItem } from "@/app/api/mcx/ltp/route";
+import type { MCXCandle } from "@/app/api/mcx/candles/route";
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const INITIAL_BALANCE = 1_000_000;
+const MAX_CONCURRENT = 8;
+const MAX_BARS = 200;
+const TICK_MS = 5_000;
+
+// ─── Public types ─────────────────────────────────────────────────────────────
+
+export type MCXPosition = {
+  id: string;
+  commodityId: string;
+  commodityName: string;
+  strategyId: number;
+  strategyName: string;
+  optionType: "CALL" | "PUT";
+  strike: number;
+  entryPremium: number;
+  currentPremium: number;
+  tpPremium: number;
+  slPremium: number;
+  quantity: number;
+  lots: number;
+  costBasis: number;
+  entryPrice: number;
+  currentPrice: number;
+  entryTime: string;
+  unrealizedPnl: number;
+  iv: number;
+  delta: number;
+};
+
+export type MCXTrade = {
+  id: string;
+  commodityId: string;
+  commodityName: string;
+  strategyId: number;
+  strategyName: string;
+  optionType: "CALL" | "PUT";
+  strike: number;
+  entryPremium: number;
+  exitPremium: number;
+  lots: number;
+  costBasis: number;
+  netPnl: number;
+  returnPct: number;
+  entryPrice: number;
+  exitPrice: number;
+  entryTime: string;
+  exitTime: string;
+  exitReason: string;
+};
+
+export type MCXStrategyStatus = {
+  strategyId: number;
+  name: string;
+  commodityId: string;
+  commodityName: string;
+  optionType: "CALL" | "PUT";
+  status: string;
+  score: number;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalPnl: number;
+  hasPosition: boolean;
+};
+
+export type MCXCommodityQuote = {
+  id: string;
+  name: string;
+  ltp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  change: number;
+  changePct: number;
+  barCount: number;
+};
+
+export type MCXStats = {
+  balance: number;
+  equity: number;
+  totalTrades: number;
+  openPositions: number;
+  totalWins: number;
+  totalLosses: number;
+  winRate: number;
+  totalPnl: number;
+  unrealizedPnl: number;
+};
+
+// ─── Strategy definitions ──────────────────────────────────────────────────────
+
+interface StratDef {
+  id: number;
+  name: string;
+  commodityId: string;
+  optionType: "CALL" | "PUT";
+  signal: string;
+  tpPct: number;
+  slPct: number;
+  cooldownSecs: number;
+  minBars: number;
+}
+
+const STRAT_DEFS: StratDef[] = [
+  // ── Crude Oil (volatile, trend-following + BB)
+  { id: 1,  name: "CrudeOil_MomBull_Call",    commodityId: "CRUDEOIL",    optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
+  { id: 2,  name: "CrudeOil_MomBear_Put",     commodityId: "CRUDEOIL",    optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
+  { id: 3,  name: "CrudeOil_BB_Lower_Call",   commodityId: "CRUDEOIL",    optionType: "CALL", signal: "BB_LOWER_TOUCH",  tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
+  { id: 4,  name: "CrudeOil_BB_Upper_Put",    commodityId: "CRUDEOIL",    optionType: "PUT",  signal: "BB_UPPER_TOUCH",  tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
+
+  // ── Gold Mini (mean-reverting, RSI + EMA)
+  { id: 5,  name: "Gold_RSI_OS_Call",         commodityId: "GOLDM",       optionType: "CALL", signal: "RSI_EXTREME_OS",  tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 6,  name: "Gold_RSI_OB_Put",          commodityId: "GOLDM",       optionType: "PUT",  signal: "RSI_EXTREME_OB",  tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 7,  name: "Gold_EMA_Bull_Call",        commodityId: "GOLDM",       optionType: "CALL", signal: "EMA_BULL_CROSS",  tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
+  { id: 8,  name: "Gold_EMA_Bear_Put",         commodityId: "GOLDM",       optionType: "PUT",  signal: "EMA_BEAR_CROSS",  tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
+
+  // ── Silver Mini (momentum + RSI)
+  { id: 9,  name: "Silver_MomBull_Call",      commodityId: "SILVERM",     optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
+  { id: 10, name: "Silver_MomBear_Put",       commodityId: "SILVERM",     optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
+  { id: 11, name: "Silver_RSI_OS_Call",       commodityId: "SILVERM",     optionType: "CALL", signal: "RSI_EXTREME_OS",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 12, name: "Silver_RSI_OB_Put",        commodityId: "SILVERM",     optionType: "PUT",  signal: "RSI_EXTREME_OB",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+
+  // ── Natural Gas (hyper-volatile, strong momentum + stochastic)
+  { id: 13, name: "NatGas_StrongMom_Call",    commodityId: "NATURALGAS",  optionType: "CALL", signal: "STRONG_BULL_MOM", tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
+  { id: 14, name: "NatGas_StrongMom_Put",     commodityId: "NATURALGAS",  optionType: "PUT",  signal: "STRONG_BEAR_MOM", tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
+  { id: 15, name: "NatGas_Stoch_OS_Call",     commodityId: "NATURALGAS",  optionType: "CALL", signal: "STOCH_OS",        tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
+  { id: 16, name: "NatGas_Stoch_OB_Put",      commodityId: "NATURALGAS",  optionType: "PUT",  signal: "STOCH_OB",        tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
+
+  // ── Copper (industrial trend-following + breakout)
+  { id: 17, name: "Copper_MomBull_Call",      commodityId: "COPPER",      optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
+  { id: 18, name: "Copper_MomBear_Put",       commodityId: "COPPER",      optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
+  { id: 19, name: "Copper_Resist_Break_Call", commodityId: "COPPER",      optionType: "CALL", signal: "RESIST_BREAK",    tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
+  { id: 20, name: "Copper_Support_Break_Put", commodityId: "COPPER",      optionType: "PUT",  signal: "SUPPORT_BREAK",   tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
+];
+
+// ─── Math helpers ──────────────────────────────────────────────────────────────
+
+function ema(bars: number[], period: number): number {
+  if (!bars.length) return 0;
+  const p = Math.min(period, bars.length);
+  const k = 2 / (p + 1);
+  let v = bars[0];
+  for (let i = 1; i < bars.length; i++) v = bars[i] * k + v * (1 - k);
+  return v;
+}
+
+function rsi(bars: number[], period: number): number {
+  if (bars.length < 2) return 50;
+  const slice = bars.slice(-period - 1);
+  let gains = 0, losses = 0;
+  for (let i = 1; i < slice.length; i++) {
+    const d = slice[i] - slice[i - 1];
+    if (d > 0) gains += d; else losses -= d;
+  }
+  if (losses === 0) return 100;
+  return 100 - 100 / (1 + gains / losses);
+}
+
+function sma(bars: number[], period: number): number {
+  const s = bars.slice(-period);
+  return s.reduce((a, v) => a + v, 0) / s.length;
+}
+
+function stddev(bars: number[]): number {
+  if (bars.length < 2) return 0;
+  const m = bars.reduce((s, v) => s + v, 0) / bars.length;
+  return Math.sqrt(bars.reduce((s, v) => s + (v - m) ** 2, 0) / bars.length);
+}
+
+function bbMid(bars: number[], p: number) { return sma(bars.slice(-p), p); }
+function bbUpper(bars: number[], p: number) { return bbMid(bars, p) + 2 * stddev(bars.slice(-p)); }
+function bbLower(bars: number[], p: number) { return bbMid(bars, p) - 2 * stddev(bars.slice(-p)); }
+
+function momentum(bars: number[], n: number): number {
+  if (bars.length <= n) return 0;
+  const prev = bars[bars.length - 1 - n];
+  return prev === 0 ? 0 : (bars[bars.length - 1] - prev) / prev;
+}
+
+function stochK(bars: number[], period: number): number {
+  if (bars.length < period) return 50;
+  const s = bars.slice(-period);
+  const lo = Math.min(...s), hi = Math.max(...s);
+  return hi === lo ? 50 : ((bars[bars.length - 1] - lo) / (hi - lo)) * 100;
+}
+
+function crossedAbove(bars: number[], fp: number, sp: number): boolean {
+  if (bars.length < sp + 2) return false;
+  const prev = bars.slice(0, -1);
+  return ema(bars, fp) > ema(bars, sp) && ema(prev, fp) <= ema(prev, sp);
+}
+
+function crossedBelow(bars: number[], fp: number, sp: number): boolean {
+  if (bars.length < sp + 2) return false;
+  const prev = bars.slice(0, -1);
+  return ema(bars, fp) < ema(bars, sp) && ema(prev, fp) >= ema(prev, sp);
+}
+
+// ─── Signal evaluator ─────────────────────────────────────────────────────────
+
+function evalSignal(signal: string, bars: number[], price: number): boolean {
+  const n = bars.length;
+  if (n < 2) return false;
+
+  switch (signal) {
+    case "STRONG_BULL_MOM": {
+      if (n < 15) return false;
+      return momentum(bars, 5) > 0.0010 && momentum(bars, 3) > 0.0004 && rsi(bars, 14) < 72;
+    }
+    case "BULL_MOM": {
+      if (n < 15) return false;
+      return momentum(bars, 5) > 0.0005 && rsi(bars, 14) < 68 && price > ema(bars, 9);
+    }
+    case "STRONG_BEAR_MOM": {
+      if (n < 15) return false;
+      return momentum(bars, 5) < -0.0010 && momentum(bars, 3) < -0.0004 && rsi(bars, 14) > 28;
+    }
+    case "BEAR_MOM": {
+      if (n < 15) return false;
+      return momentum(bars, 5) < -0.0005 && rsi(bars, 14) > 32 && price < ema(bars, 9);
+    }
+    case "RSI_EXTREME_OS":
+      if (n < 20) return false;
+      return rsi(bars, 14) < 28 && price > bars[n - 2];
+    case "RSI_EXTREME_OB":
+      if (n < 20) return false;
+      return rsi(bars, 14) > 72 && price < bars[n - 2];
+    case "BB_LOWER_TOUCH": {
+      if (n < 22) return false;
+      const bl = bbLower(bars, 20);
+      return bars[n - 2] <= bl * 1.003 && price > bars[n - 2] && price < bbMid(bars, 20) && rsi(bars, 14) < 52;
+    }
+    case "BB_UPPER_TOUCH": {
+      if (n < 22) return false;
+      const bu = bbUpper(bars, 20);
+      return bars[n - 2] >= bu * 0.997 && price < bars[n - 2] && price > bbMid(bars, 20) && rsi(bars, 14) > 48;
+    }
+    case "EMA_BULL_CROSS":
+      return crossedAbove(bars, 9, 21);
+    case "EMA_BEAR_CROSS":
+      return crossedBelow(bars, 9, 21);
+    case "RESIST_BREAK": {
+      if (n < 22) return false;
+      const hi = Math.max(...bars.slice(n - 21, n - 1));
+      return price > hi * 1.0004 && momentum(bars, 3) > 0.0004;
+    }
+    case "SUPPORT_BREAK": {
+      if (n < 22) return false;
+      const lo = Math.min(...bars.slice(n - 21, n - 1));
+      return price < lo * 0.9996 && momentum(bars, 3) < -0.0004;
+    }
+    case "STOCH_OS":
+      if (n < 20) return false;
+      return stochK(bars, 14) < 25 && price > bars[n - 2] && rsi(bars, 14) < 55;
+    case "STOCH_OB":
+      if (n < 20) return false;
+      return stochK(bars, 14) > 75 && price < bars[n - 2] && rsi(bars, 14) > 45;
+  }
+  return false;
+}
+
+// ─── Option premium model ──────────────────────────────────────────────────────
+
+function estimatePremium(price: number, iv: number, dteDays: number): number {
+  const T = dteDays / 252;
+  const premium = price * iv * Math.sqrt(T) * 0.4;
+  return Math.max(price * 0.003, Math.min(price * 0.03, premium));
+}
+
+function markPremium(
+  entryPremium: number,
+  entryPrice: number,
+  currentPrice: number,
+  optionType: "CALL" | "PUT",
+  barsHeld: number,
+): number {
+  const direction = optionType === "CALL" ? 1 : -1;
+  const premiumDelta = 0.5 * (currentPrice - entryPrice) * direction;
+  const thetaDecay = entryPremium * 0.002 * Math.max(0, barsHeld - 1);
+  return Math.max(entryPremium * 0.04, entryPremium + premiumDelta - thetaDecay);
+}
+
+// ─── Engine internal types ─────────────────────────────────────────────────────
+
+interface InternalPosition {
+  id: string;
+  strategyId: number;
+  strategyName: string;
+  commodityId: string;
+  optionType: "CALL" | "PUT";
+  strike: number;
+  entryPremium: number;
+  currentPremium: number;
+  tpPremium: number;
+  slPremium: number;
+  lots: number;
+  quantity: number; // lots × lotSize
+  costBasis: number;
+  entryPrice: number;
+  entryTime: number;
+  expiryTime: number;
+  unrealizedPnl: number;
+  iv: number;
+  barsHeld: number;
+}
+
+interface InternalStratState {
+  def: StratDef;
+  position: InternalPosition | null;
+  status: "WARMING" | "READY" | "IN_POSITION" | "COOLING";
+  cooldownUntil: number;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  winRate: number;
+  lastTradeAt: number;
+  score: number;
+}
+
+interface InternalTrade {
+  id: string;
+  strategyId: number;
+  strategyName: string;
+  commodityId: string;
+  optionType: "CALL" | "PUT";
+  strike: number;
+  entryPremium: number;
+  exitPremium: number;
+  lots: number;
+  costBasis: number;
+  netPnl: number;
+  returnPct: number;
+  entryPrice: number;
+  exitPrice: number;
+  entryTime: number;
+  exitTime: number;
+  exitReason: string;
+}
+
+interface CommodityState {
+  minuteBars: number[];
+  lastPrice: number;
+  lastMinute: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  change: number;
+  changePct: number;
+}
+
+interface EngineRef {
+  commodities: Map<string, CommodityState>;
+  strategies: InternalStratState[];
+  positions: Map<string, InternalPosition>;
+  trades: InternalTrade[];
+  balance: number;
+  seq: number;
+  totalWins: number;
+  totalLosses: number;
+  totalRealizedPnl: number;
+}
+
+function initEngine(): EngineRef {
+  const commodities = new Map<string, CommodityState>();
+  for (const c of MCX_COMMODITIES) {
+    commodities.set(c.id, { minuteBars: [], lastPrice: 0, lastMinute: 0, open: 0, high: 0, low: 0, close: 0, change: 0, changePct: 0 });
+  }
+  return {
+    commodities,
+    strategies: STRAT_DEFS.map((def) => ({
+      def, position: null, status: "WARMING", cooldownUntil: 0,
+      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, lastTradeAt: 0, score: 0,
+    })),
+    positions: new Map(),
+    trades: [],
+    balance: INITIAL_BALANCE,
+    seq: 0,
+    totalWins: 0,
+    totalLosses: 0,
+    totalRealizedPnl: 0,
+  };
+}
+
+function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: number, exitPrice: number, reason: string, now: number) {
+  const pos = strat.position;
+  if (!pos) return;
+  const netPnl = (exitPremium - pos.entryPremium) * pos.quantity;
+  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100;
+
+  eng.trades.unshift({
+    id: pos.id, strategyId: pos.strategyId, strategyName: pos.strategyName,
+    commodityId: pos.commodityId, optionType: pos.optionType, strike: pos.strike,
+    entryPremium: pos.entryPremium, exitPremium,
+    lots: pos.lots, costBasis: pos.costBasis,
+    netPnl, returnPct,
+    entryPrice: pos.entryPrice, exitPrice,
+    entryTime: pos.entryTime, exitTime: now, exitReason: reason,
+  });
+  if (eng.trades.length > 500) eng.trades.length = 500;
+
+  eng.balance += exitPremium * pos.quantity;
+  eng.totalRealizedPnl += netPnl;
+  strat.totalTrades++;
+  if (netPnl >= 0) { strat.wins++; eng.totalWins++; } else { strat.losses++; eng.totalLosses++; }
+  strat.totalPnl += netPnl;
+  strat.winRate = strat.totalTrades > 0 ? (strat.wins / strat.totalTrades) * 100 : 0;
+  strat.lastTradeAt = now;
+  strat.cooldownUntil = now + strat.def.cooldownSecs * 1000;
+  strat.status = "COOLING";
+  strat.position = null;
+  eng.positions.delete(pos.id);
+}
+
+function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number) {
+  const premium = estimatePremium(price, iv, commodity.dteDays);
+  const costPerLot = premium * commodity.lotSize;
+  let lots = costPerLot > 0 ? Math.max(1, Math.round(commodity.positionINR / costPerLot)) : 1;
+  let cost = premium * commodity.lotSize * lots;
+  // Reduce lots if not enough balance
+  while (cost > eng.balance && lots > 1) { lots--; cost = premium * commodity.lotSize * lots; }
+  if (eng.balance < cost) return;
+
+  eng.seq++;
+  eng.balance -= cost;
+  const id = `MCXOPT-${now}-${eng.seq}`;
+  const quantity = commodity.lotSize * lots;
+  const strike = Math.round(price / commodity.strikeStep) * commodity.strikeStep;
+
+  const pos: InternalPosition = {
+    id, strategyId: strat.def.id, strategyName: strat.def.name, commodityId: commodity.id,
+    optionType: strat.def.optionType, strike,
+    entryPremium: premium, currentPremium: premium,
+    tpPremium: premium * (1 + strat.def.tpPct),
+    slPremium: premium * (1 - strat.def.slPct),
+    lots, quantity, costBasis: cost,
+    entryPrice: price, entryTime: now,
+    expiryTime: now + commodity.dteDays * 24 * 60 * 60 * 1000,
+    unrealizedPnl: 0, iv, barsHeld: 0,
+  };
+
+  strat.position = pos;
+  strat.status = "IN_POSITION";
+  eng.positions.set(id, pos);
+}
+
+// ─── Display builders ─────────────────────────────────────────────────────────
+
+function buildPositions(eng: EngineRef): MCXPosition[] {
+  return eng.strategies
+    .filter((s) => s.position)
+    .map((s) => {
+      const pos = s.position!;
+      const commodity = MCX_COMMODITY_MAP.get(pos.commodityId);
+      return {
+        id: pos.id, commodityId: pos.commodityId, commodityName: commodity?.name ?? pos.commodityId,
+        strategyId: pos.strategyId, strategyName: pos.strategyName, optionType: pos.optionType,
+        strike: pos.strike, entryPremium: pos.entryPremium, currentPremium: pos.currentPremium,
+        tpPremium: pos.tpPremium, slPremium: pos.slPremium,
+        quantity: pos.quantity, lots: pos.lots, costBasis: pos.costBasis,
+        entryPrice: pos.entryPrice,
+        currentPrice: eng.commodities.get(pos.commodityId)?.lastPrice ?? pos.entryPrice,
+        entryTime: new Date(pos.entryTime).toISOString(), unrealizedPnl: pos.unrealizedPnl,
+        iv: pos.iv, delta: 0.5,
+      };
+    });
+}
+
+function buildTrades(eng: EngineRef): MCXTrade[] {
+  return eng.trades.slice(0, 200).map((t) => {
+    const commodity = MCX_COMMODITY_MAP.get(t.commodityId);
+    return {
+      id: t.id, commodityId: t.commodityId, commodityName: commodity?.name ?? t.commodityId,
+      strategyId: t.strategyId, strategyName: t.strategyName, optionType: t.optionType,
+      strike: t.strike, entryPremium: t.entryPremium, exitPremium: t.exitPremium,
+      lots: t.lots, costBasis: t.costBasis, netPnl: t.netPnl, returnPct: t.returnPct,
+      entryPrice: t.entryPrice, exitPrice: t.exitPrice,
+      entryTime: new Date(t.entryTime).toISOString(), exitTime: new Date(t.exitTime).toISOString(),
+      exitReason: t.exitReason,
+    };
+  });
+}
+
+function buildStrategies(eng: EngineRef): MCXStrategyStatus[] {
+  return eng.strategies.map((s) => {
+    const commodity = MCX_COMMODITY_MAP.get(s.def.commodityId);
+    return {
+      strategyId: s.def.id, name: s.def.name,
+      commodityId: s.def.commodityId, commodityName: commodity?.name ?? s.def.commodityId,
+      optionType: s.def.optionType,
+      status: s.status === "WARMING" ? "WARMING"
+            : s.status === "COOLING" ? "COOLING"
+            : s.status === "IN_POSITION" ? "IN_POSITION"
+            : "READY",
+      score: s.score, totalTrades: s.totalTrades, wins: s.wins, losses: s.losses,
+      winRate: s.winRate, totalPnl: s.totalPnl, hasPosition: !!s.position,
+    };
+  });
+}
+
+function buildStats(eng: EngineRef): MCXStats {
+  let openPositions = 0, unrealizedPnl = 0, openCost = 0;
+  for (const strat of eng.strategies) {
+    if (strat.position) {
+      openPositions++;
+      unrealizedPnl += strat.position.unrealizedPnl;
+      openCost += strat.position.costBasis;
+    }
+  }
+  const equity = eng.balance + openCost + unrealizedPnl;
+  const totalTrades = eng.strategies.reduce((s, st) => s + st.totalTrades, 0);
+  const totalWinRate = (eng.totalWins + eng.totalLosses) > 0
+    ? (eng.totalWins / (eng.totalWins + eng.totalLosses)) * 100 : 0;
+  return {
+    balance: eng.balance, equity, totalTrades, openPositions,
+    totalWins: eng.totalWins, totalLosses: eng.totalLosses,
+    winRate: totalWinRate, totalPnl: eng.totalRealizedPnl, unrealizedPnl,
+  };
+}
+
+function buildQuotes(eng: EngineRef): MCXCommodityQuote[] {
+  return MCX_COMMODITIES.map((c) => {
+    const state = eng.commodities.get(c.id)!;
+    return {
+      id: c.id, name: c.name, ltp: state.lastPrice,
+      open: state.open, high: state.high, low: state.low, close: state.close,
+      change: state.change, changePct: state.changePct, barCount: state.minuteBars.length,
+    };
+  });
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export default function useMCXEngine(_refreshKey = 0) {
+  const engRef = useRef<EngineRef>(initEngine());
+  const [positions, setPositions] = useState<MCXPosition[]>([]);
+  const [trades, setTrades] = useState<MCXTrade[]>([]);
+  const [strategies, setStrategies] = useState<MCXStrategyStatus[]>(() => buildStrategies(engRef.current));
+  const [stats, setStats] = useState<MCXStats>(() => buildStats(engRef.current));
+  const [quotes, setQuotes] = useState<MCXCommodityQuote[]>(() => buildQuotes(engRef.current));
+
+  const pushDisplayState = useCallback(() => {
+    const eng = engRef.current;
+    setPositions(buildPositions(eng));
+    setTrades(buildTrades(eng));
+    setStrategies(buildStrategies(eng));
+    setStats(buildStats(eng));
+    setQuotes(buildQuotes(eng));
+  }, []);
+
+  // ── Engine tick ──────────────────────────────────────────────────────────
+  const engineTick = useCallback(() => {
+    const eng = engRef.current;
+    const now = Date.now();
+    let openCount = eng.strategies.filter((s) => s.position).length;
+
+    // Mark open positions, check TP/SL/Expiry
+    for (const strat of eng.strategies) {
+      if (!strat.position) continue;
+      const pos = strat.position;
+      const state = eng.commodities.get(pos.commodityId);
+      if (!state || state.lastPrice <= 0) continue;
+      const price = state.lastPrice;
+      const commodity = MCX_COMMODITY_MAP.get(pos.commodityId)!;
+
+      pos.barsHeld++;
+      pos.currentPremium = markPremium(pos.entryPremium, pos.entryPrice, price, pos.optionType, pos.barsHeld);
+      pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
+
+      if (pos.currentPremium >= pos.tpPremium) {
+        closePosition(eng, strat, pos.tpPremium, price, "TP", now);
+        openCount--;
+      } else if (pos.currentPremium <= pos.slPremium) {
+        closePosition(eng, strat, pos.slPremium, price, "SL", now);
+        openCount--;
+      } else if (now >= pos.expiryTime) {
+        closePosition(eng, strat, pos.currentPremium, price, "EXPIRY", now);
+        openCount--;
+      } else {
+        void commodity; // suppress unused warning
+      }
+    }
+
+    // Evaluate signals
+    for (const strat of eng.strategies) {
+      if (strat.position) { strat.status = "IN_POSITION"; continue; }
+
+      if (strat.status === "COOLING") {
+        if (now < strat.cooldownUntil) continue;
+        strat.status = "READY";
+      }
+
+      const state = eng.commodities.get(strat.def.commodityId);
+      if (!state || state.lastPrice <= 0) { strat.status = "WARMING"; continue; }
+      const bars = state.minuteBars;
+
+      if (bars.length < strat.def.minBars) { strat.status = "WARMING"; continue; }
+      strat.status = "READY";
+
+      if (openCount >= MAX_CONCURRENT) continue;
+      if (eng.balance < 5000) continue;
+
+      const price = state.lastPrice;
+      const fires = evalSignal(strat.def.signal, bars, price);
+      strat.score = fires ? 75 : 0;
+
+      if (fires) {
+        const commodity = MCX_COMMODITY_MAP.get(strat.def.commodityId)!;
+        const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
+        const iv = recentStd > 0
+          ? Math.max(commodity.iv * 0.6, Math.min(commodity.iv * 2, (recentStd / price) * Math.sqrt(252 * 375)))
+          : commodity.iv;
+        openPosition(eng, strat, commodity, price, iv, now);
+        openCount++;
+      }
+    }
+
+    pushDisplayState();
+  }, [pushDisplayState]);
+
+  // ── Update commodity state from LTP poll ─────────────────────────────────
+  const feedLTP = useCallback((items: MCXLTPItem[]) => {
+    const eng = engRef.current;
+    const nowMinute = Math.floor(Date.now() / 60000);
+
+    for (const item of items) {
+      if (item.ltp <= 0) continue;
+      const state = eng.commodities.get(item.id);
+      if (!state) continue;
+      state.lastPrice = item.ltp;
+      state.open = item.open;
+      state.high = item.high;
+      state.low = item.low;
+      state.close = item.close;
+      state.change = item.change;
+      state.changePct = item.changePct;
+
+      // Build 1-min bars
+      if (nowMinute !== state.lastMinute) {
+        state.lastMinute = nowMinute;
+        state.minuteBars.push(item.ltp);
+        if (state.minuteBars.length > MAX_BARS) state.minuteBars.shift();
+      }
+    }
+  }, []);
+
+  // ── Poll LTP ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await fetch("/api/mcx/ltp");
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { ok: boolean; data?: MCXLTPItem[] };
+        if (data.ok && data.data) feedLTP(data.data);
+      } catch { /* silent */ }
+    };
+    void poll();
+    const id = setInterval(() => void poll(), TICK_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [feedLTP]);
+
+  // ── Seed historical candles for each commodity ────────────────────────────
+  useEffect(() => {
+    const seedAll = async () => {
+      for (const commodity of MCX_COMMODITIES) {
+        try {
+          const res = await fetch(`/api/mcx/candles?commodity=${commodity.id}&interval=ONE_MINUTE`);
+          if (!res.ok) continue;
+          const data = await res.json() as { ok: boolean; candles?: MCXCandle[] };
+          if (!data.ok || !data.candles?.length) continue;
+          const eng = engRef.current;
+          const state = eng.commodities.get(commodity.id);
+          if (!state || state.minuteBars.length > 0) continue; // don't overwrite live bars
+          const closes = data.candles.map((c) => c.close).filter((v) => v > 0);
+          state.minuteBars = closes.slice(-MAX_BARS);
+          state.lastPrice = closes[closes.length - 1] ?? 0;
+          const lastCandle = data.candles[data.candles.length - 1];
+          state.lastMinute = Math.floor((lastCandle?.time ?? 0) / 60000);
+        } catch { /* silent */ }
+        // Small delay between requests to avoid hammering the API
+        await new Promise<void>((r) => setTimeout(r, 300));
+      }
+      pushDisplayState();
+    };
+    void seedAll();
+  }, [pushDisplayState]);
+
+  // ── Engine tick interval ──────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => void engineTick(), TICK_MS);
+    return () => clearInterval(id);
+  }, [engineTick]);
+
+  const clearAll = useCallback(() => {
+    engRef.current = initEngine();
+    pushDisplayState();
+  }, [pushDisplayState]);
+
+  return { positions, trades, strategies, stats, quotes, clearAll };
+}
