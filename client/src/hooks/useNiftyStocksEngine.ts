@@ -13,7 +13,7 @@ const MIN_BARS_SLOW = 22; // enough for EMA21 + Donchian20
 const SIGNAL_THRESHOLD = 62;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
-const ALLOCATION_INR = 10_000; // capital per option position (premium outlay)
+const ALLOCATION_INR = 10_000; // 1% of the initial capital budget per trade
 
 // ─── Strategy definitions ─────────────────────────────────────────────────────
 interface StratDef {
@@ -401,7 +401,7 @@ function evalSignal(signal: string, inp: SignalInputs): number {
 function computeShares(premium: number, lotSize: number): number {
   if (premium <= 0 || lotSize <= 0) return lotSize;
   const costPerLot = premium * lotSize;
-  const numLots = Math.max(1, Math.min(5, Math.floor(ALLOCATION_INR / costPerLot)));
+  const numLots = Math.max(1, Math.floor(ALLOCATION_INR / costPerLot));
   return numLots * lotSize;
 }
 

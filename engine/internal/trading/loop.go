@@ -19,7 +19,6 @@ import (
 
 const (
 	minExecutionSizeBTC       = 0.01
-	maxAllocationUsage        = 0.60
 	sizeChangeEpsilonBTC      = 1e-9
 	futuresInitialCapitalUSD  = 1000000.0
 	futuresPositionCapitalPct = 0.01
@@ -634,7 +633,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		// Enforce a fixed 1% capital budget per trade for the futures engine.
-		baseSize := sig.TargetSize
+		originalSize := sig.TargetSize
+		baseSize := originalSize
 		if normalizedSize := targetSizeForCapital(currentPrice); normalizedSize > 0 {
 			baseSize = normalizedSize
 		}
@@ -647,25 +647,15 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		sig.TargetSize = baseSize
 		sig.Confidence = adjustConfidenceByExecutionWeight(sig.Confidence, executionWeight)
 
-		// Capital cap: keep each strategy within a fraction of its allocation bucket.
-		if currentPrice > 0 {
-			if stats, ok := o.tracker.GetStats(aggSig.StrategyName); ok && stats.Allocation > 0 {
-				maxSizeByAllocation := (stats.Allocation * maxAllocationUsage) / currentPrice
-				if maxSizeByAllocation > 0 && sig.TargetSize > maxSizeByAllocation {
-					sig.TargetSize = maxSizeByAllocation
-				}
-			}
-		}
-
 		if sig.TargetSize < minExecutionSizeBTC {
 			log.Printf("[SIZE ENGINE] %s size too small after scaling (%.6f BTC) — skipping",
 				aggSig.StrategyName, sig.TargetSize)
 			continue
 		}
 
-		if sig.TargetSize-baseSize > sizeChangeEpsilonBTC || baseSize-sig.TargetSize > sizeChangeEpsilonBTC {
-			log.Printf("[SIZE ENGINE] %s capped %.4f -> %.4f BTC under the 1%% capital rule",
-				aggSig.StrategyName, baseSize, sig.TargetSize)
+		if sig.TargetSize-originalSize > sizeChangeEpsilonBTC || originalSize-sig.TargetSize > sizeChangeEpsilonBTC {
+			log.Printf("[SIZE ENGINE] %s normalized %.4f -> %.4f BTC to the fixed 1%% capital rule",
+				aggSig.StrategyName, originalSize, sig.TargetSize)
 		}
 
 		baseStopLossPct := sig.StopLossPct

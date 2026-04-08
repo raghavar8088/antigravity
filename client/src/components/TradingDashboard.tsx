@@ -880,18 +880,20 @@ export default function TradingDashboard() {
               { key: "options", label: "BTC Option Scalper" },
               { key: "chain", label: "BTC Option Chain" },
               { key: "dashboard", label: "BTC Equity" },
-              { key: "engine", label: "Trade Engine" },
-              { key: "history", label: "Trade History" },
               { key: "liveDataLab", label: "Live Data Lab" },
-            ].map((module) => (
-              <button
-                key={module.key}
-                onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
-                className={`groww-tab${activeModule === module.key ? " active" : ""}`}
-              >
-                {module.label}
-              </button>
-            ))}
+            ].map((module) => {
+              const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
+              const isActive = isBtcEquityGroup || activeModule === module.key;
+              return (
+                <button
+                  key={module.key}
+                  onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
+                  className={`groww-tab${isActive ? " active" : ""}`}
+                >
+                  {module.label}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div
@@ -899,11 +901,11 @@ export default function TradingDashboard() {
           style={{ color: "var(--text-secondary)" }}
         >
           {activeModule === "dashboard"
-            ? "FUTURES ACCOUNT — BTC price, live futures positions, equity, PnL, and key stats inside the separate $1,000,000 paper account with 1% capital per position. Options data is fully separate."
+            ? "BTC EQUITY — Overview: BTC price, live futures positions, equity, PnL, and key stats inside the separate $1,000,000 paper account."
             : activeModule === "engine"
-            ? "FUTURES ACCOUNT — Advanced charts, AI panels, controls, strategy analytics, and logs for the BTC futures desk, sized at 1% of the initial $1,000,000 capital per position. No options data here."
+            ? "BTC EQUITY — Trade Engine: Advanced charts, AI panels, controls, strategy analytics, and logs for the BTC futures desk."
             : activeModule === "history"
-            ? "FUTURES ACCOUNT — Completed futures trade ledger and strategy breakdown for the 1% per-position BTC futures account. Options trades are logged separately."
+            ? "BTC EQUITY — Trade History: Completed futures trade ledger and strategy breakdown for the 1% per-position BTC futures account."
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "nifty"
@@ -917,6 +919,28 @@ export default function TradingDashboard() {
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
+
+      {(activeModule === "dashboard" || activeModule === "engine" || activeModule === "history") && (
+        <div className="glass-panel px-5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mr-1">BTC Equity</span>
+            {[
+              { key: "dashboard", label: "Overview" },
+              { key: "engine",    label: "Trade Engine" },
+              { key: "history",   label: "Trade History" },
+            ].map((sub) => (
+              <button
+                key={sub.key}
+                type="button"
+                onClick={() => setActiveModule(sub.key as "dashboard" | "engine" | "history")}
+                className={`groww-tab${activeModule === sub.key ? " active" : ""}`}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeModule === "dashboard" && (
         <div className="space-y-5">
