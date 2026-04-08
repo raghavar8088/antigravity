@@ -111,25 +111,25 @@ func buildAllStrategies() []StrategyDef {
 			Name: "MomentumBurst_Bull_Put_Sell", Type: Put,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 800, Signal: "STRONG_BULL_MOMENTUM", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "STRONG_BULL_MOMENTUM", CooldownSecs: 600,
 		},
 		{
 			Name: "MomentumBurst_Bear_Call_Sell", Type: Call,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 800, Signal: "STRONG_BEAR_MOMENTUM", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "STRONG_BEAR_MOMENTUM", CooldownSecs: 600,
 		},
 		{
 			Name: "ConsecCandle_Bull_Put_Sell", Type: Put,
 			StrikePctOTM: 0.006, ExpiryMinutes: 75,
 			TakeProfitPct: 0.65, StopLossPct: 1.30,
-			PositionUSD: 650, Signal: "CONSEC_BULL_BARS", CooldownSecs: 420,
+			PositionUSD: 10000, Signal: "CONSEC_BULL_BARS", CooldownSecs: 420,
 		},
 		{
 			Name: "ConsecCandle_Bear_Call_Sell", Type: Call,
 			StrikePctOTM: 0.006, ExpiryMinutes: 75,
 			TakeProfitPct: 0.65, StopLossPct: 1.30,
-			PositionUSD: 650, Signal: "CONSEC_BEAR_BARS", CooldownSecs: 420,
+			PositionUSD: 10000, Signal: "CONSEC_BEAR_BARS", CooldownSecs: 420,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -140,25 +140,25 @@ func buildAllStrategies() []StrategyDef {
 			Name: "RSIRecovery_Bull_Put_Sell", Type: Put,
 			StrikePctOTM: 0.012, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.10,
-			PositionUSD: 850, Signal: "RSI_OVERSOLD_EXTREME", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "RSI_OVERSOLD_EXTREME", CooldownSecs: 900,
 		},
 		{
 			Name: "RSIFade_Bear_Call_Sell", Type: Call,
 			StrikePctOTM: 0.012, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.10,
-			PositionUSD: 850, Signal: "RSI_OVERBOUGHT_EXTREME", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "RSI_OVERBOUGHT_EXTREME", CooldownSecs: 900,
 		},
 		{
 			Name: "Overextension_Fade_Call_Sell", Type: Call,
 			StrikePctOTM: 0.010, ExpiryMinutes: 120, // Longer expiry to allow for revert
 			TakeProfitPct: 0.70, StopLossPct: 1.50,
-			PositionUSD: 700, Signal: "OVEREXTENSION_FADE_UP", CooldownSecs: 1200,
+			PositionUSD: 10000, Signal: "OVEREXTENSION_FADE_UP", CooldownSecs: 1200,
 		},
 		{
 			Name: "Overextension_Fade_Put_Sell", Type: Put,
 			StrikePctOTM: 0.010, ExpiryMinutes: 120,
 			TakeProfitPct: 0.70, StopLossPct: 1.50,
-			PositionUSD: 700, Signal: "OVEREXTENSION_FADE_DOWN", CooldownSecs: 1200,
+			PositionUSD: 10000, Signal: "OVEREXTENSION_FADE_DOWN", CooldownSecs: 1200,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -169,25 +169,25 @@ func buildAllStrategies() []StrategyDef {
 			Name: "EMA_BullCross_Put_Sell", Type: Put,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 600, Signal: "EMA_BULL_CROSS", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "EMA_BULL_CROSS", CooldownSecs: 600,
 		},
 		{
 			Name: "EMA_BearCross_Call_Sell", Type: Call,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 600, Signal: "EMA_BEAR_CROSS", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "EMA_BEAR_CROSS", CooldownSecs: 600,
 		},
 		{
 			Name: "Resistance_Breakout_Put_Sell", Type: Put,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.25,
-			PositionUSD: 700, Signal: "RESISTANCE_BREAK", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "RESISTANCE_BREAK", CooldownSecs: 720,
 		},
 		{
 			Name: "Support_Breakdown_Call_Sell", Type: Call,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.25,
-			PositionUSD: 700, Signal: "SUPPORT_BREAK", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "SUPPORT_BREAK", CooldownSecs: 720,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -198,31 +198,31 @@ func buildAllStrategies() []StrategyDef {
 			Name: "Capitulation_VReversal_Put_Sell", Type: Put,
 			StrikePctOTM: 0.012, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.40,
-			PositionUSD: 900, Signal: "CAPITULATION_RECOVERY", CooldownSecs: 1200,
+			PositionUSD: 10000, Signal: "CAPITULATION_RECOVERY", CooldownSecs: 1200,
 		},
 		{
 			Name: "SessionOpen_Bull_Put_Sell", Type: Put,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.55, StopLossPct: 1.10,
-			PositionUSD: 650, Signal: "SESSION_OPEN_BULL", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "SESSION_OPEN_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "SessionOpen_Bear_Call_Sell", Type: Call,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.55, StopLossPct: 1.10,
-			PositionUSD: 650, Signal: "SESSION_OPEN_BEAR", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "SESSION_OPEN_BEAR", CooldownSecs: 720,
 		},
 		{
 			Name: "VolCompress_Breakout_Bull_Put", Type: Put,
 			StrikePctOTM: 0.009, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.50,
-			PositionUSD: 750, Signal: "VOL_COMPRESS_BULL", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "VOL_COMPRESS_BULL", CooldownSecs: 900,
 		},
 		{
 			Name: "VolCompress_Breakout_Bear_Call", Type: Call,
 			StrikePctOTM: 0.009, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.50,
-			PositionUSD: 750, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 900,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -233,25 +233,25 @@ func buildAllStrategies() []StrategyDef {
 			Name: "VWAP_Continuation_Bull_Put", Type: Put,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 600, Signal: "VWAP_ABOVE", CooldownSecs: 540,
+			PositionUSD: 10000, Signal: "VWAP_ABOVE", CooldownSecs: 540,
 		},
 		{
 			Name: "VWAP_Continuation_Bear_Call", Type: Call,
 			StrikePctOTM: 0.007, ExpiryMinutes: 75,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 600, Signal: "VWAP_BELOW", CooldownSecs: 540,
+			PositionUSD: 10000, Signal: "VWAP_BELOW", CooldownSecs: 540,
 		},
 		{
 			Name: "TripleConfluence_Bull_Put", Type: Put,
 			StrikePctOTM: 0.010, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.30,
-			PositionUSD: 800, Signal: "TRIPLE_BULL", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "TRIPLE_BULL", CooldownSecs: 900,
 		},
 		{
 			Name: "TripleConfluence_Bear_Call", Type: Call,
 			StrikePctOTM: 0.010, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.30,
-			PositionUSD: 800, Signal: "TRIPLE_BEAR", CooldownSecs: 900,
+			PositionUSD: 10000, Signal: "TRIPLE_BEAR", CooldownSecs: 900,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -262,25 +262,25 @@ func buildAllStrategies() []StrategyDef {
 			Name: "TrendAlignment_Bull_Put", Type: Put,
 			StrikePctOTM: 0.007, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 700, Signal: "EMA_ABOVE_BOTH", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "EMA_ABOVE_BOTH", CooldownSecs: 600,
 		},
 		{
 			Name: "TrendAlignment_Bear_Call", Type: Call,
 			StrikePctOTM: 0.007, ExpiryMinutes: 90,
 			TakeProfitPct: 0.60, StopLossPct: 1.20,
-			PositionUSD: 700, Signal: "EMA_BELOW_BOTH", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "EMA_BELOW_BOTH", CooldownSecs: 600,
 		},
 		{
 			Name: "BBSqueeze_Release_Bull_Put", Type: Put,
 			StrikePctOTM: 0.008, ExpiryMinutes: 75,
 			TakeProfitPct: 0.65, StopLossPct: 1.25,
-			PositionUSD: 620, Signal: "BB_SQUEEZE_BULL", CooldownSecs: 540,
+			PositionUSD: 10000, Signal: "BB_SQUEEZE_BULL", CooldownSecs: 540,
 		},
 		{
 			Name: "BBSqueeze_Release_Bear_Call", Type: Call,
 			StrikePctOTM: 0.008, ExpiryMinutes: 75,
 			TakeProfitPct: 0.65, StopLossPct: 1.25,
-			PositionUSD: 620, Signal: "BB_SQUEEZE_BEAR", CooldownSecs: 540,
+			PositionUSD: 10000, Signal: "BB_SQUEEZE_BEAR", CooldownSecs: 540,
 		},
 
 		// ═══════════════════════════════════════════════════════════════════════
@@ -291,31 +291,31 @@ func buildAllStrategies() []StrategyDef {
 			Name: "MomentumVWAP_Pro_Bull_Put", Type: Put,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.65, StopLossPct: 1.25,
-			PositionUSD: 720, Signal: "MOMENTUM_VWAP_BULL", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "MOMENTUM_VWAP_BULL", CooldownSecs: 600,
 		},
 		{
 			Name: "MomentumVWAP_Pro_Bear_Call", Type: Call,
 			StrikePctOTM: 0.008, ExpiryMinutes: 90,
 			TakeProfitPct: 0.65, StopLossPct: 1.25,
-			PositionUSD: 720, Signal: "MOMENTUM_VWAP_BEAR", CooldownSecs: 600,
+			PositionUSD: 10000, Signal: "MOMENTUM_VWAP_BEAR", CooldownSecs: 600,
 		},
 		{
 			Name: "BreakoutTrend_Pro_Bull_Put", Type: Put,
 			StrikePctOTM: 0.009, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.35,
-			PositionUSD: 820, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "BreakdownTrend_Pro_Bear_Call", Type: Call,
 			StrikePctOTM: 0.009, ExpiryMinutes: 90,
 			TakeProfitPct: 0.70, StopLossPct: 1.35,
-			PositionUSD: 820, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
+			PositionUSD: 10000, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
 		},
 		{
 			Name: "Capitulation_Reclaim_Elite_Put", Type: Put,
 			StrikePctOTM: 0.014, ExpiryMinutes: 120, // Maximum safety for high conviction
 			TakeProfitPct: 0.80, StopLossPct: 1.60,
-			PositionUSD: 1000, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 1800,
+			PositionUSD: 10000, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 1800,
 		},
 	}
 }

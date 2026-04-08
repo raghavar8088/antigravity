@@ -20,7 +20,7 @@ import type {
 } from "@/hooks/useOptions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-const INITIAL_OPTIONS_BALANCE = 1_000;
+const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ── Formatters ──────────────────────────────────────────────────────────────
 
@@ -743,7 +743,7 @@ export default function OptionsSellingScalper({ actionsEnabled = false }: Props)
       <TradesPanel trades={trades} strategyNumbers={strategyNumbers} />
 
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Options writing (selling) paper account · Black-Scholes pricing · $1,000 starting capital · Theta decay strategy · Inverted PnL vs buying engine
+        Options writing (selling) paper account · Black-Scholes pricing · $1,000,000 starting capital · 1% capital per trade · Inverted PnL vs buying engine
       </div>
 
     </div>
