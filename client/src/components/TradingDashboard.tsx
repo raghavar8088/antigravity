@@ -14,6 +14,7 @@ import AIInsightPanel from "@/components/AIInsightPanel";
 import CommandCenter from "@/components/CommandCenter";
 import FearGreedWidget from "@/components/FearGreedWidget";
 import OptionsScalper from "@/components/OptionsScalper";
+import OptionsSellingScalper from "@/components/OptionsSellingScalper";
 import BTCOptionChain from "@/components/BTCOptionChain";
 import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
@@ -318,7 +319,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx">("options");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -899,6 +900,7 @@ export default function TradingDashboard() {
                 { key: "niftyStocks", label: "Nifty 50 Equity" },
                 { key: "mcx", label: "Commodity Scalper" },
                 { key: "options", label: "BTC Option Scalper" },
+                { key: "options-selling", label: "BTC Option Selling" },
                 { key: "chain", label: "BTC Option Chain" },
                 { key: "dashboard", label: "BTC Equity" },
                 { key: "liveDataLab", label: "Live Data Lab" },
@@ -908,7 +910,7 @@ export default function TradingDashboard() {
                 return (
                   <button
                     key={module.key}
-                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
+                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
                     className={`groww-tab${isActive ? " active" : ""}`}
                   >
                     {module.label}
@@ -1888,6 +1890,8 @@ export default function TradingDashboard() {
       )}
 
       {activeModule === "options" && <OptionsScalper actionsEnabled={actionsEnabled} />}
+
+      {activeModule === "options-selling" && <OptionsSellingScalper actionsEnabled={actionsEnabled} />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
