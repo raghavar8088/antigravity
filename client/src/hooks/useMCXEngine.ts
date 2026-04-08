@@ -109,6 +109,18 @@ export type MCXStats = {
   unrealizedPnl: number;
 };
 
+export type MCXCandleIssue = {
+  commodityId: string;
+  commodityName: string;
+  error: string;
+};
+
+export type MCXDiagnostics = {
+  ltpError: string;
+  candleIssues: MCXCandleIssue[];
+  lastLtpAt: string | null;
+};
+
 // ─── Strategy definitions ──────────────────────────────────────────────────────
 
 interface StratDef {
@@ -561,6 +573,11 @@ export default function useMCXEngine(_refreshKey = 0) {
   const [strategies, setStrategies] = useState<MCXStrategyStatus[]>(() => buildStrategies(engRef.current));
   const [stats, setStats] = useState<MCXStats>(() => buildStats(engRef.current));
   const [quotes, setQuotes] = useState<MCXCommodityQuote[]>(() => buildQuotes(engRef.current));
+  const [diagnostics, setDiagnostics] = useState<MCXDiagnostics>({
+    ltpError: "",
+    candleIssues: [],
+    lastLtpAt: null,
+  });
 
   const pushDisplayState = useCallback(() => {
     const eng = engRef.current;
@@ -674,10 +691,22 @@ export default function useMCXEngine(_refreshKey = 0) {
       if (cancelled) return;
       try {
         const res = await fetch("/api/mcx/ltp");
-        if (!res.ok || cancelled) return;
-        const data = await res.json() as { ok: boolean; data?: MCXLTPItem[] };
-        if (data.ok && data.data) feedLTP(data.data);
-      } catch { /* silent */ }
+        if (cancelled) return;
+        if (!res.ok) {
+          setDiagnostics((curr) => ({ ...curr, ltpError: `MCX LTP route returned ${res.status}` }));
+          return;
+        }
+        const data = await res.json() as { ok: boolean; data?: MCXLTPItem[]; error?: string };
+        if (!data.ok || !data.data) {
+          setDiagnostics((curr) => ({ ...curr, ltpError: data.error ?? "MCX LTP unavailable" }));
+          return;
+        }
+        feedLTP(data.data);
+        setDiagnostics((curr) => ({ ...curr, ltpError: "", lastLtpAt: new Date().toISOString() }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "MCX LTP request failed";
+        setDiagnostics((curr) => ({ ...curr, ltpError: message }));
+      }
     };
     void poll();
     const id = setInterval(() => void poll(), TICK_MS);
@@ -687,12 +716,28 @@ export default function useMCXEngine(_refreshKey = 0) {
   // ── Seed historical candles for each commodity ────────────────────────────
   useEffect(() => {
     const seedAll = async () => {
+      const nextIssues: MCXCandleIssue[] = [];
       for (const commodity of MCX_COMMODITIES) {
         try {
           const res = await fetch(`/api/mcx/candles?commodity=${commodity.id}&interval=ONE_MINUTE`);
-          if (!res.ok) continue;
-          const data = await res.json() as { ok: boolean; candles?: MCXCandle[] };
-          if (!data.ok || !data.candles?.length) continue;
+          if (!res.ok) {
+            nextIssues.push({
+              commodityId: commodity.id,
+              commodityName: commodity.name,
+              error: `MCX candles route returned ${res.status}`,
+            });
+            continue;
+          }
+          const data = await res.json() as { ok: boolean; candles?: MCXCandle[]; error?: string };
+          if (!data.ok) {
+            nextIssues.push({
+              commodityId: commodity.id,
+              commodityName: commodity.name,
+              error: data.error ?? "Historical candle warm-up failed",
+            });
+            continue;
+          }
+          if (!data.candles?.length) continue;
           const eng = engRef.current;
           const state = eng.commodities.get(commodity.id);
           if (!state || state.minuteBars.length > 0) continue; // don't overwrite live bars
@@ -701,10 +746,18 @@ export default function useMCXEngine(_refreshKey = 0) {
           state.lastPrice = closes[closes.length - 1] ?? 0;
           const lastCandle = data.candles[data.candles.length - 1];
           state.lastMinute = Math.floor((lastCandle?.time ?? 0) / 60000);
-        } catch { /* silent */ }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Historical candle warm-up failed";
+          nextIssues.push({
+            commodityId: commodity.id,
+            commodityName: commodity.name,
+            error: message,
+          });
+        }
         // Small delay between requests to avoid hammering the API
         await new Promise<void>((r) => setTimeout(r, 300));
       }
+      setDiagnostics((curr) => ({ ...curr, candleIssues: nextIssues }));
       pushDisplayState();
     };
     void seedAll();
@@ -721,5 +774,5 @@ export default function useMCXEngine(_refreshKey = 0) {
     pushDisplayState();
   }, [pushDisplayState]);
 
-  return { positions, trades, strategies, stats, quotes, clearAll };
+  return { positions, trades, strategies, stats, quotes, diagnostics, clearAll };
 }

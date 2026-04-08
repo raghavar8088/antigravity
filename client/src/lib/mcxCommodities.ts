@@ -8,6 +8,8 @@ export type MCXCommodity = {
   id: string;           // engine/routing key
   name: string;         // display name
   searchQuery: string;  // prefix for Angel One searchScrip
+  searchQueries?: string[]; // fallback search queries for searchScrip
+  symbolHints?: string[];   // preferred tradingsymbol prefixes after normalization
   unit: string;         // price unit label
   lotSize: number;      // units per lot (for option cost calculation)
   iv: number;           // typical annualized IV
@@ -25,6 +27,8 @@ export const MCX_COMMODITIES: MCXCommodity[] = [
     id: "CRUDEOIL",
     name: "Crude Oil",
     searchQuery: "CRUDEOIL",
+    searchQueries: ["CRUDEOIL", "CRUDE OIL"],
+    symbolHints: ["CRUDEOIL", "CRUDEOILM"],
     unit: "₹/bbl",
     lotSize: 100,
     iv: 0.35,
@@ -40,6 +44,8 @@ export const MCX_COMMODITIES: MCXCommodity[] = [
     id: "GOLDM",
     name: "Gold Mini",
     searchQuery: "GOLDM",
+    searchQueries: ["GOLDM", "GOLD MINI"],
+    symbolHints: ["GOLDM", "GOLDMINI"],
     unit: "₹/10g",
     lotSize: 1,
     iv: 0.14,
@@ -55,6 +61,8 @@ export const MCX_COMMODITIES: MCXCommodity[] = [
     id: "SILVERM",
     name: "Silver Mini",
     searchQuery: "SILVERM",
+    searchQueries: ["SILVERM", "SILVER MINI"],
+    symbolHints: ["SILVERM", "SILVERMINI"],
     unit: "₹/kg",
     lotSize: 5,
     iv: 0.22,
@@ -70,6 +78,8 @@ export const MCX_COMMODITIES: MCXCommodity[] = [
     id: "NATURALGAS",
     name: "Natural Gas",
     searchQuery: "NATURALGAS",
+    searchQueries: ["NATURALGAS", "NATURAL GAS"],
+    symbolHints: ["NATURALGAS", "NATURALGASM"],
     unit: "₹/mmbtu",
     lotSize: 1250,
     iv: 0.55,
@@ -85,6 +95,8 @@ export const MCX_COMMODITIES: MCXCommodity[] = [
     id: "COPPER",
     name: "Copper",
     searchQuery: "COPPER",
+    searchQueries: ["COPPER"],
+    symbolHints: ["COPPER", "COPPERM"],
     unit: "₹/kg",
     lotSize: 2500,
     iv: 0.22,

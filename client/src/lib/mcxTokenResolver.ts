@@ -1,0 +1,123 @@
+import { BASE_URL, commonHeaders } from "@/lib/angelAuth";
+import type { MCXCommodity } from "@/lib/mcxCommodities";
+
+type AngelSearchItem = {
+  tradingsymbol?: string;
+  symboltoken?: string;
+  expiry?: string;
+  instrumenttype?: string;
+  exch_seg?: string;
+};
+
+export type MCXResolvedToken = {
+  token: string;
+  tradingSymbol: string;
+  expiry: string;
+};
+
+function normalize(value: string | undefined): string {
+  return (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => !!value),
+    ),
+  );
+}
+
+function parseExpiry(expiry?: string): number {
+  if (!expiry) return Number.MAX_SAFE_INTEGER;
+  const timestamp = new Date(expiry).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
+}
+
+function isMCXFuture(item: AngelSearchItem): boolean {
+  return normalize(item.exch_seg) === "MCX" && normalize(item.instrumenttype).startsWith("FUT");
+}
+
+function getSymbolMatchScore(symbol: string, hints: string[]): number {
+  let score = 0;
+  for (const hint of hints) {
+    if (!hint) continue;
+    if (symbol === hint) score = Math.max(score, 500 + hint.length);
+    else if (symbol.startsWith(hint)) score = Math.max(score, 400 + hint.length);
+    else if (symbol.includes(hint)) score = Math.max(score, 250 + hint.length);
+  }
+  return score;
+}
+
+function buildSearchQueries(commodity: MCXCommodity): string[] {
+  const compactName = commodity.name.replace(/\s+/g, "");
+  return uniqueStrings([
+    commodity.searchQuery,
+    ...(commodity.searchQueries ?? []),
+    commodity.id,
+    compactName,
+    commodity.name,
+  ]);
+}
+
+function buildSymbolHints(commodity: MCXCommodity): string[] {
+  const compactName = commodity.name.replace(/\s+/g, "");
+  return uniqueStrings([
+    commodity.searchQuery,
+    ...(commodity.symbolHints ?? []),
+    commodity.id,
+    compactName,
+  ]).map((hint) => normalize(hint));
+}
+
+async function searchScrip(jwt: string, query: string): Promise<AngelSearchItem[]> {
+  const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/searchScrip`, {
+    method: "POST",
+    headers: commonHeaders(jwt),
+    body: JSON.stringify({ exchange: "MCX", searchscrip: query }),
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) return [];
+
+  const payload = await res.json() as { status?: boolean; data?: AngelSearchItem[] };
+  return payload.status && Array.isArray(payload.data) ? payload.data : [];
+}
+
+export async function resolveMCXFutureToken(jwt: string, commodity: MCXCommodity): Promise<MCXResolvedToken | null> {
+  const queries = buildSearchQueries(commodity);
+  const hints = buildSymbolHints(commodity);
+  const candidatesByToken = new Map<string, AngelSearchItem>();
+
+  for (const query of queries) {
+    try {
+      const results = await searchScrip(jwt, query);
+      for (const item of results) {
+        if (!item.symboltoken || candidatesByToken.has(item.symboltoken)) continue;
+        candidatesByToken.set(item.symboltoken, item);
+      }
+    } catch {
+      // Ignore individual query failures and keep trying the remaining aliases.
+    }
+  }
+
+  const futures = Array.from(candidatesByToken.values()).filter((item) => item.symboltoken && isMCXFuture(item));
+  if (!futures.length) return null;
+
+  const preferred = futures.filter((item) => getSymbolMatchScore(normalize(item.tradingsymbol), hints) > 0);
+  const ranked = (preferred.length ? preferred : futures).sort((a, b) => {
+    const scoreA = getSymbolMatchScore(normalize(a.tradingsymbol), hints);
+    const scoreB = getSymbolMatchScore(normalize(b.tradingsymbol), hints);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return parseExpiry(a.expiry) - parseExpiry(b.expiry);
+  });
+
+  const winner = ranked[0];
+  if (!winner?.symboltoken) return null;
+
+  return {
+    token: winner.symboltoken,
+    tradingSymbol: winner.tradingsymbol ?? commodity.searchQuery,
+    expiry: winner.expiry ?? "",
+  };
+}

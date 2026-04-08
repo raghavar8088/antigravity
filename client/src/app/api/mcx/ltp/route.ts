@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
 import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
+import { resolveMCXFutureToken } from "@/lib/mcxTokenResolver";
 
 // ── In-memory token cache (survives warm Vercel invocations) ──────────────────
 
@@ -17,57 +18,6 @@ const tokenCache: {
 
 const TOKEN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
-async function fetchToken(jwt: string, searchQuery: string): Promise<TokenEntry | null> {
-  try {
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/searchScrip`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({ exchange: "MCX", searchscrip: searchQuery }),
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return null;
-    const payload = await res.json() as {
-      status?: boolean;
-      data?: Array<{
-        tradingsymbol?: string;
-        symboltoken?: string;
-        expiry?: string;
-        instrumenttype?: string;
-        exch_seg?: string;
-      }>;
-    };
-    if (!payload.status || !Array.isArray(payload.data)) return null;
-
-    // Filter FUTCOM on MCX where tradingsymbol starts with searchQuery (exact prefix match)
-    const futures = payload.data.filter(
-      (d) =>
-        d.instrumenttype === "FUTCOM" &&
-        d.exch_seg === "MCX" &&
-        d.tradingsymbol?.toUpperCase().startsWith(searchQuery.toUpperCase()),
-    );
-    if (!futures.length) return null;
-
-    // Sort by expiry ascending (nearest first)
-    futures.sort((a, b) => {
-      const parseExp = (s: string | undefined) => {
-        if (!s) return 0;
-        try { return new Date(s).getTime(); } catch { return 0; }
-      };
-      return parseExp(a.expiry) - parseExp(b.expiry);
-    });
-
-    const first = futures[0];
-    if (!first.symboltoken) return null;
-    return {
-      token: first.symboltoken,
-      tradingSymbol: first.tradingsymbol ?? searchQuery,
-      expiry: first.expiry ?? "",
-    };
-  } catch {
-    return null;
-  }
-}
-
 async function getCachedTokens(jwt: string): Promise<Record<string, TokenEntry>> {
   const now = Date.now();
   if (tokenCache.fetchedAt > 0 && now - tokenCache.fetchedAt < TOKEN_CACHE_TTL) {
@@ -76,7 +26,7 @@ async function getCachedTokens(jwt: string): Promise<Record<string, TokenEntry>>
   // Fetch all tokens in parallel
   const entries = await Promise.all(
     MCX_COMMODITIES.map(async (c) => {
-      const entry = await fetchToken(jwt, c.searchQuery);
+      const entry = await resolveMCXFutureToken(jwt, c);
       return [c.id, entry] as [string, TokenEntry | null];
     }),
   );
@@ -84,8 +34,13 @@ async function getCachedTokens(jwt: string): Promise<Record<string, TokenEntry>>
   for (const [id, entry] of entries) {
     if (entry) data[id] = entry;
   }
-  tokenCache.data = data;
-  tokenCache.fetchedAt = now;
+  if (Object.keys(data).length > 0) {
+    tokenCache.data = data;
+    tokenCache.fetchedAt = now;
+  } else {
+    tokenCache.data = {};
+    tokenCache.fetchedAt = 0;
+  }
   return data;
 }
 
@@ -106,6 +61,22 @@ export type MCXLTPItem = {
   changePct: number;
 };
 
+type AngelMCXQuoteItem = {
+  symbolToken?: unknown;
+  symboltoken?: unknown;
+  ltp?: unknown;
+  lastPrice?: unknown;
+  open?: unknown;
+  high?: unknown;
+  low?: unknown;
+  close?: unknown;
+};
+
+function n(value: unknown): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+}
+
 export async function GET(): Promise<Response> {
   if (!isAngelConfigured()) {
     return NextResponse.json({ ok: false, error: `Not configured — set: ${angelMissingEnv()}`, data: [] });
@@ -114,10 +85,11 @@ export async function GET(): Promise<Response> {
   try {
     const jwt = await getAngelJWT();
     const tokens = await getCachedTokens(jwt);
+    const unresolved = MCX_COMMODITIES.filter((commodity) => !tokens[commodity.id]).map((commodity) => commodity.name);
 
     const tokenIds = Object.values(tokens).map((t) => t.token).filter(Boolean);
     if (!tokenIds.length) {
-      return NextResponse.json({ ok: false, error: "Could not resolve any MCX tokens", data: [] });
+      return NextResponse.json({ ok: false, error: `Could not resolve any MCX tokens for: ${unresolved.join(", ")}`, data: [] });
     }
 
     const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/market/v1/quote/`, {
@@ -133,32 +105,30 @@ export async function GET(): Promise<Response> {
 
     const payload = await res.json() as {
       status?: boolean;
+      message?: string;
+      errorcode?: string;
       data?: {
-        fetched?: Array<{
-          symbolToken?: string;
-          ltp?: number;
-          open?: number;
-          high?: number;
-          low?: number;
-          close?: number;
-        }>;
+        fetched?: AngelMCXQuoteItem[];
+        unfetched?: unknown[];
       };
     };
 
     if (!payload.status || !payload.data?.fetched) {
-      return NextResponse.json({ ok: false, error: "LTP response invalid", data: [] });
+      const msg = [payload.message, payload.errorcode].filter(Boolean).join(" ") || "LTP response invalid";
+      return NextResponse.json({ ok: false, error: msg, data: [] });
     }
 
-    const ltpByToken: Record<string, (typeof payload.data.fetched)[0]> = {};
+    const ltpByToken: Record<string, AngelMCXQuoteItem> = {};
     for (const item of payload.data.fetched) {
-      if (item.symbolToken) ltpByToken[item.symbolToken] = item;
+      const token = String(item.symbolToken ?? item.symboltoken ?? "");
+      if (token) ltpByToken[token] = item;
     }
 
     const results: MCXLTPItem[] = MCX_COMMODITIES.map((c) => {
       const entry = tokens[c.id];
       const ltp = entry ? ltpByToken[entry.token] : undefined;
-      const price = ltp?.ltp ?? 0;
-      const prev = ltp?.close ?? 0;
+      const price = n(ltp?.ltp ?? ltp?.lastPrice);
+      const prev = n(ltp?.close);
       const change = prev > 0 ? price - prev : 0;
       const changePct = prev > 0 ? (change / prev) * 100 : 0;
       return {
@@ -168,14 +138,26 @@ export async function GET(): Promise<Response> {
         tradingSymbol: entry?.tradingSymbol ?? "",
         expiry: entry?.expiry ?? "",
         ltp: price,
-        open: ltp?.open ?? 0,
-        high: ltp?.high ?? 0,
-        low: ltp?.low ?? 0,
+        open: n(ltp?.open),
+        high: n(ltp?.high),
+        low: n(ltp?.low),
         close: prev,
         change,
         changePct,
       };
     });
+
+    const positiveQuotes = results.filter((item) => item.ltp > 0);
+    if (!positiveQuotes.length) {
+      const resolvedSymbols = results
+        .filter((item) => item.token)
+        .map((item) => item.tradingSymbol || item.id);
+      return NextResponse.json({
+        ok: false,
+        error: `MCX quotes returned no positive prices for resolved symbols: ${resolvedSymbols.join(", ") || "none"}`,
+        data: [],
+      });
+    }
 
     return NextResponse.json({ ok: true, data: results });
   } catch (err) {

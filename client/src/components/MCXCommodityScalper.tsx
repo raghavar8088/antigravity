@@ -357,7 +357,7 @@ export default function MCXCommodityScalper() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
 
-  const { positions, trades, strategies, stats, quotes, clearAll } = useMCXEngine(refreshKey);
+  const { positions, trades, strategies, stats, quotes, diagnostics, clearAll } = useMCXEngine(refreshKey);
 
   useEffect(() => {
     const id = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -389,6 +389,19 @@ export default function MCXCommodityScalper() {
   const activeStrategies = strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length;
   const totalStrategies = strategies.length;
   const feedOk = quotes.some((q) => q.ltp > 0);
+  const feedBadgeTone: BadgeTone = feedOk ? "positive" : diagnostics.ltpError ? "negative" : "warning";
+  const feedBadgeLabel = feedOk ? "MCX Feed Active" : diagnostics.ltpError ? "Feed Error" : "Feed: Connecting…";
+  const primaryCandleIssue = diagnostics.candleIssues[0];
+  const primaryIssue = diagnostics.ltpError || (primaryCandleIssue ? `${primaryCandleIssue.commodityName}: ${primaryCandleIssue.error}` : "");
+  const issueHint = diagnostics.ltpError.includes("Not configured")
+    ? "Add the Angel One variables to the Next.js app env and restart or redeploy the client."
+    : diagnostics.ltpError.includes("Could not resolve any MCX tokens")
+      ? "Angel One login is likely working, but the MCX contract lookup did not find matching futures."
+      : diagnostics.ltpError
+        ? "Once the backend starts returning MCX prices, the engine will leave WARMING automatically."
+        : primaryCandleIssue
+          ? "Live prices can still warm the engine up, but historical seeding for this commodity is failing right now."
+          : "";
 
   const bestCommodity = [...quotes].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))[0];
 
@@ -415,7 +428,7 @@ export default function MCXCommodityScalper() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="flex flex-wrap gap-2">
-              <BadgePill label={feedOk ? "MCX Feed Active" : "Feed: Connecting…"} tone={feedOk ? "positive" : "warning"} />
+              <BadgePill label={feedBadgeLabel} tone={feedBadgeTone} />
               <BadgePill label={`${activeStrategies}/${totalStrategies} Strategies Live`} tone="info" />
               <BadgePill label="5 Commodities" tone="neutral" />
               <BadgePill label="Paper Trading Only" tone="warning" />
@@ -434,6 +447,24 @@ export default function MCXCommodityScalper() {
               </button>
             </div>
           </div>
+
+          {primaryIssue && (
+            <div className="mx-1 rounded-[20px] border px-4 py-3" style={{
+              borderColor: diagnostics.ltpError ? "rgba(217,48,37,0.18)" : "rgba(217,119,6,0.18)",
+              background: diagnostics.ltpError ? "rgba(254,242,242,0.92)" : "rgba(255,251,235,0.95)",
+            }}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: diagnostics.ltpError ? "var(--red)" : "#b45309" }}>
+                {diagnostics.ltpError ? "MCX Data Error" : "MCX Warm-up Warning"}
+              </div>
+              <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {primaryIssue}
+              </div>
+              <div className="mt-1 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
+                {issueHint}
+                {diagnostics.candleIssues.length > 1 ? ` ${diagnostics.candleIssues.length - 1} more commodity warm-up issue(s) are also present.` : ""}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

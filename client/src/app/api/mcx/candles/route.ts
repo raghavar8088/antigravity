@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
 import { MCX_COMMODITY_MAP } from "@/lib/mcxCommodities";
+import { resolveMCXFutureToken } from "@/lib/mcxTokenResolver";
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -14,33 +15,6 @@ function toISTString(date: Date): string {
 }
 
 export type MCXCandle = { time: number; open: number; high: number; low: number; close: number; volume: number };
-
-async function fetchToken(jwt: string, searchQuery: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/searchScrip`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({ exchange: "MCX", searchscrip: searchQuery }),
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return null;
-    const payload = await res.json() as {
-      status?: boolean;
-      data?: Array<{ tradingsymbol?: string; symboltoken?: string; instrumenttype?: string; exch_seg?: string; expiry?: string }>;
-    };
-    if (!payload.status || !Array.isArray(payload.data)) return null;
-    const futures = payload.data.filter(
-      (d) => d.instrumenttype === "FUTCOM" && d.exch_seg === "MCX" &&
-             d.tradingsymbol?.toUpperCase().startsWith(searchQuery.toUpperCase()),
-    );
-    if (!futures.length) return null;
-    futures.sort((a, b) => {
-      const p = (s?: string) => { try { return s ? new Date(s).getTime() : 0; } catch { return 0; } };
-      return p(a.expiry) - p(b.expiry);
-    });
-    return futures[0].symboltoken ?? null;
-  } catch { return null; }
-}
 
 export async function GET(request: Request) {
   if (!isAngelConfigured()) {
@@ -58,9 +32,9 @@ export async function GET(request: Request) {
 
   try {
     const jwt = await getAngelJWT();
-    const token = await fetchToken(jwt, commodity.searchQuery);
-    if (!token) {
-      return NextResponse.json({ ok: false, candles: [], count: 0, error: `Could not resolve token for ${commodityId}` });
+    const resolved = await resolveMCXFutureToken(jwt, commodity);
+    if (!resolved) {
+      return NextResponse.json({ ok: false, candles: [], count: 0, error: `Could not resolve token for ${commodityId} via Angel One searchScrip` });
     }
 
     const now = new Date();
@@ -79,7 +53,7 @@ export async function GET(request: Request) {
     const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/historical/v1/getCandleData`, {
       method: "POST",
       headers: commonHeaders(jwt),
-      body: JSON.stringify({ exchange: "MCX", symboltoken: token, interval, fromdate, todate }),
+      body: JSON.stringify({ exchange: "MCX", symboltoken: resolved.token, interval, fromdate, todate }),
       next: { revalidate: 0 },
     });
 
@@ -101,7 +75,7 @@ export async function GET(request: Request) {
       volume: Number(row[5]) || 0,
     }));
 
-    return NextResponse.json({ ok: true, candles, count: candles.length, commodityId, token });
+    return NextResponse.json({ ok: true, candles, count: candles.length, commodityId, token: resolved.token, tradingSymbol: resolved.tradingSymbol });
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
     return NextResponse.json({ ok: false, candles: [], count: 0, error: message });
