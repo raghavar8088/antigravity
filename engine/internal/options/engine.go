@@ -317,6 +317,26 @@ func (e *Engine) UpdatePrice(price float64) {
 	}
 }
 
+// InjectMinuteBars replaces the current minuteBars with the provided close prices.
+// Call this on startup or periodically to seed the engine with real historical bars.
+func (e *Engine) InjectMinuteBars(closePrices []float64) {
+	if len(closePrices) == 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Cap at 300 bars (5 hours)
+	if len(closePrices) > 300 {
+		closePrices = closePrices[len(closePrices)-300:]
+	}
+	e.minuteBars = make([]float64, len(closePrices))
+	copy(e.minuteBars, closePrices)
+	if len(closePrices) > 0 {
+		e.lastPrice = closePrices[len(closePrices)-1]
+	}
+	log.Printf("[OPTIONS ENGINE] Injected %d real minute bars (last=%.2f)", len(e.minuteBars), e.lastPrice)
+}
+
 // Run is the main trading loop. Call it in a goroutine.
 func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)

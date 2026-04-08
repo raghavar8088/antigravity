@@ -49,7 +49,7 @@ export default function useOptionChain() {
   const fetchChain = useCallback(async (expiry?: string) => {
     try {
       const qs = expiry ? `?expiry=${encodeURIComponent(expiry)}` : "";
-      const res = await fetch(`${API_URL}/api/option-chain${qs}`);
+      const res = await fetch(`/api/btc/option-chain${qs}`);
       if (res.ok) {
         const json: ChainData = await res.json();
         setData(json);

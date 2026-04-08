@@ -29,6 +29,10 @@ export default function useNiftyCandles() {
         if (data.ok && Array.isArray(data.candles)) {
           setCandles(data.candles);
           setError("");
+          // Seed the Go engine with real candle closes (best-effort, non-blocking)
+          if (data.candles.length > 5) {
+            fetch("/api/nifty/seed-engine", { method: "POST" }).catch(() => {});
+          }
         } else {
           setError(data.error ?? "Candle fetch failed");
         }

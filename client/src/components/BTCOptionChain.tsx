@@ -1,6 +1,6 @@
 "use client";
 import { useRef } from "react";
-import useOptionChain, { ChainRow, ChainLeg } from "@/hooks/useOptionChain";
+import useOptionChain, { ChainRow, ChainLeg, ChainData } from "@/hooks/useOptionChain";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -119,6 +119,7 @@ function ColHeader({ label, align = "right" }: { label: string; align?: "right" 
 export default function BTCOptionChain() {
   const { data, loading, selectedExpiry, selectExpiry } = useOptionChain();
   const atmRowRef = useRef<HTMLTableRowElement>(null);
+  const isDelta = !!(data && (data as ChainData & { source?: string }).source === "delta_exchange");
 
   const scrollToATM = () => {
     atmRowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -189,7 +190,12 @@ export default function BTCOptionChain() {
       </div>
 
       {/* ── Expiry selector ── */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {isDelta && (
+          <span className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-300">
+            Delta Exchange
+          </span>
+        )}
         {data.expiries.map((ex) => (
           <button
             key={ex.value}
@@ -284,7 +290,9 @@ export default function BTCOptionChain() {
 
       {/* ── Footer note ── */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Prices calculated via Black-Scholes · IV from BTC realised volatility · OI & Volume simulated · Auto-refresh every 3s
+        {isDelta
+          ? "Delta Exchange live data · Real IV & OI · Auto-refresh every 3s"
+          : "Prices calculated via Black-Scholes · IV from BTC realised volatility · OI & Volume simulated · Auto-refresh every 3s"}
       </div>
     </div>
   );

@@ -61,6 +61,7 @@ const initialPaperBalanceUSD = 1000000.0
 var (
 	deltaProbeClient    *marketdata.DeltaTickerClient
 	angelOneProbeClient *marketdata.AngelOneClient
+	niftyOptionsEngine  *options.Engine
 )
 
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
@@ -457,7 +458,7 @@ func main() {
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $1,000,000 paper account
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
-	niftyOptionsEngine := options.NewNiftyEngine()
+	niftyOptionsEngine = options.NewNiftyEngine()
 	niftyStocksEngine := niftystocks.NewEngine()
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
@@ -609,6 +610,7 @@ func main() {
 	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
 	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
 	http.HandleFunc("/api/nifty-option-chain", niftyOptionsEngine.HandleOptionChain)
+	http.HandleFunc("/api/nifty-options/inject-candles", handleNiftyInjectCandles)
 
 	http.HandleFunc("/api/nifty-stocks/positions", niftyStocksEngine.HandlePositions)
 	http.HandleFunc("/api/nifty-stocks/trades", niftyStocksEngine.HandleTrades)
@@ -1018,6 +1020,31 @@ func handleDeltaBTCProbe(w http.ResponseWriter, r *http.Request) {
 		"fetched_at":    quote.FetchedAt.Format(time.RFC3339),
 		"ok":            true,
 		"error":         "",
+	})
+}
+
+// handleNiftyInjectCandles receives a JSON body with close prices and injects them into the NIFTY options engine.
+func handleNiftyInjectCandles(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		ClosePrices []float64 `json:"close_prices"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.ClosePrices) == 0 {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	niftyOptionsEngine.InjectMinuteBars(body.ClosePrices)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":       true,
+		"injected": len(body.ClosePrices),
 	})
 }
 
