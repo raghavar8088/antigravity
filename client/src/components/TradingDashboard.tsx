@@ -879,7 +879,7 @@ export default function TradingDashboard() {
               { key: "mcx", label: "Commodity Scalper" },
               { key: "options", label: "BTC Option Scalper" },
               { key: "chain", label: "BTC Option Chain" },
-              { key: "dashboard", label: "Dashboard" },
+              { key: "dashboard", label: "BTC Equity" },
               { key: "engine", label: "Trade Engine" },
               { key: "history", label: "Trade History" },
               { key: "liveDataLab", label: "Live Data Lab" },
