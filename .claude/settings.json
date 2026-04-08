@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c npm run build)",
+      "Bash(cmd /c \"npm run build > build_out.txt 2>&1\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(python -c ':*)",
+      "Bash(netstat -ano)",
+      "Bash(cmd /c \"npm run build\")"
+    ]
+  }
+}

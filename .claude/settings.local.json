@@ -35,7 +35,20 @@
       "Bash(where pg_isready)",
       "Bash(curl -s -X POST http://localhost:8080/api/admin/reset -w \"\\\\nHTTP %{http_code}\")",
       "Bash(find \"c:/Trading apllication\" -name \"*.env*\" -not -path \"*/node_modules/*\" -exec grep -l \"API_URL\\\\|8080\" {} \\\\;)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s \"http://localhost:3000/_next/static/chunks/src_app_page_tsx_0xzeqb5._.js\")",
+      "Bash(curl -s \"http://localhost:3000/_next/static/chunks/src_13hk_s~._.js\")",
+      "Bash(node --check -)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(rm -rf \"c:/Trading apllication/client/.next\")",
+      "Bash(curl -s http://localhost:3001)",
+      "Bash(curl -s http://localhost:8080/api/nifty-stocks/strategies)",
+      "Bash(curl -v http://localhost:8080/api/nifty-stocks/strategies)",
+      "Bash(go run:*)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'{len\\(data\\)} strategies'\\); print\\(data[0]['name'] if data else 'none'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(len\\(d\\),'strategies'\\); [print\\(s['name'],s['status']\\) for s in d[:3]]\")",
+      "Bash(curl -s http://localhost:8080/api/nifty-stocks/__TRACKED_VAR__)"
     ]
   }
 }
