@@ -31,12 +31,30 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
 
 function parseExpiry(expiry?: string): number {
   if (!expiry) return Number.MAX_SAFE_INTEGER;
-  const timestamp = new Date(expiry).getTime();
-  return Number.isFinite(timestamp) ? timestamp : Number.MAX_SAFE_INTEGER;
+
+  // Standard JS-parseable formats (ISO, "30 Apr 2025", etc.)
+  const direct = new Date(expiry).getTime();
+  if (Number.isFinite(direct)) return direct;
+
+  // Angel One format: "30APR2025" → "30 Apr 2025"
+  const m = expiry.match(/^(\d{1,2})([A-Za-z]{3})(\d{4})$/);
+  if (m) {
+    const spaced = new Date(`${m[1]} ${m[2]} ${m[3]}`).getTime();
+    if (Number.isFinite(spaced)) return spaced;
+  }
+
+  return Number.MAX_SAFE_INTEGER;
 }
 
 function isMCXFuture(item: AngelSearchItem): boolean {
-  return normalize(item.exch_seg) === "MCX" && normalize(item.instrumenttype).startsWith("FUT");
+  if (normalize(item.exch_seg) !== "MCX") return false;
+
+  const instrType = normalize(item.instrumenttype);
+  const symbol = normalize(item.tradingsymbol);
+
+  // Accept if instrumenttype starts with FUT (e.g. FUTCOM, FUTCUR)
+  // OR if tradingsymbol itself contains FUT (Angel One sometimes omits instrumenttype)
+  return instrType.startsWith("FUT") || symbol.includes("FUT");
 }
 
 function getSymbolMatchScore(symbol: string, hints: string[]): number {
