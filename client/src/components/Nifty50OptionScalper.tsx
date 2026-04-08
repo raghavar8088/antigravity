@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import AngelOneOrderPanel from "@/components/AngelOneOrderPanel";
 import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import NiftyOptionChainPanel from "@/components/NiftyOptionChainPanel";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
@@ -1005,9 +1004,6 @@ export default function Nifty50OptionScalper() {
 
       {/* ── Trade history ── */}
       <TradesPanel trades={trades} strategyNumbers={strategyNumbers} />
-
-      {/* ── Angel One Live Orders ── */}
-      <AngelOneOrderPanel />
 
       {/* ── Footer note ── */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
