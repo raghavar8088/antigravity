@@ -4,12 +4,12 @@ import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import NiftyOptionChainPanel from "@/components/NiftyOptionChainPanel";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import useNiftyOptionChain from "@/hooks/useNiftyOptionChain";
-import useNiftyOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useNiftyOptions";
+import useNiftyOptionsEngine, { } from "@/hooks/useNiftyOptionsEngine";
+import type { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useNiftyOptions";
 import useNiftyVIX from "@/hooks/useNiftyVIX";
 import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ── Formatters ──────────────────────────────────────────────────────────────
@@ -687,7 +687,7 @@ export default function Nifty50OptionScalper() {
   const [isResetting, setIsResetting] = useState(false);
   const market = useNiftyMarket();
   const optionChain = useNiftyOptionChain();
-  const { positions, trades, strategies, stats, clearAll } = useNiftyOptions(refreshKey);
+  const { positions, trades, strategies, stats, clearAll } = useNiftyOptionsEngine(refreshKey);
   const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
   const { candles } = useNiftyCandles();
 
@@ -696,24 +696,15 @@ export default function Nifty50OptionScalper() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleReset = async () => {
+  const handleReset = () => {
     if (!confirm("Reset the NIFTY 50 options paper account to ₹1,000,000? All history will be cleared.")) {
       return;
     }
 
     setIsResetting(true);
-    clearAll(); // immediately zero out PnL in the UI
-    try {
-      const response = await fetch(`${API_URL}/api/nifty-options/reset`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error("reset failed");
-      }
-      setRefreshKey((k) => k + 1);
-    } catch {
-      window.alert("NIFTY 50 options account reset failed. Check engine connectivity.");
-    } finally {
-      setIsResetting(false);
-    }
+    clearAll();
+    setRefreshKey((k) => k + 1);
+    setIsResetting(false);
   };
 
   // ── Derived values ──────────────────────────────────────────────
@@ -820,10 +811,9 @@ export default function Nifty50OptionScalper() {
                   type="button"
                   disabled={isResetting}
                   className="btn-primary text-sm"
-                  onClick={async () => {
+                  onClick={() => {
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
-                    await fetch(`${API_URL}/api/nifty-options/clear-history`, { method: "POST" });
                     setRefreshKey((k) => k + 1);
                   }}
                 >
