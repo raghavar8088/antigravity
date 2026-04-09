@@ -704,3 +704,10 @@ body.combat-mode .stat-card {
     border-radius: 20px;
   }
 }
+
+
+.tradingview-module {
+  flex: 1;
+  min-height: 0;
+  height: calc(100vh - 160px);
+}

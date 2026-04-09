@@ -20,6 +20,7 @@ import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
 import MCXCommodityScalper from "@/components/MCXCommodityScalper";
 import LiveDataLabPanel from "@/components/LiveDataLabPanel";
+import TradingViewChart from "@/components/TradingViewChart";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -320,7 +321,7 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx">("options");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx" | "charts">("options");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -923,6 +924,7 @@ export default function TradingDashboard() {
                 { key: "options-selling", label: "BTC Option Selling" },
                 { key: "chain", label: "BTC Option Chain" },
                 { key: "dashboard", label: "BTC Equity" },
+                { key: "charts", label: "TradingView Charts" },
                 { key: "liveDataLab", label: "Live Data Lab" },
               ].map((module) => {
                 const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
@@ -930,7 +932,7 @@ export default function TradingDashboard() {
                 return (
                   <button
                     key={module.key}
-                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx")}
+                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx" | "charts")}
                     className={`groww-tab${isActive ? " active" : ""}`}
                   >
                     {module.label}
@@ -998,6 +1000,8 @@ export default function TradingDashboard() {
             ? "COMMODITY ACCOUNT — MCX commodity option scalper trading Crude Oil, Gold Mini, Silver Mini, Natural Gas, and Copper autonomously via Angel One SmartAPI. Separate ₹1,000,000 paper account. 20 strategies across 5 commodities."
             : activeModule === "liveDataLab"
             ? "PROBE — Live connectivity test for Delta Exchange (BTC perpetual) and Angel One SmartAPI (NIFTY 50). No trading. Isolated from all live feeds."
+            : activeModule === "charts"
+            ? "CHARTS — TradingView advanced charts for NIFTY 50, Bank Nifty, BTC, ETH, and MCX commodities. Switch symbols, timeframes, and chart styles interactively."
             : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
         </div>
       </div>
@@ -1922,6 +1926,12 @@ export default function TradingDashboard() {
       {activeModule === "mcx" && <MCXCommodityScalper actionsEnabled={actionsEnabled} />}
 
       {activeModule === "liveDataLab" && <LiveDataLabPanel />}
+
+      {activeModule === "charts" && (
+        <div className="tradingview-module">
+          <TradingViewChart />
+        </div>
+      )}
     </main>
   );
 }
