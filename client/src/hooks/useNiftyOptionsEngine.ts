@@ -22,7 +22,7 @@ const LOT_SIZE = 75;                  // NIFTY F&O lot size
 const STRIKE_STEP = 50;              // NIFTY strike increment
 const NIFTY_IV = 0.18;               // ~18% IV for NIFTY weekly options
 const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly expiry
-const MAX_CONCURRENT = 12;
+const MAX_CONCURRENT = 15;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
 const TICK_MS = 5_000;               // engine tick interval
 
@@ -88,6 +88,30 @@ const STRAT_DEFS: StratDef[] = [
   { id: 38, name: "RSI_Midline_Bear_Cross_Put",     category: "Mean Reversion", optionType: "PUT",  signal: "RSI_MID_BEAR",      tpPct: 0.60, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 13000 },
   { id: 39, name: "Squeeze_Momentum_Bear_Put",      category: "Volatility",     optionType: "PUT",  signal: "SQUEEZE_FIRE_BEAR", tpPct: 1.00, slPct: 0.35, cooldownSecs: 480,  minBars: 25, positionINR: 18000 },
   { id: 40, name: "Lower_High_Reversal_Put",        category: "Price Action",   optionType: "PUT",  signal: "LOWER_HIGH_BEAR",   tpPct: 0.70, slPct: 0.25, cooldownSecs: 300,  minBars: 15, positionINR: 14000 },
+
+  // ── Advanced CALL strategies (ids 41-50) ─────────────────────────────────
+  { id: 41, name: "Fib_618_Bounce_Call",            category: "Fibonacci",      optionType: "CALL", signal: "FIB_618_BULL",       tpPct: 0.85, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 16000 },
+  { id: 42, name: "Hammer_Candle_Call",             category: "Price Action",   optionType: "CALL", signal: "HAMMER_BULL",        tpPct: 0.70, slPct: 0.24, cooldownSecs: 240,  minBars: 10, positionINR: 14000 },
+  { id: 43, name: "Three_Bar_Thrust_Call",          category: "Momentum",       optionType: "CALL", signal: "THREE_BAR_BULL",     tpPct: 0.75, slPct: 0.25, cooldownSecs: 240,  minBars: 10, positionINR: 15000 },
+  { id: 44, name: "RSI_Divergence_Bull_Call",       category: "Divergence",     optionType: "CALL", signal: "RSI_DIVERGE_BULL",   tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 20, positionINR: 17000 },
+  { id: 45, name: "Vol_Contraction_Bull_Call",      category: "Volatility",     optionType: "CALL", signal: "VOL_CONTRACT_BULL",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 15000 },
+  { id: 46, name: "Inside_Bar_Breakout_Call",       category: "Price Action",   optionType: "CALL", signal: "INSIDE_BAR_BULL",    tpPct: 0.75, slPct: 0.26, cooldownSecs: 300,  minBars: 10, positionINR: 14000 },
+  { id: 47, name: "Momentum_Diverge_Recovery_Call", category: "Divergence",     optionType: "CALL", signal: "MOM_DIVERGE_BULL",   tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 16000 },
+  { id: 48, name: "Range_Expansion_Bull_Call",      category: "Volatility",     optionType: "CALL", signal: "RANGE_EXPAND_BULL",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 300,  minBars: 15, positionINR: 16000 },
+  { id: 49, name: "ADX_Trend_Strength_Call",        category: "Trend",          optionType: "CALL", signal: "ADX_BULL_TREND",     tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 30, positionINR: 18000 },
+  { id: 50, name: "Parabolic_SAR_Bull_Call",        category: "Trend",          optionType: "CALL", signal: "PSAR_BULL_FLIP",     tpPct: 0.75, slPct: 0.25, cooldownSecs: 300,  minBars: 15, positionINR: 15000 },
+
+  // ── Advanced PUT strategies (ids 51-60) ──────────────────────────────────
+  { id: 51, name: "Fib_618_Rejection_Put",          category: "Fibonacci",      optionType: "PUT",  signal: "FIB_618_BEAR",       tpPct: 0.85, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 16000 },
+  { id: 52, name: "ShootingStar_Candle_Put",        category: "Price Action",   optionType: "PUT",  signal: "SHOOTING_STAR_BEAR", tpPct: 0.70, slPct: 0.24, cooldownSecs: 240,  minBars: 10, positionINR: 14000 },
+  { id: 53, name: "Three_Bar_Thrust_Put",           category: "Momentum",       optionType: "PUT",  signal: "THREE_BAR_BEAR",     tpPct: 0.75, slPct: 0.25, cooldownSecs: 240,  minBars: 10, positionINR: 15000 },
+  { id: 54, name: "RSI_Divergence_Bear_Put",        category: "Divergence",     optionType: "PUT",  signal: "RSI_DIVERGE_BEAR",   tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 20, positionINR: 17000 },
+  { id: 55, name: "Vol_Contraction_Bear_Put",       category: "Volatility",     optionType: "PUT",  signal: "VOL_CONTRACT_BEAR",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 15000 },
+  { id: 56, name: "Inside_Bar_Breakdown_Put",       category: "Price Action",   optionType: "PUT",  signal: "INSIDE_BAR_BEAR",    tpPct: 0.75, slPct: 0.26, cooldownSecs: 300,  minBars: 10, positionINR: 14000 },
+  { id: 57, name: "Momentum_Diverge_Fade_Put",      category: "Divergence",     optionType: "PUT",  signal: "MOM_DIVERGE_BEAR",   tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 20, positionINR: 16000 },
+  { id: 58, name: "Range_Expansion_Bear_Put",       category: "Volatility",     optionType: "PUT",  signal: "RANGE_EXPAND_BEAR",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 300,  minBars: 15, positionINR: 16000 },
+  { id: 59, name: "ADX_Trend_Strength_Put",         category: "Trend",          optionType: "PUT",  signal: "ADX_BEAR_TREND",     tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 30, positionINR: 18000 },
+  { id: 60, name: "Parabolic_SAR_Bear_Put",         category: "Trend",          optionType: "PUT",  signal: "PSAR_BEAR_FLIP",     tpPct: 0.75, slPct: 0.25, cooldownSecs: 300,  minBars: 15, positionINR: 15000 },
 ];
 
 // ─── Math helpers (ported from Go signals.go) ──────────────────────────────────
@@ -427,6 +451,182 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
       const recentHigh = Math.max(...bars.slice(n - 5, n - 1));
       const priorHigh = Math.max(...bars.slice(n - 12, n - 6));
       return recentHigh < priorHigh && price < bars[n - 2] && rsi(bars, 14) > 35;
+    }
+
+    // ── Fibonacci 61.8% retracement ──────────────────────────────────────────
+    case "FIB_618_BULL": {
+      // Price retraces 61.8% of recent swing low→high and holds
+      if (n < 20) return false;
+      const swingHigh = Math.max(...bars.slice(n - 20, n - 5));
+      const swingLow  = Math.min(...bars.slice(n - 20, n - 5));
+      const fib618 = swingHigh - (swingHigh - swingLow) * 0.618;
+      return price >= fib618 * 0.998 && price <= fib618 * 1.004 &&
+             momentum(bars, 3) > 0.0001 && rsi(bars, 14) > 38;
+    }
+    case "FIB_618_BEAR": {
+      if (n < 20) return false;
+      const swingHigh = Math.max(...bars.slice(n - 20, n - 5));
+      const swingLow  = Math.min(...bars.slice(n - 20, n - 5));
+      const fib618 = swingLow + (swingHigh - swingLow) * 0.618;
+      return price <= fib618 * 1.002 && price >= fib618 * 0.996 &&
+             momentum(bars, 3) < -0.0001 && rsi(bars, 14) < 62;
+    }
+
+    // ── Hammer / Shooting Star candlestick (price-action proxy) ─────────────
+    case "HAMMER_BULL": {
+      // Hammer: price dipped significantly below open and recovered near close
+      if (n < 10) return false;
+      const open = bars[n - 2];
+      const low  = Math.min(...bars.slice(n - 4, n - 1));
+      const wick = open - low;
+      const body = Math.abs(price - open);
+      // Long lower wick (≥2× body), closing near top
+      return wick > body * 2 && price > open && wick > open * 0.0015 &&
+             rsi(bars, 14) < 55;
+    }
+    case "SHOOTING_STAR_BEAR": {
+      if (n < 10) return false;
+      const open = bars[n - 2];
+      const high = Math.max(...bars.slice(n - 4, n - 1));
+      const wick = high - open;
+      const body = Math.abs(price - open);
+      return wick > body * 2 && price < open && wick > open * 0.0015 &&
+             rsi(bars, 14) > 45;
+    }
+
+    // ── Three consecutive bars in same direction ──────────────────────────────
+    case "THREE_BAR_BULL": {
+      if (n < 10) return false;
+      const b1 = bars[n - 4], b2 = bars[n - 3], b3 = bars[n - 2];
+      return b2 > b1 && b3 > b2 && price > b3 &&
+             momentum(bars, 4) > 0.0002 && rsi(bars, 14) < 72;
+    }
+    case "THREE_BAR_BEAR": {
+      if (n < 10) return false;
+      const b1 = bars[n - 4], b2 = bars[n - 3], b3 = bars[n - 2];
+      return b2 < b1 && b3 < b2 && price < b3 &&
+             momentum(bars, 4) < -0.0002 && rsi(bars, 14) > 28;
+    }
+
+    // ── RSI divergence: price makes lower low but RSI makes higher low ────────
+    case "RSI_DIVERGE_BULL": {
+      if (n < 20) return false;
+      const priceRecLow  = Math.min(...bars.slice(n - 5,  n - 1));
+      const pricePriorLow = Math.min(...bars.slice(n - 15, n - 6));
+      const rsiRecLow    = rsi(bars.slice(n - 5),  14);
+      const rsiPriorLow  = rsi(bars.slice(n - 15, n - 5), 14);
+      return priceRecLow < pricePriorLow && rsiRecLow > rsiPriorLow &&
+             price > priceRecLow && rsi(bars, 14) < 50;
+    }
+    case "RSI_DIVERGE_BEAR": {
+      if (n < 20) return false;
+      const priceRecHigh  = Math.max(...bars.slice(n - 5,  n - 1));
+      const pricePriorHigh = Math.max(...bars.slice(n - 15, n - 6));
+      const rsiRecHigh    = rsi(bars.slice(n - 5),  14);
+      const rsiPriorHigh  = rsi(bars.slice(n - 15, n - 5), 14);
+      return priceRecHigh > pricePriorHigh && rsiRecHigh < rsiPriorHigh &&
+             price < priceRecHigh && rsi(bars, 14) > 50;
+    }
+
+    // ── Volatility contraction → directional move ─────────────────────────────
+    case "VOL_CONTRACT_BULL": {
+      if (n < 20) return false;
+      const recentRange = Math.max(...bars.slice(n - 5, n)) - Math.min(...bars.slice(n - 5, n));
+      const priorRange  = Math.max(...bars.slice(n - 20, n - 5)) - Math.min(...bars.slice(n - 20, n - 5));
+      return recentRange < priorRange * 0.40 && momentum(bars, 3) > 0.0002 &&
+             price > ema(bars, 9);
+    }
+    case "VOL_CONTRACT_BEAR": {
+      if (n < 20) return false;
+      const recentRange = Math.max(...bars.slice(n - 5, n)) - Math.min(...bars.slice(n - 5, n));
+      const priorRange  = Math.max(...bars.slice(n - 20, n - 5)) - Math.min(...bars.slice(n - 20, n - 5));
+      return recentRange < priorRange * 0.40 && momentum(bars, 3) < -0.0002 &&
+             price < ema(bars, 9);
+    }
+
+    // ── Inside bar: narrow bar followed by breakout ───────────────────────────
+    case "INSIDE_BAR_BULL": {
+      if (n < 10) return false;
+      const motherHigh = bars[n - 3], motherLow = bars[n - 4];
+      const insideHigh = bars[n - 2], insideLow = bars[n - 3];
+      const isInside = insideHigh <= motherHigh && insideLow >= motherLow;
+      return isInside && price > motherHigh * 1.0001 && momentum(bars, 3) > 0.0001;
+    }
+    case "INSIDE_BAR_BEAR": {
+      if (n < 10) return false;
+      const motherHigh = bars[n - 3], motherLow = bars[n - 4];
+      const insideHigh = bars[n - 2], insideLow = bars[n - 3];
+      const isInside = insideHigh <= motherHigh && insideLow >= motherLow;
+      return isInside && price < motherLow * 0.9999 && momentum(bars, 3) < -0.0001;
+    }
+
+    // ── Momentum divergence: RSI rising while momentum slowing (bull recovery) ─
+    case "MOM_DIVERGE_BULL": {
+      if (n < 20) return false;
+      const m5now  = momentum(bars, 5);
+      const m5prev = momentum(bars.slice(0, -3), 5);
+      const r = rsi(bars, 14);
+      const rprev = rsi(bars.slice(0, -3), 14);
+      // Price momentum slowing but RSI recovering — exhaustion of sellers
+      return m5now < m5prev && m5prev < -0.0002 && r > rprev && r < 52 && price > bars[n - 2];
+    }
+    case "MOM_DIVERGE_BEAR": {
+      if (n < 20) return false;
+      const m5now  = momentum(bars, 5);
+      const m5prev = momentum(bars.slice(0, -3), 5);
+      const r = rsi(bars, 14);
+      const rprev = rsi(bars.slice(0, -3), 14);
+      return m5now > m5prev && m5prev > 0.0002 && r < rprev && r > 48 && price < bars[n - 2];
+    }
+
+    // ── Range expansion: bar range well above average → trend continuation ────
+    case "RANGE_EXPAND_BULL": {
+      if (n < 15) return false;
+      const curRange = Math.abs(price - bars[n - 2]);
+      const avgRange = bars.slice(n - 10, n - 1).reduce((s, v, i, a) =>
+        i === 0 ? 0 : s + Math.abs(v - a[i - 1]), 0) / 9;
+      return curRange > avgRange * 1.8 && price > bars[n - 2] &&
+             momentum(bars, 3) > 0.0002 && rsi(bars, 14) < 72;
+    }
+    case "RANGE_EXPAND_BEAR": {
+      if (n < 15) return false;
+      const curRange = Math.abs(price - bars[n - 2]);
+      const avgRange = bars.slice(n - 10, n - 1).reduce((s, v, i, a) =>
+        i === 0 ? 0 : s + Math.abs(v - a[i - 1]), 0) / 9;
+      return curRange > avgRange * 1.8 && price < bars[n - 2] &&
+             momentum(bars, 3) < -0.0002 && rsi(bars, 14) > 28;
+    }
+
+    // ── ADX proxy: sustained directional trend (high EMA separation) ─────────
+    case "ADX_BULL_TREND": {
+      // Proxy ADX via EMA spread: strong when fast EMA much higher than slow
+      if (n < 30) return false;
+      const e9  = ema(bars, 9), e21 = ema(bars, 21);
+      const spread = (e9 - e21) / e21;
+      return spread > 0.0012 && momentum(bars, 10) > 0.0005 && rsi(bars, 14) > 52 && rsi(bars, 14) < 74;
+    }
+    case "ADX_BEAR_TREND": {
+      if (n < 30) return false;
+      const e9  = ema(bars, 9), e21 = ema(bars, 21);
+      const spread = (e21 - e9) / e21;
+      return spread > 0.0012 && momentum(bars, 10) < -0.0005 && rsi(bars, 14) < 48 && rsi(bars, 14) > 26;
+    }
+
+    // ── Parabolic SAR flip proxy: price crosses above/below trailing extremum ─
+    case "PSAR_BULL_FLIP": {
+      if (n < 15) return false;
+      // Trailing stop proxy: lowest low of last 5 bars
+      const trailStop = Math.min(...bars.slice(n - 6, n - 1));
+      const prevBelow = bars[n - 3] < trailStop || bars[n - 4] < trailStop;
+      return prevBelow && price > trailStop * 1.0002 &&
+             momentum(bars, 3) > 0.0001 && rsi(bars, 14) > 45;
+    }
+    case "PSAR_BEAR_FLIP": {
+      if (n < 15) return false;
+      const trailStop = Math.max(...bars.slice(n - 6, n - 1));
+      const prevAbove = bars[n - 3] > trailStop || bars[n - 4] > trailStop;
+      return prevAbove && price < trailStop * 0.9998 &&
+             momentum(bars, 3) < -0.0001 && rsi(bars, 14) < 55;
     }
   }
   return false;
