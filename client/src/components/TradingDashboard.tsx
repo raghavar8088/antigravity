@@ -872,6 +872,8 @@ export default function TradingDashboard() {
           equityLabel={btcOptionsSellingModuleActive ? "Selling Equity" : undefined}
           pnlLabel={btcOptionsSellingModuleActive ? "Selling PnL" : undefined}
           openLabel={btcOptionsSellingModuleActive ? "Open Shorts" : undefined}
+          actionsEnabled={actionsEnabled}
+          onToggleActions={setActionsEnabled}
         />
       ) : niftyStocksModuleActive ? (
         <OptionsAccountHeader
@@ -892,6 +894,8 @@ export default function TradingDashboard() {
           equityLabel="Stocks Equity"
           pnlLabel="Stocks PnL Today"
           openLabel="Open Stocks"
+          actionsEnabled={actionsEnabled}
+          onToggleActions={setActionsEnabled}
         />
       ) : (
         <DashboardHeader

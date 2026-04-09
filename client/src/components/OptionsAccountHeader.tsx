@@ -18,6 +18,8 @@ type OptionsAccountHeaderProps = {
   equityLabel?: string;
   pnlLabel?: string;
   openLabel?: string;
+  actionsEnabled?: boolean;
+  onToggleActions?: (enabled: boolean) => void;
 };
 
 function formatCurrency(value: number, currencyCode: string, locale: string) {
@@ -51,6 +53,8 @@ export default function OptionsAccountHeader({
   equityLabel = "Options Equity",
   pnlLabel = "Options PnL Today",
   openLabel = "Open Options",
+  actionsEnabled,
+  onToggleActions,
 }: OptionsAccountHeaderProps) {
   const baseBalance = 1_000_000;
   const pnlPct = baseBalance > 0 ? (dailyPnL / baseBalance) * 100 : 0;
@@ -79,8 +83,39 @@ export default function OptionsAccountHeader({
             </div>
           </div>
           <div>
-            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              {workspaceTitle}
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {workspaceTitle}
+              </span>
+              {onToggleActions && (
+                <div className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border-subtle)", background: "var(--surface-2)" }}>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-secondary)" }}>Action</span>
+                  <div className="inline-flex items-center rounded-full border p-0.5" style={{ borderColor: "var(--border-subtle)", background: "var(--surface)" }}>
+                    <button
+                      type="button"
+                      onClick={() => onToggleActions(false)}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                      style={{
+                        background: !actionsEnabled ? "var(--surface-3)" : "transparent",
+                        color: !actionsEnabled ? "var(--text-primary)" : "var(--text-secondary)",
+                      }}
+                    >
+                      No
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleActions(true)}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                      style={{
+                        background: actionsEnabled ? "rgba(21, 128, 61, 0.16)" : "transparent",
+                        color: actionsEnabled ? "var(--green)" : "var(--text-secondary)",
+                      }}
+                    >
+                      Yes
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
               {accountLabel}
