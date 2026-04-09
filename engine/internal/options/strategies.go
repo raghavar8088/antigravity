@@ -145,34 +145,32 @@ func buildAllStrategies() []StrategyDef {
 		// Win rate target: 55-60%. R:R: 3:1.
 		// ═══════════════════════════════════════════════════════════════════════
 
-		// Signal: Price up >0.5% in 5 min AND >0.3% in 10 min, RSI < 70.
-		// Size: $700 — highest conviction momentum signal, fires ~5x/day.
+		// Signal: Price up >0.42% in 5 min AND >0.22% in 10 min, RSI < 72.
+		// Extended to 180 min: halves theta burn, giving more time to hit TP.
+		// TP lowered to 42% (from 80%): achievable on a 0.4% BTC move. R:R = 1.2
 		{
 			Name: "MomentumBurst_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.80, StopLossPct: 0.28,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.42, StopLossPct: 0.35,
 			PositionUSD: 700, Signal: "STRONG_BULL_MOMENTUM", CooldownSecs: 300,
 		},
-		// Signal: Price down >0.5% in 5 min AND >0.3% in 10 min, RSI > 30.
 		{
 			Name: "MomentumBurst_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.80, StopLossPct: 0.28,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.42, StopLossPct: 0.35,
 			PositionUSD: 700, Signal: "STRONG_BEAR_MOMENTUM", CooldownSecs: 300,
 		},
 		// Signal: 4 consecutive bullish 1-min bars with >0.35% total gain.
-		// Autocorrelation play — algo chasers extend these runs for 3-5 more bars.
 		{
 			Name: "ConsecCandle_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.70, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 600, Signal: "CONSEC_BULL_BARS", CooldownSecs: 300,
 		},
-		// Signal: 4 consecutive bearish 1-min bars with >0.35% total drop.
 		{
 			Name: "ConsecCandle_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.70, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 600, Signal: "CONSEC_BEAR_BARS", CooldownSecs: 300,
 		},
 
@@ -190,45 +188,38 @@ func buildAllStrategies() []StrategyDef {
 		// is violent. Large size because this is the rarest, most reliable signal.
 		{
 			Name: "RSI_Extreme_Oversold_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 1.00, StopLossPct: 0.30,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.50, StopLossPct: 0.38,
 			PositionUSD: 790, Signal: "RSI_OVERSOLD_EXTREME", CooldownSecs: 600,
 		},
-		// Signal: RSI(14) crossed back below 80 from above.
 		{
 			Name: "RSI_Extreme_Overbought_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 1.00, StopLossPct: 0.30,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.50, StopLossPct: 0.38,
 			PositionUSD: 790, Signal: "RSI_OVERBOUGHT_EXTREME", CooldownSecs: 600,
 		},
-		// Signal: RSI crossed back above 30 from below (regular oversold exit).
 		{
 			Name: "RSI_Oversold_Recovery_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 550, Signal: "RSI_OVERSOLD", CooldownSecs: 600,
 		},
-		// Signal: RSI crossed back below 70 from above.
 		{
 			Name: "RSI_Overbought_Fade_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 550, Signal: "RSI_OVERBOUGHT", CooldownSecs: 600,
 		},
-		// Signal: 30-min rally > 2% + RSI > 76 + price at upper BB + stalling.
-		// Pure contrarian — requires ALL conditions. When it fires, it's extremely
-		// reliable. $600 size but long cooldown to prevent re-entry in a trend.
 		{
 			Name: "Overextension_Fade_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.85, StopLossPct: 0.30,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.38,
 			PositionUSD: 600, Signal: "OVEREXTENSION_FADE_UP", CooldownSecs: 900,
 		},
-		// Signal: 30-min selloff > 2% + RSI < 24 + price at lower BB + stalling.
 		{
 			Name: "Overextension_Fade_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.85, StopLossPct: 0.30,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.38,
 			PositionUSD: 600, Signal: "OVEREXTENSION_FADE_DOWN", CooldownSecs: 900,
 		},
 
@@ -244,44 +235,38 @@ func buildAllStrategies() []StrategyDef {
 		// Signal: 9 EMA crossed above 21 EMA on the most recent bar (event-driven).
 		{
 			Name: "EMA_BullCross_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 550, Signal: "EMA_BULL_CROSS", CooldownSecs: 600,
 		},
-		// Signal: 9 EMA crossed below 21 EMA.
 		{
 			Name: "EMA_BearCross_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 550, Signal: "EMA_BEAR_CROSS", CooldownSecs: 600,
 		},
-		// Signal: Price breaks 0.3% above prior 20-bar high with momentum.
-		// Breakout buyers pile in — ride the wave.
 		{
 			Name: "Resistance_Breakout_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.75, StopLossPct: 0.28,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.42, StopLossPct: 0.36,
 			PositionUSD: 600, Signal: "RESISTANCE_BREAK", CooldownSecs: 720,
 		},
-		// Signal: Price breaks 0.3% below prior 20-bar low with momentum.
 		{
 			Name: "Support_Breakdown_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.75, StopLossPct: 0.28,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.42, StopLossPct: 0.36,
 			PositionUSD: 600, Signal: "SUPPORT_BREAK", CooldownSecs: 720,
 		},
-		// Signal: Stochastic K crossed above 20 from below + RSI < 50.
 		{
 			Name: "Stoch_Oversold_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 500, Signal: "STOCH_OVERSOLD", CooldownSecs: 540,
 		},
-		// Signal: Stochastic K crossed below 80 from above + RSI > 50.
 		{
 			Name: "Stoch_Overbought_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.65, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.34,
 			PositionUSD: 500, Signal: "STOCH_OVERBOUGHT", CooldownSecs: 540,
 		},
 
@@ -298,38 +283,32 @@ func buildAllStrategies() []StrategyDef {
 		// snaps back violently with no sellers left. Only fires as a CALL.
 		{
 			Name: "Capitulation_VReversal_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.90, StopLossPct: 0.30,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.46, StopLossPct: 0.38,
 			PositionUSD: 750, Signal: "CAPITULATION_RECOVERY", CooldownSecs: 600,
 		},
-		// Signal: Within 3-18 minutes of UTC session opens (00:00/08:00/13:30/20:00)
-		// + strong directional momentum. Fresh institutional order flow drives
-		// persistent 60-90 min trends. Fire in both directions.
 		{
 			Name: "SessionOpen_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.70, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 650, Signal: "SESSION_OPEN_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "SessionOpen_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.70, StopLossPct: 0.25,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 650, Signal: "SESSION_OPEN_BEAR", CooldownSecs: 720,
 		},
-		// Signal: Recent 10-bar vol < 50% of 60-bar vol + strong breakout momentum.
-		// Buy options when they're statistically cheap (compressed vol).
-		// When the move comes, you earn delta gain + vega gain simultaneously.
 		{
 			Name: "VolCompress_Breakout_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 1.00, StopLossPct: 0.33,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.50, StopLossPct: 0.40,
 			PositionUSD: 600, Signal: "VOL_COMPRESS_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "VolCompress_Breakout_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 1.00, StopLossPct: 0.33,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.50, StopLossPct: 0.40,
 			PositionUSD: 600, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 720,
 		},
 
@@ -351,39 +330,34 @@ func buildAllStrategies() []StrategyDef {
 		// holding above fair value instead of merely spiking through it.
 		{
 			Name: "VWAP_Continuation_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.68, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 575, Signal: "VWAP_ABOVE", CooldownSecs: 540,
 		},
 		{
 			Name: "VWAP_Continuation_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.68, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 575, Signal: "VWAP_BELOW", CooldownSecs: 540,
 		},
 
-		// Signal: oversold/overbought reversal, EMA cross, and momentum all agree.
-		// This is one of the cleanest "everything aligned" entries in the book.
 		{
 			Name: "TripleConfluence_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.80, StopLossPct: 0.26,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.36,
 			PositionUSD: 625, Signal: "TRIPLE_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "TripleConfluence_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.80, StopLossPct: 0.26,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.36,
 			PositionUSD: 625, Signal: "TRIPLE_BEAR", CooldownSecs: 720,
 		},
 
-		// Signal: fast upside burst rejects immediately and price rolls over.
-		// This catches intraday blow-off tops earlier than the slower
-		// overextension fade, with tighter risk and higher trade frequency.
 		{
 			Name: "SharpReversal_TopFade_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 575, Signal: "SHARP_REVERSAL_DOWN", CooldownSecs: 600,
 		},
 
@@ -400,39 +374,34 @@ func buildAllStrategies() []StrategyDef {
 		// structure and momentum are both aligned.
 		{
 			Name: "TrendAlignment_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.42, StopLossPct: 0.34,
 			PositionUSD: 600, Signal: "EMA_ABOVE_BOTH", CooldownSecs: 600,
 		},
 		{
 			Name: "TrendAlignment_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.42, StopLossPct: 0.34,
 			PositionUSD: 600, Signal: "EMA_BELOW_BOTH", CooldownSecs: 600,
 		},
 
-		// Signal: band-touch rejection with immediate recovery back inside the
-		// Bollinger envelope. This is a tighter, faster mean-reversion setup than
-		// the extreme RSI variants and gives the book more range-trading balance.
 		{
 			Name: "BandBounce_Reclaim_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.62, StopLossPct: 0.22,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.32,
 			PositionUSD: 525, Signal: "BB_LOWER_TOUCH", CooldownSecs: 480,
 		},
 		{
 			Name: "BandFade_Rejection_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.62, StopLossPct: 0.22,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.32,
 			PositionUSD: 525, Signal: "BB_UPPER_TOUCH", CooldownSecs: 480,
 		},
 
-		// Signal: sharp downside washout followed by immediate snapback. This is
-		// the upside counterpart to the existing sharp bearish rejection strategy.
 		{
 			Name: "SharpReversal_BottomSnap_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.72, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 575, Signal: "SHARP_REVERSAL_UP", CooldownSecs: 600,
 		},
 
@@ -453,87 +422,67 @@ func buildAllStrategies() []StrategyDef {
 		// small for the strong-momentum strategy but still option-friendly.
 		{
 			Name: "MomentumFollow_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.60, StopLossPct: 0.22,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.38, StopLossPct: 0.32,
 			PositionUSD: 540, Signal: "BULL_MOMENTUM", CooldownSecs: 420,
 		},
 
-		// Signal: recent compression in Bollinger width followed by bullish
-		// breakout. This captures the first sustained expansion leg out of a
-		// coiled range before the slower vol-compress setups fully mature.
 		{
 			Name: "BBSqueeze_Release_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.66, StopLossPct: 0.23,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 560, Signal: "BB_SQUEEZE_BULL", CooldownSecs: 540,
 		},
 		{
 			Name: "BBSqueeze_Release_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 75,
-			TakeProfitPct: 0.66, StopLossPct: 0.23,
+			StrikePctOTM: 0.0, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.34,
 			PositionUSD: 560, Signal: "BB_SQUEEZE_BEAR", CooldownSecs: 540,
 		},
 
-		// Signal: already-elevated IV plus strong directional push. These are
-		// selective follow-through trades for environments where realized vol is
-		// expanding fast enough that long premium can still outperform.
 		{
 			Name: "HighIV_Expansion_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 60,
-			TakeProfitPct: 0.58, StopLossPct: 0.20,
+			StrikePctOTM: 0.0, ExpiryMinutes: 120,
+			TakeProfitPct: 0.36, StopLossPct: 0.30,
 			PositionUSD: 500, Signal: "HIGH_IV_BULL", CooldownSecs: 480,
 		},
 		{
 			Name: "HighIV_Expansion_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 60,
-			TakeProfitPct: 0.58, StopLossPct: 0.20,
+			StrikePctOTM: 0.0, ExpiryMinutes: 120,
+			TakeProfitPct: 0.36, StopLossPct: 0.30,
 			PositionUSD: 500, Signal: "HIGH_IV_BEAR", CooldownSecs: 480,
 		},
 
-		// CATEGORY H - HYBRID ALPHA FACTORY
-		// -----------------------------------------------------------------------
-		// Five higher-conviction hybrids built by combining the strongest
-		// existing edges into more selective entries. These are intended to be
-		// better than the prior add-ons, not just more numerous.
-
-		// Signal: strong directional momentum already established above/below
-		// VWAP. These are cleaner second-leg continuation entries than raw
-		// momentum alone because fair-value alignment confirms institutional flow.
 		{
 			Name: "MomentumVWAP_Pro_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.78, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.36,
 			PositionUSD: 650, Signal: "MOMENTUM_VWAP_BULL", CooldownSecs: 600,
 		},
 		{
 			Name: "MomentumVWAP_Pro_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.78, StopLossPct: 0.24,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.44, StopLossPct: 0.36,
 			PositionUSD: 650, Signal: "MOMENTUM_VWAP_BEAR", CooldownSecs: 600,
 		},
 
-		// Signal: structural breakout plus trend confirmation from medium EMAs.
-		// These should avoid many of the fake breakouts that hurt naked breakout
-		// buying.
 		{
 			Name: "BreakoutTrend_Pro_Bull_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.92, StopLossPct: 0.26,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.48, StopLossPct: 0.36,
 			PositionUSD: 740, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "BreakdownTrend_Pro_Bear_Put", Type: Put,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 0.92, StopLossPct: 0.26,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.48, StopLossPct: 0.36,
 			PositionUSD: 740, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
 		},
 
-		// Signal: panic washout followed by immediate VWAP and EMA reclaim.
-		// This is the highest-conviction long-premium reversal setup in the book.
 		{
 			Name: "Capitulation_Reclaim_Elite_Call", Type: Call,
-			StrikePctOTM: 0.0, ExpiryMinutes: 90,
-			TakeProfitPct: 1.10, StopLossPct: 0.28,
+			StrikePctOTM: 0.0, ExpiryMinutes: 180,
+			TakeProfitPct: 0.55, StopLossPct: 0.38,
 			PositionUSD: 850, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 900,
 		},
 	}

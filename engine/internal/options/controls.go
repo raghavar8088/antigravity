@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 3
+	maxConcurrentPositions   = 5
 	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
@@ -30,8 +30,8 @@ const (
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
 
-	optionLossStreakDisableThreshold = 4
-	optionLossStreakCooldown         = 70 * time.Minute
+	optionLossStreakDisableThreshold = 5
+	optionLossStreakCooldown         = 45 * time.Minute
 	optionUnderperformingMinTrades   = 6
 	optionUnderperformingMaxWinRate  = 35.0
 	optionUnderperformingCooldown    = 6 * time.Hour
@@ -133,7 +133,11 @@ func classifyMarketRegime(prices []float64) string {
 }
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
-	return regimeFitScore(category, regime) >= 0.75
+	// Lowered from 0.75 → 0.42 so Hybrid strategies (TripleConfluence, MomentumVWAP,
+	// BreakoutTrend, Capitulation_Reclaim) are never permanently blocked. The original
+	// 0.75 threshold excluded Hybrid in ALL regimes (max score 0.74) and blocked
+	// Momentum in RANGE/MIXED — causing most strategies to sit out most of the time.
+	return regimeFitScore(category, regime) >= 0.42
 }
 
 func clamp(min, value, max float64) float64 {
