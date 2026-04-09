@@ -22,7 +22,7 @@ const LOT_SIZE = 75;                  // NIFTY F&O lot size
 const STRIKE_STEP = 50;              // NIFTY strike increment
 const NIFTY_IV = 0.18;               // ~18% IV for NIFTY weekly options
 const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly expiry
-const MAX_CONCURRENT = 7;
+const MAX_CONCURRENT = 12;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
 const TICK_MS = 5_000;               // engine tick interval
 
@@ -64,6 +64,30 @@ const STRAT_DEFS: StratDef[] = [
   { id: 18, name: "Stoch_Overbought_Put",            category: "Mean Reversion",optionType: "PUT",  signal: "STOCH_OB",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 12000 },
   { id: 19, name: "Capitulation_Reclaim_Elite_Call", category: "Capitulation",  optionType: "CALL", signal: "BB_SQUEEZE_BULL",  tpPct: 1.10, slPct: 0.42, cooldownSecs: 600,  minBars: 30, positionINR: 20000 },
   { id: 20, name: "BreakdownTrend_Pro_Bear_Put",     category: "Breakout",      optionType: "PUT",  signal: "EMA_BELOW_BOTH",   tpPct: 0.92, slPct: 0.35, cooldownSecs: 480,  minBars: 50, positionINR: 18000 },
+
+  // ── Extended CALL strategies ──────────────────────────────────────────────
+  { id: 21, name: "VWAP_Reclaim_Bull_Call",          category: "VWAP",          optionType: "CALL", signal: "VWAP_BULL_RECLAIM", tpPct: 0.70, slPct: 0.24, cooldownSecs: 300,  minBars: 20, positionINR: 14000 },
+  { id: 22, name: "EMA5_FastPull_Bull_Call",         category: "Momentum",      optionType: "CALL", signal: "EMA5_BULL_PULL",    tpPct: 0.55, slPct: 0.20, cooldownSecs: 180,  minBars: 10, positionINR: 12000 },
+  { id: 23, name: "OpenRange_Break_Bull_Call",       category: "Breakout",      optionType: "CALL", signal: "ORB_BULL",          tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 30, positionINR: 16000 },
+  { id: 24, name: "Trend_Pullback_Bull_Call",        category: "Trend",         optionType: "CALL", signal: "TREND_PULLBACK_BULL",tpPct: 0.75, slPct: 0.26, cooldownSecs: 300,  minBars: 25, positionINR: 15000 },
+  { id: 25, name: "HH_HL_Continuation_Call",        category: "Price Action",   optionType: "CALL", signal: "HH_HL_BULL",        tpPct: 0.65, slPct: 0.22, cooldownSecs: 240,  minBars: 15, positionINR: 13000 },
+  { id: 26, name: "BB_MidBand_Bounce_Call",         category: "Mean Reversion", optionType: "CALL", signal: "BB_MID_BOUNCE_BULL",tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 22, positionINR: 12000 },
+  { id: 27, name: "MultiEMA_Stack_Bull_Call",       category: "Trend",          optionType: "CALL", signal: "EMA_STACK_BULL",    tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 25, positionINR: 16000 },
+  { id: 28, name: "RSI_Midline_Bull_Cross_Call",    category: "Mean Reversion", optionType: "CALL", signal: "RSI_MID_BULL",      tpPct: 0.60, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 13000 },
+  { id: 29, name: "Squeeze_Momentum_Bull_Call",     category: "Volatility",     optionType: "CALL", signal: "SQUEEZE_FIRE_BULL", tpPct: 1.00, slPct: 0.35, cooldownSecs: 480,  minBars: 25, positionINR: 18000 },
+  { id: 30, name: "Higher_Low_Reversal_Call",       category: "Price Action",   optionType: "CALL", signal: "HIGHER_LOW_BULL",   tpPct: 0.70, slPct: 0.25, cooldownSecs: 300,  minBars: 15, positionINR: 14000 },
+
+  // ── Extended PUT strategies ───────────────────────────────────────────────
+  { id: 31, name: "VWAP_Rejection_Bear_Put",         category: "VWAP",          optionType: "PUT",  signal: "VWAP_BEAR_REJECT",  tpPct: 0.70, slPct: 0.24, cooldownSecs: 300,  minBars: 20, positionINR: 14000 },
+  { id: 32, name: "EMA5_FastPull_Bear_Put",          category: "Momentum",      optionType: "PUT",  signal: "EMA5_BEAR_PULL",    tpPct: 0.55, slPct: 0.20, cooldownSecs: 180,  minBars: 10, positionINR: 12000 },
+  { id: 33, name: "OpenRange_Break_Bear_Put",        category: "Breakout",      optionType: "PUT",  signal: "ORB_BEAR",          tpPct: 0.90, slPct: 0.30, cooldownSecs: 480,  minBars: 30, positionINR: 16000 },
+  { id: 34, name: "Trend_Pullback_Bear_Put",         category: "Trend",         optionType: "PUT",  signal: "TREND_PULLBACK_BEAR",tpPct: 0.75, slPct: 0.26, cooldownSecs: 300,  minBars: 25, positionINR: 15000 },
+  { id: 35, name: "LH_LL_Continuation_Put",         category: "Price Action",   optionType: "PUT",  signal: "LH_LL_BEAR",        tpPct: 0.65, slPct: 0.22, cooldownSecs: 240,  minBars: 15, positionINR: 13000 },
+  { id: 36, name: "BB_MidBand_Reject_Put",          category: "Mean Reversion", optionType: "PUT",  signal: "BB_MID_REJECT_BEAR",tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 22, positionINR: 12000 },
+  { id: 37, name: "MultiEMA_Stack_Bear_Put",        category: "Trend",          optionType: "PUT",  signal: "EMA_STACK_BEAR",    tpPct: 0.80, slPct: 0.28, cooldownSecs: 360,  minBars: 25, positionINR: 16000 },
+  { id: 38, name: "RSI_Midline_Bear_Cross_Put",     category: "Mean Reversion", optionType: "PUT",  signal: "RSI_MID_BEAR",      tpPct: 0.60, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 13000 },
+  { id: 39, name: "Squeeze_Momentum_Bear_Put",      category: "Volatility",     optionType: "PUT",  signal: "SQUEEZE_FIRE_BEAR", tpPct: 1.00, slPct: 0.35, cooldownSecs: 480,  minBars: 25, positionINR: 18000 },
+  { id: 40, name: "Lower_High_Reversal_Put",        category: "Price Action",   optionType: "PUT",  signal: "LOWER_HIGH_BEAR",   tpPct: 0.70, slPct: 0.25, cooldownSecs: 300,  minBars: 15, positionINR: 14000 },
 ];
 
 // ─── Math helpers (ported from Go signals.go) ──────────────────────────────────
@@ -265,6 +289,144 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
       const recentStd = stddev(bars.slice(-10));
       const priorStd = stddev(bars.slice(-25, -10));
       return priorStd > 0 && recentStd < priorStd * 0.85 && momentum(bars, 3) > 0.0002;
+    }
+
+    // ── New signals ─────────────────────────────────────────────────────────
+
+    case "VWAP_BULL_RECLAIM": {
+      // Price reclaims VWAP (approximated as SMA20) from below with RSI rising
+      if (n < 20) return false;
+      const vwap = sma(bars, 20);
+      const prev = bars[n - 2];
+      const r = rsi(bars, 14);
+      return prev < vwap && price >= vwap && r > 40 && r < 65;
+    }
+    case "VWAP_BEAR_REJECT": {
+      if (n < 20) return false;
+      const vwap = sma(bars, 20);
+      const prev = bars[n - 2];
+      const r = rsi(bars, 14);
+      return prev > vwap && price <= vwap && r > 35 && r < 60;
+    }
+
+    case "EMA5_BULL_PULL": {
+      // Price pulls back to EMA5 in uptrend and bounces
+      if (n < 10) return false;
+      const e5 = ema(bars, 5), e9 = ema(bars, 9);
+      return e9 > e5 * 0.998 && price >= e5 * 0.999 && price <= e5 * 1.002
+        && bars[n - 2] < e5 && momentum(bars, 3) > 0.0001;
+    }
+    case "EMA5_BEAR_PULL": {
+      if (n < 10) return false;
+      const e5 = ema(bars, 5), e9 = ema(bars, 9);
+      return e9 < e5 * 1.002 && price <= e5 * 1.001 && price >= e5 * 0.998
+        && bars[n - 2] > e5 && momentum(bars, 3) < -0.0001;
+    }
+
+    case "ORB_BULL": {
+      // Opening Range Breakout bull: price > first 30-bar high with RSI momentum
+      if (n < 30) return false;
+      const orbHigh = Math.max(...bars.slice(0, Math.min(30, n)));
+      return price > orbHigh * 1.0002 && momentum(bars, 5) > 0.0003 && rsi(bars, 14) > 50;
+    }
+    case "ORB_BEAR": {
+      if (n < 30) return false;
+      const orbLow = Math.min(...bars.slice(0, Math.min(30, n)));
+      return price < orbLow * 0.9998 && momentum(bars, 5) < -0.0003 && rsi(bars, 14) < 50;
+    }
+
+    case "TREND_PULLBACK_BULL": {
+      // Bullish trend pullback: EMA9 > EMA21, price dipped below EMA9 and recovered
+      if (n < 25) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e9 > e21 && bars[n - 3] < e9 && price >= e9 && momentum(bars, 3) > 0.0002;
+    }
+    case "TREND_PULLBACK_BEAR": {
+      if (n < 25) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e9 < e21 && bars[n - 3] > e9 && price <= e9 && momentum(bars, 3) < -0.0002;
+    }
+
+    case "HH_HL_BULL": {
+      // Higher Highs + Higher Lows: last 3 bars show ascending structure
+      if (n < 15) return false;
+      const b1 = bars[n - 4], b2 = bars[n - 3], b3 = bars[n - 2];
+      return b2 > b1 && b3 > b2 * 0.9998 && price >= b3 && rsi(bars, 14) < 70;
+    }
+    case "LH_LL_BEAR": {
+      if (n < 15) return false;
+      const b1 = bars[n - 4], b2 = bars[n - 3], b3 = bars[n - 2];
+      return b2 < b1 && b3 < b2 * 1.0002 && price <= b3 && rsi(bars, 14) > 30;
+    }
+
+    case "BB_MID_BOUNCE_BULL": {
+      // Price bounces off BB midline from below in uptrend
+      if (n < 22) return false;
+      const bm = bbMid(bars, 20);
+      const e9 = ema(bars, 9);
+      return bars[n - 2] < bm && price >= bm && e9 > bm * 0.999 && rsi(bars, 14) > 45;
+    }
+    case "BB_MID_REJECT_BEAR": {
+      if (n < 22) return false;
+      const bm = bbMid(bars, 20);
+      const e9 = ema(bars, 9);
+      return bars[n - 2] > bm && price <= bm && e9 < bm * 1.001 && rsi(bars, 14) < 55;
+    }
+
+    case "EMA_STACK_BULL": {
+      // Full EMA stack: EMA5 > EMA9 > EMA21, momentum positive
+      if (n < 25) return false;
+      const e5 = ema(bars, 5), e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e5 > e9 && e9 > e21 && price > e5 && momentum(bars, 5) > 0.0002;
+    }
+    case "EMA_STACK_BEAR": {
+      if (n < 25) return false;
+      const e5 = ema(bars, 5), e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e5 < e9 && e9 < e21 && price < e5 && momentum(bars, 5) < -0.0002;
+    }
+
+    case "RSI_MID_BULL": {
+      // RSI crosses above 50 midline with price above EMA9
+      if (n < 14) return false;
+      const r = rsi(bars, 14);
+      const prev = rsi(bars.slice(0, -1), 14);
+      return prev < 50 && r >= 50 && price > ema(bars, 9);
+    }
+    case "RSI_MID_BEAR": {
+      if (n < 14) return false;
+      const r = rsi(bars, 14);
+      const prev = rsi(bars.slice(0, -1), 14);
+      return prev > 50 && r <= 50 && price < ema(bars, 9);
+    }
+
+    case "SQUEEZE_FIRE_BULL": {
+      // Bollinger squeeze release: narrow bands expanding + bull momentum
+      if (n < 25) return false;
+      const recent = stddev(bars.slice(-5));
+      const prior = stddev(bars.slice(-20, -5));
+      const expanding = prior > 0 && recent > prior * 1.15;
+      return expanding && momentum(bars, 5) > 0.0004 && rsi(bars, 14) > 50;
+    }
+    case "SQUEEZE_FIRE_BEAR": {
+      if (n < 25) return false;
+      const recent = stddev(bars.slice(-5));
+      const prior = stddev(bars.slice(-20, -5));
+      const expanding = prior > 0 && recent > prior * 1.15;
+      return expanding && momentum(bars, 5) < -0.0004 && rsi(bars, 14) < 50;
+    }
+
+    case "HIGHER_LOW_BULL": {
+      // Higher Low pattern: recent trough higher than previous trough
+      if (n < 15) return false;
+      const recentLow = Math.min(...bars.slice(n - 5, n - 1));
+      const priorLow = Math.min(...bars.slice(n - 12, n - 6));
+      return recentLow > priorLow && price > bars[n - 2] && rsi(bars, 14) < 65;
+    }
+    case "LOWER_HIGH_BEAR": {
+      if (n < 15) return false;
+      const recentHigh = Math.max(...bars.slice(n - 5, n - 1));
+      const priorHigh = Math.max(...bars.slice(n - 12, n - 6));
+      return recentHigh < priorHigh && price < bars[n - 2] && rsi(bars, 14) > 35;
     }
   }
   return false;
