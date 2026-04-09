@@ -1,4 +1,4 @@
-import { getAngelJWT, isAngelConfigured, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { getAngelJWT, invalidateAngelJWT, isAngelConfigured, commonHeaders, BASE_URL } from "@/lib/angelAuth";
 
 export const maxDuration = 60;
 
@@ -40,7 +40,10 @@ export async function GET() {
               next: { revalidate: 0 },
             });
 
-            if (res.ok) {
+            if (res.status === 401) {
+              invalidateAngelJWT();
+              controller.enqueue(encoder.encode(`data: {"error":"auth expired, re-logging in"}\n\n`));
+            } else if (res.ok) {
               const payload = await res.json() as {
                 status?: boolean;
                 data?: {

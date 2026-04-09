@@ -76,9 +76,13 @@ export function commonHeaders(jwt?: string): Record<string, string> {
   return h;
 }
 
-export async function getAngelJWT(): Promise<string> {
-  if (JWT_OVERRIDE) return JWT_OVERRIDE;
+// Cache the JWT so we don't re-login on every API call.
+// Angel One tokens are valid for ~24h; we refresh after 23h or on 401.
+let cachedJwt: string | null = null;
+let cachedJwtAt = 0;
+const JWT_TTL_MS = 23 * 60 * 60 * 1000; // 23 hours
 
+async function loginFresh(): Promise<string> {
   const totp = TOTP_CODE || generateTOTP(TOTP_SECRET);
 
   const res = await fetch(`${BASE_URL}/rest/auth/angelbroking/user/v1/loginByPassword`, {
@@ -103,4 +107,24 @@ export async function getAngelJWT(): Promise<string> {
   }
 
   return payload.data.jwtToken;
+}
+
+export async function getAngelJWT(forceRefresh = false): Promise<string> {
+  if (JWT_OVERRIDE) return JWT_OVERRIDE;
+
+  const now = Date.now();
+  if (!forceRefresh && cachedJwt && (now - cachedJwtAt) < JWT_TTL_MS) {
+    return cachedJwt;
+  }
+
+  const jwt = await loginFresh();
+  cachedJwt = jwt;
+  cachedJwtAt = now;
+  return jwt;
+}
+
+/** Call this when an API request returns 401 so the next call re-authenticates. */
+export function invalidateAngelJWT(): void {
+  cachedJwt = null;
+  cachedJwtAt = 0;
 }
