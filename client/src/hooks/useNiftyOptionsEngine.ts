@@ -24,7 +24,7 @@ const NIFTY_IV = 0.18;               // ~18% IV for NIFTY weekly options
 const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly expiry
 const MAX_CONCURRENT = 15;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
-const TICK_MS = 5_000;               // engine tick interval
+const TICK_MS = 1_000;               // engine tick every second
 
 // ─── Strategy definitions ──────────────────────────────────────────────────────
 
@@ -1022,9 +1022,13 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
   // ── Engine tick (runs every TICK_MS) ──────────────────────────────────────
   const engineTick = useCallback(() => {
     const eng = engRef.current;
-    if (eng.lastPrice <= 0 || eng.minuteBars.length === 0) return;
+    if (eng.lastPrice <= 0) return;
 
-    const bars = eng.minuteBars;
+    // Always include live price as latest bar so signals fire immediately
+    // even before a full 1-min bar boundary is crossed
+    const bars = eng.minuteBars.length > 0
+      ? eng.minuteBars
+      : [eng.lastPrice];
     const price = eng.lastPrice;
     const now = Date.now();
 
@@ -1090,8 +1094,8 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     pushDisplayState();
   }, [pushDisplayState]);
 
-  // ── Feed price tick: build 1-minute bars ─────────────────────────────────
-  const feedPrice = useCallback((price: number) => {
+  // ── Feed price tick: build 1-minute bars + trigger engine immediately ────
+  const feedPrice = useCallback((price: number, triggerTick: () => void) => {
     if (price <= 0) return;
     const eng = engRef.current;
     eng.lastPrice = price;
@@ -1102,6 +1106,8 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       eng.minuteBars.push(price);
       if (eng.minuteBars.length > MAX_BARS) eng.minuteBars.shift();
     }
+    // Run engine on every price tick — no need to wait for interval
+    triggerTick();
   }, []);
 
   // ── Subscribe to NIFTY SSE price stream ──────────────────────────────────
@@ -1113,13 +1119,13 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       if (cancelled) return;
       try {
         const data = JSON.parse(e.data as string) as { price?: number };
-        if (data.price && data.price > 0) feedPrice(data.price);
+        if (data.price && data.price > 0) feedPrice(data.price, engineTick);
       } catch { /* ignore */ }
     };
 
     source.onerror = () => { /* EventSource auto-reconnects */ };
     return () => { cancelled = true; source.close(); };
-  }, [feedPrice]);
+  }, [feedPrice, engineTick]);
 
   // ── Pre-seed from today's 1-min candles ──────────────────────────────────
   useEffect(() => {

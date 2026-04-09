@@ -88,30 +88,32 @@ export default function OptionsAccountHeader({
                 {workspaceTitle}
               </span>
               {onToggleActions && (
-                <div className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border-subtle)", background: "var(--surface-2)" }}>
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-secondary)" }}>Action</span>
-                  <div className="inline-flex items-center rounded-full border p-0.5" style={{ borderColor: "var(--border-subtle)", background: "var(--surface)" }}>
+                <div className="inline-flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2" style={{ background: "rgba(15, 15, 20, 0.92)", boxShadow: "0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
+                  <span className="text-[10px] font-medium tracking-[0.08em]" style={{ color: "rgba(255,255,255,0.55)" }}>Auto Execute</span>
+                  <div className="inline-flex items-center rounded-full p-[3px]" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
                     <button
                       type="button"
                       onClick={() => onToggleActions(false)}
-                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                      className="rounded-full px-4 py-1.5 text-[11px] font-semibold transition-all duration-200"
                       style={{
-                        background: !actionsEnabled ? "var(--surface-3)" : "transparent",
-                        color: !actionsEnabled ? "var(--text-primary)" : "var(--text-secondary)",
+                        background: !actionsEnabled ? "rgba(255,255,255,0.12)" : "transparent",
+                        color: !actionsEnabled ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.35)",
+                        boxShadow: !actionsEnabled ? "0 1px 4px rgba(0,0,0,0.3)" : "none",
                       }}
                     >
-                      No
+                      Disabled
                     </button>
                     <button
                       type="button"
                       onClick={() => onToggleActions(true)}
-                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition"
+                      className="rounded-full px-4 py-1.5 text-[11px] font-semibold transition-all duration-200"
                       style={{
-                        background: actionsEnabled ? "rgba(21, 128, 61, 0.16)" : "transparent",
-                        color: actionsEnabled ? "var(--green)" : "var(--text-secondary)",
+                        background: actionsEnabled ? "rgb(34, 139, 64)" : "transparent",
+                        color: actionsEnabled ? "#fff" : "rgba(255,255,255,0.35)",
+                        boxShadow: actionsEnabled ? "0 1px 8px rgba(34, 139, 64, 0.45)" : "none",
                       }}
                     >
-                      Yes
+                      Enabled
                     </button>
                   </div>
                 </div>
