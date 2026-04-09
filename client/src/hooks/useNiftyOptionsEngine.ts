@@ -43,27 +43,27 @@ interface StratDef {
 
 const STRAT_DEFS: StratDef[] = [
   // ── CALL strategies ───────────────────────────────────────────────────────
-  { id: 1,  name: "MomentumBurst_Bull_Call",        category: "Momentum",      optionType: "CALL", signal: "STRONG_BULL_MOM",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 300,  minBars: 15, positionINR: 15000 },
-  { id: 2,  name: "ConsecCandle_Bull_Call",          category: "Momentum",      optionType: "CALL", signal: "BULL_MOM",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 180,  minBars: 15, positionINR: 12000 },
-  { id: 3,  name: "RSI_Extreme_Oversold_Call",       category: "Mean Reversion",optionType: "CALL", signal: "RSI_EXTREME_OS",   tpPct: 1.00, slPct: 0.30, cooldownSecs: 600,  minBars: 20, positionINR: 18000 },
-  { id: 4,  name: "RSI_Oversold_Recovery_Call",      category: "Mean Reversion",optionType: "CALL", signal: "RSI_OVERSOLD",     tpPct: 0.65, slPct: 0.24, cooldownSecs: 480,  minBars: 20, positionINR: 14000 },
-  { id: 5,  name: "Overextension_Fade_Call",         category: "Mean Reversion",optionType: "CALL", signal: "BB_LOWER_TOUCH",   tpPct: 0.55, slPct: 0.22, cooldownSecs: 300,  minBars: 22, positionINR: 12000 },
-  { id: 6,  name: "EMA_BullCross_Call",              category: "Breakout",      optionType: "CALL", signal: "EMA_BULL_CROSS",   tpPct: 0.65, slPct: 0.25, cooldownSecs: 600,  minBars: 22, positionINR: 14000 },
-  { id: 7,  name: "Resistance_Breakout_Call",        category: "Breakout",      optionType: "CALL", signal: "RESIST_BREAK",     tpPct: 0.84, slPct: 0.28, cooldownSecs: 480,  minBars: 22, positionINR: 16000 },
-  { id: 8,  name: "Stoch_Oversold_Call",             category: "Mean Reversion",optionType: "CALL", signal: "STOCH_OS",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 360,  minBars: 20, positionINR: 12000 },
-  { id: 9,  name: "Capitulation_VReversal_Call",     category: "Capitulation",  optionType: "CALL", signal: "CAPITUL_CALL",     tpPct: 0.90, slPct: 0.35, cooldownSecs: 480,  minBars: 22, positionINR: 18000 },
-  { id: 10, name: "BreakoutTrend_Pro_Bull_Call",     category: "Breakout",      optionType: "CALL", signal: "EMA_ABOVE_BOTH",   tpPct: 0.92, slPct: 0.35, cooldownSecs: 720,  minBars: 55, positionINR: 18000 },
+  { id: 1,  name: "MomentumBurst_Bull_Call",        category: "Momentum",      optionType: "CALL", signal: "STRONG_BULL_MOM",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 240,  minBars: 10, positionINR: 15000 },
+  { id: 2,  name: "ConsecCandle_Bull_Call",          category: "Momentum",      optionType: "CALL", signal: "BULL_MOM",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 120,  minBars: 10, positionINR: 12000 },
+  { id: 3,  name: "RSI_Extreme_Oversold_Call",       category: "Mean Reversion",optionType: "CALL", signal: "RSI_EXTREME_OS",   tpPct: 1.00, slPct: 0.30, cooldownSecs: 480,  minBars: 14, positionINR: 18000 },
+  { id: 4,  name: "RSI_Oversold_Recovery_Call",      category: "Mean Reversion",optionType: "CALL", signal: "RSI_OVERSOLD",     tpPct: 0.65, slPct: 0.24, cooldownSecs: 360,  minBars: 14, positionINR: 14000 },
+  { id: 5,  name: "Overextension_Fade_Call",         category: "Mean Reversion",optionType: "CALL", signal: "BB_LOWER_TOUCH",   tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 20, positionINR: 12000 },
+  { id: 6,  name: "EMA_BullCross_Call",              category: "Breakout",      optionType: "CALL", signal: "EMA_BULL_CROSS",   tpPct: 0.65, slPct: 0.25, cooldownSecs: 360,  minBars: 22, positionINR: 14000 },
+  { id: 7,  name: "Resistance_Breakout_Call",        category: "Breakout",      optionType: "CALL", signal: "RESIST_BREAK",     tpPct: 0.84, slPct: 0.28, cooldownSecs: 360,  minBars: 22, positionINR: 16000 },
+  { id: 8,  name: "Stoch_Oversold_Call",             category: "Mean Reversion",optionType: "CALL", signal: "STOCH_OS",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 12000 },
+  { id: 9,  name: "Capitulation_VReversal_Call",     category: "Capitulation",  optionType: "CALL", signal: "CAPITUL_CALL",     tpPct: 0.90, slPct: 0.35, cooldownSecs: 360,  minBars: 20, positionINR: 18000 },
+  { id: 10, name: "BreakoutTrend_Pro_Bull_Call",     category: "Breakout",      optionType: "CALL", signal: "EMA_ABOVE_BOTH",   tpPct: 0.92, slPct: 0.35, cooldownSecs: 480,  minBars: 50, positionINR: 18000 },
   // ── PUT strategies ────────────────────────────────────────────────────────
-  { id: 11, name: "MomentumBurst_Bear_Put",          category: "Momentum",      optionType: "PUT",  signal: "STRONG_BEAR_MOM",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 300,  minBars: 15, positionINR: 15000 },
-  { id: 12, name: "ConsecCandle_Bear_Put",           category: "Momentum",      optionType: "PUT",  signal: "BEAR_MOM",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 180,  minBars: 15, positionINR: 12000 },
-  { id: 13, name: "RSI_Extreme_Overbought_Put",      category: "Mean Reversion",optionType: "PUT",  signal: "RSI_EXTREME_OB",   tpPct: 1.00, slPct: 0.30, cooldownSecs: 600,  minBars: 20, positionINR: 18000 },
-  { id: 14, name: "RSI_Overbought_Fade_Put",         category: "Mean Reversion",optionType: "PUT",  signal: "RSI_OVERBOUGHT",   tpPct: 0.65, slPct: 0.24, cooldownSecs: 480,  minBars: 20, positionINR: 14000 },
-  { id: 15, name: "Overextension_Fade_Put",          category: "Mean Reversion",optionType: "PUT",  signal: "BB_UPPER_TOUCH",   tpPct: 0.55, slPct: 0.22, cooldownSecs: 300,  minBars: 22, positionINR: 12000 },
-  { id: 16, name: "EMA_BearCross_Put",               category: "Breakout",      optionType: "PUT",  signal: "EMA_BEAR_CROSS",   tpPct: 0.65, slPct: 0.25, cooldownSecs: 600,  minBars: 22, positionINR: 14000 },
-  { id: 17, name: "Support_Breakdown_Put",           category: "Breakout",      optionType: "PUT",  signal: "SUPPORT_BREAK",    tpPct: 0.84, slPct: 0.28, cooldownSecs: 480,  minBars: 22, positionINR: 16000 },
-  { id: 18, name: "Stoch_Overbought_Put",            category: "Mean Reversion",optionType: "PUT",  signal: "STOCH_OB",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 360,  minBars: 20, positionINR: 12000 },
-  { id: 19, name: "Capitulation_Reclaim_Elite_Call", category: "Capitulation",  optionType: "CALL", signal: "BB_SQUEEZE_BULL",  tpPct: 1.10, slPct: 0.42, cooldownSecs: 900,  minBars: 40, positionINR: 20000 },
-  { id: 20, name: "BreakdownTrend_Pro_Bear_Put",     category: "Breakout",      optionType: "PUT",  signal: "EMA_BELOW_BOTH",   tpPct: 0.92, slPct: 0.35, cooldownSecs: 720,  minBars: 55, positionINR: 18000 },
+  { id: 11, name: "MomentumBurst_Bear_Put",          category: "Momentum",      optionType: "PUT",  signal: "STRONG_BEAR_MOM",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 240,  minBars: 10, positionINR: 15000 },
+  { id: 12, name: "ConsecCandle_Bear_Put",           category: "Momentum",      optionType: "PUT",  signal: "BEAR_MOM",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 120,  minBars: 10, positionINR: 12000 },
+  { id: 13, name: "RSI_Extreme_Overbought_Put",      category: "Mean Reversion",optionType: "PUT",  signal: "RSI_EXTREME_OB",   tpPct: 1.00, slPct: 0.30, cooldownSecs: 480,  minBars: 14, positionINR: 18000 },
+  { id: 14, name: "RSI_Overbought_Fade_Put",         category: "Mean Reversion",optionType: "PUT",  signal: "RSI_OVERBOUGHT",   tpPct: 0.65, slPct: 0.24, cooldownSecs: 360,  minBars: 14, positionINR: 14000 },
+  { id: 15, name: "Overextension_Fade_Put",          category: "Mean Reversion",optionType: "PUT",  signal: "BB_UPPER_TOUCH",   tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 20, positionINR: 12000 },
+  { id: 16, name: "EMA_BearCross_Put",               category: "Breakout",      optionType: "PUT",  signal: "EMA_BEAR_CROSS",   tpPct: 0.65, slPct: 0.25, cooldownSecs: 360,  minBars: 22, positionINR: 14000 },
+  { id: 17, name: "Support_Breakdown_Put",           category: "Breakout",      optionType: "PUT",  signal: "SUPPORT_BREAK",    tpPct: 0.84, slPct: 0.28, cooldownSecs: 360,  minBars: 22, positionINR: 16000 },
+  { id: 18, name: "Stoch_Overbought_Put",            category: "Mean Reversion",optionType: "PUT",  signal: "STOCH_OB",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 240,  minBars: 14, positionINR: 12000 },
+  { id: 19, name: "Capitulation_Reclaim_Elite_Call", category: "Capitulation",  optionType: "CALL", signal: "BB_SQUEEZE_BULL",  tpPct: 1.10, slPct: 0.42, cooldownSecs: 600,  minBars: 30, positionINR: 20000 },
+  { id: 20, name: "BreakdownTrend_Pro_Bear_Put",     category: "Breakout",      optionType: "PUT",  signal: "EMA_BELOW_BOTH",   tpPct: 0.92, slPct: 0.35, cooldownSecs: 480,  minBars: 50, positionINR: 18000 },
 ];
 
 // ─── Math helpers (ported from Go signals.go) ──────────────────────────────────
@@ -153,124 +153,118 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
 
   switch (signal) {
     case "STRONG_BULL_MOM": {
-      // ~22 pts over 5 min on NIFTY@22000, short-term burst confirmation
+      // Strong upward momentum: ~7 pts over 5 min on NIFTY@22000
       if (n < 15) return false;
       const m5 = momentum(bars, 5);
       const m3 = momentum(bars, 3);
       const r = rsi(bars, 14);
-      return m5 > 0.0010 && m3 > 0.0004 && r < 72;
+      return m5 > 0.0006 && m3 > 0.0002 && r < 74;
     }
     case "BULL_MOM": {
-      // ~11 pts over 5 min, price above EMA9
+      // Mild upward momentum: price above EMA9 + positive 5-bar drift
       if (n < 15) return false;
       const m5 = momentum(bars, 5);
       const r = rsi(bars, 14);
-      return m5 > 0.0005 && r < 68 && price > ema(bars, 9);
+      return m5 > 0.0003 && r < 70 && price > ema(bars, 9);
     }
     case "STRONG_BEAR_MOM": {
       if (n < 15) return false;
       const m5 = momentum(bars, 5);
       const m3 = momentum(bars, 3);
       const r = rsi(bars, 14);
-      return m5 < -0.0010 && m3 < -0.0004 && r > 28;
+      return m5 < -0.0006 && m3 < -0.0002 && r > 26;
     }
     case "BEAR_MOM": {
       if (n < 15) return false;
       const m5 = momentum(bars, 5);
       const r = rsi(bars, 14);
-      return m5 < -0.0005 && r > 32 && price < ema(bars, 9);
+      return m5 < -0.0003 && r > 30 && price < ema(bars, 9);
     }
     case "RSI_EXTREME_OS": {
-      // RSI deeply oversold zone + price bouncing (no crossover required)
-      if (n < 20) return false;
+      if (n < 14) return false;
       const r = rsi(bars, 14);
-      return r < 28 && price > bars[n - 2];
+      return r < 32 && price >= bars[n - 2];
     }
     case "RSI_OVERSOLD": {
-      // RSI in recovery zone, price reclaiming EMA9
-      if (n < 20) return false;
+      if (n < 14) return false;
       const r = rsi(bars, 14);
       const e9 = ema(bars, 9);
-      return r > 30 && r < 46 && price >= e9 && bars[n - 2] < e9;
+      return r > 32 && r < 48 && price >= e9;
     }
     case "RSI_EXTREME_OB": {
-      if (n < 20) return false;
+      if (n < 14) return false;
       const r = rsi(bars, 14);
-      return r > 72 && price < bars[n - 2];
+      return r > 68 && price <= bars[n - 2];
     }
     case "RSI_OVERBOUGHT": {
-      if (n < 20) return false;
+      if (n < 14) return false;
       const r = rsi(bars, 14);
       const e9 = ema(bars, 9);
-      return r > 54 && r < 70 && price <= e9 && bars[n - 2] > e9;
+      return r > 52 && r < 68 && price <= e9;
     }
     case "BB_LOWER_TOUCH": {
-      // Near or below lower band, bouncing with RSI not overbought
-      if (n < 22) return false;
+      if (n < 20) return false;
       const bl = bbLower(bars, 20);
       const bm = bbMid(bars, 20);
       const r = rsi(bars, 14);
-      return bars[n - 2] <= bl * 1.003 && price > bars[n - 2] && price < bm && r < 52;
+      return price <= bl * 1.005 && price < bm && r < 52;
     }
     case "BB_UPPER_TOUCH": {
-      if (n < 22) return false;
+      if (n < 20) return false;
       const bu = bbUpper(bars, 20);
       const bm = bbMid(bars, 20);
       const r = rsi(bars, 14);
-      return bars[n - 2] >= bu * 0.997 && price < bars[n - 2] && price > bm && r > 48;
+      return price >= bu * 0.995 && price > bm && r > 48;
     }
-    case "EMA_BULL_CROSS":
-      return crossedAbove(bars, 9, 21);
-    case "EMA_BEAR_CROSS":
-      return crossedBelow(bars, 9, 21);
+    case "EMA_BULL_CROSS": {
+      // State-based: EMA9 currently above EMA21 with upward momentum
+      if (n < 22) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e9 > e21 && momentum(bars, 3) > 0.0002;
+    }
+    case "EMA_BEAR_CROSS": {
+      if (n < 22) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return e9 < e21 && momentum(bars, 3) < -0.0002;
+    }
     case "EMA_ABOVE_BOTH": {
-      if (n < 55) return false;
-      return price > ema(bars, 20) && price > ema(bars, 50) && crossedAbove(bars, 9, 21);
+      if (n < 50) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return price > ema(bars, 20) && price > ema(bars, 50) && e9 > e21 && momentum(bars, 5) > 0.0003;
     }
     case "EMA_BELOW_BOTH": {
-      if (n < 55) return false;
-      return price < ema(bars, 20) && price < ema(bars, 50) && crossedBelow(bars, 9, 21);
+      if (n < 50) return false;
+      const e9 = ema(bars, 9), e21 = ema(bars, 21);
+      return price < ema(bars, 20) && price < ema(bars, 50) && e9 < e21 && momentum(bars, 5) < -0.0003;
     }
     case "RESIST_BREAK": {
-      // Price breaks 20-bar high with momentum confirmation
       if (n < 22) return false;
-      const prev = bars.slice(n - 21, n - 1);
-      const hi = Math.max(...prev);
-      return price > hi * 1.0004 && momentum(bars, 3) > 0.0004;
+      const hi = Math.max(...bars.slice(n - 21, n - 1));
+      return price > hi * 1.0002 && momentum(bars, 3) > 0.0002;
     }
     case "SUPPORT_BREAK": {
       if (n < 22) return false;
-      const prev = bars.slice(n - 21, n - 1);
-      const lo = Math.min(...prev);
-      return price < lo * 0.9996 && momentum(bars, 3) < -0.0004;
+      const lo = Math.min(...bars.slice(n - 21, n - 1));
+      return price < lo * 0.9998 && momentum(bars, 3) < -0.0002;
     }
     case "STOCH_OS": {
-      // Stoch deeply oversold + price bouncing (no crossover required)
-      if (n < 20) return false;
-      const k = stochK(bars, 14);
-      const r = rsi(bars, 14);
-      return k < 25 && price > bars[n - 2] && r < 55;
+      if (n < 14) return false;
+      return stochK(bars, 14) < 28 && price >= bars[n - 2] && rsi(bars, 14) < 55;
     }
     case "STOCH_OB": {
-      if (n < 20) return false;
-      const k = stochK(bars, 14);
-      const r = rsi(bars, 14);
-      return k > 75 && price < bars[n - 2] && r > 45;
+      if (n < 14) return false;
+      return stochK(bars, 14) > 72 && price <= bars[n - 2] && rsi(bars, 14) > 45;
     }
     case "CAPITUL_CALL": {
-      if (n < 22) return false;
+      if (n < 20) return false;
       const bl = bbLower(bars, 20);
-      const isBBLower = bars[n - 2] <= bl * 1.002;
-      const isBouncing = price > bars[n - 2];
-      const mom5 = momentum(bars, 5);
-      return isBBLower && isBouncing && mom5 > 0.0006;
+      return price <= bl * 1.004 && price >= bars[n - 2] && momentum(bars, 5) > 0.0003;
     }
     case "BB_SQUEEZE_BULL": {
-      if (n < 40) return false;
+      if (n < 30) return false;
       const recentStd = stddev(bars.slice(-10));
-      const priorStd = stddev(bars.slice(-30, -10));
-      const squeezed = priorStd > 0 && recentStd < priorStd * 0.80;
-      return squeezed && momentum(bars, 3) > 0.0005;
+      const priorStd = stddev(bars.slice(-25, -10));
+      return priorStd > 0 && recentStd < priorStd * 0.85 && momentum(bars, 3) > 0.0002;
     }
   }
   return false;
@@ -719,7 +713,10 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       if (openCount >= MAX_CONCURRENT) continue;
       if (eng.balance < strat.def.positionINR) continue;
 
-      const fires = evalSignal(strat.def.signal, bars, price);
+      // Append live SSE price as the "current bar" so momentum/RSI/EMA
+      // reflect the actual market right now, not the last minute's close.
+      const barsForEval = [...bars, price];
+      const fires = evalSignal(strat.def.signal, barsForEval, price);
       strat.score = fires ? 75 : 0;
 
       if (fires) {
