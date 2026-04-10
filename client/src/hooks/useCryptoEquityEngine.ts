@@ -5,28 +5,32 @@ import { CRYPTO_TOP_20, type CryptoAsset } from "@/lib/cryptoTop20";
 import type { CryptoMarketItem } from "@/app/api/crypto/markets/route";
 
 const INITIAL_BALANCE = 1_000_000;
-const MAX_OPEN_POSITIONS = 16;
+const MAX_OPEN_POSITIONS = 22;        // ↑ more concurrent trades = more PnL
 const MAX_BARS = 120;
 const MIN_BARS_FAST = 18;
 const MIN_BARS_SLOW = 28;
 const SIGNAL_THRESHOLD = 61;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
-const ALLOCATION_USD = 10_000;
-const PROFIT_LOCK_PROGRESS = 0.26;
-const PROFIT_LOCK_SHARE = 0.40;
+const ALLOCATION_USD = 12_000;        // ↑ bigger base allocation per trade
+const PROFIT_LOCK_PROGRESS = 0.24;    // ↑ lock profits earlier in the hold
+const PROFIT_LOCK_SHARE = 0.35;       // ↑ lock at lower threshold
 const LATE_EXIT_PROGRESS = 0.54;
 const LATE_EXIT_MIN_GAIN = 0.05;
-const GRIND_EXIT_PROGRESS = 0.46;
-const GRIND_EXIT_SHARE = 0.24;
-const TRAIL_ACTIVATION_PCT = 1.2;
-const TRAIL_GIVEBACK_SHARE = 0.38;
+const GRIND_EXIT_PROGRESS = 0.38;     // ↑ exit grinders earlier
+const GRIND_EXIT_SHARE = 0.18;        // ↑ lower threshold to exit grinders
+const TRAIL_ACTIVATION_PCT = 0.85;    // ↑ trailing protection kicks in sooner
+const TRAIL_GIVEBACK_SHARE = 0.26;    // ↓ give back less profit before trail exit
 const MIN_SIZE_MULTIPLIER = 0.5;
-const MAX_SIZE_MULTIPLIER = 1.75;
+const MAX_SIZE_MULTIPLIER = 2.25;     // ↑ allow larger size on hot strategies
 const LOSS_COOLDOWN_PENALTY = 0.35;
 const UNDERPERFORMING_MIN_TRADES = 8;
 const UNDERPERFORMING_MAX_WINRATE = 35;
-const UNDERPERFORMING_PAUSE_MS = 6 * 60 * 60 * 1000;
+const UNDERPERFORMING_PAUSE_MS = 90 * 60 * 1000; // ↓ 90 min instead of 6h
+// Volume confirmation thresholds
+const VOL_SPIKE_RATIO = 1.6;          // volume must be 1.6x avg for boost
+const VOL_BOOST_POINTS = 5;           // extra score points on volume spike
+const VOL_HISTORY = 30;               // bars of volume history for avg
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -46,6 +50,7 @@ type SignalInputs = {
   low20: number;
   momentum3: number;
   momentum6: number;
+  volRatio: number; // currentVolume / rolling avg — 1.0 if unknown
 };
 
 interface StratDef {
@@ -114,6 +119,7 @@ interface InternalStrategyState {
 
 interface EngineRef {
   bars: Record<string, number[]>;
+  volBars: Record<string, number[]>; // rolling volume history per symbol
   quotes: Record<string, CryptoMarketItem>;
   strategies: InternalStrategyState[];
   positions: Map<string, InternalPosition>;
@@ -136,6 +142,7 @@ export type CryptoQuoteDisplay = {
   signalScore: number;
   hasPosition: boolean;
   strategyLabel?: string;
+  sparkline: number[];
 };
 
 export type CryptoPosition = {
@@ -210,19 +217,21 @@ export type CryptoEngineStats = {
 type CategoryProfile = { minTp: number; maxTp: number; minSl: number; maxSl: number; holdMins: number };
 
 const CATEGORY_PROFILES: Record<string, CategoryProfile> = {
-  Momentum: { minTp: 3.2, maxTp: 4.8, minSl: 1.5, maxSl: 2.4, holdMins: 95 },
-  Breakout: { minTp: 3.6, maxTp: 5.4, minSl: 1.6, maxSl: 2.5, holdMins: 105 },
-  Trend: { minTp: 3.5, maxTp: 5.2, minSl: 1.5, maxSl: 2.4, holdMins: 110 },
-  "Mean Reversion": { minTp: 2.4, maxTp: 3.6, minSl: 1.3, maxSl: 2.1, holdMins: 70 },
-  VWAP: { minTp: 2.6, maxTp: 3.8, minSl: 1.3, maxSl: 2.2, holdMins: 80 },
+  Momentum:        { minTp: 3.8, maxTp: 5.8, minSl: 1.4, maxSl: 2.2, holdMins: 95 },  // ↑ TP +20%
+  Breakout:        { minTp: 4.4, maxTp: 6.5, minSl: 1.5, maxSl: 2.3, holdMins: 110 }, // ↑ TP +20%
+  Trend:           { minTp: 4.2, maxTp: 6.2, minSl: 1.4, maxSl: 2.2, holdMins: 115 }, // ↑ TP +20%
+  "Mean Reversion":{ minTp: 2.8, maxTp: 4.4, minSl: 1.2, maxSl: 2.0, holdMins: 70 },  // ↑ TP +20%
+  VWAP:            { minTp: 3.2, maxTp: 4.8, minSl: 1.2, maxSl: 2.0, holdMins: 85 },  // ↑ TP +20%
+  Surge:           { minTp: 4.0, maxTp: 6.0, minSl: 1.5, maxSl: 2.2, holdMins: 90 },  // new
 };
 
 const BASE_SIGNALS = [
-  { signal: "BREAKOUT", category: "Breakout", longName: "Range_Breakout", shortName: "Range_Breakdown", tpPct: 4.8, slPct: 2.3, cooldownMinutes: 14, minBars: MIN_BARS_SLOW },
-  { signal: "EMA_CROSS", category: "Momentum", longName: "EMA_Cross_Impulse", shortName: "EMA_Cross_Fade", tpPct: 4.1, slPct: 2.0, cooldownMinutes: 11, minBars: MIN_BARS_SLOW },
-  { signal: "RSI_BOUNCE", category: "Mean Reversion", longName: "RSI_Compression_Reclaim", shortName: "RSI_Compression_Fade", tpPct: 3.4, slPct: 1.8, cooldownMinutes: 10, minBars: MIN_BARS_FAST },
-  { signal: "VWAP_RECLAIM", category: "VWAP", longName: "VWAP_Reclaim", shortName: "VWAP_Reject", tpPct: 3.5, slPct: 1.8, cooldownMinutes: 10, minBars: MIN_BARS_SLOW },
-  { signal: "TREND_CONT", category: "Trend", longName: "Trend_Continuation", shortName: "Trend_Reversal_Pressure", tpPct: 4.6, slPct: 2.2, cooldownMinutes: 16, minBars: MIN_BARS_SLOW },
+  { signal: "BREAKOUT",      category: "Breakout",        longName: "Range_Breakout",          shortName: "Range_Breakdown",           tpPct: 5.2, slPct: 2.1, cooldownMinutes: 14, minBars: MIN_BARS_SLOW },
+  { signal: "EMA_CROSS",     category: "Momentum",        longName: "EMA_Cross_Impulse",        shortName: "EMA_Cross_Fade",            tpPct: 4.5, slPct: 1.8, cooldownMinutes: 11, minBars: MIN_BARS_SLOW },
+  { signal: "RSI_BOUNCE",    category: "Mean Reversion",  longName: "RSI_Compression_Reclaim",  shortName: "RSI_Compression_Fade",      tpPct: 3.8, slPct: 1.6, cooldownMinutes: 10, minBars: MIN_BARS_FAST },
+  { signal: "VWAP_RECLAIM",  category: "VWAP",            longName: "VWAP_Reclaim",             shortName: "VWAP_Reject",               tpPct: 4.0, slPct: 1.6, cooldownMinutes: 10, minBars: MIN_BARS_SLOW },
+  { signal: "TREND_CONT",    category: "Trend",           longName: "Trend_Continuation",       shortName: "Trend_Reversal_Pressure",   tpPct: 5.0, slPct: 2.0, cooldownMinutes: 16, minBars: MIN_BARS_SLOW },
+  { signal: "MOMENTUM_SURGE",category: "Surge",           longName: "Momentum_Surge_Long",      shortName: "Momentum_Surge_Short",      tpPct: 5.0, slPct: 1.8, cooldownMinutes: 12, minBars: MIN_BARS_FAST },
 ];
 
 const VARIANTS = [
@@ -301,7 +310,7 @@ function scoreClamp(value: number, min = 0, max = 99): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function buildSignalInputs(bars: number[]): SignalInputs {
+function buildSignalInputs(bars: number[], volRatio = 1.0): SignalInputs {
   const last = bars.length - 1;
   const price = bars[last];
   const previous = bars.slice(0, -1);
@@ -320,6 +329,7 @@ function buildSignalInputs(bars: number[]): SignalInputs {
     low20: Math.min(...bars.slice(-20)),
     momentum3: last >= 3 ? ((price - bars[last - 3]) / bars[last - 3]) * 100 : 0,
     momentum6: last >= 6 ? ((price - bars[last - 6]) / bars[last - 6]) * 100 : 0,
+    volRatio,
   };
 }
 
@@ -346,6 +356,15 @@ function evalSignal(signal: string, input: SignalInputs): number {
       return fast > slow && slow > trend && momentum6 > 0.7 && rsi14 >= 56 && rsi14 <= 76 ? scoreClamp(73 + momentum6 * 8 + (rsi14 - 54) * 0.3) : 0;
     case "TREND_CONT_SHORT":
       return fast < slow && slow < trend && momentum6 < -0.7 && rsi14 >= 24 && rsi14 <= 44 ? scoreClamp(73 + Math.abs(momentum6) * 8 + (46 - rsi14) * 0.3) : 0;
+    // Pure volume + momentum surge — requires high volume spike to fire
+    case "MOMENTUM_SURGE":
+      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 > 0.55 && fast > slow && rsi14 >= 52 && rsi14 <= 78
+        ? scoreClamp(74 + momentum3 * 9 + (input.volRatio - 1) * 6 + (rsi14 - 50) * 0.25)
+        : 0;
+    case "MOMENTUM_SURGE_SHORT":
+      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 < -0.55 && fast < slow && rsi14 >= 22 && rsi14 <= 48
+        ? scoreClamp(74 + Math.abs(momentum3) * 9 + (input.volRatio - 1) * 6 + (50 - rsi14) * 0.25)
+        : 0;
     default:
       return 0;
   }
@@ -384,11 +403,13 @@ function computeQuantity(price: number): number {
 
 function sizeMultiplierFor(strategy: InternalStrategyState): number {
   let multiplier = 1;
-  if (strategy.totalTrades >= 6 && strategy.winRate >= 55) multiplier += 0.15;
-  if (strategy.totalTrades >= 12 && strategy.winRate >= 60) multiplier += 0.2;
+  if (strategy.totalTrades >= 6 && strategy.winRate >= 55) multiplier += 0.20;
+  if (strategy.totalTrades >= 12 && strategy.winRate >= 60) multiplier += 0.25;
+  if (strategy.totalTrades >= 20 && strategy.winRate >= 65) multiplier += 0.30; // hot streak bonus
   if (strategy.totalTrades > 0) {
     const avgPnlRatio = strategy.totalPnl / (strategy.totalTrades * ALLOCATION_USD);
-    if (avgPnlRatio > 0.025) multiplier += 0.2;
+    if (avgPnlRatio > 0.025) multiplier += 0.25;
+    if (avgPnlRatio > 0.05)  multiplier += 0.20; // extra bonus for high avg profit
     if (avgPnlRatio < -0.015) multiplier -= 0.15;
   }
   multiplier -= strategy.consecutiveLosses * LOSS_COOLDOWN_PENALTY * 0.2;
@@ -432,6 +453,7 @@ function resolveExit(position: InternalPosition, def: StratDef, currentPrice: nu
 function initEngine(): EngineRef {
   return {
     bars: {},
+    volBars: {},
     quotes: {},
     strategies: STRAT_DEFS.map((def) => ({ def, position: null, status: "WARMING", cooldownUntil: 0, score: 0, currentSymbol: "", lastSignalSymbol: "", totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, consecutiveLosses: 0 })),
     positions: new Map(),
@@ -538,7 +560,7 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
 
 export default function useCryptoEquityEngine() {
   const engineRef = useRef<EngineRef>(initEngine());
-  const [quotes, setQuotes] = useState<CryptoQuoteDisplay[]>(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false })));
+  const [quotes, setQuotes] = useState<CryptoQuoteDisplay[]>(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
   const [positions, setPositions] = useState<CryptoPosition[]>([]);
   const [trades, setTrades] = useState<CryptoTrade[]>([]);
   const [strategies, setStrategies] = useState<CryptoStrategyStatus[]>(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
@@ -557,6 +579,13 @@ export default function useCryptoEquityEngine() {
       bars.push(item.price);
       if (bars.length > MAX_BARS) bars.splice(0, bars.length - MAX_BARS);
       engine.bars[item.symbol] = bars;
+      // track rolling volume for spike detection
+      if (item.volume > 0) {
+        const vb = engine.volBars[item.symbol] ?? [];
+        vb.push(item.volume);
+        if (vb.length > VOL_HISTORY) vb.splice(0, vb.length - VOL_HISTORY);
+        engine.volBars[item.symbol] = vb;
+      }
     }
 
     for (const strategy of engine.strategies) {
@@ -593,8 +622,14 @@ export default function useCryptoEquityEngine() {
       for (const asset of CRYPTO_TOP_20) {
         const bars = engine.bars[asset.symbol];
         if (!bars || bars.length < strategy.def.minBars) continue;
-        const input = buildSignalInputs(bars);
-        const score = evalSignal(strategy.def.signal, input);
+        const vb = engine.volBars[asset.symbol] ?? [];
+        const avgVol = vb.length >= 3 ? vb.slice(0, -1).reduce((s, v) => s + v, 0) / (vb.length - 1) : 0;
+        const curVol = vb.length > 0 ? vb[vb.length - 1] : 0;
+        const volRatio = avgVol > 0 ? curVol / avgVol : 1.0;
+        const input = buildSignalInputs(bars, volRatio);
+        const rawScore = evalSignal(strategy.def.signal, input);
+        // boost score when volume is spiking — confirms conviction
+        const score = rawScore > 0 && volRatio >= VOL_SPIKE_RATIO ? Math.min(99, rawScore + VOL_BOOST_POINTS) : rawScore;
         const confirmed = score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strategy.def, input, classifyRegime(input));
         const displayScore = confirmed ? score : Math.min(score, SIGNAL_THRESHOLD - 1);
         if (displayScore > strategy.score) {
@@ -628,7 +663,8 @@ export default function useCryptoEquityEngine() {
     setQuotes(CRYPTO_TOP_20.map((asset) => {
       const quote = engine.quotes[asset.symbol];
       const sides = positionSides[asset.symbol];
-      return { symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: quote?.price ?? 0, changePct: quote?.changePct ?? 0, volume: quote?.volume ?? 0, signalScore: symbolScores[asset.symbol] ?? 0, hasPosition: Boolean(sides?.size), strategyLabel: sides ? [...sides].join("+") : undefined };
+      const sparkline = (engine.bars[asset.symbol] ?? []).slice(-24);
+      return { symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: quote?.price ?? 0, changePct: quote?.changePct ?? 0, volume: quote?.volume ?? 0, signalScore: symbolScores[asset.symbol] ?? 0, hasPosition: Boolean(sides?.size), strategyLabel: sides ? [...sides].join("+") : undefined, sparkline };
     }));
 
     setPositions([...engine.positions.values()].map((position) => ({ id: position.id, strategyId: position.strategyId, strategyName: position.strategyName, symbol: position.asset.symbol, name: position.asset.name, sector: position.asset.sector, side: position.side, quantity: position.quantity, entryPrice: position.entryPrice, currentPrice: position.currentPrice, tpPrice: position.tpPrice, slPrice: position.slPrice, notional: position.notional, entryTime: new Date(position.entryTime).toISOString(), unrealizedPnl: position.unrealizedPnl, returnPct: position.returnPct })));
@@ -648,7 +684,7 @@ export default function useCryptoEquityEngine() {
 
   const reset = useCallback(() => {
     engineRef.current = initEngine();
-    setQuotes(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false })));
+    setQuotes(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
     setPositions([]);
     setTrades([]);
     setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
