@@ -1141,10 +1141,97 @@ function buildDisplayStats(eng: EngineRef): OptionStats {
   };
 }
 
+// ─── DB persistence helpers ────────────────────────────────────────────────────
+
+type DbStatePayload = {
+  balance: number;
+  totalWins: number;
+  totalLosses: number;
+  totalPnl: number;
+  totalPremiumSpent: number;
+  tradeSeq: number;
+  minuteBars: number[];
+  trades: InternalTrade[];
+  strategies: Array<{
+    id: number;
+    totalTrades: number;
+    wins: number;
+    losses: number;
+    totalPnl: number;
+    lastTradeAt: number;
+  }>;
+};
+
+async function saveStateToDb(eng: EngineRef): Promise<void> {
+  try {
+    const payload: DbStatePayload = {
+      balance:           eng.balance,
+      totalWins:         eng.totalWins,
+      totalLosses:       eng.totalLosses,
+      totalPnl:          eng.totalRealizedPnl,
+      totalPremiumSpent: eng.totalPremiumSpent,
+      tradeSeq:          eng.seq,
+      minuteBars:        eng.minuteBars.slice(-200),
+      trades:            eng.trades.slice(0, 500),
+      strategies:        eng.strategies.map((s) => ({
+        id:           s.def.id,
+        totalTrades:  s.totalTrades,
+        wins:         s.wins,
+        losses:       s.losses,
+        totalPnl:     s.totalPnl,
+        lastTradeAt:  s.lastTradeAt,
+      })),
+    };
+    await fetch("/api/nifty/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch { /* non-critical — engine continues without DB */ }
+}
+
+async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
+  try {
+    const res = await fetch("/api/nifty/state");
+    if (!res.ok) return false;
+    const data = await res.json() as { ok: boolean; found: boolean; state?: DbStatePayload };
+    if (!data.ok || !data.found || !data.state) return false;
+
+    const s = data.state;
+    eng.balance           = s.balance;
+    eng.totalWins         = s.totalWins;
+    eng.totalLosses       = s.totalLosses;
+    eng.totalRealizedPnl  = s.totalPnl;
+    eng.totalPremiumSpent = s.totalPremiumSpent;
+    eng.seq               = s.tradeSeq;
+    eng.trades            = s.trades ?? [];
+
+    // Restore per-strategy stats (wins/losses/pnl) by strategy ID
+    for (const saved of (s.strategies ?? [])) {
+      const strat = eng.strategies.find((st) => st.def.id === saved.id);
+      if (!strat) continue;
+      strat.totalTrades = saved.totalTrades;
+      strat.wins        = saved.wins;
+      strat.losses      = saved.losses;
+      strat.totalPnl    = saved.totalPnl;
+      strat.lastTradeAt = saved.lastTradeAt;
+      strat.winRate     = saved.totalTrades > 0 ? (saved.wins / saved.totalTrades) * 100 : 0;
+    }
+
+    // Minute bars are seeded from candles API (fresher) — only restore if candle seed fails
+    if (eng.minuteBars.length === 0 && s.minuteBars?.length) {
+      eng.minuteBars = s.minuteBars;
+      eng.lastPrice  = s.minuteBars[s.minuteBars.length - 1] ?? 0;
+    }
+    return true;
+  } catch { return false; }
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export default function useNiftyOptionsEngine(_refreshKey = 0) {
   const engRef = useRef<EngineRef>(initEngine());
+  const lastTradeCountRef = useRef(0);
 
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
@@ -1163,6 +1250,13 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     setStats(buildDisplayStats(eng));
     setBarCount(eng.minuteBars.length);
     setEnginePrice(eng.lastPrice);
+
+    // Save to DB whenever a new trade is completed
+    const tradeCount = eng.trades.length;
+    if (tradeCount !== lastTradeCountRef.current) {
+      lastTradeCountRef.current = tradeCount;
+      void saveStateToDb(eng);
+    }
   }, []);
 
   // ── Engine tick (runs every TICK_MS) ──────────────────────────────────────
@@ -1267,6 +1361,18 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     return () => { cancelled = true; source.close(); };
   }, [feedPrice, engineTick]);
 
+  // ── Load persisted state from DB on mount ────────────────────────────────
+  useEffect(() => {
+    const restore = async () => {
+      const restored = await loadStateFromDb(engRef.current);
+      if (restored) {
+        lastTradeCountRef.current = engRef.current.trades.length;
+        pushDisplayState();
+      }
+    };
+    void restore();
+  }, [pushDisplayState]);
+
   // ── Pre-seed from today's 1-min candles ──────────────────────────────────
   useEffect(() => {
     const seed = async () => {
@@ -1276,9 +1382,9 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
         const data = await res.json() as { ok: boolean; candles?: Candle[] };
         if (!data.ok || !data.candles?.length) return;
         const eng = engRef.current;
-        // Only seed if we have no bars yet
-        if (eng.minuteBars.length > 0) return;
         const closes = data.candles.map((c) => c.close).filter((v) => v > 0);
+        if (!closes.length) return;
+        // Always seed bars from candles (fresher than DB) — overwrite DB bars
         eng.minuteBars = closes.slice(-MAX_BARS);
         eng.lastPrice = closes[closes.length - 1] ?? 0;
         const lastMinute = data.candles[data.candles.length - 1]?.time ?? 0;
@@ -1298,7 +1404,9 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
   // ── Reset ─────────────────────────────────────────────────────────────────
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
+    lastTradeCountRef.current = 0;
     pushDisplayState();
+    void saveStateToDb(engRef.current); // persist clean slate
   }, [pushDisplayState]);
 
   return { positions, trades, strategies, stats, clearAll, barCount, enginePrice };
