@@ -1,35 +1,38 @@
 /**
  * /api/nifty/stream — SSE live price feed for NIFTY 50
  *
- * Data source: Yahoo Finance v7 quote API (^NSEI)
+ * Data source: Yahoo Finance v8 chart API (^NSEI)
  * - No authentication required
- * - No API key required
- * - Polls every 3 seconds
+ * - Uses the same v8/chart endpoint as candles (v7/quote returns 401)
+ * - regularMarketPrice from chart meta gives the live price
+ * - Polls every 3 seconds, dual-mirror fallback
  * - Works on Vercel (serverless, maxDuration 60s — client auto-reconnects)
  */
 
 export const maxDuration = 60;
 
-const YAHOO_QUOTE_URL =
-  "https://query1.finance.yahoo.com/v7/finance/quote?symbols=%5ENSEI&fields=regularMarketPrice,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent";
+const CHART_URL1 =
+  "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false";
+const CHART_URL2 =
+  "https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false";
 
-// Fallback mirror — Yahoo sometimes throttles query1
-const YAHOO_QUOTE_URL2 =
-  "https://query2.finance.yahoo.com/v7/finance/quote?symbols=%5ENSEI&fields=regularMarketPrice,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent";
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+  "Accept": "application/json",
+};
 
-type YahooQuoteResult = {
+type ChartMeta = {
   regularMarketPrice?: number;
   regularMarketOpen?: number;
   regularMarketDayHigh?: number;
   regularMarketDayLow?: number;
-  regularMarketPreviousClose?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
+  chartPreviousClose?: number;
+  previousClose?: number;
 };
 
-type YahooQuoteResponse = {
-  quoteResponse?: {
-    result?: YahooQuoteResult[];
+type ChartResponse = {
+  chart?: {
+    result?: Array<{ meta?: ChartMeta }>;
     error?: unknown;
   };
 };
@@ -39,19 +42,14 @@ function n(v: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
-async function fetchNiftyQuote(): Promise<YahooQuoteResult | null> {
-  const headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Accept": "application/json",
-  };
-
-  for (const url of [YAHOO_QUOTE_URL, YAHOO_QUOTE_URL2]) {
+async function fetchNiftyQuote(): Promise<ChartMeta | null> {
+  for (const url of [CHART_URL1, CHART_URL2]) {
     try {
-      const res = await fetch(url, { headers, cache: "no-store" });
+      const res = await fetch(url, { headers: HEADERS, cache: "no-store" });
       if (!res.ok) continue;
-      const data = await res.json() as YahooQuoteResponse;
-      const result = data?.quoteResponse?.result?.[0];
-      if (result?.regularMarketPrice) return result;
+      const data = await res.json() as ChartResponse;
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta?.regularMarketPrice) return meta;
     } catch {
       // try next mirror
     }
@@ -69,16 +67,14 @@ export async function GET() {
       try {
         while (active) {
           try {
-            const quote = await fetchNiftyQuote();
+            const meta = await fetchNiftyQuote();
 
-            if (quote) {
-              const price = n(quote.regularMarketPrice);
-              const open  = n(quote.regularMarketOpen);
-              const high  = n(quote.regularMarketDayHigh);
-              const low   = n(quote.regularMarketDayLow);
-              const close = n(quote.regularMarketPreviousClose);
-              const change = n(quote.regularMarketChange);
-              const percentChange = n(quote.regularMarketChangePercent);
+            if (meta) {
+              const price = n(meta.regularMarketPrice);
+              const open  = n(meta.regularMarketOpen);
+              const high  = n(meta.regularMarketDayHigh);
+              const low   = n(meta.regularMarketDayLow);
+              const close = n(meta.chartPreviousClose ?? meta.previousClose);
 
               controller.enqueue(encoder.encode(
                 `data: ${JSON.stringify({
@@ -87,9 +83,9 @@ export async function GET() {
                   high,
                   low,
                   close,
-                  change,
-                  percentChange,
-                  source: "yahoo",
+                  change: price - close,
+                  percentChange: close > 0 ? ((price - close) / close) * 100 : 0,
+                  source: "yahoo-v8",
                   fetched_at: new Date().toISOString(),
                 })}\n\n`,
               ));
@@ -104,7 +100,7 @@ export async function GET() {
             ));
           }
 
-          // Poll every 3 seconds — Yahoo rate limit is generous at this pace
+          // Poll every 3 seconds
           await new Promise<void>((r) => setTimeout(r, 3000));
         }
       } finally {
