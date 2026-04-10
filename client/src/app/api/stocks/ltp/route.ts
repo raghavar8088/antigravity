@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
-import { NIFTY50_STOCKS, STOCK_BY_TOKEN, ALL_TOKENS } from "@/lib/nifty50Stocks";
+import { NIFTY50_STOCKS } from "@/lib/nifty50Stocks";
 
 export type StockLTPItem = {
   symbol: string;
@@ -18,16 +17,24 @@ type StockLTPResponse = {
   error: string;
   stocks: StockLTPItem[];
   fetchedAt: string;
+  source?: string;
 };
 
-type AngelBatchItem = {
-  symbolToken?: unknown;
-  ltp?: unknown;
-  open?: unknown;
-  high?: unknown;
-  low?: unknown;
-  close?: unknown;
-  lastPrice?: unknown;
+type YahooQuoteResult = {
+  symbol?: unknown;
+  regularMarketPrice?: unknown;
+  regularMarketOpen?: unknown;
+  regularMarketDayHigh?: unknown;
+  regularMarketDayLow?: unknown;
+  regularMarketPreviousClose?: unknown;
+  regularMarketChangePercent?: unknown;
+};
+
+type YahooQuoteResponse = {
+  quoteResponse?: {
+    result?: YahooQuoteResult[];
+    error?: unknown;
+  };
 };
 
 function n(v: unknown): number {
@@ -35,117 +42,95 @@ function n(v: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
-/**
- * Batch-fetch LTP for two chunks of tokens in parallel to stay within limits.
- * Angel One market/v1/quote accepts up to 50 tokens per request.
- */
-async function fetchBatch(jwt: string, tokens: string[]): Promise<AngelBatchItem[]> {
-  const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/market/v1/quote/`, {
-    method: "POST",
-    headers: commonHeaders(jwt),
-    body: JSON.stringify({
-      mode: "LTP",
-      exchangeTokens: { NSE: tokens },
-    }),
-    next: { revalidate: 0 },
-  });
+function toYahooSymbol(symbol: string): string {
+  return `${symbol}.NS`;
+}
 
-  if (!res.ok) throw new Error(`Angel batch LTP status ${res.status}`);
+function buildYahooQuoteUrls(symbols: string[]): string[] {
+  const joined = symbols.map((symbol) => encodeURIComponent(symbol)).join(",");
+  const fields = "regularMarketPrice,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketPreviousClose,regularMarketChangePercent";
+  return [
+    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${joined}&fields=${fields}`,
+    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${joined}&fields=${fields}`,
+  ];
+}
 
-  const payload = await res.json() as {
-    status?: boolean;
-    message?: string;
-    errorcode?: string;
-    data?: {
-      fetched?: AngelBatchItem[];
-      unfetched?: unknown[];
-    };
+async function fetchYahooQuotes(symbols: string[]): Promise<YahooQuoteResult[]> {
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
   };
 
-  if (!payload.status || !payload.data?.fetched) {
-    const msg = [payload.message, payload.errorcode].filter(Boolean).join(" ") || "Batch LTP failed";
-    throw new Error(msg);
+  for (const url of buildYahooQuoteUrls(symbols)) {
+    try {
+      const res = await fetch(url, { headers, cache: "no-store" });
+      if (!res.ok) continue;
+
+      const payload = await res.json() as YahooQuoteResponse;
+      const results = payload?.quoteResponse?.result;
+      if (Array.isArray(results) && results.length > 0) {
+        return results;
+      }
+    } catch {
+      // try next mirror
+    }
   }
 
-  return payload.data.fetched;
+  throw new Error("Yahoo Finance quote unavailable");
 }
 
 export async function GET(): Promise<Response> {
-  if (!isAngelConfigured()) {
-    const empty: StockLTPResponse = {
-      ok: false,
-      error: `Not configured — set: ${angelMissingEnv()}`,
-      stocks: [],
-      fetchedAt: new Date().toISOString(),
-    };
-    return NextResponse.json(empty);
-  }
-
   try {
-    const jwt = await getAngelJWT();
+    const yahooSymbols = NIFTY50_STOCKS.map((stock) => toYahooSymbol(stock.symbol));
+    const quotes = await fetchYahooQuotes(yahooSymbols);
 
-    // Split 50 tokens into two batches of 25 to be safe
-    const chunk1 = ALL_TOKENS.slice(0, 25);
-    const chunk2 = ALL_TOKENS.slice(25);
-
-    const [batch1, batch2] = await Promise.all([
-      fetchBatch(jwt, chunk1),
-      fetchBatch(jwt, chunk2),
-    ]);
-
-    const allItems = [...batch1, ...batch2];
-
-    // Build result map: token → parsed quote
-    const resultMap = new Map<string, StockLTPItem>();
-
-    for (const item of allItems) {
-      const token = String(item.symbolToken ?? "");
-      const stock = STOCK_BY_TOKEN[token];
-      if (!stock) continue;
-
-      const ltp = n(item.ltp ?? item.lastPrice);
-      const close = n(item.close);
-      const changePct = close > 0 ? ((ltp - close) / close) * 100 : 0;
-
-      resultMap.set(token, {
-        symbol: stock.symbol,
-        token,
-        ltp,
-        open: n(item.open),
-        high: n(item.high),
-        low: n(item.low),
-        close,
-        changePct,
-      });
+    const resultMap = new Map<string, YahooQuoteResult>();
+    for (const quote of quotes) {
+      const symbol = String(quote.symbol ?? "").toUpperCase();
+      if (symbol) {
+        resultMap.set(symbol, quote);
+      }
     }
 
-    // Ensure all 50 stocks appear in output (fill missing with zeros)
-    const stocks: StockLTPItem[] = NIFTY50_STOCKS.map((s) =>
-      resultMap.get(s.token) ?? {
-        symbol: s.symbol,
-        token: s.token,
-        ltp: 0,
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        changePct: 0,
-      },
-    );
+    const stocks: StockLTPItem[] = NIFTY50_STOCKS.map((stock) => {
+      const yahooSymbol = toYahooSymbol(stock.symbol).toUpperCase();
+      const quote = resultMap.get(yahooSymbol);
+      return {
+        symbol: stock.symbol,
+        token: stock.token,
+        ltp: n(quote?.regularMarketPrice),
+        open: n(quote?.regularMarketOpen),
+        high: n(quote?.regularMarketDayHigh),
+        low: n(quote?.regularMarketDayLow),
+        close: n(quote?.regularMarketPreviousClose),
+        changePct: n(quote?.regularMarketChangePercent),
+      };
+    });
 
     return NextResponse.json({
       ok: true,
       error: "",
       stocks,
       fetchedAt: new Date().toISOString(),
+      source: "yahoo",
     } satisfies StockLTPResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
     return NextResponse.json({
       ok: false,
       error: message,
-      stocks: [],
+      stocks: NIFTY50_STOCKS.map((stock) => ({
+        symbol: stock.symbol,
+        token: stock.token,
+        ltp: 0,
+        open: 0,
+        high: 0,
+        low: 0,
+        close: 0,
+        changePct: 0,
+      })),
       fetchedAt: new Date().toISOString(),
+      source: "yahoo",
     } satisfies StockLTPResponse);
   }
 }
