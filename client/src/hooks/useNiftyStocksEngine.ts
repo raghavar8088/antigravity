@@ -10,7 +10,7 @@ const MAX_OPEN_POSITIONS = 8;
 const MAX_BARS = 80; // ~4 min of price history at 3s ticks
 const MIN_BARS_FAST = 15; // enough for RSI14
 const MIN_BARS_SLOW = 22; // enough for EMA21 + Donchian20
-const SIGNAL_THRESHOLD = 68;
+const SIGNAL_THRESHOLD = 60;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
 const ALLOCATION_INR = 10_000; // 1% of the initial capital budget per trade
@@ -468,7 +468,8 @@ function isCategoryAlignedWithRegime(category: string, regime: string): boolean 
     case "HIGH_VOL":
       return ["Breakout", "Momentum", "Price Action", "Trend"].includes(category);
     case "RANGE":
-      return ["Mean Reversion", "VWAP", "Price Action"].includes(category);
+      // Allow all in range — momentum/breakout still fire on intraday swings
+      return true;
     default:
       return true;
   }
@@ -482,17 +483,21 @@ function passesEntryConfirmation(def: StratDef, inp: SignalInputs, regime: strin
     case "Breakout":
     case "Momentum":
     case "Trend":
-      return bullish
-        ? inp.price >= inp.fast && inp.fast >= inp.slow && inp.momentum3 > 0.12
-        : inp.price <= inp.fast && inp.fast <= inp.slow && inp.momentum3 < -0.12;
+      if (regime === "TRENDING_BULL" || regime === "TRENDING_BEAR") {
+        return bullish
+          ? inp.price >= inp.fast && inp.fast >= inp.slow && inp.momentum3 > 0.06
+          : inp.price <= inp.fast && inp.fast <= inp.slow && inp.momentum3 < -0.06;
+      }
+      // In range/unknown just need price direction
+      return bullish ? inp.momentum3 > 0.05 : inp.momentum3 < -0.05;
     case "VWAP":
       return bullish
-        ? inp.price >= inp.mean20 && inp.rsi14 >= 50
-        : inp.price <= inp.mean20 && inp.rsi14 <= 50;
+        ? inp.price >= inp.mean20 && inp.rsi14 >= 48
+        : inp.price <= inp.mean20 && inp.rsi14 <= 52;
     case "Mean Reversion":
       return bullish
-        ? inp.rsi14 <= 40 && inp.price >= inp.prevPrice
-        : inp.rsi14 >= 60 && inp.price <= inp.prevPrice;
+        ? inp.rsi14 <= 44 && inp.price >= inp.prevPrice
+        : inp.rsi14 >= 56 && inp.price <= inp.prevPrice;
     case "Price Action":
       return bullish
         ? inp.price >= inp.prevPrice
@@ -687,8 +692,73 @@ function initEngine(): EngineRef {
   };
 }
 
+// ─── DB persistence ───────────────────────────────────────────────────────────
+
+type StocksDbPayload = {
+  balance: number;
+  totalWins: number;
+  totalLosses: number;
+  totalPnl: number;
+  tradeSeq: number;
+  trades: InternalTrade[];
+  strategies: Array<{
+    id: number; totalTrades: number; wins: number;
+    losses: number; totalPnl: number; lastTradeAt: number;
+  }>;
+};
+
+async function saveStocksState(eng: EngineRef): Promise<void> {
+  try {
+    const payload: StocksDbPayload = {
+      balance:    eng.balance,
+      totalWins:  eng.totalWins,
+      totalLosses: eng.totalLosses,
+      totalPnl:   eng.totalRealizedPnl,
+      tradeSeq:   eng.seq,
+      trades:     eng.trades.slice(0, 500),
+      strategies: eng.strategies.map((s) => ({
+        id: s.def.id, totalTrades: s.totalTrades, wins: s.wins,
+        losses: s.losses, totalPnl: s.totalPnl, lastTradeAt: s.lastTradeAt,
+      })),
+    };
+    await fetch("/api/nifty/stocks-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch { /* non-critical */ }
+}
+
+async function loadStocksState(eng: EngineRef): Promise<boolean> {
+  try {
+    const res = await fetch("/api/nifty/stocks-state");
+    if (!res.ok) return false;
+    const data = await res.json() as { ok: boolean; found: boolean; state?: StocksDbPayload };
+    if (!data.ok || !data.found || !data.state) return false;
+    const s = data.state;
+    eng.balance          = s.balance;
+    eng.totalWins        = s.totalWins;
+    eng.totalLosses      = s.totalLosses;
+    eng.totalRealizedPnl = s.totalPnl;
+    eng.seq              = s.tradeSeq;
+    eng.trades           = s.trades ?? [];
+    for (const saved of (s.strategies ?? [])) {
+      const strat = eng.strategies.find((st) => st.def.id === saved.id);
+      if (!strat) continue;
+      strat.totalTrades = saved.totalTrades;
+      strat.wins        = saved.wins;
+      strat.losses      = saved.losses;
+      strat.totalPnl    = saved.totalPnl;
+      strat.lastTradeAt = saved.lastTradeAt;
+      strat.winRate     = saved.totalTrades > 0 ? (saved.wins / saved.totalTrades) * 100 : 0;
+    }
+    return true;
+  } catch { return false; }
+}
+
 export default function useNiftyStocksEngine() {
   const engRef = useRef<EngineRef>(initEngine());
+  const lastTradeCountRef = useRef(0);
 
   const [state, setState] = useState<StocksEngineState>({
     quotes: NIFTY50_STOCKS.map((s) => ({
@@ -950,11 +1020,27 @@ export default function useNiftyStocksEngine() {
     };
 
     setState({ quotes, positions, trades, strategies, stats });
+
+    // Save to DB whenever a new trade is completed
+    const tradeCount = eng.trades.length;
+    if (tradeCount !== lastTradeCountRef.current) {
+      lastTradeCountRef.current = tradeCount;
+      void saveStocksState(eng);
+    }
+  }, []);
+
+  // ── Load persisted state from DB on mount ─────────────────────────────────
+  useEffect(() => {
+    void loadStocksState(engRef.current).then((restored) => {
+      if (restored) lastTradeCountRef.current = engRef.current.trades.length;
+    });
   }, []);
 
   // ── Reset handler ──────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     engRef.current = initEngine();
+    lastTradeCountRef.current = 0;
+    void saveStocksState(engRef.current);
     setState({
       quotes: NIFTY50_STOCKS.map((s) => ({
         symbol: s.symbol, name: s.name, sector: s.sector,

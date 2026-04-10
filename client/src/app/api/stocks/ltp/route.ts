@@ -20,21 +20,17 @@ type StockLTPResponse = {
   source?: string;
 };
 
-type YahooQuoteResult = {
-  symbol?: unknown;
-  regularMarketPrice?: unknown;
-  regularMarketOpen?: unknown;
-  regularMarketDayHigh?: unknown;
-  regularMarketDayLow?: unknown;
-  regularMarketPreviousClose?: unknown;
-  regularMarketChangePercent?: unknown;
+type ChartMeta = {
+  regularMarketPrice?: number;
+  regularMarketOpen?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  chartPreviousClose?: number;
+  previousClose?: number;
 };
 
-type YahooQuoteResponse = {
-  quoteResponse?: {
-    result?: YahooQuoteResult[];
-    error?: unknown;
-  };
+type ChartResponse = {
+  chart?: { result?: Array<{ meta?: ChartMeta }>; error?: unknown };
 };
 
 function n(v: unknown): number {
@@ -42,68 +38,53 @@ function n(v: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
-function toYahooSymbol(symbol: string): string {
-  return `${symbol}.NS`;
-}
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+  "Accept": "application/json",
+};
 
-function buildYahooQuoteUrls(symbols: string[]): string[] {
-  const joined = symbols.map((symbol) => encodeURIComponent(symbol)).join(",");
-  const fields = "regularMarketPrice,regularMarketOpen,regularMarketDayHigh,regularMarketDayLow,regularMarketPreviousClose,regularMarketChangePercent";
-  return [
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${joined}&fields=${fields}`,
-    `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${joined}&fields=${fields}`,
+// Fetch a single stock's price using v8/chart (v7/quote returns 401)
+async function fetchStockPrice(yahooSymbol: string): Promise<ChartMeta | null> {
+  const mirrors = [
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d&includePrePost=false`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=2d&includePrePost=false`,
   ];
-}
-
-async function fetchYahooQuotes(symbols: string[]): Promise<YahooQuoteResult[]> {
-  const headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Accept": "application/json",
-  };
-
-  for (const url of buildYahooQuoteUrls(symbols)) {
+  for (const url of mirrors) {
     try {
-      const res = await fetch(url, { headers, cache: "no-store" });
+      const res = await fetch(url, { headers: HEADERS, cache: "no-store" });
       if (!res.ok) continue;
-
-      const payload = await res.json() as YahooQuoteResponse;
-      const results = payload?.quoteResponse?.result;
-      if (Array.isArray(results) && results.length > 0) {
-        return results;
-      }
+      const data = await res.json() as ChartResponse;
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta?.regularMarketPrice) return meta;
     } catch {
       // try next mirror
     }
   }
-
-  throw new Error("Yahoo Finance quote unavailable");
+  return null;
 }
 
 export async function GET(): Promise<Response> {
   try {
-    const yahooSymbols = NIFTY50_STOCKS.map((stock) => toYahooSymbol(stock.symbol));
-    const quotes = await fetchYahooQuotes(yahooSymbols);
+    // Fetch all 50 stocks in parallel (v8/chart, no auth required)
+    const results = await Promise.allSettled(
+      NIFTY50_STOCKS.map((stock) => fetchStockPrice(`${stock.symbol}.NS`)),
+    );
 
-    const resultMap = new Map<string, YahooQuoteResult>();
-    for (const quote of quotes) {
-      const symbol = String(quote.symbol ?? "").toUpperCase();
-      if (symbol) {
-        resultMap.set(symbol, quote);
-      }
-    }
-
-    const stocks: StockLTPItem[] = NIFTY50_STOCKS.map((stock) => {
-      const yahooSymbol = toYahooSymbol(stock.symbol).toUpperCase();
-      const quote = resultMap.get(yahooSymbol);
+    const stocks: StockLTPItem[] = NIFTY50_STOCKS.map((stock, i) => {
+      const result = results[i];
+      const meta = result.status === "fulfilled" ? result.value : null;
+      const prevClose = n(meta?.chartPreviousClose ?? meta?.previousClose);
+      const ltp = n(meta?.regularMarketPrice);
+      const changePct = prevClose > 0 ? ((ltp - prevClose) / prevClose) * 100 : 0;
       return {
         symbol: stock.symbol,
         token: stock.token,
-        ltp: n(quote?.regularMarketPrice),
-        open: n(quote?.regularMarketOpen),
-        high: n(quote?.regularMarketDayHigh),
-        low: n(quote?.regularMarketDayLow),
-        close: n(quote?.regularMarketPreviousClose),
-        changePct: n(quote?.regularMarketChangePercent),
+        ltp,
+        open: n(meta?.regularMarketOpen),
+        high: n(meta?.regularMarketDayHigh),
+        low: n(meta?.regularMarketDayLow),
+        close: prevClose,
+        changePct,
       };
     });
 
@@ -112,7 +93,7 @@ export async function GET(): Promise<Response> {
       error: "",
       stocks,
       fetchedAt: new Date().toISOString(),
-      source: "yahoo",
+      source: "yahoo-v8",
     } satisfies StockLTPResponse);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
@@ -122,15 +103,10 @@ export async function GET(): Promise<Response> {
       stocks: NIFTY50_STOCKS.map((stock) => ({
         symbol: stock.symbol,
         token: stock.token,
-        ltp: 0,
-        open: 0,
-        high: 0,
-        low: 0,
-        close: 0,
-        changePct: 0,
+        ltp: 0, open: 0, high: 0, low: 0, close: 0, changePct: 0,
       })),
       fetchedAt: new Date().toISOString(),
-      source: "yahoo",
+      source: "yahoo-v8",
     } satisfies StockLTPResponse);
   }
 }
