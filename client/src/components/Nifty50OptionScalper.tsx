@@ -741,7 +741,6 @@ export default function Nifty50OptionScalper({
   const grossLoss = trades.filter((trade) => trade.netPnl < 0).reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
   const totalTrades = Math.max(stats?.totalTrades ?? 0, trades.length);
   const totalWins = stats?.totalWins ?? trades.filter((trade) => trade.netPnl >= 0).length;
-  const totalLosses = stats?.totalLosses ?? trades.filter((trade) => trade.netPnl < 0).length;
   const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
   const openCount = Math.max(stats?.openPositions ?? 0, positions.length);

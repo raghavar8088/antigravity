@@ -132,8 +132,8 @@ export async function GET(request: Request) {
   }));
 
   // If selectedExpiry isn't one of the 4 Fridays, find the nearest match or use as-is
-  let selectedDte = expiries.find((e) => e.value === selectedExpiry)?.dte ?? 0;
-  let selectedLabel = expiries.find((e) => e.value === selectedExpiry)?.label ?? selectedExpiry;
+  const selectedDte = expiries.find((e) => e.value === selectedExpiry)?.dte ?? 0;
+  const selectedLabel = expiries.find((e) => e.value === selectedExpiry)?.label ?? selectedExpiry;
 
   try {
     // 1. Fetch spot price from BTCUSD ticker

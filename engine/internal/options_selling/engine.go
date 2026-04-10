@@ -351,8 +351,15 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !ok || !fn(ctx) {
 		return
 	}
+	if !optionEntryConfirmed(s.def, ctx, regime) {
+		return
+	}
 
-	positionUSD := s.def.PositionUSD * s.stats.SizeMultiplier
+	positionUSD := s.stats.AllocationUSD
+	if positionUSD <= 0 {
+		positionUSD = s.def.PositionUSD
+	}
+	positionUSD *= s.stats.SizeMultiplier
 	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "SELL")
 	if pos == nil {
 		return
@@ -377,6 +384,9 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 
 	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
+		return
+	}
+	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
@@ -452,6 +462,9 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		// If Entry=10, Current=4, gainPct = (10-4)/10 = 0.6 (60% profit)
 		gainPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium
 	}
+	if gainPct > pos.PeakGainPct {
+		pos.PeakGainPct = gainPct
+	}
 
 	timeProgress := 0.0
 	totalLife := pos.ExpiryTime.Sub(pos.EntryTime)
@@ -460,6 +473,9 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	}
 
 	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
+	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.24)
+	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.36)
+	trailFloor := pos.PeakGainPct * 0.62
 	strikePressure := false
 	switch pos.OptionType {
 	case Put:
@@ -473,12 +489,16 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		return ExitTP
 	case gainPct <= -stopLossPct: // Expansion of premium > SL threshold
 		return ExitSL
+	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
+		return ExitTrailStop
 	case strikePressure && gainPct < profitLockThreshold*0.50:
 		return ExitStrikePressure
 	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
 		return ExitProfitLock
-	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
+	case timeProgress >= 0.46 && gainPct >= grindExitThreshold:
 		return ExitProfitLock
+	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
+		return ExitLateExit
 	case now.After(pos.ExpiryTime):
 		return ExitExpiry
 	default:
@@ -551,6 +571,7 @@ func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now 
 	s.recordShadowTradeResultLocked(netPnL)
 	e.refreshStrategyPresentationLocked(s, now)
 	e.lastRosterEval = time.Time{}
+	e.schedulePersistLocked(e.exportStateLocked())
 }
 
 func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
@@ -559,6 +580,7 @@ func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
 	if netPnL > 0 {
 		s.stats.Wins++
 		s.consecutiveLosses = 0
+		s.stats.DisableReason = ""
 	} else {
 		s.stats.Losses++
 		s.consecutiveLosses++
@@ -567,10 +589,29 @@ func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
 		s.stats.WinRate = float64(s.stats.Wins) / float64(s.stats.TotalTrades) * 100
 	}
 
-	if s.consecutiveLosses >= optionLossStreakDisableThreshold {
+	switch {
+	case s.consecutiveLosses >= optionLossStreakDisableThreshold:
 		s.disabledUntil = now.Add(optionLossStreakCooldown)
 		s.stats.DisableReason = fmt.Sprintf("Loss streak reached %d", s.consecutiveLosses)
+	case s.stats.TotalTrades >= optionUnderperformingMinTrades &&
+		s.stats.TotalPnL < 0 &&
+		s.stats.WinRate < optionUnderperformingMaxWinRate:
+		s.disabledUntil = now.Add(optionUnderperformingCooldown)
+		s.stats.DisableReason = "Live results fell below minimum edge thresholds"
+	default:
+		s.disabledUntil = time.Time{}
 	}
+
+	s.stats.DisabledUntil = s.disabledUntil
+	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
+		s.stats.RosterState = StrategyRosterDisabled
+		s.stats.Status = optionStatusDisabled
+		s.stats.AllocationUSD = 0
+		s.stats.SizeMultiplier = 0
+		return
+	}
+
+	s.stats.SizeMultiplier = liveSizeMultiplierFor(s)
 }
 
 func (s *strategyState) recordShadowTradeResultLocked(netPnL float64) {

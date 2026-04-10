@@ -257,3 +257,67 @@ func TestClassifyMarketRegimeRecognizesTrend(t *testing.T) {
 		t.Fatalf("expected trend regime, got %s", got)
 	}
 }
+
+func TestLiveSizeMultiplierRewardsProfitableStrategies(t *testing.T) {
+	state := newStrategyState(StrategyDef{
+		ID:          9,
+		Name:        "Profitable_Trend_Call",
+		Category:    "Breakout",
+		Type:        Call,
+		PositionUSD: optionTradeAllocationUSD,
+	})
+	state.stats.TotalTrades = 14
+	state.stats.Wins = 9
+	state.stats.Losses = 5
+	state.stats.WinRate = 64.2
+	state.stats.TotalPnL = state.def.PositionUSD * 2.4
+
+	got := liveSizeMultiplierFor(state)
+	if got <= 1.0 {
+		t.Fatalf("expected profitable strategy to scale above 1.0x, got %.2f", got)
+	}
+}
+
+func TestMarkToMarketCanExitEarlyToProtectGrindProfit(t *testing.T) {
+	e := NewEngine()
+	entryTime := time.Now().Add(-90 * time.Minute)
+	pos := &OptionPosition{
+		ID:             "OPT-GRIND-0001",
+		StrategyID:     1,
+		StrategyName:   "MomentumBurst_Bull_Call",
+		OptionType:     Call,
+		Strike:         65000,
+		ExpiryTime:     entryTime.Add(180 * time.Minute),
+		EntryPremium:   100,
+		CurrentPremium: 114,
+		Quantity:       1,
+		CostBasis:      100,
+		EntryBTCPrice:  65000,
+		EntryTime:      entryTime,
+		UnrealizedPnL:  14,
+		IV:             0.5,
+		Delta:          0.5,
+	}
+
+	reason := e.markToMarketPositionLocked(pos, 0.5, 0.42, 0.35, entryTime.Add(95*time.Minute))
+	if reason == "" {
+		t.Fatal("expected profitable grind exit to trigger a protective close")
+	}
+}
+
+func TestOptionEntryConfirmedRejectsWeakMomentumCall(t *testing.T) {
+	prices := []float64{
+		100, 100.1, 100.2, 100.18, 100.22, 100.19, 100.24, 100.26, 100.23, 100.28,
+		100.3, 100.29, 100.33, 100.35, 100.34, 100.36, 100.38, 100.37, 100.39, 100.4,
+		100.41, 100.4, 100.42, 100.43, 100.44, 100.43, 100.45, 100.46, 100.45, 100.47,
+	}
+	ctx := SignalContext{
+		Prices:   prices,
+		BTCPrice: prices[len(prices)-1],
+	}
+	def := StrategyDef{Category: "Momentum", Type: Call}
+
+	if optionEntryConfirmed(def, ctx, optionMarketRegimeTrend) {
+		t.Fatal("expected weak momentum tape to fail the entry confirmation gate")
+	}
+}

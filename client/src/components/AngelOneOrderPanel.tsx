@@ -30,7 +30,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Order row ─────────────────────────────────────────────────────────────────
 
-function OrderRow({ order, onCancel: _onCancel }: { order: AngelOrder; onCancel: (id: string) => void }) {
+function OrderRow({ order }: { order: AngelOrder }) {
   const isBuy = order.transactionType === "BUY";
   const placedDate = order.placedAt
     ? new Date(order.placedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
@@ -140,7 +140,7 @@ export default function AngelOneOrderPanel() {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <OrderRow key={order.orderId} order={order} onCancel={() => {}} />
+                  <OrderRow key={order.orderId} order={order} />
                 ))}
               </tbody>
             </table>

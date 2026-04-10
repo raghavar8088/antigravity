@@ -32,9 +32,9 @@ type MarketProfile struct {
 
 var defaultOptionsMarketProfile = MarketProfile{
 	Name:      "BTC option scalper",
-	DefaultIV: 0.80,
-	MinIV:     0.30,
-	MaxIV:     3.00,
+	DefaultIV: 0.68,
+	MinIV:     0.22,
+	MaxIV:     2.20,
 	ChainConfig: ChainConfig{
 		WeeklyExpiryWeekday: time.Friday,
 		ExpiryHourUTC:       8,

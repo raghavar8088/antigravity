@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 5
+	maxConcurrentPositions   = 8
 	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
@@ -24,8 +24,8 @@ const (
 
 	optionRegimeMinBars = 55
 
-	optionMaxActiveStrategies      = 7
-	optionMaxStrategiesPerCategory = 3
+	optionMaxActiveStrategies      = 13
+	optionMaxStrategiesPerCategory = 4
 	optionRosterRefreshInterval    = 30 * time.Second
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
@@ -36,19 +36,19 @@ const (
 	optionUnderperformingMaxWinRate  = 35.0
 	optionUnderperformingCooldown    = 6 * time.Hour
 
-	optionProfitLockProgress      = 0.55
-	optionProfitLockShareOfTarget = 0.65
-	optionLateExitProgress        = 0.82
-	optionLateExitMinGain         = 0.12
+	optionProfitLockProgress      = 0.28
+	optionProfitLockShareOfTarget = 0.40
+	optionLateExitProgress        = 0.56
+	optionLateExitMinGain         = 0.05
 	optionStrikePressureBuffer    = 0.0025
 
-	optionColdStartSizeMultiplier = 0.85
+	optionColdStartSizeMultiplier = 0.95
 	optionMinSizeMultiplier       = 0.45
-	optionMaxSizeMultiplier       = 1.40
-	optionEarlyMaxMultiplier      = 1.05
-	optionLossStreakPenalty       = 0.12
-	optionAvgPnLBoost             = 0.10
-	optionAvgPnLPenalty           = 0.10
+	optionMaxSizeMultiplier       = 1.90
+	optionEarlyMaxMultiplier      = 1.15
+	optionLossStreakPenalty       = 0.10
+	optionAvgPnLBoost             = 0.22
+	optionAvgPnLPenalty           = 0.12
 )
 
 func newStrategyStatus(def StrategyDef) StrategyStatus {
@@ -153,9 +153,72 @@ func liveSizeMultiplierFor(s *strategyState) float64 {
 	if !s.disabledUntil.IsZero() && time.Now().Before(s.disabledUntil) {
 		return optionMinSizeMultiplier
 	}
-	return 1.0
+
+	multiplier := optionColdStartSizeMultiplier
+	liveTrades := s.stats.TotalTrades
+	if liveTrades >= 3 {
+		multiplier = 1.0
+	}
+	if liveTrades >= 8 && s.stats.WinRate >= 52 {
+		multiplier += 0.10
+	}
+	if liveTrades >= 12 && s.stats.WinRate >= 56 {
+		multiplier += 0.10
+	}
+	if liveTrades > 0 && s.def.PositionUSD > 0 {
+		avgPnLRatio := (s.stats.TotalPnL / float64(liveTrades)) / s.def.PositionUSD
+		if avgPnLRatio > 0.08 {
+			multiplier += optionAvgPnLBoost
+		}
+		if avgPnLRatio < -0.06 {
+			multiplier -= optionAvgPnLPenalty
+		}
+	}
+	if s.consecutiveLosses > 0 {
+		multiplier -= float64(s.consecutiveLosses) * optionLossStreakPenalty
+	}
+	if liveTrades <= 2 {
+		multiplier = math.Min(multiplier, optionEarlyMaxMultiplier)
+	}
+	return clamp(optionMinSizeMultiplier, multiplier, optionMaxSizeMultiplier)
 }
 
 func sizeMultiplierFor(s *strategyState) float64 {
 	return liveSizeMultiplierFor(s)
+}
+
+func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
+	if len(ctx.Prices) < 25 {
+		return false
+	}
+
+	price := ctx.BTCPrice
+	fast := ema(ctx.Prices, 9)
+	slow := ema(ctx.Prices, 21)
+	trend := ema(ctx.Prices, 55)
+	rsiVal := rsi(ctx.Prices, 14)
+	mom3 := momentum(ctx.Prices, 3)
+	mom8 := momentum(ctx.Prices, 8)
+
+	bullishSeller := def.Type == Put
+	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
+	if bullishSeller {
+		switch def.Category {
+		case "Momentum", "Breakout", "Hybrid":
+			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+		case "Mean Reversion", "Capitulation":
+			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
+		default:
+			return price >= fast && mom3 >= -0.0002
+		}
+	}
+
+	switch def.Category {
+	case "Momentum", "Breakout", "Hybrid":
+		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+	case "Mean Reversion", "Capitulation":
+		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
+	default:
+		return price <= fast && mom3 <= 0.0002
+	}
 }

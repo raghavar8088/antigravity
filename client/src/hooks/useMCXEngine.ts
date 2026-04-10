@@ -18,13 +18,22 @@ import type { MCXCandle } from "@/app/api/mcx/candles/route";
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const INITIAL_BALANCE = 1_000_000;
-const MAX_CONCURRENT = 6;
+const MAX_CONCURRENT = 9;
 const MAX_BARS = 200;
 const TICK_MS = 5_000;
-const MCX_PROFIT_LOCK_PROGRESS = 0.42;
-const MCX_PROFIT_LOCK_SHARE = 0.58;
-const MCX_LATE_EXIT_PROGRESS = 0.75;
-const MCX_LATE_EXIT_MIN_GAIN = 0.1;
+const MCX_PROFIT_LOCK_PROGRESS = 0.28;
+const MCX_PROFIT_LOCK_SHARE = 0.42;
+const MCX_LATE_EXIT_PROGRESS = 0.56;
+const MCX_LATE_EXIT_MIN_GAIN = 0.06;
+const MCX_GRIND_EXIT_PROGRESS = 0.48;
+const MCX_GRIND_EXIT_SHARE = 0.26;
+const MCX_TRAIL_GIVEBACK_SHARE = 0.38;
+const MCX_MIN_SIZE_MULTIPLIER = 0.5;
+const MCX_MAX_SIZE_MULTIPLIER = 1.75;
+const MCX_LOSS_COOLDOWN_PENALTY = 0.3;
+const MCX_UNDERPERFORMING_MIN_TRADES = 8;
+const MCX_UNDERPERFORMING_MAX_WINRATE = 35;
+const MCX_UNDERPERFORMING_PAUSE_MS = 6 * 60 * 60 * 1000;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -385,6 +394,7 @@ interface InternalPosition {
   entryTime: number;
   expiryTime: number;
   unrealizedPnl: number;
+  peakGainPct: number;
   iv: number;
   barsHeld: number;
 }
@@ -401,6 +411,7 @@ interface InternalStratState {
   winRate: number;
   lastTradeAt: number;
   score: number;
+  consecutiveLosses: number;
 }
 
 interface InternalTrade {
@@ -529,8 +540,14 @@ function resolveExit(
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= MCX_GRIND_EXIT_PROGRESS && gainPct >= Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * MCX_GRIND_EXIT_SHARE)) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
   if (timeProgress >= MCX_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (pos.peakGainPct >= Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - MCX_TRAIL_GIVEBACK_SHARE)) {
+    return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= MCX_LATE_EXIT_PROGRESS && gainPct >= MCX_LATE_EXIT_MIN_GAIN) {
     return { reason: "LATE_EXIT", exitPremium: currentPremium };
@@ -550,7 +567,7 @@ function initEngine(): EngineRef {
     commodities,
     strategies: STRAT_DEFS.map((def) => ({
       def, position: null, status: "WARMING", cooldownUntil: 0,
-      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, lastTradeAt: 0, score: 0,
+      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, lastTradeAt: 0, score: 0, consecutiveLosses: 0,
     })),
     positions: new Map(),
     trades: [],
@@ -560,6 +577,30 @@ function initEngine(): EngineRef {
     totalLosses: 0,
     totalRealizedPnl: 0,
   };
+}
+
+function mcxSizeMultiplier(strat: InternalStratState): number {
+  let multiplier = 1;
+  if (strat.totalTrades >= 6 && strat.winRate >= 55) multiplier += 0.15;
+  if (strat.totalTrades >= 12 && strat.winRate >= 60) multiplier += 0.2;
+  const commodity = MCX_COMMODITY_MAP.get(strat.def.commodityId);
+  if (strat.totalTrades > 0 && commodity) {
+    const avgPnlRatio = strat.totalPnl / (strat.totalTrades * commodity.positionINR);
+    if (avgPnlRatio > 0.08) multiplier += 0.18;
+    if (avgPnlRatio < -0.04) multiplier -= 0.15;
+  }
+  multiplier -= strat.consecutiveLosses * 0.1;
+  return mcxClamp(multiplier, MCX_MIN_SIZE_MULTIPLIER, MCX_MAX_SIZE_MULTIPLIER);
+}
+
+function mcxCooldownMs(strat: InternalStratState, won: boolean): number {
+  const base = strat.def.cooldownSecs * 1000;
+  if (won) return base;
+  return Math.round(base * (1 + strat.consecutiveLosses * MCX_LOSS_COOLDOWN_PENALTY));
+}
+
+function shouldPauseMCXStrategy(strat: InternalStratState): boolean {
+  return strat.totalTrades >= MCX_UNDERPERFORMING_MIN_TRADES && strat.totalPnl < 0 && strat.winRate < MCX_UNDERPERFORMING_MAX_WINRATE;
 }
 
 function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: number, exitPrice: number, reason: string, now: number) {
@@ -582,11 +623,11 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
   eng.balance += exitPremium * pos.quantity;
   eng.totalRealizedPnl += netPnl;
   strat.totalTrades++;
-  if (netPnl >= 0) { strat.wins++; eng.totalWins++; } else { strat.losses++; eng.totalLosses++; }
+  if (netPnl >= 0) { strat.wins++; eng.totalWins++; strat.consecutiveLosses = 0; } else { strat.losses++; eng.totalLosses++; strat.consecutiveLosses += 1; }
   strat.totalPnl += netPnl;
   strat.winRate = strat.totalTrades > 0 ? (strat.wins / strat.totalTrades) * 100 : 0;
   strat.lastTradeAt = now;
-  strat.cooldownUntil = now + strat.def.cooldownSecs * 1000;
+  strat.cooldownUntil = now + mcxCooldownMs(strat, netPnl >= 0);
   strat.status = "COOLING";
   strat.position = null;
   eng.positions.delete(pos.id);
@@ -595,7 +636,7 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
 function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number): boolean {
   const premium = estimatePremium(price, iv, commodity.dteDays);
   const costPerLot = premium * commodity.lotSize;
-  let lots = costPerLot > 0 ? Math.max(1, Math.round(commodity.positionINR / costPerLot)) : 1;
+  let lots = costPerLot > 0 ? Math.max(1, Math.round((commodity.positionINR * mcxSizeMultiplier(strat)) / costPerLot)) : 1;
   let cost = premium * commodity.lotSize * lots;
   // Reduce lots if not enough balance
   while (cost > eng.balance && lots > 1) { lots--; cost = premium * commodity.lotSize * lots; }
@@ -616,7 +657,7 @@ function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXC
     lots, quantity, costBasis: cost,
     entryPrice: price, entryTime: now,
     expiryTime: now + commodity.dteDays * 24 * 60 * 60 * 1000,
-    unrealizedPnl: 0, iv, barsHeld: 0,
+    unrealizedPnl: 0, peakGainPct: 0, iv, barsHeld: 0,
   };
 
   strat.position = pos;
@@ -713,6 +754,7 @@ function buildQuotes(eng: EngineRef): MCXCommodityQuote[] {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export default function useMCXEngine(_refreshKey = 0) {
+  void _refreshKey;
   const engRef = useRef<EngineRef>(initEngine());
   const [positions, setPositions] = useState<MCXPosition[]>([]);
   const [trades, setTrades] = useState<MCXTrade[]>([]);
@@ -749,9 +791,13 @@ export default function useMCXEngine(_refreshKey = 0) {
       const price = state.lastPrice;
       const commodity = MCX_COMMODITY_MAP.get(pos.commodityId)!;
 
+      // eslint-disable-next-line react-hooks/immutability
       pos.barsHeld++;
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
+      if (pos.entryPremium > 0) {
+        pos.peakGainPct = Math.max(pos.peakGainPct, (pos.currentPremium-pos.entryPremium)/pos.entryPremium);
+      }
 
       const exit = resolveExit(pos, strat.def, pos.currentPremium, now);
       if (exit) {
@@ -764,6 +810,12 @@ export default function useMCXEngine(_refreshKey = 0) {
     // Evaluate signals
     for (const strat of eng.strategies) {
       if (strat.position) { strat.status = "IN_POSITION"; continue; }
+      if (shouldPauseMCXStrategy(strat)) {
+        strat.status = "COOLING";
+        strat.score = 0;
+        strat.cooldownUntil = Math.max(strat.cooldownUntil, now + MCX_UNDERPERFORMING_PAUSE_MS);
+        continue;
+      }
 
       if (strat.status === "COOLING") {
         if (now < strat.cooldownUntil) continue;

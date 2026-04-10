@@ -24,14 +24,14 @@ const (
 	futuresPositionCapitalPct = 0.01
 	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
-	minExecutableConfidence     = 0.75 // Raised: require higher-quality entries
+	minExecutableConfidence     = 0.78 // Push further toward higher-quality entries
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio        = 2.00 // 2:1 R:R — profitable at 40%+ win rate
+	minRewardToRiskRatio        = 2.20 // Slightly stronger edge requirement
 	minSignalTakeProfitPct      = 0.35 // Wider TP — captures real BTC moves, not just noise
-	maxSignalStopLossPct        = 0.18 // Tighter SL — cut losses before they compound
+	maxSignalStopLossPct        = 0.16 // Trim losers faster on futures flow
 	defaultSignalStopLossPct    = 0.12 // Tighter default SL — noise filter
 
-	minExecutionWeightToTrade = 0.30 // Raised: only strategies with demonstrated edge trade
+	minExecutionWeightToTrade = 0.34 // Further bias toward strategies with demonstrated edge
 	marketHistoryMaxSamples   = 320
 
 	marketRegimeUnknown  = "UNKNOWN"

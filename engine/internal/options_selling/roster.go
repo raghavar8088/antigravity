@@ -256,7 +256,7 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 		switch next {
 		case StrategyRosterActive:
 			s.stats.AllocationUSD = s.def.PositionUSD
-			s.stats.SizeMultiplier = 1.0
+			s.stats.SizeMultiplier = liveSizeMultiplierFor(s)
 			if s.stats.DisableReason == "Rotated out of live roster" {
 				s.stats.DisableReason = ""
 			}

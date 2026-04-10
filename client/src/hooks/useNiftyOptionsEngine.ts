@@ -22,13 +22,22 @@ const LOT_SIZE = 75;                  // NIFTY F&O lot size
 const STRIKE_STEP = 50;              // NIFTY strike increment
 const NIFTY_IV = 0.18;               // ~18% IV for NIFTY weekly options
 const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly expiry
-const MAX_CONCURRENT = 10;
+const MAX_CONCURRENT = 16;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
 const TICK_MS = 1_000;               // engine tick every second
-const PROFIT_LOCK_PROGRESS = 0.45;
-const PROFIT_LOCK_SHARE = 0.62;
-const LATE_EXIT_PROGRESS = 0.76;
-const LATE_EXIT_MIN_GAIN = 0.12;
+const PROFIT_LOCK_PROGRESS = 0.28;
+const PROFIT_LOCK_SHARE = 0.44;
+const LATE_EXIT_PROGRESS = 0.56;
+const LATE_EXIT_MIN_GAIN = 0.06;
+const GRIND_EXIT_PROGRESS = 0.50;
+const GRIND_EXIT_SHARE = 0.26;
+const NIFTY_OPT_TRAIL_GIVEBACK_SHARE = 0.38;
+const NIFTY_OPT_MIN_SIZE_MULTIPLIER = 0.5;
+const NIFTY_OPT_MAX_SIZE_MULTIPLIER = 1.8;
+const NIFTY_OPT_LOSS_COOLDOWN_PENALTY = 0.3;
+const NIFTY_OPT_UNDERPERFORMING_MIN_TRADES = 8;
+const NIFTY_OPT_UNDERPERFORMING_MAX_WINRATE = 35;
+const NIFTY_OPT_UNDERPERFORMING_PAUSE_MS = 6 * 60 * 60 * 1000;
 
 // ─── Strategy definitions ──────────────────────────────────────────────────────
 
@@ -225,22 +234,6 @@ function stochK(bars: number[], period: number): number {
   const slice = bars.slice(-period);
   const lo = Math.min(...slice), hi = Math.max(...slice);
   return hi === lo ? 50 : ((bars[bars.length - 1] - lo) / (hi - lo)) * 100;
-}
-
-function crossedAbove(bars: number[], fastP: number, slowP: number): boolean {
-  if (bars.length < slowP + 2) return false;
-  const prev = bars.slice(0, -1);
-  return ema(bars, fastP) > ema(bars, slowP) && ema(prev, fastP) <= ema(prev, slowP);
-}
-
-function crossedBelow(bars: number[], fastP: number, slowP: number): boolean {
-  if (bars.length < slowP + 2) return false;
-  const prev = bars.slice(0, -1);
-  return ema(bars, fastP) < ema(bars, slowP) && ema(prev, fastP) >= ema(prev, slowP);
-}
-
-function avgPrice(bars: number[]): number {
-  return bars.reduce((s, v) => s + v, 0) / bars.length;
 }
 
 // ─── Signal evaluators (NIFTY-calibrated thresholds) ─────────────────────────
@@ -780,8 +773,14 @@ function resolveExit(
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= GRIND_EXIT_PROGRESS && gainPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
   if (timeProgress >= PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (pos.peakGainPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - NIFTY_OPT_TRAIL_GIVEBACK_SHARE)) {
+    return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= LATE_EXIT_PROGRESS && gainPct >= LATE_EXIT_MIN_GAIN) {
     return { reason: "LATE_EXIT", exitPremium: currentPremium };
@@ -834,6 +833,7 @@ interface InternalPosition {
   entryNiftyPrice: number;
   entryTime: number; // ms
   unrealizedPnl: number;
+  peakGainPct: number;
   iv: number;
   delta: number;
   barsHeld: number;
@@ -852,6 +852,7 @@ interface InternalStratState {
   lastTradeAt: number; // ms
   score: number;
   regime: string;
+  consecutiveLosses: number;
 }
 
 interface InternalTrade {
@@ -913,6 +914,7 @@ function initEngine(): EngineRef {
       lastTradeAt: 0,
       score: 0,
       regime: "UNKNOWN",
+      consecutiveLosses: 0,
     })),
     positions: new Map(),
     trades: [],
@@ -923,6 +925,29 @@ function initEngine(): EngineRef {
     totalRealizedPnl: 0,
     totalPremiumSpent: 0,
   };
+}
+
+function niftyOptionSizeMultiplier(strat: InternalStratState): number {
+  let multiplier = 1;
+  if (strat.totalTrades >= 6 && strat.winRate >= 55) multiplier += 0.15;
+  if (strat.totalTrades >= 12 && strat.winRate >= 60) multiplier += 0.2;
+  if (strat.totalTrades > 0 && strat.def.positionINR > 0) {
+    const avgPnlRatio = strat.totalPnl / (strat.totalTrades * strat.def.positionINR);
+    if (avgPnlRatio > 0.1) multiplier += 0.18;
+    if (avgPnlRatio < -0.05) multiplier -= 0.15;
+  }
+  multiplier -= strat.consecutiveLosses * 0.1;
+  return clampNumber(multiplier, NIFTY_OPT_MIN_SIZE_MULTIPLIER, NIFTY_OPT_MAX_SIZE_MULTIPLIER);
+}
+
+function niftyOptionCooldownMs(strat: InternalStratState, won: boolean): number {
+  const base = strat.def.cooldownSecs * 1000;
+  if (won) return base;
+  return Math.round(base * (1 + strat.consecutiveLosses * NIFTY_OPT_LOSS_COOLDOWN_PENALTY));
+}
+
+function shouldPauseNiftyOptionStrategy(strat: InternalStratState): boolean {
+  return strat.totalTrades >= NIFTY_OPT_UNDERPERFORMING_MIN_TRADES && strat.totalPnl < 0 && strat.winRate < NIFTY_OPT_UNDERPERFORMING_MAX_WINRATE;
 }
 
 function closePositionLocked(
@@ -964,12 +989,12 @@ function closePositionLocked(
   eng.totalRealizedPnl += netPnl;
 
   strat.totalTrades++;
-  if (netPnl >= 0) { strat.wins++; eng.totalWins++; }
-  else { strat.losses++; eng.totalLosses++; }
+  if (netPnl >= 0) { strat.wins++; eng.totalWins++; strat.consecutiveLosses = 0; }
+  else { strat.losses++; eng.totalLosses++; strat.consecutiveLosses += 1; }
   strat.totalPnl += netPnl;
   strat.winRate = strat.totalTrades > 0 ? (strat.wins / strat.totalTrades) * 100 : 0;
   strat.lastTradeAt = now;
-  strat.cooldownUntil = now + strat.def.cooldownSecs * 1000;
+  strat.cooldownUntil = now + niftyOptionCooldownMs(strat, netPnl >= 0);
   strat.status = "COOLING";
   strat.position = null;
   eng.positions.delete(pos.id);
@@ -984,7 +1009,9 @@ function openPositionLocked(
 ): boolean {
   eng.seq++;
   const premium = estimatePremium(price, iv);
-  const cost = premium * LOT_SIZE;
+  const lots = Math.max(1, Math.floor((strat.def.positionINR * niftyOptionSizeMultiplier(strat)) / Math.max(premium * LOT_SIZE, 1)));
+  const quantity = lots * LOT_SIZE;
+  const cost = premium * quantity;
 
   if (eng.balance < cost) return false;
 
@@ -1005,11 +1032,12 @@ function openPositionLocked(
     currentPremium: premium,
     tpPremium: premium * (1 + strat.def.tpPct),
     slPremium: premium * (1 - strat.def.slPct),
-    quantity: LOT_SIZE,
+    quantity,
     costBasis: cost,
     entryNiftyPrice: price,
     entryTime: now,
     unrealizedPnl: 0,
+    peakGainPct: 0,
     iv,
     delta: 0.5,
     barsHeld: 0,
@@ -1081,7 +1109,7 @@ function buildDisplayStrategies(eng: EngineRef): OptionStrategyStatus[] {
     score: s.score,
     regime: s.regime,
     regimeFit: 1,
-    allocationUsd: s.def.positionINR,
+      allocationUsd: Math.round(s.def.positionINR * niftyOptionSizeMultiplier(s)),
     totalTrades: s.totalTrades,
     wins: s.wins,
     losses: s.losses,
@@ -1230,6 +1258,7 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export default function useNiftyOptionsEngine(_refreshKey = 0) {
+  void _refreshKey;
   const engRef = useRef<EngineRef>(initEngine());
   const lastSavedTradeCountRef = useRef(-1); // -1 = DB not yet loaded, block saves until loaded
   const dbLoadedRef = useRef(false);
@@ -1287,9 +1316,13 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     for (const strat of eng.strategies) {
       if (!strat.position) continue;
       const pos = strat.position;
+      // eslint-disable-next-line react-hooks/immutability
       pos.barsHeld++;
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryNiftyPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
+      if (pos.entryPremium > 0) {
+        pos.peakGainPct = Math.max(pos.peakGainPct, (pos.currentPremium-pos.entryPremium)/pos.entryPremium);
+      }
       pos.iv = iv;
 
       const exit = resolveExit(pos, strat.def, pos.currentPremium, now);
@@ -1305,6 +1338,12 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       strat.regime = regime;
 
       if (strat.position) { strat.status = "IN_POSITION"; continue; }
+      if (shouldPauseNiftyOptionStrategy(strat)) {
+        strat.status = "DISABLED";
+        strat.score = 0;
+        strat.cooldownUntil = Math.max(strat.cooldownUntil, now + NIFTY_OPT_UNDERPERFORMING_PAUSE_MS);
+        continue;
+      }
 
       if (strat.status === "COOLING") {
         if (now < strat.cooldownUntil) continue;

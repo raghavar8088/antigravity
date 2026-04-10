@@ -545,7 +545,6 @@ export default function OptionsSellingScalper({ actionsEnabled = false }: Props)
   const grossLoss = trades.filter((t) => t.netPnl < 0).reduce((sum, t) => sum + Math.abs(t.netPnl), 0);
   const totalTrades = Math.max(stats?.totalTrades ?? 0, trades.length);
   const totalWins = stats?.totalWins ?? trades.filter((t) => t.netPnl >= 0).length;
-  const totalLosses = stats?.totalLosses ?? trades.filter((t) => t.netPnl < 0).length;
   const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
   const openCount = Math.max(stats?.openPositions ?? 0, positions.length);

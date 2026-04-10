@@ -17,6 +17,7 @@ const (
 	ExitExpiry     = "EXPIRY"
 	ExitProfitLock = "PROFIT_LOCK"
 	ExitLateExit   = "LATE_EXIT"
+	ExitTrailStop  = "TRAIL_STOP"
 )
 
 // StrategyDef configures one option scalping strategy
@@ -49,6 +50,7 @@ type OptionPosition struct {
 	EntryBTCPrice  float64    `json:"entryBtcPrice"`
 	EntryTime      time.Time  `json:"entryTime"`
 	UnrealizedPnL  float64    `json:"unrealizedPnl"`
+	PeakGainPct    float64    `json:"peakGainPct"`
 	IV             float64    `json:"iv"`
 	Delta          float64    `json:"delta"`
 }

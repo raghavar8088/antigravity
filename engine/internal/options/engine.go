@@ -600,6 +600,9 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !ok || !fn(ctx) {
 		return
 	}
+	if !optionEntryConfirmed(s.def, ctx, regime) {
+		return
+	}
 	if e.balance <= 0 {
 		return
 	}
@@ -639,6 +642,9 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 
 	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
+		return
+	}
+	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
@@ -712,6 +718,9 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	if pos.EntryPremium > 0 {
 		gainPct = (result.Premium - pos.EntryPremium) / pos.EntryPremium
 	}
+	if gainPct > pos.PeakGainPct {
+		pos.PeakGainPct = gainPct
+	}
 
 	lifespan := pos.ExpiryTime.Sub(pos.EntryTime)
 	timeProgress := 0.0
@@ -719,13 +728,20 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/lifespan.Seconds(), 1)
 	}
 	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShare)
+	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.26)
+	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.38)
+	trailFloor := pos.PeakGainPct * 0.62
 
 	switch {
 	case gainPct >= takeProfitPct:
 		return ExitTP
 	case gainPct <= -stopLossPct:
 		return ExitSL
+	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
+		return ExitTrailStop
 	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
+		return ExitProfitLock
+	case timeProgress >= 0.50 && gainPct >= grindExitThreshold:
 		return ExitProfitLock
 	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
 		return ExitLateExit

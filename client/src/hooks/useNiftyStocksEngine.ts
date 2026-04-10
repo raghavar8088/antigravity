@@ -6,18 +6,27 @@ import type { StockLTPItem } from "@/app/api/stocks/ltp/route";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const INITIAL_BALANCE = 1_000_000;
-const MAX_OPEN_POSITIONS = 8;
+const MAX_OPEN_POSITIONS = 14;
 const MAX_BARS = 80; // ~4 min of price history at 3s ticks
 const MIN_BARS_FAST = 15; // enough for RSI14
 const MIN_BARS_SLOW = 22; // enough for EMA21 + Donchian20
-const SIGNAL_THRESHOLD = 60;
+const SIGNAL_THRESHOLD = 56;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
 const ALLOCATION_INR = 10_000; // 1% of the initial capital budget per trade
-const STOCK_PROFIT_LOCK_PROGRESS = 0.45;
-const STOCK_PROFIT_LOCK_SHARE = 0.6;
-const STOCK_LATE_EXIT_PROGRESS = 0.78;
-const STOCK_LATE_EXIT_MIN_GAIN = 0.12;
+const STOCK_PROFIT_LOCK_PROGRESS = 0.28;
+const STOCK_PROFIT_LOCK_SHARE = 0.44;
+const STOCK_LATE_EXIT_PROGRESS = 0.56;
+const STOCK_LATE_EXIT_MIN_GAIN = 0.06;
+const STOCK_GRIND_EXIT_PROGRESS = 0.50;
+const STOCK_GRIND_EXIT_SHARE = 0.26;
+const STOCK_TRAIL_GIVEBACK_SHARE = 0.38;
+const STOCK_MIN_SIZE_MULTIPLIER = 0.5;
+const STOCK_MAX_SIZE_MULTIPLIER = 1.7;
+const STOCK_LOSS_COOLDOWN_PENALTY = 0.3;
+const STOCK_UNDERPERFORMING_MIN_TRADES = 8;
+const STOCK_UNDERPERFORMING_MAX_WINRATE = 35;
+const STOCK_UNDERPERFORMING_PAUSE_MS = 6 * 60 * 60 * 1000;
 
 // ─── Strategy definitions ─────────────────────────────────────────────────────
 interface StratDef {
@@ -210,6 +219,7 @@ interface InternalPosition {
   entryTime: number; // ms
   unrealizedPnl: number;
   returnPct: number;
+  peakGainPct: number;
 }
 
 interface InternalTrade {
@@ -244,6 +254,7 @@ interface InternalStratState {
   totalPnl: number;
   winRate: number;
   lastTradeAt: number; // ms
+  consecutiveLosses: number;
 }
 
 interface EngineRef {
@@ -520,8 +531,14 @@ function resolveExit(
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= STOCK_GRIND_EXIT_PROGRESS && gainPct >= Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * STOCK_GRIND_EXIT_SHARE)) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
   if (timeProgress >= STOCK_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (pos.peakGainPct >= Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - STOCK_TRAIL_GIVEBACK_SHARE)) {
+    return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= STOCK_LATE_EXIT_PROGRESS && gainPct >= STOCK_LATE_EXIT_MIN_GAIN) {
     return { reason: "LATE_EXIT", exitPremium: currentPremium };
@@ -537,6 +554,29 @@ function computeShares(premium: number, lotSize: number): number {
   const costPerLot = premium * lotSize;
   const numLots = Math.max(1, Math.floor(ALLOCATION_INR / costPerLot));
   return numLots * lotSize;
+}
+
+function stockSizeMultiplier(strat: InternalStratState): number {
+  let multiplier = 1;
+  if (strat.totalTrades >= 6 && strat.winRate >= 54) multiplier += 0.15;
+  if (strat.totalTrades >= 12 && strat.winRate >= 58) multiplier += 0.2;
+  if (strat.totalTrades > 0) {
+    const avgPnlRatio = strat.totalPnl / (strat.totalTrades * ALLOCATION_INR);
+    if (avgPnlRatio > 0.08) multiplier += 0.18;
+    if (avgPnlRatio < -0.04) multiplier -= 0.15;
+  }
+  multiplier -= strat.consecutiveLosses * 0.1;
+  return stockClamp(multiplier, STOCK_MIN_SIZE_MULTIPLIER, STOCK_MAX_SIZE_MULTIPLIER);
+}
+
+function stockCooldownMs(strat: InternalStratState, won: boolean): number {
+  const base = strat.def.cooldownMinutes * 60 * 1000;
+  if (won) return base;
+  return Math.round(base * (1 + strat.consecutiveLosses * STOCK_LOSS_COOLDOWN_PENALTY));
+}
+
+function shouldPauseStockStrategy(strat: InternalStratState): boolean {
+  return strat.totalTrades >= STOCK_UNDERPERFORMING_MIN_TRADES && strat.totalPnl < 0 && strat.winRate < STOCK_UNDERPERFORMING_MAX_WINRATE;
 }
 
 // ─── Engine: close a position ──────────────────────────────────────────────────
@@ -585,14 +625,16 @@ function closePosition(
   if (netPnl >= 0) {
     strat.wins++;
     eng.totalWins++;
+    strat.consecutiveLosses = 0;
   } else {
     strat.losses++;
     eng.totalLosses++;
+    strat.consecutiveLosses += 1;
   }
   strat.totalPnl += netPnl;
   strat.winRate = strat.totalTrades > 0 ? (strat.wins / strat.totalTrades) * 100 : 0;
   strat.lastTradeAt = now;
-  strat.cooldownUntil = now + strat.def.cooldownMinutes * 60 * 1000;
+  strat.cooldownUntil = now + stockCooldownMs(strat, netPnl >= 0);
   strat.status = "COOLING";
   strat.currentStock = "";
 
@@ -611,7 +653,7 @@ function openPosition(
 ): boolean {
   eng.seq++;
   const premium = estimatePremium(underlying);
-  const numShares = computeShares(premium, stock.lotSize);
+  const numShares = Math.max(stock.lotSize, Math.round(computeShares(premium, stock.lotSize) * stockSizeMultiplier(strat) / stock.lotSize) * stock.lotSize);
   const cost = premium * numShares;
 
   if (eng.balance < cost) return false; // insufficient capital
@@ -639,6 +681,7 @@ function openPosition(
     entryTime: now,
     unrealizedPnl: 0,
     returnPct: 0,
+    peakGainPct: 0,
   };
 
   strat.position = pos;
@@ -680,6 +723,7 @@ function initEngine(): EngineRef {
       losses: 0,
       totalPnl: 0,
       winRate: 0,
+      consecutiveLosses: 0,
       lastTradeAt: 0,
     })),
     positions: new Map(),
@@ -830,6 +874,7 @@ export default function useNiftyStocksEngine() {
       pos.currentPremium = currentPremium;
       pos.unrealizedPnl = (currentPremium - pos.entryPremium) * pos.numShares;
       pos.returnPct = ((currentPremium - pos.entryPremium) / pos.entryPremium) * 100;
+      pos.peakGainPct = Math.max(pos.peakGainPct, pos.returnPct / 100);
 
       const exit = resolveExit(pos, strat.def, currentPremium, now);
       if (exit) {
@@ -850,6 +895,13 @@ export default function useNiftyStocksEngine() {
 
     for (const strat of eng.strategies) {
       const now2 = Date.now();
+
+      if (shouldPauseStockStrategy(strat)) {
+        strat.status = "COOLING";
+        strat.score = 0;
+        strat.cooldownUntil = Math.max(strat.cooldownUntil, now2 + STOCK_UNDERPERFORMING_PAUSE_MS);
+        continue;
+      }
 
       // Update status
       if (!strat.position) {

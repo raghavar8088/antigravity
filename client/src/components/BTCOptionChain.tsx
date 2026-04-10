@@ -1,6 +1,6 @@
 "use client";
 import { useRef } from "react";
-import useOptionChain, { ChainRow, ChainLeg, ChainData } from "@/hooks/useOptionChain";
+import useOptionChain, { ChainRow, ChainData } from "@/hooks/useOptionChain";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
