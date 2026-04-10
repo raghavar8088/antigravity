@@ -691,29 +691,32 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
 // ─── Market regime ─────────────────────────────────────────────────────────────
 
 function classifyRegime(bars: number[]): string {
-  if (bars.length < 22) return "UNKNOWN";
+  if (bars.length < 9) return "UNKNOWN";
   const price = bars[bars.length - 1];
-  const e9 = ema(bars, 9), e21 = ema(bars, 21);
-  const r = rsi(bars, 14);
-  const s = stddev(bars.slice(-20));
+  const e9  = ema(bars, 9);
+  const e21 = bars.length >= 21 ? ema(bars, 21) : e9;
+  const r   = bars.length >= 14 ? rsi(bars, 14) : 50;
+  const s   = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
   const volPct = price > 0 ? (s / price) * 100 : 0;
-  if (e9 > e21 && r >= 55) return "TRENDING_BULL";
-  if (e9 < e21 && r <= 45) return "TRENDING_BEAR";
-  if (volPct >= 0.15) return "HIGH_VOL";
+  if (e9 > e21 && r >= 52) return "TRENDING_BULL";
+  if (e9 < e21 && r <= 48) return "TRENDING_BEAR";
+  if (volPct >= 0.10) return "HIGH_VOL";
   return "RANGE";
 }
 
 function isCategoryAlignedWithRegime(category: string, regime: string): boolean {
   switch (regime) {
     case "UNKNOWN":
-      return false;
+      // Warming up — allow all categories so strategies can trade once minBars is met
+      return true;
     case "TRENDING_BULL":
     case "TRENDING_BEAR":
       return ["Momentum", "Breakout", "Trend", "VWAP", "Price Action", "Fibonacci", "Divergence", "Capitulation", "Volatility"].includes(category);
     case "HIGH_VOL":
-      return ["Momentum", "Breakout", "Volatility", "Capitulation", "Trend"].includes(category);
+      return ["Momentum", "Breakout", "Volatility", "Capitulation", "Trend", "Divergence"].includes(category);
     case "RANGE":
-      return ["Mean Reversion", "VWAP", "Price Action", "Fibonacci", "Divergence"].includes(category);
+      // Allow all categories in range — Momentum/Breakout still fire on intraday swings
+      return true;
     default:
       return true;
   }
@@ -721,39 +724,44 @@ function isCategoryAlignedWithRegime(category: string, regime: string): boolean 
 
 function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
   if (!isCategoryAlignedWithRegime(def.category, regime)) return false;
-  if (bars.length < 22) return false;
+  // minBars is already enforced per-strategy before calling this — no second gate needed
 
-  const e9 = ema(bars, 9);
-  const e21 = ema(bars, 21);
-  const mean20 = sma(bars, 20);
-  const m3 = momentum(bars, 3);
-  const r = rsi(bars, 14);
+  const n = bars.length;
+  const e9  = n >= 9  ? ema(bars, 9)  : price;
+  const e21 = n >= 21 ? ema(bars, 21) : price;
+  const mean20 = n >= 20 ? sma(bars, 20) : price;
+  const m3 = n >= 4  ? momentum(bars, 3) : 0;
+  const r  = n >= 14 ? rsi(bars, 14) : 50;
   const bullish = def.optionType === "CALL";
 
   switch (def.category) {
     case "Momentum":
     case "Breakout":
     case "Trend":
-      return bullish
-        ? price >= e9 && e9 >= e21 && m3 > 0.0002
-        : price <= e9 && e9 <= e21 && m3 < -0.0002;
+      // In trend regimes require EMA alignment; in range/unknown just need price direction
+      if (regime === "TRENDING_BULL" || regime === "TRENDING_BEAR") {
+        return bullish
+          ? price >= e9 && e9 >= e21 && m3 > 0.0001
+          : price <= e9 && e9 <= e21 && m3 < -0.0001;
+      }
+      return bullish ? m3 > 0.0001 : m3 < -0.0001;
     case "VWAP":
       return bullish
-        ? price >= mean20 && r >= 48
-        : price <= mean20 && r <= 52;
+        ? price >= mean20 && r >= 45
+        : price <= mean20 && r <= 55;
     case "Mean Reversion":
     case "Divergence":
     case "Fibonacci":
     case "Price Action":
       return bullish
-        ? r <= 56 && price >= bars[bars.length - 2]
-        : r >= 44 && price <= bars[bars.length - 2];
+        ? r <= 60 && price >= bars[n - 2]
+        : r >= 40 && price <= bars[n - 2];
     case "Capitulation":
       return bullish
-        ? r <= 48 && m3 > -0.0006
-        : r >= 52 && m3 < 0.0006;
+        ? r <= 52 && m3 > -0.0008
+        : r >= 48 && m3 < 0.0008;
     case "Volatility":
-      return Math.abs(m3) >= 0.00035;
+      return Math.abs(m3) >= 0.0002;
     default:
       return true;
   }
