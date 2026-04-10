@@ -758,7 +758,8 @@ async function loadStocksState(eng: EngineRef): Promise<boolean> {
 
 export default function useNiftyStocksEngine() {
   const engRef = useRef<EngineRef>(initEngine());
-  const lastTradeCountRef = useRef(0);
+  const lastSavedTradeCountRef = useRef(-1); // -1 = DB not loaded yet, block saves
+  const dbLoadedRef = useRef(false);
 
   const [state, setState] = useState<StocksEngineState>({
     quotes: NIFTY50_STOCKS.map((s) => ({
@@ -1021,25 +1022,55 @@ export default function useNiftyStocksEngine() {
 
     setState({ quotes, positions, trades, strategies, stats });
 
-    // Save to DB whenever a new trade is completed
+    // Only save after DB has been loaded — avoids overwriting DB with empty state on mount
+    if (!dbLoadedRef.current) return;
     const tradeCount = eng.trades.length;
-    if (tradeCount !== lastTradeCountRef.current) {
-      lastTradeCountRef.current = tradeCount;
+    if (tradeCount !== lastSavedTradeCountRef.current) {
+      lastSavedTradeCountRef.current = tradeCount;
       void saveStocksState(eng);
     }
   }, []);
 
-  // ── Load persisted state from DB on mount ─────────────────────────────────
+  // ── Load persisted state from DB on mount (unblocks saves when done) ─────
   useEffect(() => {
-    void loadStocksState(engRef.current).then((restored) => {
-      if (restored) lastTradeCountRef.current = engRef.current.trades.length;
+    void loadStocksState(engRef.current).then(() => {
+      dbLoadedRef.current = true;
+      lastSavedTradeCountRef.current = engRef.current.trades.length;
     });
+  }, []);
+
+  // ── Periodic save every 60s ───────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (dbLoadedRef.current) void saveStocksState(engRef.current);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Save on page close/refresh ────────────────────────────────────────────
+  useEffect(() => {
+    const onUnload = () => {
+      if (!dbLoadedRef.current) return;
+      const eng = engRef.current;
+      const payload = JSON.stringify({
+        balance: eng.balance, totalWins: eng.totalWins, totalLosses: eng.totalLosses,
+        totalPnl: eng.totalRealizedPnl, tradeSeq: eng.seq,
+        trades: eng.trades.slice(0, 500),
+        strategies: eng.strategies.map((s) => ({
+          id: s.def.id, totalTrades: s.totalTrades, wins: s.wins,
+          losses: s.losses, totalPnl: s.totalPnl, lastTradeAt: s.lastTradeAt,
+        })),
+      });
+      navigator.sendBeacon("/api/nifty/stocks-state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
   }, []);
 
   // ── Reset handler ──────────────────────────────────────────────────────────
   const reset = useCallback(() => {
     engRef.current = initEngine();
-    lastTradeCountRef.current = 0;
+    lastSavedTradeCountRef.current = 0;
     void saveStocksState(engRef.current);
     setState({
       quotes: NIFTY50_STOCKS.map((s) => ({

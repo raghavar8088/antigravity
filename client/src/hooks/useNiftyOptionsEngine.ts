@@ -1231,7 +1231,8 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
 
 export default function useNiftyOptionsEngine(_refreshKey = 0) {
   const engRef = useRef<EngineRef>(initEngine());
-  const lastTradeCountRef = useRef(0);
+  const lastSavedTradeCountRef = useRef(-1); // -1 = DB not yet loaded, block saves until loaded
+  const dbLoadedRef = useRef(false);
 
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
@@ -1251,10 +1252,12 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     setBarCount(eng.minuteBars.length);
     setEnginePrice(eng.lastPrice);
 
-    // Save to DB whenever a new trade is completed
+    // Only save after DB has been loaded — avoids overwriting DB with empty state on mount
+    if (!dbLoadedRef.current) return;
+
     const tradeCount = eng.trades.length;
-    if (tradeCount !== lastTradeCountRef.current) {
-      lastTradeCountRef.current = tradeCount;
+    if (tradeCount !== lastSavedTradeCountRef.current) {
+      lastSavedTradeCountRef.current = tradeCount;
       void saveStateToDb(eng);
     }
   }, []);
@@ -1361,17 +1364,51 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     return () => { cancelled = true; source.close(); };
   }, [feedPrice, engineTick]);
 
-  // ── Load persisted state from DB on mount ────────────────────────────────
+  // ── Load persisted state from DB on mount (runs first, unblocks saves) ───
   useEffect(() => {
     const restore = async () => {
-      const restored = await loadStateFromDb(engRef.current);
-      if (restored) {
-        lastTradeCountRef.current = engRef.current.trades.length;
-        pushDisplayState();
-      }
+      await loadStateFromDb(engRef.current);
+      // Mark DB as loaded regardless of success — now saves are allowed
+      dbLoadedRef.current = true;
+      lastSavedTradeCountRef.current = engRef.current.trades.length;
+      pushDisplayState();
     };
     void restore();
   }, [pushDisplayState]);
+
+  // ── Periodic save every 60s — catches balance/strategy changes between trades
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (dbLoadedRef.current) void saveStateToDb(engRef.current);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Save on page close/refresh ─────────────────────────────────────────────
+  useEffect(() => {
+    const onUnload = () => {
+      if (dbLoadedRef.current) {
+        // Use sendBeacon for reliable delivery on page unload
+        const payload = JSON.stringify({
+          balance:           engRef.current.balance,
+          totalWins:         engRef.current.totalWins,
+          totalLosses:       engRef.current.totalLosses,
+          totalPnl:          engRef.current.totalRealizedPnl,
+          totalPremiumSpent: engRef.current.totalPremiumSpent,
+          tradeSeq:          engRef.current.seq,
+          minuteBars:        engRef.current.minuteBars.slice(-200),
+          trades:            engRef.current.trades.slice(0, 500),
+          strategies:        engRef.current.strategies.map((s) => ({
+            id: s.def.id, totalTrades: s.totalTrades, wins: s.wins,
+            losses: s.losses, totalPnl: s.totalPnl, lastTradeAt: s.lastTradeAt,
+          })),
+        });
+        navigator.sendBeacon("/api/nifty/state", new Blob([payload], { type: "application/json" }));
+      }
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
 
   // ── Pre-seed from today's 1-min candles ──────────────────────────────────
   useEffect(() => {
@@ -1404,7 +1441,7 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
   // ── Reset ─────────────────────────────────────────────────────────────────
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
-    lastTradeCountRef.current = 0;
+    lastSavedTradeCountRef.current = 0;
     pushDisplayState();
     void saveStateToDb(engRef.current); // persist clean slate
   }, [pushDisplayState]);
