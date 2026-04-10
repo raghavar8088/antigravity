@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -712,11 +713,24 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		gainPct = (result.Premium - pos.EntryPremium) / pos.EntryPremium
 	}
 
+	lifespan := pos.ExpiryTime.Sub(pos.EntryTime)
+	timeProgress := 0.0
+	if lifespan > 0 {
+		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/lifespan.Seconds(), 1)
+	}
+	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShare)
+
 	switch {
 	case gainPct >= takeProfitPct:
 		return ExitTP
 	case gainPct <= -stopLossPct:
 		return ExitSL
+	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
+		return ExitProfitLock
+	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
+		return ExitLateExit
+	case timeProgress >= optionMomentumFadeProgress && gainPct > 0:
+		return ExitLateExit
 	case now.After(pos.ExpiryTime):
 		return ExitExpiry
 	default:

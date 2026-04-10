@@ -10,10 +10,14 @@ const MAX_OPEN_POSITIONS = 8;
 const MAX_BARS = 80; // ~4 min of price history at 3s ticks
 const MIN_BARS_FAST = 15; // enough for RSI14
 const MIN_BARS_SLOW = 22; // enough for EMA21 + Donchian20
-const SIGNAL_THRESHOLD = 62;
+const SIGNAL_THRESHOLD = 68;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
 const ALLOCATION_INR = 10_000; // 1% of the initial capital budget per trade
+const STOCK_PROFIT_LOCK_PROGRESS = 0.45;
+const STOCK_PROFIT_LOCK_SHARE = 0.6;
+const STOCK_LATE_EXIT_PROGRESS = 0.78;
+const STOCK_LATE_EXIT_MIN_GAIN = 0.12;
 
 // ─── Strategy definitions ─────────────────────────────────────────────────────
 interface StratDef {
@@ -28,7 +32,53 @@ interface StratDef {
   minBars: number;
 }
 
-const STRAT_DEFS: StratDef[] = [
+type StockCategoryProfile = {
+  minTp: number;
+  maxTp: number;
+  minSl: number;
+  maxSl: number;
+  holdMins: number;
+};
+
+const DEFAULT_STOCK_PROFILE: StockCategoryProfile = {
+  minTp: 44,
+  maxTp: 60,
+  minSl: 24,
+  maxSl: 30,
+  holdMins: 18,
+};
+
+const STOCK_CATEGORY_PROFILES: Record<string, StockCategoryProfile> = {
+  Breakout: { minTp: 52, maxTp: 68, minSl: 26, maxSl: 32, holdMins: 20 },
+  Momentum: { minTp: 48, maxTp: 64, minSl: 24, maxSl: 30, holdMins: 18 },
+  "Mean Reversion": { minTp: 42, maxTp: 56, minSl: 22, maxSl: 28, holdMins: 14 },
+  VWAP: { minTp: 40, maxTp: 54, minSl: 22, maxSl: 28, holdMins: 15 },
+  "Price Action": { minTp: 48, maxTp: 62, minSl: 26, maxSl: 34, holdMins: 18 },
+  Trend: { minTp: 55, maxTp: 72, minSl: 28, maxSl: 35, holdMins: 22 },
+};
+
+function stockClamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function stockProfileFor(category: string): StockCategoryProfile {
+  return STOCK_CATEGORY_PROFILES[category] ?? DEFAULT_STOCK_PROFILE;
+}
+
+function tuneStockStrategy(def: StratDef): StratDef {
+  const profile = stockProfileFor(def.category);
+  return {
+    ...def,
+    tpPct: stockClamp(def.tpPct, profile.minTp, profile.maxTp),
+    slPct: stockClamp(def.slPct, profile.minSl, profile.maxSl),
+  };
+}
+
+function holdMinutesFor(def: StratDef): number {
+  return stockProfileFor(def.category).holdMins;
+}
+
+const BASE_STRAT_DEFS: StratDef[] = [
   // ── CALL strategies (buy CE when bullish signal) ────────────────────────
   { id: 1,  name: "Breakout_Momentum_CE",    category: "Breakout",      optionType: "CE", signal: "BREAKOUT_CE",    tpPct: 85,  slPct: 38, cooldownMinutes: 3, minBars: MIN_BARS_SLOW },
   { id: 2,  name: "EMA_Cross_Bull_CE",       category: "Momentum",      optionType: "CE", signal: "EMA_CROSS_CE",   tpPct: 75,  slPct: 33, cooldownMinutes: 2, minBars: MIN_BARS_SLOW },
@@ -46,6 +96,8 @@ const STRAT_DEFS: StratDef[] = [
 ];
 
 // ─── Public display types ─────────────────────────────────────────────────────
+
+const STRAT_DEFS: StratDef[] = BASE_STRAT_DEFS.map(tuneStockStrategy);
 
 export type StockQuoteDisplay = {
   symbol: string;
@@ -333,62 +385,62 @@ function evalSignal(signal: string, inp: SignalInputs): number {
 
   switch (signal) {
     case "BREAKOUT_CE":
-      if (price > high20 * 1.0003 && fast > slow && rsi14 >= 56 && rsi14 <= 78)
-        return clamp(68 + (price / high20 - 1) * 2000 + (rsi14 - 56) * 0.35);
+      if (price > high20 * 1.0007 && fast > slow && rsi14 >= 58 && rsi14 <= 76)
+        return clamp(70 + (price / high20 - 1) * 2200 + (rsi14 - 58) * 0.35);
       break;
 
     case "BREAKDOWN_PE":
-      if (price < low20 * 0.9997 && fast < slow && rsi14 >= 22 && rsi14 <= 44)
-        return clamp(68 + (low20 / price - 1) * 2000 + (44 - rsi14) * 0.35);
+      if (price < low20 * 0.9993 && fast < slow && rsi14 >= 24 && rsi14 <= 42)
+        return clamp(70 + (low20 / price - 1) * 2200 + (42 - rsi14) * 0.35);
       break;
 
     case "EMA_CROSS_CE":
-      if (prevFast <= prevSlow && fast > slow && rsi14 > 50 && price > trend)
+      if (prevFast <= prevSlow && fast > slow && rsi14 > 52 && price > trend * 1.0004)
         return clamp(72 + (fast / slow - 1) * 3000 + (rsi14 - 50) * 0.2);
       break;
 
     case "EMA_CROSS_PE":
-      if (prevFast >= prevSlow && fast < slow && rsi14 < 50 && price < trend)
+      if (prevFast >= prevSlow && fast < slow && rsi14 < 48 && price < trend * 0.9996)
         return clamp(72 + (slow / fast - 1) * 3000 + (50 - rsi14) * 0.2);
       break;
 
     case "RSI_BOUNCE_CE":
-      if (rsi14 < 28 && price >= prevPrice && momentum3 > -0.5)
+      if (rsi14 < 26 && price >= prevPrice && momentum3 > -0.35)
         return clamp(67 + (28 - rsi14) * 1.4);
       break;
 
     case "RSI_FADE_PE":
-      if (rsi14 > 72 && price <= prevPrice && momentum3 < 0.5)
+      if (rsi14 > 74 && price <= prevPrice && momentum3 < 0.35)
         return clamp(67 + (rsi14 - 72) * 1.4);
       break;
 
     case "VWAP_RECLAIM_CE":
-      if (price > mean20 && prevPrice <= mean20 * 1.002 && rsi14 > 50 && momentum3 > 0)
-        return clamp(64 + (price / mean20 - 1) * 1200 + momentum3 * 4);
+      if (price > mean20 * 1.0008 && prevPrice <= mean20 * 1.0015 && rsi14 > 52 && momentum3 > 0.12)
+        return clamp(66 + (price / mean20 - 1) * 1400 + momentum3 * 4);
       break;
 
     case "VWAP_REJECT_PE":
-      if (price < mean20 && prevPrice >= mean20 * 0.998 && rsi14 < 50 && momentum3 < 0)
-        return clamp(64 + (mean20 / price - 1) * 1200 + Math.abs(momentum3) * 4);
+      if (price < mean20 * 0.9992 && prevPrice >= mean20 * 0.9985 && rsi14 < 48 && momentum3 < -0.12)
+        return clamp(66 + (mean20 / price - 1) * 1400 + Math.abs(momentum3) * 4);
       break;
 
     case "EXHAUSTION_CE":
-      if (momentum3 <= -1.3 && rsi14 < 26 && price > low20 * 1.0002)
+      if (momentum3 <= -1.5 && rsi14 < 24 && price > low20 * 1.0006)
         return clamp(70 + Math.abs(momentum3) * 9 + (26 - rsi14) * 1.4);
       break;
 
     case "EXHAUSTION_PE":
-      if (momentum3 >= 1.3 && rsi14 > 74 && price < high20 * 0.9998)
+      if (momentum3 >= 1.5 && rsi14 > 76 && price < high20 * 0.9994)
         return clamp(70 + Math.abs(momentum3) * 9 + (rsi14 - 74) * 1.4);
       break;
 
     case "TREND_CONT_CE":
-      if (fast > slow && slow > trend && momentum6 > 0.75 && rsi14 >= 54 && rsi14 <= 74)
+      if (fast > slow && slow > trend && momentum6 > 0.95 && rsi14 >= 56 && rsi14 <= 72)
         return clamp(74 + momentum6 * 7 + (rsi14 - 54) * 0.25);
       break;
 
     case "TREND_CONT_PE":
-      if (fast < slow && slow < trend && momentum6 < -0.75 && rsi14 >= 26 && rsi14 <= 46)
+      if (fast < slow && slow < trend && momentum6 < -0.95 && rsi14 >= 28 && rsi14 <= 44)
         return clamp(74 + Math.abs(momentum6) * 7 + (46 - rsi14) * 0.25);
       break;
   }
@@ -397,6 +449,83 @@ function evalSignal(signal: string, inp: SignalInputs): number {
 }
 
 // ─── Engine helper: compute lot shares from allocation ────────────────────────
+
+function classifyStockRegime(inp: SignalInputs): string {
+  const trendGapPct = inp.price > 0 ? Math.abs(inp.fast - inp.slow) / inp.price * 100 : 0;
+  const volPct = inp.price > 0 ? inp.std20 / inp.price * 100 : 0;
+
+  if (inp.fast > inp.slow && inp.slow > inp.trend && inp.momentum6 > 0.45 && inp.rsi14 >= 54) return "TRENDING_BULL";
+  if (inp.fast < inp.slow && inp.slow < inp.trend && inp.momentum6 < -0.45 && inp.rsi14 <= 46) return "TRENDING_BEAR";
+  if (volPct >= 0.9 || trendGapPct >= 0.7) return "HIGH_VOL";
+  return "RANGE";
+}
+
+function isCategoryAlignedWithRegime(category: string, regime: string): boolean {
+  switch (regime) {
+    case "TRENDING_BULL":
+    case "TRENDING_BEAR":
+      return ["Breakout", "Momentum", "Trend", "VWAP", "Price Action"].includes(category);
+    case "HIGH_VOL":
+      return ["Breakout", "Momentum", "Price Action", "Trend"].includes(category);
+    case "RANGE":
+      return ["Mean Reversion", "VWAP", "Price Action"].includes(category);
+    default:
+      return true;
+  }
+}
+
+function passesEntryConfirmation(def: StratDef, inp: SignalInputs, regime: string): boolean {
+  if (!isCategoryAlignedWithRegime(def.category, regime)) return false;
+
+  const bullish = def.optionType === "CE";
+  switch (def.category) {
+    case "Breakout":
+    case "Momentum":
+    case "Trend":
+      return bullish
+        ? inp.price >= inp.fast && inp.fast >= inp.slow && inp.momentum3 > 0.12
+        : inp.price <= inp.fast && inp.fast <= inp.slow && inp.momentum3 < -0.12;
+    case "VWAP":
+      return bullish
+        ? inp.price >= inp.mean20 && inp.rsi14 >= 50
+        : inp.price <= inp.mean20 && inp.rsi14 <= 50;
+    case "Mean Reversion":
+      return bullish
+        ? inp.rsi14 <= 40 && inp.price >= inp.prevPrice
+        : inp.rsi14 >= 60 && inp.price <= inp.prevPrice;
+    case "Price Action":
+      return bullish
+        ? inp.price >= inp.prevPrice
+        : inp.price <= inp.prevPrice;
+    default:
+      return true;
+  }
+}
+
+function resolveExit(
+  pos: InternalPosition,
+  def: StratDef,
+  currentPremium: number,
+  now: number,
+): { reason: string; exitPremium: number } | null {
+  const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  const maxHoldMs = holdMinutesFor(def) * 60 * 1000;
+  const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
+  const profitLockThreshold = Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * STOCK_PROFIT_LOCK_SHARE);
+
+  if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
+  if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= STOCK_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (timeProgress >= STOCK_LATE_EXIT_PROGRESS && gainPct >= STOCK_LATE_EXIT_MIN_GAIN) {
+    return { reason: "LATE_EXIT", exitPremium: currentPremium };
+  }
+  if (maxHoldMs > 0 && now - pos.entryTime >= maxHoldMs) {
+    return { reason: "TIME_EXIT", exitPremium: currentPremium };
+  }
+  return null;
+}
 
 function computeShares(premium: number, lotSize: number): number {
   if (premium <= 0 || lotSize <= 0) return lotSize;
@@ -474,13 +603,13 @@ function openPosition(
   stock: Nifty50Stock,
   underlying: number,
   now: number,
-): void {
+): boolean {
   eng.seq++;
   const premium = estimatePremium(underlying);
   const numShares = computeShares(premium, stock.lotSize);
   const cost = premium * numShares;
 
-  if (eng.balance < cost) return; // insufficient capital
+  if (eng.balance < cost) return false; // insufficient capital
 
   eng.balance -= cost;
 
@@ -511,6 +640,7 @@ function openPosition(
   strat.status = "IN_POSITION";
   strat.currentStock = stock.symbol;
   eng.positions.set(id, pos);
+  return true;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -630,14 +760,9 @@ export default function useNiftyStocksEngine() {
       pos.unrealizedPnl = (currentPremium - pos.entryPremium) * pos.numShares;
       pos.returnPct = ((currentPremium - pos.entryPremium) / pos.entryPremium) * 100;
 
-      // Check TP
-      if (currentPremium >= pos.tpPremium) {
-        closePosition(eng, strat, pos.tpPremium, currentUnderlying, "TP", now);
-        continue;
-      }
-      // Check SL
-      if (currentPremium <= pos.slPremium) {
-        closePosition(eng, strat, pos.slPremium, currentUnderlying, "SL", now);
+      const exit = resolveExit(pos, strat.def, currentPremium, now);
+      if (exit) {
+        closePosition(eng, strat, exit.exitPremium, currentUnderlying, exit.reason, now);
         continue;
       }
     }
@@ -675,13 +800,16 @@ export default function useNiftyStocksEngine() {
 
         const inp = buildSignalInputs(bars);
         const score = evalSignal(strat.def.signal, inp);
+        const regime = classifyStockRegime(inp);
+        const confirmed = score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strat.def, inp, regime);
 
         // Track per-stock max score
-        if (score > (stockSignalScores[stock.symbol] ?? 0)) {
-          stockSignalScores[stock.symbol] = score;
+        const displayScore = confirmed ? score : Math.min(score, SIGNAL_THRESHOLD - 1);
+        if (displayScore > (stockSignalScores[stock.symbol] ?? 0)) {
+          stockSignalScores[stock.symbol] = displayScore;
         }
 
-        if (score >= SIGNAL_THRESHOLD && score > bestScore) {
+        if (confirmed && score > bestScore) {
           bestScore = score;
           bestStock = stock;
         }
@@ -692,8 +820,9 @@ export default function useNiftyStocksEngine() {
       if (bestStock && bestScore >= SIGNAL_THRESHOLD) {
         const underlying = eng.bars[bestStock.symbol]?.at(-1) ?? 0;
         if (underlying > 0) {
-          openPosition(eng, strat, bestStock, underlying, now2);
-          openCount++;
+          if (openPosition(eng, strat, bestStock, underlying, now2)) {
+            openCount++;
+          }
         }
       }
     }

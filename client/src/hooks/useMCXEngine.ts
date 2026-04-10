@@ -18,9 +18,13 @@ import type { MCXCandle } from "@/app/api/mcx/candles/route";
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const INITIAL_BALANCE = 1_000_000;
-const MAX_CONCURRENT = 8;
+const MAX_CONCURRENT = 6;
 const MAX_BARS = 200;
 const TICK_MS = 5_000;
+const MCX_PROFIT_LOCK_PROGRESS = 0.42;
+const MCX_PROFIT_LOCK_SHARE = 0.58;
+const MCX_LATE_EXIT_PROGRESS = 0.75;
+const MCX_LATE_EXIT_MIN_GAIN = 0.1;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -135,7 +139,52 @@ interface StratDef {
   minBars: number;
 }
 
-const STRAT_DEFS: StratDef[] = [
+type MCXCategory = "Momentum" | "Mean Reversion" | "Breakout";
+
+type MCXCategoryProfile = {
+  minTp: number;
+  maxTp: number;
+  minSl: number;
+  maxSl: number;
+};
+
+const MCX_CATEGORY_PROFILES: Record<MCXCategory, MCXCategoryProfile> = {
+  Momentum: { minTp: 0.46, maxTp: 0.68, minSl: 0.26, maxSl: 0.34 },
+  "Mean Reversion": { minTp: 0.36, maxTp: 0.52, minSl: 0.20, maxSl: 0.28 },
+  Breakout: { minTp: 0.50, maxTp: 0.70, minSl: 0.26, maxSl: 0.32 },
+};
+
+function mcxClamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function categoryForSignal(signal: string): MCXCategory {
+  switch (signal) {
+    case "RSI_EXTREME_OS":
+    case "RSI_EXTREME_OB":
+    case "BB_LOWER_TOUCH":
+    case "BB_UPPER_TOUCH":
+    case "STOCH_OS":
+    case "STOCH_OB":
+      return "Mean Reversion";
+    case "RESIST_BREAK":
+    case "SUPPORT_BREAK":
+      return "Breakout";
+    default:
+      return "Momentum";
+  }
+}
+
+function tuneStrategy(def: StratDef): StratDef {
+  const profile = MCX_CATEGORY_PROFILES[categoryForSignal(def.signal)];
+  return {
+    ...def,
+    tpPct: mcxClamp(def.tpPct, profile.minTp, profile.maxTp),
+    slPct: mcxClamp(def.slPct, profile.minSl, profile.maxSl),
+  };
+}
+
+const BASE_STRAT_DEFS: StratDef[] = [
   // ── Crude Oil (volatile, trend-following + BB)
   { id: 1,  name: "CrudeOil_MomBull_Call",    commodityId: "CRUDEOIL",    optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
   { id: 2,  name: "CrudeOil_MomBear_Put",     commodityId: "CRUDEOIL",    optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
@@ -168,6 +217,8 @@ const STRAT_DEFS: StratDef[] = [
 ];
 
 // ─── Math helpers ──────────────────────────────────────────────────────────────
+
+const STRAT_DEFS: StratDef[] = BASE_STRAT_DEFS.map(tuneStrategy);
 
 function ema(bars: number[], period: number): number {
   if (!bars.length) return 0;
@@ -239,35 +290,35 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
   switch (signal) {
     case "STRONG_BULL_MOM": {
       if (n < 15) return false;
-      return momentum(bars, 5) > 0.0010 && momentum(bars, 3) > 0.0004 && rsi(bars, 14) < 72;
+      return momentum(bars, 5) > 0.0014 && momentum(bars, 3) > 0.0006 && rsi(bars, 14) < 70;
     }
     case "BULL_MOM": {
       if (n < 15) return false;
-      return momentum(bars, 5) > 0.0005 && rsi(bars, 14) < 68 && price > ema(bars, 9);
+      return momentum(bars, 5) > 0.0008 && rsi(bars, 14) < 66 && price > ema(bars, 9);
     }
     case "STRONG_BEAR_MOM": {
       if (n < 15) return false;
-      return momentum(bars, 5) < -0.0010 && momentum(bars, 3) < -0.0004 && rsi(bars, 14) > 28;
+      return momentum(bars, 5) < -0.0014 && momentum(bars, 3) < -0.0006 && rsi(bars, 14) > 30;
     }
     case "BEAR_MOM": {
       if (n < 15) return false;
-      return momentum(bars, 5) < -0.0005 && rsi(bars, 14) > 32 && price < ema(bars, 9);
+      return momentum(bars, 5) < -0.0008 && rsi(bars, 14) > 34 && price < ema(bars, 9);
     }
     case "RSI_EXTREME_OS":
       if (n < 20) return false;
-      return rsi(bars, 14) < 28 && price > bars[n - 2];
+      return rsi(bars, 14) < 25 && price > bars[n - 2] && price >= ema(bars, 9);
     case "RSI_EXTREME_OB":
       if (n < 20) return false;
-      return rsi(bars, 14) > 72 && price < bars[n - 2];
+      return rsi(bars, 14) > 75 && price < bars[n - 2] && price <= ema(bars, 9);
     case "BB_LOWER_TOUCH": {
       if (n < 22) return false;
       const bl = bbLower(bars, 20);
-      return bars[n - 2] <= bl * 1.003 && price > bars[n - 2] && price < bbMid(bars, 20) && rsi(bars, 14) < 52;
+      return bars[n - 2] <= bl * 1.0015 && price > bars[n - 2] && price < bbMid(bars, 20) && rsi(bars, 14) < 50;
     }
     case "BB_UPPER_TOUCH": {
       if (n < 22) return false;
       const bu = bbUpper(bars, 20);
-      return bars[n - 2] >= bu * 0.997 && price < bars[n - 2] && price > bbMid(bars, 20) && rsi(bars, 14) > 48;
+      return bars[n - 2] >= bu * 0.9985 && price < bars[n - 2] && price > bbMid(bars, 20) && rsi(bars, 14) > 50;
     }
     case "EMA_BULL_CROSS":
       return crossedAbove(bars, 9, 21);
@@ -276,19 +327,19 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
     case "RESIST_BREAK": {
       if (n < 22) return false;
       const hi = Math.max(...bars.slice(n - 21, n - 1));
-      return price > hi * 1.0004 && momentum(bars, 3) > 0.0004;
+      return price > hi * 1.0009 && momentum(bars, 3) > 0.0008;
     }
     case "SUPPORT_BREAK": {
       if (n < 22) return false;
       const lo = Math.min(...bars.slice(n - 21, n - 1));
-      return price < lo * 0.9996 && momentum(bars, 3) < -0.0004;
+      return price < lo * 0.9991 && momentum(bars, 3) < -0.0008;
     }
     case "STOCH_OS":
       if (n < 20) return false;
-      return stochK(bars, 14) < 25 && price > bars[n - 2] && rsi(bars, 14) < 55;
+      return stochK(bars, 14) < 20 && price > bars[n - 2] && rsi(bars, 14) < 52;
     case "STOCH_OB":
       if (n < 20) return false;
-      return stochK(bars, 14) > 75 && price < bars[n - 2] && rsi(bars, 14) > 45;
+      return stochK(bars, 14) > 80 && price < bars[n - 2] && rsi(bars, 14) > 48;
   }
   return false;
 }
@@ -396,6 +447,100 @@ interface EngineRef {
   totalRealizedPnl: number;
 }
 
+function classifyCommodityRegime(bars: number[]): string {
+  if (bars.length < 22) return "UNKNOWN";
+  const price = bars[bars.length - 1];
+  const e9 = ema(bars, 9);
+  const e21 = ema(bars, 21);
+  const volPct = price > 0 ? (stddev(bars.slice(-20)) / price) * 100 : 0;
+  const m3 = momentum(bars, 3);
+
+  if (e9 > e21 && m3 > 0.0006) return "TRENDING_BULL";
+  if (e9 < e21 && m3 < -0.0006) return "TRENDING_BEAR";
+  if (volPct >= 0.35) return "HIGH_VOL";
+  return "RANGE";
+}
+
+function isCategoryAlignedWithRegime(category: MCXCategory, regime: string): boolean {
+  switch (regime) {
+    case "UNKNOWN":
+      return false;
+    case "TRENDING_BULL":
+    case "TRENDING_BEAR":
+      return category !== "Mean Reversion";
+    case "HIGH_VOL":
+      return category !== "Mean Reversion";
+    case "RANGE":
+      return category !== "Momentum";
+    default:
+      return true;
+  }
+}
+
+function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
+  const category = categoryForSignal(def.signal);
+  if (!isCategoryAlignedWithRegime(category, regime)) return false;
+  if (bars.length < 22) return false;
+
+  const e9 = ema(bars, 9);
+  const e21 = ema(bars, 21);
+  const mean20 = sma(bars, 20);
+  const m3 = momentum(bars, 3);
+  const r = rsi(bars, 14);
+  const bullish = def.optionType === "CALL";
+
+  switch (category) {
+    case "Momentum":
+    case "Breakout":
+      return bullish
+        ? price >= e9 && e9 >= e21 && m3 > 0.0003
+        : price <= e9 && e9 <= e21 && m3 < -0.0003;
+    case "Mean Reversion":
+      return bullish
+        ? price >= mean20 * 0.997 && r <= 52
+        : price <= mean20 * 1.003 && r >= 48;
+    default:
+      return true;
+  }
+}
+
+function holdMinutesFor(commodityId: string): number {
+  switch (commodityId) {
+    case "NATURALGAS":
+      return 90;
+    case "CRUDEOIL":
+    case "COPPER":
+      return 120;
+    default:
+      return 150;
+  }
+}
+
+function resolveExit(
+  pos: InternalPosition,
+  def: StratDef,
+  currentPremium: number,
+  now: number,
+): { reason: string; exitPremium: number } | null {
+  const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  const maxHoldMs = holdMinutesFor(pos.commodityId) * 60 * 1000;
+  const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
+  const profitLockThreshold = Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * MCX_PROFIT_LOCK_SHARE);
+
+  if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
+  if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= MCX_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (timeProgress >= MCX_LATE_EXIT_PROGRESS && gainPct >= MCX_LATE_EXIT_MIN_GAIN) {
+    return { reason: "LATE_EXIT", exitPremium: currentPremium };
+  }
+  if (now >= pos.expiryTime || (maxHoldMs > 0 && now - pos.entryTime >= maxHoldMs)) {
+    return { reason: "TIME_EXIT", exitPremium: currentPremium };
+  }
+  return null;
+}
+
 function initEngine(): EngineRef {
   const commodities = new Map<string, CommodityState>();
   for (const c of MCX_COMMODITIES) {
@@ -447,14 +592,14 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
   eng.positions.delete(pos.id);
 }
 
-function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number) {
+function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number): boolean {
   const premium = estimatePremium(price, iv, commodity.dteDays);
   const costPerLot = premium * commodity.lotSize;
   let lots = costPerLot > 0 ? Math.max(1, Math.round(commodity.positionINR / costPerLot)) : 1;
   let cost = premium * commodity.lotSize * lots;
   // Reduce lots if not enough balance
   while (cost > eng.balance && lots > 1) { lots--; cost = premium * commodity.lotSize * lots; }
-  if (eng.balance < cost) return;
+  if (eng.balance < cost) return false;
 
   eng.seq++;
   eng.balance -= cost;
@@ -477,6 +622,7 @@ function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXC
   strat.position = pos;
   strat.status = "IN_POSITION";
   eng.positions.set(id, pos);
+  return true;
 }
 
 // ─── Display builders ─────────────────────────────────────────────────────────
@@ -607,18 +753,12 @@ export default function useMCXEngine(_refreshKey = 0) {
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
 
-      if (pos.currentPremium >= pos.tpPremium) {
-        closePosition(eng, strat, pos.tpPremium, price, "TP", now);
+      const exit = resolveExit(pos, strat.def, pos.currentPremium, now);
+      if (exit) {
+        closePosition(eng, strat, exit.exitPremium, price, exit.reason, now);
         openCount--;
-      } else if (pos.currentPremium <= pos.slPremium) {
-        closePosition(eng, strat, pos.slPremium, price, "SL", now);
-        openCount--;
-      } else if (now >= pos.expiryTime) {
-        closePosition(eng, strat, pos.currentPremium, price, "EXPIRY", now);
-        openCount--;
-      } else {
-        void commodity; // suppress unused warning
       }
+      void commodity; // suppress unused warning
     }
 
     // Evaluate signals
@@ -641,17 +781,21 @@ export default function useMCXEngine(_refreshKey = 0) {
       if (eng.balance < 5000) continue;
 
       const price = state.lastPrice;
-      const fires = evalSignal(strat.def.signal, bars, price);
-      strat.score = fires ? 75 : 0;
+      const barsForEval = [...bars, price];
+      const regime = classifyCommodityRegime(barsForEval);
+      const fires = evalSignal(strat.def.signal, barsForEval, price);
+      const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price, regime);
+      strat.score = confirmed ? 82 : fires ? 56 : 0;
 
-      if (fires) {
+      if (confirmed) {
         const commodity = MCX_COMMODITY_MAP.get(strat.def.commodityId)!;
         const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
         const iv = recentStd > 0
           ? Math.max(commodity.iv * 0.6, Math.min(commodity.iv * 2, (recentStd / price) * Math.sqrt(252 * 375)))
           : commodity.iv;
-        openPosition(eng, strat, commodity, price, iv, now);
-        openCount++;
+        if (openPosition(eng, strat, commodity, price, iv, now)) {
+          openCount++;
+        }
       }
     }
 

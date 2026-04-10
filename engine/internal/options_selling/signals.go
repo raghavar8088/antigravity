@@ -190,7 +190,7 @@ var Signals = map[string]SignalFunc{
 		mom10 := momentum(ctx.Prices, 10) // 10-min momentum
 		rsiVal := rsi(ctx.Prices, 14)
 		// Price rising on both timeframes, RSI not overbought yet
-		return mom5 > 0.0018 && mom10 > 0.0008 && rsiVal < 68
+		return mom5 > 0.0025 && mom10 > 0.0012 && rsiVal < 64
 	},
 	"BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -199,7 +199,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0018 && mom10 < -0.0008 && rsiVal > 32
+		return mom5 < -0.0025 && mom10 < -0.0012 && rsiVal > 36
 	},
 	"STRONG_BULL_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -208,7 +208,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 > 0.0032 && mom10 > 0.0016 && rsiVal < 72
+		return mom5 > 0.0042 && mom10 > 0.0022 && rsiVal < 68
 	},
 	"STRONG_BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -217,7 +217,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0032 && mom10 < -0.0016 && rsiVal > 28
+		return mom5 < -0.0042 && mom10 < -0.0022 && rsiVal > 32
 	},
 
 	// ── RSI signals ──────────────────────────────────────────────────────────
@@ -333,7 +333,7 @@ var Signals = map[string]SignalFunc{
 		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (ctx.BTCPrice - vw) / vw
 		// Must be 0.3% above VWAP AND have upward momentum
-		return deviation > 0.002 && momentum(ctx.Prices, 5) > 0.0015
+		return deviation > 0.0035 && momentum(ctx.Prices, 5) > 0.0022
 	},
 	"VWAP_BELOW": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 30 {
@@ -341,7 +341,7 @@ var Signals = map[string]SignalFunc{
 		}
 		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (vw - ctx.BTCPrice) / vw
-		return deviation > 0.002 && momentum(ctx.Prices, 5) < -0.0015
+		return deviation > 0.0035 && momentum(ctx.Prices, 5) < -0.0022
 	},
 
 	// ── Breakout signals ─────────────────────────────────────────────────────
@@ -358,7 +358,7 @@ var Signals = map[string]SignalFunc{
 			}
 		}
 		// Clean break above prior high with momentum
-		return ctx.BTCPrice > hi*1.0018 && momentum(ctx.Prices, 3) > 0.0015
+		return ctx.BTCPrice > hi*1.0028 && momentum(ctx.Prices, 3) > 0.0022
 	},
 	"SUPPORT_BREAK": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 22 {
@@ -371,7 +371,7 @@ var Signals = map[string]SignalFunc{
 				lo = p
 			}
 		}
-		return ctx.BTCPrice < lo*0.9982 && momentum(ctx.Prices, 3) < -0.0015
+		return ctx.BTCPrice < lo*0.9972 && momentum(ctx.Prices, 3) < -0.0022
 	},
 
 	// ── Stochastic signals ────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return ctx.BTCPrice > vw*1.0015 && mom5 > 0.0024 && mom10 > 0.0012 && rsiVal > 48 && rsiVal < 70
+		return ctx.BTCPrice > vw*1.0025 && mom5 > 0.0032 && mom10 > 0.0018 && rsiVal > 50 && rsiVal < 66
 	},
 	"MOMENTUM_VWAP_BEAR": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 30 {
@@ -440,7 +440,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return ctx.BTCPrice < vw*0.9985 && mom5 < -0.0024 && mom10 < -0.0012 && rsiVal > 30 && rsiVal < 52
+		return ctx.BTCPrice < vw*0.9975 && mom5 < -0.0032 && mom10 < -0.0018 && rsiVal > 34 && rsiVal < 50
 	},
 	"BREAKOUT_TREND_BULL": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 55 {
@@ -456,11 +456,11 @@ var Signals = map[string]SignalFunc{
 		ema20 := ema(ctx.Prices, 20)
 		ema50 := ema(ctx.Prices, 50)
 		rsiVal := rsi(ctx.Prices, 14)
-		return ctx.BTCPrice > hi*1.0018 &&
+		return ctx.BTCPrice > hi*1.0028 &&
 			ctx.BTCPrice > ema20 &&
 			ctx.BTCPrice > ema50 &&
-			momentum(ctx.Prices, 3) > 0.0018 &&
-			rsiVal > 52 && rsiVal < 72
+			momentum(ctx.Prices, 3) > 0.0024 &&
+			rsiVal > 54 && rsiVal < 68
 	},
 	"BREAKDOWN_TREND_BEAR": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 55 {
@@ -476,11 +476,11 @@ var Signals = map[string]SignalFunc{
 		ema20 := ema(ctx.Prices, 20)
 		ema50 := ema(ctx.Prices, 50)
 		rsiVal := rsi(ctx.Prices, 14)
-		return ctx.BTCPrice < lo*0.9982 &&
+		return ctx.BTCPrice < lo*0.9972 &&
 			ctx.BTCPrice < ema20 &&
 			ctx.BTCPrice < ema50 &&
-			momentum(ctx.Prices, 3) < -0.0018 &&
-			rsiVal > 28 && rsiVal < 48
+			momentum(ctx.Prices, 3) < -0.0024 &&
+			rsiVal > 32 && rsiVal < 46
 	},
 	"CAPITULATION_RECLAIM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 30 {
@@ -503,11 +503,11 @@ var Signals = map[string]SignalFunc{
 		shortVWAP := avgPrice(ctx.Prices[n-15:])
 		ema9 := ema(ctx.Prices, 9)
 		rsiVal := rsi(ctx.Prices, 14)
-		return drop > 0.0048 &&
-			recovery > 0.0022 &&
+		return drop > 0.0055 &&
+			recovery > 0.0028 &&
 			ctx.BTCPrice > shortVWAP &&
 			ctx.BTCPrice > ema9 &&
-			rsiVal > 34 && rsiVal < 60
+			rsiVal > 38 && rsiVal < 56
 	},
 	"HIGH_IV_BULL": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -577,7 +577,7 @@ var Signals = map[string]SignalFunc{
 		totalGain := (ctx.Prices[n-1] - ctx.Prices[n-5]) / ctx.Prices[n-5]
 		// RSI must not be deep overbought — leave room for the move to continue
 		rsiVal := rsi(ctx.Prices, 14)
-		return totalGain > 0.0022 && rsiVal < 75
+		return totalGain > 0.0030 && rsiVal < 72
 	},
 	"CONSEC_BEAR_BARS": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 6 {
@@ -591,7 +591,7 @@ var Signals = map[string]SignalFunc{
 		}
 		totalLoss := (ctx.Prices[n-5] - ctx.Prices[n-1]) / ctx.Prices[n-5]
 		rsiVal := rsi(ctx.Prices, 14)
-		return totalLoss > 0.0022 && rsiVal > 25
+		return totalLoss > 0.0030 && rsiVal > 28
 	},
 
 	// ── Strategy 2: Volatility Compression Breakout ────────────────────────────
@@ -609,11 +609,11 @@ var Signals = map[string]SignalFunc{
 		if historicalStd == 0 {
 			return false
 		}
-		compressed := recentStd < historicalStd*0.70
+		compressed := recentStd < historicalStd*0.65
 		// Breakout: strong upward momentum breaking out of the compression
-		breakout := momentum(ctx.Prices, 5) > 0.002
+		breakout := momentum(ctx.Prices, 5) > 0.0028
 		rsiVal := rsi(ctx.Prices, 14)
-		return compressed && breakout && rsiVal < 68
+		return compressed && breakout && rsiVal < 65
 	},
 	"VOL_COMPRESS_BEAR": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 45 {
@@ -625,10 +625,10 @@ var Signals = map[string]SignalFunc{
 		if historicalStd == 0 {
 			return false
 		}
-		compressed := recentStd < historicalStd*0.70
-		breakout := momentum(ctx.Prices, 5) < -0.002
+		compressed := recentStd < historicalStd*0.65
+		breakout := momentum(ctx.Prices, 5) < -0.0028
 		rsiVal := rsi(ctx.Prices, 14)
-		return compressed && breakout && rsiVal > 32
+		return compressed && breakout && rsiVal > 35
 	},
 
 	// ── Strategy 3: Session Open Momentum ─────────────────────────────────────
@@ -656,7 +656,7 @@ var Signals = map[string]SignalFunc{
 		// Strong bullish momentum in the opening bars
 		mom := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom > 0.0025 && rsiVal < 68
+		return mom > 0.0035 && rsiVal < 65
 	},
 	"SESSION_OPEN_BEAR": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -677,7 +677,7 @@ var Signals = map[string]SignalFunc{
 		}
 		mom := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom < -0.0025 && rsiVal > 32
+		return mom < -0.0035 && rsiVal > 35
 	},
 
 	// ── Strategy 4: Capitulation V-Reversal ───────────────────────────────────
@@ -708,7 +708,7 @@ var Signals = map[string]SignalFunc{
 		recovery := (ctx.BTCPrice - lo) / lo
 		// RSI not yet overbought — means the recovery can continue
 		rsiVal := rsi(ctx.Prices, 14)
-		return drop > 0.0045 && recovery > 0.0020 && ctx.BTCPrice > lo && rsiVal < 58
+		return drop > 0.0055 && recovery > 0.0025 && ctx.BTCPrice > lo && rsiVal < 56
 	},
 
 	// ── Strategy 5: Overextension Fade ────────────────────────────────────────

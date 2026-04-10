@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 3
+	maxConcurrentPositions   = 5
 	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
@@ -30,11 +30,17 @@ const (
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
 
-	optionLossStreakDisableThreshold = 4
-	optionLossStreakCooldown         = 70 * time.Minute
+	optionLossStreakDisableThreshold = 5
+	optionLossStreakCooldown         = 50 * time.Minute
 	optionUnderperformingMinTrades   = 6
 	optionUnderperformingMaxWinRate  = 35.0
 	optionUnderperformingCooldown    = 6 * time.Hour
+
+	optionProfitLockProgress      = 0.55
+	optionProfitLockShareOfTarget = 0.65
+	optionLateExitProgress        = 0.82
+	optionLateExitMinGain         = 0.12
+	optionStrikePressureBuffer    = 0.0025
 
 	optionColdStartSizeMultiplier = 0.85
 	optionMinSizeMultiplier       = 0.45
@@ -133,7 +139,10 @@ func classifyMarketRegime(prices []float64) string {
 }
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
-	return regimeFitScore(category, regime) >= 0.75
+	// Lower the gate so Hybrid/Momentum sellers are not permanently locked out.
+	// The old 0.75 threshold blocked Hybrid in every regime and sidelined several
+	// otherwise strong continuation sellers for most of the session.
+	return regimeFitScore(category, regime) >= 0.42
 }
 
 func clamp(min, value, max float64) float64 {

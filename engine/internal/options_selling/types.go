@@ -12,9 +12,11 @@ const (
 
 // Exit reasons
 const (
-	ExitTP     = "TP"
-	ExitSL     = "SL"
-	ExitExpiry = "EXPIRY"
+	ExitTP             = "TP"
+	ExitSL             = "SL"
+	ExitExpiry         = "EXPIRY"
+	ExitProfitLock     = "PROFIT_LOCK"
+	ExitStrikePressure = "STRIKE_PRESSURE"
 )
 
 // StrategyDef configures one option scalping strategy

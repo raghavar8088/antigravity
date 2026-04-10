@@ -639,7 +639,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			baseSize = normalizedSize
 		}
 		executionWeight := o.tracker.GetExecutionWeight(aggSig.StrategyName)
-		if executionWeight < minExecutionWeightToTrade {
+		if executionWeight < 0.38 {
 			log.Printf("[QUALITY FILTER] %s skipped due to weak execution weight %.2f",
 				aggSig.StrategyName, executionWeight)
 			continue
@@ -1048,10 +1048,10 @@ func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID st
 	}
 
 	if decision.Confidence > 0 {
-		if decision.Confidence < minBridgeApprovalConfidence {
+		if decision.Confidence < 0.70 {
 			log.Printf("[COMMAND CENTER] ⛔ Bridge signal %s blocked: ChatGPT confidence %.2f below minimum %.2f",
-				pendingID, decision.Confidence, minBridgeApprovalConfidence)
-			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, minBridgeApprovalConfidence)
+				pendingID, decision.Confidence, 0.70)
+			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, 0.70)
 		}
 		p.Signal.Confidence = decision.Confidence
 	}
@@ -1187,27 +1187,27 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool
 	if adjusted.Confidence == 0 {
 		adjusted.Confidence = 1.0
 	}
-	if adjusted.Confidence < minExecutableConfidence {
-		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, minExecutableConfidence), false
+	if adjusted.Confidence < 0.78 {
+		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, 0.78), false
 	}
 
 	if adjusted.StopLossPct <= 0 {
-		adjusted.StopLossPct = defaultSignalStopLossPct
+		adjusted.StopLossPct = 0.10
 	}
-	if adjusted.StopLossPct > maxSignalStopLossPct {
-		adjusted.StopLossPct = maxSignalStopLossPct
+	if adjusted.StopLossPct > 0.15 {
+		adjusted.StopLossPct = 0.15
 	}
 
 	if adjusted.TakeProfitPct <= 0 {
-		adjusted.TakeProfitPct = minSignalTakeProfitPct
+		adjusted.TakeProfitPct = 0.40
 	}
 
-	minTakeProfitByRR := adjusted.StopLossPct * minRewardToRiskRatio
+	minTakeProfitByRR := adjusted.StopLossPct * 2.20
 	if adjusted.TakeProfitPct < minTakeProfitByRR {
 		adjusted.TakeProfitPct = minTakeProfitByRR
 	}
-	if adjusted.TakeProfitPct < minSignalTakeProfitPct {
-		adjusted.TakeProfitPct = minSignalTakeProfitPct
+	if adjusted.TakeProfitPct < 0.40 {
+		adjusted.TakeProfitPct = 0.40
 	}
 
 	return adjusted, "", true

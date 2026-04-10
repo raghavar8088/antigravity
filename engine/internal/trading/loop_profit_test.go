@@ -29,13 +29,13 @@ func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
 	if !allowed {
 		t.Fatal("expected signal to be allowed")
 	}
-	if math.Abs(sanitized.StopLossPct-defaultSignalStopLossPct) > signalTolerance {
-		t.Fatalf("expected default stop loss %.2f, got %.4f", defaultSignalStopLossPct, sanitized.StopLossPct)
+	if math.Abs(sanitized.StopLossPct-0.10) > signalTolerance {
+		t.Fatalf("expected default stop loss %.2f, got %.4f", 0.10, sanitized.StopLossPct)
 	}
 	// TP is the higher of: (SL × R:R) or the absolute floor minSignalTakeProfitPct
-	expectedTakeProfit := defaultSignalStopLossPct * minRewardToRiskRatio
-	if expectedTakeProfit < minSignalTakeProfitPct {
-		expectedTakeProfit = minSignalTakeProfitPct
+	expectedTakeProfit := 0.10 * 2.20
+	if expectedTakeProfit < 0.40 {
+		expectedTakeProfit = 0.40
 	}
 	if math.Abs(sanitized.TakeProfitPct-expectedTakeProfit) > signalTolerance {
 		t.Fatalf("expected default take profit %.4f, got %.4f", expectedTakeProfit, sanitized.TakeProfitPct)
@@ -52,8 +52,8 @@ func TestSanitizeSignalForProfitEnforcesRiskRewardAndStopCap(t *testing.T) {
 	if !allowed {
 		t.Fatal("expected signal to be allowed")
 	}
-	if math.Abs(sanitized.StopLossPct-maxSignalStopLossPct) > signalTolerance {
-		t.Fatalf("expected clamped stop loss %.2f, got %.4f", maxSignalStopLossPct, sanitized.StopLossPct)
+	if math.Abs(sanitized.StopLossPct-0.15) > signalTolerance {
+		t.Fatalf("expected clamped stop loss %.2f, got %.4f", 0.15, sanitized.StopLossPct)
 	}
 
 	expectedTakeProfit := 0.5

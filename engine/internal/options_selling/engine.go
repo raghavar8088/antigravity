@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -151,7 +152,7 @@ func (e *Engine) RestoreState(state PersistedState) {
 		s.consecutiveLosses = persisted.ConsecutiveLosses
 		s.disabledUntil = persisted.DisabledUntil
 		s.stats = persisted.Stats
-		
+
 		if persisted.Position != nil {
 			cp := *persisted.Position
 			s.position = &cp
@@ -358,7 +359,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	}
 
 	// RECEIVE premium as a seller
-	e.balance += positionUSD 
+	e.balance += positionUSD
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
@@ -452,11 +453,32 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		gainPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium
 	}
 
+	timeProgress := 0.0
+	totalLife := pos.ExpiryTime.Sub(pos.EntryTime)
+	if totalLife > 0 {
+		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/totalLife.Seconds(), 1)
+	}
+
+	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
+	strikePressure := false
+	switch pos.OptionType {
+	case Put:
+		strikePressure = e.lastPrice <= pos.Strike*(1+optionStrikePressureBuffer)
+	case Call:
+		strikePressure = e.lastPrice >= pos.Strike*(1-optionStrikePressureBuffer)
+	}
+
 	switch {
 	case gainPct >= takeProfitPct:
 		return ExitTP
 	case gainPct <= -stopLossPct: // Expansion of premium > SL threshold
 		return ExitSL
+	case strikePressure && gainPct < profitLockThreshold*0.50:
+		return ExitStrikePressure
+	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
+		return ExitProfitLock
+	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
+		return ExitProfitLock
 	case now.After(pos.ExpiryTime):
 		return ExitExpiry
 	default:
@@ -479,7 +501,7 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 
 	// BUY back to close: balance decreases by current market value
 	e.balance -= pos.CurrentPremium * pos.Quantity
-	
+
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
 		StrategyID:    s.def.ID,
@@ -596,7 +618,9 @@ func setCORSOptions(w http.ResponseWriter) {
 
 func (e *Engine) HandlePositions(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -606,18 +630,24 @@ func (e *Engine) HandlePositions(w http.ResponseWriter, r *http.Request) {
 			positions = append(positions, *s.position)
 		}
 	}
-	if positions == nil { positions = []OptionPosition{} }
+	if positions == nil {
+		positions = []OptionPosition{}
+	}
 	json.NewEncoder(w).Encode(positions)
 }
 
 func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	trades := e.trades
-	if trades == nil { trades = []OptionTrade{} }
+	if trades == nil {
+		trades = []OptionTrade{}
+	}
 	result := make([]OptionTrade, len(trades))
 	for i, t := range trades {
 		result[len(trades)-1-i] = t
@@ -627,7 +657,9 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 
 func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -640,7 +672,9 @@ func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 
 func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -664,10 +698,14 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 			openMarketValue += s.position.CurrentPremium * s.position.Quantity
 		}
 	}
-	for _, t := range e.trades { totalPremiumSpent += t.CostBasis }
+	for _, t := range e.trades {
+		totalPremiumSpent += t.CostBasis
+	}
 
 	winRate := 0.0
-	if totalTrades > 0 { winRate = float64(wins) / float64(totalTrades) * 100 }
+	if totalTrades > 0 {
+		winRate = float64(wins) / float64(totalTrades) * 100
+	}
 
 	return AggregateStats{
 		Balance:           e.balance,
@@ -685,7 +723,9 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 
 func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
@@ -696,7 +736,9 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
-	if r.Method == http.MethodOptions { return }
+	if r.Method == http.MethodOptions {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return

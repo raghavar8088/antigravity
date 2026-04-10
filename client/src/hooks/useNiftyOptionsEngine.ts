@@ -22,9 +22,13 @@ const LOT_SIZE = 75;                  // NIFTY F&O lot size
 const STRIKE_STEP = 50;              // NIFTY strike increment
 const NIFTY_IV = 0.18;               // ~18% IV for NIFTY weekly options
 const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly expiry
-const MAX_CONCURRENT = 15;
+const MAX_CONCURRENT = 10;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
 const TICK_MS = 1_000;               // engine tick every second
+const PROFIT_LOCK_PROGRESS = 0.45;
+const PROFIT_LOCK_SHARE = 0.62;
+const LATE_EXIT_PROGRESS = 0.76;
+const LATE_EXIT_MIN_GAIN = 0.12;
 
 // ─── Strategy definitions ──────────────────────────────────────────────────────
 
@@ -41,7 +45,57 @@ interface StratDef {
   positionINR: number;
 }
 
-const STRAT_DEFS: StratDef[] = [
+type CategoryProfile = {
+  minTp: number;
+  maxTp: number;
+  minSl: number;
+  maxSl: number;
+  holdMins: number;
+};
+
+const DEFAULT_CATEGORY_PROFILE: CategoryProfile = {
+  minTp: 0.38,
+  maxTp: 0.54,
+  minSl: 0.26,
+  maxSl: 0.34,
+  holdMins: 150,
+};
+
+const CATEGORY_PROFILES: Record<string, CategoryProfile> = {
+  Momentum: { minTp: 0.40, maxTp: 0.58, minSl: 0.28, maxSl: 0.36, holdMins: 150 },
+  Breakout: { minTp: 0.42, maxTp: 0.62, minSl: 0.30, maxSl: 0.38, holdMins: 165 },
+  Trend: { minTp: 0.42, maxTp: 0.60, minSl: 0.28, maxSl: 0.36, holdMins: 180 },
+  VWAP: { minTp: 0.36, maxTp: 0.50, minSl: 0.24, maxSl: 0.30, holdMins: 135 },
+  "Mean Reversion": { minTp: 0.34, maxTp: 0.48, minSl: 0.24, maxSl: 0.32, holdMins: 120 },
+  Capitulation: { minTp: 0.48, maxTp: 0.70, minSl: 0.32, maxSl: 0.40, holdMins: 195 },
+  Volatility: { minTp: 0.44, maxTp: 0.64, minSl: 0.30, maxSl: 0.38, holdMins: 180 },
+  "Price Action": { minTp: 0.38, maxTp: 0.54, minSl: 0.26, maxSl: 0.34, holdMins: 150 },
+  Divergence: { minTp: 0.40, maxTp: 0.56, minSl: 0.28, maxSl: 0.36, holdMins: 165 },
+  Fibonacci: { minTp: 0.40, maxTp: 0.54, minSl: 0.26, maxSl: 0.34, holdMins: 150 },
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function profileForCategory(category: string): CategoryProfile {
+  return CATEGORY_PROFILES[category] ?? DEFAULT_CATEGORY_PROFILE;
+}
+
+function tuneStrategy(def: StratDef): StratDef {
+  const profile = profileForCategory(def.category);
+  return {
+    ...def,
+    tpPct: clampNumber(def.tpPct, profile.minTp, profile.maxTp),
+    slPct: clampNumber(def.slPct, profile.minSl, profile.maxSl),
+  };
+}
+
+function holdMinutesFor(def: StratDef): number {
+  return profileForCategory(def.category).holdMins;
+}
+
+const BASE_STRAT_DEFS: StratDef[] = [
   // ── CALL strategies ───────────────────────────────────────────────────────
   { id: 1,  name: "MomentumBurst_Bull_Call",        category: "Momentum",      optionType: "CALL", signal: "STRONG_BULL_MOM",  tpPct: 0.80, slPct: 0.28, cooldownSecs: 120,  minBars: 3, positionINR: 15000 },
   { id: 2,  name: "ConsecCandle_Bull_Call",          category: "Momentum",      optionType: "CALL", signal: "BULL_MOM",         tpPct: 0.55, slPct: 0.22, cooldownSecs: 60,   minBars: 3, positionINR: 12000 },
@@ -115,6 +169,8 @@ const STRAT_DEFS: StratDef[] = [
 ];
 
 // ─── Math helpers (ported from Go signals.go) ──────────────────────────────────
+
+const STRAT_DEFS: StratDef[] = BASE_STRAT_DEFS.map(tuneStrategy);
 
 function ema(bars: number[], period: number): number {
   if (!bars.length) return 0;
@@ -647,6 +703,87 @@ function classifyRegime(bars: number[]): string {
   return "RANGE";
 }
 
+function isCategoryAlignedWithRegime(category: string, regime: string): boolean {
+  switch (regime) {
+    case "UNKNOWN":
+      return false;
+    case "TRENDING_BULL":
+    case "TRENDING_BEAR":
+      return ["Momentum", "Breakout", "Trend", "VWAP", "Price Action", "Fibonacci", "Divergence", "Capitulation", "Volatility"].includes(category);
+    case "HIGH_VOL":
+      return ["Momentum", "Breakout", "Volatility", "Capitulation", "Trend"].includes(category);
+    case "RANGE":
+      return ["Mean Reversion", "VWAP", "Price Action", "Fibonacci", "Divergence"].includes(category);
+    default:
+      return true;
+  }
+}
+
+function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
+  if (!isCategoryAlignedWithRegime(def.category, regime)) return false;
+  if (bars.length < 22) return false;
+
+  const e9 = ema(bars, 9);
+  const e21 = ema(bars, 21);
+  const mean20 = sma(bars, 20);
+  const m3 = momentum(bars, 3);
+  const r = rsi(bars, 14);
+  const bullish = def.optionType === "CALL";
+
+  switch (def.category) {
+    case "Momentum":
+    case "Breakout":
+    case "Trend":
+      return bullish
+        ? price >= e9 && e9 >= e21 && m3 > 0.0002
+        : price <= e9 && e9 <= e21 && m3 < -0.0002;
+    case "VWAP":
+      return bullish
+        ? price >= mean20 && r >= 48
+        : price <= mean20 && r <= 52;
+    case "Mean Reversion":
+    case "Divergence":
+    case "Fibonacci":
+    case "Price Action":
+      return bullish
+        ? r <= 56 && price >= bars[bars.length - 2]
+        : r >= 44 && price <= bars[bars.length - 2];
+    case "Capitulation":
+      return bullish
+        ? r <= 48 && m3 > -0.0006
+        : r >= 52 && m3 < 0.0006;
+    case "Volatility":
+      return Math.abs(m3) >= 0.00035;
+    default:
+      return true;
+  }
+}
+
+function resolveExit(
+  pos: InternalPosition,
+  def: StratDef,
+  currentPremium: number,
+  now: number,
+): { reason: string; exitPremium: number } | null {
+  const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  const maxHoldMs = holdMinutesFor(def) * 60 * 1000;
+  const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
+  const profitLockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
+
+  if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
+  if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (timeProgress >= PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
+    return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
+  }
+  if (timeProgress >= LATE_EXIT_PROGRESS && gainPct >= LATE_EXIT_MIN_GAIN) {
+    return { reason: "LATE_EXIT", exitPremium: currentPremium };
+  }
+  if (now >= pos.expiryTime || (maxHoldMs > 0 && now-pos.entryTime >= maxHoldMs)) {
+    return { reason: "TIME_EXIT", exitPremium: currentPremium };
+  }
+  return null;
+}
+
 // ─── Option premium model ──────────────────────────────────────────────────────
 
 function estimatePremium(underlyingPrice: number, iv = NIFTY_IV): number {
@@ -836,12 +973,12 @@ function openPositionLocked(
   price: number,
   iv: number,
   now: number,
-) {
+): boolean {
   eng.seq++;
   const premium = estimatePremium(price, iv);
   const cost = premium * LOT_SIZE;
 
-  if (eng.balance < cost) return;
+  if (eng.balance < cost) return false;
 
   eng.balance -= cost;
   eng.totalPremiumSpent += cost;
@@ -873,6 +1010,7 @@ function openPositionLocked(
   strat.position = pos;
   strat.status = "IN_POSITION";
   eng.positions.set(id, pos);
+  return true;
 }
 
 // ─── Build display state from engine ref ──────────────────────────────────────
@@ -1036,7 +1174,8 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
     const iv = recentStd > 0 ? Math.max(0.12, Math.min(0.35, (recentStd / price) * Math.sqrt(252 * 375))) : NIFTY_IV;
 
-    const regime = classifyRegime(bars);
+    const barsForEval = [...bars, price];
+    const regime = classifyRegime(barsForEval);
 
     // ── Mark open positions, check TP/SL ─────────────────────────────────
     let openCount = 0;
@@ -1048,13 +1187,9 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
       pos.iv = iv;
 
-      // Check TP / SL / Expiry
-      if (pos.currentPremium >= pos.tpPremium) {
-        closePositionLocked(eng, strat, pos.tpPremium, price, "TP", now);
-      } else if (pos.currentPremium <= pos.slPremium) {
-        closePositionLocked(eng, strat, pos.slPremium, price, "SL", now);
-      } else if (now >= pos.expiryTime) {
-        closePositionLocked(eng, strat, pos.currentPremium, price, "EXPIRY", now);
+      const exit = resolveExit(pos, strat.def, pos.currentPremium, now);
+      if (exit) {
+        closePositionLocked(eng, strat, exit.exitPremium, price, exit.reason, now);
       } else {
         openCount++;
       }
@@ -1079,14 +1214,11 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       if (openCount >= MAX_CONCURRENT) continue;
       if (eng.balance < strat.def.positionINR) continue;
 
-      // Append live SSE price as the "current bar" so momentum/RSI/EMA
-      // reflect the actual market right now, not the last minute's close.
-      const barsForEval = [...bars, price];
       const fires = evalSignal(strat.def.signal, barsForEval, price);
-      strat.score = fires ? 75 : 0;
+      const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price, regime);
+      strat.score = confirmed ? 82 : fires ? 58 : 0;
 
-      if (fires) {
-        openPositionLocked(eng, strat, price, iv, now);
+      if (confirmed && openPositionLocked(eng, strat, price, iv, now)) {
         openCount++;
       }
     }
