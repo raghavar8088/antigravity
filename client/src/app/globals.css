@@ -294,6 +294,38 @@ img {
   border-color: rgba(26, 115, 232, 0.16);
 }
 
+/* ── Market group tab bar ───────────────────────────────────────────────── */
+.market-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.75rem;
+}
+
+.market-group-tab {
+  padding: 8px 20px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.market-group-tab:hover {
+  background: rgba(26, 115, 232, 0.07);
+  color: var(--accent);
+}
+
+.market-group-tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 .display-font {
   font-family: var(--font-display);
 }

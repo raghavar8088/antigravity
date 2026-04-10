@@ -321,7 +321,8 @@ export default function TradingDashboard() {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx" | "charts">("options");
+  const [activeGroup, setActiveGroup] = useState<"crypto" | "india" | "charts">("india");
+  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx" | "charts">("nifty");
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -918,32 +919,67 @@ export default function TradingDashboard() {
       )}
 
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
+        {/* ── Group tabs ─────────────────────────────────────────────────── */}
+        <div className="market-group-bar">
+          {([
+            { key: "crypto", label: "🪙 Crypto Market" },
+            { key: "india",  label: "🇮🇳 Indian Market" },
+            { key: "charts", label: "📊 Charts & Data" },
+          ] as { key: "crypto" | "india" | "charts"; label: string }[]).map((g) => (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => {
+                setActiveGroup(g.key);
+                if (g.key === "crypto")  setActiveModule("options");
+                if (g.key === "india")   setActiveModule("nifty");
+                if (g.key === "charts")  setActiveModule("charts");
+              }}
+              className={`market-group-tab${activeGroup === g.key ? " active" : ""}`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="overflow-x-auto pb-1">
             <div className="flex min-w-max items-center gap-2">
-              {[
-                { key: "nifty", label: "Nifty 50 Option Scalper" },
-                { key: "niftyStocks", label: "Nifty 50 Equity" },
-                { key: "mcx", label: "Commodity Scalper" },
-                { key: "options", label: "BTC Option Scalper" },
-                { key: "options-selling", label: "BTC Option Selling" },
-                { key: "chain", label: "BTC Option Chain" },
-                { key: "dashboard", label: "BTC Equity" },
-                { key: "charts", label: "TradingView Charts" },
-                { key: "liveDataLab", label: "Live Data Lab" },
-              ].map((module) => {
+              {/* ── Crypto sub-tabs ─────────────────────────────────────── */}
+              {activeGroup === "crypto" && ([
+                { key: "options",          label: "BTC Option Scalper" },
+                { key: "options-selling",  label: "BTC Option Selling" },
+                { key: "dashboard",        label: "BTC Equity" },
+              ] as { key: typeof activeModule; label: string }[]).map((module) => {
                 const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
                 const isActive = isBtcEquityGroup || activeModule === module.key;
                 return (
-                  <button
-                    key={module.key}
-                    onClick={() => setActiveModule(module.key as "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftyStocks" | "liveDataLab" | "mcx" | "charts")}
-                    className={`groww-tab${isActive ? " active" : ""}`}
-                  >
+                  <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${isActive ? " active" : ""}`}>
                     {module.label}
                   </button>
                 );
               })}
+
+              {/* ── Indian Market sub-tabs ──────────────────────────────── */}
+              {activeGroup === "india" && ([
+                { key: "nifty",       label: "Nifty 50 Option Scalper" },
+                { key: "niftyStocks", label: "Nifty 50 Equity" },
+                { key: "mcx",         label: "Commodity Scalper" },
+              ] as { key: typeof activeModule; label: string }[]).map((module) => (
+                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                  {module.label}
+                </button>
+              ))}
+
+              {/* ── Charts & Data sub-tabs ──────────────────────────────── */}
+              {activeGroup === "charts" && ([
+                { key: "charts",      label: "TradingView Charts" },
+                { key: "liveDataLab", label: "Live Data Lab" },
+              ] as { key: typeof activeModule; label: string }[]).map((module) => (
+                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                  {module.label}
+                </button>
+              ))}
             </div>
           </div>
           <div
