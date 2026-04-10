@@ -1,26 +1,17 @@
+/**
+ * /api/nifty/candles — Historical 1-minute candles for NIFTY 50
+ *
+ * Data source: Yahoo Finance v8 chart API (^NSEI)
+ * - No authentication required
+ * - No API key required
+ * - Returns today's 1-minute bars from market open (09:15 IST) to now
+ * - Falls back to 5-minute bars if 1-minute is unavailable
+ */
+
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-/** Format a Date as "YYYY-MM-DD HH:mm" in IST (UTC+5:30) */
-function toISTString(date: Date): string {
-  // IST = UTC + 5h30m
-  const istOffset = 5 * 60 + 30; // minutes
-  const istMs = date.getTime() + istOffset * 60 * 1000;
-  const d = new Date(istMs);
-  const yyyy = d.getUTCFullYear();
-  const mm = pad2(d.getUTCMonth() + 1);
-  const dd = pad2(d.getUTCDate());
-  const hh = pad2(d.getUTCHours());
-  const min = pad2(d.getUTCMinutes());
-  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
-}
 
 export type Candle = {
-  time: number;
+  time: number;   // Unix ms timestamp
   open: number;
   high: number;
   low: number;
@@ -28,77 +19,115 @@ export type Candle = {
   volume: number;
 };
 
+type YahooChartMeta = {
+  regularMarketPrice?: number;
+  previousClose?: number;
+};
+
+type YahooChartResponse = {
+  chart?: {
+    result?: Array<{
+      meta?: YahooChartMeta;
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          open?: (number | null)[];
+          high?: (number | null)[];
+          low?: (number | null)[];
+          close?: (number | null)[];
+          volume?: (number | null)[];
+        }>;
+      };
+    }>;
+    error?: { code?: string; description?: string };
+  };
+};
+
+function safeNum(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+async function fetchYahooCandles(interval: string): Promise<Candle[] | null> {
+  // Yahoo Finance chart — 1d range gives today's intraday bars
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=${interval}&range=1d&includePrePost=false`;
+  const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=${interval}&range=1d&includePrePost=false`;
+
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+  };
+
+  for (const endpoint of [url, url2]) {
+    try {
+      const res = await fetch(endpoint, { headers, cache: "no-store" });
+      if (!res.ok) continue;
+
+      const data = await res.json() as YahooChartResponse;
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
+
+      const timestamps = result.timestamp ?? [];
+      const quote = result.indicators?.quote?.[0];
+      if (!timestamps.length || !quote) continue;
+
+      const candles: Candle[] = [];
+      for (let i = 0; i < timestamps.length; i++) {
+        const close = safeNum(quote.close?.[i]);
+        if (close <= 0) continue; // skip gaps/nulls
+        candles.push({
+          time: timestamps[i] * 1000, // seconds → ms
+          open:   safeNum(quote.open?.[i]),
+          high:   safeNum(quote.high?.[i]),
+          low:    safeNum(quote.low?.[i]),
+          close,
+          volume: safeNum(quote.volume?.[i]),
+        });
+      }
+
+      if (candles.length > 0) return candles;
+    } catch {
+      // try next mirror
+    }
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
-  if (!isAngelConfigured()) {
+  const { searchParams } = new URL(request.url);
+  const requestedInterval = searchParams.get("interval") ?? "ONE_MINUTE";
+
+  // Map Angel One interval names → Yahoo Finance interval codes
+  const intervalMap: Record<string, string> = {
+    ONE_MINUTE:   "1m",
+    THREE_MINUTE: "2m",  // Yahoo has 2m, not 3m
+    FIVE_MINUTE:  "5m",
+    TEN_MINUTE:   "5m",
+    FIFTEEN_MINUTE: "15m",
+    THIRTY_MINUTE: "30m",
+    ONE_HOUR:     "60m",
+  };
+  const yahooInterval = intervalMap[requestedInterval] ?? "1m";
+
+  // Try requested interval, fallback to 5m if 1m fails (Yahoo sometimes delays 1m)
+  let candles = await fetchYahooCandles(yahooInterval);
+  if (!candles && yahooInterval === "1m") {
+    candles = await fetchYahooCandles("5m");
+  }
+
+  if (!candles) {
     return NextResponse.json({
       ok: false,
       candles: [],
       count: 0,
-      error: `Not configured — set these env vars: ${angelMissingEnv()}`,
+      error: "Yahoo Finance unavailable — no candle data returned",
     });
   }
 
-  const { searchParams } = new URL(request.url);
-  const interval = searchParams.get("interval") || "ONE_MINUTE";
-
-  // Build IST date range: today 09:00 to 15:30 (or now if market is open)
-  const now = new Date();
-  const istOffset = (5 * 60 + 30) * 60 * 1000;
-  const nowIST = new Date(now.getTime() + istOffset);
-
-  // Build fromdate: today at 09:00 IST
-  const fromUTC = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(), 3, 30)); // 09:00 IST = 03:30 UTC
-  const fromdate = toISTString(fromUTC);
-
-  // Build todate: today at 15:30 IST, capped at now
-  const toUTC930 = new Date(Date.UTC(nowIST.getUTCFullYear(), nowIST.getUTCMonth(), nowIST.getUTCDate(), 10, 0)); // 15:30 IST = 10:00 UTC
-  const toUTC = now < toUTC930 ? now : toUTC930;
-  const todate = toISTString(toUTC);
-
-  try {
-    const jwt = await getAngelJWT();
-
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/historical/v1/getCandleData`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({
-        exchange: "NSE",
-        symboltoken: "99926000",
-        interval,
-        fromdate,
-        todate,
-      }),
-      next: { revalidate: 0 },
-    });
-
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, candles: [], count: 0, error: `Angel One returned ${res.status}` });
-    }
-
-    const payload = await res.json() as {
-      status?: boolean;
-      message?: string;
-      errorcode?: string;
-      data?: unknown[][];
-    };
-
-    if (!payload.status || !Array.isArray(payload.data)) {
-      const msg = [payload.message, payload.errorcode].filter(Boolean).join(" ") || "Candle fetch failed";
-      return NextResponse.json({ ok: false, candles: [], count: 0, error: msg });
-    }
-
-    const candles: Candle[] = payload.data.map((row) => ({
-      time: new Date(row[0] as string).getTime(),
-      open: Number(row[1]) || 0,
-      high: Number(row[2]) || 0,
-      low: Number(row[3]) || 0,
-      close: Number(row[4]) || 0,
-      volume: Number(row[5]) || 0,
-    }));
-
-    return NextResponse.json({ ok: true, candles, count: candles.length });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown error";
-    return NextResponse.json({ ok: false, candles: [], count: 0, error: message });
-  }
+  return NextResponse.json({
+    ok: true,
+    candles,
+    count: candles.length,
+    source: "yahoo",
+    interval: yahooInterval,
+  });
 }
