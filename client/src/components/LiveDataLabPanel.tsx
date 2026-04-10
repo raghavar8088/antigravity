@@ -24,6 +24,27 @@ function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
+function ProbeStateBanner({
+  label,
+  detail,
+  tone,
+}: {
+  label: string;
+  detail: string;
+  tone: "warning" | "error";
+}) {
+  const styles = tone === "error"
+    ? { borderColor: "rgba(239, 68, 68, 0.18)", background: "rgba(239, 68, 68, 0.08)", color: "#b91c1c" }
+    : { borderColor: "rgba(245, 158, 11, 0.18)", background: "rgba(245, 158, 11, 0.08)", color: "#b45309" };
+
+  return (
+    <div className="rounded-[18px] border px-4 py-3 text-xs" style={styles}>
+      <div className="font-semibold uppercase tracking-[0.12em]">{label}</div>
+      <div className="mt-1 normal-case tracking-normal">{detail}</div>
+    </div>
+  );
+}
+
 function OhlRow({ open, high, low }: { open: number; high: number; low: number }) {
   return (
     <div className="flex gap-4 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -92,6 +113,13 @@ function BTCCard({ data, loading, error }: { data: DeltaProbeData | null; loadin
           <div className="text-[10px]" style={{ color: "var(--text-muted, #71717a)" }}>
             Updated {data.fetched_at ? new Date(data.fetched_at).toLocaleTimeString() : "-"}
           </div>
+          {!loading && !ok && (
+            <ProbeStateBanner
+              label="Probe State"
+              detail="BTC probe is offline. Use Refresh to retry or inspect the probe endpoint if this persists."
+              tone={error ? "error" : "warning"}
+            />
+          )}
         </>
       ) : (
         <>

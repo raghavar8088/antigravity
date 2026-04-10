@@ -788,6 +788,7 @@ export default function Nifty50OptionScalper({
         market={market}
         subtitle="Live NIFTY 50 index chart from NSE for the options scalper's underlying spot feed."
         vix={vix}
+        currentTime={currentTime}
       />
 
       <MarketIndicatorsPanel vix={vix} vixChange={vixChange} vixPct={vixPct} candles={candles} />
@@ -987,6 +988,9 @@ export default function Nifty50OptionScalper({
       <NiftyOptionChainPanel
         data={optionChain.data}
         loading={optionChain.loading}
+        error={optionChain.error}
+        lastUpdatedAt={optionChain.lastUpdatedAt}
+        currentTime={currentTime}
         selectedExpiry={optionChain.selectedExpiry}
         selectExpiry={optionChain.selectExpiry}
       />

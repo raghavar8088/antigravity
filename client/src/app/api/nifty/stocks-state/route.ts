@@ -13,6 +13,10 @@ import { Pool } from "pg";
 
 let pool: Pool | null = null;
 
+function hasDatabaseUrl(): boolean {
+  return Boolean(process.env.DATABASE_URL);
+}
+
 function getPool(): Pool {
   if (!pool) {
     const url = process.env.DATABASE_URL;
@@ -54,6 +58,10 @@ type Payload = {
 
 export async function GET() {
   try {
+    if (!hasDatabaseUrl()) {
+      return NextResponse.json({ ok: true, found: false, disabled: true, reason: "DATABASE_URL not set" });
+    }
+
     const db = getPool();
     const client = await db.connect();
     try {
@@ -87,6 +95,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if (!hasDatabaseUrl()) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "DATABASE_URL not set" });
+    }
+
     const body = await request.json() as Payload;
     const db = getPool();
     const client = await db.connect();

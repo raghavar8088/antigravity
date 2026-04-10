@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
 import ActivityFeed from "@/components/ActivityFeed";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -22,7 +23,9 @@ import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
 import MCXCommodityScalper from "@/components/MCXCommodityScalper";
 import CryptoEquityScalper from "@/components/CryptoEquityScalper";
 import LiveDataLabPanel from "@/components/LiveDataLabPanel";
+import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
 import TradingViewChart from "@/components/TradingViewChart";
+import WorkspaceSettingsPanel, { type StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -80,10 +83,31 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
+type DashboardGroup = "crypto" | "india" | "charts";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts";
+type WorkspacePreset = {
+  path: string;
+  label: string;
+  description: string;
+  group: DashboardGroup;
+  module: DashboardModule;
+};
+type TradingDashboardProps = {
+  initialGroup?: DashboardGroup;
+  initialModule?: DashboardModule;
+};
 
 const SOUND_STORAGE_KEY = "raig.sound.enabled";
 const INITIAL_BALANCE = 1000000;
 const INITIAL_OPTIONS_BALANCE = 1000000;
+const WORKSPACE_PRESETS: WorkspacePreset[] = [
+  { path: "/", label: "NIFTY Options", description: "Default live options desk with Indian-market context.", group: "india", module: "nifty" },
+  { path: "/crypto", label: "Crypto Workspace", description: "Jump straight into crypto equity and BTC derivatives desks.", group: "crypto", module: "cryptoEquity" },
+  { path: "/nifty-options", label: "NIFTY Options", description: "Dedicated route for the NIFTY 50 options workspace.", group: "india", module: "nifty" },
+  { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
+  { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
+  { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
+];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
   { name: "RAIG_Breakout_VWAP", category: "RAIG Alpha", timeframe: "15m", status: "RUNNING", exposure: 0, profit: 0, wins: 0, losses: 0 },
@@ -321,12 +345,15 @@ function CompactMetric({
   );
 }
 
-export default function TradingDashboard() {
+export default function TradingDashboard({
+  initialGroup = "india",
+  initialModule = "nifty",
+}: TradingDashboardProps) {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [activeGroup, setActiveGroup] = useState<"crypto" | "india" | "charts">("india");
-  const [activeModule, setActiveModule] = useState<"dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts">("nifty");
+  const [activeGroup, setActiveGroup] = useState<DashboardGroup>(initialGroup);
+  const [activeModule, setActiveModule] = useState<DashboardModule>(initialModule);
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -336,6 +363,11 @@ export default function TradingDashboard() {
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
   const milestoneRef = useRef<Set<number>>(new Set());
   const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setActiveGroup(initialGroup);
+    setActiveModule(initialModule);
+  }, [initialGroup, initialModule]);
 
   const { engineOnline } = useEngineState();
   const { positions: optionPositions, stats: optionStats } = useOptions();
@@ -869,12 +901,126 @@ export default function TradingDashboard() {
   const optionsHeaderOnlineLabel = btcOptionsSellingModuleActive ? "Selling engine live — collecting theta decay on BTC options" : niftyOptionsSellingModuleActive ? "Selling engine live on NSE NIFTY 50 option premium decay" : niftyOptionsModuleActive ? "Options engine live on NSE NIFTY 50 spot data" : undefined;
   const optionsHeaderDetailLabel = btcOptionsSellingModuleActive ? `${optionOpenPositions} open short option positions in the selling account` : niftyOptionsSellingModuleActive ? `${optionOpenPositions} open NIFTY short-option positions in the separate selling account` : niftyOptionsModuleActive ? `${optionOpenPositions} open NIFTY 50 option positions in the separate NIFTY account` : undefined;
 
+  const activePreset = WORKSPACE_PRESETS.find((preset) => preset.module === activeModule) ?? WORKSPACE_PRESETS[0];
+  const workspaceStrategyItems: StrategyToggleItem[] = cryptoEquityModuleActive
+    ? cryptoStrategies.slice(0, 10).map((strategy, index) => ({
+        id: String(strategy.id ?? `crypto-${index}`),
+        label: strategy.name,
+        description: `${strategy.category} · ${strategy.status}`,
+        enabled: strategy.status !== "COOLING",
+      }))
+    : niftyOptionsModuleActive
+      ? niftyOptionStrategies.slice(0, 10).map((strategy, index) => ({
+          id: strategy.strategyId > 0 ? String(strategy.strategyId) : `nifty-${index}`,
+          label: strategy.name,
+          description: `${strategy.category} · ${strategy.status}`,
+          enabled: strategy.rosterState !== "DISABLED",
+        }))
+      : niftyOptionsSellingModuleActive
+        ? niftySellingStrategies.slice(0, 10).map((strategy, index) => ({
+            id: strategy.strategyId > 0 ? String(strategy.strategyId) : `nifty-selling-${index}`,
+            label: strategy.name,
+            description: `${strategy.category} · ${strategy.status}`,
+            enabled: strategy.rosterState !== "DISABLED",
+          }))
+        : niftyStocksModuleActive
+          ? niftyStockStrategies.slice(0, 10).map((strategy, index) => ({
+              id: String(strategy.id ?? `stocks-${index}`),
+              label: strategy.name,
+              description: `${strategy.category} · ${strategy.status}`,
+              enabled: strategy.status !== "COOLING",
+            }))
+          : liveStrategies.slice(0, 10).map((strategy, index) => ({
+              id: `btc-${index}`,
+              label: strategy.name,
+              description: `${strategy.category} · ${strategy.status}`,
+              enabled: !strategy.disabled,
+            }));
+  const workspaceCurrencyCode = niftyOptionsModuleActive || niftyOptionsSellingModuleActive || niftyStocksModuleActive || activeModule === "mcx" ? "INR" : "USD";
+  const workspacePriceSeries = cryptoEquityModuleActive || activeModule === "dashboard" || activeModule === "engine" || activeModule === "history" || activeModule === "options" || activeModule === "options-selling" || activeModule === "chain"
+    ? deferredCandles.map((candle) => ({ time: candle.time, value: candle.close }))
+    : [];
+  const workspaceReplayEvents: ReplayEvent[] = [
+    ...(cryptoEquityModuleActive
+      ? cryptoTrades.slice(0, 8).map((trade, index) => ({
+          id: trade.id ?? `crypto-trade-${index}`,
+          time: trade.exitTime ?? trade.entryTime ?? "",
+          title: trade.strategyName,
+          detail: `${trade.side} closed ${formatUSD(trade.netPnl, { signed: true })}`,
+          tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+        }))
+      : niftyOptionsModuleActive
+        ? niftyOptionTrades.slice(0, 8).map((trade) => ({
+            id: trade.id,
+            time: trade.exitTime,
+            title: trade.strategyName,
+            detail: `${trade.exitReason} · ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
+            tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+          }))
+        : niftyOptionsSellingModuleActive
+          ? niftySellingTrades.slice(0, 8).map((trade) => ({
+              id: trade.id,
+              time: trade.exitTime,
+              title: trade.strategyName,
+              detail: `${trade.exitReason} · ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
+              tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+            }))
+          : liveTrades.slice(0, 8).map((trade) => ({
+              id: trade.id,
+              time: trade.exitTime,
+              title: trade.strategyName,
+              detail: `${trade.side} ${formatUSD(trade.netPnl, { signed: true })}`,
+              tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+            }))),
+    ...feed.slice(0, 4).map((entry) => ({
+      id: entry.id,
+      time: new Date(entry.time).toISOString(),
+      title: entry.message,
+      detail: entry.tone.toUpperCase(),
+      tone: entry.tone === "loss" ? "negative" as const : entry.tone === "win" || entry.tone === "buy" ? "positive" as const : "neutral" as const,
+    })),
+  ];
+
   return (
-    <main className="gmail-shell space-y-5">
+    <main className="gmail-shell">
       {milestoneToast && (
         <div className="milestone-toast">{milestoneToast}</div>
       )}
 
+      <div className="workspace-shell">
+        <aside className="workspace-sidebar glass-panel">
+          <div className="workspace-sidebar-header">
+            <div className="workspace-sidebar-eyebrow">Workspace Routes</div>
+            <div className="workspace-sidebar-title">Operator Navigation</div>
+            <div className="workspace-sidebar-copy">
+              Split the platform into direct entry points so each desk can open in context with fewer clicks.
+            </div>
+          </div>
+
+          <div className="workspace-route-list">
+            {WORKSPACE_PRESETS.map((preset) => {
+              const active = activeModule === preset.module;
+              return (
+                <Link
+                  key={preset.path}
+                  href={preset.path}
+                  className={`workspace-route-card${active ? " active" : ""}`}
+                >
+                  <div className="workspace-route-label">{preset.label}</div>
+                  <div className="workspace-route-copy">{preset.description}</div>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="workspace-sidebar-footer">
+            <div className="workspace-sidebar-eyebrow">Active Route</div>
+            <div className="workspace-sidebar-title">{activePreset.label}</div>
+            <div className="workspace-sidebar-copy">{activePreset.description}</div>
+          </div>
+        </aside>
+
+        <div className="workspace-main space-y-5">
       {optionsModuleActive ? (
         <OptionsAccountHeader
           online={optionsOnline}
@@ -953,6 +1099,17 @@ export default function TradingDashboard() {
           actionsEnabled={actionsEnabled}
         />
       )}
+
+      <WorkspaceSettingsPanel
+        key={activeModule}
+        workspaceKey={activeModule}
+        workspaceLabel={activePreset.label}
+        workspaceDescription={activePreset.description}
+        currencyCode={workspaceCurrencyCode}
+        defaultMode={activeGroup === "charts" ? "analysis" : "paper"}
+        defaultDataSource={activeGroup === "crypto" ? "binance" : activeModule === "mcx" ? "angel" : "nse"}
+        strategyItems={workspaceStrategyItems}
+      />
 
       <div className="glass-panel px-5 py-3 flex flex-col gap-3">
         {/* ── Group tabs ─────────────────────────────────────────────────── */}
@@ -1072,9 +1229,9 @@ export default function TradingDashboard() {
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "cryptoEquity"
-            ? "CRYPTO EQUITY â€” Top-20 crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 1% capital deployed per trade."
+            ? "CRYPTO EQUITY — Top-20 crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 1% capital deployed per trade."
             : activeModule === "niftySelling"
-            ? "OPTIONS SELLING ACCOUNT â€” Separate NIFTY 50 short-option workspace focused on premium decay, with independent paper capital and guarded reset controls."
+            ? "OPTIONS SELLING ACCOUNT — Separate NIFTY 50 short-option workspace focused on premium decay, with independent paper capital and guarded reset controls."
             : activeModule === "nifty"
             ? "OPTIONS ACCOUNT — Nifty 50 option scalper running autonomous strategies on live NSE NIFTY 50 spot data inside a separate ₹1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "niftyStocks"
@@ -2043,6 +2200,20 @@ export default function TradingDashboard() {
           <TradingViewChart />
         </div>
       )}
+
+      <ReplayBacktestPanel
+        workspaceLabel={activePreset.label}
+        priceSeries={workspacePriceSeries}
+        events={workspaceReplayEvents}
+        summary={activeModule === "history"
+          ? "Review the BTC futures ledger with replay-friendly trade events and operator feed history."
+          : activeModule === "mcx"
+            ? "Use replay mode to validate commodity entries against operator notes and upcoming MCX support."
+            : "Replay price movement, trade outcomes, and feed decisions without leaving the active workspace."}
+      />
+
+        </div>
+      </div>
     </main>
   );
 }

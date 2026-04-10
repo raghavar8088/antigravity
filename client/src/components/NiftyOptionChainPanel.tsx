@@ -5,6 +5,9 @@ import type { ChainData, ChainLeg, ChainRow } from "@/hooks/useOptionChain";
 type Props = {
   data: ChainData | null;
   loading: boolean;
+  error?: string;
+  lastUpdatedAt?: number;
+  currentTime?: number;
   selectedExpiry: string;
   selectExpiry: (value: string) => void;
 };
@@ -88,13 +91,35 @@ function findAtmIndex(chain: ChainRow[]) {
 export default function NiftyOptionChainPanel({
   data,
   loading,
+  error = "",
+  lastUpdatedAt = 0,
+  currentTime = 0,
   selectedExpiry,
   selectExpiry,
 }: Props) {
+  const isStale = currentTime > 0 && lastUpdatedAt > 0 && currentTime - lastUpdatedAt > 90_000;
+
   if (loading && !data) {
     return (
       <div className="glass-panel px-6 py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-        Loading NIFTY option chain...
+        <div className="text-base font-medium text-zinc-900">Loading NIFTY option chain</div>
+        <div className="mt-2 max-w-[540px] mx-auto">
+          Pulling strikes, ATM levels, and premium data from the active NIFTY feed.
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="glass-panel px-6 py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+        <div className="text-base font-medium text-rose-600">NIFTY option chain unavailable</div>
+        <div className="mt-2 max-w-[560px] mx-auto" style={{ color: "var(--text-secondary)" }}>
+          {error}
+        </div>
+        <div className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+          Probe Angel One connectivity or wait for the next market refresh before retrying.
+        </div>
       </div>
     );
   }
@@ -102,7 +127,10 @@ export default function NiftyOptionChainPanel({
   if (!data || data.chain.length === 0) {
     return (
       <div className="glass-panel px-6 py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-        NIFTY option chain is waiting for the live spot feed.
+        <div className="text-base font-medium text-zinc-900">Waiting for live NIFTY spot feed</div>
+        <div className="mt-2 max-w-[560px] mx-auto" style={{ color: "var(--text-secondary)" }}>
+          The options desk is online, but it does not yet have enough spot data to center the chain around ATM.
+        </div>
       </div>
     );
   }
@@ -143,6 +171,20 @@ export default function NiftyOptionChainPanel({
           >
             {data.expiryLabel} · {data.dte}DTE
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${isStale ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+            {isStale ? "Stale Snapshot" : "Live Snapshot"}
+          </span>
+          <span className="rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em]" style={{ borderColor: "var(--border)", background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+            Last refresh {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--"}
+          </span>
+          {error ? (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-amber-700">
+              Showing last good chain
+            </span>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
