@@ -1842,7 +1842,7 @@ export default function TradingDashboard() {
               <h2 className="flex items-center gap-3 text-xl font-bold">
                 <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
                 Trade History
-                <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+                <span className="text-sm font-mono text-gray-500">({tradeCount} completed)</span>
               </h2>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1865,7 +1865,19 @@ export default function TradingDashboard() {
                 </button>
               </div>
             </div>
-            <TradeHistory history={historyItems} />
+            {historyItems.length > 0 ? (
+              <TradeHistory history={historyItems} />
+            ) : liveStats && liveStats.aggregate.totalTrades > 0 ? (
+              <div className="trade-history-loading">
+                <div className="trade-history-loading-title">Trade log loading…</div>
+                <div className="trade-history-loading-detail">Engine has {liveStats.aggregate.totalTrades} recorded trades. Fetching from database.</div>
+                <div className="trade-history-loading-stats">
+                  Win Rate: {liveStats.aggregate.winRate.toFixed(1)}% · Total PnL: {formatUSD(liveStats.aggregate.totalPnl, { signed: true })} · Profit Factor: {liveStats.aggregate.profitFactor.toFixed(2)}
+                </div>
+              </div>
+            ) : (
+              <div className="trade-history-empty">No completed trades yet.</div>
+            )}
           </div>
         </div>
       )}
@@ -1926,7 +1938,7 @@ export default function TradingDashboard() {
               <h2 className="flex items-center gap-3 text-xl font-bold">
                 <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-bold tracking-widest text-blue-400">LOG</span>
                 Trade History
-                <span className="text-sm font-mono text-gray-500">({liveTrades.length} completed)</span>
+                <span className="text-sm font-mono text-gray-500">({tradeCount} completed)</span>
               </h2>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -1949,7 +1961,19 @@ export default function TradingDashboard() {
                 </button>
               </div>
             </div>
-            <TradeHistory history={historyItems} />
+            {historyItems.length > 0 ? (
+              <TradeHistory history={historyItems} />
+            ) : liveStats && liveStats.aggregate.totalTrades > 0 ? (
+              <div className="trade-history-loading">
+                <div className="trade-history-loading-title">Trade log loading…</div>
+                <div className="trade-history-loading-detail">Engine has {liveStats.aggregate.totalTrades} recorded trades. Fetching from database.</div>
+                <div className="trade-history-loading-stats">
+                  Win Rate: {liveStats.aggregate.winRate.toFixed(1)}% · Total PnL: {formatUSD(liveStats.aggregate.totalPnl, { signed: true })} · Profit Factor: {liveStats.aggregate.profitFactor.toFixed(2)}
+                </div>
+              </div>
+            ) : (
+              <div className="trade-history-empty">No completed trades yet.</div>
+            )}
           </div>
         </div>
       )}

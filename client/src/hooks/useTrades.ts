@@ -63,8 +63,11 @@ export default function useTrades(refreshKey = 0) {
 
         if (tradesRes.ok) {
           const data = await tradesRes.json();
+          // API returns null when DB has no rows — treat as empty array
           if (Array.isArray(data)) {
             setTrades(data);
+          } else if (data === null || data === undefined) {
+            setTrades([]);
           }
         }
 

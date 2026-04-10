@@ -605,7 +605,7 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 	}
 	defer rows.Close()
 
-	var trades []map[string]interface{}
+	trades := make([]map[string]interface{}, 0) // never nil — always encodes as []
 	for rows.Next() {
 		var id, strategy, category, side, reason, aiID, aiProvider, aiReason, aiBull, aiBear string
 		var entryP, exitP, size, grossP, fees, netP, aiConf float64
