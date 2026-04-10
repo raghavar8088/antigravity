@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
-import useNiftyStocksEngine, {
-  type StockQuoteDisplay,
-  type StockOptionPosition,
-  type StockOptionTrade,
-  type StrategyDisplayStatus,
-  type StocksEngineStats,
+import type {
+  StockQuoteDisplay,
+  StockOptionPosition,
+  StockOptionTrade,
+  StrategyDisplayStatus,
+  StocksEngineStats,
 } from "@/hooks/useNiftyStocksEngine";
 
 const INITIAL_BALANCE = 1_000_000;
@@ -570,11 +570,25 @@ function EquitySparkline({ stats }: { stats: StocksEngineStats }) {
 
 type Nifty50StocksScalperProps = {
   actionsEnabled?: boolean;
+  // Engine data lifted from TradingDashboard so header cards stay in sync
+  quotes: StockQuoteDisplay[];
+  positions: StockOptionPosition[];
+  trades: StockOptionTrade[];
+  strategies: StrategyDisplayStatus[];
+  stats: StocksEngineStats;
+  reset: () => void;
 };
 
-export default function Nifty50StocksScalper({ actionsEnabled = false }: Nifty50StocksScalperProps) {
+export default function Nifty50StocksScalper({
+  actionsEnabled = false,
+  quotes,
+  positions,
+  trades,
+  strategies,
+  stats,
+  reset,
+}: Nifty50StocksScalperProps) {
   const market = useNiftyMarket();
-  const { quotes, positions, trades, strategies, stats, reset } = useNiftyStocksEngine();
 
   const [isResetting, setIsResetting] = useState(false);
   const actionButtonTitle = actionsEnabled

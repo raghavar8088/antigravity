@@ -25,8 +25,8 @@ import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
-import useNiftyStocks from "@/hooks/useNiftyStocks";
-import useNiftyOptions from "@/hooks/useNiftyOptions";
+import useNiftyOptionsEngine from "@/hooks/useNiftyOptionsEngine";
+import useNiftyStocksEngine from "@/hooks/useNiftyStocksEngine";
 import useOptions from "@/hooks/useOptions";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
@@ -335,8 +335,8 @@ export default function TradingDashboard() {
   const { engineOnline, balance: engineBalance } = useEngineState();
   const { positions: optionPositions, stats: optionStats } = useOptions();
   const { positions: optionSellingPositions, stats: optionSellingStats } = useOptionsSelling();
-  const { positions: niftyOptionPositions, stats: niftyOptionStats } = useNiftyOptions();
-  const { positions: niftyStockPositions, stats: niftyStockStats } = useNiftyStocks();
+  const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll, barCount: niftyBarCount, enginePrice: niftyEnginePrice } = useNiftyOptionsEngine();
+  const { quotes: niftyStockQuotes, positions: niftyStockPositions, trades: niftyStockTrades, strategies: niftyStockStrategies, stats: niftyStockStats, reset: niftyStockReset } = useNiftyStocksEngine();
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
   const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
@@ -832,14 +832,19 @@ export default function TradingDashboard() {
   const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive || btcOptionsSellingModuleActive;
   const selectedOptionsStats = btcOptionsSellingModuleActive ? optionSellingStats : niftyOptionsModuleActive ? niftyOptionStats : optionStats;
   const selectedOptionPositions = btcOptionsSellingModuleActive ? optionSellingPositions : niftyOptionsModuleActive ? niftyOptionPositions : optionPositions;
-  const optionEquity = selectedOptionsStats?.equity ?? INITIAL_OPTIONS_BALANCE;
+  // For NIFTY options: use client engine equity directly (avoids Go API mismatch)
+  const niftyOptionEquity = niftyOptionStats?.equity ?? INITIAL_OPTIONS_BALANCE;
+  const optionEquity = niftyOptionsModuleActive ? niftyOptionEquity : (selectedOptionsStats?.equity ?? INITIAL_OPTIONS_BALANCE);
   const optionSessionPnl = optionEquity - INITIAL_OPTIONS_BALANCE;
-  const optionOpenPositions = Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
-  const optionsOnline = selectedOptionsStats !== null || selectedOptionPositions.length > 0;
+  const optionOpenPositions = niftyOptionsModuleActive
+    ? niftyOptionPositions.length
+    : Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
+  const optionsOnline = selectedOptionsStats !== null || selectedOptionPositions.length > 0 || niftyOptionPositions.length > 0;
+  // For NIFTY stocks: use client engine equity directly
   const niftyStocksEquity = niftyStockStats?.equity ?? INITIAL_BALANCE;
   const niftyStocksSessionPnl = niftyStocksEquity - INITIAL_BALANCE;
-  const niftyStocksOpenPositions = Math.max(niftyStockStats?.openPositions ?? 0, niftyStockPositions.length);
-  const niftyStocksOnline = niftyStockStats !== null || niftyStockPositions.length > 0;
+  const niftyStocksOpenPositions = niftyStockPositions.length;
+  const niftyStocksOnline = niftyStockStats.lastUpdateAt > 0 || niftyStockPositions.length > 0;
 
   const optionsHeaderMarketLabel = btcOptionsSellingModuleActive ? "BTC SELLING" : niftyOptionsModuleActive ? "NIFTY 50" : "BTC";
   const optionsHeaderMarketCode = btcOptionsSellingModuleActive ? "SELL" : niftyOptionsModuleActive ? "N50" : "OPT";
@@ -1919,9 +1924,9 @@ export default function TradingDashboard() {
 
       {activeModule === "chain" && <BTCOptionChain />}
 
-      {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} />}
+      {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} positions={niftyOptionPositions} trades={niftyOptionTrades} strategies={niftyOptionStrategies} stats={niftyOptionStats} clearAll={niftyOptionClearAll} barCount={niftyBarCount} enginePrice={niftyEnginePrice} />}
 
-      {activeModule === "niftyStocks" && <Nifty50StocksScalper actionsEnabled={actionsEnabled} />}
+      {activeModule === "niftyStocks" && <Nifty50StocksScalper actionsEnabled={actionsEnabled} quotes={niftyStockQuotes} positions={niftyStockPositions} trades={niftyStockTrades} strategies={niftyStockStrategies} stats={niftyStockStats} reset={niftyStockReset} />}
 
       {activeModule === "mcx" && <MCXCommodityScalper actionsEnabled={actionsEnabled} />}
 

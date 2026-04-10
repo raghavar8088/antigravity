@@ -4,8 +4,7 @@ import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import NiftyOptionChainPanel from "@/components/NiftyOptionChainPanel";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import useNiftyOptionChain from "@/hooks/useNiftyOptionChain";
-import useNiftyOptionsEngine, { } from "@/hooks/useNiftyOptionsEngine";
-import type { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useNiftyOptions";
+import type { OptionPosition, OptionTrade, OptionStrategyStatus, OptionStats } from "@/hooks/useNiftyOptions";
 import useNiftyVIX from "@/hooks/useNiftyVIX";
 import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
@@ -682,16 +681,31 @@ function MarketIndicatorsPanel({
 
 type Nifty50OptionScalperProps = {
   actionsEnabled?: boolean;
+  // Engine data lifted from TradingDashboard so header cards stay in sync
+  positions: OptionPosition[];
+  trades: OptionTrade[];
+  strategies: OptionStrategyStatus[];
+  stats: OptionStats;
+  clearAll: () => void;
+  barCount: number;
+  enginePrice: number;
 };
 
-export default function Nifty50OptionScalper({ actionsEnabled = false }: Nifty50OptionScalperProps) {
+export default function Nifty50OptionScalper({
+  actionsEnabled = false,
+  positions,
+  trades,
+  strategies,
+  stats,
+  clearAll,
+  barCount,
+  enginePrice,
+}: Nifty50OptionScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
   const market = useNiftyMarket();
   const optionChain = useNiftyOptionChain();
-  const { positions, trades, strategies, stats, clearAll, barCount, enginePrice } = useNiftyOptionsEngine(refreshKey);
   const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
   const { candles } = useNiftyCandles();
   const actionButtonTitle = actionsEnabled
@@ -713,7 +727,6 @@ export default function Nifty50OptionScalper({ actionsEnabled = false }: Nifty50
 
     setIsResetting(true);
     clearAll();
-    setRefreshKey((k) => k + 1);
     setIsResetting(false);
   };
 
@@ -827,7 +840,6 @@ export default function Nifty50OptionScalper({ actionsEnabled = false }: Nifty50
                     if (!actionsEnabled) return;
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
-                    setRefreshKey((k) => k + 1);
                   }}
                 >
                   Clear NIFTY Trades
