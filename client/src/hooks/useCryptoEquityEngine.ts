@@ -214,6 +214,62 @@ export type CryptoEngineStats = {
   diagnostics: string;
 };
 
+type CryptoDbPosition = {
+  id: string;
+  strategyId: number;
+  symbol: string;
+  side: Side;
+  entryPrice: number;
+  currentPrice: number;
+  tpPrice: number;
+  slPrice: number;
+  quantity: number;
+  notional: number;
+  entryTime: number;
+  unrealizedPnl: number;
+  returnPct: number;
+  peakReturnPct: number;
+};
+
+type CryptoDbTrade = {
+  id: string;
+  strategyId: number;
+  strategyName: string;
+  symbol: string;
+  side: Side;
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  netPnl: number;
+  returnPct: number;
+  entryTime: number;
+  exitTime: number;
+  exitReason: string;
+  holdSeconds: number;
+};
+
+type CryptoDbStrategy = {
+  id: number;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  winRate: number;
+  cooldownUntil: number;
+  consecutiveLosses: number;
+};
+
+type CryptoDbPayload = {
+  balance: number;
+  totalWins: number;
+  totalLosses: number;
+  totalPnl: number;
+  tradeSeq: number;
+  positions: CryptoDbPosition[];
+  trades: CryptoDbTrade[];
+  strategies: CryptoDbStrategy[];
+};
+
 type CategoryProfile = { minTp: number; maxTp: number; minSl: number; maxSl: number; holdMins: number };
 
 const CATEGORY_PROFILES: Record<string, CategoryProfile> = {
@@ -271,6 +327,8 @@ const STRAT_DEFS: StratDef[] = (() => {
   }
   return defs;
 })();
+
+const CRYPTO_ASSET_BY_SYMBOL = new Map(CRYPTO_TOP_20.map((asset) => [asset.symbol, asset]));
 
 function sma(values: number[], period: number): number {
   const slice = values.slice(-period);
@@ -503,6 +561,135 @@ const EMPTY_STATS: CryptoEngineStats = {
   diagnostics: "Bootstrapping top-20 crypto feed.",
 };
 
+function buildPersistedPayload(engine: EngineRef): CryptoDbPayload {
+  return {
+    balance: engine.balance,
+    totalWins: engine.totalWins,
+    totalLosses: engine.totalLosses,
+    totalPnl: engine.totalRealizedPnl,
+    tradeSeq: engine.seq,
+    positions: [...engine.positions.values()].map((position) => ({
+      id: position.id,
+      strategyId: position.strategyId,
+      symbol: position.asset.symbol,
+      side: position.side,
+      entryPrice: position.entryPrice,
+      currentPrice: position.currentPrice,
+      tpPrice: position.tpPrice,
+      slPrice: position.slPrice,
+      quantity: position.quantity,
+      notional: position.notional,
+      entryTime: position.entryTime,
+      unrealizedPnl: position.unrealizedPnl,
+      returnPct: position.returnPct,
+      peakReturnPct: position.peakReturnPct,
+    })),
+    trades: engine.trades.slice(0, MAX_TRADES).map((trade) => ({
+      id: trade.id,
+      strategyId: trade.strategyId,
+      strategyName: trade.strategyName,
+      symbol: trade.symbol,
+      side: trade.side,
+      quantity: trade.quantity,
+      entryPrice: trade.entryPrice,
+      exitPrice: trade.exitPrice,
+      netPnl: trade.netPnl,
+      returnPct: trade.returnPct,
+      entryTime: trade.entryTime,
+      exitTime: trade.exitTime,
+      exitReason: trade.exitReason,
+      holdSeconds: trade.holdSeconds,
+    })),
+    strategies: engine.strategies.map((strategy) => ({
+      id: strategy.def.id,
+      totalTrades: strategy.totalTrades,
+      wins: strategy.wins,
+      losses: strategy.losses,
+      totalPnl: strategy.totalPnl,
+      winRate: strategy.winRate,
+      cooldownUntil: strategy.cooldownUntil,
+      consecutiveLosses: strategy.consecutiveLosses,
+    })),
+  };
+}
+
+async function saveCryptoState(engine: EngineRef): Promise<void> {
+  try {
+    await fetch("/api/crypto/equity-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPersistedPayload(engine)),
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+async function loadCryptoState(engine: EngineRef): Promise<boolean> {
+  try {
+    const response = await fetch("/api/crypto/equity-state");
+    if (!response.ok) return false;
+    const data = await response.json() as { ok: boolean; found: boolean; state?: CryptoDbPayload };
+    if (!data.ok || !data.found || !data.state) return false;
+
+    const saved = data.state;
+    engine.balance = saved.balance;
+    engine.totalWins = saved.totalWins;
+    engine.totalLosses = saved.totalLosses;
+    engine.totalRealizedPnl = saved.totalPnl;
+    engine.seq = saved.tradeSeq;
+    engine.trades = (saved.trades ?? []).slice(0, MAX_TRADES);
+    engine.positions.clear();
+
+    for (const persisted of saved.positions ?? []) {
+      const asset = CRYPTO_ASSET_BY_SYMBOL.get(persisted.symbol);
+      if (!asset) continue;
+      const position: InternalPosition = {
+        id: persisted.id,
+        strategyId: persisted.strategyId,
+        strategyName: STRAT_DEFS.find((def) => def.id === persisted.strategyId)?.name ?? persisted.id,
+        asset,
+        side: persisted.side,
+        entryPrice: persisted.entryPrice,
+        currentPrice: persisted.currentPrice,
+        tpPrice: persisted.tpPrice,
+        slPrice: persisted.slPrice,
+        quantity: persisted.quantity,
+        notional: persisted.notional,
+        entryTime: persisted.entryTime,
+        unrealizedPnl: persisted.unrealizedPnl,
+        returnPct: persisted.returnPct,
+        peakReturnPct: persisted.peakReturnPct,
+      };
+      engine.positions.set(position.id, position);
+      const strategy = engine.strategies.find((item) => item.def.id === position.strategyId);
+      if (strategy) {
+        strategy.position = position;
+        strategy.status = "IN_POSITION";
+        strategy.currentSymbol = asset.symbol;
+      }
+    }
+
+    for (const strategy of engine.strategies) {
+      const savedStrategy = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
+      if (!savedStrategy) continue;
+      strategy.totalTrades = savedStrategy.totalTrades;
+      strategy.wins = savedStrategy.wins;
+      strategy.losses = savedStrategy.losses;
+      strategy.totalPnl = savedStrategy.totalPnl;
+      strategy.winRate = savedStrategy.winRate;
+      strategy.cooldownUntil = savedStrategy.cooldownUntil;
+      strategy.consecutiveLosses = savedStrategy.consecutiveLosses;
+      if (!strategy.position) {
+        strategy.status = strategy.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function openPosition(engine: EngineRef, strategy: InternalStrategyState, asset: CryptoAsset, entryPrice: number, now: number): boolean {
   const quantity = computeQuantity(entryPrice) * sizeMultiplierFor(strategy);
   const notional = quantity * entryPrice;
@@ -580,6 +767,8 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
 
 export default function useCryptoEquityEngine() {
   const engineRef = useRef<EngineRef>(initEngine());
+  const lastSavedSignatureRef = useRef("");
+  const dbLoadedRef = useRef(false);
   const [quotes, setQuotes] = useState<CryptoQuoteDisplay[]>(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
   const [positions, setPositions] = useState<CryptoPosition[]>([]);
   const [trades, setTrades] = useState<CryptoTrade[]>([]);
@@ -705,15 +894,64 @@ export default function useCryptoEquityEngine() {
     const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
     const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
     setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length, warmingUp: CRYPTO_TOP_20.every((asset) => (engine.bars[asset.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/20 crypto symbols live.` : "Waiting for crypto market quotes.") });
+
+    if (!dbLoadedRef.current) return;
+    const signature = JSON.stringify({
+      balance: engine.balance,
+      totalWins: engine.totalWins,
+      totalLosses: engine.totalLosses,
+      totalPnl: engine.totalRealizedPnl,
+      tradeSeq: engine.seq,
+      openPositions: [...engine.positions.keys()],
+      tradeIds: engine.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
+    });
+    if (signature !== lastSavedSignatureRef.current) {
+      lastSavedSignatureRef.current = signature;
+      void saveCryptoState(engine);
+    }
   }, []);
 
   const reset = useCallback(() => {
     engineRef.current = initEngine();
+    lastSavedSignatureRef.current = "";
+    if (dbLoadedRef.current) void saveCryptoState(engineRef.current);
     setQuotes(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
     setPositions([]);
     setTrades([]);
     setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
     setStats(EMPTY_STATS);
+  }, []);
+
+  useEffect(() => {
+    void loadCryptoState(engineRef.current).then(() => {
+      dbLoadedRef.current = true;
+      lastSavedSignatureRef.current = JSON.stringify({
+        balance: engineRef.current.balance,
+        totalWins: engineRef.current.totalWins,
+        totalLosses: engineRef.current.totalLosses,
+        totalPnl: engineRef.current.totalRealizedPnl,
+        tradeSeq: engineRef.current.seq,
+        openPositions: [...engineRef.current.positions.keys()],
+        tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (dbLoadedRef.current) void saveCryptoState(engineRef.current);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const onUnload = () => {
+      if (!dbLoadedRef.current) return;
+      const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
+      navigator.sendBeacon("/api/crypto/equity-state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
   }, []);
 
   const fetchDirectBinanceMarkets = useCallback(async (): Promise<{ ok: boolean; data: CryptoMarketItem[]; error?: string }> => {
