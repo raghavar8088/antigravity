@@ -64,6 +64,16 @@ function formatTradeDuration(entryTime: string, exitTime: string) {
   return `${seconds}s`;
 }
 
+function formatDailyLabel(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 type StrategyNumberMap = Record<string, number>;
 
 function resolveNum(name: string, id: number | undefined, map: StrategyNumberMap) {
@@ -192,6 +202,57 @@ function PremiumBar({ entry, current }: { entry: number; current: number }) {
       </div>
     </div>
   );
+}
+
+type DailyPnlRow = {
+  dateKey: string;
+  label: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  pnl: number;
+  pnlPct: number;
+  startEquity: number;
+  endEquity: number;
+};
+
+function buildDailyPnlRows(trades: OptionTrade[]): DailyPnlRow[] {
+  const grouped = new Map<string, { pnl: number; trades: number; wins: number; losses: number }>();
+
+  for (const trade of trades) {
+    const exit = new Date(trade.exitTime);
+    if (Number.isNaN(exit.getTime())) continue;
+    const dateKey = exit.toISOString().slice(0, 10);
+    const current = grouped.get(dateKey) ?? { pnl: 0, trades: 0, wins: 0, losses: 0 };
+    current.pnl += trade.netPnl;
+    current.trades += 1;
+    if (trade.netPnl >= 0) current.wins += 1;
+    else current.losses += 1;
+    grouped.set(dateKey, current);
+  }
+
+  let runningEquity = INITIAL_OPTIONS_BALANCE;
+  const chronological = [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([dateKey, value]) => {
+      const startEquity = runningEquity;
+      const pnlPct = startEquity > 0 ? (value.pnl / startEquity) * 100 : 0;
+      const endEquity = startEquity + value.pnl;
+      runningEquity = endEquity;
+      return {
+        dateKey,
+        label: formatDailyLabel(dateKey),
+        trades: value.trades,
+        wins: value.wins,
+        losses: value.losses,
+        pnl: value.pnl,
+        pnlPct,
+        startEquity,
+        endEquity,
+      };
+    });
+
+  return chronological.reverse();
 }
 
 // ── Live Positions ───────────────────────────────────────────────────────────
@@ -389,6 +450,89 @@ function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionSt
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function DailyPnlPanel({ trades }: { trades: OptionTrade[] }) {
+  const rows = buildDailyPnlRows(trades);
+  const bestDay = rows.reduce<DailyPnlRow | null>((best, row) => (!best || row.pnl > best.pnl ? row : best), null);
+  const worstDay = rows.reduce<DailyPnlRow | null>((worst, row) => (!worst || row.pnl < worst.pnl ? row : worst), null);
+
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+            DAILY PNL LEDGER
+          </h2>
+          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+            Realized option-selling PnL grouped by trade exit day, with daily return based on that day&apos;s starting equity.
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 font-medium text-zinc-600">
+            {rows.length} trading days
+          </span>
+          <span className={`rounded-full px-3 py-1 font-medium ${bestDay && bestDay.pnl >= 0 ? "text-emerald-700" : "text-zinc-600"}`}
+            style={{ background: bestDay && bestDay.pnl >= 0 ? "rgba(24,128,56,0.10)" : "var(--surface-2)" }}>
+            Best day {bestDay ? fmtUSD(bestDay.pnl, { signed: true }) : "-"}
+          </span>
+          <span className={`rounded-full px-3 py-1 font-medium ${worstDay && worstDay.pnl < 0 ? "text-rose-700" : "text-zinc-600"}`}
+            style={{ background: worstDay && worstDay.pnl < 0 ? "rgba(217,48,37,0.10)" : "var(--surface-2)" }}>
+            Worst day {worstDay ? fmtUSD(worstDay.pnl, { signed: true }) : "-"}
+          </span>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="flex min-h-[160px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
+          style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
+          No closed option-selling trades yet, so there is no daily PnL ledger to display.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <table className="w-full text-left text-sm" style={{ minWidth: 900 }}>
+            <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+              <tr className="text-[11px] uppercase tracking-[0.12em]">
+                <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Trades</th>
+                <th className="px-4 py-3 font-medium">W / L</th>
+                <th className="px-4 py-3 font-medium text-right">Start Equity</th>
+                <th className="px-4 py-3 font-medium text-right">Daily PnL</th>
+                <th className="px-4 py-3 font-medium text-right">Daily PnL %</th>
+                <th className="px-4 py-3 font-medium text-right">End Equity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.dateKey} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{row.label}</div>
+                    <div className="font-mono text-[11px]" style={{ color: "var(--text-secondary)" }}>{row.dateKey}</div>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-sm" style={{ color: "var(--text-primary)" }}>{row.trades}</td>
+                  <td className="px-4 py-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {row.wins}W / {row.losses}L
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-sm" style={{ color: "var(--text-secondary)" }}>
+                    {fmtUSD(row.startEquity)}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-mono text-sm font-bold ${row.pnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(row.pnl, { signed: true })}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${row.pnlPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtPct(row.pnlPct, true, 2)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-sm" style={{ color: "var(--text-primary)" }}>
+                    {fmtUSD(row.endEquity)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -738,6 +882,8 @@ export default function OptionsSellingScalper({ actionsEnabled = false }: Props)
           </div>
         </div>
       )}
+
+      <DailyPnlPanel trades={trades} />
 
       <TradesPanel trades={trades} strategyNumbers={strategyNumbers} />
 

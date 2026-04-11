@@ -716,6 +716,49 @@ export default function useCryptoEquityEngine() {
     setStats(EMPTY_STATS);
   }, []);
 
+  const fetchDirectBinanceMarkets = useCallback(async (): Promise<{ ok: boolean; data: CryptoMarketItem[]; error?: string }> => {
+    const symbols = JSON.stringify(CRYPTO_TOP_20.map((asset) => asset.pair));
+    try {
+      const response = await fetch(
+        `https://api.binance.com/api/v3/ticker/24hr?symbols=${encodeURIComponent(symbols)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        return { ok: false, data: [], error: `Binance fallback returned ${response.status}` };
+      }
+      const raw = await response.json() as Array<{
+        symbol?: string;
+        lastPrice?: string;
+        openPrice?: string;
+        highPrice?: string;
+        lowPrice?: string;
+        prevClosePrice?: string;
+        volume?: string;
+        priceChangePercent?: string;
+      }>;
+      const byPair = new Map(raw.map((item) => [item.symbol ?? "", item]));
+      return {
+        ok: true,
+        data: CRYPTO_TOP_20.map((asset) => {
+          const ticker = byPair.get(asset.pair);
+          return {
+            symbol: asset.symbol,
+            pair: asset.pair,
+            price: Number(ticker?.lastPrice ?? 0),
+            open: Number(ticker?.openPrice ?? 0),
+            high: Number(ticker?.highPrice ?? 0),
+            low: Number(ticker?.lowPrice ?? 0),
+            prevClose: Number(ticker?.prevClosePrice ?? 0),
+            volume: Number(ticker?.volume ?? 0),
+            changePct: Number(ticker?.priceChangePercent ?? 0),
+          };
+        }),
+      };
+    } catch {
+      return { ok: false, data: [], error: "Direct Binance fallback failed." };
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
@@ -724,11 +767,21 @@ export default function useCryptoEquityEngine() {
         const response = await fetch("/api/crypto/markets", { next: { revalidate: 0 } } as RequestInit);
         const payload = await response.json() as { ok?: boolean; data?: CryptoMarketItem[]; error?: string };
         if (!response.ok || !payload.ok || !payload.data?.length) {
-          processTick([], payload.error || `Crypto market API returned ${response.status}`);
+          const fallback = await fetchDirectBinanceMarkets();
+          if (fallback.ok && fallback.data.length) {
+            processTick(fallback.data, payload.error ? `${payload.error} | using direct Binance fallback.` : "Using direct Binance fallback.");
+            return;
+          }
+          processTick([], payload.error || fallback.error || `Crypto market API returned ${response.status}`);
           return;
         }
         processTick(payload.data, "");
       } catch {
+        const fallback = await fetchDirectBinanceMarkets();
+        if (fallback.ok && fallback.data.length) {
+          processTick(fallback.data, "Internal crypto API unavailable | using direct Binance fallback.");
+          return;
+        }
         processTick([], "Unable to fetch crypto market data.");
       }
     };
@@ -738,7 +791,7 @@ export default function useCryptoEquityEngine() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [processTick]);
+  }, [fetchDirectBinanceMarkets, processTick]);
 
   return { quotes, positions, trades, strategies, stats, reset };
 }
