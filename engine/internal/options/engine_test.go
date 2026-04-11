@@ -308,18 +308,18 @@ func TestMarkToMarketCanExitEarlyToProtectGrindProfit(t *testing.T) {
 
 func TestMarkToMarketKeepsStrongWinnerOpenWhileNearHigh(t *testing.T) {
 	e := NewEngine()
-	entryTime := time.Now().Add(-75 * time.Minute)
-	expiry := entryTime.Add(180 * time.Minute)
+	entryTime := time.Now().Add(-12 * 24 * time.Hour)
+	expiry := entryTime.Add(30 * 24 * time.Hour)
 	entrySpot := 65000.0
 	strike := 65000.0
 	entryPremium := PriceOption(entrySpot, strike, expiry, 0.5, Call).Premium
 
 	currentSpot := 0.0
 	currentPremium := 0.0
-	for spot := 65200.0; spot <= 74000.0; spot += 100 {
+	for spot := 65100.0; spot <= 74000.0; spot += 100 {
 		premium := PriceOption(spot, strike, expiry, 0.5, Call).Premium
 		gainPct := (premium - entryPremium) / entryPremium
-		if gainPct >= 0.29 && gainPct < 0.42 {
+		if gainPct >= 0.08 && gainPct < 0.10 {
 			currentSpot = spot
 			currentPremium = premium
 			break
@@ -346,12 +346,41 @@ func TestMarkToMarketKeepsStrongWinnerOpenWhileNearHigh(t *testing.T) {
 		UnrealizedPnL:  currentPremium - entryPremium,
 		IV:             0.5,
 		Delta:          0.5,
-		PeakGainPct:    0.31,
+		PeakGainPct:    0.09,
 	}
 
-	reason := e.markToMarketPositionLocked(pos, 0.5, 0.42, 0.35, entryTime.Add(80*time.Minute))
+	reason := e.markToMarketPositionLocked(pos, 0.5, 0.10, 0.35, entryTime.Add(13*24*time.Hour))
 	if reason != "" {
 		t.Fatalf("expected strong winner near its high to keep running, got %s", reason)
+	}
+}
+
+func TestContinuationStrategiesUseHigherProfitTargets(t *testing.T) {
+	defs := BuildStrategies()
+	byName := make(map[string]StrategyDef, len(defs))
+	for _, def := range defs {
+		byName[def.Name] = def
+	}
+
+	cases := map[string]float64{
+		"MomentumBurst_Bull_Call":         0.50,
+		"MomentumBurst_Bear_Put":          0.50,
+		"Resistance_Breakout_Call":        0.48,
+		"Support_Breakdown_Put":           0.48,
+		"TripleConfluence_Bull_Call":      0.50,
+		"MomentumVWAP_Pro_Bull_Call":      0.52,
+		"BreakoutTrend_Pro_Bull_Call":     0.56,
+		"Capitulation_Reclaim_Elite_Call": 0.62,
+	}
+
+	for name, want := range cases {
+		def, ok := byName[name]
+		if !ok {
+			t.Fatalf("expected strategy %s to exist", name)
+		}
+		if def.TakeProfitPct != want {
+			t.Fatalf("expected %s take profit %.2f, got %.2f", name, want, def.TakeProfitPct)
+		}
 	}
 }
 
