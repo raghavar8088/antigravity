@@ -744,4 +744,680 @@ var Signals = map[string]SignalFunc{
 		mom3 := momentum(ctx.Prices, 3)
 		return mom30 < -0.012 && rsiVal < 28 && atLower && mom3 > mom30/8
 	},
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CATEGORY H — MICRO-MOMENTUM SCALP signals (MM_BULL_1..10 / MM_BEAR_1..10)
+	// Each variant uses a slightly different indicator combination so no two
+	// fire at the same time.  All operate on 1-minute bars.
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// 1: 2-bar burst + RSI-9 above 55
+	"MM_BULL_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		r9 := rsi(ctx.Prices, 9)
+		return momentum(ctx.Prices, 2) > 0.0018 && r9 > 55 && r9 < 78
+	},
+	"MM_BEAR_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		r9 := rsi(ctx.Prices, 9)
+		return momentum(ctx.Prices, 2) < -0.0018 && r9 < 45 && r9 > 22
+	},
+	// 2: 3-bar thrust + RSI-14 cross above 40
+	"MM_BULL_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 18 { return false }
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 3) > 0.0022 && rPrev < 42 && r >= 42 && r < 72
+	},
+	"MM_BEAR_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 18 { return false }
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 3) < -0.0022 && rPrev > 58 && r <= 58 && r > 28
+	},
+	// 3: 4-bar acceleration + stochK crossing 30
+	"MM_BULL_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 18 { return false }
+		k := stochK(ctx.Prices, 14)
+		kPrev := stochK(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 4) > 0.0025 && kPrev < 32 && k >= 32 && k < 80
+	},
+	"MM_BEAR_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 18 { return false }
+		k := stochK(ctx.Prices, 14)
+		kPrev := stochK(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 4) < -0.0025 && kPrev > 68 && k <= 68 && k > 20
+	},
+	// 4: 5-bar momentum + price above BB midline
+	"MM_BULL_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 { return false }
+		mid := bbMid(ctx.Prices, 20)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return momentum(ctx.Prices, 5) > 0.0028 && prev < mid && ctx.BTCPrice >= mid
+	},
+	"MM_BEAR_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 { return false }
+		mid := bbMid(ctx.Prices, 20)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return momentum(ctx.Prices, 5) < -0.0028 && prev > mid && ctx.BTCPrice <= mid
+	},
+	// 5: 6-bar trend pulse + RSI cross 50
+	"MM_BULL_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 { return false }
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 6) > 0.0030 && rPrev < 52 && r >= 52 && r < 70
+	},
+	"MM_BEAR_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 { return false }
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return momentum(ctx.Prices, 6) < -0.0030 && rPrev > 48 && r <= 48 && r > 30
+	},
+	// 6: 7-bar + EMA9 slope positive (current > previous EMA9)
+	"MM_BULL_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 { return false }
+		e9 := ema(ctx.Prices, 9)
+		e9Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 9)
+		return momentum(ctx.Prices, 7) > 0.0032 && e9 > e9Prev && rsi(ctx.Prices, 14) < 74
+	},
+	"MM_BEAR_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 { return false }
+		e9 := ema(ctx.Prices, 9)
+		e9Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 9)
+		return momentum(ctx.Prices, 7) < -0.0032 && e9 < e9Prev && rsi(ctx.Prices, 14) > 26
+	},
+	// 7: 8-bar higher-lows series (each bar > prior bar's low)
+	"MM_BULL_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		n := len(ctx.Prices)
+		for i := n - 4; i < n-1; i++ {
+			if ctx.Prices[i] <= ctx.Prices[i-1] { return false }
+		}
+		return momentum(ctx.Prices, 8) > 0.0035 && rsi(ctx.Prices, 14) < 76
+	},
+	"MM_BEAR_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		n := len(ctx.Prices)
+		for i := n - 4; i < n-1; i++ {
+			if ctx.Prices[i] >= ctx.Prices[i-1] { return false }
+		}
+		return momentum(ctx.Prices, 8) < -0.0035 && rsi(ctx.Prices, 14) > 24
+	},
+	// 8: 9-bar trend + VWAP above + RSI 52-70
+	"MM_BULL_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 9) > 0.0038 && ctx.BTCPrice > vw && r >= 52 && r <= 70
+	},
+	"MM_BEAR_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 9) < -0.0038 && ctx.BTCPrice < vw && r >= 30 && r <= 48
+	},
+	// 9: 10-bar momentum + EMA21 slope rising
+	"MM_BULL_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		e21 := ema(ctx.Prices, 21)
+		e21Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 21)
+		return momentum(ctx.Prices, 10) > 0.0040 && e21 > e21Prev
+	},
+	"MM_BEAR_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		e21 := ema(ctx.Prices, 21)
+		e21Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 21)
+		return momentum(ctx.Prices, 10) < -0.0040 && e21 < e21Prev
+	},
+	// 10: 12-bar sustained trend + BB width expanding (expansion > 110% of prior)
+	"MM_BULL_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 { return false }
+		n := len(ctx.Prices)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-5], 20) - bbLower(ctx.Prices[:n-5], 20)
+		return momentum(ctx.Prices, 12) > 0.0045 && widthNow > widthPrev*1.10 && rsi(ctx.Prices, 14) < 74
+	},
+	"MM_BEAR_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 { return false }
+		n := len(ctx.Prices)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-5], 20) - bbLower(ctx.Prices[:n-5], 20)
+		return momentum(ctx.Prices, 12) < -0.0045 && widthNow > widthPrev*1.10 && rsi(ctx.Prices, 14) > 26
+	},
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CATEGORY I — REGIME TREND RIDER signals (TR_BULL_1..10 / TR_BEAR_1..10)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// 1: EMA9 > EMA21 > EMA55 full stack + RSI 52-68
+	"TR_BULL_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		r := rsi(ctx.Prices, 14)
+		return e9 > e21 && e21 > e55 && ctx.BTCPrice > e9 && r >= 52 && r <= 68
+	},
+	"TR_BEAR_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		r := rsi(ctx.Prices, 14)
+		return e9 < e21 && e21 < e55 && ctx.BTCPrice < e9 && r >= 32 && r <= 48
+	},
+	// 2: pullback to EMA21 + price bounced back above EMA9 + RSI 45-58
+	"TR_BULL_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-3]
+		r := rsi(ctx.Prices, 14)
+		return e9 > e21 && prev < e9 && ctx.BTCPrice > e9 && r >= 45 && r <= 62
+	},
+	"TR_BEAR_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-3]
+		r := rsi(ctx.Prices, 14)
+		return e9 < e21 && prev > e9 && ctx.BTCPrice < e9 && r >= 38 && r <= 55
+	},
+	// 3: price > EMA55 + 15-bar momentum > 0.4%
+	"TR_BULL_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		return ctx.BTCPrice > ema(ctx.Prices, 55) && momentum(ctx.Prices, 15) > 0.0040
+	},
+	"TR_BEAR_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		return ctx.BTCPrice < ema(ctx.Prices, 55) && momentum(ctx.Prices, 15) < -0.0040
+	},
+	// 4: BB midline held for 3 bars + EMA21 slope positive
+	"TR_BULL_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 28 { return false }
+		mid := bbMid(ctx.Prices, 20)
+		e21 := ema(ctx.Prices, 21)
+		e21Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 21)
+		n := len(ctx.Prices)
+		heldMid := ctx.Prices[n-1] > mid && ctx.Prices[n-2] > mid && ctx.Prices[n-3] > mid
+		return heldMid && e21 > e21Prev && momentum(ctx.Prices, 5) > 0.0015
+	},
+	"TR_BEAR_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 28 { return false }
+		mid := bbMid(ctx.Prices, 20)
+		e21 := ema(ctx.Prices, 21)
+		e21Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 21)
+		n := len(ctx.Prices)
+		heldMid := ctx.Prices[n-1] < mid && ctx.Prices[n-2] < mid && ctx.Prices[n-3] < mid
+		return heldMid && e21 < e21Prev && momentum(ctx.Prices, 5) < -0.0015
+	},
+	// 5: RSI-8 > 60 AND RSI-14 > 55 dual confirmation
+	"TR_BULL_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 { return false }
+		return rsi(ctx.Prices, 8) > 60 && rsi(ctx.Prices, 14) > 55 && momentum(ctx.Prices, 5) > 0.0020
+	},
+	"TR_BEAR_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 { return false }
+		return rsi(ctx.Prices, 8) < 40 && rsi(ctx.Prices, 14) < 45 && momentum(ctx.Prices, 5) < -0.0020
+	},
+	// 6: 20-bar structure of higher-highs + fresh EMA cross
+	"TR_BULL_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		hi10 := ctx.Prices[n-11]
+		for _, p := range ctx.Prices[n-10 : n-1] {
+			if p > hi10 { hi10 = p }
+		}
+		return ctx.BTCPrice > hi10 && crossedAbove(ctx.Prices, 9, 21)
+	},
+	"TR_BEAR_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		lo10 := ctx.Prices[n-11]
+		for _, p := range ctx.Prices[n-10 : n-1] {
+			if p < lo10 { lo10 = p }
+		}
+		return ctx.BTCPrice < lo10 && crossedBelow(ctx.Prices, 9, 21)
+	},
+	// 7: VWAP reclaim after 8-bar consolidation (std < 60% of prior)
+	"TR_BULL_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		vw := avgPrice(ctx.Prices[n-30:])
+		consStd := stddev(ctx.Prices[n-8:])
+		priorStd := stddev(ctx.Prices[n-25 : n-8])
+		consolidated := consStd < priorStd*0.60
+		return consolidated && ctx.BTCPrice > vw && momentum(ctx.Prices, 3) > 0.0020
+	},
+	"TR_BEAR_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		vw := avgPrice(ctx.Prices[n-30:])
+		consStd := stddev(ctx.Prices[n-8:])
+		priorStd := stddev(ctx.Prices[n-25 : n-8])
+		consolidated := consStd < priorStd*0.60
+		return consolidated && ctx.BTCPrice < vw && momentum(ctx.Prices, 3) < -0.0020
+	},
+	// 8: 25-bar momentum > 0.8% + RSI 55-72
+	"TR_BULL_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 25) > 0.0080 && r >= 55 && r <= 72
+	},
+	"TR_BEAR_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 25) < -0.0080 && r >= 28 && r <= 45
+	},
+	// 9: EMA21 > EMA55 + 3-bar retrace shallow (<0.2%) + resumes
+	"TR_BULL_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		e21, e55 := ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		n := len(ctx.Prices)
+		retrace := (ctx.Prices[n-4] - ctx.Prices[n-2]) / ctx.Prices[n-4]
+		resume := momentum(ctx.Prices, 2) > 0.0010
+		return e21 > e55 && retrace > 0 && retrace < 0.002 && resume
+	},
+	"TR_BEAR_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		e21, e55 := ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		n := len(ctx.Prices)
+		retrace := (ctx.Prices[n-2] - ctx.Prices[n-4]) / ctx.Prices[n-4]
+		resume := momentum(ctx.Prices, 2) < -0.0010
+		return e21 < e55 && retrace > 0 && retrace < 0.002 && resume
+	},
+	// 10: full trend + vol expansion (BB width > 140% of 20-bar-ago width)
+	"TR_BULL_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 50 { return false }
+		n := len(ctx.Prices)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-20], 20) - bbLower(ctx.Prices[:n-20], 20)
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		return e9 > e21 && e21 > e55 && widthNow > widthPrev*1.40 && momentum(ctx.Prices, 5) > 0.0025
+	},
+	"TR_BEAR_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 50 { return false }
+		n := len(ctx.Prices)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-20], 20) - bbLower(ctx.Prices[:n-20], 20)
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		return e9 < e21 && e21 < e55 && widthNow > widthPrev*1.40 && momentum(ctx.Prices, 5) < -0.0025
+	},
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CATEGORY J — VOLATILITY PULSE signals (VP_BULL_1..10 / VP_BEAR_1..10)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// 1: realised vol spike (recent 5-bar std > 1.5× 30-bar std) + directional
+	"VP_BULL_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-5:])
+		priorStd := stddev(ctx.Prices[n-35 : n-5])
+		return priorStd > 0 && recentStd > priorStd*1.50 && momentum(ctx.Prices, 5) > 0.0025
+	},
+	"VP_BEAR_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-5:])
+		priorStd := stddev(ctx.Prices[n-35 : n-5])
+		return priorStd > 0 && recentStd > priorStd*1.50 && momentum(ctx.Prices, 5) < -0.0025
+	},
+	// 2: BB width crossed above 20-bar average BB width
+	"VP_BULL_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		totalWidth := 0.0
+		for i := n - 20; i < n-1; i++ {
+			totalWidth += bbUpper(ctx.Prices[:i+1], 20) - bbLower(ctx.Prices[:i+1], 20)
+		}
+		avgWidth := totalWidth / 19.0
+		curWidth := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		return curWidth > avgWidth*1.15 && momentum(ctx.Prices, 5) > 0.0020
+	},
+	"VP_BEAR_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		totalWidth := 0.0
+		for i := n - 20; i < n-1; i++ {
+			totalWidth += bbUpper(ctx.Prices[:i+1], 20) - bbLower(ctx.Prices[:i+1], 20)
+		}
+		avgWidth := totalWidth / 19.0
+		curWidth := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		return curWidth > avgWidth*1.15 && momentum(ctx.Prices, 5) < -0.0020
+	},
+	// 3: 5-bar ATR-proxy spike (avg absolute bar change > 1.4x prior 20-bar)
+	"VP_BULL_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 28 { return false }
+		n := len(ctx.Prices)
+		atr5 := 0.0
+		for i := n - 5; i < n; i++ { atr5 += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) / ctx.Prices[i-1] }
+		atr5 /= 5
+		atr20 := 0.0
+		for i := n - 25; i < n-5; i++ { atr20 += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) / ctx.Prices[i-1] }
+		atr20 /= 20
+		return atr20 > 0 && atr5 > atr20*1.40 && momentum(ctx.Prices, 5) > 0.0022
+	},
+	"VP_BEAR_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 28 { return false }
+		n := len(ctx.Prices)
+		atr5 := 0.0
+		for i := n - 5; i < n; i++ { atr5 += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) / ctx.Prices[i-1] }
+		atr5 /= 5
+		atr20 := 0.0
+		for i := n - 25; i < n-5; i++ { atr20 += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) / ctx.Prices[i-1] }
+		atr20 /= 20
+		return atr20 > 0 && atr5 > atr20*1.40 && momentum(ctx.Prices, 5) < -0.0022
+	},
+	// 4: BB(10) tighter-period squeeze then break
+	"VP_BULL_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		priorStd := stddev(ctx.Prices[n-30 : n-10])
+		return priorStd > 0 && recentStd < priorStd*0.65 && momentum(ctx.Prices, 3) > 0.0020
+	},
+	"VP_BEAR_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		priorStd := stddev(ctx.Prices[n-30 : n-10])
+		return priorStd > 0 && recentStd < priorStd*0.65 && momentum(ctx.Prices, 3) < -0.0020
+	},
+	// 5: IV > 0.65 + directional 5m momentum
+	"VP_BULL_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 { return false }
+		return ctx.IV > 0.65 && momentum(ctx.Prices, 5) > 0.0028
+	},
+	"VP_BEAR_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 { return false }
+		return ctx.IV > 0.65 && momentum(ctx.Prices, 5) < -0.0028
+	},
+	// 6: std-dev cross (recent 8-bar std crossed above prior 20-bar std) + RSI
+	"VP_BULL_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		n := len(ctx.Prices)
+		stdNow := stddev(ctx.Prices[n-8:])
+		stdPrev := stddev(ctx.Prices[n-28 : n-8])
+		return stdNow > stdPrev && momentum(ctx.Prices, 5) > 0.0020 && rsi(ctx.Prices, 14) > 52
+	},
+	"VP_BEAR_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 { return false }
+		n := len(ctx.Prices)
+		stdNow := stddev(ctx.Prices[n-8:])
+		stdPrev := stddev(ctx.Prices[n-28 : n-8])
+		return stdNow > stdPrev && momentum(ctx.Prices, 5) < -0.0020 && rsi(ctx.Prices, 14) < 48
+	},
+	// 7: extreme low vol (30-bar std < 50% of 60-bar std) + breakout
+	"VP_BULL_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 65 { return false }
+		n := len(ctx.Prices)
+		std30 := stddev(ctx.Prices[n-30:])
+		std60 := stddev(ctx.Prices[n-60:])
+		return std60 > 0 && std30 < std60*0.50 && momentum(ctx.Prices, 5) > 0.0022
+	},
+	"VP_BEAR_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 65 { return false }
+		n := len(ctx.Prices)
+		std30 := stddev(ctx.Prices[n-30:])
+		std60 := stddev(ctx.Prices[n-60:])
+		return std60 > 0 && std30 < std60*0.50 && momentum(ctx.Prices, 5) < -0.0022
+	},
+	// 8: vol compression + EMA cross + RSI leaving neutral band
+	"VP_BULL_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-8:])
+		priorStd := stddev(ctx.Prices[n-40 : n-8])
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:n-1], 14)
+		return priorStd > 0 && recentStd < priorStd*0.60 && crossedAbove(ctx.Prices, 9, 21) && rPrev < 52 && r >= 52
+	},
+	"VP_BEAR_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 { return false }
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-8:])
+		priorStd := stddev(ctx.Prices[n-40 : n-8])
+		r := rsi(ctx.Prices, 14)
+		rPrev := rsi(ctx.Prices[:n-1], 14)
+		return priorStd > 0 && recentStd < priorStd*0.60 && crossedBelow(ctx.Prices, 9, 21) && rPrev > 48 && r <= 48
+	},
+	// 9: historical vol at 6-month proxy low + resistance break
+	"VP_BULL_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 90 { return false }
+		n := len(ctx.Prices)
+		stdNow := stddev(ctx.Prices[n-20:])
+		std90 := stddev(ctx.Prices[n-90:])
+		hi20 := 0.0
+		for _, p := range ctx.Prices[n-21 : n-1] { if p > hi20 { hi20 = p } }
+		return std90 > 0 && stdNow < std90*0.45 && ctx.BTCPrice > hi20*1.0015
+	},
+	"VP_BEAR_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 90 { return false }
+		n := len(ctx.Prices)
+		stdNow := stddev(ctx.Prices[n-20:])
+		std90 := stddev(ctx.Prices[n-90:])
+		lo20 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-21 : n-1] { if p < lo20 { lo20 = p } }
+		return std90 > 0 && stdNow < std90*0.45 && ctx.BTCPrice < lo20*0.9985
+	},
+	// 10: IV crisis mode (> 0.80) + confirmed reversal (capitulation recovery)
+	"VP_BULL_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-6 : n-1]
+		lo := window[0]
+		for _, p := range window[1:] { if p < lo { lo = p } }
+		drop := (ctx.Prices[n-7] - lo) / ctx.Prices[n-7]
+		recovery := (ctx.BTCPrice - lo) / lo
+		return ctx.IV > 0.80 && drop > 0.0030 && recovery > 0.0015
+	},
+	"VP_BEAR_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 { return false }
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-6 : n-1]
+		hi := 0.0
+		for _, p := range window { if p > hi { hi = p } }
+		rise := (hi - ctx.Prices[n-7]) / ctx.Prices[n-7]
+		rejection := (hi - ctx.BTCPrice) / hi
+		return ctx.IV > 0.80 && rise > 0.0030 && rejection > 0.0015
+	},
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// CATEGORY K — STRUCTURE SNAP signals (SS_BULL_1..10 / SS_BEAR_1..10)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	// 1: 30-bar swing high break + momentum confirmation
+	"SS_BULL_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 32 { return false }
+		n := len(ctx.Prices)
+		hi30 := 0.0
+		for _, p := range ctx.Prices[n-31 : n-1] { if p > hi30 { hi30 = p } }
+		return ctx.BTCPrice > hi30*1.0012 && momentum(ctx.Prices, 5) > 0.0018
+	},
+	"SS_BEAR_1": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 32 { return false }
+		n := len(ctx.Prices)
+		lo30 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-31 : n-1] { if p < lo30 { lo30 = p } }
+		return ctx.BTCPrice < lo30*0.9988 && momentum(ctx.Prices, 5) < -0.0018
+	},
+	// 2: inside-bar breakout (prior bar range < 50% of 5-bar avg range, current expands)
+	"SS_BULL_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 { return false }
+		n := len(ctx.Prices)
+		priorRange := math.Abs(ctx.Prices[n-2] - ctx.Prices[n-3])
+		avgRange := 0.0
+		for i := n - 7; i < n-2; i++ { avgRange += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) }
+		avgRange /= 5
+		curRange := math.Abs(ctx.BTCPrice - ctx.Prices[n-2])
+		return avgRange > 0 && priorRange < avgRange*0.50 && curRange > avgRange && momentum(ctx.Prices, 2) > 0.0015
+	},
+	"SS_BEAR_2": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 { return false }
+		n := len(ctx.Prices)
+		priorRange := math.Abs(ctx.Prices[n-2] - ctx.Prices[n-3])
+		avgRange := 0.0
+		for i := n - 7; i < n-2; i++ { avgRange += math.Abs(ctx.Prices[i]-ctx.Prices[i-1]) }
+		avgRange /= 5
+		curRange := math.Abs(ctx.BTCPrice - ctx.Prices[n-2])
+		return avgRange > 0 && priorRange < avgRange*0.50 && curRange > avgRange && momentum(ctx.Prices, 2) < -0.0015
+	},
+	// 3: 40-bar high break + EMA9 > EMA21
+	"SS_BULL_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 42 { return false }
+		n := len(ctx.Prices)
+		hi40 := 0.0
+		for _, p := range ctx.Prices[n-41 : n-1] { if p > hi40 { hi40 = p } }
+		return ctx.BTCPrice > hi40*1.0008 && ema(ctx.Prices, 9) > ema(ctx.Prices, 21)
+	},
+	"SS_BEAR_3": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 42 { return false }
+		n := len(ctx.Prices)
+		lo40 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-41 : n-1] { if p < lo40 { lo40 = p } }
+		return ctx.BTCPrice < lo40*0.9992 && ema(ctx.Prices, 9) < ema(ctx.Prices, 21)
+	},
+	// 4: 50-bar pivot reclaim + RSI 50-65
+	"SS_BULL_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 52 { return false }
+		n := len(ctx.Prices)
+		hi50 := 0.0
+		for _, p := range ctx.Prices[n-51 : n-1] { if p > hi50 { hi50 = p } }
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > hi50 && r >= 50 && r <= 65
+	},
+	"SS_BEAR_4": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 52 { return false }
+		n := len(ctx.Prices)
+		lo50 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-51 : n-1] { if p < lo50 { lo50 = p } }
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < lo50 && r >= 35 && r <= 50
+	},
+	// 5: 3-bar base (low std) + expansion above resistance
+	"SS_BULL_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		baseStd := stddev(ctx.Prices[n-4 : n-1])
+		priorStd := stddev(ctx.Prices[n-20 : n-4])
+		hi3 := 0.0
+		for _, p := range ctx.Prices[n-4 : n-1] { if p > hi3 { hi3 = p } }
+		return priorStd > 0 && baseStd < priorStd*0.55 && ctx.BTCPrice > hi3*1.0010
+	},
+	"SS_BEAR_5": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		baseStd := stddev(ctx.Prices[n-4 : n-1])
+		priorStd := stddev(ctx.Prices[n-20 : n-4])
+		lo3 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-4 : n-1] { if p < lo3 { lo3 = p } }
+		return priorStd > 0 && baseStd < priorStd*0.55 && ctx.BTCPrice < lo3*0.9990
+	},
+	// 6: failed breakdown snap (price dipped below support then recovered above)
+	"SS_BULL_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		support := 0.0
+		for _, p := range ctx.Prices[n-21 : n-4] { support += p }
+		support /= 17
+		loRecent := math.MaxFloat64
+		for _, p := range ctx.Prices[n-4 : n-1] { if p < loRecent { loRecent = p } }
+		return loRecent < support*0.9990 && ctx.BTCPrice > support && momentum(ctx.Prices, 2) > 0.0015
+	},
+	"SS_BEAR_6": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 { return false }
+		n := len(ctx.Prices)
+		resistance := 0.0
+		for _, p := range ctx.Prices[n-21 : n-4] { resistance += p }
+		resistance /= 17
+		hiRecent := 0.0
+		for _, p := range ctx.Prices[n-4 : n-1] { if p > hiRecent { hiRecent = p } }
+		return hiRecent > resistance*1.0010 && ctx.BTCPrice < resistance && momentum(ctx.Prices, 2) < -0.0015
+	},
+	// 7: hourly-open reclaim (first 10 bars of hour) + EMA9 slope
+	"SS_BULL_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 { return false }
+		withinHour := ctx.UTCMin < 12
+		e9 := ema(ctx.Prices, 9)
+		e9Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 9)
+		return withinHour && e9 > e9Prev && momentum(ctx.Prices, 5) > 0.0022
+	},
+	"SS_BEAR_7": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 { return false }
+		withinHour := ctx.UTCMin < 12
+		e9 := ema(ctx.Prices, 9)
+		e9Prev := ema(ctx.Prices[:len(ctx.Prices)-1], 9)
+		return withinHour && e9 < e9Prev && momentum(ctx.Prices, 5) < -0.0022
+	},
+	// 8: 60-bar high break + strong 10-bar momentum + RSI 54-70
+	"SS_BULL_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 62 { return false }
+		n := len(ctx.Prices)
+		hi60 := 0.0
+		for _, p := range ctx.Prices[n-61 : n-1] { if p > hi60 { hi60 = p } }
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > hi60*1.0008 && momentum(ctx.Prices, 10) > 0.0045 && r >= 54 && r <= 72
+	},
+	"SS_BEAR_8": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 62 { return false }
+		n := len(ctx.Prices)
+		lo60 := math.MaxFloat64
+		for _, p := range ctx.Prices[n-61 : n-1] { if p < lo60 { lo60 = p } }
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < lo60*0.9992 && momentum(ctx.Prices, 10) < -0.0045 && r >= 28 && r <= 46
+	},
+	// 9: 3-touch level break (3rd test of resistance then clean break)
+	"SS_BULL_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 { return false }
+		n := len(ctx.Prices)
+		lookback := ctx.Prices[n-38 : n-2]
+		hi := 0.0
+		for _, p := range lookback { if p > hi { hi = p } }
+		band := hi * 0.0015
+		touches := 0
+		for _, p := range lookback { if math.Abs(p-hi) < band { touches++ } }
+		return touches >= 3 && ctx.BTCPrice > hi*1.0010 && momentum(ctx.Prices, 3) > 0.0018
+	},
+	"SS_BEAR_9": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 { return false }
+		n := len(ctx.Prices)
+		lookback := ctx.Prices[n-38 : n-2]
+		lo := math.MaxFloat64
+		for _, p := range lookback { if p < lo { lo = p } }
+		band := lo * 0.0015
+		touches := 0
+		for _, p := range lookback { if math.Abs(p-lo) < band { touches++ } }
+		return touches >= 3 && ctx.BTCPrice < lo*0.9990 && momentum(ctx.Prices, 3) < -0.0018
+	},
+	// 10: session-high break + EMA stack + vol expansion + RSI elite
+	"SS_BULL_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		n := len(ctx.Prices)
+		sessionBars := ctx.UTCHour*60 + ctx.UTCMin
+		if sessionBars > 240 { sessionBars = 240 }
+		if sessionBars < 10 { return false }
+		sessionHi := 0.0
+		start := n - sessionBars - 1
+		if start < 0 { start = 0 }
+		for _, p := range ctx.Prices[start : n-1] { if p > sessionHi { sessionHi = p } }
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-10], 20) - bbLower(ctx.Prices[:n-10], 20)
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > sessionHi && e9 > e21 && e21 > e55 && widthNow > widthPrev*1.25 && r >= 55 && r <= 72
+	},
+	"SS_BEAR_10": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 { return false }
+		n := len(ctx.Prices)
+		sessionBars := ctx.UTCHour*60 + ctx.UTCMin
+		if sessionBars > 240 { sessionBars = 240 }
+		if sessionBars < 10 { return false }
+		sessionLo := math.MaxFloat64
+		start := n - sessionBars - 1
+		if start < 0 { start = 0 }
+		for _, p := range ctx.Prices[start : n-1] { if p < sessionLo { sessionLo = p } }
+		e9, e21, e55 := ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		widthNow := bbUpper(ctx.Prices, 20) - bbLower(ctx.Prices, 20)
+		widthPrev := bbUpper(ctx.Prices[:n-10], 20) - bbLower(ctx.Prices[:n-10], 20)
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < sessionLo && e9 < e21 && e21 < e55 && widthNow > widthPrev*1.25 && r >= 28 && r <= 45
+	},
 }
