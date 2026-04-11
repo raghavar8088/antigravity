@@ -613,7 +613,28 @@ function buildPersistedPayload(engine: EngineRef): CryptoDbPayload {
   };
 }
 
+const LS_KEY = "crypto_equity_state_v1";
+
+function saveToLocalStorage(engine: EngineRef): void {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(buildPersistedPayload(engine)));
+  } catch {
+    // quota exceeded or SSR — ignore
+  }
+}
+
+function loadFromLocalStorage(): CryptoDbPayload | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CryptoDbPayload;
+  } catch {
+    return null;
+  }
+}
+
 async function saveCryptoState(engine: EngineRef): Promise<void> {
+  saveToLocalStorage(engine);
   try {
     await fetch("/api/crypto/equity-state", {
       method: "POST",
@@ -626,13 +647,32 @@ async function saveCryptoState(engine: EngineRef): Promise<void> {
 }
 
 async function loadCryptoState(engine: EngineRef): Promise<boolean> {
+  // Try localStorage first (always available, no network needed)
+  const lsState = loadFromLocalStorage();
+
+  // Also try DB (may have newer data if another tab saved)
+  let dbState: CryptoDbPayload | null = null;
   try {
     const response = await fetch("/api/crypto/equity-state");
-    if (!response.ok) return false;
-    const data = await response.json() as { ok: boolean; found: boolean; state?: CryptoDbPayload };
-    if (!data.ok || !data.found || !data.state) return false;
+    if (response.ok) {
+      const data = await response.json() as { ok: boolean; found: boolean; disabled?: boolean; state?: CryptoDbPayload };
+      if (data.ok && data.found && data.state) dbState = data.state;
+    }
+  } catch {
+    // DB unavailable, use localStorage
+  }
 
-    const saved = data.state;
+  // Pick whichever has more trades (most up-to-date)
+  let saved: CryptoDbPayload | null = null;
+  if (dbState && lsState) {
+    saved = (dbState.tradeSeq ?? 0) >= (lsState.tradeSeq ?? 0) ? dbState : lsState;
+  } else {
+    saved = dbState ?? lsState;
+  }
+
+  if (!saved) return false;
+
+  try {
     engine.balance = saved.balance;
     engine.totalWins = saved.totalWins;
     engine.totalLosses = saved.totalLosses;
@@ -950,13 +990,15 @@ export default function useCryptoEquityEngine() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (dbLoadedRef.current) void saveCryptoState(engineRef.current);
-    }, 60_000);
+    }, 15_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const onUnload = () => {
       if (!dbLoadedRef.current) return;
+      // localStorage is synchronous — always succeeds before tab closes
+      saveToLocalStorage(engineRef.current);
       const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
       navigator.sendBeacon("/api/crypto/equity-state", new Blob([payload], { type: "application/json" }));
     };
