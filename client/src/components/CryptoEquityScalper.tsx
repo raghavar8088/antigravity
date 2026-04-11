@@ -138,6 +138,53 @@ function QuoteCard({ quote }: { quote: CryptoQuoteDisplay }) {
   );
 }
 
+function PositionSnapshotCard({ position }: { position: CryptoPosition }) {
+  return (
+    <div
+      className="rounded-[16px] border px-4 py-3"
+      style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <SideBadge side={position.side} />
+            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{position.symbol}</span>
+          </div>
+          <div className="mt-1 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+            {position.strategyName.replace(/_/g, " ")}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-mono text-sm font-semibold" style={{ color: position.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+            {fmtUSD(position.unrealizedPnl, { signed: true })}
+          </div>
+          <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+            {fmtPct(position.returnPct, true)}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+        <div>
+          <div style={{ color: "var(--text-secondary)" }}>Entry</div>
+          <div className="font-mono" style={{ color: "var(--text-primary)" }}>{fmtUSD(position.entryPrice, { decimals: 4 })}</div>
+        </div>
+        <div>
+          <div style={{ color: "var(--text-secondary)" }}>Current</div>
+          <div className="font-mono" style={{ color: "var(--text-primary)" }}>{fmtUSD(position.currentPrice, { decimals: 4 })}</div>
+        </div>
+        <div>
+          <div style={{ color: "var(--text-secondary)" }}>Size</div>
+          <div className="font-mono" style={{ color: "var(--text-primary)" }}>{position.quantity.toFixed(4)}</div>
+        </div>
+        <div>
+          <div style={{ color: "var(--text-secondary)" }}>Opened</div>
+          <div className="font-mono" style={{ color: "var(--text-primary)" }}>{fmtTime(position.entryTime)}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   actionsEnabled?: boolean;
   quotes: CryptoQuoteDisplay[];
@@ -238,6 +285,38 @@ export default function CryptoEquityScalper({
         <SummaryCard label="Unrealized" value={fmtUSD(stats.unrealizedPnl, { signed: true })} accent={stats.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Realized" value={fmtUSD(stats.realizedPnl, { signed: true })} accent={stats.realizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Best Strategy" value={topStrategy ? topStrategy.name.replace(/_/g, " ") : "Waiting"} detail={topStrategy ? fmtUSD(topStrategy.totalPnl, { signed: true }) : "No closed trades yet"} />
+      </div>
+
+      <div className="glass-panel px-5 py-6 md:px-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
+              Open Positions Snapshot
+            </h2>
+            <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              Active Crypto Equity positions, surfaced near the top for quicker monitoring.
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 font-medium text-zinc-600">
+              {positions.length} open
+            </span>
+            <span className="rounded-full px-3 py-1 font-medium" style={{ background: "rgba(245,124,0,0.10)", color: "var(--amber)" }}>
+              Unrealized {fmtUSD(stats.unrealizedPnl, { signed: true })}
+            </span>
+          </div>
+        </div>
+        {positions.length === 0 ? (
+          <div className="flex min-h-[140px] items-center justify-center rounded-[20px] border border-dashed px-6 py-10 text-center text-sm" style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
+            No crypto positions are open right now.
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {positions.map((position) => (
+              <PositionSnapshotCard key={position.id} position={position} />
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-panel px-5 py-6 md:px-6">
