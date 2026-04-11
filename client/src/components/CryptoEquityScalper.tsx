@@ -245,7 +245,7 @@ export default function CryptoEquityScalper({
                 {fmtUSD(stats.equity)}
               </div>
               <div className="mt-3 max-w-2xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                Autonomous top-20 crypto workspace. The engine tracks 20 spot markets, runs 50 directional strategies,
+                Autonomous 40-coin crypto workspace. The engine tracks 40 spot markets, runs 50 directional strategies,
                 and deploys 5% paper capital per trade with TP, SL, profit-lock, and time-based exits.
               </div>
               <div className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -261,7 +261,7 @@ export default function CryptoEquityScalper({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <MetricCard label="Open Positions" value={`${stats.openPositions}`} detail="Max 10 concurrent" />
-                <MetricCard label="Live Symbols" value={`${stats.liveSymbols}/20`} detail="Tracked every 3 seconds" />
+                <MetricCard label="Live Symbols" value={`${stats.liveSymbols}/40`} detail="Tracked every 3 seconds" />
                 <MetricCard label="Strategies" value={`${stats.activeStrategies}/50`} detail={stats.warmingUp ? "Loading bars..." : "Scanner online"} />
                 <MetricCard label="Win Rate" value={stats.totalTrades > 0 ? fmtPct(stats.winRate) : "--"} detail={`${stats.totalTrades} closed trades`} accent={stats.winRate >= 50 ? "text-emerald-600" : ""} />
               </div>
@@ -326,11 +326,11 @@ export default function CryptoEquityScalper({
               Crypto Scanner
             </h2>
             <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-              Top 20 liquid crypto symbols scanned continuously for momentum, breakout, VWAP, trend, and mean-reversion setups.
+              40 liquid crypto symbols scanned continuously for momentum, breakout, VWAP, trend, and mean-reversion setups.
             </div>
           </div>
           <div className="flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 font-medium text-zinc-600">{stats.liveSymbols}/20 live</span>
+            <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 font-medium text-zinc-600">{stats.liveSymbols}/40 live</span>
             <span className="rounded-full px-3 py-1 font-medium" style={{ background: "rgba(26,115,232,0.10)", color: "var(--blue)" }}>{quotes.filter((quote) => quote.signalScore >= 66).length} active signals</span>
             <span className="rounded-full px-3 py-1 font-medium" style={{ background: "rgba(245,124,0,0.10)", color: "var(--amber)" }}>{positions.length} open trades</span>
           </div>

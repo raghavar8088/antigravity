@@ -1053,14 +1053,14 @@ export default function TradingDashboard({
           dailyPnL={cryptoEquitySessionPnl}
           openPositions={cryptoEquityOpenPositions}
           marketLabel="CRYPTO"
-          marketCode="TOP20"
+          marketCode="TOP40"
           accountLabel="Crypto equity paper account"
           currencyCode="USD"
           locale="en-US"
           workspaceTitle="RAIG Crypto Equity Workspace"
-          onlineLabel="Crypto equity engine live on top-20 spot markets"
+          onlineLabel="Crypto equity engine live on 40 spot markets"
           offlineLabel="Crypto equity engine offline"
-          detailLabel={`${cryptoEquityOpenPositions} open crypto equity positions in the top-20 market workspace`}
+          detailLabel={`${cryptoEquityOpenPositions} open crypto equity positions in the 40-market workspace`}
           accountBadgeLabel="Crypto Account"
           equityLabel="Crypto Equity"
           pnlLabel="Crypto PnL Today"
@@ -1244,7 +1244,7 @@ export default function TradingDashboard({
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "cryptoEquity"
-            ? "CRYPTO EQUITY — Top-20 crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 5% capital deployed per trade."
+            ? "CRYPTO EQUITY — 40-coin crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 5% capital deployed per trade."
             : activeModule === "niftySelling"
             ? "OPTIONS SELLING ACCOUNT — Separate NIFTY 50 short-option workspace focused on premium decay, with independent paper capital and guarded reset controls."
             : activeModule === "nifty"

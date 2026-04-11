@@ -558,7 +558,7 @@ const EMPTY_STATS: CryptoEngineStats = {
   warmingUp: true,
   liveSymbols: 0,
   lastUpdateAt: 0,
-  diagnostics: "Bootstrapping top-20 crypto feed.",
+  diagnostics: "Bootstrapping 40-coin crypto feed.",
 };
 
 function buildPersistedPayload(engine: EngineRef): CryptoDbPayload {
@@ -893,7 +893,7 @@ export default function useCryptoEquityEngine() {
     const liveSymbols = CRYPTO_TOP_20.filter((asset) => (engine.quotes[asset.symbol]?.price ?? 0) > 0).length;
     const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
     const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
-    setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length, warmingUp: CRYPTO_TOP_20.every((asset) => (engine.bars[asset.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/20 crypto symbols live.` : "Waiting for crypto market quotes.") });
+    setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length, warmingUp: CRYPTO_TOP_20.every((asset) => (engine.bars[asset.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/40 crypto symbols live.` : "Waiting for crypto market quotes.") });
 
     if (!dbLoadedRef.current) return;
     const signature = JSON.stringify({
