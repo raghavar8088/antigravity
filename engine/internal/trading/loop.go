@@ -21,7 +21,7 @@ const (
 	minExecutionSizeBTC       = 0.01
 	sizeChangeEpsilonBTC      = 1e-9
 	futuresInitialCapitalUSD  = 1000000.0
-	futuresPositionCapitalPct = 0.01
+	futuresPositionCapitalPct = 0.05
 	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
 	minExecutableConfidence     = 0.78 // Push further toward higher-quality entries
@@ -632,7 +632,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			continue
 		}
 
-		// Enforce a fixed 1% capital budget per trade for the futures engine.
+		// Enforce a fixed 5% capital budget per trade for the futures engine.
 		originalSize := sig.TargetSize
 		baseSize := originalSize
 		if normalizedSize := targetSizeForCapital(currentPrice); normalizedSize > 0 {
@@ -654,7 +654,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		if sig.TargetSize-originalSize > sizeChangeEpsilonBTC || originalSize-sig.TargetSize > sizeChangeEpsilonBTC {
-			log.Printf("[SIZE ENGINE] %s normalized %.4f -> %.4f BTC to the fixed 1%% capital rule",
+			log.Printf("[SIZE ENGINE] %s normalized %.4f -> %.4f BTC to the fixed 5%% capital rule",
 				aggSig.StrategyName, originalSize, sig.TargetSize)
 		}
 

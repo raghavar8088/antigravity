@@ -1240,7 +1240,7 @@ export default function TradingDashboard({
             : activeModule === "engine"
             ? "BTC EQUITY — Trade Engine: Advanced charts, AI panels, controls, strategy analytics, and logs for the BTC futures desk."
             : activeModule === "history"
-            ? "BTC EQUITY — Trade History: Completed futures trade ledger and strategy breakdown for the 1% per-position BTC futures account."
+            ? "BTC EQUITY — Trade History: Completed futures trade ledger and strategy breakdown for the 5% per-position BTC futures account."
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "cryptoEquity"
