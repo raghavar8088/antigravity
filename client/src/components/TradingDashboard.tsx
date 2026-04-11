@@ -1244,7 +1244,7 @@ export default function TradingDashboard({
             : activeModule === "options"
             ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
             : activeModule === "cryptoEquity"
-            ? "CRYPTO EQUITY — Top-20 crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 1% capital deployed per trade."
+            ? "CRYPTO EQUITY — Top-20 crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 5% capital deployed per trade."
             : activeModule === "niftySelling"
             ? "OPTIONS SELLING ACCOUNT — Separate NIFTY 50 short-option workspace focused on premium decay, with independent paper capital and guarded reset controls."
             : activeModule === "nifty"

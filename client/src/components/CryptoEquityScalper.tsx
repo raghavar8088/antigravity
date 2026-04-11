@@ -199,7 +199,7 @@ export default function CryptoEquityScalper({
               </div>
               <div className="mt-3 max-w-2xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
                 Autonomous top-20 crypto workspace. The engine tracks 20 spot markets, runs 50 directional strategies,
-                and deploys 1% paper capital per trade with TP, SL, profit-lock, and time-based exits.
+                and deploys 5% paper capital per trade with TP, SL, profit-lock, and time-based exits.
               </div>
               <div className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
                 {stats.diagnostics}
