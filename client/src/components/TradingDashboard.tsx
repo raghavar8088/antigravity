@@ -22,6 +22,7 @@ import Nifty50OptionSellingScalper from "@/components/Nifty50OptionSellingScalpe
 import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
 import MCXCommodityScalper from "@/components/MCXCommodityScalper";
 import CryptoEquityScalper from "@/components/CryptoEquityScalper";
+import ForexScalper from "@/components/ForexScalper";
 import LiveDataLabPanel from "@/components/LiveDataLabPanel";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
 import TradingViewChart from "@/components/TradingViewChart";
@@ -34,6 +35,7 @@ import useNiftyOptionsEngine from "@/hooks/useNiftyOptionsEngine";
 import useNiftyOptionsSellingEngine from "@/hooks/useNiftyOptionsSellingEngine";
 import useNiftyStocksEngine from "@/hooks/useNiftyStocksEngine";
 import useCryptoEquityEngine from "@/hooks/useCryptoEquityEngine";
+import useForexEngine from "@/hooks/useForexEngine";
 import useOptions from "@/hooks/useOptions";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
@@ -83,8 +85,8 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
-type DashboardGroup = "crypto" | "india" | "charts";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts";
+type DashboardGroup = "crypto" | "india" | "forex" | "charts";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -107,6 +109,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
   { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
   { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
+  { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 major and cross currency pairs.", group: "forex", module: "forexScalper" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -373,6 +376,7 @@ export default function TradingDashboard({
   const { positions: optionPositions, stats: optionStats } = useOptions();
   const { positions: optionSellingPositions, stats: optionSellingStats } = useOptionsSelling();
   const { quotes: cryptoQuotes, positions: cryptoPositions, trades: cryptoTrades, strategies: cryptoStrategies, stats: cryptoStats, reset: cryptoReset } = useCryptoEquityEngine();
+  const { quotes: forexQuotes, positions: forexPositions, trades: forexTrades, strategies: forexStrategies, stats: forexStats, reset: forexReset } = useForexEngine();
   const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll, barCount: niftyBarCount, enginePrice: niftyEnginePrice } = useNiftyOptionsEngine();
   const { positions: niftySellingPositions, trades: niftySellingTrades, strategies: niftySellingStrategies, stats: niftySellingStats, clearAll: niftySellingClearAll, barCount: niftySellingBarCount, enginePrice: niftySellingEnginePrice } = useNiftyOptionsSellingEngine();
   const { quotes: niftyStockQuotes, positions: niftyStockPositions, trades: niftyStockTrades, strategies: niftyStockStrategies, stats: niftyStockStats, reset: niftyStockReset } = useNiftyStocksEngine();
@@ -1117,8 +1121,9 @@ export default function TradingDashboard({
           {([
             { key: "crypto", label: "🪙 Crypto Market" },
             { key: "india",  label: "🇮🇳 Indian Market" },
+            { key: "forex",  label: "💱 Forex Market"  },
             { key: "charts", label: "📊 Charts & Data" },
-          ] as { key: "crypto" | "india" | "charts"; label: string }[]).map((g) => (
+          ] as { key: "crypto" | "india" | "forex" | "charts"; label: string }[]).map((g) => (
             <button
               key={g.key}
               type="button"
@@ -1126,6 +1131,7 @@ export default function TradingDashboard({
                 setActiveGroup(g.key);
                 if (g.key === "crypto")  setActiveModule("options");
                 if (g.key === "india")   setActiveModule("nifty");
+                if (g.key === "forex")   setActiveModule("forexScalper");
                 if (g.key === "charts")  setActiveModule("charts");
               }}
               className={`market-group-tab${activeGroup === g.key ? " active" : ""}`}
@@ -1160,6 +1166,15 @@ export default function TradingDashboard({
                 { key: "niftySelling",label: "Nifty Option Selling" },
                 { key: "niftyStocks", label: "Nifty 50 Equity" },
                 { key: "mcx",         label: "Commodity Scalper" },
+              ] as { key: typeof activeModule; label: string }[]).map((module) => (
+                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                  {module.label}
+                </button>
+              ))}
+
+              {/* ── Forex sub-tabs ──────────────────────────────────────── */}
+              {activeGroup === "forex" && ([
+                { key: "forexScalper", label: "Forex Scalper" },
               ] as { key: typeof activeModule; label: string }[]).map((module) => (
                 <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
                   {module.label}
@@ -2184,6 +2199,8 @@ export default function TradingDashboard({
       {activeModule === "chain" && <BTCOptionChain />}
 
       {activeModule === "cryptoEquity" && <CryptoEquityScalper actionsEnabled={actionsEnabled} quotes={cryptoQuotes} positions={cryptoPositions} trades={cryptoTrades} strategies={cryptoStrategies} stats={cryptoStats} reset={cryptoReset} />}
+
+      {activeModule === "forexScalper" && <ForexScalper actionsEnabled={actionsEnabled} quotes={forexQuotes} positions={forexPositions} trades={forexTrades} strategies={forexStrategies} stats={forexStats} reset={forexReset} />}
 
       {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} positions={niftyOptionPositions} trades={niftyOptionTrades} strategies={niftyOptionStrategies} stats={niftyOptionStats} clearAll={niftyOptionClearAll} barCount={niftyBarCount} enginePrice={niftyEnginePrice} />}
 
