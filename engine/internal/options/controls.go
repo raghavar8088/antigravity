@@ -36,11 +36,11 @@ const (
 	optionUnderperformingMaxWinRate  = 35.0
 	optionUnderperformingCooldown    = 6 * time.Hour
 
-	optionProfitLockProgress   = 0.26
+	optionProfitLockProgress   = 0.38
 	optionProfitLockShare      = 0.40
-	optionLateExitProgress     = 0.56
+	optionLateExitProgress     = 0.68
 	optionLateExitMinGain      = 0.06
-	optionMomentumFadeProgress = 0.62
+	optionMomentumFadeProgress = 0.78
 
 	optionColdStartSizeMultiplier = 0.95
 	optionMinSizeMultiplier       = 0.45

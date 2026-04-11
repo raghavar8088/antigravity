@@ -297,11 +297,61 @@ func TestMarkToMarketCanExitEarlyToProtectGrindProfit(t *testing.T) {
 		UnrealizedPnL:  14,
 		IV:             0.5,
 		Delta:          0.5,
+		PeakGainPct:    0.18,
 	}
 
 	reason := e.markToMarketPositionLocked(pos, 0.5, 0.42, 0.35, entryTime.Add(95*time.Minute))
 	if reason == "" {
 		t.Fatal("expected profitable grind exit to trigger a protective close")
+	}
+}
+
+func TestMarkToMarketKeepsStrongWinnerOpenWhileNearHigh(t *testing.T) {
+	e := NewEngine()
+	entryTime := time.Now().Add(-75 * time.Minute)
+	expiry := entryTime.Add(180 * time.Minute)
+	entrySpot := 65000.0
+	strike := 65000.0
+	entryPremium := PriceOption(entrySpot, strike, expiry, 0.5, Call).Premium
+
+	currentSpot := 0.0
+	currentPremium := 0.0
+	for spot := 65200.0; spot <= 74000.0; spot += 100 {
+		premium := PriceOption(spot, strike, expiry, 0.5, Call).Premium
+		gainPct := (premium - entryPremium) / entryPremium
+		if gainPct >= 0.29 && gainPct < 0.42 {
+			currentSpot = spot
+			currentPremium = premium
+			break
+		}
+	}
+	if currentSpot == 0 {
+		t.Fatal("expected to find a profitable runner scenario for the pricing model")
+	}
+
+	e.lastPrice = currentSpot
+	pos := &OptionPosition{
+		ID:             "OPT-RUNNER-0001",
+		StrategyID:     1,
+		StrategyName:   "MomentumBurst_Bull_Call",
+		OptionType:     Call,
+		Strike:         strike,
+		ExpiryTime:     expiry,
+		EntryPremium:   entryPremium,
+		CurrentPremium: currentPremium,
+		Quantity:       1,
+		CostBasis:      entryPremium,
+		EntryBTCPrice:  entrySpot,
+		EntryTime:      entryTime,
+		UnrealizedPnL:  currentPremium - entryPremium,
+		IV:             0.5,
+		Delta:          0.5,
+		PeakGainPct:    0.31,
+	}
+
+	reason := e.markToMarketPositionLocked(pos, 0.5, 0.42, 0.35, entryTime.Add(80*time.Minute))
+	if reason != "" {
+		t.Fatalf("expected strong winner near its high to keep running, got %s", reason)
 	}
 }
 

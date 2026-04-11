@@ -729,8 +729,10 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	}
 	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShare)
 	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.26)
-	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.38)
-	trailFloor := pos.PeakGainPct * 0.62
+	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.52)
+	trailFloor := math.Max(optionLateExitMinGain, pos.PeakGainPct*0.70)
+	holdingNearHigh := pos.PeakGainPct > 0 && gainPct >= pos.PeakGainPct*0.82
+	strongWinner := gainPct >= takeProfitPct*0.58 || pos.PeakGainPct >= takeProfitPct*0.72
 
 	switch {
 	case gainPct >= takeProfitPct:
@@ -739,13 +741,23 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		return ExitSL
 	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
 		return ExitTrailStop
-	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
+	case timeProgress >= optionProfitLockProgress &&
+		gainPct >= profitLockThreshold &&
+		gainPct < takeProfitPct*0.75 &&
+		!holdingNearHigh:
 		return ExitProfitLock
-	case timeProgress >= 0.50 && gainPct >= grindExitThreshold:
+	case timeProgress >= 0.52 &&
+		gainPct >= grindExitThreshold &&
+		gainPct < takeProfitPct*0.55 &&
+		!holdingNearHigh:
 		return ExitProfitLock
-	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
+	case timeProgress >= optionLateExitProgress &&
+		gainPct >= optionLateExitMinGain &&
+		(!holdingNearHigh || timeProgress >= 0.88):
 		return ExitLateExit
-	case timeProgress >= optionMomentumFadeProgress && gainPct > 0:
+	case timeProgress >= optionMomentumFadeProgress &&
+		gainPct > 0 &&
+		(!strongWinner || !holdingNearHigh):
 		return ExitLateExit
 	case now.After(pos.ExpiryTime):
 		return ExitExpiry
