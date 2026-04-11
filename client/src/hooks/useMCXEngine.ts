@@ -458,6 +458,45 @@ interface EngineRef {
   totalRealizedPnl: number;
 }
 
+type MCXDbCommodityState = {
+  id: string;
+  minuteBars: number[];
+  lastPrice: number;
+  lastMinute: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  change: number;
+  changePct: number;
+};
+
+type MCXDbStrategy = {
+  id: number;
+  status: "WARMING" | "READY" | "IN_POSITION" | "COOLING";
+  cooldownUntil: number;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  winRate: number;
+  lastTradeAt: number;
+  score: number;
+  consecutiveLosses: number;
+};
+
+type MCXDbPayload = {
+  balance: number;
+  totalWins: number;
+  totalLosses: number;
+  totalPnl: number;
+  tradeSeq: number;
+  commodities: MCXDbCommodityState[];
+  positions: InternalPosition[];
+  trades: InternalTrade[];
+  strategies: MCXDbStrategy[];
+};
+
 function classifyCommodityRegime(bars: number[]): string {
   if (bars.length < 22) return "UNKNOWN";
   const price = bars[bars.length - 1];
@@ -577,6 +616,114 @@ function initEngine(): EngineRef {
     totalLosses: 0,
     totalRealizedPnl: 0,
   };
+}
+
+function buildPersistedPayload(eng: EngineRef): MCXDbPayload {
+  return {
+    balance: eng.balance,
+    totalWins: eng.totalWins,
+    totalLosses: eng.totalLosses,
+    totalPnl: eng.totalRealizedPnl,
+    tradeSeq: eng.seq,
+    commodities: MCX_COMMODITIES.map((commodity) => {
+      const state = eng.commodities.get(commodity.id);
+      return {
+        id: commodity.id,
+        minuteBars: state?.minuteBars ?? [],
+        lastPrice: state?.lastPrice ?? 0,
+        lastMinute: state?.lastMinute ?? 0,
+        open: state?.open ?? 0,
+        high: state?.high ?? 0,
+        low: state?.low ?? 0,
+        close: state?.close ?? 0,
+        change: state?.change ?? 0,
+        changePct: state?.changePct ?? 0,
+      };
+    }),
+    positions: [...eng.positions.values()],
+    trades: eng.trades.slice(0, 500),
+    strategies: eng.strategies.map((strategy) => ({
+      id: strategy.def.id,
+      status: strategy.status,
+      cooldownUntil: strategy.cooldownUntil,
+      totalTrades: strategy.totalTrades,
+      wins: strategy.wins,
+      losses: strategy.losses,
+      totalPnl: strategy.totalPnl,
+      winRate: strategy.winRate,
+      lastTradeAt: strategy.lastTradeAt,
+      score: strategy.score,
+      consecutiveLosses: strategy.consecutiveLosses,
+    })),
+  };
+}
+
+async function saveMCXState(eng: EngineRef): Promise<void> {
+  try {
+    await fetch("/api/mcx/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPersistedPayload(eng)),
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+async function loadMCXState(eng: EngineRef): Promise<boolean> {
+  try {
+    const res = await fetch("/api/mcx/state");
+    if (!res.ok) return false;
+    const data = await res.json() as { ok: boolean; found: boolean; state?: MCXDbPayload };
+    if (!data.ok || !data.found || !data.state) return false;
+    const saved = data.state;
+    eng.balance = saved.balance;
+    eng.totalWins = saved.totalWins;
+    eng.totalLosses = saved.totalLosses;
+    eng.totalRealizedPnl = saved.totalPnl;
+    eng.seq = saved.tradeSeq;
+    eng.trades = (saved.trades ?? []).slice(0, 500);
+    eng.positions.clear();
+
+    for (const commodity of saved.commodities ?? []) {
+      eng.commodities.set(commodity.id, {
+        minuteBars: commodity.minuteBars ?? [],
+        lastPrice: commodity.lastPrice,
+        lastMinute: commodity.lastMinute,
+        open: commodity.open,
+        high: commodity.high,
+        low: commodity.low,
+        close: commodity.close,
+        change: commodity.change,
+        changePct: commodity.changePct,
+      });
+    }
+
+    for (const persisted of saved.positions ?? []) {
+      eng.positions.set(persisted.id, persisted);
+      const strategy = eng.strategies.find((item) => item.def.id === persisted.strategyId);
+      if (strategy) strategy.position = persisted;
+    }
+
+    for (const strategy of eng.strategies) {
+      const persisted = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
+      if (!persisted) continue;
+      strategy.status = persisted.status;
+      strategy.cooldownUntil = persisted.cooldownUntil;
+      strategy.totalTrades = persisted.totalTrades;
+      strategy.wins = persisted.wins;
+      strategy.losses = persisted.losses;
+      strategy.totalPnl = persisted.totalPnl;
+      strategy.winRate = persisted.winRate;
+      strategy.lastTradeAt = persisted.lastTradeAt;
+      strategy.score = persisted.score;
+      strategy.consecutiveLosses = persisted.consecutiveLosses;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function mcxSizeMultiplier(strat: InternalStratState): number {
@@ -756,6 +903,8 @@ function buildQuotes(eng: EngineRef): MCXCommodityQuote[] {
 export default function useMCXEngine(_refreshKey = 0) {
   void _refreshKey;
   const engRef = useRef<EngineRef>(initEngine());
+  const lastSavedSignatureRef = useRef("");
+  const dbLoadedRef = useRef(false);
   const [positions, setPositions] = useState<MCXPosition[]>([]);
   const [trades, setTrades] = useState<MCXTrade[]>([]);
   const [strategies, setStrategies] = useState<MCXStrategyStatus[]>(() => buildStrategies(engRef.current));
@@ -774,7 +923,47 @@ export default function useMCXEngine(_refreshKey = 0) {
     setStrategies(buildStrategies(eng));
     setStats(buildStats(eng));
     setQuotes(buildQuotes(eng));
+    if (!dbLoadedRef.current) return;
+    const signature = JSON.stringify({
+      balance: eng.balance,
+      totalWins: eng.totalWins,
+      totalLosses: eng.totalLosses,
+      totalPnl: eng.totalRealizedPnl,
+      tradeSeq: eng.seq,
+      commodityBars: MCX_COMMODITIES.map((commodity) => ({
+        id: commodity.id,
+        bars: eng.commodities.get(commodity.id)?.minuteBars.length ?? 0,
+        lastMinute: eng.commodities.get(commodity.id)?.lastMinute ?? 0,
+      })),
+      openPositions: [...eng.positions.keys()],
+      tradeIds: eng.trades.slice(0, 500).map((trade) => trade.id),
+    });
+    if (signature !== lastSavedSignatureRef.current) {
+      lastSavedSignatureRef.current = signature;
+      void saveMCXState(eng);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadMCXState(engRef.current).then(() => {
+      dbLoadedRef.current = true;
+      lastSavedSignatureRef.current = JSON.stringify({
+        balance: engRef.current.balance,
+        totalWins: engRef.current.totalWins,
+        totalLosses: engRef.current.totalLosses,
+        totalPnl: engRef.current.totalRealizedPnl,
+        tradeSeq: engRef.current.seq,
+        commodityBars: MCX_COMMODITIES.map((commodity) => ({
+          id: commodity.id,
+          bars: engRef.current.commodities.get(commodity.id)?.minuteBars.length ?? 0,
+          lastMinute: engRef.current.commodities.get(commodity.id)?.lastMinute ?? 0,
+        })),
+        openPositions: [...engRef.current.positions.keys()],
+        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+      });
+      pushDisplayState();
+    });
+  }, [pushDisplayState]);
 
   // ── Engine tick ──────────────────────────────────────────────────────────
   const engineTick = useCallback(() => {
@@ -965,8 +1154,27 @@ export default function useMCXEngine(_refreshKey = 0) {
     return () => clearInterval(id);
   }, [engineTick]);
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (dbLoadedRef.current) void saveMCXState(engRef.current);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onUnload = () => {
+      if (!dbLoadedRef.current) return;
+      const payload = JSON.stringify(buildPersistedPayload(engRef.current));
+      navigator.sendBeacon("/api/mcx/state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
+
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
+    lastSavedSignatureRef.current = "";
+    if (dbLoadedRef.current) void saveMCXState(engRef.current);
     pushDisplayState();
   }, [pushDisplayState]);
 

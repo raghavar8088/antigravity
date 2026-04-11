@@ -92,6 +92,36 @@ interface EngineRef {
   strategies: InternalStrategy[];
 }
 
+type NiftySellingDbStrategy = {
+  id: number;
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  score: number;
+  status: OptionStrategyStatus["status"];
+  rosterState: OptionStrategyStatus["rosterState"];
+  hasPosition: boolean;
+  cooldownUntil: number;
+  regime: string;
+  consecutiveLosses: number;
+};
+
+type NiftySellingDbPayload = {
+  balance: number;
+  totalWins: number;
+  totalLosses: number;
+  totalPnl: number;
+  totalPremiumSpent: number;
+  tradeSeq: number;
+  lastPrice: number;
+  lastMinute: number;
+  minuteBars: number[];
+  positions: InternalPosition[];
+  trades: OptionTrade[];
+  strategies: NiftySellingDbStrategy[];
+};
+
 const STRATEGIES: StratDef[] = [
   { id: 1, name: "Bull_Put_VWAP", category: "VWAP", optionType: "PUT", signal: "BULL_VWAP", tpPct: 0.28, slPct: 0.22, cooldownSecs: 120, minBars: MIN_BARS, marginINR: 12000 },
   { id: 2, name: "Bull_Put_Trend", category: "Trend", optionType: "PUT", signal: "BULL_TREND", tpPct: 0.32, slPct: 0.24, cooldownSecs: 180, minBars: MIN_BARS, marginINR: 14000 },
@@ -285,6 +315,87 @@ function initEngine(): EngineRef {
   };
 }
 
+function buildPersistedPayload(eng: EngineRef): NiftySellingDbPayload {
+  return {
+    balance: eng.balance,
+    totalWins: eng.totalWins,
+    totalLosses: eng.totalLosses,
+    totalPnl: eng.totalRealizedPnl,
+    totalPremiumSpent: eng.totalPremiumSpent,
+    tradeSeq: eng.seq,
+    lastPrice: eng.lastPrice,
+    lastMinute: eng.lastMinute,
+    minuteBars: eng.minuteBars,
+    positions: eng.positions,
+    trades: eng.trades.slice(0, 500),
+    strategies: eng.strategies.map((strategy) => ({
+      id: strategy.def.id,
+      totalTrades: strategy.totalTrades,
+      wins: strategy.wins,
+      losses: strategy.losses,
+      totalPnl: strategy.totalPnl,
+      score: strategy.score,
+      status: strategy.status,
+      rosterState: strategy.rosterState,
+      hasPosition: strategy.hasPosition,
+      cooldownUntil: strategy.cooldownUntil,
+      regime: strategy.regime,
+      consecutiveLosses: strategy.consecutiveLosses,
+    })),
+  };
+}
+
+async function saveSellingState(eng: EngineRef): Promise<void> {
+  try {
+    await fetch("/api/nifty/selling-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPersistedPayload(eng)),
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+async function loadSellingState(eng: EngineRef): Promise<boolean> {
+  try {
+    const res = await fetch("/api/nifty/selling-state");
+    if (!res.ok) return false;
+    const data = await res.json() as { ok: boolean; found: boolean; state?: NiftySellingDbPayload };
+    if (!data.ok || !data.found || !data.state) return false;
+    const saved = data.state;
+    eng.balance = saved.balance;
+    eng.totalWins = saved.totalWins;
+    eng.totalLosses = saved.totalLosses;
+    eng.totalRealizedPnl = saved.totalPnl;
+    eng.totalPremiumSpent = saved.totalPremiumSpent;
+    eng.seq = saved.tradeSeq;
+    eng.lastPrice = saved.lastPrice;
+    eng.lastMinute = saved.lastMinute;
+    eng.minuteBars = saved.minuteBars ?? [];
+    eng.positions = saved.positions ?? [];
+    eng.trades = (saved.trades ?? []).slice(0, 500);
+    for (const strategy of eng.strategies) {
+      const persisted = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
+      if (!persisted) continue;
+      strategy.totalTrades = persisted.totalTrades;
+      strategy.wins = persisted.wins;
+      strategy.losses = persisted.losses;
+      strategy.totalPnl = persisted.totalPnl;
+      strategy.score = persisted.score;
+      strategy.status = persisted.status;
+      strategy.rosterState = persisted.rosterState;
+      strategy.hasPosition = persisted.hasPosition;
+      strategy.cooldownUntil = persisted.cooldownUntil;
+      strategy.regime = persisted.regime;
+      strategy.consecutiveLosses = persisted.consecutiveLosses;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function niftySellingSizeMultiplier(strategy: InternalStrategy): number {
   let multiplier = 1;
   const winRate = strategy.totalTrades > 0 ? (strategy.wins / strategy.totalTrades) * 100 : 0;
@@ -419,6 +530,8 @@ function closePosition(eng: EngineRef, strategy: InternalStrategy, position: Int
 
 export default function useNiftyOptionsSellingEngine() {
   const engRef = useRef<EngineRef>(initEngine());
+  const lastSavedSignatureRef = useRef("");
+  const dbLoadedRef = useRef(false);
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
   const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(buildDisplayStrategies(engRef.current));
@@ -434,6 +547,22 @@ export default function useNiftyOptionsSellingEngine() {
     setStats(buildDisplayStats(eng));
     setBarCount(eng.minuteBars.length);
     setEnginePrice(eng.lastPrice);
+    if (!dbLoadedRef.current) return;
+    const signature = JSON.stringify({
+      balance: eng.balance,
+      totalWins: eng.totalWins,
+      totalLosses: eng.totalLosses,
+      totalPnl: eng.totalRealizedPnl,
+      tradeSeq: eng.seq,
+      lastPrice: eng.lastPrice,
+      bars: eng.minuteBars.length,
+      openPositions: eng.positions.map((position) => position.id),
+      tradeIds: eng.trades.slice(0, 500).map((trade) => trade.id),
+    });
+    if (signature !== lastSavedSignatureRef.current) {
+      lastSavedSignatureRef.current = signature;
+      void saveSellingState(eng);
+    }
   }, []);
 
   const tickEngine = useCallback(() => {
@@ -552,6 +681,24 @@ export default function useNiftyOptionsSellingEngine() {
   }, [tickEngine]);
 
   useEffect(() => {
+    void loadSellingState(engRef.current).then(() => {
+      dbLoadedRef.current = true;
+      lastSavedSignatureRef.current = JSON.stringify({
+        balance: engRef.current.balance,
+        totalWins: engRef.current.totalWins,
+        totalLosses: engRef.current.totalLosses,
+        totalPnl: engRef.current.totalRealizedPnl,
+        tradeSeq: engRef.current.seq,
+        lastPrice: engRef.current.lastPrice,
+        bars: engRef.current.minuteBars.length,
+        openPositions: engRef.current.positions.map((position) => position.id),
+        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+      });
+      pushDisplayState();
+    });
+  }, [pushDisplayState]);
+
+  useEffect(() => {
     let cancelled = false;
     const source = new EventSource("/api/nifty/stream");
     source.onmessage = (event) => {
@@ -594,8 +741,27 @@ export default function useNiftyOptionsSellingEngine() {
     return () => clearInterval(id);
   }, [tickEngine]);
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (dbLoadedRef.current) void saveSellingState(engRef.current);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const onUnload = () => {
+      if (!dbLoadedRef.current) return;
+      const payload = JSON.stringify(buildPersistedPayload(engRef.current));
+      navigator.sendBeacon("/api/nifty/selling-state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
+
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
+    lastSavedSignatureRef.current = "";
+    if (dbLoadedRef.current) void saveSellingState(engRef.current);
     pushDisplayState();
   }, [pushDisplayState]);
 

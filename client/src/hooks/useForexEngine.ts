@@ -124,6 +124,30 @@ export type ForexEngineStats = {
   liveSymbols: number; lastUpdateAt: number; diagnostics: string;
 };
 
+type ForexDbPosition = {
+  id: string; strategyId: number; symbol: string; side: Side;
+  entryPrice: number; currentPrice: number; tpPrice: number; slPrice: number;
+  quantity: number; notional: number; entryTime: number;
+  unrealizedPnl: number; returnPct: number; peakReturnPct: number;
+};
+
+type ForexDbTrade = {
+  id: string; strategyId: number; strategyName: string;
+  symbol: string; side: Side; quantity: number;
+  entryPrice: number; exitPrice: number; netPnl: number; returnPct: number;
+  entryTime: number; exitTime: number; exitReason: string; holdSeconds: number;
+};
+
+type ForexDbStrategy = {
+  id: number; totalTrades: number; wins: number; losses: number;
+  totalPnl: number; winRate: number; cooldownUntil: number; consecutiveLosses: number;
+};
+
+type ForexDbPayload = {
+  balance: number; totalWins: number; totalLosses: number; totalPnl: number; tradeSeq: number;
+  positions: ForexDbPosition[]; trades: ForexDbTrade[]; strategies: ForexDbStrategy[];
+};
+
 // ── Strategy definitions ──────────────────────────────────────────────────────
 type CategoryProfile = { minTp: number; maxTp: number; minSl: number; maxSl: number; holdMins: number };
 
@@ -171,6 +195,8 @@ const STRAT_DEFS: StratDef[] = (() => {
   }
   return defs;
 })();
+
+const FOREX_PAIR_BY_SYMBOL = new Map(FOREX_PAIRS.map((pair) => [pair.symbol, pair]));
 
 // ── Indicator helpers ─────────────────────────────────────────────────────────
 function sma(values: number[], period: number): number {
@@ -397,9 +423,122 @@ const EMPTY_STATS: ForexEngineStats = {
   lastUpdateAt: 0, diagnostics: "Bootstrapping forex feed.",
 };
 
+function buildPersistedPayload(engine: EngineRef): ForexDbPayload {
+  return {
+    balance: engine.balance,
+    totalWins: engine.totalWins,
+    totalLosses: engine.totalLosses,
+    totalPnl: engine.totalRealizedPnl,
+    tradeSeq: engine.seq,
+    positions: [...engine.positions.values()].map((position) => ({
+      id: position.id,
+      strategyId: position.strategyId,
+      symbol: position.pair.symbol,
+      side: position.side,
+      entryPrice: position.entryPrice,
+      currentPrice: position.currentPrice,
+      tpPrice: position.tpPrice,
+      slPrice: position.slPrice,
+      quantity: position.quantity,
+      notional: position.notional,
+      entryTime: position.entryTime,
+      unrealizedPnl: position.unrealizedPnl,
+      returnPct: position.returnPct,
+      peakReturnPct: position.peakReturnPct,
+    })),
+    trades: engine.trades.slice(0, MAX_TRADES),
+    strategies: engine.strategies.map((strategy) => ({
+      id: strategy.def.id,
+      totalTrades: strategy.totalTrades,
+      wins: strategy.wins,
+      losses: strategy.losses,
+      totalPnl: strategy.totalPnl,
+      winRate: strategy.winRate,
+      cooldownUntil: strategy.cooldownUntil,
+      consecutiveLosses: strategy.consecutiveLosses,
+    })),
+  };
+}
+
+async function saveForexState(engine: EngineRef): Promise<void> {
+  try {
+    await fetch("/api/forex/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPersistedPayload(engine)),
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+async function loadForexState(engine: EngineRef): Promise<boolean> {
+  try {
+    const response = await fetch("/api/forex/state");
+    if (!response.ok) return false;
+    const data = await response.json() as { ok: boolean; found: boolean; state?: ForexDbPayload };
+    if (!data.ok || !data.found || !data.state) return false;
+    const saved = data.state;
+    engine.balance = saved.balance;
+    engine.totalWins = saved.totalWins;
+    engine.totalLosses = saved.totalLosses;
+    engine.totalRealizedPnl = saved.totalPnl;
+    engine.seq = saved.tradeSeq;
+    engine.trades = (saved.trades ?? []).slice(0, MAX_TRADES);
+    engine.positions.clear();
+
+    for (const persisted of saved.positions ?? []) {
+      const pair = FOREX_PAIR_BY_SYMBOL.get(persisted.symbol);
+      if (!pair) continue;
+      const position: InternalPosition = {
+        id: persisted.id,
+        strategyId: persisted.strategyId,
+        strategyName: STRAT_DEFS.find((def) => def.id === persisted.strategyId)?.name ?? persisted.id,
+        pair,
+        side: persisted.side,
+        entryPrice: persisted.entryPrice,
+        currentPrice: persisted.currentPrice,
+        tpPrice: persisted.tpPrice,
+        slPrice: persisted.slPrice,
+        quantity: persisted.quantity,
+        notional: persisted.notional,
+        entryTime: persisted.entryTime,
+        unrealizedPnl: persisted.unrealizedPnl,
+        returnPct: persisted.returnPct,
+        peakReturnPct: persisted.peakReturnPct,
+      };
+      engine.positions.set(position.id, position);
+      const strategy = engine.strategies.find((item) => item.def.id === position.strategyId);
+      if (strategy) {
+        strategy.position = position;
+        strategy.status = "IN_POSITION";
+        strategy.currentSymbol = pair.symbol;
+      }
+    }
+
+    for (const strategy of engine.strategies) {
+      const savedStrategy = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
+      if (!savedStrategy) continue;
+      strategy.totalTrades = savedStrategy.totalTrades;
+      strategy.wins = savedStrategy.wins;
+      strategy.losses = savedStrategy.losses;
+      strategy.totalPnl = savedStrategy.totalPnl;
+      strategy.winRate = savedStrategy.winRate;
+      strategy.cooldownUntil = savedStrategy.cooldownUntil;
+      strategy.consecutiveLosses = savedStrategy.consecutiveLosses;
+      if (!strategy.position) strategy.status = strategy.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 export default function useForexEngine() {
   const engineRef = useRef<EngineRef>(initEngine());
+  const lastSavedSignatureRef = useRef("");
+  const dbLoadedRef = useRef(false);
   const [quotes, setQuotes] = useState<ForexQuoteDisplay[]>(
     FOREX_PAIRS.map((p) => ({ symbol: p.symbol, category: p.category, ltp: 0, changePct: 0, signalScore: 0, hasPosition: false, sparkline: [] }))
   );
@@ -494,14 +633,63 @@ export default function useForexEngine() {
     const totalTrades = engine.strategies.reduce((sum, s) => sum + s.totalTrades, 0);
     const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
     setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((s) => s.status !== "WARMING").length, warmingUp: FOREX_PAIRS.every((p) => (engine.bars[p.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/12 forex pairs live.` : "Waiting for forex market quotes.") });
+
+    if (!dbLoadedRef.current) return;
+    const signature = JSON.stringify({
+      balance: engine.balance,
+      totalWins: engine.totalWins,
+      totalLosses: engine.totalLosses,
+      totalPnl: engine.totalRealizedPnl,
+      tradeSeq: engine.seq,
+      openPositions: [...engine.positions.keys()],
+      tradeIds: engine.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
+    });
+    if (signature !== lastSavedSignatureRef.current) {
+      lastSavedSignatureRef.current = signature;
+      void saveForexState(engine);
+    }
   }, []);
 
   const reset = useCallback(() => {
     engineRef.current = initEngine();
+    lastSavedSignatureRef.current = "";
+    if (dbLoadedRef.current) void saveForexState(engineRef.current);
     setQuotes(FOREX_PAIRS.map((p) => ({ symbol: p.symbol, category: p.category, ltp: 0, changePct: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
     setPositions([]); setTrades([]);
     setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
     setStats(EMPTY_STATS);
+  }, []);
+
+  useEffect(() => {
+    void loadForexState(engineRef.current).then(() => {
+      dbLoadedRef.current = true;
+      lastSavedSignatureRef.current = JSON.stringify({
+        balance: engineRef.current.balance,
+        totalWins: engineRef.current.totalWins,
+        totalLosses: engineRef.current.totalLosses,
+        totalPnl: engineRef.current.totalRealizedPnl,
+        tradeSeq: engineRef.current.seq,
+        openPositions: [...engineRef.current.positions.keys()],
+        tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (dbLoadedRef.current) void saveForexState(engineRef.current);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const onUnload = () => {
+      if (!dbLoadedRef.current) return;
+      const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
+      navigator.sendBeacon("/api/forex/state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
   }, []);
 
   useEffect(() => {
