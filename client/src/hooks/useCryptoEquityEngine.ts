@@ -333,37 +333,53 @@ function buildSignalInputs(bars: number[], volRatio = 1.0): SignalInputs {
   };
 }
 
+// NOTE: bars are 3-second sampled price ticks from Binance lastPrice.
+// At 3s resolution, BTC moves ~0.001–0.02% per tick on average.
+// All momentum thresholds are calibrated for this sub-minute bar frequency.
 function evalSignal(signal: string, input: SignalInputs): number {
   const { price, prevPrice, fast, slow, trend, prevFast, prevSlow, mean20, rsi14, high20, low20, momentum3, momentum6 } = input;
   switch (signal) {
     case "BREAKOUT":
-      return price > high20 * 1.0012 && fast > slow && rsi14 >= 57 && momentum3 > 0.18 ? scoreClamp(72 + (price / high20 - 1) * 2600 + momentum3 * 5) : 0;
+      // 0.04% momentum over 9s is achievable on any active crypto tick
+      return price > high20 * 1.0004 && fast > slow && rsi14 >= 54 && momentum3 > 0.04
+        ? scoreClamp(72 + (price / high20 - 1) * 8000 + momentum3 * 40) : 0;
     case "BREAKOUT_SHORT":
-      return price < low20 * 0.9988 && fast < slow && rsi14 <= 43 && momentum3 < -0.18 ? scoreClamp(72 + (low20 / price - 1) * 2600 + Math.abs(momentum3) * 5) : 0;
+      return price < low20 * 0.9996 && fast < slow && rsi14 <= 46 && momentum3 < -0.04
+        ? scoreClamp(72 + (low20 / price - 1) * 8000 + Math.abs(momentum3) * 40) : 0;
     case "EMA_CROSS":
-      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 54 ? scoreClamp(70 + (fast / slow - 1) * 4200 + (rsi14 - 50) * 0.35) : 0;
+      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 52
+        ? scoreClamp(70 + (fast / slow - 1) * 18000 + (rsi14 - 50) * 0.4) : 0;
     case "EMA_CROSS_SHORT":
-      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 46 ? scoreClamp(70 + (slow / fast - 1) * 4200 + (50 - rsi14) * 0.35) : 0;
+      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 48
+        ? scoreClamp(70 + (slow / fast - 1) * 18000 + (50 - rsi14) * 0.4) : 0;
     case "RSI_BOUNCE":
-      return rsi14 <= 31 && price >= prevPrice && momentum3 > -0.6 ? scoreClamp(67 + (34 - rsi14) * 1.3) : 0;
+      return rsi14 <= 33 && price >= prevPrice && momentum3 > -0.25
+        ? scoreClamp(67 + (35 - rsi14) * 1.4) : 0;
     case "RSI_BOUNCE_SHORT":
-      return rsi14 >= 69 && price <= prevPrice && momentum3 < 0.6 ? scoreClamp(67 + (rsi14 - 66) * 1.3) : 0;
+      return rsi14 >= 67 && price <= prevPrice && momentum3 < 0.25
+        ? scoreClamp(67 + (rsi14 - 65) * 1.4) : 0;
     case "VWAP_RECLAIM":
-      return price > mean20 * 1.001 && prevPrice <= mean20 * 1.0012 && momentum3 > 0.14 ? scoreClamp(68 + (price / mean20 - 1) * 1900 + momentum3 * 4) : 0;
+      // Price crossing above mean20 — crossover on 3s ticks
+      return price > mean20 && prevPrice <= mean20 * 1.0003 && momentum3 > 0.02
+        ? scoreClamp(68 + (price / mean20 - 1) * 9000 + momentum3 * 30) : 0;
     case "VWAP_RECLAIM_SHORT":
-      return price < mean20 * 0.999 && prevPrice >= mean20 * 0.9988 && momentum3 < -0.14 ? scoreClamp(68 + (mean20 / price - 1) * 1900 + Math.abs(momentum3) * 4) : 0;
+      return price < mean20 && prevPrice >= mean20 * 0.9997 && momentum3 < -0.02
+        ? scoreClamp(68 + (mean20 / price - 1) * 9000 + Math.abs(momentum3) * 30) : 0;
     case "TREND_CONT":
-      return fast > slow && slow > trend && momentum6 > 0.7 && rsi14 >= 56 && rsi14 <= 76 ? scoreClamp(73 + momentum6 * 8 + (rsi14 - 54) * 0.3) : 0;
+      // 0.12% over 18s is a real directional push at 3s resolution
+      return fast > slow && slow > trend && momentum6 > 0.12 && rsi14 >= 54 && rsi14 <= 78
+        ? scoreClamp(73 + momentum6 * 60 + (rsi14 - 54) * 0.3) : 0;
     case "TREND_CONT_SHORT":
-      return fast < slow && slow < trend && momentum6 < -0.7 && rsi14 >= 24 && rsi14 <= 44 ? scoreClamp(73 + Math.abs(momentum6) * 8 + (46 - rsi14) * 0.3) : 0;
-    // Pure volume + momentum surge — requires high volume spike to fire
+      return fast < slow && slow < trend && momentum6 < -0.12 && rsi14 >= 22 && rsi14 <= 46
+        ? scoreClamp(73 + Math.abs(momentum6) * 60 + (46 - rsi14) * 0.3) : 0;
+    // Volume-spike surge: uses incremental volume delta ratio
     case "MOMENTUM_SURGE":
-      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 > 0.55 && fast > slow && rsi14 >= 52 && rsi14 <= 78
-        ? scoreClamp(74 + momentum3 * 9 + (input.volRatio - 1) * 6 + (rsi14 - 50) * 0.25)
+      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 > 0.08 && fast > slow && rsi14 >= 52 && rsi14 <= 78
+        ? scoreClamp(74 + momentum3 * 50 + (input.volRatio - 1) * 8 + (rsi14 - 50) * 0.3)
         : 0;
     case "MOMENTUM_SURGE_SHORT":
-      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 < -0.55 && fast < slow && rsi14 >= 22 && rsi14 <= 48
-        ? scoreClamp(74 + Math.abs(momentum3) * 9 + (input.volRatio - 1) * 6 + (50 - rsi14) * 0.25)
+      return input.volRatio >= VOL_SPIKE_RATIO && momentum3 < -0.08 && fast < slow && rsi14 >= 22 && rsi14 <= 48
+        ? scoreClamp(74 + Math.abs(momentum3) * 50 + (input.volRatio - 1) * 8 + (50 - rsi14) * 0.3)
         : 0;
     default:
       return 0;
@@ -373,9 +389,10 @@ function evalSignal(signal: string, input: SignalInputs): number {
 function classifyRegime(input: SignalInputs): string {
   const trendGapPct = input.price > 0 ? Math.abs(input.fast - input.slow) / input.price * 100 : 0;
   const volPct = input.price > 0 ? input.std20 / input.price * 100 : 0;
-  if (input.fast > input.slow && input.slow > input.trend && input.momentum6 > 0.5) return "TRENDING_BULL";
-  if (input.fast < input.slow && input.slow < input.trend && input.momentum6 < -0.5) return "TRENDING_BEAR";
-  if (volPct >= 1.3 || trendGapPct >= 0.9) return "HIGH_VOL";
+  // Thresholds scaled for 3-second bars (momentum is tiny vs minute bars)
+  if (input.fast > input.slow && input.slow > input.trend && input.momentum6 > 0.08) return "TRENDING_BULL";
+  if (input.fast < input.slow && input.slow < input.trend && input.momentum6 < -0.08) return "TRENDING_BEAR";
+  if (volPct >= 0.3 || trendGapPct >= 0.12) return "HIGH_VOL";
   return "RANGE";
 }
 
@@ -388,13 +405,16 @@ function isCategoryAligned(category: string, regime: string): boolean {
 function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: string): boolean {
   if (!isCategoryAligned(def.category, regime)) return false;
   if (def.side === "LONG") {
-    if (def.category === "VWAP") return input.price >= input.mean20 && input.rsi14 >= 49;
+    if (def.category === "VWAP") return input.price >= input.mean20 && input.rsi14 >= 48;
     if (def.category === "Mean Reversion") return input.rsi14 <= 45 && input.price >= input.prevPrice;
-    return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.08;
+    if (def.category === "Surge") return input.fast >= input.slow && input.momentum3 > 0.01;
+    // 0.015% momentum over 9s is a genuine directional push at 3s bar frequency
+    return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.015;
   }
-  if (def.category === "VWAP") return input.price <= input.mean20 && input.rsi14 <= 51;
+  if (def.category === "VWAP") return input.price <= input.mean20 && input.rsi14 <= 52;
   if (def.category === "Mean Reversion") return input.rsi14 >= 55 && input.price <= input.prevPrice;
-  return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.08;
+  if (def.category === "Surge") return input.fast <= input.slow && input.momentum3 < -0.01;
+  return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.015;
 }
 
 function computeQuantity(price: number): number {
@@ -579,12 +599,17 @@ export default function useCryptoEquityEngine() {
       bars.push(item.price);
       if (bars.length > MAX_BARS) bars.splice(0, bars.length - MAX_BARS);
       engine.bars[item.symbol] = bars;
-      // track rolling volume for spike detection
+      // Track INCREMENTAL volume delta per tick (not cumulative 24hr volume)
+      // Binance 24hr ticker gives cumulative volume — compute the delta each tick
       if (item.volume > 0) {
         const vb = engine.volBars[item.symbol] ?? [];
-        vb.push(item.volume);
-        if (vb.length > VOL_HISTORY) vb.splice(0, vb.length - VOL_HISTORY);
-        engine.volBars[item.symbol] = vb;
+        const prevCumVol = engine.quotes[item.symbol]?.volume ?? 0;
+        const delta = prevCumVol > 0 ? Math.max(0, item.volume - prevCumVol) : 0;
+        if (delta > 0) {
+          vb.push(delta);
+          if (vb.length > VOL_HISTORY) vb.splice(0, vb.length - VOL_HISTORY);
+          engine.volBars[item.symbol] = vb;
+        }
       }
     }
 
