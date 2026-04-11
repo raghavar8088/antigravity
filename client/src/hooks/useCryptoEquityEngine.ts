@@ -775,6 +775,45 @@ export default function useCryptoEquityEngine() {
   const [strategies, setStrategies] = useState<CryptoStrategyStatus[]>(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
   const [stats, setStats] = useState<CryptoEngineStats>(EMPTY_STATS);
 
+  const pushDisplayState = useCallback((errorMessage = "") => {
+    const engine = engineRef.current;
+    const now = Date.now();
+
+    if (errorMessage) engine.lastError = errorMessage;
+
+    const positionSides: Record<string, Set<Side>> = {};
+    const symbolScores: Record<string, number> = {};
+    for (const strategy of engine.strategies) {
+      const symbol = strategy.position?.asset.symbol ?? strategy.lastSignalSymbol;
+      if (symbol && strategy.score > 0) symbolScores[symbol] = Math.max(symbolScores[symbol] ?? 0, strategy.score);
+      if (strategy.position) {
+        if (!positionSides[strategy.position.asset.symbol]) positionSides[strategy.position.asset.symbol] = new Set();
+        positionSides[strategy.position.asset.symbol].add(strategy.def.side);
+      }
+    }
+
+    setQuotes(CRYPTO_TOP_20.map((asset) => {
+      const quote = engine.quotes[asset.symbol];
+      const sides = positionSides[asset.symbol];
+      const sparkline = (engine.bars[asset.symbol] ?? []).slice(-24);
+      return { symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: quote?.price ?? 0, changePct: quote?.changePct ?? 0, volume: quote?.volume ?? 0, signalScore: symbolScores[asset.symbol] ?? 0, hasPosition: Boolean(sides?.size), strategyLabel: sides ? [...sides].join("+") : undefined, sparkline };
+    }));
+
+    setPositions([...engine.positions.values()].map((position) => ({ id: position.id, strategyId: position.strategyId, strategyName: position.strategyName, symbol: position.asset.symbol, name: position.asset.name, sector: position.asset.sector, side: position.side, quantity: position.quantity, entryPrice: position.entryPrice, currentPrice: position.currentPrice, tpPrice: position.tpPrice, slPrice: position.slPrice, notional: position.notional, entryTime: new Date(position.entryTime).toISOString(), unrealizedPnl: position.unrealizedPnl, returnPct: position.returnPct })));
+
+    setTrades(engine.trades.slice(0, 120).map((trade) => ({ id: trade.id, strategyId: trade.strategyId, strategyName: trade.strategyName, symbol: trade.symbol, side: trade.side, quantity: trade.quantity, entryPrice: trade.entryPrice, exitPrice: trade.exitPrice, netPnl: trade.netPnl, returnPct: trade.returnPct, entryTime: new Date(trade.entryTime).toISOString(), exitTime: new Date(trade.exitTime).toISOString(), exitReason: trade.exitReason, holdSeconds: trade.holdSeconds })));
+
+    setStrategies(engine.strategies.map((strategy) => ({ id: strategy.def.id, name: strategy.def.name, category: strategy.def.category, side: strategy.def.side, status: strategy.status, currentSymbol: strategy.currentSymbol || strategy.lastSignalSymbol, score: strategy.score, allocationUSD: Math.round(ALLOCATION_USD * sizeMultiplierFor(strategy)), totalTrades: strategy.totalTrades, wins: strategy.wins, losses: strategy.losses, totalPnl: strategy.totalPnl, winRate: strategy.winRate, cooldownUntil: strategy.cooldownUntil > 0 ? new Date(strategy.cooldownUntil).toISOString() : undefined })));
+
+    const unrealizedPnl = [...engine.positions.values()].reduce((sum, position) => sum + position.unrealizedPnl, 0);
+    const openNotional = [...engine.positions.values()].reduce((sum, position) => sum + position.notional, 0);
+    const equity = engine.balance + openNotional + unrealizedPnl;
+    const liveSymbols = CRYPTO_TOP_20.filter((asset) => (engine.quotes[asset.symbol]?.price ?? 0) > 0).length;
+    const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
+    const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
+    setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length, warmingUp: CRYPTO_TOP_20.every((asset) => (engine.bars[asset.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/40 crypto symbols live.` : "Waiting for crypto market quotes.") });
+  }, []);
+
   const processTick = useCallback((items: CryptoMarketItem[], errorMessage = "") => {
     const engine = engineRef.current;
     const now = Date.now();
@@ -863,37 +902,7 @@ export default function useCryptoEquityEngine() {
       }
     }
 
-    const positionSides: Record<string, Set<Side>> = {};
-    const symbolScores: Record<string, number> = {};
-    for (const strategy of engine.strategies) {
-      const symbol = strategy.position?.asset.symbol ?? strategy.lastSignalSymbol;
-      if (symbol && strategy.score > 0) symbolScores[symbol] = Math.max(symbolScores[symbol] ?? 0, strategy.score);
-      if (strategy.position) {
-        if (!positionSides[strategy.position.asset.symbol]) positionSides[strategy.position.asset.symbol] = new Set();
-        positionSides[strategy.position.asset.symbol].add(strategy.def.side);
-      }
-    }
-
-    setQuotes(CRYPTO_TOP_20.map((asset) => {
-      const quote = engine.quotes[asset.symbol];
-      const sides = positionSides[asset.symbol];
-      const sparkline = (engine.bars[asset.symbol] ?? []).slice(-24);
-      return { symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: quote?.price ?? 0, changePct: quote?.changePct ?? 0, volume: quote?.volume ?? 0, signalScore: symbolScores[asset.symbol] ?? 0, hasPosition: Boolean(sides?.size), strategyLabel: sides ? [...sides].join("+") : undefined, sparkline };
-    }));
-
-    setPositions([...engine.positions.values()].map((position) => ({ id: position.id, strategyId: position.strategyId, strategyName: position.strategyName, symbol: position.asset.symbol, name: position.asset.name, sector: position.asset.sector, side: position.side, quantity: position.quantity, entryPrice: position.entryPrice, currentPrice: position.currentPrice, tpPrice: position.tpPrice, slPrice: position.slPrice, notional: position.notional, entryTime: new Date(position.entryTime).toISOString(), unrealizedPnl: position.unrealizedPnl, returnPct: position.returnPct })));
-
-    setTrades(engine.trades.slice(0, 120).map((trade) => ({ id: trade.id, strategyId: trade.strategyId, strategyName: trade.strategyName, symbol: trade.symbol, side: trade.side, quantity: trade.quantity, entryPrice: trade.entryPrice, exitPrice: trade.exitPrice, netPnl: trade.netPnl, returnPct: trade.returnPct, entryTime: new Date(trade.entryTime).toISOString(), exitTime: new Date(trade.exitTime).toISOString(), exitReason: trade.exitReason, holdSeconds: trade.holdSeconds })));
-
-    setStrategies(engine.strategies.map((strategy) => ({ id: strategy.def.id, name: strategy.def.name, category: strategy.def.category, side: strategy.def.side, status: strategy.status, currentSymbol: strategy.currentSymbol || strategy.lastSignalSymbol, score: strategy.score, allocationUSD: Math.round(ALLOCATION_USD * sizeMultiplierFor(strategy)), totalTrades: strategy.totalTrades, wins: strategy.wins, losses: strategy.losses, totalPnl: strategy.totalPnl, winRate: strategy.winRate, cooldownUntil: strategy.cooldownUntil > 0 ? new Date(strategy.cooldownUntil).toISOString() : undefined })));
-
-    const unrealizedPnl = [...engine.positions.values()].reduce((sum, position) => sum + position.unrealizedPnl, 0);
-    const openNotional = [...engine.positions.values()].reduce((sum, position) => sum + position.notional, 0);
-    const equity = engine.balance + openNotional + unrealizedPnl;
-    const liveSymbols = CRYPTO_TOP_20.filter((asset) => (engine.quotes[asset.symbol]?.price ?? 0) > 0).length;
-    const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
-    const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
-    setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length, warmingUp: CRYPTO_TOP_20.every((asset) => (engine.bars[asset.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/40 crypto symbols live.` : "Waiting for crypto market quotes.") });
+    pushDisplayState();
 
     if (!dbLoadedRef.current) return;
     const signature = JSON.stringify({
@@ -909,7 +918,7 @@ export default function useCryptoEquityEngine() {
       lastSavedSignatureRef.current = signature;
       void saveCryptoState(engine);
     }
-  }, []);
+  }, [pushDisplayState]);
 
   const reset = useCallback(() => {
     engineRef.current = initEngine();
@@ -924,6 +933,7 @@ export default function useCryptoEquityEngine() {
 
   useEffect(() => {
     void loadCryptoState(engineRef.current).then(() => {
+      pushDisplayState();
       dbLoadedRef.current = true;
       lastSavedSignatureRef.current = JSON.stringify({
         balance: engineRef.current.balance,
@@ -935,7 +945,7 @@ export default function useCryptoEquityEngine() {
         tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
       });
     });
-  }, []);
+  }, [pushDisplayState]);
 
   useEffect(() => {
     const interval = setInterval(() => {
