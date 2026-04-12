@@ -104,7 +104,7 @@ const SOUND_STORAGE_KEY = "raig.sound.enabled";
 const INITIAL_BALANCE = 1000000;
 const INITIAL_OPTIONS_BALANCE = 1000000;
 const WORKSPACE_PRESETS: WorkspacePreset[] = [
-  { path: "/", label: "NIFTY Options", description: "Default live options desk with Indian-market context.", group: "india", module: "nifty" },
+  { path: "/", label: "BTC Option Selling", description: "Default crypto option selling desk with BTC theta decay context.", group: "crypto", module: "options-selling" },
   { path: "/crypto", label: "Crypto Workspace", description: "Jump straight into crypto equity and BTC derivatives desks.", group: "crypto", module: "cryptoEquity" },
   { path: "/nifty-options", label: "NIFTY Options", description: "Dedicated route for the NIFTY 50 options workspace.", group: "india", module: "nifty" },
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
@@ -350,8 +350,8 @@ function CompactMetric({
 }
 
 export default function TradingDashboard({
-  initialGroup = "india",
-  initialModule = "nifty",
+  initialGroup = "crypto",
+  initialModule = "options-selling",
 }: TradingDashboardProps) {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());
