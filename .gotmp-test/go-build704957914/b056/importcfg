@@ -1,0 +1,6 @@
+# import config
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile internal/syscall/windows/sysdll=c:\Trading apllication\.gotmp-test\go-build704957914\b038\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build704957914\b044\_pkg_.a
+packagefile unicode/utf16=c:\Trading apllication\.gotmp-test\go-build704957914\b048\_pkg_.a

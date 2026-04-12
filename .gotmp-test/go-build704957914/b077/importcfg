@@ -1,0 +1,14 @@
+# import config
+packagefile bufio=c:\Trading apllication\.gotmp-test\go-build704957914\b078\_pkg_.a
+packagefile context=c:\Trading apllication\.gotmp-test\go-build704957914\b066\_pkg_.a
+packagefile internal/fuzz=c:\Trading apllication\.gotmp-test\go-build704957914\b079\_pkg_.a
+packagefile internal/testlog=c:\Trading apllication\.gocache-test\e1\e144e572a5ff832176d5ebcac9d162bc8691a31794f2efc32e59db7bf4f65e65-d
+packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build704957914\b002\_pkg_.a
+packagefile os/signal=c:\Trading apllication\.gotmp-test\go-build704957914\b119\_pkg_.a
+packagefile reflect=c:\Trading apllication\.gotmp-test\go-build704957914\b060\_pkg_.a
+packagefile regexp=c:\Trading apllication\.gotmp-test\go-build704957914\b120\_pkg_.a
+packagefile runtime/pprof=c:\Trading apllication\.gotmp-test\go-build704957914\b122\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build704957914\b053\_pkg_.a

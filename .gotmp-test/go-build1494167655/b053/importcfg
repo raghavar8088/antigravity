@@ -1,0 +1,10 @@
+# import config
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build1494167655\b010\_pkg_.a
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build1494167655\b054\_pkg_.a
+packagefile internal/stringslite=c:\Trading apllication\.gotmp-test\go-build1494167655\b033\_pkg_.a
+packagefile internal/syscall/windows/registry=c:\Trading apllication\.gotmp-test\go-build1494167655\b056\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gocache-test\65\65d4da48e3a14b17e1767b118237f9c405c6b5b6fe9a31fe16173d262b036166-d
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build1494167655\b009\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build1494167655\b044\_pkg_.a

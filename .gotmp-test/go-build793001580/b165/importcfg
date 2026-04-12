@@ -1,0 +1,6 @@
+# import config
+packagefile crypto/internal/fips140/hkdf=c:\Trading apllication\.gotmp-test\go-build793001580\b166\_pkg_.a
+packagefile crypto/internal/fips140hash=c:\Trading apllication\.gotmp-test\go-build793001580\b131\_pkg_.a
+packagefile crypto/internal/fips140only=c:\Trading apllication\.gotmp-test\go-build793001580\b104\_pkg_.a
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile hash=c:\Trading apllication\.gotmp-test\go-build793001580\b082\_pkg_.a

@@ -1,0 +1,4 @@
+# import config
+packagefile crypto/internal/fips140=c:\Trading apllication\.gotmp-test\go-build1494167655\b086\_pkg_.a
+packagefile crypto/internal/fips140/check=c:\Trading apllication\.gotmp-test\go-build1494167655\b089\_pkg_.a
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build1494167655\b054\_pkg_.a

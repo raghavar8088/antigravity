@@ -1,0 +1,8 @@
+# import config
+packagefile context=c:\Trading apllication\.gotmp-test\go-build1494167655\b066\_pkg_.a
+packagefile crypto/tls=c:\Trading apllication\.gotmp-test\go-build1494167655\b140\_pkg_.a
+packagefile internal/nettrace=c:\Trading apllication\.gotmp-test\go-build1494167655\b189\_pkg_.a
+packagefile net=c:\Trading apllication\.gotmp-test\go-build1494167655\b187\_pkg_.a
+packagefile net/textproto=c:\Trading apllication\.gotmp-test\go-build1494167655\b204\_pkg_.a
+packagefile reflect=c:\Trading apllication\.gotmp-test\go-build1494167655\b060\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build1494167655\b053\_pkg_.a

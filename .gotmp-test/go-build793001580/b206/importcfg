@@ -1,0 +1,11 @@
+# import config
+importmap golang.org/x/net/idna=vendor/golang.org/x/net/idna
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build793001580\b069\_pkg_.a
+packagefile vendor/golang.org/x/net/idna=c:\Trading apllication\.gotmp-test\go-build793001580\b198\_pkg_.a
+packagefile net=c:\Trading apllication\.gotmp-test\go-build793001580\b188\_pkg_.a
+packagefile net/netip=c:\Trading apllication\.gotmp-test\go-build793001580\b192\_pkg_.a
+packagefile net/url=c:\Trading apllication\.gotmp-test\go-build793001580\b194\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build793001580\b002\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build793001580\b071\_pkg_.a
+packagefile unicode/utf8=c:\Trading apllication\.gocache-test\4b\4bd7c946449dd93c76de96f272ff6e1ef1daa150dae9ac74bf943cf6b793fe4d-d

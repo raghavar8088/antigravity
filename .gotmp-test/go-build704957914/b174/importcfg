@@ -1,0 +1,5 @@
+# import config
+packagefile os=c:\Trading apllication\.gotmp-test\go-build704957914\b002\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build704957914\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a

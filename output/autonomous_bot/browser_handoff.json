@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-04-12T10:12:20.802345+00:00",
+  "root": "C:\\Trading apllication",
+  "status": "ready",
+  "instructions": [
+    "Open one prompt file at a time in Claude or ChatGPT.",
+    "Collect the answer or proposed patch.",
+    "Paste or route the result into your coding agent.",
+    "Run verification before marking the task complete."
+  ],
+  "prompt_files": [
+    "output\\autonomous_bot\\prompts\\browser_automation_part_1.md",
+    "output\\autonomous_bot\\prompts\\browser_automation_part_2.md",
+    "output\\autonomous_bot\\prompts\\browser_automation_part_3.md",
+    "output\\autonomous_bot\\prompts\\coverage_part_1.md",
+    "output\\autonomous_bot\\prompts\\dependencies_part_1.md",
+    "output\\autonomous_bot\\prompts\\master_upgrade_prompt_part_1.md",
+    "output\\autonomous_bot\\prompts\\master_upgrade_prompt_part_2.md",
+    "output\\autonomous_bot\\prompts\\master_upgrade_prompt_part_3.md",
+    "output\\autonomous_bot\\prompts\\master_upgrade_prompt_part_4.md",
+    "output\\autonomous_bot\\prompts\\operations_part_1.md",
+    "output\\autonomous_bot\\prompts\\orchestration_part_1.md",
+    "output\\autonomous_bot\\prompts\\upgrade_part_1.md",
+    "output\\autonomous_bot\\prompts\\verification_part_1.md"
+  ],
+  "task_files": [
+    "output\\autonomous_bot\\agent_tasks\\automation_orchestration.json",
+    "output\\autonomous_bot\\agent_tasks\\client_frontend.json",
+    "output\\autonomous_bot\\agent_tasks\\engine_backend.json"
+  ],
+  "primary_report": "output\\autonomous_bot\\report.md",
+  "upgrade_plan": "output\\autonomous_bot\\upgrade_plan.md"
+}

@@ -1,0 +1,7 @@
+# import config
+packagefile os=c:\Trading apllication\.gotmp-test\go-build704957914\b002\_pkg_.a
+packagefile reflect=c:\Trading apllication\.gotmp-test\go-build704957914\b060\_pkg_.a
+packagefile testing=c:\Trading apllication\.gotmp-test\go-build704957914\b064\_pkg_.a
+packagefile testing/internal/testdeps=c:\Trading apllication\.gotmp-test\go-build704957914\b077\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile antigravity-engine/internal/positions=c:\Trading apllication\.gotmp-test\go-build704957914\b127\_pkg_.a

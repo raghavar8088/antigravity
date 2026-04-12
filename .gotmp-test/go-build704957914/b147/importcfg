@@ -1,0 +1,9 @@
+# import config
+packagefile crypto/internal/constanttime=c:\Trading apllication\.gotmp-test\go-build704957914\b097\_pkg_.a
+packagefile crypto/internal/fips140/check=c:\Trading apllication\.gotmp-test\go-build704957914\b089\_pkg_.a
+packagefile crypto/internal/fips140/nistec/fiat=c:\Trading apllication\.gotmp-test\go-build704957914\b148\_pkg_.a
+packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b092\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a

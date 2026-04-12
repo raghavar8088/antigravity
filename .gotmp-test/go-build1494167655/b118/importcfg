@@ -1,0 +1,16 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build1494167655\b065\_pkg_.a
+packagefile context=c:\Trading apllication\.gotmp-test\go-build1494167655\b066\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build1494167655\b054\_pkg_.a
+packagefile internal/syscall/execenv=c:\Trading apllication\.gotmp-test\go-build1494167655\b058\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build1494167655\b051\_pkg_.a
+packagefile io/fs=c:\Trading apllication\.gotmp-test\go-build1494167655\b050\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build1494167655\b002\_pkg_.a
+packagefile path/filepath=c:\Trading apllication\.gotmp-test\go-build1494167655\b074\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build1494167655\b009\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build1494167655\b071\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build1494167655\b044\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build1494167655\b053\_pkg_.a

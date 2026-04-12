@@ -1,0 +1,6 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build704957914\b065\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a
+packagefile unicode/utf8=c:\Trading apllication\.gotmp-test\go-build704957914\b049\_pkg_.a

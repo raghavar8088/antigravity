@@ -1,0 +1,22 @@
+# import config
+importmap golang.org/x/crypto/chacha20poly1305=vendor/golang.org/x/crypto/chacha20poly1305
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build1494167655\b065\_pkg_.a
+packagefile crypto=c:\Trading apllication\.gotmp-test\go-build1494167655\b081\_pkg_.a
+packagefile crypto/cipher=c:\Trading apllication\.gotmp-test\go-build1494167655\b084\_pkg_.a
+packagefile crypto/ecdh=c:\Trading apllication\.gotmp-test\go-build1494167655\b144\_pkg_.a
+packagefile crypto/fips140=c:\Trading apllication\.gotmp-test\go-build1494167655\b105\_pkg_.a
+packagefile crypto/hkdf=c:\Trading apllication\.gotmp-test\go-build1494167655\b164\_pkg_.a
+packagefile crypto/internal/fips140/aes=c:\Trading apllication\.gotmp-test\go-build1494167655\b085\_pkg_.a
+packagefile crypto/internal/fips140/aes/gcm=c:\Trading apllication\.gotmp-test\go-build1494167655\b099\_pkg_.a
+packagefile crypto/internal/fips140/drbg=c:\Trading apllication\.gotmp-test\go-build1494167655\b100\_pkg_.a
+packagefile crypto/internal/rand=c:\Trading apllication\.gotmp-test\go-build1494167655\b136\_pkg_.a
+packagefile crypto/mlkem=c:\Trading apllication\.gotmp-test\go-build1494167655\b167\_pkg_.a
+packagefile crypto/sha256=c:\Trading apllication\.gotmp-test\go-build1494167655\b080\_pkg_.a
+packagefile crypto/sha3=c:\Trading apllication\.gotmp-test\go-build1494167655\b131\_pkg_.a
+packagefile crypto/sha512=c:\Trading apllication\.gotmp-test\go-build1494167655\b156\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
+packagefile vendor/golang.org/x/crypto/chacha20poly1305=c:\Trading apllication\.gotmp-test\go-build1494167655\b169\_pkg_.a
+packagefile hash=c:\Trading apllication\.gotmp-test\go-build1494167655\b082\_pkg_.a
+packagefile internal/byteorder=c:\Trading apllication\.gocache-test\9f\9fc588e51e19272d2f3554a8abd3d50ba74c9e47c4335b635194b6b79f92f5ec-d
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a

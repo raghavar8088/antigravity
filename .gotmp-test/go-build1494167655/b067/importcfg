@@ -1,0 +1,12 @@
+# import config
+packagefile encoding=c:\Trading apllication\.gocache-test\3f\3f173ad0c68e57558ba9fc348d7e1f80aab3554835795ec0829089e90881ee0b-d
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build1494167655\b051\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build1494167655\b002\_pkg_.a
+packagefile reflect=c:\Trading apllication\.gotmp-test\go-build1494167655\b060\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build1494167655\b009\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build1494167655\b071\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build1494167655\b053\_pkg_.a

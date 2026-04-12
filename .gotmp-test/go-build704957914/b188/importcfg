@@ -1,0 +1,24 @@
+# import config
+importmap golang.org/x/net/dns/dnsmessage=vendor/golang.org/x/net/dns/dnsmessage
+packagefile cmp=c:\Trading apllication\.gotmp-test\go-build704957914\b046\_pkg_.a
+packagefile context=c:\Trading apllication\.gotmp-test\go-build704957914\b066\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile vendor/golang.org/x/net/dns/dnsmessage=c:\Trading apllication\.gotmp-test\go-build704957914\b189\_pkg_.a
+packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build704957914\b010\_pkg_.a
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build704957914\b054\_pkg_.a
+packagefile internal/nettrace=c:\Trading apllication\.gotmp-test\go-build704957914\b190\_pkg_.a
+packagefile internal/poll=c:\Trading apllication\.gotmp-test\go-build704957914\b057\_pkg_.a
+packagefile internal/singleflight=c:\Trading apllication\.gotmp-test\go-build704957914\b191\_pkg_.a
+packagefile internal/strconv=c:\Trading apllication\.gotmp-test\go-build704957914\b031\_pkg_.a
+packagefile internal/stringslite=c:\Trading apllication\.gotmp-test\go-build704957914\b033\_pkg_.a
+packagefile internal/syscall/windows=c:\Trading apllication\.gotmp-test\go-build704957914\b036\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
+packagefile io/fs=c:\Trading apllication\.gocache-test\39\39b61e750581108ddb962e078015183378e053dfeb9e6317756e0bf9cd2117e0-d
+packagefile net/netip=c:\Trading apllication\.gotmp-test\go-build704957914\b192\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build704957914\b002\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile slices=c:\Trading apllication\.gocache-test\00\00aed35beb40fd52a9a2b6128c394fb197b07a8b22ffd0c8b82433ff6c96a96f-d
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gotmp-test\go-build704957914\b042\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build704957914\b044\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build704957914\b053\_pkg_.a

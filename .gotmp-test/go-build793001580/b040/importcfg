@@ -1,0 +1,6 @@
+# import config
+packagefile internal/race=c:\Trading apllication\.gotmp-test\go-build793001580\b027\_pkg_.a
+packagefile internal/sync=c:\Trading apllication\.gotmp-test\go-build793001580\b041\_pkg_.a
+packagefile internal/synctest=c:\Trading apllication\.gotmp-test\go-build793001580\b043\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build793001580\b009\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d

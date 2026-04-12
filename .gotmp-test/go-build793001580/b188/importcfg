@@ -1,0 +1,24 @@
+# import config
+importmap golang.org/x/net/dns/dnsmessage=vendor/golang.org/x/net/dns/dnsmessage
+packagefile cmp=c:\Trading apllication\.gocache-test\d8\d8421d35927268847bd22e9a81514e1b6371fe287b4ed04a0f5c139ff308a96c-d
+packagefile context=c:\Trading apllication\.gotmp-test\go-build793001580\b066\_pkg_.a
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile vendor/golang.org/x/net/dns/dnsmessage=c:\Trading apllication\.gotmp-test\go-build793001580\b189\_pkg_.a
+packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build793001580\b010\_pkg_.a
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build793001580\b054\_pkg_.a
+packagefile internal/nettrace=c:\Trading apllication\.gotmp-test\go-build793001580\b190\_pkg_.a
+packagefile internal/poll=c:\Trading apllication\.gotmp-test\go-build793001580\b057\_pkg_.a
+packagefile internal/singleflight=c:\Trading apllication\.gotmp-test\go-build793001580\b191\_pkg_.a
+packagefile internal/strconv=c:\Trading apllication\.gotmp-test\go-build793001580\b031\_pkg_.a
+packagefile internal/stringslite=c:\Trading apllication\.gocache-test\fb\fb794b5c3c2a44953d15b67176b50a2e4a3fe669bbbcc9db74741db4b6952f68-d
+packagefile internal/syscall/windows=c:\Trading apllication\.gotmp-test\go-build793001580\b036\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build793001580\b051\_pkg_.a
+packagefile io/fs=c:\Trading apllication\.gotmp-test\go-build793001580\b050\_pkg_.a
+packagefile net/netip=c:\Trading apllication\.gotmp-test\go-build793001580\b192\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build793001580\b002\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build793001580\b009\_pkg_.a
+packagefile slices=c:\Trading apllication\.gocache-test\00\00aed35beb40fd52a9a2b6128c394fb197b07a8b22ffd0c8b82433ff6c96a96f-d
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build793001580\b044\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build793001580\b053\_pkg_.a

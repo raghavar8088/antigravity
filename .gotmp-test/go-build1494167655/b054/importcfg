@@ -1,0 +1,5 @@
+# import config
+packagefile internal/bisect=c:\Trading apllication\.gotmp-test\go-build1494167655\b055\_pkg_.a
+packagefile internal/godebugs=c:\Trading apllication\.gocache-test\a4\a42fb6f0633c89c02095c2969a58d9675404b7f07d27ca2edc9c01cb375dabe3-d
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d

@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-04-12T10:25:00+00:00",
+  "root": "C:\\Trading apllication",
+  "status": "ready",
+  "instructions": [
+    "Run a targeted crypto equity diagnosis prompt through the browser handoff."
+  ],
+  "prompt_files": [
+    "output\\autonomous_bot\\prompts\\crypto_equity_diagnosis.md"
+  ],
+  "task_files": [],
+  "primary_report": "output\\autonomous_bot\\report.md",
+  "upgrade_plan": "output\\autonomous_bot\\upgrade_plan.md"
+}

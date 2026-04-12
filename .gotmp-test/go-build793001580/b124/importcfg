@@ -1,0 +1,10 @@
+# import config
+packagefile bufio=c:\Trading apllication\.gotmp-test\go-build793001580\b078\_pkg_.a
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build793001580\b069\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build793001580\b051\_pkg_.a
+packagefile math=c:\Trading apllication\.gotmp-test\go-build793001580\b061\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gocache-test\65\65d4da48e3a14b17e1767b118237f9c405c6b5b6fe9a31fe16173d262b036166-d
+packagefile sort=c:\Trading apllication\.gotmp-test\go-build793001580\b115\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build793001580\b062\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a

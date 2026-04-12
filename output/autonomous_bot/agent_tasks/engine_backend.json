@@ -1,0 +1,11 @@
+{
+  "task_name": "engine_backend",
+  "generated_at": "2026-04-12T10:12:20.794246+00:00",
+  "goal": "Stabilize backend and Go engine issues.",
+  "issues": [],
+  "expected_outputs": [
+    "Code changes or a precise no-change explanation",
+    "Verification notes",
+    "Any remaining blockers"
+  ]
+}

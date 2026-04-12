@@ -1,0 +1,11 @@
+# import config
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build793001580\b010\_pkg_.a
+packagefile internal/filepathlite=c:\Trading apllication\.gotmp-test\go-build793001580\b035\_pkg_.a
+packagefile io/fs=c:\Trading apllication\.gotmp-test\go-build793001580\b050\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build793001580\b002\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build793001580\b009\_pkg_.a
+packagefile slices=c:\Trading apllication\.gocache-test\00\00aed35beb40fd52a9a2b6128c394fb197b07a8b22ffd0c8b82433ff6c96a96f-d
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build793001580\b071\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build793001580\b044\_pkg_.a
+packagefile unicode/utf8=c:\Trading apllication\.gocache-test\4b\4bd7c946449dd93c76de96f272ff6e1ef1daa150dae9ac74bf943cf6b793fe4d-d

@@ -1,0 +1,9 @@
+# import config
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile internal/oserror=c:\Trading apllication\.gotmp-test\go-build793001580\b037\_pkg_.a
+packagefile internal/runtime/syscall/windows=c:\Trading apllication\.gotmp-test\go-build793001580\b030\_pkg_.a
+packagefile internal/syscall/windows/sysdll=c:\Trading apllication\.gocache-test\65\658264e21fc801cd59dd68f18b740b427ca85ed189f3a280f287eacfe12627d8-d
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build793001580\b009\_pkg_.a
+packagefile structs=c:\Trading apllication\.gocache-test\26\268d76909921a44bd9d28b42f5c718721bfc421161a8695df564e1b434d19cc9-d
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build793001580\b044\_pkg_.a

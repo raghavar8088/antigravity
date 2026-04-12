@@ -1,0 +1,9 @@
+# import config
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build704957914\b069\_pkg_.a
+packagefile internal/poll=c:\Trading apllication\.gotmp-test\go-build704957914\b057\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build704957914\b002\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a
+packagefile slices=c:\Trading apllication\.gocache-test\00\00aed35beb40fd52a9a2b6128c394fb197b07a8b22ffd0c8b82433ff6c96a96f-d
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build704957914\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build704957914\b053\_pkg_.a

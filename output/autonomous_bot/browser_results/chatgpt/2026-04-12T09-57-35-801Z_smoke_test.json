@@ -1,0 +1,7 @@
+{
+  "provider": "chatgpt",
+  "prompt_file": "output\\autonomous_bot\\prompts\\smoke_test.md",
+  "prompt_copy_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T09-57-35-801Z_smoke_test.prompt.md",
+  "response_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T09-57-35-801Z_smoke_test.response.md",
+  "saved_at": "2026-04-12T09:57:35.802Z"
+}

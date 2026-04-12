@@ -1,0 +1,8 @@
+# import config
+packagefile crypto/cipher=c:\Trading apllication\.gotmp-test\go-build704957914\b084\_pkg_.a
+packagefile crypto/internal/fips140/alias=c:\Trading apllication\.gotmp-test\go-build704957914\b088\_pkg_.a
+packagefile crypto/internal/fips140only=c:\Trading apllication\.gotmp-test\go-build704957914\b104\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile internal/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b012\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build704957914\b062\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a

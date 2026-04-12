@@ -1,0 +1,12 @@
+# import config
+packagefile crypto=c:\Trading apllication\.gotmp-test\go-build793001580\b081\_pkg_.a
+packagefile crypto/internal/fips140/ed25519=c:\Trading apllication\.gotmp-test\go-build793001580\b163\_pkg_.a
+packagefile crypto/internal/fips140cache=c:\Trading apllication\.gocache-test\72\729df7eb125a7619f1cc6eb5573b6c9405624e8945dac5c556f33a4559f74485-d
+packagefile crypto/internal/fips140only=c:\Trading apllication\.gotmp-test\go-build793001580\b104\_pkg_.a
+packagefile crypto/internal/rand=c:\Trading apllication\.gotmp-test\go-build793001580\b137\_pkg_.a
+packagefile crypto/rand=c:\Trading apllication\.gotmp-test\go-build793001580\b136\_pkg_.a
+packagefile crypto/subtle=c:\Trading apllication\.gotmp-test\go-build793001580\b106\_pkg_.a
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build793001580\b054\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build793001580\b051\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build793001580\b062\_pkg_.a

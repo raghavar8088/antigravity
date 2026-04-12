@@ -1,0 +1,8 @@
+./angelone.go
+./candle.go
+./client.go
+./coinbase.go
+./db_writer.go
+./delta.go
+./nse.go
+./warmup.go

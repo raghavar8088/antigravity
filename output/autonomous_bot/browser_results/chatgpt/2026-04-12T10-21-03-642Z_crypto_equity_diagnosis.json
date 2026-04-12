@@ -1,0 +1,7 @@
+{
+  "provider": "chatgpt",
+  "prompt_file": "output\\autonomous_bot\\prompts\\crypto_equity_diagnosis.md",
+  "prompt_copy_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T10-21-03-642Z_crypto_equity_diagnosis.prompt.md",
+  "response_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T10-21-03-642Z_crypto_equity_diagnosis.response.md",
+  "saved_at": "2026-04-12T10:21:03.651Z"
+}

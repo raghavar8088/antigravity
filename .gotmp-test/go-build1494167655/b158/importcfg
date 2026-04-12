@@ -1,0 +1,14 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build1494167655\b065\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
+packagefile internal/saferio=c:\Trading apllication\.gotmp-test\go-build1494167655\b159\_pkg_.a
+packagefile math=c:\Trading apllication\.gotmp-test\go-build1494167655\b061\_pkg_.a
+packagefile math/big=c:\Trading apllication\.gotmp-test\go-build1494167655\b139\_pkg_.a
+packagefile reflect=c:\Trading apllication\.gotmp-test\go-build1494167655\b060\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build1494167655\b071\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build1494167655\b053\_pkg_.a
+packagefile unicode/utf16=c:\Trading apllication\.gocache-test\b2\b2ffdf089eb306cde36a4d3cbe09092cf8622e0830effc9474be7b9e2a36d4ed-d
+packagefile unicode/utf8=c:\Trading apllication\.gocache-test\4b\4bd7c946449dd93c76de96f272ff6e1ef1daa150dae9ac74bf943cf6b793fe4d-d

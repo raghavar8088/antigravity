@@ -1,0 +1,9 @@
+# import config
+packagefile internal/abi=c:\Trading apllication\.gotmp-test\go-build793001580\b005\_pkg_.a
+packagefile internal/goarch=c:\Trading apllication\.gocache-test\1e\1e7accda127d84f85b2948de0158387f704f145123eb685d10cc0ab8d6e9d3fd-d
+packagefile internal/stringslite=c:\Trading apllication\.gocache-test\fb\fb794b5c3c2a44953d15b67176b50a2e4a3fe669bbbcc9db74741db4b6952f68-d
+packagefile internal/sync=c:\Trading apllication\.gotmp-test\go-build793001580\b041\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build793001580\b009\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
+packagefile weak=c:\Trading apllication\.gocache-test\5c\5c31202ca8695d7c43972d2755a29942afdb95c4fbc283e8fee5f2be6da90c0a-d

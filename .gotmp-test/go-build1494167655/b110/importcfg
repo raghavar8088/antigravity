@@ -1,0 +1,5 @@
+# import config
+packagefile internal/byteorder=c:\Trading apllication\.gocache-test\9f\9fc588e51e19272d2f3554a8abd3d50ba74c9e47c4335b635194b6b79f92f5ec-d
+packagefile io=c:\Trading apllication\.gotmp-test\go-build1494167655\b051\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a

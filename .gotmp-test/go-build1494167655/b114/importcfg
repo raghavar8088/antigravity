@@ -1,0 +1,10 @@
+# import config
+packagefile cmp=c:\Trading apllication\.gocache-test\d8\d8421d35927268847bd22e9a81514e1b6371fe287b4ed04a0f5c139ff308a96c-d
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
+packagefile iter=c:\Trading apllication\.gotmp-test\go-build1494167655\b047\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
+packagefile unicode=c:\Trading apllication\.gotmp-test\go-build1494167655\b063\_pkg_.a
+packagefile unicode/utf8=c:\Trading apllication\.gocache-test\4b\4bd7c946449dd93c76de96f272ff6e1ef1daa150dae9ac74bf943cf6b793fe4d-d

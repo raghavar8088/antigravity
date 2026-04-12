@@ -1,0 +1,7 @@
+# import config
+packagefile crypto/internal/fips140/check=c:\Trading apllication\.gotmp-test\go-build704957914\b089\_pkg_.a
+packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b092\_pkg_.a
+packagefile crypto/internal/fips140deps/cpu=c:\Trading apllication\.gotmp-test\go-build704957914\b093\_pkg_.a
+packagefile crypto/internal/impl=c:\Trading apllication\.gotmp-test\go-build704957914\b094\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a

@@ -1,0 +1,13 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build704957914\b065\_pkg_.a
+packagefile encoding/base64=c:\Trading apllication\.gotmp-test\go-build704957914\b110\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build704957914\b069\_pkg_.a
+packagefile internal/syscall/windows/registry=c:\Trading apllication\.gotmp-test\go-build704957914\b056\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
+packagefile maps=c:\Trading apllication\.gocache-test\90\90ae1676cea732aeb5fd7ba0afe70d7d51beabc2ac4a78235f1dda3ac81597c8-d
+packagefile slices=c:\Trading apllication\.gocache-test\00\00aed35beb40fd52a9a2b6128c394fb197b07a8b22ffd0c8b82433ff6c96a96f-d
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a
+packagefile unicode=c:\Trading apllication\.gotmp-test\go-build704957914\b063\_pkg_.a
+packagefile unicode/utf8=c:\Trading apllication\.gotmp-test\go-build704957914\b049\_pkg_.a

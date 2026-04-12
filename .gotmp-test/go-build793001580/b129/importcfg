@@ -1,0 +1,17 @@
+# import config
+packagefile context=c:\Trading apllication\.gotmp-test\go-build793001580\b066\_pkg_.a
+packagefile crypto/hmac=c:\Trading apllication\.gotmp-test\go-build793001580\b130\_pkg_.a
+packagefile crypto/sha1=c:\Trading apllication\.gotmp-test\go-build793001580\b133\_pkg_.a
+packagefile encoding/base32=c:\Trading apllication\.gotmp-test\go-build793001580\b134\_pkg_.a
+packagefile encoding/binary=c:\Trading apllication\.gotmp-test\go-build793001580\b108\_pkg_.a
+packagefile encoding/json=c:\Trading apllication\.gotmp-test\go-build793001580\b109\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build793001580\b069\_pkg_.a
+packagefile github.com/gorilla/websocket=c:\Trading apllication\.gotmp-test\go-build793001580\b135\_pkg_.a
+packagefile log=c:\Trading apllication\.gotmp-test\go-build793001580\b202\_pkg_.a
+packagefile net/http=c:\Trading apllication\.gotmp-test\go-build793001580\b196\_pkg_.a
+packagefile net/http/cookiejar=c:\Trading apllication\.gotmp-test\go-build793001580\b215\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build793001580\b002\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build793001580\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build793001580\b071\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
+packagefile time=c:\Trading apllication\.gotmp-test\go-build793001580\b053\_pkg_.a

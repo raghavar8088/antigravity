@@ -1,0 +1,6 @@
+# import config
+packagefile context=c:\Trading apllication\.gotmp-test\go-build1494167655\b066\_pkg_.a
+packagefile os=c:\Trading apllication\.gotmp-test\go-build1494167655\b002\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
+packagefile syscall=c:\Trading apllication\.gotmp-test\go-build1494167655\b044\_pkg_.a

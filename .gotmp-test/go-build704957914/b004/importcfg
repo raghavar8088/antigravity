@@ -1,0 +1,5 @@
+# import config
+packagefile internal/abi=c:\Trading apllication\.gotmp-test\go-build704957914\b005\_pkg_.a
+packagefile internal/goarch=c:\Trading apllication\.gotmp-test\go-build704957914\b006\_pkg_.a
+packagefile internal/unsafeheader=c:\Trading apllication\.gotmp-test\go-build704957914\b008\_pkg_.a
+packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a

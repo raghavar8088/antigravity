@@ -1,0 +1,5 @@
+# import config
+packagefile crypto/internal/fips140/alias=c:\Trading apllication\.gocache-test\a8\a8faa43f0e20941f6e07bb735f1082bef5e5c569902d26864ac0cc22a6389a89-d
+packagefile crypto/internal/fips140only=c:\Trading apllication\.gotmp-test\go-build793001580\b104\_pkg_.a
+packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build793001580\b062\_pkg_.a

@@ -1,0 +1,14 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build704957914\b065\_pkg_.a
+packagefile crypto/internal/entropy/v1.0.0=c:\Trading apllication\.gotmp-test\go-build704957914\b101\_pkg_.a
+packagefile crypto/internal/fips140=c:\Trading apllication\.gotmp-test\go-build704957914\b086\_pkg_.a
+packagefile crypto/internal/fips140/aes=c:\Trading apllication\.gotmp-test\go-build704957914\b085\_pkg_.a
+packagefile crypto/internal/fips140/check=c:\Trading apllication\.gotmp-test\go-build704957914\b089\_pkg_.a
+packagefile crypto/internal/fips140/subtle=c:\Trading apllication\.gotmp-test\go-build704957914\b096\_pkg_.a
+packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b092\_pkg_.a
+packagefile crypto/internal/sysrand=c:\Trading apllication\.gotmp-test\go-build704957914\b103\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
+packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build704957914\b040\_pkg_.a
+packagefile sync/atomic=c:\Trading apllication\.gotmp-test\go-build704957914\b042\_pkg_.a

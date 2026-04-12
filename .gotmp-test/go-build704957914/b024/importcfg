@@ -1,0 +1,8 @@
+# import config
+packagefile internal/abi=c:\Trading apllication\.gotmp-test\go-build704957914\b005\_pkg_.a
+packagefile internal/asan=c:\Trading apllication\.gotmp-test\go-build704957914\b025\_pkg_.a
+packagefile internal/goarch=c:\Trading apllication\.gotmp-test\go-build704957914\b006\_pkg_.a
+packagefile internal/msan=c:\Trading apllication\.gotmp-test\go-build704957914\b026\_pkg_.a
+packagefile internal/race=c:\Trading apllication\.gotmp-test\go-build704957914\b027\_pkg_.a
+packagefile internal/runtime/math=c:\Trading apllication\.gotmp-test\go-build704957914\b028\_pkg_.a
+packagefile internal/runtime/sys=c:\Trading apllication\.gotmp-test\go-build704957914\b023\_pkg_.a

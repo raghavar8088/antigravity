@@ -1,0 +1,14 @@
+# import config
+packagefile bytes=c:\Trading apllication\.gotmp-test\go-build1494167655\b065\_pkg_.a
+packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
+packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
+packagefile internal/byteorder=c:\Trading apllication\.gocache-test\9f\9fc588e51e19272d2f3554a8abd3d50ba74c9e47c4335b635194b6b79f92f5ec-d
+packagefile internal/cpu=c:\Trading apllication\.gocache-test\7b\7b2040af2781571eab479d412f8cd3a468d6f753f082d5a04d24fd66c8508f1f-d
+packagefile io=c:\Trading apllication\.gotmp-test\go-build1494167655\b051\_pkg_.a
+packagefile math=c:\Trading apllication\.gotmp-test\go-build1494167655\b061\_pkg_.a
+packagefile math/bits=c:\Trading apllication\.gocache-test\65\65d4da48e3a14b17e1767b118237f9c405c6b5b6fe9a31fe16173d262b036166-d
+packagefile math/rand=c:\Trading apllication\.gotmp-test\go-build1494167655\b073\_pkg_.a
+packagefile slices=c:\Trading apllication\.gotmp-test\go-build1494167655\b045\_pkg_.a
+packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
+packagefile strings=c:\Trading apllication\.gotmp-test\go-build1494167655\b071\_pkg_.a
+packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
