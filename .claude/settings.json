@@ -15,7 +15,14 @@
       "Bash(tasklist)",
       "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
       "Bash(curl -s \"https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22%2C%22ETHUSDT%22%2C%22SOLUSDT%22%5D\")",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(x['symbol'], x['lastPrice'], x['volume']\\) for x in d]\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(x['symbol'], x['lastPrice'], x['volume']\\) for x in d]\")",
+      "Bash(xargs ls:*)",
+      "Bash(cat \"c:/Trading apllication/engine/cmd/\"*/main.go)",
+      "Bash(printenv)",
+      "Bash(python3 -c ':*)"
+    ],
+    "additionalDirectories": [
+      "c:\\Trading apllication\\engine\\internal"
     ]
   }
 }

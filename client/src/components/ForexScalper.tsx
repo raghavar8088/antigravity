@@ -9,8 +9,6 @@ import type {
   ForexTrade,
 } from "@/hooks/useForexEngine";
 
-const INITIAL_BALANCE = 1_000_000;
-
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
   const { signed = false, decimals = 2 } = opts;
   const abs = Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });

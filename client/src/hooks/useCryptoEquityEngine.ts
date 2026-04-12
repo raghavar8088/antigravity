@@ -885,11 +885,20 @@ export default function useCryptoEquityEngine() {
       if (strategy.position) {
         const latest = engine.quotes[strategy.position.asset.symbol];
         if (latest?.price > 0) {
-          strategy.position.currentPrice = latest.price;
-          strategy.position.unrealizedPnl = calcPnl(strategy.position.side, strategy.position.entryPrice, latest.price, strategy.position.quantity);
-          strategy.position.returnPct = strategy.position.notional > 0 ? (strategy.position.unrealizedPnl / strategy.position.notional) * 100 : 0;
-          strategy.position.peakReturnPct = Math.max(strategy.position.peakReturnPct, strategy.position.returnPct);
-          const exit = resolveExit(strategy.position, strategy.def, latest.price, now);
+          const updatedPosition: InternalPosition = {
+            ...strategy.position,
+            currentPrice: latest.price,
+            unrealizedPnl: calcPnl(strategy.position.side, strategy.position.entryPrice, latest.price, strategy.position.quantity),
+            returnPct: 0,
+            peakReturnPct: strategy.position.peakReturnPct,
+          };
+          updatedPosition.returnPct = updatedPosition.notional > 0 ? (updatedPosition.unrealizedPnl / updatedPosition.notional) * 100 : 0;
+          updatedPosition.peakReturnPct = Math.max(updatedPosition.peakReturnPct, updatedPosition.returnPct);
+          // This hook intentionally keeps a mutable engine model inside a ref.
+          // eslint-disable-next-line react-hooks/immutability
+          strategy.position = updatedPosition;
+          engine.positions.set(updatedPosition.id, updatedPosition);
+          const exit = resolveExit(updatedPosition, strategy.def, latest.price, now);
           if (exit) closePosition(engine, strategy, exit.exitPrice, exit.reason, now);
         }
         continue;

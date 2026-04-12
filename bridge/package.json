@@ -4,7 +4,9 @@
   "description": "Automated bridge between Antigravity Trading Engine and ChatGPT Web",
   "main": "bridge.js",
   "scripts": {
-    "start": "node bridge.js"
+    "start": "node bridge.js",
+    "handoff:chatgpt": "node autonomous-handoff.js --provider chatgpt",
+    "handoff:claude": "node autonomous-handoff.js --provider claude"
   },
   "dependencies": {
     "axios": "^1.6.0",
