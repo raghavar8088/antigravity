@@ -8,16 +8,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { createHmac } from "node:crypto";
 
 const BASE = "https://api.india.delta.exchange";
 const TESTNET = "https://testnet-api.india.delta.exchange";
 function getBase() { return process.env.DELTA_TESTNET === "true" ? TESTNET : BASE; }
 
-async function sign(method: string, path: string, body: string, ts: string, secret: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(method + ts + path + body));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+function sign(method: string, path: string, body: string, ts: string, secret: string): string {
+  return createHmac("sha256", secret).update(method + ts + path + body).digest("hex");
 }
 
 async function deltaPost(path: string, body: unknown): Promise<{ ok: boolean; data: unknown; status: number }> {
@@ -27,7 +25,7 @@ async function deltaPost(path: string, body: unknown): Promise<{ ok: boolean; da
 
   const bodyStr = JSON.stringify(body);
   const ts = String(Math.floor(Date.now() / 1000));
-  const sig = await sign("POST", path, bodyStr, ts, apiSecret);
+  const sig = sign("POST", path, bodyStr, ts, apiSecret);
 
   const res = await fetch(getBase() + path, {
     method: "POST",
@@ -45,7 +43,7 @@ async function deltaGet(path: string): Promise<{ ok: boolean; data: unknown }> {
   const apiSecret = process.env.DELTA_API_SECRET ?? "";
   if (!apiKey || !apiSecret) return { ok: false, data: {} };
   const ts = String(Math.floor(Date.now() / 1000));
-  const sig = await sign("GET", path, "", ts, apiSecret);
+  const sig = sign("GET", path, "", ts, apiSecret);
   const res = await fetch(getBase() + path, {
     headers: { "api-key": apiKey, "timestamp": ts, "signature": sig, "Accept": "application/json" },
     cache: "no-store",
@@ -78,8 +76,6 @@ async function findOptionProduct(strike: number, optionType: string): Promise<{ 
   }
   return bestId ? { productId: bestId, symbol: bestSymbol } : null;
 }
-
-export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
   try {

@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { createHmac } from "node:crypto";
 
 const BASE = "https://api.india.delta.exchange";
 const TESTNET = "https://testnet-api.india.delta.exchange";
@@ -13,14 +14,8 @@ function getBase() {
   return process.env.DELTA_TESTNET === "true" ? TESTNET : BASE;
 }
 
-async function sign(method: string, path: string, body: string, ts: string, secret: string): Promise<string> {
-  const payload = method + ts + path + body;
-  const enc = new TextEncoder();
-  const keyData = enc.encode(secret);
-  const msgData = enc.encode(payload);
-  const cryptoKey = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, msgData);
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+function sign(method: string, path: string, body: string, ts: string, secret: string): string {
+  return createHmac("sha256", secret).update(method + ts + path + body).digest("hex");
 }
 
 async function deltaFetch(path: string, method = "GET", body = ""): Promise<{ ok: boolean; data: unknown; status: number }> {
@@ -29,7 +24,7 @@ async function deltaFetch(path: string, method = "GET", body = ""): Promise<{ ok
   if (!key || !secret) return { ok: false, data: { error: "keys not set" }, status: 500 };
 
   const ts = String(Math.floor(Date.now() / 1000));
-  const sig = await sign(method, path, body, ts, secret);
+  const sig = sign(method, path, body, ts, secret);
 
   const res = await fetch(getBase() + path, {
     method,
@@ -54,8 +49,6 @@ function parseFloat2(v: unknown): number {
   if (typeof v === "string") return parseFloat(v) || 0;
   return 0;
 }
-
-export const runtime = "edge";
 
 export async function GET() {
   try {
