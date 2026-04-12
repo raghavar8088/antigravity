@@ -1,8 +1,7 @@
 /**
  * Delta Exchange HMAC-SHA256 signing utility.
- * Uses Node.js built-in "crypto" (not "node:crypto") for Next.js compatibility.
  */
-import { createHmac } from "crypto";
+import * as crypto from "crypto";
 
 export function deltaSign(
   method: string,
@@ -11,7 +10,7 @@ export function deltaSign(
   ts: string,
   secret: string,
 ): string {
-  return createHmac("sha256", secret).update(method + ts + path + body).digest("hex");
+  return crypto.createHmac("sha256", secret).update(method + ts + path + body).digest("hex");
 }
 
 export function nowTs(): string {
