@@ -97,14 +97,49 @@ export default function useDeltaLive(refreshKey = 0) {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, tradesRes] = await Promise.all([
-        fetch(`${API_URL}/api/delta-live/stats`),
-        fetch(`${API_URL}/api/delta-live/trades`),
-      ]);
-      if (statsRes.ok) setStats(await statsRes.json() as DeltaLiveStats);
-      if (tradesRes.ok) setTrades(await tradesRes.json() as DeltaLiveTrade[]);
+      // Fetch account data from Next.js API route (uses Vercel env vars — works without Go engine)
+      const accountRes = await fetch("/api/delta/account", { cache: "no-store" });
+      if (accountRes.ok) {
+        const accountData = await accountRes.json() as {
+          configured: boolean;
+          testnet: boolean;
+          walletUsdt: number;
+          account?: DeltaLiveStats["account"];
+          error?: string;
+        };
+        setStats((prev) => ({
+          ...prev,
+          configured: accountData.configured,
+          testnet: accountData.testnet,
+          walletUsdt: accountData.walletUsdt ?? 0,
+          account: accountData.account,
+        }));
+      }
+
+      // Fetch mirrored trade stats + history from Go engine (optional — paper trading layer)
+      try {
+        const [engineStats, tradesRes] = await Promise.all([
+          fetch(`${API_URL}/api/delta-live/stats`),
+          fetch(`${API_URL}/api/delta-live/trades`),
+        ]);
+        if (engineStats.ok) {
+          const engineData = await engineStats.json() as Partial<DeltaLiveStats>;
+          setStats((prev) => ({
+            ...prev,
+            enabled: engineData.enabled ?? prev.enabled,
+            totalTrades: engineData.totalTrades ?? prev.totalTrades,
+            openTrades: engineData.openTrades ?? prev.openTrades,
+            wins: engineData.wins ?? prev.wins,
+            losses: engineData.losses ?? prev.losses,
+            totalPnl: engineData.totalPnl ?? prev.totalPnl,
+          }));
+        }
+        if (tradesRes.ok) setTrades(await tradesRes.json() as DeltaLiveTrade[]);
+      } catch {
+        // Go engine offline — account data still shows from Vercel
+      }
     } catch {
-      // engine offline
+      // silent
     }
   }, []);
 
