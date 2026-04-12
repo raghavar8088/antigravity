@@ -62,6 +62,14 @@ export async function GET() {
     });
   }
 
+  // Get our outbound IP so we can show it if whitelisting fails
+  let outboundIP = "unknown";
+  try {
+    const ipRes = await fetch("https://api.ipify.org?format=json", { cache: "no-store" });
+    const ipData = await ipRes.json() as { ip?: string };
+    outboundIP = ipData.ip ?? "unknown";
+  } catch { /* ignore */ }
+
   // Fetch wallet, positions, open orders in parallel
   const [walletRes, posRes, ordersRes] = await Promise.allSettled([
     deltaFetch("/v2/wallet/balances"),
@@ -134,7 +142,12 @@ export async function GET() {
   let walletError: string | undefined;
   if (walletRes.status === "fulfilled" && !walletRes.value.ok) {
     const d = walletRes.value.data as { error?: { code?: string } };
-    walletError = d?.error?.code ?? `HTTP ${walletRes.value.status}`;
+    const code = d?.error?.code ?? `HTTP ${walletRes.value.status}`;
+    if (code === "ip_not_whitelisted_for_api_key") {
+      walletError = `IP not whitelisted. Add this Vercel server IP to Delta Exchange API key whitelist: ${outboundIP}`;
+    } else {
+      walletError = code;
+    }
   } else if (walletRes.status === "rejected") {
     walletError = String(walletRes.reason);
   }
