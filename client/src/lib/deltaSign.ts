@@ -1,27 +1,17 @@
 /**
- * Pure-JS HMAC-SHA256 signing for Delta Exchange API requests.
- * Uses the Web Crypto API which is available in all Next.js runtimes.
+ * Delta Exchange HMAC-SHA256 signing utility.
+ * Uses Node.js built-in "crypto" (not "node:crypto") for Next.js compatibility.
  */
+import { createHmac } from "crypto";
 
-export async function deltaSign(
+export function deltaSign(
   method: string,
   path: string,
   body: string,
   ts: string,
   secret: string,
-): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(method + ts + path + body));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+): string {
+  return createHmac("sha256", secret).update(method + ts + path + body).digest("hex");
 }
 
 export function nowTs(): string {
@@ -47,7 +37,7 @@ export async function deltaFetch(
   }
 
   const ts = nowTs();
-  const sig = await deltaSign(method, path, body, ts, secret);
+  const sig = deltaSign(method, path, body, ts, secret);
 
   const res = await fetch(deltaBase() + path, {
     method,
@@ -59,6 +49,36 @@ export async function deltaFetch(
       "Accept": "application/json",
     },
     body: body || undefined,
+    cache: "no-store",
+  });
+
+  let data: unknown;
+  try { data = await res.json(); } catch { data = {}; }
+  return { ok: res.ok, data, status: res.status };
+}
+
+export async function deltaPost(
+  path: string,
+  body: unknown,
+): Promise<{ ok: boolean; data: unknown; status: number }> {
+  const key = process.env.DELTA_API_KEY ?? "";
+  const secret = process.env.DELTA_API_SECRET ?? "";
+  if (!key || !secret) return { ok: false, data: { error: "keys not set" }, status: 500 };
+
+  const bodyStr = JSON.stringify(body);
+  const ts = nowTs();
+  const sig = deltaSign("POST", path, bodyStr, ts, secret);
+
+  const res = await fetch(deltaBase() + path, {
+    method: "POST",
+    headers: {
+      "api-key": key,
+      "timestamp": ts,
+      "signature": sig,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: bodyStr,
     cache: "no-store",
   });
 
