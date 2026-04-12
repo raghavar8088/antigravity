@@ -227,32 +227,190 @@ func (c *Client) CancelOrder(ctx context.Context, orderID string, productID int)
 	return nil
 }
 
-// GetWallet returns USDT wallet balance.
-func (c *Client) GetWallet(ctx context.Context) (float64, error) {
+// WalletEntry holds one asset's balance from the wallet.
+type WalletEntry struct {
+	Asset            string  `json:"asset"`
+	Balance          float64 `json:"balance"`
+	AvailableBalance float64 `json:"availableBalance"`
+	BlockedBalance   float64 `json:"blockedBalance"`
+	UnrealisedPnl    float64 `json:"unrealisedPnl"`
+}
+
+// GetWalletAll returns all non-zero wallet balances.
+func (c *Client) GetWalletAll(ctx context.Context) ([]WalletEntry, error) {
 	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/wallet/balances", nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if status != http.StatusOK {
-		return 0, fmt.Errorf("wallet request failed (HTTP %d): %s", status, truncate(string(data), 200))
+		return nil, fmt.Errorf("wallet request failed (HTTP %d): %s", status, truncate(string(data), 200))
 	}
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			Asset           string `json:"asset_symbol"`
+			Asset            string `json:"asset_symbol"`
+			Balance          string `json:"balance"`
 			AvailableBalance string `json:"available_balance"`
+			BlockedBalance   string `json:"blocked_margin"`
+			UnrealisedPnl    string `json:"unrealised_cashflow"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	var entries []WalletEntry
+	for _, w := range resp.Result {
+		bal, _ := strconv.ParseFloat(w.Balance, 64)
+		avail, _ := strconv.ParseFloat(w.AvailableBalance, 64)
+		blocked, _ := strconv.ParseFloat(w.BlockedBalance, 64)
+		upnl, _ := strconv.ParseFloat(w.UnrealisedPnl, 64)
+		if bal != 0 || avail != 0 {
+			entries = append(entries, WalletEntry{
+				Asset:            w.Asset,
+				Balance:          bal,
+				AvailableBalance: avail,
+				BlockedBalance:   blocked,
+				UnrealisedPnl:    upnl,
+			})
+		}
+	}
+	return entries, nil
+}
+
+// GetWallet returns USDT available balance (backwards-compat helper).
+func (c *Client) GetWallet(ctx context.Context) (float64, error) {
+	entries, err := c.GetWalletAll(ctx)
+	if err != nil {
 		return 0, err
 	}
-	for _, w := range resp.Result {
-		if w.Asset == "USDT" || w.Asset == "USD" {
-			v, _ := strconv.ParseFloat(w.AvailableBalance, 64)
-			return v, nil
+	for _, e := range entries {
+		if e.Asset == "USDT" || e.Asset == "USD" {
+			return e.AvailableBalance, nil
 		}
 	}
 	return 0, nil
+}
+
+// LivePosition is an open position on Delta Exchange.
+type LivePosition struct {
+	Symbol        string  `json:"symbol"`
+	ProductID     int     `json:"productId"`
+	Size          float64 `json:"size"`
+	EntryPrice    float64 `json:"entryPrice"`
+	MarkPrice     float64 `json:"markPrice"`
+	UnrealisedPnl float64 `json:"unrealisedPnl"`
+	RealisedPnl   float64 `json:"realisedPnl"`
+	Margin        float64 `json:"margin"`
+	Side          string  `json:"side"`
+}
+
+// GetPositions returns all open positions on the account.
+func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/positions/margined", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("positions request failed (HTTP %d)", status)
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Result  []struct {
+			Symbol        string `json:"symbol"`
+			ProductID     int    `json:"product_id"`
+			Size          string `json:"size"`
+			EntryPrice    string `json:"entry_price"`
+			MarkPrice     string `json:"mark_price"`
+			UnrealisedPnl string `json:"unrealised_pnl"`
+			RealisedPnl   string `json:"realised_pnl"`
+			Margin        string `json:"margin"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	var positions []LivePosition
+	for _, p := range resp.Result {
+		size, _ := strconv.ParseFloat(p.Size, 64)
+		if size == 0 {
+			continue
+		}
+		entry, _ := strconv.ParseFloat(p.EntryPrice, 64)
+		mark, _ := strconv.ParseFloat(p.MarkPrice, 64)
+		upnl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
+		rpnl, _ := strconv.ParseFloat(p.RealisedPnl, 64)
+		margin, _ := strconv.ParseFloat(p.Margin, 64)
+		side := "LONG"
+		if size < 0 {
+			side = "SHORT"
+		}
+		positions = append(positions, LivePosition{
+			Symbol:        p.Symbol,
+			ProductID:     p.ProductID,
+			Size:          size,
+			EntryPrice:    entry,
+			MarkPrice:     mark,
+			UnrealisedPnl: upnl,
+			RealisedPnl:   rpnl,
+			Margin:        margin,
+			Side:          side,
+		})
+	}
+	return positions, nil
+}
+
+// OpenOrder is an active order on Delta Exchange.
+type OpenOrder struct {
+	OrderID   string  `json:"orderId"`
+	Symbol    string  `json:"symbol"`
+	Side      string  `json:"side"`
+	Size      float64 `json:"size"`
+	Price     float64 `json:"price"`
+	State     string  `json:"state"`
+	CreatedAt string  `json:"createdAt"`
+}
+
+// GetOpenOrders returns all open orders.
+func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/orders?state=open", nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("open orders request failed (HTTP %d)", status)
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Result  struct {
+			Data []struct {
+				ID        int64  `json:"id"`
+				Symbol    string `json:"symbol"`
+				Side      string `json:"side"`
+				Size      string `json:"size"`
+				LimitPrice string `json:"limit_price"`
+				State     string `json:"state"`
+				CreatedAt string `json:"created_at"`
+			} `json:"data"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	var orders []OpenOrder
+	for _, o := range resp.Result.Data {
+		size, _ := strconv.ParseFloat(o.Size, 64)
+		price, _ := strconv.ParseFloat(o.LimitPrice, 64)
+		orders = append(orders, OpenOrder{
+			OrderID:   strconv.FormatInt(o.ID, 10),
+			Symbol:    o.Symbol,
+			Side:      o.Side,
+			Size:      size,
+			Price:     price,
+			State:     o.State,
+			CreatedAt: o.CreatedAt,
+		})
+	}
+	return orders, nil
 }
 
 // FindOptionProduct searches Delta product list for a BTC option matching the given

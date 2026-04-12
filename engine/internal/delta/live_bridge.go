@@ -270,17 +270,28 @@ func (b *Bridge) OpenTrades() []LiveTrade {
 	return out
 }
 
+// AccountInfo bundles all live account data from Delta Exchange.
+type AccountInfo struct {
+	Wallets    []WalletEntry  `json:"wallets"`
+	Positions  []LivePosition `json:"positions"`
+	OpenOrders []OpenOrder    `json:"openOrders"`
+	FetchedAt  string         `json:"fetchedAt"`
+	Error      string         `json:"error,omitempty"`
+}
+
 // Stats returns aggregate stats.
 type BridgeStats struct {
-	Configured  bool    `json:"configured"`
-	Testnet     bool    `json:"testnet"`
-	Enabled     bool    `json:"enabled"`
-	TotalTrades int     `json:"totalTrades"`
-	OpenTrades  int     `json:"openTrades"`
-	Wins        int     `json:"wins"`
-	Losses      int     `json:"losses"`
-	TotalPnl    float64 `json:"totalPnl"`
-	WalletUSDT  float64 `json:"walletUsdt"`
+	Configured    bool    `json:"configured"`
+	Testnet       bool    `json:"testnet"`
+	Enabled       bool    `json:"enabled"`
+	TotalTrades   int     `json:"totalTrades"`
+	OpenTrades    int     `json:"openTrades"`
+	Wins          int     `json:"wins"`
+	Losses        int     `json:"losses"`
+	TotalPnl      float64 `json:"totalPnl"`
+	WalletUSDT    float64 `json:"walletUsdt"`
+	// Live account data
+	Account       *AccountInfo `json:"account,omitempty"`
 }
 
 func (b *Bridge) Stats(ctx context.Context) BridgeStats {
@@ -309,10 +320,26 @@ func (b *Bridge) Stats(ctx context.Context) BridgeStats {
 		}
 	}
 
-	if configured && enabled && b.client != nil {
-		if wallet, err := b.client.GetWallet(ctx); err == nil {
-			s.WalletUSDT = wallet
+	if configured && b.client != nil {
+		info := &AccountInfo{FetchedAt: time.Now().UTC().Format(time.RFC3339)}
+		wallets, err := b.client.GetWalletAll(ctx)
+		if err != nil {
+			info.Error = err.Error()
+		} else {
+			info.Wallets = wallets
+			for _, w := range wallets {
+				if w.Asset == "USDT" || w.Asset == "USD" {
+					s.WalletUSDT = w.AvailableBalance
+				}
+			}
 		}
+		if positions, err := b.client.GetPositions(ctx); err == nil {
+			info.Positions = positions
+		}
+		if orders, err := b.client.GetOpenOrders(ctx); err == nil {
+			info.OpenOrders = orders
+		}
+		s.Account = info
 	}
 	return s
 }

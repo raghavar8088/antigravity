@@ -27,6 +27,44 @@ export type DeltaLiveTrade = {
   failureReason?: string;
 };
 
+export type WalletEntry = {
+  asset: string;
+  balance: number;
+  availableBalance: number;
+  blockedBalance: number;
+  unrealisedPnl: number;
+};
+
+export type LivePosition = {
+  symbol: string;
+  productId: number;
+  size: number;
+  entryPrice: number;
+  markPrice: number;
+  unrealisedPnl: number;
+  realisedPnl: number;
+  margin: number;
+  side: string;
+};
+
+export type OpenOrder = {
+  orderId: string;
+  symbol: string;
+  side: string;
+  size: number;
+  price: number;
+  state: string;
+  createdAt: string;
+};
+
+export type AccountInfo = {
+  wallets: WalletEntry[];
+  positions: LivePosition[];
+  openOrders: OpenOrder[];
+  fetchedAt: string;
+  error?: string;
+};
+
 export type DeltaLiveStats = {
   configured: boolean;
   testnet: boolean;
@@ -37,6 +75,7 @@ export type DeltaLiveStats = {
   losses: number;
   totalPnl: number;
   walletUsdt: number;
+  account?: AccountInfo;
 };
 
 const EMPTY_STATS: DeltaLiveStats = {
@@ -71,7 +110,7 @@ export default function useDeltaLive(refreshKey = 0) {
 
   useEffect(() => {
     void fetchAll();
-    const interval = setInterval(() => void fetchAll(), 3000);
+    const interval = setInterval(() => void fetchAll(), 5000);
     return () => clearInterval(interval);
   }, [fetchAll, refreshKey]);
 
