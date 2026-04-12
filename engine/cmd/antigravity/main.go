@@ -17,6 +17,7 @@ import (
 
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/niftystocks"
@@ -524,6 +525,29 @@ func main() {
 	optionsEngine := options.NewEngine()
 	optionsSellingEngine := options_selling.NewEngine()
 	niftyOptionsEngine = options.NewNiftyEngine()
+
+	// Delta Exchange live bridge — mirrors paper sell signals to real orders
+	deltaBridge := delta.NewBridge()
+	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64) {
+		deltaBridge.OnOpen(delta.OpenSignal{
+			PaperTradeID: posID,
+			StrategyID:   stratID,
+			StrategyName: stratName,
+			OptionType:   optType,
+			Strike:       strike,
+			ExpiryTime:   expiry,
+			PremiumUSD:   premiumUSD,
+		})
+	})
+	optionsSellingEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
+		deltaBridge.OnClose(delta.CloseSignal{
+			PaperTradeID: posID,
+			StrategyID:   stratID,
+			OptionType:   optType,
+			Strike:       strike,
+			ExitReason:   exitReason,
+		})
+	})
 	niftyStocksEngine := niftystocks.NewEngine()
 	if dbStore != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
@@ -706,6 +730,47 @@ func main() {
 	http.HandleFunc("/api/options-selling/stats", optionsSellingEngine.HandleStats)
 	http.HandleFunc("/api/options-selling/reset", optionsSellingEngine.HandleReset)
 	http.HandleFunc("/api/options-selling/clear-history", optionsSellingEngine.HandleClearHistory)
+
+	// Delta Exchange Live Bridge endpoints
+	http.HandleFunc("/api/delta-live/stats", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		stats := deltaBridge.Stats(r.Context())
+		_ = json.NewEncoder(w).Encode(stats)
+	})
+	http.HandleFunc("/api/delta-live/trades", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(w).Encode(deltaBridge.Trades())
+	})
+	http.HandleFunc("/api/delta-live/open", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(w).Encode(deltaBridge.OpenTrades())
+	})
+	http.HandleFunc("/api/delta-live/enable", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid body", http.StatusBadRequest)
+			return
+		}
+		deltaBridge.SetEnabled(body.Enabled)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "enabled": body.Enabled})
+	})
 
 	// NIFTY 50 Options Scalper endpoints
 	http.HandleFunc("/api/nifty-options/positions", niftyOptionsEngine.HandlePositions)

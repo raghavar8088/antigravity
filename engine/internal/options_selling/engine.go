@@ -39,6 +39,8 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
+	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 }
 
 func NewEngine() *Engine {
@@ -64,6 +66,22 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.persistHook = fn
+}
+
+// SetOnOpenHook registers a callback fired every time a live sell position is opened.
+// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD.
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onOpenHook = fn
+}
+
+// SetOnCloseHook registers a callback fired every time a live position is closed.
+// Called with: posID, strategyID, optionType, strike, exitReason.
+func (e *Engine) SetOnCloseHook(fn func(posID string, stratID int, optType string, strike float64, exitReason string)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onCloseHook = fn
 }
 
 func (e *Engine) ExportState() PersistedState {
@@ -375,6 +393,18 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 
 	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Balance: $%.0f",
 		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, e.balance)
+
+	// Fire Delta live bridge hook (non-blocking, outside lock)
+	if hook := e.onOpenHook; hook != nil {
+		posID := pos.ID
+		stratID := s.def.ID
+		stratName := s.def.Name
+		optType := string(s.def.Type)
+		strike := pos.Strike
+		expiry := pos.ExpiryTime
+		premium := pos.CostBasis
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium)
+	}
 }
 
 func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalContext, iv float64, now time.Time) {
@@ -556,6 +586,16 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	}
 	log.Printf("[OPTIONS SELLING] %s CLOSE SELL %s | Reason: %s | PnL: $%.2f (%.1f%%) | Balance: $%.0f",
 		symbol, s.def.Name, reason, netPnL, returnPct, e.balance)
+
+	// Fire Delta live bridge close hook (non-blocking, outside lock)
+	if hook := e.onCloseHook; hook != nil {
+		posID := pos.ID
+		stratID := s.def.ID
+		optType := string(s.def.Type)
+		strike := pos.Strike
+		exitReason := reason
+		go hook(posID, stratID, optType, strike, exitReason)
+	}
 }
 
 func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now time.Time) {
