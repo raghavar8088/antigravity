@@ -496,12 +496,12 @@ function TestOrderTab({
   );
 }
 
-type MainTab = "account" | "positions" | "orders" | "mirrored" | "test";
+type MainTab = "test" | "account" | "positions" | "orders" | "mirrored";
 
 export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const { stats, trades, toggling, toggleEnabled } = useDeltaLive(refreshKey);
-  const [tab, setTab] = useState<MainTab>("account");
+  const [tab, setTab] = useState<MainTab>("test");
   const [mirroredFilter, setMirroredFilter] = useState<"open" | "all">("open");
 
   const account = stats.account;
@@ -566,16 +566,15 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
       )}
 
       {/* ── Tabs ────────────────────────────────────────────────────── */}
-      {stats.configured && (
-        <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
-          <div className="flex border-b border-gray-700 overflow-x-auto">
-            {([
-              { key: "account",   label: `💳 Wallet & Balances` },
-              { key: "positions", label: `📊 Positions (${account?.positions?.length ?? 0})` },
-              { key: "orders",    label: `📋 Open Orders (${account?.openOrders?.length ?? 0})` },
-              { key: "mirrored",  label: `🔗 Mirrored Trades (${trades.length})` },
-              { key: "test",      label: `🧪 Test Orders` },
-            ] as { key: MainTab; label: string }[]).map((t) => (
+      <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
+        <div className="flex border-b border-gray-700 overflow-x-auto">
+          {([
+            { key: "test",      label: `🧪 Test Orders` },
+            { key: "account",   label: `💳 Wallet & Balances` },
+            { key: "positions", label: `📊 Positions (${account?.positions?.length ?? 0})` },
+            { key: "orders",    label: `📋 Open Orders (${account?.openOrders?.length ?? 0})` },
+            { key: "mirrored",  label: `🔗 Mirrored Trades (${trades.length})` },
+          ] as { key: MainTab; label: string }[]).map((t) => (
               <button
                 type="button"
                 key={t.key}
@@ -586,78 +585,77 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
               >
                 {t.label}
               </button>
-            ))}
-          </div>
-
-          <div className="p-4">
-            {tab === "account" && (
-              <div className="space-y-4">
-                <div className="text-gray-300 text-sm font-semibold">Account Balances</div>
-                <WalletCards wallets={account?.wallets ?? []} />
-                {account?.error && (
-                  <div className="text-red-400 text-xs bg-red-900/20 rounded p-2">{account.error}</div>
-                )}
-              </div>
-            )}
-
-            {tab === "positions" && (
-              <div className="space-y-3">
-                <div className="text-gray-300 text-sm font-semibold">Live Positions on Delta Exchange</div>
-                <LivePositionsTable positions={account?.positions ?? []} />
-              </div>
-            )}
-
-            {tab === "orders" && (
-              <div className="space-y-3">
-                <div className="text-gray-300 text-sm font-semibold">Open Orders on Delta Exchange</div>
-                <OpenOrdersTable orders={account?.openOrders ?? []} />
-              </div>
-            )}
-
-            {tab === "mirrored" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-gray-300 text-sm font-semibold">Mirrored Orders</div>
-                  <div className="flex gap-1">
-                    {(["open", "all"] as const).map((f) => (
-                      <button
-                        type="button"
-                        key={f}
-                        onClick={() => setMirroredFilter(f)}
-                        className={`px-3 py-1 rounded text-xs font-medium ${
-                          mirroredFilter === f ? "bg-blue-700 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        }`}
-                      >
-                        {f === "open" ? `Open (${openTrades.length})` : `All (${trades.length})`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <MirroredTradesTable trades={displayTrades} />
-
-                {failedTrades.length > 0 && (
-                  <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 mt-2">
-                    <div className="text-red-300 font-bold text-xs mb-2">⚠️ Failed Orders ({failedTrades.length})</div>
-                    {failedTrades.slice(0, 5).map((t) => (
-                      <div key={t.id} className="text-red-200/70 text-xs mb-1">
-                        <span className="text-red-300 font-mono">{t.id}</span> — {t.failureReason}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tab === "test" && (
-              <TestOrderTab
-                actionsEnabled={actionsEnabled}
-                positions={account?.positions ?? []}
-                onOrderPlaced={refreshDeltaState}
-              />
-            )}
-          </div>
+          ))}
         </div>
-      )}
+
+        <div className="p-4">
+          {tab === "account" && (
+            <div className="space-y-4">
+              <div className="text-gray-300 text-sm font-semibold">Account Balances</div>
+              <WalletCards wallets={account?.wallets ?? []} />
+              {account?.error && (
+                <div className="text-red-400 text-xs bg-red-900/20 rounded p-2">{account.error}</div>
+              )}
+            </div>
+          )}
+
+          {tab === "positions" && (
+            <div className="space-y-3">
+              <div className="text-gray-300 text-sm font-semibold">Live Positions on Delta Exchange</div>
+              <LivePositionsTable positions={account?.positions ?? []} />
+            </div>
+          )}
+
+          {tab === "orders" && (
+            <div className="space-y-3">
+              <div className="text-gray-300 text-sm font-semibold">Open Orders on Delta Exchange</div>
+              <OpenOrdersTable orders={account?.openOrders ?? []} />
+            </div>
+          )}
+
+          {tab === "mirrored" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-gray-300 text-sm font-semibold">Mirrored Orders</div>
+                <div className="flex gap-1">
+                  {(["open", "all"] as const).map((f) => (
+                    <button
+                      type="button"
+                      key={f}
+                      onClick={() => setMirroredFilter(f)}
+                      className={`px-3 py-1 rounded text-xs font-medium ${
+                        mirroredFilter === f ? "bg-blue-700 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      }`}
+                    >
+                      {f === "open" ? `Open (${openTrades.length})` : `All (${trades.length})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <MirroredTradesTable trades={displayTrades} />
+
+              {failedTrades.length > 0 && (
+                <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 mt-2">
+                  <div className="text-red-300 font-bold text-xs mb-2">⚠️ Failed Orders ({failedTrades.length})</div>
+                  {failedTrades.slice(0, 5).map((t) => (
+                    <div key={t.id} className="text-red-200/70 text-xs mb-1">
+                      <span className="text-red-300 font-mono">{t.id}</span> — {t.failureReason}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "test" && (
+            <TestOrderTab
+              actionsEnabled={actionsEnabled}
+              positions={account?.positions ?? []}
+              onOrderPlaced={refreshDeltaState}
+            />
+          )}
+        </div>
+      </div>
 
       {/* Mirrored trade stats bar */}
       {stats.configured && trades.length > 0 && (
