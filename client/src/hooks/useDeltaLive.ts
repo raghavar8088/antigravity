@@ -115,9 +115,9 @@ export default function useDeltaLive(refreshKey = 0) {
         fetch("/api/delta/account", { cache: "no-store" }),
       ]);
 
+      let statsData: DeltaLiveStats = EMPTY_STATS;
       if (statsRes.ok) {
-        const statsData = await statsRes.json() as DeltaLiveStats;
-        setStats(statsData);
+        statsData = await statsRes.json() as DeltaLiveStats;
       }
 
       if (tradesRes.ok) {
@@ -125,10 +125,13 @@ export default function useDeltaLive(refreshKey = 0) {
         setTrades(tradesData);
       }
 
+      // The Next.js /api/delta/account route fetches wallet data directly from Delta.
+      // If the Go engine didn't return account data, use the Next.js response as fallback.
       if (accountRes.ok) {
         const accountData = await accountRes.json() as {
           configured: boolean;
           testnet: boolean;
+          walletUsdt?: number;
           account?: AccountInfo;
         };
         setNextStatus({
@@ -136,7 +139,17 @@ export default function useDeltaLive(refreshKey = 0) {
           testnet: accountData.testnet,
           error: accountData.account?.error,
         });
+
+        // Merge: prefer Go engine data, fallback to Next.js data
+        if (!statsData.account && accountData.account) {
+          statsData = { ...statsData, account: accountData.account };
+        }
+        if (statsData.walletUsdt === 0 && (accountData.walletUsdt ?? 0) > 0) {
+          statsData = { ...statsData, walletUsdt: accountData.walletUsdt ?? 0 };
+        }
       }
+
+      setStats(statsData);
     } catch {
       // Engine offline or Delta bridge unavailable.
     }
