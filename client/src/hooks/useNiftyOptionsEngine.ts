@@ -1179,14 +1179,21 @@ type DbStatePayload = {
   totalPremiumSpent: number;
   tradeSeq: number;
   minuteBars: number[];
+  positions: InternalPosition[];
   trades: InternalTrade[];
   strategies: Array<{
     id: number;
+    position: InternalPosition | null;
+    status: InternalStratState["status"];
+    cooldownUntil: number;
     totalTrades: number;
     wins: number;
     losses: number;
     totalPnl: number;
+    winRate: number;
     lastTradeAt: number;
+    regime: string;
+    consecutiveLosses: number;
   }>;
 };
 
@@ -1200,14 +1207,21 @@ async function saveStateToDb(eng: EngineRef): Promise<void> {
       totalPremiumSpent: eng.totalPremiumSpent,
       tradeSeq:          eng.seq,
       minuteBars:        eng.minuteBars.slice(-200),
+      positions:         Array.from(eng.positions.values()),
       trades:            eng.trades.slice(0, 500),
       strategies:        eng.strategies.map((s) => ({
+        position:       s.position,
+        status:         s.status,
+        cooldownUntil:  s.cooldownUntil,
         id:           s.def.id,
         totalTrades:  s.totalTrades,
         wins:         s.wins,
         losses:       s.losses,
         totalPnl:     s.totalPnl,
+        winRate:      s.winRate,
         lastTradeAt:  s.lastTradeAt,
+        regime:       s.regime,
+        consecutiveLosses: s.consecutiveLosses,
       })),
     };
     await fetch("/api/nifty/state", {
@@ -1232,18 +1246,24 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
     eng.totalRealizedPnl  = s.totalPnl;
     eng.totalPremiumSpent = s.totalPremiumSpent;
     eng.seq               = s.tradeSeq;
+    eng.positions         = new Map((s.positions ?? []).map((position) => [position.id, position]));
     eng.trades            = s.trades ?? [];
 
     // Restore per-strategy stats (wins/losses/pnl) by strategy ID
     for (const saved of (s.strategies ?? [])) {
       const strat = eng.strategies.find((st) => st.def.id === saved.id);
       if (!strat) continue;
+      strat.position    = saved.position ?? null;
+      strat.status      = saved.status ?? (saved.position ? "IN_POSITION" : "READY");
+      strat.cooldownUntil = saved.cooldownUntil ?? 0;
       strat.totalTrades = saved.totalTrades;
       strat.wins        = saved.wins;
       strat.losses      = saved.losses;
       strat.totalPnl    = saved.totalPnl;
+      strat.winRate     = saved.winRate ?? (saved.totalTrades > 0 ? (saved.wins / saved.totalTrades) * 100 : 0);
       strat.lastTradeAt = saved.lastTradeAt;
-      strat.winRate     = saved.totalTrades > 0 ? (saved.wins / saved.totalTrades) * 100 : 0;
+      strat.regime      = saved.regime ?? "UNKNOWN";
+      strat.consecutiveLosses = saved.consecutiveLosses ?? 0;
     }
 
     // Minute bars are seeded from candles API (fresher) — only restore if candle seed fails
@@ -1260,7 +1280,7 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
 export default function useNiftyOptionsEngine(_refreshKey = 0) {
   void _refreshKey;
   const engRef = useRef<EngineRef>(initEngine());
-  const lastSavedTradeCountRef = useRef(-1); // -1 = DB not yet loaded, block saves until loaded
+  const lastSavedSignatureRef = useRef(""); // empty = DB not yet loaded, block optimistic saves until loaded
   const dbLoadedRef = useRef(false);
 
   const [positions, setPositions] = useState<OptionPosition[]>([]);
@@ -1284,9 +1304,14 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     // Only save after DB has been loaded — avoids overwriting DB with empty state on mount
     if (!dbLoadedRef.current) return;
 
-    const tradeCount = eng.trades.length;
-    if (tradeCount !== lastSavedTradeCountRef.current) {
-      lastSavedTradeCountRef.current = tradeCount;
+    const saveSignature = JSON.stringify({
+      tradeCount: eng.trades.length,
+      openCount: eng.positions.size,
+      balance: Math.round(eng.balance),
+      realizedPnl: Math.round(eng.totalRealizedPnl),
+    });
+    if (saveSignature !== lastSavedSignatureRef.current) {
+      lastSavedSignatureRef.current = saveSignature;
       void saveStateToDb(eng);
     }
   }, []);
@@ -1409,7 +1434,12 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       await loadStateFromDb(engRef.current);
       // Mark DB as loaded regardless of success — now saves are allowed
       dbLoadedRef.current = true;
-      lastSavedTradeCountRef.current = engRef.current.trades.length;
+      lastSavedSignatureRef.current = JSON.stringify({
+        tradeCount: engRef.current.trades.length,
+        openCount: engRef.current.positions.size,
+        balance: Math.round(engRef.current.balance),
+        realizedPnl: Math.round(engRef.current.totalRealizedPnl),
+      });
       pushDisplayState();
     };
     void restore();
@@ -1436,10 +1466,21 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
           totalPremiumSpent: engRef.current.totalPremiumSpent,
           tradeSeq:          engRef.current.seq,
           minuteBars:        engRef.current.minuteBars.slice(-200),
+          positions:         Array.from(engRef.current.positions.values()),
           trades:            engRef.current.trades.slice(0, 500),
           strategies:        engRef.current.strategies.map((s) => ({
-            id: s.def.id, totalTrades: s.totalTrades, wins: s.wins,
-            losses: s.losses, totalPnl: s.totalPnl, lastTradeAt: s.lastTradeAt,
+            id: s.def.id,
+            position: s.position,
+            status: s.status,
+            cooldownUntil: s.cooldownUntil,
+            totalTrades: s.totalTrades,
+            wins: s.wins,
+            losses: s.losses,
+            totalPnl: s.totalPnl,
+            winRate: s.winRate,
+            lastTradeAt: s.lastTradeAt,
+            regime: s.regime,
+            consecutiveLosses: s.consecutiveLosses,
           })),
         });
         navigator.sendBeacon("/api/nifty/state", new Blob([payload], { type: "application/json" }));
@@ -1480,7 +1521,12 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
   // ── Reset ─────────────────────────────────────────────────────────────────
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
-    lastSavedTradeCountRef.current = 0;
+    lastSavedSignatureRef.current = JSON.stringify({
+      tradeCount: 0,
+      openCount: 0,
+      balance: INITIAL_BALANCE,
+      realizedPnl: 0,
+    });
     pushDisplayState();
     void saveStateToDb(engRef.current); // persist clean slate
   }, [pushDisplayState]);
