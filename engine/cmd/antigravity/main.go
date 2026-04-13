@@ -590,7 +590,7 @@ func main() {
 	niftyOptionsEngine = options.NewNiftyEngine()
 	niftyOptionsSellingEngine := options_selling.NewNiftyEngine()
 
-	// Delta Exchange live bridge — mirrors paper sell signals to real orders
+	// Delta Exchange live bridge — mirrors BTC option selling paper trades to Delta when enabled.
 	deltaBridge := delta.NewBridge()
 	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{

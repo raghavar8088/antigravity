@@ -64,7 +64,7 @@ function EnableBanner({ stats, toggling, onToggle }: { stats: DeltaLiveStats; to
           <div className="font-bold text-sm text-white">Live Order Mirroring {stats.enabled ? "ACTIVE" : "PAUSED"}</div>
           <div className="text-xs text-gray-400">
             {stats.testnet ? "🧪 Testnet" : "🔴 Production — real money"}&nbsp;·&nbsp;
-            Connected to <span className="text-blue-300">india.delta.exchange</span>
+            Enable this to mirror BTC Option Selling paper positions to Delta.
           </div>
         </div>
       </div>
@@ -205,7 +205,7 @@ function MirroredTradesTable({ trades }: { trades: DeltaLiveTrade[] }) {
   if (!trades.length) {
     return (
       <div className="text-center py-10 text-gray-500 text-sm">
-        No mirrored trades yet — waiting for BTC Option Selling signals...
+        No Delta trade records are available on the server.
       </div>
     );
   }
@@ -284,7 +284,7 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
             <span className="text-red-400">🔴</span> Delta Exchange Live Trading
           </h2>
           <p className="text-gray-400 text-xs mt-0.5">
-            Mirrors BTC Option Selling paper signals → real orders on india.delta.exchange
+            When enabled, BTC Option Selling paper positions are mirrored to Delta Exchange.
           </p>
         </div>
         <div className="text-right">
