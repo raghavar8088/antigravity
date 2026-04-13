@@ -1,6 +1,8 @@
 import * as crypto from "crypto";
 
-const DELTA_BASE = process.env.DELTA_API_BASE_URL?.replace(/\/$/, "") ?? "https://api.india.delta.exchange";
+const DELTA_BASE = process.env.DELTA_TESTNET === "true" 
+  ? "https://cdn-ind.testnet.deltaex.org" 
+  : "https://cdn.india.deltaex.org";
 const API_KEY = process.env.DELTA_API_KEY ?? "";
 const API_SECRET = process.env.DELTA_API_SECRET ?? "";
 
