@@ -1246,7 +1246,7 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
     eng.totalRealizedPnl  = s.totalPnl;
     eng.totalPremiumSpent = s.totalPremiumSpent;
     eng.seq               = s.tradeSeq;
-    eng.positions         = new Map((s.positions ?? []).map((position) => [position.id, position]));
+    eng.positions         = new Map();
     eng.trades            = s.trades ?? [];
 
     // Restore per-strategy stats (wins/losses/pnl) by strategy ID
@@ -1264,6 +1264,13 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
       strat.lastTradeAt = saved.lastTradeAt;
       strat.regime      = saved.regime ?? "UNKNOWN";
       strat.consecutiveLosses = saved.consecutiveLosses ?? 0;
+      if (strat.position) {
+        eng.positions.set(strat.position.id, strat.position);
+      }
+    }
+
+    for (const position of (s.positions ?? [])) {
+      eng.positions.set(position.id, position);
     }
 
     // Minute bars are seeded from candles API (fresher) — only restore if candle seed fails

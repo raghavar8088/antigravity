@@ -63,6 +63,7 @@ export type NiftyStatePayload = {
   totalPremiumSpent: number;
   tradeSeq: number;
   minuteBars: number[];
+  positions?: unknown[];
   trades: unknown[];
   strategies: unknown[];
 };
