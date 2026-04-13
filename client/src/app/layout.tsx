@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
-import { Roboto, Roboto_Mono } from "next/font/google";
+import { Inter, Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+});
 
 const roboto = Roboto({
   subsets: ["latin"],
@@ -10,7 +16,7 @@ const roboto = Roboto({
 
 const robotoMono = Roboto_Mono({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-mono-var",
   weight: ["400", "500", "700"],
 });
 
@@ -22,7 +28,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${roboto.variable} ${robotoMono.variable} ${roboto.className}`}>
+      <head>
+        <meta name="theme-color" content="#ffffff" />
+      </head>
+      <body className={`${inter.variable} ${roboto.variable} ${robotoMono.variable} ${roboto.className}`}>
         {children}
       </body>
     </html>

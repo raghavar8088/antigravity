@@ -59,124 +59,247 @@ export default function OptionsAccountHeader({
   const baseBalance = 1_000_000;
   const pnlPct = baseBalance > 0 ? (dailyPnL / baseBalance) * 100 : 0;
   const positive = dailyPnL >= 0;
-  const resolvedOnlineLabel = onlineLabel ?? `Options engine live and monitoring ${marketLabel} option strategies`;
+  const resolvedOnlineLabel = onlineLabel ?? `Options engine live · ${marketLabel} strategies`;
   const resolvedDetailLabel =
     detailLabel ??
-    `${openPositions} open ${marketLabel} option positions in the separate options account`;
+    `${openPositions} open ${marketLabel} option positions`;
 
   return (
     <header className="cockpit-header">
-      <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-4 px-5 py-4">
-        <div className="flex min-w-[220px] items-center gap-3">
+      <div
+        style={{
+          maxWidth: 1680,
+          margin: "0 auto",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          padding: "0 20px",
+          height: "var(--header-height)",
+        }}
+      >
+        {/* ── Left: Market Badge + Title ──────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 200, flexShrink: 0 }}>
           <div
-            className="flex h-12 w-12 items-center justify-center rounded-2xl border"
             style={{
-              borderColor: "rgba(176, 96, 0, 0.18)",
-              background: "rgba(197, 139, 0, 0.08)",
+              width: 36,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "var(--radius-card)",
+              background: "var(--amber-dim)",
+              border: "1px solid rgba(227, 116, 0, 0.12)",
             }}
           >
-            <div
-              className="text-[11px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: "var(--amber)" }}
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                color: "var(--amber)",
+                fontFamily: "var(--font-display)",
+              }}
             >
               {marketCode}
-            </div>
+            </span>
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  lineHeight: 1.2,
+                }}
+              >
                 {workspaceTitle}
               </span>
+              {/* Auto Execute toggle */}
               {onToggleActions && (
-                <div className="inline-flex flex-col items-center gap-1.5 rounded-2xl px-4 py-2" style={{ background: "rgba(15, 15, 20, 0.92)", boxShadow: "0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)" }}>
-                  <span className="text-[10px] font-medium tracking-[0.08em]" style={{ color: "rgba(255,255,255,0.55)" }}>Auto Execute</span>
-                  <div className="inline-flex items-center rounded-full p-[3px]" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                    <button
-                      type="button"
-                      onClick={() => onToggleActions(false)}
-                      className="rounded-full px-4 py-1.5 text-[11px] font-semibold transition-all duration-200"
-                      style={{
-                        background: !actionsEnabled ? "rgba(255,255,255,0.12)" : "transparent",
-                        color: !actionsEnabled ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.35)",
-                        boxShadow: !actionsEnabled ? "0 1px 4px rgba(0,0,0,0.3)" : "none",
-                      }}
-                    >
-                      Disabled
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleActions(true)}
-                      className="rounded-full px-4 py-1.5 text-[11px] font-semibold transition-all duration-200"
-                      style={{
-                        background: actionsEnabled ? "rgb(34, 139, 64)" : "transparent",
-                        color: actionsEnabled ? "#fff" : "rgba(255,255,255,0.35)",
-                        boxShadow: actionsEnabled ? "0 1px 8px rgba(34, 139, 64, 0.45)" : "none",
-                      }}
-                    >
-                      Enabled
-                    </button>
-                  </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "3px 4px",
+                    borderRadius: "var(--radius-chip)",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface-2)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onToggleActions(false)}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "var(--radius-chip)",
+                      border: "none",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      fontFamily: "var(--font-display)",
+                      cursor: "pointer",
+                      background: !actionsEnabled ? "var(--surface)" : "transparent",
+                      color: !actionsEnabled ? "var(--text-primary)" : "var(--text-muted)",
+                      boxShadow: !actionsEnabled ? "var(--shadow-xs)" : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    Off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleActions(true)}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "var(--radius-chip)",
+                      border: "none",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      fontFamily: "var(--font-display)",
+                      cursor: "pointer",
+                      background: actionsEnabled ? "var(--green)" : "transparent",
+                      color: actionsEnabled ? "#fff" : "var(--text-muted)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    Auto
+                  </button>
                 </div>
               )}
             </div>
-            <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
               {accountLabel}
             </div>
           </div>
         </div>
 
+        {/* ── Center: Status ──────────────────────────────────────── */}
         <div
-          className="flex min-w-[240px] flex-1 items-center gap-3 rounded-full border px-4 py-3"
           style={{
-            borderColor: "var(--border)",
-            background: "var(--surface)",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "0 16px",
+            minWidth: 0,
           }}
         >
           <div className={online ? "live-dot" : "live-dot-red"} />
-          <div className="flex-1">
-            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--text-primary)",
+              }}
+            >
               {online ? resolvedOnlineLabel : offlineLabel}
             </div>
-            <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {online
-                ? resolvedDetailLabel
-                : "Waiting for options engine data"}
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              {online ? resolvedDetailLabel : "Waiting for options engine data"}
             </div>
           </div>
+          {/* Account type badge */}
           <span
-            className="inline-flex items-center rounded-full border px-3 py-2 text-xs font-medium"
             style={{
-              borderColor: "rgba(176, 96, 0, 0.18)",
-              background: "rgba(197, 139, 0, 0.08)",
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "3px 10px",
+              borderRadius: "var(--radius-chip)",
+              background: "var(--amber-dim)",
               color: "var(--amber)",
+              fontSize: 11,
+              fontWeight: 500,
+              fontFamily: "var(--font-display)",
             }}
           >
             {accountBadgeLabel}
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="summary-card min-w-[170px]">
-            <div className="summary-label">{equityLabel}</div>
-            <div className="summary-value">
+        {/* ── Right: Metrics ──────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {/* Equity */}
+          <div
+            style={{
+              padding: "6px 14px",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.03em" }}>
+              {equityLabel}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 16,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                marginTop: 2,
+              }}
+            >
               {formatCurrency(equity, currencyCode, locale)}
             </div>
           </div>
 
-          <div className="summary-card min-w-[170px]">
-            <div className="summary-label">{pnlLabel}</div>
-            <div className={`summary-value ${positive ? "profit-positive" : "profit-negative"}`}>
+          {/* PnL */}
+          <div
+            style={{
+              padding: "6px 14px",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.03em" }}>
+              {pnlLabel}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 16,
+                fontWeight: 600,
+                color: positive ? "var(--green)" : "var(--red)",
+                marginTop: 2,
+              }}
+            >
               {formatSignedCurrency(dailyPnL, currencyCode, locale)}
             </div>
-            <div className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
-              {positive ? "+" : ""}
-              {pnlPct.toFixed(Math.abs(pnlPct) < 0.01 && pnlPct !== 0 ? 4 : 2)}%
+            <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>
+              {positive ? "+" : ""}{pnlPct.toFixed(Math.abs(pnlPct) < 0.01 && pnlPct !== 0 ? 4 : 2)}%
             </div>
           </div>
 
-          <div className="metric-card min-w-[140px]">
-            <div className="metric-label">{openLabel}</div>
-            <div className="metric-value">{openPositions}</div>
+          {/* Open positions */}
+          <div
+            style={{
+              padding: "6px 14px",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)", letterSpacing: "0.03em" }}>
+              {openLabel}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 16,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                marginTop: 2,
+              }}
+            >
+              {openPositions}
+            </div>
           </div>
         </div>
       </div>

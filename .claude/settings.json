@@ -19,7 +19,14 @@
       "Bash(xargs ls:*)",
       "Bash(cat \"c:/Trading apllication/engine/cmd/\"*/main.go)",
       "Bash(printenv)",
-      "Bash(python3 -c ':*)"
+      "Bash(python3 -c ':*)",
+      "Bash(curl -s http://localhost:8080/api/nifty-options/stats)",
+      "Bash(curl -s \"https://antigravity-two.vercel.app/api/delta/account\")",
+      "Bash(curl -s \"https://antigravity.vercel.app/api/delta/account\")",
+      "Bash(curl -s \"https://antigravity-raghavar8088s-projects.vercel.app/api/delta/account\")",
+      "Bash(curl -s \"https://api.india.delta.exchange/v2/tickers/BTCUSDT\")",
+      "Bash(curl -s \"https://api.india.delta.exchange/v2/wallet/balances\" -H \"api-key: d5CPJjQxr85zwYPYbd5LSninuMKsjl\" -H \"timestamp: $\\(date +%s\\)\" -H \"signature: invalid\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.india.delta.exchange/v2/wallet/balances\" -H \"api-key: d5CPJjQxr85zwYPYbd5LSninuMKsjl\" -H \"timestamp: $\\(date +%s\\)\" -H \"signature: invalid\")"
     ],
     "additionalDirectories": [
       "c:\\Trading apllication\\engine\\internal"

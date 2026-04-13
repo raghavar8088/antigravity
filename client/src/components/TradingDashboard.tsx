@@ -291,7 +291,7 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <div className="summary-card flex min-h-[112px] flex-col justify-between gap-3">
+    <div className="summary-card flex min-h-[88px] flex-col justify-between gap-2">
       <div className="summary-label">{label}</div>
       <div className={`summary-value ${accent}`}>{value}</div>
     </div>
@@ -307,16 +307,16 @@ function BadgePill({
   label: string;
   tone?: BadgeTone;
 }) {
-  const toneClasses: Record<BadgeTone, string> = {
-    neutral: "border-zinc-200 bg-white text-zinc-600",
-    positive: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    negative: "border-rose-200 bg-rose-50 text-rose-700",
-    info: "border-blue-200 bg-blue-50 text-blue-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-700",
+  const styles: Record<BadgeTone, { bg: string; color: string }> = {
+    neutral: { bg: "var(--surface-2)", color: "var(--text-secondary)" },
+    positive: { bg: "var(--green-dim)", color: "var(--green)" },
+    negative: { bg: "var(--red-dim)", color: "var(--red)" },
+    info: { bg: "var(--accent-dim)", color: "var(--accent)" },
+    warning: { bg: "var(--amber-dim)", color: "var(--amber)" },
   };
-
+  const s = styles[tone];
   return (
-    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${toneClasses[tone]}`}>
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: "var(--radius-chip)", background: s.bg, color: s.color, fontSize: 11, fontWeight: 500, fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}>
       {label}
     </span>
   );
@@ -334,7 +334,7 @@ function CompactMetric({
   accent?: string;
 }) {
   return (
-    <div className="metric-card flex min-h-[104px] flex-col justify-between gap-3">
+    <div className="metric-card flex min-h-[84px] flex-col justify-between gap-2">
       <div>
         <div className="metric-label">
           {label}
@@ -997,13 +997,10 @@ export default function TradingDashboard({
       )}
 
       <div className="workspace-shell">
-        <aside className="workspace-sidebar glass-panel">
+        <aside className="workspace-sidebar">
           <div className="workspace-sidebar-header">
-            <div className="workspace-sidebar-eyebrow">Workspace Routes</div>
-            <div className="workspace-sidebar-title">Operator Navigation</div>
-            <div className="workspace-sidebar-copy">
-              Split the platform into direct entry points so each desk can open in context with fewer clicks.
-            </div>
+            <div className="workspace-sidebar-eyebrow">Navigation</div>
+            <div className="workspace-sidebar-title">Workspaces</div>
           </div>
 
           <div className="workspace-route-list">
@@ -1022,14 +1019,27 @@ export default function TradingDashboard({
             })}
           </div>
 
-          <div className="workspace-sidebar-footer">
-            <div className="workspace-sidebar-eyebrow">Active Route</div>
-            <div className="workspace-sidebar-title">{activePreset.label}</div>
-            <div className="workspace-sidebar-copy">{activePreset.description}</div>
+          <div style={{ marginTop: "auto", padding: "12px" }}>
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: "var(--radius-card)",
+                background: "var(--accent-dim)",
+                fontSize: 12,
+                color: "var(--accent)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 500,
+              }}
+            >
+              {activePreset.label}
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontWeight: 400 }}>
+                {activePreset.description}
+              </div>
+            </div>
           </div>
         </aside>
 
-        <div className="workspace-main space-y-5">
+        <div className="workspace-main" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {optionsModuleActive ? (
         <OptionsAccountHeader
           online={optionsOnline}
@@ -1120,14 +1130,15 @@ export default function TradingDashboard({
         strategyItems={workspaceStrategyItems}
       />
 
-      <div className="glass-panel px-5 py-3 flex flex-col gap-3">
-        {/* ── Group tabs ─────────────────────────────────────────────────── */}
-        <div className="market-group-bar">
+      {/* ── Google Finance-style navigation panel ─────────────────────────── */}
+      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
+        {/* Group tabs */}
+        <div className="market-group-bar" style={{ padding: "0 20px" }}>
           {([
-            { key: "crypto", label: "🪙 Crypto Market" },
-            { key: "india",  label: "🇮🇳 Indian Market" },
-            { key: "forex",  label: "💱 Forex Market"  },
-            { key: "charts", label: "📊 Charts & Data" },
+            { key: "crypto", label: "Crypto" },
+            { key: "india",  label: "Indian Market" },
+            { key: "forex",  label: "Forex" },
+            { key: "charts", label: "Charts & Data" },
           ] as { key: "crypto" | "india" | "forex" | "charts"; label: string }[]).map((g) => (
             <button
               key={g.key}
@@ -1146,75 +1157,90 @@ export default function TradingDashboard({
           ))}
         </div>
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="overflow-x-auto pb-1">
-            <div className="flex min-w-max items-center gap-2">
-              {/* ── Crypto sub-tabs ─────────────────────────────────────── */}
-              {activeGroup === "crypto" && ([
-                { key: "options",          label: "BTC Option Scalper" },
-                { key: "options-selling",  label: "BTC Option Selling" },
-                { key: "deltaLive",        label: "🔴 Delta Live" },
-                { key: "dashboard",        label: "BTC Equity" },
-                { key: "cryptoEquity",     label: "Crypto Equity" },
-              ] as { key: typeof activeModule; label: string }[]).map((module) => {
-                const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
-                const isActive = isBtcEquityGroup || activeModule === module.key;
-                return (
-                  <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${isActive ? " active" : ""}`}>
-                    {module.label}
-                  </button>
-                );
-              })}
-
-              {/* ── Indian Market sub-tabs ──────────────────────────────── */}
-              {activeGroup === "india" && ([
-                { key: "nifty",       label: "Nifty 50 Option Scalper" },
-                { key: "niftySelling",label: "Nifty Option Selling" },
-                { key: "niftyStocks", label: "Nifty 50 Equity" },
-                { key: "mcx",         label: "Commodity Scalper" },
-              ] as { key: typeof activeModule; label: string }[]).map((module) => (
-                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+        {/* Sub-tabs + action toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderTop: "1px solid var(--border-subtle)", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto" }}>
+            {/* Crypto sub-tabs */}
+            {activeGroup === "crypto" && ([
+              { key: "options",          label: "BTC Option Scalper" },
+              { key: "options-selling",  label: "BTC Option Selling" },
+              { key: "deltaLive",        label: "Delta Live" },
+              { key: "dashboard",        label: "BTC Equity" },
+              { key: "cryptoEquity",     label: "Crypto Equity" },
+            ] as { key: typeof activeModule; label: string }[]).map((module) => {
+              const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
+              const isActive = isBtcEquityGroup || activeModule === module.key;
+              return (
+                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${isActive ? " active" : ""}`}>
                   {module.label}
                 </button>
-              ))}
+              );
+            })}
 
-              {/* ── Forex sub-tabs ──────────────────────────────────────── */}
-              {activeGroup === "forex" && ([
-                { key: "forexScalper", label: "Forex Scalper" },
-              ] as { key: typeof activeModule; label: string }[]).map((module) => (
-                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
-                  {module.label}
-                </button>
-              ))}
+            {/* Indian Market sub-tabs */}
+            {activeGroup === "india" && ([
+              { key: "nifty",       label: "Nifty 50 Option Scalper" },
+              { key: "niftySelling",label: "Nifty Option Selling" },
+              { key: "niftyStocks", label: "Nifty 50 Equity" },
+              { key: "mcx",         label: "Commodity Scalper" },
+            ] as { key: typeof activeModule; label: string }[]).map((module) => (
+              <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                {module.label}
+              </button>
+            ))}
 
-              {/* ── Charts & Data sub-tabs ──────────────────────────────── */}
-              {activeGroup === "charts" && ([
-                { key: "charts",      label: "TradingView Charts" },
-                { key: "liveDataLab", label: "Live Data Lab" },
-              ] as { key: typeof activeModule; label: string }[]).map((module) => (
-                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
-                  {module.label}
-                </button>
-              ))}
-            </div>
+            {/* Forex sub-tabs */}
+            {activeGroup === "forex" && ([
+              { key: "forexScalper", label: "Forex Scalper" },
+            ] as { key: typeof activeModule; label: string }[]).map((module) => (
+              <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                {module.label}
+              </button>
+            ))}
+
+            {/* Charts & Data sub-tabs */}
+            {activeGroup === "charts" && ([
+              { key: "charts",      label: "TradingView Charts" },
+              { key: "liveDataLab", label: "Live Data Lab" },
+            ] as { key: typeof activeModule; label: string }[]).map((module) => (
+              <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
+                {module.label}
+              </button>
+            ))}
           </div>
+
+          {/* Action toggle */}
           <div
-            className="flex flex-wrap items-center gap-3 rounded-[18px] border px-3 py-2"
-            style={{ borderColor: "var(--border)", background: "var(--surface)" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 4px 4px 12px",
+              borderRadius: "var(--radius-chip)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+            }}
             title={actionToggleTitle}
           >
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
               Action
-            </div>
-            <div className="inline-flex items-center rounded-full border p-1" style={{ borderColor: "var(--border-subtle)", background: "var(--surface-2)" }}>
+            </span>
+            <div style={{ display: "inline-flex", borderRadius: "var(--radius-chip)", overflow: "hidden", border: "1px solid var(--border-subtle)", background: "var(--surface-2)" }}>
               <button
                 type="button"
                 onClick={() => setActionsEnabled(false)}
                 aria-pressed={!actionsEnabled}
-                className="rounded-full px-3 py-1 text-xs font-semibold transition"
                 style={{
-                  background: !actionsEnabled ? "var(--surface-3)" : "transparent",
-                  color: !actionsEnabled ? "var(--text-primary)" : "var(--text-secondary)",
+                  padding: "4px 12px",
+                  border: "none",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  fontFamily: "var(--font-display)",
+                  cursor: "pointer",
+                  background: !actionsEnabled ? "var(--surface)" : "transparent",
+                  color: !actionsEnabled ? "var(--text-primary)" : "var(--text-muted)",
+                  boxShadow: !actionsEnabled ? "var(--shadow-xs)" : "none",
+                  transition: "all 0.15s ease",
                 }}
               >
                 No
@@ -1223,47 +1249,57 @@ export default function TradingDashboard({
                 type="button"
                 onClick={() => setActionsEnabled(true)}
                 aria-pressed={actionsEnabled}
-                className="rounded-full px-3 py-1 text-xs font-semibold transition"
                 style={{
-                  background: actionsEnabled ? "rgba(21, 128, 61, 0.16)" : "transparent",
-                  color: actionsEnabled ? "var(--green)" : "var(--text-secondary)",
+                  padding: "4px 12px",
+                  border: "none",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  fontFamily: "var(--font-display)",
+                  cursor: "pointer",
+                  background: actionsEnabled ? "var(--green)" : "transparent",
+                  color: actionsEnabled ? "#fff" : "var(--text-muted)",
+                  transition: "all 0.15s ease",
                 }}
               >
                 Yes
               </button>
             </div>
-            <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {actionsEnabled ? "Enabled for reset and admin actions." : "No keeps reset, clear, kill, and close-all locked."}
-            </div>
           </div>
         </div>
+
+        {/* Module description */}
         <div
-          className="max-w-[760px] text-xs leading-5 md:text-sm lg:ml-auto lg:text-right"
-          style={{ color: "var(--text-secondary)" }}
+          style={{
+            padding: "8px 20px 12px",
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "var(--text-muted)",
+            borderTop: "1px solid var(--border-subtle)",
+          }}
         >
           {activeModule === "dashboard"
-            ? "BTC EQUITY — Overview: BTC price, live futures positions, equity, PnL, and key stats inside the separate $1,000,000 paper account."
+            ? "BTC Equity — Overview: BTC price, live futures positions, equity, PnL, and key stats."
             : activeModule === "engine"
-            ? "BTC EQUITY — Trade Engine: Advanced charts, AI panels, controls, strategy analytics, and logs for the BTC futures desk."
+            ? "BTC Equity — Trade Engine: Charts, AI panels, controls, strategy analytics, and logs."
             : activeModule === "history"
-            ? "BTC EQUITY — Trade History: Completed futures trade ledger and strategy breakdown for the 5% per-position BTC futures account."
+            ? "BTC Equity — Trade History: Completed futures trade ledger and strategy breakdown."
             : activeModule === "options"
-            ? "OPTIONS ACCOUNT — 50 autonomous BTC option scalping strategies. Completely separate $1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
+            ? "Options — 50 autonomous BTC option scalping strategies. Separate $1M paper account, 1% per trade."
             : activeModule === "cryptoEquity"
-            ? "CRYPTO EQUITY — 40-coin crypto market workspace with 50 autonomous spot strategies, separate $1,000,000 paper capital, and 5% capital deployed per trade."
+            ? "Crypto Equity — 40-coin workspace with 50 autonomous spot strategies. $1M paper capital, 5% per trade."
             : activeModule === "niftySelling"
-            ? "OPTIONS SELLING ACCOUNT — Separate NIFTY 50 short-option workspace focused on premium decay, with independent paper capital and guarded reset controls."
+            ? "Options Selling — NIFTY 50 short-option workspace focused on premium decay."
             : activeModule === "nifty"
-            ? "OPTIONS ACCOUNT — Nifty 50 option scalper running autonomous strategies on live NSE NIFTY 50 spot data inside a separate ₹1,000,000 paper account with 1% capital per trade. Zero overlap with futures."
+            ? "Options — Nifty 50 option scalper on live NSE data. Separate ₹1M paper account, 1% per trade."
             : activeModule === "niftyStocks"
-            ? "EQUITY ACCOUNT — Nifty 50 equity scalper using live NSE NIFTY 50 spot data, separate ₹1,000,000 paper capital, 1% capital per trade, and a dedicated stock strategy roster."
+            ? "Equity — Nifty 50 equity scalper with dedicated stock strategy roster. ₹1M paper capital."
             : activeModule === "mcx"
-            ? "COMMODITY ACCOUNT — MCX commodity option scalper trading Crude Oil, Gold Mini, Silver Mini, Natural Gas, and Copper autonomously via Angel One SmartAPI. Separate ₹1,000,000 paper account. 20 strategies across 5 commodities."
+            ? "Commodity — MCX option scalper: Crude, Gold, Silver, Gas, Copper. 20 strategies, ₹1M paper."
             : activeModule === "liveDataLab"
-            ? "PROBE — Live connectivity test for Delta Exchange (BTC perpetual) and Angel One SmartAPI (NIFTY 50). No trading. Isolated from all live feeds."
+            ? "Probe — Live connectivity test for Delta Exchange and Angel One SmartAPI."
             : activeModule === "charts"
-            ? "CHARTS — TradingView advanced charts for NIFTY 50, Bank Nifty, BTC, ETH, and MCX commodities. Switch symbols, timeframes, and chart styles interactively."
-            : "OPTIONS VIEW — Live BTC option chain with full Greeks and IV smile. Delta Exchange layout. Read-only, no trading account."}
+            ? "Charts — TradingView advanced charts for NIFTY 50, Bank Nifty, BTC, ETH, and MCX."
+            : "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."}
         </div>
       </div>
 
