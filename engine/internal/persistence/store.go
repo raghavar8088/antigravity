@@ -65,6 +65,19 @@ type OptionsSellingState struct {
 	SavedAt    time.Time       `json:"savedAt"`
 }
 
+// NiftyOptionsSellingState is the persisted snapshot for the NIFTY options selling engine.
+type NiftyOptionsSellingState struct {
+	Balance    float64         `json:"balance"`
+	LastPrice  float64         `json:"lastPrice"`
+	LastMinute int64           `json:"lastMinute"`
+	TradeSeq   int             `json:"tradeSeq"`
+	PriceHist  json.RawMessage `json:"priceHist"`
+	MinuteBars json.RawMessage `json:"minuteBars"`
+	Trades     json.RawMessage `json:"trades"`
+	Strategies json.RawMessage `json:"strategies"`
+	SavedAt    time.Time       `json:"savedAt"`
+}
+
 // Store handles all database persistence operations.
 type Store struct {
 	pool *pgxpool.Pool
@@ -147,6 +160,15 @@ func NewStore(ctx context.Context) (*Store, error) {
 		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_trades_json TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_strategies_json TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_last_minute BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_trade_seq INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_trades_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_strategies_json TEXT NOT NULL DEFAULT '[]'`,
+		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
 	} {
 		if _, err = pool.Exec(ctx, stmt); err != nil {
 			return nil, fmt.Errorf("failed to migrate options columns: %w", err)
@@ -488,6 +510,79 @@ func (s *Store) SaveOptionsSellingState(ctx context.Context, state *OptionsSelli
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save options selling state: %w", err)
+	}
+	return nil
+}
+
+// LoadNiftyOptionsSellingState retrieves the last saved NIFTY options selling engine snapshot.
+func (s *Store) LoadNiftyOptionsSellingState(ctx context.Context) (*NiftyOptionsSellingState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var state NiftyOptionsSellingState
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT nifty_options_selling_balance, nifty_options_selling_last_price, nifty_options_selling_last_minute, nifty_options_selling_trade_seq,
+		       nifty_options_selling_price_hist_json, nifty_options_selling_minute_bars_json,
+		       nifty_options_selling_trades_json, nifty_options_selling_strategies_json, nifty_options_selling_saved_at
+		FROM engine_state WHERE id = 1
+	`).Scan(
+		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
+		&priceHistJSON, &minuteBarsJSON,
+		&tradesJSON, &strategiesJSON, &state.SavedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load nifty options selling state: %w", err)
+	}
+
+	state.PriceHist = json.RawMessage(priceHistJSON)
+	state.MinuteBars = json.RawMessage(minuteBarsJSON)
+	state.Trades = json.RawMessage(tradesJSON)
+	state.Strategies = json.RawMessage(strategiesJSON)
+	return &state, nil
+}
+
+// SaveNiftyOptionsSellingState persists the NIFTY options selling engine snapshot.
+func (s *Store) SaveNiftyOptionsSellingState(ctx context.Context, state *NiftyOptionsSellingState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	priceHistJSON := string(state.PriceHist)
+	if priceHistJSON == "" {
+		priceHistJSON = "[]"
+	}
+	minuteBarsJSON := string(state.MinuteBars)
+	if minuteBarsJSON == "" {
+		minuteBarsJSON = "[]"
+	}
+	tradesJSON := string(state.Trades)
+	if tradesJSON == "" {
+		tradesJSON = "[]"
+	}
+	strategiesJSON := string(state.Strategies)
+	if strategiesJSON == "" {
+		strategiesJSON = "[]"
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		UPDATE engine_state SET
+			nifty_options_selling_balance = $1,
+			nifty_options_selling_last_price = $2,
+			nifty_options_selling_last_minute = $3,
+			nifty_options_selling_trade_seq = $4,
+			nifty_options_selling_price_hist_json = $5,
+			nifty_options_selling_minute_bars_json = $6,
+			nifty_options_selling_trades_json = $7,
+			nifty_options_selling_strategies_json = $8,
+			nifty_options_selling_saved_at = NOW()
+		WHERE id = 1
+	`,
+		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
+		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save nifty options selling state: %w", err)
 	}
 	return nil
 }

@@ -44,6 +44,14 @@ type Engine struct {
 }
 
 func NewEngine() *Engine {
+	return newEngineWithProfile(defaultOptionsMarketProfile)
+}
+
+func NewNiftyEngine() *Engine {
+	return newEngineWithProfile(niftyOptionsMarketProfile)
+}
+
+func newEngineWithProfile(profile MarketProfile) *Engine {
 	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
@@ -55,7 +63,7 @@ func NewEngine() *Engine {
 
 	engine := &Engine{
 		states:        states,
-		marketProfile: defaultOptionsMarketProfile,
+		marketProfile: profile,
 		balance:       initialOptionsBalance,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())

@@ -5,6 +5,7 @@ import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import type { OptionPosition, OptionStats, OptionStrategyStatus, OptionTrade } from "@/hooks/useNiftyOptions";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const INITIAL_BALANCE = 1_000_000;
 
 function fmtINR(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -54,10 +55,11 @@ type Props = {
   positions: OptionPosition[];
   trades: OptionTrade[];
   strategies: OptionStrategyStatus[];
-  stats: OptionStats;
+  stats: OptionStats | null;
   clearAll: () => void;
   barCount: number;
   enginePrice: number;
+  onRefresh?: () => void;
 };
 
 export default function Nifty50OptionSellingScalper({
@@ -69,21 +71,45 @@ export default function Nifty50OptionSellingScalper({
   clearAll,
   barCount,
   enginePrice,
+  onRefresh,
 }: Props) {
   const market = useNiftyMarket();
   const [isResetting, setIsResetting] = useState(false);
   const actionButtonTitle = actionsEnabled ? "Action buttons are enabled." : "Set Action to Yes to enable reset and clear buttons.";
-  const equity = stats?.equity ?? INITIAL_BALANCE;
+  const resolvedStats: OptionStats = stats ?? {
+    balance: INITIAL_BALANCE,
+    equity: INITIAL_BALANCE,
+    totalTrades: 0,
+    openPositions: positions.length,
+    totalWins: 0,
+    totalLosses: 0,
+    winRate: 0,
+    totalPnl: 0,
+    totalPremiumSpent: 0,
+    unrealizedPnl: 0,
+  };
+  const equity = resolvedStats.equity;
   const sessionPnl = equity - INITIAL_BALANCE;
   const bestStrategy = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl)[0] ?? null;
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!actionsEnabled) return;
     if (!confirm("Reset the NIFTY option selling paper account to ₹10,00,000? All history will be cleared.")) return;
     setIsResetting(true);
     clearAll();
-    setTimeout(() => setIsResetting(false), 250);
+    try {
+      const response = await fetch(`${API_URL}/api/nifty-options-selling/reset`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("reset failed");
+      }
+      onRefresh?.();
+    } catch {
+      window.alert("NIFTY option selling reset failed. Check engine connectivity.");
+    } finally {
+      setIsResetting(false);
+    }
   };
+  const displayedEnginePrice = enginePrice > 0 ? enginePrice : market.price;
 
   return (
     <div className="space-y-6">
@@ -115,7 +141,7 @@ export default function Nifty50OptionSellingScalper({
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600">
-                Feed {enginePrice > 0 ? `₹${enginePrice.toFixed(0)}` : "Connecting..."}
+                Feed {displayedEnginePrice > 0 ? `₹${displayedEnginePrice.toFixed(0)}` : "Connecting..."}
               </span>
               <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600">
                 {barCount >= 12 ? `${barCount} bars` : `Warming ${barCount}/12`}
@@ -128,12 +154,25 @@ export default function Nifty50OptionSellingScalper({
           <div className="flex flex-col justify-between gap-5 border-t px-6 py-7 md:px-8 lg:border-l lg:border-t-0" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
             <div className="grid grid-cols-2 gap-3">
               <SummaryCard label="Session PnL" value={fmtINR(sessionPnl, { signed: true })} accent={sessionPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
-              <SummaryCard label="Win Rate" value={stats.totalTrades > 0 ? fmtPct(stats.winRate) : "--"} detail={`${stats.totalTrades} trades`} />
-              <SummaryCard label="Open Positions" value={`${stats.openPositions}`} detail="Short premium positions" />
+              <SummaryCard label="Win Rate" value={resolvedStats.totalTrades > 0 ? fmtPct(resolvedStats.winRate) : "--"} detail={`${resolvedStats.totalTrades} trades`} />
+              <SummaryCard label="Open Positions" value={`${resolvedStats.openPositions}`} detail="Short premium positions" />
               <SummaryCard label="Best Strategy" value={bestStrategy ? bestStrategy.name.replace(/_/g, " ") : "Waiting"} detail={bestStrategy ? fmtINR(bestStrategy.totalPnl, { signed: true }) : "No closed trades yet"} />
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm" onClick={() => { if (!actionsEnabled) return; clearAll(); }}>
+              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm" onClick={async () => {
+                if (!actionsEnabled) return;
+                if (!confirm("Clear completed NIFTY option selling trades and strategy stats? Open positions and balance will be kept.")) return;
+                clearAll();
+                try {
+                  const response = await fetch(`${API_URL}/api/nifty-options-selling/clear-history`, { method: "POST" });
+                  if (!response.ok) {
+                    throw new Error("clear history failed");
+                  }
+                  onRefresh?.();
+                } catch {
+                  window.alert("Clearing NIFTY option selling history failed. Check engine connectivity.");
+                }
+              }}>
                 Clear NIFTY Selling Trades
               </button>
               <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm" onClick={handleReset}>
@@ -145,10 +184,10 @@ export default function Nifty50OptionSellingScalper({
       </section>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
-        <SummaryCard label="Cash Balance" value={fmtINR(stats.balance)} />
-        <SummaryCard label="Realized PnL" value={fmtINR(stats.totalPnl, { signed: true })} accent={stats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
-        <SummaryCard label="Unrealized" value={fmtINR(stats.unrealizedPnl, { signed: true })} accent={stats.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
-        <SummaryCard label="Wins / Losses" value={`${stats.totalWins}/${stats.totalLosses}`} />
+        <SummaryCard label="Cash Balance" value={fmtINR(resolvedStats.balance)} />
+        <SummaryCard label="Realized PnL" value={fmtINR(resolvedStats.totalPnl, { signed: true })} accent={resolvedStats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Unrealized" value={fmtINR(resolvedStats.unrealizedPnl, { signed: true })} accent={resolvedStats.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Wins / Losses" value={`${resolvedStats.totalWins}/${resolvedStats.totalLosses}`} />
         <SummaryCard label="Strategies" value={`${strategies.length}`} detail={`${strategies.filter((item) => item.status === "READY" || item.status === "IN_POSITION").length} live`} />
         <SummaryCard label="Premium Engine" value="Decay First" detail="Short calls and short puts" />
       </div>

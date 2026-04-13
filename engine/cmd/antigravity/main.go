@@ -283,6 +283,69 @@ func loadOptionsSellingSnapshot(state *persistence.OptionsSellingState) (options
 	return snapshot, nil
 }
 
+func saveNiftyOptionsSellingSnapshot(ctx context.Context, store *persistence.Store, snapshot options_selling.PersistedState) error {
+	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options selling price history: %w", err)
+	}
+	minuteBarsJSON, err := json.Marshal(snapshot.MinuteBars)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options selling minute bars: %w", err)
+	}
+	tradesJSON, err := json.Marshal(snapshot.Trades)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options selling trades: %w", err)
+	}
+	strategiesJSON, err := json.Marshal(snapshot.Strategies)
+	if err != nil {
+		return fmt.Errorf("marshal nifty options selling strategies: %w", err)
+	}
+
+	return store.SaveNiftyOptionsSellingState(ctx, &persistence.NiftyOptionsSellingState{
+		Balance:    snapshot.Balance,
+		LastPrice:  snapshot.LastPrice,
+		LastMinute: snapshot.LastMinute,
+		TradeSeq:   snapshot.TradeSeq,
+		PriceHist:  priceHistJSON,
+		MinuteBars: minuteBarsJSON,
+		Trades:     tradesJSON,
+		Strategies: strategiesJSON,
+	})
+}
+
+func loadNiftyOptionsSellingSnapshot(state *persistence.NiftyOptionsSellingState) (options_selling.PersistedState, error) {
+	snapshot := options_selling.PersistedState{
+		Balance:    state.Balance,
+		LastPrice:  state.LastPrice,
+		LastMinute: state.LastMinute,
+		TradeSeq:   state.TradeSeq,
+		SavedAt:    state.SavedAt,
+	}
+
+	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
+		if err := json.Unmarshal(state.PriceHist, &snapshot.PriceHist); err != nil {
+			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling price history: %w", err)
+		}
+	}
+	if len(state.MinuteBars) > 0 && string(state.MinuteBars) != "[]" {
+		if err := json.Unmarshal(state.MinuteBars, &snapshot.MinuteBars); err != nil {
+			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling minute bars: %w", err)
+		}
+	}
+	if len(state.Trades) > 0 && string(state.Trades) != "[]" {
+		if err := json.Unmarshal(state.Trades, &snapshot.Trades); err != nil {
+			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling trades: %w", err)
+		}
+	}
+	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
+		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
+			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling strategies: %w", err)
+		}
+	}
+
+	return snapshot, nil
+}
+
 func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
@@ -525,6 +588,7 @@ func main() {
 	optionsEngine := options.NewEngine()
 	optionsSellingEngine := options_selling.NewEngine()
 	niftyOptionsEngine = options.NewNiftyEngine()
+	niftyOptionsSellingEngine := options_selling.NewNiftyEngine()
 
 	// Delta Exchange live bridge — mirrors paper sell signals to real orders
 	deltaBridge := delta.NewBridge()
@@ -584,8 +648,6 @@ func main() {
 			}
 		}
 
-
-
 		sellOptState, loadErr := dbStore.LoadOptionsSellingState(ctx)
 		if loadErr != nil {
 			log.Printf("[DB] ⚠️  Failed to load options selling state: %v", loadErr)
@@ -635,6 +697,34 @@ func main() {
 				)
 			}
 		}
+
+		niftyOptionsSellingEngine.SetStateSaveHook(func(snapshot options_selling.PersistedState) {
+			if err := saveNiftyOptionsSellingSnapshot(context.Background(), dbStore, snapshot); err != nil {
+				log.Printf("[DB] WARN Failed to save NIFTY options selling state: %v", err)
+			}
+		})
+
+		niftySellingState, loadErr := dbStore.LoadNiftyOptionsSellingState(ctx)
+		if loadErr != nil {
+			log.Printf("[DB] WARN Failed to load NIFTY options selling state: %v", loadErr)
+		} else {
+			snapshot, snapshotErr := loadNiftyOptionsSellingSnapshot(niftySellingState)
+			if snapshotErr != nil {
+				log.Printf("[DB] WARN Failed to decode NIFTY options selling state: %v", snapshotErr)
+			} else {
+				niftyOptionsSellingEngine.RestoreState(snapshot)
+				restoredOpen := 0
+				for _, strategyState := range snapshot.Strategies {
+					if strategyState.Position != nil {
+						restoredOpen++
+					}
+				}
+				log.Printf(
+					"[DB] RESTORE NIFTY options SELLING state from %s | Balance: INR %.2f | Open Positions: %d | Trades: %d",
+					niftySellingState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
+				)
+			}
+		}
 	}
 
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
@@ -681,6 +771,7 @@ func main() {
 			lastErr = ""
 			niftyMarketCache.Update(quote)
 			niftyOptionsEngine.UpdatePrice(quote.Price)
+			niftyOptionsSellingEngine.UpdatePrice(quote.Price)
 			niftyStocksEngine.UpdatePrice(quote.Price)
 		}
 
@@ -698,6 +789,7 @@ func main() {
 	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
 	go safeGo("OptionsSellingScalper", func() { optionsSellingEngine.Run(ctx.Done()) })
 	go safeGo("NiftyOptionsScalper", func() { niftyOptionsEngine.Run(ctx.Done()) })
+	go safeGo("NiftyOptionsSellingScalper", func() { niftyOptionsSellingEngine.Run(ctx.Done()) })
 
 	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
@@ -779,6 +871,12 @@ func main() {
 	http.HandleFunc("/api/nifty-options/stats", niftyOptionsEngine.HandleStats)
 	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
 	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
+	http.HandleFunc("/api/nifty-options-selling/positions", niftyOptionsSellingEngine.HandlePositions)
+	http.HandleFunc("/api/nifty-options-selling/trades", niftyOptionsSellingEngine.HandleTrades)
+	http.HandleFunc("/api/nifty-options-selling/strategies", niftyOptionsSellingEngine.HandleStrategies)
+	http.HandleFunc("/api/nifty-options-selling/stats", niftyOptionsSellingEngine.HandleStats)
+	http.HandleFunc("/api/nifty-options-selling/reset", niftyOptionsSellingEngine.HandleReset)
+	http.HandleFunc("/api/nifty-options-selling/clear-history", niftyOptionsSellingEngine.HandleClearHistory)
 	http.HandleFunc("/api/nifty-option-chain", niftyOptionsEngine.HandleOptionChain)
 	http.HandleFunc("/api/nifty-options/inject-candles", handleNiftyInjectCandles)
 
