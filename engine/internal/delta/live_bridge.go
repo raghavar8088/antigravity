@@ -219,10 +219,12 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 
 		// To close a short option sell position, we BUY to close
 		result, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
-			ProductID: trade.ProductID,
-			Size:      trade.Contracts,
-			Side:      SideBuy,
-			OrderType: TypeMarket,
+			ProductID:            trade.ProductID,
+			Size:                 trade.Contracts,
+			Side:                 SideBuy,
+			OrderType:            TypeMarket,
+			ReduceOnly:           true,
+			CancelOrdersAccepted: "true",
 		})
 		now := time.Now().UTC()
 		if err != nil {

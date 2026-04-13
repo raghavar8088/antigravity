@@ -47,13 +47,15 @@ const (
 
 // PlaceOrderRequest mirrors Delta Exchange POST /v2/orders payload.
 type PlaceOrderRequest struct {
-	ProductID   int       `json:"product_id"`
-	Size        int       `json:"size"`   // number of contracts
-	Side        OrderSide `json:"side"`   // "buy" or "sell"
-	OrderType   OrderType `json:"order_type"`
-	LimitPrice  string    `json:"limit_price,omitempty"`
-	TimeInForce string    `json:"time_in_force,omitempty"` // "gtc", "ioc", "fok"
-	PostOnly    bool      `json:"post_only,omitempty"`
+	ProductID            int       `json:"product_id"`
+	Size                 int       `json:"size"`        // number of contracts
+	Side                 OrderSide `json:"side"`        // "buy" or "sell"
+	OrderType            OrderType `json:"order_type"`
+	LimitPrice           string    `json:"limit_price,omitempty"`
+	TimeInForce          string    `json:"time_in_force,omitempty"` // "gtc", "ioc", "fok"
+	PostOnly             bool      `json:"post_only,omitempty"`
+	ReduceOnly           bool      `json:"reduce_only,omitempty"`            // required for closing positions
+	CancelOrdersAccepted string   `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
 }
 
 // PlaceOrderResult is a simplified view of Delta's order response.

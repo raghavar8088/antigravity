@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
         size: contracts,
         side: "sell",
         order_type: "market_order",
+        reduce_only: false,
+        order_source: "place_order",
       });
       if (!result.ok) {
         const err = result.data as { error?: { code?: string; message?: string } };
@@ -68,6 +70,8 @@ export async function POST(req: NextRequest) {
         size: contracts,
         side: "buy",
         order_type: "market_order",
+        reduce_only: true,
+        cancel_orders_accepted: "true",
       });
       if (!result.ok) {
         const err = result.data as { error?: { code?: string; message?: string } };
