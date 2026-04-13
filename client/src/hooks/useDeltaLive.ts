@@ -80,6 +80,12 @@ export type DeltaLiveStats = {
   account?: AccountInfo;
 };
 
+export type DeltaRuntimeStatus = {
+  configured: boolean;
+  testnet: boolean;
+  error?: string;
+};
+
 const EMPTY_STATS: DeltaLiveStats = {
   configured: false,
   testnet: false,
@@ -96,12 +102,17 @@ export default function useDeltaLive(refreshKey = 0) {
   const [stats, setStats] = useState<DeltaLiveStats>(EMPTY_STATS);
   const [trades, setTrades] = useState<DeltaLiveTrade[]>([]);
   const [toggling, setToggling] = useState(false);
+  const [nextStatus, setNextStatus] = useState<DeltaRuntimeStatus>({
+    configured: false,
+    testnet: false,
+  });
 
   const fetchDeltaState = useCallback(async () => {
     try {
-      const [statsRes, tradesRes] = await Promise.all([
+      const [statsRes, tradesRes, accountRes] = await Promise.all([
         fetch(`${API_URL}/api/delta-live/stats`, { cache: "no-store" }),
         fetch(`${API_URL}/api/delta-live/trades`, { cache: "no-store" }),
+        fetch("/api/delta/account", { cache: "no-store" }),
       ]);
 
       if (statsRes.ok) {
@@ -112,6 +123,19 @@ export default function useDeltaLive(refreshKey = 0) {
       if (tradesRes.ok) {
         const tradesData = await tradesRes.json() as DeltaLiveTrade[];
         setTrades(tradesData);
+      }
+
+      if (accountRes.ok) {
+        const accountData = await accountRes.json() as {
+          configured: boolean;
+          testnet: boolean;
+          account?: AccountInfo;
+        };
+        setNextStatus({
+          configured: accountData.configured,
+          testnet: accountData.testnet,
+          error: accountData.account?.error,
+        });
       }
     } catch {
       // Engine offline or Delta bridge unavailable.
@@ -150,5 +174,5 @@ export default function useDeltaLive(refreshKey = 0) {
     }
   }, [fetchDeltaState]);
 
-  return { stats, trades, toggling, toggleEnabled };
+  return { stats, trades, toggling, toggleEnabled, nextStatus };
 }

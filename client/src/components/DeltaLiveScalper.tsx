@@ -3,6 +3,7 @@ import { useState } from "react";
 import useDeltaLive, {
   type DeltaLiveTrade,
   type DeltaLiveStats,
+  type DeltaRuntimeStatus,
   type WalletEntry,
   type LivePosition,
   type OpenOrder,
@@ -35,22 +36,62 @@ function StatusBadge({ status }: { status: DeltaLiveTrade["status"] }) {
 }
 
 // ─── Enable/Disable banner ───────────────────────────────────────────────────
-function EnableBanner({ stats, toggling, onToggle }: { stats: DeltaLiveStats; toggling: boolean; onToggle: (v: boolean) => void }) {
-  if (!stats.configured) {
+function RuntimeStatusPill({ label, configured, detail }: { label: string; configured: boolean; detail: string }) {
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs ${
+      configured ? "border-emerald-600/40 bg-emerald-900/20 text-emerald-200" : "border-red-700/40 bg-red-900/20 text-red-200"
+    }`}>
+      <div className="font-semibold">{label}: {configured ? "Configured" : "Not Configured"}</div>
+      <div className="mt-1 opacity-80">{detail}</div>
+    </div>
+  );
+}
+
+function EnableBanner({
+  stats,
+  nextStatus,
+  toggling,
+  onToggle,
+}: {
+  stats: DeltaLiveStats;
+  nextStatus: DeltaRuntimeStatus;
+  toggling: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  if (!stats.configured || !nextStatus.configured) {
     return (
       <div className="bg-yellow-900/40 border border-yellow-600 rounded-xl p-4">
         <div className="flex items-start gap-3">
           <span className="text-yellow-400 text-2xl">⚠️</span>
-          <div>
-            <div className="text-yellow-300 font-bold mb-1">Delta Exchange Not Configured</div>
-            <div className="text-yellow-200/80 text-xs mb-3">Set these environment variables on the Go engine server:</div>
-            <div className="bg-black/50 rounded-lg p-3 font-mono text-xs space-y-1">
+          <div className="flex-1">
+            <div className="text-yellow-300 font-bold mb-1">Delta Runtime Configuration Check</div>
+            <div className="text-yellow-200/80 text-xs mb-3">
+              This screen depends on two different runtimes. The Go engine powers live mirroring, while Vercel / Next.js powers the test-order routes.
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <RuntimeStatusPill
+                label="Go Engine"
+                configured={stats.configured}
+                detail={stats.configured ? `Ready${stats.testnet ? " · testnet" : " · production"}` : "Set DELTA_API_KEY and DELTA_API_SECRET on the Go backend server"}
+              />
+              <RuntimeStatusPill
+                label="Vercel / Next.js"
+                configured={nextStatus.configured}
+                detail={nextStatus.configured ? `Ready${nextStatus.testnet ? " · testnet" : " · production"}` : "Set DELTA_API_KEY and DELTA_API_SECRET in Vercel project env vars"}
+              />
+            </div>
+            <div className="bg-black/50 rounded-lg p-3 font-mono text-xs space-y-1 mt-3">
               <div className="text-green-300">DELTA_API_KEY=<span className="text-gray-400">your_api_key</span></div>
               <div className="text-green-300">DELTA_API_SECRET=<span className="text-gray-400">your_api_secret</span></div>
               <div className="text-gray-500"># Optional testnet</div>
               <div className="text-gray-400">DELTA_TESTNET=true</div>
             </div>
             <div className="text-yellow-200/60 text-xs mt-2">API keys: <span className="text-yellow-300">india.delta.exchange → Settings → API Keys</span></div>
+            {nextStatus.error && (
+              <div className="text-yellow-200/80 text-xs mt-3">
+                Vercel / Next.js message: {nextStatus.error}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -500,7 +541,7 @@ type MainTab = "test" | "account" | "positions" | "orders" | "mirrored";
 
 export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const { stats, trades, toggling, toggleEnabled } = useDeltaLive(refreshKey);
+  const { stats, trades, toggling, toggleEnabled, nextStatus } = useDeltaLive(refreshKey);
   const [tab, setTab] = useState<MainTab>("test");
   const [mirroredFilter, setMirroredFilter] = useState<"open" | "all">("open");
 
@@ -538,7 +579,12 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
       </div>
 
       {/* ── Enable banner ───────────────────────────────────────────── */}
-      <EnableBanner stats={stats} toggling={toggling} onToggle={actionsEnabled ? toggleEnabled : () => {}} />
+      <EnableBanner
+        stats={stats}
+        nextStatus={nextStatus}
+        toggling={toggling}
+        onToggle={actionsEnabled ? toggleEnabled : () => {}}
+      />
 
       {/* ── Top KPI row ─────────────────────────────────────────────── */}
       {stats.configured && (
