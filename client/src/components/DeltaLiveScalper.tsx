@@ -8,6 +8,7 @@ import useDeltaLive, {
   type LivePosition,
   type OpenOrder,
 } from "@/hooks/useDeltaLive";
+import useDeltaStrikes from "@/hooks/useDeltaStrikes";
 
 type Props = { actionsEnabled?: boolean };
 
@@ -442,278 +443,306 @@ function TestOrderTab({
   actionsEnabled,
   positions,
   onOrderPlaced,
+  walletUsdt,
 }: {
   actionsEnabled: boolean;
   positions: LivePosition[];
   onOrderPlaced: () => void;
+  walletUsdt: number;
 }) {
-  const [optionType, setOptionType] = useState<"CALL" | "PUT">("CALL");
-  const [strike, setStrike] = useState("120000");
-  const [premiumUsd, setPremiumUsd] = useState("100");
-  const [closeProductId, setCloseProductId] = useState("");
-  const [closeContracts, setCloseContracts] = useState("1");
-  const [submitting, setSubmitting] = useState<"open" | "close" | null>(null);
+  const [side, setSide] = useState<"buy" | "sell">("sell"); // sell = open, buy = close/reduce
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [strike, setStrike] = useState("");
+  const [premiumUsd, setPremiumUsd] = useState("10");
+  const [contracts, setContracts] = useState("1");
+  const [leverage, setLeverage] = useState("10x");
+  const [reduceOnly, setReduceOnly] = useState(false);
+  
+  // Custom Hook for strikes
+  const { strikes, loading: strikesLoading } = useDeltaStrikes();
+  
+  const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [lastResult, setLastResult] = useState<TestOrderResponse | null>(null);
 
-  const submitOpen = async () => {
-    setSubmitting("open");
+  // Auto-switch side if reduceOnly is toggled
+  const handleReduceChange = (v: boolean) => {
+    setReduceOnly(v);
+    if (v) setSide("buy");
+  };
+
+  const handleAction = async () => {
+    setSubmitting(true);
     setFeedback(null);
     try {
+      const isClose = side === "buy" || reduceOnly;
+      const payload = isClose 
+        ? {
+            action: "close",
+            productId: Number(strike), // In 'close' mode, user can treat strike field as product ID or we use a dedicated logic
+            contracts: Number(contracts),
+          }
+        : {
+            action: "open",
+            optionType: "CALL", // default to CALL, can be improved to detect from symbol
+            strike: Number(strike),
+            premiumUsd: Number(premiumUsd),
+          };
+
       const response = await fetch("/api/delta/mirror", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "open",
-          optionType,
-          strike: Number(strike),
-          premiumUsd: Number(premiumUsd),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json() as TestOrderResponse;
       setLastResult(data);
       if (response.ok && data.ok) {
         setFeedback({
           tone: "success",
-          text: `Open order placed on Delta. Order ID ${data.orderId ?? "-"}${data.symbol ? ` | ${data.symbol}` : ""}`,
+          text: `${isClose ? "Close" : "Open"} order placed successfully.`,
         });
         onOrderPlaced();
       } else {
-        setFeedback({ tone: "error", text: data.error ?? "Failed to place Delta open order." });
+        setFeedback({ tone: "error", text: data.error ?? "Order execution failed." });
       }
     } catch (error) {
       setFeedback({ tone: "error", text: String(error) });
     } finally {
-      setSubmitting(null);
+      setSubmitting(false);
     }
   };
 
-  const submitClose = async () => {
-    setSubmitting("close");
-    setFeedback(null);
-    try {
-      const response = await fetch("/api/delta/mirror", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "close",
-          productId: Number(closeProductId),
-          contracts: Number(closeContracts),
-        }),
-      });
-      const data = await response.json() as TestOrderResponse;
-      setLastResult(data);
-      if (response.ok && data.ok) {
-        setFeedback({
-          tone: "success",
-          text: `Close order placed on Delta. Order ID ${data.closeOrderId ?? "-"} | ${Number(closeContracts) || 0} contract(s)`,
-        });
-        onOrderPlaced();
-      } else {
-        setFeedback({ tone: "error", text: data.error ?? "Failed to place Delta close order." });
-      }
-    } catch (error) {
-      setFeedback({ tone: "error", text: String(error) });
-    } finally {
-      setSubmitting(null);
-    }
-  };
+  const sideColor = side === "buy" ? "var(--green)" : "var(--red)";
+  const sideBg = side === "buy" ? "var(--green-dim)" : "var(--red-dim)";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Warning banner */}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+      {/* ── Left Side: Order Panel ────────────────────────────────── */}
       <div
         style={{
-          padding: "10px 16px",
+          flex: "0 0 340px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+          padding: 20,
           borderRadius: "var(--radius-card)",
-          border: "1px solid rgba(227, 116, 0, 0.2)",
-          background: "var(--amber-dim)",
-          fontSize: 12,
-          color: "var(--amber)",
-          fontFamily: "var(--font-display)",
-          fontWeight: 500,
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
         }}
       >
-        ⚠ This tab sends live test orders to Delta Exchange. Use small size and prefer testnet first.
-      </div>
-
-      {!actionsEnabled && (
-        <div
-          style={{
-            padding: "10px 16px",
-            borderRadius: "var(--radius-card)",
-            border: "1px solid var(--border)",
-            background: "var(--surface-2)",
-            fontSize: 12,
-            color: "var(--text-muted)",
-          }}
-        >
-          Action buttons are disabled. Turn Action to Yes to use this test order panel.
-        </div>
-      )}
-
-      {/* Order forms */}
-      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
-        {/* Open order */}
-        <div
-          style={{
-            padding: 20,
-            borderRadius: "var(--radius-card)",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-          }}
-        >
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
-              Open Test Sell Order
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-              Finds the nearest Delta option contract and sends a market sell order.
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(3, 1fr)" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Option Type</span>
-              <select value={optionType} onChange={(e) => setOptionType(e.target.value as "CALL" | "PUT")} style={selectStyle}>
-                <option value="CALL">CALL</option>
-                <option value="PUT">PUT</option>
-              </select>
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Strike</span>
-              <input value={strike} onChange={(e) => setStrike(e.target.value)} inputMode="decimal" style={inputStyle} placeholder="120000" />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Premium USD</span>
-              <input value={premiumUsd} onChange={(e) => setPremiumUsd(e.target.value)} inputMode="decimal" style={inputStyle} placeholder="100" />
-            </label>
-          </div>
-
+        {/* Buy/Sell Side Toggle */}
+        <div style={{ display: "flex", height: 36, background: "var(--surface-2)", borderRadius: 6, padding: 3, gap: 4 }}>
           <button
-            type="button"
-            disabled={!actionsEnabled || submitting !== null}
-            onClick={() => void submitOpen()}
-            className="btn-danger"
-            style={{ alignSelf: "flex-start" }}
+            onClick={() => { setSide("buy"); setReduceOnly(true); }}
+            style={{
+              flex: 1, border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              background: side === "buy" ? "var(--green)" : "transparent",
+              color: side === "buy" ? "#fff" : "var(--text-secondary)",
+              transition: "all 0.2s"
+            }}
           >
-            {submitting === "open" ? "Placing…" : "Place Open Test Order"}
+            Buy | Long
+          </button>
+          <button
+            onClick={() => { setSide("sell"); setReduceOnly(false); }}
+            style={{
+              flex: 1, border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              background: side === "sell" ? "var(--red)" : "transparent",
+              color: side === "sell" ? "#fff" : "var(--text-secondary)",
+              transition: "all 0.2s"
+            }}
+          >
+            Sell | Short
           </button>
         </div>
 
-        {/* Close order */}
-        <div
-          style={{
-            padding: 20,
-            borderRadius: "var(--radius-card)",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-          }}
-        >
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
-              Close Test Order
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-              Sends a market buy order for a Delta option product ID to close a short test position.
-            </div>
+        {/* Leverage Select */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+          <span style={{ color: "var(--text-secondary)" }}>Leverage</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--amber)", fontWeight: 600, cursor: "pointer" }}>
+            {leverage} <span style={{ fontSize: 10 }}>▼</span>
           </div>
+        </div>
 
-          {positions.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Quick fill from live positions</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {positions.slice(0, 6).map((position) => (
-                  <button
-                    key={`${position.productId}-${position.symbol}`}
-                    type="button"
-                    onClick={() => {
-                      setCloseProductId(String(position.productId));
-                      setCloseContracts(String(Math.max(1, Math.round(Math.abs(position.size)))));
-                    }}
-                    style={{
-                      padding: "4px 12px",
-                      borderRadius: "var(--radius-chip)",
-                      border: "1px solid var(--border)",
-                      background: "var(--surface-2)",
-                      color: "var(--accent)",
-                      fontSize: 11,
-                      fontWeight: 500,
-                      cursor: "pointer",
-                      transition: "border-color 0.15s ease",
-                    }}
-                  >
-                    {position.symbol} | ID {position.productId}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* Order Type Tabs */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 16 }}>
+          {["Limit", "Market", "Stop Limit"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setOrderType(t.toLowerCase() as any)}
+              style={{
+                background: "none", border: "none", padding: "8px 0", cursor: "pointer", fontSize: 12, fontWeight: 500,
+                color: orderType === t.toLowerCase() ? "var(--accent)" : "var(--text-muted)",
+                borderBottom: orderType === t.toLowerCase() ? "2px solid var(--accent)" : "2px solid transparent",
+                transition: "all 0.1s"
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Strike Selection */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>{side === "sell" ? "Select Strike" : "Product ID"}</span>
+            {side === "sell" && (
+              <span style={{ fontSize: 10, color: "var(--accent)", cursor: "pointer" }} onClick={() => setStrike("")}>Manual?</span>
+            )}
+          </div>
+          {side === "sell" && strikes.length > 0 ? (
+            <select
+              value={strike}
+              onChange={(e) => setStrike(e.target.value)}
+              style={{ ...selectStyle, border: "1px solid var(--border-subtle)" }}
+            >
+              <option value="">Select Strike...</option>
+              {strikes.slice(0, 20).map(s => (
+                <option key={s.strike} value={s.strike}>${s.strike.toLocaleString()} (IV: {(s.callIv * 100).toFixed(1)}%)</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={strike}
+              onChange={(e) => setStrike(e.target.value)}
+              placeholder={side === "sell" ? "e.g. 96000" : "Delta Product ID"}
+              style={inputStyle}
+            />
           )}
+        </div>
 
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Product ID</span>
-              <input value={closeProductId} onChange={(e) => setCloseProductId(e.target.value)} inputMode="numeric" style={inputStyle} placeholder="12345" />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Contracts</span>
-              <input value={closeContracts} onChange={(e) => setCloseContracts(e.target.value)} inputMode="numeric" style={inputStyle} placeholder="1" />
-            </label>
+        {/* Quantity / Size */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Quantity</span>
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{side === "sell" ? "USD" : "Lots"} <span style={{ fontSize: 8 }}>▼</span></div>
           </div>
+          <input
+            value={side === "sell" ? premiumUsd : contracts}
+            onChange={(e) => side === "sell" ? setPremiumUsd(e.target.value) : setContracts(e.target.value)}
+            style={inputStyle}
+            placeholder={side === "sell" ? "100" : "1"}
+          />
+        </div>
 
-          <button
-            type="button"
-            disabled={!actionsEnabled || submitting !== null}
-            onClick={() => void submitClose()}
-            className="btn-primary"
-            style={{ alignSelf: "flex-start" }}
-          >
-            {submitting === "close" ? "Placing…" : "Place Close Test Order"}
-          </button>
+        {/* Percentage Pills */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 4 }}>
+          {["10%", "25%", "50%", "75%", "100%"].map(p => (
+            <button
+              key={p}
+              onClick={() => {
+                if (side === "sell") setPremiumUsd(String(Math.floor(walletUsdt * parseFloat(p) / 100)));
+              }}
+              style={{
+                padding: "4px 0", border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface-2)",
+                fontSize: 10, color: "var(--text-secondary)", cursor: "pointer", transition: "all 0.1s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {/* Metrics Section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+            <span style={{ color: "var(--text-muted)" }}>Available Margin</span>
+            <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{walletUsdt.toFixed(2)} USD</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+            <span style={{ color: "var(--text-muted)" }}>{side === "buy" ? "Est. Fill" : "Funds Required"}</span>
+            <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>~{side === "sell" ? premiumUsd : "--"} USD</span>
+          </div>
+        </div>
+
+        {/* Big Action Button */}
+        <button
+          onClick={handleAction}
+          disabled={!actionsEnabled || submitting || !strike}
+          style={{
+            width: "100%", height: 44, border: "none", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer",
+            background: side === "buy" ? "var(--green)" : "var(--red)",
+            color: "#fff", marginTop: 8, transition: "opacity 0.2s",
+            opacity: (!actionsEnabled || submitting || !strike) ? 0.5 : 1
+          }}
+        >
+          {submitting ? "Processing..." : side === "buy" ? "Buy / Long" : "Sell / Short"}
+        </button>
+
+        {/* Reduce Only Checkbox */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            id="reduce-only"
+            type="checkbox"
+            checked={reduceOnly}
+            onChange={(e) => handleReduceChange(e.target.checked)}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          <label htmlFor="reduce-only" style={{ fontSize: 13, color: "var(--text-secondary)", cursor: "pointer" }}>Reduce Only</label>
         </div>
       </div>
 
-      {/* Feedback */}
-      {feedback && (
+      {/* ── Right Side: Info & Feed ──────────────────────────────── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
         <div
           style={{
-            padding: "10px 16px",
-            borderRadius: "var(--radius-card)",
-            border: `1px solid ${feedback.tone === "success" ? "rgba(30, 142, 62, 0.25)" : "rgba(217, 48, 37, 0.25)"}`,
-            background: feedback.tone === "success" ? "var(--green-dim)" : "var(--red-dim)",
-            color: feedback.tone === "success" ? "var(--green)" : "var(--red)",
-            fontSize: 13,
-            fontFamily: "var(--font-display)",
+            padding: "12px 16px", borderRadius: "var(--radius-card)", background: "var(--surface-2)",
+            border: "1px solid var(--border)", borderLeft: `4px solid ${sideColor}`,
           }}
         >
-          {feedback.text}
-        </div>
-      )}
-
-      {/* Last response */}
-      {lastResult && (
-        <div
-          style={{
-            padding: 16,
-            borderRadius: "var(--radius-card)",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-          }}
-        >
-          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 13, color: "var(--text-primary)", marginBottom: 8 }}>
-            Last Test Response
+          <div style={{ fontSize: 14, fontWeight: 600, color: sideColor, marginBottom: 4 }}>
+            {side === "sell" ? "Mirror Open Simulation" : "Position Exit Flow"}
           </div>
-          <pre style={{ overflow: "auto", fontSize: 12, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", lineHeight: 1.6, margin: 0 }}>
-            {JSON.stringify(lastResult, null, 2)}
-          </pre>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
+            {side === "sell" 
+              ? "This panel allows you to manually trigger the Delta mirroring engine. It will find the closest expiration for the strike you select and place a market sell order."
+              : "Use the Buy side (or Reduce Only) to exit an existing position. You can click a position button below to auto-fill the Product ID."}
+          </p>
         </div>
-      )}
+
+        {positions.length > 0 && side === "buy" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Quick Exit Buttons</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {positions.map(p => (
+                <button
+                  key={p.symbol}
+                  onClick={() => { setStrike(String(p.productId)); setContracts(String(Math.abs(p.size))); }}
+                  style={{
+                    padding: "6px 14px", borderRadius: "var(--radius-input)", border: "1px solid var(--border)",
+                    background: "var(--surface)", color: "var(--accent)", fontSize: 12, fontWeight: 500, cursor: "pointer"
+                  }}
+                >
+                  Close {p.symbol}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Status/Feedback */}
+        {feedback && (
+          <div style={{
+            padding: 16, borderRadius: "var(--radius-card)", background: feedback.tone === "success" ? "var(--green-dim)" : "var(--red-dim)",
+            color: feedback.tone === "success" ? "var(--green)" : "var(--red)", border: `1px solid ${feedback.tone === "success" ? "rgba(30,142,62,0.2)" : "rgba(217,48,37,0.2)"}`,
+            fontSize: 13, fontWeight: 500
+          }}>
+            {feedback.text}
+          </div>
+        )}
+
+        {/* Response JSON */}
+        {lastResult && (
+          <div style={{ padding: 16, borderRadius: "var(--radius-card)", background: "var(--surface-3)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }}>Response Data</div>
+            <pre style={{ margin: 0, fontSize: 11, color: "var(--text-secondary)", overflowX: "auto", fontFamily: "var(--font-mono)" }}>
+              {JSON.stringify(lastResult, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -946,6 +975,7 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
               actionsEnabled={actionsEnabled}
               positions={account?.positions ?? []}
               onOrderPlaced={refreshDeltaState}
+              walletUsdt={stats.walletUsdt}
             />
           )}
         </div>
