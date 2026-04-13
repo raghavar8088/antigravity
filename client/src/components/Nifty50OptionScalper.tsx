@@ -9,6 +9,7 @@ import useNiftyVIX from "@/hooks/useNiftyVIX";
 import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ── Formatters ──────────────────────────────────────────────────────────────
@@ -685,10 +686,11 @@ type Nifty50OptionScalperProps = {
   positions: OptionPosition[];
   trades: OptionTrade[];
   strategies: OptionStrategyStatus[];
-  stats: OptionStats;
+  stats: OptionStats | null;
   clearAll: () => void;
   barCount: number;
   enginePrice: number;
+  onRefresh?: () => void;
 };
 
 export default function Nifty50OptionScalper({
@@ -700,6 +702,7 @@ export default function Nifty50OptionScalper({
   clearAll,
   barCount,
   enginePrice,
+  onRefresh,
 }: Nifty50OptionScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -717,7 +720,7 @@ export default function Nifty50OptionScalper({
     return () => clearInterval(interval);
   }, []);
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!actionsEnabled) {
       return;
     }
@@ -727,7 +730,17 @@ export default function Nifty50OptionScalper({
 
     setIsResetting(true);
     clearAll();
-    setIsResetting(false);
+    try {
+      const response = await fetch(`${API_URL}/api/nifty-options/reset`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("reset failed");
+      }
+      onRefresh?.();
+    } catch {
+      window.alert("NIFTY options account reset failed. Check engine connectivity.");
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   // ── Derived values ──────────────────────────────────────────────
@@ -781,6 +794,7 @@ export default function Nifty50OptionScalper({
     }
     return `${count}${lastWasWin ? "W" : "L"}`;
   })();
+  const displayedEnginePrice = enginePrice > 0 ? enginePrice : market.price;
 
   return (
     <div className="space-y-5">
@@ -820,7 +834,7 @@ export default function Nifty50OptionScalper({
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
-                <BadgePill label={enginePrice > 0 ? `Feed ₹${enginePrice.toFixed(0)}` : "Feed: Connecting…"} tone={enginePrice > 0 ? "positive" : "neutral"} />
+                <BadgePill label={displayedEnginePrice > 0 ? `Feed ₹${displayedEnginePrice.toFixed(0)}` : "Feed: Connecting…"} tone={displayedEnginePrice > 0 ? "positive" : "neutral"} />
                 <BadgePill label={barCount >= 15 ? `${barCount} bars` : `Warming ${barCount}/15 bars`} tone={barCount >= 15 ? "info" : "warning"} />
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
@@ -836,10 +850,19 @@ export default function Nifty50OptionScalper({
                   disabled={!actionsEnabled || isResetting}
                   title={actionButtonTitle}
                   className="btn-primary text-sm"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!actionsEnabled) return;
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
+                    try {
+                      const response = await fetch(`${API_URL}/api/nifty-options/clear-history`, { method: "POST" });
+                      if (!response.ok) {
+                        throw new Error("clear history failed");
+                      }
+                      onRefresh?.();
+                    } catch {
+                      window.alert("Clearing NIFTY option history failed. Check engine connectivity.");
+                    }
                   }}
                 >
                   Clear NIFTY Trades
