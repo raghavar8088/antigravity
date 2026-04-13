@@ -17,7 +17,7 @@ export function nowTs(): string {
   return String(Math.floor(Date.now() / 1000));
 }
 
-const BASE = "https://api.india.delta.exchange";
+const BASE = "https://cdn.india.deltaex.org";
 const TESTNET = "https://cdn-ind.testnet.deltaex.org";
 
 export function deltaBase(): string {

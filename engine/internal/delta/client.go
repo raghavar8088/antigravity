@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	prodBaseURL    = "https://api.india.delta.exchange"
+	prodBaseURL    = "https://cdn.india.deltaex.org"
 	testnetBaseURL = "https://cdn-ind.testnet.deltaex.org"
 )
 
