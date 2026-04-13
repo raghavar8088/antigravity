@@ -18,7 +18,7 @@ export function nowTs(): string {
 }
 
 const BASE = "https://api.india.delta.exchange";
-const TESTNET = "https://testnet-api.india.delta.exchange";
+const TESTNET = "https://cdn-ind.testnet.deltaex.org";
 
 export function deltaBase(): string {
   return process.env.DELTA_TESTNET === "true" ? TESTNET : BASE;
