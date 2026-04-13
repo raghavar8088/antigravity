@@ -21,28 +21,53 @@ function fmtDate(iso: string) {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
-function pnlColor(v: number) { return v >= 0 ? "text-green-400" : "text-red-400"; }
+function pnlColor(v: number) { return v >= 0 ? "profit-positive" : "profit-negative"; }
 function pnlSign(v: number) { return v >= 0 ? "+" : ""; }
 
 // ─── Status badge ───────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: DeltaLiveTrade["status"] }) {
-  const s: Record<string, string> = {
-    OPEN:      "bg-blue-900 text-blue-200",
-    CLOSED:    "bg-green-900 text-green-200",
-    FAILED:    "bg-red-900 text-red-200",
-    CANCELLED: "bg-gray-700 text-gray-300",
+  const colors: Record<string, { bg: string; color: string }> = {
+    OPEN:      { bg: "var(--accent-dim)", color: "var(--accent)" },
+    CLOSED:    { bg: "var(--green-dim)", color: "var(--green)" },
+    FAILED:    { bg: "var(--red-dim)", color: "var(--red)" },
+    CANCELLED: { bg: "var(--surface-3)", color: "var(--text-muted)" },
   };
-  return <span className={`px-2 py-0.5 rounded text-xs font-bold ${s[status] ?? "bg-gray-700 text-gray-300"}`}>{status}</span>;
+  const c = colors[status] ?? colors.CANCELLED;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 8px",
+        borderRadius: "var(--radius-chip)",
+        background: c.bg,
+        color: c.color,
+        fontSize: 11,
+        fontWeight: 600,
+        fontFamily: "var(--font-display)",
+      }}
+    >
+      {status}
+    </span>
+  );
 }
 
 // ─── Enable/Disable banner ───────────────────────────────────────────────────
 function RuntimeStatusPill({ label, configured, detail }: { label: string; configured: boolean; detail: string }) {
   return (
-    <div className={`rounded-lg border px-3 py-2 text-xs ${
-      configured ? "border-emerald-600/40 bg-emerald-900/20 text-emerald-200" : "border-red-700/40 bg-red-900/20 text-red-200"
-    }`}>
-      <div className="font-semibold">{label}: {configured ? "Configured" : "Not Configured"}</div>
-      <div className="mt-1 opacity-80">{detail}</div>
+    <div
+      style={{
+        padding: "10px 14px",
+        borderRadius: "var(--radius-card)",
+        border: `1px solid ${configured ? "rgba(30, 142, 62, 0.2)" : "rgba(217, 48, 37, 0.2)"}`,
+        background: configured ? "var(--green-dim)" : "var(--red-dim)",
+        fontSize: 12,
+      }}
+    >
+      <div style={{ fontWeight: 600, color: configured ? "var(--green)" : "var(--red)", fontFamily: "var(--font-display)" }}>
+        {label}: {configured ? "Configured" : "Not Configured"}
+      </div>
+      <div style={{ marginTop: 4, color: "var(--text-secondary)", fontSize: 11 }}>{detail}</div>
     </div>
   );
 }
@@ -60,15 +85,24 @@ function EnableBanner({
 }) {
   if (!stats.configured || !nextStatus.configured) {
     return (
-      <div className="bg-yellow-900/40 border border-yellow-600 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-yellow-400 text-2xl">⚠️</span>
-          <div className="flex-1">
-            <div className="text-yellow-300 font-bold mb-1">Delta Runtime Configuration Check</div>
-            <div className="text-yellow-200/80 text-xs mb-3">
+      <div
+        style={{
+          padding: 20,
+          borderRadius: "var(--radius-card)",
+          border: "1px solid var(--amber)",
+          background: "var(--amber-dim)",
+        }}
+      >
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <span style={{ fontSize: 24, lineHeight: 1 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)", marginBottom: 4 }}>
+              Delta Runtime Configuration Check
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
               This screen depends on two different runtimes. The Go engine powers live mirroring, while Vercel / Next.js powers the test-order routes.
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
               <RuntimeStatusPill
                 label="Go Engine"
                 configured={stats.configured}
@@ -80,15 +114,28 @@ function EnableBanner({
                 detail={nextStatus.configured ? `Ready${nextStatus.testnet ? " · testnet" : " · production"}` : "Set DELTA_API_KEY and DELTA_API_SECRET in Vercel project env vars"}
               />
             </div>
-            <div className="bg-black/50 rounded-lg p-3 font-mono text-xs space-y-1 mt-3">
-              <div className="text-green-300">DELTA_API_KEY=<span className="text-gray-400">your_api_key</span></div>
-              <div className="text-green-300">DELTA_API_SECRET=<span className="text-gray-400">your_api_secret</span></div>
-              <div className="text-gray-500"># Optional testnet</div>
-              <div className="text-gray-400">DELTA_TESTNET=true</div>
+            <div
+              style={{
+                marginTop: 12,
+                padding: 14,
+                borderRadius: "var(--radius-input)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                lineHeight: 1.8,
+              }}
+            >
+              <div style={{ color: "var(--green)" }}>DELTA_API_KEY=<span style={{ color: "var(--text-muted)" }}>your_api_key</span></div>
+              <div style={{ color: "var(--green)" }}>DELTA_API_SECRET=<span style={{ color: "var(--text-muted)" }}>your_api_secret</span></div>
+              <div style={{ color: "var(--text-muted)" }}># Optional testnet</div>
+              <div style={{ color: "var(--text-secondary)" }}>DELTA_TESTNET=true</div>
             </div>
-            <div className="text-yellow-200/60 text-xs mt-2">API keys: <span className="text-yellow-300">india.delta.exchange → Settings → API Keys</span></div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+              API keys: <span style={{ color: "var(--accent)" }}>india.delta.exchange → Settings → API Keys</span>
+            </div>
             {nextStatus.error && (
-              <div className="text-yellow-200/80 text-xs mt-3">
+              <div style={{ fontSize: 11, color: "var(--amber)", marginTop: 8 }}>
                 Vercel / Next.js message: {nextStatus.error}
               </div>
             )}
@@ -98,12 +145,33 @@ function EnableBanner({
     );
   }
   return (
-    <div className={`border rounded-xl p-4 flex items-center justify-between ${stats.enabled ? "bg-green-900/20 border-green-600" : "bg-gray-800/60 border-gray-600"}`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-3 h-3 rounded-full ${stats.enabled ? "bg-green-400 animate-pulse" : "bg-gray-500"}`} />
+    <div
+      style={{
+        padding: 16,
+        borderRadius: "var(--radius-card)",
+        border: `1px solid ${stats.enabled ? "var(--green)" : "var(--border)"}`,
+        background: stats.enabled ? "var(--green-dim)" : "var(--surface)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: "var(--radius-chip)",
+            background: stats.enabled ? "var(--green)" : "var(--text-muted)",
+            boxShadow: stats.enabled ? "0 0 0 3px rgba(30, 142, 62, 0.2)" : "none",
+          }}
+        />
         <div>
-          <div className="font-bold text-sm text-white">Live Order Mirroring {stats.enabled ? "ACTIVE" : "PAUSED"}</div>
-          <div className="text-xs text-gray-400">
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
+            Live Order Mirroring {stats.enabled ? "ACTIVE" : "PAUSED"}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
             {stats.testnet ? "🧪 Testnet" : "🔴 Production — real money"}&nbsp;·&nbsp;
             Enable this to mirror BTC Option Selling paper positions to Delta.
           </div>
@@ -113,11 +181,10 @@ function EnableBanner({
         type="button"
         disabled={toggling}
         onClick={() => onToggle(!stats.enabled)}
-        className={`px-5 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 ${
-          stats.enabled ? "bg-red-700 hover:bg-red-600 text-white" : "bg-green-700 hover:bg-green-600 text-white"
-        }`}
+        className={stats.enabled ? "btn-danger" : "btn-primary"}
+        style={{ minWidth: 100 }}
       >
-        {toggling ? "..." : stats.enabled ? "⏸ Disable" : "▶ Enable"}
+        {toggling ? "..." : stats.enabled ? "Disable" : "Enable"}
       </button>
     </div>
   );
@@ -125,29 +192,51 @@ function EnableBanner({
 
 // ─── Wallet cards ────────────────────────────────────────────────────────────
 function WalletCards({ wallets }: { wallets: WalletEntry[] }) {
-  if (!wallets?.length) return <div className="text-gray-500 text-sm text-center py-4">No wallet data</div>;
+  if (!wallets?.length) return <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)", fontSize: 13 }}>No wallet data</div>;
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
       {wallets.map((w) => (
-        <div key={w.asset} className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-gray-300 bg-gray-700 px-2 py-0.5 rounded">{w.asset}</span>
+        <div
+          key={w.asset}
+          style={{
+            padding: 14,
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "var(--radius-chip)",
+                background: "var(--accent-dim)",
+                color: "var(--accent)",
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {w.asset}
+            </span>
             {w.unrealisedPnl !== 0 && (
-              <span className={`text-xs font-semibold ${pnlColor(w.unrealisedPnl)}`}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: w.unrealisedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
                 {pnlSign(w.unrealisedPnl)}{fmt(w.unrealisedPnl)} uPnL
               </span>
             )}
           </div>
-          <div className="text-lg font-bold text-white mb-1">{fmt(w.balance, 4)}</div>
-          <div className="space-y-0.5">
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-400">Available</span>
-              <span className="text-green-300 font-medium">{fmt(w.availableBalance, 4)}</span>
+          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-display)", marginBottom: 6 }}>
+            {fmt(w.balance, 4)}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+              <span style={{ color: "var(--text-muted)" }}>Available</span>
+              <span style={{ color: "var(--green)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>{fmt(w.availableBalance, 4)}</span>
             </div>
             {w.blockedBalance > 0 && (
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">In Margin</span>
-                <span className="text-orange-300">{fmt(w.blockedBalance, 4)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                <span style={{ color: "var(--text-muted)" }}>In Margin</span>
+                <span style={{ color: "var(--amber)", fontFamily: "var(--font-mono)" }}>{fmt(w.blockedBalance, 4)}</span>
               </div>
             )}
           </div>
@@ -157,43 +246,66 @@ function WalletCards({ wallets }: { wallets: WalletEntry[] }) {
   );
 }
 
+// ─── Google-style data table ─────────────────────────────────────────────────
+const thStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  textAlign: "left",
+  color: "var(--text-secondary)",
+  fontSize: 11,
+  fontWeight: 500,
+  letterSpacing: "0.02em",
+  borderBottom: "1px solid var(--border)",
+  whiteSpace: "nowrap",
+};
+const thRight: React.CSSProperties = { ...thStyle, textAlign: "right" };
+const tdStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  fontSize: 13,
+  color: "var(--text-primary)",
+  borderBottom: "1px solid var(--border-subtle)",
+  verticalAlign: "middle",
+};
+const tdRight: React.CSSProperties = { ...tdStyle, textAlign: "right" };
+const tdMuted: React.CSSProperties = { ...tdStyle, color: "var(--text-muted)" };
+const tdMono: React.CSSProperties = { ...tdStyle, fontFamily: "var(--font-mono)" };
+
 // ─── Live positions on Delta ─────────────────────────────────────────────────
 function LivePositionsTable({ positions }: { positions: LivePosition[] }) {
   if (!positions?.length) {
-    return <div className="text-gray-500 text-sm text-center py-6">No open positions on Delta Exchange</div>;
+    return <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)", fontSize: 13 }}>No open positions on Delta Exchange</div>;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr className="text-gray-400 border-b border-gray-700">
-            <th className="px-3 py-2 text-left">Symbol</th>
-            <th className="px-3 py-2 text-left">Side</th>
-            <th className="px-3 py-2 text-right">Size</th>
-            <th className="px-3 py-2 text-right">Entry</th>
-            <th className="px-3 py-2 text-right">Mark</th>
-            <th className="px-3 py-2 text-right">uPnL</th>
-            <th className="px-3 py-2 text-right">rPnL</th>
-            <th className="px-3 py-2 text-right">Margin</th>
+          <tr>
+            <th style={thStyle}>Symbol</th>
+            <th style={thStyle}>Side</th>
+            <th style={thRight}>Size</th>
+            <th style={thRight}>Entry</th>
+            <th style={thRight}>Mark</th>
+            <th style={thRight}>uPnL</th>
+            <th style={thRight}>rPnL</th>
+            <th style={thRight}>Margin</th>
           </tr>
         </thead>
         <tbody>
           {positions.map((p, i) => (
-            <tr key={i} className="border-b border-gray-800 hover:bg-gray-800/40">
-              <td className="px-3 py-2 font-mono text-blue-300 font-bold">{p.symbol}</td>
-              <td className="px-3 py-2">
-                <span className={`font-bold ${p.side === "LONG" ? "text-green-400" : "text-red-400"}`}>{p.side}</span>
+            <tr key={i} style={{ transition: "background-color 0.1s" }} onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={e => (e.currentTarget.style.background = "")}>
+              <td style={{ ...tdMono, color: "var(--accent)", fontWeight: 600 }}>{p.symbol}</td>
+              <td style={tdStyle}>
+                <span style={{ fontWeight: 600, color: p.side === "LONG" ? "var(--green)" : "var(--red)" }}>{p.side}</span>
               </td>
-              <td className="px-3 py-2 text-right text-white">{fmt(Math.abs(p.size), 0)}</td>
-              <td className="px-3 py-2 text-right text-white">${fmt(p.entryPrice, 2)}</td>
-              <td className="px-3 py-2 text-right text-gray-300">${fmt(p.markPrice, 2)}</td>
-              <td className={`px-3 py-2 text-right font-semibold ${pnlColor(p.unrealisedPnl)}`}>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>{fmt(Math.abs(p.size), 0)}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>${fmt(p.entryPrice, 2)}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>${fmt(p.markPrice, 2)}</td>
+              <td style={{ ...tdRight, fontWeight: 600, color: p.unrealisedPnl >= 0 ? "var(--green)" : "var(--red)", fontFamily: "var(--font-mono)" }}>
                 {pnlSign(p.unrealisedPnl)}${fmt(p.unrealisedPnl)}
               </td>
-              <td className={`px-3 py-2 text-right ${pnlColor(p.realisedPnl)}`}>
+              <td style={{ ...tdRight, color: p.realisedPnl >= 0 ? "var(--green)" : "var(--red)", fontFamily: "var(--font-mono)" }}>
                 {pnlSign(p.realisedPnl)}${fmt(p.realisedPnl)}
               </td>
-              <td className="px-3 py-2 text-right text-orange-300">${fmt(p.margin)}</td>
+              <td style={{ ...tdRight, color: "var(--amber)", fontFamily: "var(--font-mono)" }}>${fmt(p.margin)}</td>
             </tr>
           ))}
         </tbody>
@@ -205,34 +317,34 @@ function LivePositionsTable({ positions }: { positions: LivePosition[] }) {
 // ─── Open orders on Delta ─────────────────────────────────────────────────────
 function OpenOrdersTable({ orders }: { orders: OpenOrder[] }) {
   if (!orders?.length) {
-    return <div className="text-gray-500 text-sm text-center py-4">No open orders</div>;
+    return <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)", fontSize: 13 }}>No open orders</div>;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr className="text-gray-400 border-b border-gray-700">
-            <th className="px-3 py-2 text-left">Order ID</th>
-            <th className="px-3 py-2 text-left">Symbol</th>
-            <th className="px-3 py-2 text-left">Side</th>
-            <th className="px-3 py-2 text-right">Size</th>
-            <th className="px-3 py-2 text-right">Price</th>
-            <th className="px-3 py-2 text-left">State</th>
-            <th className="px-3 py-2 text-left">Time</th>
+          <tr>
+            <th style={thStyle}>Order ID</th>
+            <th style={thStyle}>Symbol</th>
+            <th style={thStyle}>Side</th>
+            <th style={thRight}>Size</th>
+            <th style={thRight}>Price</th>
+            <th style={thStyle}>State</th>
+            <th style={thStyle}>Time</th>
           </tr>
         </thead>
         <tbody>
           {orders.map((o) => (
-            <tr key={o.orderId} className="border-b border-gray-800 hover:bg-gray-800/40">
-              <td className="px-3 py-2 font-mono text-gray-400 text-xs">{o.orderId}</td>
-              <td className="px-3 py-2 text-blue-300 font-bold">{o.symbol}</td>
-              <td className="px-3 py-2">
-                <span className={`font-bold ${o.side === "buy" ? "text-green-400" : "text-red-400"}`}>{o.side.toUpperCase()}</span>
+            <tr key={o.orderId} style={{ transition: "background-color 0.1s" }} onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={e => (e.currentTarget.style.background = "")}>
+              <td style={{ ...tdMuted, fontFamily: "var(--font-mono)", fontSize: 11 }}>{o.orderId}</td>
+              <td style={{ ...tdMono, color: "var(--accent)", fontWeight: 600 }}>{o.symbol}</td>
+              <td style={tdStyle}>
+                <span style={{ fontWeight: 600, color: o.side === "buy" ? "var(--green)" : "var(--red)" }}>{o.side.toUpperCase()}</span>
               </td>
-              <td className="px-3 py-2 text-right text-white">{fmt(o.size, 0)}</td>
-              <td className="px-3 py-2 text-right text-white">${fmt(o.price, 2)}</td>
-              <td className="px-3 py-2 text-yellow-300 text-xs font-medium">{o.state}</td>
-              <td className="px-3 py-2 text-gray-400">{fmtTime(o.createdAt)}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>{fmt(o.size, 0)}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>${fmt(o.price, 2)}</td>
+              <td style={{ ...tdStyle, color: "var(--amber)", fontWeight: 500 }}>{o.state}</td>
+              <td style={tdMuted}>{fmtTime(o.createdAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -244,52 +356,48 @@ function OpenOrdersTable({ orders }: { orders: OpenOrder[] }) {
 // ─── Mirrored trades table ────────────────────────────────────────────────────
 function MirroredTradesTable({ trades }: { trades: DeltaLiveTrade[] }) {
   if (!trades.length) {
-    return (
-      <div className="text-center py-10 text-gray-500 text-sm">
-        No Delta trade records are available on the server.
-      </div>
-    );
+    return <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontSize: 13 }}>No Delta trade records are available on the server.</div>;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
-          <tr className="text-gray-400 border-b border-gray-700">
-            <th className="px-3 py-2 text-left">ID</th>
-            <th className="px-3 py-2 text-left">Strategy</th>
-            <th className="px-3 py-2 text-left">Type</th>
-            <th className="px-3 py-2 text-right">Strike</th>
-            <th className="px-3 py-2 text-left">Delta Symbol</th>
-            <th className="px-3 py-2 text-right">Qty</th>
-            <th className="px-3 py-2 text-right">Fill $</th>
-            <th className="px-3 py-2 text-right">PnL</th>
-            <th className="px-3 py-2 text-left">Status</th>
-            <th className="px-3 py-2 text-left">Opened</th>
+          <tr>
+            <th style={thStyle}>ID</th>
+            <th style={thStyle}>Strategy</th>
+            <th style={thStyle}>Type</th>
+            <th style={thRight}>Strike</th>
+            <th style={thStyle}>Delta Symbol</th>
+            <th style={thRight}>Qty</th>
+            <th style={thRight}>Fill $</th>
+            <th style={thRight}>PnL</th>
+            <th style={thStyle}>Status</th>
+            <th style={thStyle}>Opened</th>
           </tr>
         </thead>
         <tbody>
           {trades.map((t) => (
-            <tr key={t.id} className="border-b border-gray-800 hover:bg-gray-800/40">
-              <td className="px-3 py-2 font-mono text-gray-300">{t.id}</td>
-              <td className="px-3 py-2 text-gray-200 max-w-[120px] truncate">{t.strategyName}</td>
-              <td className="px-3 py-2">
-                <span className={`font-bold ${t.optionType === "CALL" ? "text-green-400" : "text-red-400"}`}>{t.optionType}</span>
+            <tr key={t.id} style={{ transition: "background-color 0.1s" }} onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-hover)")} onMouseLeave={e => (e.currentTarget.style.background = "")}>
+              <td style={{ ...tdMuted, fontFamily: "var(--font-mono)", fontSize: 11 }}>{t.id}</td>
+              <td style={{ ...tdStyle, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.strategyName}</td>
+              <td style={tdStyle}>
+                <span style={{ fontWeight: 600, color: t.optionType === "CALL" ? "var(--green)" : "var(--red)" }}>{t.optionType}</span>
               </td>
-              <td className="px-3 py-2 text-right text-white">${fmt(t.strike, 0)}</td>
-              <td className="px-3 py-2 font-mono text-blue-300">{t.deltaSymbol || "—"}</td>
-              <td className="px-3 py-2 text-right text-white">{t.contracts}</td>
-              <td className="px-3 py-2 text-right text-white">${fmt(t.fillPrice, 4)}</td>
-              <td className="px-3 py-2 text-right">
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>${fmt(t.strike, 0)}</td>
+              <td style={{ ...tdMono, color: "var(--accent)" }}>{t.deltaSymbol || "—"}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>{t.contracts}</td>
+              <td style={{ ...tdRight, fontFamily: "var(--font-mono)" }}>${fmt(t.fillPrice, 4)}</td>
+              <td style={tdRight}>
                 {t.status === "CLOSED" && t.realizedPnl != null ? (
-                  <span className={`font-semibold ${pnlColor(t.realizedPnl)}`}>
+                  <span style={{ fontWeight: 600, color: t.realizedPnl >= 0 ? "var(--green)" : "var(--red)", fontFamily: "var(--font-mono)" }}>
                     {pnlSign(t.realizedPnl)}${fmt(t.realizedPnl)}
                   </span>
                 ) : t.status === "FAILED" ? (
-                  <span className="text-red-400 text-xs truncate max-w-[100px]" title={t.failureReason}>ERR</span>
-                ) : <span className="text-gray-500">—</span>}
+                  <span style={{ color: "var(--red)", fontSize: 11 }} title={t.failureReason}>ERR</span>
+                ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
               </td>
-              <td className="px-3 py-2"><StatusBadge status={t.status} /></td>
-              <td className="px-3 py-2 text-gray-400">{fmtTime(t.openedAt)}</td>
+              <td style={tdStyle}><StatusBadge status={t.status} /></td>
+              <td style={tdMuted}>{fmtTime(t.openedAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -310,6 +418,24 @@ type TestOrderResponse = {
   fillPrice?: number;
   closeFillPrice?: number;
   state?: string;
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 12px",
+  borderRadius: "var(--radius-input)",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  color: "var(--text-primary)",
+  fontSize: 13,
+  outline: "none",
+  fontFamily: "var(--font-body)",
+  transition: "border-color 0.15s ease",
+};
+
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  cursor: "pointer",
 };
 
 function TestOrderTab({
@@ -394,55 +520,76 @@ function TestOrderTab({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-amber-700/40 bg-amber-900/10 p-4 text-xs text-amber-200">
-        This tab sends live test orders to Delta Exchange. Use small size and prefer testnet first.
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Warning banner */}
+      <div
+        style={{
+          padding: "10px 16px",
+          borderRadius: "var(--radius-card)",
+          border: "1px solid rgba(227, 116, 0, 0.2)",
+          background: "var(--amber-dim)",
+          fontSize: 12,
+          color: "var(--amber)",
+          fontFamily: "var(--font-display)",
+          fontWeight: 500,
+        }}
+      >
+        ⚠ This tab sends live test orders to Delta Exchange. Use small size and prefer testnet first.
       </div>
 
       {!actionsEnabled && (
-        <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-3 text-xs text-gray-400">
+        <div
+          style={{
+            padding: "10px 16px",
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            fontSize: 12,
+            color: "var(--text-muted)",
+          }}
+        >
           Action buttons are disabled. Turn Action to Yes to use this test order panel.
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-4">
+      {/* Order forms */}
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))" }}>
+        {/* Open order */}
+        <div
+          style={{
+            padding: 20,
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
           <div>
-            <div className="text-sm font-semibold text-white">Open Test Sell Order</div>
-            <div className="text-xs text-gray-400 mt-1">Finds the nearest Delta option contract and sends a market sell order.</div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
+              Open Test Sell Order
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
+              Finds the nearest Delta option contract and sends a market sell order.
+            </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-1">
-              <span className="text-xs text-gray-400">Option Type</span>
-              <select
-                value={optionType}
-                onChange={(e) => setOptionType(e.target.value as "CALL" | "PUT")}
-                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
-              >
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(3, 1fr)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Option Type</span>
+              <select value={optionType} onChange={(e) => setOptionType(e.target.value as "CALL" | "PUT")} style={selectStyle}>
                 <option value="CALL">CALL</option>
                 <option value="PUT">PUT</option>
               </select>
             </label>
-            <label className="space-y-1">
-              <span className="text-xs text-gray-400">Strike</span>
-              <input
-                value={strike}
-                onChange={(e) => setStrike(e.target.value)}
-                inputMode="decimal"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
-                placeholder="120000"
-              />
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Strike</span>
+              <input value={strike} onChange={(e) => setStrike(e.target.value)} inputMode="decimal" style={inputStyle} placeholder="120000" />
             </label>
-            <label className="space-y-1">
-              <span className="text-xs text-gray-400">Premium USD</span>
-              <input
-                value={premiumUsd}
-                onChange={(e) => setPremiumUsd(e.target.value)}
-                inputMode="decimal"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
-                placeholder="100"
-              />
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Premium USD</span>
+              <input value={premiumUsd} onChange={(e) => setPremiumUsd(e.target.value)} inputMode="decimal" style={inputStyle} placeholder="100" />
             </label>
           </div>
 
@@ -450,22 +597,38 @@ function TestOrderTab({
             type="button"
             disabled={!actionsEnabled || submitting !== null}
             onClick={() => void submitOpen()}
-            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-danger"
+            style={{ alignSelf: "flex-start" }}
           >
-            {submitting === "open" ? "Placing..." : "Place Open Test Order"}
+            {submitting === "open" ? "Placing…" : "Place Open Test Order"}
           </button>
         </div>
 
-        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-4">
+        {/* Close order */}
+        <div
+          style={{
+            padding: 20,
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
           <div>
-            <div className="text-sm font-semibold text-white">Close Test Order</div>
-            <div className="text-xs text-gray-400 mt-1">Sends a market buy order for a Delta option product ID to close a short test position.</div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
+              Close Test Order
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
+              Sends a market buy order for a Delta option product ID to close a short test position.
+            </div>
           </div>
 
           {positions.length > 0 && (
-            <div className="space-y-2">
-              <div className="text-xs text-gray-400">Quick fill from live Delta positions</div>
-              <div className="flex flex-wrap gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Quick fill from live positions</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {positions.slice(0, 6).map((position) => (
                   <button
                     key={`${position.productId}-${position.symbol}`}
@@ -474,7 +637,17 @@ function TestOrderTab({
                       setCloseProductId(String(position.productId));
                       setCloseContracts(String(Math.max(1, Math.round(Math.abs(position.size)))));
                     }}
-                    className="rounded-full border border-gray-700 bg-gray-900 px-3 py-1 text-xs text-blue-200 hover:border-blue-500"
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "var(--radius-chip)",
+                      border: "1px solid var(--border)",
+                      background: "var(--surface-2)",
+                      color: "var(--accent)",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      transition: "border-color 0.15s ease",
+                    }}
                   >
                     {position.symbol} | ID {position.productId}
                   </button>
@@ -483,26 +656,14 @@ function TestOrderTab({
             </div>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs text-gray-400">Product ID</span>
-              <input
-                value={closeProductId}
-                onChange={(e) => setCloseProductId(e.target.value)}
-                inputMode="numeric"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
-                placeholder="12345"
-              />
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Product ID</span>
+              <input value={closeProductId} onChange={(e) => setCloseProductId(e.target.value)} inputMode="numeric" style={inputStyle} placeholder="12345" />
             </label>
-            <label className="space-y-1">
-              <span className="text-xs text-gray-400">Contracts</span>
-              <input
-                value={closeContracts}
-                onChange={(e) => setCloseContracts(e.target.value)}
-                inputMode="numeric"
-                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
-                placeholder="1"
-              />
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-secondary)" }}>Contracts</span>
+              <input value={closeContracts} onChange={(e) => setCloseContracts(e.target.value)} inputMode="numeric" style={inputStyle} placeholder="1" />
             </label>
           </div>
 
@@ -510,27 +671,47 @@ function TestOrderTab({
             type="button"
             disabled={!actionsEnabled || submitting !== null}
             onClick={() => void submitClose()}
-            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary"
+            style={{ alignSelf: "flex-start" }}
           >
-            {submitting === "close" ? "Placing..." : "Place Close Test Order"}
+            {submitting === "close" ? "Placing…" : "Place Close Test Order"}
           </button>
         </div>
       </div>
 
+      {/* Feedback */}
       {feedback && (
-        <div className={`rounded-xl border px-4 py-3 text-sm ${
-          feedback.tone === "success"
-            ? "border-emerald-700 bg-emerald-900/20 text-emerald-200"
-            : "border-red-700 bg-red-900/20 text-red-200"
-        }`}>
+        <div
+          style={{
+            padding: "10px 16px",
+            borderRadius: "var(--radius-card)",
+            border: `1px solid ${feedback.tone === "success" ? "rgba(30, 142, 62, 0.25)" : "rgba(217, 48, 37, 0.25)"}`,
+            background: feedback.tone === "success" ? "var(--green-dim)" : "var(--red-dim)",
+            color: feedback.tone === "success" ? "var(--green)" : "var(--red)",
+            fontSize: 13,
+            fontFamily: "var(--font-display)",
+          }}
+        >
           {feedback.text}
         </div>
       )}
 
+      {/* Last response */}
       {lastResult && (
-        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4">
-          <div className="text-sm font-semibold text-white mb-2">Last Test Response</div>
-          <pre className="overflow-x-auto text-xs text-gray-300">{JSON.stringify(lastResult, null, 2)}</pre>
+        <div
+          style={{
+            padding: 16,
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+          }}
+        >
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 13, color: "var(--text-primary)", marginBottom: 8 }}>
+            Last Test Response
+          </div>
+          <pre style={{ overflow: "auto", fontSize: 12, color: "var(--text-secondary)", fontFamily: "var(--font-mono)", lineHeight: 1.6, margin: 0 }}>
+            {JSON.stringify(lastResult, null, 2)}
+          </pre>
         </div>
       )}
     </div>
@@ -555,25 +736,68 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const totalUPnl = (account?.positions ?? []).reduce((s, p) => s + p.unrealisedPnl, 0);
   const winRate = stats.wins + stats.losses > 0 ? (stats.wins / (stats.wins + stats.losses)) * 100 : 0;
 
+  const tabItems: { key: MainTab; label: string }[] = [
+    { key: "test",      label: "Test Orders" },
+    { key: "account",   label: "Wallet & Balances" },
+    { key: "positions", label: `Positions (${account?.positions?.length ?? 0})` },
+    { key: "orders",    label: `Open Orders (${account?.openOrders?.length ?? 0})` },
+    { key: "mirrored",  label: `Mirrored Trades (${trades.length})` },
+  ];
+
   return (
-    <div className="p-4 space-y-4">
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          padding: "16px 20px",
+          borderRadius: "var(--radius-card)",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+        }}
+      >
         <div>
-          <h2 className="text-white font-bold text-lg flex items-center gap-2">
-            <span className="text-red-400">🔴</span> Delta Exchange Live Trading
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 18,
+              fontWeight: 600,
+              color: "var(--text-primary)",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              margin: 0,
+            }}
+          >
+            <span style={{ width: 10, height: 10, borderRadius: "var(--radius-chip)", background: "var(--red)", display: "inline-block" }} />
+            Delta Exchange Live Trading
           </h2>
-          <p className="text-gray-400 text-xs mt-0.5">
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
             When enabled, BTC Option Selling paper positions are mirrored to Delta Exchange.
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-gray-500 bg-gray-800 rounded px-2 py-1">
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              borderRadius: "var(--radius-chip)",
+              background: stats.testnet ? "var(--accent-dim)" : "var(--red-dim)",
+              color: stats.testnet ? "var(--accent)" : "var(--red)",
+              fontSize: 11,
+              fontWeight: 500,
+              fontFamily: "var(--font-display)",
+            }}
+          >
             {stats.testnet ? "🧪 Testnet" : "🔴 Live"} · india.delta.exchange
           </div>
           {account?.fetchedAt && (
-            <div className="text-xs text-gray-600 mt-1">Updated {fmtDate(account.fetchedAt)}</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Updated {fmtDate(account.fetchedAt)}</div>
           )}
         </div>
       </div>
@@ -588,90 +812,105 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
 
       {/* ── Top KPI row ─────────────────────────────────────────────── */}
       {stats.configured && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-            <div className="text-gray-400 text-xs mb-1">USDT Available</div>
-            <div className="text-xl font-bold text-white">${fmt(stats.walletUsdt)}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          <div className="metric-card" style={{ padding: "14px 16px" }}>
+            <div className="metric-label">USDT Available</div>
+            <div className="metric-value" style={{ fontFamily: "var(--font-display)" }}>${fmt(stats.walletUsdt)}</div>
           </div>
-          <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-            <div className="text-gray-400 text-xs mb-1">Open Positions</div>
-            <div className="text-xl font-bold text-blue-300">{account?.positions?.length ?? 0}</div>
+          <div className="metric-card" style={{ padding: "14px 16px" }}>
+            <div className="metric-label">Open Positions</div>
+            <div className="metric-value" style={{ color: "var(--accent)", fontFamily: "var(--font-display)" }}>{account?.positions?.length ?? 0}</div>
           </div>
-          <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-            <div className="text-gray-400 text-xs mb-1">Unrealised PnL</div>
-            <div className={`text-xl font-bold ${pnlColor(totalUPnl)}`}>{pnlSign(totalUPnl)}${fmt(totalUPnl)}</div>
+          <div className="metric-card" style={{ padding: "14px 16px" }}>
+            <div className="metric-label">Unrealised PnL</div>
+            <div className={`metric-value ${pnlColor(totalUPnl)}`} style={{ fontFamily: "var(--font-display)" }}>
+              {pnlSign(totalUPnl)}${fmt(totalUPnl)}
+            </div>
           </div>
-          <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
-            <div className="text-gray-400 text-xs mb-1">Mirror Win Rate</div>
-            <div className={`text-xl font-bold ${winRate >= 50 ? "text-green-300" : "text-red-300"}`}>
+          <div className="metric-card" style={{ padding: "14px 16px" }}>
+            <div className="metric-label">Mirror Win Rate</div>
+            <div className={`metric-value ${winRate >= 50 ? "profit-positive" : "profit-negative"}`} style={{ fontFamily: "var(--font-display)" }}>
               {fmt(winRate, 1)}%
             </div>
-            <div className="text-xs text-gray-500">{stats.wins}W / {stats.losses}L</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{stats.wins}W / {stats.losses}L</div>
           </div>
         </div>
       )}
 
-      {/* ── Tabs ────────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
-        <div className="flex border-b border-gray-700 overflow-x-auto">
-          {([
-            { key: "test",      label: `🧪 Test Orders` },
-            { key: "account",   label: `💳 Wallet & Balances` },
-            { key: "positions", label: `📊 Positions (${account?.positions?.length ?? 0})` },
-            { key: "orders",    label: `📋 Open Orders (${account?.openOrders?.length ?? 0})` },
-            { key: "mirrored",  label: `🔗 Mirrored Trades (${trades.length})` },
-          ] as { key: MainTab; label: string }[]).map((t) => (
-              <button
-                type="button"
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
-                  tab === t.key ? "text-white border-b-2 border-blue-500 bg-gray-800/30" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {t.label}
-              </button>
+      {/* ── Google-style Tabs ────────────────────────────────────────── */}
+      <div
+        style={{
+          borderRadius: "var(--radius-card)",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          overflow: "hidden",
+        }}
+      >
+        {/* Tab bar */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
+          {tabItems.map((t) => (
+            <button
+              type="button"
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`groww-tab${tab === t.key ? " active" : ""}`}
+              style={{ padding: "12px 18px" }}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
 
-        <div className="p-4">
+        {/* Tab content */}
+        <div style={{ padding: 20 }}>
           {tab === "account" && (
-            <div className="space-y-4">
-              <div className="text-gray-300 text-sm font-semibold">Account Balances</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>Account Balances</div>
               <WalletCards wallets={account?.wallets ?? []} />
               {account?.error && (
-                <div className="text-red-400 text-xs bg-red-900/20 rounded p-2">{account.error}</div>
+                <div style={{ padding: "8px 12px", borderRadius: "var(--radius-input)", background: "var(--red-dim)", color: "var(--red)", fontSize: 12 }}>
+                  {account.error}
+                </div>
               )}
             </div>
           )}
 
           {tab === "positions" && (
-            <div className="space-y-3">
-              <div className="text-gray-300 text-sm font-semibold">Live Positions on Delta Exchange</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>Live Positions on Delta Exchange</div>
               <LivePositionsTable positions={account?.positions ?? []} />
             </div>
           )}
 
           {tab === "orders" && (
-            <div className="space-y-3">
-              <div className="text-gray-300 text-sm font-semibold">Open Orders on Delta Exchange</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>Open Orders on Delta Exchange</div>
               <OpenOrdersTable orders={account?.openOrders ?? []} />
             </div>
           )}
 
           {tab === "mirrored" && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-gray-300 text-sm font-semibold">Mirrored Orders</div>
-                <div className="flex gap-1">
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>Mirrored Orders</div>
+                <div style={{ display: "flex", gap: 4 }}>
                   {(["open", "all"] as const).map((f) => (
                     <button
                       type="button"
                       key={f}
                       onClick={() => setMirroredFilter(f)}
-                      className={`px-3 py-1 rounded text-xs font-medium ${
-                        mirroredFilter === f ? "bg-blue-700 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      }`}
+                      style={{
+                        padding: "4px 12px",
+                        borderRadius: "var(--radius-chip)",
+                        border: "none",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        fontFamily: "var(--font-display)",
+                        cursor: "pointer",
+                        background: mirroredFilter === f ? "var(--accent)" : "var(--surface-2)",
+                        color: mirroredFilter === f ? "#fff" : "var(--text-secondary)",
+                        transition: "all 0.15s ease",
+                      }}
                     >
                       {f === "open" ? `Open (${openTrades.length})` : `All (${trades.length})`}
                     </button>
@@ -681,11 +920,20 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
               <MirroredTradesTable trades={displayTrades} />
 
               {failedTrades.length > 0 && (
-                <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 mt-2">
-                  <div className="text-red-300 font-bold text-xs mb-2">⚠️ Failed Orders ({failedTrades.length})</div>
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: "var(--radius-card)",
+                    border: "1px solid rgba(217, 48, 37, 0.2)",
+                    background: "var(--red-dim)",
+                  }}
+                >
+                  <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 12, color: "var(--red)", marginBottom: 8 }}>
+                    ⚠ Failed Orders ({failedTrades.length})
+                  </div>
                   {failedTrades.slice(0, 5).map((t) => (
-                    <div key={t.id} className="text-red-200/70 text-xs mb-1">
-                      <span className="text-red-300 font-mono">{t.id}</span> — {t.failureReason}
+                    <div key={t.id} style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>
+                      <span style={{ color: "var(--red)", fontFamily: "var(--font-mono)" }}>{t.id}</span> — {t.failureReason}
                     </div>
                   ))}
                 </div>
@@ -705,20 +953,20 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
 
       {/* Mirrored trade stats bar */}
       {stats.configured && trades.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-gray-800 rounded-xl p-3 text-center border border-gray-700">
-            <div className="text-2xl font-bold text-blue-300">{stats.openTrades}</div>
-            <div className="text-gray-400 text-xs mt-1">Live Open</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div className="metric-card" style={{ padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 600, color: "var(--accent)", fontFamily: "var(--font-display)" }}>{stats.openTrades}</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Live Open</div>
           </div>
-          <div className="bg-gray-800 rounded-xl p-3 text-center border border-gray-700">
-            <div className={`text-2xl font-bold ${pnlColor(stats.totalPnl)}`}>
+          <div className="metric-card" style={{ padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 600, color: stats.totalPnl >= 0 ? "var(--green)" : "var(--red)", fontFamily: "var(--font-display)" }}>
               {pnlSign(stats.totalPnl)}${fmt(stats.totalPnl)}
             </div>
-            <div className="text-gray-400 text-xs mt-1">Realised PnL</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Realised PnL</div>
           </div>
-          <div className="bg-gray-800 rounded-xl p-3 text-center border border-gray-700">
-            <div className="text-2xl font-bold text-white">{stats.totalTrades}</div>
-            <div className="text-gray-400 text-xs mt-1">Total Mirrored</div>
+          <div className="metric-card" style={{ padding: "14px 16px", textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 600, color: "var(--text-primary)", fontFamily: "var(--font-display)" }}>{stats.totalTrades}</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Total Mirrored</div>
           </div>
         </div>
       )}
