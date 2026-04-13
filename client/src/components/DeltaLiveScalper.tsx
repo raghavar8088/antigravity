@@ -258,10 +258,249 @@ function MirroredTradesTable({ trades }: { trades: DeltaLiveTrade[] }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-type MainTab = "account" | "positions" | "orders" | "mirrored";
+type TestOrderResponse = {
+  ok: boolean;
+  error?: string;
+  orderId?: string;
+  closeOrderId?: string;
+  symbol?: string;
+  productId?: number;
+  contracts?: number;
+  fillPrice?: number;
+  closeFillPrice?: number;
+  state?: string;
+};
+
+function TestOrderTab({
+  actionsEnabled,
+  positions,
+  onOrderPlaced,
+}: {
+  actionsEnabled: boolean;
+  positions: LivePosition[];
+  onOrderPlaced: () => void;
+}) {
+  const [optionType, setOptionType] = useState<"CALL" | "PUT">("CALL");
+  const [strike, setStrike] = useState("120000");
+  const [premiumUsd, setPremiumUsd] = useState("100");
+  const [closeProductId, setCloseProductId] = useState("");
+  const [closeContracts, setCloseContracts] = useState("1");
+  const [submitting, setSubmitting] = useState<"open" | "close" | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [lastResult, setLastResult] = useState<TestOrderResponse | null>(null);
+
+  const submitOpen = async () => {
+    setSubmitting("open");
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/delta/mirror", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "open",
+          optionType,
+          strike: Number(strike),
+          premiumUsd: Number(premiumUsd),
+        }),
+      });
+      const data = await response.json() as TestOrderResponse;
+      setLastResult(data);
+      if (response.ok && data.ok) {
+        setFeedback({
+          tone: "success",
+          text: `Open order placed on Delta. Order ID ${data.orderId ?? "-"}${data.symbol ? ` | ${data.symbol}` : ""}`,
+        });
+        onOrderPlaced();
+      } else {
+        setFeedback({ tone: "error", text: data.error ?? "Failed to place Delta open order." });
+      }
+    } catch (error) {
+      setFeedback({ tone: "error", text: String(error) });
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const submitClose = async () => {
+    setSubmitting("close");
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/delta/mirror", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "close",
+          productId: Number(closeProductId),
+          contracts: Number(closeContracts),
+        }),
+      });
+      const data = await response.json() as TestOrderResponse;
+      setLastResult(data);
+      if (response.ok && data.ok) {
+        setFeedback({
+          tone: "success",
+          text: `Close order placed on Delta. Order ID ${data.closeOrderId ?? "-"} | ${Number(closeContracts) || 0} contract(s)`,
+        });
+        onOrderPlaced();
+      } else {
+        setFeedback({ tone: "error", text: data.error ?? "Failed to place Delta close order." });
+      }
+    } catch (error) {
+      setFeedback({ tone: "error", text: String(error) });
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-amber-700/40 bg-amber-900/10 p-4 text-xs text-amber-200">
+        This tab sends live test orders to Delta Exchange. Use small size and prefer testnet first.
+      </div>
+
+      {!actionsEnabled && (
+        <div className="rounded-xl border border-gray-700 bg-gray-800/60 p-3 text-xs text-gray-400">
+          Action buttons are disabled. Turn Action to Yes to use this test order panel.
+        </div>
+      )}
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-4">
+          <div>
+            <div className="text-sm font-semibold text-white">Open Test Sell Order</div>
+            <div className="text-xs text-gray-400 mt-1">Finds the nearest Delta option contract and sends a market sell order.</div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1">
+              <span className="text-xs text-gray-400">Option Type</span>
+              <select
+                value={optionType}
+                onChange={(e) => setOptionType(e.target.value as "CALL" | "PUT")}
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="CALL">CALL</option>
+                <option value="PUT">PUT</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-gray-400">Strike</span>
+              <input
+                value={strike}
+                onChange={(e) => setStrike(e.target.value)}
+                inputMode="decimal"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
+                placeholder="120000"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-gray-400">Premium USD</span>
+              <input
+                value={premiumUsd}
+                onChange={(e) => setPremiumUsd(e.target.value)}
+                inputMode="decimal"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
+                placeholder="100"
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            disabled={!actionsEnabled || submitting !== null}
+            onClick={() => void submitOpen()}
+            className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting === "open" ? "Placing..." : "Place Open Test Order"}
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4 space-y-4">
+          <div>
+            <div className="text-sm font-semibold text-white">Close Test Order</div>
+            <div className="text-xs text-gray-400 mt-1">Sends a market buy order for a Delta option product ID to close a short test position.</div>
+          </div>
+
+          {positions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-gray-400">Quick fill from live Delta positions</div>
+              <div className="flex flex-wrap gap-2">
+                {positions.slice(0, 6).map((position) => (
+                  <button
+                    key={`${position.productId}-${position.symbol}`}
+                    type="button"
+                    onClick={() => {
+                      setCloseProductId(String(position.productId));
+                      setCloseContracts(String(Math.max(1, Math.round(Math.abs(position.size)))));
+                    }}
+                    className="rounded-full border border-gray-700 bg-gray-900 px-3 py-1 text-xs text-blue-200 hover:border-blue-500"
+                  >
+                    {position.symbol} | ID {position.productId}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs text-gray-400">Product ID</span>
+              <input
+                value={closeProductId}
+                onChange={(e) => setCloseProductId(e.target.value)}
+                inputMode="numeric"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
+                placeholder="12345"
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-gray-400">Contracts</span>
+              <input
+                value={closeContracts}
+                onChange={(e) => setCloseContracts(e.target.value)}
+                inputMode="numeric"
+                className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none"
+                placeholder="1"
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            disabled={!actionsEnabled || submitting !== null}
+            onClick={() => void submitClose()}
+            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting === "close" ? "Placing..." : "Place Close Test Order"}
+          </button>
+        </div>
+      </div>
+
+      {feedback && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${
+          feedback.tone === "success"
+            ? "border-emerald-700 bg-emerald-900/20 text-emerald-200"
+            : "border-red-700 bg-red-900/20 text-red-200"
+        }`}>
+          {feedback.text}
+        </div>
+      )}
+
+      {lastResult && (
+        <div className="rounded-xl border border-gray-800 bg-gray-950/70 p-4">
+          <div className="text-sm font-semibold text-white mb-2">Last Test Response</div>
+          <pre className="overflow-x-auto text-xs text-gray-300">{JSON.stringify(lastResult, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type MainTab = "account" | "positions" | "orders" | "mirrored" | "test";
 
 export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
-  const { stats, trades, toggling, toggleEnabled } = useDeltaLive();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { stats, trades, toggling, toggleEnabled } = useDeltaLive(refreshKey);
   const [tab, setTab] = useState<MainTab>("account");
   const [mirroredFilter, setMirroredFilter] = useState<"open" | "all">("open");
 
@@ -269,6 +508,7 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const openTrades = trades.filter((t) => t.status === "OPEN");
   const displayTrades = mirroredFilter === "open" ? openTrades : trades;
   const failedTrades = trades.filter((t) => t.status === "FAILED");
+  const refreshDeltaState = () => setRefreshKey((value) => value + 1);
 
   // Total unrealised PnL from Delta positions
   const totalUPnl = (account?.positions ?? []).reduce((s, p) => s + p.unrealisedPnl, 0);
@@ -334,6 +574,7 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
               { key: "positions", label: `📊 Positions (${account?.positions?.length ?? 0})` },
               { key: "orders",    label: `📋 Open Orders (${account?.openOrders?.length ?? 0})` },
               { key: "mirrored",  label: `🔗 Mirrored Trades (${trades.length})` },
+              { key: "test",      label: `🧪 Test Orders` },
             ] as { key: MainTab; label: string }[]).map((t) => (
               <button
                 type="button"
@@ -405,6 +646,14 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
                   </div>
                 )}
               </div>
+            )}
+
+            {tab === "test" && (
+              <TestOrderTab
+                actionsEnabled={actionsEnabled}
+                positions={account?.positions ?? []}
+                onOrderPlaced={refreshDeltaState}
+              />
             )}
           </div>
         </div>
