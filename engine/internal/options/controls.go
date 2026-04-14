@@ -38,8 +38,10 @@ const (
 
 	optionProfitLockProgress      = 0.28
 	optionProfitLockShareOfTarget = 0.40
+	optionProfitLockShare         = 0.40  // alias used in engine.go
 	optionLateExitProgress        = 0.56
 	optionLateExitMinGain         = 0.05
+	optionMomentumFadeProgress    = 0.72  // late-stage momentum fade exit threshold
 	optionStrikePressureBuffer    = 0.0025
 
 	optionColdStartSizeMultiplier = 0.95
