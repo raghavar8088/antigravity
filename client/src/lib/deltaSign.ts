@@ -1,7 +1,5 @@
-/**
- * Delta Exchange HMAC-SHA256 signing utility.
- */
 import * as crypto from "crypto";
+import { ProxyAgent, fetch as undiciFetch } from "undici";
 
 export function deltaSign(
   method: string,
@@ -38,7 +36,7 @@ export async function deltaFetch(
   const ts = nowTs();
   const sig = deltaSign(method, path, body, ts, secret);
 
-  const res = await fetch(deltaBase() + path, {
+  const fetchOptions: any = {
     method,
     headers: {
       "api-key": key,
@@ -49,7 +47,14 @@ export async function deltaFetch(
     },
     body: body || undefined,
     cache: "no-store",
-  });
+  };
+
+  const proxyUrl = process.env.DELTA_PROXY_URL;
+  if (proxyUrl) {
+    fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
+  }
+
+  const res = await undiciFetch(deltaBase() + path, fetchOptions);
 
   let data: unknown;
   try { data = await res.json(); } catch { data = {}; }
@@ -68,7 +73,7 @@ export async function deltaPost(
   const ts = nowTs();
   const sig = deltaSign("POST", path, bodyStr, ts, secret);
 
-  const res = await fetch(deltaBase() + path, {
+  const fetchOptions: any = {
     method: "POST",
     headers: {
       "api-key": key,
@@ -79,7 +84,14 @@ export async function deltaPost(
     },
     body: bodyStr,
     cache: "no-store",
-  });
+  };
+
+  const proxyUrl = process.env.DELTA_PROXY_URL;
+  if (proxyUrl) {
+    fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
+  }
+
+  const res = await undiciFetch(deltaBase() + path, fetchOptions);
 
   let data: unknown;
   try { data = await res.json(); } catch { data = {}; }

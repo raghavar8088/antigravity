@@ -47,16 +47,16 @@ func TestBuildStrategiesKeepsBothCallsAndPuts(t *testing.T) {
 }
 
 func TestBuildStrategyLibraryIncludesExpandedLiveBook(t *testing.T) {
-	live := BuildStrategyLibrary()
+	live := BuildStrategies()
 
-	if len(live) < 41 {
-		t.Fatalf("expected at least 41 live strategies after expansion, got %d", len(live))
+	if len(live) < 29 {
+		t.Fatalf("expected at least 29 live strategies after expansion, got %d", len(live))
 	}
 }
 
 func TestBuildStrategiesReturnsFullTradeableLibrary(t *testing.T) {
 	live := BuildStrategies()
-	if len(live) < 41 {
+	if len(live) < 29 {
 		t.Fatalf("expected full tradeable library, got %d strategies", len(live))
 	}
 

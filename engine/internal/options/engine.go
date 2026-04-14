@@ -24,7 +24,7 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-// Engine is the fully autonomous BTC option scalping engine.
+// Engine is the fully autonomous BTC option SELLING engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
 	mu               sync.RWMutex
@@ -40,6 +40,8 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
+	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 }
 
 // NewEngine initialises the options engine with the full strategy library.
@@ -74,6 +76,22 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.persistHook = fn
+}
+
+// SetOnOpenHook registers a callback fired every time a live sell position is opened.
+// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD.
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onOpenHook = fn
+}
+
+// SetOnCloseHook registers a callback fired every time a live position is closed.
+// Called with: posID, strategyID, optionType, strike, exitReason.
+func (e *Engine) SetOnCloseHook(fn func(posID string, stratID int, optType string, strike float64, exitReason string)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onCloseHook = fn
 }
 
 // ExportState returns a durable snapshot of the options engine.
@@ -391,163 +409,6 @@ func (e *Engine) tick() {
 	}
 }
 
-func (e *Engine) manageStrategy(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
-
-	// ── Manage open position ──────────────────────────────────────────────
-	if s.position != nil {
-		if exitReason := e.markToMarketPositionLocked(s.position, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
-			e.closePositionLocked(s, exitReason, now)
-			if *openCount > 0 {
-				*openCount--
-			}
-		}
-	}
-
-	// ── Enforce global position cap ───────────────────────────────────────
-	if *openCount >= maxConcurrentPositions {
-		return
-	}
-
-	if !s.disabledUntil.IsZero() {
-		if now.Before(s.disabledUntil) {
-			s.stats.Status = optionStatusDisabled
-			s.stats.SizeMultiplier = optionMinSizeMultiplier
-			return
-		}
-		s.disabledUntil = time.Time{}
-		s.consecutiveLosses = 0
-	}
-
-	// ── Check cooldown ────────────────────────────────────────────────────
-	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
-		s.stats.Status = "COOLING"
-		s.stats.SizeMultiplier = sizeMultiplierFor(s)
-		return
-	}
-	s.stats.Status = "READY"
-	s.stats.SizeMultiplier = sizeMultiplierFor(s)
-
-	if !isCategoryAlignedWithRegime(s.def.Category, regime) {
-		return
-	}
-
-	// ── Evaluate signal ───────────────────────────────────────────────────
-	fn, ok := Signals[s.def.Signal]
-	if !ok {
-		return
-	}
-	if !fn(ctx) {
-		return
-	}
-
-	// ── Check balance ─────────────────────────────────────────────────────
-	if e.balance <= 0 {
-		return
-	}
-
-	positionUSD := s.def.PositionUSD * s.stats.SizeMultiplier
-	if positionUSD > e.balance {
-		positionUSD = e.balance
-	}
-	if positionUSD < s.def.PositionUSD*optionMinSizeMultiplier {
-		return
-	}
-
-	// ── Open position ─────────────────────────────────────────────────────
-	expiry := now.Add(time.Duration(s.def.ExpiryMinutes) * time.Minute)
-	var strike float64
-	if s.def.Type == Call {
-		strike = e.lastPrice * (1 + s.def.StrikePctOTM)
-	} else {
-		strike = e.lastPrice * (1 - s.def.StrikePctOTM)
-	}
-
-	pr := PriceOption(e.lastPrice, strike, expiry, iv, s.def.Type)
-	if pr.Premium <= 0 {
-		return
-	}
-
-	quantity := positionUSD / pr.Premium
-	if quantity <= 0 {
-		return
-	}
-
-	e.tradeSeq++
-	nameTag := s.def.Name
-	if len(nameTag) > 4 {
-		nameTag = nameTag[:4]
-	}
-	pos := &OptionPosition{
-		ID:             fmt.Sprintf("OPT-%04d-%s", e.tradeSeq, nameTag),
-		StrategyID:     s.def.ID,
-		StrategyName:   s.def.Name,
-		OptionType:     s.def.Type,
-		Strike:         strike,
-		ExpiryTime:     expiry,
-		EntryPremium:   pr.Premium,
-		CurrentPremium: pr.Premium,
-		Quantity:       quantity,
-		CostBasis:      positionUSD,
-		EntryBTCPrice:  e.lastPrice,
-		EntryTime:      now,
-		IV:             iv,
-		Delta:          pr.Delta,
-	}
-
-	e.balance -= positionUSD
-	s.position = pos
-	s.stats.StrategyID = s.def.ID
-	s.stats.Status = "IN_POSITION"
-	s.stats.HasPosition = true
-	*openCount++ // Track the new position for remaining strategies in this tick
-	e.schedulePersistLocked(e.exportStateLocked())
-
-	log.Printf("[OPTIONS] 📈 OPEN  %s %s | Strike: $%.0f | Expiry: %dm | Premium: $%.2f | Qty: %.2f | IV: %.1f%%",
-		s.def.Name, s.def.Type, strike, s.def.ExpiryMinutes, pr.Premium, quantity, iv*100)
-}
-
-func (e *Engine) closePosition(s *strategyState, reason string, now time.Time) {
-	pos := s.position
-	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
-	returnPct := (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
-
-	e.balance += pos.CostBasis + netPnL
-
-	trade := OptionTrade{
-		ID:            pos.ID,
-		StrategyID:    s.def.ID,
-		StrategyName:  pos.StrategyName,
-		OptionType:    pos.OptionType,
-		Strike:        pos.Strike,
-		ExpiryMins:    s.def.ExpiryMinutes,
-		EntryPremium:  pos.EntryPremium,
-		ExitPremium:   pos.CurrentPremium,
-		Quantity:      pos.Quantity,
-		CostBasis:     pos.CostBasis,
-		NetPnL:        netPnL,
-		ReturnPct:     returnPct,
-		EntryBTCPrice: pos.EntryBTCPrice,
-		ExitBTCPrice:  e.lastPrice,
-		EntryTime:     pos.EntryTime,
-		ExitTime:      now,
-		ExitReason:    reason,
-	}
-	e.trades = append(e.trades, trade)
-
-	s.lastTradeAt = now
-	s.position = nil
-	s.stats.Status = "COOLING"
-	s.stats.HasPosition = false
-	s.recordTradeResultLocked(netPnL, now)
-	e.schedulePersistLocked(e.exportStateLocked())
-
-	symbol := "✅"
-	if netPnL < 0 {
-		symbol = "❌"
-	}
-	log.Printf("[OPTIONS] %s CLOSE %s | Reason: %s | PnL: $%.2f (%.1f%%)",
-		symbol, s.def.Name, reason, netPnL, returnPct)
-}
 
 func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 	if s.position != nil {
@@ -585,8 +446,6 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
-		s.stats.RosterState = StrategyRosterDisabled
-		e.refreshStrategyPresentationLocked(s, now)
 		return
 	}
 	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
@@ -603,36 +462,39 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !optionEntryConfirmed(s.def, ctx, regime) {
 		return
 	}
-	if e.balance <= 0 {
-		return
-	}
 
 	positionUSD := s.stats.AllocationUSD
 	if positionUSD <= 0 {
 		positionUSD = s.def.PositionUSD
 	}
 	positionUSD *= s.stats.SizeMultiplier
-	if positionUSD > e.balance {
-		positionUSD = e.balance
-	}
-	if positionUSD < s.def.PositionUSD*optionMinSizeMultiplier {
-		return
-	}
-
-	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "")
+	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "SELL")
 	if pos == nil {
 		return
 	}
 
-	e.balance -= positionUSD
+	// RECEIVE premium as a seller
+	e.balance += positionUSD
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS] OPEN %s %s | roster=%s score=%.1f alloc=$%.0f size=%.2fx",
-		s.def.Name, s.def.Type, s.stats.RosterState, s.stats.Score, s.stats.AllocationUSD, s.stats.SizeMultiplier)
+	log.Printf("[OPTIONS] \U0001F4C9 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Balance: $%.0f",
+		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, e.balance)
+
+	// Fire Delta live bridge hook (non-blocking, outside lock)
+	if hook := e.onOpenHook; hook != nil {
+		posID := pos.ID
+		stratID := s.def.ID
+		stratName := s.def.Name
+		optType := string(s.def.Type)
+		strike := pos.Strike
+		expiry := pos.ExpiryTime
+		premium := pos.CostBasis
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium)
+	}
 }
 
 func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalContext, iv float64, now time.Time) {
@@ -649,7 +511,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	}
 
 	s.stats.ShadowSignals++
-	pos := e.newOptionPositionLocked(s.def, s.def.PositionUSD, iv, now, "SHADOW")
+	pos := e.newOptionPositionLocked(s.def, s.def.PositionUSD, iv, now, "SHADOW_SELL")
 	if pos == nil {
 		return
 	}
@@ -657,7 +519,6 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	s.shadowPosition = pos
 	s.stats.HasShadowPosition = true
 	s.stats.Status = optionStatusShadowing
-	e.schedulePersistLocked(e.exportStateLocked())
 }
 
 func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {
@@ -711,53 +572,53 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
 	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
-	pos.UnrealizedPnL = (result.Premium - pos.EntryPremium) * pos.Quantity
 	pos.IV = iv
+
+	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
+	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
-		gainPct = (result.Premium - pos.EntryPremium) / pos.EntryPremium
+		// As a seller, we want CurrentPremium to go DOWN.
+		// If Entry=10, Current=4, gainPct = (10-4)/10 = 0.6 (60% profit)
+		gainPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium
 	}
 	if gainPct > pos.PeakGainPct {
 		pos.PeakGainPct = gainPct
 	}
 
-	lifespan := pos.ExpiryTime.Sub(pos.EntryTime)
 	timeProgress := 0.0
-	if lifespan > 0 {
-		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/lifespan.Seconds(), 1)
+	totalLife := pos.ExpiryTime.Sub(pos.EntryTime)
+	if totalLife > 0 {
+		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/totalLife.Seconds(), 1)
 	}
-	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShare)
-	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.26)
-	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.52)
-	trailFloor := math.Max(optionLateExitMinGain, pos.PeakGainPct*0.70)
-	holdingNearHigh := pos.PeakGainPct > 0 && gainPct >= pos.PeakGainPct*0.82
-	strongWinner := gainPct >= takeProfitPct*0.58 || pos.PeakGainPct >= takeProfitPct*0.72
+
+	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
+	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.24)
+	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.36)
+	trailFloor := pos.PeakGainPct * 0.62
+	strikePressure := false
+	switch pos.OptionType {
+	case Put:
+		strikePressure = e.lastPrice <= pos.Strike*(1+optionStrikePressureBuffer)
+	case Call:
+		strikePressure = e.lastPrice >= pos.Strike*(1-optionStrikePressureBuffer)
+	}
 
 	switch {
 	case gainPct >= takeProfitPct:
 		return ExitTP
-	case gainPct <= -stopLossPct:
+	case gainPct <= -stopLossPct: // Expansion of premium > SL threshold
 		return ExitSL
 	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
 		return ExitTrailStop
-	case timeProgress >= optionProfitLockProgress &&
-		gainPct >= profitLockThreshold &&
-		gainPct < takeProfitPct*0.75 &&
-		!holdingNearHigh:
+	case strikePressure && gainPct < profitLockThreshold*0.50:
+		return ExitStrikePressure
+	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
 		return ExitProfitLock
-	case timeProgress >= 0.52 &&
-		gainPct >= grindExitThreshold &&
-		gainPct < takeProfitPct*0.55 &&
-		!holdingNearHigh:
+	case timeProgress >= 0.46 && gainPct >= grindExitThreshold:
 		return ExitProfitLock
-	case timeProgress >= optionLateExitProgress &&
-		gainPct >= optionLateExitMinGain &&
-		(!holdingNearHigh || timeProgress >= 0.88):
-		return ExitLateExit
-	case timeProgress >= optionMomentumFadeProgress &&
-		gainPct > 0 &&
-		(!strongWinner || !holdingNearHigh):
+	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
 		return ExitLateExit
 	case now.After(pos.ExpiryTime):
 		return ExitExpiry
@@ -772,13 +633,16 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
-	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	// PnL already computed in markToMarket
+	netPnL := pos.UnrealizedPnL
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
-		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
+		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
 	}
 
-	e.balance += pos.CostBasis + netPnL
+	// BUY back to close: balance decreases by current market value
+	e.balance -= pos.CurrentPremium * pos.Quantity
+
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
 		StrategyID:    s.def.ID,
@@ -807,7 +671,22 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	e.lastRosterEval = time.Time{}
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS] CLOSE %s | reason=%s pnl=$%.2f return=%.1f%%", s.def.Name, reason, netPnL, returnPct)
+	symbol := "\u2705"
+	if netPnL < 0 {
+		symbol = "\u274C"
+	}
+	log.Printf("[OPTIONS] %s CLOSE SELL %s | Reason: %s | PnL: $%.2f (%.1f%%) | Balance: $%.0f",
+		symbol, s.def.Name, reason, netPnL, returnPct, e.balance)
+
+	// Fire Delta live bridge close hook (non-blocking, outside lock)
+	if hook := e.onCloseHook; hook != nil {
+		posID := pos.ID
+		stratID := s.def.ID
+		optType := string(s.def.Type)
+		strike := pos.Strike
+		exitReason := reason
+		go hook(posID, stratID, optType, strike, exitReason)
+	}
 }
 
 func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now time.Time) {
@@ -816,7 +695,7 @@ func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now 
 		return
 	}
 
-	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	netPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 	s.shadowLastTradeAt = now
 	s.shadowPosition = nil
 	s.stats.HasShadowPosition = false
@@ -824,8 +703,6 @@ func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now 
 	e.refreshStrategyPresentationLocked(s, now)
 	e.lastRosterEval = time.Time{}
 	e.schedulePersistLocked(e.exportStateLocked())
-
-	log.Printf("[OPTIONS][SHADOW] CLOSE %s | reason=%s pnl=$%.2f", s.def.Name, reason, netPnL)
 }
 
 func (s *strategyState) recordTradeResultLocked(netPnL float64, now time.Time) {
@@ -1012,7 +889,7 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 
 	return AggregateStats{
 		Balance:           e.balance,
-		Equity:            e.balance + openMarketValue,
+		Equity:            e.balance - openMarketValue, // Equity for a seller is Balance - Liability
 		TotalTrades:       totalTrades,
 		OpenPositions:     openCount,
 		TotalWins:         wins,

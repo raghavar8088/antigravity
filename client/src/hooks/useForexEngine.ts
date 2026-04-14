@@ -558,8 +558,17 @@ export default function useForexEngine() {
     for (const item of items) {
       if (item.price <= 0) continue;
       engine.quotes[item.symbol] = item;
-      const bars = engine.bars[item.symbol] ?? [];
-      bars.push(item.price);
+      let bars = engine.bars[item.symbol] ?? [];
+
+      // Pre-seed with historical 1-min candles on first tick (eliminates warmup delay)
+      if (item.candles && item.candles.length > bars.length) {
+        bars = [...item.candles];
+      }
+
+      // Append current price as the latest bar (avoid duplicate if unchanged)
+      if (!bars.length || bars[bars.length - 1] !== item.price) {
+        bars.push(item.price);
+      }
       if (bars.length > MAX_BARS) bars.splice(0, bars.length - MAX_BARS);
       engine.bars[item.symbol] = bars;
     }

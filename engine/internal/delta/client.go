@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -98,11 +99,25 @@ func NewClient() (*Client, error) {
 		baseURL = testnetBaseURL
 	}
 
+	timeout := 10 * time.Second
+	httpClient := &http.Client{Timeout: timeout}
+
+	proxyStr := strings.TrimSpace(os.Getenv("DELTA_PROXY_URL"))
+	if proxyStr != "" {
+		proxyURL, err := url.Parse(proxyStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid DELTA_PROXY_URL: %w", err)
+		}
+		httpClient.Transport = &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		}
+	}
+
 	return &Client{
-		baseURL:   baseURL,
-		apiKey:    key,
-		apiSecret: secret,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		baseURL:    baseURL,
+		apiKey:     key,
+		apiSecret:  secret,
+		httpClient: httpClient,
 	}, nil
 }
 

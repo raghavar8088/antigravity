@@ -13,6 +13,82 @@ import (
 	"time"
 )
 
+// ── Yahoo Finance fallback for ^NSEI ─────────────────────────────────────────
+
+type yahooChartMeta struct {
+	RegularMarketPrice  float64 `json:"regularMarketPrice"`
+	ChartPreviousClose  float64 `json:"chartPreviousClose"`
+	PreviousClose       float64 `json:"previousClose"`
+}
+
+type yahooChartResult struct {
+	Meta *yahooChartMeta `json:"meta"`
+}
+
+type yahooChartResponse struct {
+	Chart *struct {
+		Result []yahooChartResult `json:"result"`
+	} `json:"chart"`
+}
+
+var yahooHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
+// fetchNiftyFromYahoo fetches the live NIFTY 50 price from Yahoo Finance
+// using the v8/chart endpoint which does not require authentication.
+func fetchNiftyFromYahoo(ctx context.Context) (NSEIndexQuote, error) {
+	mirrors := []string{
+		"https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false",
+		"https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false",
+	}
+	for _, url := range mirrors {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := yahooHTTPClient.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		var payload yahooChartResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			continue
+		}
+		if payload.Chart == nil || len(payload.Chart.Result) == 0 || payload.Chart.Result[0].Meta == nil {
+			continue
+		}
+		meta := payload.Chart.Result[0].Meta
+		if meta.RegularMarketPrice <= 0 {
+			continue
+		}
+		prevClose := meta.ChartPreviousClose
+		if prevClose <= 0 {
+			prevClose = meta.PreviousClose
+		}
+		change := meta.RegularMarketPrice - prevClose
+		pctChange := 0.0
+		if prevClose > 0 {
+			pctChange = change / prevClose * 100
+		}
+		return NSEIndexQuote{
+			Index:         "NIFTY 50",
+			Price:         meta.RegularMarketPrice,
+			Change:        change,
+			PercentChange: pctChange,
+			ExchangeTime:  time.Now().Format("15:04:05"),
+			FetchedAt:     time.Now().UTC(),
+		}, nil
+	}
+	return NSEIndexQuote{}, fmt.Errorf("yahoo finance unavailable for ^NSEI")
+}
+
 const (
 	defaultNSEBaseURL     = "https://www.nseindia.com"
 	nifty50IndexName      = "NIFTY 50"
@@ -68,6 +144,20 @@ func getNSEBaseURL() string {
 }
 
 func (c *NSEIndexClient) FetchNifty50Quote(ctx context.Context) (NSEIndexQuote, error) {
+	// Try NSE first; fall back to Yahoo Finance when NSE blocks or errors.
+	quote, err := c.fetchFromNSE(ctx)
+	if err == nil {
+		return quote, nil
+	}
+	// NSE failed — use Yahoo Finance as fallback.
+	yahooQuote, yahooErr := fetchNiftyFromYahoo(ctx)
+	if yahooErr != nil {
+		return NSEIndexQuote{}, fmt.Errorf("NSE: %w; Yahoo fallback: %v", err, yahooErr)
+	}
+	return yahooQuote, nil
+}
+
+func (c *NSEIndexClient) fetchFromNSE(ctx context.Context) (NSEIndexQuote, error) {
 	if err := c.ensureSession(ctx); err != nil {
 		return NSEIndexQuote{}, err
 	}
