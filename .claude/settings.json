@@ -26,7 +26,26 @@
       "Bash(curl -s \"https://antigravity-raghavar8088s-projects.vercel.app/api/delta/account\")",
       "Bash(curl -s \"https://api.india.delta.exchange/v2/tickers/BTCUSDT\")",
       "Bash(curl -s \"https://api.india.delta.exchange/v2/wallet/balances\" -H \"api-key: d5CPJjQxr85zwYPYbd5LSninuMKsjl\" -H \"timestamp: $\\(date +%s\\)\" -H \"signature: invalid\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.india.delta.exchange/v2/wallet/balances\" -H \"api-key: d5CPJjQxr85zwYPYbd5LSninuMKsjl\" -H \"timestamp: $\\(date +%s\\)\" -H \"signature: invalid\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://api.india.delta.exchange/v2/wallet/balances\" -H \"api-key: d5CPJjQxr85zwYPYbd5LSninuMKsjl\" -H \"timestamp: $\\(date +%s\\)\" -H \"signature: invalid\")",
+      "Bash(curl -s \"https://query2.finance.yahoo.com/v8/finance/quote?symbols=EURUSD%3DX&fields=regularMarketPrice\" -H \"User-Agent: Mozilla/5.0\")",
+      "Bash(curl -s \"https://query1.finance.yahoo.com/v8/finance/chart/EURUSD=X?interval=1m&range=5m\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\")",
+      "Bash(curl -s \"https://api.frankfurter.app/latest?base=EUR&symbols=USD,GBP,JPY,CHF,AUD,CAD,NZD,SGD,INR\")",
+      "Bash(curl -s \"https://query1.finance.yahoo.com/v8/finance/chart/GBPUSD=X?interval=1m&range=1d\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); r=d['chart']['result'][0]; print\\('price:', r['meta']['regularMarketPrice']\\); print\\('prevClose:', r['meta']['chartPreviousClose']\\); ts=r.get\\('timestamp',[]\\); c=r['indicators']['quote'][0].get\\('close',[]\\); print\\('candles available:', len\\(ts\\)\\); print\\('last 3 closes:', [x for x in c if x][-3:]\\)\")",
+      "Bash(node -e \"let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('price:', r.meta.regularMarketPrice, 'prevClose:', r.meta.chartPreviousClose, 'candles:', r.timestamp?.length, 'last3:', r.indicators.quote[0].close?.filter\\(Boolean\\).slice\\(-3\\)\\);}\\)\")",
+      "Bash(curl -s \"https://query1.finance.yahoo.com/v8/finance/chart/USDJPY=X?interval=1m&range=1d\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\")",
+      "Bash(node -e \"let d=''; process.stdin.on\\('data',c=>d+=c\\); process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; const closes=r.indicators.quote[0].close.filter\\(Boolean\\); console.log\\('USDJPY price:', r.meta.regularMarketPrice, 'candles:', closes.length, 'last3:', closes.slice\\(-3\\)\\);}\\)\")",
+      "Bash(curl -s \"http://localhost:8080/api/nifty-market\")",
+      "Bash(curl -s \"https://www.nseindia.com/api/allIndices\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\" -H \"Referer: https://www.nseindia.com/market-data/live-market-indices\")",
+      "Bash(curl -s \"https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0];console.log\\('NIFTY price:', r.meta.regularMarketPrice, 'candles:', r.indicators.quote[0].close.filter\\(Boolean\\).length\\);}\\)\")",
+      "Bash(curl -s \"https://query1.finance.yahoo.com/v8/finance/chart/%5EINDIAVIX?interval=1m&range=1d\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0];console.log\\('VIX price:', r.meta.regularMarketPrice, 'prevClose:', r.meta.chartPreviousClose\\);}\\)\")",
+      "Bash(curl -s \"https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\" -H \"Referer: https://www.nseindia.com/option-chain\" -H \"Cookie: \")",
+      "Bash(curl -s -c /tmp/nse_cookie.txt \"https://www.nseindia.com/\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl -s -b /tmp/nse_cookie.txt \"https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\" -H \"Referer: https://www.nseindia.com/option-chain\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('NIFTY:', r.meta.regularMarketPrice, '| candles:', r.indicators.quote[0].close.filter\\(Boolean\\).length\\);}\\)\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('VIX:', r.meta.regularMarketPrice, '| prevClose:', r.meta.chartPreviousClose\\);}\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Trading apllication\\engine\\internal"
