@@ -514,14 +514,14 @@ function classifyCommodityRegime(bars: number[]): string {
 function isCategoryAlignedWithRegime(category: MCXCategory, regime: string): boolean {
   switch (regime) {
     case "UNKNOWN":
-      return false;
+      return true; // allow all categories — signal + confirmation gate quality
     case "TRENDING_BULL":
     case "TRENDING_BEAR":
       return category !== "Mean Reversion";
     case "HIGH_VOL":
       return category !== "Mean Reversion";
     case "RANGE":
-      return category !== "Momentum";
+      return true; // allow Momentum in range — signal strength gates it
     default:
       return true;
   }
@@ -530,7 +530,6 @@ function isCategoryAlignedWithRegime(category: MCXCategory, regime: string): boo
 function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
   const category = categoryForSignal(def.signal);
   if (!isCategoryAlignedWithRegime(category, regime)) return false;
-  if (bars.length < 22) return false;
 
   const e9 = ema(bars, 9);
   const e21 = ema(bars, 21);
