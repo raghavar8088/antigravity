@@ -56,7 +56,12 @@ func NewNiftyEngine() *Engine {
 }
 
 func newEngineWithProfile(profile MarketProfile) *Engine {
-	defs := BuildStrategies()
+	var defs []StrategyDef
+	if profile.Name == niftyOptionsMarketProfile.Name {
+		defs = BuildNiftyStrategies()
+	} else {
+		defs = BuildStrategies()
+	}
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
 		states[i] = newStrategyState(d)

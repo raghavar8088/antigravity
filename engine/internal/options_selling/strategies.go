@@ -92,6 +92,31 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
+// BuildNiftyStrategies returns the same strategy roster re-calibrated for NIFTY 50.
+//
+// Why different parameters?
+//   - NIFTY annualized IV ≈ 14-22% (vs BTC 60-100%).
+//   - With low IV and short expiry the Black-Scholes model returns near-zero
+//     premiums for the 1-2% OTM strikes used in the BTC strategies, causing
+//     newOptionPositionLocked() to always return nil (no trade ever placed).
+//   - Fix: reduce StrikePctOTM to 0.2% (48 pts on NIFTY 24000) and extend
+//     ExpiryMinutes to 4320 (3 calendar days ≈ realistic NIFTY weekly option).
+//     This yields meaningful premiums (~100-200 INR/lot) at NIFTY's IV level.
+func BuildNiftyStrategies() []StrategyDef {
+	btc := buildAllStrategies()
+	nifty := make([]StrategyDef, 0, len(btc))
+	for _, def := range btc {
+		// Scale OTM distance down by 5× (1% → 0.2%) and use 3-day expiry
+		def.StrikePctOTM = def.StrikePctOTM * 0.20
+		def.ExpiryMinutes = 4320 // 3 calendar days
+		if category, ok := optionStrategyCategories[def.Name]; ok {
+			def.Category = category
+		}
+		nifty = append(nifty, def)
+	}
+	return assignStrategyIDs(nifty)
+}
+
 // buildAllStrategies defines BTC option SELLING (writing) strategies.
 //
 // Efficiency Improvements:

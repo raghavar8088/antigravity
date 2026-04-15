@@ -743,6 +743,21 @@ func main() {
 		}
 	})
 
+	// indianMarketOpen returns true when NSE is currently open (9:15–15:30 IST).
+	// Outside these hours Yahoo Finance returns the previous closing price unchanged,
+	// which would fill minuteBars with a flat series and pollute all indicators.
+	indianMarketOpen := func() bool {
+		ist := time.FixedZone("IST", 5*3600+30*60)
+		now := time.Now().In(ist)
+		// Skip weekends
+		if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
+			return false
+		}
+		open := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
+		close := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, ist)
+		return now.After(open) && now.Before(close)
+	}
+
 	// Feed live NIFTY 50 spot quotes into the NIFTY modules from NSE.
 	go safeGo("Nifty50PriceFeed", func() {
 		ticker := time.NewTicker(5 * time.Second)
@@ -752,6 +767,12 @@ func main() {
 		var lastErr string
 
 		pullQuote := func() {
+			// Skip price updates when NSE is closed to avoid stale bars
+			// polluting EMA/RSI/momentum indicators.
+			if !indianMarketOpen() {
+				return
+			}
+
 			quote, err := nseIndexClient.FetchNifty50Quote(ctx)
 			if err != nil {
 				if err.Error() != lastErr {
