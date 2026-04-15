@@ -37,6 +37,7 @@ type SignalInputs = {
   prevFast: number; prevSlow: number;
   mean20: number; std20: number; rsi14: number;
   high20: number; low20: number;
+  breakoutHigh20: number; breakoutLow20: number;
   momentum3: number; momentum6: number;
 };
 
@@ -233,27 +234,31 @@ function buildSignalInputs(bars: number[]): SignalInputs {
   const last = bars.length - 1;
   const price = bars[last];
   const prev = bars.slice(0, -1);
+  const recent20 = bars.slice(-20);
+  const prior20 = bars.slice(-21, -1);
+  const breakoutWindow = prior20.length > 0 ? prior20 : recent20;
   return {
     price, prevPrice: last > 0 ? bars[last - 1] : price,
     fast: ema(bars, 6), slow: ema(bars, 15), trend: ema(bars, 28),
     prevFast: ema(prev, 6), prevSlow: ema(prev, 15),
     mean20: sma(bars, 20), std20: stdDev(bars, 20), rsi14: rsi(bars, 14),
-    high20: Math.max(...bars.slice(-20)), low20: Math.min(...bars.slice(-20)),
+    high20: Math.max(...recent20), low20: Math.min(...recent20),
+    breakoutHigh20: Math.max(...breakoutWindow), breakoutLow20: Math.min(...breakoutWindow),
     momentum3: last >= 3 ? ((price - bars[last - 3]) / bars[last - 3]) * 100 : 0,
     momentum6: last >= 6 ? ((price - bars[last - 6]) / bars[last - 6]) * 100 : 0,
   };
 }
 
 function evalSignal(signal: string, input: SignalInputs): number {
-  const { price, prevPrice, fast, slow, trend, prevFast, prevSlow, mean20, rsi14, high20, low20, momentum3, momentum6 } = input;
+  const { price, prevPrice, fast, slow, trend, prevFast, prevSlow, mean20, rsi14, breakoutHigh20, breakoutLow20, momentum3, momentum6 } = input;
   // Forex uses tighter thresholds (smaller % moves)
   switch (signal) {
     case "BREAKOUT":
-      return price > high20 * 1.0003 && fast > slow && rsi14 >= 56 && momentum3 > 0.05
-        ? scoreClamp(72 + (price / high20 - 1) * 8000 + momentum3 * 15) : 0;
+      return price > breakoutHigh20 * 1.0003 && fast > slow && rsi14 >= 56 && momentum3 > 0.05
+        ? scoreClamp(72 + (price / breakoutHigh20 - 1) * 8000 + momentum3 * 15) : 0;
     case "BREAKOUT_SHORT":
-      return price < low20 * 0.9997 && fast < slow && rsi14 <= 44 && momentum3 < -0.05
-        ? scoreClamp(72 + (low20 / price - 1) * 8000 + Math.abs(momentum3) * 15) : 0;
+      return price < breakoutLow20 * 0.9997 && fast < slow && rsi14 <= 44 && momentum3 < -0.05
+        ? scoreClamp(72 + (breakoutLow20 / price - 1) * 8000 + Math.abs(momentum3) * 15) : 0;
     case "EMA_CROSS":
       return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 53
         ? scoreClamp(70 + (fast / slow - 1) * 12000 + (rsi14 - 50) * 0.4) : 0;
@@ -556,18 +561,16 @@ export default function useForexEngine() {
     else if (items.length) engine.lastError = "";
 
     for (const item of items) {
-      if (item.price <= 0) continue;
-      engine.quotes[item.symbol] = item;
-      let bars = engine.bars[item.symbol] ?? [];
+      const historyBars = (item.candles ?? []).filter((bar) => bar > 0).slice(-MAX_BARS);
+      const livePrice = item.price > 0 ? item.price : (historyBars.length > 0 ? historyBars[historyBars.length - 1] : 0);
+      if (livePrice <= 0) continue;
 
-      // Pre-seed with historical 1-min candles on first tick (eliminates warmup delay)
-      if (item.candles && item.candles.length > bars.length) {
-        bars = [...item.candles];
-      }
+      engine.quotes[item.symbol] = { ...item, price: livePrice };
+      const bars = historyBars.length > 0 ? [...historyBars] : [...(engine.bars[item.symbol] ?? [])];
 
-      // Append current price as the latest bar (avoid duplicate if unchanged)
-      if (!bars.length || bars[bars.length - 1] !== item.price) {
-        bars.push(item.price);
+      // Refresh the 1-minute candle window every tick, then append an in-flight quote if it moved.
+      if (!bars.length || bars[bars.length - 1] !== livePrice) {
+        bars.push(livePrice);
       }
       if (bars.length > MAX_BARS) bars.splice(0, bars.length - MAX_BARS);
       engine.bars[item.symbol] = bars;

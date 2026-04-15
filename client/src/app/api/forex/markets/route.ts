@@ -16,6 +16,7 @@ export type ForexMarketItem = {
 type YahooChartMeta = {
   regularMarketPrice?: number;
   chartPreviousClose?: number;
+  previousClose?: number;
   regularMarketDayHigh?: number;
   regularMarketDayLow?: number;
 };
@@ -33,6 +34,8 @@ type YahooChartResponse = {
   };
 };
 
+type YahooChartResult = NonNullable<NonNullable<YahooChartResponse["chart"]>["result"]>[number];
+
 function n(v: unknown): number {
   const p = Number(v);
   return Number.isFinite(p) ? p : 0;
@@ -44,43 +47,74 @@ const CHART_HEADERS = {
   Accept: "application/json",
 };
 
+function buildChartUrls(yahooSymbol: string): string[] {
+  const encoded = encodeURIComponent(yahooSymbol);
+  return [
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1m&range=1d&includePrePost=false`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encoded}?interval=1m&range=1d&includePrePost=false`,
+  ];
+}
+
+function extractCandles(result: YahooChartResult): number[] {
+  const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
+  return rawCloses
+    .filter((c): c is number => c !== null && c !== undefined && Number.isFinite(c))
+    .slice(-120);
+}
+
 async function fetchPairChart(
   yahooSymbol: string,
   displaySymbol: string,
 ): Promise<ForexMarketItem> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1m&range=1d`;
-  const res = await fetch(url, { headers: CHART_HEADERS, cache: "no-store" });
-  if (!res.ok) throw new Error(`Yahoo chart ${yahooSymbol} returned ${res.status}`);
+  let lastError = `No chart result for ${yahooSymbol}`;
 
-  const body = (await res.json()) as YahooChartResponse;
-  const result = body.chart?.result?.[0];
-  if (!result) throw new Error(`No chart result for ${yahooSymbol}`);
+  for (const url of buildChartUrls(yahooSymbol)) {
+    try {
+      const res = await fetch(url, { headers: CHART_HEADERS, cache: "no-store" });
+      if (!res.ok) {
+        lastError = `Yahoo chart ${yahooSymbol} returned ${res.status}`;
+        continue;
+      }
 
-  const meta = result.meta ?? {};
-  const price = n(meta.regularMarketPrice);
-  const prevClose = n(meta.chartPreviousClose);
-  const dayHigh = n(meta.regularMarketDayHigh);
-  const dayLow = n(meta.regularMarketDayLow);
-  const change = price - prevClose;
-  const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      const body = (await res.json()) as YahooChartResponse;
+      const result = body.chart?.result?.[0];
+      if (!result) {
+        lastError = `No chart result for ${yahooSymbol}`;
+        continue;
+      }
 
-  // Extract up to 120 historical 1-min close prices for engine pre-seeding
-  const rawCloses = result.indicators?.quote?.[0]?.close ?? [];
-  const candles = rawCloses
-    .filter((c): c is number => c !== null && c !== undefined && Number.isFinite(c))
-    .slice(-120);
+      const candles = extractCandles(result);
+      const lastCandle = candles.length > 0 ? candles[candles.length - 1] : 0;
+      const meta = result.meta ?? {};
+      const price = n(meta.regularMarketPrice) || lastCandle;
+      const prevClose = n(meta.chartPreviousClose ?? meta.previousClose) || (candles.length > 0 ? candles[0] : 0);
+      const dayHigh = n(meta.regularMarketDayHigh) || (candles.length > 0 ? Math.max(...candles) : 0);
+      const dayLow = n(meta.regularMarketDayLow) || (candles.length > 0 ? Math.min(...candles) : 0);
+      const change = price - prevClose;
+      const changePct = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-  return {
-    symbol: displaySymbol,
-    yahooSymbol,
-    price,
-    prevClose,
-    change,
-    changePct,
-    dayHigh,
-    dayLow,
-    candles,
-  };
+      if (price <= 0 && candles.length === 0) {
+        lastError = `No usable forex price for ${yahooSymbol}`;
+        continue;
+      }
+
+      return {
+        symbol: displaySymbol,
+        yahooSymbol,
+        price,
+        prevClose,
+        change,
+        changePct,
+        dayHigh,
+        dayLow,
+        candles,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : `Unknown Yahoo fetch error for ${yahooSymbol}`;
+    }
+  }
+
+  throw new Error(lastError);
 }
 
 export async function GET(): Promise<Response> {
