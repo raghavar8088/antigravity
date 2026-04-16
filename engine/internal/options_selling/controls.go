@@ -230,6 +230,10 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 // niftyEntryConfirmed mirrors optionEntryConfirmed with momentum thresholds
 // scaled ~0.25× for NIFTY's lower volatility (IV ~18% vs BTC ~80%).
 // Typical NIFTY 3-minute move is ~0.025%; BTC's is ~0.10%.
+//
+// RSI bounds are deliberately wide for Mean Reversion / Capitulation to avoid
+// contradicting the signal (e.g. RSI_OVERSOLD_EXTREME fires at RSI≈25, so
+// requiring rsiVal >= 38 in confirmation would always reject the trade).
 func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 	if len(ctx.Prices) < 25 {
 		return false
@@ -248,9 +252,11 @@ func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+			// Relax price >= trend to price >= trend*0.995 so intraday dips don't block
+			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 75
 		case "Mean Reversion", "Capitulation":
-			return price >= fast && price >= trend*0.997 && mom3 > -0.0003 && rsiVal >= 38 && rsiVal <= 60
+			// Wide RSI band: signal already sets RSI level; don't double-filter
+			return price >= fast*0.999 && mom3 > -0.0003 && rsiVal >= 20 && rsiVal <= 68
 		default:
 			return price >= fast && mom3 >= -0.00005
 		}
@@ -258,9 +264,10 @@ func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 55
 	case "Mean Reversion", "Capitulation":
-		return price <= fast && price <= trend*1.003 && mom3 < 0.0003 && rsiVal >= 40 && rsiVal <= 62
+		// Wide RSI band for bearish mean reversion (overbought signals fire at RSI~75+)
+		return price <= fast*1.001 && mom3 < 0.0003 && rsiVal >= 32 && rsiVal <= 80
 	default:
 		return price <= fast && mom3 <= 0.00005
 	}

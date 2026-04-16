@@ -742,6 +742,541 @@ var Signals = map[string]SignalFunc{
 		mom3 := momentum(ctx.Prices, 3)
 		return mom30 < -0.012 && rsiVal < 28 && atLower && mom3 > mom30/8
 	},
+
+	// ── 50 NEW SIGNALS (IDs 131-180) ─────────────────────────────────────────
+
+	"DUAL_RSI_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		r7 := rsi(ctx.Prices, 7)
+		r21 := rsi(ctx.Prices, 21)
+		return r7 > 55 && r21 > 50 && r7 < 70 && momentum(ctx.Prices, 5) > 0.0020
+	},
+	"DUAL_RSI_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		r7 := rsi(ctx.Prices, 7)
+		r21 := rsi(ctx.Prices, 21)
+		return r7 < 45 && r21 < 50 && r7 > 30 && momentum(ctx.Prices, 5) < -0.0020
+	},
+	"PULLBACK_EMA9_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return math.Abs(prev-e9)/e9 < 0.003 && ctx.BTCPrice > prev && momentum(ctx.Prices, 3) > 0.0018 && e9 > e21
+	},
+	"PULLBACK_EMA9_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return math.Abs(prev-e9)/e9 < 0.003 && ctx.BTCPrice < prev && momentum(ctx.Prices, 3) < -0.0018 && e9 < e21
+	},
+	"MOM_ACCEL_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		mom3 := momentum(ctx.Prices, 3)
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
+		return mom3 > 0.0025 && mom5 > 0.0015 && mom10 > 0.0008 && mom3 > mom5 && rsi(ctx.Prices, 14) < 68
+	},
+	"MOM_ACCEL_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		mom3 := momentum(ctx.Prices, 3)
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
+		return mom3 < -0.0025 && mom5 < -0.0015 && mom10 < -0.0008 && mom3 < mom5 && rsi(ctx.Prices, 14) > 32
+	},
+	"VWAP_RECLAIM_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return prev < vw && ctx.BTCPrice > vw && momentum(ctx.Prices, 3) > 0.0020
+	},
+	"VWAP_RECLAIM_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return prev > vw && ctx.BTCPrice < vw && momentum(ctx.Prices, 3) < -0.0020
+	},
+	"ATR_BREAK_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		atr := 0.0
+		for i := n - 14; i < n-1; i++ {
+			atr += math.Abs(ctx.Prices[i] - ctx.Prices[i-1])
+		}
+		atr /= 14
+		if atr == 0 {
+			return false
+		}
+		return ctx.BTCPrice-ctx.Prices[n-2] > atr*1.5 && rsi(ctx.Prices, 14) < 65
+	},
+	"ATR_BREAK_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		atr := 0.0
+		for i := n - 14; i < n-1; i++ {
+			atr += math.Abs(ctx.Prices[i] - ctx.Prices[i-1])
+		}
+		atr /= 14
+		if atr == 0 {
+			return false
+		}
+		return ctx.Prices[n-2]-ctx.BTCPrice > atr*1.5 && rsi(ctx.Prices, 14) > 35
+	},
+	"RANGE_BOUNCE_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-20:]
+		lo, hi := window[0], window[0]
+		for _, p := range window {
+			if p < lo {
+				lo = p
+			}
+			if p > hi {
+				hi = p
+			}
+		}
+		rng := hi - lo
+		if rng == 0 {
+			return false
+		}
+		return (ctx.BTCPrice-lo)/rng < 0.15 && rsi(ctx.Prices, 14) < 40 && momentum(ctx.Prices, 3) > 0.0010
+	},
+	"RANGE_BOUNCE_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-20:]
+		lo, hi := window[0], window[0]
+		for _, p := range window {
+			if p < lo {
+				lo = p
+			}
+			if p > hi {
+				hi = p
+			}
+		}
+		rng := hi - lo
+		if rng == 0 {
+			return false
+		}
+		return (hi-ctx.BTCPrice)/rng < 0.15 && rsi(ctx.Prices, 14) > 60 && momentum(ctx.Prices, 3) < -0.0010
+	},
+	"EMA_STACK_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 {
+			return false
+		}
+		e5, e9, e21, e55 := ema(ctx.Prices, 5), ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		return e5 > e9 && e9 > e21 && e21 > e55 && crossedAbove(ctx.Prices, 5, 9) && momentum(ctx.Prices, 5) > 0.0020
+	},
+	"EMA_STACK_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 60 {
+			return false
+		}
+		e5, e9, e21, e55 := ema(ctx.Prices, 5), ema(ctx.Prices, 9), ema(ctx.Prices, 21), ema(ctx.Prices, 55)
+		return e5 < e9 && e9 < e21 && e21 < e55 && crossedBelow(ctx.Prices, 5, 9) && momentum(ctx.Prices, 5) < -0.0020
+	},
+	"STOCH_BULL_CROSS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		k := stochK(ctx.Prices, 14)
+		prevK := stochK(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return prevK < 30 && k >= 30 && ctx.BTCPrice > ema(ctx.Prices, 21) && momentum(ctx.Prices, 3) > 0.0012
+	},
+	"STOCH_BEAR_CROSS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		k := stochK(ctx.Prices, 14)
+		prevK := stochK(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return prevK > 70 && k <= 70 && ctx.BTCPrice < ema(ctx.Prices, 21) && momentum(ctx.Prices, 3) < -0.0012
+	},
+	"BB_MID_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		mid := bbMid(ctx.Prices, 20)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return prev < mid && ctx.BTCPrice > mid && momentum(ctx.Prices, 3) > 0.0018 && rsi(ctx.Prices, 14) < 62
+	},
+	"BB_MID_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		mid := bbMid(ctx.Prices, 20)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return prev > mid && ctx.BTCPrice < mid && momentum(ctx.Prices, 3) < -0.0018 && rsi(ctx.Prices, 14) > 38
+	},
+	"OPEN_DRIVE_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		afterOpen := totalMin - 225 // minutes after NSE open at 03:45 UTC
+		if afterOpen < 45 || afterOpen > 120 {
+			return false
+		}
+		firstN := 30
+		hi := ctx.Prices[0]
+		for _, p := range ctx.Prices[:firstN] {
+			if p > hi {
+				hi = p
+			}
+		}
+		return ctx.BTCPrice > hi*1.0010 && momentum(ctx.Prices, 5) > 0.0020
+	},
+	"OPEN_DRIVE_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		afterOpen := totalMin - 225
+		if afterOpen < 45 || afterOpen > 120 {
+			return false
+		}
+		firstN := 30
+		lo := ctx.Prices[0]
+		for _, p := range ctx.Prices[:firstN] {
+			if p < lo {
+				lo = p
+			}
+		}
+		return ctx.BTCPrice < lo*0.9990 && momentum(ctx.Prices, 5) < -0.0020
+	},
+	"PREV_BREAK_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		n := len(ctx.Prices)
+		hi := ctx.Prices[n-11]
+		for _, p := range ctx.Prices[n-11 : n-1] {
+			if p > hi {
+				hi = p
+			}
+		}
+		return ctx.BTCPrice > hi*1.0015 && momentum(ctx.Prices, 3) > 0.0015 && rsi(ctx.Prices, 14) > 50
+	},
+	"PREV_BREAK_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		n := len(ctx.Prices)
+		lo := ctx.Prices[n-11]
+		for _, p := range ctx.Prices[n-11 : n-1] {
+			if p < lo {
+				lo = p
+			}
+		}
+		return ctx.BTCPrice < lo*0.9985 && momentum(ctx.Prices, 3) < -0.0015 && rsi(ctx.Prices, 14) < 50
+	},
+	"RSI_CROSS_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		prevR := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return prevR < 45 && r >= 45 && momentum(ctx.Prices, 5) > 0.0018
+	},
+	"RSI_CROSS_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		prevR := rsi(ctx.Prices[:len(ctx.Prices)-1], 14)
+		return prevR > 55 && r <= 55 && momentum(ctx.Prices, 5) < -0.0018
+	},
+	"GRIND_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 {
+			return false
+		}
+		n := len(ctx.Prices)
+		up := 0
+		for i := n - 8; i < n; i++ {
+			if ctx.Prices[i] > ctx.Prices[i-1] {
+				up++
+			}
+		}
+		total := (ctx.Prices[n-1] - ctx.Prices[n-9]) / ctx.Prices[n-9]
+		return up >= 6 && total > 0.0022 && rsi(ctx.Prices, 14) < 70
+	},
+	"GRIND_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 {
+			return false
+		}
+		n := len(ctx.Prices)
+		down := 0
+		for i := n - 8; i < n; i++ {
+			if ctx.Prices[i] < ctx.Prices[i-1] {
+				down++
+			}
+		}
+		total := (ctx.Prices[n-9] - ctx.Prices[n-1]) / ctx.Prices[n-9]
+		return down >= 6 && total > 0.0022 && rsi(ctx.Prices, 14) > 30
+	},
+	"TENSION_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recent := stddev(ctx.Prices[n-5:])
+		prior := stddev(ctx.Prices[n-25 : n-5])
+		if prior == 0 {
+			return false
+		}
+		return recent < prior*0.30 && momentum(ctx.Prices, 2) > 0.0028 && rsi(ctx.Prices, 14) < 65
+	},
+	"TENSION_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recent := stddev(ctx.Prices[n-5:])
+		prior := stddev(ctx.Prices[n-25 : n-5])
+		if prior == 0 {
+			return false
+		}
+		return recent < prior*0.30 && momentum(ctx.Prices, 2) < -0.0028 && rsi(ctx.Prices, 14) > 35
+	},
+	"EMA21_TOUCH_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return math.Abs(prev-e21)/e21 < 0.002 && ctx.BTCPrice > e21 && ctx.BTCPrice > ema(ctx.Prices, 9) && momentum(ctx.Prices, 2) > 0.0020
+	},
+	"EMA21_TOUCH_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		e21 := ema(ctx.Prices, 21)
+		prev := ctx.Prices[len(ctx.Prices)-2]
+		return math.Abs(prev-e21)/e21 < 0.002 && ctx.BTCPrice < e21 && ctx.BTCPrice < ema(ctx.Prices, 9) && momentum(ctx.Prices, 2) < -0.0020
+	},
+	"BB_MEAN_REV_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		n := len(ctx.Prices)
+		lower := bbLower(ctx.Prices, 20)
+		prevR := rsi(ctx.Prices[:n-1], 14)
+		r := rsi(ctx.Prices, 14)
+		return ctx.Prices[n-2] <= lower*1.001 && ctx.BTCPrice > ctx.Prices[n-2] && prevR < 28 && r >= 28
+	},
+	"BB_MEAN_REV_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		n := len(ctx.Prices)
+		upper := bbUpper(ctx.Prices, 20)
+		prevR := rsi(ctx.Prices[:n-1], 14)
+		r := rsi(ctx.Prices, 14)
+		return ctx.Prices[n-2] >= upper*0.999 && ctx.BTCPrice < ctx.Prices[n-2] && prevR > 72 && r <= 72
+	},
+	"EARLY_NSE_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		afterOpen := ctx.UTCHour*60 + ctx.UTCMin - 225
+		if afterOpen < 5 || afterOpen > 30 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) > 0.0040 && rsi(ctx.Prices, 14) > 52
+	},
+	"EARLY_NSE_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		afterOpen := ctx.UTCHour*60 + ctx.UTCMin - 225
+		if afterOpen < 5 || afterOpen > 30 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) < -0.0040 && rsi(ctx.Prices, 14) < 48
+	},
+	"AFTERNOON_NSE_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		inAfternoon := totalMin >= 480 && totalMin <= 570 // 08:00-09:30 UTC
+		if !inAfternoon {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 10) > 0.0030 && r > 50 && r < 65
+	},
+	"AFTERNOON_NSE_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		inAfternoon := totalMin >= 480 && totalMin <= 570
+		if !inAfternoon {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		return momentum(ctx.Prices, 10) < -0.0030 && r > 35 && r < 50
+	},
+	"MICRO_REV_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 8 {
+			return false
+		}
+		n := len(ctx.Prices)
+		downOk := ctx.Prices[n-3] < ctx.Prices[n-4] && ctx.Prices[n-2] < ctx.Prices[n-3]
+		snapback := (ctx.BTCPrice - ctx.Prices[n-2]) / ctx.Prices[n-2]
+		totalDrop := (ctx.Prices[n-4] - ctx.Prices[n-2]) / ctx.Prices[n-4]
+		return downOk && snapback > 0.0022 && totalDrop > 0.0018 && snapback > totalDrop*0.50
+	},
+	"MICRO_REV_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 8 {
+			return false
+		}
+		n := len(ctx.Prices)
+		upOk := ctx.Prices[n-3] > ctx.Prices[n-4] && ctx.Prices[n-2] > ctx.Prices[n-3]
+		snapback := (ctx.Prices[n-2] - ctx.BTCPrice) / ctx.Prices[n-2]
+		totalRise := (ctx.Prices[n-2] - ctx.Prices[n-4]) / ctx.Prices[n-4]
+		return upOk && snapback > 0.0022 && totalRise > 0.0018 && snapback > totalRise*0.50
+	},
+	"RSI_MOM_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		return r > 55 && r < 68 && momentum(ctx.Prices, 5) > 0.0028 && momentum(ctx.Prices, 10) > 0.0012
+	},
+	"RSI_MOM_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		r := rsi(ctx.Prices, 14)
+		return r > 32 && r < 45 && momentum(ctx.Prices, 5) < -0.0028 && momentum(ctx.Prices, 10) < -0.0012
+	},
+	"DEEP_CAP_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		lo := ctx.Prices[n-10]
+		for _, p := range ctx.Prices[n-10 : n-1] {
+			if p < lo {
+				lo = p
+			}
+		}
+		start := ctx.Prices[n-11]
+		if start == 0 || lo == 0 {
+			return false
+		}
+		return (start-lo)/start > 0.0090 && (ctx.BTCPrice-lo)/lo > 0.0040 && rsi(ctx.Prices, 14) < 52
+	},
+	"DEEP_CAP_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		hi := ctx.Prices[n-10]
+		for _, p := range ctx.Prices[n-10 : n-1] {
+			if p > hi {
+				hi = p
+			}
+		}
+		start := ctx.Prices[n-11]
+		if start == 0 || hi == 0 {
+			return false
+		}
+		return (hi-start)/start > 0.0090 && (hi-ctx.BTCPrice)/hi > 0.0040 && rsi(ctx.Prices, 14) > 48
+	},
+	"EMA_TREND_CROSS_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		return ctx.BTCPrice > ema(ctx.Prices, 55)*1.001 && crossedAbove(ctx.Prices, 9, 21) && momentum(ctx.Prices, 5) > 0.0022
+	},
+	"EMA_TREND_CROSS_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		return ctx.BTCPrice < ema(ctx.Prices, 55)*0.999 && crossedBelow(ctx.Prices, 9, 21) && momentum(ctx.Prices, 5) < -0.0022
+	},
+	"QUIET_BREAK_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		n := len(ctx.Prices)
+		quiet := stddev(ctx.Prices[n-8:])
+		base := stddev(ctx.Prices[n-30:])
+		if base == 0 {
+			return false
+		}
+		return quiet < base*0.50 && momentum(ctx.Prices, 2) > 0.0030 && rsi(ctx.Prices, 14) < 68
+	},
+	"QUIET_BREAK_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		n := len(ctx.Prices)
+		quiet := stddev(ctx.Prices[n-8:])
+		base := stddev(ctx.Prices[n-30:])
+		if base == 0 {
+			return false
+		}
+		return quiet < base*0.50 && momentum(ctx.Prices, 2) < -0.0030 && rsi(ctx.Prices, 14) > 32
+	},
+	"VOL_SURGE_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		atr := 0.0
+		for i := n - 15; i < n-2; i++ {
+			atr += math.Abs(ctx.Prices[i] - ctx.Prices[i-1])
+		}
+		atr /= 13
+		if atr == 0 {
+			return false
+		}
+		lastBar := ctx.BTCPrice - ctx.Prices[n-2]
+		return lastBar > atr*2.0 && rsi(ctx.Prices, 14) < 68 && momentum(ctx.Prices, 3) > 0.0020
+	},
+	"VOL_SURGE_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		n := len(ctx.Prices)
+		atr := 0.0
+		for i := n - 15; i < n-2; i++ {
+			atr += math.Abs(ctx.Prices[i] - ctx.Prices[i-1])
+		}
+		atr /= 13
+		if atr == 0 {
+			return false
+		}
+		lastBar := ctx.Prices[n-2] - ctx.BTCPrice
+		return lastBar > atr*2.0 && rsi(ctx.Prices, 14) > 32 && momentum(ctx.Prices, 3) < -0.0020
+	},
 }
 
 // NiftySignals contains signal functions calibrated for NIFTY 50.
