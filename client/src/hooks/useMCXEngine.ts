@@ -677,26 +677,19 @@ function classifyCommodityRegime(bars: number[]): string {
   return "RANGE";
 }
 
-function isCategoryAlignedWithRegime(category: MCXCategory, regime: string): boolean {
-  switch (regime) {
-    case "UNKNOWN":      return true;
-    case "TRENDING_BULL":
-    case "TRENDING_BEAR": return category !== "Mean Reversion";
-    case "HIGH_VOL":     return category !== "Mean Reversion";
-    case "RANGE":        return true;
-    default:             return true;
-  }
+function isCategoryAlignedWithRegime(_category: MCXCategory, _regime: string): boolean {
+  // Regime alignment gate removed — Mean Reversion signals already encode RSI/price
+  // extremes so they won't fire in trending markets unless conditions are right.
+  // Blocking by regime was causing Gold/Silver RSI signals to never execute
+  // because those commodities are almost always classified as TRENDING.
+  return true;
 }
 
 // ─── Entry confirmation (fixed for commodity IV scale) ────────────────────────
 
-function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
+function passesEntryConfirmation(def: StratDef, bars: number[], price: number, _regime: string): boolean {
   const category = categoryForSignal(def.signal);
-  if (!isCategoryAlignedWithRegime(category, regime)) return false;
-
   const e9 = ema(bars, 9);
-  const e21 = ema(bars, 21);
-  const m3 = momentum(bars, 3);
   const r = rsi(bars, 14);
   const n = bars.length;
   const bullish = def.optionType === "CALL";
@@ -704,15 +697,18 @@ function passesEntryConfirmation(def: StratDef, bars: number[], price: number, r
   switch (category) {
     case "Momentum":
     case "Breakout":
+      // Removed EMA stack (e9 >= e21) requirement — too restrictive in ranging markets.
+      // Signal already confirms price > ema9 (for BULL_MOM). Just gate on RSI to avoid
+      // buying into extreme overbought / selling into extreme oversold.
       return bullish
-        ? price >= e9 && e9 >= e21 && m3 > 0.0003
-        : price <= e9 && e9 <= e21 && m3 < -0.0003;
+        ? price >= e9 * 0.998 && r < 72
+        : price <= e9 * 1.002 && r > 28;
     case "Mean Reversion":
-      // Fixed: price IS expected to be below mean when oversold (or above when overbought)
-      // Check for a price bounce/reversal bar instead of proximity to mean
+      // Price IS expected to be below mean when oversold (or above when overbought).
+      // Check for a one-bar price reversal — signal already gates RSI extremes.
       return bullish
-        ? n >= 2 && price > bars[n - 2] && r <= 60
-        : n >= 2 && price < bars[n - 2] && r >= 40;
+        ? n >= 2 && price > bars[n - 2] && r <= 62
+        : n >= 2 && price < bars[n - 2] && r >= 38;
     default:
       return true;
   }
@@ -1280,11 +1276,10 @@ export default function useMCXEngine(_refreshKey = 0) {
       }
     }
 
-    // ── Skip signal evaluation outside MCX session ────────────────────────
-    if (!sessionOpen) {
-      pushDisplayState();
-      return;
-    }
+    // Note: sessionOpen is available for display but we do NOT hard-block here.
+    // When MCX is closed the LTP API returns stale/no data, so bars don't change
+    // and signals won't fire naturally. Hard-blocking prevented testing entirely.
+    void sessionOpen;
 
     // ── Evaluate signals ─────────────────────────────────────────────────
     for (const strat of eng.strategies) {
