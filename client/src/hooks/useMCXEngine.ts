@@ -752,6 +752,7 @@ function shouldPauseMCXStrategy(strat: InternalStratState): boolean {
 function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: number, exitPrice: number, reason: string, now: number) {
   const pos = strat.position;
   if (!pos) return;
+  if (pos.entryPremium <= 0) { strat.position = null; eng.positions.delete(pos.id); return; }
   const netPnl = (exitPremium - pos.entryPremium) * pos.quantity;
   const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100;
 
@@ -781,6 +782,7 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
 
 function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number): boolean {
   const premium = estimatePremium(price, iv, commodity.dteDays);
+  if (premium <= 0) return false; // should not happen given price guard, but be defensive
   const costPerLot = premium * commodity.lotSize;
   let lots = costPerLot > 0 ? Math.max(1, Math.round((commodity.positionINR * mcxSizeMultiplier(strat)) / costPerLot)) : 1;
   let cost = premium * commodity.lotSize * lots;

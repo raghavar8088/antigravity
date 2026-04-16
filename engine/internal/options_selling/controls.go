@@ -139,10 +139,14 @@ func classifyMarketRegime(prices []float64) string {
 }
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
-	// Lower the gate so Hybrid/Momentum sellers are not permanently locked out.
-	// The old 0.75 threshold blocked Hybrid in every regime and sidelined several
-	// otherwise strong continuation sellers for most of the session.
-	return regimeFitScore(category, regime) >= 0.42
+	// Threshold set to 0.32 — the minimum possible regimeFitScore (Mean Reversion
+	// in TREND). The roster system already penalises poorly-aligned strategies via
+	// structural score, so this gate should only block categories with a truly zero
+	// fit score (i.e. unrecognised regime strings hitting the default 0.50 fallback
+	// still passes). Raising the threshold to 0.42 had the unintended side-effect
+	// of permanently blocking Momentum in RANGE (0.36) and Mean Reversion in TREND
+	// (0.32), two of the most common market states.
+	return regimeFitScore(category, regime) >= 0.32
 }
 
 func clamp(min, value, max float64) float64 {

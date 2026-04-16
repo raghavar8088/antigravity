@@ -456,7 +456,9 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium <= 0 {
+	if pr.Premium < 1.0 {
+		// Reject options with sub-$1 premiums: they are deep OTM with unrealistic
+		// quantities (positionUSD/0.01 = 1,000,000 contracts) that distort PnL.
 		return nil
 	}
 
