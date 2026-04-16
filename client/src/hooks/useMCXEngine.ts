@@ -6,8 +6,10 @@
  * Fully autonomous, client-side MCX commodity option scalping engine.
  * - Polls /api/mcx/ltp every 5 seconds for all 5 commodities
  * - Seeds 1-min bars from /api/mcx/candles on mount
- * - Runs 20 signal-driven strategies (4 per commodity × 5 commodities)
+ * - Runs 50 signal-driven strategies (10 per commodity × 5 commodities)
+ * - Roster system: ACTIVE/WATCHLIST/DISABLED with shadow position tracking
  * - Paper option positions with delta-based mark-to-market, TP/SL auto-exit
+ * - MCX session gating: 9:00 AM – 11:30 PM IST (3:30–18:00 UTC)
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -34,8 +36,14 @@ const MCX_LOSS_COOLDOWN_PENALTY = 0.3;
 const MCX_UNDERPERFORMING_MIN_TRADES = 8;
 const MCX_UNDERPERFORMING_MAX_WINRATE = 35;
 const MCX_UNDERPERFORMING_PAUSE_MS = 6 * 60 * 60 * 1000;
+const MCX_LOSS_STREAK_DISABLE_THRESHOLD = 5;
+const MCX_LOSS_STREAK_COOLDOWN_MS = 50 * 60 * 1000;
+const MCX_SHADOW_PROMOTE_TRADES = 3;
+const MCX_SHADOW_PROMOTE_WINRATE = 0.45;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
+
+export type MCXRosterState = "ACTIVE" | "WATCHLIST" | "DISABLED";
 
 export type MCXPosition = {
   id: string;
@@ -88,6 +96,7 @@ export type MCXStrategyStatus = {
   commodityName: string;
   optionType: "CALL" | "PUT";
   status: string;
+  rosterState: MCXRosterState;
   score: number;
   totalTrades: number;
   wins: number;
@@ -95,6 +104,9 @@ export type MCXStrategyStatus = {
   winRate: number;
   totalPnl: number;
   hasPosition: boolean;
+  shadowTrades: number;
+  shadowWins: number;
+  hasShadowPosition: boolean;
 };
 
 export type MCXCommodityQuote = {
@@ -146,6 +158,7 @@ interface StratDef {
   slPct: number;
   cooldownSecs: number;
   minBars: number;
+  startAsWatchlist?: boolean;
 }
 
 type MCXCategory = "Momentum" | "Mean Reversion" | "Breakout";
@@ -175,11 +188,19 @@ function categoryForSignal(signal: string): MCXCategory {
     case "BB_UPPER_TOUCH":
     case "STOCH_OS":
     case "STOCH_OB":
+    case "STOCH_BULL_CROSS":
+    case "STOCH_BEAR_CROSS":
       return "Mean Reversion";
     case "RESIST_BREAK":
     case "SUPPORT_BREAK":
+    case "ATR_BREAKOUT_BULL":
+    case "ATR_BREAKOUT_BEAR":
+    case "BB_SQUEEZE_BULL":
+    case "BB_SQUEEZE_BEAR":
       return "Breakout";
     default:
+      // BULL_MOM, BEAR_MOM, STRONG_*, EMA_BULL_CROSS, EMA_BEAR_CROSS,
+      // TREND_PULLBACK_BULL, TREND_PULLBACK_BEAR
       return "Momentum";
   }
 }
@@ -194,35 +215,79 @@ function tuneStrategy(def: StratDef): StratDef {
 }
 
 const BASE_STRAT_DEFS: StratDef[] = [
-  // ── Crude Oil (volatile, trend-following + BB)
-  { id: 1,  name: "CrudeOil_MomBull_Call",    commodityId: "CRUDEOIL",    optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
-  { id: 2,  name: "CrudeOil_MomBear_Put",     commodityId: "CRUDEOIL",    optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
-  { id: 3,  name: "CrudeOil_BB_Lower_Call",   commodityId: "CRUDEOIL",    optionType: "CALL", signal: "BB_LOWER_TOUCH",  tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
-  { id: 4,  name: "CrudeOil_BB_Upper_Put",    commodityId: "CRUDEOIL",    optionType: "PUT",  signal: "BB_UPPER_TOUCH",  tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
+  // ── Crude Oil (volatile, trend-following + BB) — ACTIVE
+  { id: 1,  name: "CrudeOil_MomBull_Call",       commodityId: "CRUDEOIL",   optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
+  { id: 2,  name: "CrudeOil_MomBear_Put",        commodityId: "CRUDEOIL",   optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.70, slPct: 0.25, cooldownSecs: 240, minBars: 15 },
+  { id: 3,  name: "CrudeOil_BB_Lower_Call",      commodityId: "CRUDEOIL",   optionType: "CALL", signal: "BB_LOWER_TOUCH",     tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
+  { id: 4,  name: "CrudeOil_BB_Upper_Put",       commodityId: "CRUDEOIL",   optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.60, slPct: 0.22, cooldownSecs: 300, minBars: 22 },
 
-  // ── Gold Mini (mean-reverting, RSI + EMA)
-  { id: 5,  name: "Gold_RSI_OS_Call",         commodityId: "GOLDM",       optionType: "CALL", signal: "RSI_EXTREME_OS",  tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
-  { id: 6,  name: "Gold_RSI_OB_Put",          commodityId: "GOLDM",       optionType: "PUT",  signal: "RSI_EXTREME_OB",  tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
-  { id: 7,  name: "Gold_EMA_Bull_Call",        commodityId: "GOLDM",       optionType: "CALL", signal: "EMA_BULL_CROSS",  tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
-  { id: 8,  name: "Gold_EMA_Bear_Put",         commodityId: "GOLDM",       optionType: "PUT",  signal: "EMA_BEAR_CROSS",  tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
+  // ── Gold Mini (mean-reverting, RSI + EMA) — ACTIVE
+  { id: 5,  name: "Gold_RSI_OS_Call",            commodityId: "GOLDM",      optionType: "CALL", signal: "RSI_EXTREME_OS",     tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 6,  name: "Gold_RSI_OB_Put",             commodityId: "GOLDM",      optionType: "PUT",  signal: "RSI_EXTREME_OB",     tpPct: 0.90, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 7,  name: "Gold_EMA_Bull_Call",          commodityId: "GOLDM",      optionType: "CALL", signal: "EMA_BULL_CROSS",     tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
+  { id: 8,  name: "Gold_EMA_Bear_Put",           commodityId: "GOLDM",      optionType: "PUT",  signal: "EMA_BEAR_CROSS",     tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 22 },
 
-  // ── Silver Mini (momentum + RSI)
-  { id: 9,  name: "Silver_MomBull_Call",      commodityId: "SILVERM",     optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
-  { id: 10, name: "Silver_MomBear_Put",       commodityId: "SILVERM",     optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
-  { id: 11, name: "Silver_RSI_OS_Call",       commodityId: "SILVERM",     optionType: "CALL", signal: "RSI_EXTREME_OS",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
-  { id: 12, name: "Silver_RSI_OB_Put",        commodityId: "SILVERM",     optionType: "PUT",  signal: "RSI_EXTREME_OB",  tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  // ── Silver Mini (momentum + RSI) — ACTIVE
+  { id: 9,  name: "Silver_MomBull_Call",         commodityId: "SILVERM",    optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
+  { id: 10, name: "Silver_MomBear_Put",          commodityId: "SILVERM",    optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.75, slPct: 0.26, cooldownSecs: 300, minBars: 15 },
+  { id: 11, name: "Silver_RSI_OS_Call",          commodityId: "SILVERM",    optionType: "CALL", signal: "RSI_EXTREME_OS",     tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
+  { id: 12, name: "Silver_RSI_OB_Put",           commodityId: "SILVERM",    optionType: "PUT",  signal: "RSI_EXTREME_OB",     tpPct: 0.85, slPct: 0.28, cooldownSecs: 480, minBars: 20 },
 
-  // ── Natural Gas (hyper-volatile, strong momentum + stochastic)
-  { id: 13, name: "NatGas_StrongMom_Call",    commodityId: "NATURALGAS",  optionType: "CALL", signal: "STRONG_BULL_MOM", tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
-  { id: 14, name: "NatGas_StrongMom_Put",     commodityId: "NATURALGAS",  optionType: "PUT",  signal: "STRONG_BEAR_MOM", tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
-  { id: 15, name: "NatGas_Stoch_OS_Call",     commodityId: "NATURALGAS",  optionType: "CALL", signal: "STOCH_OS",        tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
-  { id: 16, name: "NatGas_Stoch_OB_Put",      commodityId: "NATURALGAS",  optionType: "PUT",  signal: "STOCH_OB",        tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
+  // ── Natural Gas (hyper-volatile, strong momentum + stochastic) — ACTIVE
+  { id: 13, name: "NatGas_StrongMom_Call",       commodityId: "NATURALGAS", optionType: "CALL", signal: "STRONG_BULL_MOM",    tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
+  { id: 14, name: "NatGas_StrongMom_Put",        commodityId: "NATURALGAS", optionType: "PUT",  signal: "STRONG_BEAR_MOM",    tpPct: 1.00, slPct: 0.35, cooldownSecs: 360, minBars: 15 },
+  { id: 15, name: "NatGas_Stoch_OS_Call",        commodityId: "NATURALGAS", optionType: "CALL", signal: "STOCH_OS",           tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
+  { id: 16, name: "NatGas_Stoch_OB_Put",         commodityId: "NATURALGAS", optionType: "PUT",  signal: "STOCH_OB",           tpPct: 0.80, slPct: 0.30, cooldownSecs: 420, minBars: 20 },
 
-  // ── Copper (industrial trend-following + breakout)
-  { id: 17, name: "Copper_MomBull_Call",      commodityId: "COPPER",      optionType: "CALL", signal: "BULL_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
-  { id: 18, name: "Copper_MomBear_Put",       commodityId: "COPPER",      optionType: "PUT",  signal: "BEAR_MOM",        tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
-  { id: 19, name: "Copper_Resist_Break_Call", commodityId: "COPPER",      optionType: "CALL", signal: "RESIST_BREAK",    tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
-  { id: 20, name: "Copper_Support_Break_Put", commodityId: "COPPER",      optionType: "PUT",  signal: "SUPPORT_BREAK",   tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
+  // ── Copper (industrial trend-following + breakout) — ACTIVE
+  { id: 17, name: "Copper_MomBull_Call",         commodityId: "COPPER",     optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
+  { id: 18, name: "Copper_MomBear_Put",          commodityId: "COPPER",     optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.70, slPct: 0.25, cooldownSecs: 300, minBars: 15 },
+  { id: 19, name: "Copper_Resist_Break_Call",    commodityId: "COPPER",     optionType: "CALL", signal: "RESIST_BREAK",       tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
+  { id: 20, name: "Copper_Support_Break_Put",    commodityId: "COPPER",     optionType: "PUT",  signal: "SUPPORT_BREAK",      tpPct: 0.84, slPct: 0.28, cooldownSecs: 480, minBars: 22 },
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // NEW STRATEGIES — start in WATCHLIST (shadow mode until qualified)
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  // ── Crude Oil extended
+  { id: 21, name: "CrudeOil_ATR_Break_Call",     commodityId: "CRUDEOIL",   optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.72, slPct: 0.28, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 22, name: "CrudeOil_ATR_Break_Put",      commodityId: "CRUDEOIL",   optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.72, slPct: 0.28, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 23, name: "CrudeOil_Stoch_Cross_Call",   commodityId: "CRUDEOIL",   optionType: "CALL", signal: "STOCH_BULL_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
+  { id: 24, name: "CrudeOil_Stoch_Cross_Put",    commodityId: "CRUDEOIL",   optionType: "PUT",  signal: "STOCH_BEAR_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
+  { id: 25, name: "CrudeOil_Pullback_Call",      commodityId: "CRUDEOIL",   optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.68, slPct: 0.26, cooldownSecs: 300, minBars: 60, startAsWatchlist: true },
+  { id: 26, name: "CrudeOil_Pullback_Put",       commodityId: "CRUDEOIL",   optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.68, slPct: 0.26, cooldownSecs: 300, minBars: 60, startAsWatchlist: true },
+
+  // ── Gold Mini extended
+  { id: 27, name: "Gold_BB_Squeeze_Call",        commodityId: "GOLDM",      optionType: "CALL", signal: "BB_SQUEEZE_BULL",    tpPct: 0.62, slPct: 0.26, cooldownSecs: 360, minBars: 25, startAsWatchlist: true },
+  { id: 28, name: "Gold_BB_Squeeze_Put",         commodityId: "GOLDM",      optionType: "PUT",  signal: "BB_SQUEEZE_BEAR",    tpPct: 0.62, slPct: 0.26, cooldownSecs: 360, minBars: 25, startAsWatchlist: true },
+  { id: 29, name: "Gold_Stoch_Cross_Call",       commodityId: "GOLDM",      optionType: "CALL", signal: "STOCH_BULL_CROSS",   tpPct: 0.52, slPct: 0.22, cooldownSecs: 480, minBars: 20, startAsWatchlist: true },
+  { id: 30, name: "Gold_Stoch_Cross_Put",        commodityId: "GOLDM",      optionType: "PUT",  signal: "STOCH_BEAR_CROSS",   tpPct: 0.52, slPct: 0.22, cooldownSecs: 480, minBars: 20, startAsWatchlist: true },
+  { id: 31, name: "Gold_Pullback_Call",          commodityId: "GOLDM",      optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+  { id: 32, name: "Gold_Pullback_Put",           commodityId: "GOLDM",      optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.65, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+
+  // ── Silver Mini extended
+  { id: 33, name: "Silver_ATR_Break_Call",       commodityId: "SILVERM",    optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.68, slPct: 0.27, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 34, name: "Silver_ATR_Break_Put",        commodityId: "SILVERM",    optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.68, slPct: 0.27, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 35, name: "Silver_BB_Squeeze_Call",      commodityId: "SILVERM",    optionType: "CALL", signal: "BB_SQUEEZE_BULL",    tpPct: 0.60, slPct: 0.25, cooldownSecs: 360, minBars: 25, startAsWatchlist: true },
+  { id: 36, name: "Silver_BB_Squeeze_Put",       commodityId: "SILVERM",    optionType: "PUT",  signal: "BB_SQUEEZE_BEAR",    tpPct: 0.60, slPct: 0.25, cooldownSecs: 360, minBars: 25, startAsWatchlist: true },
+  { id: 37, name: "Silver_Pullback_Call",        commodityId: "SILVERM",    optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.65, slPct: 0.25, cooldownSecs: 300, minBars: 60, startAsWatchlist: true },
+  { id: 38, name: "Silver_Pullback_Put",         commodityId: "SILVERM",    optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.65, slPct: 0.25, cooldownSecs: 300, minBars: 60, startAsWatchlist: true },
+
+  // ── Natural Gas extended
+  { id: 39, name: "NatGas_ATR_Break_Call",       commodityId: "NATURALGAS", optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.70, slPct: 0.30, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 40, name: "NatGas_ATR_Break_Put",        commodityId: "NATURALGAS", optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.70, slPct: 0.30, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 41, name: "NatGas_BB_Lower_Call",        commodityId: "NATURALGAS", optionType: "CALL", signal: "BB_LOWER_TOUCH",     tpPct: 0.65, slPct: 0.28, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 42, name: "NatGas_BB_Upper_Put",         commodityId: "NATURALGAS", optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.65, slPct: 0.28, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 43, name: "NatGas_Pullback_Call",        commodityId: "NATURALGAS", optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.68, slPct: 0.28, cooldownSecs: 360, minBars: 60, startAsWatchlist: true },
+  { id: 44, name: "NatGas_Pullback_Put",         commodityId: "NATURALGAS", optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.68, slPct: 0.28, cooldownSecs: 360, minBars: 60, startAsWatchlist: true },
+
+  // ── Copper extended
+  { id: 45, name: "Copper_ATR_Break_Call",       commodityId: "COPPER",     optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.68, slPct: 0.26, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 46, name: "Copper_ATR_Break_Put",        commodityId: "COPPER",     optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.68, slPct: 0.26, cooldownSecs: 300, minBars: 22, startAsWatchlist: true },
+  { id: 47, name: "Copper_BB_Lower_Call",        commodityId: "COPPER",     optionType: "CALL", signal: "BB_LOWER_TOUCH",     tpPct: 0.60, slPct: 0.24, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 48, name: "Copper_BB_Upper_Put",         commodityId: "COPPER",     optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.60, slPct: 0.24, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 49, name: "Copper_Stoch_Cross_Call",     commodityId: "COPPER",     optionType: "CALL", signal: "STOCH_BULL_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
+  { id: 50, name: "Copper_Stoch_Cross_Put",      commodityId: "COPPER",     optionType: "PUT",  signal: "STOCH_BEAR_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
 ];
 
 // ─── Math helpers ──────────────────────────────────────────────────────────────
@@ -278,6 +343,14 @@ function stochK(bars: number[], period: number): number {
   return hi === lo ? 50 : ((bars[bars.length - 1] - lo) / (hi - lo)) * 100;
 }
 
+function atr(bars: number[], period: number): number {
+  if (bars.length < period + 1) return 0;
+  const slice = bars.slice(-period - 1);
+  let total = 0;
+  for (let i = 1; i < slice.length; i++) total += Math.abs(slice[i] - slice[i - 1]);
+  return total / period;
+}
+
 function crossedAbove(bars: number[], fp: number, sp: number): boolean {
   if (bars.length < sp + 2) return false;
   const prev = bars.slice(0, -1);
@@ -288,6 +361,17 @@ function crossedBelow(bars: number[], fp: number, sp: number): boolean {
   if (bars.length < sp + 2) return false;
   const prev = bars.slice(0, -1);
   return ema(bars, fp) < ema(bars, sp) && ema(prev, fp) >= ema(prev, sp);
+}
+
+// ─── MCX session check ─────────────────────────────────────────────────────────
+// MCX hours: 9:00 AM – 11:30 PM IST = 3:30 AM – 6:00 PM UTC
+
+function isMCXSessionOpen(): boolean {
+  const now = new Date();
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const open = 3 * 60 + 30;   // 03:30 UTC = 09:00 IST
+  const close = 18 * 60;       // 18:00 UTC = 23:30 IST
+  return utcMinutes >= open && utcMinutes < close;
 }
 
 // ─── Signal evaluator ─────────────────────────────────────────────────────────
@@ -314,11 +398,13 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
       return momentum(bars, 5) < -0.0008 && rsi(bars, 14) > 34 && price < ema(bars, 9);
     }
     case "RSI_EXTREME_OS":
+      // Fixed: removed price >= ema(bars,9) — price IS below EMA9 when RSI<25
       if (n < 20) return false;
-      return rsi(bars, 14) < 25 && price > bars[n - 2] && price >= ema(bars, 9);
+      return rsi(bars, 14) < 25 && price > bars[n - 2];
     case "RSI_EXTREME_OB":
+      // Fixed: removed price <= ema(bars,9) — price IS above EMA9 when RSI>75
       if (n < 20) return false;
-      return rsi(bars, 14) > 75 && price < bars[n - 2] && price <= ema(bars, 9);
+      return rsi(bars, 14) > 75 && price < bars[n - 2];
     case "BB_LOWER_TOUCH": {
       if (n < 22) return false;
       const bl = bbLower(bars, 20);
@@ -349,6 +435,68 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
     case "STOCH_OB":
       if (n < 20) return false;
       return stochK(bars, 14) > 80 && price < bars[n - 2] && rsi(bars, 14) > 48;
+
+    // ── New signals ──────────────────────────────────────────────────────────
+    case "ATR_BREAKOUT_BULL": {
+      if (n < 22) return false;
+      const a = atr(bars, 14);
+      const hi20 = Math.max(...bars.slice(n - 21, n - 1));
+      return a > 0 && price > hi20 + a * 0.5 && momentum(bars, 3) > 0.0008 && rsi(bars, 14) < 72;
+    }
+    case "ATR_BREAKOUT_BEAR": {
+      if (n < 22) return false;
+      const a = atr(bars, 14);
+      const lo20 = Math.min(...bars.slice(n - 21, n - 1));
+      return a > 0 && price < lo20 - a * 0.5 && momentum(bars, 3) < -0.0008 && rsi(bars, 14) > 28;
+    }
+    case "STOCH_BULL_CROSS": {
+      if (n < 20) return false;
+      const prevBars = bars.slice(0, -1);
+      const kNow = stochK(bars, 14);
+      const kPrev = stochK(prevBars, 14);
+      // Was in oversold territory, now crossing upward
+      return kPrev < 25 && kNow > kPrev && rsi(bars, 14) < 55;
+    }
+    case "STOCH_BEAR_CROSS": {
+      if (n < 20) return false;
+      const prevBars = bars.slice(0, -1);
+      const kNow = stochK(bars, 14);
+      const kPrev = stochK(prevBars, 14);
+      // Was in overbought territory, now crossing downward
+      return kPrev > 75 && kNow < kPrev && rsi(bars, 14) > 45;
+    }
+    case "BB_SQUEEZE_BULL": {
+      if (n < 25) return false;
+      const bwNow = bbUpper(bars, 20) - bbLower(bars, 20);
+      const prev3 = bars.slice(0, -3);
+      const bwPrev = prev3.length >= 20 ? bbUpper(prev3, 20) - bbLower(prev3, 20) : bwNow;
+      return price > bbMid(bars, 20) && bwNow > bwPrev * 1.1 && momentum(bars, 3) > 0.0005;
+    }
+    case "BB_SQUEEZE_BEAR": {
+      if (n < 25) return false;
+      const bwNow = bbUpper(bars, 20) - bbLower(bars, 20);
+      const prev3 = bars.slice(0, -3);
+      const bwPrev = prev3.length >= 20 ? bbUpper(prev3, 20) - bbLower(prev3, 20) : bwNow;
+      return price < bbMid(bars, 20) && bwNow > bwPrev * 1.1 && momentum(bars, 3) < -0.0005;
+    }
+    case "TREND_PULLBACK_BULL": {
+      if (n < 60) return false;
+      const e9 = ema(bars, 9);
+      const e21 = ema(bars, 21);
+      const e55 = ema(bars, 55);
+      const r = rsi(bars, 14);
+      // Intact uptrend, price pulled back to EMA21 zone
+      return e9 > e21 && e21 > e55 && price <= e21 * 1.005 && price >= e21 * 0.993 && r >= 38 && r <= 62;
+    }
+    case "TREND_PULLBACK_BEAR": {
+      if (n < 60) return false;
+      const e9 = ema(bars, 9);
+      const e21 = ema(bars, 21);
+      const e55 = ema(bars, 55);
+      const r = rsi(bars, 14);
+      // Intact downtrend, price bounced back to EMA21 zone
+      return e9 < e21 && e21 < e55 && price >= e21 * 0.995 && price <= e21 * 1.007 && r >= 38 && r <= 62;
+    }
   }
   return false;
 }
@@ -358,7 +506,7 @@ function evalSignal(signal: string, bars: number[], price: number): boolean {
 function estimatePremium(price: number, iv: number, dteDays: number): number {
   const T = dteDays / 252;
   const premium = price * iv * Math.sqrt(T) * 0.4;
-  return Math.max(price * 0.003, Math.min(price * 0.03, premium));
+  return Math.max(price * 0.002, Math.min(price * 0.05, premium));
 }
 
 function markPremium(
@@ -388,7 +536,7 @@ interface InternalPosition {
   tpPremium: number;
   slPremium: number;
   lots: number;
-  quantity: number; // lots × lotSize
+  quantity: number;
   costBasis: number;
   entryPrice: number;
   entryTime: number;
@@ -399,10 +547,21 @@ interface InternalPosition {
   barsHeld: number;
 }
 
+interface ShadowPosition {
+  entryPremium: number;
+  entryPrice: number;
+  tpPremium: number;
+  slPremium: number;
+  entryTime: number;
+  barsHeld: number;
+}
+
 interface InternalStratState {
   def: StratDef;
   position: InternalPosition | null;
+  shadowPosition: ShadowPosition | null;
   status: "WARMING" | "READY" | "IN_POSITION" | "COOLING";
+  rosterState: MCXRosterState;
   cooldownUntil: number;
   totalTrades: number;
   wins: number;
@@ -412,6 +571,8 @@ interface InternalStratState {
   lastTradeAt: number;
   score: number;
   consecutiveLosses: number;
+  shadowTrades: number;
+  shadowWins: number;
 }
 
 interface InternalTrade {
@@ -474,6 +635,7 @@ type MCXDbCommodityState = {
 type MCXDbStrategy = {
   id: number;
   status: "WARMING" | "READY" | "IN_POSITION" | "COOLING";
+  rosterState?: MCXRosterState;
   cooldownUntil: number;
   totalTrades: number;
   wins: number;
@@ -483,6 +645,8 @@ type MCXDbStrategy = {
   lastTradeAt: number;
   score: number;
   consecutiveLosses: number;
+  shadowTrades?: number;
+  shadowWins?: number;
 };
 
 type MCXDbPayload = {
@@ -496,6 +660,8 @@ type MCXDbPayload = {
   trades: InternalTrade[];
   strategies: MCXDbStrategy[];
 };
+
+// ─── Regime classifier ────────────────────────────────────────────────────────
 
 function classifyCommodityRegime(bars: number[]): string {
   if (bars.length < 22) return "UNKNOWN";
@@ -513,19 +679,16 @@ function classifyCommodityRegime(bars: number[]): string {
 
 function isCategoryAlignedWithRegime(category: MCXCategory, regime: string): boolean {
   switch (regime) {
-    case "UNKNOWN":
-      return true; // allow all categories — signal + confirmation gate quality
+    case "UNKNOWN":      return true;
     case "TRENDING_BULL":
-    case "TRENDING_BEAR":
-      return category !== "Mean Reversion";
-    case "HIGH_VOL":
-      return category !== "Mean Reversion";
-    case "RANGE":
-      return true; // allow Momentum in range — signal strength gates it
-    default:
-      return true;
+    case "TRENDING_BEAR": return category !== "Mean Reversion";
+    case "HIGH_VOL":     return category !== "Mean Reversion";
+    case "RANGE":        return true;
+    default:             return true;
   }
 }
+
+// ─── Entry confirmation (fixed for commodity IV scale) ────────────────────────
 
 function passesEntryConfirmation(def: StratDef, bars: number[], price: number, regime: string): boolean {
   const category = categoryForSignal(def.signal);
@@ -533,9 +696,9 @@ function passesEntryConfirmation(def: StratDef, bars: number[], price: number, r
 
   const e9 = ema(bars, 9);
   const e21 = ema(bars, 21);
-  const mean20 = sma(bars, 20);
   const m3 = momentum(bars, 3);
   const r = rsi(bars, 14);
+  const n = bars.length;
   const bullish = def.optionType === "CALL";
 
   switch (category) {
@@ -545,25 +708,42 @@ function passesEntryConfirmation(def: StratDef, bars: number[], price: number, r
         ? price >= e9 && e9 >= e21 && m3 > 0.0003
         : price <= e9 && e9 <= e21 && m3 < -0.0003;
     case "Mean Reversion":
+      // Fixed: price IS expected to be below mean when oversold (or above when overbought)
+      // Check for a price bounce/reversal bar instead of proximity to mean
       return bullish
-        ? price >= mean20 * 0.997 && r <= 52
-        : price <= mean20 * 1.003 && r >= 48;
+        ? n >= 2 && price > bars[n - 2] && r <= 60
+        : n >= 2 && price < bars[n - 2] && r >= 40;
     default:
       return true;
   }
 }
 
+// ─── Roster helpers ────────────────────────────────────────────────────────────
+
+function initialRosterState(def: StratDef): MCXRosterState {
+  return def.startAsWatchlist ? "WATCHLIST" : "ACTIVE";
+}
+
+function canPromoteToActive(strat: InternalStratState): boolean {
+  return (
+    strat.shadowTrades >= MCX_SHADOW_PROMOTE_TRADES &&
+    strat.shadowTrades > 0 &&
+    strat.shadowWins / strat.shadowTrades >= MCX_SHADOW_PROMOTE_WINRATE
+  );
+}
+
+// ─── Hold time by commodity ───────────────────────────────────────────────────
+
 function holdMinutesFor(commodityId: string): number {
   switch (commodityId) {
-    case "NATURALGAS":
-      return 90;
+    case "NATURALGAS": return 90;
     case "CRUDEOIL":
-    case "COPPER":
-      return 120;
-    default:
-      return 150;
+    case "COPPER":     return 120;
+    default:           return 150;
   }
 }
+
+// ─── Exit resolver ────────────────────────────────────────────────────────────
 
 function resolveExit(
   pos: InternalPosition,
@@ -596,6 +776,24 @@ function resolveExit(
   return null;
 }
 
+// Same exit logic reused for shadow positions
+function resolveShadowExit(
+  shadow: ShadowPosition,
+  def: StratDef,
+  currentPremium: number,
+  now: number,
+): "WIN" | "LOSS" | null {
+  if (currentPremium >= shadow.tpPremium) return "WIN";
+  if (currentPremium <= shadow.slPremium) return "LOSS";
+  const maxHoldMs = holdMinutesFor(def.commodityId) * 60 * 1000;
+  if (now - shadow.entryTime >= maxHoldMs) {
+    return currentPremium > shadow.entryPremium ? "WIN" : "LOSS";
+  }
+  return null;
+}
+
+// ─── Engine initializer ───────────────────────────────────────────────────────
+
 function initEngine(): EngineRef {
   const commodities = new Map<string, CommodityState>();
   for (const c of MCX_COMMODITIES) {
@@ -604,8 +802,22 @@ function initEngine(): EngineRef {
   return {
     commodities,
     strategies: STRAT_DEFS.map((def) => ({
-      def, position: null, status: "WARMING", cooldownUntil: 0,
-      totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, lastTradeAt: 0, score: 0, consecutiveLosses: 0,
+      def,
+      position: null,
+      shadowPosition: null,
+      status: "WARMING",
+      rosterState: initialRosterState(def),
+      cooldownUntil: 0,
+      totalTrades: 0,
+      wins: 0,
+      losses: 0,
+      totalPnl: 0,
+      winRate: 0,
+      lastTradeAt: 0,
+      score: 0,
+      consecutiveLosses: 0,
+      shadowTrades: 0,
+      shadowWins: 0,
     })),
     positions: new Map(),
     trades: [],
@@ -616,6 +828,8 @@ function initEngine(): EngineRef {
     totalRealizedPnl: 0,
   };
 }
+
+// ─── Persistence ──────────────────────────────────────────────────────────────
 
 function buildPersistedPayload(eng: EngineRef): MCXDbPayload {
   return {
@@ -644,6 +858,7 @@ function buildPersistedPayload(eng: EngineRef): MCXDbPayload {
     strategies: eng.strategies.map((strategy) => ({
       id: strategy.def.id,
       status: strategy.status,
+      rosterState: strategy.rosterState,
       cooldownUntil: strategy.cooldownUntil,
       totalTrades: strategy.totalTrades,
       wins: strategy.wins,
@@ -653,6 +868,8 @@ function buildPersistedPayload(eng: EngineRef): MCXDbPayload {
       lastTradeAt: strategy.lastTradeAt,
       score: strategy.score,
       consecutiveLosses: strategy.consecutiveLosses,
+      shadowTrades: strategy.shadowTrades,
+      shadowWins: strategy.shadowWins,
     })),
   };
 }
@@ -708,6 +925,8 @@ async function loadMCXState(eng: EngineRef): Promise<boolean> {
       const persisted = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
       if (!persisted) continue;
       strategy.status = persisted.status;
+      // Restore roster state — fall back to initial if not saved
+      strategy.rosterState = persisted.rosterState ?? initialRosterState(strategy.def);
       strategy.cooldownUntil = persisted.cooldownUntil;
       strategy.totalTrades = persisted.totalTrades;
       strategy.wins = persisted.wins;
@@ -717,6 +936,8 @@ async function loadMCXState(eng: EngineRef): Promise<boolean> {
       strategy.lastTradeAt = persisted.lastTradeAt;
       strategy.score = persisted.score;
       strategy.consecutiveLosses = persisted.consecutiveLosses;
+      strategy.shadowTrades = persisted.shadowTrades ?? 0;
+      strategy.shadowWins = persisted.shadowWins ?? 0;
     }
 
     return true;
@@ -724,6 +945,8 @@ async function loadMCXState(eng: EngineRef): Promise<boolean> {
     return false;
   }
 }
+
+// ─── Position sizing ──────────────────────────────────────────────────────────
 
 function mcxSizeMultiplier(strat: InternalStratState): number {
   let multiplier = 1;
@@ -749,6 +972,8 @@ function shouldPauseMCXStrategy(strat: InternalStratState): boolean {
   return strat.totalTrades >= MCX_UNDERPERFORMING_MIN_TRADES && strat.totalPnl < 0 && strat.winRate < MCX_UNDERPERFORMING_MAX_WINRATE;
 }
 
+// ─── Position management ──────────────────────────────────────────────────────
+
 function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: number, exitPrice: number, reason: string, now: number) {
   const pos = strat.position;
   if (!pos) return;
@@ -770,7 +995,11 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
   eng.balance += exitPremium * pos.quantity;
   eng.totalRealizedPnl += netPnl;
   strat.totalTrades++;
-  if (netPnl >= 0) { strat.wins++; eng.totalWins++; strat.consecutiveLosses = 0; } else { strat.losses++; eng.totalLosses++; strat.consecutiveLosses += 1; }
+  if (netPnl >= 0) {
+    strat.wins++; eng.totalWins++; strat.consecutiveLosses = 0;
+  } else {
+    strat.losses++; eng.totalLosses++; strat.consecutiveLosses += 1;
+  }
   strat.totalPnl += netPnl;
   strat.winRate = strat.totalTrades > 0 ? (strat.wins / strat.totalTrades) * 100 : 0;
   strat.lastTradeAt = now;
@@ -778,15 +1007,20 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
   strat.status = "COOLING";
   strat.position = null;
   eng.positions.delete(pos.id);
+
+  // After live losses, consider demoting ACTIVE to WATCHLIST
+  if (strat.consecutiveLosses >= MCX_LOSS_STREAK_DISABLE_THRESHOLD && strat.rosterState === "ACTIVE") {
+    strat.rosterState = "DISABLED";
+    strat.cooldownUntil = Math.max(strat.cooldownUntil, now + MCX_LOSS_STREAK_COOLDOWN_MS);
+  }
 }
 
 function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number): boolean {
   const premium = estimatePremium(price, iv, commodity.dteDays);
-  if (premium <= 0) return false; // should not happen given price guard, but be defensive
+  if (premium <= 0) return false;
   const costPerLot = premium * commodity.lotSize;
   let lots = costPerLot > 0 ? Math.max(1, Math.round((commodity.positionINR * mcxSizeMultiplier(strat)) / costPerLot)) : 1;
   let cost = premium * commodity.lotSize * lots;
-  // Reduce lots if not enough balance
   while (cost > eng.balance && lots > 1) { lots--; cost = premium * commodity.lotSize * lots; }
   if (eng.balance < cost) return false;
 
@@ -812,6 +1046,19 @@ function openPosition(eng: EngineRef, strat: InternalStratState, commodity: MCXC
   strat.status = "IN_POSITION";
   eng.positions.set(id, pos);
   return true;
+}
+
+function openShadowPosition(strat: InternalStratState, commodity: MCXCommodity, price: number, iv: number, now: number) {
+  const premium = estimatePremium(price, iv, commodity.dteDays);
+  if (premium <= 0) return;
+  strat.shadowPosition = {
+    entryPremium: premium,
+    entryPrice: price,
+    tpPremium: premium * (1 + strat.def.tpPct),
+    slPremium: premium * (1 - strat.def.slPct),
+    entryTime: now,
+    barsHeld: 0,
+  };
 }
 
 // ─── Display builders ─────────────────────────────────────────────────────────
@@ -862,8 +1109,11 @@ function buildStrategies(eng: EngineRef): MCXStrategyStatus[] {
             : s.status === "COOLING" ? "COOLING"
             : s.status === "IN_POSITION" ? "IN_POSITION"
             : "READY",
+      rosterState: s.rosterState,
       score: s.score, totalTrades: s.totalTrades, wins: s.wins, losses: s.losses,
       winRate: s.winRate, totalPnl: s.totalPnl, hasPosition: !!s.position,
+      shadowTrades: s.shadowTrades, shadowWins: s.shadowWins,
+      hasShadowPosition: !!s.shadowPosition,
     };
   });
 }
@@ -970,9 +1220,10 @@ export default function useMCXEngine(_refreshKey = 0) {
   const engineTick = useCallback(() => {
     const eng = engRef.current;
     const now = Date.now();
+    const sessionOpen = isMCXSessionOpen();
     let openCount = eng.strategies.filter((s) => s.position).length;
 
-    // Mark open positions, check TP/SL/Expiry
+    // ── Mark open positions, check TP/SL/Expiry ──────────────────────────
     for (const strat of eng.strategies) {
       if (!strat.position) continue;
       const pos = strat.position;
@@ -986,7 +1237,7 @@ export default function useMCXEngine(_refreshKey = 0) {
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
       if (pos.entryPremium > 0) {
-        pos.peakGainPct = Math.max(pos.peakGainPct, (pos.currentPremium-pos.entryPremium)/pos.entryPremium);
+        pos.peakGainPct = Math.max(pos.peakGainPct, (pos.currentPremium - pos.entryPremium) / pos.entryPremium);
       }
 
       const exit = resolveExit(pos, strat.def, pos.currentPremium, now);
@@ -994,12 +1245,54 @@ export default function useMCXEngine(_refreshKey = 0) {
         closePosition(eng, strat, exit.exitPremium, price, exit.reason, now);
         openCount--;
       }
-      void commodity; // suppress unused warning
+      void commodity;
     }
 
-    // Evaluate signals
+    // ── Mark shadow positions for WATCHLIST strategies ───────────────────
+    for (const strat of eng.strategies) {
+      if (strat.rosterState !== "WATCHLIST" || !strat.shadowPosition) continue;
+      const shadow = strat.shadowPosition;
+      const state = eng.commodities.get(strat.def.commodityId);
+      if (!state || state.lastPrice <= 0) continue;
+      const price = state.lastPrice;
+      shadow.barsHeld++;
+      const currentPremium = markPremium(shadow.entryPremium, shadow.entryPrice, price, strat.def.optionType, shadow.barsHeld);
+      const result = resolveShadowExit(shadow, strat.def, currentPremium, now);
+      if (result !== null) {
+        strat.shadowTrades++;
+        if (result === "WIN") strat.shadowWins++;
+        strat.shadowPosition = null;
+        // Promote to ACTIVE if qualified
+        if (canPromoteToActive(strat)) {
+          strat.rosterState = "ACTIVE";
+        }
+      }
+    }
+
+    // ── Roster management for DISABLED strategies ─────────────────────────
+    for (const strat of eng.strategies) {
+      if (strat.rosterState === "DISABLED" && now >= strat.cooldownUntil) {
+        // Return to WATCHLIST after disable cooldown, reset consecutive losses
+        strat.rosterState = "WATCHLIST";
+        strat.consecutiveLosses = 0;
+        strat.shadowTrades = 0;
+        strat.shadowWins = 0;
+      }
+    }
+
+    // ── Skip signal evaluation outside MCX session ────────────────────────
+    if (!sessionOpen) {
+      pushDisplayState();
+      return;
+    }
+
+    // ── Evaluate signals ─────────────────────────────────────────────────
     for (const strat of eng.strategies) {
       if (strat.position) { strat.status = "IN_POSITION"; continue; }
+
+      // Disabled strategies don't trade
+      if (strat.rosterState === "DISABLED") { strat.score = 0; continue; }
+
       if (shouldPauseMCXStrategy(strat)) {
         strat.status = "COOLING";
         strat.score = 0;
@@ -1019,9 +1312,6 @@ export default function useMCXEngine(_refreshKey = 0) {
       if (bars.length < strat.def.minBars) { strat.status = "WARMING"; continue; }
       strat.status = "READY";
 
-      if (openCount >= MAX_CONCURRENT) continue;
-      if (eng.balance < 5000) continue;
-
       const price = state.lastPrice;
       const barsForEval = [...bars, price];
       const regime = classifyCommodityRegime(barsForEval);
@@ -1029,12 +1319,23 @@ export default function useMCXEngine(_refreshKey = 0) {
       const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price, regime);
       strat.score = confirmed ? 82 : fires ? 56 : 0;
 
-      if (confirmed) {
-        const commodity = MCX_COMMODITY_MAP.get(strat.def.commodityId)!;
-        const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
-        const iv = recentStd > 0
-          ? Math.max(commodity.iv * 0.6, Math.min(commodity.iv * 2, (recentStd / price) * Math.sqrt(252 * 375)))
-          : commodity.iv;
+      if (!confirmed) continue;
+
+      const commodity = MCX_COMMODITY_MAP.get(strat.def.commodityId)!;
+      const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
+      const iv = recentStd > 0
+        ? Math.max(commodity.iv * 0.6, Math.min(commodity.iv * 2, (recentStd / price) * Math.sqrt(252 * 375)))
+        : commodity.iv;
+
+      if (strat.rosterState === "WATCHLIST") {
+        // Open shadow position if none exists
+        if (!strat.shadowPosition) {
+          openShadowPosition(strat, commodity, price, iv, now);
+        }
+      } else if (strat.rosterState === "ACTIVE") {
+        // Open real position
+        if (openCount >= MAX_CONCURRENT) continue;
+        if (eng.balance < 5000) continue;
         if (openPosition(eng, strat, commodity, price, iv, now)) {
           openCount++;
         }
@@ -1126,7 +1427,7 @@ export default function useMCXEngine(_refreshKey = 0) {
           if (!data.candles?.length) continue;
           const eng = engRef.current;
           const state = eng.commodities.get(commodity.id);
-          if (!state || state.minuteBars.length > 0) continue; // don't overwrite live bars
+          if (!state || state.minuteBars.length > 0) continue;
           const closes = data.candles.map((c) => c.close).filter((v) => v > 0);
           state.minuteBars = closes.slice(-MAX_BARS);
           state.lastPrice = closes[closes.length - 1] ?? 0;
@@ -1140,7 +1441,6 @@ export default function useMCXEngine(_refreshKey = 0) {
             error: message,
           });
         }
-        // Small delay between requests to avoid hammering the API
         await new Promise<void>((r) => setTimeout(r, 300));
       }
       setDiagnostics((curr) => ({ ...curr, candleIssues: nextIssues }));

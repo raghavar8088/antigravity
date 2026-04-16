@@ -89,6 +89,15 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
+function RosterBadge({ rosterState, shadowTrades, shadowWins }: { rosterState: string; shadowTrades: number; shadowWins: number }) {
+  if (rosterState === "ACTIVE") return <span className="rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest border-emerald-500/25 bg-emerald-500/10 text-emerald-600">ACTIVE</span>;
+  if (rosterState === "DISABLED") return <span className="rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest border-rose-500/25 bg-rose-500/10 text-rose-600">DISABLED</span>;
+  // WATCHLIST
+  const pct = shadowTrades > 0 ? Math.round((shadowWins / shadowTrades) * 100) : 0;
+  const label = shadowTrades > 0 ? `WATCH ${shadowWins}/${shadowTrades} ${pct}%` : "WATCH";
+  return <span className="rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest border-amber-500/25 bg-amber-500/10 text-amber-600">{label}</span>;
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     READY:       "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -247,7 +256,7 @@ function StrategyRoster({ strategies }: { strategies: MCXStrategyStatus[] }) {
       <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
         STRATEGY ROSTER
         <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
-          ({strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length}/{strategies.length} active)
+          ({strategies.filter((s) => s.rosterState === "ACTIVE").length} active / {strategies.filter((s) => s.rosterState === "WATCHLIST").length} watch / {strategies.length} total)
         </span>
       </h2>
 
@@ -261,7 +270,7 @@ function StrategyRoster({ strategies }: { strategies: MCXStrategyStatus[] }) {
               <table className="w-full text-left text-sm" style={{ minWidth: 720 }}>
                 <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
                   <tr className="text-[11px] uppercase tracking-[0.12em]">
-                    {["#", "Strategy", "Type", "Status", "Trades", "Win Rate", "Total P&L"].map((h) => (
+                    {["#", "Strategy", "Type", "Roster", "Status", "Trades", "Win Rate", "Total P&L"].map((h) => (
                       <th key={h} className="px-3 py-2 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -272,6 +281,7 @@ function StrategyRoster({ strategies }: { strategies: MCXStrategyStatus[] }) {
                       <td className="px-3 py-2 font-mono text-[11px] text-zinc-500">{s.strategyId}</td>
                       <td className="px-3 py-2 font-mono text-xs text-zinc-300">{s.name}</td>
                       <td className="px-3 py-2"><TypeBadge type={s.optionType} /></td>
+                      <td className="px-3 py-2"><RosterBadge rosterState={s.rosterState} shadowTrades={s.shadowTrades} shadowWins={s.shadowWins} /></td>
                       <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
                       <td className="px-3 py-2 font-mono text-xs text-zinc-400">{s.totalTrades}</td>
                       <td className="px-3 py-2 font-mono text-xs" style={{ color: s.winRate >= 50 ? "var(--green)" : s.totalTrades > 0 ? "var(--red)" : "var(--text-muted)" }}>
