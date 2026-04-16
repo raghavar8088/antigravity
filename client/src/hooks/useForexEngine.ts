@@ -26,10 +26,13 @@ const MIN_SIZE_MULTIPLIER  = 0.5;
 const MAX_SIZE_MULTIPLIER  = 2.0;
 const LOSS_COOLDOWN_PENALTY = 0.35;
 const UNDERPERFORMING_PAUSE_MS = 90 * 60 * 1000;
+const LOCAL_STORAGE_KEY = "forex_state_v2";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Side   = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
+type Regime = "UNKNOWN" | "TRENDING_BULL" | "TRENDING_BEAR" | "HIGH_VOL" | "RANGE";
+type RosterState = "ACTIVE" | "WATCHLIST";
 
 type SignalInputs = {
   price: number; prevPrice: number;
@@ -69,6 +72,7 @@ interface InternalStrategyState {
   def: StratDef; position: InternalPosition | null;
   status: Status; cooldownUntil: number; score: number;
   currentSymbol: string; lastSignalSymbol: string;
+  regime: Regime;
   totalTrades: number; wins: number; losses: number;
   totalPnl: number; winRate: number; consecutiveLosses: number;
 }
@@ -82,6 +86,8 @@ interface EngineRef {
   balance: number; seq: number;
   totalWins: number; totalLosses: number; totalRealizedPnl: number;
   lastError: string;
+  lastFeedAt: number;
+  lastFeedMode: string;
 }
 
 // ── Public output types ───────────────────────────────────────────────────────
@@ -112,7 +118,8 @@ export type ForexTrade = {
 export type ForexStrategyStatus = {
   id: number; name: string; category: string; side: Side;
   status: Status; currentSymbol: string; score: number;
-  allocationUSD: number; totalTrades: number; wins: number;
+  regime: Regime; rosterState: RosterState;
+  allocationUSD: number; sizeMultiplier: number; totalTrades: number; wins: number;
   losses: number; totalPnl: number; winRate: number;
   cooldownUntil?: string;
 };
@@ -141,7 +148,7 @@ type ForexDbTrade = {
 
 type ForexDbStrategy = {
   id: number; totalTrades: number; wins: number; losses: number;
-  totalPnl: number; winRate: number; cooldownUntil: number; consecutiveLosses: number;
+  totalPnl: number; winRate: number; cooldownUntil: number; consecutiveLosses: number; regime?: Regime;
 };
 
 type ForexDbPayload = {
@@ -254,16 +261,16 @@ function evalSignal(signal: string, input: SignalInputs): number {
   // Forex uses tighter thresholds (smaller % moves)
   switch (signal) {
     case "BREAKOUT":
-      return price > breakoutHigh20 * 1.0003 && fast > slow && rsi14 >= 56 && momentum3 > 0.05
+      return price > breakoutHigh20 * 1.00025 && fast > slow && rsi14 >= 54 && momentum3 > 0.03
         ? scoreClamp(72 + (price / breakoutHigh20 - 1) * 8000 + momentum3 * 15) : 0;
     case "BREAKOUT_SHORT":
-      return price < breakoutLow20 * 0.9997 && fast < slow && rsi14 <= 44 && momentum3 < -0.05
+      return price < breakoutLow20 * 0.99975 && fast < slow && rsi14 <= 46 && momentum3 < -0.03
         ? scoreClamp(72 + (breakoutLow20 / price - 1) * 8000 + Math.abs(momentum3) * 15) : 0;
     case "EMA_CROSS":
-      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 53
+      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 52
         ? scoreClamp(70 + (fast / slow - 1) * 12000 + (rsi14 - 50) * 0.4) : 0;
     case "EMA_CROSS_SHORT":
-      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 47
+      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 48
         ? scoreClamp(70 + (slow / fast - 1) * 12000 + (50 - rsi14) * 0.4) : 0;
     case "RSI_BOUNCE":
       return rsi14 <= 32 && price >= prevPrice && momentum3 > -0.15
@@ -272,46 +279,55 @@ function evalSignal(signal: string, input: SignalInputs): number {
       return rsi14 >= 68 && price <= prevPrice && momentum3 < 0.15
         ? scoreClamp(67 + (rsi14 - 66) * 1.4) : 0;
     case "VWAP_RECLAIM":
-      return price > mean20 * 1.0002 && prevPrice <= mean20 * 1.0003 && momentum3 > 0.04
+      return price > mean20 * 1.00015 && prevPrice <= mean20 * 1.0003 && momentum3 > 0.02
         ? scoreClamp(68 + (price / mean20 - 1) * 5500 + momentum3 * 12) : 0;
     case "VWAP_RECLAIM_SHORT":
-      return price < mean20 * 0.9998 && prevPrice >= mean20 * 0.9997 && momentum3 < -0.04
+      return price < mean20 * 0.99985 && prevPrice >= mean20 * 0.9997 && momentum3 < -0.02
         ? scoreClamp(68 + (mean20 / price - 1) * 5500 + Math.abs(momentum3) * 12) : 0;
     case "TREND_CONT":
-      return fast > slow && slow > trend && momentum6 > 0.12 && rsi14 >= 55 && rsi14 <= 75
+      return fast > slow && slow > trend && momentum6 > 0.08 && rsi14 >= 53 && rsi14 <= 76
         ? scoreClamp(73 + momentum6 * 25 + (rsi14 - 54) * 0.3) : 0;
     case "TREND_CONT_SHORT":
-      return fast < slow && slow < trend && momentum6 < -0.12 && rsi14 >= 25 && rsi14 <= 45
+      return fast < slow && slow < trend && momentum6 < -0.08 && rsi14 >= 24 && rsi14 <= 47
         ? scoreClamp(73 + Math.abs(momentum6) * 25 + (46 - rsi14) * 0.3) : 0;
     default: return 0;
   }
 }
 
-function classifyRegime(input: SignalInputs): string {
+function classifyRegime(input: SignalInputs): Regime {
   const trendGapPct = input.price > 0 ? Math.abs(input.fast - input.slow) / input.price * 100 : 0;
   const volPct = input.price > 0 ? input.std20 / input.price * 100 : 0;
+  if (input.price <= 0) return "UNKNOWN";
+  if (input.momentum6 === 0 && input.momentum3 === 0) return "UNKNOWN";
   if (input.fast > input.slow && input.slow > input.trend && input.momentum6 > 0.08) return "TRENDING_BULL";
   if (input.fast < input.slow && input.slow < input.trend && input.momentum6 < -0.08) return "TRENDING_BEAR";
   if (volPct >= 0.15 || trendGapPct >= 0.10) return "HIGH_VOL";
   return "RANGE";
 }
 
-function isCategoryAligned(category: string, regime: string): boolean {
-  if (regime === "HIGH_VOL") return category !== "Mean Reversion";
-  if (regime === "RANGE") return category !== "Trend";
-  return true;
-}
-
-function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: string): boolean {
-  if (!isCategoryAligned(def.category, regime)) return false;
+function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: Regime): boolean {
+  // Regime-based category blocking removed — signals already encode RSI/price extremes
+  // so they won't fire when conditions are wrong. Blocking by regime prevented
+  // RSI_BOUNCE (Mean Reversion) from ever firing on trending pairs (which is most forex pairs).
   if (def.side === "LONG") {
-    if (def.category === "VWAP") return input.price >= input.mean20 && input.rsi14 >= 49;
-    if (def.category === "Mean Reversion") return input.rsi14 <= 45 && input.price >= input.prevPrice;
-    return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.02;
+    if (def.category === "VWAP")
+      return input.price >= input.mean20 * 0.9998 && input.rsi14 >= 44;
+    if (def.category === "Mean Reversion")
+      // RSI_BOUNCE already requires price >= prevPrice — don't double-gate on momentum
+      return input.rsi14 <= 52 && input.price >= input.prevPrice * 0.9998;
+    if (regime === "TRENDING_BULL")
+      // Relax fast >= slow EMA stack requirement — allow near-alignment
+      return input.price >= input.fast * 0.9997 && input.momentum3 > -0.02;
+    // General confirmation: direction check only, no strict momentum threshold
+    return input.price >= input.prevPrice * 0.9997 && input.momentum3 > -0.05;
   }
-  if (def.category === "VWAP") return input.price <= input.mean20 && input.rsi14 <= 51;
-  if (def.category === "Mean Reversion") return input.rsi14 >= 55 && input.price <= input.prevPrice;
-  return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.02;
+  if (def.category === "VWAP")
+    return input.price <= input.mean20 * 1.0002 && input.rsi14 <= 56;
+  if (def.category === "Mean Reversion")
+    return input.rsi14 >= 48 && input.price <= input.prevPrice * 1.0002;
+  if (regime === "TRENDING_BEAR")
+    return input.price <= input.fast * 1.0003 && input.momentum3 < 0.02;
+  return input.price <= input.prevPrice * 1.0003 && input.momentum3 < 0.05;
 }
 
 function calcPnl(side: Side, entry: number, current: number, qty: number): number {
@@ -361,10 +377,11 @@ function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: n
 function initEngine(): EngineRef {
   return {
     bars: {}, quotes: {},
-    strategies: STRAT_DEFS.map((def) => ({ def, position: null, status: "WARMING", cooldownUntil: 0, score: 0, currentSymbol: "", lastSignalSymbol: "", totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, consecutiveLosses: 0 })),
+    strategies: STRAT_DEFS.map((def) => ({ def, position: null, status: "WARMING", cooldownUntil: 0, score: 0, currentSymbol: "", lastSignalSymbol: "", regime: "UNKNOWN", totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0, consecutiveLosses: 0 })),
     positions: new Map(), trades: [],
     balance: INITIAL_BALANCE, seq: 0,
     totalWins: 0, totalLosses: 0, totalRealizedPnl: 0, lastError: "",
+    lastFeedAt: 0, lastFeedMode: "",
   };
 }
 
@@ -417,8 +434,13 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
   strategy.cooldownUntil = now + cooldownMsFor(strategy, netPnl >= 0);
   strategy.status = "COOLING";
   strategy.currentSymbol = "";
+  strategy.regime = "UNKNOWN";
   strategy.position = null;
   engine.positions.delete(pos.id);
+}
+
+function rosterStateFor(status: Status): RosterState {
+  return status === "WARMING" ? "WATCHLIST" : "ACTIVE";
 }
 
 const EMPTY_STATS: ForexEngineStats = {
@@ -461,11 +483,31 @@ function buildPersistedPayload(engine: EngineRef): ForexDbPayload {
       winRate: strategy.winRate,
       cooldownUntil: strategy.cooldownUntil,
       consecutiveLosses: strategy.consecutiveLosses,
+      regime: strategy.regime,
     })),
   };
 }
 
+function saveToLocalStorage(engine: EngineRef): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(buildPersistedPayload(engine)));
+  } catch {
+    // non-critical
+  }
+}
+
+function loadFromLocalStorage(): ForexDbPayload | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ForexDbPayload;
+  } catch {
+    return null;
+  }
+}
+
 async function saveForexState(engine: EngineRef): Promise<void> {
+  saveToLocalStorage(engine);
   try {
     await fetch("/api/forex/state", {
       method: "POST",
@@ -477,65 +519,71 @@ async function saveForexState(engine: EngineRef): Promise<void> {
   }
 }
 
+function applySavedState(engine: EngineRef, saved: ForexDbPayload): boolean {
+  engine.balance = saved.balance;
+  engine.totalWins = saved.totalWins;
+  engine.totalLosses = saved.totalLosses;
+  engine.totalRealizedPnl = saved.totalPnl;
+  engine.seq = saved.tradeSeq;
+  engine.trades = (saved.trades ?? []).slice(0, MAX_TRADES);
+  engine.positions.clear();
+
+  for (const persisted of saved.positions ?? []) {
+    const pair = FOREX_PAIR_BY_SYMBOL.get(persisted.symbol);
+    if (!pair) continue;
+    const position: InternalPosition = {
+      id: persisted.id,
+      strategyId: persisted.strategyId,
+      strategyName: STRAT_DEFS.find((def) => def.id === persisted.strategyId)?.name ?? persisted.id,
+      pair,
+      side: persisted.side,
+      entryPrice: persisted.entryPrice,
+      currentPrice: persisted.currentPrice,
+      tpPrice: persisted.tpPrice,
+      slPrice: persisted.slPrice,
+      quantity: persisted.quantity,
+      notional: persisted.notional,
+      entryTime: persisted.entryTime,
+      unrealizedPnl: persisted.unrealizedPnl,
+      returnPct: persisted.returnPct,
+      peakReturnPct: persisted.peakReturnPct,
+    };
+    engine.positions.set(position.id, position);
+    const strategy = engine.strategies.find((item) => item.def.id === position.strategyId);
+    if (strategy) {
+      strategy.position = position;
+      strategy.status = "IN_POSITION";
+      strategy.currentSymbol = pair.symbol;
+      strategy.regime = "UNKNOWN";
+    }
+  }
+
+  for (const strategy of engine.strategies) {
+    const savedStrategy = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
+    if (!savedStrategy) continue;
+    strategy.totalTrades = savedStrategy.totalTrades;
+    strategy.wins = savedStrategy.wins;
+    strategy.losses = savedStrategy.losses;
+    strategy.totalPnl = savedStrategy.totalPnl;
+    strategy.winRate = savedStrategy.winRate;
+    strategy.cooldownUntil = savedStrategy.cooldownUntil;
+    strategy.consecutiveLosses = savedStrategy.consecutiveLosses;
+    strategy.regime = savedStrategy.regime ?? "UNKNOWN";
+    if (!strategy.position) strategy.status = strategy.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
+  }
+  return true;
+}
+
 async function loadForexState(engine: EngineRef): Promise<boolean> {
+  const local = loadFromLocalStorage();
   try {
     const response = await fetch("/api/forex/state");
-    if (!response.ok) return false;
+    if (!response.ok) return local ? applySavedState(engine, local) : false;
     const data = await response.json() as { ok: boolean; found: boolean; state?: ForexDbPayload };
-    if (!data.ok || !data.found || !data.state) return false;
-    const saved = data.state;
-    engine.balance = saved.balance;
-    engine.totalWins = saved.totalWins;
-    engine.totalLosses = saved.totalLosses;
-    engine.totalRealizedPnl = saved.totalPnl;
-    engine.seq = saved.tradeSeq;
-    engine.trades = (saved.trades ?? []).slice(0, MAX_TRADES);
-    engine.positions.clear();
-
-    for (const persisted of saved.positions ?? []) {
-      const pair = FOREX_PAIR_BY_SYMBOL.get(persisted.symbol);
-      if (!pair) continue;
-      const position: InternalPosition = {
-        id: persisted.id,
-        strategyId: persisted.strategyId,
-        strategyName: STRAT_DEFS.find((def) => def.id === persisted.strategyId)?.name ?? persisted.id,
-        pair,
-        side: persisted.side,
-        entryPrice: persisted.entryPrice,
-        currentPrice: persisted.currentPrice,
-        tpPrice: persisted.tpPrice,
-        slPrice: persisted.slPrice,
-        quantity: persisted.quantity,
-        notional: persisted.notional,
-        entryTime: persisted.entryTime,
-        unrealizedPnl: persisted.unrealizedPnl,
-        returnPct: persisted.returnPct,
-        peakReturnPct: persisted.peakReturnPct,
-      };
-      engine.positions.set(position.id, position);
-      const strategy = engine.strategies.find((item) => item.def.id === position.strategyId);
-      if (strategy) {
-        strategy.position = position;
-        strategy.status = "IN_POSITION";
-        strategy.currentSymbol = pair.symbol;
-      }
-    }
-
-    for (const strategy of engine.strategies) {
-      const savedStrategy = (saved.strategies ?? []).find((item) => item.id === strategy.def.id);
-      if (!savedStrategy) continue;
-      strategy.totalTrades = savedStrategy.totalTrades;
-      strategy.wins = savedStrategy.wins;
-      strategy.losses = savedStrategy.losses;
-      strategy.totalPnl = savedStrategy.totalPnl;
-      strategy.winRate = savedStrategy.winRate;
-      strategy.cooldownUntil = savedStrategy.cooldownUntil;
-      strategy.consecutiveLosses = savedStrategy.consecutiveLosses;
-      if (!strategy.position) strategy.status = strategy.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
-    }
-    return true;
+    if (data.ok && data.found && data.state) return applySavedState(engine, data.state);
+    return local ? applySavedState(engine, local) : false;
   } catch {
-    return false;
+    return local ? applySavedState(engine, local) : false;
   }
 }
 
@@ -550,21 +598,138 @@ export default function useForexEngine() {
   const [positions, setPositions] = useState<ForexPosition[]>([]);
   const [trades, setTrades]       = useState<ForexTrade[]>([]);
   const [strategies, setStrategies] = useState<ForexStrategyStatus[]>(
-    STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 }))
+    STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: 1, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 }))
   );
   const [stats, setStats] = useState<ForexEngineStats>(EMPTY_STATS);
 
-  const processTick = useCallback((items: ForexMarketItem[], errorMessage = "") => {
+  const pushDisplayState = useCallback(() => {
+    const engine = engineRef.current;
+    const pairByCat = Object.fromEntries(FOREX_PAIRS.map((pair) => [pair.symbol, pair.category]));
+    const positionSides: Record<string, Set<Side>> = {};
+    const symbolScores: Record<string, number> = {};
+
+    for (const strategy of engine.strategies) {
+      const symbol = strategy.position?.pair.symbol ?? strategy.lastSignalSymbol;
+      if (symbol && strategy.score > 0) symbolScores[symbol] = Math.max(symbolScores[symbol] ?? 0, strategy.score);
+      if (strategy.position) {
+        if (!positionSides[strategy.position.pair.symbol]) positionSides[strategy.position.pair.symbol] = new Set();
+        positionSides[strategy.position.pair.symbol].add(strategy.def.side);
+      }
+    }
+
+    setQuotes(FOREX_PAIRS.map((pair) => {
+      const quote = engine.quotes[pair.symbol];
+      const sides = positionSides[pair.symbol];
+      return {
+        symbol: pair.symbol,
+        category: pair.category,
+        ltp: quote?.price ?? 0,
+        changePct: quote?.changePct ?? 0,
+        signalScore: symbolScores[pair.symbol] ?? 0,
+        hasPosition: Boolean(sides?.size),
+        strategyLabel: sides ? [...sides].join("+") : undefined,
+        sparkline: (engine.bars[pair.symbol] ?? []).slice(-24),
+      };
+    }));
+
+    setPositions([...engine.positions.values()].map((position) => ({
+      id: position.id,
+      strategyId: position.strategyId,
+      strategyName: position.strategyName,
+      symbol: position.pair.symbol,
+      category: pairByCat[position.pair.symbol] ?? "Major",
+      side: position.side,
+      quantity: position.quantity,
+      entryPrice: position.entryPrice,
+      currentPrice: position.currentPrice,
+      tpPrice: position.tpPrice,
+      slPrice: position.slPrice,
+      notional: position.notional,
+      entryTime: new Date(position.entryTime).toISOString(),
+      unrealizedPnl: position.unrealizedPnl,
+      returnPct: position.returnPct,
+    })));
+
+    setTrades(engine.trades.slice(0, 120).map((trade) => ({
+      id: trade.id,
+      strategyId: trade.strategyId,
+      strategyName: trade.strategyName,
+      symbol: trade.symbol,
+      side: trade.side,
+      quantity: trade.quantity,
+      entryPrice: trade.entryPrice,
+      exitPrice: trade.exitPrice,
+      netPnl: trade.netPnl,
+      returnPct: trade.returnPct,
+      entryTime: new Date(trade.entryTime).toISOString(),
+      exitTime: new Date(trade.exitTime).toISOString(),
+      exitReason: trade.exitReason,
+      holdSeconds: trade.holdSeconds,
+    })));
+
+    setStrategies(engine.strategies.map((strategy) => {
+      const sizeMultiplier = sizeMultiplierFor(strategy);
+      return {
+        id: strategy.def.id,
+        name: strategy.def.name,
+        category: strategy.def.category,
+        side: strategy.def.side,
+        status: strategy.status,
+        currentSymbol: strategy.currentSymbol || strategy.lastSignalSymbol,
+        score: strategy.score,
+        regime: strategy.regime,
+        rosterState: rosterStateFor(strategy.status),
+        allocationUSD: Math.round(ALLOCATION_USD * sizeMultiplier),
+        sizeMultiplier,
+        totalTrades: strategy.totalTrades,
+        wins: strategy.wins,
+        losses: strategy.losses,
+        totalPnl: strategy.totalPnl,
+        winRate: strategy.winRate,
+        cooldownUntil: strategy.cooldownUntil > 0 ? new Date(strategy.cooldownUntil).toISOString() : undefined,
+      };
+    }));
+
+    const unrealizedPnl = [...engine.positions.values()].reduce((sum, position) => sum + position.unrealizedPnl, 0);
+    const openNotional  = [...engine.positions.values()].reduce((sum, position) => sum + position.notional, 0);
+    const equity = engine.balance + openNotional + unrealizedPnl;
+    const liveSymbols = FOREX_PAIRS.filter((pair) => (engine.quotes[pair.symbol]?.price ?? 0) > 0).length;
+    const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
+    const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
+    const diagnostics = engine.lastError || (liveSymbols > 0
+      ? `Tracking ${liveSymbols}/12 forex pairs live${engine.lastFeedMode ? ` via ${engine.lastFeedMode}` : ""}.`
+      : "Waiting for forex market quotes.");
+
+    setStats({
+      equity,
+      balance: engine.balance,
+      sessionPnl: equity - INITIAL_BALANCE,
+      unrealizedPnl,
+      realizedPnl: engine.totalRealizedPnl,
+      totalTrades,
+      openPositions: engine.positions.size,
+      winRate,
+      activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length,
+      warmingUp: FOREX_PAIRS.every((pair) => (engine.bars[pair.symbol]?.length ?? 0) < MIN_BARS_SLOW),
+      liveSymbols,
+      lastUpdateAt: engine.lastFeedAt,
+      diagnostics,
+    });
+  }, []);
+
+  const processTick = useCallback((items: ForexMarketItem[], errorMessage = "", pauseEntries = false) => {
     const engine = engineRef.current;
     const now = Date.now();
+    if (items.length > 0) engine.lastFeedAt = now;
     if (errorMessage) engine.lastError = errorMessage;
-    else if (items.length) engine.lastError = "";
+    else if (items.length && !pauseEntries) engine.lastError = "";
 
     for (const item of items) {
       const historyBars = (item.candles ?? []).filter((bar) => bar > 0).slice(-MAX_BARS);
       const livePrice = item.price > 0 ? item.price : (historyBars.length > 0 ? historyBars[historyBars.length - 1] : 0);
       if (livePrice <= 0) continue;
 
+      if (item.interval) engine.lastFeedMode = item.interval;
       engine.quotes[item.symbol] = { ...item, price: livePrice };
       const bars = historyBars.length > 0 ? [...historyBars] : [...(engine.bars[item.symbol] ?? [])];
 
@@ -584,6 +749,10 @@ export default function useForexEngine() {
           strategy.position.unrealizedPnl = calcPnl(strategy.position.side, strategy.position.entryPrice, latest.price, strategy.position.quantity);
           strategy.position.returnPct = strategy.position.notional > 0 ? (strategy.position.unrealizedPnl / strategy.position.notional) * 100 : 0;
           strategy.position.peakReturnPct = Math.max(strategy.position.peakReturnPct, strategy.position.returnPct);
+          const currentBars = engine.bars[strategy.position.pair.symbol];
+          if (currentBars && currentBars.length >= strategy.def.minBars) {
+            strategy.regime = classifyRegime(buildSignalInputs(currentBars));
+          }
           const exit = resolveExit(strategy.position, strategy.def, latest.price, now);
           if (exit) closePosition(engine, strategy, exit.exitPrice, exit.reason, now);
         }
@@ -594,57 +763,41 @@ export default function useForexEngine() {
         strategy.status = "COOLING"; strategy.score = 0; continue;
       }
       if (strategy.cooldownUntil > now) { strategy.status = "COOLING"; strategy.score = 0; continue; }
-      strategy.status = "READY"; strategy.score = 0; strategy.lastSignalSymbol = "";
+      strategy.status = "READY"; strategy.score = 0; strategy.lastSignalSymbol = ""; strategy.regime = "UNKNOWN";
       if (engine.positions.size >= MAX_OPEN_POSITIONS) continue;
 
       let bestPair: ForexPair | null = null;
       let bestScore = 0;
+      let bestRegime: Regime = "UNKNOWN";
       for (const pair of FOREX_PAIRS) {
         const bars = engine.bars[pair.symbol];
         if (!bars || bars.length < strategy.def.minBars) continue;
         const input = buildSignalInputs(bars);
+        const regime = classifyRegime(input);
         const score = evalSignal(strategy.def.signal, input);
-        const confirmed = score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strategy.def, input, classifyRegime(input));
+        const confirmed = !pauseEntries && score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strategy.def, input, regime);
         const displayScore = confirmed ? score : Math.min(score, SIGNAL_THRESHOLD - 1);
-        if (displayScore > strategy.score) { strategy.score = displayScore; strategy.lastSignalSymbol = pair.symbol; }
-        if (confirmed && score > bestScore) { bestScore = score; bestPair = pair; }
+        if (displayScore > strategy.score) {
+          strategy.score = displayScore;
+          strategy.lastSignalSymbol = pair.symbol;
+          strategy.regime = regime;
+        }
+        if (confirmed && score > bestScore) {
+          bestScore = score;
+          bestPair = pair;
+          bestRegime = regime;
+        }
       }
       if (bestPair) {
         const price = engine.quotes[bestPair.symbol]?.price ?? 0;
-        if (price > 0) openPosition(engine, strategy, bestPair, price, now);
+        if (price > 0 && openPosition(engine, strategy, bestPair, price, now)) strategy.regime = bestRegime;
       } else if (FOREX_PAIRS.every((p) => (engine.bars[p.symbol]?.length ?? 0) < strategy.def.minBars)) {
         strategy.status = "WARMING";
+        strategy.regime = "UNKNOWN";
       }
     }
 
-    const positionSides: Record<string, Set<Side>> = {};
-    const symbolScores: Record<string, number> = {};
-    for (const strategy of engine.strategies) {
-      const sym = strategy.position?.pair.symbol ?? strategy.lastSignalSymbol;
-      if (sym && strategy.score > 0) symbolScores[sym] = Math.max(symbolScores[sym] ?? 0, strategy.score);
-      if (strategy.position) {
-        if (!positionSides[strategy.position.pair.symbol]) positionSides[strategy.position.pair.symbol] = new Set();
-        positionSides[strategy.position.pair.symbol].add(strategy.def.side);
-      }
-    }
-
-    const pairByCat = Object.fromEntries(FOREX_PAIRS.map((p) => [p.symbol, p.category]));
-    setQuotes(FOREX_PAIRS.map((pair) => {
-      const q = engine.quotes[pair.symbol];
-      const sides = positionSides[pair.symbol];
-      return { symbol: pair.symbol, category: pair.category, ltp: q?.price ?? 0, changePct: q?.changePct ?? 0, signalScore: symbolScores[pair.symbol] ?? 0, hasPosition: Boolean(sides?.size), strategyLabel: sides ? [...sides].join("+") : undefined, sparkline: (engine.bars[pair.symbol] ?? []).slice(-24) };
-    }));
-    setPositions([...engine.positions.values()].map((p) => ({ id: p.id, strategyId: p.strategyId, strategyName: p.strategyName, symbol: p.pair.symbol, category: pairByCat[p.pair.symbol] ?? "Major", side: p.side, quantity: p.quantity, entryPrice: p.entryPrice, currentPrice: p.currentPrice, tpPrice: p.tpPrice, slPrice: p.slPrice, notional: p.notional, entryTime: new Date(p.entryTime).toISOString(), unrealizedPnl: p.unrealizedPnl, returnPct: p.returnPct })));
-    setTrades(engine.trades.slice(0, 120).map((t) => ({ id: t.id, strategyId: t.strategyId, strategyName: t.strategyName, symbol: t.symbol, side: t.side, quantity: t.quantity, entryPrice: t.entryPrice, exitPrice: t.exitPrice, netPnl: t.netPnl, returnPct: t.returnPct, entryTime: new Date(t.entryTime).toISOString(), exitTime: new Date(t.exitTime).toISOString(), exitReason: t.exitReason, holdSeconds: t.holdSeconds })));
-    setStrategies(engine.strategies.map((s) => ({ id: s.def.id, name: s.def.name, category: s.def.category, side: s.def.side, status: s.status, currentSymbol: s.currentSymbol || s.lastSignalSymbol, score: s.score, allocationUSD: Math.round(ALLOCATION_USD * sizeMultiplierFor(s)), totalTrades: s.totalTrades, wins: s.wins, losses: s.losses, totalPnl: s.totalPnl, winRate: s.winRate, cooldownUntil: s.cooldownUntil > 0 ? new Date(s.cooldownUntil).toISOString() : undefined })));
-
-    const unrealizedPnl = [...engine.positions.values()].reduce((sum, p) => sum + p.unrealizedPnl, 0);
-    const openNotional  = [...engine.positions.values()].reduce((sum, p) => sum + p.notional, 0);
-    const equity = engine.balance + openNotional + unrealizedPnl;
-    const liveSymbols = FOREX_PAIRS.filter((p) => (engine.quotes[p.symbol]?.price ?? 0) > 0).length;
-    const totalTrades = engine.strategies.reduce((sum, s) => sum + s.totalTrades, 0);
-    const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
-    setStats({ equity, balance: engine.balance, sessionPnl: equity - INITIAL_BALANCE, unrealizedPnl, realizedPnl: engine.totalRealizedPnl, totalTrades, openPositions: engine.positions.size, winRate, activeStrategies: engine.strategies.filter((s) => s.status !== "WARMING").length, warmingUp: FOREX_PAIRS.every((p) => (engine.bars[p.symbol]?.length ?? 0) < MIN_BARS_SLOW), liveSymbols, lastUpdateAt: now, diagnostics: engine.lastError || (liveSymbols > 0 ? `Tracking ${liveSymbols}/12 forex pairs live.` : "Waiting for forex market quotes.") });
+    pushDisplayState();
 
     if (!dbLoadedRef.current) return;
     const signature = JSON.stringify({
@@ -660,7 +813,7 @@ export default function useForexEngine() {
       lastSavedSignatureRef.current = signature;
       void saveForexState(engine);
     }
-  }, []);
+  }, [pushDisplayState]);
 
   const reset = useCallback(() => {
     engineRef.current = initEngine();
@@ -668,7 +821,7 @@ export default function useForexEngine() {
     if (dbLoadedRef.current) void saveForexState(engineRef.current);
     setQuotes(FOREX_PAIRS.map((p) => ({ symbol: p.symbol, category: p.category, ltp: 0, changePct: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
     setPositions([]); setTrades([]);
-    setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, allocationUSD: ALLOCATION_USD, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
+    setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: 1, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
     setStats(EMPTY_STATS);
   }, []);
 
@@ -684,8 +837,9 @@ export default function useForexEngine() {
         openPositions: [...engineRef.current.positions.keys()],
         tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
       });
+      pushDisplayState();
     });
-  }, []);
+  }, [pushDisplayState]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -697,6 +851,7 @@ export default function useForexEngine() {
   useEffect(() => {
     const onUnload = () => {
       if (!dbLoadedRef.current) return;
+      saveToLocalStorage(engineRef.current);
       const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
       navigator.sendBeacon("/api/forex/state", new Blob([payload], { type: "application/json" }));
     };
@@ -710,12 +865,16 @@ export default function useForexEngine() {
       if (cancelled) return;
       try {
         const res = await fetch("/api/forex/markets", { next: { revalidate: 0 } } as RequestInit);
-        const payload = await res.json() as { ok?: boolean; data?: ForexMarketItem[]; error?: string };
+        const payload = await res.json() as { ok?: boolean; data?: ForexMarketItem[]; error?: string; stale?: boolean; cached?: boolean };
         if (!res.ok || !payload.ok || !payload.data?.length) {
           processTick([], payload.error || `Forex API returned ${res.status}`);
           return;
         }
-        processTick(payload.data, "");
+        // pauseEntries removed: Yahoo returns stale:true on rate-limiting/failures, which
+        // was blocking ALL new position entries. Signals are self-gating via RSI/price
+        // checks. Stale data just means candles don't advance — signals won't fire on
+        // unchanged bars anyway. Keep the diagnostic message but don't pause entries.
+        processTick(payload.data, payload.stale ? payload.error || "Using cached forex quotes." : "", false);
       } catch {
         processTick([], "Unable to fetch forex market data.");
       }

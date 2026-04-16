@@ -875,6 +875,7 @@ export default function TradingDashboard({
   const btcOptionsModuleActive = activeModule === "options" || activeModule === "chain";
   const btcOptionsSellingModuleActive = activeModule === "options-selling";
   const cryptoEquityModuleActive = activeModule === "cryptoEquity";
+  const forexModuleActive = activeModule === "forexScalper";
   const niftyOptionsModuleActive = activeModule === "nifty";
   const niftyOptionsSellingModuleActive = activeModule === "niftySelling";
   const niftyStocksModuleActive = activeModule === "niftyStocks";
@@ -901,6 +902,10 @@ export default function TradingDashboard({
   const cryptoEquitySessionPnl = cryptoEquityBalance - INITIAL_BALANCE;
   const cryptoEquityOpenPositions = cryptoPositions.length;
   const cryptoEquityOnline = cryptoStats.lastUpdateAt > 0 || cryptoPositions.length > 0;
+  const forexEquity = forexStats.equity ?? INITIAL_BALANCE;
+  const forexSessionPnl = forexEquity - INITIAL_BALANCE;
+  const forexOpenPositions = forexPositions.length;
+  const forexOnline = forexStats.lastUpdateAt > 0 || forexPositions.length > 0;
 
   const optionsHeaderMarketLabel = btcOptionsSellingModuleActive ? "BTC SELLING" : niftyOptionsSellingModuleActive ? "NIFTY SELLING" : niftyOptionsModuleActive ? "NIFTY 50" : "BTC";
   const optionsHeaderMarketCode = btcOptionsSellingModuleActive ? "SELL" : niftyOptionsSellingModuleActive ? "NSELL" : niftyOptionsModuleActive ? "N50" : "OPT";
@@ -918,6 +923,13 @@ export default function TradingDashboard({
         description: `${strategy.category} · ${strategy.status}`,
         enabled: strategy.status !== "COOLING",
       }))
+    : forexModuleActive
+      ? forexStrategies.slice(0, 10).map((strategy, index) => ({
+          id: String(strategy.id ?? `forex-${index}`),
+          label: strategy.name,
+          description: `${strategy.category} · ${strategy.regime} · ${strategy.status}`,
+          enabled: strategy.rosterState === "ACTIVE",
+        }))
     : niftyOptionsModuleActive
       ? niftyOptionStrategies.slice(0, 10).map((strategy, index) => ({
           id: strategy.strategyId > 0 ? String(strategy.strategyId) : `nifty-${index}`,
@@ -974,6 +986,14 @@ export default function TradingDashboard({
               detail: `${trade.exitReason} · ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
               tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
             }))
+          : forexModuleActive
+            ? forexTrades.slice(0, 8).map((trade) => ({
+                id: trade.id,
+                time: trade.exitTime,
+                title: trade.strategyName,
+                detail: `${trade.symbol} ${trade.exitReason} · ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
+                tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+              }))
           : liveTrades.slice(0, 8).map((trade) => ({
               id: trade.id,
               time: trade.exitTime,
@@ -1083,6 +1103,28 @@ export default function TradingDashboard({
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
+      ) : forexModuleActive ? (
+        <OptionsAccountHeader
+          online={forexOnline}
+          equity={forexEquity}
+          dailyPnL={forexSessionPnl}
+          openPositions={forexOpenPositions}
+          marketLabel="FOREX"
+          marketCode="FX12"
+          accountLabel="Forex paper account"
+          currencyCode="USD"
+          locale="en-US"
+          workspaceTitle="RAIG Forex Workspace"
+          onlineLabel={`Forex engine live on ${forexStats.liveSymbols}/12 monitored pairs`}
+          offlineLabel="Forex engine offline"
+          detailLabel={forexStats.diagnostics}
+          accountBadgeLabel="FX Account"
+          equityLabel="Forex Equity"
+          pnlLabel="Forex PnL Today"
+          openLabel="Open FX"
+          actionsEnabled={actionsEnabled}
+          onToggleActions={setActionsEnabled}
+        />
       ) : niftyStocksModuleActive ? (
         <OptionsAccountHeader
           online={niftyStocksOnline}
@@ -1126,7 +1168,7 @@ export default function TradingDashboard({
         workspaceDescription={activePreset.description}
         currencyCode={workspaceCurrencyCode}
         defaultMode={activeGroup === "charts" ? "analysis" : "paper"}
-        defaultDataSource={activeGroup === "crypto" ? "binance" : activeModule === "mcx" ? "angel" : "nse"}
+        defaultDataSource={activeGroup === "crypto" ? "binance" : activeGroup === "forex" ? "yahoo" : activeModule === "mcx" ? "angel" : "nse"}
         strategyItems={workspaceStrategyItems}
       />
 

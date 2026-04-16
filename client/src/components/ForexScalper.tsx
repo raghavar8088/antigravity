@@ -93,6 +93,23 @@ function StatusBadge({ status }: { status: ForexStrategyStatus["status"] }) {
   );
 }
 
+function RegimeBadge({ regime }: { regime: ForexStrategyStatus["regime"] }) {
+  const tones: Record<ForexStrategyStatus["regime"], { bg: string; color: string }> = {
+    UNKNOWN:        { bg: "rgba(100,100,100,0.1)", color: "var(--text-secondary)" },
+    RANGE:          { bg: "rgba(26,115,232,0.1)", color: "var(--blue)" },
+    HIGH_VOL:       { bg: "rgba(245,124,0,0.12)", color: "var(--amber)" },
+    TRENDING_BULL:  { bg: "rgba(24,128,56,0.1)", color: "var(--green)" },
+    TRENDING_BEAR:  { bg: "rgba(217,48,37,0.12)", color: "var(--red)" },
+  };
+  const tone = tones[regime];
+  return (
+    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em]"
+      style={{ background: tone.bg, color: tone.color }}>
+      {regime.replace("_", " ")}
+    </span>
+  );
+}
+
 function QuoteCard({ quote }: { quote: ForexQuoteDisplay }) {
   const positive = quote.changePct >= 0;
   const activeSignal = quote.signalScore >= 66;
@@ -166,6 +183,10 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
       if (stratSort === "winRate") return b.winRate - a.winRate;
       return 0;
     });
+  const activeRoster = strategies.filter((s) => s.rosterState === "ACTIVE").length;
+  const watchlistCount = strategies.length - activeRoster;
+  const bestStrategy = [...strategies].sort((a, b) => b.score - a.score)[0];
+  const hasBestSetup = Boolean(bestStrategy && bestStrategy.score > 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -201,8 +222,9 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
       </div>
 
       {/* ── Metric strip ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricCard label="Active Strategies" value={String(stats.activeStrategies)} detail="of 50 total" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <MetricCard label="Active Strategies" value={String(activeRoster)} detail={`${watchlistCount} warming/watchlist`} />
+        <MetricCard label="Best Setup" value={hasBestSetup ? (bestStrategy?.currentSymbol || "Ready") : "Scanning"} detail={hasBestSetup && bestStrategy ? `${bestStrategy.regime} · score ${bestStrategy.score}` : "Waiting for confirmed FX signals"} />
         <MetricCard label="Realized P&L" value={fmtUSD(stats.realizedPnl, { signed: true })} accent={stats.realizedPnl >= 0 ? "text-green" : "text-red"} />
         <MetricCard label="Diagnostics" value={stats.warmingUp ? "Warming" : "Active"} detail={stats.diagnostics} />
         <MetricCard label="Live Pairs" value={`${stats.liveSymbols} / 12`} detail="Yahoo Finance feed" />
@@ -339,8 +361,11 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
                     <th className="pb-2 pr-3">Category</th>
                     <th className="pb-2 pr-3">Side</th>
                     <th className="pb-2 pr-3">Status</th>
+                    <th className="pb-2 pr-3">Regime</th>
                     <th className="pb-2 pr-3">Pair</th>
                     <th className="pb-2 pr-3 text-right">Score</th>
+                    <th className="pb-2 pr-3 text-right">Size</th>
+                    <th className="pb-2 pr-3 text-right">Alloc</th>
                     <th className="pb-2 pr-3 text-right">W/L</th>
                     <th className="pb-2 pr-3 text-right">Win%</th>
                     <th className="pb-2 text-right">P&L</th>
@@ -353,8 +378,11 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
                       <td className="py-2 pr-3" style={{ color: "var(--text-secondary)" }}>{s.category}</td>
                       <td className="py-2 pr-3"><SideBadge side={s.side} /></td>
                       <td className="py-2 pr-3"><StatusBadge status={s.status} /></td>
+                      <td className="py-2 pr-3"><RegimeBadge regime={s.regime} /></td>
                       <td className="py-2 pr-3 font-mono text-[11px]">{s.currentSymbol || "—"}</td>
                       <td className="py-2 pr-3 text-right font-mono" style={{ color: scoreColor(s.score) }}>{s.score > 0 ? s.score : "—"}</td>
+                      <td className="py-2 pr-3 text-right font-mono">{s.sizeMultiplier.toFixed(2)}x</td>
+                      <td className="py-2 pr-3 text-right font-mono">{fmtUSD(s.allocationUSD)}</td>
                       <td className="py-2 pr-3 text-right font-mono">{s.wins}/{s.losses}</td>
                       <td className="py-2 pr-3 text-right" style={{ color: s.winRate >= 55 ? "var(--green)" : s.winRate > 0 ? "var(--amber)" : "var(--text-secondary)" }}>
                         {s.totalTrades > 0 ? `${s.winRate.toFixed(0)}%` : "—"}
