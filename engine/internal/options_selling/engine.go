@@ -24,12 +24,13 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-// Engine is the fully autonomous BTC option SELLING engine.
+// Engine is the fully autonomous option SELLING engine (BTC or NIFTY).
 type Engine struct {
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
 	marketProfile    MarketProfile
+	signals          map[string]SignalFunc // BTC uses Signals, NIFTY uses NiftySignals
 	balance          float64
 	lastPrice        float64
 	priceHist        []float64
@@ -66,9 +67,15 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		}
 	}
 
+	sigs := Signals
+	if profile.Name == niftyOptionsMarketProfile.Name {
+		sigs = NiftySignals
+	}
+
 	engine := &Engine{
 		states:        states,
 		marketProfile: profile,
+		signals:       sigs,
 		balance:       initialOptionsBalance,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
@@ -378,7 +385,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	fn, ok := Signals[s.def.Signal]
+	fn, ok := e.signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}
@@ -425,7 +432,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 		return
 	}
 
-	fn, ok := Signals[s.def.Signal]
+	fn, ok := e.signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}

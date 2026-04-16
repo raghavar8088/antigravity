@@ -743,3 +743,360 @@ var Signals = map[string]SignalFunc{
 		return mom30 < -0.012 && rsiVal < 28 && atLower && mom3 > mom30/8
 	},
 }
+
+// NiftySignals contains signal functions calibrated for NIFTY 50.
+//
+// NIFTY 50 has ~18% annualised IV vs BTC's ~80% IV. All momentum-based
+// thresholds are scaled down by approximately 0.25× so that signals fire
+// at equivalent statistical rarity for an Indian equity index. RSI, EMA
+// cross, Bollinger Band, and Stochastic signals are percentage-agnostic
+// and reused unchanged. Session timing is adjusted to NSE market hours
+// (03:45–10:00 UTC = 09:15–15:30 IST).
+var NiftySignals map[string]SignalFunc
+
+func init() {
+	// Copy all BTC signals as a baseline (RSI/EMA/BB/Stoch need no scaling).
+	NiftySignals = make(map[string]SignalFunc, len(Signals))
+	for k, v := range Signals {
+		NiftySignals[k] = v
+	}
+
+	// ── Override momentum-sensitive signals ─────────────────────────────────
+
+	NiftySignals["BULL_MOMENTUM"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) > 0.0006 && momentum(ctx.Prices, 10) > 0.0003 && rsi(ctx.Prices, 14) < 64
+	}
+	NiftySignals["BEAR_MOMENTUM"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) < -0.0006 && momentum(ctx.Prices, 10) < -0.0003 && rsi(ctx.Prices, 14) > 36
+	}
+	NiftySignals["STRONG_BULL_MOMENTUM"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) > 0.0010 && momentum(ctx.Prices, 10) > 0.0005 && rsi(ctx.Prices, 14) < 68
+	}
+	NiftySignals["STRONG_BEAR_MOMENTUM"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return momentum(ctx.Prices, 5) < -0.0010 && momentum(ctx.Prices, 10) < -0.0005 && rsi(ctx.Prices, 14) > 32
+	}
+
+	NiftySignals["VWAP_ABOVE"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		return (ctx.BTCPrice-vw)/vw > 0.0010 && momentum(ctx.Prices, 5) > 0.0006
+	}
+	NiftySignals["VWAP_BELOW"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		return (vw-ctx.BTCPrice)/vw > 0.0010 && momentum(ctx.Prices, 5) < -0.0006
+	}
+
+	NiftySignals["RESISTANCE_BREAK"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		hi := 0.0
+		for _, p := range prev {
+			if p > hi {
+				hi = p
+			}
+		}
+		return ctx.BTCPrice > hi*1.0007 && momentum(ctx.Prices, 3) > 0.0006
+	}
+	NiftySignals["SUPPORT_BREAK"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 22 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		lo := math.MaxFloat64
+		for _, p := range prev {
+			if p < lo {
+				lo = p
+			}
+		}
+		return ctx.BTCPrice < lo*0.9993 && momentum(ctx.Prices, 3) < -0.0006
+	}
+
+	NiftySignals["BB_SQUEEZE_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		priorStd := stddev(ctx.Prices[n-30 : n-10])
+		return recentStd < priorStd*0.75 && momentum(ctx.Prices, 3) > 0.0005
+	}
+	NiftySignals["BB_SQUEEZE_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		priorStd := stddev(ctx.Prices[n-30 : n-10])
+		return recentStd < priorStd*0.75 && momentum(ctx.Prices, 3) < -0.0005
+	}
+
+	NiftySignals["TRIPLE_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		return rsi(ctx.Prices, 14) < 35 && crossedAbove(ctx.Prices, 9, 21) && momentum(ctx.Prices, 5) > 0.0005
+	}
+	NiftySignals["TRIPLE_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		return rsi(ctx.Prices, 14) > 65 && crossedBelow(ctx.Prices, 9, 21) && momentum(ctx.Prices, 5) < -0.0005
+	}
+
+	NiftySignals["MOMENTUM_VWAP_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > vw*1.0006 && momentum(ctx.Prices, 5) > 0.0008 && momentum(ctx.Prices, 10) > 0.0004 && r > 50 && r < 66
+	}
+	NiftySignals["MOMENTUM_VWAP_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < vw*0.9994 && momentum(ctx.Prices, 5) < -0.0008 && momentum(ctx.Prices, 10) < -0.0004 && r > 34 && r < 50
+	}
+
+	NiftySignals["BREAKOUT_TREND_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		hi := 0.0
+		for _, p := range prev {
+			if p > hi {
+				hi = p
+			}
+		}
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice > hi*1.0007 && ctx.BTCPrice > ema(ctx.Prices, 20) && ctx.BTCPrice > ema(ctx.Prices, 50) && momentum(ctx.Prices, 3) > 0.0006 && r > 54 && r < 68
+	}
+	NiftySignals["BREAKDOWN_TREND_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 55 {
+			return false
+		}
+		prev := ctx.Prices[len(ctx.Prices)-21 : len(ctx.Prices)-1]
+		lo := math.MaxFloat64
+		for _, p := range prev {
+			if p < lo {
+				lo = p
+			}
+		}
+		r := rsi(ctx.Prices, 14)
+		return ctx.BTCPrice < lo*0.9993 && ctx.BTCPrice < ema(ctx.Prices, 20) && ctx.BTCPrice < ema(ctx.Prices, 50) && momentum(ctx.Prices, 3) < -0.0006 && r > 32 && r < 46
+	}
+
+	NiftySignals["VOL_COMPRESS_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		historicalStd := stddev(ctx.Prices[n-40:])
+		if historicalStd == 0 {
+			return false
+		}
+		return recentStd < historicalStd*0.65 && momentum(ctx.Prices, 5) > 0.0007 && rsi(ctx.Prices, 14) < 65
+	}
+	NiftySignals["VOL_COMPRESS_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 45 {
+			return false
+		}
+		n := len(ctx.Prices)
+		recentStd := stddev(ctx.Prices[n-10:])
+		historicalStd := stddev(ctx.Prices[n-40:])
+		if historicalStd == 0 {
+			return false
+		}
+		return recentStd < historicalStd*0.65 && momentum(ctx.Prices, 5) < -0.0007 && rsi(ctx.Prices, 14) > 35
+	}
+
+	NiftySignals["CONSEC_BULL_BARS"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 6 {
+			return false
+		}
+		n := len(ctx.Prices)
+		for i := n - 4; i < n; i++ {
+			if ctx.Prices[i] <= ctx.Prices[i-1] {
+				return false
+			}
+		}
+		return (ctx.Prices[n-1]-ctx.Prices[n-5])/ctx.Prices[n-5] > 0.0008 && rsi(ctx.Prices, 14) < 72
+	}
+	NiftySignals["CONSEC_BEAR_BARS"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 6 {
+			return false
+		}
+		n := len(ctx.Prices)
+		for i := n - 4; i < n; i++ {
+			if ctx.Prices[i] >= ctx.Prices[i-1] {
+				return false
+			}
+		}
+		return (ctx.Prices[n-5]-ctx.Prices[n-1])/ctx.Prices[n-5] > 0.0008 && rsi(ctx.Prices, 14) > 28
+	}
+
+	NiftySignals["SHARP_REVERSAL_UP"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		window := ctx.Prices[len(ctx.Prices)-6 : len(ctx.Prices)-1]
+		lo := math.MaxFloat64
+		for _, p := range window {
+			if p < lo {
+				lo = p
+			}
+		}
+		dropFromHigh := (ctx.Prices[len(ctx.Prices)-6] - lo) / ctx.Prices[len(ctx.Prices)-6]
+		recovery := (ctx.BTCPrice - lo) / lo
+		return dropFromHigh > 0.0008 && recovery > 0.0004 && ctx.BTCPrice > lo
+	}
+	NiftySignals["SHARP_REVERSAL_DOWN"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		window := ctx.Prices[len(ctx.Prices)-6 : len(ctx.Prices)-1]
+		hi := 0.0
+		for _, p := range window {
+			if p > hi {
+				hi = p
+			}
+		}
+		riseFromLow := (hi - ctx.Prices[len(ctx.Prices)-6]) / ctx.Prices[len(ctx.Prices)-6]
+		rejection := (hi - ctx.BTCPrice) / hi
+		return riseFromLow > 0.0008 && rejection > 0.0004 && ctx.BTCPrice < hi
+	}
+
+	NiftySignals["OVEREXTENSION_FADE_UP"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		mom30 := momentum(ctx.Prices, 30)
+		mom3 := momentum(ctx.Prices, 3)
+		return mom30 > 0.0030 && rsi(ctx.Prices, 14) > 72 && ctx.BTCPrice >= bbUpper(ctx.Prices, 20)*0.999 && mom3 < mom30/8
+	}
+	NiftySignals["OVEREXTENSION_FADE_DOWN"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 35 {
+			return false
+		}
+		mom30 := momentum(ctx.Prices, 30)
+		mom3 := momentum(ctx.Prices, 3)
+		return mom30 < -0.0030 && rsi(ctx.Prices, 14) < 28 && ctx.BTCPrice <= bbLower(ctx.Prices, 20)*1.001 && mom3 > mom30/8
+	}
+
+	NiftySignals["CAPITULATION_RECOVERY"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 12 {
+			return false
+		}
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-7 : n-1]
+		lo := window[0]
+		for _, p := range window[1:] {
+			if p < lo {
+				lo = p
+			}
+		}
+		startPrice := ctx.Prices[n-8]
+		if startPrice == 0 || lo == 0 {
+			return false
+		}
+		drop := (startPrice - lo) / startPrice
+		recovery := (ctx.BTCPrice - lo) / lo
+		return drop > 0.0014 && recovery > 0.0006 && ctx.BTCPrice > lo && rsi(ctx.Prices, 14) < 56
+	}
+
+	NiftySignals["CAPITULATION_RECLAIM"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 30 {
+			return false
+		}
+		n := len(ctx.Prices)
+		window := ctx.Prices[n-7 : n-1]
+		lo := window[0]
+		for _, p := range window[1:] {
+			if p < lo {
+				lo = p
+			}
+		}
+		startPrice := ctx.Prices[n-8]
+		if startPrice == 0 || lo == 0 {
+			return false
+		}
+		drop := (startPrice - lo) / startPrice
+		recovery := (ctx.BTCPrice - lo) / lo
+		shortVWAP := avgPrice(ctx.Prices[n-15:])
+		r := rsi(ctx.Prices, 14)
+		return drop > 0.0014 && recovery > 0.0007 && ctx.BTCPrice > shortVWAP && ctx.BTCPrice > ema(ctx.Prices, 9) && r > 38 && r < 56
+	}
+
+	// ── IV threshold: NIFTY elevated = above 25% (vs BTC's 60%) ───────────────
+	NiftySignals["HIGH_IV_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return ctx.IV > 0.25 && momentum(ctx.Prices, 5) > 0.0008
+	}
+	NiftySignals["HIGH_IV_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		return ctx.IV > 0.25 && momentum(ctx.Prices, 5) < -0.0008
+	}
+
+	// ── Session timing: NSE hours (UTC) ────────────────────────────────────────
+	// NSE opens 03:45 UTC (09:15 IST), closes 10:00 UTC (15:30 IST).
+	// Key volatility windows: open burst (03:45), midday reset (06:30).
+	NiftySignals["SESSION_OPEN_BULL"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		sessions := []int{225, 390} // 03:45 UTC (NSE open), 06:30 UTC (midday)
+		nearSession := false
+		for _, s := range sessions {
+			diff := totalMin - s
+			if diff >= 1 && diff <= 20 {
+				nearSession = true
+				break
+			}
+		}
+		return nearSession && momentum(ctx.Prices, 10) > 0.0009 && rsi(ctx.Prices, 14) < 65
+	}
+	NiftySignals["SESSION_OPEN_BEAR"] = func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		totalMin := ctx.UTCHour*60 + ctx.UTCMin
+		sessions := []int{225, 390}
+		nearSession := false
+		for _, s := range sessions {
+			diff := totalMin - s
+			if diff >= 1 && diff <= 20 {
+				nearSession = true
+				break
+			}
+		}
+		return nearSession && momentum(ctx.Prices, 10) < -0.0009 && rsi(ctx.Prices, 14) > 35
+	}
+}
