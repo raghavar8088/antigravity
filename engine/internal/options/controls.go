@@ -226,3 +226,42 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 		return price <= fast && mom3 <= 0.0002
 	}
 }
+
+// niftyEntryConfirmed mirrors optionEntryConfirmed with momentum thresholds
+// scaled ~0.25× for NIFTY's lower volatility (IV ~18% vs BTC ~80%).
+// Typical NIFTY 3-minute move is ~0.025%; BTC's is ~0.10%.
+func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
+	if len(ctx.Prices) < 25 {
+		return false
+	}
+
+	price := ctx.BTCPrice
+	fast := ema(ctx.Prices, 9)
+	slow := ema(ctx.Prices, 21)
+	trend := ema(ctx.Prices, 55)
+	rsiVal := rsi(ctx.Prices, 14)
+	mom3 := momentum(ctx.Prices, 3)
+	mom8 := momentum(ctx.Prices, 8)
+
+	bullishSeller := def.Type == Put
+	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
+	if bullishSeller {
+		switch def.Category {
+		case "Momentum", "Breakout", "Hybrid":
+			return trendAligned && price >= trend && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+		case "Mean Reversion", "Capitulation":
+			return price >= fast && price >= trend*0.997 && mom3 > -0.0003 && rsiVal >= 38 && rsiVal <= 60
+		default:
+			return price >= fast && mom3 >= -0.00005
+		}
+	}
+
+	switch def.Category {
+	case "Momentum", "Breakout", "Hybrid":
+		return trendAligned && price <= trend && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+	case "Mean Reversion", "Capitulation":
+		return price <= fast && price <= trend*1.003 && mom3 < 0.0003 && rsiVal >= 40 && rsiVal <= 62
+	default:
+		return price <= fast && mom3 <= 0.00005
+	}
+}

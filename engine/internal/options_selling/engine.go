@@ -368,6 +368,15 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 	e.refreshStrategyPresentationLocked(s, now)
 }
 
+// entryConfirmed routes to the market-appropriate confirmation function.
+// NIFTY uses scaled-down momentum thresholds; BTC uses the original ones.
+func (e *Engine) entryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
+	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
+		return niftyEntryConfirmed(def, ctx, regime)
+	}
+	return optionEntryConfirmed(def, ctx, regime)
+}
+
 func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 	if s.stats.RosterState != StrategyRosterActive {
 		return
@@ -389,7 +398,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !optionEntryConfirmed(s.def, ctx, regime) {
+	if !e.entryConfirmed(s.def, ctx, regime) {
 		return
 	}
 
@@ -436,7 +445,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
+	if !e.entryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
