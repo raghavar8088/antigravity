@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deltaFetch, deltaPost } from "@/lib/deltaSign";
+import { deltaFetch, deltaPost, type DeltaKeyOverride } from "@/lib/deltaSign";
 
 function pf(v: unknown): number {
   if (typeof v === "number") return v;
@@ -7,9 +7,9 @@ function pf(v: unknown): number {
   return 0;
 }
 
-async function findOptionProduct(strike: number, optionType: string): Promise<{ productId: number; symbol: string } | null> {
+async function findOptionProduct(strike: number, optionType: string, overrides?: DeltaKeyOverride): Promise<{ productId: number; symbol: string } | null> {
   const contractType = optionType === "CALL" ? "call_options" : "put_options";
-  const { ok, data } = await deltaFetch(`/v2/products?contract_types=${contractType}&page_size=300`);
+  const { ok, data } = await deltaFetch(`/v2/products?contract_types=${contractType}&page_size=300`, "GET", "", overrides);
   if (!ok) return null;
   type P = { id?: number; symbol?: string; strike_price?: string };
   let bestId = 0, bestSymbol = "", bestDiff = 1e18;
@@ -22,6 +22,15 @@ async function findOptionProduct(strike: number, optionType: string): Promise<{ 
 
 export async function POST(req: NextRequest) {
   try {
+    // Allow UI-supplied keys via request headers (takes priority over env vars)
+    const overrides: DeltaKeyOverride = {};
+    const hKey = req.headers.get("x-delta-api-key");
+    const hSecret = req.headers.get("x-delta-api-secret");
+    const hTestnet = req.headers.get("x-delta-testnet");
+    if (hKey) overrides.apiKey = hKey;
+    if (hSecret) overrides.apiSecret = hSecret;
+    if (hTestnet !== null) overrides.testnet = hTestnet === "true";
+
     const body = await req.json() as {
       action: "open" | "close";
       optionType?: string;
@@ -33,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     if (body.action === "open") {
       const { optionType = "CALL", strike = 0, premiumUsd = 100 } = body;
-      const product = await findOptionProduct(strike, optionType);
+      const product = await findOptionProduct(strike, optionType, overrides);
       if (!product) {
         return NextResponse.json({ ok: false, error: `No ${optionType} option found near strike $${strike}` });
       }
@@ -46,7 +55,7 @@ export async function POST(req: NextRequest) {
         reduce_only: false,
         order_source: "place_order",
         source: "desktop",
-      });
+      }, overrides);
       if (!result.ok) {
         const err = result.data as { error?: { code?: string; message?: string } };
         return NextResponse.json({ ok: false, error: err?.error?.message ?? err?.error?.code ?? `HTTP ${result.status}` });
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest) {
         reduce_only: true,
         cancel_orders_accepted: "true",
         source: "desktop",
-      });
+      }, overrides);
       if (!result.ok) {
         const err = result.data as { error?: { code?: string; message?: string } };
         return NextResponse.json({ ok: false, error: err?.error?.message ?? err?.error?.code ?? `HTTP ${result.status}` });

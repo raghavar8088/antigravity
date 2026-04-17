@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { deltaFetch } from "@/lib/deltaSign";
+import { NextRequest, NextResponse } from "next/server";
+import { deltaFetch, type DeltaKeyOverride } from "@/lib/deltaSign";
 
 function pf(v: unknown): number {
   if (typeof v === "number") return v;
@@ -7,10 +7,19 @@ function pf(v: unknown): number {
   return 0;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const key = process.env.DELTA_API_KEY;
-    const secret = process.env.DELTA_API_SECRET;
+    // Allow UI-supplied keys via request headers (takes priority over env vars)
+    const overrides: DeltaKeyOverride = {};
+    const hKey = req.headers.get("x-delta-api-key");
+    const hSecret = req.headers.get("x-delta-api-secret");
+    const hTestnet = req.headers.get("x-delta-testnet");
+    if (hKey) overrides.apiKey = hKey;
+    if (hSecret) overrides.apiSecret = hSecret;
+    if (hTestnet !== null) overrides.testnet = hTestnet === "true";
+
+    const key = overrides.apiKey || process.env.DELTA_API_KEY;
+    const secret = overrides.apiSecret || process.env.DELTA_API_SECRET;
 
     if (!key || !secret) {
       return NextResponse.json({
@@ -22,16 +31,16 @@ export async function GET() {
           positions: [],
           openOrders: [],
           fetchedAt: new Date().toISOString(),
-          error: "DELTA_API_KEY and DELTA_API_SECRET not configured in Vercel environment variables",
+          error: "No API keys — enter them in the Delta Live module config panel",
         },
       });
     }
 
     // Fetch wallet, positions, open orders in parallel
     const [walletRes, posRes, ordersRes] = await Promise.allSettled([
-      deltaFetch("/v2/wallet/balances"),
-      deltaFetch("/v2/positions/margined"),
-      deltaFetch("/v2/orders?state=open"),
+      deltaFetch("/v2/wallet/balances", "GET", "", overrides),
+      deltaFetch("/v2/positions/margined", "GET", "", overrides),
+      deltaFetch("/v2/orders?state=open", "GET", "", overrides),
     ]);
 
     // --- Wallets ---
@@ -106,7 +115,7 @@ export async function GET() {
 
     return NextResponse.json({
       configured: true,
-      testnet: process.env.DELTA_TESTNET === "true",
+      testnet: overrides.testnet ?? (process.env.DELTA_TESTNET === "true"),
       walletUsdt: usdtWallet?.availableBalance ?? 0,
       account: {
         wallets,

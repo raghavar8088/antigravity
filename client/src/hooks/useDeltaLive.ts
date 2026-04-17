@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const LEGACY_LS_KEY = "delta_live_state_v1";
 
+export type DeltaLocalConfig = {
+  apiKey: string;
+  apiSecret: string;
+  testnet: boolean;
+};
+
 export type DeltaLiveTrade = {
   id: string;
   paperTradeID?: string;
@@ -98,7 +104,7 @@ const EMPTY_STATS: DeltaLiveStats = {
   walletUsdt: 0,
 };
 
-export default function useDeltaLive(refreshKey = 0) {
+export default function useDeltaLive(refreshKey = 0, config?: DeltaLocalConfig | null) {
   const [stats, setStats] = useState<DeltaLiveStats>(EMPTY_STATS);
   const [trades, setTrades] = useState<DeltaLiveTrade[]>([]);
   const [toggling, setToggling] = useState(false);
@@ -109,10 +115,16 @@ export default function useDeltaLive(refreshKey = 0) {
 
   const fetchDeltaState = useCallback(async () => {
     try {
+      // Build headers for the Next.js account route from locally stored config
+      const accountHeaders: Record<string, string> = { cache: "no-store" };
+      if (config?.apiKey) accountHeaders["x-delta-api-key"] = config.apiKey;
+      if (config?.apiSecret) accountHeaders["x-delta-api-secret"] = config.apiSecret;
+      if (config?.testnet !== undefined) accountHeaders["x-delta-testnet"] = String(config.testnet);
+
       const [statsRes, tradesRes, accountRes] = await Promise.all([
         fetch(`${API_URL}/api/delta-live/stats`, { cache: "no-store" }),
         fetch(`${API_URL}/api/delta-live/trades`, { cache: "no-store" }),
-        fetch("/api/delta/account", { cache: "no-store" }),
+        fetch("/api/delta/account", { cache: "no-store", headers: accountHeaders }),
       ]);
 
       let statsData: DeltaLiveStats = EMPTY_STATS;

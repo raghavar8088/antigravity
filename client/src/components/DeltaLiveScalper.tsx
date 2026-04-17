@@ -1,14 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useDeltaLive, {
   type DeltaLiveTrade,
   type DeltaLiveStats,
   type DeltaRuntimeStatus,
+  type DeltaLocalConfig,
   type WalletEntry,
   type LivePosition,
   type OpenOrder,
 } from "@/hooks/useDeltaLive";
 import useDeltaStrikes from "@/hooks/useDeltaStrikes";
+
+const CONFIG_LS_KEY = "delta_api_config_v1";
 
 type Props = { actionsEnabled?: boolean };
 
@@ -439,16 +442,221 @@ const selectStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+// ─── Delta API Config Panel ──────────────────────────────────────────────────
+function DeltaConfigPanel({
+  config,
+  onSave,
+}: {
+  config: DeltaLocalConfig | null;
+  onSave: (c: DeltaLocalConfig) => void;
+}) {
+  const [open, setOpen] = useState(!config?.apiKey);
+  const [key, setKey] = useState(config?.apiKey ?? "");
+  const [secret, setSecret] = useState(config?.apiSecret ?? "");
+  const [testnet, setTestnet] = useState(config?.testnet ?? false);
+  const [showSecret, setShowSecret] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    onSave({ apiKey: key.trim(), apiSecret: secret.trim(), testnet });
+    setSaved(true);
+    setOpen(false);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const handleClear = () => {
+    setKey(""); setSecret(""); setTestnet(false);
+    onSave({ apiKey: "", apiSecret: "", testnet: false });
+    setOpen(true);
+  };
+  const hasKeys = !!(config?.apiKey && config?.apiSecret);
+
+  return (
+    <div
+      style={{
+        borderRadius: "var(--radius-card)",
+        border: "1px solid var(--border)",
+        background: "var(--surface)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header row */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 14 }}>🔑</span>
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>
+            API Key Configuration
+          </span>
+          {hasKeys && (
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "var(--radius-chip)",
+                background: "var(--green-dim)",
+                color: "var(--green)",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              {config?.testnet ? "Testnet" : "Production"}
+            </span>
+          )}
+          {!hasKeys && (
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "var(--radius-chip)",
+                background: "var(--amber-dim)",
+                color: "var(--amber)",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              Not Set
+            </span>
+          )}
+          {saved && (
+            <span style={{ fontSize: 11, color: "var(--green)", fontWeight: 500 }}>Saved</span>
+          )}
+        </div>
+        <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Form */}
+      {open && (
+        <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            Keys are stored in your browser only (localStorage) and sent directly to Delta Exchange via Vercel Edge.
+            Get your key at <span style={{ color: "var(--accent)" }}>india.delta.exchange → Settings → API Keys</span>.
+          </div>
+
+          {/* API Key */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>API Key</label>
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="Paste your API key here"
+              autoComplete="off"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* API Secret */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>API Secret</label>
+              <button
+                type="button"
+                onClick={() => setShowSecret((v) => !v)}
+                style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
+              >
+                {showSecret ? "Hide" : "Show"}
+              </button>
+            </div>
+            <input
+              type={showSecret ? "text" : "password"}
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+              placeholder="Paste your API secret here"
+              autoComplete="off"
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Testnet toggle */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>Use Testnet</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                {testnet ? "cdn-ind.testnet.deltaex.org — paper money" : "cdn.india.deltaex.org — real money"}
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label={testnet ? "Disable testnet" : "Enable testnet"}
+              onClick={() => setTestnet((v) => !v)}
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                border: "none",
+                cursor: "pointer",
+                background: testnet ? "var(--accent)" : "var(--surface-3)",
+                position: "relative",
+                transition: "background 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: testnet ? 22 : 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  transition: "left 0.2s",
+                }}
+              />
+            </button>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={!key.trim() || !secret.trim()}
+              className="btn-primary"
+              style={{ flex: 1, opacity: (!key.trim() || !secret.trim()) ? 0.5 : 1 }}
+            >
+              Save Keys
+            </button>
+            {hasKeys && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="btn-danger"
+                style={{ flex: "0 0 auto" }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TestOrderTab({
   actionsEnabled,
   positions,
   onOrderPlaced,
   walletUsdt,
+  config,
 }: {
   actionsEnabled: boolean;
   positions: LivePosition[];
   onOrderPlaced: () => void;
   walletUsdt: number;
+  config: DeltaLocalConfig | null;
 }) {
   const [side, setSide] = useState<"buy" | "sell">("sell"); // sell = open, buy = close/reduce
   const [orderType, setOrderType] = useState<"market" | "limit">("market");
@@ -489,9 +697,14 @@ function TestOrderTab({
             premiumUsd: Number(premiumUsd),
           };
 
+      const mirrorHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (config?.apiKey) mirrorHeaders["x-delta-api-key"] = config.apiKey;
+      if (config?.apiSecret) mirrorHeaders["x-delta-api-secret"] = config.apiSecret;
+      if (config?.testnet !== undefined) mirrorHeaders["x-delta-testnet"] = String(config.testnet);
+
       const response = await fetch("/api/delta/mirror", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: mirrorHeaders,
         body: JSON.stringify(payload),
       });
       const data = await response.json() as TestOrderResponse;
@@ -751,7 +964,25 @@ type MainTab = "test" | "account" | "positions" | "orders" | "mirrored";
 
 export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const { stats, trades, toggling, toggleEnabled, nextStatus } = useDeltaLive(refreshKey);
+  const [config, setConfig] = useState<DeltaLocalConfig | null>(null);
+
+  // Load config from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CONFIG_LS_KEY);
+      if (raw) setConfig(JSON.parse(raw) as DeltaLocalConfig);
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  const handleConfigSave = (c: DeltaLocalConfig) => {
+    setConfig(c);
+    try { localStorage.setItem(CONFIG_LS_KEY, JSON.stringify(c)); } catch { /* ignore */ }
+    setRefreshKey((v) => v + 1);
+  };
+
+  const { stats, trades, toggling, toggleEnabled, nextStatus } = useDeltaLive(refreshKey, config);
   const [tab, setTab] = useState<MainTab>("test");
   const [mirroredFilter, setMirroredFilter] = useState<"open" | "all">("open");
 
@@ -830,6 +1061,9 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
           )}
         </div>
       </div>
+
+      {/* ── API Key Config Panel ────────────────────────────────────── */}
+      <DeltaConfigPanel config={config} onSave={handleConfigSave} />
 
       {/* ── Enable banner ───────────────────────────────────────────── */}
       <EnableBanner
@@ -976,6 +1210,7 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
               positions={account?.positions ?? []}
               onOrderPlaced={refreshDeltaState}
               walletUsdt={stats.walletUsdt}
+              config={config}
             />
           )}
         </div>

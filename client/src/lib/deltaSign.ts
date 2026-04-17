@@ -18,17 +18,25 @@ export function nowTs(): string {
 const BASE = "https://cdn.india.deltaex.org";
 const TESTNET = "https://cdn-ind.testnet.deltaex.org";
 
-export function deltaBase(): string {
-  return process.env.DELTA_TESTNET === "true" ? TESTNET : BASE;
+export function deltaBase(testnet?: boolean): string {
+  const isTestnet = testnet !== undefined ? testnet : process.env.DELTA_TESTNET === "true";
+  return isTestnet ? TESTNET : BASE;
 }
+
+export type DeltaKeyOverride = {
+  apiKey?: string;
+  apiSecret?: string;
+  testnet?: boolean;
+};
 
 export async function deltaFetch(
   path: string,
   method = "GET",
   body = "",
+  overrides?: DeltaKeyOverride,
 ): Promise<{ ok: boolean; data: unknown; status: number }> {
-  const key = process.env.DELTA_API_KEY ?? "";
-  const secret = process.env.DELTA_API_SECRET ?? "";
+  const key = (overrides?.apiKey ?? "").trim() || (process.env.DELTA_API_KEY ?? "");
+  const secret = (overrides?.apiSecret ?? "").trim() || (process.env.DELTA_API_SECRET ?? "");
   if (!key || !secret) {
     return { ok: false, data: { error: "DELTA_API_KEY / DELTA_API_SECRET not set" }, status: 500 };
   }
@@ -54,7 +62,8 @@ export async function deltaFetch(
     fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
   }
 
-  const res = await undiciFetch(deltaBase() + path, fetchOptions);
+  const base = deltaBase(overrides?.testnet);
+  const res = await undiciFetch(base + path, fetchOptions);
 
   let data: unknown;
   try { data = await res.json(); } catch { data = {}; }
@@ -64,9 +73,10 @@ export async function deltaFetch(
 export async function deltaPost(
   path: string,
   body: unknown,
+  overrides?: DeltaKeyOverride,
 ): Promise<{ ok: boolean; data: unknown; status: number }> {
-  const key = process.env.DELTA_API_KEY ?? "";
-  const secret = process.env.DELTA_API_SECRET ?? "";
+  const key = (overrides?.apiKey ?? "").trim() || (process.env.DELTA_API_KEY ?? "");
+  const secret = (overrides?.apiSecret ?? "").trim() || (process.env.DELTA_API_SECRET ?? "");
   if (!key || !secret) return { ok: false, data: { error: "keys not set" }, status: 500 };
 
   const bodyStr = JSON.stringify(body);
@@ -91,7 +101,8 @@ export async function deltaPost(
     fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
   }
 
-  const res = await undiciFetch(deltaBase() + path, fetchOptions);
+  const base = deltaBase(overrides?.testnet);
+  const res = await undiciFetch(base + path, fetchOptions);
 
   let data: unknown;
   try { data = await res.json(); } catch { data = {}; }
