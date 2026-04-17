@@ -7,17 +7,35 @@ function pf(v: unknown): number {
   return 0;
 }
 
-async function findOptionProduct(strike: number, optionType: string, overrides?: DeltaKeyOverride): Promise<{ productId: number; symbol: string } | null> {
+async function findOptionProduct(
+  strike: number,
+  optionType: string,
+  overrides?: DeltaKeyOverride,
+): Promise<{ productId: number; symbol: string; debugInfo?: string } | null> {
   const contractType = optionType === "CALL" ? "call_options" : "put_options";
-  const { ok, data } = await deltaFetch(`/v2/products?contract_types=${contractType}&page_size=300`, "GET", "", overrides);
-  if (!ok) return null;
+  const res = await deltaFetch(
+    `/v2/products?contract_types=${contractType}&underlying_asset_symbol=BTC&page_size=300`,
+    "GET", "", overrides,
+  );
+  if (!res.ok) {
+    const errData = res.data as { error?: { code?: string; message?: string } | string };
+    const errMsg = typeof errData?.error === "string"
+      ? errData.error
+      : errData?.error?.code ?? errData?.error?.message ?? `HTTP ${res.status}`;
+    return { productId: 0, symbol: "", debugInfo: `products fetch failed: ${errMsg}` };
+  }
   type P = { id?: number; symbol?: string; strike_price?: string };
+  const products = (res.data as { result?: P[] }).result ?? [];
   let bestId = 0, bestSymbol = "", bestDiff = 1e18;
-  for (const p of (data as { result?: P[] }).result ?? []) {
+  for (const p of products) {
     const diff = Math.abs(parseFloat(p.strike_price ?? "0") - strike);
     if (diff < bestDiff) { bestDiff = diff; bestId = p.id ?? 0; bestSymbol = p.symbol ?? ""; }
   }
-  return bestId ? { productId: bestId, symbol: bestSymbol } : null;
+  if (!bestId) {
+    const strikes = products.slice(0, 5).map((p) => p.strike_price).join(", ");
+    return { productId: 0, symbol: "", debugInfo: `no product found — ${products.length} products returned, sample strikes: [${strikes || "none"}]` };
+  }
+  return { productId: bestId, symbol: bestSymbol };
 }
 
 export async function POST(req: NextRequest) {
@@ -43,8 +61,12 @@ export async function POST(req: NextRequest) {
     if (body.action === "open") {
       const { optionType = "CALL", strike = 0, premiumUsd = 100 } = body;
       const product = await findOptionProduct(strike, optionType, overrides);
-      if (!product) {
-        return NextResponse.json({ ok: false, error: `No ${optionType} option found near strike $${strike}` });
+      if (!product || !product.productId) {
+        return NextResponse.json({
+          ok: false,
+          error: `No ${optionType} option found near strike $${strike}`,
+          debug: product?.debugInfo,
+        });
       }
       const contracts = Math.max(1, Math.floor(premiumUsd / 100));
       const result = await deltaPost("/v2/orders", {
