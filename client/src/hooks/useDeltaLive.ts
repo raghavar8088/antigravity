@@ -165,7 +165,7 @@ export default function useDeltaLive(refreshKey = 0, config?: DeltaLocalConfig |
     } catch {
       // Engine offline or Delta bridge unavailable.
     }
-  }, []);
+  }, [config]);
 
   useEffect(() => {
     try {
