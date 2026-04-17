@@ -14,7 +14,7 @@ async function findOptionProduct(
 ): Promise<{ productId: number; symbol: string; debugInfo?: string } | null> {
   const contractType = optionType === "CALL" ? "call_options" : "put_options";
   const res = await deltaFetch(
-    `/v2/products?contract_types=${contractType}&underlying_asset_symbol=BTC&page_size=300`,
+    `/v2/products?contract_types=${contractType}&page_size=300`,
     "GET", "", overrides,
   );
   if (!res.ok) {
