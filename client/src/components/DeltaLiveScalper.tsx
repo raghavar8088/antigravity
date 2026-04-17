@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import useDeltaLive, {
   type DeltaLiveTrade,
   type DeltaLiveStats,
@@ -964,17 +964,16 @@ type MainTab = "test" | "account" | "positions" | "orders" | "mirrored";
 
 export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const [config, setConfig] = useState<DeltaLocalConfig | null>(null);
-
-  // Load config from localStorage on mount
-  useEffect(() => {
+  // Lazy initializer reads localStorage synchronously on first render so the
+  // config panel receives the saved keys before DeltaConfigPanel mounts.
+  const [config, setConfig] = useState<DeltaLocalConfig | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem(CONFIG_LS_KEY);
-      if (raw) setConfig(JSON.parse(raw) as DeltaLocalConfig);
-    } catch {
-      // ignore parse errors
-    }
-  }, []);
+      if (raw) return JSON.parse(raw) as DeltaLocalConfig;
+    } catch { /* ignore */ }
+    return null;
+  });
 
   const handleConfigSave = (c: DeltaLocalConfig) => {
     setConfig(c);
