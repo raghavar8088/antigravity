@@ -1,7 +1,7 @@
 import * as crypto from "crypto";
 import * as https from "node:https";
+import * as http from "node:http";
 import { URL } from "node:url";
-import { HttpsProxyAgent } from "https-proxy-agent";
 
 export function deltaSign(
   method: string,
@@ -31,29 +31,30 @@ export type DeltaKeyOverride = {
   testnet?: boolean;
 };
 
-// Low-level HTTPS request using Node.js native https module.
-// Uses https-proxy-agent when DELTA_PROXY_URL is set, which properly handles
-// the HTTP CONNECT tunnel needed to reach HTTPS endpoints through a proxy.
-function httpsRequest(
+// Supports both http:// and https:// targets.
+// When DELTA_PROXY_URL is set, it acts as a reverse proxy base — requests go to
+// http://VPS_IP:PORT/v2/... and nginx on the VPS forwards to Delta Exchange.
+// This avoids HTTPS CONNECT tunneling (which Squid struggled with).
+function makeRequest(
   urlStr: string,
   method: string,
   headers: Record<string, string>,
   body?: string,
-  proxyUrl?: string,
 ): Promise<{ ok: boolean; data: unknown; status: number }> {
   return new Promise((resolve) => {
     const url = new URL(urlStr);
-    const options: https.RequestOptions = {
+    const isHttps = url.protocol === "https:";
+    const options: http.RequestOptions = {
       hostname: url.hostname,
-      port: Number(url.port) || 443,
+      port: Number(url.port) || (isHttps ? 443 : 80),
       path: url.pathname + url.search,
       method,
       headers,
-      agent: proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined,
       timeout: 15000,
     };
 
-    const req = https.request(options, (res) => {
+    const transport = isHttps ? https : http;
+    const req = transport.request(options, (res) => {
       let raw = "";
       res.on("data", (chunk) => { raw += String(chunk); });
       res.on("end", () => {
@@ -78,6 +79,12 @@ function httpsRequest(
   });
 }
 
+function resolveBase(overrides?: DeltaKeyOverride): string {
+  // If DELTA_PROXY_URL is set, use it as the base (nginx reverse proxy on VPS).
+  // Otherwise call Delta CDN directly.
+  return process.env.DELTA_PROXY_URL || deltaBase(overrides?.testnet);
+}
+
 export async function deltaFetch(
   path: string,
   method = "GET",
@@ -92,10 +99,9 @@ export async function deltaFetch(
 
   const ts = nowTs();
   const sig = deltaSign(method, path, body, ts, secret);
-  const base = deltaBase(overrides?.testnet);
-  const proxyUrl = process.env.DELTA_PROXY_URL;
+  const base = resolveBase(overrides);
 
-  return httpsRequest(
+  return makeRequest(
     base + path,
     method,
     {
@@ -106,7 +112,6 @@ export async function deltaFetch(
       "Accept": "application/json",
     },
     body || undefined,
-    proxyUrl,
   );
 }
 
@@ -122,10 +127,9 @@ export async function deltaPost(
   const bodyStr = JSON.stringify(body);
   const ts = nowTs();
   const sig = deltaSign("POST", path, bodyStr, ts, secret);
-  const base = deltaBase(overrides?.testnet);
-  const proxyUrl = process.env.DELTA_PROXY_URL;
+  const base = resolveBase(overrides);
 
-  return httpsRequest(
+  return makeRequest(
     base + path,
     "POST",
     {
@@ -136,6 +140,5 @@ export async function deltaPost(
       "Accept": "application/json",
     },
     bodyStr,
-    proxyUrl,
   );
 }
