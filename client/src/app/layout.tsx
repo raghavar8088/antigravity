@@ -6,18 +6,27 @@ const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   weight: ["400", "500", "600", "700"],
+  display: "swap",
+  fallback: ["system-ui", "-apple-system", "sans-serif"],
+  preload: false,
 });
 
 const roboto = Roboto({
   subsets: ["latin"],
   variable: "--font-ui",
   weight: ["400", "500", "700"],
+  display: "swap",
+  fallback: ["system-ui", "-apple-system", "sans-serif"],
+  preload: false,
 });
 
 const robotoMono = Roboto_Mono({
   subsets: ["latin"],
   variable: "--font-mono-var",
   weight: ["400", "500", "700"],
+  display: "swap",
+  fallback: ["ui-monospace", "monospace"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
