@@ -243,45 +243,40 @@ function evalSignal(signal: string, values: number[]): boolean {
   }
 }
 
-function passesEntryConfirmation(def: StratDef, values: number[], regime: Regime): boolean {
-  const price = values[values.length - 1];
-  const fast = ema(values, 5);
-  const slow = ema(values, 13);
-  const trend = ema(values, 21);
-  const mean = sma(values, 20);
+function passesEntryConfirmation(def: StratDef, values: number[], _regime: Regime): boolean {
   const r = rsi(values, 14);
   const mom3 = momentum(values, 3);
 
   if (def.optionType === "PUT") {
-    if (!(regime === "BULL" || regime === "RANGE")) return false;
     switch (def.category) {
       case "Trend":
       case "Momentum":
-        return price >= fast && fast >= slow && slow >= trend && mom3 > 0.0007 && r >= 52;
+        // signal already validated direction; just gate on RSI not oversold and not strongly bearish
+        return mom3 > -0.002 && r >= 44;
       case "VWAP":
-        return price >= mean && fast >= slow && r >= 50;
+        return r >= 44;
       case "Mean Reversion":
-        return price >= mean * 0.998 && r >= 44 && r <= 62;
+        return r >= 38 && r <= 68;
       case "Volatility":
-        return price >= fast && Math.abs(mom3) <= 0.0032;
+        return Math.abs(mom3) <= 0.005;
       default:
-        return price >= fast && mom3 >= -0.0002;
+        return mom3 >= -0.003;
     }
   }
 
-  if (!(regime === "BEAR" || regime === "RANGE")) return false;
   switch (def.category) {
     case "Trend":
     case "Momentum":
-      return price <= fast && fast <= slow && slow <= trend && mom3 < -0.0007 && r <= 48;
+      // signal already validated direction; just gate on RSI not overbought and not strongly bullish
+      return mom3 < 0.002 && r <= 56;
     case "VWAP":
-      return price <= mean && fast <= slow && r <= 50;
+      return r <= 56;
     case "Mean Reversion":
-      return price <= mean * 1.002 && r >= 38 && r <= 56;
+      return r >= 32 && r <= 62;
     case "Volatility":
-      return price <= fast && Math.abs(mom3) <= 0.0032;
+      return Math.abs(mom3) <= 0.005;
     default:
-      return price <= fast && mom3 <= 0.0002;
+      return mom3 <= 0.003;
   }
 }
 
@@ -389,6 +384,13 @@ async function loadSellingState(eng: EngineRef): Promise<boolean> {
       strategy.cooldownUntil = persisted.cooldownUntil;
       strategy.regime = persisted.regime;
       strategy.consecutiveLosses = persisted.consecutiveLosses;
+    }
+    // Recover from hasPosition desync: if strategy says it has a position but none exists, reset it
+    for (const strategy of eng.strategies) {
+      if (strategy.hasPosition && !eng.positions.some((p) => p.strategyId === strategy.def.id)) {
+        strategy.hasPosition = false;
+        strategy.status = "WATCHLIST";
+      }
     }
     return true;
   } catch {
@@ -574,7 +576,8 @@ export default function useNiftyOptionsSellingEngine() {
     const iv = Math.max(0.12, Math.min(0.28, BASE_IV + stddev(bars.slice(-20)) / Math.max(currentPrice, 1)));
 
     for (const position of [...eng.positions]) {
-      position.barsHeld += 1;
+      // barsHeld = minutes elapsed since entry (time-based, not tick-based)
+      position.barsHeld = Math.floor((Date.now() - new Date(position.entryTime).getTime()) / 60_000);
       position.currentPremium = markPremium(position.entryPremium, position.entryNiftyPrice, currentPrice, position.optionType, position.barsHeld);
       position.unrealizedPnl = (position.entryPremium - position.currentPremium) * position.quantity;
       if (position.entryPremium > 0) {
@@ -606,6 +609,10 @@ export default function useNiftyOptionsSellingEngine() {
     for (const strategy of eng.strategies) {
       // eslint-disable-next-line react-hooks/immutability
       strategy.regime = regime;
+      if (strategy.rosterState === "DISABLED") {
+        strategy.status = "DISABLED";
+        continue;
+      }
       if (strategy.hasPosition) {
         strategy.status = "IN_POSITION";
         continue;
@@ -641,6 +648,7 @@ export default function useNiftyOptionsSellingEngine() {
       const marginBlocked = Math.max(strategy.def.marginINR * NIFTY_SELL_MIN_SIZE_MULTIPLIER, sizedMargin);
 
       eng.balance -= marginBlocked;
+      eng.totalPremiumSpent += premium * quantity;
       eng.positions.push({
         id: `NIFTY-SHORT-${Date.now()}-${eng.seq++}`,
         strategyId: strategy.def.id,
