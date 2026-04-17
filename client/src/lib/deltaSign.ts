@@ -1,5 +1,7 @@
 import * as crypto from "crypto";
-import { ProxyAgent, fetch as undiciFetch } from "undici";
+import * as https from "node:https";
+import { URL } from "node:url";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 export function deltaSign(
   method: string,
@@ -29,6 +31,53 @@ export type DeltaKeyOverride = {
   testnet?: boolean;
 };
 
+// Low-level HTTPS request using Node.js native https module.
+// Uses https-proxy-agent when DELTA_PROXY_URL is set, which properly handles
+// the HTTP CONNECT tunnel needed to reach HTTPS endpoints through a proxy.
+function httpsRequest(
+  urlStr: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: string,
+  proxyUrl?: string,
+): Promise<{ ok: boolean; data: unknown; status: number }> {
+  return new Promise((resolve) => {
+    const url = new URL(urlStr);
+    const options: https.RequestOptions = {
+      hostname: url.hostname,
+      port: Number(url.port) || 443,
+      path: url.pathname + url.search,
+      method,
+      headers,
+      agent: proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined,
+      timeout: 15000,
+    };
+
+    const req = https.request(options, (res) => {
+      let raw = "";
+      res.on("data", (chunk) => { raw += String(chunk); });
+      res.on("end", () => {
+        let data: unknown;
+        try { data = JSON.parse(raw); } catch { data = {}; }
+        const status = res.statusCode ?? 0;
+        resolve({ ok: status >= 200 && status < 300, data, status });
+      });
+    });
+
+    req.on("error", (err) => {
+      resolve({ ok: false, data: { error: err.message }, status: 0 });
+    });
+
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, data: { error: "request timeout" }, status: 0 });
+    });
+
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 export async function deltaFetch(
   path: string,
   method = "GET",
@@ -43,31 +92,22 @@ export async function deltaFetch(
 
   const ts = nowTs();
   const sig = deltaSign(method, path, body, ts, secret);
+  const base = deltaBase(overrides?.testnet);
+  const proxyUrl = process.env.DELTA_PROXY_URL;
 
-  const fetchOptions: any = {
+  return httpsRequest(
+    base + path,
     method,
-    headers: {
+    {
       "api-key": key,
       "timestamp": ts,
       "signature": sig,
       "Content-Type": "application/json",
       "Accept": "application/json",
     },
-    body: body || undefined,
-    cache: "no-store",
-  };
-
-  const proxyUrl = process.env.DELTA_PROXY_URL;
-  if (proxyUrl) {
-    fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
-  }
-
-  const base = deltaBase(overrides?.testnet);
-  const res = await undiciFetch(base + path, fetchOptions);
-
-  let data: unknown;
-  try { data = await res.json(); } catch { data = {}; }
-  return { ok: res.ok, data, status: res.status };
+    body || undefined,
+    proxyUrl,
+  );
 }
 
 export async function deltaPost(
@@ -82,29 +122,20 @@ export async function deltaPost(
   const bodyStr = JSON.stringify(body);
   const ts = nowTs();
   const sig = deltaSign("POST", path, bodyStr, ts, secret);
+  const base = deltaBase(overrides?.testnet);
+  const proxyUrl = process.env.DELTA_PROXY_URL;
 
-  const fetchOptions: any = {
-    method: "POST",
-    headers: {
+  return httpsRequest(
+    base + path,
+    "POST",
+    {
       "api-key": key,
       "timestamp": ts,
       "signature": sig,
       "Content-Type": "application/json",
       "Accept": "application/json",
     },
-    body: bodyStr,
-    cache: "no-store",
-  };
-
-  const proxyUrl = process.env.DELTA_PROXY_URL;
-  if (proxyUrl) {
-    fetchOptions.dispatcher = new ProxyAgent(proxyUrl);
-  }
-
-  const base = deltaBase(overrides?.testnet);
-  const res = await undiciFetch(base + path, fetchOptions);
-
-  let data: unknown;
-  try { data = await res.json(); } catch { data = {}; }
-  return { ok: res.ok, data, status: res.status };
+    bodyStr,
+    proxyUrl,
+  );
 }
