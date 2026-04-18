@@ -28,6 +28,7 @@ import LiveDataLabPanel from "@/components/LiveDataLabPanel";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
 import TradingViewChart from "@/components/TradingViewChart";
 import WorkspaceSettingsPanel, { type StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
+import NotePadPanel from "@/components/NotePadPanel";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -88,7 +89,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india" | "forex" | "charts";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "notepad";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -1209,6 +1210,7 @@ export default function TradingDashboard({
               { key: "deltaLive",        label: "Delta Live" },
               { key: "dashboard",        label: "BTC Equity" },
               { key: "cryptoEquity",     label: "Crypto Equity" },
+              { key: "notepad",          label: "📋 Notepad" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => {
               const isBtcEquityGroup = module.key === "dashboard" && (activeModule === "dashboard" || activeModule === "engine" || activeModule === "history");
               const isActive = isBtcEquityGroup || activeModule === module.key;
@@ -1225,6 +1227,7 @@ export default function TradingDashboard({
               { key: "niftySelling",label: "Nifty Option Selling" },
               { key: "niftyStocks", label: "Nifty 50 Equity" },
               { key: "mcx",         label: "Commodity Scalper" },
+              { key: "notepad",     label: "📋 Notepad" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => (
               <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
                 {module.label}
@@ -1234,6 +1237,7 @@ export default function TradingDashboard({
             {/* Forex sub-tabs */}
             {activeGroup === "forex" && ([
               { key: "forexScalper", label: "Forex Scalper" },
+              { key: "notepad",      label: "📋 Notepad" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => (
               <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
                 {module.label}
@@ -1244,6 +1248,7 @@ export default function TradingDashboard({
             {activeGroup === "charts" && ([
               { key: "charts",      label: "TradingView Charts" },
               { key: "liveDataLab", label: "Live Data Lab" },
+              { key: "notepad",     label: "📋 Notepad" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => (
               <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
                 {module.label}
@@ -1341,6 +1346,8 @@ export default function TradingDashboard({
             ? "Probe — Live connectivity test for Delta Exchange and Angel One SmartAPI."
             : activeModule === "charts"
             ? "Charts — TradingView advanced charts for NIFTY 50, Bank Nifty, BTC, ETH, and MCX."
+            : activeModule === "notepad"
+            ? "Notepad — Store API keys, broker credentials, and important notes. Data is local to your browser only."
             : "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."}
         </div>
       </div>
@@ -2296,6 +2303,12 @@ export default function TradingDashboard({
       {activeModule === "mcx" && <MCXCommodityScalper actionsEnabled={actionsEnabled} />}
 
       {activeModule === "liveDataLab" && <LiveDataLabPanel />}
+
+      {activeModule === "notepad" && (
+        <div className="glass-panel px-5 py-5">
+          <NotePadPanel />
+        </div>
+      )}
 
       {activeModule === "charts" && (
         <div className="tradingview-module">
