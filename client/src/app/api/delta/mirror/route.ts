@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deltaFetch, deltaPost, type DeltaKeyOverride } from "@/lib/deltaSign";
+import { deltaPublicFetch, deltaPost, type DeltaKeyOverride } from "@/lib/deltaSign";
 
 function pf(v: unknown): number {
   if (typeof v === "number") return v;
@@ -13,16 +13,13 @@ async function findOptionProduct(
   overrides?: DeltaKeyOverride,
 ): Promise<{ productId: number; symbol: string; debugInfo?: string } | null> {
   const contractType = optionType === "CALL" ? "call_options" : "put_options";
-  const res = await deltaFetch(
+  // Products is a public endpoint — no auth headers needed (auth causes 403 on IP-whitelisted keys)
+  const res = await deltaPublicFetch(
     `/v2/products?contract_types=${contractType}&page_size=300`,
-    "GET", "", overrides,
+    overrides,
   );
   if (!res.ok) {
-    const errData = res.data as { error?: { code?: string; message?: string } | string };
-    const errMsg = typeof errData?.error === "string"
-      ? errData.error
-      : errData?.error?.code ?? errData?.error?.message ?? `HTTP ${res.status}`;
-    return { productId: 0, symbol: "", debugInfo: `products fetch failed: ${errMsg}` };
+    return { productId: 0, symbol: "", debugInfo: `products fetch failed: HTTP ${res.status} — ${JSON.stringify(res.data)}` };
   }
   type P = { id?: number; symbol?: string; strike_price?: string };
   const products = (res.data as { result?: P[] }).result ?? [];

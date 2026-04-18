@@ -85,6 +85,23 @@ function resolveBase(overrides?: DeltaKeyOverride): string {
   return process.env.DELTA_PROXY_URL || deltaBase(overrides?.testnet);
 }
 
+// Fetch public (unauthenticated) endpoints — no API key required.
+// Used for /v2/products and other public market-data endpoints.
+export async function deltaPublicFetch(
+  path: string,
+  overrides?: DeltaKeyOverride,
+): Promise<{ ok: boolean; data: unknown; status: number }> {
+  const base = resolveBase(overrides);
+  return makeRequest(
+    base + path,
+    "GET",
+    {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+  );
+}
+
 export async function deltaFetch(
   path: string,
   method = "GET",
