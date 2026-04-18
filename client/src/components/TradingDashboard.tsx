@@ -17,6 +17,7 @@ import FearGreedWidget from "@/components/FearGreedWidget";
 import OptionsScalper from "@/components/OptionsScalper";
 import OptionsSellingScalper from "@/components/OptionsSellingScalper";
 import DeltaLiveScalper from "@/components/DeltaLiveScalper";
+import DeltaSpotBuy from "@/components/DeltaSpotBuy";
 import BTCOptionChain from "@/components/BTCOptionChain";
 import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import Nifty50OptionSellingScalper from "@/components/Nifty50OptionSellingScalper";
@@ -89,7 +90,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india" | "forex" | "charts";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "notepad";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "notepad" | "spotBuy";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -1208,6 +1209,7 @@ export default function TradingDashboard({
               { key: "options",          label: "BTC Option Scalper" },
               { key: "options-selling",  label: "BTC Option Selling" },
               { key: "deltaLive",        label: "Delta Live" },
+              { key: "spotBuy",          label: "BTC Spot Buy" },
               { key: "dashboard",        label: "BTC Equity" },
               { key: "cryptoEquity",     label: "Crypto Equity" },
               { key: "notepad",          label: "📋 Notepad" },
@@ -2287,6 +2289,7 @@ export default function TradingDashboard({
 
       {activeModule === "options-selling" && <OptionsSellingScalper actionsEnabled={actionsEnabled} />}
       {activeModule === "deltaLive" && <DeltaLiveScalper actionsEnabled={actionsEnabled} />}
+      {activeModule === "spotBuy" && <DeltaSpotBuy />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
