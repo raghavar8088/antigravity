@@ -44,12 +44,14 @@ function makeRequest(
   return new Promise((resolve) => {
     const url = new URL(urlStr);
     const isHttps = url.protocol === "https:";
+    const finalHeaders = { ...headers };
+    if (body) finalHeaders["Content-Length"] = String(Buffer.byteLength(body, "utf-8"));
     const options: http.RequestOptions = {
       hostname: url.hostname,
       port: Number(url.port) || (isHttps ? 443 : 80),
       path: url.pathname + url.search,
       method,
-      headers,
+      headers: finalHeaders,
       timeout: 15000,
     };
 

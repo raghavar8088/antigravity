@@ -76,8 +76,13 @@ export async function POST(req: NextRequest) {
         source: "desktop",
       }, overrides);
       if (!result.ok) {
-        const err = result.data as { error?: { code?: string; message?: string } };
-        return NextResponse.json({ ok: false, error: err?.error?.message ?? err?.error?.code ?? `HTTP ${result.status}` });
+        const errAny = result.data as { error?: unknown };
+        const errMsg = typeof errAny?.error === "string"
+          ? errAny.error
+          : (errAny?.error as { message?: string; code?: string } | undefined)?.message
+            ?? (errAny?.error as { code?: string } | undefined)?.code
+            ?? `HTTP ${result.status}`;
+        return NextResponse.json({ ok: false, error: errMsg, debug: JSON.stringify(result.data) });
       }
       const r = result.data as { result?: { id?: number; symbol?: string; state?: string; average_fill_price?: string } };
       return NextResponse.json({
@@ -104,8 +109,13 @@ export async function POST(req: NextRequest) {
         source: "desktop",
       }, overrides);
       if (!result.ok) {
-        const err = result.data as { error?: { code?: string; message?: string } };
-        return NextResponse.json({ ok: false, error: err?.error?.message ?? err?.error?.code ?? `HTTP ${result.status}` });
+        const errAny2 = result.data as { error?: unknown };
+        const errMsg2 = typeof errAny2?.error === "string"
+          ? errAny2.error
+          : (errAny2?.error as { message?: string; code?: string } | undefined)?.message
+            ?? (errAny2?.error as { code?: string } | undefined)?.code
+            ?? `HTTP ${result.status}`;
+        return NextResponse.json({ ok: false, error: errMsg2, debug: JSON.stringify(result.data) });
       }
       const r = result.data as { result?: { id?: number; average_fill_price?: string; state?: string } };
       return NextResponse.json({
