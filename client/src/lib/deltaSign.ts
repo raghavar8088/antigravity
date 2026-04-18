@@ -59,7 +59,7 @@ function makeRequest(
       res.on("data", (chunk) => { raw += String(chunk); });
       res.on("end", () => {
         let data: unknown;
-        try { data = JSON.parse(raw); } catch { data = {}; }
+        try { data = JSON.parse(raw); } catch { data = { _raw: raw.slice(0, 300) }; }
         const status = res.statusCode ?? 0;
         resolve({ ok: status >= 200 && status < 300, data, status });
       });
@@ -85,17 +85,21 @@ function resolveBase(overrides?: DeltaKeyOverride): string {
   return process.env.DELTA_PROXY_URL || deltaBase(overrides?.testnet);
 }
 
-// Fetch public (unauthenticated) endpoints — no API key, no proxy needed.
-// Goes directly to Delta's API; public endpoints are not IP-restricted.
+// Fetch public (unauthenticated) endpoints — no API key required.
+// Routes through the proxy (DELTA_PROXY_URL) so the whitelisted VPS IP is used,
+// but sends no auth headers (products endpoint is public).
 export async function deltaPublicFetch(
   path: string,
   overrides?: DeltaKeyOverride,
 ): Promise<{ ok: boolean; data: unknown; status: number }> {
-  const base = deltaBase(overrides?.testnet);
+  const base = resolveBase(overrides);
   return makeRequest(
     base + path,
     "GET",
-    { "Accept": "application/json" },
+    {
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0",
+    },
   );
 }
 
