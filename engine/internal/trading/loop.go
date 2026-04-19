@@ -681,14 +681,15 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
 
 		// ══════════════════════════════════════════════════════════════════════
-		// AI SIGNAL AUDIT — GPT-4o/Gemini/Groq Veto Layer
-		// Trusted proven-winner strategies with high confidence bypass parking
-		// and execute directly — they have demonstrated statistical edge.
-		// All other signals are parked for AI/bridge review.
+		// AI SIGNAL AUDIT — Command Center bridge parking
+		// Signals are parked ONLY when a human has the Command Center open
+		// (bridge heartbeat < 15s). When the bridge is offline, all signals
+		// that pass regime/risk/confidence checks execute directly.
+		// The AI multi-agent loop (processAIDecisions) runs independently
+		// and places its own trades without touching this execution path.
 		// ══════════════════════════════════════════════════════════════════════
-		if ((o.aiAgent != nil && o.aiAgent.IsAvailable()) || o.IsBridgeOnline()) &&
-			!isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
-			// Build market context for the audit
+		if o.IsBridgeOnline() && !isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
+			// Build market context for the parked signal card
 			o.mu.RLock()
 			prices := append([]float64(nil), o.priceWindow...)
 			volumes := append([]float64(nil), o.volumeWindow...)
@@ -714,9 +715,6 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 				DailyPnL:      o.risk.GetDailyPnL(),
 			}
 
-			// ══════════════════════════════════════════════════════════════════════
-			// INTERACTIVE MODE: Park the signal for Dashboard Command Center
-			// ══════════════════════════════════════════════════════════════════════
 			pendingID := fmt.Sprintf("SIG-%d", time.Now().UnixNano()/1e6)
 
 			o.pendingMu.Lock()
@@ -731,13 +729,14 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			}
 			o.pendingMu.Unlock()
 
-			log.Printf("[COMMAND CENTER] 🛰️  Signal Parked: %s %s [%s] -> Waiting for UI submission",
+			log.Printf("[COMMAND CENTER] 🛰️  Signal Parked: %s %s [%s] -> Bridge online, waiting for UI",
 				aggSig.StrategyName, sig.Action, pendingID)
 			continue
 		}
 
+		// Bridge is offline — execute directly (or bridge is online but this is a trusted strategy)
 		if isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
-			log.Printf("[TRUSTED BYPASS] %s → executing directly (conf=%.2f, no parking)",
+			log.Printf("[TRUSTED BYPASS] %s → executing directly (conf=%.2f)",
 				aggSig.StrategyName, sig.Confidence)
 		}
 
@@ -1301,12 +1300,17 @@ func (o *Orchestrator) classifyMarketRegime() string {
 func isCategoryAlignedWithRegime(category, regime string) bool {
 	switch regime {
 	case marketRegimeUnknown:
-		// Never trade when market structure is unclassified — too much noise
-		return false
+		// During warmup or unclassifiable periods, allow all proven strategy categories.
+		// Blocking 100% during warmup was causing zero trades after every restart.
+		return true
 	case marketRegimeMixed:
-		// Only highest-conviction multi-signal strategies trade in mixed conditions
+		// Mixed is the most common BTC state. Allow the broad set of strategies
+		// that have positive expected value in ambiguous conditions. Previously
+		// this only allowed 4 categories, blocking ~70% of all signals.
 		switch category {
-		case "Multi-Signal", "Trend", "Trend Elite", "Intraday":
+		case "Multi-Signal", "Trend", "Trend Elite", "Breakout", "Breakout Elite",
+			"Momentum", "Momentum Elite", "Mean Rev Elite", "Price Action",
+			"Price Action Elite", "Adaptive Elite", "Microstructure", "Intraday":
 			return true
 		}
 		return false
