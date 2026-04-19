@@ -208,20 +208,36 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
 	if bullishSeller {
 		switch def.Category {
-		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+		case "Momentum", "Breakout":
+			// Allow up to 1.5% below the 55-min EMA so a minor pullback doesn't
+			// permanently block puts during otherwise-bullish conditions.
+			return trendAligned && price >= trend*0.985 && mom3 > 0.0005 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 75
+		case "Hybrid":
+			// TRIPLE_BULL signal fires at RSI < 35 — no minimum RSI bound here or
+			// the signal and confirmation gates would never overlap.
+			return trendAligned && price >= trend*0.990 && mom3 > 0.0003 && mom8 > 0 && rsiVal <= 75
 		case "Mean Reversion", "Capitulation":
-			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
+			// RSI is already encoded in the firing signal (RSI_OVERSOLD_EXTREME fires
+			// at RSI ≈ 25, OVEREXTENSION_FADE_DOWN fires at RSI < 28). Adding a lower
+			// RSI bound ≥ 38 here creates a permanently impossible condition — removed.
+			return price >= fast*0.998 && price >= trend*0.980 && mom3 > -0.0015 && rsiVal <= 62
 		default:
 			return price >= fast && mom3 >= -0.0002
 		}
 	}
 
 	switch def.Category {
-	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+	case "Momentum", "Breakout":
+		// Allow up to 1.5% above the 55-min EMA for bear call sells.
+		return trendAligned && price <= trend*1.015 && mom3 < -0.0005 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 55
+	case "Hybrid":
+		// TRIPLE_BEAR signal fires at RSI > 65 — no maximum RSI bound here.
+		return trendAligned && price <= trend*1.010 && mom3 < -0.0003 && mom8 < 0 && rsiVal >= 25
 	case "Mean Reversion", "Capitulation":
-		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
+		// RSI is already encoded in the firing signal (RSI_OVERBOUGHT_EXTREME fires
+		// at RSI ≈ 75, OVEREXTENSION_FADE_UP fires at RSI > 72). Adding an upper
+		// RSI bound ≤ 62 here creates a permanently impossible condition — removed.
+		return price <= fast*1.002 && price <= trend*1.020 && mom3 < 0.0015 && rsiVal >= 38
 	default:
 		return price <= fast && mom3 <= 0.0002
 	}
