@@ -16,7 +16,7 @@ const (
 	maxTradesKept                = 600
 	maxBarSamples                = 360
 	barIntervalSeconds     int64 = 5
-	maxConcurrentPositions       = 4
+	maxConcurrentPositions       = 8
 )
 
 type strategyState struct {
@@ -62,6 +62,7 @@ func NewEngine() *Engine {
 
 func buildStrategies() []StrategyDef {
 	return []StrategyDef{
+		// ── Original 8 (thresholds fixed in evaluateSignal) ─────────────────
 		{ID: 1, Name: "RAIG_Trend_Pullback_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.55, TakeProfitPct: 1.25, CooldownMins: 2},
 		{ID: 2, Name: "EMA_Cross_Scalp_N50", Category: "Momentum", Bias: "BOTH", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 1.00, CooldownMins: 2},
 		{ID: 3, Name: "VWAP_Bounce_Pro_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 1.10, CooldownMins: 2},
@@ -70,6 +71,80 @@ func buildStrategies() []StrategyDef {
 		{ID: 6, Name: "RSI_BB_Confluence_N50", Category: "Mean Reversion", Bias: "BOTH", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 0.90, CooldownMins: 2},
 		{ID: 7, Name: "Exhaustion_Reversal_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 0.95, CooldownMins: 2},
 		{ID: 8, Name: "TrendMomentum_Score_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: tradeAllocationINR, StopLossPct: 0.65, TakeProfitPct: 1.45, CooldownMins: 4},
+
+		// ── New 42 (IDs 9–50) — NIFTY-calibrated signals ───────────────────
+
+		// Stochastic reversal
+		{ID: 9, Name: "Stoch_Bull_Reversal_N50", Category: "Mean Reversion", Bias: "LONG", Signal: "STOCH_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 0.90, CooldownMins: 2},
+		{ID: 10, Name: "Stoch_Bear_Reversal_N50", Category: "Mean Reversion", Bias: "SHORT", Signal: "STOCH_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.45, TakeProfitPct: 0.90, CooldownMins: 2},
+
+		// MACD momentum (EMA-difference cross, zero-lag proxy)
+		{ID: 11, Name: "MACD_Bull_Cross_N50", Category: "Momentum", Bias: "LONG", Signal: "MACD_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 1.05, CooldownMins: 2},
+		{ID: 12, Name: "MACD_Bear_Cross_N50", Category: "Momentum", Bias: "SHORT", Signal: "MACD_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.50, TakeProfitPct: 1.05, CooldownMins: 2},
+
+		// Bollinger Band bounce
+		{ID: 13, Name: "BB_Bounce_Bull_N50", Category: "Mean Reversion", Bias: "LONG", Signal: "BB_BOUNCE_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.42, TakeProfitPct: 0.85, CooldownMins: 2},
+		{ID: 14, Name: "BB_Bounce_Bear_N50", Category: "Mean Reversion", Bias: "SHORT", Signal: "BB_BOUNCE_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.42, TakeProfitPct: 0.85, CooldownMins: 2},
+
+		// Pullback to EMA in trend
+		{ID: 15, Name: "Pullback_Bull_N50", Category: "Trend", Bias: "LONG", Signal: "PULLBACK_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.55, TakeProfitPct: 1.15, CooldownMins: 3},
+		{ID: 16, Name: "Pullback_Bear_N50", Category: "Trend", Bias: "SHORT", Signal: "PULLBACK_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.55, TakeProfitPct: 1.15, CooldownMins: 3},
+
+		// Breakout above 20-bar high / below 20-bar low
+		{ID: 17, Name: "BreakoutHigh_N50", Category: "Breakout", Bias: "LONG", Signal: "BREAKOUT_HIGH", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.25, CooldownMins: 3},
+		{ID: 18, Name: "BreakdownLow_N50", Category: "Breakout", Bias: "SHORT", Signal: "BREAKOUT_LOW", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.25, CooldownMins: 3},
+
+		// Intraday trend (all EMAs aligned + momentum)
+		{ID: 19, Name: "IntradayTrend_Bull_N50", Category: "Multi-Signal", Bias: "LONG", Signal: "INTRADAY_TREND_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.65, TakeProfitPct: 1.40, CooldownMins: 4},
+		{ID: 20, Name: "IntradayTrend_Bear_N50", Category: "Multi-Signal", Bias: "SHORT", Signal: "INTRADAY_TREND_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.65, TakeProfitPct: 1.40, CooldownMins: 4},
+
+		// EMA Cross — wider TP/SL variant
+		{ID: 21, Name: "EMA_Cross_Wide_Bull_N50", Category: "Momentum", Bias: "LONG", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.40, CooldownMins: 3},
+		{ID: 22, Name: "EMA_Cross_Wide_Bear_N50", Category: "Momentum", Bias: "SHORT", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.40, CooldownMins: 3},
+		{ID: 23, Name: "EMA_Cross_Tight_Bull_N50", Category: "Momentum", Bias: "LONG", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.35, TakeProfitPct: 0.75, CooldownMins: 1},
+		{ID: 24, Name: "EMA_Cross_Tight_Bear_N50", Category: "Momentum", Bias: "SHORT", Signal: "EMA_CROSS", AllocationINR: tradeAllocationINR, StopLossPct: 0.35, TakeProfitPct: 0.75, CooldownMins: 1},
+
+		// RSI-BB — wider and tighter variants
+		{ID: 25, Name: "RSI_BB_Wide_Bull_N50", Category: "Mean Reversion", Bias: "LONG", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.20, CooldownMins: 3},
+		{ID: 26, Name: "RSI_BB_Wide_Bear_N50", Category: "Mean Reversion", Bias: "SHORT", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.60, TakeProfitPct: 1.20, CooldownMins: 3},
+		{ID: 27, Name: "RSI_BB_Tight_Bull_N50", Category: "Mean Reversion", Bias: "LONG", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.32, TakeProfitPct: 0.65, CooldownMins: 1},
+		{ID: 28, Name: "RSI_BB_Tight_Bear_N50", Category: "Mean Reversion", Bias: "SHORT", Signal: "RSI_BB", AllocationINR: tradeAllocationINR, StopLossPct: 0.32, TakeProfitPct: 0.65, CooldownMins: 1},
+
+		// Trend Pullback — aggressive and conservative variants
+		{ID: 29, Name: "TrendPullback_Aggressive_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.70, TakeProfitPct: 1.60, CooldownMins: 4},
+		{ID: 30, Name: "TrendPullback_Conservative_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.35, TakeProfitPct: 0.80, CooldownMins: 1},
+		{ID: 31, Name: "TrendPullback_Medium_Bull_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.48, TakeProfitPct: 1.10, CooldownMins: 2},
+		{ID: 32, Name: "TrendPullback_Swing_N50", Category: "Trend", Bias: "LONG", Signal: "TREND_PULLBACK", AllocationINR: tradeAllocationINR, StopLossPct: 0.80, TakeProfitPct: 1.90, CooldownMins: 5},
+
+		// Opening Range — aggressive and fade variants
+		{ID: 33, Name: "OpenRange_Wide_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: tradeAllocationINR, StopLossPct: 0.75, TakeProfitPct: 1.70, CooldownMins: 4},
+		{ID: 34, Name: "OpenRange_Tight_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: tradeAllocationINR, StopLossPct: 0.40, TakeProfitPct: 0.90, CooldownMins: 2},
+		{ID: 35, Name: "OpenRange_Scalp_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: tradeAllocationINR, StopLossPct: 0.30, TakeProfitPct: 0.65, CooldownMins: 1},
+		{ID: 36, Name: "OpenRange_Swing_N50", Category: "Breakout", Bias: "BOTH", Signal: "OPENING_RANGE", AllocationINR: tradeAllocationINR, StopLossPct: 0.85, TakeProfitPct: 2.00, CooldownMins: 5},
+
+		// Donchian — wider and tighter
+		{ID: 37, Name: "Donchian_Wide_N50", Category: "Breakout", Bias: "BOTH", Signal: "DONCHIAN", AllocationINR: tradeAllocationINR, StopLossPct: 0.70, TakeProfitPct: 1.65, CooldownMins: 4},
+		{ID: 38, Name: "Donchian_Tight_N50", Category: "Breakout", Bias: "BOTH", Signal: "DONCHIAN", AllocationINR: tradeAllocationINR, StopLossPct: 0.38, TakeProfitPct: 0.85, CooldownMins: 2},
+		{ID: 39, Name: "Donchian_Scalp_N50", Category: "Breakout", Bias: "BOTH", Signal: "DONCHIAN", AllocationINR: tradeAllocationINR, StopLossPct: 0.28, TakeProfitPct: 0.60, CooldownMins: 1},
+
+		// Exhaustion — wider and tighter
+		{ID: 40, Name: "Exhaustion_Wide_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: tradeAllocationINR, StopLossPct: 0.65, TakeProfitPct: 1.35, CooldownMins: 3},
+		{ID: 41, Name: "Exhaustion_Tight_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: tradeAllocationINR, StopLossPct: 0.35, TakeProfitPct: 0.72, CooldownMins: 1},
+		{ID: 42, Name: "Exhaustion_Swing_N50", Category: "Price Action", Bias: "BOTH", Signal: "EXHAUSTION", AllocationINR: tradeAllocationINR, StopLossPct: 0.80, TakeProfitPct: 1.80, CooldownMins: 5},
+
+		// Trend Momentum — wider and tighter
+		{ID: 43, Name: "TrendMom_Wide_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: tradeAllocationINR, StopLossPct: 0.80, TakeProfitPct: 1.80, CooldownMins: 5},
+		{ID: 44, Name: "TrendMom_Tight_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: tradeAllocationINR, StopLossPct: 0.42, TakeProfitPct: 0.95, CooldownMins: 2},
+		{ID: 45, Name: "TrendMom_Scalp_N50", Category: "Multi-Signal", Bias: "BOTH", Signal: "TREND_MOMENTUM", AllocationINR: tradeAllocationINR, StopLossPct: 0.30, TakeProfitPct: 0.65, CooldownMins: 1},
+
+		// VWAP Bounce — wider and tighter
+		{ID: 46, Name: "VWAP_Bounce_Wide_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: tradeAllocationINR, StopLossPct: 0.70, TakeProfitPct: 1.60, CooldownMins: 4},
+		{ID: 47, Name: "VWAP_Bounce_Tight_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: tradeAllocationINR, StopLossPct: 0.35, TakeProfitPct: 0.78, CooldownMins: 1},
+		{ID: 48, Name: "VWAP_Bounce_Scalp_N50", Category: "Trend", Bias: "LONG", Signal: "VWAP_BOUNCE", AllocationINR: tradeAllocationINR, StopLossPct: 0.28, TakeProfitPct: 0.58, CooldownMins: 1},
+
+		// Multi-factor elite
+		{ID: 49, Name: "MultiSignal_Elite_Bull_N50", Category: "Multi-Signal", Bias: "LONG", Signal: "INTRADAY_TREND_BULL", AllocationINR: tradeAllocationINR, StopLossPct: 0.75, TakeProfitPct: 1.75, CooldownMins: 5},
+		{ID: 50, Name: "MultiSignal_Elite_Bear_N50", Category: "Multi-Signal", Bias: "SHORT", Signal: "INTRADAY_TREND_BEAR", AllocationINR: tradeAllocationINR, StopLossPct: 0.75, TakeProfitPct: 1.75, CooldownMins: 5},
 	}
 }
 
@@ -274,11 +349,12 @@ func evaluateSignal(kind string, in signalInputs) signalEval {
 			return signalEval{side: SideShort, score: clampScore(68 + pctSpread(in.low20, in.price)*500)}
 		}
 	case "DONCHIAN":
-		if in.price > in.high20 && in.momentum6 > 0.15 {
-			return signalEval{side: SideLong, score: clampScore(64 + in.momentum6*9)}
+		// Fixed: 0.15% in 30s on NIFTY is too strict; lowered to 0.05% (~12 pts at 24000)
+		if in.price > in.high20 && in.momentum6 > 0.05 {
+			return signalEval{side: SideLong, score: clampScore(64 + in.momentum6*18)}
 		}
-		if in.price < in.low20 && in.momentum6 < -0.15 {
-			return signalEval{side: SideShort, score: clampScore(64 + math.Abs(in.momentum6)*9)}
+		if in.price < in.low20 && in.momentum6 < -0.05 {
+			return signalEval{side: SideShort, score: clampScore(64 + math.Abs(in.momentum6)*18)}
 		}
 	case "RSI_BB":
 		if in.price <= lowerBand && in.rsi14 < 34 {
@@ -288,18 +364,93 @@ func evaluateSignal(kind string, in signalInputs) signalEval {
 			return signalEval{side: SideShort, score: clampScore(67 + pctSpread(in.price, in.mean20)*120)}
 		}
 	case "EXHAUSTION":
-		if in.momentum3 <= -0.28 && in.rsi14 < 30 && in.price > in.low20*1.0003 {
-			return signalEval{side: SideLong, score: clampScore(63 + math.Abs(in.momentum3)*12)}
+		// Fixed: 0.28% in 15s is extreme (~67 pts); lowered to 0.08% (~19 pts, fires regularly)
+		if in.momentum3 <= -0.08 && in.rsi14 < 32 && in.price > in.low20*1.0002 {
+			return signalEval{side: SideLong, score: clampScore(63 + math.Abs(in.momentum3)*30)}
 		}
-		if in.momentum3 >= 0.28 && in.rsi14 > 70 && in.price < in.high20*0.9997 {
-			return signalEval{side: SideShort, score: clampScore(63 + math.Abs(in.momentum3)*12)}
+		if in.momentum3 >= 0.08 && in.rsi14 > 68 && in.price < in.high20*0.9998 {
+			return signalEval{side: SideShort, score: clampScore(63 + math.Abs(in.momentum3)*30)}
 		}
 	case "TREND_MOMENTUM":
-		if in.fast > in.slow && in.price > in.trend && in.momentum6 > 0.22 && in.rsi14 >= 55 && in.rsi14 <= 72 {
-			return signalEval{side: SideLong, score: clampScore(70 + in.momentum6*10)}
+		// Fixed: 0.22% in 30s is too strict; lowered to 0.08% (~19 pts) for NIFTY 5-sec bars
+		if in.fast > in.slow && in.price > in.trend && in.momentum6 > 0.08 && in.rsi14 >= 52 && in.rsi14 <= 72 {
+			return signalEval{side: SideLong, score: clampScore(70 + in.momentum6*25)}
 		}
-		if in.fast < in.slow && in.price < in.trend && in.momentum6 < -0.22 && in.rsi14 >= 28 && in.rsi14 <= 45 {
-			return signalEval{side: SideShort, score: clampScore(70 + math.Abs(in.momentum6)*10)}
+		if in.fast < in.slow && in.price < in.trend && in.momentum6 < -0.08 && in.rsi14 >= 28 && in.rsi14 <= 48 {
+			return signalEval{side: SideShort, score: clampScore(70 + math.Abs(in.momentum6)*25)}
+		}
+
+	// ── New NIFTY-native signals ─────────────────────────────────────────────
+
+	case "STOCH_BULL":
+		// Stochastic proxy: (price - low20) / (high20 - low20) * 100
+		// Oversold (< 25) + positive momentum + RSI not overbought
+		if in.high20 > in.low20 {
+			stochK := (in.price - in.low20) / (in.high20 - in.low20) * 100
+			if stochK < 25 && in.momentum3 > 0 && in.rsi14 > 32 && in.rsi14 < 55 {
+				return signalEval{side: SideLong, score: clampScore(65 + (25-stochK)*0.6 + in.momentum3*8)}
+			}
+		}
+	case "STOCH_BEAR":
+		if in.high20 > in.low20 {
+			stochK := (in.price - in.low20) / (in.high20 - in.low20) * 100
+			if stochK > 75 && in.momentum3 < 0 && in.rsi14 > 45 && in.rsi14 < 68 {
+				return signalEval{side: SideShort, score: clampScore(65 + (stochK-75)*0.6 + math.Abs(in.momentum3)*8)}
+			}
+		}
+
+	case "MACD_BULL":
+		// MACD proxy: EMA5 crossed above EMA13 (zero-lag difference turned positive)
+		if in.fast > in.slow && in.prevFast <= in.prevSlow && in.rsi14 > 46 && in.momentum3 > 0 {
+			spread := pctSpread(in.fast, in.slow)
+			return signalEval{side: SideLong, score: clampScore(66 + spread*120 + in.momentum3*6)}
+		}
+	case "MACD_BEAR":
+		if in.fast < in.slow && in.prevFast >= in.prevSlow && in.rsi14 < 54 && in.momentum3 < 0 {
+			spread := pctSpread(in.fast, in.slow)
+			return signalEval{side: SideShort, score: clampScore(66 + spread*120 + math.Abs(in.momentum3)*6)}
+		}
+
+	case "BB_BOUNCE_BULL":
+		// Price at/below lower band (mean - 1.8σ) AND starting to recover
+		bounceBand := in.mean20 - in.std20*1.8
+		if in.price <= bounceBand*1.0005 && in.rsi14 < 36 && in.momentum3 > -0.03 {
+			return signalEval{side: SideLong, score: clampScore(66 + pctSpread(in.mean20, in.price)*100)}
+		}
+	case "BB_BOUNCE_BEAR":
+		rejBand := in.mean20 + in.std20*1.8
+		if in.price >= rejBand*0.9995 && in.rsi14 > 64 && in.momentum3 < 0.03 {
+			return signalEval{side: SideShort, score: clampScore(66 + pctSpread(in.price, in.mean20)*100)}
+		}
+
+	case "PULLBACK_BULL":
+		// All EMAs bullish stacked; price pulls back to near fast EMA for entry
+		if in.fast > in.slow && in.slow > in.trend && in.price <= in.fast*1.0008 && in.price >= in.slow*0.9990 && in.rsi14 >= 40 && in.rsi14 <= 58 {
+			return signalEval{side: SideLong, score: clampScore(64 + pctSpread(in.fast, in.slow)*110 + (58-in.rsi14)*0.3)}
+		}
+	case "PULLBACK_BEAR":
+		if in.fast < in.slow && in.slow < in.trend && in.price >= in.fast*0.9992 && in.price <= in.slow*1.0010 && in.rsi14 >= 42 && in.rsi14 <= 60 {
+			return signalEval{side: SideShort, score: clampScore(64 + pctSpread(in.fast, in.slow)*110 + (in.rsi14-42)*0.3)}
+		}
+
+	case "BREAKOUT_HIGH":
+		// Price breaks above prior 20-bar high with confirmed momentum
+		if in.price > in.high20 && in.momentum6 > 0.04 && in.rsi14 > 54 {
+			return signalEval{side: SideLong, score: clampScore(67 + pctSpread(in.price, in.high20)*200 + in.momentum6*12)}
+		}
+	case "BREAKOUT_LOW":
+		if in.price < in.low20 && in.momentum6 < -0.04 && in.rsi14 < 46 {
+			return signalEval{side: SideShort, score: clampScore(67 + pctSpread(in.low20, in.price)*200 + math.Abs(in.momentum6)*12)}
+		}
+
+	case "INTRADAY_TREND_BULL":
+		// Full EMA alignment + multi-period momentum both positive + RSI in buy zone
+		if in.fast > in.slow && in.slow > in.trend && in.momentum3 > 0.02 && in.momentum6 > 0.05 && in.rsi14 >= 50 && in.rsi14 <= 70 {
+			return signalEval{side: SideLong, score: clampScore(71 + in.momentum6*18 + pctSpread(in.fast, in.trend)*60)}
+		}
+	case "INTRADAY_TREND_BEAR":
+		if in.fast < in.slow && in.slow < in.trend && in.momentum3 < -0.02 && in.momentum6 < -0.05 && in.rsi14 >= 30 && in.rsi14 <= 50 {
+			return signalEval{side: SideShort, score: clampScore(71 + math.Abs(in.momentum6)*18 + pctSpread(in.trend, in.fast)*60)}
 		}
 	}
 

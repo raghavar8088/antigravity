@@ -24,8 +24,8 @@ const (
 
 	optionRegimeMinBars = 55
 
-	optionMaxActiveStrategies      = 13
-	optionMaxStrategiesPerCategory = 4
+	optionMaxActiveStrategies      = 20
+	optionMaxStrategiesPerCategory = 6
 	optionRosterRefreshInterval    = 30 * time.Second
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5

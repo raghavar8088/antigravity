@@ -92,22 +92,12 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
-// BuildNiftyStrategies returns the strategy roster re-calibrated for NIFTY 50.
-// NIFTY IV (~18%) is much lower than BTC (~80%), so the BTC strike distances
-// (1-2% OTM) produce near-zero premiums and no trades are ever placed.
-// This scales StrikePctOTM to 0.2% and uses 3-day expiry for realistic premiums.
+// BuildNiftyStrategies returns 100 NIFTY 50–native option-selling strategies.
+// These are purpose-built for NIFTY's characteristics (IV ≈ 14-22%) rather
+// than BTC-scaled proxies. Strike OTM 0.08-0.18% (≈ 19-43 pts on NIFTY 24000),
+// expiry 90-210 min, signals from NiftySignals map.
 func BuildNiftyStrategies() []StrategyDef {
-	btc := buildAllStrategies()
-	nifty := make([]StrategyDef, 0, len(btc))
-	for _, def := range btc {
-		def.StrikePctOTM = def.StrikePctOTM * 0.20
-		def.ExpiryMinutes = 4320 // 3 calendar days
-		if category, ok := optionStrategyCategories[def.Name]; ok {
-			def.Category = category
-		}
-		nifty = append(nifty, def)
-	}
-	return assignStrategyIDs(nifty)
+	return buildNiftyNativeStrategies()
 }
 
 // buildAllStrategies defines BTC option SELLING (writing) strategies.
