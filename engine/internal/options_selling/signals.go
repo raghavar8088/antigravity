@@ -186,11 +186,10 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 15 {
 			return false
 		}
-		mom5 := momentum(ctx.Prices, 5)   // 5-min momentum
-		mom10 := momentum(ctx.Prices, 10) // 10-min momentum
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		// Price rising on both timeframes, RSI not overbought yet
-		return mom5 > 0.0025 && mom10 > 0.0012 && rsiVal < 64
+		return mom5 > 0.0010 && mom10 > 0.0005 && rsiVal < 68
 	},
 	"BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -199,7 +198,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0025 && mom10 < -0.0012 && rsiVal > 36
+		return mom5 < -0.0010 && mom10 < -0.0005 && rsiVal > 32
 	},
 	"STRONG_BULL_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -208,7 +207,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 > 0.0028 && mom10 > 0.0015 && rsiVal < 68
+		return mom5 > 0.0015 && mom10 > 0.0008 && rsiVal < 70
 	},
 	"STRONG_BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -217,7 +216,7 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0028 && mom10 < -0.0015 && rsiVal > 32
+		return mom5 < -0.0015 && mom10 < -0.0008 && rsiVal > 30
 	},
 
 	// ── RSI signals ──────────────────────────────────────────────────────────
@@ -264,21 +263,26 @@ var Signals = map[string]SignalFunc{
 	"EMA_BEAR_CROSS": func(ctx SignalContext) bool {
 		return crossedBelow(ctx.Prices, 9, 21)
 	},
-	// Regime + fresh momentum (not just sustained state)
+	// Sustained EMA state — fires every bar while price is above both EMAs
+	// with positive momentum. Does NOT require a crossover event so it fires
+	// continuously during any uptrend, not just at the single crossover tick.
 	"EMA_ABOVE_BOTH": func(ctx SignalContext) bool {
-		if len(ctx.Prices) < 55 {
+		if len(ctx.Prices) < 22 {
 			return false
 		}
-		aboveBoth := ctx.BTCPrice > ema(ctx.Prices, 20) && ctx.BTCPrice > ema(ctx.Prices, 50)
-		// Require a recent bullish EMA cross within last 5 bars
-		return aboveBoth && crossedAbove(ctx.Prices, 9, 21)
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		mom3 := momentum(ctx.Prices, 3)
+		return ctx.BTCPrice > e9 && e9 > e21 && mom3 > 0.00005
 	},
 	"EMA_BELOW_BOTH": func(ctx SignalContext) bool {
-		if len(ctx.Prices) < 55 {
+		if len(ctx.Prices) < 22 {
 			return false
 		}
-		belowBoth := ctx.BTCPrice < ema(ctx.Prices, 20) && ctx.BTCPrice < ema(ctx.Prices, 50)
-		return belowBoth && crossedBelow(ctx.Prices, 9, 21)
+		e9 := ema(ctx.Prices, 9)
+		e21 := ema(ctx.Prices, 21)
+		mom3 := momentum(ctx.Prices, 3)
+		return ctx.BTCPrice < e9 && e9 < e21 && mom3 < -0.00005
 	},
 
 	// ── Bollinger Band signals ───────────────────────────────────────────────
@@ -333,7 +337,7 @@ var Signals = map[string]SignalFunc{
 		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (ctx.BTCPrice - vw) / vw
 		// Must be 0.2% above VWAP AND have upward momentum
-		return deviation > 0.0020 && momentum(ctx.Prices, 5) > 0.0012
+		return deviation > 0.0008 && momentum(ctx.Prices, 5) > 0.0005
 	},
 	"VWAP_BELOW": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 30 {
@@ -341,7 +345,7 @@ var Signals = map[string]SignalFunc{
 		}
 		vw := avgPrice(ctx.Prices[len(ctx.Prices)-30:])
 		deviation := (vw - ctx.BTCPrice) / vw
-		return deviation > 0.0020 && momentum(ctx.Prices, 5) < -0.0012
+		return deviation > 0.0008 && momentum(ctx.Prices, 5) < -0.0005
 	},
 
 	// ── Breakout signals ─────────────────────────────────────────────────────
