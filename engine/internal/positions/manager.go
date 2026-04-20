@@ -192,20 +192,6 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 		pos.HighWaterMark = price
 	}
 
-	profitPct := ((price - pos.EntryPrice) / pos.EntryPrice) * 100
-
-	if profitPct >= m.config.TrailingStopPct && !pos.TrailingActive {
-		pos.TrailingActive = true
-		log.Printf("[TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
-	}
-
-	if pos.TrailingActive {
-		trailingLevel := pos.HighWaterMark * (1 - pos.TrailingDist/100)
-		if trailingLevel > pos.StopLoss {
-			pos.StopLoss = trailingLevel
-		}
-	}
-
 	// Full close at take profit — no partial TP to avoid half-open reversal risk
 	if price >= pos.TakeProfit {
 		pnl := m.calculatePnL(pos, price)
@@ -219,14 +205,10 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 
 	if price <= pos.StopLoss {
 		pnl := m.calculatePnL(pos, price)
-		reason := ReasonStopLoss
-		if pos.TrailingActive {
-			reason = ReasonTrailingStop
-		}
-		pos.Status = string(reason)
+		pos.Status = string(ReasonStopLoss)
 		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
-			reason, id, pos.EntryPrice, price, pnl)
-		m.emitClose(pos, reason, price, pnl)
+			ReasonStopLoss, id, pos.EntryPrice, price, pnl)
+		m.emitClose(pos, ReasonStopLoss, price, pnl)
 		delete(m.positions, id)
 	}
 }
@@ -234,20 +216,6 @@ func (m *Manager) checkLongPosition(id string, pos *Position, price float64) {
 func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 	if price < pos.LowWaterMark {
 		pos.LowWaterMark = price
-	}
-
-	profitPct := ((pos.EntryPrice - price) / pos.EntryPrice) * 100
-
-	if profitPct >= m.config.TrailingStopPct && !pos.TrailingActive {
-		pos.TrailingActive = true
-		log.Printf("[TRAILING ACTIVE] %s | Profit %.2f%% triggered trailing stop", id, profitPct)
-	}
-
-	if pos.TrailingActive {
-		trailingLevel := pos.LowWaterMark * (1 + pos.TrailingDist/100)
-		if trailingLevel < pos.StopLoss {
-			pos.StopLoss = trailingLevel
-		}
 	}
 
 	// Full close at take profit — no partial TP to avoid half-open reversal risk
@@ -263,14 +231,10 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 
 	if price >= pos.StopLoss {
 		pnl := m.calculatePnL(pos, price)
-		reason := ReasonStopLoss
-		if pos.TrailingActive {
-			reason = ReasonTrailingStop
-		}
-		pos.Status = string(reason)
+		pos.Status = string(ReasonStopLoss)
 		log.Printf("[STOP %s] %s | Entry: $%.2f -> Exit: $%.2f | PnL: $%.4f",
-			reason, id, pos.EntryPrice, price, pnl)
-		m.emitClose(pos, reason, price, pnl)
+			ReasonStopLoss, id, pos.EntryPrice, price, pnl)
+		m.emitClose(pos, ReasonStopLoss, price, pnl)
 		delete(m.positions, id)
 	}
 }

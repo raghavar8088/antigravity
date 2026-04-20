@@ -2,19 +2,21 @@ package risk
 
 import "testing"
 
-func TestStrategyTrackerDisablesAfterThreeConsecutiveLosses(t *testing.T) {
+func TestStrategyTrackerDisablesAfterFiveConsecutiveLosses(t *testing.T) {
 	tracker := NewStrategyTracker([]string{"A"}, []string{"Trend"}, []string{"1m"}, 100000)
 
 	tracker.RecordTradeResult("A", -10)
 	tracker.RecordTradeResult("A", -8)
 	tracker.RecordTradeResult("A", -7)
+	tracker.RecordTradeResult("A", -6)
+	tracker.RecordTradeResult("A", -5)
 
 	stats, ok := tracker.GetStats("A")
 	if !ok {
 		t.Fatal("expected strategy stats to exist")
 	}
 	if !stats.Disabled {
-		t.Fatal("expected strategy to be disabled after three consecutive losses")
+		t.Fatal("expected strategy to be disabled after five consecutive losses")
 	}
 	if stats.Status != "COOLDOWN" {
 		t.Fatalf("expected COOLDOWN status, got %s", stats.Status)
@@ -95,8 +97,8 @@ func TestStrategyTrackerExecutionWeightDefaults(t *testing.T) {
 	if got := tracker.GetExecutionWeight("UNKNOWN"); got != 1.0 {
 		t.Fatalf("expected default execution weight 1.0 for unknown strategy, got %.2f", got)
 	}
-	if got := tracker.GetExecutionWeight("A"); got != 0.90 {
-		t.Fatalf("expected cold-start execution weight 0.90, got %.2f", got)
+	if got := tracker.GetExecutionWeight("A"); got != 1.10 {
+		t.Fatalf("expected cold-start execution weight 1.10, got %.2f", got)
 	}
 }
 

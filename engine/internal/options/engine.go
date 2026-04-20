@@ -936,22 +936,6 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 	e.ResetAccount()
 	log.Println("[OPTIONS] Options account reset to $1,000,000")
 	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
-	return
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.balance = initialOptionsBalance
-	e.trades = nil
-	for _, s := range e.states {
-		s.position = nil
-		s.lastTradeAt = time.Time{}
-		s.consecutiveLosses = 0
-		s.disabledUntil = time.Time{}
-		s.stats = newStrategyStatus(s.def)
-	}
-	e.schedulePersistLocked(e.exportStateLocked())
-	log.Println("[OPTIONS] 🔄 Options account reset to $1,000,000")
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {

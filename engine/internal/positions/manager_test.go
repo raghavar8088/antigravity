@@ -144,11 +144,11 @@ func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
 	if math.Abs(pos.StopLossPct-1.0) > floatTolerance {
 		t.Fatalf("expected reversed stop loss pct 1.0, got %.4f", pos.StopLossPct)
 	}
-	if math.Abs(pos.TakeProfitPct-0.20) > floatTolerance {
-		t.Fatalf("expected take profit floor 0.20, got %.4f", pos.TakeProfitPct)
+	if math.Abs(pos.TakeProfitPct-0.30) > floatTolerance {
+		t.Fatalf("expected take profit floor 0.30, got %.4f", pos.TakeProfitPct)
 	}
-	if math.Abs(pos.TakeProfit-100.20) > floatTolerance {
-		t.Fatalf("expected take profit 100.20, got %.4f", pos.TakeProfit)
+	if math.Abs(pos.TakeProfit-100.30) > floatTolerance {
+		t.Fatalf("expected take profit 100.30, got %.4f", pos.TakeProfit)
 	}
 }
 

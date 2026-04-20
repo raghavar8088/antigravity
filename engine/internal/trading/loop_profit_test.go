@@ -137,8 +137,8 @@ func TestIsCategoryAlignedWithRegime(t *testing.T) {
 	if isCategoryAlignedWithRegime("Trend", marketRegimeRange) {
 		t.Fatal("expected Trend blocked in RANGE regime")
 	}
-	if isCategoryAlignedWithRegime("Any", marketRegimeUnknown) {
-		t.Fatal("expected UNKNOWN regime to block all categories")
+	if !isCategoryAlignedWithRegime("Any", marketRegimeUnknown) {
+		t.Fatal("expected UNKNOWN regime to allow all categories (strategies warm up from live data)")
 	}
 	if !isCategoryAlignedWithRegime("Trend", marketRegimeMixed) {
 		t.Fatal("expected MIXED regime to allow high-conviction trend categories")
