@@ -699,6 +699,7 @@ export default function TradingDashboard({
     : market.connectionState === "error"
       ? "negative"
       : "warning";
+  const showEngineOfflineWarning = !engineOnline;
   const soundTone: BadgeTone = isSoundOn ? "info" : "neutral";
   const signalAccent = latestSignal?.side === "BUY"
     ? "text-emerald-300"
@@ -1477,6 +1478,18 @@ export default function TradingDashboard({
                 ({livePositions.length} active)
               </span>
             </h2>
+            {showEngineOfflineWarning ? (
+              <div
+                className="mb-4 rounded-[16px] border px-4 py-3 text-sm"
+                style={{
+                  borderColor: "rgba(217, 48, 37, 0.16)",
+                  background: "var(--red-dim)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                The BTC open-trades panel depends on the Go engine API. It is currently offline or unreachable, so new BTC positions cannot appear here until the engine is running again.
+              </div>
+            ) : null}
             <RunningTrades currentPrice={price} trades={runningTrades} />
           </div>
 
@@ -1829,6 +1842,18 @@ export default function TradingDashboard({
                 ({livePositions.length} active)
               </span>
             </h2>
+            {showEngineOfflineWarning ? (
+              <div
+                className="mb-4 rounded-[16px] border px-4 py-3 text-sm"
+                style={{
+                  borderColor: "rgba(217, 48, 37, 0.16)",
+                  background: "var(--red-dim)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                The BTC open-trades panel depends on the Go engine API. It is currently offline or unreachable, so signals can scan in the UI while order placement stays at zero.
+              </div>
+            ) : null}
             <RunningTrades currentPrice={price} trades={runningTrades} />
           </div>
 

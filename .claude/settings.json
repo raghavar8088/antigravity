@@ -45,10 +45,26 @@
       "Bash(curl -s -c /tmp/nse_cookie.txt \"https://www.nseindia.com/\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -o /dev/null -w \"%{http_code}\")",
       "Bash(curl -s -b /tmp/nse_cookie.txt \"https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY\" -H \"User-Agent: Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36\" -H \"Accept: application/json\" -H \"Referer: https://www.nseindia.com/option-chain\")",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('NIFTY:', r.meta.regularMarketPrice, '| candles:', r.indicators.quote[0].close.filter\\(Boolean\\).length\\);}\\)\")",
-      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('VIX:', r.meta.regularMarketPrice, '| prevClose:', r.meta.chartPreviousClose\\);}\\)\")"
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\).chart.result[0]; console.log\\('VIX:', r.meta.regularMarketPrice, '| prevClose:', r.meta.chartPreviousClose\\);}\\)\")",
+      "Bash(ls \"c:/Trading apllication/\"*.log)",
+      "Bash(npx --yes tsc --noEmit --skipLibCheck)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx --prefix \"c:/Trading apllication/client\" tsc --noEmit --project \"c:/Trading apllication/client/tsconfig.json\")",
+      "Bash(powershell -Command \"Set-Location 'c:\\\\Trading apllication\\\\client'; npx tsc --noEmit 2>&1 | Select-Object -First 80\")",
+      "Bash(powershell -NoProfile -Command \"cd 'c:\\\\Trading apllication\\\\client'; npx tsc --noEmit\")",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(\"c:/Trading apllication/client/node_modules/.bin/tsc.cmd\" --noEmit --project \"c:/Trading apllication/client/tsconfig.json\")",
+      "Bash(node \"c:/Trading apllication/client/node_modules/typescript/bin/tsc\" --noEmit --project \"c:/Trading apllication/client/tsconfig.json\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(\"c:/Trading apllication/engine/risk_test.exe\" -test.v)",
+      "Bash(\"c:/Trading apllication/engine/positions_test.exe\" -test.v)",
+      "Bash(\"c:/Trading apllication/engine/strategy_test.exe\" -test.v)",
+      "Bash(\"c:/Trading apllication/engine/options_test.exe\" -test.v)",
+      "Bash(grep -n \"func FetchWarmupCandles\\\\|type WarmupData\\\\|Candles1m\" \"c:/Trading apllication/engine/internal/marketdata/\"*.go)"
     ],
     "additionalDirectories": [
-      "c:\\Trading apllication\\engine\\internal"
+      "c:\\Trading apllication\\engine\\internal",
+      "c:\\Trading apllication\\engine"
     ]
   }
 }
