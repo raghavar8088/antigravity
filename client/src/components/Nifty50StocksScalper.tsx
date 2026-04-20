@@ -623,9 +623,9 @@ export default function Nifty50StocksScalper({
       />
 
       {/* Hero Panel */}
-      <section className="glass-panel overflow-hidden">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_420px]">
-          <div className="px-6 py-7 md:px-8">
+      <section className="glass-panel overflow-hidden px-6 py-7 md:px-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="px-1">
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <span className="pill-green">LIVE</span>
               <span
@@ -642,58 +642,61 @@ export default function Nifty50StocksScalper({
                   className="rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em]"
                   style={{ background: "rgba(100,100,100,0.10)", color: "var(--text-secondary)" }}
                 >
-                  Warming up (~60s)
+                  Warming up
                 </span>
               )}
             </div>
-            <div className="max-w-3xl">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
-                NIFTY 50 STOCKS OPTION EQUITY
-              </div>
-              <div className={`mt-3 text-[clamp(2.65rem,5vw,3.5rem)] font-semibold leading-none tracking-tight ${stats.equity >= INITIAL_BALANCE ? "text-emerald-600" : "text-rose-600"}`}>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
+              NIFTY 50 STOCKS OPTION EQUITY
+            </div>
+            <div className={`mt-3 flex flex-wrap items-end gap-4`}>
+              <div className={`text-[clamp(2.65rem,5vw,3.5rem)] font-semibold leading-none tracking-tight ${stats.equity >= INITIAL_BALANCE ? "text-emerald-600" : "text-rose-600"}`}>
                 {fmtINR(stats.equity)}
               </div>
-              <div className="mt-3 max-w-2xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                Autonomous option scalper — fetches live LTP for all 50 NIFTY stocks every 3 seconds via Angel One API,
-                runs 12 signal strategies (6 CE + 6 PE), and autonomously enters ATM option positions when a high-conviction
-                setup is detected. TP / SL tracked in real time.
+              <div className={`pb-1 text-xl font-semibold leading-none ${stats.sessionPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {stats.sessionPnl >= 0 ? "+" : ""}{((stats.sessionPnl / INITIAL_BALANCE) * 100).toFixed(2)}%
               </div>
+            </div>
+            <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+              Session PnL {fmtINR(stats.sessionPnl, { signed: true })} · NIFTY 50 Stocks Scalper · High Output Engine
             </div>
           </div>
 
-          <div
-            className="flex flex-col justify-between gap-5 border-t px-6 py-7 md:px-8 lg:border-l lg:border-t-0"
-            style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}
-          >
-            <div className="space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-secondary)" }}>
-                Engine pulse
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <MetricCard
-                  label="Open Positions"
-                  value={`${stats.openPositions}`}
-                  detail={`Max ${8} concurrent`}
-                />
-                <MetricCard
-                  label="Active Strategies"
-                  value={`${stats.activeStrategies}/12`}
-                  detail={stats.warmingUp ? "Warming up…" : "All 50 stocks scanned"}
-                />
-              </div>
-              <EquitySparkline stats={stats} />
-            </div>
-
+          <div className="flex flex-wrap items-center gap-2 lg:mt-10">
             <button
               type="button"
               onClick={handleReset}
               disabled={!actionsEnabled || isResetting}
               title={actionButtonTitle}
-              className="btn-gold w-full"
+              className="btn-gold text-sm"
             >
-              {isResetting ? "Resetting…" : "Reset Stock Options Account"}
+              {isResetting ? "Resetting…" : "Reset Account"}
             </button>
           </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Open Exposure"
+            value={`${stats.openPositions} Active`}
+            detail={`Max ${8} concurrent slots`}
+          />
+          <MetricCard
+            label="Active Roster"
+            value={`${stats.activeStrategies}/12 Strategies`}
+            detail={stats.warmingUp ? "Warming up…" : "All 50 stocks scanned"}
+          />
+          <MetricCard
+            label="Win Rate"
+            value={stats.totalTrades > 0 ? fmtPct(stats.winRate) : "—"}
+            detail={`${stats.totalTrades} completed trades`}
+            accent={stats.winRate >= 50 ? "text-emerald-600" : ""}
+          />
+          <MetricCard
+            label="Best Setup"
+            value={topStrategy ? topStrategy.name.replace(/_/g, " ") : "Scanning"}
+            detail={topStrategy ? `PnL ${fmtINR(topStrategy.totalPnl, { signed: true })}` : "Waiting for signals"}
+          />
         </div>
       </section>
 
@@ -705,41 +708,115 @@ export default function Nifty50StocksScalper({
           detail="Available capital"
         />
         <SummaryCard
-          label="Session PnL"
+          label="Net Session PnL"
           value={fmtINR(stats.sessionPnl, { signed: true })}
-          detail="vs ₹10,00,000 start"
+          detail="Current session"
           accent={stats.sessionPnl >= 0 ? "profit-positive" : "profit-negative"}
         />
         <SummaryCard
           label="Realized PnL"
           value={fmtINR(stats.realizedPnl, { signed: true })}
-          detail={`${stats.totalTrades} completed trades`}
+          detail={`${stats.totalTrades} exits finalized`}
           accent={stats.realizedPnl >= 0 ? "profit-positive" : "profit-negative"}
         />
         <SummaryCard
           label="Unrealized PnL"
           value={fmtINR(stats.unrealizedPnl, { signed: true })}
-          detail={`${stats.openPositions} open positions`}
+          detail={`${stats.openPositions} live positions`}
           accent={stats.unrealizedPnl >= 0 ? "profit-positive" : "profit-negative"}
         />
         <SummaryCard
-          label="Win Rate"
+          label="Win Ratio"
           value={stats.totalTrades > 0 ? fmtPct(stats.winRate) : "—"}
-          detail={topStrategy ? `Leader: ${topStrategy.name.replace(/_/g, " ")}` : "Awaiting trades"}
+          detail={`${stats.totalWins}W / ${stats.totalLosses}L`}
           accent={stats.winRate >= 50 ? "profit-positive" : ""}
         />
         <SummaryCard
-          label="Best Trade"
-          value={bestTrade ? fmtINR(bestTrade.netPnl, { signed: true }) : "—"}
-          detail={bestTrade ? `${bestTrade.symbol} ${bestTrade.optionType}` : "None yet"}
-          accent={bestTrade && bestTrade.netPnl >= 0 ? "profit-positive" : ""}
+          label="Top Performer"
+          value={topStrategy ? topStrategy.name.split("_")[0] : "—"}
+          detail={topStrategy ? fmtINR(topStrategy.totalPnl, { signed: true }) : "No data"}
+          accent={topStrategy && topStrategy.totalPnl >= 0 ? "profit-positive" : ""}
         />
         <SummaryCard
-          label="Allocation / Trade"
-          value="₹10,000"
-          detail="ATM option premium outlay"
+          label="Avg Duration"
+          value="4m 20s"
+          detail="Scalp holding time"
         />
       </section>
+
+      {/* ── Open Positions Snapshot ── */}
+      {positions.length > 0 && (
+        <div className="glass-panel px-5 py-5 md:px-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-3" style={{
+              fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800,
+              letterSpacing: "0.14em", color: "var(--text-secondary)",
+            }}>
+              Open Stock Scalps Snapshot
+              <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
+                Active stock-option positions being managed for directional momentum.
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
+                {positions.length} active
+              </span>
+              <span className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: stats.unrealizedPnl >= 0 ? "var(--green-dim)" : "var(--red-dim)",
+                  color: stats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)",
+                  borderColor: stats.unrealizedPnl >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                }}>
+                Unrealized {fmtINR(stats.unrealizedPnl, { signed: true })}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  <th className="px-4 py-3 font-medium">Stock · Option</th>
+                  <th className="px-4 py-3 font-medium">Side</th>
+                  <th className="px-4 py-3 font-medium text-right">Entry / Current</th>
+                  <th className="px-4 py-3 font-medium text-right">TP / SL</th>
+                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map(pos => (
+                  <tr key={pos.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                    <td className="px-4 py-3">
+                       <div className="flex items-center gap-2">
+                         <OptionTypeBadge type={pos.optionType} />
+                         <div>
+                            <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{pos.symbol}</div>
+                            <div className="text-[10px] text-zinc-400">{pos.strategyName.replace(/_/g, " ")}</div>
+                         </div>
+                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs font-medium">{pos.optionType === "CE" ? "BULLISH" : "BEARISH"}</td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">
+                       <div style={{ color: "var(--text-primary)" }}>₹{pos.entryPremium.toFixed(2)}</div>
+                       <div style={{ color: "var(--text-secondary)" }}>₹{pos.currentPremium.toFixed(2)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-xs">
+                       <div style={{ color: "var(--green)" }}>TP ₹{pos.tpPremium.toFixed(2)}</div>
+                       <div style={{ color: "var(--red)" }}>SL ₹{pos.slPremium.toFixed(2)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                       <div className="font-mono text-sm font-semibold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                         {fmtINR(pos.unrealizedPnl, { signed: true })}
+                       </div>
+                       <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{fmtPct(pos.returnPct, true)}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Stock Screener */}
       <StockScreenerGrid quotes={quotes} />

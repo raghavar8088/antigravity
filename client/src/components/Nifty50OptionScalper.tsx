@@ -829,7 +829,7 @@ export default function Nifty50OptionScalper({
                 </div>
               </div>
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-                Session PnL {fmtUSD(sessionPnl, { signed: true })}
+                Session PnL {fmtUSD(sessionPnl, { signed: true })} � NIFTY 50 Options Scalper � High Frequency Engine
               </div>
             </div>
 
@@ -969,7 +969,100 @@ export default function Nifty50OptionScalper({
         </div>
       </div>
 
-      {/* ── Summary stats row ── */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
+        <SummaryCard label="Win Rate" value={`${winRate.toFixed(1)}%`} accent={winRate >= 50 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Profit Factor" value={profitFactor.toFixed(2)} accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Trades" value={`${totalTrades}`} accent="text-zinc-900" />
+        <SummaryCard label="Unrealized" value={fmtUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Streak" value={streak} accent="text-amber-500" />
+        <SummaryCard label="Best Trade" value={bestTrade ? fmtUSD(bestTrade.netPnl, { signed: true }) : "-"} accent={bestTrade && bestTrade.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Avg Hold" value={avgHoldSecs > 0 ? formatElapsedSeconds(Math.round(avgHoldSecs)) : "-"} accent="text-zinc-900" />
+      </div>
+
+      {/* ── Open Positions Snapshot (High visibility) ── */}
+      {positions.length > 0 && (
+        <div className="glass-panel px-5 py-5 md:px-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-3" style={{
+              fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800,
+              letterSpacing: "0.14em", color: "var(--text-secondary)",
+            }}>
+              Open Positions Snapshot
+              <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
+                Active NIFTY options from automated signals, surfaced near the top for quicker monitoring.
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
+                {positions.length} open
+              </span>
+              <span className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: unrealized >= 0 ? "var(--green-dim)" : "var(--red-dim)",
+                  color: unrealized >= 0 ? "var(--green)" : "var(--red)",
+                  borderColor: unrealized >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                }}>
+                Unrealized {fmtUSD(unrealized, { signed: true })}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  <th className="px-4 py-3 font-medium">Position</th>
+                  <th className="px-4 py-3 font-medium">Strike / NIFTY</th>
+                  <th className="px-4 py-3 font-medium">Premium (In / Now)</th>
+                  <th className="px-4 py-3 font-medium">Size / Cost</th>
+                  <th className="px-4 py-3 font-medium">Opened</th>
+                  <th className="px-4 py-3 font-medium">Greeks</th>
+                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((pos) => (
+                  <tr key={pos.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <TypeBadge type={pos.optionType} />
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          {formatStrategyLabel(pos.strategyName, pos.strategyId, strategyNumbers)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 0)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Entry {fmtUSD(pos.entryBtcPrice)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.entryPremium)} {"->"} ₹{fmt(pos.currentPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Basis ₹{fmt(pos.costBasis)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono text-zinc-900 font-medium">{fmt(pos.quantity, 0)} units</div>
+                      <div style={{ color: "var(--text-secondary)" }}>₹{fmt(pos.costBasis * pos.quantity, 0)} notional</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(pos.entryTime)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>Δ {fmt(pos.delta, 3)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>IV {fmtPct(pos.iv * 100)}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="font-mono text-sm font-semibold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                        {fmtUSD(pos.unrealizedPnl, { signed: true })}
+                      </div>
+                      <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{formatShortDate(pos.expiryTime)} expiry</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-4">
         <SummaryCard
           label="Win Rate"

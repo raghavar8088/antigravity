@@ -429,7 +429,7 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
       {/* ── Header ── */}
       <div className="glass-panel px-6 py-7 md:px-7 relative overflow-hidden">
         <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="px-1">
             <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">MCX Commodity Scalper</div>
             <div className="mt-4 flex flex-wrap items-end gap-4">
@@ -437,55 +437,54 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
                 {fmtINR(equity)}
               </div>
               <div className={`pb-1 text-xl font-semibold leading-none ${sessionPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                {sessionPnl >= 0 ? "+" : ""}{fmtPct(totalReturnPct, false)}
+                {sessionPnl >= 0 ? "+" : ""}{totalReturnPct.toFixed(2)}%
               </div>
             </div>
             <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-              Session P&L {fmtINR(sessionPnl, { signed: true })}
+              Session PnL {fmtINR(sessionPnl, { signed: true })} · MCX Commodity Scalper · High Output Engine
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-            <div className="flex flex-wrap gap-2">
-              <BadgePill label={feedBadgeLabel} tone={feedBadgeTone} />
-              <BadgePill label={`${activeStrategies}/${totalStrategies} Strategies Live`} tone="info" />
-              <BadgePill label="5 Commodities" tone="neutral" />
-              <BadgePill label="Paper Trading Only" tone="warning" />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm"
-                onClick={() => {
-                  if (!actionsEnabled) return;
-                  if (!confirm("Clear completed MCX trades and strategy stats? Open positions and balance will be kept.")) return;
-                  clearAll();
-                  setRefreshKey((k) => k + 1);
-                }}>
-                Clear Trades
-              </button>
-              <button type="button" onClick={handleReset} disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm">
-                {isResetting ? "Resetting…" : "Reset Account"}
-              </button>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 lg:mt-10">
+            <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm"
+              onClick={() => {
+                if (!actionsEnabled) return;
+                if (!confirm("Clear completed MCX trades and strategy stats? Open positions and balance will be kept.")) return;
+                clearAll();
+                setRefreshKey((k) => k + 1);
+              }}>
+              Clear Trades
+            </button>
+            <button type="button" onClick={handleReset} disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm">
+              {isResetting ? "Resetting…" : "Reset Account"}
+            </button>
           </div>
-
-          {primaryIssue && (
-            <div className="mx-1 rounded-[20px] border px-4 py-3" style={{
-              borderColor: diagnostics.ltpError ? "rgba(217,48,37,0.18)" : "rgba(217,119,6,0.18)",
-              background: diagnostics.ltpError ? "rgba(254,242,242,0.92)" : "rgba(255,251,235,0.95)",
-            }}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: diagnostics.ltpError ? "var(--red)" : "#b45309" }}>
-                {diagnostics.ltpError ? "MCX Data Error" : "MCX Warm-up Warning"}
-              </div>
-              <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                {primaryIssue}
-              </div>
-              <div className="mt-1 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-                {issueHint}
-                {diagnostics.candleIssues.length > 1 ? ` ${diagnostics.candleIssues.length - 1} more commodity warm-up issue(s) are also present.` : ""}
-              </div>
-            </div>
-          )}
         </div>
+
+        <div className="mt-6 flex flex-wrap gap-2 px-1">
+          <BadgePill label={feedBadgeLabel} tone={feedBadgeTone} />
+          <BadgePill label={`${activeStrategies}/${totalStrategies} Strategies Live`} tone="info" />
+          <BadgePill label="5 Commodities" tone="neutral" />
+          <BadgePill label="Paper Trading Only" tone="warning" />
+        </div>
+
+        {primaryIssue && (
+          <div className="mx-1 mt-6 rounded-[20px] border px-4 py-3" style={{
+            borderColor: diagnostics.ltpError ? "rgba(217,48,37,0.18)" : "rgba(217,119,6,0.18)",
+            background: diagnostics.ltpError ? "rgba(254,242,242,0.92)" : "rgba(255,251,235,0.95)",
+          }}>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: diagnostics.ltpError ? "var(--red)" : "#b45309" }}>
+              {diagnostics.ltpError ? "MCX Data Error" : "MCX Warm-up Warning"}
+            </div>
+            <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              {primaryIssue}
+            </div>
+            <div className="mt-1 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
+              {issueHint}
+              {diagnostics.candleIssues.length > 1 ? ` ${diagnostics.candleIssues.length - 1} more commodity warm-up issue(s) are also present.` : ""}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Commodity price grid ── */}
@@ -502,15 +501,15 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
           accent="text-zinc-900"
         />
         <CompactMetric
-          label="Closed P&L"
+          label="Realized PnL"
           value={fmtINR(closedPnl, { signed: true })}
-          detail={`${stats.totalTrades} completed trade${stats.totalTrades !== 1 ? "s" : ""}`}
+          detail={`${stats.totalTrades} completed trades`}
           accent={closedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}
         />
         <CompactMetric
-          label="Unrealized P&L"
+          label="Unrealized PnL"
           value={fmtINR(unrealized, { signed: true })}
-          detail={`${openCount} of ${activeStrategies} slots open${callCount > 0 || putCount > 0 ? ` (${callCount}C/${putCount}P)` : ""}`}
+          detail={`${openCount} active positions`}
           accent={unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}
         />
         <CompactMetric
@@ -521,7 +520,6 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
         />
       </div>
 
-      {/* ── 7 summary cards ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7 mt-1">
         <SummaryCard label="Account Equity" value={fmtINR(equity)} accent={equity >= INITIAL_MCX_BALANCE ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Cash Balance" value={fmtINR(stats.balance)} accent="text-zinc-700" />
@@ -531,6 +529,85 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
         <SummaryCard label="Gross Profit" value={fmtINR(grossProfit)} accent="text-emerald-600" />
         <SummaryCard label="Gross Loss" value={fmtINR(grossLoss)} accent="text-rose-600" />
       </div>
+
+      {/* ── Open Positions Snapshot (High visibility) ── */}
+      {positions.length > 0 && (
+        <div className="glass-panel px-5 py-5 md:px-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-3" style={{
+              fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800,
+              letterSpacing: "0.14em", color: "var(--text-secondary)",
+            }}>
+              Open Positions Snapshot
+              <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
+                Active commodity options being managed for breakout or mean reversion.
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
+                {positions.length} open
+              </span>
+              <span className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: unrealized >= 0 ? "var(--green-dim)" : "var(--red-dim)",
+                  color: unrealized >= 0 ? "var(--green)" : "var(--red)",
+                  borderColor: unrealized >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                }}>
+                Unrealized {fmtINR(unrealized, { signed: true })}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  <th className="px-4 py-3 font-medium">Position</th>
+                  <th className="px-4 py-3 font-medium">Strike / LTP</th>
+                  <th className="px-4 py-3 font-medium">Premium (In / Now)</th>
+                  <th className="px-4 py-3 font-medium">Lots / Notional</th>
+                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((pos) => {
+                   const commodity = MCX_COMMODITIES.find((c) => c.id === pos.commodityId);
+                   return (
+                    <tr key={pos.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <TypeBadge type={pos.optionType} />
+                          <div>
+                            <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{pos.commodityName}</div>
+                            <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{pos.strategyName}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 1)}</div>
+                        <div style={{ color: "var(--text-secondary)" }}>LTP ₹{fmt(pos.currentPremium, 2)}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.entryPremium, 2)} {"->"} ₹{fmt(pos.currentPremium, 2)}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono text-zinc-900 font-medium">{pos.lots} lot(s)</div>
+                        <div style={{ color: "var(--text-secondary)" }}>{fmtINR(pos.costBasis)} cost</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-mono text-sm font-semibold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                          {fmtINR(pos.unrealizedPnl, { signed: true })}
+                        </div>
+                        <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>{fmtPct(pos.costBasis > 0 ? (pos.unrealizedPnl / pos.costBasis) * 100 : 0, true)}</div>
+                      </td>
+                    </tr>
+                   );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Live positions ── */}
       <PositionsPanel positions={positions} />

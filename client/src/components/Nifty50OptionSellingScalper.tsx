@@ -119,78 +119,72 @@ export default function Nifty50OptionSellingScalper({
         subtitle="Live NIFTY 50 index feed powering the separate NIFTY option-selling workspace."
       />
 
-      <section className="glass-panel overflow-hidden">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_420px]">
-          <div className="px-6 py-7 md:px-8">
+      <section className="glass-panel overflow-hidden px-6 py-7 md:px-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="px-1">
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <span className="pill-green">LIVE</span>
               <span className="rounded-full px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em]" style={{ background: "rgba(26,115,232,0.10)", color: "var(--blue)" }}>
                 NIFTY OPTION SELLING
               </span>
               <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-orange-700">
-                Separate Account
+                Premium Writer
               </span>
             </div>
             <div className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>
-              NIFTY 50 OPTION SELLING EQUITY
+              NIFTY 50 OPTION WRITING EQUITY
             </div>
-            <div className={`mt-3 text-[clamp(2.65rem,5vw,3.5rem)] font-semibold leading-none tracking-tight ${equity >= INITIAL_BALANCE ? "text-emerald-600" : "text-rose-600"}`}>
-              {fmtINR(equity)}
+            <div className={`mt-3 flex flex-wrap items-end gap-4`}>
+              <div className={`text-[clamp(2.65rem,5vw,3.5rem)] font-semibold leading-none tracking-tight ${equity >= INITIAL_BALANCE ? "text-emerald-600" : "text-rose-600"}`}>
+                {fmtINR(equity)}
+              </div>
+              <div className={`pb-1 text-xl font-semibold leading-none ${sessionPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {sessionPnl >= 0 ? "+" : ""}{((sessionPnl / INITIAL_BALANCE) * 100).toFixed(2)}%
+              </div>
             </div>
-            <div className="mt-3 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-              Autonomous premium-selling workspace for NIFTY 50. The engine shorts calls in bearish/range conditions and shorts puts in bullish/range conditions, then manages decay-based exits with TP, SL, and timed profit locking.
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600">
-                Feed {displayedEnginePrice > 0 ? `₹${displayedEnginePrice.toFixed(0)}` : "Connecting..."}
-              </span>
-              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600">
-                {barCount >= 12 ? `${barCount} bars` : `Warming ${barCount}/12`}
-              </span>
-              <span className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600">
-                {positions.length} open shorts
-              </span>
+            <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
+              Session PnL {fmtINR(sessionPnl, { signed: true })} · NIFTY Selling Engine · Decay First
             </div>
           </div>
-          <div className="flex flex-col justify-between gap-5 border-t px-6 py-7 md:px-8 lg:border-l lg:border-t-0" style={{ borderColor: "var(--border)", background: "var(--surface-2)" }}>
-            <div className="grid grid-cols-2 gap-3">
-              <SummaryCard label="Session PnL" value={fmtINR(sessionPnl, { signed: true })} accent={sessionPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
-              <SummaryCard label="Win Rate" value={resolvedStats.totalTrades > 0 ? fmtPct(resolvedStats.winRate) : "--"} detail={`${resolvedStats.totalTrades} trades`} />
-              <SummaryCard label="Open Positions" value={`${resolvedStats.openPositions}`} detail="Short premium positions" />
-              <SummaryCard label="Best Strategy" value={bestStrategy ? bestStrategy.name.replace(/_/g, " ") : "Waiting"} detail={bestStrategy ? fmtINR(bestStrategy.totalPnl, { signed: true }) : "No closed trades yet"} />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm" onClick={async () => {
-                if (!actionsEnabled) return;
-                if (!confirm("Clear completed NIFTY option selling trades and strategy stats? Open positions and balance will be kept.")) return;
-                clearAll();
-                try {
-                  const response = await fetch(`${API_URL}/api/nifty-options-selling/clear-history`, { method: "POST" });
-                  if (!response.ok) {
-                    throw new Error("clear history failed");
-                  }
-                  onRefresh?.();
-                } catch {
-                  window.alert("Clearing NIFTY option selling history failed. Check engine connectivity.");
+
+          <div className="flex flex-wrap items-center gap-2 lg:mt-10">
+            <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm" onClick={async () => {
+              if (!actionsEnabled) return;
+              if (!confirm("Clear completed NIFTY option selling trades and strategy stats? Open positions and balance will be kept.")) return;
+              clearAll();
+              try {
+                const response = await fetch(`${API_URL}/api/nifty-options-selling/clear-history`, { method: "POST" });
+                if (!response.ok) {
+                  throw new Error("clear history failed");
                 }
-              }}>
-                Clear NIFTY Selling Trades
-              </button>
-              <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm" onClick={handleReset}>
-                {isResetting ? "Resetting..." : "Reset Selling Account"}
-              </button>
-            </div>
+                onRefresh?.();
+              } catch {
+                window.alert("Clearing NIFTY option selling history failed. Check engine connectivity.");
+              }
+            }}>
+              Clear Selling Trades
+            </button>
+            <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-danger text-sm" onClick={handleReset}>
+              {isResetting ? "Resetting..." : "Reset Selling Account"}
+            </button>
           </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard label="Feed Price" value={displayedEnginePrice > 0 ? `₹${displayedEnginePrice.toFixed(0)}` : "Connecting..."} detail={barCount >= 12 ? `${barCount} bars analyzed` : `Warming ${barCount}/12`} />
+          <SummaryCard label="Open Exposure" value={`${positions.length} Shorts`} detail="Premium decay tracking" />
+          <SummaryCard label="Win Rate" value={resolvedStats.totalTrades > 0 ? fmtPct(resolvedStats.winRate) : "--"} detail={`${resolvedStats.totalTrades} completed trades`} />
+          <SummaryCard label="Best Strategy" value={bestStrategy ? bestStrategy.name.replace(/_/g, " ") : "Waiting"} detail={bestStrategy ? fmtINR(bestStrategy.totalPnl, { signed: true }) : "No closed trades yet"} />
         </div>
       </section>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
         <SummaryCard label="Cash Balance" value={fmtINR(resolvedStats.balance)} />
+        <SummaryCard label="Net Session PnL" value={fmtINR(sessionPnl, { signed: true })} accent={sessionPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Realized PnL" value={fmtINR(resolvedStats.totalPnl, { signed: true })} accent={resolvedStats.totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Unrealized" value={fmtINR(resolvedStats.unrealizedPnl, { signed: true })} accent={resolvedStats.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Wins / Losses" value={`${resolvedStats.totalWins}/${resolvedStats.totalLosses}`} />
-        <SummaryCard label="Strategies" value={`${strategies.length}`} detail={`${strategies.filter((item) => item.status === "READY" || item.status === "IN_POSITION").length} live`} />
-        <SummaryCard label="Premium Engine" value="Decay First" detail="Short calls and short puts" />
+        <SummaryCard label="Live Strategies" value={`${strategies.filter((item) => item.status === "READY" || item.status === "IN_POSITION").length}`} detail={`${strategies.length} total`} />
       </div>
 
       <DailyPnlLedger
@@ -202,10 +196,78 @@ export default function Nifty50OptionSellingScalper({
         formatCurrency={fmtINR}
       />
 
+      {/* ── Open Positions Snapshot (High visibility) ── */}
+      {positions.length > 0 && (
+        <div className="glass-panel px-5 py-5 md:px-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-3" style={{
+              fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800,
+              letterSpacing: "0.14em", color: "var(--text-secondary)",
+            }}>
+              Open Shorts Snapshot
+              <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>
+                Active NIFTY premium-writing positions being tracked for theta decay.
+              </span>
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
+                {positions.length} open
+              </span>
+              <span className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: resolvedStats.unrealizedPnl >= 0 ? "var(--green-dim)" : "var(--red-dim)",
+                  color: resolvedStats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)",
+                  borderColor: resolvedStats.unrealizedPnl >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                }}>
+                Unrealized {fmtINR(resolvedStats.unrealizedPnl, { signed: true })}
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+            <table className="w-full text-left text-sm" style={{ minWidth: 1040 }}>
+              <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                <tr className="text-[11px] uppercase tracking-[0.12em]">
+                  <th className="px-4 py-3 font-medium">Position</th>
+                  <th className="px-4 py-3 font-medium">Strike</th>
+                  <th className="px-4 py-3 font-medium">Premium (Sold / Now)</th>
+                  <th className="px-4 py-3 font-medium">Opened</th>
+                  <th className="px-4 py-3 font-medium text-right">PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((pos) => (
+                  <tr key={pos.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <TypeBadge type={pos.optionType} />
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          {pos.strategyName.replace(/_/g, " ")}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>{pos.strike}</td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
+                      ₹{pos.entryPremium.toFixed(2)} {"->"} ₹{pos.currentPremium.toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>{fmtTime(pos.entryTime)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="font-mono text-sm font-semibold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
+                        {fmtINR(pos.unrealizedPnl, { signed: true })}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">
           <div className="glass-panel p-6">
-            <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Open Short Positions</div>
+            <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>All Open Positions</div>
             {positions.length === 0 ? (
               <div className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-10 text-center text-sm" style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
                 No short option positions are open yet. The engine is waiting for NIFTY premium-selling setups.
@@ -293,7 +355,7 @@ export default function Nifty50OptionSellingScalper({
         <div className="glass-panel p-6">
           <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Strategy Roster</div>
           <div className="overflow-x-auto rounded-[18px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-            <table className="w-full min-w-[760px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
                 <tr className="text-[11px] uppercase tracking-[0.12em]">
                   <th className="px-4 py-3 font-medium">Strategy</th>
