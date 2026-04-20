@@ -13,7 +13,7 @@ import { formatShortDate, formatShortTime } from "@/lib/time";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
-// ── Formatters ──────────────────────────────────────────────────────────────
+// ââ Formatters ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function fmtUSD(n: number, opts: { signed?: boolean; decimals?: number } = {}) {
   const { signed = false, decimals = 2 } = opts;
@@ -21,8 +21,8 @@ function fmtUSD(n: number, opts: { signed?: boolean; decimals?: number } = {}) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  if (signed) return `${n >= 0 ? "+" : "-"}₹${abs}`;
-  return `₹${abs}`;
+  if (signed) return `${n >= 0 ? "+" : "-"}â¹${abs}`;
+  return `â¹${abs}`;
 }
 
 function fmtPct(n: number, signed = false, decimals = 1) {
@@ -79,7 +79,7 @@ function formatStrategyLabel(name: string, strategyId: number | undefined, strat
   return number ? `${number}. ${name}` : name;
 }
 
-// ── Design-system primitives (mirrors Dashboard) ─────────────────────────────
+// ââ Design-system primitives (mirrors Dashboard) âââââââââââââââââââââââââââââ
 
 function CompactMetric({ label, value, detail, accent = "" }: {
   label: string; value: string; detail?: string; accent?: string;
@@ -121,7 +121,7 @@ function BadgePill({ label, tone = "neutral" }: { label: string; tone?: BadgeTon
   );
 }
 
-// ── Option-specific badges ───────────────────────────────────────────────────
+// ââ Option-specific badges âââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function TypeBadge({ type }: { type: string }) {
   return (
@@ -182,7 +182,7 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
-// ── Progress bar for premium/PnL ─────────────────────────────────────────────
+// ââ Progress bar for premium/PnL âââââââââââââââââââââââââââââââââââââââââââââ
 
 function PremiumBar({ entry, current }: { entry: number; current: number }) {
   const pct = entry > 0 ? Math.min(200, Math.max(0, (current / entry) * 100)) : 0;
@@ -199,7 +199,7 @@ function PremiumBar({ entry, current }: { entry: number; current: number }) {
   );
 }
 
-// ── Live Positions table ─────────────────────────────────────────────────────
+// ââ Live Positions table âââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionPosition[]; strategyNumbers: StrategyNumberMap }) {
   const totalUnrealized = positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
@@ -281,12 +281,12 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 0)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.strike, 0)}</div>
                       <div style={{ color: "var(--text-secondary)" }}>NIFTY {fmtUSD(pos.entryBtcPrice)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In ₹{fmt(pos.entryPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Now ₹{fmt(pos.currentPremium)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In â¹{fmt(pos.entryPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Now â¹{fmt(pos.currentPremium)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {pos.entryTime ? (
@@ -326,7 +326,7 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
   );
 }
 
-// ── Strategies leaderboard ────────────────────────────────────────────────────
+// ââ Strategies leaderboard ââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionStrategyStatus[]; strategyNumbers: StrategyNumberMap }) {
   const [showAll, setShowAll] = useState(false);
@@ -412,7 +412,7 @@ function StrategiesPanel({ strategies, strategyNumbers }: { strategies: OptionSt
   );
 }
 
-// ── Trade history ─────────────────────────────────────────────────────────────
+// ââ Trade history âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strategyNumbers: StrategyNumberMap }) {
   const [showAll, setShowAll] = useState(false);
@@ -509,15 +509,15 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
                     <td className="px-4 py-3 text-xs">
                       <div className="flex items-center gap-2">
                         <TypeBadge type={t.optionType} />
-                        <span className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(t.strike, 0)}</span>
+                        <span className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(t.strike, 0)}</span>
                       </div>
                       <div style={{ color: "var(--text-secondary)", marginTop: 4 }}>
                         {t.expiryMins}m expiry
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In ₹{fmt(t.entryPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Out ₹{fmt(t.exitPremium)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In â¹{fmt(t.entryPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Out â¹{fmt(t.exitPremium)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono" style={{ color: "var(--text-primary)" }}>
@@ -548,7 +548,7 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
   );
 }
 
-// ── Market Indicators panel ───────────────────────────────────────────────────
+// ââ Market Indicators panel âââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 function fmtTime(ts: number): string {
   if (!ts) return "--:--";
@@ -599,7 +599,7 @@ function MarketIndicatorsPanel({
           MARKET INDICATORS
         </h2>
         <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-blue-700">
-          Source: Angel One · Live
+          Source: Angel One Â· Live
         </span>
       </div>
 
@@ -679,7 +679,7 @@ function MarketIndicatorsPanel({
   );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ââ Main export âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 type Nifty50OptionScalperProps = {
   actionsEnabled?: boolean;
@@ -725,7 +725,7 @@ export default function Nifty50OptionScalper({
     if (!actionsEnabled) {
       return;
     }
-    if (!confirm("Reset the NIFTY 50 options paper account to ₹1,000,000? All history will be cleared.")) {
+    if (!confirm("Reset the NIFTY 50 options paper account to â¹1,000,000? All history will be cleared.")) {
       return;
     }
 
@@ -744,7 +744,7 @@ export default function Nifty50OptionScalper({
     }
   };
 
-  // ── Derived values ──────────────────────────────────────────────
+  // ââ Derived values ââââââââââââââââââââââââââââââââââââââââââââââ
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
   const closedPnl = stats?.totalPnl ?? trades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const unrealized = stats?.unrealizedPnl ?? positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
@@ -784,7 +784,7 @@ export default function Nifty50OptionScalper({
       }, 0) / trades.length
     : 0;
 
-  // ── Streak ──────────────────────────────────────────────────────
+  // ââ Streak ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   const streak = (() => {
     if (trades.length === 0) return "0";
     const lastWasWin = trades[0].netPnl >= 0;
@@ -808,7 +808,7 @@ export default function Nifty50OptionScalper({
 
       <MarketIndicatorsPanel vix={vix} vixChange={vixChange} vixPct={vixPct} candles={candles} />
 
-      {/* ── Hero: Options Equity ── */}
+      {/* ââ Hero: Options Equity ââ */}
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] items-start gap-5">
 
         {/* Left: price-hero card */}
@@ -829,13 +829,13 @@ export default function Nifty50OptionScalper({
                 </div>
               </div>
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-                Session PnL {fmtUSD(sessionPnl, { signed: true })} � NIFTY 50 Options Scalper � High Frequency Engine
+                Session PnL {fmtUSD(sessionPnl, { signed: true })} · NIFTY 50 Options Scalper · High Frequency Engine
               </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
-                <BadgePill label={displayedEnginePrice > 0 ? `Feed ₹${displayedEnginePrice.toFixed(0)}` : "Feed: Connecting…"} tone={displayedEnginePrice > 0 ? "positive" : "neutral"} />
+                <BadgePill label={displayedEnginePrice > 0 ? `Feed â¹${displayedEnginePrice.toFixed(0)}` : "Feed: Connectingâ¦"} tone={displayedEnginePrice > 0 ? "positive" : "neutral"} />
                 <BadgePill label={barCount >= 15 ? `${barCount} bars` : `Warming ${barCount}/15 bars`} tone={barCount >= 15 ? "info" : "warning"} />
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
@@ -902,7 +902,7 @@ export default function Nifty50OptionScalper({
             />
           </div>
 
-          {/* ── Equity sparkline ── */}
+          {/* ââ Equity sparkline ââ */}
           {trades.length >= 2 && (() => {
             const initial = INITIAL_OPTIONS_BALANCE;
             const points: { x: number; y: number }[] = [];
@@ -924,7 +924,7 @@ export default function Nifty50OptionScalper({
             return (
               <div className="mt-4 px-1">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-2">
-                  Equity Curve · {trades.length} trades
+                  Equity Curve Â· {trades.length} trades
                 </div>
                 <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 56, display: "block" }}>
                   <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
@@ -979,7 +979,7 @@ export default function Nifty50OptionScalper({
         <SummaryCard label="Avg Hold" value={avgHoldSecs > 0 ? formatElapsedSeconds(Math.round(avgHoldSecs)) : "-"} accent="text-zinc-900" />
       </div>
 
-      {/* ── Open Positions Snapshot (High visibility) ── */}
+      {/* ââ Open Positions Snapshot (High visibility) ââ */}
       {positions.length > 0 && (
         <div className="glass-panel px-5 py-5 md:px-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1032,22 +1032,22 @@ export default function Nifty50OptionScalper({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 0)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.strike, 0)}</div>
                       <div style={{ color: "var(--text-secondary)" }}>Entry {fmtUSD(pos.entryBtcPrice)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.entryPremium)} {"->"} ₹{fmt(pos.currentPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Basis ₹{fmt(pos.costBasis)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.entryPremium)} {"->"} â¹{fmt(pos.currentPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Basis â¹{fmt(pos.costBasis)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono text-zinc-900 font-medium">{fmt(pos.quantity, 0)} units</div>
-                      <div style={{ color: "var(--text-secondary)" }}>₹{fmt(pos.costBasis * pos.quantity, 0)} notional</div>
+                      <div style={{ color: "var(--text-secondary)" }}>â¹{fmt(pos.costBasis * pos.quantity, 0)} notional</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(pos.entryTime)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>Δ {fmt(pos.delta, 3)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>Î {fmt(pos.delta, 3)}</div>
                       <div style={{ color: "var(--text-secondary)" }}>IV {fmtPct(pos.iv * 100)}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -1101,7 +1101,7 @@ export default function Nifty50OptionScalper({
         />
       </div>
 
-      {/* ── Live positions ── */}
+      {/* ââ Live positions ââ */}
       <NiftyOptionChainPanel
         data={optionChain.data}
         loading={optionChain.loading}
@@ -1113,7 +1113,7 @@ export default function Nifty50OptionScalper({
       />
       <LivePositionsPanel positions={positions} strategyNumbers={strategyNumbers} />
 
-      {/* ── Strategies leaderboard ── */}
+      {/* ââ Strategies leaderboard ââ */}
       <StrategiesPanel strategies={strategies} strategyNumbers={strategyNumbers} />
 
       <DailyPnlLedger
@@ -1125,7 +1125,7 @@ export default function Nifty50OptionScalper({
         formatCurrency={fmtUSD}
       />
 
-      {/* ── Best strategy callout ── */}
+      {/* ââ Best strategy callout ââ */}
       {bestStrategy && (
         <div className="glass-panel px-6 py-5 flex flex-wrap items-center gap-6 justify-between">
           <div>
@@ -1147,12 +1147,12 @@ export default function Nifty50OptionScalper({
         </div>
       )}
 
-      {/* ── Trade history ── */}
+      {/* ââ Trade history ââ */}
       <TradesPanel trades={trades} strategyNumbers={strategyNumbers} />
 
-      {/* ── Footer note ── */}
+      {/* ââ Footer note ââ */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        NIFTY 50 options paper account · Black-Scholes pricing · live NSE NIFTY 50 spot feed · ₹1,000,000 starting balance · 1% capital per trade
+        NIFTY 50 options paper account Â· Black-Scholes pricing Â· live NSE NIFTY 50 spot feed Â· â¹1,000,000 starting balance Â· 1% capital per trade
       </div>
 
     </div>
