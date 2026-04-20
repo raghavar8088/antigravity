@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 8
+	maxConcurrentPositions   = 15
 	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
@@ -24,8 +24,8 @@ const (
 
 	optionRegimeMinBars = 55
 
-	optionMaxActiveStrategies      = 20
-	optionMaxStrategiesPerCategory = 6
+	optionMaxActiveStrategies      = 40
+	optionMaxStrategiesPerCategory = 12
 	optionRosterRefreshInterval    = 30 * time.Second
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
