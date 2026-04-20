@@ -1,5 +1,7 @@
 # Go cache
 .gocache/
+engine/.gocache*/
+engine/.gotmp*/
 bin/
 *.exe
 *.test
