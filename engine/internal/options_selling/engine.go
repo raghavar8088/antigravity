@@ -212,11 +212,10 @@ func (e *Engine) ResetAccount() PersistedState {
 
 	e.trades = nil
 	e.balance = initialOptionsBalance
-	e.lastPrice = 0
 	e.priceHist = nil
-	e.minuteBars = nil
-	e.lastMinute = 0
 	e.tradeSeq = 0
+	// minuteBars and lastMinute are price history for signal computation,
+	// not account state — preserve them so signals fire immediately after reset.
 
 	for _, s := range e.states {
 		s.position = nil
