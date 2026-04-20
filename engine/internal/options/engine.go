@@ -40,6 +40,7 @@ type Engine struct {
 	tradeSeq         int
 	lastRosterEval   time.Time
 	lastRosterRegime string
+	lastDebugAt      time.Time
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
@@ -418,6 +419,61 @@ func (e *Engine) tick() {
 
 	for _, s := range e.states {
 		e.manageStrategyRuntime(s, ctx, regime, iv, nowUTC, &openCount)
+	}
+
+	if e.lastDebugAt.IsZero() || nowUTC.Sub(e.lastDebugAt) >= 2*time.Minute {
+		e.lastDebugAt = nowUTC
+		e.logDiagnosticsLocked(ctx, regime, iv, nowUTC)
+	}
+}
+
+func (e *Engine) logDiagnosticsLocked(ctx SignalContext, regime string, iv float64, now time.Time) {
+	active, inPos, openSlots := 0, 0, 0
+	for _, s := range e.states {
+		if s.stats.RosterState == StrategyRosterActive {
+			active++
+		}
+		if s.position != nil {
+			inPos++
+		}
+	}
+	openSlots = maxConcurrentPositions - inPos
+	log.Printf("[OPTIONS DIAG] %s | price=%.0f iv=%.2f regime=%s bars=%d active=%d inPos=%d openSlots=%d",
+		e.marketProfile.Name, e.lastPrice, iv, regime, len(e.minuteBars), active, inPos, openSlots)
+
+	if openSlots <= 0 || active == 0 {
+		return
+	}
+
+	for _, s := range e.states {
+		if s.stats.RosterState != StrategyRosterActive || s.position != nil {
+			continue
+		}
+		var reason string
+		switch {
+		case !s.disabledUntil.IsZero() && now.Before(s.disabledUntil):
+			reason = "disabled"
+		case !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second:
+			reason = fmt.Sprintf("cooldown(%.0fs left)", (time.Duration(s.def.CooldownSecs)*time.Second - now.Sub(s.lastTradeAt)).Seconds())
+		case !isCategoryAlignedWithRegime(s.def.Category, regime):
+			reason = fmt.Sprintf("regime_mismatch(%s vs %s)", s.def.Category, regime)
+		default:
+			fn, ok := e.signals[s.def.Signal]
+			sigFired := ok && fn(ctx)
+			confirmed := sigFired && e.entryConfirmed(s.def, ctx, regime)
+			switch {
+			case !ok:
+				reason = fmt.Sprintf("signal_missing(%s)", s.def.Signal)
+			case !sigFired:
+				reason = fmt.Sprintf("signal_not_fired(%s)", s.def.Signal)
+			case !confirmed:
+				reason = "entry_not_confirmed"
+			default:
+				reason = "SHOULD_TRADE(premium_check)"
+			}
+		}
+		log.Printf("[OPTIONS DIAG]   %-45s cat=%-15s sig=%-30s -> %s",
+			s.def.Name, s.def.Category, s.def.Signal, reason)
 	}
 }
 
