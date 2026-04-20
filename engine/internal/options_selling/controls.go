@@ -198,24 +198,22 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
-	slow := ema(ctx.Prices, 21)
 	trend := ema(ctx.Prices, 55)
 	rsiVal := rsi(ctx.Prices, 14)
 	mom3 := momentum(ctx.Prices, 3)
 	mom8 := momentum(ctx.Prices, 8)
 
 	bullishSeller := def.Type == Put
-	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout":
-			// Allow up to 1.5% below the 55-min EMA so a minor pullback doesn't
-			// permanently block puts during otherwise-bullish conditions.
-			return trendAligned && price >= trend*0.985 && mom3 > 0.0005 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 75
+			// trendAligned removed: flat/mixed regimes blocked too many valid puts.
+			// mom3 lowered 0.0005→0.0001 (~$8 on $84k BTC); RSI floor 45→38.
+			return price >= trend*0.985 && mom3 > 0.0001 && mom8 > 0 && rsiVal >= 38 && rsiVal <= 75
 		case "Hybrid":
 			// TRIPLE_BULL signal fires at RSI < 35 — no minimum RSI bound here or
 			// the signal and confirmation gates would never overlap.
-			return trendAligned && price >= trend*0.990 && mom3 > 0.0003 && mom8 > 0 && rsiVal <= 75
+			return price >= trend*0.990 && mom3 > 0.00005 && mom8 > 0 && rsiVal <= 75
 		case "Mean Reversion", "Capitulation":
 			// RSI is already encoded in the firing signal (RSI_OVERSOLD_EXTREME fires
 			// at RSI ≈ 25, OVEREXTENSION_FADE_DOWN fires at RSI < 28). Adding a lower
@@ -228,11 +226,11 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	switch def.Category {
 	case "Momentum", "Breakout":
-		// Allow up to 1.5% above the 55-min EMA for bear call sells.
-		return trendAligned && price <= trend*1.015 && mom3 < -0.0005 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 55
+		// trendAligned removed; RSI ceiling 55→62; mom3 threshold -0.0005→-0.0001.
+		return price <= trend*1.015 && mom3 < -0.0001 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 62
 	case "Hybrid":
 		// TRIPLE_BEAR signal fires at RSI > 65 — no maximum RSI bound here.
-		return trendAligned && price <= trend*1.010 && mom3 < -0.0003 && mom8 < 0 && rsiVal >= 25
+		return price <= trend*1.010 && mom3 < -0.00005 && mom8 < 0 && rsiVal >= 25
 	case "Mean Reversion", "Capitulation":
 		// RSI is already encoded in the firing signal (RSI_OVERBOUGHT_EXTREME fires
 		// at RSI ≈ 75, OVEREXTENSION_FADE_UP fires at RSI > 72). Adding an upper
