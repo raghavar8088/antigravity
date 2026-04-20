@@ -727,6 +727,24 @@ func main() {
 		}
 	}
 
+	// Inject real historical 1m bars into BTC options engines so they have
+	// enough price history to classify regime and fire signals immediately on
+	// startup. Without this, the engines start in UNKNOWN regime with an empty
+	// minuteBars buffer and no signals can fire until 55+ minutes accumulate
+	// one bar at a time. The same warmupData already fetched for the futures
+	// orchestrator is reused here — no extra API call needed.
+	if warmupData != nil && len(warmupData.Candles1m) > 0 {
+		closePrices := make([]float64, len(warmupData.Candles1m))
+		for i, c := range warmupData.Candles1m {
+			closePrices[i] = c.Close
+		}
+		optionsEngine.InjectMinuteBars(closePrices)
+		optionsSellingEngine.InjectMinuteBars(closePrices)
+		log.Printf("[WARMUP] ✅ Injected %d real 1m bars into BTC options engines (regime will classify immediately)", len(closePrices))
+	} else {
+		log.Printf("[WARMUP] ⚠️  No warmup data for BTC options engines — will accumulate bars from live feed")
+	}
+
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {
 		for {
