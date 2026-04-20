@@ -1,6 +1,9 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git -C 'c:/Trading apllication' add:*)",
+      "Bash(git -C 'c:/Trading apllication' commit:*)",
+      "Bash(git -C 'c:/Trading apllication' push origin main)",
       "Bash(xargs wc:*)",
       "Bash(go build:*)",
       "Bash(npx tsc:*)",

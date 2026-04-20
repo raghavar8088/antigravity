@@ -22,7 +22,7 @@ const (
 	optionMarketRegimeVolatile = "VOLATILE"
 	optionMarketRegimeMixed    = "MIXED"
 
-	optionRegimeMinBars = 55
+	optionRegimeMinBars = 30
 
 	optionMaxActiveStrategies      = 40
 	optionMaxStrategiesPerCategory = 12
@@ -107,9 +107,20 @@ func classifyMarketRegime(prices []float64) string {
 		return optionMarketRegimeUnknown
 	}
 
+	// Use adaptive lookback: prefer 55 bars but fall back to what's available.
+	slowPeriod := 55
+	if len(prices) < slowPeriod {
+		slowPeriod = len(prices)
+	}
+
 	fast := ema(prices, 21)
-	slow := ema(prices, 55)
-	fairValue := avgPrice(prices[len(prices)-30:])
+	slow := ema(prices, slowPeriod)
+
+	fairValueLen := 30
+	if len(prices) < fairValueLen {
+		fairValueLen = len(prices)
+	}
+	fairValue := avgPrice(prices[len(prices)-fairValueLen:])
 	if fairValue <= 0 {
 		return optionMarketRegimeUnknown
 	}
@@ -117,7 +128,11 @@ func classifyMarketRegime(prices []float64) string {
 	trendGap := math.Abs(fast-slow) / latest
 	distanceFromFairValue := math.Abs(latest-fairValue) / fairValue
 	shortVol := optionRecentAbsMove(prices, 14)
-	longVol := optionRecentAbsMove(prices, 55)
+	longVol := optionRecentAbsMove(prices, slowPeriod)
+	if longVol <= 0 {
+		// When longVol is unavailable, fall back to shortVol-based classification
+		longVol = shortVol
+	}
 	if longVol <= 0 {
 		return optionMarketRegimeUnknown
 	}

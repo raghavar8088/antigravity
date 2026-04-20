@@ -567,14 +567,30 @@ func main() {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// 11. WARMUP — Pre-fill strategy buffers from Coinbase REST
+	// 11. WARMUP — Pre-fill strategy buffers from Coinbase REST (with retry)
 	// ═══════════════════════════════════════════════════
 	log.Println("[WARMUP] Fetching historical candles to pre-fill strategy buffers...")
-	warmupData, err := marketdata.FetchWarmupCandles("BTC-USD")
-	if err != nil {
-		log.Printf("[WARMUP] ⚠️  Warmup failed (will warm up from live data): %v", err)
-	} else {
+	var warmupData *marketdata.WarmupData
+	for attempt := 1; attempt <= 3; attempt++ {
+		data, fetchErr := marketdata.FetchWarmupCandles("BTC-USD")
+		if fetchErr == nil && data != nil && len(data.Candles1m) >= 30 {
+			warmupData = data
+			break
+		}
+		log.Printf("[WARMUP] ⚠️  Attempt %d/3 failed (got %d candles): %v", attempt, func() int {
+			if data != nil {
+				return len(data.Candles1m)
+			}
+			return 0
+		}(), fetchErr)
+		if attempt < 3 {
+			time.Sleep(2 * time.Second)
+		}
+	}
+	if warmupData != nil {
 		orchestrator.WarmupStrategies(warmupData)
+	} else {
+		log.Println("[WARMUP] ⚠️  All warmup attempts failed — will warm up from live data")
 	}
 
 	log.Printf("[BOOT] Engine fully initialized in %s", time.Since(bootStart).Round(time.Millisecond))
