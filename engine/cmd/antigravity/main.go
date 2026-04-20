@@ -851,16 +851,44 @@ func main() {
 	http.HandleFunc("/api/options/trades", optionsEngine.HandleTrades)
 	http.HandleFunc("/api/options/strategies", optionsEngine.HandleStrategies)
 	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
-	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
+	// Wrap reset handlers so bars are re-injected immediately after reset —
+	// this ensures signals fire right away without waiting 55+ minutes.
+	reinjectBTCBars := func(engines ...interface{ InjectMinuteBars([]float64) }) {
+		go func() {
+			data, err := marketdata.FetchWarmupCandles("BTC-USD")
+			if err != nil || data == nil || len(data.Candles1m) == 0 {
+				log.Printf("[WARMUP] post-reset reinject failed: %v", err)
+				return
+			}
+			closes := make([]float64, len(data.Candles1m))
+			for i, c := range data.Candles1m {
+				closes[i] = c.Close
+			}
+			for _, eng := range engines {
+				eng.InjectMinuteBars(closes)
+			}
+			log.Printf("[WARMUP] post-reset: injected %d bars into %d engines", len(closes), len(engines))
+		}()
+	}
+
+	http.HandleFunc("/api/options/reset", func(w http.ResponseWriter, r *http.Request) {
+		optionsEngine.HandleReset(w, r)
+		reinjectBTCBars(optionsEngine)
+	})
 	http.HandleFunc("/api/options/clear-history", optionsEngine.HandleClearHistory)
+	http.HandleFunc("/api/options/warmup-bars", optionsEngine.HandleWarmupBars)
 
 	// Options Selling Scalper endpoints
 	http.HandleFunc("/api/options-selling/positions", optionsSellingEngine.HandlePositions)
 	http.HandleFunc("/api/options-selling/trades", optionsSellingEngine.HandleTrades)
 	http.HandleFunc("/api/options-selling/strategies", optionsSellingEngine.HandleStrategies)
 	http.HandleFunc("/api/options-selling/stats", optionsSellingEngine.HandleStats)
-	http.HandleFunc("/api/options-selling/reset", optionsSellingEngine.HandleReset)
+	http.HandleFunc("/api/options-selling/reset", func(w http.ResponseWriter, r *http.Request) {
+		optionsSellingEngine.HandleReset(w, r)
+		reinjectBTCBars(optionsSellingEngine)
+	})
 	http.HandleFunc("/api/options-selling/clear-history", optionsSellingEngine.HandleClearHistory)
+	http.HandleFunc("/api/options-selling/warmup-bars", optionsSellingEngine.HandleWarmupBars)
 
 	// Delta Exchange Live Bridge endpoints
 	http.HandleFunc("/api/delta-live/stats", func(w http.ResponseWriter, r *http.Request) {

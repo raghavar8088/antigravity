@@ -1006,3 +1006,28 @@ func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
 	log.Println("[OPTIONS] 🗑️ Option trade history cleared")
 	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
 }
+
+// HandleWarmupBars accepts POST {"close_prices":[...]} and injects bars immediately
+// so signals fire without waiting 55+ minutes to accumulate after a reset.
+func (e *Engine) HandleWarmupBars(w http.ResponseWriter, r *http.Request) {
+	setCORSOptions(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		ClosePrices []float64 `json:"close_prices"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.ClosePrices) == 0 {
+		http.Error(w, "invalid body: need {\"close_prices\":[...]}", http.StatusBadRequest)
+		return
+	}
+	e.InjectMinuteBars(body.ClosePrices)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":       true,
+		"injected": len(body.ClosePrices),
+	})
+}
