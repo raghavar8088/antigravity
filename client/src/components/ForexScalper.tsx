@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import type {
   ForexEngineStats,
   ForexPosition,
@@ -231,6 +232,15 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
       </div>
 
       {/* ── Tabs ───────────────────────────────────────────────────── */}
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={1_000_000}
+        title="DAILY PNL LEDGER"
+        description="Realized forex PnL grouped by exit day, with daily return benchmarked against that session's starting equity."
+        emptyMessage="No completed forex trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtUSD}
+      />
+
       <div className="glass-panel px-5 py-4">
         <div className="flex gap-2 border-b mb-4 overflow-x-auto" style={{ borderColor: "var(--border)" }}>
           {(["positions", "trades", "strategies", "quotes"] as Tab[]).map((t) => (

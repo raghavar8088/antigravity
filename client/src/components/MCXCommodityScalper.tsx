@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useMCXEngine from "@/hooks/useMCXEngine";
 import type { MCXPosition, MCXTrade, MCXStrategyStatus, MCXCommodityQuote } from "@/hooks/useMCXEngine";
 import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
@@ -536,6 +537,15 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
 
       {/* ── Strategy roster ── */}
       <StrategyRoster strategies={strategies} />
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_MCX_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized MCX option PnL grouped by exit day, with each day measured from the equity it opened with."
+        emptyMessage="No completed MCX trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtINR}
+      />
 
       {/* ── Trade ledger ── */}
       <TradeLedger trades={trades} />

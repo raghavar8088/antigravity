@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import NiftyOptionChainPanel from "@/components/NiftyOptionChainPanel";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
@@ -1021,6 +1022,15 @@ export default function Nifty50OptionScalper({
 
       {/* ── Strategies leaderboard ── */}
       <StrategiesPanel strategies={strategies} strategyNumbers={strategyNumbers} />
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_OPTIONS_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized NIFTY options PnL grouped by trade exit day, so strong and weak sessions stand out immediately."
+        emptyMessage="No closed NIFTY option trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtUSD}
+      />
 
       {/* ── Best strategy callout ── */}
       {bestStrategy && (

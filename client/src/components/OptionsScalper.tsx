@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useOptions";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
@@ -840,6 +841,15 @@ export default function OptionsScalper({ actionsEnabled = false }: OptionsScalpe
 
       {/* ── Strategies leaderboard ── */}
       <StrategiesPanel strategies={strategies} strategyNumbers={strategyNumbers} />
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_OPTIONS_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized BTC options PnL grouped by exit day, with each day measured against the equity it started with."
+        emptyMessage="No closed BTC option trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtUSD}
+      />
 
       {/* ── Best strategy callout ── */}
       {bestStrategy && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import type {
   CryptoEngineStats,
   CryptoPosition,
@@ -341,6 +342,15 @@ export default function CryptoEquityScalper({
           ))}
         </div>
       </div>
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized crypto-equity PnL grouped by exit day, making strong and weak trading sessions easy to spot."
+        emptyMessage="No completed crypto trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtUSD}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">

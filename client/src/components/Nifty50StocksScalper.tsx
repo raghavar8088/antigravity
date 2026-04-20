@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import type {
@@ -769,6 +770,15 @@ export default function Nifty50StocksScalper({
           <StrategyRoster strategies={strategies} />
         </div>
       </section>
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized NIFTY stock-option PnL grouped by exit day, so the scanner's daily edge is visible at a glance."
+        emptyMessage="No closed NIFTY stock-option trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtINR}
+      />
 
       {/* Trade Ledger */}
       <section className="glass-panel px-5 py-6 md:px-6">

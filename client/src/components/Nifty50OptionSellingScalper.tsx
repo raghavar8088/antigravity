@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DailyPnlLedger from "@/components/DailyPnlLedger";
 import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import type { OptionPosition, OptionStats, OptionStrategyStatus, OptionTrade } from "@/hooks/useNiftyOptions";
@@ -191,6 +192,15 @@ export default function Nifty50OptionSellingScalper({
         <SummaryCard label="Strategies" value={`${strategies.length}`} detail={`${strategies.filter((item) => item.status === "READY" || item.status === "IN_POSITION").length} live`} />
         <SummaryCard label="Premium Engine" value="Decay First" detail="Short calls and short puts" />
       </div>
+
+      <DailyPnlLedger
+        trades={trades}
+        initialEquity={INITIAL_BALANCE}
+        title="DAILY PNL LEDGER"
+        description="Realized NIFTY option-selling PnL grouped by exit day, with returns measured from that day's opening equity."
+        emptyMessage="No closed NIFTY option-selling trades yet, so there is no daily PnL ledger to display."
+        formatCurrency={fmtINR}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-6">

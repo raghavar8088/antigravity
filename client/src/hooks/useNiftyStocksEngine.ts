@@ -6,7 +6,7 @@ import type { StockLTPItem } from "@/app/api/stocks/ltp/route";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const INITIAL_BALANCE = 1_000_000;
-const MAX_OPEN_POSITIONS = 14;
+const MAX_OPEN_POSITIONS = 8;
 const MAX_BARS = 80; // ~4 min of price history at 3s ticks
 const MIN_BARS_FAST = 15; // enough for RSI14
 const MIN_BARS_SLOW = 22; // enough for EMA21 + Donchian20
@@ -371,6 +371,7 @@ function buildSignalInputs(bars: number[]): SignalInputs {
   const n = bars.length;
   const price = bars[n - 1];
   const prevBars = bars.slice(0, -1);
+  const breakoutWindow = prevBars.length > 0 ? prevBars.slice(-20) : bars.slice(-20);
 
   return {
     price,
@@ -383,8 +384,9 @@ function buildSignalInputs(bars: number[]): SignalInputs {
     mean20: sma(bars, 20),
     std20: stdDev(bars, 20),
     rsi14: rsi(bars, 14),
-    high20: Math.max(...bars.slice(-20)),
-    low20: Math.min(...bars.slice(-20)),
+    // Exclude the active bar so breakout and breakdown checks can trigger.
+    high20: Math.max(...breakoutWindow),
+    low20: Math.min(...breakoutWindow),
     momentum3: n >= 4 ? ((price - bars[n - 4]) / bars[n - 4]) * 100 : 0,
     momentum6: n >= 7 ? ((price - bars[n - 7]) / bars[n - 7]) * 100 : 0,
   };
