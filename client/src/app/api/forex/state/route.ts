@@ -129,7 +129,7 @@ export async function POST(request: Request) {
           body.totalPnl,
           body.tradeSeq,
           JSON.stringify(body.positions ?? []),
-          JSON.stringify((body.trades ?? []).slice(0, 500)),
+          JSON.stringify((body.trades ?? []).slice(0, 5000)),
           JSON.stringify(body.strategies ?? []),
         ],
       );

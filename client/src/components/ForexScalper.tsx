@@ -36,6 +36,16 @@ function fmtTime(iso: string) {
   catch { return "--"; }
 }
 
+function fmtHold(seconds: number) {
+  if (!seconds || seconds <= 0) return "0s";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
+  return `${remainingSeconds}s`;
+}
+
 function SummaryCard({ label, value, detail, accent = "" }: { label: string; value: string; detail?: string; accent?: string }) {
   return (
     <div className="summary-card flex min-h-[110px] flex-col justify-between gap-2">
@@ -128,6 +138,7 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
   const [isResetting, setIsResetting] = useState(false);
   const totalReturnPct = ((stats.equity - INITIAL_BALANCE) / INITIAL_BALANCE) * 100;
   const bestStrategy = [...strategies].sort((a, b) => b.totalPnl - a.totalPnl)[0];
+  const hiddenTradeCount = Math.max(stats.totalTrades - trades.length, 0);
 
   const handleReset = () => {
     if (!actionsEnabled) return;
@@ -322,22 +333,33 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
           trades.length === 0 ? (
             <div className="py-10 text-center text-sm" style={{ color: "var(--text-secondary)" }}>No completed trades recorded for this session.</div>
           ) : (
-            <div className="overflow-x-auto rounded-[18px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-               <table className="w-full text-left text-sm" style={{ minWidth: 900 }}>
+            <div className="space-y-3">
+              {hiddenTradeCount > 0 ? (
+                <div className="rounded-[14px] border px-4 py-3 text-xs" style={{ borderColor: "rgba(245,124,0,0.20)", background: "rgba(245,124,0,0.06)", color: "var(--text-secondary)" }}>
+                  Showing the latest {trades.length.toLocaleString("en-US")} of {stats.totalTrades.toLocaleString("en-US")} closed forex trades restored for this session.
+                </div>
+              ) : null}
+              <div className="overflow-x-auto rounded-[18px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+               <table className="w-full text-left text-sm" style={{ minWidth: 1180 }}>
                   <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
                     <tr className="text-[11px] uppercase tracking-[0.12em]">
                       <th className="px-4 py-3 font-medium">Time</th>
+                      <th className="px-4 py-3 font-medium">Strategy</th>
                       <th className="px-4 py-3 font-medium">Pair</th>
                       <th className="px-4 py-3 font-medium">Side</th>
                       <th className="px-4 py-3 text-right font-medium">Entry / Exit</th>
                       <th className="px-4 py-3 text-right font-medium">PnL</th>
-                      <th className="px-4 py-3 text-right font-medium">Hold</th>
+                      <th className="px-4 py-3 text-right font-medium">Hold / Exit</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {trades.slice(0, 100).map(t => (
+                    {trades.map(t => (
                       <tr key={t.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
                         <td className="px-4 py-3 font-mono text-xs text-zinc-500">{fmtTime(t.exitTime)}</td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{t.strategyName}</div>
+                          <div className="text-[10px] text-zinc-400">{t.id}</div>
+                        </td>
                         <td className="px-4 py-3 font-semibold">{t.symbol}</td>
                         <td className="px-4 py-3"><SideBadge side={t.side} /></td>
                         <td className="px-4 py-3 text-right font-mono text-xs">
@@ -350,11 +372,12 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
                            </div>
                            <div className="text-[10px] text-zinc-400">{fmtPct(t.returnPct, true)}</div>
                         </td>
-                        <td className="px-4 py-3 text-right text-xs text-zinc-500">{t.exitReason} · {fmtTime(t.entryTime)}</td>
+                        <td className="px-4 py-3 text-right text-xs text-zinc-500">{fmtHold(t.holdSeconds)} | {t.exitReason.replace(/_/g, " ")}</td>
                       </tr>
                     ))}
                   </tbody>
                </table>
+            </div>
             </div>
           )
         )}

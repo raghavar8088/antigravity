@@ -12,7 +12,7 @@ const MIN_BARS_FAST      = 18;
 const MIN_BARS_SLOW      = 28;
 const SIGNAL_THRESHOLD   = 61;
 const POLL_MS            = 5_000;   // 5s — Yahoo Finance rate limit friendly
-const MAX_TRADES         = 500;
+const MAX_TRADES         = 5_000;
 const ALLOCATION_USD     = 15_000;  // larger notional for forex (tight moves)
 const PROFIT_LOCK_PROGRESS = 0.28;
 const PROFIT_LOCK_SHARE    = 0.40;
@@ -489,6 +489,22 @@ function buildPersistedPayload(engine: EngineRef): ForexDbPayload {
   };
 }
 
+function buildSaveSignature(engine: EngineRef): string {
+  const storedTradeCount = Math.min(engine.trades.length, MAX_TRADES);
+  const oldestStoredTradeId = storedTradeCount > 0 ? engine.trades[storedTradeCount - 1]?.id ?? "" : "";
+  return JSON.stringify({
+    balance: engine.balance,
+    totalWins: engine.totalWins,
+    totalLosses: engine.totalLosses,
+    totalPnl: engine.totalRealizedPnl,
+    tradeSeq: engine.seq,
+    openPositions: [...engine.positions.keys()],
+    tradeCount: engine.trades.length,
+    latestTradeId: engine.trades[0]?.id ?? "",
+    oldestStoredTradeId,
+  });
+}
+
 function saveToLocalStorage(engine: EngineRef): void {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(buildPersistedPayload(engine)));
@@ -505,6 +521,19 @@ function loadFromLocalStorage(): ForexDbPayload | null {
   } catch {
     return null;
   }
+}
+
+function compareSavedStates(a: ForexDbPayload, b: ForexDbPayload): number {
+  const tradeSeqDiff = (a.tradeSeq ?? 0) - (b.tradeSeq ?? 0);
+  if (tradeSeqDiff !== 0) return tradeSeqDiff;
+
+  const tradeCountDiff = (a.trades?.length ?? 0) - (b.trades?.length ?? 0);
+  if (tradeCountDiff !== 0) return tradeCountDiff;
+
+  const positionCountDiff = (a.positions?.length ?? 0) - (b.positions?.length ?? 0);
+  if (positionCountDiff !== 0) return positionCountDiff;
+
+  return 0;
 }
 
 async function saveForexState(engine: EngineRef): Promise<void> {
@@ -577,15 +606,22 @@ function applySavedState(engine: EngineRef, saved: ForexDbPayload): boolean {
 
 async function loadForexState(engine: EngineRef): Promise<boolean> {
   const local = loadFromLocalStorage();
+  let dbState: ForexDbPayload | null = null;
   try {
     const response = await fetch("/api/forex/state");
-    if (!response.ok) return local ? applySavedState(engine, local) : false;
-    const data = await response.json() as { ok: boolean; found: boolean; state?: ForexDbPayload };
-    if (data.ok && data.found && data.state) return applySavedState(engine, data.state);
-    return local ? applySavedState(engine, local) : false;
+    if (response.ok) {
+      const data = await response.json() as { ok: boolean; found: boolean; state?: ForexDbPayload };
+      if (data.ok && data.found && data.state) dbState = data.state;
+    }
   } catch {
-    return local ? applySavedState(engine, local) : false;
+    // Fall back to the newest local snapshot when the DB is unavailable.
   }
+
+  const saved = local && dbState
+    ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
+    : (local ?? dbState);
+
+  return saved ? applySavedState(engine, saved) : false;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -651,7 +687,7 @@ export default function useForexEngine() {
       returnPct: position.returnPct,
     })));
 
-    setTrades(engine.trades.slice(0, 120).map((trade) => ({
+    setTrades(engine.trades.slice(0, MAX_TRADES).map((trade) => ({
       id: trade.id,
       strategyId: trade.strategyId,
       strategyName: trade.strategyName,
@@ -748,6 +784,7 @@ export default function useForexEngine() {
       if (strategy.position) {
         const latest = engine.quotes[strategy.position.pair.symbol];
         if (latest?.price > 0) {
+          // eslint-disable-next-line react-hooks/immutability
           strategy.position.currentPrice = latest.price;
           strategy.position.unrealizedPnl = calcPnl(strategy.position.side, strategy.position.entryPrice, latest.price, strategy.position.quantity);
           strategy.position.returnPct = strategy.position.notional > 0 ? (strategy.position.unrealizedPnl / strategy.position.notional) * 100 : 0;
@@ -803,15 +840,7 @@ export default function useForexEngine() {
     pushDisplayState();
 
     if (!dbLoadedRef.current) return;
-    const signature = JSON.stringify({
-      balance: engine.balance,
-      totalWins: engine.totalWins,
-      totalLosses: engine.totalLosses,
-      totalPnl: engine.totalRealizedPnl,
-      tradeSeq: engine.seq,
-      openPositions: [...engine.positions.keys()],
-      tradeIds: engine.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
-    });
+    const signature = buildSaveSignature(engine);
     if (signature !== lastSavedSignatureRef.current) {
       lastSavedSignatureRef.current = signature;
       void saveForexState(engine);
@@ -831,15 +860,7 @@ export default function useForexEngine() {
   useEffect(() => {
     void loadForexState(engineRef.current).then(() => {
       dbLoadedRef.current = true;
-      lastSavedSignatureRef.current = JSON.stringify({
-        balance: engineRef.current.balance,
-        totalWins: engineRef.current.totalWins,
-        totalLosses: engineRef.current.totalLosses,
-        totalPnl: engineRef.current.totalRealizedPnl,
-        tradeSeq: engineRef.current.seq,
-        openPositions: [...engineRef.current.positions.keys()],
-        tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
-      });
+      lastSavedSignatureRef.current = buildSaveSignature(engineRef.current);
       pushDisplayState();
     });
   }, [pushDisplayState]);
