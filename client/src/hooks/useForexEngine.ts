@@ -127,7 +127,8 @@ export type ForexStrategyStatus = {
 export type ForexEngineStats = {
   equity: number; balance: number; sessionPnl: number;
   unrealizedPnl: number; realizedPnl: number;
-  totalTrades: number; openPositions: number; winRate: number;
+  totalTrades: number; totalWins: number; totalLosses: number;
+  openPositions: number; winRate: number;
   activeStrategies: number; warmingUp: boolean;
   liveSymbols: number; lastUpdateAt: number; diagnostics: string;
 };
@@ -445,8 +446,8 @@ function rosterStateFor(status: Status): RosterState {
 
 const EMPTY_STATS: ForexEngineStats = {
   equity: INITIAL_BALANCE, balance: INITIAL_BALANCE, sessionPnl: 0,
-  unrealizedPnl: 0, realizedPnl: 0, totalTrades: 0, openPositions: 0,
-  winRate: 0, activeStrategies: 0, warmingUp: true, liveSymbols: 0,
+  unrealizedPnl: 0, realizedPnl: 0, totalTrades: 0, totalWins: 0, totalLosses: 0,
+  openPositions: 0, winRate: 0, activeStrategies: 0, warmingUp: true, liveSymbols: 0,
   lastUpdateAt: 0, diagnostics: "Bootstrapping forex feed.",
 };
 
@@ -707,6 +708,8 @@ export default function useForexEngine() {
       unrealizedPnl,
       realizedPnl: engine.totalRealizedPnl,
       totalTrades,
+      totalWins: engine.totalWins,
+      totalLosses: engine.totalLosses,
       openPositions: engine.positions.size,
       winRate,
       activeStrategies: engine.strategies.filter((strategy) => strategy.status !== "WARMING").length,

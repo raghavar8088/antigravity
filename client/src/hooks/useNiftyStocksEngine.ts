@@ -185,6 +185,8 @@ export type StocksEngineStats = {
   unrealizedPnl: number;
   realizedPnl: number;
   totalTrades: number;
+  totalWins: number;
+  totalLosses: number;
   openPositions: number;
   winRate: number;
   activeStrategies: number;
@@ -702,6 +704,8 @@ const EMPTY_STATS: StocksEngineStats = {
   unrealizedPnl: 0,
   realizedPnl: 0,
   totalTrades: 0,
+  totalWins: 0,
+  totalLosses: 0,
   openPositions: 0,
   winRate: 0,
   activeStrategies: 0,
@@ -1067,6 +1071,8 @@ export default function useNiftyStocksEngine() {
       unrealizedPnl,
       realizedPnl: eng.totalRealizedPnl,
       totalTrades: totalStratTrades,
+      totalWins: eng.totalWins,
+      totalLosses: eng.totalLosses,
       openPositions: openCount,
       winRate: totalWinRate,
       activeStrategies: eng.strategies.filter((s) => s.status !== "WARMING").length,
