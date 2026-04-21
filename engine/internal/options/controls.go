@@ -204,49 +204,18 @@ func sizeMultiplierFor(s *strategyState) float64 {
 }
 
 func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
-	if len(ctx.Prices) < 25 {
+	if len(ctx.Prices) < 22 {
 		return false
 	}
-
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
-	trend := ema(ctx.Prices, 55)
-	rsiVal := rsi(ctx.Prices, 14)
+	slow := ema(ctx.Prices, 21)
 	mom3 := momentum(ctx.Prices, 3)
-	mom8 := momentum(ctx.Prices, 8)
 
-	bullishSeller := def.Type == Put
-	if bullishSeller {
-		switch def.Category {
-		case "Momentum", "Breakout":
-			// No RSI ceiling — overbought (RSI>75) is ideal for put sellers since
-			// price is moving further from strike. Floor 38 prevents crash entries.
-			return price >= trend*0.985 && mom3 > 0.0001 && mom8 > 0 && rsiVal >= 38
-		case "Hybrid":
-			// TRIPLE_BULL signal fires at RSI < 35; no RSI bounds needed.
-			return price >= trend*0.990 && mom3 > 0.00005 && mom8 > 0
-		case "Mean Reversion", "Capitulation":
-			// RSI level is set by the signal; only block deep-oversold entries.
-			return price >= fast*0.998 && price >= trend*0.980 && mom3 > -0.0015 && rsiVal >= 20
-		default:
-			return price >= fast && mom3 >= -0.0002
-		}
+	if def.Type == Put {
+		return price >= fast*0.995 && fast >= slow*0.997 && mom3 > -0.003
 	}
-
-	switch def.Category {
-	case "Momentum", "Breakout":
-		// No RSI floor — oversold (RSI<25) is ideal for call sellers. Ceiling 62
-		// ensures we don't sell calls into a strong bull move.
-		return price <= trend*1.015 && mom3 < -0.0001 && mom8 < 0 && rsiVal <= 62
-	case "Hybrid":
-		// TRIPLE_BEAR signal fires at RSI > 65; no RSI floor needed.
-		return price <= trend*1.010 && mom3 < -0.00005 && mom8 < 0
-	case "Mean Reversion", "Capitulation":
-		// RSI level is set by the signal; only block deep-overbought entries.
-		return price <= fast*1.002 && price <= trend*1.020 && mom3 < 0.0015 && rsiVal <= 80
-	default:
-		return price <= fast && mom3 <= 0.0002
-	}
+	return price <= fast*1.005 && fast <= slow*1.003 && mom3 < 0.003
 }
 
 // niftyEntryConfirmed mirrors optionEntryConfirmed with momentum thresholds
