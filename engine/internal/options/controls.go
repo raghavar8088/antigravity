@@ -219,18 +219,15 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout":
-			// trendAligned removed: flat/mixed regimes blocked too many valid puts.
-			// mom3 lowered 0.0005→0.0001 (~$8 on $84k BTC); RSI floor 45→38.
-			return price >= trend*0.985 && mom3 > 0.0001 && mom8 > 0 && rsiVal >= 38 && rsiVal <= 75
+			// No RSI ceiling — overbought (RSI>75) is ideal for put sellers since
+			// price is moving further from strike. Floor 38 prevents crash entries.
+			return price >= trend*0.985 && mom3 > 0.0001 && mom8 > 0 && rsiVal >= 38
 		case "Hybrid":
-			// TRIPLE_BULL signal fires at RSI < 35 — no minimum RSI bound here or
-			// the signal and confirmation gates would never overlap.
-			return price >= trend*0.990 && mom3 > 0.00005 && mom8 > 0 && rsiVal <= 75
+			// TRIPLE_BULL signal fires at RSI < 35; no RSI bounds needed.
+			return price >= trend*0.990 && mom3 > 0.00005 && mom8 > 0
 		case "Mean Reversion", "Capitulation":
-			// RSI is already encoded in the firing signal (RSI_OVERSOLD_EXTREME fires
-			// at RSI ≈ 25, OVEREXTENSION_FADE_DOWN fires at RSI < 28). Adding a lower
-			// RSI bound ≥ 38 here creates a permanently impossible condition — removed.
-			return price >= fast*0.998 && price >= trend*0.980 && mom3 > -0.0015 && rsiVal <= 62
+			// RSI level is set by the signal; only block deep-oversold entries.
+			return price >= fast*0.998 && price >= trend*0.980 && mom3 > -0.0015 && rsiVal >= 20
 		default:
 			return price >= fast && mom3 >= -0.0002
 		}
@@ -238,16 +235,15 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	switch def.Category {
 	case "Momentum", "Breakout":
-		// trendAligned removed; RSI ceiling 55→62; mom3 threshold -0.0005→-0.0001.
-		return price <= trend*1.015 && mom3 < -0.0001 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 62
+		// No RSI floor — oversold (RSI<25) is ideal for call sellers. Ceiling 62
+		// ensures we don't sell calls into a strong bull move.
+		return price <= trend*1.015 && mom3 < -0.0001 && mom8 < 0 && rsiVal <= 62
 	case "Hybrid":
-		// TRIPLE_BEAR signal fires at RSI > 65 — no maximum RSI bound here.
-		return price <= trend*1.010 && mom3 < -0.00005 && mom8 < 0 && rsiVal >= 25
+		// TRIPLE_BEAR signal fires at RSI > 65; no RSI floor needed.
+		return price <= trend*1.010 && mom3 < -0.00005 && mom8 < 0
 	case "Mean Reversion", "Capitulation":
-		// RSI is already encoded in the firing signal (RSI_OVERBOUGHT_EXTREME fires
-		// at RSI ≈ 75, OVEREXTENSION_FADE_UP fires at RSI > 72). Adding an upper
-		// RSI bound ≤ 62 here creates a permanently impossible condition — removed.
-		return price <= fast*1.002 && price <= trend*1.020 && mom3 < 0.0015 && rsiVal >= 38
+		// RSI level is set by the signal; only block deep-overbought entries.
+		return price <= fast*1.002 && price <= trend*1.020 && mom3 < 0.0015 && rsiVal <= 80
 	default:
 		return price <= fast && mom3 <= 0.0002
 	}
