@@ -40,7 +40,6 @@ type Engine struct {
 	tradeSeq         int
 	lastRosterEval   time.Time
 	lastRosterRegime string
-	lastDebugAt      time.Time
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
@@ -257,10 +256,11 @@ func (e *Engine) ResetAccount() PersistedState {
 
 	e.trades = nil
 	e.balance = initialOptionsBalance
+	e.lastPrice = 0
 	e.priceHist = nil
+	e.minuteBars = nil
+	e.lastMinute = 0
 	e.tradeSeq = 0
-	// minuteBars and lastMinute are price history for signal computation,
-	// not account state — preserve them so signals fire immediately after reset.
 	e.lastRosterEval = time.Time{}
 	e.lastRosterRegime = ""
 
@@ -418,61 +418,6 @@ func (e *Engine) tick() {
 
 	for _, s := range e.states {
 		e.manageStrategyRuntime(s, ctx, regime, iv, nowUTC, &openCount)
-	}
-
-	if e.lastDebugAt.IsZero() || nowUTC.Sub(e.lastDebugAt) >= 2*time.Minute {
-		e.lastDebugAt = nowUTC
-		e.logDiagnosticsLocked(ctx, regime, iv, nowUTC)
-	}
-}
-
-func (e *Engine) logDiagnosticsLocked(ctx SignalContext, regime string, iv float64, now time.Time) {
-	active, inPos, openSlots := 0, 0, 0
-	for _, s := range e.states {
-		if s.stats.RosterState == StrategyRosterActive {
-			active++
-		}
-		if s.position != nil {
-			inPos++
-		}
-	}
-	openSlots = maxConcurrentPositions - inPos
-	log.Printf("[OPTIONS DIAG] %s | price=%.0f iv=%.2f regime=%s bars=%d active=%d inPos=%d openSlots=%d",
-		e.marketProfile.Name, e.lastPrice, iv, regime, len(e.minuteBars), active, inPos, openSlots)
-
-	if openSlots <= 0 || active == 0 {
-		return
-	}
-
-	for _, s := range e.states {
-		if s.stats.RosterState != StrategyRosterActive || s.position != nil {
-			continue
-		}
-		var reason string
-		switch {
-		case !s.disabledUntil.IsZero() && now.Before(s.disabledUntil):
-			reason = "disabled"
-		case !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second:
-			reason = fmt.Sprintf("cooldown(%.0fs left)", (time.Duration(s.def.CooldownSecs)*time.Second - now.Sub(s.lastTradeAt)).Seconds())
-		case !isCategoryAlignedWithRegime(s.def.Category, regime):
-			reason = fmt.Sprintf("regime_mismatch(%s vs %s)", s.def.Category, regime)
-		default:
-			fn, ok := e.signals[s.def.Signal]
-			sigFired := ok && fn(ctx)
-			confirmed := sigFired && e.entryConfirmed(s.def, ctx, regime)
-			switch {
-			case !ok:
-				reason = fmt.Sprintf("signal_missing(%s)", s.def.Signal)
-			case !sigFired:
-				reason = fmt.Sprintf("signal_not_fired(%s)", s.def.Signal)
-			case !confirmed:
-				reason = "entry_not_confirmed"
-			default:
-				reason = "SHOULD_TRADE(premium_check)"
-			}
-		}
-		log.Printf("[OPTIONS DIAG]   %-45s cat=%-15s sig=%-30s -> %s",
-			s.def.Name, s.def.Category, s.def.Signal, reason)
 	}
 }
 
@@ -991,6 +936,22 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 	e.ResetAccount()
 	log.Println("[OPTIONS] Options account reset to $1,000,000")
 	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	return
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.balance = initialOptionsBalance
+	e.trades = nil
+	for _, s := range e.states {
+		s.position = nil
+		s.lastTradeAt = time.Time{}
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
+		s.stats = newStrategyStatus(s.def)
+	}
+	e.schedulePersistLocked(e.exportStateLocked())
+	log.Println("[OPTIONS] 🔄 Options account reset to $1,000,000")
+	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
@@ -1005,29 +966,4 @@ func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
 	e.ClearHistory()
 	log.Println("[OPTIONS] 🗑️ Option trade history cleared")
 	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
-}
-
-// HandleWarmupBars accepts POST {"close_prices":[...]} and injects bars immediately
-// so signals fire without waiting 55+ minutes to accumulate after a reset.
-func (e *Engine) HandleWarmupBars(w http.ResponseWriter, r *http.Request) {
-	setCORSOptions(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
-	}
-	var body struct {
-		ClosePrices []float64 `json:"close_prices"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.ClosePrices) == 0 {
-		http.Error(w, "invalid body: need {\"close_prices\":[...]}", http.StatusBadRequest)
-		return
-	}
-	e.InjectMinuteBars(body.ClosePrices)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":       true,
-		"injected": len(body.ClosePrices),
-	})
 }

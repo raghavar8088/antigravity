@@ -39,7 +39,6 @@ type Engine struct {
 	tradeSeq         int
 	lastRosterEval   time.Time
 	lastRosterRegime string
-	lastDebugAt      time.Time
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
@@ -212,10 +211,11 @@ func (e *Engine) ResetAccount() PersistedState {
 
 	e.trades = nil
 	e.balance = initialOptionsBalance
+	e.lastPrice = 0
 	e.priceHist = nil
+	e.minuteBars = nil
+	e.lastMinute = 0
 	e.tradeSeq = 0
-	// minuteBars and lastMinute are price history for signal computation,
-	// not account state — preserve them so signals fire immediately after reset.
 
 	for _, s := range e.states {
 		s.position = nil
@@ -292,26 +292,6 @@ func (e *Engine) UpdatePrice(price float64) {
 	}
 }
 
-// InjectMinuteBars replaces the current minuteBars with the provided close prices.
-// Call this on startup to seed the engine with real historical bars so regime
-// classification and signal confirmation work immediately without a warmup delay.
-func (e *Engine) InjectMinuteBars(closePrices []float64) {
-	if len(closePrices) == 0 {
-		return
-	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if len(closePrices) > 300 {
-		closePrices = closePrices[len(closePrices)-300:]
-	}
-	e.minuteBars = make([]float64, len(closePrices))
-	copy(e.minuteBars, closePrices)
-	if len(closePrices) > 0 {
-		e.lastPrice = closePrices[len(closePrices)-1]
-	}
-	log.Printf("[OPTIONS SELLING] Injected %d real minute bars (last=%.2f)", len(e.minuteBars), e.lastPrice)
-}
-
 func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -357,74 +337,6 @@ func (e *Engine) tick() {
 
 	for _, s := range e.states {
 		e.manageStrategyRuntime(s, ctx, regime, iv, nowUTC, &openCount)
-	}
-
-	if e.lastDebugAt.IsZero() || nowUTC.Sub(e.lastDebugAt) >= 2*time.Minute {
-		e.lastDebugAt = nowUTC
-		e.logDiagnosticsLocked(ctx, regime, iv, nowUTC)
-	}
-}
-
-func (e *Engine) logDiagnosticsLocked(ctx SignalContext, regime string, iv float64, now time.Time) {
-	active, inPos, openSlots := 0, 0, 0
-	for _, s := range e.states {
-		if s.stats.RosterState == StrategyRosterActive {
-			active++
-		}
-		if s.position != nil {
-			inPos++
-		}
-	}
-	openSlots = maxConcurrentPositions - inPos
-	log.Printf("[SELL-DIAG] %s | price=%.0f iv=%.2f regime=%s bars=%d active=%d inPos=%d openSlots=%d",
-		e.marketProfile.Name, e.lastPrice, iv, regime, len(e.minuteBars), active, inPos, openSlots)
-
-	if openSlots <= 0 || active == 0 {
-		return
-	}
-
-	for _, s := range e.states {
-		if s.stats.RosterState != StrategyRosterActive || s.position != nil {
-			continue
-		}
-		var reason string
-		switch {
-		case !s.disabledUntil.IsZero() && now.Before(s.disabledUntil):
-			reason = "disabled"
-		case !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second:
-			reason = fmt.Sprintf("cooldown(%.0fs left)", (time.Duration(s.def.CooldownSecs)*time.Second - now.Sub(s.lastTradeAt)).Seconds())
-		case !isCategoryAlignedWithRegime(s.def.Category, regime):
-			reason = fmt.Sprintf("regime_mismatch(%s vs %s)", s.def.Category, regime)
-		default:
-			fn, ok := e.signals[s.def.Signal]
-			sigFired := ok && fn(ctx)
-			confirmed := sigFired && e.entryConfirmed(s.def, ctx, regime)
-			switch {
-			case !ok:
-				reason = fmt.Sprintf("signal_missing(%s)", s.def.Signal)
-			case !sigFired:
-				reason = fmt.Sprintf("signal_not_fired(%s)", s.def.Signal)
-			case !confirmed:
-				reason = "entry_not_confirmed"
-			default:
-				// Signal fired and confirmed — check if premium pricing passes
-				var strike float64
-				if s.def.Type == Call {
-					strike = e.lastPrice * (1 + s.def.StrikePctOTM)
-				} else {
-					strike = e.lastPrice * (1 - s.def.StrikePctOTM)
-				}
-				testExpiry := time.Now().UTC().Add(time.Duration(s.def.ExpiryMinutes) * time.Minute)
-				testPR := PriceOption(e.lastPrice, strike, testExpiry, iv, s.def.Type)
-				if testPR.Premium < 0.10 {
-					reason = fmt.Sprintf("PREMIUM_TOO_LOW($%.4f < $0.10, strike=$%.0f, iv=%.2f)", testPR.Premium, strike, iv)
-				} else {
-					reason = fmt.Sprintf("SHOULD_TRADE(premium=$%.2f, strike=$%.0f)", testPR.Premium, strike)
-				}
-			}
-		}
-		log.Printf("[SELL-DIAG]   %-45s cat=%-15s sig=%-30s -> %s",
-			s.def.Name, s.def.Category, s.def.Signal, reason)
 	}
 }
 
@@ -560,12 +472,9 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium < 0.10 {
-		// Reject options with sub-$0.10 premiums: truly deep OTM with negligible
-		// value. Note: $1 floor was too aggressive — OTM premiums at current BTC
-		// prices ($80k-$90k) with 135-210min expiries typically range $0.15-$0.80.
-		log.Printf("[OPTIONS SELLING] %s %s | Strike: $%.0f | Premium too low: $%.4f (IV=%.2f, TTL=%.0fmin) — skipping",
-			def.Name, def.Type, strike, pr.Premium, iv, expiry.Sub(time.Now().UTC()).Minutes())
+	if pr.Premium < 1.0 {
+		// Reject options with sub-$1 premiums: they are deep OTM with unrealistic
+		// quantities (positionUSD/0.01 = 1,000,000 contracts) that distort PnL.
 		return nil
 	}
 
@@ -948,30 +857,4 @@ func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	e.ClearHistory()
 	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
-}
-
-// HandleWarmupBars accepts a POST with {"close_prices":[...]} and injects the
-// bars immediately so signals can fire without waiting 55+ minutes to accumulate.
-// Call this after any reset or on demand from the UI.
-func (e *Engine) HandleWarmupBars(w http.ResponseWriter, r *http.Request) {
-	setCORSOptions(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
-	}
-	var body struct {
-		ClosePrices []float64 `json:"close_prices"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.ClosePrices) == 0 {
-		http.Error(w, "invalid body: need {\"close_prices\":[...]}", http.StatusBadRequest)
-		return
-	}
-	e.InjectMinuteBars(body.ClosePrices)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":       true,
-		"injected": len(body.ClosePrices),
-	})
 }

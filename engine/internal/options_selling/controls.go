@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 15
+	maxConcurrentPositions   = 8
 	optionTradeAllocationUSD = initialOptionsBalance * 0.01
 
 	optionStatusReady      = "READY"
@@ -22,10 +22,10 @@ const (
 	optionMarketRegimeVolatile = "VOLATILE"
 	optionMarketRegimeMixed    = "MIXED"
 
-	optionRegimeMinBars = 30
+	optionRegimeMinBars = 55
 
-	optionMaxActiveStrategies      = 40
-	optionMaxStrategiesPerCategory = 12
+	optionMaxActiveStrategies      = 13
+	optionMaxStrategiesPerCategory = 4
 	optionRosterRefreshInterval    = 30 * time.Second
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
@@ -107,20 +107,9 @@ func classifyMarketRegime(prices []float64) string {
 		return optionMarketRegimeUnknown
 	}
 
-	// Use adaptive lookback: prefer 55 bars but fall back to what's available.
-	slowPeriod := 55
-	if len(prices) < slowPeriod {
-		slowPeriod = len(prices)
-	}
-
 	fast := ema(prices, 21)
-	slow := ema(prices, slowPeriod)
-
-	fairValueLen := 30
-	if len(prices) < fairValueLen {
-		fairValueLen = len(prices)
-	}
-	fairValue := avgPrice(prices[len(prices)-fairValueLen:])
+	slow := ema(prices, 55)
+	fairValue := avgPrice(prices[len(prices)-30:])
 	if fairValue <= 0 {
 		return optionMarketRegimeUnknown
 	}
@@ -128,11 +117,7 @@ func classifyMarketRegime(prices []float64) string {
 	trendGap := math.Abs(fast-slow) / latest
 	distanceFromFairValue := math.Abs(latest-fairValue) / fairValue
 	shortVol := optionRecentAbsMove(prices, 14)
-	longVol := optionRecentAbsMove(prices, slowPeriod)
-	if longVol <= 0 {
-		// When longVol is unavailable, fall back to shortVol-based classification
-		longVol = shortVol
-	}
+	longVol := optionRecentAbsMove(prices, 55)
 	if longVol <= 0 {
 		return optionMarketRegimeUnknown
 	}
@@ -207,18 +192,39 @@ func sizeMultiplierFor(s *strategyState) float64 {
 }
 
 func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
-	if len(ctx.Prices) < 22 {
+	if len(ctx.Prices) < 25 {
 		return false
 	}
+
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
 	slow := ema(ctx.Prices, 21)
+	trend := ema(ctx.Prices, 55)
+	rsiVal := rsi(ctx.Prices, 14)
 	mom3 := momentum(ctx.Prices, 3)
+	mom8 := momentum(ctx.Prices, 8)
 
-	if def.Type == Put {
-		return price >= fast*0.995 && fast >= slow*0.997 && mom3 > -0.003
+	bullishSeller := def.Type == Put
+	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
+	if bullishSeller {
+		switch def.Category {
+		case "Momentum", "Breakout", "Hybrid":
+			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+		case "Mean Reversion", "Capitulation":
+			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
+		default:
+			return price >= fast && mom3 >= -0.0002
+		}
 	}
-	return price <= fast*1.005 && fast <= slow*1.003 && mom3 < 0.003
+
+	switch def.Category {
+	case "Momentum", "Breakout", "Hybrid":
+		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+	case "Mean Reversion", "Capitulation":
+		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
+	default:
+		return price <= fast && mom3 <= 0.0002
+	}
 }
 
 // niftyEntryConfirmed mirrors optionEntryConfirmed with momentum thresholds
