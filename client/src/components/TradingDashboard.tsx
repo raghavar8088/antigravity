@@ -1207,7 +1207,7 @@ export default function TradingDashboard({
           <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto" }}>
             {/* Crypto sub-tabs */}
             {activeGroup === "crypto" && ([
-              { key: "options",          label: "BTC Option Scalper" },
+              { key: "options",          label: "BTC Option Buying" },
               { key: "options-selling",  label: "BTC Option Selling" },
               { key: "deltaLive",        label: "Delta Live" },
               { key: "spotBuy",          label: "BTC Spot Buy" },
