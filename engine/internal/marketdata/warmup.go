@@ -16,22 +16,17 @@ type WarmupData struct {
 }
 
 func FetchWarmupCandles(symbol string) (*WarmupData, error) {
-	log.Printf("[WARMUP] Fetching real-time 1m and 5m candles from Coinbase REST...")
+	log.Printf("[WARMUP] Fetching real-time 1m and 5m candles from Binance REST...")
 
-	// Coinbase API limit is 300 per granular request.
-	candles1m, err := fetchKlines(symbol, "60")
+	candles1m, err := fetchBinanceKlines("BTCUSDT", "1m", 300)
 	if err != nil {
 		return nil, fmt.Errorf("warmup 1m fetch failed: %w", err)
 	}
 
-	candles5m, err := fetchKlines(symbol, "300")
+	candles5m, err := fetchBinanceKlines("BTCUSDT", "5m", 300)
 	if err != nil {
 		return nil, fmt.Errorf("warmup 5m fetch failed: %w", err)
 	}
-
-	// Important: Coinbase returns descending time (newest first). Must reverse it!
-	reverseCandles(candles1m)
-	reverseCandles(candles5m)
 
 	log.Printf("[WARMUP] ✅ Loaded %d x 1m candles and %d x 5m candles", len(candles1m), len(candles5m))
 	return &WarmupData{
@@ -40,12 +35,12 @@ func FetchWarmupCandles(symbol string) (*WarmupData, error) {
 	}, nil
 }
 
-// fetchKlines calls the Coinbase REST candles endpoint.
-// Response format: [[ time (unix secs), low, high, open, close, volume ], ...]
-func fetchKlines(symbol, granularity string) ([]Candle, error) {
+// fetchBinanceKlines calls the Binance public klines endpoint (no auth needed).
+// Response: [[openTime, open, high, low, close, volume, closeTime, ...], ...]
+func fetchBinanceKlines(symbol, interval string, limit int) ([]Candle, error) {
 	url := fmt.Sprintf(
-		"https://api.exchange.coinbase.com/products/%s/candles?granularity=%s",
-		symbol, granularity,
+		"https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&limit=%d",
+		symbol, interval, limit,
 	)
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -59,10 +54,10 @@ func fetchKlines(symbol, granularity string) ([]Candle, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("coinbase API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("binance API returned status %d", resp.StatusCode)
 	}
 
-	var raw [][]float64
+	var raw [][]json.RawMessage
 	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("JSON decode failed: %w", err)
 	}
@@ -72,25 +67,37 @@ func fetchKlines(symbol, granularity string) ([]Candle, error) {
 		if len(kline) < 6 {
 			continue
 		}
-
-		timeSecs := int64(kline[0])
-		low := kline[1]
-		high := kline[2]
-		open := kline[3]
-		closeP := kline[4]
-		volume := kline[5]
-
-		openTime := time.Unix(timeSecs, 0)
-
-		// Determine length of candle in seconds based on granularity parameter
-		var d time.Duration
-		if granularity == "60" {
-			d = 1 * time.Minute
-		} else {
-			d = 5 * time.Minute
+		var openTimeMs int64
+		var open, high, low, closeP, volume float64
+		var closeTimeMs int64
+		if err := json.Unmarshal(kline[0], &openTimeMs); err != nil {
+			continue
 		}
-		
-		closeTime := openTime.Add(d)
+		// Fields 1-5 are strings in Binance format
+		var openS, highS, lowS, closeS, volS string
+		if err := json.Unmarshal(kline[1], &openS); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(kline[2], &highS); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(kline[3], &lowS); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(kline[4], &closeS); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(kline[5], &volS); err != nil {
+			continue
+		}
+		if err := json.Unmarshal(kline[6], &closeTimeMs); err != nil {
+			continue
+		}
+		fmt.Sscanf(openS, "%f", &open)
+		fmt.Sscanf(highS, "%f", &high)
+		fmt.Sscanf(lowS, "%f", &low)
+		fmt.Sscanf(closeS, "%f", &closeP)
+		fmt.Sscanf(volS, "%f", &volume)
 
 		candles = append(candles, Candle{
 			Symbol:    symbol,
@@ -99,8 +106,8 @@ func fetchKlines(symbol, granularity string) ([]Candle, error) {
 			Low:       low,
 			Close:     closeP,
 			Volume:    volume,
-			OpenTime:  openTime,
-			CloseTime: closeTime,
+			OpenTime:  time.UnixMilli(openTimeMs),
+			CloseTime: time.UnixMilli(closeTimeMs),
 		})
 	}
 
