@@ -407,7 +407,20 @@ func (e *Engine) logDiagnosticsLocked(ctx SignalContext, regime string, iv float
 			case !confirmed:
 				reason = "entry_not_confirmed"
 			default:
-				reason = "SHOULD_TRADE(premium_check)"
+				// Signal fired and confirmed — check if premium pricing passes
+				var strike float64
+				if s.def.Type == Call {
+					strike = e.lastPrice * (1 + s.def.StrikePctOTM)
+				} else {
+					strike = e.lastPrice * (1 - s.def.StrikePctOTM)
+				}
+				testExpiry := time.Now().UTC().Add(time.Duration(s.def.ExpiryMinutes) * time.Minute)
+				testPR := PriceOption(e.lastPrice, strike, testExpiry, iv, s.def.Type)
+				if testPR.Premium < 0.10 {
+					reason = fmt.Sprintf("PREMIUM_TOO_LOW($%.4f < $0.10, strike=$%.0f, iv=%.2f)", testPR.Premium, strike, iv)
+				} else {
+					reason = fmt.Sprintf("SHOULD_TRADE(premium=$%.2f, strike=$%.0f)", testPR.Premium, strike)
+				}
 			}
 		}
 		log.Printf("[SELL-DIAG]   %-45s cat=%-15s sig=%-30s -> %s",
@@ -547,9 +560,12 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium < 1.0 {
-		// Reject options with sub-$1 premiums: they are deep OTM with unrealistic
-		// quantities (positionUSD/0.01 = 1,000,000 contracts) that distort PnL.
+	if pr.Premium < 0.10 {
+		// Reject options with sub-$0.10 premiums: truly deep OTM with negligible
+		// value. Note: $1 floor was too aggressive — OTM premiums at current BTC
+		// prices ($80k-$90k) with 135-210min expiries typically range $0.15-$0.80.
+		log.Printf("[OPTIONS SELLING] %s %s | Strike: $%.0f | Premium too low: $%.4f (IV=%.2f, TTL=%.0fmin) — skipping",
+			def.Name, def.Type, strike, pr.Premium, iv, expiry.Sub(time.Now().UTC()).Minutes())
 		return nil
 	}
 
