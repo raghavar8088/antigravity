@@ -157,6 +157,30 @@ type ForexDbPayload = {
   positions: ForexDbPosition[]; trades: ForexDbTrade[]; strategies: ForexDbStrategy[];
 };
 
+function num(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function nonNegativeInt(value: unknown, fallback = 0): number {
+  const parsed = Math.trunc(num(value, fallback));
+  return parsed >= 0 ? parsed : fallback;
+}
+
+function normalizeDbPayload(raw: Partial<ForexDbPayload> | null | undefined): ForexDbPayload | null {
+  if (!raw) return null;
+  return {
+    balance: num(raw.balance, INITIAL_BALANCE),
+    totalWins: nonNegativeInt(raw.totalWins, 0),
+    totalLosses: nonNegativeInt(raw.totalLosses, 0),
+    totalPnl: num(raw.totalPnl, 0),
+    tradeSeq: nonNegativeInt(raw.tradeSeq, 0),
+    positions: Array.isArray(raw.positions) ? raw.positions : [],
+    trades: Array.isArray(raw.trades) ? raw.trades.slice(0, MAX_TRADES) : [],
+    strategies: Array.isArray(raw.strategies) ? raw.strategies : [],
+  };
+}
+
 // ── Strategy definitions ──────────────────────────────────────────────────────
 type CategoryProfile = { minTp: number; maxTp: number; minSl: number; maxSl: number; holdMins: number };
 
@@ -451,7 +475,26 @@ const EMPTY_STATS: ForexEngineStats = {
   lastUpdateAt: 0, diagnostics: "Bootstrapping forex feed.",
 };
 
+function normalizeEngineAccount(engine: EngineRef) {
+  const openNotional = [...engine.positions.values()].reduce((sum, position) => sum + position.notional, 0);
+  const unrealizedPnl = [...engine.positions.values()].reduce((sum, position) => sum + position.unrealizedPnl, 0);
+  const normalizedBalance = INITIAL_BALANCE + engine.totalRealizedPnl - openNotional;
+
+  if (Number.isFinite(normalizedBalance) && Math.abs(engine.balance - normalizedBalance) > 0.01) {
+    engine.balance = normalizedBalance;
+  }
+
+  return {
+    openNotional,
+    unrealizedPnl,
+    balance: engine.balance,
+    equity: engine.balance + openNotional + unrealizedPnl,
+    sessionPnl: engine.totalRealizedPnl + unrealizedPnl,
+  };
+}
+
 function buildPersistedPayload(engine: EngineRef): ForexDbPayload {
+  normalizeEngineAccount(engine);
   return {
     balance: engine.balance,
     totalWins: engine.totalWins,
@@ -517,7 +560,7 @@ function loadFromLocalStorage(): ForexDbPayload | null {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ForexDbPayload;
+    return normalizeDbPayload(JSON.parse(raw) as Partial<ForexDbPayload>);
   } catch {
     return null;
   }
@@ -550,11 +593,11 @@ async function saveForexState(engine: EngineRef): Promise<void> {
 }
 
 function applySavedState(engine: EngineRef, saved: ForexDbPayload): boolean {
-  engine.balance = saved.balance;
-  engine.totalWins = saved.totalWins;
-  engine.totalLosses = saved.totalLosses;
-  engine.totalRealizedPnl = saved.totalPnl;
-  engine.seq = saved.tradeSeq;
+  engine.balance = num(saved.balance, INITIAL_BALANCE);
+  engine.totalWins = nonNegativeInt(saved.totalWins, 0);
+  engine.totalLosses = nonNegativeInt(saved.totalLosses, 0);
+  engine.totalRealizedPnl = num(saved.totalPnl, 0);
+  engine.seq = nonNegativeInt(saved.tradeSeq, 0);
   engine.trades = (saved.trades ?? []).slice(0, MAX_TRADES);
   engine.positions.clear();
 
@@ -601,6 +644,8 @@ function applySavedState(engine: EngineRef, saved: ForexDbPayload): boolean {
     strategy.regime = savedStrategy.regime ?? "UNKNOWN";
     if (!strategy.position) strategy.status = strategy.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
   }
+
+  normalizeEngineAccount(engine);
   return true;
 }
 
@@ -611,7 +656,7 @@ async function loadForexState(engine: EngineRef): Promise<boolean> {
     const response = await fetch("/api/forex/state");
     if (response.ok) {
       const data = await response.json() as { ok: boolean; found: boolean; state?: ForexDbPayload };
-      if (data.ok && data.found && data.state) dbState = data.state;
+      if (data.ok && data.found && data.state) dbState = normalizeDbPayload(data.state);
     }
   } catch {
     // Fall back to the newest local snapshot when the DB is unavailable.
@@ -727,9 +772,7 @@ export default function useForexEngine() {
       };
     }));
 
-    const unrealizedPnl = [...engine.positions.values()].reduce((sum, position) => sum + position.unrealizedPnl, 0);
-    const openNotional  = [...engine.positions.values()].reduce((sum, position) => sum + position.notional, 0);
-    const equity = engine.balance + openNotional + unrealizedPnl;
+    const { balance, equity, sessionPnl, unrealizedPnl } = normalizeEngineAccount(engine);
     const liveSymbols = FOREX_PAIRS.filter((pair) => (engine.quotes[pair.symbol]?.price ?? 0) > 0).length;
     const totalTrades = engine.strategies.reduce((sum, strategy) => sum + strategy.totalTrades, 0);
     const winRate = engine.totalWins + engine.totalLosses > 0 ? (engine.totalWins / (engine.totalWins + engine.totalLosses)) * 100 : 0;
@@ -739,8 +782,8 @@ export default function useForexEngine() {
 
     setStats({
       equity,
-      balance: engine.balance,
-      sessionPnl: equity - INITIAL_BALANCE,
+      balance,
+      sessionPnl,
       unrealizedPnl,
       realizedPnl: engine.totalRealizedPnl,
       totalTrades,

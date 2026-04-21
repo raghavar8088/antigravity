@@ -52,6 +52,38 @@ type Payload = {
   strategies: unknown[];
 };
 
+function toFiniteNumber(value: unknown, fallback = 0): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function toNonNegativeInt(value: unknown, fallback = 0): number {
+  const parsed = Math.trunc(toFiniteNumber(value, fallback));
+  return parsed >= 0 ? parsed : fallback;
+}
+
+function parseJsonArray(raw: string): unknown[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizePayload(body: Partial<Payload>): Payload {
+  return {
+    balance: toFiniteNumber(body.balance, 1_000_000),
+    totalWins: toNonNegativeInt(body.totalWins, 0),
+    totalLosses: toNonNegativeInt(body.totalLosses, 0),
+    totalPnl: toFiniteNumber(body.totalPnl, 0),
+    tradeSeq: toNonNegativeInt(body.tradeSeq, 0),
+    positions: Array.isArray(body.positions) ? body.positions : [],
+    trades: Array.isArray(body.trades) ? body.trades.slice(0, 5000) : [],
+    strategies: Array.isArray(body.strategies) ? body.strategies : [],
+  };
+}
+
 export async function GET() {
   try {
     if (!hasDatabaseUrl()) {
@@ -79,14 +111,14 @@ export async function GET() {
         ok: true,
         found: true,
         state: {
-          balance: parseFloat(row.balance),
-          totalWins: parseInt(row.total_wins),
-          totalLosses: parseInt(row.total_losses),
-          totalPnl: parseFloat(row.total_pnl),
-          tradeSeq: parseInt(row.trade_seq),
-          positions: JSON.parse(row.positions_json) as unknown[],
-          trades: JSON.parse(row.trades_json) as unknown[],
-          strategies: JSON.parse(row.strategies_json) as unknown[],
+          balance: toFiniteNumber(row.balance, 1_000_000),
+          totalWins: toNonNegativeInt(row.total_wins, 0),
+          totalLosses: toNonNegativeInt(row.total_losses, 0),
+          totalPnl: toFiniteNumber(row.total_pnl, 0),
+          tradeSeq: toNonNegativeInt(row.trade_seq, 0),
+          positions: parseJsonArray(row.positions_json),
+          trades: parseJsonArray(row.trades_json),
+          strategies: parseJsonArray(row.strategies_json),
         },
         savedAt: row.saved_at,
       });
@@ -105,7 +137,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: "DATABASE_URL not set" });
     }
 
-    const body = await request.json() as Payload;
+    const body = normalizePayload((await request.json()) as Partial<Payload>);
     const db = getPool();
     const client = await db.connect();
     try {
@@ -129,7 +161,7 @@ export async function POST(request: Request) {
           body.totalPnl,
           body.tradeSeq,
           JSON.stringify(body.positions ?? []),
-          JSON.stringify((body.trades ?? []).slice(0, 5000)),
+          JSON.stringify(body.trades ?? []),
           JSON.stringify(body.strategies ?? []),
         ],
       );

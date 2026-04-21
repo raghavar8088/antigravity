@@ -906,7 +906,7 @@ export default function TradingDashboard({
   const cryptoEquityOpenPositions = cryptoPositions.length;
   const cryptoEquityOnline = cryptoStats.lastUpdateAt > 0 || cryptoPositions.length > 0;
   const forexEquity = forexStats.equity ?? INITIAL_BALANCE;
-  const forexSessionPnl = forexEquity - INITIAL_BALANCE;
+  const forexSessionPnl = forexStats.sessionPnl ?? (forexEquity - INITIAL_BALANCE);
   const forexOpenPositions = forexPositions.length;
   const forexOnline = forexStats.lastUpdateAt > 0 || forexPositions.length > 0;
 
