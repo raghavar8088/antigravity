@@ -550,9 +550,12 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium < 1.0 {
-		// Reject options with sub-$1 premiums: they are deep OTM with unrealistic
-		// quantities (positionUSD/0.01 = 1,000,000 contracts) that distort PnL.
+	if pr.Premium < 0.10 {
+		// Reject truly deep-OTM near-zero options only. The old $1 floor was
+		// too aggressive — OTM premiums at BTC ~$80k-$90k with 135-210min
+		// expiries typically fall in the $0.15-$0.80 range.
+		log.Printf("[OPTIONS] %s %s | Strike: $%.0f | Premium too low: $%.4f (IV=%.2f) — skipping",
+			def.Name, def.Type, strike, pr.Premium, iv)
 		return nil
 	}
 
