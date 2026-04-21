@@ -139,14 +139,10 @@ func classifyMarketRegime(prices []float64) string {
 }
 
 func isCategoryAlignedWithRegime(category, regime string) bool {
-	// Threshold set to 0.32 — the minimum possible regimeFitScore (Mean Reversion
-	// in TREND). The roster system already penalises poorly-aligned strategies via
-	// structural score, so this gate should only block categories with a truly zero
-	// fit score (i.e. unrecognised regime strings hitting the default 0.50 fallback
-	// still passes). Raising the threshold to 0.42 had the unintended side-effect
-	// of permanently blocking Momentum in RANGE (0.36) and Mean Reversion in TREND
-	// (0.32), two of the most common market states.
-	return regimeFitScore(category, regime) >= 0.32
+	// Lower the gate so Hybrid/Momentum sellers are not permanently locked out.
+	// The old 0.75 threshold blocked Hybrid in every regime and sidelined several
+	// otherwise strong continuation sellers for most of the session.
+	return regimeFitScore(category, regime) >= 0.42
 }
 
 func clamp(min, value, max float64) float64 {
@@ -209,9 +205,9 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 82
+			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
 		case "Mean Reversion", "Capitulation":
-			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 75
+			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
 		default:
 			return price >= fast && mom3 >= -0.0002
 		}
@@ -219,58 +215,10 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 18 && rsiVal <= 50
+		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
 	case "Mean Reversion", "Capitulation":
-		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 25 && rsiVal <= 62
+		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
 	default:
 		return price <= fast && mom3 <= 0.0002
-	}
-}
-
-// niftyEntryConfirmed mirrors optionEntryConfirmed with momentum thresholds
-// scaled ~0.25× for NIFTY's lower volatility (IV ~18% vs BTC ~80%).
-// Typical NIFTY 3-minute move is ~0.025%; BTC's is ~0.10%.
-//
-// RSI bounds are deliberately wide for Mean Reversion / Capitulation to avoid
-// contradicting the signal (e.g. RSI_OVERSOLD_EXTREME fires at RSI≈25, so
-// requiring rsiVal >= 38 in confirmation would always reject the trade).
-func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
-	if len(ctx.Prices) < 15 {
-		return false
-	}
-
-	price := ctx.BTCPrice
-	fast := ema(ctx.Prices, 9)
-	slow := ema(ctx.Prices, 21)
-	// Use adaptive trend: fall back to fewer bars early in the session
-	trendPeriod := 55
-	if len(ctx.Prices) < 55 {
-		trendPeriod = len(ctx.Prices)
-	}
-	trend := ema(ctx.Prices, trendPeriod)
-	rsiVal := rsi(ctx.Prices, 14)
-	mom3 := momentum(ctx.Prices, 3)
-	mom8 := momentum(ctx.Prices, 8)
-
-	bullishSeller := def.Type == Put
-	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
-	if bullishSeller {
-		switch def.Category {
-		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 82
-		case "Mean Reversion", "Capitulation":
-			return price >= fast*0.999 && mom3 > -0.0003 && rsiVal >= 20 && rsiVal <= 75
-		default:
-			return price >= fast && mom3 >= -0.00005
-		}
-	}
-
-	switch def.Category {
-	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 18 && rsiVal <= 65
-	case "Mean Reversion", "Capitulation":
-		return price <= fast*1.001 && mom3 < 0.0003 && rsiVal >= 25 && rsiVal <= 80
-	default:
-		return price <= fast && mom3 <= 0.00005
 	}
 }

@@ -24,14 +24,13 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-// Engine is the fully autonomous option SELLING engine (BTC or NIFTY).
+// Engine is the fully autonomous BTC option SELLING engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
 	marketProfile    MarketProfile
-	signals          map[string]SignalFunc // BTC uses Signals, NIFTY uses NiftySignals
 	balance          float64
 	lastPrice        float64
 	priceHist        []float64 // raw tick prices (for current price + IV)
@@ -68,15 +67,9 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		states[i] = newStrategyState(d)
 	}
 
-	sigs := Signals
-	if profile.Name == niftyOptionsMarketProfile.Name {
-		sigs = NiftySignals
-	}
-
 	engine := &Engine{
 		states:        states,
 		marketProfile: profile,
-		signals:       sigs,
 		balance:       initialOptionsBalance,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
@@ -348,22 +341,24 @@ func (e *Engine) UpdatePrice(price float64) {
 	}
 }
 
-// InjectMinuteBars pre-fills the minuteBars buffer with historical close prices
-// so the engine can classify regime and fire signals immediately on startup
-// instead of waiting 55+ minutes to accumulate bars from live feed.
+// InjectMinuteBars replaces the current minuteBars with the provided close prices.
+// Call this on startup or periodically to seed the engine with real historical bars.
 func (e *Engine) InjectMinuteBars(closePrices []float64) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if len(closePrices) == 0 {
 		return
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// Cap at 300 bars (5 hours)
 	if len(closePrices) > 300 {
 		closePrices = closePrices[len(closePrices)-300:]
 	}
 	e.minuteBars = make([]float64, len(closePrices))
 	copy(e.minuteBars, closePrices)
-	e.lastPrice = closePrices[len(closePrices)-1]
-	log.Printf("[%s] Injected %d historical 1m bars (last=%.2f)", e.marketProfile.Name, len(e.minuteBars), e.lastPrice)
+	if len(closePrices) > 0 {
+		e.lastPrice = closePrices[len(closePrices)-1]
+	}
+	log.Printf("[OPTIONS ENGINE] Injected %d real minute bars (last=%.2f)", len(e.minuteBars), e.lastPrice)
 }
 
 // Run is the main trading loop. Call it in a goroutine.
@@ -448,15 +443,6 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 	e.refreshStrategyPresentationLocked(s, now)
 }
 
-// entryConfirmed routes to the market-appropriate confirmation function.
-// NIFTY uses scaled-down momentum thresholds; BTC uses the original ones.
-func (e *Engine) entryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
-	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
-		return niftyEntryConfirmed(def, ctx, regime)
-	}
-	return optionEntryConfirmed(def, ctx, regime)
-}
-
 func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 	if s.stats.RosterState != StrategyRosterActive {
 		return
@@ -474,11 +460,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	fn, ok := e.signals[s.def.Signal]
+	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !e.entryConfirmed(s.def, ctx, regime) {
+	if !optionEntryConfirmed(s.def, ctx, regime) {
 		return
 	}
 
@@ -521,11 +507,11 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 		return
 	}
 
-	fn, ok := e.signals[s.def.Signal]
+	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !e.entryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
+	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
@@ -550,12 +536,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium < 0.10 {
-		// Reject truly deep-OTM near-zero options only. The old $1 floor was
-		// too aggressive — OTM premiums at BTC ~$80k-$90k with 135-210min
-		// expiries typically fall in the $0.15-$0.80 range.
-		log.Printf("[OPTIONS] %s %s | Strike: $%.0f | Premium too low: $%.4f (IV=%.2f) — skipping",
-			def.Name, def.Type, strike, pr.Premium, iv)
+	if pr.Premium <= 0 {
 		return nil
 	}
 

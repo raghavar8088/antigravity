@@ -24,13 +24,12 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-// Engine is the fully autonomous option SELLING engine (BTC or NIFTY).
+// Engine is the fully autonomous BTC option SELLING engine.
 type Engine struct {
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
 	marketProfile    MarketProfile
-	signals          map[string]SignalFunc // BTC uses Signals, NIFTY uses NiftySignals
 	balance          float64
 	lastPrice        float64
 	priceHist        []float64
@@ -67,15 +66,9 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		}
 	}
 
-	sigs := Signals
-	if profile.Name == niftyOptionsMarketProfile.Name {
-		sigs = NiftySignals
-	}
-
 	engine := &Engine{
 		states:        states,
 		marketProfile: profile,
-		signals:       sigs,
 		balance:       initialOptionsBalance,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
@@ -292,23 +285,18 @@ func (e *Engine) UpdatePrice(price float64) {
 	}
 }
 
-// InjectMinuteBars pre-fills the minuteBars buffer with historical close prices
-// so the engine can classify regime and fire signals immediately on startup
-// instead of waiting 55+ minutes to accumulate bars from live feed.
 func (e *Engine) InjectMinuteBars(closePrices []float64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if len(closePrices) == 0 {
 		return
 	}
+	if len(closePrices) > 300 {
+		closePrices = closePrices[len(closePrices)-300:]
+	}
 	e.minuteBars = make([]float64, len(closePrices))
 	copy(e.minuteBars, closePrices)
-	if len(e.minuteBars) > 300 {
-		e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
-	}
-	if len(closePrices) > 0 {
-		e.lastPrice = closePrices[len(closePrices)-1]
-	}
+	e.lastPrice = closePrices[len(closePrices)-1]
 	log.Printf("[%s] Injected %d historical 1m bars (last=%.2f)", e.marketProfile.Name, len(e.minuteBars), e.lastPrice)
 }
 
@@ -388,15 +376,6 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 	e.refreshStrategyPresentationLocked(s, now)
 }
 
-// entryConfirmed routes to the market-appropriate confirmation function.
-// NIFTY uses scaled-down momentum thresholds; BTC uses the original ones.
-func (e *Engine) entryConfirmed(def StrategyDef, ctx SignalContext, regime string) bool {
-	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
-		return niftyEntryConfirmed(def, ctx, regime)
-	}
-	return optionEntryConfirmed(def, ctx, regime)
-}
-
 func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 	if s.stats.RosterState != StrategyRosterActive {
 		return
@@ -414,11 +393,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	fn, ok := e.signals[s.def.Signal]
+	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !e.entryConfirmed(s.def, ctx, regime) {
+	if !optionEntryConfirmed(s.def, ctx, regime) {
 		return
 	}
 
@@ -461,11 +440,11 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 		return
 	}
 
-	fn, ok := e.signals[s.def.Signal]
+	fn, ok := Signals[s.def.Signal]
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !e.entryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
+	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
@@ -492,9 +471,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
-	if pr.Premium < 1.0 {
-		// Reject options with sub-$1 premiums: they are deep OTM with unrealistic
-		// quantities (positionUSD/0.01 = 1,000,000 contracts) that distort PnL.
+	if pr.Premium <= 0 {
 		return nil
 	}
 
