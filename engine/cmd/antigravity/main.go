@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -767,12 +769,29 @@ func main() {
 
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {
+		lastFallbackPrice := 0.0
+		lastFallbackFetch := time.Time{}
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(1 * time.Second):
 				p := paperExecute.GetLastPrice()
+				if p <= 0 {
+					// Keep options trading autonomous even when the primary WS feed
+					// is still warming up or temporarily disconnected.
+					if lastFallbackFetch.IsZero() || time.Since(lastFallbackFetch) >= 10*time.Second {
+						if fallbackPrice, err := fetchBinanceBTCSpot(ctx); err == nil && fallbackPrice > 0 {
+							lastFallbackPrice = fallbackPrice
+						} else if err != nil {
+							log.Printf("[OPTIONS FEED] fallback Binance spot fetch failed: %v", err)
+						}
+						lastFallbackFetch = time.Now()
+					}
+					if lastFallbackPrice > 0 {
+						p = lastFallbackPrice
+					}
+				}
 				if p > 0 {
 					optionsEngine.UpdatePrice(p)
 					optionsSellingEngine.UpdatePrice(p)
@@ -1273,6 +1292,36 @@ func main() {
 	}
 	time.Sleep(2 * time.Second) // Allow state saver final flush
 	log.Println("Systems offline.")
+}
+
+func fetchBinanceBTCSpot(ctx context.Context) (float64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", nil)
+	if err != nil {
+		return 0, fmt.Errorf("build fallback request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("fallback request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("fallback status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("fallback body read failed: %w", err)
+	}
+	var payload struct {
+		Price string `json:"price"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0, fmt.Errorf("fallback decode failed: %w", err)
+	}
+	price, err := strconv.ParseFloat(payload.Price, 64)
+	if err != nil {
+		return 0, fmt.Errorf("fallback parse failed: %w", err)
+	}
+	return price, nil
 }
 
 // setCORS adds standard CORS headers for dashboard communication.

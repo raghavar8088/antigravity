@@ -1,7 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+function resolveEngineApiUrl() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      const port = process.env.NEXT_PUBLIC_ENGINE_PORT || "8080";
+      return `${window.location.protocol}//${host}:${port}`;
+    }
+  }
+  return "http://localhost:8080";
+}
 
 export type OptionPosition = {
   id: string;
@@ -116,13 +126,14 @@ export default function useOptions(refreshKey = 0) {
   };
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetch3 = async () => {
       try {
         const [posRes, tradesRes, stratRes, statsRes] = await Promise.all([
-          fetch(`${API_URL}/api/options/positions`),
-          fetch(`${API_URL}/api/options/trades`),
-          fetch(`${API_URL}/api/options/strategies`),
-          fetch(`${API_URL}/api/options/stats`),
+          fetch(`${apiUrl}/api/options/positions`),
+          fetch(`${apiUrl}/api/options/trades`),
+          fetch(`${apiUrl}/api/options/strategies`),
+          fetch(`${apiUrl}/api/options/stats`),
         ]);
         if (posRes.ok) setPositions(await posRes.json());
         if (tradesRes.ok) setTrades(await tradesRes.json());

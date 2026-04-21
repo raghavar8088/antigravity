@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+function resolveEngineApiUrl() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      const port = process.env.NEXT_PUBLIC_ENGINE_PORT || "8080";
+      return `${window.location.protocol}//${host}:${port}`;
+    }
+  }
+  return "http://localhost:8080";
+}
 
 export type TradeEntry = {
   id: string;
@@ -54,11 +64,12 @@ export default function useTrades(refreshKey = 0) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetchData = async () => {
       try {
         const [tradesRes, statsRes] = await Promise.all([
-          fetch(`${API_URL}/api/trades`),
-          fetch(`${API_URL}/api/stats`),
+          fetch(`${apiUrl}/api/trades`),
+          fetch(`${apiUrl}/api/stats`),
         ]);
 
         if (tradesRes.ok) {

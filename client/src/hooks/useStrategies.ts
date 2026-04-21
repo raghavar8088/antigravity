@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+function resolveEngineApiUrl() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      const port = process.env.NEXT_PUBLIC_ENGINE_PORT || "8080";
+      return `${window.location.protocol}//${host}:${port}`;
+    }
+  }
+  return "http://localhost:8080";
+}
 
 export type StrategyData = {
   name: string;
@@ -23,9 +33,10 @@ export default function useStrategies(refreshKey = 0) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetchStrategies = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/strategies`);
+        const res = await fetch(`${apiUrl}/api/strategies`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {

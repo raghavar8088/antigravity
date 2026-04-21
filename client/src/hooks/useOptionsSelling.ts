@@ -9,7 +9,17 @@ export type {
   OptionStats,
 } from "@/hooks/useOptions";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+function resolveEngineApiUrl() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      const port = process.env.NEXT_PUBLIC_ENGINE_PORT || "8080";
+      return `${window.location.protocol}//${host}:${port}`;
+    }
+  }
+  return "http://localhost:8080";
+}
 
 import type { OptionPosition, OptionTrade, OptionStrategyStatus, OptionStats } from "@/hooks/useOptions";
 
@@ -51,13 +61,14 @@ export default function useOptionsSelling(refreshKey = 0) {
   };
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetchAll = async () => {
       try {
         const [posRes, tradesRes, stratRes, statsRes] = await Promise.all([
-          fetch(`${API_URL}/api/options-selling/positions`),
-          fetch(`${API_URL}/api/options-selling/trades`),
-          fetch(`${API_URL}/api/options-selling/strategies`),
-          fetch(`${API_URL}/api/options-selling/stats`),
+          fetch(`${apiUrl}/api/options-selling/positions`),
+          fetch(`${apiUrl}/api/options-selling/trades`),
+          fetch(`${apiUrl}/api/options-selling/strategies`),
+          fetch(`${apiUrl}/api/options-selling/stats`),
         ]);
         if (posRes.ok) setPositions(await posRes.json());
         if (tradesRes.ok) setTrades(await tradesRes.json());
