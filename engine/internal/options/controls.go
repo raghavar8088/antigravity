@@ -235,14 +235,19 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 // contradicting the signal (e.g. RSI_OVERSOLD_EXTREME fires at RSI≈25, so
 // requiring rsiVal >= 38 in confirmation would always reject the trade).
 func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
-	if len(ctx.Prices) < 25 {
+	if len(ctx.Prices) < 15 {
 		return false
 	}
 
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
 	slow := ema(ctx.Prices, 21)
-	trend := ema(ctx.Prices, 55)
+	// Use adaptive trend: fall back to fewer bars early in the session
+	trendPeriod := 55
+	if len(ctx.Prices) < 55 {
+		trendPeriod = len(ctx.Prices)
+	}
+	trend := ema(ctx.Prices, trendPeriod)
 	rsiVal := rsi(ctx.Prices, 14)
 	mom3 := momentum(ctx.Prices, 3)
 	mom8 := momentum(ctx.Prices, 8)
@@ -252,11 +257,9 @@ func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			// Relax price >= trend to price >= trend*0.995 so intraday dips don't block
-			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 75
+			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > 0 && rsiVal >= 45 && rsiVal <= 82
 		case "Mean Reversion", "Capitulation":
-			// Wide RSI band: signal already sets RSI level; don't double-filter
-			return price >= fast*0.999 && mom3 > -0.0003 && rsiVal >= 20 && rsiVal <= 68
+			return price >= fast*0.999 && mom3 > -0.0003 && rsiVal >= 20 && rsiVal <= 75
 		default:
 			return price >= fast && mom3 >= -0.00005
 		}
@@ -264,10 +267,9 @@ func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 25 && rsiVal <= 55
+		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0 && rsiVal >= 18 && rsiVal <= 65
 	case "Mean Reversion", "Capitulation":
-		// Wide RSI band for bearish mean reversion (overbought signals fire at RSI~75+)
-		return price <= fast*1.001 && mom3 < 0.0003 && rsiVal >= 32 && rsiVal <= 80
+		return price <= fast*1.001 && mom3 < 0.0003 && rsiVal >= 25 && rsiVal <= 80
 	default:
 		return price <= fast && mom3 <= 0.00005
 	}

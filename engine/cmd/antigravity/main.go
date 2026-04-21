@@ -743,8 +743,7 @@ func main() {
 		}
 	}
 
-	// Pre-fill options engines with historical 1m bars from the same warmup
-	// data already fetched for BTC Equity — eliminates the 55-minute wait.
+	// Pre-fill BTC options engines with historical 1m bars — eliminates the 55-min wait.
 	if warmupData != nil && len(warmupData.Candles1m) > 0 {
 		closes := make([]float64, len(warmupData.Candles1m))
 		for i, c := range warmupData.Candles1m {
@@ -753,6 +752,18 @@ func main() {
 		optionsEngine.InjectMinuteBars(closes)
 		optionsSellingEngine.InjectMinuteBars(closes)
 	}
+
+	// Pre-fill NIFTY options engines with today's 1m bars from Yahoo Finance.
+	go safeGo("NiftyOptionsWarmup", func() {
+		niftyCloses, err := marketdata.FetchNiftyWarmupBars(ctx)
+		if err != nil {
+			log.Printf("[WARMUP] NIFTY warmup failed: %v", err)
+			return
+		}
+		niftyOptionsEngine.InjectMinuteBars(niftyCloses)
+		niftyOptionsSellingEngine.InjectMinuteBars(niftyCloses)
+		log.Printf("[WARMUP] ✅ Injected %d NIFTY 1m bars into NIFTY options engines", len(niftyCloses))
+	})
 
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {

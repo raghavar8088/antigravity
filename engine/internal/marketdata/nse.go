@@ -16,19 +16,78 @@ import (
 // ── Yahoo Finance fallback for ^NSEI ─────────────────────────────────────────
 
 type yahooChartMeta struct {
-	RegularMarketPrice  float64 `json:"regularMarketPrice"`
-	ChartPreviousClose  float64 `json:"chartPreviousClose"`
-	PreviousClose       float64 `json:"previousClose"`
+	RegularMarketPrice float64 `json:"regularMarketPrice"`
+	ChartPreviousClose float64 `json:"chartPreviousClose"`
+	PreviousClose      float64 `json:"previousClose"`
+}
+
+type yahooQuoteIndicator struct {
+	Close []float64 `json:"close"`
 }
 
 type yahooChartResult struct {
-	Meta *yahooChartMeta `json:"meta"`
+	Meta       *yahooChartMeta `json:"meta"`
+	Timestamps []int64         `json:"timestamp"`
+	Indicators *struct {
+		Quote []yahooQuoteIndicator `json:"quote"`
+	} `json:"indicators"`
 }
 
 type yahooChartResponse struct {
 	Chart *struct {
 		Result []yahooChartResult `json:"result"`
 	} `json:"chart"`
+}
+
+// FetchNiftyWarmupBars fetches today's 1-minute NIFTY 50 close prices from
+// Yahoo Finance so the NIFTY options engines can classify regime immediately
+// on startup instead of waiting 55+ minutes to accumulate bars from live feed.
+func FetchNiftyWarmupBars(ctx context.Context) ([]float64, error) {
+	mirrors := []string{
+		"https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false",
+		"https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1m&range=1d&includePrePost=false",
+	}
+	for _, url := range mirrors {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := yahooHTTPClient.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		var payload yahooChartResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			continue
+		}
+		if payload.Chart == nil || len(payload.Chart.Result) == 0 {
+			continue
+		}
+		result := payload.Chart.Result[0]
+		if result.Indicators == nil || len(result.Indicators.Quote) == 0 {
+			continue
+		}
+		closes := result.Indicators.Quote[0].Close
+		// Filter out zero/NaN values (market gaps, pre-open bars)
+		valid := make([]float64, 0, len(closes))
+		for _, c := range closes {
+			if c > 0 {
+				valid = append(valid, c)
+			}
+		}
+		if len(valid) >= 5 {
+			return valid, nil
+		}
+	}
+	return nil, fmt.Errorf("could not fetch NIFTY warmup bars from Yahoo Finance")
 }
 
 var yahooHTTPClient = &http.Client{Timeout: 8 * time.Second}
