@@ -1277,6 +1277,7 @@ var Signals = map[string]SignalFunc{
 		lastBar := ctx.Prices[n-2] - ctx.BTCPrice
 		return lastBar > atr*2.0 && rsi(ctx.Prices, 14) > 32 && momentum(ctx.Prices, 3) < -0.0020
 	},
+
 }
 
 // NiftySignals contains signal functions calibrated for NIFTY 50.

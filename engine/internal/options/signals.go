@@ -742,6 +742,7 @@ var Signals = map[string]SignalFunc{
 		mom3 := momentum(ctx.Prices, 3)
 		return mom30 < -0.012 && rsiVal < 28 && atLower && mom3 > mom30/8
 	},
+
 }
 
 // NiftySignals contains signal functions calibrated for NIFTY 50.

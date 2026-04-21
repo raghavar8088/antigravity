@@ -292,6 +292,26 @@ func (e *Engine) UpdatePrice(price float64) {
 	}
 }
 
+// InjectMinuteBars pre-fills the minuteBars buffer with historical close prices
+// so the engine can classify regime and fire signals immediately on startup
+// instead of waiting 55+ minutes to accumulate bars from live feed.
+func (e *Engine) InjectMinuteBars(closePrices []float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(closePrices) == 0 {
+		return
+	}
+	e.minuteBars = make([]float64, len(closePrices))
+	copy(e.minuteBars, closePrices)
+	if len(e.minuteBars) > 300 {
+		e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
+	}
+	if len(closePrices) > 0 {
+		e.lastPrice = closePrices[len(closePrices)-1]
+	}
+	log.Printf("[%s] Injected %d historical 1m bars (last=%.2f)", e.marketProfile.Name, len(e.minuteBars), e.lastPrice)
+}
+
 func (e *Engine) Run(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()

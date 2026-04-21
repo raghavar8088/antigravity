@@ -743,6 +743,17 @@ func main() {
 		}
 	}
 
+	// Pre-fill options engines with historical 1m bars from the same warmup
+	// data already fetched for BTC Equity — eliminates the 55-minute wait.
+	if warmupData != nil && len(warmupData.Candles1m) > 0 {
+		closes := make([]float64, len(warmupData.Candles1m))
+		for i, c := range warmupData.Candles1m {
+			closes[i] = c.Close
+		}
+		optionsEngine.InjectMinuteBars(closes)
+		optionsSellingEngine.InjectMinuteBars(closes)
+	}
+
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {
 		for {
