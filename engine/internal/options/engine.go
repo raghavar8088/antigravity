@@ -464,7 +464,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !optionEntryConfirmed(s.def, ctx, regime) {
+	if !e.entryConfirmedFor(s.def, ctx, regime) {
 		return
 	}
 
@@ -511,7 +511,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	if !ok || !fn(ctx) {
 		return
 	}
-	if !optionEntryConfirmed(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
+	if !e.entryConfirmedFor(s.def, ctx, classifyMarketRegime(ctx.Prices)) {
 		return
 	}
 
@@ -524,6 +524,13 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	s.shadowPosition = pos
 	s.stats.HasShadowPosition = true
 	s.stats.Status = optionStatusShadowing
+}
+
+func (e *Engine) entryConfirmedFor(def StrategyDef, ctx SignalContext, regime string) bool {
+	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
+		return niftyEntryConfirmed(def, ctx, regime)
+	}
+	return optionEntryConfirmed(def, ctx, regime)
 }
 
 func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {

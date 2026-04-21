@@ -225,3 +225,43 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 		return price <= fast && mom3 <= 0.0002
 	}
 }
+
+// niftyEntryConfirmed is the NIFTY-calibrated entry gate.
+// NIFTY IV ~18% vs BTC ~80%, so momentum thresholds are ~0.25× BTC values.
+// RSI bands are wider because NIFTY intraday RSI rarely exceeds 72 in bull runs.
+func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
+	if len(ctx.Prices) < 15 {
+		return false
+	}
+	price := ctx.BTCPrice
+	fast := ema(ctx.Prices, 9)
+	slow := ema(ctx.Prices, 21)
+	trendPeriod := 55
+	if len(ctx.Prices) < 55 {
+		trendPeriod = len(ctx.Prices)
+	}
+	trend := ema(ctx.Prices, trendPeriod)
+	rsiVal := rsi(ctx.Prices, 14)
+	mom3 := momentum(ctx.Prices, 3)
+	mom8 := momentum(ctx.Prices, 8)
+
+	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
+	if def.Type == Put {
+		switch def.Category {
+		case "Momentum", "Breakout", "Hybrid":
+			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > -0.0005 && rsiVal >= 42 && rsiVal <= 82
+		case "Mean Reversion", "Capitulation":
+			return price >= fast*0.999 && mom3 > -0.0005 && rsiVal >= 20 && rsiVal <= 75
+		default:
+			return price >= fast && mom3 >= -0.0001
+		}
+	}
+	switch def.Category {
+	case "Momentum", "Breakout", "Hybrid":
+		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0.0005 && rsiVal >= 18 && rsiVal <= 58
+	case "Mean Reversion", "Capitulation":
+		return price <= fast*1.001 && mom3 < 0.0005 && rsiVal >= 25 && rsiVal <= 80
+	default:
+		return price <= fast && mom3 <= 0.0001
+	}
+}
