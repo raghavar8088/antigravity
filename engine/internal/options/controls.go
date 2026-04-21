@@ -209,9 +209,9 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 82
 		case "Mean Reversion", "Capitulation":
-			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
+			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 75
 		default:
 			return price >= fast && mom3 >= -0.0002
 		}
@@ -219,9 +219,9 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 18 && rsiVal <= 50
 	case "Mean Reversion", "Capitulation":
-		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
+		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 25 && rsiVal <= 62
 	default:
 		return price <= fast && mom3 <= 0.0002
 	}
