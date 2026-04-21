@@ -1226,7 +1226,7 @@ export default function TradingDashboard({
 
             {/* Indian Market sub-tabs */}
             {activeGroup === "india" && ([
-              { key: "nifty",       label: "Nifty 50 Option Scalper" },
+              { key: "nifty",       label: "Nifty 50 Option Buying" },
               { key: "niftySelling",label: "Nifty Option Selling" },
               { key: "niftyStocks", label: "Nifty 50 Equity" },
               { key: "mcx",         label: "Commodity Scalper" },
