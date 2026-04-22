@@ -6,9 +6,11 @@ import type { ForexMarketItem } from "@/app/api/forex/markets/route";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const INITIAL_BALANCE   = 1_000_000;
-/** Fixed notional per new forex position: 1% of initial paper capital (no scaling above this). */
+/** Base slice of paper capital used to size each entry (1%); multiplied below for desk risk. */
 const FOREX_CAPITAL_PER_TRADE_PCT = 0.01;
-const ALLOCATION_USD     = INITIAL_BALANCE * FOREX_CAPITAL_PER_TRADE_PCT;
+/** 10× the base slice → 10% of initial capital per active entry (~$100k on $1M paper). */
+const FOREX_ALLOCATION_MULTIPLIER = 10;
+const ALLOCATION_USD = INITIAL_BALANCE * FOREX_CAPITAL_PER_TRADE_PCT * FOREX_ALLOCATION_MULTIPLIER;
 const MAX_OPEN_POSITIONS = 12;
 const MAX_BARS           = 120;
 const MIN_BARS_FAST      = 18;
@@ -26,7 +28,7 @@ const TRAIL_ACTIVATION_PCT = 0.25;  // forex moves are small — activate trail 
 const TRAIL_GIVEBACK_SHARE = 0.30;
 const LOSS_COOLDOWN_PENALTY = 0.35;
 const UNDERPERFORMING_PAUSE_MS = 90 * 60 * 1000;
-const LOCAL_STORAGE_KEY = "forex_state_v2";
+const LOCAL_STORAGE_KEY = "forex_state_v3";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Side   = "LONG" | "SHORT";

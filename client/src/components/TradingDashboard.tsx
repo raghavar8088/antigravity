@@ -114,7 +114,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
   { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
   { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
-  { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 pairs with 1% of $1M capital per trade entry.", group: "forex", module: "forexScalper" },
+  { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 pairs with 10% of $1M paper capital per trade entry (10× prior allocation).", group: "forex", module: "forexScalper" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -1384,7 +1384,7 @@ export default function TradingDashboard({
             : activeModule === "notepad"
             ? "Notepad — Store API keys, broker credentials, and important notes. Data is local to your browser only."
             : activeModule === "forexScalper"
-            ? "Forex — Live forex scalping across 12 pairs; $1M paper account with 1% of initial capital per trade entry."
+            ? "Forex — Live forex scalping across 12 pairs; $1M paper account with 10% of initial capital per trade entry (10× prior 1% allocation)."
             : activeModule === "options-selling"
             ? "Options Selling — BTC short-premium workspace with theta-style decay and separate paper capital."
             : activeModule === "chain"
