@@ -6,7 +6,7 @@ import type { ForexMarketItem } from "@/app/api/forex/markets/route";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const INITIAL_BALANCE   = 1_000_000;
-/** Base notional per forex entry before performance multipliers (1% of paper capital). */
+/** Fixed notional per new forex position: 1% of initial paper capital (no scaling above this). */
 const FOREX_CAPITAL_PER_TRADE_PCT = 0.01;
 const ALLOCATION_USD     = INITIAL_BALANCE * FOREX_CAPITAL_PER_TRADE_PCT;
 const MAX_OPEN_POSITIONS = 12;
@@ -24,8 +24,6 @@ const GRIND_EXIT_PROGRESS  = 0.42;
 const GRIND_EXIT_SHARE     = 0.20;
 const TRAIL_ACTIVATION_PCT = 0.25;  // forex moves are small — activate trail early
 const TRAIL_GIVEBACK_SHARE = 0.30;
-const MIN_SIZE_MULTIPLIER  = 0.5;
-const MAX_SIZE_MULTIPLIER  = 2.0;
 const LOSS_COOLDOWN_PENALTY = 0.35;
 const UNDERPERFORMING_PAUSE_MS = 90 * 60 * 1000;
 const LOCAL_STORAGE_KEY = "forex_state_v2";
@@ -361,21 +359,6 @@ function calcPnl(side: Side, entry: number, current: number, qty: number): numbe
   return (current - entry) * qty * (side === "LONG" ? 1 : -1);
 }
 
-function sizeMultiplierFor(strategy: InternalStrategyState): number {
-  let m = 1;
-  if (strategy.totalTrades >= 6  && strategy.winRate >= 55) m += 0.20;
-  if (strategy.totalTrades >= 12 && strategy.winRate >= 60) m += 0.25;
-  if (strategy.totalTrades >= 20 && strategy.winRate >= 65) m += 0.30;
-  if (strategy.totalTrades > 0) {
-    const avg = strategy.totalPnl / (strategy.totalTrades * ALLOCATION_USD);
-    if (avg > 0.025) m += 0.25;
-    if (avg > 0.05)  m += 0.20;
-    if (avg < -0.015) m -= 0.15;
-  }
-  m -= strategy.consecutiveLosses * LOSS_COOLDOWN_PENALTY * 0.2;
-  return clamp(m, MIN_SIZE_MULTIPLIER, MAX_SIZE_MULTIPLIER);
-}
-
 function cooldownMsFor(strategy: InternalStrategyState, won: boolean): number {
   const base = strategy.def.cooldownMinutes * 60 * 1000;
   return won ? base : Math.round(base * (1 + strategy.consecutiveLosses * LOSS_COOLDOWN_PENALTY));
@@ -413,7 +396,7 @@ function initEngine(): EngineRef {
 }
 
 function openPosition(engine: EngineRef, strategy: InternalStrategyState, pair: ForexPair, entryPrice: number, now: number): boolean {
-  const quantity = entryPrice > 0 ? Math.max(1, ALLOCATION_USD / entryPrice) * sizeMultiplierFor(strategy) : 0;
+  const quantity = entryPrice > 0 ? Math.max(1, ALLOCATION_USD / entryPrice) : 0;
   const notional = quantity * entryPrice;
   if (notional <= 0 || engine.balance < notional) return false;
   engine.seq++;
@@ -752,7 +735,6 @@ export default function useForexEngine() {
     })));
 
     setStrategies(engine.strategies.map((strategy) => {
-      const sizeMultiplier = sizeMultiplierFor(strategy);
       return {
         id: strategy.def.id,
         name: strategy.def.name,
@@ -763,8 +745,8 @@ export default function useForexEngine() {
         score: strategy.score,
         regime: strategy.regime,
         rosterState: rosterStateFor(strategy.status),
-        allocationUSD: Math.round(ALLOCATION_USD * sizeMultiplier),
-        sizeMultiplier,
+        allocationUSD: Math.round(ALLOCATION_USD),
+        sizeMultiplier: 1,
         totalTrades: strategy.totalTrades,
         wins: strategy.wins,
         losses: strategy.losses,
