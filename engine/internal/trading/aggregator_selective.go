@@ -11,9 +11,9 @@ import (
 const (
 	// Tuned for a ~30-strategy BTC paper roster: allow fresh names through without
 	// legacy live-performance boosts while still blocking pure coin-flip batches.
-	minSelectiveScore  = 1.18
-	minDominanceRatio  = 1.08
-	minDominanceLead   = 0.12
+	minSelectiveScore  = 1.21 // Above generic 1.0 conf + 0.2 category (1.20); named boosts still pass
+	minDominanceRatio  = 1.10 // e.g. 1.75 vs 1.60 ≈ 1.09 → skip (weak two-sided tape)
+	minDominanceLead   = 0.14
 	maxApprovedSignals = 3 // Allow top 3 best setups per batch
 )
 
@@ -173,13 +173,17 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 0.50
 	case "RSI_MACD_Divergence_Scalp": // -$2.06 live
 		score += 0.40
+	// Historical worst — keep below selective floor in tests and prod.
+	case "ATR_Volume_Impulse_Scalp":
+		score -= 0.70
 	// ── PROVEN LOSERS — below threshold floor, will not pass ───────
 	case "RangeCompress_Breakout_Scalp", "Exhaustion_Reversal_Scalp":
 		score += 0.20
 	}
 
 	switch sig.Category {
-	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend", "Time-of-Day":
+	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend", "Time-of-Day",
+		"Statistical", "Microstructure", "Mean Reversion":
 		score += 0.2
 	case "Trend Elite", "Momentum Elite", "Mean Rev Elite", "Volatility Elite":
 		score += 0.15

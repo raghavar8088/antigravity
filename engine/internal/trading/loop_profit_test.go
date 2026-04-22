@@ -143,8 +143,8 @@ func TestIsCategoryAlignedWithRegime(t *testing.T) {
 	if !isCategoryAlignedWithRegime("Trend", marketRegimeMixed) {
 		t.Fatal("expected MIXED regime to allow high-conviction trend categories")
 	}
-	if isCategoryAlignedWithRegime("Mean Reversion", marketRegimeMixed) {
-		t.Fatal("expected MIXED regime to block mean reversion categories")
+	if !isCategoryAlignedWithRegime("Mean Reversion", marketRegimeMixed) {
+		t.Fatal("expected MIXED regime to allow mean reversion (common on BTC mixed tape)")
 	}
 }
 

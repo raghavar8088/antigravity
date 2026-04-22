@@ -45,6 +45,7 @@ import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
 import useStrategies from "@/hooks/useStrategies";
 import useTrades from "@/hooks/useTrades";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 import { formatUSD } from "@/lib/money";
 import { formatElapsed, safeFormatDate } from "@/lib/time";
 import { calcMarketSentiment, detectMarketSignal } from "@/lib/marketSignal";
@@ -747,7 +748,7 @@ export default function TradingDashboard({
 
     setIsClearingLedger(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const apiUrl = resolveEngineApiUrl();
       const response = await fetch(`${apiUrl}/api/admin/clear-history`, { method: "POST" });
       if (!response.ok) {
         throw new Error("action failed");
@@ -764,7 +765,7 @@ export default function TradingDashboard({
     if (!actionsEnabled || isClearingLedger) {
       return;
     }
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+    const apiUrl = resolveEngineApiUrl();
     if (!confirm("Reset futures paper account to $1,000,000? All history and open positions will be cleared.")) return;
     fetch(`${apiUrl}/api/admin/reset`, { method: "POST" })
       .then((r) => { if (r.ok) handleAdminEvent("Futures account reset to $1,000,000.", "admin"); })

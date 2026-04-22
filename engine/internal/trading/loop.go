@@ -1311,7 +1311,8 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 		// this only allowed 4 categories, blocking ~70% of all signals.
 		switch category {
 		case "Multi-Signal", "Trend", "Trend Elite", "Breakout", "Breakout Elite",
-			"Momentum", "Momentum Elite", "Mean Rev Elite", "Price Action",
+			"Momentum", "Momentum Elite", "Mean Reversion", "Mean Rev Elite", "Statistical",
+			"Volatility", "Volatility Elite", "Time-of-Day", "Price Action",
 			"Price Action Elite", "Adaptive Elite", "Microstructure", "Intraday":
 			return true
 		}

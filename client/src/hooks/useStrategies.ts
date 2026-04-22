@@ -1,16 +1,5 @@
 import { useState, useEffect } from "react";
-
-function resolveEngineApiUrl() {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host && host !== "localhost" && host !== "127.0.0.1") {
-      const port = process.env.NEXT_PUBLIC_ENGINE_PORT || "8080";
-      return `${window.location.protocol}//${host}:${port}`;
-    }
-  }
-  return "http://localhost:8080";
-}
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 export type StrategyData = {
   name: string;
