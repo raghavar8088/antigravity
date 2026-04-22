@@ -25,6 +25,9 @@ type PriceResult struct {
 
 // PriceOption calculates the Black-Scholes price and Greeks for a European option.
 func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType OptionType) PriceResult {
+	if iv <= 0 || math.IsNaN(iv) || math.IsInf(iv, 0) {
+		iv = 0.30
+	}
 	T := time.Until(expiry).Hours() / 8760.0
 	if T <= 0 {
 		var intrinsic float64

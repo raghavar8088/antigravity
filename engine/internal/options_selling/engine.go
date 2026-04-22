@@ -176,6 +176,11 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.priceHist = append([]float64(nil), state.PriceHist...)
 	e.minuteBars = append([]float64(nil), state.MinuteBars...)
 	e.trades = append([]OptionTrade(nil), state.Trades...)
+	for i := range e.trades {
+		if e.trades[i].StrategyID == 0 {
+			e.trades[i].StrategyID = strategyIDs[e.trades[i].StrategyName]
+		}
+	}
 
 	byName := make(map[string]PersistedStrategyState, len(state.Strategies))
 	for _, persisted := range state.Strategies {
@@ -184,6 +189,14 @@ func (e *Engine) RestoreState(state PersistedState) {
 
 	now := time.Now()
 	for _, s := range e.states {
+		s.position = nil
+		s.shadowPosition = nil
+		s.lastTradeAt = time.Time{}
+		s.shadowLastTradeAt = time.Time{}
+		s.consecutiveLosses = 0
+		s.disabledUntil = time.Time{}
+		s.stats = newStrategyStatus(s.def)
+
 		persisted, ok := byName[s.def.Name]
 		if !ok {
 			continue
@@ -193,17 +206,58 @@ func (e *Engine) RestoreState(state PersistedState) {
 		s.shadowLastTradeAt = persisted.ShadowLastTradeAt
 		s.consecutiveLosses = persisted.ConsecutiveLosses
 		s.disabledUntil = persisted.DisabledUntil
+		if !persisted.Stats.DisabledUntil.IsZero() {
+			s.disabledUntil = persisted.Stats.DisabledUntil
+		}
+
 		s.stats = persisted.Stats
+		if s.stats.Name == "" {
+			s.stats.Name = s.def.Name
+		}
+		if s.stats.StrategyID == 0 {
+			s.stats.StrategyID = s.def.ID
+		}
+		if s.stats.Category == "" {
+			s.stats.Category = s.def.Category
+		}
+		if s.stats.OptionType == "" {
+			s.stats.OptionType = string(s.def.Type)
+		}
+		if s.stats.RosterState == "" {
+			s.stats.RosterState = StrategyRosterWatchlist
+		}
 
 		if persisted.Position != nil {
 			cp := *persisted.Position
+			if cp.StrategyID == 0 {
+				cp.StrategyID = s.def.ID
+			}
 			s.position = &cp
 		}
 		if persisted.ShadowPosition != nil {
 			cp := *persisted.ShadowPosition
+			if cp.StrategyID == 0 {
+				cp.StrategyID = s.def.ID
+			}
 			s.shadowPosition = &cp
 		}
+
 		e.refreshStrategyPresentationLocked(s, now)
+	}
+
+	if e.marketProfile.Name == defaultOptionsMarketProfile.Name {
+		for _, s := range e.states {
+			if s.position == nil && s.shadowPosition != nil {
+				s.shadowPosition = nil
+				s.stats.HasShadowPosition = false
+				s.shadowLastTradeAt = time.Time{}
+				if s.stats.RosterState == StrategyRosterActive {
+					s.stats.Status = optionStatusReady
+				} else if s.stats.Status == optionStatusShadowing {
+					s.stats.Status = optionStatusWatchlist
+				}
+			}
+		}
 	}
 
 	e.lastRosterEval = time.Time{}
@@ -329,6 +383,27 @@ func (e *Engine) InjectMinuteBars(closePrices []float64) {
 	}
 }
 
+// stripStaleBTCPaperShadowsLocked clears shadow-only rows on the BTC paper desk so ACTIVE
+// strategies are not blocked from opening live short premium positions.
+func (e *Engine) stripStaleBTCPaperShadowsLocked() {
+	if e.marketProfile.Name != defaultOptionsMarketProfile.Name {
+		return
+	}
+	for _, s := range e.states {
+		if s.position != nil || s.shadowPosition == nil {
+			continue
+		}
+		s.shadowPosition = nil
+		s.stats.HasShadowPosition = false
+		s.shadowLastTradeAt = time.Time{}
+		if s.stats.RosterState == StrategyRosterActive {
+			s.stats.Status = optionStatusReady
+		} else if s.stats.Status == optionStatusShadowing {
+			s.stats.Status = optionStatusWatchlist
+		}
+	}
+}
+
 func (e *Engine) Run(stopCh <-chan struct{}) {
 	interval := e.tickEvery
 	if interval <= 0 {
@@ -357,6 +432,8 @@ func (e *Engine) tick() {
 	if e.lastPrice <= 0 {
 		return
 	}
+
+	e.stripStaleBTCPaperShadowsLocked()
 
 	iv := estimateIVWithBounds(e.minuteBars, e.marketProfile.DefaultIV, e.marketProfile.MinIV, e.marketProfile.MaxIV)
 	nowUTC := time.Now().UTC()

@@ -157,7 +157,9 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 	if regime == "" {
 		regime = optionMarketRegimeUnknown
 	}
-	if !e.lastRosterEval.IsZero() && regime == e.lastRosterRegime && now.Sub(e.lastRosterEval) < optionRosterRefreshInterval {
+	// BTC paper: recompute roster every tick so live allocation/size never go stale behind the 30s throttle.
+	if e.marketProfile.Name != defaultOptionsMarketProfile.Name &&
+		!e.lastRosterEval.IsZero() && regime == e.lastRosterRegime && now.Sub(e.lastRosterEval) < optionRosterRefreshInterval {
 		return
 	}
 

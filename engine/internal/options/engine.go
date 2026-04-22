@@ -250,6 +250,22 @@ func (e *Engine) RestoreState(state PersistedState) {
 		e.refreshStrategyPresentationLocked(s, now)
 	}
 
+	// Shadow-only rows block live entries; paper BTC desk prioritises visible live positions.
+	if e.marketProfile.Name == defaultOptionsMarketProfile.Name {
+		for _, s := range e.states {
+			if s.position == nil && s.shadowPosition != nil {
+				s.shadowPosition = nil
+				s.stats.HasShadowPosition = false
+				s.shadowLastTradeAt = time.Time{}
+				if s.stats.RosterState == StrategyRosterActive {
+					s.stats.Status = optionStatusReady
+				} else if s.stats.Status == optionStatusShadowing {
+					s.stats.Status = optionStatusWatchlist
+				}
+			}
+		}
+	}
+
 	// NewEngine() already ran a roster pass; if we restore within the refresh window
 	// with the same UNKNOWN regime, refresh would no-op and leave watchlist-sized
 	// fields (e.g. sizeMultiplier=0) on strategies marked ACTIVE — blocking opens.
@@ -418,6 +434,27 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	}
 }
 
+// stripStaleBTCPaperShadowsLocked removes shadow-only paper fills on the BTC desk so ACTIVE
+// strategies are not stuck behind "position nil && shadow non-nil" forever (common after DB restore).
+func (e *Engine) stripStaleBTCPaperShadowsLocked() {
+	if e.marketProfile.Name != defaultOptionsMarketProfile.Name {
+		return
+	}
+	for _, s := range e.states {
+		if s.position != nil || s.shadowPosition == nil {
+			continue
+		}
+		s.shadowPosition = nil
+		s.stats.HasShadowPosition = false
+		s.shadowLastTradeAt = time.Time{}
+		if s.stats.RosterState == StrategyRosterActive {
+			s.stats.Status = optionStatusReady
+		} else if s.stats.Status == optionStatusShadowing {
+			s.stats.Status = optionStatusWatchlist
+		}
+	}
+}
+
 func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -425,6 +462,8 @@ func (e *Engine) tick() {
 	if e.lastPrice <= 0 {
 		return
 	}
+
+	e.stripStaleBTCPaperShadowsLocked()
 
 	profile := e.resolvedProfile()
 	iv := estimateIVWithBounds(e.minuteBars, profile.DefaultIV, profile.MinIV, profile.MaxIV)

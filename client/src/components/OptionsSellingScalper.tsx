@@ -217,7 +217,7 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
       {positions.length === 0 ? (
         <div className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          No open short positions — engine is scanning for premium-selling entries.
+          No open short positions yet — live slots open on each engine tick once BTC spot is priced.
         </div>
       ) : (
         <div className="space-y-4">
