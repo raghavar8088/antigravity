@@ -91,3 +91,9 @@ func (e *Engine) resolvedProfile() MarketProfile {
 func PaperBTCFallbackSpot() float64 {
 	return defaultOptionsMarketProfile.ChainConfig.FallbackSpot
 }
+
+// PaperNiftyFallbackSpot is a positive NIFTY 50 index level when NSE/Yahoo feeds
+// are unavailable or the cash session is closed — keeps NIFTY paper desks running.
+func PaperNiftyFallbackSpot() float64 {
+	return niftyOptionsMarketProfile.ChainConfig.FallbackSpot
+}

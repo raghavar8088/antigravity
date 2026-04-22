@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 type NiftyEngineMarketPoint = {
   time: number;
@@ -35,7 +34,7 @@ export default function useNiftyEngineMarket() {
 
     const fetchMarket = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/nifty-market`);
+        const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-market`);
         if (!response.ok) {
           return;
         }

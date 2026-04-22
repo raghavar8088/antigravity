@@ -10,7 +10,7 @@ import useNiftyVIX from "@/hooks/useNiftyVIX";
 import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ââ Formatters ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -713,8 +713,8 @@ export default function Nifty50OptionScalper({
   const { vix, change: vixChange, percentChange: vixPct } = useNiftyVIX();
   const { candles } = useNiftyCandles();
   const actionButtonTitle = actionsEnabled
-    ? "Action buttons are enabled."
-    : "Set Action to Yes to enable reset and clear buttons.";
+    ? "Reset and clear are enabled."
+    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -732,7 +732,7 @@ export default function Nifty50OptionScalper({
     setIsResetting(true);
     clearAll();
     try {
-      const response = await fetch(`${API_URL}/api/nifty-options/reset`, { method: "POST" });
+      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options/reset`, { method: "POST" });
       if (!response.ok) {
         throw new Error("reset failed");
       }
@@ -856,7 +856,7 @@ export default function Nifty50OptionScalper({
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
                     try {
-                      const response = await fetch(`${API_URL}/api/nifty-options/clear-history`, { method: "POST" });
+                      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options/clear-history`, { method: "POST" });
                       if (!response.ok) {
                         throw new Error("clear history failed");
                       }

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 export type NiftyStockPosition = {
   id: string;
@@ -101,13 +100,14 @@ export default function useNiftyStocks(refreshKey = 0) {
   };
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetchAll = async () => {
       try {
         const [posRes, tradesRes, stratRes, statsRes] = await Promise.all([
-          fetch(`${API_URL}/api/nifty-stocks/positions`),
-          fetch(`${API_URL}/api/nifty-stocks/trades`),
-          fetch(`${API_URL}/api/nifty-stocks/strategies`),
-          fetch(`${API_URL}/api/nifty-stocks/stats`),
+          fetch(`${apiUrl}/api/nifty-stocks/positions`),
+          fetch(`${apiUrl}/api/nifty-stocks/trades`),
+          fetch(`${apiUrl}/api/nifty-stocks/strategies`),
+          fetch(`${apiUrl}/api/nifty-stocks/stats`),
         ]);
 
         if (posRes.ok) setPositions(await posRes.json());

@@ -42,7 +42,7 @@ type Engine struct {
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
-	tickEvery        time.Duration // trading loop interval; BTC paper uses a short interval
+	tickEvery        time.Duration // trading loop interval; BTC/NIFTY paper use a short interval
 }
 
 // NewEngine initialises the options engine with the full strategy library.
@@ -69,7 +69,7 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 	}
 
 	tickEvery := 10 * time.Second
-	if profile.Name == defaultOptionsMarketProfile.Name {
+	if profile.Name == defaultOptionsMarketProfile.Name || profile.Name == niftyOptionsMarketProfile.Name {
 		tickEvery = 1 * time.Second
 	}
 
@@ -83,8 +83,17 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 	return engine
 }
 
-func (e *Engine) btcPaperDeskAggressiveOpen() bool {
-	return e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0
+func (e *Engine) isPaperIndexDesk() bool {
+	switch e.marketProfile.Name {
+	case defaultOptionsMarketProfile.Name, niftyOptionsMarketProfile.Name:
+		return true
+	default:
+		return false
+	}
+}
+
+func (e *Engine) paperDeskAggressiveOpen() bool {
+	return e.isPaperIndexDesk() && e.lastPrice > 0
 }
 
 // SetStateSaveHook registers a callback used to persist options state changes.
@@ -250,8 +259,8 @@ func (e *Engine) RestoreState(state PersistedState) {
 		e.refreshStrategyPresentationLocked(s, now)
 	}
 
-	// Shadow-only rows block live entries; paper BTC desk prioritises visible live positions.
-	if e.marketProfile.Name == defaultOptionsMarketProfile.Name {
+	// Shadow-only rows block live entries; paper index desks prioritise visible live positions.
+	if e.isPaperIndexDesk() {
 		for _, s := range e.states {
 			if s.position == nil && s.shadowPosition != nil {
 				s.shadowPosition = nil
@@ -347,7 +356,7 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 	go e.persistHook(snapshot)
 }
 
-// UpdatePrice feeds a new BTC price tick into the engine.
+// UpdatePrice feeds a new underlying spot tick (BTC USD or NIFTY index) into the engine.
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
 	hadNoPrice := e.lastPrice <= 0
@@ -370,10 +379,10 @@ func (e *Engine) UpdatePrice(price float64) {
 			e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
 		}
 	}
-	wakeBTC := hadNoPrice && price > 0 && e.marketProfile.Name == defaultOptionsMarketProfile.Name
+	wakePaper := hadNoPrice && price > 0 && e.isPaperIndexDesk()
 	e.mu.Unlock()
 
-	if wakeBTC {
+	if wakePaper {
 		go e.tick()
 	}
 }
@@ -400,12 +409,12 @@ func (e *Engine) InjectMinuteBars(closePrices []float64) {
 	e.lastRosterRegime = ""
 	regime := classifyMarketRegime(e.minuteBars)
 	e.refreshRosterLocked(regime, time.Now().UTC())
-	wakeBTC := e.marketProfile.Name == defaultOptionsMarketProfile.Name && last > 0
+	wakePaper := e.isPaperIndexDesk() && last > 0
 	nBars := len(e.minuteBars)
 	e.mu.Unlock()
 
 	log.Printf("[OPTIONS ENGINE] Injected %d real minute bars (last=%.2f)", nBars, last)
-	if wakeBTC {
+	if wakePaper {
 		go e.tick()
 	}
 }
@@ -434,10 +443,10 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	}
 }
 
-// stripStaleBTCPaperShadowsLocked removes shadow-only paper fills on the BTC desk so ACTIVE
-// strategies are not stuck behind "position nil && shadow non-nil" forever (common after DB restore).
-func (e *Engine) stripStaleBTCPaperShadowsLocked() {
-	if e.marketProfile.Name != defaultOptionsMarketProfile.Name {
+// stripStalePaperDeskShadowsLocked removes shadow-only paper fills on BTC/NIFTY paper desks
+// so ACTIVE strategies are not stuck behind "position nil && shadow non-nil" (e.g. after DB restore).
+func (e *Engine) stripStalePaperDeskShadowsLocked() {
+	if !e.isPaperIndexDesk() {
 		return
 	}
 	for _, s := range e.states {
@@ -463,7 +472,7 @@ func (e *Engine) tick() {
 		return
 	}
 
-	e.stripStaleBTCPaperShadowsLocked()
+	e.stripStalePaperDeskShadowsLocked()
 
 	profile := e.resolvedProfile()
 	iv := estimateIVWithBounds(e.minuteBars, profile.DefaultIV, profile.MinIV, profile.MaxIV)
@@ -530,13 +539,13 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
 		return
 	}
-	if !e.btcPaperDeskAggressiveOpen() {
+	if !e.paperDeskAggressiveOpen() {
 		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
 			return
 		}
 	}
-	// BTC paper desk: skip signal/regime/entry gates so positions rotate quickly for demos.
-	if !e.btcPaperDeskAggressiveOpen() {
+	// Paper index desks: skip signal/regime/entry gates so positions rotate quickly for demos.
+	if !e.paperDeskAggressiveOpen() {
 		if !isCategoryAlignedWithRegime(s.def.Category, regime) {
 			return
 		}
@@ -555,7 +564,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		positionUSD = s.def.PositionUSD
 	}
 	mul := s.stats.SizeMultiplier
-	if e.btcPaperDeskAggressiveOpen() && mul <= 0 {
+	if e.paperDeskAggressiveOpen() && mul <= 0 {
 		mul = optionColdStartSizeMultiplier
 	}
 	positionUSD *= mul

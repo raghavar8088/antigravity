@@ -6,7 +6,7 @@ import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import type { OptionPosition, OptionStats, OptionStrategyStatus, OptionTrade } from "@/hooks/useNiftyOptions";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 const INITIAL_BALANCE = 1_000_000;
 
 function fmtINR(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -76,7 +76,9 @@ export default function Nifty50OptionSellingScalper({
 }: Props) {
   const market = useNiftyMarket();
   const [isResetting, setIsResetting] = useState(false);
-  const actionButtonTitle = actionsEnabled ? "Action buttons are enabled." : "Set Action to Yes to enable reset and clear buttons.";
+  const actionButtonTitle = actionsEnabled
+    ? "Reset and clear are enabled."
+    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
   const resolvedStats: OptionStats = stats ?? {
     balance: INITIAL_BALANCE,
     equity: INITIAL_BALANCE,
@@ -99,7 +101,7 @@ export default function Nifty50OptionSellingScalper({
     setIsResetting(true);
     clearAll();
     try {
-      const response = await fetch(`${API_URL}/api/nifty-options-selling/reset`, { method: "POST" });
+      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options-selling/reset`, { method: "POST" });
       if (!response.ok) {
         throw new Error("reset failed");
       }
@@ -153,7 +155,7 @@ export default function Nifty50OptionSellingScalper({
               if (!confirm("Clear completed NIFTY option selling trades and strategy stats? Open positions and balance will be kept.")) return;
               clearAll();
               try {
-                const response = await fetch(`${API_URL}/api/nifty-options-selling/clear-history`, { method: "POST" });
+                const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options-selling/clear-history`, { method: "POST" });
                 if (!response.ok) {
                   throw new Error("clear history failed");
                 }

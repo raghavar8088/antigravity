@@ -157,7 +157,7 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 	if regime == "" {
 		regime = optionMarketRegimeUnknown
 	}
-	if e.marketProfile.Name != defaultOptionsMarketProfile.Name &&
+	if !e.isPaperIndexDesk() &&
 		!e.lastRosterEval.IsZero() && regime == e.lastRosterRegime && now.Sub(e.lastRosterEval) < optionRosterRefreshInterval {
 		return
 	}

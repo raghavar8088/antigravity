@@ -822,38 +822,57 @@ func main() {
 		return now.After(open) && now.Before(close)
 	}
 
-	// Feed live NIFTY 50 spot quotes into the NIFTY modules from NSE.
+	// Feed NIFTY 50 spot into NIFTY modules (NSE when session open; synthetic fallback otherwise
+	// so paper desks keep ticking on Render / outside IST cash hours).
 	go safeGo("Nifty50PriceFeed", func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 
 		var feedPrimed bool
 		var lastErr string
+		var syntheticNiftyLogged sync.Once
 
 		pullQuote := func() {
-			// Skip price updates when NSE is closed to avoid stale bars
-			// polluting EMA/RSI/momentum indicators.
-			if !indianMarketOpen() {
-				return
+			var quote marketdata.NSEIndexQuote
+			live := false
+
+			if indianMarketOpen() {
+				q, err := nseIndexClient.FetchNifty50Quote(ctx)
+				if err == nil && q.Price > 0 {
+					quote = q
+					live = true
+					lastErr = ""
+				} else if err != nil {
+					if err.Error() != lastErr {
+						log.Printf("[NSE] WARN Failed to fetch live NIFTY 50 quote: %v", err)
+						lastErr = err.Error()
+					}
+				}
 			}
 
-			quote, err := nseIndexClient.FetchNifty50Quote(ctx)
-			if err != nil {
-				if err.Error() != lastErr {
-					log.Printf("[NSE] WARN Failed to fetch live NIFTY 50 quote: %v", err)
-					lastErr = err.Error()
+			if !live || quote.Price <= 0 {
+				quote = marketdata.NSEIndexQuote{
+					Index:        "NIFTY 50",
+					Price:        options.PaperNiftyFallbackSpot(),
+					ExchangeTime: "SYNTHETIC",
+					FetchedAt:    time.Now(),
 				}
-				return
+				syntheticNiftyLogged.Do(func() {
+					log.Printf("[NIFTY FEED] using synthetic NIFTY spot %.0f (session closed or feed unavailable)", quote.Price)
+				})
 			}
 
 			if !feedPrimed {
-				log.Printf("[NSE] Live NIFTY 50 quote online at %.2f (%s)", quote.Price, quote.ExchangeTime)
 				feedPrimed = true
-			} else if lastErr != "" {
+				if live {
+					log.Printf("[NSE] Live NIFTY 50 quote online at %.2f (%s)", quote.Price, quote.ExchangeTime)
+				} else {
+					log.Printf("[NIFTY FEED] primed with synthetic NIFTY spot %.0f", quote.Price)
+				}
+			} else if live && lastErr != "" {
 				log.Printf("[NSE] Live NIFTY 50 quote feed recovered at %.2f", quote.Price)
 			}
 
-			lastErr = ""
 			niftyMarketCache.Update(quote)
 			niftyOptionsEngine.UpdatePrice(quote.Price)
 			niftyOptionsSellingEngine.UpdatePrice(quote.Price)

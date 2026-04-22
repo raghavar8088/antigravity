@@ -9,8 +9,7 @@ export type {
 } from "@/hooks/useNiftyOptions";
 
 import type { OptionPosition, OptionTrade, OptionStrategyStatus, OptionStats } from "@/hooks/useNiftyOptions";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 export default function useNiftyOptionsSelling(refreshKey = 0) {
   const [positions, setPositions] = useState<OptionPosition[]>([]);
@@ -43,13 +42,14 @@ export default function useNiftyOptionsSelling(refreshKey = 0) {
   };
 
   useEffect(() => {
+    const apiUrl = resolveEngineApiUrl();
     const fetchAll = async () => {
       try {
         const [posRes, tradesRes, stratRes, statsRes] = await Promise.all([
-          fetch(`${API_URL}/api/nifty-options-selling/positions`),
-          fetch(`${API_URL}/api/nifty-options-selling/trades`),
-          fetch(`${API_URL}/api/nifty-options-selling/strategies`),
-          fetch(`${API_URL}/api/nifty-options-selling/stats`),
+          fetch(`${apiUrl}/api/nifty-options-selling/positions`),
+          fetch(`${apiUrl}/api/nifty-options-selling/trades`),
+          fetch(`${apiUrl}/api/nifty-options-selling/strategies`),
+          fetch(`${apiUrl}/api/nifty-options-selling/stats`),
         ]);
         if (posRes.ok) setPositions(await posRes.json());
         if (tradesRes.ok) setTrades(await tradesRes.json());
