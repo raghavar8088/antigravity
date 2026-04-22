@@ -1370,7 +1370,17 @@ export default function TradingDashboard({
             ? "Charts — TradingView advanced charts for NIFTY 50, Bank Nifty, BTC, ETH, and MCX."
             : activeModule === "notepad"
             ? "Notepad — Store API keys, broker credentials, and important notes. Data is local to your browser only."
-            : "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."}
+            : activeModule === "forexScalper"
+            ? "Forex — Live forex scalping across 12 major and cross currency pairs with a dedicated $1M paper account."
+            : activeModule === "options-selling"
+            ? "Options Selling — BTC short-premium workspace with theta-style decay and separate paper capital."
+            : activeModule === "chain"
+            ? "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."
+            : activeModule === "deltaLive"
+            ? "Delta Live — Delta Exchange connectivity and live trading context."
+            : activeModule === "spotBuy"
+            ? "BTC Spot Buy — Spot accumulation desk and related controls."
+            : "Select a workspace tab above to see its description."}
         </div>
       </div>
 
