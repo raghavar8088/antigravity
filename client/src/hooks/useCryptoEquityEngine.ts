@@ -270,6 +270,24 @@ type CryptoDbPayload = {
   strategies: CryptoDbStrategy[];
 };
 
+/** Lexicographic richness: more closed trades wins, then higher tradeSeq (fixes empty DB row vs full localStorage). */
+function compareCryptoLedgerRichness(db: CryptoDbPayload, ls: CryptoDbPayload): number {
+  const dbN = db.trades?.length ?? 0;
+  const lsN = ls.trades?.length ?? 0;
+  if (dbN !== lsN) return dbN - lsN;
+  return (db.tradeSeq ?? 0) - (ls.tradeSeq ?? 0);
+}
+
+function pickRicherCryptoSnapshot(db: CryptoDbPayload | null, ls: CryptoDbPayload | null): CryptoDbPayload | null {
+  if (!db && !ls) return null;
+  if (!db) return ls;
+  if (!ls) return db;
+  const c = compareCryptoLedgerRichness(db, ls);
+  if (c > 0) return db;
+  if (c < 0) return ls;
+  return db;
+}
+
 type CategoryProfile = { minTp: number; maxTp: number; minSl: number; maxSl: number; holdMins: number };
 
 const CATEGORY_PROFILES: Record<string, CategoryProfile> = {
@@ -662,13 +680,8 @@ async function loadCryptoState(engine: EngineRef): Promise<boolean> {
     // DB unavailable, use localStorage
   }
 
-  // Pick whichever has more trades (most up-to-date)
-  let saved: CryptoDbPayload | null = null;
-  if (dbState && lsState) {
-    saved = (dbState.tradeSeq ?? 0) >= (lsState.tradeSeq ?? 0) ? dbState : lsState;
-  } else {
-    saved = dbState ?? lsState;
-  }
+  // Prefer the snapshot with the fuller trade ledger (avoids empty DB row beating a populated localStorage on tie).
+  const saved = pickRicherCryptoSnapshot(dbState, lsState);
 
   if (!saved) return false;
 
@@ -809,6 +822,7 @@ export default function useCryptoEquityEngine() {
   const engineRef = useRef<EngineRef>(initEngine());
   const lastSavedSignatureRef = useRef("");
   const dbLoadedRef = useRef(false);
+  const [engineReady, setEngineReady] = useState(false);
   const [quotes, setQuotes] = useState<CryptoQuoteDisplay[]>(CRYPTO_TOP_20.map((asset) => ({ symbol: asset.symbol, name: asset.name, sector: asset.sector, ltp: 0, changePct: 0, volume: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
   const [positions, setPositions] = useState<CryptoPosition[]>([]);
   const [trades, setTrades] = useState<CryptoTrade[]>([]);
@@ -855,6 +869,7 @@ export default function useCryptoEquityEngine() {
   }, []);
 
   const processTick = useCallback((items: CryptoMarketItem[], errorMessage = "") => {
+    if (!dbLoadedRef.current) return;
     const engine = engineRef.current;
     const now = Date.now();
     if (errorMessage) engine.lastError = errorMessage;
@@ -993,26 +1008,42 @@ export default function useCryptoEquityEngine() {
         openPositions: [...engineRef.current.positions.keys()],
         tradeIds: engineRef.current.trades.slice(0, MAX_TRADES).map((trade) => trade.id),
       });
+      void saveCryptoState(engineRef.current);
+    }).finally(() => {
+      setEngineReady(true);
     });
   }, [pushDisplayState]);
 
   useEffect(() => {
+    if (!engineReady) return;
     const interval = setInterval(() => {
       if (dbLoadedRef.current) void saveCryptoState(engineRef.current);
     }, 15_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [engineReady]);
 
   useEffect(() => {
-    const onUnload = () => {
+    const flushLocal = () => {
       if (!dbLoadedRef.current) return;
-      // localStorage is synchronous — always succeeds before tab closes
+      saveToLocalStorage(engineRef.current);
+    };
+    const flushRemote = () => {
+      if (!dbLoadedRef.current) return;
       saveToLocalStorage(engineRef.current);
       const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
       navigator.sendBeacon("/api/crypto/equity-state", new Blob([payload], { type: "application/json" }));
     };
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flushLocal();
+    };
+    window.addEventListener("beforeunload", flushRemote);
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushRemote);
+    return () => {
+      window.removeEventListener("beforeunload", flushRemote);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushRemote);
+    };
   }, []);
 
   const fetchDirectBinanceMarkets = useCallback(async (): Promise<{ ok: boolean; data: CryptoMarketItem[]; error?: string }> => {
@@ -1059,6 +1090,7 @@ export default function useCryptoEquityEngine() {
   }, []);
 
   useEffect(() => {
+    if (!engineReady) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
@@ -1090,7 +1122,7 @@ export default function useCryptoEquityEngine() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [fetchDirectBinanceMarkets, processTick]);
+  }, [engineReady, fetchDirectBinanceMarkets, processTick]);
 
   return { quotes, positions, trades, strategies, stats, reset };
 }
