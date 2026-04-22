@@ -178,6 +178,7 @@ function Section({ section, onUpdate, onDelete }: {
 }) {
   const [editingId, setEditingId]   = useState<string | null>(null);
   const [addingNew, setAddingNew]   = useState(false);
+  const [newEntry, setNewEntry] = useState<NoteEntry | null>(null);
   const [editTitle, setEditTitle]   = useState(false);
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [collapsed, setCollapsed]   = useState(false);
@@ -276,12 +277,12 @@ function Section({ section, onUpdate, onDelete }: {
             )
           )}
 
-          {addingNew ? (
-            <EditRow entry={{ id: uid(), key: "", value: "", type: "text", createdAt: Date.now() }}
-              onSave={entry => { onUpdate({ ...section, entries: [...section.entries, entry] }); setAddingNew(false); }}
-              onCancel={() => setAddingNew(false)} />
+          {addingNew && newEntry ? (
+            <EditRow entry={newEntry}
+              onSave={entry => { onUpdate({ ...section, entries: [...section.entries, entry] }); setAddingNew(false); setNewEntry(null); }}
+              onCancel={() => { setAddingNew(false); setNewEntry(null); }} />
           ) : (
-            <button type="button" onClick={() => setAddingNew(true)}
+            <button type="button" onClick={() => { setNewEntry({ id: uid(), key: "", value: "", type: "text", createdAt: Date.now() }); setAddingNew(true); }}
               style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "5px 12px", borderRadius: "var(--radius-chip)",
                 border: "1px dashed var(--border-strong)", background: "transparent",
@@ -434,7 +435,7 @@ function ScreenshotsTab() {
           borderRadius: "var(--radius-input)", background: "rgba(227,116,0,0.08)",
           border: "1px solid rgba(227,116,0,0.3)", marginBottom: 16,
           fontSize: 12, color: "var(--text-secondary)" }}>
-          ⚠️ You're storing {(totalKB / 1024).toFixed(1)} MB of images in localStorage.
+          ⚠️ You&apos;re storing {(totalKB / 1024).toFixed(1)} MB of images in localStorage.
           Browser limit is ~5–10 MB. Delete old screenshots to free space.
         </div>
       )}
@@ -633,7 +634,7 @@ export default function NotePadPanel() {
             {filtered.length === 0 && search ? (
               <div style={{ textAlign: "center", padding: "40px 20px",
                 color: "var(--text-muted)", fontSize: 13 }}>
-                No results for "{search}"
+                No results for &quot;{search}&quot;
               </div>
             ) : (
               filtered.map(section => (

@@ -28,6 +28,19 @@ type SpotProduct = {
   debugInfo?: string;
 };
 
+function loadStoredConfig(): ApiConfig {
+  if (typeof window === "undefined") {
+    return { apiKey: "", apiSecret: "", testnet: false };
+  }
+  try {
+    const stored = localStorage.getItem(CONFIG_LS_KEY);
+    if (stored) return JSON.parse(stored) as ApiConfig;
+  } catch {
+    // ignore
+  }
+  return { apiKey: "", apiSecret: "", testnet: false };
+}
+
 function fmt(n: number, dp = 2) {
   return n.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
@@ -114,9 +127,9 @@ function SideTab({ label, active, isBuy, onClick }: { label: string; active: boo
 }
 
 export default function DeltaSpotBuy() {
-  const [config, setConfig] = useState<ApiConfig>({ apiKey: "", apiSecret: "", testnet: false });
+  const [config, setConfig] = useState<ApiConfig>(() => loadStoredConfig());
   const [showConfig, setShowConfig] = useState(false);
-  const [configInput, setConfigInput] = useState<ApiConfig>({ apiKey: "", apiSecret: "", testnet: false });
+  const [configInput, setConfigInput] = useState<ApiConfig>(() => loadStoredConfig());
 
   const [side, setSide] = useState<Side>("buy");
   const [orderType, setOrderType] = useState<OrderType>("market_order");
@@ -125,6 +138,7 @@ export default function DeltaSpotBuy() {
 
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [priceTs, setPriceTs] = useState<number>(0);
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
   const [spotProduct, setSpotProduct] = useState<SpotProduct | null>(null);
   const [probing, setProbing] = useState(false);
@@ -135,18 +149,6 @@ export default function DeltaSpotBuy() {
   const [orders, setOrders] = useState<OrderResult[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
-
-  // Load config from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(CONFIG_LS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as ApiConfig;
-        setConfig(parsed);
-        setConfigInput(parsed);
-      }
-    } catch { /* ignore */ }
-  }, []);
 
   // Live BTC price via Binance WebSocket
   useEffect(() => {
@@ -164,6 +166,11 @@ export default function DeltaSpotBuy() {
     };
     connect();
     return () => { wsRef.current?.close(); };
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const authHeaders = useCallback(() => ({
@@ -243,7 +250,7 @@ export default function DeltaSpotBuy() {
     setPlacing(false);
   }, [usdtAmount, side, orderType, limitPrice, spotProduct, config, authHeaders]);
 
-  const priceStale = Date.now() - priceTs > 10000;
+  const priceStale = nowTs - priceTs > 10000;
   const estimatedBTC = btcPrice && parseFloat(usdtAmount) > 0
     ? parseFloat(usdtAmount) / btcPrice
     : null;
@@ -372,7 +379,7 @@ export default function DeltaSpotBuy() {
           <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{probeError}</div>
         )}
         {!spotProduct && !probeError && (
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Click "Detect Product" to resolve the BTC/USDT spot product ID.</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Click &quot;Detect Product&quot; to resolve the BTC/USDT spot product ID.</div>
         )}
       </div>
 

@@ -7,6 +7,12 @@ export type DeltaStrike = {
   putIv: number;
 };
 
+type ChainRow = {
+  strike?: number;
+  call?: { iv?: number };
+  put?: { iv?: number };
+};
+
 export default function useDeltaStrikes() {
   const [strikes, setStrikes] = useState<DeltaStrike[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,10 +27,10 @@ export default function useDeltaStrikes() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.ok && Array.isArray(data.chain)) {
-        const mapped = data.chain.map((row: any) => ({
-          strike: row.strike,
-          callIv: row.call?.iv || 0,
-          putIv: row.put?.iv || 0,
+        const mapped = (data.chain as ChainRow[]).map((row) => ({
+          strike: Number(row.strike ?? 0),
+          callIv: Number(row.call?.iv ?? 0),
+          putIv: Number(row.put?.iv ?? 0),
         }));
         setStrikes(mapped);
       } else {

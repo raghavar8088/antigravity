@@ -243,7 +243,7 @@ function evalSignal(signal: string, values: number[]): boolean {
   }
 }
 
-function passesEntryConfirmation(def: StratDef, values: number[], _regime: Regime): boolean {
+function passesEntryConfirmation(def: StratDef, values: number[]): boolean {
   const r = rsi(values, 14);
   const mom3 = momentum(values, 3);
 
@@ -636,7 +636,7 @@ export default function useNiftyOptionsSellingEngine() {
       strategy.score = fired ? 78 : 0;
       strategy.status = fired ? "READY" : "WATCHLIST";
 
-      if (!fired || !passesEntryConfirmation(strategy.def, bars, regime)) continue;
+      if (!fired || !passesEntryConfirmation(strategy.def, bars)) continue;
       if (eng.positions.length >= MAX_CONCURRENT || eng.balance < strategy.def.marginINR) continue;
 
       const strikeOffset = strategy.def.optionType === "CALL" ? 1 : -1;

@@ -663,11 +663,11 @@ function TestOrderTab({
   const [strike, setStrike] = useState("");
   const [premiumUsd, setPremiumUsd] = useState("10");
   const [contracts, setContracts] = useState("1");
-  const [leverage, setLeverage] = useState("10x");
+  const [leverage] = useState("10x");
   const [reduceOnly, setReduceOnly] = useState(false);
   
   // Custom Hook for strikes
-  const { strikes, loading: strikesLoading } = useDeltaStrikes();
+  const { strikes } = useDeltaStrikes();
   
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -726,7 +726,10 @@ function TestOrderTab({
   };
 
   const sideColor = side === "buy" ? "var(--green)" : "var(--red)";
-  const sideBg = side === "buy" ? "var(--green-dim)" : "var(--red-dim)";
+  const orderTypeOptions: Array<{ label: string; value: "limit" | "market" }> = [
+    { label: "Limit", value: "limit" },
+    { label: "Market", value: "market" },
+  ];
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
@@ -779,18 +782,18 @@ function TestOrderTab({
 
         {/* Order Type Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 16 }}>
-          {["Limit", "Market", "Stop Limit"].map((t) => (
+          {orderTypeOptions.map((t) => (
             <button
-              key={t}
-              onClick={() => setOrderType(t.toLowerCase() as any)}
+              key={t.value}
+              onClick={() => setOrderType(t.value)}
               style={{
                 background: "none", border: "none", padding: "8px 0", cursor: "pointer", fontSize: 12, fontWeight: 500,
-                color: orderType === t.toLowerCase() ? "var(--accent)" : "var(--text-muted)",
-                borderBottom: orderType === t.toLowerCase() ? "2px solid var(--accent)" : "2px solid transparent",
+                color: orderType === t.value ? "var(--accent)" : "var(--text-muted)",
+                borderBottom: orderType === t.value ? "2px solid var(--accent)" : "2px solid transparent",
                 transition: "all 0.1s"
               }}
             >
-              {t}
+              {t.label}
             </button>
           ))}
         </div>

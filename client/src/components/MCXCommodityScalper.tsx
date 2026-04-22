@@ -403,8 +403,6 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
   const winRate = stats.winRate;
   const openCount = stats.openPositions;
-  const callCount = positions.filter((p) => p.optionType === "CALL").length;
-  const putCount = positions.filter((p) => p.optionType === "PUT").length;
   const activeStrategies = strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length;
   const totalStrategies = strategies.length;
   const feedOk = quotes.some((q) => q.ltp > 0);
@@ -571,7 +569,6 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
               </thead>
               <tbody>
                 {positions.map((pos) => {
-                   const commodity = MCX_COMMODITIES.find((c) => c.id === pos.commodityId);
                    return (
                     <tr key={pos.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
                       <td className="px-4 py-3">

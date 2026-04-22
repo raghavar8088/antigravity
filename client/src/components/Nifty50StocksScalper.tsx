@@ -543,30 +543,6 @@ function TradeLedger({ trades }: { trades: StockOptionTrade[] }) {
   );
 }
 
-// ─── Equity sparkline ──────────────────────────────────────────────────────────
-
-function EquitySparkline({ stats }: { stats: StocksEngineStats }) {
-  const positive = stats.equity >= INITIAL_BALANCE;
-  return (
-    <div className="flex items-center gap-3 px-1">
-      <div
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
-        style={{ background: positive ? "rgba(24,128,56,0.12)" : "rgba(217,48,37,0.12)" }}
-      >
-        <span className="text-base">{positive ? "▲" : "▼"}</span>
-      </div>
-      <div>
-        <div className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>
-          Session
-        </div>
-        <div className="font-mono text-sm font-semibold" style={{ color: positive ? "var(--green)" : "var(--red)" }}>
-          {fmtINR(stats.sessionPnl, { signed: true })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main component ────────────────────────────────────────────────────────────
 
 type Nifty50StocksScalperProps = {
@@ -599,8 +575,6 @@ export default function Nifty50StocksScalper({
   const topStrategy = [...strategies]
     .filter((s) => s.totalTrades > 0)
     .sort((a, b) => b.totalPnl - a.totalPnl)[0] ?? null;
-
-  const bestTrade = [...trades].sort((a, b) => b.netPnl - a.netPnl)[0] ?? null;
 
   const handleReset = () => {
     if (!actionsEnabled) {

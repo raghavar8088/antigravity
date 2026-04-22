@@ -661,33 +661,9 @@ type MCXDbPayload = {
   strategies: MCXDbStrategy[];
 };
 
-// ─── Regime classifier ────────────────────────────────────────────────────────
-
-function classifyCommodityRegime(bars: number[]): string {
-  if (bars.length < 22) return "UNKNOWN";
-  const price = bars[bars.length - 1];
-  const e9 = ema(bars, 9);
-  const e21 = ema(bars, 21);
-  const volPct = price > 0 ? (stddev(bars.slice(-20)) / price) * 100 : 0;
-  const m3 = momentum(bars, 3);
-
-  if (e9 > e21 && m3 > 0.0006) return "TRENDING_BULL";
-  if (e9 < e21 && m3 < -0.0006) return "TRENDING_BEAR";
-  if (volPct >= 0.35) return "HIGH_VOL";
-  return "RANGE";
-}
-
-function isCategoryAlignedWithRegime(_category: MCXCategory, _regime: string): boolean {
-  // Regime alignment gate removed — Mean Reversion signals already encode RSI/price
-  // extremes so they won't fire in trending markets unless conditions are right.
-  // Blocking by regime was causing Gold/Silver RSI signals to never execute
-  // because those commodities are almost always classified as TRENDING.
-  return true;
-}
-
 // ─── Entry confirmation (fixed for commodity IV scale) ────────────────────────
 
-function passesEntryConfirmation(def: StratDef, bars: number[], price: number, _regime: string): boolean {
+function passesEntryConfirmation(def: StratDef, bars: number[], price: number): boolean {
   const category = categoryForSignal(def.signal);
   const e9 = ema(bars, 9);
   const r = rsi(bars, 14);
@@ -1309,9 +1285,8 @@ export default function useMCXEngine(_refreshKey = 0) {
 
       const price = state.lastPrice;
       const barsForEval = [...bars, price];
-      const regime = classifyCommodityRegime(barsForEval);
       const fires = evalSignal(strat.def.signal, barsForEval, price);
-      const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price, regime);
+      const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price);
       strat.score = confirmed ? 82 : fires ? 56 : 0;
 
       if (!confirmed) continue;
