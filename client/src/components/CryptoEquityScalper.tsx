@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 import type {
@@ -615,6 +616,8 @@ function ScannerPanel({ quotes, positions }: { quotes: CryptoQuoteDisplay[]; pos
 
 type Props = {
   actionsEnabled?: boolean;
+  btcSpotUsd?: number;
+  btcChange24hPct?: number;
   quotes: CryptoQuoteDisplay[];
   positions: CryptoPosition[];
   trades: CryptoTrade[];
@@ -625,6 +628,8 @@ type Props = {
 
 export default function CryptoEquityScalper({
   actionsEnabled = false,
+  btcSpotUsd,
+  btcChange24hPct,
   quotes,
   positions,
   trades,
@@ -704,6 +709,7 @@ export default function CryptoEquityScalper({
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
                 Session PnL {fmtUSD(stats.sessionPnl, { signed: true })} · 40 coins · 50 autonomous spot strategies
               </div>
+              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">

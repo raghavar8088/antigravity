@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
@@ -514,9 +515,9 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type Props = { actionsEnabled?: boolean };
+type Props = { actionsEnabled?: boolean; btcSpotUsd?: number; btcChange24hPct?: number };
 
-export default function OptionsSellingScalper({ actionsEnabled = false }: Props) {
+export default function OptionsSellingScalper({ actionsEnabled = false, btcSpotUsd, btcChange24hPct }: Props) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -621,6 +622,7 @@ export default function OptionsSellingScalper({ actionsEnabled = false }: Props)
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
                 Session PnL {fmtUSD(sessionPnl, { signed: true })} · Premium collected
               </div>
+              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">

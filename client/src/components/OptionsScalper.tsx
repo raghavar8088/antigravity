@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useOptions";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
@@ -545,9 +546,11 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
 
 type OptionsScalperProps = {
   actionsEnabled?: boolean;
+  btcSpotUsd?: number;
+  btcChange24hPct?: number;
 };
 
-export default function OptionsScalper({ actionsEnabled = false }: OptionsScalperProps) {
+export default function OptionsScalper({ actionsEnabled = false, btcSpotUsd, btcChange24hPct }: OptionsScalperProps) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [refreshKey, setRefreshKey] = useState(0);
@@ -665,6 +668,7 @@ export default function OptionsScalper({ actionsEnabled = false }: OptionsScalpe
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
                 Session PnL {fmtUSD(sessionPnl, { signed: true })}
               </div>
+              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">

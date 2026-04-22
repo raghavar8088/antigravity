@@ -2339,15 +2339,31 @@ export default function TradingDashboard({
         </div>
       )}
 
-      {activeModule === "options" && <OptionsScalper actionsEnabled={actionsEnabled} />}
+      {activeModule === "options" && (
+        <OptionsScalper actionsEnabled={actionsEnabled} btcSpotUsd={price} btcChange24hPct={market.change24h} />
+      )}
 
-      {activeModule === "options-selling" && <OptionsSellingScalper actionsEnabled={actionsEnabled} />}
+      {activeModule === "options-selling" && (
+        <OptionsSellingScalper actionsEnabled={actionsEnabled} btcSpotUsd={price} btcChange24hPct={market.change24h} />
+      )}
       {activeModule === "deltaLive" && <DeltaLiveScalper actionsEnabled={actionsEnabled} />}
       {activeModule === "spotBuy" && <DeltaSpotBuy />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
-      {activeModule === "cryptoEquity" && <CryptoEquityScalper actionsEnabled={actionsEnabled} quotes={cryptoQuotes} positions={cryptoPositions} trades={cryptoTrades} strategies={cryptoStrategies} stats={cryptoStats} reset={cryptoReset} />}
+      {activeModule === "cryptoEquity" && (
+        <CryptoEquityScalper
+          actionsEnabled={actionsEnabled}
+          btcSpotUsd={price}
+          btcChange24hPct={market.change24h}
+          quotes={cryptoQuotes}
+          positions={cryptoPositions}
+          trades={cryptoTrades}
+          strategies={cryptoStrategies}
+          stats={cryptoStats}
+          reset={cryptoReset}
+        />
+      )}
 
       {activeModule === "forexScalper" && <ForexScalper actionsEnabled={actionsEnabled} quotes={forexQuotes} positions={forexPositions} trades={forexTrades} strategies={forexStrategies} stats={forexStats} reset={forexReset} />}
 
