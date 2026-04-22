@@ -1,6 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
+import {
+  clearOptionsBuyCache,
+  readOptionsBuyCache,
+  writeOptionsBuyCache,
+} from "@/lib/optionsSnapshotCache";
 
 export type OptionPosition = {
   id: string;
@@ -85,12 +90,18 @@ export type OptionStats = {
 };
 
 export default function useOptions(refreshKey = 0) {
-  const [positions, setPositions] = useState<OptionPosition[]>([]);
-  const [trades, setTrades] = useState<OptionTrade[]>([]);
-  const [strategies, setStrategies] = useState<OptionStrategyStatus[]>([]);
-  const [stats, setStats] = useState<OptionStats | null>(null);
+  const cached = typeof window !== "undefined" ? readOptionsBuyCache() : null;
+  const [positions, setPositions] = useState<OptionPosition[]>(
+    () => (cached?.positions as OptionPosition[]) ?? [],
+  );
+  const [trades, setTrades] = useState<OptionTrade[]>(() => (cached?.trades as OptionTrade[]) ?? []);
+  const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(
+    () => (cached?.strategies as OptionStrategyStatus[]) ?? [],
+  );
+  const [stats, setStats] = useState<OptionStats | null>(() => (cached?.stats as OptionStats) ?? null);
 
   const clearAll = () => {
+    clearOptionsBuyCache();
     setPositions([]);
     setTrades([]);
     setStats(null);
@@ -124,10 +135,25 @@ export default function useOptions(refreshKey = 0) {
           fetch(`${apiUrl}/api/options/strategies`),
           fetch(`${apiUrl}/api/options/stats`),
         ]);
-        if (posRes.ok) setPositions(await posRes.json());
-        if (tradesRes.ok) setTrades(await tradesRes.json());
-        if (stratRes.ok) setStrategies(await stratRes.json());
-        if (statsRes.ok) setStats(await statsRes.json());
+
+        const posJson = posRes.ok ? ((await posRes.json()) as OptionPosition[]) : null;
+        const tradesJson = tradesRes.ok ? ((await tradesRes.json()) as OptionTrade[]) : null;
+        const stratJson = stratRes.ok ? ((await stratRes.json()) as OptionStrategyStatus[]) : null;
+        const statsJson = statsRes.ok ? ((await statsRes.json()) as OptionStats) : null;
+
+        if (posJson) setPositions(posJson);
+        if (tradesJson) setTrades(tradesJson);
+        if (stratJson) setStrategies(stratJson);
+        if (statsJson !== null && statsRes.ok) setStats(statsJson);
+
+        if (posJson && tradesJson && stratJson && statsJson !== null && statsRes.ok) {
+          writeOptionsBuyCache({
+            positions: posJson,
+            trades: tradesJson,
+            strategies: stratJson,
+            stats: statsJson,
+          });
+        }
       } catch {
         // silent
       }

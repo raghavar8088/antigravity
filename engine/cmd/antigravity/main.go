@@ -96,7 +96,7 @@ func loadDotEnv() {
 	log.Println("[ENV] Loaded local .env file")
 }
 
-func saveOptionsSnapshot(ctx context.Context, store *persistence.Store, snapshot options.PersistedState) error {
+func saveOptionsSnapshot(ctx context.Context, store persistence.OptionsBuyPaperPersistence, snapshot options.PersistedState) error {
 	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
 	if err != nil {
 		return fmt.Errorf("marshal options price history: %w", err)
@@ -123,6 +123,7 @@ func saveOptionsSnapshot(ctx context.Context, store *persistence.Store, snapshot
 		MinuteBars: minuteBarsJSON,
 		Trades:     tradesJSON,
 		Strategies: strategiesJSON,
+		SavedAt:    snapshot.SavedAt,
 	})
 }
 
@@ -222,7 +223,7 @@ func loadNiftyOptionsSnapshot(state *persistence.NiftyOptionsState) (options.Per
 	return snapshot, nil
 }
 
-func saveOptionsSellingSnapshot(ctx context.Context, store *persistence.Store, snapshot options_selling.PersistedState) error {
+func saveOptionsSellingSnapshot(ctx context.Context, store persistence.OptionsSellPaperPersistence, snapshot options_selling.PersistedState) error {
 	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
 	if err != nil {
 		return fmt.Errorf("marshal options selling price history: %w", err)
@@ -249,6 +250,7 @@ func saveOptionsSellingSnapshot(ctx context.Context, store *persistence.Store, s
 		MinuteBars: minuteBarsJSON,
 		Trades:     tradesJSON,
 		Strategies: strategiesJSON,
+		SavedAt:    snapshot.SavedAt,
 	})
 }
 
@@ -635,26 +637,38 @@ func main() {
 		})
 	})
 	niftyStocksEngine := niftystocks.NewEngine()
+
+	var btcBuy persistence.OptionsBuyPaperPersistence
+	var btcSell persistence.OptionsSellPaperPersistence
 	if dbStore != nil {
+		btcBuy, btcSell = dbStore, dbStore
+	} else if fs, ferr := persistence.NewFileSnapshotStore(); ferr == nil {
+		btcBuy, btcSell = fs, fs
+		log.Printf("[SNAPSHOT] ✅ BTC options paper state → files under %s (set ENGINE_DATA_DIR to a mounted disk so redeploys keep history)", fs.Dir)
+	} else {
+		log.Printf("[SNAPSHOT] ⚠️  BTC options not persisted: no DATABASE_URL and file store failed: %v", ferr)
+	}
+
+	if btcBuy != nil {
 		optionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
-			if err := saveOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
-				log.Printf("[DB] ⚠️  Failed to save options state: %v", err)
+			if err := saveOptionsSnapshot(context.Background(), btcBuy, snapshot); err != nil {
+				log.Printf("[OPTIONS PERSIST] ⚠️  Failed to save options (buy) state: %v", err)
 			}
 		})
 
 		optionsSellingEngine.SetStateSaveHook(func(snapshot options_selling.PersistedState) {
-			if err := saveOptionsSellingSnapshot(context.Background(), dbStore, snapshot); err != nil {
-				log.Printf("[DB] ⚠️  Failed to save options selling state: %v", err)
+			if err := saveOptionsSellingSnapshot(context.Background(), btcSell, snapshot); err != nil {
+				log.Printf("[OPTIONS PERSIST] ⚠️  Failed to save options selling state: %v", err)
 			}
 		})
 
-		optState, loadErr := dbStore.LoadOptionsState(ctx)
+		optState, loadErr := btcBuy.LoadOptionsState(ctx)
 		if loadErr != nil {
-			log.Printf("[DB] ⚠️  Failed to load options state: %v", loadErr)
+			log.Printf("[OPTIONS PERSIST] ⚠️  Failed to load options (buy) state: %v", loadErr)
 		} else {
 			snapshot, snapshotErr := loadOptionsSnapshot(optState)
 			if snapshotErr != nil {
-				log.Printf("[DB] ⚠️  Failed to decode options state: %v", snapshotErr)
+				log.Printf("[OPTIONS PERSIST] ⚠️  Failed to decode options state: %v", snapshotErr)
 			} else {
 				optionsEngine.RestoreState(snapshot)
 				restoredOpen := 0
@@ -663,20 +677,24 @@ func main() {
 						restoredOpen++
 					}
 				}
+				savedAt := "new"
+				if !optState.SavedAt.IsZero() {
+					savedAt = optState.SavedAt.Format(time.RFC3339)
+				}
 				log.Printf(
-					"[DB] ♻️  Options state restored from %s | Balance: $%.2f | Open Positions: %d | Trades: %d",
-					optState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
+					"[OPTIONS PERSIST] ♻️  Options (buy) restored | savedAt=%s | Balance: $%.2f | Open: %d | Trades: %d",
+					savedAt, snapshot.Balance, restoredOpen, len(snapshot.Trades),
 				)
 			}
 		}
 
-		sellOptState, loadErr := dbStore.LoadOptionsSellingState(ctx)
+		sellOptState, loadErr := btcSell.LoadOptionsSellingState(ctx)
 		if loadErr != nil {
-			log.Printf("[DB] ⚠️  Failed to load options selling state: %v", loadErr)
+			log.Printf("[OPTIONS PERSIST] ⚠️  Failed to load options selling state: %v", loadErr)
 		} else {
 			snapshot, snapshotErr := loadOptionsSellingSnapshot(sellOptState)
 			if snapshotErr != nil {
-				log.Printf("[DB] ⚠️  Failed to decode options selling state: %v", snapshotErr)
+				log.Printf("[OPTIONS PERSIST] ⚠️  Failed to decode options selling state: %v", snapshotErr)
 			} else {
 				optionsSellingEngine.RestoreState(snapshot)
 				restoredOpen := 0
@@ -685,13 +703,19 @@ func main() {
 						restoredOpen++
 					}
 				}
+				savedAt := "new"
+				if !sellOptState.SavedAt.IsZero() {
+					savedAt = sellOptState.SavedAt.Format(time.RFC3339)
+				}
 				log.Printf(
-					"[DB] ♻️  Options SELLING state restored from %s | Balance: $%.2f | Open Positions: %d | Trades: %d",
-					sellOptState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
+					"[OPTIONS PERSIST] ♻️  Options SELLING restored | savedAt=%s | Balance: $%.2f | Open: %d | Trades: %d",
+					savedAt, snapshot.Balance, restoredOpen, len(snapshot.Trades),
 				)
 			}
 		}
+	}
 
+	if dbStore != nil {
 		niftyOptionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
 			if err := saveNiftyOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
 				log.Printf("[DB] WARN Failed to save NIFTY options state: %v", err)
