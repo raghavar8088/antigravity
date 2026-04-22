@@ -25,6 +25,7 @@ import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
 import MCXCommodityScalper from "@/components/MCXCommodityScalper";
 import CryptoEquityScalper from "@/components/CryptoEquityScalper";
 import ForexScalper from "@/components/ForexScalper";
+import ForexGoldScalper from "@/components/ForexGoldScalper";
 import LiveDataLabPanel from "@/components/LiveDataLabPanel";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
 import TradingViewChart from "@/components/TradingViewChart";
@@ -40,6 +41,7 @@ import useNiftyOptionsSelling from "@/hooks/useNiftyOptionsSelling";
 import useNiftyStocksEngine from "@/hooks/useNiftyStocksEngine";
 import useCryptoEquityEngine from "@/hooks/useCryptoEquityEngine";
 import useForexEngine from "@/hooks/useForexEngine";
+import useForexGoldEngine from "@/hooks/useForexGoldEngine";
 import useOptions from "@/hooks/useOptions";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
@@ -91,7 +93,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india" | "forex" | "charts";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "notepad" | "spotBuy";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "forexGold" | "notepad" | "spotBuy";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -115,6 +117,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
   { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
   { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 pairs with 10% of $1M paper capital per trade entry (10× prior allocation).", group: "forex", module: "forexScalper" },
+  { path: "/forex/gold", label: "Gold Trading", description: "Dedicated gold desk under forex with 100 autonomous strategies and separate trade history.", group: "forex", module: "forexGold" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -394,6 +397,7 @@ export default function TradingDashboard({
   } = useOptionsSelling(resetRefreshKey);
   const { quotes: cryptoQuotes, positions: cryptoPositions, trades: cryptoTrades, strategies: cryptoStrategies, stats: cryptoStats, reset: cryptoReset } = useCryptoEquityEngine();
   const { quotes: forexQuotes, positions: forexPositions, trades: forexTrades, strategies: forexStrategies, stats: forexStats, reset: forexReset } = useForexEngine();
+  const { quote: goldQuote, positions: goldPositions, trades: goldTrades, strategies: goldStrategies, stats: goldStats, reset: goldReset } = useForexGoldEngine();
   const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll } = useNiftyOptions(resetRefreshKey);
   const { barCount: niftyBarCount, price: niftyEnginePrice } = useNiftyEngineMarket();
   const { positions: niftySellingPositions, trades: niftySellingTrades, strategies: niftySellingStrategies, stats: niftySellingStats, clearAll: niftySellingClearAll } = useNiftyOptionsSelling(resetRefreshKey);
@@ -892,6 +896,7 @@ export default function TradingDashboard({
   const btcOptionsSellingModuleActive = activeModule === "options-selling";
   const cryptoEquityModuleActive = activeModule === "cryptoEquity";
   const forexModuleActive = activeModule === "forexScalper";
+  const forexGoldModuleActive = activeModule === "forexGold";
   const niftyOptionsModuleActive = activeModule === "nifty";
   const niftyOptionsSellingModuleActive = activeModule === "niftySelling";
   const niftyStocksModuleActive = activeModule === "niftyStocks";
@@ -939,6 +944,10 @@ export default function TradingDashboard({
   const forexSessionPnl = forexStats.sessionPnl ?? (forexEquity - INITIAL_BALANCE);
   const forexOpenPositions = forexPositions.length;
   const forexOnline = forexStats.lastUpdateAt > 0 || forexPositions.length > 0;
+  const goldEquity = goldStats.equity ?? INITIAL_BALANCE;
+  const goldSessionPnl = goldStats.sessionPnl ?? (goldEquity - INITIAL_BALANCE);
+  const goldOpenPositions = goldPositions.length;
+  const goldOnline = goldStats.lastUpdateAt > 0 || goldPositions.length > 0;
 
   const optionsHeaderMarketLabel = btcOptionsSellingModuleActive ? "BTC SELLING" : niftyOptionsSellingModuleActive ? "NIFTY SELLING" : niftyOptionsModuleActive ? "NIFTY 50" : "BTC";
   const optionsHeaderMarketCode = btcOptionsSellingModuleActive ? "SELL" : niftyOptionsSellingModuleActive ? "NSELL" : niftyOptionsModuleActive ? "N50" : "OPT";
@@ -961,6 +970,13 @@ export default function TradingDashboard({
           id: String(strategy.id ?? `forex-${index}`),
           label: strategy.name,
           description: `${strategy.category} · ${strategy.regime} · ${strategy.status}`,
+          enabled: strategy.rosterState === "ACTIVE",
+        }))
+    : forexGoldModuleActive
+      ? goldStrategies.slice(0, 10).map((strategy, index) => ({
+          id: String(strategy.id ?? `gold-${index}`),
+          label: strategy.name,
+          description: `${strategy.category} Â· ${strategy.regime} Â· ${strategy.status}`,
           enabled: strategy.rosterState === "ACTIVE",
         }))
     : niftyOptionsModuleActive
@@ -1025,6 +1041,14 @@ export default function TradingDashboard({
                 time: trade.exitTime,
                 title: trade.strategyName,
                 detail: `${trade.symbol} ${trade.exitReason} · ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
+                tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
+              }))
+          : forexGoldModuleActive
+            ? goldTrades.slice(0, 8).map((trade) => ({
+                id: trade.id,
+                time: trade.exitTime,
+                title: trade.strategyName,
+                detail: `${trade.side} ${trade.exitReason} Â· ${trade.netPnl >= 0 ? "+" : ""}${trade.netPnl.toFixed(2)}`,
                 tone: trade.netPnl >= 0 ? "positive" as const : "negative" as const,
               }))
           : liveTrades.slice(0, 8).map((trade) => ({
@@ -1158,6 +1182,28 @@ export default function TradingDashboard({
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
+      ) : forexGoldModuleActive ? (
+        <OptionsAccountHeader
+          online={goldOnline}
+          equity={goldEquity}
+          dailyPnL={goldSessionPnl}
+          openPositions={goldOpenPositions}
+          marketLabel="GOLD"
+          marketCode="XAU"
+          accountLabel="Gold paper account"
+          currencyCode="USD"
+          locale="en-US"
+          workspaceTitle="RAIG Gold Trading Workspace"
+          onlineLabel="Gold engine live on Yahoo gold proxy"
+          offlineLabel="Gold engine offline"
+          detailLabel={goldStats.diagnostics}
+          accountBadgeLabel="Gold Account"
+          equityLabel="Gold Equity"
+          pnlLabel="Gold PnL Today"
+          openLabel="Open Gold"
+          actionsEnabled={actionsEnabled}
+          onToggleActions={setActionsEnabled}
+        />
       ) : niftyStocksModuleActive ? (
         <OptionsAccountHeader
           online={niftyStocksOnline}
@@ -1270,6 +1316,7 @@ export default function TradingDashboard({
             {/* Forex sub-tabs */}
             {activeGroup === "forex" && ([
               { key: "forexScalper", label: "Forex Scalper" },
+              { key: "forexGold", label: "Gold Trading" },
               { key: "notepad",      label: "📋 Notepad" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => (
               <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
@@ -1385,6 +1432,8 @@ export default function TradingDashboard({
             ? "Notepad — Store API keys, broker credentials, and important notes. Data is local to your browser only."
             : activeModule === "forexScalper"
             ? "Forex — Live forex scalping across 12 pairs; $1M paper account with 10% of initial capital per trade entry (10× prior 1% allocation)."
+            : activeModule === "forexGold"
+            ? "Gold - Dedicated gold desk under forex with 100 autonomous strategies, 1% capital per trade, isolated history, and auto-triggered execution."
             : activeModule === "options-selling"
             ? "Options Selling — BTC short-premium workspace with theta-style decay and separate paper capital."
             : activeModule === "chain"
@@ -2399,6 +2448,7 @@ export default function TradingDashboard({
       )}
 
       {activeModule === "forexScalper" && <ForexScalper actionsEnabled={actionsEnabled} quotes={forexQuotes} positions={forexPositions} trades={forexTrades} strategies={forexStrategies} stats={forexStats} reset={forexReset} />}
+      {activeModule === "forexGold" && <ForexGoldScalper actionsEnabled={actionsEnabled} quote={goldQuote} positions={goldPositions} trades={goldTrades} strategies={goldStrategies} stats={goldStats} reset={goldReset} />}
 
       {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} positions={niftyOptionPositions} trades={niftyOptionTrades} strategies={niftyOptionStrategies} stats={niftyOptionStats} clearAll={niftyOptionClearAll} barCount={niftyBarCount} enginePrice={niftyEnginePrice} onRefresh={() => setResetRefreshKey((current) => current + 1)} />}
 
