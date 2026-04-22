@@ -116,6 +116,13 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
   { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
   { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
+  {
+    path: "/trade-history",
+    label: "Excel archive (all modules)",
+    description: "Download daily cross-module trade workbooks stored in the database (survives account resets).",
+    group: "crypto",
+    module: "history",
+  },
   { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 pairs with 10% of $1M paper capital per trade entry (10× prior allocation).", group: "forex", module: "forexScalper" },
   { path: "/forex/gold", label: "Gold Trading", description: "Dedicated gold desk under forex with 100 autonomous strategies and separate trade history.", group: "forex", module: "forexGold" },
 ];

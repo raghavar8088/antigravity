@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/trade-history/daily-run",
+      "schedule": "5 1 * * *"
+    }
+  ]
+}
