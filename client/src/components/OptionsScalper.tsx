@@ -2,9 +2,8 @@
 import { useEffect, useState } from "react";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useOptions, { OptionPosition, OptionTrade, OptionStrategyStatus } from "@/hooks/useOptions";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 import { formatShortDate, formatShortTime } from "@/lib/time";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ── Formatters ──────────────────────────────────────────────────────────────
@@ -574,7 +573,7 @@ export default function OptionsScalper({ actionsEnabled = false }: OptionsScalpe
     setIsResetting(true);
     clearAll(); // immediately zero out PnL in the UI
     try {
-      const response = await fetch(`${API_URL}/api/options/reset`, { method: "POST" });
+      const response = await fetch(`${resolveEngineApiUrl()}/api/options/reset`, { method: "POST" });
       if (!response.ok) {
         throw new Error("reset failed");
       }
@@ -689,7 +688,7 @@ export default function OptionsScalper({ actionsEnabled = false }: OptionsScalpe
                     if (!actionsEnabled) return;
                     if (!confirm("Clear completed option trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
-                    await fetch(`${API_URL}/api/options/clear-history`, { method: "POST" });
+                    await fetch(`${resolveEngineApiUrl()}/api/options/clear-history`, { method: "POST" });
                     setRefreshKey((k) => k + 1);
                   }}
                 >

@@ -377,8 +377,8 @@ export default function TradingDashboard({
   }, [initialGroup, initialModule]);
 
   const { engineOnline } = useEngineState();
-  const { positions: optionPositions, stats: optionStats } = useOptions();
-  const { positions: optionSellingPositions, stats: optionSellingStats } = useOptionsSelling();
+  const { positions: optionPositions, stats: optionStats, strategies: optionStrategies } = useOptions();
+  const { positions: optionSellingPositions, stats: optionSellingStats, strategies: optionSellingStrategies } = useOptionsSelling();
   const { quotes: cryptoQuotes, positions: cryptoPositions, trades: cryptoTrades, strategies: cryptoStrategies, stats: cryptoStats, reset: cryptoReset } = useCryptoEquityEngine();
   const { quotes: forexQuotes, positions: forexPositions, trades: forexTrades, strategies: forexStrategies, stats: forexStats, reset: forexReset } = useForexEngine();
   const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll } = useNiftyOptions(resetRefreshKey);
@@ -895,7 +895,24 @@ export default function TradingDashboard({
     : niftyOptionsSellingModuleActive
     ? niftySellingPositions.length
     : Math.max(selectedOptionsStats?.openPositions ?? 0, selectedOptionPositions.length);
-  const optionsOnline = selectedOptionsStats !== null || selectedOptionPositions.length > 0 || niftyOptionPositions.length > 0 || niftySellingPositions.length > 0;
+  const btcOptionsDeskReachable =
+    optionStats !== null || optionPositions.length > 0 || optionStrategies.length > 0;
+  const btcOptionsSellingDeskReachable =
+    optionSellingStats !== null || optionSellingPositions.length > 0 || optionSellingStrategies.length > 0;
+  const niftyOptionsDeskReachable =
+    niftyOptionStats !== null || niftyOptionPositions.length > 0 || niftyOptionStrategies.length > 0;
+  const niftyOptionsSellingDeskReachable =
+    niftySellingStats !== null || niftySellingPositions.length > 0 || niftySellingStrategies.length > 0;
+  const optionsOnline =
+    engineOnline ||
+    (btcOptionsModuleActive &&
+      !btcOptionsSellingModuleActive &&
+      !niftyOptionsModuleActive &&
+      !niftyOptionsSellingModuleActive &&
+      btcOptionsDeskReachable) ||
+    (btcOptionsSellingModuleActive && btcOptionsSellingDeskReachable) ||
+    (niftyOptionsModuleActive && niftyOptionsDeskReachable) ||
+    (niftyOptionsSellingModuleActive && niftyOptionsSellingDeskReachable);
   // For NIFTY stocks: use client engine equity directly
   const niftyStocksEquity = niftyStockStats?.equity ?? INITIAL_BALANCE;
   const niftyStocksSessionPnl = niftyStocksEquity - INITIAL_BALANCE;

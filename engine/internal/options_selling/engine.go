@@ -304,18 +304,29 @@ func (e *Engine) UpdatePrice(price float64) {
 }
 
 func (e *Engine) InjectMinuteBars(closePrices []float64) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	if len(closePrices) == 0 {
 		return
 	}
 	if len(closePrices) > 300 {
 		closePrices = closePrices[len(closePrices)-300:]
 	}
+	e.mu.Lock()
 	e.minuteBars = make([]float64, len(closePrices))
 	copy(e.minuteBars, closePrices)
-	e.lastPrice = closePrices[len(closePrices)-1]
-	log.Printf("[%s] Injected %d historical 1m bars (last=%.2f)", e.marketProfile.Name, len(e.minuteBars), e.lastPrice)
+	last := closePrices[len(closePrices)-1]
+	e.lastPrice = last
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
+	regime := classifyMarketRegime(e.minuteBars)
+	e.refreshRosterLocked(regime, time.Now().UTC())
+	wakeBTC := e.marketProfile.Name == defaultOptionsMarketProfile.Name && last > 0
+	nBars := len(e.minuteBars)
+	e.mu.Unlock()
+
+	log.Printf("[%s] Injected %d historical 1m bars (last=%.2f)", e.marketProfile.Name, nBars, last)
+	if wakeBTC {
+		go e.tick()
+	}
 }
 
 func (e *Engine) Run(stopCh <-chan struct{}) {

@@ -368,18 +368,30 @@ func (e *Engine) InjectMinuteBars(closePrices []float64) {
 	if len(closePrices) == 0 {
 		return
 	}
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	// Cap at 300 bars (5 hours)
 	if len(closePrices) > 300 {
 		closePrices = closePrices[len(closePrices)-300:]
 	}
+	e.mu.Lock()
 	e.minuteBars = make([]float64, len(closePrices))
 	copy(e.minuteBars, closePrices)
+	last := 0.0
 	if len(closePrices) > 0 {
-		e.lastPrice = closePrices[len(closePrices)-1]
+		last = closePrices[len(closePrices)-1]
+		e.lastPrice = last
 	}
-	log.Printf("[OPTIONS ENGINE] Injected %d real minute bars (last=%.2f)", len(e.minuteBars), e.lastPrice)
+	// New bars can change regime; do not let the 30s throttle skip the next roster pass.
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
+	regime := classifyMarketRegime(e.minuteBars)
+	e.refreshRosterLocked(regime, time.Now().UTC())
+	wakeBTC := e.marketProfile.Name == defaultOptionsMarketProfile.Name && last > 0
+	nBars := len(e.minuteBars)
+	e.mu.Unlock()
+
+	log.Printf("[OPTIONS ENGINE] Injected %d real minute bars (last=%.2f)", nBars, last)
+	if wakeBTC {
+		go e.tick()
+	}
 }
 
 // Run is the main trading loop. Call it in a goroutine.
