@@ -41,6 +41,7 @@ type Engine struct {
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
+	tickEvery        time.Duration
 }
 
 func NewEngine() *Engine {
@@ -66,13 +67,23 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		}
 	}
 
+	tickEvery := 10 * time.Second
+	if profile.Name == defaultOptionsMarketProfile.Name {
+		tickEvery = 3 * time.Second
+	}
+
 	engine := &Engine{
 		states:        states,
 		marketProfile: profile,
 		balance:       initialOptionsBalance,
+		tickEvery:     tickEvery,
 	}
 	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
 	return engine
+}
+
+func (e *Engine) btcPaperDeskAggressiveOpen() bool {
+	return e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0
 }
 
 func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
@@ -301,11 +312,16 @@ func (e *Engine) InjectMinuteBars(closePrices []float64) {
 }
 
 func (e *Engine) Run(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(10 * time.Second)
+	interval := e.tickEvery
+	if interval <= 0 {
+		interval = 10 * time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	log.Printf("[OPTIONS SELLING] Started with %d strategies", len(e.states))
+	log.Printf("[OPTIONS SELLING] %s started with %d strategies (tick every %v)", e.marketProfile.Name, len(e.states), interval)
 
+	e.tick()
 	for {
 		select {
 		case <-stopCh:
@@ -386,11 +402,13 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
 		return
 	}
-	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
-		return
+	if !e.btcPaperDeskAggressiveOpen() {
+		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
+			return
+		}
 	}
 	// BTC paper desk: skip signal/regime/entry gates so positions rotate quickly for demos.
-	if !(e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0) {
+	if !e.btcPaperDeskAggressiveOpen() {
 		if !isCategoryAlignedWithRegime(s.def.Category, regime) {
 			return
 		}

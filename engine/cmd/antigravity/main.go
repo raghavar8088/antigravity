@@ -780,7 +780,7 @@ func main() {
 				if p <= 0 {
 					// Keep options trading autonomous even when the primary WS feed
 					// is still warming up or temporarily disconnected.
-					if lastFallbackFetch.IsZero() || time.Since(lastFallbackFetch) >= 10*time.Second {
+					if lastFallbackFetch.IsZero() || time.Since(lastFallbackFetch) >= 3*time.Second {
 						if fallbackPrice, err := fetchBinanceBTCSpot(ctx); err == nil && fallbackPrice > 0 {
 							lastFallbackPrice = fallbackPrice
 						} else if err != nil {
