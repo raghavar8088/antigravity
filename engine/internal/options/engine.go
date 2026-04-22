@@ -70,7 +70,7 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 
 	tickEvery := 10 * time.Second
 	if profile.Name == defaultOptionsMarketProfile.Name {
-		tickEvery = 3 * time.Second
+		tickEvery = 1 * time.Second
 	}
 
 	engine := &Engine{
@@ -250,6 +250,11 @@ func (e *Engine) RestoreState(state PersistedState) {
 		e.refreshStrategyPresentationLocked(s, now)
 	}
 
+	// NewEngine() already ran a roster pass; if we restore within the refresh window
+	// with the same UNKNOWN regime, refresh would no-op and leave watchlist-sized
+	// fields (e.g. sizeMultiplier=0) on strategies marked ACTIVE — blocking opens.
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
@@ -329,8 +334,7 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 // UpdatePrice feeds a new BTC price tick into the engine.
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
+	hadNoPrice := e.lastPrice <= 0
 	e.lastPrice = price
 
 	// Keep raw tick history (capped at 500 ticks) — used only for live pricing
@@ -349,6 +353,12 @@ func (e *Engine) UpdatePrice(price float64) {
 		if len(e.minuteBars) > 300 { // 300 minutes = 5 hours of history
 			e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
 		}
+	}
+	wakeBTC := hadNoPrice && price > 0 && e.marketProfile.Name == defaultOptionsMarketProfile.Name
+	e.mu.Unlock()
+
+	if wakeBTC {
+		go e.tick()
 	}
 }
 
@@ -493,7 +503,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if positionUSD <= 0 {
 		positionUSD = s.def.PositionUSD
 	}
-	positionUSD *= s.stats.SizeMultiplier
+	mul := s.stats.SizeMultiplier
+	if e.btcPaperDeskAggressiveOpen() && mul <= 0 {
+		mul = optionColdStartSizeMultiplier
+	}
+	positionUSD *= mul
 	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "SELL")
 	if pos == nil {
 		return

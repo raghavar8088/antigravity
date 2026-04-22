@@ -69,7 +69,7 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 
 	tickEvery := 10 * time.Second
 	if profile.Name == defaultOptionsMarketProfile.Name {
-		tickEvery = 3 * time.Second
+		tickEvery = 1 * time.Second
 	}
 
 	engine := &Engine{
@@ -206,6 +206,8 @@ func (e *Engine) RestoreState(state PersistedState) {
 		e.refreshStrategyPresentationLocked(s, now)
 	}
 
+	e.lastRosterEval = time.Time{}
+	e.lastRosterRegime = ""
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
@@ -278,8 +280,7 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
+	hadNoPrice := e.lastPrice <= 0
 	e.lastPrice = price
 	e.priceHist = append(e.priceHist, price)
 	if len(e.priceHist) > 500 {
@@ -293,6 +294,12 @@ func (e *Engine) UpdatePrice(price float64) {
 		if len(e.minuteBars) > 300 {
 			e.minuteBars = e.minuteBars[len(e.minuteBars)-300:]
 		}
+	}
+	wakeBTC := hadNoPrice && price > 0 && e.marketProfile.Name == defaultOptionsMarketProfile.Name
+	e.mu.Unlock()
+
+	if wakeBTC {
+		go e.tick()
 	}
 }
 
@@ -426,7 +433,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if positionUSD <= 0 {
 		positionUSD = s.def.PositionUSD
 	}
-	positionUSD *= s.stats.SizeMultiplier
+	mul := s.stats.SizeMultiplier
+	if e.btcPaperDeskAggressiveOpen() && mul <= 0 {
+		mul = optionColdStartSizeMultiplier
+	}
+	positionUSD *= mul
 	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "SELL")
 	if pos == nil {
 		return

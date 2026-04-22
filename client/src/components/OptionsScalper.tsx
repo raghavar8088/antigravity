@@ -222,7 +222,7 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
             background: "var(--surface-2)",
           }}
         >
-          No open option positions - strategies are scanning for entry signals.
+          No open option positions yet — the engine opens paper slots on each tick once spot price is live.
         </div>
       ) : (
         <div className="space-y-4">
