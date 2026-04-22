@@ -389,16 +389,19 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
 		return
 	}
-	if !isCategoryAlignedWithRegime(s.def.Category, regime) {
-		return
-	}
+	// BTC paper desk: skip signal/regime/entry gates so positions rotate quickly for demos.
+	if !(e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0) {
+		if !isCategoryAlignedWithRegime(s.def.Category, regime) {
+			return
+		}
 
-	fn, ok := Signals[s.def.Signal]
-	if !ok || !fn(ctx) {
-		return
-	}
-	if !e.entryConfirmedFor(s.def, ctx, regime) {
-		return
+		fn, ok := Signals[s.def.Signal]
+		if !ok || !fn(ctx) {
+			return
+		}
+		if !e.entryConfirmedFor(s.def, ctx, regime) {
+			return
+		}
 	}
 
 	positionUSD := s.stats.AllocationUSD
