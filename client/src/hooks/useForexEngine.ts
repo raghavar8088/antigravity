@@ -667,7 +667,7 @@ export default function useForexEngine() {
   const [positions, setPositions] = useState<ForexPosition[]>([]);
   const [trades, setTrades]       = useState<ForexTrade[]>([]);
   const [strategies, setStrategies] = useState<ForexStrategyStatus[]>(
-    STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: 1, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 }))
+    STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: FOREX_ALLOCATION_MULTIPLIER, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 }))
   );
   const [stats, setStats] = useState<ForexEngineStats>(EMPTY_STATS);
 
@@ -748,7 +748,7 @@ export default function useForexEngine() {
         regime: strategy.regime,
         rosterState: rosterStateFor(strategy.status),
         allocationUSD: Math.round(ALLOCATION_USD),
-        sizeMultiplier: 1,
+        sizeMultiplier: FOREX_ALLOCATION_MULTIPLIER,
         totalTrades: strategy.totalTrades,
         wins: strategy.wins,
         losses: strategy.losses,
@@ -882,7 +882,7 @@ export default function useForexEngine() {
     if (dbLoadedRef.current) void saveForexState(engineRef.current);
     setQuotes(FOREX_PAIRS.map((p) => ({ symbol: p.symbol, category: p.category, ltp: 0, changePct: 0, signalScore: 0, hasPosition: false, sparkline: [] })));
     setPositions([]); setTrades([]);
-    setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: 1, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
+    setStrategies(STRAT_DEFS.map((def) => ({ id: def.id, name: def.name, category: def.category, side: def.side, status: "WARMING", currentSymbol: "", score: 0, regime: "UNKNOWN", rosterState: "WATCHLIST", allocationUSD: ALLOCATION_USD, sizeMultiplier: FOREX_ALLOCATION_MULTIPLIER, totalTrades: 0, wins: 0, losses: 0, totalPnl: 0, winRate: 0 })));
     setStats(EMPTY_STATS);
   }, []);
 
