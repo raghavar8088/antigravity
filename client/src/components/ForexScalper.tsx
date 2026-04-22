@@ -714,7 +714,7 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
       </div>
 
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Forex paper desk · Yahoo Finance spot quotes · $1,000,000 starting capital · Fixed-lot directional scalps across rostered strategies
+        Forex paper desk · Yahoo Finance spot quotes · $1,000,000 starting capital · 1% of initial capital per entry (before strategy size multipliers)
       </div>
     </div>
   );

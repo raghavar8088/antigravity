@@ -6,6 +6,9 @@ import type { ForexMarketItem } from "@/app/api/forex/markets/route";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const INITIAL_BALANCE   = 1_000_000;
+/** Base notional per forex entry before performance multipliers (1% of paper capital). */
+const FOREX_CAPITAL_PER_TRADE_PCT = 0.01;
+const ALLOCATION_USD     = INITIAL_BALANCE * FOREX_CAPITAL_PER_TRADE_PCT;
 const MAX_OPEN_POSITIONS = 12;
 const MAX_BARS           = 120;
 const MIN_BARS_FAST      = 18;
@@ -13,7 +16,6 @@ const MIN_BARS_SLOW      = 28;
 const SIGNAL_THRESHOLD   = 61;
 const POLL_MS            = 5_000;   // 5s — Yahoo Finance rate limit friendly
 const MAX_TRADES         = 5_000;
-const ALLOCATION_USD     = 15_000;  // larger notional for forex (tight moves)
 const PROFIT_LOCK_PROGRESS = 0.28;
 const PROFIT_LOCK_SHARE    = 0.40;
 const LATE_EXIT_PROGRESS   = 0.55;
