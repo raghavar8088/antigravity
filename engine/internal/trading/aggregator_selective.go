@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	minSelectiveScore  = 1.80 // Raised: only high-conviction signals pass
-	minDominanceRatio  = 1.20 // Raised: dominant side must clearly beat the opposing side
-	minDominanceLead   = 0.40 // Raised: avoid weak consensus trades
-	maxApprovedSignals = 3    // Allow top 3 best setups per batch
+	// Tuned for a ~30-strategy BTC paper roster: allow fresh names through without
+	// legacy live-performance boosts while still blocking pure coin-flip batches.
+	minSelectiveScore  = 1.18
+	minDominanceRatio  = 1.08
+	minDominanceLead   = 0.12
+	maxApprovedSignals = 3 // Allow top 3 best setups per batch
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and

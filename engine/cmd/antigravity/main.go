@@ -352,7 +352,7 @@ func main() {
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   RAIG ENGINE v6.0 — IMMORTAL EDITION                  ║")
-	fmt.Println("║   35 Curated Strategies | Full State Restore | Panic Recovery  ║")
+	fmt.Println("║   30 Curated Strategies | Full State Restore | Panic Recovery  ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	loadDotEnv()
@@ -378,10 +378,14 @@ func main() {
 	}()
 
 	// ═══════════════════════════════════════════════════
-	// 2. Build ALL 40 Strategies
+	// 2. Build curated strategies (BTC Equity roster capped at 30)
 	// ═══════════════════════════════════════════════════
+	const btcEquityStrategyCount = 30
 	allStrategies := strategy.BuildCuratedScalpers()
-	log.Printf("[INIT] Loaded %d curated live strategies", len(allStrategies))
+	if len(allStrategies) > btcEquityStrategyCount {
+		allStrategies = allStrategies[:btcEquityStrategyCount]
+	}
+	log.Printf("[INIT] Loaded %d curated live strategies (cap %d)", len(allStrategies), btcEquityStrategyCount)
 
 	// Extract names, categories, timeframes for tracker
 	names := make([]string, len(allStrategies))

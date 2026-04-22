@@ -21,7 +21,7 @@ const (
 	minExecutionSizeBTC       = 0.01
 	sizeChangeEpsilonBTC      = 1e-9
 	futuresInitialCapitalUSD  = 1000000.0
-	futuresPositionCapitalPct = 0.05
+	futuresPositionCapitalPct = 0.01 // 1% of paper capital per futures entry (BTC Equity)
 	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
 	minExecutableConfidence     = 0.78 // Push further toward higher-quality entries
@@ -155,7 +155,9 @@ func NewOrchestrator(
 		volumeWindow:           make([]float64, 0, marketHistoryMaxSamples),
 		pendingSignals:         make(map[string]PendingSignal),
 		processedBridgeSignals: make(map[string]time.Time),
-		lastBridgeHeartbeat:    time.Now(),
+		// Zero until the browser bridge explicitly heartbeats — avoids treating
+		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
+		lastBridgeHeartbeat: time.Time{},
 	}
 }
 
@@ -632,14 +634,14 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 			continue
 		}
 
-		// Enforce a fixed 5% capital budget per trade for the futures engine.
+		// Enforce a fixed 1% capital budget per trade for the futures engine.
 		originalSize := sig.TargetSize
 		baseSize := originalSize
 		if normalizedSize := targetSizeForCapital(currentPrice); normalizedSize > 0 {
 			baseSize = normalizedSize
 		}
 		executionWeight := o.tracker.GetExecutionWeight(aggSig.StrategyName)
-		if executionWeight < 0.38 {
+		if executionWeight < minExecutionWeightToTrade {
 			log.Printf("[QUALITY FILTER] %s skipped due to weak execution weight %.2f",
 				aggSig.StrategyName, executionWeight)
 			continue
@@ -654,7 +656,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		}
 
 		if sig.TargetSize-originalSize > sizeChangeEpsilonBTC || originalSize-sig.TargetSize > sizeChangeEpsilonBTC {
-			log.Printf("[SIZE ENGINE] %s normalized %.4f -> %.4f BTC to the fixed 5%% capital rule",
+			log.Printf("[SIZE ENGINE] %s normalized %.4f -> %.4f BTC to the fixed 1%% capital rule",
 				aggSig.StrategyName, originalSize, sig.TargetSize)
 		}
 
