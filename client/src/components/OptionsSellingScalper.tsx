@@ -217,7 +217,7 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
       {positions.length === 0 ? (
         <div className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          No open short positions yet — live slots open on each engine tick once BTC spot is priced.
+          No open short positions yet — the engine fills live slots on each tick (live or synthetic BTC spot).
         </div>
       ) : (
         <div className="space-y-4">
@@ -523,8 +523,8 @@ export default function OptionsSellingScalper({ actionsEnabled = false }: Props)
   const [isResetting, setIsResetting] = useState(false);
   const { positions, trades, strategies, stats, clearAll } = useOptionsSelling(refreshKey);
   const actionButtonTitle = actionsEnabled
-    ? "Action buttons are enabled."
-    : "Set Action to Yes to enable reset and clear buttons.";
+    ? "Reset and clear are enabled."
+    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);

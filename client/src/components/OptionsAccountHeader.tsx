@@ -119,6 +119,7 @@ export default function OptionsAccountHeader({
               {/* Auto Execute toggle */}
               {onToggleActions && (
                 <div
+                  title="Locked hides reset/clear only. Paper engines run on the server either way."
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -132,6 +133,7 @@ export default function OptionsAccountHeader({
                   <button
                     type="button"
                     onClick={() => onToggleActions(false)}
+                    title="Reset / clear account buttons hidden"
                     style={{
                       padding: "3px 10px",
                       borderRadius: "var(--radius-chip)",
@@ -146,11 +148,12 @@ export default function OptionsAccountHeader({
                       transition: "all 0.15s ease",
                     }}
                   >
-                    Off
+                    Locked
                   </button>
                   <button
                     type="button"
                     onClick={() => onToggleActions(true)}
+                    title="Enable reset and clear account"
                     style={{
                       padding: "3px 10px",
                       borderRadius: "var(--radius-chip)",
@@ -164,7 +167,7 @@ export default function OptionsAccountHeader({
                       transition: "all 0.15s ease",
                     }}
                   >
-                    Auto
+                    Actions
                   </button>
                 </div>
               )}

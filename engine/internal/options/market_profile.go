@@ -84,3 +84,10 @@ func (e *Engine) resolvedProfile() MarketProfile {
 	}
 	return e.marketProfile
 }
+
+// PaperBTCFallbackSpot is a positive BTC/USD spot used when no live exchange
+// price is available (cold start, WS down, or outbound HTTPS blocked). Keeps
+// paper options engines ticking on minimal infrastructure.
+func PaperBTCFallbackSpot() float64 {
+	return defaultOptionsMarketProfile.ChainConfig.FallbackSpot
+}

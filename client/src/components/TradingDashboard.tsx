@@ -772,8 +772,8 @@ export default function TradingDashboard({
   };
 
   const actionToggleTitle = actionsEnabled
-    ? "Admin and reset actions are enabled."
-    : "Set Action to Yes to enable reset, clear, kill, and close-all buttons.";
+    ? "Dangerous controls (reset, clear, kill, close-all) are enabled."
+    : "Locked: reset/clear/kill/close-all hidden. Server-side paper engines still run.";
 
   // ── Dynamic Color Intelligence ──────────────────────────────────
   const dailyPnlValue = sessionPnl;
@@ -1276,7 +1276,7 @@ export default function TradingDashboard({
             ))}
           </div>
 
-          {/* Action toggle */}
+          {/* Dangerous actions (does not stop server-side paper engines) */}
           <div
             style={{
               display: "flex",
@@ -1290,13 +1290,14 @@ export default function TradingDashboard({
             title={actionToggleTitle}
           >
             <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
-              Action
+              Controls
             </span>
             <div style={{ display: "inline-flex", borderRadius: "var(--radius-chip)", overflow: "hidden", border: "1px solid var(--border-subtle)", background: "var(--surface-2)" }}>
               <button
                 type="button"
                 onClick={() => setActionsEnabled(false)}
                 aria-pressed={!actionsEnabled}
+                title="Hide reset/clear/kill/close-all"
                 style={{
                   padding: "4px 12px",
                   border: "none",
@@ -1310,12 +1311,13 @@ export default function TradingDashboard({
                   transition: "all 0.15s ease",
                 }}
               >
-                No
+                Locked
               </button>
               <button
                 type="button"
                 onClick={() => setActionsEnabled(true)}
                 aria-pressed={actionsEnabled}
+                title="Show reset/clear/kill/close-all"
                 style={{
                   padding: "4px 12px",
                   border: "none",
@@ -1328,7 +1330,7 @@ export default function TradingDashboard({
                   transition: "all 0.15s ease",
                 }}
               >
-                Yes
+                Actions
               </button>
             </div>
           </div>

@@ -221,7 +221,7 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
             background: "var(--surface-2)",
           }}
         >
-          No open option positions yet — the engine opens paper slots on each tick once spot price is live.
+          No open option positions yet — the engine opens paper slots on each tick (live or synthetic BTC spot).
         </div>
       ) : (
         <div className="space-y-4">
@@ -554,8 +554,8 @@ export default function OptionsScalper({ actionsEnabled = false }: OptionsScalpe
   const [isResetting, setIsResetting] = useState(false);
   const { positions, trades, strategies, stats, clearAll } = useOptions(refreshKey);
   const actionButtonTitle = actionsEnabled
-    ? "Action buttons are enabled."
-    : "Set Action to Yes to enable reset and clear buttons.";
+    ? "Reset and clear are enabled."
+    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);

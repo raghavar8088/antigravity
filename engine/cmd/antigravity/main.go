@@ -771,6 +771,7 @@ func main() {
 	go safeGo("OptionsPriceFeed", func() {
 		lastFallbackPrice := 0.0
 		lastFallbackFetch := time.Time{}
+		var syntheticSpotLogged sync.Once
 		for {
 			select {
 			case <-ctx.Done():
@@ -792,10 +793,16 @@ func main() {
 						p = lastFallbackPrice
 					}
 				}
-				if p > 0 {
-					optionsEngine.UpdatePrice(p)
-					optionsSellingEngine.UpdatePrice(p)
+				// Some hosts block outbound exchange HTTPS; without any spot the options
+				// engines never tick. Use the same default as the synthetic chain model.
+				if p <= 0 {
+					p = options.PaperBTCFallbackSpot()
+					syntheticSpotLogged.Do(func() {
+						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until paper or exchange feed is available", p)
+					})
 				}
+				optionsEngine.UpdatePrice(p)
+				optionsSellingEngine.UpdatePrice(p)
 			}
 		}
 	})
