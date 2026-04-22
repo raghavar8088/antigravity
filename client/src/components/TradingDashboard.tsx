@@ -378,8 +378,20 @@ export default function TradingDashboard({
   }, [initialGroup, initialModule]);
 
   const { engineOnline } = useEngineState();
-  const { positions: optionPositions, stats: optionStats, strategies: optionStrategies } = useOptions();
-  const { positions: optionSellingPositions, stats: optionSellingStats, strategies: optionSellingStrategies } = useOptionsSelling();
+  const {
+    positions: optionPositions,
+    stats: optionStats,
+    strategies: optionStrategies,
+    trades: optionTrades,
+    clearAll: optionBuyClearAll,
+  } = useOptions(resetRefreshKey);
+  const {
+    positions: optionSellingPositions,
+    stats: optionSellingStats,
+    strategies: optionSellingStrategies,
+    trades: optionSellingTrades,
+    clearAll: optionSellingClearAll,
+  } = useOptionsSelling(resetRefreshKey);
   const { quotes: cryptoQuotes, positions: cryptoPositions, trades: cryptoTrades, strategies: cryptoStrategies, stats: cryptoStats, reset: cryptoReset } = useCryptoEquityEngine();
   const { quotes: forexQuotes, positions: forexPositions, trades: forexTrades, strategies: forexStrategies, stats: forexStats, reset: forexReset } = useForexEngine();
   const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll } = useNiftyOptions(resetRefreshKey);
@@ -2341,11 +2353,31 @@ export default function TradingDashboard({
       )}
 
       {activeModule === "options" && (
-        <OptionsScalper actionsEnabled={actionsEnabled} btcSpotUsd={price} btcChange24hPct={market.change24h} />
+        <OptionsScalper
+          actionsEnabled={actionsEnabled}
+          btcSpotUsd={price}
+          btcChange24hPct={market.change24h}
+          positions={optionPositions}
+          trades={optionTrades}
+          strategies={optionStrategies}
+          stats={optionStats}
+          clearAll={optionBuyClearAll}
+          onPollRefresh={() => setResetRefreshKey((k) => k + 1)}
+        />
       )}
 
       {activeModule === "options-selling" && (
-        <OptionsSellingScalper actionsEnabled={actionsEnabled} btcSpotUsd={price} btcChange24hPct={market.change24h} />
+        <OptionsSellingScalper
+          actionsEnabled={actionsEnabled}
+          btcSpotUsd={price}
+          btcChange24hPct={market.change24h}
+          positions={optionSellingPositions}
+          trades={optionSellingTrades}
+          strategies={optionSellingStrategies}
+          stats={optionSellingStats}
+          clearAll={optionSellingClearAll}
+          onPollRefresh={() => setResetRefreshKey((k) => k + 1)}
+        />
       )}
       {activeModule === "deltaLive" && <DeltaLiveScalper actionsEnabled={actionsEnabled} />}
       {activeModule === "spotBuy" && <DeltaSpotBuy />}

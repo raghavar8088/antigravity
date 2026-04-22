@@ -13,13 +13,13 @@
 import { useEffect, useState } from "react";
 import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
-import useOptionsSelling from "@/hooks/useOptionsSelling";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 import type {
   OptionPosition,
   OptionTrade,
   OptionStrategyStatus,
+  OptionStats,
 } from "@/hooks/useOptions";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
@@ -515,14 +515,32 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-type Props = { actionsEnabled?: boolean; btcSpotUsd?: number; btcChange24hPct?: number };
+type Props = {
+  actionsEnabled?: boolean;
+  btcSpotUsd?: number;
+  btcChange24hPct?: number;
+  positions: OptionPosition[];
+  trades: OptionTrade[];
+  strategies: OptionStrategyStatus[];
+  stats: OptionStats | null;
+  clearAll: () => void;
+  onPollRefresh: () => void;
+};
 
-export default function OptionsSellingScalper({ actionsEnabled = false, btcSpotUsd, btcChange24hPct }: Props) {
+export default function OptionsSellingScalper({
+  actionsEnabled = false,
+  btcSpotUsd,
+  btcChange24hPct,
+  positions,
+  trades,
+  strategies,
+  stats,
+  clearAll,
+  onPollRefresh,
+}: Props) {
   const [sessionStartedAt] = useState(() => Date.now());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
-  const [refreshKey, setRefreshKey] = useState(0);
   const [isResetting, setIsResetting] = useState(false);
-  const { positions, trades, strategies, stats, clearAll } = useOptionsSelling(refreshKey);
   const actionButtonTitle = actionsEnabled
     ? "Reset and clear are enabled."
     : "Locked: reset/clear hidden. Paper engine still runs on the server.";
@@ -540,7 +558,7 @@ export default function OptionsSellingScalper({ actionsEnabled = false, btcSpotU
     try {
       const response = await fetch(`${resolveEngineApiUrl()}/api/options-selling/reset`, { method: "POST" });
       if (!response.ok) throw new Error("reset failed");
-      setRefreshKey((k) => k + 1);
+      onPollRefresh();
     } catch {
       window.alert("Options selling account reset failed. Check engine connectivity.");
     } finally {
@@ -647,7 +665,7 @@ export default function OptionsSellingScalper({ actionsEnabled = false, btcSpotU
                     if (!confirm("Clear completed option writing trades and strategy stats? Open positions and balance will be kept.")) return;
                     clearAll();
                     await fetch(`${resolveEngineApiUrl()}/api/options-selling/clear-history`, { method: "POST" });
-                    setRefreshKey((k) => k + 1);
+                    onPollRefresh();
                   }}
                 >
                   Clear Trades

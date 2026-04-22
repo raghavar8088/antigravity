@@ -1,11 +1,20 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
 import {
   clearOptionsBuyCache,
   readOptionsBuyCache,
   writeOptionsBuyCache,
 } from "@/lib/optionsSnapshotCache";
+import {
+  fetchPaperSnapshotFromServer,
+  mergeStrategiesById,
+  mergeTradesById,
+  patchStatsWhenTradesSurvive,
+  postPaperSnapshotToServer,
+  sortTradesByExitDesc,
+  type OptionsDesk,
+} from "@/lib/optionsPaperLedger";
 
 export type OptionPosition = {
   id: string;
@@ -89,41 +98,80 @@ export type OptionStats = {
   unrealizedPnl: number;
 };
 
+const DESK: OptionsDesk = "buy";
+
 export default function useOptions(refreshKey = 0) {
   const cached = typeof window !== "undefined" ? readOptionsBuyCache() : null;
+  const initialTrades = (cached?.trades as OptionTrade[]) ?? [];
+  const initialStrategies = (cached?.strategies as OptionStrategyStatus[]) ?? [];
+
+  const mergedTradesRef = useRef<OptionTrade[]>(initialTrades);
+  const mergedStrategiesRef = useRef<OptionStrategyStatus[]>(initialStrategies);
+  const statsRef = useRef<OptionStats | null>((cached?.stats as OptionStats) ?? null);
+
   const [positions, setPositions] = useState<OptionPosition[]>(
     () => (cached?.positions as OptionPosition[]) ?? [],
   );
-  const [trades, setTrades] = useState<OptionTrade[]>(() => (cached?.trades as OptionTrade[]) ?? []);
-  const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(
-    () => (cached?.strategies as OptionStrategyStatus[]) ?? [],
-  );
-  const [stats, setStats] = useState<OptionStats | null>(() => (cached?.stats as OptionStats) ?? null);
+  const [trades, setTrades] = useState<OptionTrade[]>(initialTrades);
+  const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(initialStrategies);
+  const [stats, setStats] = useState<OptionStats | null>(() => statsRef.current);
 
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     clearOptionsBuyCache();
+    mergedTradesRef.current = [];
+    statsRef.current = null;
     setPositions([]);
     setTrades([]);
     setStats(null);
-    setStrategies((prev) => prev.map((s) => ({
-      ...s,
-      totalTrades: 0,
-      wins: 0,
-      losses: 0,
-      totalPnl: 0,
-      winRate: 0,
-      shadowTrades: 0,
-      shadowWins: 0,
-      shadowLosses: 0,
-      shadowPnl: 0,
-      shadowWinRate: 0,
-      shadowSignals: 0,
-      score: 0,
-      allocationUsd: 0,
-      sizeMultiplier: s.rosterState === "ACTIVE" ? s.sizeMultiplier : 0,
-      status: s.rosterState === "ACTIVE" ? "READY" as const : s.rosterState === "DISABLED" ? "DISABLED" as const : "WATCHLIST" as const,
-    })));
-  };
+    setStrategies((prev) => {
+      const next = prev.map((s) => ({
+        ...s,
+        totalTrades: 0,
+        wins: 0,
+        losses: 0,
+        totalPnl: 0,
+        winRate: 0,
+        shadowTrades: 0,
+        shadowWins: 0,
+        shadowLosses: 0,
+        shadowPnl: 0,
+        shadowWinRate: 0,
+        shadowSignals: 0,
+        score: 0,
+        allocationUsd: 0,
+        sizeMultiplier: s.rosterState === "ACTIVE" ? s.sizeMultiplier : 0,
+        status:
+          s.rosterState === "ACTIVE"
+            ? ("READY" as const)
+            : s.rosterState === "DISABLED"
+              ? ("DISABLED" as const)
+              : ("WATCHLIST" as const),
+      }));
+      mergedStrategiesRef.current = next;
+      void postPaperSnapshotToServer(DESK, { positions: [], trades: [], strategies: next, stats: null });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const remote = await fetchPaperSnapshotFromServer(DESK);
+      if (cancelled || !remote) return;
+      mergedTradesRef.current = mergeTradesById(mergedTradesRef.current, remote.trades);
+      mergedStrategiesRef.current = mergeStrategiesById(mergedStrategiesRef.current, remote.strategies);
+      setTrades(sortTradesByExitDesc(mergedTradesRef.current));
+      setStrategies(mergedStrategiesRef.current);
+      if (remote.positions.length) setPositions(remote.positions);
+      if (remote.stats) {
+        statsRef.current = remote.stats;
+        setStats(remote.stats);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const apiUrl = resolveEngineApiUrl();
@@ -141,17 +189,34 @@ export default function useOptions(refreshKey = 0) {
         const stratJson = stratRes.ok ? ((await stratRes.json()) as OptionStrategyStatus[]) : null;
         const statsJson = statsRes.ok ? ((await statsRes.json()) as OptionStats) : null;
 
-        if (posJson) setPositions(posJson);
-        if (tradesJson) setTrades(tradesJson);
-        if (stratJson) setStrategies(stratJson);
-        if (statsJson !== null && statsRes.ok) setStats(statsJson);
+        mergedTradesRef.current = mergeTradesById(mergedTradesRef.current, tradesJson ?? []);
+        mergedStrategiesRef.current = mergeStrategiesById(mergedStrategiesRef.current, stratJson ?? []);
 
-        if (posJson && tradesJson && stratJson && statsJson !== null && statsRes.ok) {
+        const mergedTradesSorted = sortTradesByExitDesc(mergedTradesRef.current);
+        setTrades(mergedTradesSorted);
+
+        if (posJson) setPositions(posJson);
+        setStrategies(mergedStrategiesRef.current);
+
+        let nextStats: OptionStats | null = statsRef.current;
+        if (statsJson !== null && statsRes.ok) {
+          nextStats = patchStatsWhenTradesSurvive(statsJson, mergedTradesSorted, posJson ?? []);
+          statsRef.current = nextStats;
+          setStats(nextStats);
+        }
+
+        if (posJson && stratJson) {
           writeOptionsBuyCache({
             positions: posJson,
-            trades: tradesJson,
-            strategies: stratJson,
-            stats: statsJson,
+            trades: mergedTradesSorted,
+            strategies: mergedStrategiesRef.current,
+            stats: nextStats,
+          });
+          void postPaperSnapshotToServer(DESK, {
+            positions: posJson,
+            trades: mergedTradesSorted,
+            strategies: mergedStrategiesRef.current,
+            stats: nextStats,
           });
         }
       } catch {
@@ -159,8 +224,8 @@ export default function useOptions(refreshKey = 0) {
       }
     };
 
-    fetch3();
-    const interval = setInterval(fetch3, 3000);
+    void fetch3();
+    const interval = setInterval(() => void fetch3(), 3000);
     return () => clearInterval(interval);
   }, [refreshKey]);
 
