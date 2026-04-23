@@ -1,4 +1,8 @@
 "use client";
+/**
+ * Client-side NIFTY option *writing* (short premium) desk — same deployment model as BTC selling:
+ * live underlying via SSE, autonomous entries/exits, Postgres snapshot via /api/nifty/selling-state.
+ */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Candle } from "@/app/api/nifty/candles/route";
@@ -367,7 +371,13 @@ async function loadSellingState(eng: EngineRef): Promise<boolean> {
     eng.seq = saved.tradeSeq;
     eng.lastPrice = saved.lastPrice;
     eng.lastMinute = saved.lastMinute;
-    eng.minuteBars = saved.minuteBars ?? [];
+    // Only trust stored bar history if long enough for indicators; short/empty arrays are replaced by candle seed.
+    const savedBars = saved.minuteBars ?? [];
+    if (savedBars.length >= MIN_BARS) {
+      eng.minuteBars = savedBars.slice(-MAX_BARS);
+    } else {
+      eng.minuteBars = [];
+    }
     eng.positions = saved.positions ?? [];
     eng.trades = (saved.trades ?? []).slice(0, 500);
     for (const strategy of eng.strategies) {
@@ -385,11 +395,15 @@ async function loadSellingState(eng: EngineRef): Promise<boolean> {
       strategy.regime = persisted.regime;
       strategy.consecutiveLosses = persisted.consecutiveLosses;
     }
-    // Recover from hasPosition desync: if strategy says it has a position but none exists, reset it
+    // Authoritative: open positions list drives hasPosition / status (fixes stale DB flags).
+    const now = Date.now();
     for (const strategy of eng.strategies) {
-      if (strategy.hasPosition && !eng.positions.some((p) => p.strategyId === strategy.def.id)) {
-        strategy.hasPosition = false;
-        strategy.status = "WATCHLIST";
+      const open = eng.positions.some((p) => p.strategyId === strategy.def.id);
+      strategy.hasPosition = open;
+      if (open) {
+        strategy.status = "IN_POSITION";
+      } else if (strategy.status === "IN_POSITION") {
+        strategy.status = strategy.cooldownUntil > now ? "COOLING" : "WATCHLIST";
       }
     }
     return true;
@@ -535,6 +549,7 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
   const lastSavedSignatureRef = useRef("");
   const dbLoadedRef = useRef(false);
   const lastFeedTickRef = useRef(0);
+  const tickEngineRef = useRef<() => void>(() => {});
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
   const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(buildDisplayStrategies(engRef.current));
@@ -570,8 +585,11 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
 
   const tickEngine = useCallback(() => {
     const eng = engRef.current;
-    if (eng.lastPrice <= 0 || eng.minuteBars.length < 2) return;
-    const bars = [...eng.minuteBars, eng.lastPrice];
+    if (eng.lastPrice <= 0) return;
+    // Same pattern as BTC / NIFTY buy client engines: never block on "2 stored minute bars"
+    // (SSE only appends a bar once per clock minute, so the old guard left the desk idle for minutes).
+    const baseHist = eng.minuteBars.length > 0 ? eng.minuteBars : [eng.lastPrice];
+    const bars = [...baseHist, eng.lastPrice];
     const regime = classifyRegime(bars);
     const currentPrice = eng.lastPrice;
     const iv = Math.max(0.12, Math.min(0.28, BASE_IV + stddev(bars.slice(-20)) / Math.max(currentPrice, 1)));
@@ -628,7 +646,8 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
         strategy.status = "COOLING";
         continue;
       }
-      if (bars.length < strategy.def.minBars) {
+      // Need real bar history for signal math (not just the synthetic live tail).
+      if (eng.minuteBars.length < strategy.def.minBars) {
         strategy.status = "WATCHLIST";
         continue;
       }
@@ -675,6 +694,8 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
 
     pushDisplayState();
   }, [pushDisplayState]);
+
+  tickEngineRef.current = tickEngine;
 
   const feedPrice = useCallback((price: number) => {
     if (price <= 0) return;
@@ -737,10 +758,15 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
         if (!data.ok || !data.candles?.length) return;
         const closes = data.candles.map((candle) => candle.close).filter((close) => close > 0);
         if (!closes.length) return;
-        engRef.current.minuteBars = closes.slice(-MAX_BARS);
-        engRef.current.lastPrice = closes[closes.length - 1] ?? 0;
-        engRef.current.lastMinute = Math.floor((data.candles[data.candles.length - 1]?.time ?? 0) / 60000);
+        const eng = engRef.current;
+        // Prefer session candle history whenever it is at least as long as what we have (fills short DB restores).
+        if (closes.length >= eng.minuteBars.length) {
+          eng.minuteBars = closes.slice(-MAX_BARS);
+          eng.lastPrice = closes[closes.length - 1] ?? eng.lastPrice;
+          eng.lastMinute = Math.floor((data.candles[data.candles.length - 1]?.time ?? 0) / 60000);
+        }
         pushDisplayState();
+        tickEngineRef.current();
       } catch {
         // ignore seed failures
       }
