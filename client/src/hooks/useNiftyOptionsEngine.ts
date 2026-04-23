@@ -1267,8 +1267,12 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
   try {
     const res = await fetch("/api/nifty/state");
     if (!res.ok) return false;
-    const data = await res.json() as { ok: boolean; found: boolean; state?: DbStatePayload };
-    if (!data.ok || !data.found || !data.state) return false;
+    const data = await res.json() as { ok: boolean; found?: boolean; disabled?: boolean; state?: DbStatePayload };
+    if (!data.ok) return false;
+    // DB persistence unavailable — do not unlock saves (would overwrite real history on transient GET failures).
+    if (data.disabled) return false;
+    // DB reachable but no row yet — keep init engine; allow first real save.
+    if (!data.found || !data.state) return true;
 
     const s = data.state;
     eng.balance           = s.balance;
@@ -1471,18 +1475,19 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
     return () => { cancelled = true; source.close(); };
   }, [feedPrice, engineTick]);
 
-  // ── Load persisted state from DB on mount (runs first, unblocks saves) ───
+  // ── Load persisted state from DB on mount (only unlock saves after a successful load) ───
   useEffect(() => {
     const restore = async () => {
-      await loadStateFromDb(engRef.current);
-      // Mark DB as loaded regardless of success — now saves are allowed
-      dbLoadedRef.current = true;
-      lastSavedSignatureRef.current = JSON.stringify({
-        tradeCount: engRef.current.trades.length,
-        openCount: engRef.current.positions.size,
-        balance: Math.round(engRef.current.balance),
-        realizedPnl: Math.round(engRef.current.totalRealizedPnl),
-      });
+      const loaded = await loadStateFromDb(engRef.current);
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedSignatureRef.current = JSON.stringify({
+          tradeCount: engRef.current.trades.length,
+          openCount: engRef.current.positions.size,
+          balance: Math.round(engRef.current.balance),
+          realizedPnl: Math.round(engRef.current.totalRealizedPnl),
+        });
+      }
       pushDisplayState();
     };
     void restore();
@@ -1594,14 +1599,16 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
   useEffect(() => {
     if (refreshKey === 0) return;
     const run = async () => {
-      await loadStateFromDb(engRef.current);
-      dbLoadedRef.current = true;
-      lastSavedSignatureRef.current = JSON.stringify({
-        tradeCount: engRef.current.trades.length,
-        openCount: engRef.current.positions.size,
-        balance: Math.round(engRef.current.balance),
-        realizedPnl: Math.round(engRef.current.totalRealizedPnl),
-      });
+      const loaded = await loadStateFromDb(engRef.current);
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedSignatureRef.current = JSON.stringify({
+          tradeCount: engRef.current.trades.length,
+          openCount: engRef.current.positions.size,
+          balance: Math.round(engRef.current.balance),
+          realizedPnl: Math.round(engRef.current.totalRealizedPnl),
+        });
+      }
       pushDisplayState();
     };
     void run();

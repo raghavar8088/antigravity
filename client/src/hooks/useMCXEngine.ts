@@ -862,8 +862,11 @@ async function loadMCXState(eng: EngineRef): Promise<boolean> {
   try {
     const res = await fetch("/api/mcx/state");
     if (!res.ok) return false;
-    const data = await res.json() as { ok: boolean; found: boolean; state?: MCXDbPayload };
-    if (!data.ok || !data.found || !data.state) return false;
+    const data = await res.json() as { ok: boolean; found?: boolean; disabled?: boolean; state?: MCXDbPayload };
+    if (!data.ok) return false;
+    if (data.disabled) return false;
+    if (!data.found || !data.state) return true;
+
     const saved = data.state;
     eng.balance = saved.balance;
     eng.totalWins = saved.totalWins;
@@ -1168,22 +1171,24 @@ export default function useMCXEngine(_refreshKey = 0) {
   }, []);
 
   useEffect(() => {
-    void loadMCXState(engRef.current).then(() => {
-      dbLoadedRef.current = true;
-      lastSavedSignatureRef.current = JSON.stringify({
-        balance: engRef.current.balance,
-        totalWins: engRef.current.totalWins,
-        totalLosses: engRef.current.totalLosses,
-        totalPnl: engRef.current.totalRealizedPnl,
-        tradeSeq: engRef.current.seq,
-        commodityBars: MCX_COMMODITIES.map((commodity) => ({
-          id: commodity.id,
-          bars: engRef.current.commodities.get(commodity.id)?.minuteBars.length ?? 0,
-          lastMinute: engRef.current.commodities.get(commodity.id)?.lastMinute ?? 0,
-        })),
-        openPositions: [...engRef.current.positions.keys()],
-        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
-      });
+    void loadMCXState(engRef.current).then((loaded) => {
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedSignatureRef.current = JSON.stringify({
+          balance: engRef.current.balance,
+          totalWins: engRef.current.totalWins,
+          totalLosses: engRef.current.totalLosses,
+          totalPnl: engRef.current.totalRealizedPnl,
+          tradeSeq: engRef.current.seq,
+          commodityBars: MCX_COMMODITIES.map((commodity) => ({
+            id: commodity.id,
+            bars: engRef.current.commodities.get(commodity.id)?.minuteBars.length ?? 0,
+            lastMinute: engRef.current.commodities.get(commodity.id)?.lastMinute ?? 0,
+          })),
+          openPositions: [...engRef.current.positions.keys()],
+          tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+        });
+      }
       pushDisplayState();
     });
   }, [pushDisplayState]);

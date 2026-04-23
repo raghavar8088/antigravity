@@ -360,8 +360,11 @@ async function loadSellingState(eng: EngineRef): Promise<boolean> {
   try {
     const res = await fetch("/api/nifty/selling-state");
     if (!res.ok) return false;
-    const data = await res.json() as { ok: boolean; found: boolean; state?: NiftySellingDbPayload };
-    if (!data.ok || !data.found || !data.state) return false;
+    const data = await res.json() as { ok: boolean; found?: boolean; disabled?: boolean; state?: NiftySellingDbPayload };
+    if (!data.ok) return false;
+    if (data.disabled) return false;
+    if (!data.found || !data.state) return true;
+
     const saved = data.state;
     eng.balance = saved.balance;
     eng.totalWins = saved.totalWins;
@@ -714,19 +717,21 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
   }, [tickEngine]);
 
   useEffect(() => {
-    void loadSellingState(engRef.current).then(() => {
-      dbLoadedRef.current = true;
-      lastSavedSignatureRef.current = JSON.stringify({
-        balance: engRef.current.balance,
-        totalWins: engRef.current.totalWins,
-        totalLosses: engRef.current.totalLosses,
-        totalPnl: engRef.current.totalRealizedPnl,
-        tradeSeq: engRef.current.seq,
-        lastPrice: engRef.current.lastPrice,
-        bars: engRef.current.minuteBars.length,
-        openPositions: engRef.current.positions.map((position) => position.id),
-        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
-      });
+    void loadSellingState(engRef.current).then((loaded) => {
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedSignatureRef.current = JSON.stringify({
+          balance: engRef.current.balance,
+          totalWins: engRef.current.totalWins,
+          totalLosses: engRef.current.totalLosses,
+          totalPnl: engRef.current.totalRealizedPnl,
+          tradeSeq: engRef.current.seq,
+          lastPrice: engRef.current.lastPrice,
+          bars: engRef.current.minuteBars.length,
+          openPositions: engRef.current.positions.map((position) => position.id),
+          tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+        });
+      }
       pushDisplayState();
     });
   }, [pushDisplayState]);
@@ -821,18 +826,21 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
 
   useEffect(() => {
     if (refreshKey === 0) return;
-    void loadSellingState(engRef.current).then(() => {
-      lastSavedSignatureRef.current = JSON.stringify({
-        balance: engRef.current.balance,
-        totalWins: engRef.current.totalWins,
-        totalLosses: engRef.current.totalLosses,
-        totalPnl: engRef.current.totalRealizedPnl,
-        tradeSeq: engRef.current.seq,
-        lastPrice: engRef.current.lastPrice,
-        bars: engRef.current.minuteBars.length,
-        openPositions: engRef.current.positions.map((position) => position.id),
-        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
-      });
+    void loadSellingState(engRef.current).then((loaded) => {
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedSignatureRef.current = JSON.stringify({
+          balance: engRef.current.balance,
+          totalWins: engRef.current.totalWins,
+          totalLosses: engRef.current.totalLosses,
+          totalPnl: engRef.current.totalRealizedPnl,
+          tradeSeq: engRef.current.seq,
+          lastPrice: engRef.current.lastPrice,
+          bars: engRef.current.minuteBars.length,
+          openPositions: engRef.current.positions.map((position) => position.id),
+          tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+        });
+      }
       pushDisplayState();
     });
   }, [refreshKey, pushDisplayState]);

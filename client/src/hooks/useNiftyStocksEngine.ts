@@ -783,8 +783,11 @@ async function loadStocksState(eng: EngineRef): Promise<boolean> {
   try {
     const res = await fetch("/api/nifty/stocks-state");
     if (!res.ok) return false;
-    const data = await res.json() as { ok: boolean; found: boolean; state?: StocksDbPayload };
-    if (!data.ok || !data.found || !data.state) return false;
+    const data = await res.json() as { ok: boolean; found?: boolean; disabled?: boolean; state?: StocksDbPayload };
+    if (!data.ok) return false;
+    if (data.disabled) return false;
+    if (!data.found || !data.state) return true;
+
     const s = data.state;
     eng.balance          = s.balance;
     eng.totalWins        = s.totalWins;
@@ -1091,11 +1094,13 @@ export default function useNiftyStocksEngine() {
     }
   }, []);
 
-  // ── Load persisted state from DB on mount (unblocks saves when done) ─────
+  // ── Load persisted state from DB on mount (only unblock saves after a successful load) ─────
   useEffect(() => {
-    void loadStocksState(engRef.current).then(() => {
-      dbLoadedRef.current = true;
-      lastSavedTradeCountRef.current = engRef.current.trades.length;
+    void loadStocksState(engRef.current).then((loaded) => {
+      dbLoadedRef.current = loaded;
+      if (loaded) {
+        lastSavedTradeCountRef.current = engRef.current.trades.length;
+      }
     });
   }, []);
 
