@@ -1151,11 +1151,21 @@ export default function TradingDashboard({
           locale={optionsHeaderLocale}
           onlineLabel={optionsHeaderOnlineLabel}
           detailLabel={optionsHeaderDetailLabel}
-          workspaceTitle={btcOptionsSellingModuleActive ? "RAIG BTC Options Selling Workspace" : undefined}
-          accountBadgeLabel={btcOptionsSellingModuleActive ? "Selling Account" : undefined}
-          equityLabel={btcOptionsSellingModuleActive ? "Selling Equity" : undefined}
-          pnlLabel={btcOptionsSellingModuleActive ? "Selling PnL" : undefined}
-          openLabel={btcOptionsSellingModuleActive ? "Open Shorts" : undefined}
+          workspaceTitle={
+            btcOptionsSellingModuleActive
+              ? "RAIG BTC Options Selling Workspace"
+              : niftyOptionsSellingModuleActive
+                ? "RAIG NIFTY 50 Options Selling Workspace"
+                : undefined
+          }
+          accountBadgeLabel={
+            btcOptionsSellingModuleActive || niftyOptionsSellingModuleActive ? "Selling Account" : undefined
+          }
+          equityLabel={
+            btcOptionsSellingModuleActive || niftyOptionsSellingModuleActive ? "Selling Equity" : undefined
+          }
+          pnlLabel={btcOptionsSellingModuleActive || niftyOptionsSellingModuleActive ? "Selling PnL" : undefined}
+          openLabel={btcOptionsSellingModuleActive || niftyOptionsSellingModuleActive ? "Open Shorts" : undefined}
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
