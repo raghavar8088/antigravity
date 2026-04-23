@@ -10,7 +10,6 @@ import useNiftyVIX from "@/hooks/useNiftyVIX";
 import useNiftyCandles, { type Candle } from "@/hooks/useNiftyCandles";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 
-import { resolveEngineApiUrl } from "@/lib/engineApi";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
 // ââ Formatters ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -21,8 +20,8 @@ function fmtUSD(n: number, opts: { signed?: boolean; decimals?: number } = {}) {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  if (signed) return `${n >= 0 ? "+" : "-"}â¹${abs}`;
-  return `â¹${abs}`;
+  if (signed) return `${n >= 0 ? "+" : "-"}₹${abs}`;
+  return `₹${abs}`;
 }
 
 function fmtPct(n: number, signed = false, decimals = 1) {
@@ -281,12 +280,12 @@ function LivePositionsPanel({ positions, strategyNumbers }: { positions: OptionP
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.strike, 0)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 0)}</div>
                       <div style={{ color: "var(--text-secondary)" }}>NIFTY {fmtUSD(pos.entryBtcPrice)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In â¹{fmt(pos.entryPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Now â¹{fmt(pos.currentPremium)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In ₹{fmt(pos.entryPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Now ₹{fmt(pos.currentPremium)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {pos.entryTime ? (
@@ -509,15 +508,15 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
                     <td className="px-4 py-3 text-xs">
                       <div className="flex items-center gap-2">
                         <TypeBadge type={t.optionType} />
-                        <span className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(t.strike, 0)}</span>
+                        <span className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(t.strike, 0)}</span>
                       </div>
                       <div style={{ color: "var(--text-secondary)", marginTop: 4 }}>
                         {t.expiryMins}m expiry
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In â¹{fmt(t.entryPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Out â¹{fmt(t.exitPremium)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>In ₹{fmt(t.entryPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Out ₹{fmt(t.exitPremium)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono" style={{ color: "var(--text-primary)" }}>
@@ -599,7 +598,7 @@ function MarketIndicatorsPanel({
           MARKET INDICATORS
         </h2>
         <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-blue-700">
-          Source: Angel One Â· Live
+          Source: Angel One · Live
         </span>
       </div>
 
@@ -689,6 +688,7 @@ type Nifty50OptionScalperProps = {
   strategies: OptionStrategyStatus[];
   stats: OptionStats | null;
   clearAll: () => void;
+  clearTradeHistory: () => void;
   barCount: number;
   enginePrice: number;
   onRefresh?: () => void;
@@ -701,6 +701,7 @@ export default function Nifty50OptionScalper({
   strategies,
   stats,
   clearAll,
+  clearTradeHistory,
   barCount,
   enginePrice,
   onRefresh,
@@ -714,7 +715,7 @@ export default function Nifty50OptionScalper({
   const { candles } = useNiftyCandles();
   const actionButtonTitle = actionsEnabled
     ? "Reset and clear are enabled."
-    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
+    : "Locked: reset/clear hidden. Paper engine still runs in this browser.";
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -725,20 +726,14 @@ export default function Nifty50OptionScalper({
     if (!actionsEnabled) {
       return;
     }
-    if (!confirm("Reset the NIFTY 50 options paper account to â¹1,000,000? All history will be cleared.")) {
+    if (!confirm("Reset the NIFTY 50 options paper account to ₹10,00,000? All history will be cleared.")) {
       return;
     }
 
     setIsResetting(true);
-    clearAll();
     try {
-      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options/reset`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error("reset failed");
-      }
+      clearAll();
       onRefresh?.();
-    } catch {
-      window.alert("NIFTY options account reset failed. Check engine connectivity.");
     } finally {
       setIsResetting(false);
     }
@@ -835,7 +830,7 @@ export default function Nifty50OptionScalper({
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
-                <BadgePill label={displayedEnginePrice > 0 ? `Feed â¹${displayedEnginePrice.toFixed(0)}` : "Feed: Connectingâ¦"} tone={displayedEnginePrice > 0 ? "positive" : "neutral"} />
+                <BadgePill label={displayedEnginePrice > 0 ? `Feed ₹${displayedEnginePrice.toFixed(0)}` : "Feed: Connecting…"} tone={displayedEnginePrice > 0 ? "positive" : "neutral"} />
                 <BadgePill label={barCount >= 15 ? `${barCount} bars` : `Warming ${barCount}/15 bars`} tone={barCount >= 15 ? "info" : "warning"} />
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Live`} tone="info" />
                 <BadgePill label="Separate Account" tone="warning" />
@@ -854,16 +849,8 @@ export default function Nifty50OptionScalper({
                   onClick={async () => {
                     if (!actionsEnabled) return;
                     if (!confirm("Clear completed NIFTY option trades and strategy stats? Open positions and balance will be kept.")) return;
-                    clearAll();
-                    try {
-                      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options/clear-history`, { method: "POST" });
-                      if (!response.ok) {
-                        throw new Error("clear history failed");
-                      }
-                      onRefresh?.();
-                    } catch {
-                      window.alert("Clearing NIFTY option history failed. Check engine connectivity.");
-                    }
+                    clearTradeHistory();
+                    onRefresh?.();
                   }}
                 >
                   Clear NIFTY Trades
@@ -924,7 +911,7 @@ export default function Nifty50OptionScalper({
             return (
               <div className="mt-4 px-1">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500 mb-2">
-                  Equity Curve Â· {trades.length} trades
+                  Equity Curve · {trades.length} trades
                 </div>
                 <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 56, display: "block" }}>
                   <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
@@ -1032,16 +1019,16 @@ export default function Nifty50OptionScalper({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.strike, 0)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.strike, 0)}</div>
                       <div style={{ color: "var(--text-secondary)" }}>Entry {fmtUSD(pos.entryBtcPrice)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>â¹{fmt(pos.entryPremium)} {"->"} â¹{fmt(pos.currentPremium)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>Basis â¹{fmt(pos.costBasis)}</div>
+                      <div className="font-mono" style={{ color: "var(--text-primary)" }}>₹{fmt(pos.entryPremium)} {"->"} ₹{fmt(pos.currentPremium)}</div>
+                      <div style={{ color: "var(--text-secondary)" }}>Basis ₹{fmt(pos.costBasis)}</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono text-zinc-900 font-medium">{fmt(pos.quantity, 0)} units</div>
-                      <div style={{ color: "var(--text-secondary)" }}>â¹{fmt(pos.costBasis * pos.quantity, 0)} notional</div>
+                      <div style={{ color: "var(--text-secondary)" }}>₹{fmt(pos.costBasis * pos.quantity, 0)} notional</div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(pos.entryTime)}</div>
@@ -1152,7 +1139,7 @@ export default function Nifty50OptionScalper({
 
       {/* ââ Footer note ââ */}
       <div className="text-center text-[11px]" style={{ color: "var(--text-muted)" }}>
-        NIFTY 50 options paper account Â· Black-Scholes pricing Â· live NSE NIFTY 50 spot feed Â· â¹1,000,000 starting balance Â· 1% capital per trade
+        NIFTY 50 options paper account · Black-Scholes pricing · live NSE NIFTY 50 spot feed · ₹1,000,000 starting balance · 1% capital per trade
       </div>
 
     </div>

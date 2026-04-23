@@ -6,7 +6,6 @@ import Nifty50MarketHero from "@/components/Nifty50MarketHero";
 import useNiftyMarket from "@/hooks/useNiftyMarket";
 import type { OptionPosition, OptionStats, OptionStrategyStatus, OptionTrade } from "@/hooks/useNiftyOptions";
 
-import { resolveEngineApiUrl } from "@/lib/engineApi";
 const INITIAL_BALANCE = 1_000_000;
 
 function fmtINR(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -58,6 +57,7 @@ type Props = {
   strategies: OptionStrategyStatus[];
   stats: OptionStats | null;
   clearAll: () => void;
+  clearTradeHistory: () => void;
   barCount: number;
   enginePrice: number;
   onRefresh?: () => void;
@@ -70,6 +70,7 @@ export default function Nifty50OptionSellingScalper({
   strategies,
   stats,
   clearAll,
+  clearTradeHistory,
   barCount,
   enginePrice,
   onRefresh,
@@ -78,7 +79,7 @@ export default function Nifty50OptionSellingScalper({
   const [isResetting, setIsResetting] = useState(false);
   const actionButtonTitle = actionsEnabled
     ? "Reset and clear are enabled."
-    : "Locked: reset/clear hidden. Paper engine still runs on the server.";
+    : "Locked: reset/clear hidden. Paper engine still runs in this browser.";
   const resolvedStats: OptionStats = stats ?? {
     balance: INITIAL_BALANCE,
     equity: INITIAL_BALANCE,
@@ -99,15 +100,9 @@ export default function Nifty50OptionSellingScalper({
     if (!actionsEnabled) return;
     if (!confirm("Reset the NIFTY option selling paper account to ₹10,00,000? All history will be cleared.")) return;
     setIsResetting(true);
-    clearAll();
     try {
-      const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options-selling/reset`, { method: "POST" });
-      if (!response.ok) {
-        throw new Error("reset failed");
-      }
+      clearAll();
       onRefresh?.();
-    } catch {
-      window.alert("NIFTY option selling reset failed. Check engine connectivity.");
     } finally {
       setIsResetting(false);
     }
@@ -153,16 +148,8 @@ export default function Nifty50OptionSellingScalper({
             <button type="button" disabled={!actionsEnabled || isResetting} title={actionButtonTitle} className="btn-primary text-sm" onClick={async () => {
               if (!actionsEnabled) return;
               if (!confirm("Clear completed NIFTY option selling trades and strategy stats? Open positions and balance will be kept.")) return;
-              clearAll();
-              try {
-                const response = await fetch(`${resolveEngineApiUrl()}/api/nifty-options-selling/clear-history`, { method: "POST" });
-                if (!response.ok) {
-                  throw new Error("clear history failed");
-                }
-                onRefresh?.();
-              } catch {
-                window.alert("Clearing NIFTY option selling history failed. Check engine connectivity.");
-              }
+              clearTradeHistory();
+              onRefresh?.();
             }}>
               Clear Selling Trades
             </button>

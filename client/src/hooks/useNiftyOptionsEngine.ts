@@ -1232,6 +1232,37 @@ async function saveStateToDb(eng: EngineRef): Promise<void> {
   } catch { /* non-critical — engine continues without DB */ }
 }
 
+function coerceEpochMs(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+/** DB JSON uses ISO strings; engine expects ms numbers for time math. */
+function normalizeEngineAfterDbLoad(eng: EngineRef): void {
+  const now = Date.now();
+  for (const pos of eng.positions.values()) {
+    pos.entryTime = coerceEpochMs(pos.entryTime, now);
+    pos.expiryTime = coerceEpochMs(pos.expiryTime, pos.entryTime + DTE_DAYS * 24 * 60 * 60 * 1000);
+  }
+  for (const strat of eng.strategies) {
+    if (strat.position) {
+      strat.position.entryTime = coerceEpochMs(strat.position.entryTime, now);
+      strat.position.expiryTime = coerceEpochMs(
+        strat.position.expiryTime,
+        strat.position.entryTime + DTE_DAYS * 24 * 60 * 60 * 1000,
+      );
+    }
+  }
+  for (const t of eng.trades) {
+    t.entryTime = coerceEpochMs(t.entryTime, now);
+    t.exitTime = coerceEpochMs(t.exitTime, t.entryTime);
+  }
+}
+
 async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
   try {
     const res = await fetch("/api/nifty/state");
@@ -1273,6 +1304,8 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
       eng.positions.set(position.id, position);
     }
 
+    normalizeEngineAfterDbLoad(eng);
+
     // Minute bars are seeded from candles API (fresher) — only restore if candle seed fails
     if (eng.minuteBars.length === 0 && s.minuteBars?.length) {
       eng.minuteBars = s.minuteBars;
@@ -1284,11 +1317,11 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export default function useNiftyOptionsEngine(_refreshKey = 0) {
-  void _refreshKey;
+export default function useNiftyOptionsEngine(refreshKey = 0) {
   const engRef = useRef<EngineRef>(initEngine());
   const lastSavedSignatureRef = useRef(""); // empty = DB not yet loaded, block optimistic saves until loaded
   const dbLoadedRef = useRef(false);
+  const lastFeedEngineTickRef = useRef(0);
 
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
@@ -1348,8 +1381,9 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     for (const strat of eng.strategies) {
       if (!strat.position) continue;
       const pos = strat.position;
+      // Wall-clock minutes since entry (theta / exits are time-scaled; do not increment per tick or SSE bursts distort pricing).
       // eslint-disable-next-line react-hooks/immutability
-      pos.barsHeld++;
+      pos.barsHeld = Math.max(0, Math.floor((now - pos.entryTime) / 60_000));
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryNiftyPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
       if (pos.entryPremium > 0) {
@@ -1402,7 +1436,7 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     pushDisplayState();
   }, [pushDisplayState]);
 
-  // ── Feed price tick: build 1-minute bars + trigger engine immediately ────
+  // ── Feed price tick: build 1-minute bars + throttle engine eval (SSE can burst faster than 1s). ────
   const feedPrice = useCallback((price: number, triggerTick: () => void) => {
     if (price <= 0) return;
     const eng = engRef.current;
@@ -1414,7 +1448,9 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
       eng.minuteBars.push(price);
       if (eng.minuteBars.length > MAX_BARS) eng.minuteBars.shift();
     }
-    // Run engine on every price tick — no need to wait for interval
+    const t = Date.now();
+    if (t - lastFeedEngineTickRef.current < 400) return;
+    lastFeedEngineTickRef.current = t;
     triggerTick();
   }, []);
 
@@ -1538,5 +1574,38 @@ export default function useNiftyOptionsEngine(_refreshKey = 0) {
     void saveStateToDb(engRef.current); // persist clean slate
   }, [pushDisplayState]);
 
-  return { positions, trades, strategies, stats, clearAll, barCount, enginePrice };
+  /** Clears closed-trade ledger and per-strategy stats; keeps balances, open positions, and realized PnL. */
+  const clearTradeHistory = useCallback(() => {
+    const eng = engRef.current;
+    eng.trades = [];
+    eng.totalWins = 0;
+    eng.totalLosses = 0;
+    for (const s of eng.strategies) {
+      s.totalTrades = 0;
+      s.wins = 0;
+      s.losses = 0;
+      s.totalPnl = 0;
+      s.winRate = 0;
+    }
+    pushDisplayState();
+    if (dbLoadedRef.current) void saveStateToDb(eng);
+  }, [pushDisplayState]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    const run = async () => {
+      await loadStateFromDb(engRef.current);
+      dbLoadedRef.current = true;
+      lastSavedSignatureRef.current = JSON.stringify({
+        tradeCount: engRef.current.trades.length,
+        openCount: engRef.current.positions.size,
+        balance: Math.round(engRef.current.balance),
+        realizedPnl: Math.round(engRef.current.totalRealizedPnl),
+      });
+      pushDisplayState();
+    };
+    void run();
+  }, [refreshKey, pushDisplayState]);
+
+  return { positions, trades, strategies, stats, clearAll, clearTradeHistory, barCount, enginePrice };
 }

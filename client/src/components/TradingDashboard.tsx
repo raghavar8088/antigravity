@@ -35,9 +35,8 @@ import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
-import useNiftyEngineMarket from "@/hooks/useNiftyEngineMarket";
-import useNiftyOptions from "@/hooks/useNiftyOptions";
-import useNiftyOptionsSelling from "@/hooks/useNiftyOptionsSelling";
+import useNiftyOptionsEngine from "@/hooks/useNiftyOptionsEngine";
+import useNiftyOptionsSellingEngine from "@/hooks/useNiftyOptionsSellingEngine";
 import useNiftyStocksEngine from "@/hooks/useNiftyStocksEngine";
 import useCryptoEquityEngine from "@/hooks/useCryptoEquityEngine";
 import useForexEngine from "@/hooks/useForexEngine";
@@ -405,11 +404,26 @@ export default function TradingDashboard({
   const { quotes: cryptoQuotes, positions: cryptoPositions, trades: cryptoTrades, strategies: cryptoStrategies, stats: cryptoStats, reset: cryptoReset } = useCryptoEquityEngine();
   const { quotes: forexQuotes, positions: forexPositions, trades: forexTrades, strategies: forexStrategies, stats: forexStats, reset: forexReset } = useForexEngine();
   const { quote: goldQuote, positions: goldPositions, trades: goldTrades, strategies: goldStrategies, stats: goldStats, reset: goldReset } = useForexGoldEngine();
-  const { positions: niftyOptionPositions, trades: niftyOptionTrades, strategies: niftyOptionStrategies, stats: niftyOptionStats, clearAll: niftyOptionClearAll } = useNiftyOptions(resetRefreshKey);
-  const { barCount: niftyBarCount, price: niftyEnginePrice } = useNiftyEngineMarket();
-  const { positions: niftySellingPositions, trades: niftySellingTrades, strategies: niftySellingStrategies, stats: niftySellingStats, clearAll: niftySellingClearAll } = useNiftyOptionsSelling(resetRefreshKey);
-  const niftySellingBarCount = niftyBarCount;
-  const niftySellingEnginePrice = niftyEnginePrice;
+  const {
+    positions: niftyOptionPositions,
+    trades: niftyOptionTrades,
+    strategies: niftyOptionStrategies,
+    stats: niftyOptionStats,
+    clearAll: niftyOptionClearAll,
+    clearTradeHistory: niftyOptionClearTradeHistory,
+    barCount: niftyBarCount,
+    enginePrice: niftyEnginePrice,
+  } = useNiftyOptionsEngine(resetRefreshKey);
+  const {
+    positions: niftySellingPositions,
+    trades: niftySellingTrades,
+    strategies: niftySellingStrategies,
+    stats: niftySellingStats,
+    clearAll: niftySellingClearAll,
+    clearTradeHistory: niftySellingClearTradeHistory,
+    barCount: niftySellingBarCount,
+    enginePrice: niftySellingEnginePrice,
+  } = useNiftyOptionsSellingEngine(resetRefreshKey);
   const { quotes: niftyStockQuotes, positions: niftyStockPositions, trades: niftyStockTrades, strategies: niftyStockStrategies, stats: niftyStockStats, reset: niftyStockReset } = useNiftyStocksEngine();
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
@@ -2457,9 +2471,35 @@ export default function TradingDashboard({
       {activeModule === "forexScalper" && <ForexScalper actionsEnabled={actionsEnabled} quotes={forexQuotes} positions={forexPositions} trades={forexTrades} strategies={forexStrategies} stats={forexStats} reset={forexReset} />}
       {activeModule === "forexGold" && <ForexGoldScalper actionsEnabled={actionsEnabled} quote={goldQuote} positions={goldPositions} trades={goldTrades} strategies={goldStrategies} stats={goldStats} reset={goldReset} />}
 
-      {activeModule === "nifty" && <Nifty50OptionScalper actionsEnabled={actionsEnabled} positions={niftyOptionPositions} trades={niftyOptionTrades} strategies={niftyOptionStrategies} stats={niftyOptionStats} clearAll={niftyOptionClearAll} barCount={niftyBarCount} enginePrice={niftyEnginePrice} onRefresh={() => setResetRefreshKey((current) => current + 1)} />}
+      {activeModule === "nifty" && (
+        <Nifty50OptionScalper
+          actionsEnabled={actionsEnabled}
+          positions={niftyOptionPositions}
+          trades={niftyOptionTrades}
+          strategies={niftyOptionStrategies}
+          stats={niftyOptionStats}
+          clearAll={niftyOptionClearAll}
+          clearTradeHistory={niftyOptionClearTradeHistory}
+          barCount={niftyBarCount}
+          enginePrice={niftyEnginePrice}
+          onRefresh={() => setResetRefreshKey((current) => current + 1)}
+        />
+      )}
 
-      {activeModule === "niftySelling" && <Nifty50OptionSellingScalper actionsEnabled={actionsEnabled} positions={niftySellingPositions} trades={niftySellingTrades} strategies={niftySellingStrategies} stats={niftySellingStats} clearAll={niftySellingClearAll} barCount={niftySellingBarCount} enginePrice={niftySellingEnginePrice} onRefresh={() => setResetRefreshKey((current) => current + 1)} />}
+      {activeModule === "niftySelling" && (
+        <Nifty50OptionSellingScalper
+          actionsEnabled={actionsEnabled}
+          positions={niftySellingPositions}
+          trades={niftySellingTrades}
+          strategies={niftySellingStrategies}
+          stats={niftySellingStats}
+          clearAll={niftySellingClearAll}
+          clearTradeHistory={niftySellingClearTradeHistory}
+          barCount={niftySellingBarCount}
+          enginePrice={niftySellingEnginePrice}
+          onRefresh={() => setResetRefreshKey((current) => current + 1)}
+        />
+      )}
 
       {activeModule === "niftyStocks" && <Nifty50StocksScalper actionsEnabled={actionsEnabled} quotes={niftyStockQuotes} positions={niftyStockPositions} trades={niftyStockTrades} strategies={niftyStockStrategies} stats={niftyStockStats} reset={niftyStockReset} />}
 

@@ -530,10 +530,11 @@ function closePosition(eng: EngineRef, strategy: InternalStrategy, position: Int
   eng.trades.unshift(trade);
 }
 
-export default function useNiftyOptionsSellingEngine() {
+export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
   const engRef = useRef<EngineRef>(initEngine());
   const lastSavedSignatureRef = useRef("");
   const dbLoadedRef = useRef(false);
+  const lastFeedTickRef = useRef(0);
   const [positions, setPositions] = useState<OptionPosition[]>([]);
   const [trades, setTrades] = useState<OptionTrade[]>([]);
   const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(buildDisplayStrategies(engRef.current));
@@ -576,8 +577,8 @@ export default function useNiftyOptionsSellingEngine() {
     const iv = Math.max(0.12, Math.min(0.28, BASE_IV + stddev(bars.slice(-20)) / Math.max(currentPrice, 1)));
 
     for (const position of [...eng.positions]) {
-      // barsHeld = minutes elapsed since entry (time-based, not tick-based)
-      position.barsHeld = Math.floor((Date.now() - new Date(position.entryTime).getTime()) / 60_000);
+      // Minutes since entry (wall clock; avoids coupling to tick/SSE rate).
+      position.barsHeld = Math.max(0, Math.floor((Date.now() - new Date(position.entryTime).getTime()) / 60_000));
       position.currentPremium = markPremium(position.entryPremium, position.entryNiftyPrice, currentPrice, position.optionType, position.barsHeld);
       position.unrealizedPnl = (position.entryPremium - position.currentPremium) * position.quantity;
       if (position.entryPremium > 0) {
@@ -685,6 +686,9 @@ export default function useNiftyOptionsSellingEngine() {
       eng.minuteBars.push(price);
       if (eng.minuteBars.length > MAX_BARS) eng.minuteBars.shift();
     }
+    const t = Date.now();
+    if (t - lastFeedTickRef.current < 400) return;
+    lastFeedTickRef.current = t;
     tickEngine();
   }, [tickEngine]);
 
@@ -773,5 +777,39 @@ export default function useNiftyOptionsSellingEngine() {
     pushDisplayState();
   }, [pushDisplayState]);
 
-  return { positions, trades, strategies, stats, clearAll, barCount, enginePrice };
+  const clearTradeHistory = useCallback(() => {
+    const eng = engRef.current;
+    eng.trades = [];
+    eng.totalWins = 0;
+    eng.totalLosses = 0;
+    for (const s of eng.strategies) {
+      s.totalTrades = 0;
+      s.wins = 0;
+      s.losses = 0;
+      s.totalPnl = 0;
+      s.score = s.hasPosition ? s.score : 0;
+    }
+    pushDisplayState();
+    if (dbLoadedRef.current) void saveSellingState(eng);
+  }, [pushDisplayState]);
+
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    void loadSellingState(engRef.current).then(() => {
+      lastSavedSignatureRef.current = JSON.stringify({
+        balance: engRef.current.balance,
+        totalWins: engRef.current.totalWins,
+        totalLosses: engRef.current.totalLosses,
+        totalPnl: engRef.current.totalRealizedPnl,
+        tradeSeq: engRef.current.seq,
+        lastPrice: engRef.current.lastPrice,
+        bars: engRef.current.minuteBars.length,
+        openPositions: engRef.current.positions.map((position) => position.id),
+        tradeIds: engRef.current.trades.slice(0, 500).map((trade) => trade.id),
+      });
+      pushDisplayState();
+    });
+  }, [refreshKey, pushDisplayState]);
+
+  return { positions, trades, strategies, stats, clearAll, clearTradeHistory, barCount, enginePrice };
 }
