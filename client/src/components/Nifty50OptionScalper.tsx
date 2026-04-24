@@ -164,7 +164,7 @@ function RosterBadge({ rosterState }: { rosterState: string }) {
 function formatMaybeDate(value?: string) {
   if (!value) return "-";
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
+  if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() < 2000) return "-";
   return `${formatShortDate(value)} ${formatShortTime(value)}`;
 }
 
@@ -423,7 +423,7 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
   const totalPnl = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const grossProfit = trades.filter((trade) => trade.netPnl > 0).reduce((sum, trade) => sum + trade.netPnl, 0);
   const grossLoss = trades.filter((trade) => trade.netPnl < 0).reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
 
   return (
     <div className="glass-panel px-5 py-6 md:px-6">
@@ -467,7 +467,7 @@ function TradesPanel({ trades, strategyNumbers }: { trades: OptionTrade[]; strat
             />
             <SummaryCard
               label="Profit Factor"
-              value={profitFactor.toFixed(2)}
+              value={isFinite(profitFactor) ? profitFactor.toFixed(2) : "∞"}
               accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"}
             />
             <SummaryCard
@@ -741,17 +741,18 @@ export default function Nifty50OptionScalper({
 
   // ââ Derived values ââââââââââââââââââââââââââââââââââââââââââââââ
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
-  const closedPnl = stats?.totalPnl ?? trades.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const tradesPnl = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const closedPnl = Math.max(stats?.totalPnl ?? 0, tradesPnl);
   const unrealized = stats?.unrealizedPnl ?? positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
   const sessionPnl = closedPnl + unrealized;
-  const equity = INITIAL_OPTIONS_BALANCE + sessionPnl;
+  const equity = stats?.equity ?? (INITIAL_OPTIONS_BALANCE + sessionPnl);
   const totalReturnPct = (sessionPnl / INITIAL_OPTIONS_BALANCE) * 100;
   const grossProfit = trades.filter((trade) => trade.netPnl > 0).reduce((sum, trade) => sum + trade.netPnl, 0);
   const grossLoss = trades.filter((trade) => trade.netPnl < 0).reduce((sum, trade) => sum + Math.abs(trade.netPnl), 0);
   const totalTrades = Math.max(stats?.totalTrades ?? 0, trades.length);
-  const totalWins = stats?.totalWins ?? trades.filter((trade) => trade.netPnl >= 0).length;
+  const totalWins = Math.max(stats?.totalWins ?? 0, trades.filter((trade) => trade.netPnl >= 0).length);
   const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? grossProfit : 0;
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
   const openCount = Math.max(stats?.openPositions ?? 0, positions.length);
   const callCount = positions.filter((p) => p.optionType === "CALL").length;
   const putCount  = positions.filter((p) => p.optionType === "PUT").length;
@@ -958,7 +959,7 @@ export default function Nifty50OptionScalper({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <SummaryCard label="Win Rate" value={`${winRate.toFixed(1)}%`} accent={winRate >= 50 ? "text-emerald-600" : "text-rose-600"} />
-        <SummaryCard label="Profit Factor" value={profitFactor.toFixed(2)} accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Profit Factor" value={isFinite(profitFactor) ? profitFactor.toFixed(2) : "∞"} accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Trades" value={`${totalTrades}`} accent="text-zinc-900" />
         <SummaryCard label="Unrealized" value={fmtUSD(unrealized, { signed: true })} accent={unrealized >= 0 ? "text-emerald-600" : "text-rose-600"} />
         <SummaryCard label="Streak" value={streak} accent="text-amber-500" />
@@ -1058,7 +1059,7 @@ export default function Nifty50OptionScalper({
         />
         <SummaryCard
           label="Profit Factor"
-          value={profitFactor.toFixed(2)}
+          value={isFinite(profitFactor) ? profitFactor.toFixed(2) : "∞"}
           accent={profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"}
         />
         <SummaryCard
