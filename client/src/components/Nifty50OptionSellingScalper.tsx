@@ -571,8 +571,7 @@ export default function Nifty50OptionSellingScalper({
   };
 
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
-  const tradesPnl = trades.reduce((sum, t) => sum + t.netPnl, 0);
-  const closedPnl = Math.max(resolvedStats.totalPnl, tradesPnl);
+  const closedPnl = resolvedStats.totalPnl;
   const unrealized = resolvedStats.unrealizedPnl;
   const sessionPnl = closedPnl + unrealized;
   const equity = resolvedStats.equity;

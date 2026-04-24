@@ -604,8 +604,7 @@ export default function OptionsScalper({
 
   // ── Derived values ──────────────────────────────────────────────
   const sessionRuntime = formatElapsedSeconds(Math.max(0, Math.floor((currentTime - sessionStartedAt) / 1000)));
-  const tradesPnl = trades.reduce((sum, trade) => sum + trade.netPnl, 0);
-  const closedPnl = Math.max(stats?.totalPnl ?? 0, tradesPnl);
+  const closedPnl = stats?.totalPnl ?? trades.reduce((sum, trade) => sum + trade.netPnl, 0);
   const unrealized = stats?.unrealizedPnl ?? positions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
   const sessionPnl = closedPnl + unrealized;
   const equity = stats?.equity ?? (INITIAL_OPTIONS_BALANCE + sessionPnl);
