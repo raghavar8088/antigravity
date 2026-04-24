@@ -177,13 +177,13 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "Overextension_Fade_Call_Sell", Type: Call,
 			StrikePctOTM: 0.015, ExpiryMinutes: 180,
-			TakeProfitPct: 0.50, StopLossPct: 0.85,
+			TakeProfitPct: 0.50, StopLossPct: 0.70,
 			PositionUSD: 10000, Signal: "OVEREXTENSION_FADE_UP", CooldownSecs: 1200,
 		},
 		{
 			Name: "Overextension_Fade_Put_Sell", Type: Put,
 			StrikePctOTM: 0.015, ExpiryMinutes: 180,
-			TakeProfitPct: 0.50, StopLossPct: 0.85,
+			TakeProfitPct: 0.50, StopLossPct: 0.70,
 			PositionUSD: 10000, Signal: "OVEREXTENSION_FADE_DOWN", CooldownSecs: 1200,
 		},
 
@@ -223,7 +223,7 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "Capitulation_VReversal_Put_Sell", Type: Put,
 			StrikePctOTM: 0.018, ExpiryMinutes: 180,
-			TakeProfitPct: 0.48, StopLossPct: 0.80,
+			TakeProfitPct: 0.48, StopLossPct: 0.72,
 			PositionUSD: 10000, Signal: "CAPITULATION_RECOVERY", CooldownSecs: 1200,
 		},
 		{
@@ -241,13 +241,13 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "VolCompress_Breakout_Bull_Put", Type: Put,
 			StrikePctOTM: 0.013, ExpiryMinutes: 150,
-			TakeProfitPct: 0.44, StopLossPct: 0.78,
+			TakeProfitPct: 0.44, StopLossPct: 0.72,
 			PositionUSD: 10000, Signal: "VOL_COMPRESS_BULL", CooldownSecs: 900,
 		},
 		{
 			Name: "VolCompress_Breakout_Bear_Call", Type: Call,
 			StrikePctOTM: 0.013, ExpiryMinutes: 150,
-			TakeProfitPct: 0.44, StopLossPct: 0.78,
+			TakeProfitPct: 0.44, StopLossPct: 0.72,
 			PositionUSD: 10000, Signal: "VOL_COMPRESS_BEAR", CooldownSecs: 900,
 		},
 
@@ -328,19 +328,19 @@ func buildAllStrategies() []StrategyDef {
 		{
 			Name: "BreakoutTrend_Pro_Bull_Put", Type: Put,
 			StrikePctOTM: 0.013, ExpiryMinutes: 165,
-			TakeProfitPct: 0.44, StopLossPct: 0.78,
+			TakeProfitPct: 0.44, StopLossPct: 0.72,
 			PositionUSD: 10000, Signal: "BREAKOUT_TREND_BULL", CooldownSecs: 720,
 		},
 		{
 			Name: "BreakdownTrend_Pro_Bear_Call", Type: Call,
 			StrikePctOTM: 0.013, ExpiryMinutes: 165,
-			TakeProfitPct: 0.44, StopLossPct: 0.78,
+			TakeProfitPct: 0.44, StopLossPct: 0.72,
 			PositionUSD: 10000, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 720,
 		},
 		{
 			Name: "Capitulation_Reclaim_Elite_Put", Type: Put,
 			StrikePctOTM: 0.018, ExpiryMinutes: 210,
-			TakeProfitPct: 0.52, StopLossPct: 0.88,
+			TakeProfitPct: 0.52, StopLossPct: 0.75,
 			PositionUSD: 10000, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 1800,
 		},
 	}

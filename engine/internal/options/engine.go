@@ -551,7 +551,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		}
 
 		fn, ok := Signals[s.def.Signal]
-		if !ok || !fn(ctx) {
+		if !ok {
+			log.Printf("[OPTIONS] WARN: unknown signal %q for strategy %q — skipping", s.def.Signal, s.def.Name)
+			return
+		}
+		if !fn(ctx) {
 			return
 		}
 		if !e.entryConfirmedFor(s.def, ctx, regime) {
@@ -700,8 +704,9 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/totalLife.Seconds(), 1)
 	}
 
+	// profitLockThreshold raised from 0.40→0.60 of TP — let positions run longer
+	// before early-exit so theta decay is fully collected before locking in gains.
 	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
-	grindExitThreshold := math.Max(optionLateExitMinGain, takeProfitPct*0.24)
 	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.36)
 	trailFloor := pos.PeakGainPct * 0.62
 	strikePressure := false
@@ -715,15 +720,13 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	switch {
 	case gainPct >= takeProfitPct:
 		return ExitTP
-	case gainPct <= -stopLossPct: // Expansion of premium > SL threshold
+	case gainPct <= -stopLossPct:
 		return ExitSL
 	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
 		return ExitTrailStop
 	case strikePressure && gainPct < profitLockThreshold*0.50:
 		return ExitStrikePressure
 	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
-		return ExitProfitLock
-	case timeProgress >= 0.46 && gainPct >= grindExitThreshold:
 		return ExitProfitLock
 	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
 		return ExitLateExit

@@ -26,7 +26,7 @@ const (
 
 	optionMaxActiveStrategies      = 13
 	optionMaxStrategiesPerCategory = 4
-	optionRosterRefreshInterval    = 30 * time.Second
+	optionRosterRefreshInterval    = 10 * time.Second // reduced from 30s for faster regime response
 	optionActiveRetentionBonus     = 6.0
 	optionPromotionBuffer          = 2.5
 
@@ -34,14 +34,14 @@ const (
 	optionLossStreakCooldown         = 50 * time.Minute
 	optionUnderperformingMinTrades   = 6
 	optionUnderperformingMaxWinRate  = 35.0
-	optionUnderperformingCooldown    = 6 * time.Hour
+	optionUnderperformingCooldown    = 90 * time.Minute // reduced from 6h — one bad session no longer kills a strategy all day
 
 	optionProfitLockProgress      = 0.28
-	optionProfitLockShareOfTarget = 0.40
-	optionProfitLockShare         = 0.40  // alias used in engine.go
+	optionProfitLockShareOfTarget = 0.60 // raised from 0.40 — collect more premium before locking in early exits
+	optionProfitLockShare         = 0.60 // alias used in engine.go
 	optionLateExitProgress        = 0.56
 	optionLateExitMinGain         = 0.05
-	optionMomentumFadeProgress    = 0.72  // late-stage momentum fade exit threshold
+	optionMomentumFadeProgress    = 0.72
 	optionStrikePressureBuffer    = 0.0025
 
 	optionColdStartSizeMultiplier = 0.95
@@ -162,11 +162,13 @@ func liveSizeMultiplierFor(s *strategyState) float64 {
 	if liveTrades >= 3 {
 		multiplier = 1.0
 	}
-	if liveTrades >= 8 && s.stats.WinRate >= 52 {
-		multiplier += 0.10
+	// Faster promotion: halved trade-count thresholds so intraday strategies
+	// can reach meaningful size within the same session instead of 4+ hours.
+	if liveTrades >= 5 && s.stats.WinRate >= 50 {
+		multiplier += 0.12
 	}
-	if liveTrades >= 12 && s.stats.WinRate >= 56 {
-		multiplier += 0.10
+	if liveTrades >= 8 && s.stats.WinRate >= 54 {
+		multiplier += 0.12
 	}
 	if liveTrades > 0 && s.def.PositionUSD > 0 {
 		avgPnLRatio := (s.stats.TotalPnL / float64(liveTrades)) / s.def.PositionUSD
@@ -198,31 +200,37 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
 	slow := ema(ctx.Prices, 21)
-	trend := ema(ctx.Prices, 55)
 	rsiVal := rsi(ctx.Prices, 14)
 	mom3 := momentum(ctx.Prices, 3)
 	mom8 := momentum(ctx.Prices, 8)
 
 	bullishSeller := def.Type == Put
+	// trendAligned uses 9/21-EMA only — the 55-EMA requirement was blocking
+	// all consolidation trades where mean-reversion puts are most profitable.
 	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend && mom3 > 0.0008 && mom8 > 0 && rsiVal >= 50 && rsiVal <= 72
+			// Widened RSI ceiling 72→76; relaxed trend gate to 21-EMA × 0.996
+			// instead of requiring price >= 55-EMA (which blocked range/consolidation entries).
+			return trendAligned && price >= slow*0.996 && mom3 > 0.0006 && mom8 > -0.0002 && rsiVal >= 44 && rsiVal <= 76
 		case "Mean Reversion", "Capitulation":
-			return price >= fast && price >= trend*0.997 && mom3 > -0.0012 && rsiVal >= 38 && rsiVal <= 60
+			// Widened RSI ceiling 60→68; allow entry slightly below 9-EMA.
+			return price >= fast*0.998 && mom3 > -0.0015 && rsiVal >= 34 && rsiVal <= 68
 		default:
-			return price >= fast && mom3 >= -0.0002
+			return price >= fast*0.998 && mom3 >= -0.0003
 		}
 	}
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend && mom3 < -0.0008 && mom8 < 0 && rsiVal >= 28 && rsiVal <= 50
+		// Widened RSI floor 28→22; relaxed trend gate to 21-EMA × 1.004.
+		return trendAligned && price <= slow*1.004 && mom3 < -0.0006 && mom8 < 0.0002 && rsiVal >= 22 && rsiVal <= 56
 	case "Mean Reversion", "Capitulation":
-		return price <= fast && price <= trend*1.003 && mom3 < 0.0012 && rsiVal >= 40 && rsiVal <= 62
+		// Widened RSI floor 40→32; allow entry slightly above 9-EMA.
+		return price <= fast*1.002 && mom3 < 0.0015 && rsiVal >= 32 && rsiVal <= 66
 	default:
-		return price <= fast && mom3 <= 0.0002
+		return price <= fast*1.002 && mom3 <= 0.0003
 	}
 }
 
