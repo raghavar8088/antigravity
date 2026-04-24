@@ -807,9 +807,9 @@ export default function OptionsScalper({
             />
             <CompactMetric
               label="Unrealized PnL"
-              value={`${openCount}`}
+              value={fmtUSD(unrealized, { signed: true })}
               detail={exposureSummary}
-              accent="text-blue-600"
+              accent={unrealized >= 0 ? "text-emerald-600" : "text-rose-600"}
             />
           </div>
         </div>
