@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const API_URL = resolveEngineApiUrl();
 const LEGACY_LS_KEY = "delta_live_state_v1";
 
 export type DeltaLocalConfig = {

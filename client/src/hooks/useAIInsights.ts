@@ -57,7 +57,8 @@ type AIInsightsState = {
   loading: boolean;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
+const API_URL = resolveEngineApiUrl();
 
 export default function useAIInsights(refreshKey = 0): AIInsightsState {
   const [state, setState] = useState<AIInsightsState>({

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 interface PendingSignal {
   id: string;
@@ -45,7 +46,7 @@ export default function CommandCenter() {
   useEffect(() => {
     const fetchPending = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/pending`);
+        const res = await fetch(`${resolveEngineApiUrl()}/api/ai/pending`);
         const data = await res.json();
         setPending(data);
         if (data.length > 0 && !input && !loading) {
@@ -56,7 +57,7 @@ export default function CommandCenter() {
     };
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/bridge-status`);
+        const res = await fetch(`${resolveEngineApiUrl()}/api/ai/bridge-status`);
         const data = await res.json();
         setBridge({
           online: Boolean(data.online),
@@ -88,7 +89,7 @@ export default function CommandCenter() {
     setStatus(null);
     const signalId = pending[0].id;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}/api/ai/submit`, {
+      const res = await fetch(`${resolveEngineApiUrl()}/api/ai/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: signalId, prompt: input }),

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 type DashboardHeaderProps = {
   online: boolean;
@@ -42,7 +43,7 @@ export default function DashboardHeader({
     if (!confirm(confirmation)) return;
     setActiveAction(endpoint);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const apiUrl = resolveEngineApiUrl();
       const response = await fetch(`${apiUrl}${endpoint}`, { method: "POST" });
       if (!response.ok) {
         throw new Error("action failed");
