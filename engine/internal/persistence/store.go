@@ -2,14 +2,16 @@ package persistence
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
 )
 
 // EngineState is the complete snapshot persisted to the database.
@@ -80,161 +82,139 @@ type NiftyOptionsSellingState struct {
 
 // Store handles all database persistence operations.
 type Store struct {
-	pool *pgxpool.Pool
-	mu   sync.Mutex
+	db *sql.DB
+	mu sync.Mutex
 }
 
-// NewStore connects to the database and creates the state table if needed.
+// NewStore opens the SQLite database and creates all tables if needed.
 func NewStore(ctx context.Context) (*Store, error) {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return nil, fmt.Errorf("DATABASE_URL not set")
+	dbPath := os.Getenv("SQLITE_PATH")
+	if dbPath == "" {
+		dbPath = "./data/engine.db"
 	}
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		return nil, fmt.Errorf("failed to create data dir: %w", err)
+	}
+
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("failed to open sqlite: %w", err)
 	}
 
-	// Verify connection
-	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("database ping failed: %w", err)
+	if err := db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("sqlite ping failed: %w", err)
 	}
 
-	log.Println("[DB] ✅ Connected to Neon PostgreSQL")
+	log.Printf("[DB] ✅ Connected to SQLite at %s", dbPath)
 
-	// Create state table
-	_, err = pool.Exec(ctx, `
+	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS engine_state (
 			id INTEGER PRIMARY KEY DEFAULT 1,
-			balance DOUBLE PRECISION NOT NULL DEFAULT 1000000,
-			position_btc DOUBLE PRECISION NOT NULL DEFAULT 0,
-			total_fees DOUBLE PRECISION NOT NULL DEFAULT 0,
+			balance REAL NOT NULL DEFAULT 1000000,
+			position_btc REAL NOT NULL DEFAULT 0,
+			total_fees REAL NOT NULL DEFAULT 0,
 			positions_json TEXT NOT NULL DEFAULT '[]',
 			trades_json TEXT NOT NULL DEFAULT '[]',
 			total_trades INTEGER NOT NULL DEFAULT 0,
 			total_wins INTEGER NOT NULL DEFAULT 0,
 			total_losses INTEGER NOT NULL DEFAULT 0,
-			total_pnl DOUBLE PRECISION NOT NULL DEFAULT 0,
-			saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			total_pnl REAL NOT NULL DEFAULT 0,
+			saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+			options_balance REAL NOT NULL DEFAULT 1000000,
+			options_last_price REAL NOT NULL DEFAULT 0,
+			options_last_minute INTEGER NOT NULL DEFAULT 0,
+			options_trade_seq INTEGER NOT NULL DEFAULT 0,
+			options_price_hist_json TEXT NOT NULL DEFAULT '[]',
+			options_minute_bars_json TEXT NOT NULL DEFAULT '[]',
+			options_trades_json TEXT NOT NULL DEFAULT '[]',
+			options_strategies_json TEXT NOT NULL DEFAULT '[]',
+			options_saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+			nifty_options_balance REAL NOT NULL DEFAULT 1000000,
+			nifty_options_last_price REAL NOT NULL DEFAULT 0,
+			nifty_options_last_minute INTEGER NOT NULL DEFAULT 0,
+			nifty_options_trade_seq INTEGER NOT NULL DEFAULT 0,
+			nifty_options_price_hist_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_minute_bars_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_trades_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_strategies_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+			options_selling_balance REAL NOT NULL DEFAULT 1000000,
+			options_selling_last_price REAL NOT NULL DEFAULT 0,
+			options_selling_last_minute INTEGER NOT NULL DEFAULT 0,
+			options_selling_trade_seq INTEGER NOT NULL DEFAULT 0,
+			options_selling_price_hist_json TEXT NOT NULL DEFAULT '[]',
+			options_selling_minute_bars_json TEXT NOT NULL DEFAULT '[]',
+			options_selling_trades_json TEXT NOT NULL DEFAULT '[]',
+			options_selling_strategies_json TEXT NOT NULL DEFAULT '[]',
+			options_selling_saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+			nifty_options_selling_balance REAL NOT NULL DEFAULT 1000000,
+			nifty_options_selling_last_price REAL NOT NULL DEFAULT 0,
+			nifty_options_selling_last_minute INTEGER NOT NULL DEFAULT 0,
+			nifty_options_selling_trade_seq INTEGER NOT NULL DEFAULT 0,
+			nifty_options_selling_price_hist_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_selling_minute_bars_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_selling_trades_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_selling_strategies_json TEXT NOT NULL DEFAULT '[]',
+			nifty_options_selling_saved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 			CHECK (id = 1)
 		)
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create state table: %w", err)
+	`); err != nil {
+		return nil, fmt.Errorf("failed to create engine_state table: %w", err)
 	}
 
-	_, err = pool.Exec(ctx, `
-		ALTER TABLE engine_state
-		ALTER COLUMN balance SET DEFAULT 1000000
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update engine_state balance default: %w", err)
-	}
-
-	for _, stmt := range []string{
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_last_minute BIGINT NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_trade_seq INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_trades_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_strategies_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_last_minute BIGINT NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_trade_seq INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_trades_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_strategies_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_last_minute BIGINT NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_trade_seq INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_trades_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_strategies_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS options_selling_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_balance DOUBLE PRECISION NOT NULL DEFAULT 1000000`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_last_price DOUBLE PRECISION NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_last_minute BIGINT NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_trade_seq INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_price_hist_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_minute_bars_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_trades_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_strategies_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE engine_state ADD COLUMN IF NOT EXISTS nifty_options_selling_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
-	} {
-		if _, err = pool.Exec(ctx, stmt); err != nil {
-			return nil, fmt.Errorf("failed to migrate options columns: %w", err)
-		}
-	}
-
-	// Ensure a row exists
-	_, err = pool.Exec(ctx, `
-		INSERT INTO engine_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING
-	`)
-	if err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO engine_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`); err != nil {
 		log.Printf("[DB] Warning: could not seed state row: %v", err)
 	}
 
 	log.Println("[DB] ✅ State table ready")
 
-	// Create trades table — for UNLIMITED trade history
-	_, err = pool.Exec(ctx, `
+	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS trades (
 			id TEXT PRIMARY KEY,
-			timestamp TIMESTAMPTZ NOT NULL,
+			timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 			strategy_name TEXT NOT NULL,
 			category TEXT NOT NULL,
 			side TEXT NOT NULL,
-			entry_price DOUBLE PRECISION NOT NULL,
-			exit_price DOUBLE PRECISION NOT NULL,
-			size DOUBLE PRECISION NOT NULL,
-			gross_pnl DOUBLE PRECISION NOT NULL,
-			fees DOUBLE PRECISION NOT NULL,
-			net_pnl DOUBLE PRECISION NOT NULL,
+			entry_price REAL NOT NULL,
+			exit_price REAL NOT NULL,
+			size REAL NOT NULL,
+			gross_pnl REAL NOT NULL,
+			fees REAL NOT NULL,
+			net_pnl REAL NOT NULL,
 			reason TEXT NOT NULL,
-			entry_time TIMESTAMPTZ NOT NULL,
-			exit_time TIMESTAMPTZ NOT NULL,
-			duration_ms BIGINT NOT NULL,
+			entry_time TEXT NOT NULL,
+			exit_time TEXT NOT NULL,
+			duration_ms INTEGER NOT NULL,
 			ai_decision_id TEXT,
 			ai_provider TEXT,
 			ai_reasoning TEXT,
-			ai_confidence DOUBLE PRECISION,
+			ai_confidence REAL,
 			ai_bull_thesis TEXT,
 			ai_bear_thesis TEXT
 		)
-	`)
-	if err != nil {
+	`); err != nil {
 		return nil, fmt.Errorf("failed to create trades table: %w", err)
 	}
 	log.Println("[DB] ✅ Trades table ready (Unlimited Mode)")
 
-	// Create ai_audit_logs table — for AI Performance Tracking & History
-	_, err = pool.Exec(ctx, `
+	if _, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS ai_audit_logs (
 			id TEXT PRIMARY KEY,
-			timestamp TIMESTAMPTZ NOT NULL,
+			timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
 			strategy_name TEXT NOT NULL,
 			action TEXT NOT NULL,
-			approved BOOLEAN NOT NULL,
+			approved INTEGER NOT NULL,
 			reason TEXT NOT NULL,
-			confidence DOUBLE PRECISION NOT NULL,
+			confidence REAL NOT NULL,
 			provider TEXT NOT NULL
 		)
-	`)
-	if err != nil {
+	`); err != nil {
 		return nil, fmt.Errorf("failed to create ai_audit_logs table: %w", err)
 	}
 	log.Println("[DB] ✅ AI Audit log table ready")
 
-	return &Store{pool: pool}, nil
+	return &Store{db: db}, nil
 }
 
 // LoadState retrieves the last saved engine state from the database.
@@ -243,9 +223,9 @@ func (s *Store) LoadState(ctx context.Context) (*EngineState, error) {
 	defer s.mu.Unlock()
 
 	var state EngineState
-	var posJSON, tradesJSON string
+	var posJSON, tradesJSON, savedAtStr string
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT balance, position_btc, total_fees,
 		       positions_json, trades_json,
 		       total_trades, total_wins, total_losses, total_pnl,
@@ -255,7 +235,7 @@ func (s *Store) LoadState(ctx context.Context) (*EngineState, error) {
 		&state.Balance, &state.PositionBTC, &state.TotalFees,
 		&posJSON, &tradesJSON,
 		&state.TotalTrades, &state.TotalWins, &state.TotalLosses, &state.TotalPnL,
-		&state.SavedAt,
+		&savedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load state: %w", err)
@@ -263,6 +243,7 @@ func (s *Store) LoadState(ctx context.Context) (*EngineState, error) {
 
 	state.Positions = json.RawMessage(posJSON)
 	state.Trades = json.RawMessage(tradesJSON)
+	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
 	return &state, nil
 }
 
@@ -280,12 +261,12 @@ func (s *Store) SaveState(ctx context.Context, state *EngineState) error {
 		tradesJSON = "[]"
 	}
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			balance = $1, position_btc = $2, total_fees = $3,
-			positions_json = $4, trades_json = $5,
-			total_trades = $6, total_wins = $7, total_losses = $8, total_pnl = $9,
-			saved_at = NOW()
+			balance = ?, position_btc = ?, total_fees = ?,
+			positions_json = ?, trades_json = ?,
+			total_trades = ?, total_wins = ?, total_losses = ?, total_pnl = ?,
+			saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.PositionBTC, state.TotalFees,
@@ -301,9 +282,9 @@ func (s *Store) LoadOptionsState(ctx context.Context) (*OptionsState, error) {
 	defer s.mu.Unlock()
 
 	var state OptionsState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT options_balance, options_last_price, options_last_minute, options_trade_seq,
 		       options_price_hist_json, options_minute_bars_json,
 		       options_trades_json, options_strategies_json, options_saved_at
@@ -311,7 +292,7 @@ func (s *Store) LoadOptionsState(ctx context.Context) (*OptionsState, error) {
 	`).Scan(
 		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
 		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &state.SavedAt,
+		&tradesJSON, &strategiesJSON, &savedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load options state: %w", err)
@@ -321,6 +302,7 @@ func (s *Store) LoadOptionsState(ctx context.Context) (*OptionsState, error) {
 	state.MinuteBars = json.RawMessage(minuteBarsJSON)
 	state.Trades = json.RawMessage(tradesJSON)
 	state.Strategies = json.RawMessage(strategiesJSON)
+	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
 	return &state, nil
 }
 
@@ -346,26 +328,23 @@ func (s *Store) SaveOptionsState(ctx context.Context, state *OptionsState) error
 		strategiesJSON = "[]"
 	}
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			options_balance = $1,
-			options_last_price = $2,
-			options_last_minute = $3,
-			options_trade_seq = $4,
-			options_price_hist_json = $5,
-			options_minute_bars_json = $6,
-			options_trades_json = $7,
-			options_strategies_json = $8,
-			options_saved_at = NOW()
+			options_balance = ?,
+			options_last_price = ?,
+			options_last_minute = ?,
+			options_trade_seq = ?,
+			options_price_hist_json = ?,
+			options_minute_bars_json = ?,
+			options_trades_json = ?,
+			options_strategies_json = ?,
+			options_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
 		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to save options state: %w", err)
-	}
-	return nil
+	return err
 }
 
 // LoadNiftyOptionsState retrieves the last saved NIFTY 50 options engine snapshot.
@@ -374,9 +353,9 @@ func (s *Store) LoadNiftyOptionsState(ctx context.Context) (*NiftyOptionsState, 
 	defer s.mu.Unlock()
 
 	var state NiftyOptionsState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT nifty_options_balance, nifty_options_last_price, nifty_options_last_minute, nifty_options_trade_seq,
 		       nifty_options_price_hist_json, nifty_options_minute_bars_json,
 		       nifty_options_trades_json, nifty_options_strategies_json, nifty_options_saved_at
@@ -384,7 +363,7 @@ func (s *Store) LoadNiftyOptionsState(ctx context.Context) (*NiftyOptionsState, 
 	`).Scan(
 		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
 		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &state.SavedAt,
+		&tradesJSON, &strategiesJSON, &savedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load nifty options state: %w", err)
@@ -394,6 +373,7 @@ func (s *Store) LoadNiftyOptionsState(ctx context.Context) (*NiftyOptionsState, 
 	state.MinuteBars = json.RawMessage(minuteBarsJSON)
 	state.Trades = json.RawMessage(tradesJSON)
 	state.Strategies = json.RawMessage(strategiesJSON)
+	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
 	return &state, nil
 }
 
@@ -419,26 +399,23 @@ func (s *Store) SaveNiftyOptionsState(ctx context.Context, state *NiftyOptionsSt
 		strategiesJSON = "[]"
 	}
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			nifty_options_balance = $1,
-			nifty_options_last_price = $2,
-			nifty_options_last_minute = $3,
-			nifty_options_trade_seq = $4,
-			nifty_options_price_hist_json = $5,
-			nifty_options_minute_bars_json = $6,
-			nifty_options_trades_json = $7,
-			nifty_options_strategies_json = $8,
-			nifty_options_saved_at = NOW()
+			nifty_options_balance = ?,
+			nifty_options_last_price = ?,
+			nifty_options_last_minute = ?,
+			nifty_options_trade_seq = ?,
+			nifty_options_price_hist_json = ?,
+			nifty_options_minute_bars_json = ?,
+			nifty_options_trades_json = ?,
+			nifty_options_strategies_json = ?,
+			nifty_options_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
 		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to save nifty options state: %w", err)
-	}
-	return nil
+	return err
 }
 
 // LoadOptionsSellingState retrieves the last saved BTC options selling engine snapshot.
@@ -447,9 +424,9 @@ func (s *Store) LoadOptionsSellingState(ctx context.Context) (*OptionsSellingSta
 	defer s.mu.Unlock()
 
 	var state OptionsSellingState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT options_selling_balance, options_selling_last_price, options_selling_last_minute, options_selling_trade_seq,
 		       options_selling_price_hist_json, options_selling_minute_bars_json,
 		       options_selling_trades_json, options_selling_strategies_json, options_selling_saved_at
@@ -457,7 +434,7 @@ func (s *Store) LoadOptionsSellingState(ctx context.Context) (*OptionsSellingSta
 	`).Scan(
 		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
 		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &state.SavedAt,
+		&tradesJSON, &strategiesJSON, &savedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load options selling state: %w", err)
@@ -467,6 +444,7 @@ func (s *Store) LoadOptionsSellingState(ctx context.Context) (*OptionsSellingSta
 	state.MinuteBars = json.RawMessage(minuteBarsJSON)
 	state.Trades = json.RawMessage(tradesJSON)
 	state.Strategies = json.RawMessage(strategiesJSON)
+	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
 	return &state, nil
 }
 
@@ -492,26 +470,23 @@ func (s *Store) SaveOptionsSellingState(ctx context.Context, state *OptionsSelli
 		strategiesJSON = "[]"
 	}
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			options_selling_balance = $1,
-			options_selling_last_price = $2,
-			options_selling_last_minute = $3,
-			options_selling_trade_seq = $4,
-			options_selling_price_hist_json = $5,
-			options_selling_minute_bars_json = $6,
-			options_selling_trades_json = $7,
-			options_selling_strategies_json = $8,
-			options_selling_saved_at = NOW()
+			options_selling_balance = ?,
+			options_selling_last_price = ?,
+			options_selling_last_minute = ?,
+			options_selling_trade_seq = ?,
+			options_selling_price_hist_json = ?,
+			options_selling_minute_bars_json = ?,
+			options_selling_trades_json = ?,
+			options_selling_strategies_json = ?,
+			options_selling_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
 		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to save options selling state: %w", err)
-	}
-	return nil
+	return err
 }
 
 // LoadNiftyOptionsSellingState retrieves the last saved NIFTY options selling engine snapshot.
@@ -520,9 +495,9 @@ func (s *Store) LoadNiftyOptionsSellingState(ctx context.Context) (*NiftyOptions
 	defer s.mu.Unlock()
 
 	var state NiftyOptionsSellingState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON string
+	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
 
-	err := s.pool.QueryRow(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT nifty_options_selling_balance, nifty_options_selling_last_price, nifty_options_selling_last_minute, nifty_options_selling_trade_seq,
 		       nifty_options_selling_price_hist_json, nifty_options_selling_minute_bars_json,
 		       nifty_options_selling_trades_json, nifty_options_selling_strategies_json, nifty_options_selling_saved_at
@@ -530,7 +505,7 @@ func (s *Store) LoadNiftyOptionsSellingState(ctx context.Context) (*NiftyOptions
 	`).Scan(
 		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
 		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &state.SavedAt,
+		&tradesJSON, &strategiesJSON, &savedAtStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load nifty options selling state: %w", err)
@@ -540,6 +515,7 @@ func (s *Store) LoadNiftyOptionsSellingState(ctx context.Context) (*NiftyOptions
 	state.MinuteBars = json.RawMessage(minuteBarsJSON)
 	state.Trades = json.RawMessage(tradesJSON)
 	state.Strategies = json.RawMessage(strategiesJSON)
+	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
 	return &state, nil
 }
 
@@ -565,35 +541,31 @@ func (s *Store) SaveNiftyOptionsSellingState(ctx context.Context, state *NiftyOp
 		strategiesJSON = "[]"
 	}
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			nifty_options_selling_balance = $1,
-			nifty_options_selling_last_price = $2,
-			nifty_options_selling_last_minute = $3,
-			nifty_options_selling_trade_seq = $4,
-			nifty_options_selling_price_hist_json = $5,
-			nifty_options_selling_minute_bars_json = $6,
-			nifty_options_selling_trades_json = $7,
-			nifty_options_selling_strategies_json = $8,
-			nifty_options_selling_saved_at = NOW()
+			nifty_options_selling_balance = ?,
+			nifty_options_selling_last_price = ?,
+			nifty_options_selling_last_minute = ?,
+			nifty_options_selling_trade_seq = ?,
+			nifty_options_selling_price_hist_json = ?,
+			nifty_options_selling_minute_bars_json = ?,
+			nifty_options_selling_trades_json = ?,
+			nifty_options_selling_strategies_json = ?,
+			nifty_options_selling_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
 		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to save nifty options selling state: %w", err)
-	}
-	return nil
+	return err
 }
 
-// ResetState writes a clean default state to the database, effectively
-// zeroing out the account so the next engine restart starts fresh.
+// ResetState writes a clean default state to the database.
 func (s *Store) ResetState(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
 			balance = 1000000,
 			position_btc = 0,
@@ -604,34 +576,33 @@ func (s *Store) ResetState(ctx context.Context) error {
 			total_wins = 0,
 			total_losses = 0,
 			total_pnl = 0,
-			saved_at = NOW()
+			saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to reset state in database: %w", err)
+		return fmt.Errorf("failed to reset state: %w", err)
 	}
 	log.Println("[DB] 🔄 Account state reset to factory defaults in database")
 	return nil
 }
 
-// ClearTradeHistory removes persisted trade-history records while preserving
-// balances, fees, and open-position state.
+// ClearTradeHistory removes persisted trade-history records while preserving balances and open positions.
 func (s *Store) ClearTradeHistory(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, err := s.pool.Exec(ctx, `DELETE FROM trades`); err != nil {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM trades`); err != nil {
 		return fmt.Errorf("failed to clear trades table: %w", err)
 	}
 
-	if _, err := s.pool.Exec(ctx, `
+	if _, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
 			trades_json = '[]',
 			total_trades = 0,
 			total_wins = 0,
 			total_losses = 0,
 			total_pnl = 0,
-			saved_at = NOW()
+			saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`); err != nil {
 		return fmt.Errorf("failed to clear trade history from engine state: %w", err)
@@ -646,11 +617,16 @@ func (s *Store) SaveAuditLog(ctx context.Context, id, strategy, action string, a
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.pool.Exec(ctx, `
+	approvedInt := 0
+	if approved {
+		approvedInt = 1
+	}
+
+	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO ai_audit_logs (id, timestamp, strategy_name, action, approved, reason, confidence, provider)
-		VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7)
+		VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO NOTHING
-	`, id, strategy, action, approved, reason, confidence, provider)
+	`, id, strategy, action, approvedInt, reason, confidence, provider)
 	return err
 }
 
@@ -659,22 +635,30 @@ func (s *Store) SaveTrade(ctx context.Context, trade map[string]interface{}) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Convert duration to MS
 	dur, _ := trade["duration"].(time.Duration)
 
-	_, err := s.pool.Exec(ctx, `
+	entryTimeStr := ""
+	if t, ok := trade["entryTime"].(time.Time); ok {
+		entryTimeStr = t.Format(time.RFC3339)
+	}
+	exitTimeStr := ""
+	if t, ok := trade["exitTime"].(time.Time); ok {
+		exitTimeStr = t.Format(time.RFC3339)
+	}
+
+	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO trades (
 			id, timestamp, strategy_name, category, side,
 			entry_price, exit_price, size, gross_pnl, fees, net_pnl,
 			reason, entry_time, exit_time, duration_ms,
 			ai_decision_id, ai_provider, ai_reasoning, ai_confidence, ai_bull_thesis, ai_bear_thesis
-		) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+		) VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO NOTHING
 	`,
 		trade["id"], trade["strategyName"], trade["category"], trade["side"],
 		trade["entryPrice"], trade["exitPrice"], trade["size"], trade["grossPnl"],
 		trade["fees"], trade["netPnl"], trade["reason"],
-		trade["entryTime"], trade["exitTime"], dur.Milliseconds(),
+		entryTimeStr, exitTimeStr, dur.Milliseconds(),
 		trade["aiDecisionId"], trade["aiProvider"], trade["aiReasoning"],
 		trade["aiConfidence"], trade["aiBullThesis"], trade["aiBearThesis"],
 	)
@@ -686,29 +670,30 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, entry_time, exit_time, strategy_name, category, side,
 		       entry_price, exit_price, size, gross_pnl, fees, net_pnl,
-		       reason, duration_ms, ai_decision_id, ai_provider, ai_reasoning,
-		       ai_confidence, ai_bull_thesis, ai_bear_thesis
+		       reason, duration_ms,
+		       COALESCE(ai_decision_id, ''), COALESCE(ai_provider, ''), COALESCE(ai_reasoning, ''),
+		       COALESCE(ai_confidence, 0), COALESCE(ai_bull_thesis, ''), COALESCE(ai_bear_thesis, '')
 		FROM trades
 		ORDER BY exit_time DESC
-		LIMIT $1
+		LIMIT ?
 	`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query trades: %w", err)
 	}
 	defer rows.Close()
 
-	trades := make([]map[string]interface{}, 0) // never nil — always encodes as []
+	trades := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id, strategy, category, side, reason, aiID, aiProvider, aiReason, aiBull, aiBear string
 		var entryP, exitP, size, grossP, fees, netP, aiConf float64
 		var durMS int64
-		var entryT, exitT time.Time
+		var entryTStr, exitTStr string
 
 		err := rows.Scan(
-			&id, &entryT, &exitT, &strategy, &category, &side,
+			&id, &entryTStr, &exitTStr, &strategy, &category, &side,
 			&entryP, &exitP, &size, &grossP, &fees, &netP,
 			&reason, &durMS, &aiID, &aiProvider, &aiReason,
 			&aiConf, &aiBull, &aiBear,
@@ -716,6 +701,9 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 		if err != nil {
 			return nil, err
 		}
+
+		entryT, _ := time.Parse(time.RFC3339, entryTStr)
+		exitT, _ := time.Parse(time.RFC3339, exitTStr)
 
 		trades = append(trades, map[string]interface{}{
 			"id":           id,
@@ -732,7 +720,7 @@ func (s *Store) GetTrades(ctx context.Context, limit int) ([]map[string]interfac
 			"entryTime":    entryT.Format(time.RFC3339),
 			"exitTime":     exitT.Format(time.RFC3339),
 			"duration":     time.Duration(durMS) * time.Millisecond,
-			"time":         exitT.Format("15:04:05"), // Friendly string for legacy UI
+			"time":         exitT.Format("15:04:05"),
 			"aiDecisionId": aiID,
 			"aiProvider":   aiProvider,
 			"aiReasoning":  aiReason,
@@ -749,11 +737,11 @@ func (s *Store) LoadAuditLogs(ctx context.Context, limit int) ([]map[string]inte
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	rows, err := s.pool.Query(ctx, `
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, timestamp, strategy_name, action, approved, reason, confidence, provider
 		FROM ai_audit_logs
 		ORDER BY timestamp DESC
-		LIMIT $1
+		LIMIT ?
 	`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit logs: %w", err)
@@ -762,19 +750,19 @@ func (s *Store) LoadAuditLogs(ctx context.Context, limit int) ([]map[string]inte
 
 	var logs []map[string]interface{}
 	for rows.Next() {
-		var id, strategy, action, reason, provider string
-		var approved bool
+		var id, strategy, action, reason, provider, timestampStr string
+		var approvedInt int
 		var confidence float64
-		var timestamp time.Time
-		if err := rows.Scan(&id, &timestamp, &strategy, &action, &approved, &reason, &confidence, &provider); err != nil {
+		if err := rows.Scan(&id, &timestampStr, &strategy, &action, &approvedInt, &reason, &confidence, &provider); err != nil {
 			return nil, err
 		}
+		timestamp, _ := time.Parse(time.RFC3339, timestampStr)
 		logs = append(logs, map[string]interface{}{
 			"id":           id,
 			"timestamp":    timestamp,
 			"strategyName": strategy,
 			"action":       action,
-			"approved":     approved,
+			"approved":     approvedInt != 0,
 			"reason":       reason,
 			"confidence":   confidence,
 			"provider":     provider,
@@ -783,9 +771,9 @@ func (s *Store) LoadAuditLogs(ctx context.Context, limit int) ([]map[string]inte
 	return logs, nil
 }
 
-// Close shuts down the database connection pool.
+// Close shuts down the database connection.
 func (s *Store) Close() {
-	if s.pool != nil {
-		s.pool.Close()
+	if s.db != nil {
+		s.db.Close()
 	}
 }

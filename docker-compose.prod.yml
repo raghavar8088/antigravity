@@ -7,55 +7,11 @@ services:
       dockerfile: Dockerfile
     container_name: antigravity_engine
     restart: always
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgres://antigravity:password123@timescaledb:5432/antigravity
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - timescaledb
-      - redis
-
-  client:
-    build:
-      context: ./client
-      dockerfile: Dockerfile
-    container_name: antigravity_client
-    restart: always
-    env_file:
-      - .env
-    environment:
-      - INTERNAL_API_URL=http://engine:8080
-    depends_on:
-      - engine
-
-  nginx:
-    image: nginx:alpine
-    container_name: antigravity_nginx
     ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - client
-    restart: always
-
-  timescaledb:
-    image: timescale/timescaledb:latest-pg15
-    container_name: antigravity_db
+      - "80:8080"
+    env_file:
+      - .env
     environment:
-      - POSTGRES_USER=antigravity
-      - POSTGRES_PASSWORD=password123
-      - POSTGRES_DB=antigravity
+      - SQLITE_PATH=/app/data/engine.db
     volumes:
-      - ./infrastructure/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - pgdata:/var/lib/postgresql/data
-    restart: always
-
-  redis:
-    image: redis:7-alpine
-    container_name: antigravity_cache
-    restart: always
-
-volumes:
-  pgdata:
+      - ./data:/app/data
