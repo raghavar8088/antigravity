@@ -905,9 +905,11 @@ func main() {
 			}
 
 			niftyMarketCache.Update(quote)
-			niftyOptionsEngine.UpdatePrice(quote.Price)
-			niftyOptionsSellingEngine.UpdatePrice(quote.Price)
-			niftyStocksEngine.UpdatePrice(quote.Price)
+			if live {
+				niftyOptionsEngine.UpdatePrice(quote.Price)
+				niftyOptionsSellingEngine.UpdatePrice(quote.Price)
+				niftyStocksEngine.UpdatePrice(quote.Price)
+			}
 		}
 
 		pullQuote()
