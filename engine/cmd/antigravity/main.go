@@ -614,8 +614,10 @@ func main() {
 	niftyOptionsEngine = options.NewNiftyEngine()
 	niftyOptionsSellingEngine := options_selling.NewNiftyEngine()
 
-	// Delta Exchange live bridge — mirrors BTC option selling paper trades to Delta when enabled.
+	// Delta Exchange live bridge — mirrors BTC option signals to Delta when enabled.
+	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
+	deltaBridge.StartMonitor(ctx)
 	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
 			PaperTradeID: posID,
@@ -990,6 +992,30 @@ func main() {
 		}
 		deltaBridge.SetEnabled(body.Enabled)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "enabled": body.Enabled})
+	})
+
+	http.HandleFunc("/api/delta-live/mode", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			BuyingMode bool `json:"buyingMode"` // true = buy options, false = sell options
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, `{"error":"need {buyingMode: true|false}"}`, http.StatusBadRequest)
+			return
+		}
+		deltaBridge.SetBuyingMode(body.BuyingMode)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "buyingMode": body.BuyingMode})
 	})
 
 	http.HandleFunc("/api/delta-live/order", func(w http.ResponseWriter, r *http.Request) {
