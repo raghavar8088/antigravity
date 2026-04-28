@@ -162,6 +162,7 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 			Size:      contracts,
 			Side:      SideSell,
 			OrderType: TypeMarket,
+			Leverage:  10,
 		})
 		if err != nil {
 			b.updateTrade(id, func(t *LiveTrade) {
@@ -223,6 +224,7 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 			Size:                 trade.Contracts,
 			Side:                 SideBuy,
 			OrderType:            TypeMarket,
+			Leverage:             10,
 			ReduceOnly:           true,
 			CancelOrdersAccepted: "true",
 		})

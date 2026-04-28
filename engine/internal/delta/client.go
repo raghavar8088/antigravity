@@ -52,6 +52,7 @@ type PlaceOrderRequest struct {
 	Size                 int       `json:"size"`        // number of contracts
 	Side                 OrderSide `json:"side"`        // "buy" or "sell"
 	OrderType            OrderType `json:"order_type"`
+	Leverage             int       `json:"leverage,omitempty"` // e.g. 10 for 10x leverage
 	LimitPrice           string    `json:"limit_price,omitempty"`
 	TimeInForce          string    `json:"time_in_force,omitempty"` // "gtc", "ioc", "fok"
 	PostOnly             bool      `json:"post_only,omitempty"`
