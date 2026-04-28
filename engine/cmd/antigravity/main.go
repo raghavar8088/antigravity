@@ -806,6 +806,9 @@ func main() {
 				return
 			case <-time.After(1 * time.Second):
 				p := paperExecute.GetLastPrice()
+				if p < 5000 || p > 1000000 {
+					p = 0 // reject implausible BTC prices
+				}
 				if p <= 0 {
 					// Keep options trading autonomous even when the primary WS feed
 					// is still warming up or temporarily disconnected.
