@@ -797,39 +797,29 @@ func main() {
 
 	// Feed live BTC price ticks into the BTC options engine from Coinbase.
 	go safeGo("OptionsPriceFeed", func() {
-		lastFallbackPrice := 0.0
-		lastFallbackFetch := time.Time{}
+		lastBinancePrice := 0.0
+		lastBinanceFetch := time.Time{}
 		var syntheticSpotLogged sync.Once
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(1 * time.Second):
-				p := paperExecute.GetLastPrice()
-				if p < 5000 || p > 1000000 {
-					p = 0 // reject implausible BTC prices
-				}
-				if p <= 0 {
-					// Keep options trading autonomous even when the primary WS feed
-					// is still warming up or temporarily disconnected.
-					if lastFallbackFetch.IsZero() || time.Since(lastFallbackFetch) >= 3*time.Second {
-						if fallbackPrice, err := fetchBinanceBTCSpot(ctx); err == nil && fallbackPrice > 0 {
-							lastFallbackPrice = fallbackPrice
-						} else if err != nil {
-							log.Printf("[OPTIONS FEED] fallback Binance spot fetch failed: %v", err)
-						}
-						lastFallbackFetch = time.Now()
+				// Use Binance REST as the primary source — reliable and always returns
+				// current spot. Refresh every 10s to avoid hammering the API.
+				if lastBinanceFetch.IsZero() || time.Since(lastBinanceFetch) >= 10*time.Second {
+					if price, err := fetchBinanceBTCSpot(ctx); err == nil && price > 5000 && price < 1000000 {
+						lastBinancePrice = price
+					} else if err != nil {
+						log.Printf("[OPTIONS FEED] Binance spot fetch failed: %v", err)
 					}
-					if lastFallbackPrice > 0 {
-						p = lastFallbackPrice
-					}
+					lastBinanceFetch = time.Now()
 				}
-				// Some hosts block outbound exchange HTTPS; without any spot the options
-				// engines never tick. Use the same default as the synthetic chain model.
+				p := lastBinancePrice
 				if p <= 0 {
 					p = options.PaperBTCFallbackSpot()
 					syntheticSpotLogged.Do(func() {
-						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until paper or exchange feed is available", p)
+						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until Binance feed is available", p)
 					})
 				}
 				optionsEngine.UpdatePrice(p)
