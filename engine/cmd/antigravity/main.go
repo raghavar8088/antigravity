@@ -992,6 +992,43 @@ func main() {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "enabled": body.Enabled})
 	})
 
+	http.HandleFunc("/api/delta-live/order", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Symbol string `json:"symbol"` // e.g. "C-BTC-76000-290426"
+			Side   string `json:"side"`   // "buy" or "sell"
+			Size   int    `json:"size"`   // number of contracts
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Symbol == "" || body.Side == "" || body.Size < 1 {
+			http.Error(w, `{"error":"need symbol, side (buy/sell), size (>=1)"}`, http.StatusBadRequest)
+			return
+		}
+		side := delta.SideBuy
+		if strings.ToLower(body.Side) == "sell" {
+			side = delta.SideSell
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		result, err := deltaBridge.PlaceManualOrder(ctx, body.Symbol, side, body.Size)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(result)
+	})
+
 	// NIFTY 50 Options Scalper endpoints
 	http.HandleFunc("/api/nifty-options/positions", niftyOptionsEngine.HandlePositions)
 	http.HandleFunc("/api/nifty-options/trades", niftyOptionsEngine.HandleTrades)

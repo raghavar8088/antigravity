@@ -489,6 +489,33 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 	return OptionContractInfo{ProductID: bestID, Symbol: bestSymbol}, nil
 }
 
+// FindProductBySymbol looks up a product by its exact symbol (e.g. "C-BTC-76000-290426").
+func (c *Client) FindProductBySymbol(ctx context.Context, symbol string) (OptionContractInfo, error) {
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?page_size=500", nil)
+	if err != nil {
+		return OptionContractInfo{}, err
+	}
+	if status != http.StatusOK {
+		return OptionContractInfo{}, fmt.Errorf("products list failed (HTTP %d)", status)
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Result  []struct {
+			ID     int    `json:"id"`
+			Symbol string `json:"symbol"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return OptionContractInfo{}, err
+	}
+	for _, p := range resp.Result {
+		if p.Symbol == symbol {
+			return OptionContractInfo{ProductID: p.ID, Symbol: p.Symbol}, nil
+		}
+	}
+	return OptionContractInfo{}, fmt.Errorf("product %q not found", symbol)
+}
+
 func abs(x float64) float64 {
 	if x < 0 {
 		return -x

@@ -348,6 +348,24 @@ func (b *Bridge) Stats(ctx context.Context) BridgeStats {
 	return s
 }
 
+// PlaceManualOrder places a real order for any product by symbol. Useful for manual/test trades.
+func (b *Bridge) PlaceManualOrder(ctx context.Context, symbol string, side OrderSide, size int) (PlaceOrderResult, error) {
+	if !b.configured || b.client == nil {
+		return PlaceOrderResult{}, fmt.Errorf("bridge not configured")
+	}
+	info, err := b.client.FindProductBySymbol(ctx, symbol)
+	if err != nil {
+		return PlaceOrderResult{}, fmt.Errorf("symbol lookup: %w", err)
+	}
+	return b.client.PlaceOrder(ctx, PlaceOrderRequest{
+		ProductID: info.ProductID,
+		Size:      size,
+		Side:      side,
+		OrderType: TypeMarket,
+		Leverage:  10,
+	})
+}
+
 // ---- helpers ----
 
 func (b *Bridge) updateTrade(id string, fn func(*LiveTrade)) {
