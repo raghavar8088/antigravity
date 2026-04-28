@@ -915,8 +915,9 @@ func main() {
 
 	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
 	go safeGo("OptionsSellingScalper", func() { optionsSellingEngine.Run(ctx.Done()) })
-	go safeGo("NiftyOptionsScalper", func() { niftyOptionsEngine.Run(ctx.Done()) })
-	go safeGo("NiftyOptionsSellingScalper", func() { niftyOptionsSellingEngine.Run(ctx.Done()) })
+	// NIFTY options engines disabled — only run during Indian market hours (9:15–15:30 IST)
+	_ = niftyOptionsEngine
+	_ = niftyOptionsSellingEngine
 
 	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
