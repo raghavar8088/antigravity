@@ -1,6 +1,7 @@
 package options_selling
 
 import (
+	"log"
 	"math"
 	"time"
 )
@@ -26,6 +27,7 @@ type PriceResult struct {
 // PriceOption calculates the Black-Scholes price and Greeks for a European option.
 func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType OptionType) PriceResult {
 	if iv <= 0 || math.IsNaN(iv) || math.IsInf(iv, 0) {
+		log.Printf("[PRICER] WARN: invalid IV %.4f for %s strike=%.0f — defaulting to 30%%", iv, optType, strike)
 		iv = 0.30
 	}
 	T := time.Until(expiry).Hours() / 8760.0
@@ -62,8 +64,8 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 		theta = -(spot*normPDF(d1)*iv/(2*sqrtT) - riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(-d2)) / 365
 	}
 
-	if premium < 0.01 {
-		premium = 0.01
+	if premium < 1.00 {
+		premium = 1.00
 	}
 
 	return PriceResult{

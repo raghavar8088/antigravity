@@ -356,6 +356,27 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 	go e.persistHook(snapshot)
 }
 
+// RegimeInfo returns the current market regime, last price, IV estimate, and price history depth.
+// Used by the /api/regime endpoint to expose engine classification state.
+type RegimeInfo struct {
+	Regime         string  `json:"regime"`
+	LastPrice      float64 `json:"lastPrice"`
+	IV             float64 `json:"iv"`
+	MinuteBarsCount int    `json:"minuteBarsCount"`
+}
+
+func (e *Engine) RegimeInfo() RegimeInfo {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	iv := estimateIVWithBounds(e.minuteBars, e.marketProfile.DefaultIV, e.marketProfile.MinIV, e.marketProfile.MaxIV)
+	return RegimeInfo{
+		Regime:         e.lastRosterRegime,
+		LastPrice:      e.lastPrice,
+		IV:             iv,
+		MinuteBarsCount: len(e.minuteBars),
+	}
+}
+
 // UpdatePrice feeds a new underlying spot tick (BTC USD or NIFTY index) into the engine.
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
@@ -534,6 +555,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 	if *openCount >= maxConcurrentPositions {
+		return
+	}
+	// Refuse to trade when market regime is UNKNOWN — not enough price history
+	// to classify the market. Prevents opening positions on noisy startup data.
+	if regime == optionMarketRegimeUnknown && !e.paperDeskAggressiveOpen() {
 		return
 	}
 	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {

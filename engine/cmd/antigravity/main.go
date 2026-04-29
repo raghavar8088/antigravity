@@ -1133,6 +1133,28 @@ func main() {
 	http.HandleFunc("/api/nifty-stocks/clear-history", niftyStocksEngine.HandleClearHistory)
 	http.HandleFunc("/api/nifty-market", niftyMarketCache.HandleQuote)
 
+	// Health check — used by load balancers, Docker HEALTHCHECK, and uptime monitors
+	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":        true,
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"uptime":    time.Since(bootStart).Round(time.Second).String(),
+		})
+	})
+
+	// Regime endpoint — current market regime for BTC and NIFTY engines
+	http.HandleFunc("/api/regime", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"btc":       optionsSellingEngine.RegimeInfo(),
+			"nifty":     niftyOptionsSellingEngine.RegimeInfo(),
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
 	// Probe endpoints — connectivity tests for Delta Exchange and Angel One
 	http.HandleFunc("/api/probe/delta-btc", handleDeltaBTCProbe)
 	http.HandleFunc("/api/probe/angelone-nifty", handleAngelOneNiftyProbe)

@@ -142,6 +142,24 @@ func stochK(prices []float64, period int) float64 {
 }
 
 // momentum returns the % change from n bars ago to now
+// scaledMom adjusts a base momentum threshold proportionally to realized IV.
+// Higher-vol markets (IV>0.68) require bigger moves to avoid whipsaws.
+// Lower-vol markets (IV<0.68) accept smaller moves as significant.
+func scaledMom(base, iv, defaultIV float64) float64 {
+	if iv <= 0 || defaultIV <= 0 {
+		return base
+	}
+	s := base * (iv / defaultIV)
+	min, max := base*0.55, base*1.90
+	if s < min {
+		return min
+	}
+	if s > max {
+		return max
+	}
+	return s
+}
+
 func momentum(prices []float64, n int) float64 {
 	if len(prices) <= n {
 		return 0
@@ -186,11 +204,12 @@ var Signals = map[string]SignalFunc{
 		if len(ctx.Prices) < 15 {
 			return false
 		}
-		mom5 := momentum(ctx.Prices, 5)   // 5-min momentum
-		mom10 := momentum(ctx.Prices, 10) // 10-min momentum
+		mom5 := momentum(ctx.Prices, 5)
+		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		// Price rising on both timeframes, RSI not overbought yet
-		return mom5 > 0.0025 && mom10 > 0.0012 && rsiVal < 64
+		// Threshold scales with IV: high-vol markets need bigger moves to confirm signal.
+		thr := scaledMom(0.0025, ctx.IV, 0.68)
+		return mom5 > thr && mom10 > thr*0.48 && rsiVal < 64
 	},
 	"BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -199,7 +218,8 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0025 && mom10 < -0.0012 && rsiVal > 36
+		thr := scaledMom(0.0025, ctx.IV, 0.68)
+		return mom5 < -thr && mom10 < -thr*0.48 && rsiVal > 36
 	},
 	"STRONG_BULL_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -208,7 +228,8 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 > 0.0042 && mom10 > 0.0022 && rsiVal < 68
+		thr := scaledMom(0.0042, ctx.IV, 0.68)
+		return mom5 > thr && mom10 > thr*0.52 && rsiVal < 68
 	},
 	"STRONG_BEAR_MOMENTUM": func(ctx SignalContext) bool {
 		if len(ctx.Prices) < 15 {
@@ -217,7 +238,8 @@ var Signals = map[string]SignalFunc{
 		mom5 := momentum(ctx.Prices, 5)
 		mom10 := momentum(ctx.Prices, 10)
 		rsiVal := rsi(ctx.Prices, 14)
-		return mom5 < -0.0042 && mom10 < -0.0022 && rsiVal > 32
+		thr := scaledMom(0.0042, ctx.IV, 0.68)
+		return mom5 < -thr && mom10 < -thr*0.52 && rsiVal > 32
 	},
 
 	// ── RSI signals ──────────────────────────────────────────────────────────

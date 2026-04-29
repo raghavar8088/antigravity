@@ -205,18 +205,17 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	mom8 := momentum(ctx.Prices, 8)
 
 	bullishSeller := def.Type == Put
-	// trendAligned uses 9/21-EMA only — the 55-EMA requirement was blocking
-	// all consolidation trades where mean-reversion puts are most profitable.
 	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
 	if bullishSeller {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			// Widened RSI ceiling 72→76; relaxed trend gate to 21-EMA × 0.996
-			// instead of requiring price >= 55-EMA (which blocked range/consolidation entries).
-			return trendAligned && price >= slow*0.996 && mom3 > 0.0006 && mom8 > -0.0002 && rsiVal >= 44 && rsiVal <= 76
+			// Tightened RSI band 44-76 → 48-72: removes weakest reversal setups
+			// and caps entries when price is already overbought for the signal type.
+			return trendAligned && price >= slow*0.996 && mom3 > 0.0006 && mom8 > -0.0002 && rsiVal >= 48 && rsiVal <= 72
 		case "Mean Reversion", "Capitulation":
-			// Widened RSI ceiling 60→68; allow entry slightly below 9-EMA.
-			return price >= fast*0.998 && mom3 > -0.0015 && rsiVal >= 34 && rsiVal <= 68
+			// Tightened RSI band 34-68 → 38-64: mean-reversion entries require
+			// more confirmed oversold reading before entering the trade.
+			return price >= fast*0.998 && mom3 > -0.0015 && rsiVal >= 38 && rsiVal <= 64
 		default:
 			return price >= fast*0.998 && mom3 >= -0.0003
 		}
@@ -224,11 +223,12 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		// Widened RSI floor 28→22; relaxed trend gate to 21-EMA × 1.004.
-		return trendAligned && price <= slow*1.004 && mom3 < -0.0006 && mom8 < 0.0002 && rsiVal >= 22 && rsiVal <= 56
+		// Tightened RSI band 22-56 → 26-54: avoids chasing already-oversold bounces
+		// and prevents bearish entries when momentum is about to reverse.
+		return trendAligned && price <= slow*1.004 && mom3 < -0.0006 && mom8 < 0.0002 && rsiVal >= 26 && rsiVal <= 54
 	case "Mean Reversion", "Capitulation":
-		// Widened RSI floor 40→32; allow entry slightly above 9-EMA.
-		return price <= fast*1.002 && mom3 < 0.0015 && rsiVal >= 32 && rsiVal <= 66
+		// Tightened RSI band 32-66 → 36-62: forces cleaner overbought readings.
+		return price <= fast*1.002 && mom3 < 0.0015 && rsiVal >= 36 && rsiVal <= 62
 	default:
 		return price <= fast*1.002 && mom3 <= 0.0003
 	}

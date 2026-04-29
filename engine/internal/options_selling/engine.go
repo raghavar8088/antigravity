@@ -341,6 +341,26 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 	go e.persistHook(snapshot)
 }
 
+// RegimeInfo returns regime classification, last price, IV, and price history depth.
+type RegimeInfo struct {
+	Regime          string  `json:"regime"`
+	LastPrice       float64 `json:"lastPrice"`
+	IV              float64 `json:"iv"`
+	MinuteBarsCount int     `json:"minuteBarsCount"`
+}
+
+func (e *Engine) RegimeInfo() RegimeInfo {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	iv := estimateIVWithBounds(e.minuteBars, e.marketProfile.DefaultIV, e.marketProfile.MinIV, e.marketProfile.MaxIV)
+	return RegimeInfo{
+		Regime:          e.lastRosterRegime,
+		LastPrice:       e.lastPrice,
+		IV:              iv,
+		MinuteBarsCount: len(e.minuteBars),
+	}
+}
+
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
 	hadNoPrice := e.lastPrice <= 0
@@ -501,6 +521,9 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 	if *openCount >= maxConcurrentPositions {
+		return
+	}
+	if regime == optionMarketRegimeUnknown && !e.paperDeskAggressiveOpen() {
 		return
 	}
 	if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
