@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   if (!isEngineProxyConfigured()) {
     return NextResponse.json({
       ok: false,
@@ -9,15 +9,19 @@ export async function GET(): Promise<Response> {
     });
   }
 
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get("q") ?? searchParams.get("commodity") ?? "CRUDEOIL";
+
   try {
     const res = await engineProxyFetch("/rest/secure/angelbroking/order/v1/searchScrip", {
       exchange: "MCX",
-      searchscrip: "CRUDEOIL",
+      searchscrip: query,
     });
 
     const raw = await res.json();
     return NextResponse.json({
       ok: true,
+      query,
       jwtObtained: true,
       httpStatus: res.status,
       rawResponse: raw,
