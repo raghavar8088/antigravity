@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
 import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
 import { resolveMCXFutureToken } from "@/lib/mcxTokenResolver";
 
@@ -18,15 +18,15 @@ const tokenCache: {
 
 const TOKEN_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
-async function getCachedTokens(jwt: string): Promise<Record<string, TokenEntry>> {
+async function getCachedTokens(): Promise<Record<string, TokenEntry>> {
   const now = Date.now();
   if (tokenCache.fetchedAt > 0 && now - tokenCache.fetchedAt < TOKEN_CACHE_TTL) {
     return tokenCache.data;
   }
-  // Fetch all tokens in parallel
+  // Fetch all tokens in parallel (Lightsail engine proxy handles Angel auth + IP)
   const entries = await Promise.all(
     MCX_COMMODITIES.map(async (c) => {
-      const entry = await resolveMCXFutureToken(jwt, c);
+      const entry = await resolveMCXFutureToken(c);
       return [c.id, entry] as [string, TokenEntry | null];
     }),
   );
@@ -78,13 +78,17 @@ function n(value: unknown): number {
 }
 
 export async function GET(): Promise<Response> {
-  if (!isAngelConfigured()) {
-    return NextResponse.json({ ok: false, error: `Not configured — set: ${angelMissingEnv()}`, data: [] });
+  if (!isEngineProxyConfigured()) {
+    return NextResponse.json({
+      ok: false,
+      error:
+        "Not configured — set LIGHTSAIL_ENGINE_URL to your Lightsail engine base (e.g. http://13.233.8.80) so MCX calls use the whitelisted IP.",
+      data: [],
+    });
   }
 
   try {
-    const jwt = await getAngelJWT();
-    const tokens = await getCachedTokens(jwt);
+    const tokens = await getCachedTokens();
     const unresolved = MCX_COMMODITIES.filter((commodity) => !tokens[commodity.id]).map((commodity) => commodity.name);
 
     const tokenIds = Object.values(tokens).map((t) => t.token).filter(Boolean);
@@ -92,11 +96,9 @@ export async function GET(): Promise<Response> {
       return NextResponse.json({ ok: false, error: `Could not resolve any MCX tokens for: ${unresolved.join(", ")}`, data: [] });
     }
 
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/market/v1/quote/`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({ mode: "LTP", exchangeTokens: { MCX: tokenIds } }),
-      next: { revalidate: 0 },
+    const res = await engineProxyFetch("/rest/secure/angelbroking/market/v1/quote/", {
+      mode: "LTP",
+      exchangeTokens: { MCX: tokenIds },
     });
 
     if (!res.ok) {

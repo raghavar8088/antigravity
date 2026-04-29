@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
 import { MCX_COMMODITY_MAP } from "@/lib/mcxCommodities";
 import { resolveMCXFutureToken } from "@/lib/mcxTokenResolver";
 
@@ -17,8 +17,14 @@ function toISTString(date: Date): string {
 export type MCXCandle = { time: number; open: number; high: number; low: number; close: number; volume: number };
 
 export async function GET(request: Request) {
-  if (!isAngelConfigured()) {
-    return NextResponse.json({ ok: false, candles: [], count: 0, error: angelMissingEnv() });
+  if (!isEngineProxyConfigured()) {
+    return NextResponse.json({
+      ok: false,
+      candles: [],
+      count: 0,
+      error:
+        "Not configured — set LIGHTSAIL_ENGINE_URL to your Lightsail engine base so MCX historical data uses the whitelisted IP.",
+    });
   }
 
   const { searchParams } = new URL(request.url);
@@ -31,8 +37,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const jwt = await getAngelJWT();
-    const resolved = await resolveMCXFutureToken(jwt, commodity);
+    const resolved = await resolveMCXFutureToken(commodity);
     if (!resolved) {
       return NextResponse.json({ ok: false, candles: [], count: 0, error: `Could not resolve token for ${commodityId} via Angel One searchScrip` });
     }
@@ -50,11 +55,12 @@ export async function GET(request: Request) {
     const toUTC = now < toUTC2330 ? now : toUTC2330;
     const todate = toISTString(toUTC);
 
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/historical/v1/getCandleData`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({ exchange: "MCX", symboltoken: resolved.token, interval, fromdate, todate }),
-      next: { revalidate: 0 },
+    const res = await engineProxyFetch("/rest/secure/angelbroking/historical/v1/getCandleData", {
+      exchange: "MCX",
+      symboltoken: resolved.token,
+      interval,
+      fromdate,
+      todate,
     });
 
     if (!res.ok) {

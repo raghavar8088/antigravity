@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
 
 export async function GET(): Promise<Response> {
-  if (!isAngelConfigured()) {
-    return NextResponse.json({ ok: false, error: `Not configured: ${angelMissingEnv()}` });
+  if (!isEngineProxyConfigured()) {
+    return NextResponse.json({
+      ok: false,
+      error: "Not configured — set LIGHTSAIL_ENGINE_URL for engine proxy (MCX debug search).",
+    });
   }
 
   try {
-    const jwt = await getAngelJWT();
-
-    // Test one commodity search and return raw response
-    const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/searchScrip`, {
-      method: "POST",
-      headers: commonHeaders(jwt),
-      body: JSON.stringify({ exchange: "MCX", searchscrip: "CRUDEOIL" }),
-      next: { revalidate: 0 },
+    const res = await engineProxyFetch("/rest/secure/angelbroking/order/v1/searchScrip", {
+      exchange: "MCX",
+      searchscrip: "CRUDEOIL",
     });
 
     const raw = await res.json();
