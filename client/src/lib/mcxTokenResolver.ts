@@ -1,4 +1,4 @@
-import { BASE_URL, commonHeaders } from "@/lib/angelAuth";
+import { engineProxyFetch } from "@/lib/engineProxy";
 import type { MCXCommodity } from "@/lib/mcxCommodities";
 
 type AngelSearchItem = {
@@ -7,6 +7,8 @@ type AngelSearchItem = {
   expiry?: string;
   instrumenttype?: string;
   exch_seg?: string;
+  exchange?: string;
+  name?: string;
 };
 
 export type MCXResolvedToken = {
@@ -47,10 +49,15 @@ function parseExpiry(expiry?: string): number {
 }
 
 function isMCXFuture(item: AngelSearchItem): boolean {
-  if (normalize(item.exch_seg) !== "MCX") return false;
+  // Angel One uses `exchange` in searchScrip responses; some endpoints use `exch_seg`.
+  const exch = normalize(item.exchange) || normalize(item.exch_seg);
+  if (exch !== "MCX") return false;
 
   const instrType = normalize(item.instrumenttype);
   const symbol = normalize(item.tradingsymbol);
+
+  // Reject options outright (anything that ends in CE/PE is an option, not a future).
+  if (symbol.endsWith("CE") || symbol.endsWith("PE")) return false;
 
   // Accept if instrumenttype starts with FUT (e.g. FUTCOM, FUTCUR)
   // OR if tradingsymbol itself contains FUT (Angel One sometimes omits instrumenttype)
@@ -89,27 +96,25 @@ function buildSymbolHints(commodity: MCXCommodity): string[] {
   ]).map((hint) => normalize(hint));
 }
 
-async function searchScrip(jwt: string, query: string): Promise<AngelSearchItem[]> {
-  const res = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/searchScrip`, {
-    method: "POST",
-    headers: commonHeaders(jwt),
-    body: JSON.stringify({ exchange: "MCX", searchscrip: query }),
-    next: { revalidate: 0 },
-  });
+async function searchScrip(query: string): Promise<AngelSearchItem[]> {
+  const res = await engineProxyFetch(
+    "/rest/secure/angelbroking/order/v1/searchScrip",
+    { exchange: "MCX", searchscrip: query },
+  );
   if (!res.ok) return [];
 
   const payload = await res.json() as { status?: boolean; data?: AngelSearchItem[] };
   return payload.status && Array.isArray(payload.data) ? payload.data : [];
 }
 
-export async function resolveMCXFutureToken(jwt: string, commodity: MCXCommodity): Promise<MCXResolvedToken | null> {
+export async function resolveMCXFutureToken(commodity: MCXCommodity): Promise<MCXResolvedToken | null> {
   const queries = buildSearchQueries(commodity);
   const hints = buildSymbolHints(commodity);
   const candidatesByToken = new Map<string, AngelSearchItem>();
 
   for (const query of queries) {
     try {
-      const results = await searchScrip(jwt, query);
+      const results = await searchScrip(query);
       for (const item of results) {
         if (!item.symboltoken || candidatesByToken.has(item.symboltoken)) continue;
         candidatesByToken.set(item.symboltoken, item);
