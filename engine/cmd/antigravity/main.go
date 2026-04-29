@@ -830,14 +830,41 @@ func main() {
 		}
 	})
 
-	// indianMarketOpen returns true when NSE is currently open (9:15–15:30 IST).
-	// Outside these hours Yahoo Finance returns the previous closing price unchanged,
-	// which would fill minuteBars with a flat series and pollute all indicators.
+	// isNSEHoliday returns true when the IST date is a declared NSE exchange holiday.
+	isNSEHoliday := func(t time.Time) bool {
+		type md struct{ m time.Month; d int }
+		holidays := map[int][]md{
+			2025: {
+				{time.January, 26}, {time.February, 19}, {time.March, 14},
+				{time.March, 31}, {time.April, 14}, {time.April, 18},
+				{time.May, 1}, {time.August, 15}, {time.August, 27},
+				{time.October, 2}, {time.October, 24}, {time.November, 5},
+				{time.December, 25},
+			},
+			2026: {
+				{time.January, 26}, {time.March, 14}, {time.April, 6},
+				{time.April, 14}, {time.April, 18}, {time.May, 1},
+				{time.August, 15}, {time.October, 2}, {time.October, 21},
+				{time.November, 5}, {time.December, 25},
+			},
+		}
+		for _, h := range holidays[t.Year()] {
+			if t.Month() == h.m && t.Day() == h.d {
+				return true
+			}
+		}
+		return false
+	}
+
+	// indianMarketOpen returns true when NSE cash session is live (9:15–15:30 IST,
+	// weekdays only, excluding declared NSE holidays).
 	indianMarketOpen := func() bool {
 		ist := time.FixedZone("IST", 5*3600+30*60)
 		now := time.Now().In(ist)
-		// Skip weekends
 		if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
+			return false
+		}
+		if isNSEHoliday(now) {
 			return false
 		}
 		open := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
@@ -845,30 +872,46 @@ func main() {
 		return now.After(open) && now.Before(close)
 	}
 
-	// Feed NIFTY 50 spot into NIFTY modules (NSE when session open; synthetic fallback otherwise
-	// so paper desks keep ticking on Render / outside IST cash hours).
+	// Feed NIFTY 50 spot into NIFTY modules.
+	// During session (9:15–15:30 IST): polls NSE every 15s, Angel One as fallback.
+	// Outside session: 60s cadence, synthetic price only (engines not updated).
 	go safeGo("Nifty50PriceFeed", func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-
 		var feedPrimed bool
+		var lastLive bool
 		var lastErr string
-		var syntheticNiftyLogged sync.Once
 
 		pullQuote := func() {
 			var quote marketdata.NSEIndexQuote
 			live := false
 
 			if indianMarketOpen() {
-				q, err := nseIndexClient.FetchNifty50Quote(ctx)
-				if err == nil && q.Price > 0 {
+				q, nseErr := nseIndexClient.FetchNifty50Quote(ctx)
+				if nseErr == nil && q.Price > 0 {
 					quote = q
 					live = true
 					lastErr = ""
-				} else if err != nil {
-					if err.Error() != lastErr {
-						log.Printf("[NSE] WARN Failed to fetch live NIFTY 50 quote: %v", err)
-						lastErr = err.Error()
+				} else {
+					// Angel One as fallback when NSE API fails
+					if angelOneProbeClient.Enabled() {
+						if ao, _ := angelOneProbeClient.FetchNiftyQuote(ctx); ao.Price > 0 {
+							quote = marketdata.NSEIndexQuote{
+								Index:     "NIFTY 50",
+								Price:     ao.Price,
+								FetchedAt: time.Now(),
+							}
+							live = true
+							lastErr = ""
+							if nseErr != nil {
+								log.Printf("[NSE] Falling back to Angel One (NSE err: %v)", nseErr)
+							}
+						}
+					}
+					if !live && nseErr != nil {
+						msg := nseErr.Error()
+						if msg != lastErr {
+							log.Printf("[NSE] WARN live quote failed: %v", nseErr)
+							lastErr = msg
+						}
 					}
 				}
 			}
@@ -880,20 +923,25 @@ func main() {
 					ExchangeTime: "SYNTHETIC",
 					FetchedAt:    time.Now(),
 				}
-				syntheticNiftyLogged.Do(func() {
-					log.Printf("[NIFTY FEED] using synthetic NIFTY spot %.0f (session closed or feed unavailable)", quote.Price)
-				})
 			}
 
+			// Log session boundary transitions
 			if !feedPrimed {
 				feedPrimed = true
+				lastLive = live
 				if live {
-					log.Printf("[NSE] Live NIFTY 50 quote online at %.2f (%s)", quote.Price, quote.ExchangeTime)
+					log.Printf("[NSE] 🟢 Session OPEN — NIFTY 50 live at %.2f (%s)", quote.Price, quote.ExchangeTime)
 				} else {
-					log.Printf("[NIFTY FEED] primed with synthetic NIFTY spot %.0f", quote.Price)
+					log.Printf("[NIFTY FEED] Session closed — synthetic NIFTY spot %.0f", quote.Price)
 				}
+			} else if live && !lastLive {
+				log.Printf("[NSE] 🟢 Session OPEN — NIFTY 50 at %.2f", quote.Price)
+				lastLive = true
+			} else if !live && lastLive {
+				log.Printf("[NSE] 🔴 Session CLOSED — last NIFTY 50 at %.2f", quote.Price)
+				lastLive = false
 			} else if live && lastErr != "" {
-				log.Printf("[NSE] Live NIFTY 50 quote feed recovered at %.2f", quote.Price)
+				log.Printf("[NSE] Feed recovered at %.2f", quote.Price)
 			}
 
 			niftyMarketCache.Update(quote)
@@ -906,10 +954,15 @@ func main() {
 
 		pullQuote()
 		for {
+			// 15s during session for fresh signals; 60s outside to reduce API pressure
+			interval := 60 * time.Second
+			if indianMarketOpen() {
+				interval = 15 * time.Second
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-time.After(interval):
 				pullQuote()
 			}
 		}
@@ -917,9 +970,10 @@ func main() {
 
 	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
 	go safeGo("OptionsSellingScalper", func() { optionsSellingEngine.Run(ctx.Done()) })
-	// NIFTY options engines disabled — only run during Indian market hours (9:15–15:30 IST)
-	_ = niftyOptionsEngine
-	_ = niftyOptionsSellingEngine
+	// NIFTY engines re-enabled — price updates are session-gated in Nifty50PriceFeed,
+	// so engines only receive real prices during 9:15–15:30 IST on trading days.
+	go safeGo("NiftyOptionsScalper", func() { niftyOptionsEngine.Run(ctx.Done()) })
+	go safeGo("NiftyOptionsSellingScalper", func() { niftyOptionsSellingEngine.Run(ctx.Done()) })
 
 	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
