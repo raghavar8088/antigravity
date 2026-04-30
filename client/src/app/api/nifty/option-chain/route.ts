@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
 import type { ChainData, ChainRow, ChainLeg, ExpiryMeta } from "@/hooks/useOptionChain";
 
 // ─── Angel One types ──────────────────────────────────────────────────────────
@@ -251,17 +251,13 @@ export async function GET(request: Request) {
   const expiries = computeExpiries(4);
   const expiry = searchParams.get("expiry") || expiries[0]?.value || "";
 
-  // ── Try Angel One first if credentials are configured ─────────────────────
-  if (isAngelConfigured()) {
+  // ── Try Angel One via Lightsail proxy (whitelisted IP) ───────────────────
+  if (isEngineProxyConfigured()) {
     try {
-      const jwt = await getAngelJWT();
-
-      const chainRes = await fetch(`${BASE_URL}/rest/secure/angelbroking/market/v1/optionChain`, {
-        method: "POST",
-        headers: commonHeaders(jwt),
-        body: JSON.stringify({ name: "NIFTY", expirydate: expiry }),
-        next: { revalidate: 0 },
-      });
+      const chainRes = await engineProxyFetch(
+        "/rest/secure/angelbroking/market/v1/optionChain",
+        { name: "NIFTY", expirydate: expiry },
+      );
 
       if (!chainRes.ok) {
         throw new Error(`Angel One option chain returned HTTP ${chainRes.status}`);
@@ -279,13 +275,11 @@ export async function GET(request: Request) {
         throw new Error(msg);
       }
 
-      // Fetch spot price
-      const spotRes = await fetch(`${BASE_URL}/rest/secure/angelbroking/order/v1/getLtpData`, {
-        method: "POST",
-        headers: commonHeaders(jwt),
-        body: JSON.stringify({ exchange: "NSE", tradingsymbol: "NIFTY 50", symboltoken: "99926000" }),
-        next: { revalidate: 0 },
-      });
+      // Fetch spot price via proxy
+      const spotRes = await engineProxyFetch(
+        "/rest/secure/angelbroking/order/v1/getLtpData",
+        { exchange: "NSE", tradingsymbol: "NIFTY 50", symboltoken: "99926000" },
+      );
 
       let spotPrice = 0;
       if (spotRes.ok) {

@@ -1691,6 +1691,7 @@ func handleAngelOneProxy(w http.ResponseWriter, r *http.Request) {
 	for _, prefix := range []string{
 		"/rest/secure/angelbroking/order/v1/searchScrip",
 		"/rest/secure/angelbroking/market/v1/quote/",
+		"/rest/secure/angelbroking/market/v1/optionChain",
 		"/rest/secure/angelbroking/order/v1/getLtpData",
 		"/rest/secure/angelbroking/historical/v1/getCandleData",
 	} {
