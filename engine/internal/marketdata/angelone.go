@@ -1,6 +1,7 @@
 package marketdata
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -8,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -353,6 +355,47 @@ func (c *AngelOneClient) clearSession() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.session = angelOneSession{}
+}
+
+// ForwardRequest proxies a POST request to an Angel One API path using the cached JWT.
+// Returns the raw response body, HTTP status code, and any transport error.
+func (c *AngelOneClient) ForwardRequest(ctx context.Context, path string, reqBody []byte) ([]byte, int, error) {
+	token, err := c.ensureJWTToken(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	do := func(jwt string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(reqBody))
+		if err != nil {
+			return nil, err
+		}
+		c.setHeaders(req, jwt)
+		return c.httpClient.Do(req)
+	}
+
+	resp, err := do(token)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		c.clearSession()
+		resp.Body.Close()
+		token, err = c.ensureJWTToken(ctx)
+		if err != nil {
+			return nil, resp.StatusCode, err
+		}
+		resp, err = do(token)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer resp.Body.Close()
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, err
 }
 
 func (c *AngelOneClient) resolveTOTP() (string, error) {

@@ -1159,6 +1159,9 @@ func main() {
 	http.HandleFunc("/api/probe/delta-btc", handleDeltaBTCProbe)
 	http.HandleFunc("/api/probe/angelone-nifty", handleAngelOneNiftyProbe)
 
+	// Angel One proxy — routes MCX/NSE API calls from Vercel through this whitelisted IP
+	http.HandleFunc("/api/angel-proxy", handleAngelOneProxy)
+
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
 
@@ -1660,6 +1663,61 @@ func handleAngelOneNiftyProbe(w http.ResponseWriter, r *http.Request) {
 		"ok":             true,
 		"error":          "",
 	})
+}
+
+// handleAngelOneProxy proxies POST requests to Angel One API using the engine's whitelisted IP.
+// The request body must be JSON: {"path": "/rest/secure/...", "body": {...}}.
+func handleAngelOneProxy(w http.ResponseWriter, r *http.Request) {
+	setCORS(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var proxyReq struct {
+		Path string          `json:"path"`
+		Body json.RawMessage `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&proxyReq); err != nil || proxyReq.Path == "" {
+		http.Error(w, `{"error":"bad request: path required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Allowlist: only permit specific Angel One API paths
+	allowed := false
+	for _, prefix := range []string{
+		"/rest/secure/angelbroking/order/v1/searchScrip",
+		"/rest/secure/angelbroking/market/v1/quote/",
+		"/rest/secure/angelbroking/order/v1/getLtpData",
+		"/rest/secure/angelbroking/historical/v1/getCandleData",
+	} {
+		if strings.HasPrefix(proxyReq.Path, prefix) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		http.Error(w, `{"error":"path not permitted"}`, http.StatusForbidden)
+		return
+	}
+
+	if !angelOneProbeClient.Enabled() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Angel One not configured"})
+		return
+	}
+
+	body, status, err := angelOneProbeClient.ForwardRequest(r.Context(), proxyReq.Path, []byte(proxyReq.Body))
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	w.WriteHeader(status)
+	w.Write(body)
 }
 
 // safeGo wraps a goroutine function with panic recovery.
