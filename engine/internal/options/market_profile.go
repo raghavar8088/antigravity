@@ -32,22 +32,22 @@ type MarketProfile struct {
 
 var defaultOptionsMarketProfile = MarketProfile{
 	Name:      "BTC option scalper",
-	DefaultIV: 0.68,
-	MinIV:     0.22,
-	MaxIV:     2.20,
+	DefaultIV: 0.62,  // realised vol has compressed from 0.68 baseline
+	MinIV:     0.20,
+	MaxIV:     2.50,  // crypto tail-risk spikes can exceed 2.2×
 	ChainConfig: ChainConfig{
 		WeeklyExpiryWeekday: time.Friday,
 		ExpiryHourUTC:       8,
 		WeeklyCount:         4,
 		StrikeIncrement:     500,
-		NumStrikes:          20,
-		FallbackSpot:        85000,
+		NumStrikes:          22,  // wider chain coverage at higher spot
+		FallbackSpot:        95000,
 		SmileFactor:         2.5,
-		SkewFactor:          0.25,
+		SkewFactor:          0.28, // slightly more put skew at higher prices
 		OIBase:              8000,
 		OIDecay:             10.0,
-		SpreadBase:          0.012,
-		SpreadSlope:         0.12,
+		SpreadBase:          0.011,
+		SpreadSlope:         0.11,
 		SpreadCap:           0.15,
 		VolumeNoiseFloor:    0.05,
 		VolumeNoiseRange:    0.25,
@@ -56,25 +56,25 @@ var defaultOptionsMarketProfile = MarketProfile{
 
 var niftyOptionsMarketProfile = MarketProfile{
 	Name:      "NIFTY 50 option scalper",
-	DefaultIV: 0.18,
+	DefaultIV: 0.16,  // India VIX typically 12-18 in calm markets
 	MinIV:     0.08,
-	MaxIV:     0.75,
+	MaxIV:     0.80,  // stress events (Budget, RBI) can spike to 40+ VIX
 	ChainConfig: ChainConfig{
-		WeeklyExpiryWeekday: time.Thursday,
-		ExpiryHourUTC:       10,
+		WeeklyExpiryWeekday: time.Thursday, // NSE weekly expiry on Thursday
+		ExpiryHourUTC:       10,            // 15:30 IST = 10:00 UTC
 		WeeklyCount:         4,
 		StrikeIncrement:     50,
-		NumStrikes:          18,
-		FallbackSpot:        24500,
-		SmileFactor:         1.15,
-		SkewFactor:          0.18,
-		OIBase:              150000,
-		OIDecay:             7.0,
-		SpreadBase:          0.008,
-		SpreadSlope:         0.05,
+		NumStrikes:          20,
+		FallbackSpot:        24000,
+		SmileFactor:         1.10,
+		SkewFactor:          0.20, // NIFTY has negative skew (put premium)
+		OIBase:              200000,
+		OIDecay:             6.5,
+		SpreadBase:          0.007,
+		SpreadSlope:         0.045,
 		SpreadCap:           0.08,
-		VolumeNoiseFloor:    0.06,
-		VolumeNoiseRange:    0.22,
+		VolumeNoiseFloor:    0.05,
+		VolumeNoiseRange:    0.20,
 	},
 }
 

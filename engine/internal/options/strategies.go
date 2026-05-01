@@ -36,6 +36,16 @@ var optionStrategyCategories = map[string]string{
 	"BreakoutTrend_Pro_Bull_Put":      "Breakout",
 	"BreakdownTrend_Pro_Bear_Call":    "Breakout",
 	"Capitulation_Reclaim_Elite_Put":  "Capitulation",
+	// MACD series
+	"MACD_Bull_Put_Sell":              "Hybrid",
+	"MACD_Bear_Call_Sell":             "Hybrid",
+	"MACD_Bull_Put_Wide":              "Hybrid",
+	"MACD_Bear_Call_Wide":             "Hybrid",
+	// ATR expansion series
+	"ATRExpand_Bull_Put_Sell":         "Breakout",
+	"ATRExpand_Bear_Call_Sell":        "Breakout",
+	"ATRExpand_Bull_Put_Wide":         "Breakout",
+	"ATRExpand_Bear_Call_Wide":        "Breakout",
 }
 
 var strategyIDs = map[string]int{
@@ -69,6 +79,16 @@ var strategyIDs = map[string]int{
 	"BreakoutTrend_Pro_Bull_Put":      128,
 	"BreakdownTrend_Pro_Bear_Call":    129,
 	"Capitulation_Reclaim_Elite_Put":  130,
+	// MACD series (131–134)
+	"MACD_Bull_Put_Sell":              131,
+	"MACD_Bear_Call_Sell":             132,
+	"MACD_Bull_Put_Wide":              133,
+	"MACD_Bear_Call_Wide":             134,
+	// ATR expansion series (135–138)
+	"ATRExpand_Bull_Put_Sell":         135,
+	"ATRExpand_Bear_Call_Sell":        136,
+	"ATRExpand_Bull_Put_Wide":         137,
+	"ATRExpand_Bear_Call_Wide":        138,
 }
 
 func assignStrategyIDs(defs []StrategyDef) []StrategyDef {
@@ -92,22 +112,12 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
-// BuildNiftyStrategies returns the strategy roster re-calibrated for NIFTY 50.
-// NIFTY IV (~18%) is much lower than BTC (~80%), so the BTC strike distances
-// (1-2% OTM) produce near-zero premiums and no trades are ever placed.
-// This scales StrikePctOTM to 0.2% and uses 3-day expiry for realistic premiums.
+// BuildNiftyStrategies returns the 100 native NIFTY-calibrated strategies
+// plus the 20 new NSE-specific strategies (IDs 301-320).
+// Uses buildNiftyNativeStrategies() instead of scaling BTC parameters — the
+// native set has proper intraday expiry, correct strike OTM, and NSE signals.
 func BuildNiftyStrategies() []StrategyDef {
-	btc := buildAllStrategies()
-	nifty := make([]StrategyDef, 0, len(btc))
-	for _, def := range btc {
-		def.StrikePctOTM = def.StrikePctOTM * 0.20
-		def.ExpiryMinutes = 4320 // 3 calendar days
-		if category, ok := optionStrategyCategories[def.Name]; ok {
-			def.Category = category
-		}
-		nifty = append(nifty, def)
-	}
-	return assignStrategyIDs(nifty)
+	return buildNiftyNativeStrategies()
 }
 
 // buildAllStrategies defines BTC option SELLING (writing) strategies.
@@ -335,6 +345,68 @@ func buildAllStrategies() []StrategyDef {
 			StrikePctOTM: 0.018, ExpiryMinutes: 210,
 			TakeProfitPct: 0.52, StopLossPct: 0.75,
 			PositionUSD: 10000, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 1800,
+		},
+
+		// ═══════════════════════════════════════════════════════════════════════
+		// CATEGORY H — MACD CROSSOVER (SELLERS)
+		// MACD line crosses signal line with histogram confirmation.
+		// Tighter strikes; MACD crosses tend to be earlier-cycle signals.
+		// ═══════════════════════════════════════════════════════════════════════
+
+		{
+			Name: "MACD_Bull_Put_Sell", Type: Put,
+			StrikePctOTM: 0.011, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.70,
+			PositionUSD: 10000, Signal: "MACD_BULL_CROSS", CooldownSecs: 720,
+		},
+		{
+			Name: "MACD_Bear_Call_Sell", Type: Call,
+			StrikePctOTM: 0.011, ExpiryMinutes: 150,
+			TakeProfitPct: 0.40, StopLossPct: 0.70,
+			PositionUSD: 10000, Signal: "MACD_BEAR_CROSS", CooldownSecs: 720,
+		},
+		{
+			Name: "MACD_Bull_Put_Wide", Type: Put,
+			StrikePctOTM: 0.014, ExpiryMinutes: 180,
+			TakeProfitPct: 0.46, StopLossPct: 0.74,
+			PositionUSD: 10000, Signal: "MACD_BULL_CROSS", CooldownSecs: 900,
+		},
+		{
+			Name: "MACD_Bear_Call_Wide", Type: Call,
+			StrikePctOTM: 0.014, ExpiryMinutes: 180,
+			TakeProfitPct: 0.46, StopLossPct: 0.74,
+			PositionUSD: 10000, Signal: "MACD_BEAR_CROSS", CooldownSecs: 900,
+		},
+
+		// ═══════════════════════════════════════════════════════════════════════
+		// CATEGORY I — ATR EXPANSION (SELLERS)
+		// Volatility expanding 40%+ above baseline + directional momentum.
+		// Wider strikes to account for expanded true range on entry bar.
+		// ═══════════════════════════════════════════════════════════════════════
+
+		{
+			Name: "ATRExpand_Bull_Put_Sell", Type: Put,
+			StrikePctOTM: 0.013, ExpiryMinutes: 150,
+			TakeProfitPct: 0.42, StopLossPct: 0.72,
+			PositionUSD: 10000, Signal: "ATR_EXPAND_BULL", CooldownSecs: 600,
+		},
+		{
+			Name: "ATRExpand_Bear_Call_Sell", Type: Call,
+			StrikePctOTM: 0.013, ExpiryMinutes: 150,
+			TakeProfitPct: 0.42, StopLossPct: 0.72,
+			PositionUSD: 10000, Signal: "ATR_EXPAND_BEAR", CooldownSecs: 600,
+		},
+		{
+			Name: "ATRExpand_Bull_Put_Wide", Type: Put,
+			StrikePctOTM: 0.016, ExpiryMinutes: 180,
+			TakeProfitPct: 0.48, StopLossPct: 0.76,
+			PositionUSD: 10000, Signal: "ATR_EXPAND_BULL", CooldownSecs: 900,
+		},
+		{
+			Name: "ATRExpand_Bear_Call_Wide", Type: Call,
+			StrikePctOTM: 0.016, ExpiryMinutes: 180,
+			TakeProfitPct: 0.48, StopLossPct: 0.76,
+			PositionUSD: 10000, Signal: "ATR_EXPAND_BEAR", CooldownSecs: 900,
 		},
 	}
 }

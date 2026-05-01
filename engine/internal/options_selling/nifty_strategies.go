@@ -153,5 +153,45 @@ func buildNiftyNativeStrategies() []StrategyDef {
 		{ID: 298, Name: "N50S_SupBreak_Bear_Call_W1", Category: "Breakout", Type: Call, StrikePctOTM: 0.0016, ExpiryMinutes: 210, TakeProfitPct: 0.44, StopLossPct: 0.74, PositionUSD: 10000, Signal: "SUPPORT_BREAK", CooldownSecs: 840},
 		{ID: 299, Name: "N50S_CapReclaim_Elite_Put", Category: "Hybrid", Type: Put, StrikePctOTM: 0.0020, ExpiryMinutes: 300, TakeProfitPct: 0.55, StopLossPct: 0.85, PositionUSD: 10000, Signal: "CAPITULATION_RECLAIM", CooldownSecs: 1800},
 		{ID: 300, Name: "N50S_BkdnTrend_Elite_Call", Category: "Hybrid", Type: Call, StrikePctOTM: 0.0020, ExpiryMinutes: 300, TakeProfitPct: 0.55, StopLossPct: 0.85, PositionUSD: 10000, Signal: "BREAKDOWN_TREND_BEAR", CooldownSecs: 1800},
+
+		// ═══════════════════════════════════════════════════════════════════
+		// GROUP 11 — NSE OPEN (IDs 301–306)
+		// ═══════════════════════════════════════════════════════════════════
+		{ID: 301, Name: "N50S_NSEOpen_Bull_Put_S1", Category: "Breakout", Type: Put, StrikePctOTM: 0.0010, ExpiryMinutes: 120, TakeProfitPct: 0.35, StopLossPct: 0.63, PositionUSD: 10000, Signal: "NSE_OPEN_BULL", CooldownSecs: 600},
+		{ID: 302, Name: "N50S_NSEOpen_Bear_Call_S1", Category: "Breakout", Type: Call, StrikePctOTM: 0.0010, ExpiryMinutes: 120, TakeProfitPct: 0.35, StopLossPct: 0.63, PositionUSD: 10000, Signal: "NSE_OPEN_BEAR", CooldownSecs: 600},
+		{ID: 303, Name: "N50S_NSEOpen_Bull_Put_M1", Category: "Breakout", Type: Put, StrikePctOTM: 0.0012, ExpiryMinutes: 150, TakeProfitPct: 0.38, StopLossPct: 0.66, PositionUSD: 10000, Signal: "NSE_OPEN_BULL", CooldownSecs: 720},
+		{ID: 304, Name: "N50S_NSEOpen_Bear_Call_M1", Category: "Breakout", Type: Call, StrikePctOTM: 0.0012, ExpiryMinutes: 150, TakeProfitPct: 0.38, StopLossPct: 0.66, PositionUSD: 10000, Signal: "NSE_OPEN_BEAR", CooldownSecs: 720},
+		{ID: 305, Name: "N50S_NSEOpen_Bull_Put_M2", Category: "Breakout", Type: Put, StrikePctOTM: 0.0014, ExpiryMinutes: 180, TakeProfitPct: 0.42, StopLossPct: 0.70, PositionUSD: 10000, Signal: "NSE_OPEN_BULL", CooldownSecs: 900},
+		{ID: 306, Name: "N50S_NSEOpen_Bear_Call_M2", Category: "Breakout", Type: Call, StrikePctOTM: 0.0014, ExpiryMinutes: 180, TakeProfitPct: 0.42, StopLossPct: 0.70, PositionUSD: 10000, Signal: "NSE_OPEN_BEAR", CooldownSecs: 900},
+
+		// ═══════════════════════════════════════════════════════════════════
+		// GROUP 12 — NSE MIDDAY (IDs 307–310)
+		// ═══════════════════════════════════════════════════════════════════
+		{ID: 307, Name: "N50S_NSEMidday_Bull_Put_M1", Category: "Momentum", Type: Put, StrikePctOTM: 0.0011, ExpiryMinutes: 135, TakeProfitPct: 0.37, StopLossPct: 0.65, PositionUSD: 10000, Signal: "NSE_MIDDAY_BULL", CooldownSecs: 720},
+		{ID: 308, Name: "N50S_NSEMidday_Bear_Call_M1", Category: "Momentum", Type: Call, StrikePctOTM: 0.0011, ExpiryMinutes: 135, TakeProfitPct: 0.37, StopLossPct: 0.65, PositionUSD: 10000, Signal: "NSE_MIDDAY_BEAR", CooldownSecs: 720},
+		{ID: 309, Name: "N50S_NSEMidday_Bull_Put_M2", Category: "Momentum", Type: Put, StrikePctOTM: 0.0013, ExpiryMinutes: 150, TakeProfitPct: 0.40, StopLossPct: 0.68, PositionUSD: 10000, Signal: "NSE_MIDDAY_BULL", CooldownSecs: 900},
+		{ID: 310, Name: "N50S_NSEMidday_Bear_Call_M2", Category: "Momentum", Type: Call, StrikePctOTM: 0.0013, ExpiryMinutes: 150, TakeProfitPct: 0.40, StopLossPct: 0.68, PositionUSD: 10000, Signal: "NSE_MIDDAY_BEAR", CooldownSecs: 900},
+
+		// ═══════════════════════════════════════════════════════════════════
+		// GROUP 13 — NSE PRE-CLOSE PREMIUM SELL (IDs 311–314)
+		// ═══════════════════════════════════════════════════════════════════
+		{ID: 311, Name: "N50S_PreClose_SellCall_S1", Category: "Mean Reversion", Type: Call, StrikePctOTM: 0.0013, ExpiryMinutes: 60, TakeProfitPct: 0.42, StopLossPct: 0.66, PositionUSD: 10000, Signal: "NSE_PRECLOSE_SELL_CALL", CooldownSecs: 900},
+		{ID: 312, Name: "N50S_PreClose_SellPut_S1", Category: "Mean Reversion", Type: Put, StrikePctOTM: 0.0013, ExpiryMinutes: 60, TakeProfitPct: 0.42, StopLossPct: 0.66, PositionUSD: 10000, Signal: "NSE_PRECLOSE_SELL_PUT", CooldownSecs: 900},
+		{ID: 313, Name: "N50S_PreClose_SellCall_M1", Category: "Mean Reversion", Type: Call, StrikePctOTM: 0.0016, ExpiryMinutes: 75, TakeProfitPct: 0.46, StopLossPct: 0.72, PositionUSD: 10000, Signal: "NSE_PRECLOSE_SELL_CALL", CooldownSecs: 1200},
+		{ID: 314, Name: "N50S_PreClose_SellPut_M1", Category: "Mean Reversion", Type: Put, StrikePctOTM: 0.0016, ExpiryMinutes: 75, TakeProfitPct: 0.46, StopLossPct: 0.72, PositionUSD: 10000, Signal: "NSE_PRECLOSE_SELL_PUT", CooldownSecs: 1200},
+
+		// ═══════════════════════════════════════════════════════════════════
+		// GROUP 14 — MACD CROSSOVER FOR NIFTY (IDs 315–318)
+		// ═══════════════════════════════════════════════════════════════════
+		{ID: 315, Name: "N50S_MACD_Bull_Put_M1", Category: "Hybrid", Type: Put, StrikePctOTM: 0.0012, ExpiryMinutes: 150, TakeProfitPct: 0.40, StopLossPct: 0.68, PositionUSD: 10000, Signal: "MACD_BULL_CROSS", CooldownSecs: 600},
+		{ID: 316, Name: "N50S_MACD_Bear_Call_M1", Category: "Hybrid", Type: Call, StrikePctOTM: 0.0012, ExpiryMinutes: 150, TakeProfitPct: 0.40, StopLossPct: 0.68, PositionUSD: 10000, Signal: "MACD_BEAR_CROSS", CooldownSecs: 600},
+		{ID: 317, Name: "N50S_MACD_Bull_Put_M2", Category: "Hybrid", Type: Put, StrikePctOTM: 0.0014, ExpiryMinutes: 180, TakeProfitPct: 0.44, StopLossPct: 0.72, PositionUSD: 10000, Signal: "MACD_BULL_CROSS", CooldownSecs: 720},
+		{ID: 318, Name: "N50S_MACD_Bear_Call_M2", Category: "Hybrid", Type: Call, StrikePctOTM: 0.0014, ExpiryMinutes: 180, TakeProfitPct: 0.44, StopLossPct: 0.72, PositionUSD: 10000, Signal: "MACD_BEAR_CROSS", CooldownSecs: 720},
+
+		// ═══════════════════════════════════════════════════════════════════
+		// GROUP 15 — ATR EXPANSION FOR NIFTY (IDs 319–320)
+		// ═══════════════════════════════════════════════════════════════════
+		{ID: 319, Name: "N50S_ATRExp_Bull_Put_M1", Category: "Breakout", Type: Put, StrikePctOTM: 0.0014, ExpiryMinutes: 150, TakeProfitPct: 0.42, StopLossPct: 0.70, PositionUSD: 10000, Signal: "ATR_EXPAND_BULL", CooldownSecs: 540},
+		{ID: 320, Name: "N50S_ATRExp_Bear_Call_M1", Category: "Breakout", Type: Call, StrikePctOTM: 0.0014, ExpiryMinutes: 150, TakeProfitPct: 0.42, StopLossPct: 0.70, PositionUSD: 10000, Signal: "ATR_EXPAND_BEAR", CooldownSecs: 540},
 	}
 }

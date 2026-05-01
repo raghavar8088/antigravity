@@ -231,13 +231,27 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	}
 }
 
+func isNSEMarketOpen(utcHour, utcMin int) bool {
+	total := utcHour*60 + utcMin
+	return total >= 225 && total <= 600
+}
+
+func isNSEPreClose(utcHour, utcMin int) bool {
+	total := utcHour*60 + utcMin
+	return total >= 525 && total <= 570
+}
+
 // niftyEntryConfirmed is the NIFTY-calibrated entry gate.
-// NIFTY IV ~18% vs BTC ~80%, so momentum thresholds are ~0.25× BTC values.
-// RSI bands are wider because NIFTY intraday RSI rarely exceeds 72 in bull runs.
+// NIFTY IV ~16% vs BTC ~62%, so momentum thresholds are ~0.25× BTC values.
+// NSE session guard prevents phantom fills when the market is closed.
 func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 	if len(ctx.Prices) < 15 {
 		return false
 	}
+	if !isNSEMarketOpen(ctx.UTCHour, ctx.UTCMin) {
+		return false
+	}
+
 	price := ctx.BTCPrice
 	fast := ema(ctx.Prices, 9)
 	slow := ema(ctx.Prices, 21)
@@ -250,22 +264,43 @@ func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
 	mom3 := momentum(ctx.Prices, 3)
 	mom8 := momentum(ctx.Prices, 8)
 
+	preClose := isNSEPreClose(ctx.UTCHour, ctx.UTCMin)
 	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
 	if def.Type == Put {
 		switch def.Category {
-		case "Momentum", "Breakout", "Hybrid":
-			return trendAligned && price >= trend*0.995 && mom3 > 0.0002 && mom8 > -0.0005 && rsiVal >= 42 && rsiVal <= 82
+		case "Momentum", "Breakout", "Hybrid", "MACD", "ATR":
+			rsiLo, rsiHi := 44.0, 80.0
+			momFloor := 0.0002
+			if preClose {
+				rsiLo, rsiHi = 48.0, 72.0
+				momFloor = 0.0004
+			}
+			return trendAligned && price >= trend*0.995 && mom3 > momFloor && mom8 > -0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
 		case "Mean Reversion", "Capitulation":
-			return price >= fast*0.999 && mom3 > -0.0005 && rsiVal >= 20 && rsiVal <= 75
+			rsiLo, rsiHi := 22.0, 75.0
+			if preClose {
+				rsiLo, rsiHi = 28.0, 68.0
+			}
+			return price >= fast*0.999 && mom3 > -0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
 		default:
 			return price >= fast && mom3 >= -0.0001
 		}
 	}
 	switch def.Category {
-	case "Momentum", "Breakout", "Hybrid":
-		return trendAligned && price <= trend*1.005 && mom3 < -0.0002 && mom8 < 0.0005 && rsiVal >= 18 && rsiVal <= 58
+	case "Momentum", "Breakout", "Hybrid", "MACD", "ATR":
+		rsiLo, rsiHi := 20.0, 56.0
+		momCeil := -0.0002
+		if preClose {
+			rsiLo, rsiHi = 28.0, 52.0
+			momCeil = -0.0004
+		}
+		return trendAligned && price <= trend*1.005 && mom3 < momCeil && mom8 < 0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
 	case "Mean Reversion", "Capitulation":
-		return price <= fast*1.001 && mom3 < 0.0005 && rsiVal >= 25 && rsiVal <= 80
+		rsiLo, rsiHi := 25.0, 78.0
+		if preClose {
+			rsiLo, rsiHi = 32.0, 70.0
+		}
+		return price <= fast*1.001 && mom3 < 0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
 	default:
 		return price <= fast && mom3 <= 0.0001
 	}

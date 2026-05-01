@@ -16,6 +16,33 @@ type SignalFunc func(ctx SignalContext) bool
 
 // ── Indicator helpers (operate on minute bars) ─────────────────────────────
 
+func macdLine(prices []float64) float64 {
+	return ema(prices, 12) - ema(prices, 26)
+}
+
+func macdSignalLine(prices []float64) float64 {
+	if len(prices) < 35 {
+		return 0
+	}
+	hist := make([]float64, 14)
+	for i := range hist {
+		hist[i] = macdLine(prices[:len(prices)-13+i])
+	}
+	return ema(hist, 9)
+}
+
+func atrApprox(prices []float64, period int) float64 {
+	if len(prices) < period+1 {
+		return 0
+	}
+	s := prices[len(prices)-period-1:]
+	sum := 0.0
+	for i := 1; i < len(s); i++ {
+		sum += math.Abs(s[i] - s[i-1])
+	}
+	return sum / float64(period)
+}
+
 func ema(prices []float64, period int) float64 {
 	if len(prices) == 0 {
 		return 0
@@ -742,4 +769,136 @@ var Signals = map[string]SignalFunc{
 		mom3 := momentum(ctx.Prices, 3)
 		return mom30 < -0.012 && rsiVal < 28 && atLower && mom3 > mom30/8
 	},
+
+	"MACD_BULL_CROSS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 {
+			return false
+		}
+		curr := macdLine(ctx.Prices)
+		prev := macdLine(ctx.Prices[:len(ctx.Prices)-1])
+		currSig := macdSignalLine(ctx.Prices)
+		prevSig := macdSignalLine(ctx.Prices[:len(ctx.Prices)-1])
+		rsiVal := rsi(ctx.Prices, 14)
+		return prev <= prevSig && curr > currSig && curr > 0 && rsiVal < 68
+	},
+	"MACD_BEAR_CROSS": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 40 {
+			return false
+		}
+		curr := macdLine(ctx.Prices)
+		prev := macdLine(ctx.Prices[:len(ctx.Prices)-1])
+		currSig := macdSignalLine(ctx.Prices)
+		prevSig := macdSignalLine(ctx.Prices[:len(ctx.Prices)-1])
+		rsiVal := rsi(ctx.Prices, 14)
+		return prev >= prevSig && curr < currSig && curr < 0 && rsiVal > 32
+	},
+	"ATR_EXPAND_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		recent := atrApprox(ctx.Prices, 5)
+		prior := atrApprox(ctx.Prices[:len(ctx.Prices)-5], 14)
+		if prior <= 0 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		return recent > prior*1.40 && mom5 > 0.0028 && rsiVal < 68
+	},
+	"ATR_EXPAND_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 25 {
+			return false
+		}
+		recent := atrApprox(ctx.Prices, 5)
+		prior := atrApprox(ctx.Prices[:len(ctx.Prices)-5], 14)
+		if prior <= 0 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		return recent > prior*1.40 && mom5 < -0.0028 && rsiVal > 32
+	},
+	"NSE_OPEN_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 230 || total > 258 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		vw := avgPrice(ctx.Prices[max0(len(ctx.Prices)-15):])
+		return ctx.BTCPrice > vw && mom5 > 0.0018 && rsiVal > 48 && rsiVal < 70
+	},
+	"NSE_OPEN_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 10 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 230 || total > 258 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		vw := avgPrice(ctx.Prices[max0(len(ctx.Prices)-15):])
+		return ctx.BTCPrice < vw && mom5 < -0.0018 && rsiVal > 30 && rsiVal < 52
+	},
+	"NSE_MIDDAY_BULL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 360 || total > 405 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		vw := avgPrice(ctx.Prices[max0(len(ctx.Prices)-20):])
+		return ctx.BTCPrice > vw && mom5 > 0.0015 && rsiVal > 52 && rsiVal < 72
+	},
+	"NSE_MIDDAY_BEAR": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 15 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 360 || total > 405 {
+			return false
+		}
+		mom5 := momentum(ctx.Prices, 5)
+		rsiVal := rsi(ctx.Prices, 14)
+		vw := avgPrice(ctx.Prices[max0(len(ctx.Prices)-20):])
+		return ctx.BTCPrice < vw && mom5 < -0.0015 && rsiVal > 28 && rsiVal < 48
+	},
+	"NSE_PRECLOSE_SELL_CALL": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 525 || total > 555 {
+			return false
+		}
+		mom15 := momentum(ctx.Prices, 15)
+		rsiVal := rsi(ctx.Prices, 14)
+		return mom15 > 0.0022 && rsiVal > 54 && rsiVal < 74
+	},
+	"NSE_PRECLOSE_SELL_PUT": func(ctx SignalContext) bool {
+		if len(ctx.Prices) < 20 {
+			return false
+		}
+		total := ctx.UTCHour*60 + ctx.UTCMin
+		if total < 525 || total > 555 {
+			return false
+		}
+		mom15 := momentum(ctx.Prices, 15)
+		rsiVal := rsi(ctx.Prices, 14)
+		return mom15 < -0.0022 && rsiVal > 26 && rsiVal < 46
+	},
+}
+
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }

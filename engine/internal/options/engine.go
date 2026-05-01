@@ -24,6 +24,12 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
+const (
+	// dailyLossLimitPct halts new opens if realised PnL for the day falls below
+	// this fraction of the starting balance (e.g. 0.05 = 5% daily stop-out).
+	dailyLossLimitPct = 0.05
+)
+
 // Engine is the fully autonomous BTC option SELLING engine.
 // It runs independently from the futures engine with its own paper account.
 type Engine struct {
@@ -32,6 +38,9 @@ type Engine struct {
 	trades           []OptionTrade
 	marketProfile    MarketProfile
 	balance          float64
+	peakBalance      float64   // highest balance ever reached — used for drawdown calc
+	dayStartBalance  float64   // balance at the beginning of the current UTC day
+	dayStartDate     int       // UTC day number (unix-day) when dayStartBalance was set
 	lastPrice        float64
 	priceHist        []float64 // raw tick prices (for current price + IV)
 	minuteBars       []float64 // 1-minute sampled prices (for indicators)
@@ -73,13 +82,17 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		tickEvery = 1 * time.Second
 	}
 
+	now := time.Now().UTC()
 	engine := &Engine{
-		states:        states,
-		marketProfile: profile,
-		balance:       initialOptionsBalance,
-		tickEvery:     tickEvery,
+		states:          states,
+		marketProfile:   profile,
+		balance:         initialOptionsBalance,
+		peakBalance:     initialOptionsBalance,
+		dayStartBalance: initialOptionsBalance,
+		dayStartDate:    int(now.Unix() / 86400),
+		tickEvery:       tickEvery,
 	}
-	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
+	engine.refreshRosterLocked(optionMarketRegimeUnknown, now)
 	return engine
 }
 
@@ -288,8 +301,12 @@ func (e *Engine) ResetAccount() PersistedState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	now := time.Now().UTC()
 	e.trades = nil
 	e.balance = initialOptionsBalance
+	e.peakBalance = initialOptionsBalance
+	e.dayStartBalance = initialOptionsBalance
+	e.dayStartDate = int(now.Unix() / 86400)
 	e.lastPrice = 0
 	e.priceHist = nil
 	e.minuteBars = nil
@@ -359,21 +376,35 @@ func (e *Engine) schedulePersistLocked(snapshot PersistedState) {
 // RegimeInfo returns the current market regime, last price, IV estimate, and price history depth.
 // Used by the /api/regime endpoint to expose engine classification state.
 type RegimeInfo struct {
-	Regime         string  `json:"regime"`
-	LastPrice      float64 `json:"lastPrice"`
-	IV             float64 `json:"iv"`
-	MinuteBarsCount int    `json:"minuteBarsCount"`
+	Regime          string  `json:"regime"`
+	LastPrice       float64 `json:"lastPrice"`
+	IV              float64 `json:"iv"`
+	MinuteBarsCount int     `json:"minuteBarsCount"`
+	DrawdownPct     float64 `json:"drawdownPct"`
+	DayLossPct      float64 `json:"dayLossPct"`
+	DailyHalt       bool    `json:"dailyHalt"`
 }
 
 func (e *Engine) RegimeInfo() RegimeInfo {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	iv := estimateIVWithBounds(e.minuteBars, e.marketProfile.DefaultIV, e.marketProfile.MinIV, e.marketProfile.MaxIV)
+	drawdownPct := 0.0
+	if e.peakBalance > 0 {
+		drawdownPct = (e.peakBalance - e.balance) / e.peakBalance * 100
+	}
+	dayLossPct := 0.0
+	if e.dayStartBalance > 0 && e.balance < e.dayStartBalance {
+		dayLossPct = (e.dayStartBalance - e.balance) / e.dayStartBalance * 100
+	}
 	return RegimeInfo{
-		Regime:         e.lastRosterRegime,
-		LastPrice:      e.lastPrice,
-		IV:             iv,
+		Regime:          e.lastRosterRegime,
+		LastPrice:       e.lastPrice,
+		IV:              iv,
 		MinuteBarsCount: len(e.minuteBars),
+		DrawdownPct:     drawdownPct,
+		DayLossPct:      dayLossPct,
+		DailyHalt:       e.dailyLossBreached(),
 	}
 }
 
@@ -485,6 +516,27 @@ func (e *Engine) stripStalePaperDeskShadowsLocked() {
 	}
 }
 
+// refreshDayStartLocked resets the daily loss reference at the start of each UTC day.
+func (e *Engine) refreshDayStartLocked(nowUTC time.Time) {
+	today := int(nowUTC.Unix() / 86400)
+	if today != e.dayStartDate {
+		e.dayStartDate = today
+		e.dayStartBalance = e.balance
+	}
+	if e.balance > e.peakBalance {
+		e.peakBalance = e.balance
+	}
+}
+
+// dailyLossBreached returns true when today's realised loss exceeds the daily limit.
+func (e *Engine) dailyLossBreached() bool {
+	if e.dayStartBalance <= 0 {
+		return false
+	}
+	loss := (e.dayStartBalance - e.balance) / e.dayStartBalance
+	return loss >= dailyLossLimitPct
+}
+
 func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -493,12 +545,14 @@ func (e *Engine) tick() {
 		return
 	}
 
+	nowUTC := time.Now().UTC()
+	e.refreshDayStartLocked(nowUTC)
+
 	e.stripStalePaperDeskShadowsLocked()
 
 	profile := e.resolvedProfile()
 	iv := estimateIVWithBounds(e.minuteBars, profile.DefaultIV, profile.MinIV, profile.MaxIV)
 
-	nowUTC := time.Now().UTC()
 	ctx := SignalContext{
 		Prices:   e.minuteBars,
 		IV:       iv,
@@ -509,6 +563,11 @@ func (e *Engine) tick() {
 	regime := classifyMarketRegime(e.minuteBars)
 	e.refreshRosterLocked(regime, nowUTC)
 
+	dailyHalt := e.dailyLossBreached()
+	if dailyHalt {
+		log.Printf("[OPTIONS] ⛔ Daily loss limit reached (%.1f%% of day-start balance). No new opens.", dailyLossLimitPct*100)
+	}
+
 	openCount := 0
 	for _, s := range e.states {
 		if s.position != nil {
@@ -517,10 +576,37 @@ func (e *Engine) tick() {
 	}
 
 	for _, s := range e.states {
-		e.manageStrategyRuntime(s, ctx, regime, iv, nowUTC, &openCount)
+		e.manageStrategyRuntimeWithHalt(s, ctx, regime, iv, nowUTC, &openCount, dailyHalt)
 	}
 }
 
+
+func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int, dailyHalt bool) {
+	// Always manage open positions (mark-to-market + close on TP/SL/expiry).
+	if s.position != nil {
+		if exitReason := e.markToMarketPositionLocked(s.position, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
+			e.closePositionLocked(s, exitReason, now)
+			if *openCount > 0 {
+				*openCount--
+			}
+		}
+	}
+	if s.shadowPosition != nil {
+		if exitReason := e.markToMarketPositionLocked(s.shadowPosition, iv, s.def.TakeProfitPct, s.def.StopLossPct, now); exitReason != "" {
+			e.closeShadowPositionLocked(s, exitReason, now)
+		}
+	}
+	// Block new opens when daily loss limit is breached.
+	if !dailyHalt && s.position == nil && s.shadowPosition == nil {
+		switch s.stats.RosterState {
+		case StrategyRosterActive:
+			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
+		default:
+			e.maybeOpenShadowPositionLocked(s, ctx, iv, now)
+		}
+	}
+	e.refreshStrategyPresentationLocked(s, now)
+}
 
 func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int) {
 	if s.position != nil {
