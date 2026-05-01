@@ -1,0 +1,51 @@
+name: Build & Deploy Engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "engine/**"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./engine
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
+
+      - name: Deploy to Lightsail
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
+            docker stop antigravity_engine || true
+            docker rm antigravity_engine || true
+            docker run -d \
+              --name antigravity_engine \
+              --restart always \
+              -p 80:8080 \
+              --env-file /home/ubuntu/antigravity/.env \
+              -v /home/ubuntu/antigravity/data:/app/data \
+              ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
