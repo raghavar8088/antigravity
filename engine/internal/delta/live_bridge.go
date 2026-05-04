@@ -101,9 +101,9 @@ func (b *Bridge) IsEnabled() bool {
 	return b.enabled
 }
 
-// SetBuyingMode switches between buying mode (BUY options, costs ~$0.50/lot) and
-// selling mode (SELL options, requires ~$800+ margin). Buying mode is the only viable
-// mode when account balance is under ~$50.
+// SetBuyingMode switches between buying mode (BUY options, wallet-tiered sizing) and
+// selling mode (SELL options, requires large margin). Use buying mode for small real balances;
+// sizing uses TieredBuySizing / BuyingContractsFromWallet (see bridge_buy_sizing.go).
 func (b *Bridge) SetBuyingMode(v bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -187,20 +187,54 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 
 		strike := sig.Strike
 		expiry := sig.ExpiryTime
+		spot := sig.BTCPrice
+		if buying && spot <= 0 && sig.Strike > 1000 {
+			// Paper hook may omit spot; infer from writer strike (≈1% OTM).
+			switch sig.OptionType {
+			case "PUT":
+				spot = sig.Strike / 0.989
+			case "CALL":
+				spot = sig.Strike / 1.011
+			default:
+				spot = sig.Strike
+			}
+		}
 
 		if buying {
-			// For buying: use 0.7% OTM for better delta and responsiveness.
-			// Paper strategies use 1.0-1.8% OTM which is good for selling but
-			// gives low delta (~0.20) when buying — override to 0.7% OTM (~0.35 delta).
 			if optType == "CALL" {
-				strike = roundBTCStrike(sig.BTCPrice * 1.007)
+				strike = roundBTCStrike(spot * 1.007)
 			} else {
-				strike = roundBTCStrike(sig.BTCPrice * 0.993)
+				strike = roundBTCStrike(spot * 0.993)
 			}
-			// Use next weekly Friday at least 5 days out.
-			// Paper signals use 2-3.5h expiry which causes crushing theta decay
-			// for buyers — weekly expiry dramatically reduces theta risk.
 			expiry = nextWeeklyFriday(time.Now().UTC(), 5)
+		}
+
+		var contracts int
+		if buying {
+			bal, err2 := b.client.GetWallet(ctx)
+			if err2 != nil || bal <= 0 {
+				reason := "wallet unavailable"
+				if err2 != nil {
+					reason = fmt.Sprintf("wallet read failed: %v", err2)
+				}
+				b.updateTrade(id, func(t *LiveTrade) {
+					t.Status = "FAILED"
+					t.FailureReason = reason
+				})
+				log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — %s", id, reason)
+				return
+			}
+			contracts = BuyingContractsFromWallet(bal)
+			if contracts == 0 {
+				b.updateTrade(id, func(t *LiveTrade) {
+					t.Status = "FAILED"
+					t.FailureReason = "wallet below DELTA_MIN_WALLET_USD — cannot size live buy safely"
+				})
+				log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — wallet %.2f below minimum for buys", id, bal)
+				return
+			}
+		} else {
+			contracts = max1(int(sig.PremiumUSD / 100))
 		}
 
 		info, err := b.client.FindOptionProduct(ctx, strike, expiry, optType)
@@ -211,22 +245,6 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 			})
 			log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — %v", id, err)
 			return
-		}
-
-		// Position sizing:
-		// Selling: $100/contract minimum (large margin required anyway)
-		// Buying: risk 15% of available balance, min 1 lot, max 5 lots
-		contracts := max1(int(sig.PremiumUSD / 100))
-		if buying {
-			if bal, err2 := b.client.GetWallet(ctx); err2 == nil && bal > 0 && sig.PremiumUSD > 0 {
-				riskAmt := bal * 0.15
-				contracts = max1(int(riskAmt / sig.PremiumUSD))
-				if contracts > 5 {
-					contracts = 5
-				}
-			} else {
-				contracts = 1
-			}
 		}
 
 		orderSide := SideSell
@@ -336,8 +354,12 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 			t.CloseOrderID = result.OrderID
 			t.CloseFillPrice = result.Price
 			t.ClosedAt = &now
-			// PnL for a short option: sell premium - buy-back premium
-			t.RealizedPnl = (t.FillPrice - result.Price) * float64(t.Contracts)
+			if buying {
+				// Long option: bought at FillPrice, sold at close price.
+				t.RealizedPnl = (result.Price - t.FillPrice) * float64(t.Contracts)
+			} else {
+				t.RealizedPnl = (t.FillPrice - result.Price) * float64(t.Contracts)
+			}
 		})
 		log.Printf("[DELTA BRIDGE] ✅ CLOSE ORDER PLACED %s | %s | Fill: $%.4f | Exit: %s",
 			trade.ID, trade.DeltaSymbol, result.Price, sig.ExitReason)
@@ -380,13 +402,19 @@ type BridgeStats struct {
 	Configured  bool    `json:"configured"`
 	Testnet     bool    `json:"testnet"`
 	Enabled     bool    `json:"enabled"`
-	BuyingMode  bool    `json:"buyingMode"`  // true = buying options, false = selling
+	BuyingMode  bool    `json:"buyingMode"` // true = buying options, false = selling
 	TotalTrades int     `json:"totalTrades"`
 	OpenTrades  int     `json:"openTrades"`
 	Wins        int     `json:"wins"`
 	Losses      int     `json:"losses"`
 	TotalPnl    float64 `json:"totalPnl"`
 	WalletUSDT  float64 `json:"walletUsdt"`
+	// Low-balance live BUY profile (buyingMode + wallet snapshot).
+	LowBalanceProfile   bool    `json:"lowBalanceProfile,omitempty"`
+	BuyRiskPct          float64 `json:"buyRiskPct,omitempty"`
+	BuyMaxContracts     int     `json:"buyMaxContracts,omitempty"`
+	MinWalletUSD        float64 `json:"minWalletUsd,omitempty"`
+	BuyEstPremiumUSD    float64 `json:"buyEstPremiumUsd,omitempty"`
 	// Live account data
 	Account *AccountInfo `json:"account,omitempty"`
 }
@@ -431,6 +459,17 @@ func (b *Bridge) Stats(ctx context.Context) BridgeStats {
 					s.WalletUSDT = w.AvailableBalance
 				}
 			}
+		}
+		if buyingMode && s.WalletUSDT > 0 {
+			risk, maxC, minW := TieredBuySizing(s.WalletUSDT)
+			s.BuyRiskPct = risk
+			s.BuyMaxContracts = maxC
+			s.MinWalletUSD = minW
+			s.BuyEstPremiumUSD = parseEnvFloat("DELTA_BUY_EST_PREMIUM_USD", 35)
+			if s.BuyEstPremiumUSD < 5 {
+				s.BuyEstPremiumUSD = 5
+			}
+			s.LowBalanceProfile = s.WalletUSDT < 100
 		}
 		if positions, err := b.client.GetPositions(ctx); err == nil {
 			info.Positions = positions

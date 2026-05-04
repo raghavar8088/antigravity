@@ -183,7 +183,7 @@ function QuoteCard({ quote }: { quote: ForexQuoteDisplay }) {
         {quote.ltp > 0 ? fmtRate(quote.ltp) : "Waiting..."}
       </div>
       <div className="mt-1 text-[11px] font-medium" style={{ color: positive ? "var(--green)" : "var(--red)" }}>
-        {quote.ltp > 0 ? fmtPct(quote.changePct, true) : "Feed pending"}
+        {quote.ltp > 0 ? `${fmtPct(quote.changePct, true)} | ${quote.changePips >= 0 ? "+" : ""}${quote.changePips.toFixed(1)} pips` : "Feed pending"}
       </div>
     </div>
   );
@@ -243,6 +243,7 @@ function LivePositionsPanel({ positions }: { positions: ForexPosition[] }) {
                   <th className="px-4 py-3 font-medium">Side</th>
                   <th className="px-4 py-3 font-medium text-right">Entry / Current</th>
                   <th className="px-4 py-3 font-medium text-right">TP / SL</th>
+                  <th className="px-4 py-3 font-medium text-right">Pips</th>
                   <th className="px-4 py-3 font-medium text-right">PnL</th>
                 </tr>
               </thead>
@@ -263,6 +264,9 @@ function LivePositionsPanel({ positions }: { positions: ForexPosition[] }) {
                     <td className="px-4 py-3 text-right font-mono text-xs">
                       <div style={{ color: "var(--green)" }}>{fmtRate(pos.tpPrice)}</div>
                       <div style={{ color: "var(--red)" }}>{fmtRate(pos.slPrice)}</div>
+                    </td>
+                    <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${pos.pips >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {pos.pips >= 0 ? "+" : ""}{pos.pips.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="font-mono text-sm font-semibold" style={{ color: pos.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>
@@ -430,6 +434,7 @@ function TradesPanel({
                   <th className="px-4 py-3 font-medium text-right">Entry / Exit</th>
                   <th className="px-4 py-3 font-medium">Duration</th>
                   <th className="px-4 py-3 font-medium">Exit</th>
+                  <th className="px-4 py-3 font-medium text-right">Pips</th>
                   <th className="px-4 py-3 font-medium text-right">Return</th>
                   <th className="px-4 py-3 font-medium text-right">Net PnL</th>
                 </tr>
@@ -458,6 +463,9 @@ function TradesPanel({
                     </td>
                     <td className="px-4 py-3">
                       <ExitBadge reason={t.exitReason} />
+                    </td>
+                    <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${t.pips >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {t.pips >= 0 ? "+" : ""}{t.pips.toFixed(1)}
                     </td>
                     <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${t.returnPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {fmtPct(t.returnPct, true)}
@@ -585,7 +593,7 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
               <div className="flex flex-wrap gap-2">
                 <BadgePill label={stats.lastUpdateAt > 0 || positions.length > 0 ? "Forex Engine Online" : "Forex Engine Starting"} tone="positive" />
                 <BadgePill label={`${activeStrategies}/${totalStrategies} Roster`} tone="info" />
-                <BadgePill label={`${stats.liveSymbols}/12 Pairs`} tone="info" />
+                <BadgePill label={`${stats.liveSymbols}/${quotes.length} Pairs`} tone="info" />
                 <BadgePill label="Directional Scalp" tone="warning" />
                 <BadgePill label={`Regime: ${currentRegime}`} tone={regimeTone(currentRegime)} />
               </div>
@@ -704,7 +712,7 @@ export default function ForexScalper({ actionsEnabled = false, quotes, positions
       <div className="glass-panel px-5 py-6 md:px-6">
         <div className="mb-4">
           <h2 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Forex Pair Scanner</h2>
-          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>Live rates for 12 major currency pairs tracked for directional breakouts.</div>
+          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>Live rates for {quotes.length} major, cross, and emerging currency pairs tracked for directional breakouts.</div>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
           {quotes.map((q) => (

@@ -21,4 +21,12 @@ export const FOREX_PAIRS: ForexPair[] = [
   { id: "gbpjpy",  symbol: "GBP/JPY", yahooSymbol: "GBPJPY=X",  base: "GBP", quote: "JPY", category: "Cross",    pipSize: 0.01   },
   { id: "usdinr",  symbol: "USD/INR", yahooSymbol: "USDINR=X",  base: "USD", quote: "INR", category: "Emerging", pipSize: 0.01   },
   { id: "usdsgd",  symbol: "USD/SGD", yahooSymbol: "USDSGD=X",  base: "USD", quote: "SGD", category: "Emerging", pipSize: 0.0001 },
+  { id: "eurchf",  symbol: "EUR/CHF", yahooSymbol: "EURCHF=X",  base: "EUR", quote: "CHF", category: "Cross",    pipSize: 0.0001 },
+  { id: "audjpy",  symbol: "AUD/JPY", yahooSymbol: "AUDJPY=X",  base: "AUD", quote: "JPY", category: "Cross",    pipSize: 0.01   },
+  { id: "cadjpy",  symbol: "CAD/JPY", yahooSymbol: "CADJPY=X",  base: "CAD", quote: "JPY", category: "Cross",    pipSize: 0.01   },
+  { id: "chfjpy",  symbol: "CHF/JPY", yahooSymbol: "CHFJPY=X",  base: "CHF", quote: "JPY", category: "Cross",    pipSize: 0.01   },
+  { id: "audnzd",  symbol: "AUD/NZD", yahooSymbol: "AUDNZD=X",  base: "AUD", quote: "NZD", category: "Cross",    pipSize: 0.0001 },
+  { id: "euraud",  symbol: "EUR/AUD", yahooSymbol: "EURAUD=X",  base: "EUR", quote: "AUD", category: "Cross",    pipSize: 0.0001 },
+  { id: "gbpaud",  symbol: "GBP/AUD", yahooSymbol: "GBPAUD=X",  base: "GBP", quote: "AUD", category: "Cross",    pipSize: 0.0001 },
+  { id: "eurcad",  symbol: "EUR/CAD", yahooSymbol: "EURCAD=X",  base: "EUR", quote: "CAD", category: "Cross",    pipSize: 0.0001 },
 ];

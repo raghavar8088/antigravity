@@ -66,7 +66,25 @@ var (
 	deltaProbeClient    *marketdata.DeltaTickerClient
 	angelOneProbeClient *marketdata.AngelOneClient
 	niftyOptionsEngine  *options.Engine
+
+	// optionsEngineBTCSpot is updated by OptionsPriceFeed for GET /api/options/btc-feed (UI).
+	optionsEngineBTCSpot struct {
+		mu           sync.RWMutex
+		Source       string // delta | binance | synthetic | unknown
+		LastPrice    float64
+		LastUpdated  time.Time
+		TickerSymbol string
+	}
 )
+
+func publishOptionsEngineBTCSpot(source string, price float64, ticker string) {
+	optionsEngineBTCSpot.mu.Lock()
+	defer optionsEngineBTCSpot.mu.Unlock()
+	optionsEngineBTCSpot.Source = source
+	optionsEngineBTCSpot.LastPrice = price
+	optionsEngineBTCSpot.LastUpdated = time.Now().UTC()
+	optionsEngineBTCSpot.TickerSymbol = ticker
+}
 
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
@@ -618,7 +636,7 @@ func main() {
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
 	deltaBridge.StartMonitor(ctx)
-	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64) {
+	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
 			PaperTradeID: posID,
 			StrategyID:   stratID,
@@ -627,6 +645,7 @@ func main() {
 			Strike:       strike,
 			ExpiryTime:   expiry,
 			PremiumUSD:   premiumUSD,
+			BTCPrice:     btcSpot,
 		})
 	})
 	optionsSellingEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
@@ -797,33 +816,56 @@ func main() {
 		log.Printf("[WARMUP] ✅ Injected %d NIFTY 1m bars into NIFTY options engines", len(niftyCloses))
 	})
 
-	// Feed live BTC price ticks into the BTC options engine from Coinbase.
+	// Feed live BTC spot into the BTC options engines: Delta Exchange public ticker first,
+	// then Binance REST if Delta is unavailable (no API key required for ticker).
 	go safeGo("OptionsPriceFeed", func() {
-		lastBinancePrice := 0.0
-		lastBinanceFetch := time.Time{}
+		lastBTCPrice := 0.0
+		lastRESTFetch := time.Time{}
+		lastGoodSource := "unknown"
+		symDefault := strings.TrimSpace(os.Getenv("DELTA_OPTIONS_BTC_TICKER"))
+		if symDefault == "" {
+			symDefault = "BTCUSD"
+		}
 		var syntheticSpotLogged sync.Once
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(1 * time.Second):
-				// Use Binance REST as the primary source — reliable and always returns
-				// current spot. Refresh every 10s to avoid hammering the API.
-				if lastBinanceFetch.IsZero() || time.Since(lastBinanceFetch) >= 10*time.Second {
-					if price, err := fetchBinanceBTCSpot(ctx); err == nil && price > 5000 && price < 1000000 {
-						lastBinancePrice = price
-					} else if err != nil {
-						log.Printf("[OPTIONS FEED] Binance spot fetch failed: %v", err)
+				if lastRESTFetch.IsZero() || time.Since(lastRESTFetch) >= 10*time.Second {
+					lastRESTFetch = time.Now()
+					if p, err := fetchDeltaBTCSpotForOptions(ctx); err == nil && p > 5000 && p < 1000000 {
+						lastBTCPrice = p
+						lastGoodSource = "delta"
+					} else {
+						if err != nil {
+							log.Printf("[OPTIONS FEED] Delta spot fetch failed: %v", err)
+						}
+						if p, err2 := fetchBinanceBTCSpot(ctx); err2 == nil && p > 5000 && p < 1000000 {
+							lastBTCPrice = p
+							lastGoodSource = "binance"
+							log.Printf("[OPTIONS FEED] using Binance fallback BTC %.0f", p)
+						} else if err2 != nil {
+							log.Printf("[OPTIONS FEED] Binance spot fetch failed: %v", err2)
+						}
 					}
-					lastBinanceFetch = time.Now()
 				}
-				p := lastBinancePrice
+				p := lastBTCPrice
+				src := lastGoodSource
 				if p <= 0 {
 					p = options.PaperBTCFallbackSpot()
+					src = "synthetic"
 					syntheticSpotLogged.Do(func() {
-						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until Binance feed is available", p)
+						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until Delta/Binance feed is available", p)
 					})
 				}
+				tickerDisp := symDefault
+				if src == "binance" {
+					tickerDisp = "BTCUSDT"
+				} else if src == "synthetic" {
+					tickerDisp = "PAPER"
+				}
+				publishOptionsEngineBTCSpot(src, p, tickerDisp)
 				optionsEngine.UpdatePrice(p)
 				optionsSellingEngine.UpdatePrice(p)
 			}
@@ -998,6 +1040,33 @@ func main() {
 	http.HandleFunc("/api/options/stats", optionsEngine.HandleStats)
 	http.HandleFunc("/api/options/reset", optionsEngine.HandleReset)
 	http.HandleFunc("/api/options/clear-history", optionsEngine.HandleClearHistory)
+	http.HandleFunc("/api/options/btc-feed", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "GET only", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		optionsEngineBTCSpot.mu.RLock()
+		src := optionsEngineBTCSpot.Source
+		if src == "" {
+			src = "unknown"
+		}
+		out := map[string]interface{}{
+			"source":       src,
+			"lastPrice":    optionsEngineBTCSpot.LastPrice,
+			"tickerSymbol": optionsEngineBTCSpot.TickerSymbol,
+		}
+		if !optionsEngineBTCSpot.LastUpdated.IsZero() {
+			out["lastUpdated"] = optionsEngineBTCSpot.LastUpdated.UTC().Format(time.RFC3339)
+		}
+		optionsEngineBTCSpot.mu.RUnlock()
+		_ = json.NewEncoder(w).Encode(out)
+	})
 
 	// Options Selling Scalper endpoints
 	http.HandleFunc("/api/options-selling/positions", optionsSellingEngine.HandlePositions)
@@ -1484,6 +1553,41 @@ func main() {
 	}
 	time.Sleep(2 * time.Second) // Allow state saver final flush
 	log.Println("Systems offline.")
+}
+
+// spotFromDeltaQuote picks a USD BTC reference from a Delta ticker (spot index, last, or mark).
+func spotFromDeltaQuote(q marketdata.DeltaTickerQuote) float64 {
+	if q.SpotPrice > 5000 && q.SpotPrice < 1000000 {
+		return q.SpotPrice
+	}
+	if q.Price > 5000 && q.Price < 1000000 {
+		return q.Price
+	}
+	if q.MarkPrice > 5000 && q.MarkPrice < 1000000 {
+		return q.MarkPrice
+	}
+	return 0
+}
+
+// fetchDeltaBTCSpotForOptions reads Delta's public GET /v2/tickers/{symbol} (no auth).
+// Override symbol with DELTA_OPTIONS_BTC_TICKER (default BTCUSD). Base URL: DELTA_API_BASE_URL or India default.
+func fetchDeltaBTCSpotForOptions(ctx context.Context) (float64, error) {
+	if deltaProbeClient == nil {
+		return 0, fmt.Errorf("delta ticker client not initialized")
+	}
+	sym := strings.TrimSpace(os.Getenv("DELTA_OPTIONS_BTC_TICKER"))
+	if sym == "" {
+		sym = "BTCUSD"
+	}
+	q, err := deltaProbeClient.FetchTicker(ctx, sym)
+	if err != nil {
+		return 0, err
+	}
+	p := spotFromDeltaQuote(q)
+	if p <= 0 {
+		return 0, fmt.Errorf("delta ticker %s: no usable spot/close/mark price", sym)
+	}
+	return p, nil
 }
 
 func fetchBinanceBTCSpot(ctx context.Context) (float64, error) {

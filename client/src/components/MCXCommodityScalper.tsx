@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useMCXEngine from "@/hooks/useMCXEngine";
 import type { MCXPosition, MCXTrade, MCXStrategyStatus, MCXCommodityQuote } from "@/hooks/useMCXEngine";
@@ -105,6 +105,9 @@ function StatusBadge({ status }: { status: string }) {
     IN_POSITION: "border-blue-200 bg-blue-50 text-blue-700",
     COOLING:     "border-amber-200 bg-amber-50 text-amber-700",
     WARMING:     "border-zinc-200 bg-zinc-50 text-zinc-600",
+    BULLISH:     "border-emerald-200 bg-emerald-50 text-emerald-700",
+    BEARISH:     "border-rose-200 bg-rose-50 text-rose-700",
+    NEUTRAL:     "border-blue-200 bg-blue-50 text-blue-700",
   };
   return <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${map[status] ?? "border-zinc-200 bg-zinc-50 text-zinc-500"}`}>{status.replace("_", " ")}</span>;
 }
@@ -136,12 +139,13 @@ function CommodityCard({ quote }: { quote: MCXCommodityQuote }) {
   const commodity = MCX_COMMODITIES.find((c) => c.id === quote.id);
   const isUp = quote.change >= 0;
   const hasData = quote.ltp > 0;
+  const biasTone: BadgeTone = quote.bias === "BULLISH" ? "positive" : quote.bias === "BEARISH" ? "negative" : quote.bias === "NEUTRAL" ? "info" : "warning";
 
   return (
     <div className={`rounded-2xl border p-4 ${commodity?.borderClass ?? "border-zinc-700/40"} ${commodity?.bgClass ?? "bg-zinc-900/40"}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">{commodity?.sector ?? ""}</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">{quote.sector}</div>
           <div className={`text-sm font-bold mt-0.5 ${commodity?.colorClass ?? "text-white"}`}>{quote.name}</div>
         </div>
         <div className={`text-[10px] font-bold rounded-full px-2 py-0.5 border ${
@@ -155,6 +159,7 @@ function CommodityCard({ quote }: { quote: MCXCommodityQuote }) {
       <div className={`text-xl font-bold font-mono ${hasData ? (isUp ? "text-emerald-300" : "text-rose-300") : "text-zinc-500"}`}>
         {hasData ? fmt(quote.ltp, 2) : "Connecting…"}
       </div>
+      <div className="mt-0.5 text-[10px] font-medium text-zinc-500">{quote.unit}</div>
       {hasData && (
         <div className="mt-1 text-[10px] font-mono text-zinc-500 space-y-0.5">
           <div className="flex gap-2">
@@ -168,11 +173,136 @@ function CommodityCard({ quote }: { quote: MCXCommodityQuote }) {
         <div className={`h-1.5 w-1.5 rounded-full ${quote.barCount >= 15 ? "bg-emerald-400" : "bg-amber-400"} animate-pulse`} />
         <span className="text-[9px] text-zinc-500 font-mono">{quote.barCount >= 15 ? `${quote.barCount} bars` : `Warming ${quote.barCount}/15`}</span>
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <BadgePill label={quote.bias} tone={biasTone} />
+        <span className="rounded-full border border-zinc-200 bg-white px-2 py-1 text-[9px] font-mono text-zinc-500">RSI {fmt(quote.rsi, 0)}</span>
+        <span className="rounded-full border border-zinc-200 bg-white px-2 py-1 text-[9px] font-mono text-zinc-500">VOL {fmtPct(quote.volatilityPct)}</span>
+      </div>
     </div>
   );
 }
 
 // ── Positions panel ──────────────────────────────────────────────────────────
+
+type CommodityDeskRow = {
+  id: string;
+  name: string;
+  sector: string;
+  colorClass: string;
+  ltp: number;
+  changePct: number;
+  bias: MCXCommodityQuote["bias"];
+  rsi: number;
+  momentumPct: number;
+  volatilityPct: number;
+  barCount: number;
+  openPositions: number;
+  exposure: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  totalPnl: number;
+  trades: number;
+  wins: number;
+  winRate: number;
+  activeStrategies: number;
+  watchlistStrategies: number;
+  disabledStrategies: number;
+};
+
+type SectorExposureRow = {
+  sector: string;
+  exposure: number;
+  openPositions: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  totalPnl: number;
+};
+
+function CommodityDeskPanel({ rows }: { rows: CommodityDeskRow[] }) {
+  const sorted = [...rows].sort((a, b) => Math.abs(b.totalPnl) - Math.abs(a.totalPnl));
+
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+        COMMODITY DESK MATRIX
+        <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>({rows.length} instruments)</span>
+      </h2>
+
+      <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+        <table className="w-full text-left text-sm" style={{ minWidth: 980 }}>
+          <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+            <tr className="text-[11px] uppercase tracking-[0.12em]">
+              {["Commodity", "Bias", "Move", "RSI", "Vol", "Open", "Exposure", "Realized", "Unrealized", "Total P&L", "Trades", "Roster"].map((h) => (
+                <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row) => (
+              <tr key={row.id} className="border-t hover:bg-white/[0.02]" style={{ borderColor: "var(--border)" }}>
+                <td className="px-3 py-2">
+                  <div className={`text-xs font-bold ${row.colorClass}`}>{row.name}</div>
+                  <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>{row.sector}</div>
+                </td>
+                <td className="px-3 py-2"><StatusBadge status={row.bias} /></td>
+                <td className="px-3 py-2 font-mono text-xs" style={{ color: row.changePct >= 0 ? "var(--green)" : "var(--red)" }}>{row.ltp > 0 ? fmtPct(row.changePct, true) : "-"}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{fmt(row.rsi, 0)}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{fmtPct(row.volatilityPct)}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{row.openPositions}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{fmtINR(row.exposure)}</td>
+                <td className="px-3 py-2 font-mono text-xs" style={{ color: row.realizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>{row.realizedPnl !== 0 ? fmtINR(row.realizedPnl, { signed: true }) : "-"}</td>
+                <td className="px-3 py-2 font-mono text-xs" style={{ color: row.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}>{row.unrealizedPnl !== 0 ? fmtINR(row.unrealizedPnl, { signed: true }) : "-"}</td>
+                <td className="px-3 py-2 font-mono text-xs font-bold" style={{ color: row.totalPnl >= 0 ? "var(--green)" : "var(--red)" }}>{row.totalPnl !== 0 ? fmtINR(row.totalPnl, { signed: true }) : "-"}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{row.trades > 0 ? `${row.trades} / ${fmtPct(row.winRate)}` : "-"}</td>
+                <td className="px-3 py-2 font-mono text-xs text-zinc-500">{row.activeStrategies}A / {row.watchlistStrategies}W / {row.disabledStrategies}D</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SectorExposurePanel({ rows }: { rows: SectorExposureRow[] }) {
+  const totalExposure = rows.reduce((sum, row) => sum + row.exposure, 0);
+  const sorted = [...rows].sort((a, b) => b.exposure - a.exposure || Math.abs(b.totalPnl) - Math.abs(a.totalPnl));
+
+  return (
+    <div className="glass-panel px-5 py-6 md:px-6">
+      <h2 className="mb-5 flex flex-wrap items-center gap-3" style={{ fontFamily: "var(--font-display)", fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--text-secondary)" }}>
+        SECTOR EXPOSURE
+        <span className="font-mono" style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }}>({sorted.length} groups)</span>
+      </h2>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        {sorted.map((row) => {
+          const share = totalExposure > 0 ? (row.exposure / totalExposure) * 100 : 0;
+          return (
+            <div key={row.sector} className="rounded-[18px] border p-4" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--text-muted)" }}>{row.sector}</div>
+                  <div className="mt-1 font-mono text-lg font-semibold" style={{ color: row.totalPnl >= 0 ? "var(--green)" : "var(--red)" }}>{row.totalPnl !== 0 ? fmtINR(row.totalPnl, { signed: true }) : fmtINR(0)}</div>
+                </div>
+                <BadgePill label={`${row.openPositions} open`} tone={row.openPositions > 0 ? "info" : "neutral"} />
+              </div>
+              <div className="mt-4">
+                <div className="mb-1 flex items-center justify-between text-[10px] font-mono" style={{ color: "var(--text-secondary)" }}>
+                  <span>{fmtINR(row.exposure)} deployed</span>
+                  <span>{fmtPct(share)}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--border)" }}>
+                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.min(100, share)}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function PositionsPanel({ positions }: { positions: MCXPosition[] }) {
   const unrealized = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
@@ -187,7 +317,7 @@ function PositionsPanel({ positions }: { positions: MCXPosition[] }) {
       {positions.length === 0 ? (
         <div className="flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center text-sm"
           style={{ color: "var(--text-secondary)", borderColor: "var(--border)", background: "var(--surface-2)" }}>
-          No open positions — engine is scanning for entry signals across 5 commodities.
+          No open positions — engine is scanning for entry signals across {MCX_COMMODITIES.length} commodities.
         </div>
       ) : (
         <div className="space-y-4">
@@ -405,9 +535,14 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
   const openCount = stats.openPositions;
   const activeStrategies = strategies.filter((s) => s.status === "READY" || s.status === "IN_POSITION").length;
   const totalStrategies = strategies.length;
+  const activeRoster = strategies.filter((s) => s.rosterState === "ACTIVE").length;
+  const watchlistRoster = strategies.filter((s) => s.rosterState === "WATCHLIST").length;
+  const disabledRoster = strategies.filter((s) => s.rosterState === "DISABLED").length;
   const feedOk = quotes.some((q) => q.ltp > 0);
   const feedBadgeTone: BadgeTone = feedOk ? "positive" : diagnostics.ltpError ? "negative" : "warning";
   const feedBadgeLabel = feedOk ? "MCX Feed Active" : diagnostics.ltpError ? "Feed Error" : "Feed: Connecting…";
+  const sessionBadgeTone: BadgeTone = stats.sessionOpen ? "positive" : "warning";
+  const sessionBadgeLabel = stats.sessionOpen ? "MCX Session Open" : "MCX Session Closed";
   const primaryCandleIssue = diagnostics.candleIssues[0];
   const primaryIssue = diagnostics.ltpError || (primaryCandleIssue ? `${primaryCandleIssue.commodityName}: ${primaryCandleIssue.error}` : "");
   const issueHint = diagnostics.ltpError.includes("Not configured")
@@ -421,6 +556,66 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
           : "";
 
   const bestCommodity = [...quotes].sort((a, b) => Math.abs(b.changePct) - Math.abs(a.changePct))[0];
+  const commodityNames = MCX_COMMODITIES.map((c) => c.name).join(", ");
+  const commodityDeskRows = useMemo<CommodityDeskRow[]>(() => MCX_COMMODITIES.map((commodity) => {
+    const quote = quotes.find((q) => q.id === commodity.id);
+    const commodityPositions = positions.filter((position) => position.commodityId === commodity.id);
+    const commodityTrades = trades.filter((trade) => trade.commodityId === commodity.id);
+    const commodityStrategies = strategies.filter((strategy) => strategy.commodityId === commodity.id);
+    const wins = commodityTrades.filter((trade) => trade.netPnl >= 0).length;
+    const realizedPnl = commodityTrades.reduce((sum, trade) => sum + trade.netPnl, 0);
+    const unrealizedPnl = commodityPositions.reduce((sum, position) => sum + position.unrealizedPnl, 0);
+    const exposure = commodityPositions.reduce((sum, position) => sum + position.costBasis, 0);
+    return {
+      id: commodity.id,
+      name: commodity.name,
+      sector: commodity.sector,
+      colorClass: commodity.colorClass,
+      ltp: quote?.ltp ?? 0,
+      changePct: quote?.changePct ?? 0,
+      bias: quote?.bias ?? "WARMING",
+      rsi: quote?.rsi ?? 50,
+      momentumPct: quote?.momentumPct ?? 0,
+      volatilityPct: quote?.volatilityPct ?? 0,
+      barCount: quote?.barCount ?? 0,
+      openPositions: commodityPositions.length,
+      exposure,
+      realizedPnl,
+      unrealizedPnl,
+      totalPnl: realizedPnl + unrealizedPnl,
+      trades: commodityTrades.length,
+      wins,
+      winRate: commodityTrades.length > 0 ? (wins / commodityTrades.length) * 100 : 0,
+      activeStrategies: commodityStrategies.filter((strategy) => strategy.rosterState === "ACTIVE").length,
+      watchlistStrategies: commodityStrategies.filter((strategy) => strategy.rosterState === "WATCHLIST").length,
+      disabledStrategies: commodityStrategies.filter((strategy) => strategy.rosterState === "DISABLED").length,
+    };
+  }), [positions, quotes, strategies, trades]);
+  const sectorExposureRows = useMemo<SectorExposureRow[]>(() => {
+    const rows = new Map<string, SectorExposureRow>();
+    for (const row of commodityDeskRows) {
+      const existing = rows.get(row.sector) ?? {
+        sector: row.sector,
+        exposure: 0,
+        openPositions: 0,
+        realizedPnl: 0,
+        unrealizedPnl: 0,
+        totalPnl: 0,
+      };
+      existing.exposure += row.exposure;
+      existing.openPositions += row.openPositions;
+      existing.realizedPnl += row.realizedPnl;
+      existing.unrealizedPnl += row.unrealizedPnl;
+      existing.totalPnl += row.totalPnl;
+      rows.set(row.sector, existing);
+    }
+    return Array.from(rows.values());
+  }, [commodityDeskRows]);
+  const bullishCount = quotes.filter((quote) => quote.bias === "BULLISH").length;
+  const bearishCount = quotes.filter((quote) => quote.bias === "BEARISH").length;
+  const neutralCount = quotes.filter((quote) => quote.bias === "NEUTRAL").length;
+  const highVolCount = quotes.filter((quote) => quote.volatilityPct >= 0.35).length;
+  const averageRsi = quotes.length > 0 ? quotes.reduce((sum, quote) => sum + quote.rsi, 0) / quotes.length : 50;
 
   return (
     <main className="space-y-5 pb-10">
@@ -461,8 +656,10 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
 
         <div className="mt-6 flex flex-wrap gap-2 px-1">
           <BadgePill label={feedBadgeLabel} tone={feedBadgeTone} />
+          <BadgePill label={sessionBadgeLabel} tone={sessionBadgeTone} />
           <BadgePill label={`${activeStrategies}/${totalStrategies} Strategies Live`} tone="info" />
-          <BadgePill label="5 Commodities" tone="neutral" />
+          <BadgePill label={`${MCX_COMMODITIES.length} Commodities`} tone="neutral" />
+          <BadgePill label={`${bullishCount} Bull / ${bearishCount} Bear`} tone={bullishCount >= bearishCount ? "positive" : "negative"} />
           <BadgePill label="Paper Trading Only" tone="warning" />
         </div>
 
@@ -486,7 +683,7 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
       </div>
 
       {/* ── Commodity price grid ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         {quotes.map((q) => <CommodityCard key={q.id} quote={q} />)}
       </div>
 
@@ -527,6 +724,52 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
         <SummaryCard label="Gross Profit" value={fmtINR(grossProfit)} accent="text-emerald-600" />
         <SummaryCard label="Gross Loss" value={fmtINR(grossLoss)} accent="text-rose-600" />
       </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <CompactMetric
+          label="Roster Mix"
+          value={`${activeRoster}/${watchlistRoster}/${disabledRoster}`}
+          detail="Active / watchlist / disabled strategies"
+          accent="text-zinc-900"
+        />
+        <CompactMetric
+          label="Capacity"
+          value={`${openCount}/${stats.maxConcurrentPositions}`}
+          detail={`${fmtPct(stats.capitalUtilizationPct)} capital currently deployed`}
+          accent={openCount >= stats.maxConcurrentPositions ? "text-amber-600" : "text-zinc-900"}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <CompactMetric
+          label="Warm Instruments"
+          value={`${quotes.filter((q) => q.barCount >= 15).length}/${MCX_COMMODITIES.length}`}
+          detail="Commodities with enough bars for fast signals"
+          accent="text-zinc-900"
+        />
+        <CompactMetric
+          label="Market Breadth"
+          value={`${bullishCount}/${bearishCount}/${neutralCount}`}
+          detail={`Bull / bear / neutral · Avg RSI ${fmt(averageRsi, 0)}`}
+          accent={bullishCount >= bearishCount ? "text-emerald-600" : "text-rose-600"}
+        />
+        <CompactMetric
+          label="Top Mover"
+          value={bestCommodity && bestCommodity.ltp > 0 ? bestCommodity.name : "—"}
+          detail={bestCommodity && bestCommodity.ltp > 0 ? `${fmtPct(bestCommodity.changePct, true)} today` : "Waiting for live MCX prices"}
+          accent={bestCommodity && bestCommodity.changePct >= 0 ? "text-emerald-600" : "text-rose-600"}
+        />
+        <CompactMetric
+          label="Volatility Watch"
+          value={`${highVolCount}`}
+          detail="Instruments above 0.35% short-window volatility"
+          accent={highVolCount > 0 ? "text-amber-600" : "text-zinc-900"}
+        />
+      </div>
+
+      <CommodityDeskPanel rows={commodityDeskRows} />
+
+      <SectorExposurePanel rows={sectorExposureRows} />
 
       {/* ── Open Positions Snapshot (High visibility) ── */}
       {positions.length > 0 && (
@@ -628,9 +871,9 @@ export default function MCXCommodityScalper({ actionsEnabled = false }: MCXCommo
       <div className="glass-panel px-5 py-4 text-center">
         <p className="text-[11px] leading-5" style={{ color: "var(--text-muted)" }}>
           MCX commodity paper account · Simplified Black-Scholes option premium model · Angel One SmartAPI live MCX feed ·
-          ₹1,000,000 starting balance · 5 commodities (Crude Oil, Gold Mini, Silver Mini, Natural Gas, Copper) ·
+          ₹1,000,000 starting balance · {MCX_COMMODITIES.length} commodities ({commodityNames}) ·
           {bestCommodity && bestCommodity.ltp > 0 ? ` Most active: ${bestCommodity.name} (${fmtPct(Math.abs(bestCommodity.changePct))} move) ·` : ""}
-          {" "}20 strategies · Paper trading only — no real orders placed
+          {" "}{totalStrategies} strategies · Paper trading only — no real orders placed
         </p>
       </div>
     </main>

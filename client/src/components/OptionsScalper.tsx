@@ -2,7 +2,13 @@
 import { useEffect, useState } from "react";
 import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
-import type { OptionPosition, OptionTrade, OptionStrategyStatus, OptionStats } from "@/hooks/useOptions";
+import type {
+  OptionPosition,
+  OptionTrade,
+  OptionStrategyStatus,
+  OptionStats,
+  OptionsBtcFeed,
+} from "@/hooks/useOptions";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
@@ -548,6 +554,8 @@ type OptionsScalperProps = {
   actionsEnabled?: boolean;
   btcSpotUsd?: number;
   btcChange24hPct?: number;
+  /** Engine BTC spot source (Delta / Binance / synthetic) from GET /api/options/btc-feed */
+  engineBtcFeed?: OptionsBtcFeed | null;
   positions: OptionPosition[];
   trades: OptionTrade[];
   strategies: OptionStrategyStatus[];
@@ -560,6 +568,7 @@ export default function OptionsScalper({
   actionsEnabled = false,
   btcSpotUsd,
   btcChange24hPct,
+  engineBtcFeed,
   positions,
   trades,
   strategies,
@@ -683,7 +692,7 @@ export default function OptionsScalper({
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
                 Session PnL {fmtUSD(sessionPnl, { signed: true })}
               </div>
-              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} />
+              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} engineBtcFeed={engineBtcFeed} />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">

@@ -177,7 +177,7 @@ function EnableBanner({
           </div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
             {stats.testnet ? "🧪 Testnet" : "🔴 Production — real money"}&nbsp;·&nbsp;
-            Enable this to mirror BTC Option Selling paper positions to Delta.
+            Mirrors BTC Option Selling signals to Delta. Turn on <strong>Buying mode</strong> for small balances (long options); selling needs large margin.
           </div>
         </div>
       </div>
@@ -1074,6 +1074,28 @@ export default function DeltaLiveScalper({ actionsEnabled = true }: Props) {
         toggling={toggling}
         onToggle={actionsEnabled ? toggleEnabled : () => {}}
       />
+
+      {stats.configured && stats.buyingMode && stats.lowBalanceProfile && stats.walletUsdt > 0 && (
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: "var(--radius-card)",
+            border: "1px solid var(--accent)",
+            background: "var(--accent-dim)",
+            fontSize: 12,
+            color: "var(--text-secondary)",
+            lineHeight: 1.55,
+          }}
+        >
+          <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, color: "var(--accent)" }}>Low balance live sizing</span>
+          {" — "}
+          Wallet ~${fmt(stats.walletUsdt)}: engine caps long-option mirror at ~{(stats.buyRiskPct ?? 0) * 100}% of wallet per signal and max{" "}
+          {stats.buyMaxContracts ?? "—"} contracts (est. ${fmt(stats.buyEstPremiumUsd ?? 35)} premium/contract). Min wallet ${fmt(stats.minWalletUsd ?? 5)}.
+          Override with <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>DELTA_BUY_RISK_PCT</span>,{" "}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>DELTA_BUY_MAX_CONTRACTS</span>,{" "}
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>DELTA_BUY_EST_PREMIUM_USD</span>.
+        </div>
+      )}
 
       {/* ── Top KPI row ─────────────────────────────────────────────── */}
       {stats.configured && (

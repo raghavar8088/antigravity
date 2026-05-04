@@ -98,7 +98,29 @@ export type OptionStats = {
   unrealizedPnl: number;
 };
 
+/** Go engine BTC spot feed for both options desks (Delta → Binance → synthetic). */
+export type OptionsBtcFeedSource = "delta" | "binance" | "synthetic" | "unknown";
+
+export type OptionsBtcFeed = {
+  source: OptionsBtcFeedSource;
+  lastPrice: number;
+  lastUpdated?: string;
+  tickerSymbol: string;
+};
+
 const DESK: OptionsDesk = "buy";
+
+function parseBtcFeedJson(raw: unknown): OptionsBtcFeed | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const src = o.source;
+  const source: OptionsBtcFeedSource =
+    src === "delta" || src === "binance" || src === "synthetic" || src === "unknown" ? src : "unknown";
+  const lastPrice = typeof o.lastPrice === "number" ? o.lastPrice : 0;
+  const tickerSymbol = typeof o.tickerSymbol === "string" ? o.tickerSymbol : "";
+  const lastUpdated = typeof o.lastUpdated === "string" ? o.lastUpdated : undefined;
+  return { source, lastPrice, lastUpdated, tickerSymbol };
+}
 
 export default function useOptions(refreshKey = 0) {
   const cached = typeof window !== "undefined" ? readOptionsBuyCache() : null;
@@ -115,6 +137,7 @@ export default function useOptions(refreshKey = 0) {
   const [trades, setTrades] = useState<OptionTrade[]>(initialTrades);
   const [strategies, setStrategies] = useState<OptionStrategyStatus[]>(initialStrategies);
   const [stats, setStats] = useState<OptionStats | null>(() => statsRef.current);
+  const [btcFeed, setBtcFeed] = useState<OptionsBtcFeed | null>(null);
 
   const clearAll = useCallback(() => {
     clearOptionsBuyCache();
@@ -177,17 +200,26 @@ export default function useOptions(refreshKey = 0) {
     const apiUrl = resolveEngineApiUrl();
     const fetch3 = async () => {
       try {
-        const [posRes, tradesRes, stratRes, statsRes] = await Promise.all([
+        const [posRes, tradesRes, stratRes, statsRes, feedRes] = await Promise.all([
           fetch(`${apiUrl}/api/options/positions`),
           fetch(`${apiUrl}/api/options/trades`),
           fetch(`${apiUrl}/api/options/strategies`),
           fetch(`${apiUrl}/api/options/stats`),
+          fetch(`${apiUrl}/api/options/btc-feed`),
         ]);
 
         const posJson = posRes.ok ? ((await posRes.json()) as OptionPosition[]) : null;
         const tradesJson = tradesRes.ok ? ((await tradesRes.json()) as OptionTrade[]) : null;
         const stratJson = stratRes.ok ? ((await stratRes.json()) as OptionStrategyStatus[]) : null;
         const statsJson = statsRes.ok ? ((await statsRes.json()) as OptionStats) : null;
+        if (feedRes.ok) {
+          try {
+            const feedJson = parseBtcFeedJson(await feedRes.json());
+            if (feedJson) setBtcFeed(feedJson);
+          } catch {
+            /* ignore */
+          }
+        }
 
         mergedTradesRef.current = mergeTradesById(mergedTradesRef.current, tradesJson ?? []);
         mergedStrategiesRef.current = mergeStrategiesById(mergedStrategiesRef.current, stratJson ?? []);
@@ -229,5 +261,5 @@ export default function useOptions(refreshKey = 0) {
     return () => clearInterval(interval);
   }, [refreshKey]);
 
-  return { positions, trades, strategies, stats, clearAll };
+  return { positions, trades, strategies, stats, clearAll, btcFeed };
 }

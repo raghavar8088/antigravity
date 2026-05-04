@@ -49,6 +49,23 @@ const (
 	optionLossStreakPenalty       = 0.10
 	optionAvgPnLBoost             = 0.22
 	optionAvgPnLPenalty           = 0.12
+
+	// ── Upgrade: Dynamic Cooldown Multipliers ──
+	cooldownWinMultiplier       = 0.50
+	cooldownLossMultiplier      = 2.00
+	cooldownStreakWinMultiplier  = 0.33
+
+	// ── Upgrade: Theta-Decay Acceleration Exit ──
+	thetaAccelPhase1Progress = 0.50
+	thetaAccelPhase1TPScale  = 0.80
+	thetaAccelPhase2Progress = 0.70
+	thetaAccelPhase2TPScale  = 0.55
+
+	// ── Upgrade: Volatility-Adjusted Strike Selection ──
+	strikeIVLowThreshold  = 0.50
+	strikeIVHighThreshold = 0.70
+	strikeIVLowScale      = 0.75
+	strikeIVHighScale     = 1.30
 )
 
 func newStrategyStatus(def StrategyDef) StrategyStatus {

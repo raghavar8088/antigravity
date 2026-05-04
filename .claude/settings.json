@@ -60,7 +60,19 @@
       "Bash(\"c:/Trading apllication/engine/positions_test.exe\" -test.v)",
       "Bash(\"c:/Trading apllication/engine/strategy_test.exe\" -test.v)",
       "Bash(\"c:/Trading apllication/engine/options_test.exe\" -test.v)",
-      "Bash(grep -n \"func FetchWarmupCandles\\\\|type WarmupData\\\\|Candles1m\" \"c:/Trading apllication/engine/internal/marketdata/\"*.go)"
+      "Bash(grep -n \"func FetchWarmupCandles\\\\|type WarmupData\\\\|Candles1m\" \"c:/Trading apllication/engine/internal/marketdata/\"*.go)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(grep -r \"MCX\\\\|commodity\\\\|CRUDEOIL\\\\|NATURALGAS\\\\|GOLD\\\\|SILVER\" \"/c/Trading apllication\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.go\" --include=\"*.py\" --include=\"*.json\" --include=\"*.env*\" ! -path \"*/.venv/*\" ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/.git/*\")",
+      "Bash(grep -r \"MCX\\\\|CRUDEOIL\\\\|NATURALGAS\\\\|GOLDM\\\\|SILVERM\\\\|exchange.*MCX\" \"/c/Trading apllication\" --include=\"*.ts\" --include=\"*.tsx\" ! -path \"*/.venv/*\" ! -path \"*/node_modules/*\" ! -path \"*/.next/*\" ! -path \"*/.git/*\")",
+      "Bash(grep -r \"MCX\\\\|mcx\\\\|commodity\\\\|CRUDEOIL\" \"/c/Trading apllication/engine\" --include=\"*.go\" ! -path \"*/.git/*\")",
+      "Bash(grep -r \"gold\\\\|Gold\" \"/c/Trading apllication/client/src\" --include=\"*.ts\" --include=\"*.tsx\" ! -path \"*/.next/*\")",
+      "Bash(find \"c:\\\\\\\\Trading apllication\\\\\\\\client\\\\\\\\src\" -type f -name \"*.ts\" -o -name \"*.tsx\")",
+      "Bash(find \"c:\\\\\\\\Trading apllication\\\\\\\\client\\\\\\\\src\" -name \"*angelAuth*\" -type f)",
+      "Bash(grep -r \"useNiftyOptions\\\\|useNiftyOptionsSelling\\\\|useNiftyStocks\" \"c:\\\\\\\\Trading apllication\\\\\\\\client\\\\\\\\src\\\\\\\\app\" --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(grep -l \"useNiftyStocks\\\\|useNiftyOptions\" \"c:\\\\\\\\Trading apllication\\\\\\\\client\\\\\\\\src\\\\\\\\app\\\\\\\\**\\\\\\\\*.tsx\")"
     ],
     "additionalDirectories": [
       "c:\\Trading apllication\\engine\\internal",

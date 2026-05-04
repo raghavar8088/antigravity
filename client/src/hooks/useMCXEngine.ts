@@ -4,9 +4,9 @@
  * useMCXEngine
  *
  * Fully autonomous, client-side MCX commodity option scalping engine.
- * - Polls /api/mcx/ltp every 5 seconds for all 5 commodities
+ * - Polls /api/mcx/ltp every 5 seconds for every configured MCX commodity
  * - Seeds 1-min bars from /api/mcx/candles on mount
- * - Runs 50 signal-driven strategies (10 per commodity × 5 commodities)
+ * - Runs signal-driven strategies across the configured commodity roster
  * - Roster system: ACTIVE/WATCHLIST/DISABLED with shadow position tracking
  * - Paper option positions with delta-based mark-to-market, TP/SL auto-exit
  * - MCX session gating: 9:00 AM – 11:30 PM IST (3:30–18:00 UTC)
@@ -20,7 +20,7 @@ import type { MCXCandle } from "@/app/api/mcx/candles/route";
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const INITIAL_BALANCE = 1_000_000;
-const MAX_CONCURRENT = 9;
+const MAX_CONCURRENT = 12;
 const MAX_BARS = 200;
 const TICK_MS = 5_000;
 const MCX_PROFIT_LOCK_PROGRESS = 0.28;
@@ -112,6 +112,12 @@ export type MCXStrategyStatus = {
 export type MCXCommodityQuote = {
   id: string;
   name: string;
+  unit: string;
+  sector: string;
+  bias: "BULLISH" | "BEARISH" | "NEUTRAL" | "WARMING";
+  rsi: number;
+  momentumPct: number;
+  volatilityPct: number;
   ltp: number;
   open: number;
   high: number;
@@ -132,6 +138,9 @@ export type MCXStats = {
   winRate: number;
   totalPnl: number;
   unrealizedPnl: number;
+  capitalUtilizationPct: number;
+  sessionOpen: boolean;
+  maxConcurrentPositions: number;
 };
 
 export type MCXCandleIssue = {
@@ -288,6 +297,54 @@ const BASE_STRAT_DEFS: StratDef[] = [
   { id: 48, name: "Copper_BB_Upper_Put",         commodityId: "COPPER",     optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.60, slPct: 0.24, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
   { id: 49, name: "Copper_Stoch_Cross_Call",     commodityId: "COPPER",     optionType: "CALL", signal: "STOCH_BULL_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
   { id: 50, name: "Copper_Stoch_Cross_Put",      commodityId: "COPPER",     optionType: "PUT",  signal: "STOCH_BEAR_CROSS",   tpPct: 0.55, slPct: 0.24, cooldownSecs: 360, minBars: 20, startAsWatchlist: true },
+
+  // ── Aluminium
+  { id: 51, name: "Aluminium_MomBull_Call",      commodityId: "ALUMINIUM",  optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.62, slPct: 0.24, cooldownSecs: 360, minBars: 15 },
+  { id: 52, name: "Aluminium_MomBear_Put",       commodityId: "ALUMINIUM",  optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.62, slPct: 0.24, cooldownSecs: 360, minBars: 15 },
+  { id: 53, name: "Aluminium_Resist_Break_Call", commodityId: "ALUMINIUM",  optionType: "CALL", signal: "RESIST_BREAK",       tpPct: 0.66, slPct: 0.26, cooldownSecs: 480, minBars: 22 },
+  { id: 54, name: "Aluminium_Support_Break_Put", commodityId: "ALUMINIUM",  optionType: "PUT",  signal: "SUPPORT_BREAK",      tpPct: 0.66, slPct: 0.26, cooldownSecs: 480, minBars: 22 },
+  { id: 55, name: "Aluminium_ATR_Break_Call",    commodityId: "ALUMINIUM",  optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.64, slPct: 0.26, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 56, name: "Aluminium_ATR_Break_Put",     commodityId: "ALUMINIUM",  optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.64, slPct: 0.26, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 57, name: "Aluminium_BB_Lower_Call",     commodityId: "ALUMINIUM",  optionType: "CALL", signal: "BB_LOWER_TOUCH",     tpPct: 0.50, slPct: 0.22, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 58, name: "Aluminium_BB_Upper_Put",      commodityId: "ALUMINIUM",  optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.50, slPct: 0.22, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 59, name: "Aluminium_Pullback_Call",     commodityId: "ALUMINIUM",  optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.58, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+  { id: 60, name: "Aluminium_Pullback_Put",      commodityId: "ALUMINIUM",  optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.58, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+
+  // ── Zinc
+  { id: 61, name: "Zinc_MomBull_Call",           commodityId: "ZINC",       optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.64, slPct: 0.25, cooldownSecs: 360, minBars: 15 },
+  { id: 62, name: "Zinc_MomBear_Put",            commodityId: "ZINC",       optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.64, slPct: 0.25, cooldownSecs: 360, minBars: 15 },
+  { id: 63, name: "Zinc_Resist_Break_Call",      commodityId: "ZINC",       optionType: "CALL", signal: "RESIST_BREAK",       tpPct: 0.68, slPct: 0.27, cooldownSecs: 480, minBars: 22 },
+  { id: 64, name: "Zinc_Support_Break_Put",      commodityId: "ZINC",       optionType: "PUT",  signal: "SUPPORT_BREAK",      tpPct: 0.68, slPct: 0.27, cooldownSecs: 480, minBars: 22 },
+  { id: 65, name: "Zinc_ATR_Break_Call",         commodityId: "ZINC",       optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.66, slPct: 0.27, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 66, name: "Zinc_ATR_Break_Put",          commodityId: "ZINC",       optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.66, slPct: 0.27, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 67, name: "Zinc_RSI_OS_Call",            commodityId: "ZINC",       optionType: "CALL", signal: "RSI_EXTREME_OS",     tpPct: 0.52, slPct: 0.24, cooldownSecs: 480, minBars: 20, startAsWatchlist: true },
+  { id: 68, name: "Zinc_RSI_OB_Put",             commodityId: "ZINC",       optionType: "PUT",  signal: "RSI_EXTREME_OB",     tpPct: 0.52, slPct: 0.24, cooldownSecs: 480, minBars: 20, startAsWatchlist: true },
+  { id: 69, name: "Zinc_Pullback_Call",          commodityId: "ZINC",       optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.60, slPct: 0.25, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+  { id: 70, name: "Zinc_Pullback_Put",           commodityId: "ZINC",       optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.60, slPct: 0.25, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+
+  // ── Lead
+  { id: 71, name: "Lead_MomBull_Call",           commodityId: "LEAD",       optionType: "CALL", signal: "BULL_MOM",           tpPct: 0.60, slPct: 0.24, cooldownSecs: 360, minBars: 15 },
+  { id: 72, name: "Lead_MomBear_Put",            commodityId: "LEAD",       optionType: "PUT",  signal: "BEAR_MOM",           tpPct: 0.60, slPct: 0.24, cooldownSecs: 360, minBars: 15 },
+  { id: 73, name: "Lead_Resist_Break_Call",      commodityId: "LEAD",       optionType: "CALL", signal: "RESIST_BREAK",       tpPct: 0.64, slPct: 0.26, cooldownSecs: 480, minBars: 22 },
+  { id: 74, name: "Lead_Support_Break_Put",      commodityId: "LEAD",       optionType: "PUT",  signal: "SUPPORT_BREAK",      tpPct: 0.64, slPct: 0.26, cooldownSecs: 480, minBars: 22 },
+  { id: 75, name: "Lead_ATR_Break_Call",         commodityId: "LEAD",       optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.62, slPct: 0.26, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 76, name: "Lead_ATR_Break_Put",          commodityId: "LEAD",       optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.62, slPct: 0.26, cooldownSecs: 360, minBars: 22, startAsWatchlist: true },
+  { id: 77, name: "Lead_BB_Lower_Call",          commodityId: "LEAD",       optionType: "CALL", signal: "BB_LOWER_TOUCH",     tpPct: 0.48, slPct: 0.22, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 78, name: "Lead_BB_Upper_Put",           commodityId: "LEAD",       optionType: "PUT",  signal: "BB_UPPER_TOUCH",     tpPct: 0.48, slPct: 0.22, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 79, name: "Lead_Pullback_Call",          commodityId: "LEAD",       optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.58, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+  { id: 80, name: "Lead_Pullback_Put",           commodityId: "LEAD",       optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.58, slPct: 0.24, cooldownSecs: 480, minBars: 60, startAsWatchlist: true },
+
+  // ── Nickel
+  { id: 81, name: "Nickel_StrongMom_Call",       commodityId: "NICKEL",     optionType: "CALL", signal: "STRONG_BULL_MOM",    tpPct: 0.72, slPct: 0.30, cooldownSecs: 420, minBars: 15 },
+  { id: 82, name: "Nickel_StrongMom_Put",        commodityId: "NICKEL",     optionType: "PUT",  signal: "STRONG_BEAR_MOM",    tpPct: 0.72, slPct: 0.30, cooldownSecs: 420, minBars: 15 },
+  { id: 83, name: "Nickel_Resist_Break_Call",    commodityId: "NICKEL",     optionType: "CALL", signal: "RESIST_BREAK",       tpPct: 0.70, slPct: 0.30, cooldownSecs: 480, minBars: 22 },
+  { id: 84, name: "Nickel_Support_Break_Put",    commodityId: "NICKEL",     optionType: "PUT",  signal: "SUPPORT_BREAK",      tpPct: 0.70, slPct: 0.30, cooldownSecs: 480, minBars: 22 },
+  { id: 85, name: "Nickel_ATR_Break_Call",       commodityId: "NICKEL",     optionType: "CALL", signal: "ATR_BREAKOUT_BULL",  tpPct: 0.70, slPct: 0.30, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 86, name: "Nickel_ATR_Break_Put",        commodityId: "NICKEL",     optionType: "PUT",  signal: "ATR_BREAKOUT_BEAR",  tpPct: 0.70, slPct: 0.30, cooldownSecs: 420, minBars: 22, startAsWatchlist: true },
+  { id: 87, name: "Nickel_RSI_OS_Call",          commodityId: "NICKEL",     optionType: "CALL", signal: "RSI_EXTREME_OS",     tpPct: 0.52, slPct: 0.26, cooldownSecs: 540, minBars: 20, startAsWatchlist: true },
+  { id: 88, name: "Nickel_RSI_OB_Put",           commodityId: "NICKEL",     optionType: "PUT",  signal: "RSI_EXTREME_OB",     tpPct: 0.52, slPct: 0.26, cooldownSecs: 540, minBars: 20, startAsWatchlist: true },
+  { id: 89, name: "Nickel_Pullback_Call",        commodityId: "NICKEL",     optionType: "CALL", signal: "TREND_PULLBACK_BULL", tpPct: 0.66, slPct: 0.28, cooldownSecs: 540, minBars: 60, startAsWatchlist: true },
+  { id: 90, name: "Nickel_Pullback_Put",         commodityId: "NICKEL",     optionType: "PUT",  signal: "TREND_PULLBACK_BEAR", tpPct: 0.66, slPct: 0.28, cooldownSecs: 540, minBars: 60, startAsWatchlist: true },
 ];
 
 // ─── Math helpers ──────────────────────────────────────────────────────────────
@@ -710,7 +767,11 @@ function holdMinutesFor(commodityId: string): number {
   switch (commodityId) {
     case "NATURALGAS": return 90;
     case "CRUDEOIL":
-    case "COPPER":     return 120;
+    case "COPPER":
+    case "ALUMINIUM":
+    case "ZINC":
+    case "LEAD":       return 120;
+    case "NICKEL":     return 150;
     default:           return 150;
   }
 }
@@ -1110,14 +1171,37 @@ function buildStats(eng: EngineRef): MCXStats {
     balance: eng.balance, equity, totalTrades, openPositions,
     totalWins: eng.totalWins, totalLosses: eng.totalLosses,
     winRate: totalWinRate, totalPnl: eng.totalRealizedPnl, unrealizedPnl,
+    capitalUtilizationPct: INITIAL_BALANCE > 0 ? (openCost / INITIAL_BALANCE) * 100 : 0,
+    sessionOpen: isMCXSessionOpen(),
+    maxConcurrentPositions: MAX_CONCURRENT,
   };
 }
 
 function buildQuotes(eng: EngineRef): MCXCommodityQuote[] {
   return MCX_COMMODITIES.map((c) => {
     const state = eng.commodities.get(c.id)!;
+    const bars = state.minuteBars;
+    const latest = state.lastPrice > 0 ? state.lastPrice : bars[bars.length - 1] ?? 0;
+    const barsForSignal = latest > 0 ? [...bars.slice(-MAX_BARS), latest] : bars;
+    const rsiValue = barsForSignal.length >= 15 ? rsi(barsForSignal, 14) : 50;
+    const momentumValue = barsForSignal.length > 6 ? momentum(barsForSignal, 5) * 100 : 0;
+    const volatilityValue = barsForSignal.length >= 20 && latest > 0 ? (stddev(barsForSignal.slice(-20)) / latest) * 100 : 0;
+    const fastEma = barsForSignal.length >= 9 ? ema(barsForSignal, 9) : 0;
+    const slowEma = barsForSignal.length >= 21 ? ema(barsForSignal, 21) : 0;
+    const bias: MCXCommodityQuote["bias"] = barsForSignal.length < 15 || latest <= 0
+      ? "WARMING"
+      : latest > fastEma && fastEma > slowEma && momentumValue > 0
+        ? "BULLISH"
+        : latest < fastEma && fastEma < slowEma && momentumValue < 0
+          ? "BEARISH"
+          : "NEUTRAL";
     return {
-      id: c.id, name: c.name, ltp: state.lastPrice,
+      id: c.id, name: c.name, unit: c.unit, sector: c.sector,
+      bias,
+      rsi: rsiValue,
+      momentumPct: momentumValue,
+      volatilityPct: volatilityValue,
+      ltp: state.lastPrice,
       open: state.open, high: state.high, low: state.low, close: state.close,
       change: state.change, changePct: state.changePct, barCount: state.minuteBars.length,
     };

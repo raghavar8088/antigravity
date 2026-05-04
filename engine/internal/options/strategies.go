@@ -1,5 +1,7 @@
 package options
 
+import "math"
+
 const (
 	minLiveExpiryMinutes = 60
 	maxLiveStrikePctOTM  = 0.020 // Sellers can go further out
@@ -98,6 +100,21 @@ func assignStrategyIDs(defs []StrategyDef) []StrategyDef {
 	return defs
 }
 
+// toLongOptionStrategy maps each writer template to a long-premium leg:
+// short-put signals → long call; short-call signals → long put.
+// TP/SL are re-scaled for buying premium (tighter stop, modest profit capture).
+func toLongOptionStrategy(sellerDef StrategyDef) StrategyDef {
+	d := sellerDef
+	if d.Type == Put {
+		d.Type = Call
+	} else {
+		d.Type = Put
+	}
+	d.TakeProfitPct = math.Max(0.22, math.Min(0.44, d.TakeProfitPct*0.88))
+	d.StopLossPct = math.Max(0.38, math.Min(0.58, d.StopLossPct*0.82))
+	return d
+}
+
 func BuildStrategies() []StrategyDef {
 	all := assignStrategyIDs(buildAllStrategies())
 	filtered := make([]StrategyDef, 0, len(all))
@@ -106,7 +123,7 @@ func BuildStrategies() []StrategyDef {
 			if category, ok := optionStrategyCategories[def.Name]; ok {
 				def.Category = category
 			}
-			filtered = append(filtered, def)
+			filtered = append(filtered, toLongOptionStrategy(def))
 		}
 	}
 	return filtered
@@ -120,7 +137,8 @@ func BuildNiftyStrategies() []StrategyDef {
 	return buildNiftyNativeStrategies()
 }
 
-// buildAllStrategies defines BTC option SELLING (writing) strategies.
+// buildAllStrategies defines writer-style templates (bull put / bear call) used as
+// the base to derive long CALL / long PUT legs in BuildStrategies().
 //
 // Efficiency Improvements:
 //   - All strategies use safer OTM strikes (1.0% - 1.8%) for higher Probability of Profit (POP).

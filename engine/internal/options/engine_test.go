@@ -1,27 +1,27 @@
 package options
 
 import (
+	"math"
 	"testing"
 	"time"
 )
 
 func TestAggregateStatsIncludesOpenOptionMarketValueInEquity(t *testing.T) {
-	// For a SELLER, balance is high (received premium) and equity = balance - liability.
-	// Seller received $500 premium, so balance went UP by 500. Position is a liability.
+	// Long option: cash pays premium; equity = cash + mark-to-market option value.
 	e := &Engine{
-		balance: initialOptionsBalance + 500, // balance goes UP when seller opens
+		balance: initialOptionsBalance - 500, // paid premium to open
 		states: []*strategyState{
 			{
 				stats: StrategyStatus{
-					Name:        "Test_Put_Sell",
-					OptionType:  string(Put),
+					Name:        "Test_Long_Call",
+					OptionType:  string(Call),
 					Status:      "IN_POSITION",
 					HasPosition: true,
 				},
 				position: &OptionPosition{
-					ID:             "SELL-TEST-0001",
-					StrategyName:   "Test_Put_Sell",
-					OptionType:     Put,
+					ID:             "BUY-TEST-0001",
+					StrategyName:   "Test_Long_Call",
+					OptionType:     Call,
 					Strike:         67000,
 					ExpiryTime:     time.Now().Add(75 * time.Minute),
 					EntryPremium:   100,
@@ -40,13 +40,13 @@ func TestAggregateStatsIncludesOpenOptionMarketValueInEquity(t *testing.T) {
 
 	stats := e.aggregateStatsLocked()
 
-	if stats.Balance != initialOptionsBalance+500 {
-		t.Fatalf("expected balance %.2f, got %.2f", initialOptionsBalance+500, stats.Balance)
+	if stats.Balance != initialOptionsBalance-500 {
+		t.Fatalf("expected balance %.2f, got %.2f", initialOptionsBalance-500, stats.Balance)
 	}
 	if stats.UnrealizedPnL != 0 {
 		t.Fatalf("expected unrealized pnl 0, got %.2f", stats.UnrealizedPnL)
 	}
-	// Equity = Balance - Liability = (balance+500) - 500 = initialOptionsBalance
+	// Equity = cash + position MTM = (initial-500) + 500
 	if stats.Equity != initialOptionsBalance {
 		t.Fatalf("expected equity %.2f, got %.2f", initialOptionsBalance, stats.Equity)
 	}
@@ -62,7 +62,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 	strategyName := "MomentumBurst_Bull_Put_Sell"
 
 	snapshot := PersistedState{
-		Balance:    initialOptionsBalance + 250, // seller received premium
+		Balance:    initialOptionsBalance - 250, // cash after paying premium on open position
 		LastPrice:  67100,
 		LastMinute: time.Now().Unix() / 60,
 		TradeSeq:   12,
@@ -72,7 +72,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 			{
 				ID:            "SELL-0001-TEST",
 				StrategyName:  strategyName,
-				OptionType:    Put,
+				OptionType:    Call,
 				Strike:        67000,
 				ExpiryMins:    75,
 				EntryPremium:  100,
@@ -93,7 +93,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 				Name: strategyName,
 				Stats: StrategyStatus{
 					Name:        strategyName,
-					OptionType:  string(Put),
+					OptionType:  string(Call),
 					TotalTrades: 1,
 					Wins:        1,
 					Losses:      0,
@@ -104,9 +104,9 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 				},
 				LastTradeAt: entryTime,
 				Position: &OptionPosition{
-					ID:             "SELL-0012-Mome",
+					ID:             "BUY-0012-Mome",
 					StrategyName:   strategyName,
-					OptionType:     Put,
+					OptionType:     Call,
 					Strike:         67000,
 					ExpiryTime:     expiry,
 					EntryPremium:   110,
@@ -115,7 +115,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 					CostBasis:      550,
 					EntryBTCPrice:  67020,
 					EntryTime:      entryTime,
-					UnrealizedPnL:  -75, // selling: premium went UP = loss
+					UnrealizedPnL:  75, // long: premium marked up
 					IV:             0.6,
 					Delta:          0.52,
 				},
@@ -284,52 +284,51 @@ func TestLiveSizeMultiplierRewardsProfitableStrategies(t *testing.T) {
 func TestMarkToMarketCanExitEarlyToProtectGrindProfit(t *testing.T) {
 	e := NewEngine()
 	entryTime := time.Now().Add(-90 * time.Minute)
-	// Selling: entry premium was 100, current is 60 → gainPct = (100-60)/100 = 0.40
+	// Long call: premium up vs entry → bank gains near scaled TP.
 	pos := &OptionPosition{
-		ID:             "SELL-GRIND-0001",
+		ID:             "BUY-GRIND-0001",
 		StrategyID:     101,
 		StrategyName:   "MomentumBurst_Bull_Put_Sell",
-		OptionType:     Put,
+		OptionType:     Call,
 		Strike:         65000,
 		ExpiryTime:     entryTime.Add(180 * time.Minute),
 		EntryPremium:   100,
-		CurrentPremium: 60,
+		CurrentPremium: 138,
 		Quantity:       1,
 		CostBasis:      100,
 		EntryBTCPrice:  65000,
 		EntryTime:      entryTime,
-		UnrealizedPnL:  40, // (100 - 60) * 1
+		UnrealizedPnL:  38,
 		IV:             0.5,
 		Delta:          0.5,
-		PeakGainPct:    0.42,
+		PeakGainPct:    0.38,
 	}
 
-	reason := e.markToMarketPositionLocked(pos, 0.5, 0.42, 0.35, entryTime.Add(95*time.Minute))
+	reason := e.markToMarketPositionLocked(pos, 0.5, 0.334, 0.55, entryTime.Add(95*time.Minute))
 	if reason == "" {
-		t.Fatal("expected profitable grind exit to trigger a protective close")
+		t.Fatal("expected profitable exit when premium gain clears scaled take-profit")
 	}
 }
 
-func TestMarkToMarketKeepsPositionOpenWhenPremiumDecaying(t *testing.T) {
+func TestMarkToMarketKeepsPositionOpenWhenPremiumSlightlyOff(t *testing.T) {
 	e := NewEngine()
 	entryTime := time.Now().Add(-30 * time.Minute)
 	expiry := entryTime.Add(180 * time.Minute)
 	entrySpot := 65000.0
-	strike := 65000 * 1.012 // OTM call sell
+	strike := entrySpot * 1.012 // OTM long call
 	entryPremium := PriceOption(entrySpot, strike, expiry, 0.5, Call).Premium
 
-	// A small favorable decay scenario — premium has decayed slightly (good for seller)
-	currentSpot := entrySpot - 50 // price moved slightly away from strike (favorable)
+	currentSpot := entrySpot - 40
 	currentPremium := PriceOption(currentSpot, strike, expiry, 0.5, Call).Premium
 
-	gainPct := (entryPremium - currentPremium) / entryPremium
-	if gainPct <= 0 {
-		t.Skipf("pricing model shows no decay for this scenario — skipping test")
+	gainPct := (currentPremium - entryPremium) / entryPremium
+	if gainPct <= -0.5 {
+		t.Skipf("pricing model produced large loss — skip")
 	}
 
 	e.lastPrice = currentSpot
 	pos := &OptionPosition{
-		ID:             "SELL-DECAY-0001",
+		ID:             "BUY-HOLD-0001",
 		StrategyID:     102,
 		StrategyName:   "MomentumBurst_Bear_Call_Sell",
 		OptionType:     Call,
@@ -341,20 +340,19 @@ func TestMarkToMarketKeepsPositionOpenWhenPremiumDecaying(t *testing.T) {
 		CostBasis:      entryPremium,
 		EntryBTCPrice:  entrySpot,
 		EntryTime:      entryTime,
-		UnrealizedPnL:  (entryPremium - currentPremium) * 1,
+		UnrealizedPnL:  (currentPremium - entryPremium) * 1,
 		IV:             0.5,
 		Delta:          0.5,
-		PeakGainPct:    gainPct,
+		PeakGainPct:    math.Max(0, gainPct),
 	}
 
-	// Only 30 minutes in — should keep running
-	reason := e.markToMarketPositionLocked(pos, 0.5, 0.38, 0.70, entryTime.Add(30*time.Minute))
+	reason := e.markToMarketPositionLocked(pos, 0.5, 0.334, 0.55, entryTime.Add(30*time.Minute))
 	if reason != "" {
-		t.Fatalf("expected decaying premium to keep running early in trade, got %s", reason)
+		t.Fatalf("expected small early MTM move to keep trade running, got %s", reason)
 	}
 }
 
-func TestContinuationStrategiesUseSellerProfitTargets(t *testing.T) {
+func TestLongOptionStrategiesScaledProfitTargets(t *testing.T) {
 	defs := BuildStrategies()
 	byName := make(map[string]StrategyDef, len(defs))
 	for _, def := range defs {
@@ -362,14 +360,14 @@ func TestContinuationStrategiesUseSellerProfitTargets(t *testing.T) {
 	}
 
 	cases := map[string]float64{
-		"MomentumBurst_Bull_Put_Sell":     0.38,
-		"MomentumBurst_Bear_Call_Sell":    0.38,
-		"Resistance_Breakout_Put_Sell":    0.40,
-		"Support_Breakdown_Call_Sell":     0.40,
-		"TripleConfluence_Bull_Put":       0.44,
-		"MomentumVWAP_Pro_Bull_Put":       0.40,
-		"BreakoutTrend_Pro_Bull_Put":      0.44,
-		"Capitulation_Reclaim_Elite_Put":  0.52,
+		"MomentumBurst_Bull_Put_Sell":    0.3344, // 0.38 * 0.88
+		"MomentumBurst_Bear_Call_Sell":   0.3344,
+		"Resistance_Breakout_Put_Sell":   0.352, // 0.40 * 0.88
+		"Support_Breakdown_Call_Sell":    0.352,
+		"TripleConfluence_Bull_Put":      0.3872, // 0.44 * 0.88
+		"MomentumVWAP_Pro_Bull_Put":      0.352,
+		"BreakoutTrend_Pro_Bull_Put":     0.3872,
+		"Capitulation_Reclaim_Elite_Put": 0.44, // min(0.44, 0.52*0.88) — long-book TP cap
 	}
 
 	for name, want := range cases {
@@ -377,8 +375,8 @@ func TestContinuationStrategiesUseSellerProfitTargets(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected strategy %s to exist", name)
 		}
-		if def.TakeProfitPct != want {
-			t.Fatalf("expected %s take profit %.2f, got %.2f", name, want, def.TakeProfitPct)
+		if math.Abs(def.TakeProfitPct-want) > 1e-6 {
+			t.Fatalf("expected %s take profit %.4f, got %.4f", name, want, def.TakeProfitPct)
 		}
 	}
 }
@@ -393,7 +391,7 @@ func TestOptionEntryConfirmedRejectsWeakMomentumCall(t *testing.T) {
 		Prices:   prices,
 		BTCPrice: prices[len(prices)-1],
 	}
-	def := StrategyDef{Category: "Momentum", Type: Put} // Put = bullish seller
+	def := StrategyDef{Category: "Momentum", Type: Call} // Long call = bullish book
 
 	if optionEntryConfirmed(def, ctx, optionMarketRegimeTrend) {
 		t.Fatal("expected weak momentum tape to fail the entry confirmation gate")

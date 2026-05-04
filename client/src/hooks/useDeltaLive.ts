@@ -78,12 +78,19 @@ export type DeltaLiveStats = {
   configured: boolean;
   testnet: boolean;
   enabled: boolean;
+  buyingMode?: boolean;
   totalTrades: number;
   openTrades: number;
   wins: number;
   losses: number;
   totalPnl: number;
   walletUsdt: number;
+  /** Engine tier for live BUY sizing (small USDT wallet). */
+  lowBalanceProfile?: boolean;
+  buyRiskPct?: number;
+  buyMaxContracts?: number;
+  minWalletUsd?: number;
+  buyEstPremiumUsd?: number;
   account?: AccountInfo;
 };
 
@@ -97,6 +104,7 @@ const EMPTY_STATS: DeltaLiveStats = {
   configured: false,
   testnet: false,
   enabled: false,
+  buyingMode: false,
   totalTrades: 0,
   openTrades: 0,
   wins: 0,

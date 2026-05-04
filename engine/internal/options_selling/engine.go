@@ -39,7 +39,7 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
-	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration
 }
@@ -102,8 +102,8 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 }
 
 // SetOnOpenHook registers a callback fired every time a live sell position is opened.
-// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD.
-func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)) {
+// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD, btcSpot.
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onOpenHook = fn
@@ -530,7 +530,19 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 	if !e.paperDeskAggressiveOpen() {
-		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
+		// ── Upgrade: Dynamic Cooldown ──
+		cooldownMul := 1.0
+		if s.consecutiveLosses == 0 && s.stats.TotalTrades > 0 {
+			if s.stats.Wins >= 2 && s.stats.Losses == 0 {
+				cooldownMul = cooldownStreakWinMultiplier
+			} else {
+				cooldownMul = cooldownWinMultiplier
+			}
+		} else if s.consecutiveLosses > 0 {
+			cooldownMul = cooldownLossMultiplier
+		}
+		adjustedCooldown := time.Duration(float64(s.def.CooldownSecs)*cooldownMul) * time.Second
+		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < adjustedCooldown {
 			return
 		}
 	}
@@ -587,7 +599,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		strike := pos.Strike
 		expiry := pos.ExpiryTime
 		premium := pos.CostBasis
-		go hook(posID, stratID, stratName, optType, strike, expiry, premium)
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium, e.lastPrice)
 	}
 }
 
@@ -624,13 +636,23 @@ func (e *Engine) entryConfirmedFor(def StrategyDef, ctx SignalContext, regime st
 
 func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {
 	expiry := now.Add(time.Duration(def.ExpiryMinutes) * time.Minute)
+
+	// ── Upgrade: Volatility-Adjusted Strike Selection ──
+	adjustedOTM := def.StrikePctOTM
+	switch {
+	case iv > 0 && iv < strikeIVLowThreshold:
+		adjustedOTM *= strikeIVLowScale
+	case iv > strikeIVHighThreshold:
+		adjustedOTM *= strikeIVHighScale
+	}
+
 	var strike float64
 	// SELLING logic: Sell Puts on Bullish signals, Sell Calls on Bearish signals.
 	// We use StrategyDef.Type to determine if it's a Call or Put being SOLD.
 	if def.Type == Call {
-		strike = e.lastPrice * (1 + def.StrikePctOTM)
+		strike = e.lastPrice * (1 + adjustedOTM)
 	} else {
-		strike = e.lastPrice * (1 - def.StrikePctOTM)
+		strike = e.lastPrice * (1 - adjustedOTM)
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
@@ -679,8 +701,6 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
-		// As a seller, we want CurrentPremium to go DOWN.
-		// If Entry=10, Current=4, gainPct = (10-4)/10 = 0.6 (60% profit)
 		gainPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium
 	}
 	if gainPct > pos.PeakGainPct {
@@ -693,10 +713,17 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/totalLife.Seconds(), 1)
 	}
 
-	// profitLockThreshold raised from 0.40→0.60 of TP — let positions run longer
-	// before early-exit so theta decay is fully collected before locking in gains.
-	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
-	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.36)
+	// ── Upgrade: Theta-Decay Acceleration ──
+	effectiveTP := takeProfitPct
+	switch {
+	case timeProgress >= thetaAccelPhase2Progress:
+		effectiveTP = takeProfitPct * thetaAccelPhase2TPScale
+	case timeProgress >= thetaAccelPhase1Progress:
+		effectiveTP = takeProfitPct * thetaAccelPhase1TPScale
+	}
+
+	profitLockThreshold := math.Max(optionLateExitMinGain, effectiveTP*optionProfitLockShareOfTarget)
+	trailActivation := math.Max(optionLateExitMinGain, effectiveTP*0.36)
 	trailFloor := pos.PeakGainPct * 0.62
 	strikePressure := false
 	switch pos.OptionType {
@@ -707,7 +734,7 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	}
 
 	switch {
-	case gainPct >= takeProfitPct:
+	case gainPct >= effectiveTP:
 		return ExitTP
 	case gainPct <= -stopLossPct:
 		return ExitSL

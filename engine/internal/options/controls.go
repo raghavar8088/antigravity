@@ -6,8 +6,17 @@ import (
 )
 
 const (
-	maxConcurrentPositions   = 8
-	optionTradeAllocationUSD = initialOptionsBalance * 0.01
+	// Buyer desk: fewer overlapping longs and smaller base tickets vs the selling desk.
+	maxConcurrentPositions   = 4
+	optionTradeAllocationUSD = initialOptionsBalance * 0.002 // 0.20% — low-balance-oriented paper book
+
+	buyerDailyLossLimitPct = 0.03 // halt new opens after 3% of day-start balance (tighter than generic 5%)
+
+	// Long-option exits: spot moved against thesis while the trade is still losing.
+	buyerThesisMovePct = 0.012
+	// Theta bleed: by this fraction of contract life, require at least this premium gain or flatten.
+	buyerThetaBleedProgress = 0.58
+	buyerThetaBleedMinGain  = 0.055
 
 	optionStatusReady      = "READY"
 	optionStatusInPosition = "IN_POSITION"
@@ -44,13 +53,34 @@ const (
 	optionMomentumFadeProgress    = 0.72
 	optionStrikePressureBuffer    = 0.0025
 
-	optionColdStartSizeMultiplier = 0.95
-	optionMinSizeMultiplier       = 0.45
-	optionMaxSizeMultiplier       = 1.90
-	optionEarlyMaxMultiplier      = 1.15
+	optionColdStartSizeMultiplier = 0.92
+	optionMinSizeMultiplier       = 0.40
+	optionMaxSizeMultiplier       = 1.55 // cap leverage stacking on a small-book profile
+	optionEarlyMaxMultiplier      = 1.08
 	optionLossStreakPenalty       = 0.10
 	optionAvgPnLBoost             = 0.22
 	optionAvgPnLPenalty           = 0.12
+
+	// ── Upgrade: Dynamic Cooldown Multipliers ──
+	// Winners get shorter cooldowns (strike while hot), losers get longer ones.
+	cooldownWinMultiplier       = 0.50 // halve cooldown after a win
+	cooldownLossMultiplier      = 2.00 // double cooldown after a loss
+	cooldownStreakWinMultiplier  = 0.33 // 2+ consecutive wins → 1/3 cooldown
+
+	// ── Upgrade: Theta-Decay Acceleration Exit ──
+	// Selling strategies benefit from accelerating theta in late life.
+	// Tighten TP progressively as position ages to capture the theta cliff.
+	thetaAccelPhase1Progress = 0.50 // 50% of life elapsed → tighten TP
+	thetaAccelPhase1TPScale  = 0.80 // TP at 80% of normal (e.g. 38%→30%)
+	thetaAccelPhase2Progress = 0.70 // 70% of life elapsed → tighten more
+	thetaAccelPhase2TPScale  = 0.55 // TP at 55% of normal (e.g. 38%→21%)
+
+	// ── Upgrade: Volatility-Adjusted Strike Selection ──
+	// Scale OTM strike distance with realized IV so strikes adapt to conditions.
+	strikeIVLowThreshold  = 0.50 // IV below this → tighter strikes
+	strikeIVHighThreshold = 0.70 // IV above this → wider strikes
+	strikeIVLowScale      = 0.75 // multiply OTM% by this in low-vol
+	strikeIVHighScale     = 1.30 // multiply OTM% by this in high-vol
 )
 
 func newStrategyStatus(def StrategyDef) StrategyStatus {
@@ -204,33 +234,28 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 	mom3 := momentum(ctx.Prices, 3)
 	mom8 := momentum(ctx.Prices, 8)
 
-	bullishSeller := def.Type == Put
+	// Long options: calls for bullish signals, puts for bearish (writer mapping was the inverse).
+	bullishLong := def.Type == Call
 	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
-	if bullishSeller {
+	if bullishLong {
 		switch def.Category {
 		case "Momentum", "Breakout", "Hybrid":
-			// Tightened RSI band 44-76 → 48-72: removes weakest reversal setups
-			// and caps entries when price is already overbought for the signal type.
-			return trendAligned && price >= slow*0.996 && mom3 > 0.0006 && mom8 > -0.0002 && rsiVal >= 48 && rsiVal <= 72
+			// Slightly stricter than prior short-put gate: long calls need clean uptrend, not late extensions.
+			return trendAligned && price >= slow*0.996 && mom3 > 0.0007 && mom8 > -0.0001 && rsiVal >= 46 && rsiVal <= 70
 		case "Mean Reversion", "Capitulation":
-			// Tightened RSI band 34-68 → 38-64: mean-reversion entries require
-			// more confirmed oversold reading before entering the trade.
-			return price >= fast*0.998 && mom3 > -0.0015 && rsiVal >= 38 && rsiVal <= 64
+			return price >= fast*0.997 && mom3 > -0.0012 && rsiVal >= 40 && rsiVal <= 62
 		default:
-			return price >= fast*0.998 && mom3 >= -0.0003
+			return price >= fast*0.998 && mom3 >= -0.0002
 		}
 	}
 
 	switch def.Category {
 	case "Momentum", "Breakout", "Hybrid":
-		// Tightened RSI band 22-56 → 26-54: avoids chasing already-oversold bounces
-		// and prevents bearish entries when momentum is about to reverse.
-		return trendAligned && price <= slow*1.004 && mom3 < -0.0006 && mom8 < 0.0002 && rsiVal >= 26 && rsiVal <= 54
+		return trendAligned && price <= slow*1.003 && mom3 < -0.0007 && mom8 < 0.0001 && rsiVal >= 28 && rsiVal <= 52
 	case "Mean Reversion", "Capitulation":
-		// Tightened RSI band 32-66 → 36-62: forces cleaner overbought readings.
-		return price <= fast*1.002 && mom3 < 0.0015 && rsiVal >= 36 && rsiVal <= 62
+		return price <= fast*1.001 && mom3 < 0.0012 && rsiVal >= 38 && rsiVal <= 60
 	default:
-		return price <= fast*1.002 && mom3 <= 0.0003
+		return price <= fast*1.002 && mom3 <= 0.0002
 	}
 }
 

@@ -20,6 +20,7 @@ import type {
   OptionTrade,
   OptionStrategyStatus,
   OptionStats,
+  OptionsBtcFeed,
 } from "@/hooks/useOptions";
 const INITIAL_OPTIONS_BALANCE = 1_000_000;
 
@@ -519,6 +520,7 @@ type Props = {
   actionsEnabled?: boolean;
   btcSpotUsd?: number;
   btcChange24hPct?: number;
+  engineBtcFeed?: OptionsBtcFeed | null;
   positions: OptionPosition[];
   trades: OptionTrade[];
   strategies: OptionStrategyStatus[];
@@ -531,6 +533,7 @@ export default function OptionsSellingScalper({
   actionsEnabled = false,
   btcSpotUsd,
   btcChange24hPct,
+  engineBtcFeed,
   positions,
   trades,
   strategies,
@@ -640,7 +643,7 @@ export default function OptionsSellingScalper({
               <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
                 Session PnL {fmtUSD(sessionPnl, { signed: true })} · Premium collected
               </div>
-              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} />
+              <BtcSpotStrip btcSpotUsd={btcSpotUsd} btcChange24hPct={btcChange24hPct} engineBtcFeed={engineBtcFeed} />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">

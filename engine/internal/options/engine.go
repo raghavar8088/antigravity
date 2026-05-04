@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const initialOptionsBalance = 1000000.0 // $1,000,000 paper options account
+const initialOptionsBalance = 1000000.0 // $1,000,000 paper long-options (buy) account
 
 // strategyState holds the runtime state for a single strategy.
 type strategyState struct {
@@ -24,14 +24,10 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-const (
-	// dailyLossLimitPct halts new opens if realised PnL for the day falls below
-	// this fraction of the starting balance (e.g. 0.05 = 5% daily stop-out).
-	dailyLossLimitPct = 0.05
-)
 
-// Engine is the fully autonomous BTC option SELLING engine.
-// It runs independently from the futures engine with its own paper account.
+// Engine is the BTC long-options (buy) paper desk: pays premium, profits when
+// mark-to-market premium rises. Optimized for small-book risk (tight daily stop,
+// limited concurrency, conservatively scaled tickets).
 type Engine struct {
 	mu               sync.RWMutex
 	states           []*strategyState
@@ -49,7 +45,7 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
-	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration // trading loop interval; BTC/NIFTY paper use a short interval
 }
@@ -116,9 +112,9 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 	e.persistHook = fn
 }
 
-// SetOnOpenHook registers a callback fired every time a live sell position is opened.
-// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD.
-func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64)) {
+// SetOnOpenHook registers a callback fired every time a live long position is opened.
+// Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD, btcSpot.
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onOpenHook = fn
@@ -534,7 +530,7 @@ func (e *Engine) dailyLossBreached() bool {
 		return false
 	}
 	loss := (e.dayStartBalance - e.balance) / e.dayStartBalance
-	return loss >= dailyLossLimitPct
+	return loss >= buyerDailyLossLimitPct
 }
 
 func (e *Engine) tick() {
@@ -565,7 +561,7 @@ func (e *Engine) tick() {
 
 	dailyHalt := e.dailyLossBreached()
 	if dailyHalt {
-		log.Printf("[OPTIONS] ⛔ Daily loss limit reached (%.1f%% of day-start balance). No new opens.", dailyLossLimitPct*100)
+		log.Printf("[OPTIONS] ⛔ Daily loss limit reached (%.1f%% of day-start balance). No new opens.", buyerDailyLossLimitPct*100)
 	}
 
 	openCount := 0
@@ -652,7 +648,22 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 	if !e.paperDeskAggressiveOpen() {
-		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < time.Duration(s.def.CooldownSecs)*time.Second {
+		// ── Upgrade: Dynamic Cooldown ──
+		// Winners get shorter cooldowns to capitalize on momentum;
+		// losers get longer cooldowns to avoid chasing.
+		cooldownMul := 1.0
+		if s.consecutiveLosses == 0 && s.stats.TotalTrades > 0 {
+			// Last trade was a win
+			if s.stats.Wins >= 2 && s.stats.Losses == 0 {
+				cooldownMul = cooldownStreakWinMultiplier // streak winner: 1/3 cooldown
+			} else {
+				cooldownMul = cooldownWinMultiplier // single win: half cooldown
+			}
+		} else if s.consecutiveLosses > 0 {
+			cooldownMul = cooldownLossMultiplier // loss: double cooldown
+		}
+		adjustedCooldown := time.Duration(float64(s.def.CooldownSecs)*cooldownMul) * time.Second
+		if !s.lastTradeAt.IsZero() && now.Sub(s.lastTradeAt) < adjustedCooldown {
 			return
 		}
 	}
@@ -684,20 +695,19 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		mul = optionColdStartSizeMultiplier
 	}
 	positionUSD *= mul
-	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "SELL")
+	pos := e.newOptionPositionLocked(s.def, positionUSD, iv, now, "BUY")
 	if pos == nil {
 		return
 	}
 
-	// RECEIVE premium as a seller
-	e.balance += positionUSD
+	e.balance -= pos.CostBasis
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS] \U0001F4C9 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Balance: $%.0f",
+	log.Printf("[OPTIONS] \U0001F4C8 OPEN BUY %s %s | Strike: $%.0f | Premium: $%.2f | Balance: $%.0f",
 		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, e.balance)
 
 	// Fire Delta live bridge hook (non-blocking, outside lock)
@@ -709,7 +719,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		strike := pos.Strike
 		expiry := pos.ExpiryTime
 		premium := pos.CostBasis
-		go hook(posID, stratID, stratName, optType, strike, expiry, premium)
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium, e.lastPrice)
 	}
 }
 
@@ -727,7 +737,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 	}
 
 	s.stats.ShadowSignals++
-	pos := e.newOptionPositionLocked(s.def, s.def.PositionUSD, iv, now, "SHADOW_SELL")
+	pos := e.newOptionPositionLocked(s.def, s.def.PositionUSD, iv, now, "SHADOW_BUY")
 	if pos == nil {
 		return
 	}
@@ -746,11 +756,23 @@ func (e *Engine) entryConfirmedFor(def StrategyDef, ctx SignalContext, regime st
 
 func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {
 	expiry := now.Add(time.Duration(def.ExpiryMinutes) * time.Minute)
+
+	// ── Upgrade: Volatility-Adjusted Strike Selection ──
+	// Scale OTM distance with current IV so strikes are tighter in low-vol
+	// (higher premium capture) and wider in high-vol (safer distance).
+	adjustedOTM := def.StrikePctOTM
+	switch {
+	case iv > 0 && iv < strikeIVLowThreshold:
+		adjustedOTM *= strikeIVLowScale
+	case iv > strikeIVHighThreshold:
+		adjustedOTM *= strikeIVHighScale
+	}
+
 	var strike float64
 	if def.Type == Call {
-		strike = e.lastPrice * (1 + def.StrikePctOTM)
+		strike = e.lastPrice * (1 + adjustedOTM)
 	} else {
-		strike = e.lastPrice * (1 - def.StrikePctOTM)
+		strike = e.lastPrice * (1 - adjustedOTM)
 	}
 
 	pr := PriceOption(e.lastPrice, strike, expiry, iv, def.Type)
@@ -797,14 +819,12 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	pos.Delta = result.Delta
 	pos.IV = iv
 
-	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
-	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	// Long option: profit when mark-to-market premium rises vs entry.
+	pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
-		// As a seller, we want CurrentPremium to go DOWN.
-		// If Entry=10, Current=4, gainPct = (10-4)/10 = 0.6 (60% profit)
-		gainPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium
+		gainPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium
 	}
 	if gainPct > pos.PeakGainPct {
 		pos.PeakGainPct = gainPct
@@ -816,28 +836,32 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 		timeProgress = clamp(0, now.Sub(pos.EntryTime).Seconds()/totalLife.Seconds(), 1)
 	}
 
-	// profitLockThreshold raised from 0.40→0.60 of TP — let positions run longer
-	// before early-exit so theta decay is fully collected before locking in gains.
-	profitLockThreshold := math.Max(optionLateExitMinGain, takeProfitPct*optionProfitLockShareOfTarget)
-	trailActivation := math.Max(optionLateExitMinGain, takeProfitPct*0.36)
-	trailFloor := pos.PeakGainPct * 0.62
-	strikePressure := false
+	// Easier to bank TP into the last third of life (avoid giving back gamma).
+	effectiveTP := takeProfitPct * (1.0 - 0.10*timeProgress)
+
+	profitLockThreshold := math.Max(optionLateExitMinGain, effectiveTP*optionProfitLockShareOfTarget)
+	trailActivation := math.Max(optionLateExitMinGain, effectiveTP*0.38)
+	trailFloor := pos.PeakGainPct * 0.58
+
+	thesisBreak := false
 	switch pos.OptionType {
-	case Put:
-		strikePressure = e.lastPrice <= pos.Strike*(1+optionStrikePressureBuffer)
 	case Call:
-		strikePressure = e.lastPrice >= pos.Strike*(1-optionStrikePressureBuffer)
+		thesisBreak = e.lastPrice < pos.EntryBTCPrice*(1.0-buyerThesisMovePct) && gainPct < profitLockThreshold*0.42
+	case Put:
+		thesisBreak = e.lastPrice > pos.EntryBTCPrice*(1.0+buyerThesisMovePct) && gainPct < profitLockThreshold*0.42
 	}
 
 	switch {
-	case gainPct >= takeProfitPct:
+	case gainPct >= effectiveTP:
 		return ExitTP
 	case gainPct <= -stopLossPct:
 		return ExitSL
 	case pos.PeakGainPct >= trailActivation && gainPct > 0 && gainPct <= trailFloor:
 		return ExitTrailStop
-	case strikePressure && gainPct < profitLockThreshold*0.50:
+	case thesisBreak:
 		return ExitStrikePressure
+	case timeProgress >= buyerThetaBleedProgress && gainPct < buyerThetaBleedMinGain:
+		return ExitLateExit
 	case timeProgress >= optionProfitLockProgress && gainPct >= profitLockThreshold:
 		return ExitProfitLock
 	case timeProgress >= optionLateExitProgress && gainPct >= optionLateExitMinGain:
@@ -855,15 +879,14 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
-	// PnL already computed in markToMarket
 	netPnL := pos.UnrealizedPnL
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
-		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
+		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
 	}
 
-	// BUY back to close: balance decreases by current market value
-	e.balance -= pos.CurrentPremium * pos.Quantity
+	// Sell to close long: receive current option value.
+	e.balance += pos.CurrentPremium * pos.Quantity
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
@@ -897,7 +920,7 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	if netPnL < 0 {
 		symbol = "\u274C"
 	}
-	log.Printf("[OPTIONS] %s CLOSE SELL %s | Reason: %s | PnL: $%.2f (%.1f%%) | Balance: $%.0f",
+	log.Printf("[OPTIONS] %s CLOSE BUY %s | Reason: %s | PnL: $%.2f (%.1f%%) | Balance: $%.0f",
 		symbol, s.def.Name, reason, netPnL, returnPct, e.balance)
 
 	// Fire Delta live bridge close hook (non-blocking, outside lock)
@@ -917,7 +940,7 @@ func (e *Engine) closeShadowPositionLocked(s *strategyState, reason string, now 
 		return
 	}
 
-	netPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	netPnL := (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
 	s.shadowLastTradeAt = now
 	s.shadowPosition = nil
 	s.stats.HasShadowPosition = false
@@ -1111,7 +1134,7 @@ func (e *Engine) aggregateStatsLocked() AggregateStats {
 
 	return AggregateStats{
 		Balance:           e.balance,
-		Equity:            e.balance - openMarketValue, // Equity for a seller is Balance - Liability
+		Equity:            e.balance + openMarketValue, // cash + mark-to-market value of long options
 		TotalTrades:       totalTrades,
 		OpenPositions:     openCount,
 		TotalWins:         wins,
