@@ -10,7 +10,7 @@ const MAX_OPEN_POSITIONS = 3;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
 const SIGNAL_THRESHOLD = 62;
-const POLL_MS = 8_000;
+const POLL_MS = 2_000;
 const MAX_TRADES = 2_000;
 /** Taker-style round trip (entry + exit) — conservative vs Binance 0.2% VIP0. */
 const ROUND_TRIP_FEE_FRAC = 0.0015;
