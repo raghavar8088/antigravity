@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Paper desk sized for micro accounts — live sizing still uses the same math. */
-const INITIAL_BALANCE = 10;
-const MIN_NOTIONAL_USD = 1;
-const MAX_NOTIONAL_USD = 3.5;
-const MAX_OPEN_POSITIONS = 3;
+/** Paper desk sized for small accounts — live sizing still uses the same math. */
+const INITIAL_BALANCE = 100;
+const MIN_NOTIONAL_USD = 10;
+const MAX_NOTIONAL_USD = 35;
+const MAX_OPEN_POSITIONS = 4;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
 const SIGNAL_THRESHOLD = 62;
@@ -14,16 +14,16 @@ const POLL_MS = 2_000;
 const MAX_TRADES = 2_000;
 /** Taker-style round trip (entry + exit) — conservative vs Binance 0.2% VIP0. */
 const ROUND_TRIP_FEE_FRAC = 0.0015;
-const MAX_DRAWDOWN_LOCK_PCT = 28; // pause new entries if equity drawdown breaches this level
+const MAX_DRAWDOWN_LOCK_PCT = 22; // pause new entries if equity drawdown breaches this level
 
-const PROFIT_LOCK_PROGRESS = 0.32;
-const PROFIT_LOCK_SHARE = 0.38;
-const LATE_EXIT_PROGRESS = 0.35;
-const LATE_EXIT_MIN_GAIN = 0.015;
-const GRIND_EXIT_PROGRESS = 0.28;
-const GRIND_EXIT_SHARE = 0.22;
-const TRAIL_ACTIVATION_PCT = 0.12;
-const TRAIL_GIVEBACK_SHARE = 0.28;
+const PROFIT_LOCK_PROGRESS = 0.3;
+const PROFIT_LOCK_SHARE = 0.42;
+const LATE_EXIT_PROGRESS = 0.42;
+const LATE_EXIT_MIN_GAIN = 0.02;
+const GRIND_EXIT_PROGRESS = 0.3;
+const GRIND_EXIT_SHARE = 0.24;
+const TRAIL_ACTIVATION_PCT = 0.15;
+const TRAIL_GIVEBACK_SHARE = 0.3;
 const LOSS_COOLDOWN_PENALTY = 0.4;
 const VOL_SPIKE_RATIO = 1.45;
 const VOL_BOOST_POINTS = 4;
@@ -244,16 +244,16 @@ type DbPayload = {
 };
 
 const STRAT_DEFS: StratDef[] = [
-  { id: 1, name: "Micro Range Breakout", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.32, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 2, name: "Micro Range Breakdown", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.32, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 3, name: "EMA Ribbon Impulse Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.28, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 4, name: "EMA Ribbon Impulse Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.28, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
+  { id: 1, name: "Micro Range Breakout", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.36, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 2, name: "Micro Range Breakdown", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.36, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 3, name: "EMA Ribbon Impulse Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.31, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
+  { id: 4, name: "EMA Ribbon Impulse Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.31, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
   { id: 5, name: "RSI 1m Oversold Bounce", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.24, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
   { id: 6, name: "RSI 1m Overbought Fade", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.24, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
   { id: 7, name: "Session VWAP Reclaim", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.26, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
   { id: 8, name: "Session VWAP Reject", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.26, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 9, name: "Trend Leg Continuation", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.34, slPct: 0.15, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
-  { id: 10, name: "Trend Leg Exhaustion Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.34, slPct: 0.15, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
+  { id: 9, name: "Trend Leg Continuation", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
+  { id: 10, name: "Trend Leg Exhaustion Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
   { id: 11, name: "Micro Breakout Sprint Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.27, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
   { id: 12, name: "Micro Breakout Sprint Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.27, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
   { id: 13, name: "Breakout Continuation Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.38, slPct: 0.17, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 26 },
@@ -439,14 +439,14 @@ function currentVolRatio(engine: EngineRef): number {
 
 function targetNotionalFor(engine: EngineRef): number {
   const open = engine.positions.size;
-  const reserved = open * 0.15;
+  const reserved = open * 2.5;
   const equity =
     engine.balance +
     [...engine.positions.values()].reduce((s, p) => s + p.notional + p.unrealizedPnl, 0);
   const volRatio = currentVolRatio(engine);
-  const volSizeMultiplier = volRatio >= 1.8 ? 0.75 : volRatio >= 1.45 ? 0.85 : 1;
-  const slice = Math.max(MIN_NOTIONAL_USD, Math.min(MAX_NOTIONAL_USD, (equity - reserved) * 0.38 * volSizeMultiplier));
-  return Math.min(slice, Math.max(0, engine.balance - 0.25));
+  const volSizeMultiplier = volRatio >= 1.8 ? 0.7 : volRatio >= 1.45 ? 0.85 : 1;
+  const slice = Math.max(MIN_NOTIONAL_USD, Math.min(MAX_NOTIONAL_USD, (equity - reserved) * 0.18 * volSizeMultiplier));
+  return Math.min(slice, Math.max(0, engine.balance - 2));
 }
 
 function cooldownMsFor(strategy: InternalStrategyState, won: boolean): number {
@@ -583,7 +583,7 @@ function compareSavedStates(a: DbPayload, b: DbPayload): number {
 
 function applySaved(engine: EngineRef, saved: DbPayload): void {
   const persistedBalance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
-  // Hard-cap the paper wallet to the configured desk balance ($10 mode).
+  // Hard-cap the paper wallet to the configured desk balance.
   engine.balance = Math.min(INITIAL_BALANCE, persistedBalance);
   engine.totalWins = saved.totalWins ?? 0;
   engine.totalLosses = saved.totalLosses ?? 0;

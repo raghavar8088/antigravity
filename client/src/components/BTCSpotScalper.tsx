@@ -238,7 +238,7 @@ export default function BTCSpotScalper({
                 </div>
               </div>
               <div className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Thirty independent 1m strategies share a tiny pool: up to three concurrent clips, each sized to about {fmtUSD(strategies[0]?.targetNotionalUsd ?? 1, { decimals: 2 })}–{fmtUSD(Math.min(initialBalance * 0.4, 3.5), { decimals: 2 })} notional so the book stays tradable near {fmtUSD(initialBalance)}.
+                Thirty independent 1m strategies share a small-account pool: up to four concurrent clips, each sized to about {fmtUSD(strategies[0]?.targetNotionalUsd ?? 1, { decimals: 2 })}–{fmtUSD(Math.min(initialBalance * 0.4, 35), { decimals: 2 })} notional so the book stays tradable near {fmtUSD(initialBalance)}.
                 Shorts are synthetic paper only (real spot is long-biased); fees are deducted on exit to stress-test edge.
               </div>
             </div>
@@ -246,7 +246,7 @@ export default function BTCSpotScalper({
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
                 <BadgePill label={stats.warmingUp ? "Warming 1m bars" : "Engine live"} tone="positive" />
-                <BadgePill label={`${openCount}/3 max slots`} tone="warning" />
+                <BadgePill label={`${openCount}/4 max slots`} tone="warning" />
                 <BadgePill label="Tight SL / TP" tone="info" />
               </div>
               <button
@@ -256,7 +256,7 @@ export default function BTCSpotScalper({
                 title={actionsEnabled ? "Reset paper wallet" : "Unlock Actions to reset"}
                 className="btn-danger text-sm"
               >
-                {isResetting ? "Resetting…" : "Reset $10 paper wallet"}
+                {isResetting ? "Resetting…" : `Reset ${fmtUSD(initialBalance, { decimals: 0 })} paper wallet`}
               </button>
             </div>
           </div>
