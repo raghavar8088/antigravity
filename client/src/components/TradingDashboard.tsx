@@ -1572,7 +1572,7 @@ export default function TradingDashboard({
             : activeModule === "spotBuy"
             ? "BTC Spot Buy — Spot accumulation desk and related controls."
             : activeModule === "btcSpotScalper"
-            ? "BTC Spot Scalper — Ten 1m strategies on Delta Exchange candle data (default BTCUSD), $10 paper wallet, max three concurrent clips, tight stops, and round-trip fee drag modeled (~0.15% notional)."
+            ? "BTC Spot Scalper — Thirty 1m strategies on Delta Exchange candle data (default BTCUSD), $10 paper wallet, max three concurrent clips, tight stops, and round-trip fee drag modeled (~0.15% notional)."
             : "Select a workspace tab above to see its description."}
         </div>
       </div>

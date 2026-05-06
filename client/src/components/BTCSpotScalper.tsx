@@ -108,6 +108,25 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
+function PositionProgressBar({ returnPct }: { returnPct: number }) {
+  const scaleTargetPct = 0.35;
+  const width = Math.min(100, Math.max(2, (Math.abs(returnPct) / scaleTargetPct) * 100));
+  const positive = returnPct >= 0;
+  return (
+    <div className="w-28">
+      <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--border)" }}>
+        <div
+          className={`h-full rounded-full transition-all ${positive ? "bg-emerald-500" : "bg-rose-500"}`}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <div className="mt-1 text-[10px] font-mono text-right" style={{ color: "var(--text-secondary)" }}>
+        {fmtPct(returnPct, true)}
+      </div>
+    </div>
+  );
+}
+
 function QuoteHero({ quote }: { quote: BTCSpotQuote }) {
   const positive = quote.changePct24h >= 0;
   return (
@@ -265,37 +284,86 @@ export default function BTCSpotScalper({
       </div>
 
       <div className="glass-panel px-5 py-5">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Open positions</h2>
+        <h2 className="mb-4 flex flex-wrap items-center gap-3" style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 11,
+          fontWeight: 800,
+          letterSpacing: "0.14em",
+          color: "var(--text-secondary)",
+        }}>
+          <span className="pill-green">LIVE</span>
+          RUNNING SPOT POSITIONS
+          <span style={{ color: "var(--text-muted)", fontSize: 10, fontWeight: 500 }} className="font-mono">
+            ({positions.length} active)
+          </span>
+        </h2>
         {positions.length === 0 ? (
           <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>No active clips — engine scans 1m structure for the next setup.</p>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-[10px] uppercase tracking-wider" style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}>
-                  <th className="py-2 pr-3">Strategy</th>
-                  <th className="py-2 pr-3">Side</th>
-                  <th className="py-2 pr-3 text-right">Entry</th>
-                  <th className="py-2 pr-3 text-right">Mark</th>
-                  <th className="py-2 pr-3 text-right">Notional</th>
-                  <th className="py-2 text-right">uPnL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map((p) => (
-                  <tr key={p.id} className="border-b" style={{ borderColor: "var(--border-subtle)" }}>
-                    <td className="py-2 pr-3 font-medium">{p.strategyName}</td>
-                    <td className="py-2 pr-3"><SideBadge side={p.side} /></td>
-                    <td className="py-2 pr-3 text-right font-mono text-xs">{p.entryPrice.toFixed(2)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-xs">{p.currentPrice.toFixed(2)}</td>
-                    <td className="py-2 pr-3 text-right font-mono text-xs">{fmtUSD(p.notional)}</td>
-                    <td className={`py-2 text-right font-mono text-xs font-semibold ${p.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {fmtUSD(p.unrealizedPnl, { signed: true })}
-                    </td>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full" style={{ background: "var(--green)" }} />
+                <span className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>
+                  {longCount} longs | {shortCount} shorts
+                </span>
+              </div>
+              <span
+                className="rounded-full border px-3 py-1 text-xs font-medium"
+                style={{
+                  background: stats.unrealizedPnl >= 0 ? "var(--green-dim)" : "var(--red-dim)",
+                  color: stats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)",
+                  borderColor: stats.unrealizedPnl >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                }}
+              >
+                Unrealized {fmtUSD(stats.unrealizedPnl, { signed: true })}
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <table className="w-full text-left text-sm" style={{ minWidth: 980 }}>
+                <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
+                  <tr className="text-[11px] uppercase tracking-[0.12em]">
+                    <th className="px-4 py-3 font-medium">Position</th>
+                    <th className="px-4 py-3 font-medium">Side</th>
+                    <th className="px-4 py-3 font-medium text-right">Entry</th>
+                    <th className="px-4 py-3 font-medium text-right">Mark</th>
+                    <th className="px-4 py-3 font-medium text-right">Notional</th>
+                    <th className="px-4 py-3 font-medium">Opened</th>
+                    <th className="px-4 py-3 font-medium text-right">PnL</th>
+                    <th className="px-4 py-3 font-medium text-right">Progress</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {positions.map((p) => (
+                    <tr key={p.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{p.strategyName}</div>
+                        <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                          Qty {p.quantity.toFixed(6)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3"><SideBadge side={p.side} /></td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">{p.entryPrice.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">{p.currentPrice.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">{fmtUSD(p.notional)}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(p.entryTime)}</div>
+                        <div style={{ color: "var(--text-secondary)" }}>{formatShortDate(p.entryTime)}</div>
+                      </td>
+                      <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${p.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                        {fmtUSD(p.unrealizedPnl, { signed: true })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="ml-auto">
+                          <PositionProgressBar returnPct={p.returnPct} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
