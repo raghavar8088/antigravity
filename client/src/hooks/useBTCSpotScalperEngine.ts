@@ -14,6 +14,7 @@ const POLL_MS = 8_000;
 const MAX_TRADES = 2_000;
 /** Taker-style round trip (entry + exit) — conservative vs Binance 0.2% VIP0. */
 const ROUND_TRIP_FEE_FRAC = 0.0015;
+const MAX_DRAWDOWN_LOCK_PCT = 28; // pause new entries if equity drawdown breaches this level
 
 const PROFIT_LOCK_PROGRESS = 0.32;
 const PROFIT_LOCK_SHARE = 0.38;
@@ -28,7 +29,8 @@ const VOL_SPIKE_RATIO = 1.45;
 const VOL_BOOST_POINTS = 4;
 const VOL_HISTORY = 24;
 
-const LS_KEY = "btc_spot_scalper_paper_v1";
+// Bump key so older larger-wallet snapshots do not carry over.
+const LS_KEY = "btc_spot_scalper_paper_v2";
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -407,13 +409,23 @@ function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: n
   return null;
 }
 
+function currentVolRatio(engine: EngineRef): number {
+  const vb = engine.volBars.slice(-VOL_HISTORY);
+  if (vb.length < 4) return 1;
+  const lastVol = vb[vb.length - 1] ?? 0;
+  const avgVol = vb.slice(0, -1).reduce((a, b) => a + b, 0) / Math.max(1, vb.length - 1);
+  return avgVol > 0 ? lastVol / avgVol : 1;
+}
+
 function targetNotionalFor(engine: EngineRef): number {
   const open = engine.positions.size;
   const reserved = open * 0.15;
   const equity =
     engine.balance +
     [...engine.positions.values()].reduce((s, p) => s + p.notional + p.unrealizedPnl, 0);
-  const slice = Math.max(MIN_NOTIONAL_USD, Math.min(MAX_NOTIONAL_USD, (equity - reserved) * 0.38));
+  const volRatio = currentVolRatio(engine);
+  const volSizeMultiplier = volRatio >= 1.8 ? 0.75 : volRatio >= 1.45 ? 0.85 : 1;
+  const slice = Math.max(MIN_NOTIONAL_USD, Math.min(MAX_NOTIONAL_USD, (equity - reserved) * 0.38 * volSizeMultiplier));
   return Math.min(slice, Math.max(0, engine.balance - 0.25));
 }
 
@@ -526,7 +538,9 @@ function loadLs(): DbPayload | null {
 }
 
 function applySaved(engine: EngineRef, saved: DbPayload): void {
-  engine.balance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
+  const persistedBalance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
+  // Hard-cap the paper wallet to the configured desk balance ($10 mode).
+  engine.balance = Math.min(INITIAL_BALANCE, persistedBalance);
   engine.totalWins = saved.totalWins ?? 0;
   engine.totalLosses = saved.totalLosses ?? 0;
   engine.totalRealizedPnl = saved.totalPnl ?? 0;
@@ -743,6 +757,8 @@ export default function useBTCSpotScalperEngine() {
     const openN = [...engine.positions.values()].reduce((a, p) => a + p.notional, 0);
     const equity = engine.balance + openN + unrealized;
     const tw = engine.totalWins + engine.totalLosses;
+    const drawdownPct = ((INITIAL_BALANCE - equity) / INITIAL_BALANCE) * 100;
+    const lockedByDrawdown = drawdownPct >= MAX_DRAWDOWN_LOCK_PCT;
     setStats({
       equity,
       balance: engine.balance,
@@ -756,7 +772,13 @@ export default function useBTCSpotScalperEngine() {
       winRate: tw > 0 ? (engine.totalWins / tw) * 100 : 0,
       warmingUp: engine.bars.length < MIN_BARS,
       lastUpdateAt: now,
-      diagnostics: engine.lastError || (engine.lastPrice > 0 ? "Delta Exchange 1m candles (REST)." : "Waiting for candles."),
+      diagnostics:
+        engine.lastError ||
+        (lockedByDrawdown
+          ? `Risk lock active: drawdown ${drawdownPct.toFixed(1)}% exceeds ${MAX_DRAWDOWN_LOCK_PCT}% (manages open trades, pauses new entries).`
+          : engine.lastPrice > 0
+            ? "Delta Exchange 1m candles (REST)."
+            : "Waiting for candles."),
       feeModelNote: EMPTY_STATS.feeModelNote,
     });
   }, []);
@@ -794,6 +816,11 @@ export default function useBTCSpotScalperEngine() {
       const volRatio = avgVol > 0 ? lastVol / avgVol : 1;
       const input = buildSignalInputs(bars, volRatio);
       const regime = classifyRegime(input);
+      const equityNow =
+        engine.balance +
+        [...engine.positions.values()].reduce((sum, pos) => sum + pos.notional + pos.unrealizedPnl, 0);
+      const drawdownPct = ((INITIAL_BALANCE - equityNow) / INITIAL_BALANCE) * 100;
+      const allowNewEntries = drawdownPct < MAX_DRAWDOWN_LOCK_PCT;
 
       for (const strategy of engine.strategies) {
         if (strategy.position) {
@@ -825,9 +852,13 @@ export default function useBTCSpotScalperEngine() {
         const confirmed = score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strategy.def, input, regime);
         strategy.score = confirmed ? score : Math.min(score, SIGNAL_THRESHOLD - 1);
         strategy.lastSignalSymbol = "BTC";
-        if (confirmed && engine.positions.size < MAX_OPEN_POSITIONS && engine.lastPrice > 0) {
+        if (confirmed && allowNewEntries && engine.positions.size < MAX_OPEN_POSITIONS && engine.lastPrice > 0) {
           openPosition(engine, strategy, engine.lastPrice, now);
         }
+      }
+
+      if (!allowNewEntries && !engine.lastError) {
+        engine.lastError = `Risk lock: drawdown ${drawdownPct.toFixed(1)}% (>${MAX_DRAWDOWN_LOCK_PCT}%).`;
       }
 
       pushDisplay();
