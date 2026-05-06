@@ -219,7 +219,7 @@ export default function BTCSpotScalper({
                 </div>
               </div>
               <div className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Ten independent 1m strategies share a tiny pool: up to three concurrent clips, each sized to about {fmtUSD(strategies[0]?.targetNotionalUsd ?? 1, { decimals: 2 })}–{fmtUSD(Math.min(initialBalance * 0.4, 3.5), { decimals: 2 })} notional so the book stays tradable near {fmtUSD(initialBalance)}.
+                Thirty independent 1m strategies share a tiny pool: up to three concurrent clips, each sized to about {fmtUSD(strategies[0]?.targetNotionalUsd ?? 1, { decimals: 2 })}–{fmtUSD(Math.min(initialBalance * 0.4, 3.5), { decimals: 2 })} notional so the book stays tradable near {fmtUSD(initialBalance)}.
                 Shorts are synthetic paper only (real spot is long-biased); fees are deducted on exit to stress-test edge.
               </div>
             </div>
@@ -301,7 +301,7 @@ export default function BTCSpotScalper({
       </div>
 
       <div className="glass-panel px-5 py-5">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Strategies (10)</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-secondary)" }}>Strategies (30)</h2>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Regime filter skips mean-reversion in violent tape and trend-chase in dead ranges.</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {strategies.map((s) => (
