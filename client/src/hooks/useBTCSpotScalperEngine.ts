@@ -551,10 +551,34 @@ function loadLs(): DbPayload | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as DbPayload;
+    return normalizeDbPayload(JSON.parse(raw) as Partial<DbPayload>);
   } catch {
     return null;
   }
+}
+
+function normalizeDbPayload(raw: Partial<DbPayload> | null | undefined): DbPayload | null {
+  if (!raw) return null;
+  return {
+    balance: typeof raw.balance === "number" && Number.isFinite(raw.balance) ? raw.balance : INITIAL_BALANCE,
+    totalWins: Math.max(0, Math.trunc(Number(raw.totalWins) || 0)),
+    totalLosses: Math.max(0, Math.trunc(Number(raw.totalLosses) || 0)),
+    totalPnl: typeof raw.totalPnl === "number" && Number.isFinite(raw.totalPnl) ? raw.totalPnl : 0,
+    tradeSeq: Math.max(0, Math.trunc(Number(raw.tradeSeq) || 0)),
+    positions: Array.isArray(raw.positions) ? raw.positions : [],
+    trades: Array.isArray(raw.trades) ? raw.trades.slice(0, MAX_TRADES) : [],
+    strategies: Array.isArray(raw.strategies) ? raw.strategies : [],
+  };
+}
+
+function compareSavedStates(a: DbPayload, b: DbPayload): number {
+  const tradeSeqDiff = (a.tradeSeq ?? 0) - (b.tradeSeq ?? 0);
+  if (tradeSeqDiff !== 0) return tradeSeqDiff;
+  const tradeCountDiff = (a.trades?.length ?? 0) - (b.trades?.length ?? 0);
+  if (tradeCountDiff !== 0) return tradeCountDiff;
+  const positionCountDiff = (a.positions?.length ?? 0) - (b.positions?.length ?? 0);
+  if (positionCountDiff !== 0) return positionCountDiff;
+  return 0;
 }
 
 function applySaved(engine: EngineRef, saved: DbPayload): void {
@@ -605,6 +629,39 @@ function applySaved(engine: EngineRef, saved: DbPayload): void {
     st.consecutiveLosses = row.consecutiveLosses ?? 0;
     if (!st.position) st.status = st.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
   }
+}
+
+async function saveDbState(engine: EngineRef): Promise<void> {
+  try {
+    await fetch("/api/btc/spot-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(engine)),
+    });
+  } catch {
+    // non-critical persistence path
+  }
+}
+
+async function loadState(engine: EngineRef): Promise<boolean> {
+  const local = loadLs();
+  let dbState: DbPayload | null = null;
+  try {
+    const response = await fetch("/api/btc/spot-state");
+    if (response.ok) {
+      const data = (await response.json()) as { ok?: boolean; found?: boolean; state?: Partial<DbPayload> };
+      if (data.ok && data.found && data.state) dbState = normalizeDbPayload(data.state);
+    }
+  } catch {
+    // fall back to local snapshot
+  }
+
+  const saved = local && dbState
+    ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
+    : (local ?? dbState);
+  if (!saved) return false;
+  applySaved(engine, saved);
+  return true;
 }
 
 function openPosition(engine: EngineRef, strategy: InternalStrategyState, price: number, now: number): boolean {
@@ -883,6 +940,7 @@ export default function useBTCSpotScalperEngine() {
 
       pushDisplay();
       saveLs(engine);
+      if (loadedRef.current) void saveDbState(engine);
     },
     [pushDisplay],
   );
@@ -891,15 +949,36 @@ export default function useBTCSpotScalperEngine() {
     engineRef.current = initEngine();
     loadedRef.current = true;
     saveLs(engineRef.current);
+    void saveDbState(engineRef.current);
     pushDisplay();
   }, [pushDisplay]);
 
   useEffect(() => {
-    const saved = loadLs();
-    if (saved) applySaved(engineRef.current, saved);
-    loadedRef.current = true;
-    pushDisplay();
+    void loadState(engineRef.current).then(() => {
+      loadedRef.current = true;
+      pushDisplay();
+    });
   }, [pushDisplay]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!loadedRef.current) return;
+      saveLs(engineRef.current);
+      void saveDbState(engineRef.current);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const onUnload = () => {
+      if (!loadedRef.current) return;
+      saveLs(engineRef.current);
+      const payload = JSON.stringify(buildPayload(engineRef.current));
+      navigator.sendBeacon("/api/btc/spot-state", new Blob([payload], { type: "application/json" }));
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, []);
 
   useEffect(() => {
     let cancel = false;
