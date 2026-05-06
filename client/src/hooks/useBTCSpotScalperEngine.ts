@@ -30,7 +30,7 @@ const VOL_BOOST_POINTS = 4;
 const VOL_HISTORY = 24;
 
 // Bump key so older larger-wallet snapshots do not carry over.
-const LS_KEY = "btc_spot_scalper_paper_v2";
+const LS_KEY = "btc_spot_scalper_paper_v3";
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -581,6 +581,12 @@ function compareSavedStates(a: DbPayload, b: DbPayload): number {
   return 0;
 }
 
+function isLegacySmallAccountSnapshot(saved: DbPayload): boolean {
+  const likelyLegacyBalance = saved.balance > 0 && saved.balance < INITIAL_BALANCE * 0.5;
+  const likelyLegacyDrawdown = saved.totalPnl < -(INITIAL_BALANCE * 0.5);
+  return likelyLegacyBalance || likelyLegacyDrawdown;
+}
+
 function applySaved(engine: EngineRef, saved: DbPayload): void {
   const persistedBalance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
   // Hard-cap the paper wallet to the configured desk balance.
@@ -660,6 +666,7 @@ async function loadState(engine: EngineRef): Promise<boolean> {
     ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
     : (local ?? dbState);
   if (!saved) return false;
+  if (isLegacySmallAccountSnapshot(saved)) return false;
   applySaved(engine, saved);
   return true;
 }
