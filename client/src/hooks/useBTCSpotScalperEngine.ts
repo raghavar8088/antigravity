@@ -861,19 +861,26 @@ export default function useBTCSpotScalperEngine() {
   }, []);
 
   const processKlines = useCallback(
-    (closes: number[], volumes: number[], changePct24h: number, err: string) => {
+    (closes: number[], volumes: number[], livePrice: number, changePct24h: number, err: string) => {
       if (!loadedRef.current) return;
       const engine = engineRef.current;
+      const tickPrice = livePrice > 0 ? livePrice : 0;
       if (closes.length >= MIN_BARS) {
-        engine.bars = closes.slice(-MAX_BARS);
-        engine.lastPrice = closes[closes.length - 1] ?? 0;
+        const bars = closes.slice(-MAX_BARS);
+        if (tickPrice > 0 && (bars.length === 0 || bars[bars.length - 1] !== tickPrice)) {
+          bars.push(tickPrice);
+        }
+        if (bars.length > MAX_BARS) bars.splice(0, bars.length - MAX_BARS);
+        engine.bars = bars;
+        engine.lastPrice = tickPrice > 0 ? tickPrice : (bars[bars.length - 1] ?? 0);
       } else if (err) {
         engine.lastError = err;
         pushDisplay();
         return;
       }
       engine.changePct24h = changePct24h;
-      if (closes.length) engine.lastPrice = closes[closes.length - 1] ?? engine.lastPrice;
+      if (tickPrice > 0) engine.lastPrice = tickPrice;
+      else if (closes.length) engine.lastPrice = closes[closes.length - 1] ?? engine.lastPrice;
       if (err) engine.lastError = err;
       else engine.lastError = "";
 
@@ -990,16 +997,17 @@ export default function useBTCSpotScalperEngine() {
           ok?: boolean;
           closes?: number[];
           volumes?: number[];
+          livePrice?: number;
           changePct24h?: number;
           error?: string;
         };
         if (!res.ok || !data.ok || !data.closes?.length) {
-          processKlines([], [], 0, data.error || `HTTP ${res.status}`);
+          processKlines([], [], 0, 0, data.error || `HTTP ${res.status}`);
           return;
         }
-        processKlines(data.closes, data.volumes ?? [], data.changePct24h ?? 0, "");
+        processKlines(data.closes, data.volumes ?? [], data.livePrice ?? 0, data.changePct24h ?? 0, "");
       } catch {
-        processKlines([], [], 0, "Failed to fetch BTC klines.");
+        processKlines([], [], 0, 0, "Failed to fetch BTC klines.");
       }
     };
     void tick();

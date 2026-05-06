@@ -87,16 +87,18 @@ export async function GET(): Promise<Response> {
     }
 
     let changePct24h = 0;
+    let livePrice = 0;
     if (tickerRes.ok) {
       const tj = (await tickerRes.json()) as DeltaTickerResponse;
       if (tj.success && tj.result) {
         const r = tj.result;
+        livePrice = n(r.close) || n(r.mark_price) || n(r.spot_price);
         const ltp24 = n(r.ltp_change_24h);
         if (ltp24 !== 0) {
           changePct24h = ltp24;
         } else {
           const open = n(r.open);
-          const close = n(r.close) || n(r.mark_price) || n(r.spot_price);
+          const close = livePrice;
           if (open > 0 && close > 0) {
             changePct24h = ((close - open) / open) * 100;
           }
@@ -104,13 +106,15 @@ export async function GET(): Promise<Response> {
       }
     }
 
-    const lastPrice = closes.length > 0 ? closes[closes.length - 1] : 0;
+    const candleLastPrice = closes.length > 0 ? closes[closes.length - 1] : 0;
+    const lastPrice = livePrice > 0 ? livePrice : candleLastPrice;
 
     return NextResponse.json({
       ok: true,
       closes,
       volumes,
       lastPrice,
+      livePrice,
       changePct24h,
       fetchedAt: new Date().toISOString(),
       source: "delta-exchange-1m",
@@ -126,6 +130,7 @@ export async function GET(): Promise<Response> {
         closes: [],
         volumes: [],
         lastPrice: 0,
+        livePrice: 0,
         changePct24h: 0,
         fetchedAt: new Date().toISOString(),
         symbol,
