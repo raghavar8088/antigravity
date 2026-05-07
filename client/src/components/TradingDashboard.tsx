@@ -118,7 +118,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/nifty-options", label: "NIFTY Options", description: "Dedicated route for the NIFTY 50 options workspace.", group: "india", module: "nifty" },
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
   { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
-  { path: "/nifty-bees", label: "Nifty BEES", description: "NSE ETF scalper on Angel One live LTP with ₹10k paper and ten strategies.", group: "india", module: "niftyBees" },
+  { path: "/nifty-bees", label: "Nifty BEES", description: "NSE ETF scalper on Angel/Yahoo live LTP with ₹10k paper and thirty strategies.", group: "india", module: "niftyBees" },
   { path: "/history", label: "Trade History", description: "Open the completed BTC futures ledger directly.", group: "crypto", module: "history" },
   {
     path: "/trade-history",
@@ -1550,7 +1550,7 @@ export default function TradingDashboard({
             : activeModule === "niftyStocks"
             ? "Equity — Nifty 50 equity scalper with dedicated stock strategy roster. ₹1M paper capital."
             : activeModule === "niftyBees"
-            ? "ETF — Nifty BEES (Nippon India ETF Nifty 50 BeES) on Angel One live NSE prices. 10 strategies, ₹10,000 paper."
+            ? "ETF — Nifty BEES (Nippon India ETF Nifty 50 BeES) on Angel/Yahoo live NSE prices. 30 strategies, ₹10,000 paper."
             : activeModule === "mcx"
             ? "Commodity — MCX option scalper: Crude, Gold, Silver, Gas, Copper. 20 strategies, ₹1M paper."
             : activeModule === "liveDataLab"

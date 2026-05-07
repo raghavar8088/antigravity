@@ -142,7 +142,7 @@ export default function NiftyBeesScalper({
               </div>
             </div>
             <div className="mt-2 px-0.5 text-sm" style={{ color: "var(--text-secondary)" }}>
-              Session Bal: {fmtINR(stats.balance)} · {fmtINR(stats.unrealizedPnl, { signed: true })} unrealized · Angel One live NSE · 10 strategies · ₹10k paper
+              Session Bal: {fmtINR(stats.balance)} · {fmtINR(stats.unrealizedPnl, { signed: true })} unrealized · Angel/Yahoo live NSE · 30 strategies · ₹10k paper
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:mt-8">

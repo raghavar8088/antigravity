@@ -2,7 +2,7 @@
 
 /**
  * Nifty BEES paper scalper — Angel One live NSE LTP for NIFTYBEES ETF.
- * ₹10,000 paper, 10 strategies, client-side auto entries/exits.
+ * ₹10,000 paper, 30 strategies, client-side auto entries/exits.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -167,6 +167,26 @@ const STRAT_DEFS: StratDef[] = [
   { id: 8, name: "BEES_VWAP_Reject_Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.3, slPct: 0.14, cooldownMinutes: 9, minBars: MIN_BARS_SLOW, holdMinutes: 78 },
   { id: 9, name: "BEES_Trend_Cont_Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.4, slPct: 0.16, cooldownMinutes: 14, minBars: MIN_BARS_SLOW, holdMinutes: 100 },
   { id: 10, name: "BEES_Trend_Cont_Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.4, slPct: 0.16, cooldownMinutes: 14, minBars: MIN_BARS_SLOW, holdMinutes: 100 },
+  { id: 11, name: "BEES_Breakout_Scalp_Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.34, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 58 },
+  { id: 12, name: "BEES_Breakout_Scalp_Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.34, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 58 },
+  { id: 13, name: "BEES_Breakout_Continuation_Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.46, slPct: 0.2, cooldownMinutes: 13, minBars: MIN_BARS_SLOW, holdMinutes: 110 },
+  { id: 14, name: "BEES_Breakout_Continuation_Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.46, slPct: 0.2, cooldownMinutes: 13, minBars: MIN_BARS_SLOW, holdMinutes: 110 },
+  { id: 15, name: "BEES_EMA_Scalp_Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.3, slPct: 0.14, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 60 },
+  { id: 16, name: "BEES_EMA_Scalp_Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.3, slPct: 0.14, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 60 },
+  { id: 17, name: "BEES_EMA_Trend_Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.42, slPct: 0.18, cooldownMinutes: 12, minBars: MIN_BARS_SLOW, holdMinutes: 96 },
+  { id: 18, name: "BEES_EMA_Trend_Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.42, slPct: 0.18, cooldownMinutes: 12, minBars: MIN_BARS_SLOW, holdMinutes: 96 },
+  { id: 19, name: "BEES_RSI_Snap_Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.24, slPct: 0.12, cooldownMinutes: 7, minBars: MIN_BARS_FAST, holdMinutes: 52 },
+  { id: 20, name: "BEES_RSI_Snap_Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.24, slPct: 0.12, cooldownMinutes: 7, minBars: MIN_BARS_FAST, holdMinutes: 52 },
+  { id: 21, name: "BEES_RSI_Deep_Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.32, slPct: 0.15, cooldownMinutes: 10, minBars: MIN_BARS_SLOW, holdMinutes: 80 },
+  { id: 22, name: "BEES_RSI_Deep_Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.32, slPct: 0.15, cooldownMinutes: 10, minBars: MIN_BARS_SLOW, holdMinutes: 80 },
+  { id: 23, name: "BEES_VWAP_Pulse_Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.27, slPct: 0.13, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 56 },
+  { id: 24, name: "BEES_VWAP_Pulse_Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.27, slPct: 0.13, cooldownMinutes: 8, minBars: MIN_BARS_FAST, holdMinutes: 56 },
+  { id: 25, name: "BEES_VWAP_Trend_Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.36, slPct: 0.16, cooldownMinutes: 11, minBars: MIN_BARS_SLOW, holdMinutes: 90 },
+  { id: 26, name: "BEES_VWAP_Trend_Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.36, slPct: 0.16, cooldownMinutes: 11, minBars: MIN_BARS_SLOW, holdMinutes: 90 },
+  { id: 27, name: "BEES_Trend_Burst_Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.35, slPct: 0.15, cooldownMinutes: 10, minBars: MIN_BARS_FAST, holdMinutes: 72 },
+  { id: 28, name: "BEES_Trend_Burst_Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.35, slPct: 0.15, cooldownMinutes: 10, minBars: MIN_BARS_FAST, holdMinutes: 72 },
+  { id: 29, name: "BEES_Trend_Follow_Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.48, slPct: 0.2, cooldownMinutes: 15, minBars: MIN_BARS_SLOW, holdMinutes: 120 },
+  { id: 30, name: "BEES_Trend_Follow_Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.48, slPct: 0.2, cooldownMinutes: 15, minBars: MIN_BARS_SLOW, holdMinutes: 120 },
 ];
 
 function clamp(v: number, lo: number, hi: number) {
