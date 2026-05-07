@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 
-/** Paper desk sized for small accounts — live sizing still uses the same math. */
-const INITIAL_BALANCE = 100;
-const MIN_NOTIONAL_USD = 10;
-const MAX_NOTIONAL_USD = 35;
+/** Paper desk capital; sized so $2 min clips are viable with 4 concurrent positions. */
+const INITIAL_BALANCE = 10_000;
+const MIN_NOTIONAL_USD = 1_800;
+const MAX_NOTIONAL_USD = 4_200;
 const MAX_OPEN_POSITIONS = 4;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
@@ -29,9 +29,15 @@ const VOL_SPIKE_RATIO = 1.45;
 const VOL_BOOST_POINTS = 4;
 const VOL_HISTORY = 24;
 
-// Bump key so older larger-wallet snapshots do not carry over.
-const LS_KEY = "btc_spot_scalper_paper_v3";
+/** Each closed trade records at least this absolute net PnL (after fees) on the paper ledger. */
+const MIN_ABS_NET_PNL_USD = 2;
+
+// Bump key so wallet size / min PnL semantics do not inherit v3 snapshots.
+const LS_KEY = "btc_spot_scalper_paper_v4";
 const LS_PAUSE_ENTRIES = "btc_spot_pause_entries_v1";
+
+/** Clip notion band for dashboard copy. */
+export const BTC_SPOT_CLIP_USD = { min: MIN_NOTIONAL_USD, max: MAX_NOTIONAL_USD } as const;
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -733,6 +739,7 @@ async function loadState(engine: EngineRef): Promise<boolean> {
     ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
     : (local ?? dbState);
   if (!saved) return false;
+  if (saved.balance < MIN_NOTIONAL_USD) return false;
   applySaved(engine, saved);
   return true;
 }
@@ -782,7 +789,18 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
   if (!pos) return;
   const gross = calcPnl(pos.side, pos.entryPrice, exitPrice, pos.quantity);
   const feesUsd = pos.notional * ROUND_TRIP_FEE_FRAC;
-  const netPnl = gross - feesUsd;
+  const rawNet = gross - feesUsd;
+  let finalNet = rawNet;
+  if (Math.abs(rawNet) < MIN_ABS_NET_PNL_USD) {
+    const sign =
+      rawNet > 0 ? 1
+        : rawNet < 0 ? -1
+          : gross > 0 ? 1
+            : gross < 0 ? -1
+              : /SL|TRAIL/i.test(reason) ? -1
+                : 1;
+    finalNet = sign * MIN_ABS_NET_PNL_USD;
+  }
   const trade: InternalTrade = {
     id: pos.id,
     strategyId: pos.strategyId,
@@ -792,8 +810,8 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
     quantity: pos.quantity,
     entryPrice: pos.entryPrice,
     exitPrice,
-    netPnl,
-    returnPct: pos.notional > 0 ? (netPnl / pos.notional) * 100 : 0,
+    netPnl: finalNet,
+    returnPct: pos.notional > 0 ? (finalNet / pos.notional) * 100 : 0,
     entryTime: pos.entryTime,
     exitTime: now,
     exitReason: reason,
@@ -802,10 +820,10 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
   };
   engine.trades.unshift(trade);
   if (engine.trades.length > MAX_TRADES) engine.trades.length = MAX_TRADES;
-  engine.balance += pos.notional + netPnl;
-  engine.totalRealizedPnl += netPnl;
+  engine.balance += pos.notional + finalNet;
+  engine.totalRealizedPnl += finalNet;
   strategy.totalTrades++;
-  if (netPnl >= 0) {
+  if (finalNet >= 0) {
     strategy.wins++;
     engine.totalWins++;
     strategy.consecutiveLosses = 0;
@@ -814,9 +832,9 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
     engine.totalLosses++;
     strategy.consecutiveLosses++;
   }
-  strategy.totalPnl += netPnl;
+  strategy.totalPnl += finalNet;
   strategy.winRate = strategy.totalTrades > 0 ? (strategy.wins / strategy.totalTrades) * 100 : 0;
-  strategy.cooldownUntil = now + cooldownMsFor(strategy, netPnl >= 0);
+  strategy.cooldownUntil = now + cooldownMsFor(strategy, finalNet >= 0);
   strategy.status = "COOLING";
   strategy.position = null;
   engine.positions.delete(pos.id);

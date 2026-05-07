@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import { formatShortDate, formatShortTime } from "@/lib/time";
-import type {
-  BTCSpotEngineStats,
-  BTCSpotPosition,
-  BTCSpotQuote,
-  BTCSpotStrategyStatus,
-  BTCSpotTrade,
+import {
+  BTC_SPOT_CLIP_USD,
+  type BTCSpotEngineStats,
+  type BTCSpotPosition,
+  type BTCSpotQuote,
+  type BTCSpotStrategyStatus,
+  type BTCSpotTrade,
 } from "@/hooks/useBTCSpotScalperEngine";
 
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -392,7 +393,7 @@ export default function BTCSpotScalper({
                 </div>
               </div>
               <div className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Thirty independent 1m strategies share a small-account pool: up to four concurrent clips, each sized to about {fmtUSD(strategies[0]?.targetNotionalUsd ?? 1, { decimals: 2 })}–{fmtUSD(Math.min(initialBalance * 0.4, 35), { decimals: 2 })} notional so the book stays tradable near {fmtUSD(initialBalance)}.
+                Thirty independent 1m strategies share this paper pool: up to four concurrent clips, each about {fmtUSD(strategies[0]?.targetNotionalUsd ?? BTC_SPOT_CLIP_USD.min, { decimals: 2 })}–{fmtUSD(BTC_SPOT_CLIP_USD.max, { decimals: 2 })} notional ({fmtUSD(initialBalance)} desk). Each closed trade books at least $2 net win or loss after the fee model.
                 Shorts are synthetic paper only (real spot is long-biased); fees are deducted on exit to stress-test edge.
               </div>
             </div>
