@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 
 /** Paper desk sized for small accounts — live sizing still uses the same math. */
 const INITIAL_BALANCE = 100;
@@ -581,12 +581,6 @@ function compareSavedStates(a: DbPayload, b: DbPayload): number {
   return 0;
 }
 
-function isLegacySmallAccountSnapshot(saved: DbPayload): boolean {
-  const likelyLegacyBalance = saved.balance > 0 && saved.balance < INITIAL_BALANCE * 0.5;
-  const likelyLegacyDrawdown = saved.totalPnl < -(INITIAL_BALANCE * 0.5);
-  return likelyLegacyBalance || likelyLegacyDrawdown;
-}
-
 function applySaved(engine: EngineRef, saved: DbPayload): void {
   const persistedBalance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
   // Hard-cap the paper wallet to the configured desk balance.
@@ -666,9 +660,15 @@ async function loadState(engine: EngineRef): Promise<boolean> {
     ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
     : (local ?? dbState);
   if (!saved) return false;
-  if (isLegacySmallAccountSnapshot(saved)) return false;
   applySaved(engine, saved);
   return true;
+}
+
+function createEngineHydratedFromLs(): EngineRef {
+  const engine = initEngine();
+  const snap = loadLs();
+  if (snap) applySaved(engine, snap);
+  return engine;
 }
 
 function openPosition(engine: EngineRef, strategy: InternalStrategyState, price: number, now: number): boolean {
@@ -750,7 +750,11 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
 }
 
 export default function useBTCSpotScalperEngine() {
-  const engineRef = useRef<EngineRef>(initEngine());
+  const engineRef = useRef<EngineRef | null>(null);
+  if (engineRef.current === null) {
+    engineRef.current = createEngineHydratedFromLs();
+  }
+  const engineR = engineRef as MutableRefObject<EngineRef>;
   const loadedRef = useRef(false);
   const [quote, setQuote] = useState<BTCSpotQuote>({
     symbol: "BTC",
@@ -781,7 +785,7 @@ export default function useBTCSpotScalperEngine() {
   const [stats, setStats] = useState<BTCSpotEngineStats>(EMPTY_STATS);
 
   const pushDisplay = useCallback(() => {
-    const engine = engineRef.current;
+    const engine = engineR.current;
     const now = Date.now();
     let maxScore = 0;
     for (const s of engine.strategies) {
@@ -870,7 +874,7 @@ export default function useBTCSpotScalperEngine() {
   const processKlines = useCallback(
     (closes: number[], volumes: number[], livePrice: number, changePct24h: number, err: string) => {
       if (!loadedRef.current) return;
-      const engine = engineRef.current;
+      const engine = engineR.current;
       const tickPrice = livePrice > 0 ? livePrice : 0;
       if (closes.length >= MIN_BARS) {
         const bars = closes.slice(-MAX_BARS);
@@ -960,15 +964,19 @@ export default function useBTCSpotScalperEngine() {
   );
 
   const reset = useCallback(() => {
-    engineRef.current = initEngine();
+    engineR.current = initEngine();
     loadedRef.current = true;
-    saveLs(engineRef.current);
-    void saveDbState(engineRef.current);
+    saveLs(engineR.current);
+    void saveDbState(engineR.current);
+    pushDisplay();
+  }, [pushDisplay]);
+
+  useLayoutEffect(() => {
     pushDisplay();
   }, [pushDisplay]);
 
   useEffect(() => {
-    void loadState(engineRef.current).then(() => {
+    void loadState(engineR.current).then(() => {
       loadedRef.current = true;
       pushDisplay();
     });
@@ -977,8 +985,8 @@ export default function useBTCSpotScalperEngine() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (!loadedRef.current) return;
-      saveLs(engineRef.current);
-      void saveDbState(engineRef.current);
+      saveLs(engineR.current);
+      void saveDbState(engineR.current);
     }, 60_000);
     return () => clearInterval(interval);
   }, []);
@@ -986,8 +994,8 @@ export default function useBTCSpotScalperEngine() {
   useEffect(() => {
     const onUnload = () => {
       if (!loadedRef.current) return;
-      saveLs(engineRef.current);
-      const payload = JSON.stringify(buildPayload(engineRef.current));
+      saveLs(engineR.current);
+      const payload = JSON.stringify(buildPayload(engineR.current));
       navigator.sendBeacon("/api/btc/spot-state", new Blob([payload], { type: "application/json" }));
     };
     window.addEventListener("beforeunload", onUnload);
