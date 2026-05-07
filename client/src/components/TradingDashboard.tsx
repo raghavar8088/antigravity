@@ -417,6 +417,8 @@ export default function TradingDashboard({
     stats: btcSpotStats,
     reset: btcSpotReset,
     initialBalance: btcSpotInitialBalance,
+    entriesPaused: btcSpotEntriesPaused,
+    setEntriesPaused: btcSpotSetEntriesPaused,
   } = useBTCSpotScalperEngine();
   const { quote: goldQuote, positions: goldPositions, trades: goldTrades, strategies: goldStrategies, stats: goldStats, reset: goldReset } = useForexGoldEngine();
   const {
@@ -2574,6 +2576,8 @@ export default function TradingDashboard({
           strategies={btcSpotStrategies}
           stats={btcSpotStats}
           reset={btcSpotReset}
+          entriesPaused={btcSpotEntriesPaused}
+          setEntriesPaused={btcSpotSetEntriesPaused}
         />
       )}
 

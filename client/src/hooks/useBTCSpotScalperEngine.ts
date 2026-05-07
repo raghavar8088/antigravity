@@ -31,6 +31,7 @@ const VOL_HISTORY = 24;
 
 // Bump key so older larger-wallet snapshots do not carry over.
 const LS_KEY = "btc_spot_scalper_paper_v3";
+const LS_PAUSE_ENTRIES = "btc_spot_pause_entries_v1";
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -130,6 +131,15 @@ interface EngineRef {
   lastError: string;
   lastPrice: number;
   changePct24h: number;
+  /** 1m tape regime from latest bar (warmup uses "WARMING"). */
+  lastRegime: string;
+  lastLocalSaveAt: number;
+  lastServerSaveAt: number;
+  serverSyncConfigured: boolean;
+  /** High-water equity mark for drawdown-from-peak (this browser session + restored book). */
+  sessionPeakEquity: number;
+  lastVolRatio: number;
+  lastRsi14: number;
 }
 
 export type BTCSpotQuote = {
@@ -139,6 +149,9 @@ export type BTCSpotQuote = {
   signalScore: number;
   hasPosition: boolean;
   sparkline: number[];
+  /** Latest 1m volume vs trailing average (≈1 = normal). */
+  volRatio: number;
+  rsi14: number;
 };
 
 export type BTCSpotPosition = {
@@ -207,6 +220,30 @@ export type BTCSpotEngineStats = {
   lastUpdateAt: number;
   diagnostics: string;
   feeModelNote: string;
+  marketRegime: string;
+  /** Average net PnL per winning trade (after fees). */
+  avgWinUsd: number | null;
+  /** Average absolute loss per losing trade (after fees). */
+  avgLossUsd: number | null;
+  /** Gross wins / gross losses; null when no losses yet (UI may show ∞). */
+  profitFactor: number | null;
+  /** Realized PnL / closed trade count. */
+  expectancyPerTradeUsd: number | null;
+  persistence: {
+    lastLocalSaveAt: number | null;
+    lastServerSaveAt: number | null;
+    serverSyncConfigured: boolean;
+  };
+  /** Drawdown from session peak equity, percent (0 at peak). */
+  maxDrawdownFromPeakPct: number;
+  sessionPeakEquity: number;
+  volRatio: number;
+  rsi14: number;
+  winStreak: number;
+  lossStreak: number;
+  exitReasonCounts: Record<string, number>;
+  bestTradeUsd: number | null;
+  worstTradeUsd: number | null;
 };
 
 type DbPayload = {
@@ -483,6 +520,13 @@ function initEngine(): EngineRef {
     lastError: "",
     lastPrice: 0,
     changePct24h: 0,
+    lastRegime: "WARMING",
+    lastLocalSaveAt: 0,
+    lastServerSaveAt: 0,
+    serverSyncConfigured: false,
+    sessionPeakEquity: INITIAL_BALANCE,
+    lastVolRatio: 1,
+    lastRsi14: 50,
   };
 }
 
@@ -501,6 +545,21 @@ const EMPTY_STATS: BTCSpotEngineStats = {
   lastUpdateAt: 0,
   diagnostics: "Loading BTC 1m candles…",
   feeModelNote: `Round-trip fee model ≈ ${(ROUND_TRIP_FEE_FRAC * 100).toFixed(2)}% of notional (conservative spot taker assumption).`,
+  marketRegime: "WARMING",
+  avgWinUsd: null,
+  avgLossUsd: null,
+  profitFactor: null,
+  expectancyPerTradeUsd: null,
+  persistence: { lastLocalSaveAt: null, lastServerSaveAt: null, serverSyncConfigured: false },
+  maxDrawdownFromPeakPct: 0,
+  sessionPeakEquity: INITIAL_BALANCE,
+  volRatio: 1,
+  rsi14: 50,
+  winStreak: 0,
+  lossStreak: 0,
+  exitReasonCounts: {},
+  bestTradeUsd: null,
+  worstTradeUsd: null,
 };
 
 function buildPayload(engine: EngineRef): DbPayload {
@@ -542,6 +601,7 @@ function buildPayload(engine: EngineRef): DbPayload {
 function saveLs(engine: EngineRef): void {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(buildPayload(engine)));
+    engine.lastLocalSaveAt = Date.now();
   } catch {
     /* ignore */
   }
@@ -629,15 +689,21 @@ function applySaved(engine: EngineRef, saved: DbPayload): void {
     st.consecutiveLosses = row.consecutiveLosses ?? 0;
     if (!st.position) st.status = st.cooldownUntil > Date.now() ? "COOLING" : "WARMING";
   }
+  const unrealizedSum = [...engine.positions.values()].reduce((a, p) => a + p.unrealizedPnl, 0);
+  const openNotional = [...engine.positions.values()].reduce((a, p) => a + p.notional, 0);
+  const eq = engine.balance + openNotional + unrealizedSum;
+  engine.sessionPeakEquity = Math.max(INITIAL_BALANCE, engine.sessionPeakEquity, eq);
 }
 
 async function saveDbState(engine: EngineRef): Promise<void> {
   try {
-    await fetch("/api/btc/spot-state", {
+    const res = await fetch("/api/btc/spot-state", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(buildPayload(engine)),
     });
+    const data = (await res.json()) as { ok?: boolean; skipped?: boolean };
+    if (res.ok && data.ok && !data.skipped) engine.lastServerSaveAt = Date.now();
   } catch {
     // non-critical persistence path
   }
@@ -649,11 +715,18 @@ async function loadState(engine: EngineRef): Promise<boolean> {
   try {
     const response = await fetch("/api/btc/spot-state");
     if (response.ok) {
-      const data = (await response.json()) as { ok?: boolean; found?: boolean; state?: Partial<DbPayload> };
+      const data = (await response.json()) as {
+        ok?: boolean;
+        found?: boolean;
+        disabled?: boolean;
+        skipped?: boolean;
+        state?: Partial<DbPayload>;
+      };
+      engine.serverSyncConfigured = !data.disabled && !data.skipped;
       if (data.ok && data.found && data.state) dbState = normalizeDbPayload(data.state);
     }
   } catch {
-    // fall back to local snapshot
+    engine.serverSyncConfigured = false;
   }
 
   const saved = local && dbState
@@ -756,6 +829,8 @@ export default function useBTCSpotScalperEngine() {
   }
   const engineR = engineRef as MutableRefObject<EngineRef>;
   const loadedRef = useRef(false);
+  const entriesPausedRef = useRef(false);
+  const [entriesPaused, setEntriesPausedState] = useState(false);
   const [quote, setQuote] = useState<BTCSpotQuote>({
     symbol: "BTC",
     ltp: 0,
@@ -763,6 +838,8 @@ export default function useBTCSpotScalperEngine() {
     signalScore: 0,
     hasPosition: false,
     sparkline: [],
+    volRatio: 1,
+    rsi14: 50,
   });
   const [positions, setPositions] = useState<BTCSpotPosition[]>([]);
   const [trades, setTrades] = useState<BTCSpotTrade[]>([]);
@@ -798,6 +875,8 @@ export default function useBTCSpotScalperEngine() {
       signalScore: maxScore,
       hasPosition: engine.positions.size > 0,
       sparkline: engine.bars.slice(-32),
+      volRatio: engine.lastVolRatio,
+      rsi14: engine.lastRsi14,
     });
     setPositions(
       [...engine.positions.values()].map((p) => ({
@@ -818,7 +897,7 @@ export default function useBTCSpotScalperEngine() {
       })),
     );
     setTrades(
-      engine.trades.slice(0, 120).map((t) => ({
+      engine.trades.slice(0, 500).map((t) => ({
         ...t,
         entryTime: new Date(t.entryTime).toISOString(),
         exitTime: new Date(t.exitTime).toISOString(),
@@ -847,6 +926,42 @@ export default function useBTCSpotScalperEngine() {
     const tw = engine.totalWins + engine.totalLosses;
     const drawdownPct = ((INITIAL_BALANCE - equity) / INITIAL_BALANCE) * 100;
     const lockedByDrawdown = drawdownPct >= MAX_DRAWDOWN_LOCK_PCT;
+    let winGross = 0;
+    let lossGross = 0;
+    for (const t of engine.trades) {
+      if (t.netPnl > 0) winGross += t.netPnl;
+      else if (t.netPnl < 0) lossGross += Math.abs(t.netPnl);
+    }
+    const avgWinUsd = engine.totalWins > 0 ? winGross / engine.totalWins : null;
+    const avgLossUsd = engine.totalLosses > 0 ? lossGross / engine.totalLosses : null;
+    const profitFactor = lossGross > 0 ? winGross / lossGross : null;
+    const expectancyPerTradeUsd = tw > 0 ? engine.totalRealizedPnl / tw : null;
+
+    let winStreak = 0;
+    let lossStreak = 0;
+    for (const t of engine.trades) {
+      if (t.netPnl >= 0) {
+        if (lossStreak > 0) break;
+        winStreak++;
+      } else {
+        if (winStreak > 0) break;
+        lossStreak++;
+      }
+    }
+
+    const exitReasonCounts: Record<string, number> = {};
+    let bestTradeUsd: number | null = null;
+    let worstTradeUsd: number | null = null;
+    for (const t of engine.trades) {
+      const k = t.exitReason || "—";
+      exitReasonCounts[k] = (exitReasonCounts[k] ?? 0) + 1;
+      if (bestTradeUsd === null || t.netPnl > bestTradeUsd) bestTradeUsd = t.netPnl;
+      if (worstTradeUsd === null || t.netPnl < worstTradeUsd) worstTradeUsd = t.netPnl;
+    }
+
+    const peakEq = engine.sessionPeakEquity > 0 ? engine.sessionPeakEquity : INITIAL_BALANCE;
+    const maxDrawdownFromPeakPct = peakEq > 0 ? Math.max(0, ((peakEq - equity) / peakEq) * 100) : 0;
+
     setStats({
       equity,
       balance: engine.balance,
@@ -868,7 +983,36 @@ export default function useBTCSpotScalperEngine() {
             ? "Delta Exchange 1m candles (REST)."
             : "Waiting for candles."),
       feeModelNote: EMPTY_STATS.feeModelNote,
+      marketRegime: engine.lastRegime,
+      avgWinUsd,
+      avgLossUsd,
+      profitFactor,
+      expectancyPerTradeUsd,
+      persistence: {
+        lastLocalSaveAt: engine.lastLocalSaveAt > 0 ? engine.lastLocalSaveAt : null,
+        lastServerSaveAt: engine.lastServerSaveAt > 0 ? engine.lastServerSaveAt : null,
+        serverSyncConfigured: engine.serverSyncConfigured,
+      },
+      maxDrawdownFromPeakPct,
+      sessionPeakEquity: engine.sessionPeakEquity,
+      volRatio: engine.lastVolRatio,
+      rsi14: engine.lastRsi14,
+      winStreak,
+      lossStreak,
+      exitReasonCounts,
+      bestTradeUsd,
+      worstTradeUsd,
     });
+  }, []);
+
+  const setEntriesPaused = useCallback((next: boolean) => {
+    entriesPausedRef.current = next;
+    setEntriesPausedState(next);
+    try {
+      localStorage.setItem(LS_PAUSE_ENTRIES, next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const processKlines = useCallback(
@@ -901,6 +1045,7 @@ export default function useBTCSpotScalperEngine() {
       const now = Date.now();
       const bars = engine.bars;
       if (bars.length < MIN_BARS) {
+        engine.lastRegime = "WARMING";
         pushDisplay();
         saveLs(engine);
         return;
@@ -911,9 +1056,13 @@ export default function useBTCSpotScalperEngine() {
       const volRatio = avgVol > 0 ? lastVol / avgVol : 1;
       const input = buildSignalInputs(bars, volRatio);
       const regime = classifyRegime(input);
+      engine.lastRegime = regime;
+      engine.lastVolRatio = volRatio;
+      engine.lastRsi14 = input.rsi14;
       const equityNow =
         engine.balance +
         [...engine.positions.values()].reduce((sum, pos) => sum + pos.notional + pos.unrealizedPnl, 0);
+      engine.sessionPeakEquity = Math.max(engine.sessionPeakEquity, equityNow);
       const drawdownPct = ((INITIAL_BALANCE - equityNow) / INITIAL_BALANCE) * 100;
       const allowNewEntries = drawdownPct < MAX_DRAWDOWN_LOCK_PCT;
 
@@ -947,7 +1096,7 @@ export default function useBTCSpotScalperEngine() {
         const confirmed = score >= SIGNAL_THRESHOLD && passesEntryConfirmation(strategy.def, input, regime);
         strategy.score = confirmed ? score : Math.min(score, SIGNAL_THRESHOLD - 1);
         strategy.lastSignalSymbol = "BTC";
-        if (confirmed && allowNewEntries && engine.positions.size < MAX_OPEN_POSITIONS && engine.lastPrice > 0) {
+        if (confirmed && allowNewEntries && !entriesPausedRef.current && engine.positions.size < MAX_OPEN_POSITIONS && engine.lastPrice > 0) {
           openPosition(engine, strategy, engine.lastPrice, now);
         }
       }
@@ -964,7 +1113,9 @@ export default function useBTCSpotScalperEngine() {
   );
 
   const reset = useCallback(() => {
+    const sync = engineR.current.serverSyncConfigured;
     engineR.current = initEngine();
+    engineR.current.serverSyncConfigured = sync;
     loadedRef.current = true;
     saveLs(engineR.current);
     void saveDbState(engineR.current);
@@ -972,6 +1123,13 @@ export default function useBTCSpotScalperEngine() {
   }, [pushDisplay]);
 
   useLayoutEffect(() => {
+    try {
+      const p = localStorage.getItem(LS_PAUSE_ENTRIES) === "1";
+      entriesPausedRef.current = p;
+      setEntriesPausedState(p);
+    } catch {
+      /* ignore */
+    }
     pushDisplay();
   }, [pushDisplay]);
 
@@ -996,7 +1154,14 @@ export default function useBTCSpotScalperEngine() {
       if (!loadedRef.current) return;
       saveLs(engineR.current);
       const payload = JSON.stringify(buildPayload(engineR.current));
-      navigator.sendBeacon("/api/btc/spot-state", new Blob([payload], { type: "application/json" }));
+      const blob = new Blob([payload], { type: "application/json" });
+      if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon("/api/btc/spot-state", blob)) return;
+      void fetch("/api/btc/spot-state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      });
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
@@ -1033,5 +1198,5 @@ export default function useBTCSpotScalperEngine() {
     };
   }, [processKlines]);
 
-  return { quote, positions, trades, strategies, stats, reset, initialBalance: INITIAL_BALANCE };
+  return { quote, positions, trades, strategies, stats, reset, initialBalance: INITIAL_BALANCE, entriesPaused, setEntriesPaused };
 }
