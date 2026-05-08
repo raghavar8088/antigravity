@@ -393,7 +393,7 @@ export default function BTCSpotScalper({
                 </div>
               </div>
               <div className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                Thirty independent 1m strategies share this paper pool: up to four concurrent clips, each about {fmtUSD(strategies[0]?.targetNotionalUsd ?? BTC_SPOT_CLIP_USD.min, { decimals: 2 })}–{fmtUSD(BTC_SPOT_CLIP_USD.max, { decimals: 2 })} notional ({fmtUSD(initialBalance)} desk). Each closed trade books at least $2 net win or loss after the fee model.
+                Sixty independent 1m strategies (Bollinger, Stochastic, MACD, OBV, confluence &amp; more) share this paper pool: up to six concurrent clips, each about {fmtUSD(strategies[0]?.targetNotionalUsd ?? BTC_SPOT_CLIP_USD.min, { decimals: 2 })}–{fmtUSD(BTC_SPOT_CLIP_USD.max, { decimals: 2 })} notional ({fmtUSD(initialBalance)} desk). Each closed trade books at least $2 net win or loss after the fee model.
                 Shorts are synthetic paper only (real spot is long-biased); fees are deducted on exit to stress-test edge.
               </div>
             </div>
@@ -401,7 +401,7 @@ export default function BTCSpotScalper({
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
               <div className="flex flex-wrap gap-2">
                 <BadgePill label={stats.warmingUp ? "Warming 1m bars" : "Engine live"} tone="positive" />
-                <BadgePill label={`${openCount}/4 max slots`} tone="warning" />
+                <BadgePill label={`${openCount}/6 max slots`} tone="warning" />
                 <BadgePill label="Tight SL / TP" tone="info" />
                 {entriesPaused ? <BadgePill label="New entries paused" tone="warning" /> : null}
               </div>

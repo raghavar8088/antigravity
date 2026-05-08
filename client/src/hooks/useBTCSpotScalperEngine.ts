@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Mutable
 const INITIAL_BALANCE = 100;
 const MIN_NOTIONAL_USD = 10;
 const MAX_NOTIONAL_USD = 35;
-const MAX_OPEN_POSITIONS = 4;
+const MAX_OPEN_POSITIONS = 6;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
 const SIGNAL_THRESHOLD = 68;
@@ -35,8 +35,8 @@ const VOL_HISTORY = 24;
 /** Each closed trade records at least this absolute net PnL (after fees) on the paper ledger. */
 const MIN_ABS_NET_PNL_USD = 2;
 
-// Bump key to clear stale state — v5 has fee-aware exits and wider TP targets.
-const LS_KEY = "btc_spot_scalper_paper_v5";
+// Bump key to clear stale state — v6 has 60 strategies with advanced indicators.
+const LS_KEY = "btc_spot_scalper_paper_v6";
 const LS_PAUSE_ENTRIES = "btc_spot_pause_entries_v1";
 
 /** Clip notion band for dashboard copy. */
@@ -61,6 +61,21 @@ type SignalInputs = {
   momentum3: number;
   momentum6: number;
   volRatio: number;
+  bbUpper: number;
+  bbLower: number;
+  bbWidth: number;
+  stochK: number;
+  stochD: number;
+  prevStochK: number;
+  prevStochD: number;
+  macdLine: number;
+  macdSignal: number;
+  prevMacdLine: number;
+  prevMacdSignal: number;
+  atr14: number;
+  obvSlope: number;
+  momentum10: number;
+  rsi7: number;
 };
 
 interface StratDef {
@@ -320,6 +335,50 @@ const STRAT_DEFS: StratDef[] = [
   { id: 28, name: "Trend Burst Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 28 },
   { id: 29, name: "Trend Follow Through Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.58, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 45 },
   { id: 30, name: "Trend Follow Through Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.58, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 45 },
+
+  // --- Bollinger Band strategies (31-36) ---
+  { id: 31, name: "BB Squeeze Breakout Long", category: "Bollinger", side: "LONG", signal: "BB_SQUEEZE_LONG", tpPct: 0.48, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 32, name: "BB Squeeze Breakdown Short", category: "Bollinger", side: "SHORT", signal: "BB_SQUEEZE_SHORT", tpPct: 0.48, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 33, name: "BB Lower Band Bounce", category: "Bollinger MR", side: "LONG", signal: "BB_BOUNCE_LONG", tpPct: 0.38, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 24 },
+  { id: 34, name: "BB Upper Band Fade", category: "Bollinger MR", side: "SHORT", signal: "BB_BOUNCE_SHORT", tpPct: 0.38, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 24 },
+  { id: 35, name: "BB Band Walk Long", category: "Bollinger", side: "LONG", signal: "BB_WALK_LONG", tpPct: 0.52, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 34 },
+  { id: 36, name: "BB Band Walk Short", category: "Bollinger", side: "SHORT", signal: "BB_WALK_SHORT", tpPct: 0.52, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 34 },
+
+  // --- Stochastic strategies (37-42) ---
+  { id: 37, name: "Stoch Golden Cross Long", category: "Stochastic", side: "LONG", signal: "STOCH_CROSS_LONG", tpPct: 0.40, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 38, name: "Stoch Death Cross Short", category: "Stochastic", side: "SHORT", signal: "STOCH_CROSS_SHORT", tpPct: 0.40, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 39, name: "Stoch Bullish Divergence", category: "Stochastic", side: "LONG", signal: "STOCH_DIVERGE_LONG", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 40, name: "Stoch Bearish Divergence", category: "Stochastic", side: "SHORT", signal: "STOCH_DIVERGE_SHORT", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 41, name: "Stoch Oversold Snap Long", category: "Stochastic", side: "LONG", signal: "STOCH_CROSS_LONG", tpPct: 0.36, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+  { id: 42, name: "Stoch Overbought Snap Short", category: "Stochastic", side: "SHORT", signal: "STOCH_CROSS_SHORT", tpPct: 0.36, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+
+  // --- MACD strategies (43-48) ---
+  { id: 43, name: "MACD Bullish Cross", category: "MACD", side: "LONG", signal: "MACD_CROSS_LONG", tpPct: 0.46, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 44, name: "MACD Bearish Cross", category: "MACD", side: "SHORT", signal: "MACD_CROSS_SHORT", tpPct: 0.46, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 45, name: "MACD Hidden Bull Divergence", category: "MACD", side: "LONG", signal: "MACD_DIVERGE_LONG", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 46, name: "MACD Hidden Bear Divergence", category: "MACD", side: "SHORT", signal: "MACD_DIVERGE_SHORT", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 47, name: "MACD Momentum Surge Long", category: "MACD", side: "LONG", signal: "MACD_CROSS_LONG", tpPct: 0.54, slPct: 0.18, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 38 },
+  { id: 48, name: "MACD Momentum Surge Short", category: "MACD", side: "SHORT", signal: "MACD_CROSS_SHORT", tpPct: 0.54, slPct: 0.18, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 38 },
+
+  // --- OBV / Volume strategies (49-52) ---
+  { id: 49, name: "OBV Accumulation Breakout", category: "Volume", side: "LONG", signal: "OBV_BREAKOUT_LONG", tpPct: 0.50, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 32 },
+  { id: 50, name: "OBV Distribution Breakdown", category: "Volume", side: "SHORT", signal: "OBV_BREAKOUT_SHORT", tpPct: 0.50, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 32 },
+  { id: 51, name: "OBV Trend Confirm Long", category: "Volume", side: "LONG", signal: "OBV_BREAKOUT_LONG", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 52, name: "OBV Trend Confirm Short", category: "Volume", side: "SHORT", signal: "OBV_BREAKOUT_SHORT", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 28 },
+
+  // --- Multi-indicator confluence (53-56) ---
+  { id: 53, name: "Triple Indicator Bull", category: "Confluence", side: "LONG", signal: "TRIPLE_BULL", tpPct: 0.52, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 36 },
+  { id: 54, name: "Triple Indicator Bear", category: "Confluence", side: "SHORT", signal: "TRIPLE_BEAR", tpPct: 0.52, slPct: 0.17, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 36 },
+  { id: 55, name: "Deep Oversold Reversal", category: "Confluence", side: "LONG", signal: "MEAN_REVERT_DEEP_LONG", tpPct: 0.40, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 24 },
+  { id: 56, name: "Deep Overbought Reversal", category: "Confluence", side: "SHORT", signal: "MEAN_REVERT_DEEP_SHORT", tpPct: 0.40, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 24 },
+
+  // --- ATR / Volatility expansion (57-58) ---
+  { id: 57, name: "Vol Expansion Surge Long", category: "Volatility", side: "LONG", signal: "ATR_EXPANSION_LONG", tpPct: 0.56, slPct: 0.18, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 40 },
+  { id: 58, name: "Vol Expansion Surge Short", category: "Volatility", side: "SHORT", signal: "ATR_EXPANSION_SHORT", tpPct: 0.56, slPct: 0.18, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 40 },
+
+  // --- Momentum acceleration (59-60) ---
+  { id: 59, name: "Momentum Accelerator Long", category: "Momentum Accel", side: "LONG", signal: "MOM_ACCEL_LONG", tpPct: 0.50, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 32 },
+  { id: 60, name: "Momentum Accelerator Short", category: "Momentum Accel", side: "SHORT", signal: "MOM_ACCEL_SHORT", tpPct: 0.50, slPct: 0.16, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 32 },
 ];
 
 function sma(values: number[], period: number): number {
@@ -360,10 +419,84 @@ function scoreClamp(value: number): number {
   return Math.max(0, Math.min(99, value));
 }
 
-function buildSignalInputs(bars: number[], volRatio: number): SignalInputs {
+function stochastic(bars: number[], kPeriod: number, dPeriod: number): { k: number; d: number; prevK: number; prevD: number } {
+  if (bars.length < kPeriod + dPeriod) return { k: 50, d: 50, prevK: 50, prevD: 50 };
+  const kValues: number[] = [];
+  for (let i = kPeriod - 1; i < bars.length; i++) {
+    const window = bars.slice(i - kPeriod + 1, i + 1);
+    const high = Math.max(...window);
+    const low = Math.min(...window);
+    kValues.push(high !== low ? ((bars[i] - low) / (high - low)) * 100 : 50);
+  }
+  const dValues: number[] = [];
+  for (let i = dPeriod - 1; i < kValues.length; i++) {
+    dValues.push(kValues.slice(i - dPeriod + 1, i + 1).reduce((a, b) => a + b, 0) / dPeriod);
+  }
+  return {
+    k: kValues[kValues.length - 1] ?? 50,
+    d: dValues[dValues.length - 1] ?? 50,
+    prevK: kValues[kValues.length - 2] ?? 50,
+    prevD: dValues[dValues.length - 2] ?? 50,
+  };
+}
+
+function macd(bars: number[], fastP: number, slowP: number, sigP: number): { line: number; signal: number; prevLine: number; prevSignal: number } {
+  if (bars.length < slowP + sigP) return { line: 0, signal: 0, prevLine: 0, prevSignal: 0 };
+  const macdValues: number[] = [];
+  for (let i = slowP; i <= bars.length; i++) {
+    const slice = bars.slice(0, i);
+    macdValues.push(ema(slice, fastP) - ema(slice, slowP));
+  }
+  const sigValues: number[] = [];
+  for (let i = sigP; i <= macdValues.length; i++) {
+    sigValues.push(ema(macdValues.slice(0, i), sigP));
+  }
+  return {
+    line: macdValues[macdValues.length - 1] ?? 0,
+    signal: sigValues[sigValues.length - 1] ?? 0,
+    prevLine: macdValues[macdValues.length - 2] ?? 0,
+    prevSignal: sigValues[sigValues.length - 2] ?? 0,
+  };
+}
+
+function atr(bars: number[], period: number): number {
+  if (bars.length < period + 1) return 0;
+  let sum = 0;
+  for (let i = bars.length - period; i < bars.length; i++) {
+    sum += Math.abs(bars[i] - bars[i - 1]);
+  }
+  return sum / period;
+}
+
+function obvSlope(bars: number[], volumes: number[], lookback: number): number {
+  if (bars.length < lookback + 1 || volumes.length < bars.length) return 0;
+  let obv = 0;
+  const obvArr: number[] = [0];
+  const start = Math.max(1, bars.length - lookback - 5);
+  for (let i = start; i < bars.length; i++) {
+    const vol = volumes[i] ?? 0;
+    if (bars[i] > bars[i - 1]) obv += vol;
+    else if (bars[i] < bars[i - 1]) obv -= vol;
+    obvArr.push(obv);
+  }
+  if (obvArr.length < 2) return 0;
+  const mid = Math.floor(obvArr.length / 2);
+  const recent = obvArr.slice(mid);
+  const older = obvArr.slice(0, mid);
+  const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
+  const maxVol = Math.max(...volumes.slice(-lookback).map(Math.abs), 1);
+  return (recentAvg - olderAvg) / maxVol;
+}
+
+function buildSignalInputs(bars: number[], volRatio: number, volumes?: number[]): SignalInputs {
   const last = bars.length - 1;
   const price = bars[last];
   const previous = bars.slice(0, -1);
+  const m20 = sma(bars, 20);
+  const s20 = stdDev(bars, 20);
+  const stoch = stochastic(bars, 14, 3);
+  const mc = macd(bars, 12, 26, 9);
   return {
     price,
     prevPrice: last > 0 ? bars[last - 1] : price,
@@ -372,20 +505,36 @@ function buildSignalInputs(bars: number[], volRatio: number): SignalInputs {
     trend: ema(bars, 34),
     prevFast: ema(previous, 8),
     prevSlow: ema(previous, 21),
-    mean20: sma(bars, 20),
-    std20: stdDev(bars, 20),
+    mean20: m20,
+    std20: s20,
     rsi14: rsi(bars, 14),
     high20: Math.max(...bars.slice(-20)),
     low20: Math.min(...bars.slice(-20)),
     momentum3: last >= 3 ? ((price - bars[last - 3]) / bars[last - 3]) * 100 : 0,
     momentum6: last >= 6 ? ((price - bars[last - 6]) / bars[last - 6]) * 100 : 0,
     volRatio,
+    bbUpper: m20 + 2 * s20,
+    bbLower: m20 - 2 * s20,
+    bbWidth: m20 > 0 ? (4 * s20) / m20 * 100 : 0,
+    stochK: stoch.k,
+    stochD: stoch.d,
+    prevStochK: stoch.prevK,
+    prevStochD: stoch.prevD,
+    macdLine: mc.line,
+    macdSignal: mc.signal,
+    prevMacdLine: mc.prevLine,
+    prevMacdSignal: mc.prevSignal,
+    atr14: atr(bars, 14),
+    obvSlope: obvSlope(bars, volumes ?? [], 12),
+    momentum10: last >= 10 ? ((price - bars[last - 10]) / bars[last - 10]) * 100 : 0,
+    rsi7: rsi(bars, 7),
   };
 }
 
 /** Signals calibrated on 1m closes (BTC). */
 function evalMinuteSignal(signal: string, input: SignalInputs): number {
   const { price, prevPrice, fast, slow, trend, prevFast, prevSlow, mean20, rsi14, high20, low20, momentum3, momentum6 } = input;
+  const { bbUpper, bbLower, bbWidth, stochK, stochD, prevStochK, prevStochD, macdLine, macdSignal, prevMacdLine, prevMacdSignal, atr14, obvSlope, momentum10, rsi7 } = input;
   switch (signal) {
     case "BREAKOUT":
       return price > high20 * 1.0009 && fast > slow && rsi14 >= 52 && momentum3 > 0.06
@@ -417,6 +566,93 @@ function evalMinuteSignal(signal: string, input: SignalInputs): number {
     case "TREND_CONT_SHORT":
       return fast < slow && slow < trend && momentum6 < -0.07 && rsi14 >= 24 && rsi14 <= 48
         ? scoreClamp(73 + Math.abs(momentum6) * 45 + (48 - rsi14) * 0.25) : 0;
+
+    // --- Bollinger Band signals ---
+    case "BB_SQUEEZE_LONG":
+      return bbWidth < 0.35 && price > mean20 && stochK > stochD && momentum3 > 0.02 && rsi14 >= 50
+        ? scoreClamp(71 + (0.35 - bbWidth) * 60 + momentum3 * 20) : 0;
+    case "BB_SQUEEZE_SHORT":
+      return bbWidth < 0.35 && price < mean20 && stochK < stochD && momentum3 < -0.02 && rsi14 <= 50
+        ? scoreClamp(71 + (0.35 - bbWidth) * 60 + Math.abs(momentum3) * 20) : 0;
+    case "BB_BOUNCE_LONG":
+      return price <= bbLower * 1.001 && rsi14 <= 38 && prevPrice < price && momentum3 > -0.06
+        ? scoreClamp(70 + (bbLower / price - 0.999) * 8000 + (38 - rsi14) * 0.8) : 0;
+    case "BB_BOUNCE_SHORT":
+      return price >= bbUpper * 0.999 && rsi14 >= 62 && prevPrice > price && momentum3 < 0.06
+        ? scoreClamp(70 + (price / bbUpper - 0.999) * 8000 + (rsi14 - 62) * 0.8) : 0;
+    case "BB_WALK_LONG":
+      return price > bbUpper * 0.998 && fast > slow && momentum6 > 0.06 && rsi14 >= 55 && rsi14 <= 78
+        ? scoreClamp(72 + momentum6 * 35 + (rsi14 - 55) * 0.3) : 0;
+    case "BB_WALK_SHORT":
+      return price < bbLower * 1.002 && fast < slow && momentum6 < -0.06 && rsi14 >= 22 && rsi14 <= 45
+        ? scoreClamp(72 + Math.abs(momentum6) * 35 + (45 - rsi14) * 0.3) : 0;
+
+    // --- Stochastic signals ---
+    case "STOCH_CROSS_LONG":
+      return prevStochK <= prevStochD && stochK > stochD && stochK < 30 && price > fast && momentum3 > 0
+        ? scoreClamp(70 + (30 - stochK) * 0.5 + momentum3 * 15) : 0;
+    case "STOCH_CROSS_SHORT":
+      return prevStochK >= prevStochD && stochK < stochD && stochK > 70 && price < fast && momentum3 < 0
+        ? scoreClamp(70 + (stochK - 70) * 0.5 + Math.abs(momentum3) * 15) : 0;
+    case "STOCH_DIVERGE_LONG":
+      return stochK < 25 && rsi14 > 40 && price >= prevPrice && momentum3 > -0.02 && fast >= slow
+        ? scoreClamp(69 + (25 - stochK) * 0.6 + (rsi14 - 40) * 0.3) : 0;
+    case "STOCH_DIVERGE_SHORT":
+      return stochK > 75 && rsi14 < 60 && price <= prevPrice && momentum3 < 0.02 && fast <= slow
+        ? scoreClamp(69 + (stochK - 75) * 0.6 + (60 - rsi14) * 0.3) : 0;
+
+    // --- MACD signals ---
+    case "MACD_CROSS_LONG":
+      return prevMacdLine <= prevMacdSignal && macdLine > macdSignal && price > slow && rsi14 >= 48
+        ? scoreClamp(71 + Math.min(10, (macdLine - macdSignal) / (atr14 || 1) * 500) + (rsi14 - 48) * 0.25) : 0;
+    case "MACD_CROSS_SHORT":
+      return prevMacdLine >= prevMacdSignal && macdLine < macdSignal && price < slow && rsi14 <= 52
+        ? scoreClamp(71 + Math.min(10, (macdSignal - macdLine) / (atr14 || 1) * 500) + (52 - rsi14) * 0.25) : 0;
+    case "MACD_DIVERGE_LONG":
+      return macdLine > prevMacdLine && price < prevPrice && rsi14 <= 42 && stochK < 35
+        ? scoreClamp(70 + (42 - rsi14) * 0.5 + (35 - stochK) * 0.3) : 0;
+    case "MACD_DIVERGE_SHORT":
+      return macdLine < prevMacdLine && price > prevPrice && rsi14 >= 58 && stochK > 65
+        ? scoreClamp(70 + (rsi14 - 58) * 0.5 + (stochK - 65) * 0.3) : 0;
+
+    // --- OBV / Volume signals ---
+    case "OBV_BREAKOUT_LONG":
+      return obvSlope > 0.3 && price > mean20 && momentum3 > 0.03 && fast > slow
+        ? scoreClamp(70 + obvSlope * 15 + momentum3 * 20) : 0;
+    case "OBV_BREAKOUT_SHORT":
+      return obvSlope < -0.3 && price < mean20 && momentum3 < -0.03 && fast < slow
+        ? scoreClamp(70 + Math.abs(obvSlope) * 15 + Math.abs(momentum3) * 20) : 0;
+
+    // --- Multi-indicator confluence signals ---
+    case "TRIPLE_BULL":
+      return rsi14 >= 52 && rsi14 <= 70 && stochK > stochD && macdLine > macdSignal && fast > slow && momentum6 > 0.04
+        ? scoreClamp(74 + momentum6 * 30 + (rsi14 - 52) * 0.2) : 0;
+    case "TRIPLE_BEAR":
+      return rsi14 >= 30 && rsi14 <= 48 && stochK < stochD && macdLine < macdSignal && fast < slow && momentum6 < -0.04
+        ? scoreClamp(74 + Math.abs(momentum6) * 30 + (48 - rsi14) * 0.2) : 0;
+    case "MEAN_REVERT_DEEP_LONG":
+      return rsi7 <= 22 && stochK < 15 && price <= bbLower * 1.002 && price >= prevPrice
+        ? scoreClamp(72 + (22 - rsi7) * 0.8 + (15 - stochK) * 0.4) : 0;
+    case "MEAN_REVERT_DEEP_SHORT":
+      return rsi7 >= 78 && stochK > 85 && price >= bbUpper * 0.998 && price <= prevPrice
+        ? scoreClamp(72 + (rsi7 - 78) * 0.8 + (stochK - 85) * 0.4) : 0;
+
+    // --- ATR / Volatility signals ---
+    case "ATR_EXPANSION_LONG":
+      return atr14 > 0 && bbWidth > 0.5 && momentum3 > 0.06 && fast > slow && rsi14 >= 54
+        ? scoreClamp(71 + momentum3 * 30 + (bbWidth - 0.5) * 20) : 0;
+    case "ATR_EXPANSION_SHORT":
+      return atr14 > 0 && bbWidth > 0.5 && momentum3 < -0.06 && fast < slow && rsi14 <= 46
+        ? scoreClamp(71 + Math.abs(momentum3) * 30 + (bbWidth - 0.5) * 20) : 0;
+
+    // --- Momentum divergence signals ---
+    case "MOM_ACCEL_LONG":
+      return momentum3 > 0.05 && momentum10 > 0.08 && momentum3 > momentum6 && rsi14 >= 52 && rsi14 <= 72
+        ? scoreClamp(72 + momentum3 * 25 + (momentum3 - momentum6) * 40) : 0;
+    case "MOM_ACCEL_SHORT":
+      return momentum3 < -0.05 && momentum10 < -0.08 && momentum3 < momentum6 && rsi14 >= 28 && rsi14 <= 48
+        ? scoreClamp(72 + Math.abs(momentum3) * 25 + Math.abs(momentum3 - momentum6) * 40) : 0;
+
     default:
       return 0;
   }
@@ -432,8 +668,8 @@ function classifyRegime(input: SignalInputs): string {
 }
 
 function isCategoryAligned(category: string, regime: string): boolean {
-  if (regime === "HIGH_VOL") return category !== "Mean Reversion";
-  if (regime === "RANGE") return category !== "Trend";
+  if (regime === "HIGH_VOL") return category !== "Mean Reversion" && category !== "Bollinger MR";
+  if (regime === "RANGE") return category !== "Trend" && category !== "Volatility";
   return true;
 }
 
@@ -443,11 +679,27 @@ function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: str
     if (def.category === "VWAP") return input.price >= input.mean20 * 0.9992 && input.rsi14 >= 48 && input.momentum3 > 0;
     if (def.category === "Mean Reversion") return input.rsi14 <= 35 && input.price >= input.prevPrice * 0.9998 && input.momentum3 >= -0.01;
     if (def.category === "Breakout") return input.momentum3 > 0.04 && input.price > input.fast;
+    if (def.category === "Bollinger") return input.price > input.mean20 && input.stochK > 30 && input.momentum3 > 0;
+    if (def.category === "Bollinger MR") return input.rsi14 <= 40 && input.stochK < 25 && input.price >= input.prevPrice;
+    if (def.category === "Stochastic") return input.stochK > input.stochD && input.price >= input.prevPrice && input.momentum3 > -0.02;
+    if (def.category === "MACD") return input.macdLine > input.macdSignal && input.price > input.slow && input.momentum3 > 0;
+    if (def.category === "Volume") return input.obvSlope > 0.2 && input.momentum3 > 0.02 && input.fast > input.slow;
+    if (def.category === "Confluence") return input.rsi14 >= 50 && input.stochK > input.stochD && input.fast > input.slow && input.momentum3 > 0;
+    if (def.category === "Volatility") return input.bbWidth > 0.4 && input.momentum3 > 0.04 && input.fast > input.slow;
+    if (def.category === "Momentum Accel") return input.momentum3 > 0.04 && input.momentum3 > input.momentum6 && input.rsi14 >= 50;
     return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.03 && input.momentum6 > 0;
   }
   if (def.category === "VWAP") return input.price <= input.mean20 * 1.0008 && input.rsi14 <= 52 && input.momentum3 < 0;
   if (def.category === "Mean Reversion") return input.rsi14 >= 65 && input.price <= input.prevPrice * 1.0002 && input.momentum3 <= 0.01;
   if (def.category === "Breakout") return input.momentum3 < -0.04 && input.price < input.fast;
+  if (def.category === "Bollinger") return input.price < input.mean20 && input.stochK < 70 && input.momentum3 < 0;
+  if (def.category === "Bollinger MR") return input.rsi14 >= 60 && input.stochK > 75 && input.price <= input.prevPrice;
+  if (def.category === "Stochastic") return input.stochK < input.stochD && input.price <= input.prevPrice && input.momentum3 < 0.02;
+  if (def.category === "MACD") return input.macdLine < input.macdSignal && input.price < input.slow && input.momentum3 < 0;
+  if (def.category === "Volume") return input.obvSlope < -0.2 && input.momentum3 < -0.02 && input.fast < input.slow;
+  if (def.category === "Confluence") return input.rsi14 <= 50 && input.stochK < input.stochD && input.fast < input.slow && input.momentum3 < 0;
+  if (def.category === "Volatility") return input.bbWidth > 0.4 && input.momentum3 < -0.04 && input.fast < input.slow;
+  if (def.category === "Momentum Accel") return input.momentum3 < -0.04 && input.momentum3 < input.momentum6 && input.rsi14 <= 50;
   return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.03 && input.momentum6 < 0;
 }
 
@@ -1080,7 +1332,7 @@ export default function useBTCSpotScalperEngine() {
       const lastVol = vb.length ? vb[vb.length - 1] : 0;
       const avgVol = vb.length >= 3 ? vb.slice(0, -1).reduce((a, b) => a + b, 0) / (vb.length - 1) : 0;
       const volRatio = avgVol > 0 ? lastVol / avgVol : 1;
-      const input = buildSignalInputs(bars, volRatio);
+      const input = buildSignalInputs(bars, volRatio, vb);
       const regime = classifyRegime(input);
       engine.lastRegime = regime;
       engine.lastVolRatio = volRatio;
