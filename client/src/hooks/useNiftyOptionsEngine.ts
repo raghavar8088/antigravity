@@ -25,15 +25,15 @@ const DTE_DAYS = 7;                  // assume 7 trading days to nearest weekly 
 const MAX_CONCURRENT = 16;
 const MAX_BARS = 200;                // keep ~3h 20m of 1-min bars
 const TICK_MS = 1_000;               // engine tick every second
-const PROFIT_LOCK_PROGRESS = 0.28;
-const PROFIT_LOCK_SHARE = 0.44;
-const LATE_EXIT_PROGRESS = 0.56;
-const LATE_EXIT_MIN_GAIN = 0.06;
-const GRIND_EXIT_PROGRESS = 0.50;
-const GRIND_EXIT_SHARE = 0.26;
-const NIFTY_OPT_TRAIL_GIVEBACK_SHARE = 0.38;
-const NIFTY_OPT_MIN_SIZE_MULTIPLIER = 0.5;
-const NIFTY_OPT_MAX_SIZE_MULTIPLIER = 1.8;
+const PROFIT_LOCK_PROGRESS = 0.55;
+const PROFIT_LOCK_SHARE = 0.65;
+const LATE_EXIT_PROGRESS = 0.72;
+const LATE_EXIT_MIN_GAIN = 0.15;
+const GRIND_EXIT_PROGRESS = 0.60;
+const GRIND_EXIT_SHARE = 0.50;
+const NIFTY_OPT_TRAIL_GIVEBACK_SHARE = 0.25;
+const NIFTY_OPT_MIN_SIZE_MULTIPLIER = 0.6;
+const NIFTY_OPT_MAX_SIZE_MULTIPLIER = 1.3;
 const NIFTY_OPT_LOSS_COOLDOWN_PENALTY = 0.3;
 const NIFTY_OPT_UNDERPERFORMING_MIN_TRADES = 8;
 const NIFTY_OPT_UNDERPERFORMING_MAX_WINRATE = 35;
@@ -767,25 +767,36 @@ function resolveExit(
   now: number,
 ): { reason: string; exitPremium: number } | null {
   const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  // Net gain after bid-ask spread on both sides
+  const netGainPct = gainPct - BID_ASK_SPREAD_FRAC;
   const maxHoldMs = holdMinutesFor(def) * 60 * 1000;
   const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const profitLockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+
+  // Early exits only fire when gain exceeds spread cost (net positive after both entry+exit spread)
+  if (netGainPct <= 0) {
+    if (now >= pos.expiryTime || (maxHoldMs > 0 && now - pos.entryTime >= maxHoldMs)) {
+      return { reason: "TIME_EXIT", exitPremium: currentPremium };
+    }
+    return null;
+  }
+
   if (timeProgress >= GRIND_EXIT_PROGRESS && gainPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
   if (timeProgress >= PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
-  if (pos.peakGainPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - NIFTY_OPT_TRAIL_GIVEBACK_SHARE)) {
+  if (pos.peakGainPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * 0.5) && netGainPct > 0 && gainPct <= pos.peakGainPct * (1 - NIFTY_OPT_TRAIL_GIVEBACK_SHARE)) {
     return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= LATE_EXIT_PROGRESS && gainPct >= LATE_EXIT_MIN_GAIN) {
     return { reason: "LATE_EXIT", exitPremium: currentPremium };
   }
-  if (now >= pos.expiryTime || (maxHoldMs > 0 && now-pos.entryTime >= maxHoldMs)) {
+  if (now >= pos.expiryTime || (maxHoldMs > 0 && now - pos.entryTime >= maxHoldMs)) {
     return { reason: "TIME_EXIT", exitPremium: currentPremium };
   }
   return null;
@@ -793,11 +804,18 @@ function resolveExit(
 
 // ─── Option premium model ──────────────────────────────────────────────────────
 
+/** Spread fraction applied on entry (buy at ask) and exit (sell at bid). */
+const BID_ASK_SPREAD_FRAC = 0.015;
+
 function estimatePremium(underlyingPrice: number, iv = NIFTY_IV): number {
   const T = DTE_DAYS / 252;
   const premium = underlyingPrice * iv * Math.sqrt(T) * 0.4;
-  // Clamp: 0.2% – 2% of underlying
-  return Math.max(underlyingPrice * 0.002, Math.min(underlyingPrice * 0.02, premium));
+  return Math.max(underlyingPrice * 0.003, Math.min(underlyingPrice * 0.02, premium));
+}
+
+function applySpread(premium: number, side: "BUY" | "SELL"): number {
+  const half = BID_ASK_SPREAD_FRAC / 2;
+  return side === "BUY" ? premium * (1 + half) : premium * (1 - half);
 }
 
 function markPremium(
@@ -807,12 +825,27 @@ function markPremium(
   optionType: "CALL" | "PUT",
   barsHeld: number,
 ): number {
-  const delta = 0.5;
+  const move = (currentUnderlying - entryUnderlying) / entryUnderlying;
   const direction = optionType === "CALL" ? 1 : -1;
-  const premiumDelta = delta * (currentUnderlying - entryUnderlying) * direction;
-  // Mild theta decay: 0.2% of entry premium per bar
-  const thetaDecay = entryPremium * 0.002 * Math.max(0, barsHeld - 1);
-  return Math.max(entryPremium * 0.04, entryPremium + premiumDelta - thetaDecay);
+  const moneyness = move * direction;
+
+  // Dynamic delta: starts at 0.50 ATM, rises when ITM, drops when OTM
+  const delta = Math.max(0.08, Math.min(0.92, 0.50 + moneyness * 35));
+  const gamma = 0.04;
+
+  const priceDiff = currentUnderlying - entryUnderlying;
+  const premiumDelta = delta * priceDiff * direction;
+  const premiumGamma = 0.5 * gamma * priceDiff * priceDiff / entryUnderlying;
+
+  // Theta: 0.5% of entry premium per minute-bar (realistic weekly decay)
+  const thetaDecay = entryPremium * 0.005 * Math.max(0, barsHeld);
+
+  // Vega impact: IV expansion/contraction proxy from move magnitude
+  const vegaImpact = entryPremium * 0.15 * (Math.abs(move) - 0.002);
+
+  const raw = entryPremium + premiumDelta + premiumGamma - thetaDecay + Math.max(0, vegaImpact);
+  // Options can go to near-zero but never negative
+  return Math.max(entryPremium * 0.005, raw);
 }
 
 // ─── Engine internal types ─────────────────────────────────────────────────────
@@ -961,8 +994,10 @@ function closePositionLocked(
   const pos = strat.position;
   if (!pos) return;
 
-  const netPnl = (exitPremium - pos.entryPremium) * pos.quantity;
-  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100;
+  // Apply bid-ask spread: sell at bid (lower than mid)
+  const fillPremium = applySpread(exitPremium, "SELL");
+  const netPnl = (fillPremium - pos.entryPremium) * pos.quantity;
+  const returnPct = pos.entryPremium > 0 ? ((fillPremium - pos.entryPremium) / pos.entryPremium) * 100 : 0;
 
   eng.trades.unshift({
     id: pos.id,
@@ -972,7 +1007,7 @@ function closePositionLocked(
     strike: pos.strike,
     expiryMins: Math.round((pos.expiryTime - pos.entryTime) / 60000),
     entryPremium: pos.entryPremium,
-    exitPremium,
+    exitPremium: fillPremium,
     quantity: pos.quantity,
     costBasis: pos.costBasis,
     netPnl,
@@ -985,7 +1020,7 @@ function closePositionLocked(
   });
   if (eng.trades.length > 500) eng.trades.length = 500;
 
-  eng.balance += exitPremium * pos.quantity;
+  eng.balance += fillPremium * pos.quantity;
   eng.totalRealizedPnl += netPnl;
 
   strat.totalTrades++;
@@ -1007,14 +1042,19 @@ function openPositionLocked(
   iv: number,
   now: number,
 ): boolean {
-  eng.seq++;
-  const premium = estimatePremium(price, iv);
-  const lots = Math.max(1, Math.floor((strat.def.positionINR * niftyOptionSizeMultiplier(strat)) / Math.max(premium * LOT_SIZE, 1)));
+  const midPremium = estimatePremium(price, iv);
+  const premium = applySpread(midPremium, "BUY"); // buy at ask
+  const costPerLot = premium * LOT_SIZE;
+  if (costPerLot < 100) return false;
+  const budget = strat.def.positionINR * niftyOptionSizeMultiplier(strat);
+  const lots = Math.max(1, Math.min(10, Math.floor(budget / costPerLot)));
   const quantity = lots * LOT_SIZE;
   const cost = premium * quantity;
 
   if (eng.balance < cost) return false;
+  if (cost > eng.balance * 0.15) return false;
 
+  eng.seq++;
   eng.balance -= cost;
   eng.totalPremiumSpent += cost;
 
@@ -1031,7 +1071,7 @@ function openPositionLocked(
     entryPremium: premium,
     currentPremium: premium,
     tpPremium: premium * (1 + strat.def.tpPct),
-    slPremium: premium * (1 - strat.def.slPct),
+    slPremium: premium * Math.max(0.05, 1 - strat.def.slPct),
     quantity,
     costBasis: cost,
     entryNiftyPrice: price,
@@ -1365,19 +1405,18 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
     const eng = engRef.current;
     if (eng.lastPrice <= 0) return;
 
-    // Always include live price as latest bar so signals fire immediately
-    // even before a full 1-min bar boundary is crossed
+    // Use only completed 1-min bars for signal evaluation — no intrabar phantom bar.
+    // This prevents lookahead bias that inflates backtest results.
     const bars = eng.minuteBars.length > 0
       ? eng.minuteBars
       : [eng.lastPrice];
     const price = eng.lastPrice;
     const now = Date.now();
 
-    // Estimate IV from recent bar volatility
     const recentStd = bars.length >= 20 ? stddev(bars.slice(-20)) : 0;
     const iv = recentStd > 0 ? Math.max(0.12, Math.min(0.35, (recentStd / price) * Math.sqrt(252 * 375))) : NIFTY_IV;
 
-    const barsForEval = [...bars, price];
+    const barsForEval = bars;
     const regime = classifyRegime(barsForEval);
 
     // ── Mark open positions, check TP/SL ─────────────────────────────────
@@ -1385,9 +1424,13 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
     for (const strat of eng.strategies) {
       if (!strat.position) continue;
       const pos = strat.position;
-      // Wall-clock minutes since entry (theta / exits are time-scaled; do not increment per tick or SSE bursts distort pricing).
+      // Market-session minutes only — cap at ~6.25h per calendar day to avoid
+      // overnight/weekend theta acceleration that distorts option pricing.
+      const rawMinutes = Math.max(0, Math.floor((now - pos.entryTime) / 60_000));
+      const calendarDays = Math.max(1, Math.ceil(rawMinutes / 1440));
+      const maxSessionMinutes = calendarDays * 375; // 375 min = 6h15m trading session
       // eslint-disable-next-line react-hooks/immutability
-      pos.barsHeld = Math.max(0, Math.floor((now - pos.entryTime) / 60_000));
+      pos.barsHeld = Math.min(rawMinutes, maxSessionMinutes);
       pos.currentPremium = markPremium(pos.entryPremium, pos.entryNiftyPrice, price, pos.optionType, pos.barsHeld);
       pos.unrealizedPnl = (pos.currentPremium - pos.entryPremium) * pos.quantity;
       if (pos.entryPremium > 0) {
@@ -1579,12 +1622,13 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
     void saveStateToDb(engRef.current); // persist clean slate
   }, [pushDisplayState]);
 
-  /** Clears closed-trade ledger and per-strategy stats; keeps balances, open positions, and realized PnL. */
   const clearTradeHistory = useCallback(() => {
     const eng = engRef.current;
     eng.trades = [];
     eng.totalWins = 0;
     eng.totalLosses = 0;
+    eng.totalRealizedPnl = 0;
+    eng.totalPremiumSpent = 0;
     for (const s of eng.strategies) {
       s.totalTrades = 0;
       s.wins = 0;
