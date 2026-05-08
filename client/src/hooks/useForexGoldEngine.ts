@@ -26,7 +26,9 @@ const TRAIL_ACTIVATION_PCT = 0.30;
 const TRAIL_GIVEBACK_SHARE = 0.34;
 const LOSS_COOLDOWN_PENALTY = 0.30;
 const UNDERPERFORMING_PAUSE_MS = 120 * 60 * 1000;
-const LOCAL_STORAGE_KEY = "forex_gold_state_v1";
+/** Stable key — NEVER change. Old versioned keys are migrated on load. */
+const LOCAL_STORAGE_KEY = "forex_gold_state";
+const LS_LEGACY_KEYS = ["forex_gold_state_v1"];
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -911,7 +913,18 @@ function saveToLocalStorage(engine: EngineRef): void {
 
 function loadFromLocalStorage(): GoldDbPayload | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) {
+      for (const legacyKey of LS_LEGACY_KEYS) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(LOCAL_STORAGE_KEY, legacy);
+          localStorage.removeItem(legacyKey);
+          break;
+        }
+      }
+    }
     if (!raw) return null;
     return normalizeDbPayload(JSON.parse(raw) as Partial<GoldDbPayload>);
   } catch {
@@ -1309,19 +1322,24 @@ export default function useForexGoldEngine() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (dbLoadedRef.current) void saveGoldState(engineRef.current);
-    }, 60_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const onUnload = () => {
+    const flush = () => {
       if (!dbLoadedRef.current) return;
       saveToLocalStorage(engineRef.current);
       const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
       navigator.sendBeacon("/api/forex/gold/state", new Blob([payload], { type: "application/json" }));
     };
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
   }, []);
 
   useEffect(() => {

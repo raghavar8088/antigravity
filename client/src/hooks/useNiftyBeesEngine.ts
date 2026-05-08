@@ -13,14 +13,16 @@ const SYMBOL = "NIFTYBEES";
 const INITIAL_BALANCE = 10_000;
 const MAX_OPEN_POSITIONS = 4;
 const MAX_BARS = 120;
-const MIN_BARS_FAST = 18;
-const MIN_BARS_SLOW = 28;
-const SIGNAL_THRESHOLD = 61;
+const MIN_BARS_FAST = 10;
+const MIN_BARS_SLOW = 16;
+const SIGNAL_THRESHOLD = 52;
 const POLL_MS = 4_000;
 const MAX_TRADES = 2_000;
 const TRADE_CAP_PCT = 0.22;
 const TRADE_CAP_MAX = 2_500;
-const LOCAL_STORAGE_KEY = "nifty_bees_paper_v1";
+/** Stable key — NEVER change. Old versioned keys are migrated on load. */
+const LOCAL_STORAGE_KEY = "nifty_bees_paper_state";
+const LS_LEGACY_KEYS = ["nifty_bees_paper_v1"];
 
 const PROFIT_LOCK_PROGRESS = 0.28;
 const PROFIT_LOCK_SHARE = 0.4;
@@ -262,39 +264,39 @@ function evalSignal(signal: string, input: SignalInputs): number {
   const { price, prevPrice, fast, slow, trend, prevFast, prevSlow, mean20, rsi14, breakoutHigh20, breakoutLow20, momentum3, momentum6 } = input;
   switch (signal) {
     case "BREAKOUT":
-      return price > breakoutHigh20 * 1.00025 && fast > slow && rsi14 >= 54 && momentum3 > 0.03
+      return price > breakoutHigh20 * 1.0002 && fast > slow && rsi14 >= 50 && momentum3 > 0.005
         ? scoreClamp(72 + (price / breakoutHigh20 - 1) * 8000 + momentum3 * 15)
         : 0;
     case "BREAKOUT_SHORT":
-      return price < breakoutLow20 * 0.99975 && fast < slow && rsi14 <= 46 && momentum3 < -0.03
+      return price < breakoutLow20 * 0.9998 && fast < slow && rsi14 <= 50 && momentum3 < -0.005
         ? scoreClamp(72 + (breakoutLow20 / price - 1) * 8000 + Math.abs(momentum3) * 15)
         : 0;
     case "EMA_CROSS":
-      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 52
+      return prevFast <= prevSlow && fast > slow && price > trend && rsi14 >= 49
         ? scoreClamp(70 + (fast / slow - 1) * 12000 + (rsi14 - 50) * 0.4)
         : 0;
     case "EMA_CROSS_SHORT":
-      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 48
+      return prevFast >= prevSlow && fast < slow && price < trend && rsi14 <= 51
         ? scoreClamp(70 + (slow / fast - 1) * 12000 + (50 - rsi14) * 0.4)
         : 0;
     case "RSI_BOUNCE":
-      return rsi14 <= 32 && price >= prevPrice && momentum3 > -0.15 ? scoreClamp(67 + (34 - rsi14) * 1.4) : 0;
+      return rsi14 <= 38 && price >= prevPrice && momentum3 > -0.2 ? scoreClamp(67 + (40 - rsi14) * 1.2) : 0;
     case "RSI_BOUNCE_SHORT":
-      return rsi14 >= 68 && price <= prevPrice && momentum3 < 0.15 ? scoreClamp(67 + (rsi14 - 66) * 1.4) : 0;
+      return rsi14 >= 62 && price <= prevPrice && momentum3 < 0.2 ? scoreClamp(67 + (rsi14 - 60) * 1.2) : 0;
     case "VWAP_RECLAIM":
-      return price > mean20 * 1.00015 && prevPrice <= mean20 * 1.0003 && momentum3 > 0.02
+      return price > mean20 * 1.00008 && prevPrice <= mean20 * 1.0002 && momentum3 > 0.003
         ? scoreClamp(68 + (price / mean20 - 1) * 5500 + momentum3 * 12)
         : 0;
     case "VWAP_RECLAIM_SHORT":
-      return price < mean20 * 0.99985 && prevPrice >= mean20 * 0.9997 && momentum3 < -0.02
+      return price < mean20 * 0.99992 && prevPrice >= mean20 * 0.9998 && momentum3 < -0.003
         ? scoreClamp(68 + (mean20 / price - 1) * 5500 + Math.abs(momentum3) * 12)
         : 0;
     case "TREND_CONT":
-      return fast > slow && slow > trend && momentum6 > 0.08 && rsi14 >= 53 && rsi14 <= 76
+      return fast > slow && slow > trend && momentum6 > 0.02 && rsi14 >= 49 && rsi14 <= 78
         ? scoreClamp(73 + momentum6 * 25 + (rsi14 - 54) * 0.3)
         : 0;
     case "TREND_CONT_SHORT":
-      return fast < slow && slow < trend && momentum6 < -0.08 && rsi14 >= 24 && rsi14 <= 47
+      return fast < slow && slow < trend && momentum6 < -0.02 && rsi14 >= 22 && rsi14 <= 52
         ? scoreClamp(73 + Math.abs(momentum6) * 25 + (46 - rsi14) * 0.3)
         : 0;
     default:
@@ -317,13 +319,13 @@ function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: Reg
   if (def.side === "LONG") {
     if (def.category === "VWAP") return input.price >= input.mean20 * 0.9998 && input.rsi14 >= 44;
     if (def.category === "Mean Reversion") return input.rsi14 <= 52 && input.price >= input.prevPrice * 0.9998;
-    if (regime === "TRENDING_BULL") return input.price >= input.fast * 0.9997 && input.momentum3 > -0.02;
-    return input.price >= input.prevPrice * 0.9997 && input.momentum3 > -0.05;
+    if (regime === "TRENDING_BULL") return input.price >= input.fast * 0.9995 && input.momentum3 > -0.05;
+    return input.price >= input.prevPrice * 0.9995 && input.momentum3 > -0.1;
   }
-  if (def.category === "VWAP") return input.price <= input.mean20 * 1.0002 && input.rsi14 <= 56;
-  if (def.category === "Mean Reversion") return input.rsi14 >= 48 && input.price <= input.prevPrice * 1.0002;
-  if (regime === "TRENDING_BEAR") return input.price <= input.fast * 1.0003 && input.momentum3 < 0.02;
-  return input.price <= input.prevPrice * 1.0003 && input.momentum3 < 0.05;
+  if (def.category === "VWAP") return input.price <= input.mean20 * 1.0003 && input.rsi14 <= 60;
+  if (def.category === "Mean Reversion") return input.rsi14 >= 44 && input.price <= input.prevPrice * 1.0004;
+  if (regime === "TRENDING_BEAR") return input.price <= input.fast * 1.0004 && input.momentum3 < 0.05;
+  return input.price <= input.prevPrice * 1.0004 && input.momentum3 < 0.1;
 }
 
 function calcPnl(side: Side, entry: number, current: number, qty: number): number {
@@ -515,7 +517,18 @@ function persist(engine: EngineRef) {
 
 function loadPersisted(engine: EngineRef): boolean {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) {
+      for (const legacyKey of LS_LEGACY_KEYS) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(LOCAL_STORAGE_KEY, legacy);
+          localStorage.removeItem(legacyKey);
+          break;
+        }
+      }
+    }
     if (!raw) return false;
     const data = JSON.parse(raw) as {
       balance?: number;
@@ -937,6 +950,22 @@ export default function useNiftyBeesEngine() {
       clearInterval(id);
     };
   }, [processTick]);
+
+  useEffect(() => {
+    const interval = setInterval(() => persist(engineRef.current), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const flush = () => persist(engineRef.current);
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, []);
 
   return { quote, positions, trades, strategies, stats, reset, clearTrades };
 }

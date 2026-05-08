@@ -30,7 +30,9 @@ const TRAIL_ACTIVATION_PCT = 0.25;  // forex moves are small — activate trail 
 const TRAIL_GIVEBACK_SHARE = 0.30;
 const LOSS_COOLDOWN_PENALTY = 0.35;
 const UNDERPERFORMING_PAUSE_MS = 90 * 60 * 1000;
-const LOCAL_STORAGE_KEY = "forex_state_v3";
+/** Stable key — NEVER change. Old versioned keys are migrated on load. */
+const LOCAL_STORAGE_KEY = "forex_state";
+const LS_LEGACY_KEYS = ["forex_state_v3", "forex_state_v2", "forex_state_v1"];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Side   = "LONG" | "SHORT";
@@ -596,7 +598,18 @@ function saveToLocalStorage(engine: EngineRef): void {
 
 function loadFromLocalStorage(): ForexDbPayload | null {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    let raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) {
+      for (const legacyKey of LS_LEGACY_KEYS) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(LOCAL_STORAGE_KEY, legacy);
+          localStorage.removeItem(legacyKey);
+          break;
+        }
+      }
+    }
     if (!raw) return null;
     return normalizeDbPayload(JSON.parse(raw) as Partial<ForexDbPayload>);
   } catch {
@@ -957,19 +970,24 @@ export default function useForexEngine() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (dbLoadedRef.current) void saveForexState(engineRef.current);
-    }, 60_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const onUnload = () => {
+    const flush = () => {
       if (!dbLoadedRef.current) return;
       saveToLocalStorage(engineRef.current);
       const payload = JSON.stringify(buildPersistedPayload(engineRef.current));
       navigator.sendBeacon("/api/forex/state", new Blob([payload], { type: "application/json" }));
     };
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
+    const onHide = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
   }, []);
 
   useEffect(() => {

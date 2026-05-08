@@ -631,7 +631,9 @@ function buildPersistedPayload(engine: EngineRef): CryptoDbPayload {
   };
 }
 
-const LS_KEY = "crypto_equity_state_v1";
+/** Stable key — NEVER change. Old versioned keys are migrated on load. */
+const LS_KEY = "crypto_equity_state";
+const LS_LEGACY_KEYS = ["crypto_equity_state_v1"];
 
 function saveToLocalStorage(engine: EngineRef): void {
   try {
@@ -643,7 +645,18 @@ function saveToLocalStorage(engine: EngineRef): void {
 
 function loadFromLocalStorage(): CryptoDbPayload | null {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    let raw = localStorage.getItem(LS_KEY);
+    if (!raw) {
+      for (const legacyKey of LS_LEGACY_KEYS) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+          raw = legacy;
+          localStorage.setItem(LS_KEY, legacy);
+          localStorage.removeItem(legacyKey);
+          break;
+        }
+      }
+    }
     if (!raw) return null;
     return JSON.parse(raw) as CryptoDbPayload;
   } catch {
