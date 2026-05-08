@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 
-/** Paper desk capital; sized so $2 min clips are viable with 4 concurrent positions. */
-const INITIAL_BALANCE = 10_000;
-const MIN_NOTIONAL_USD = 1_800;
-const MAX_NOTIONAL_USD = 4_200;
+/** Paper desk sized for small accounts — $2 min net PnL is enforced at close time. */
+const INITIAL_BALANCE = 100;
+const MIN_NOTIONAL_USD = 10;
+const MAX_NOTIONAL_USD = 35;
 const MAX_OPEN_POSITIONS = 4;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
@@ -739,7 +739,6 @@ async function loadState(engine: EngineRef): Promise<boolean> {
     ? (compareSavedStates(local, dbState) >= 0 ? local : dbState)
     : (local ?? dbState);
   if (!saved) return false;
-  if (saved.balance < MIN_NOTIONAL_USD) return false;
   applySaved(engine, saved);
   return true;
 }
