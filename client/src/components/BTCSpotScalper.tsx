@@ -116,18 +116,52 @@ function ExitBadge({ reason }: { reason: string }) {
 
 function PositionProgressBar({ returnPct }: { returnPct: number }) {
   const scaleTargetPct = 0.35;
-  const width = Math.min(100, Math.max(2, (Math.abs(returnPct) / scaleTargetPct) * 100));
+  const width = Math.min(100, Math.max(3, (Math.abs(returnPct) / scaleTargetPct) * 100));
   const positive = returnPct >= 0;
+  const intense = Math.abs(returnPct) >= 0.10;
   return (
-    <div className="w-28">
-      <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--border)" }}>
-        <div
-          className={`h-full rounded-full transition-all ${positive ? "bg-emerald-500" : "bg-rose-500"}`}
-          style={{ width: `${width}%` }}
-        />
+    <div className="w-32">
+      <div className="flex items-center justify-between mb-1.5">
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: positive ? "var(--green)" : "var(--red)" }}
+        >
+          {positive ? "Gain" : "Loss"}
+        </span>
+        <span
+          className="font-mono text-[11px] font-bold tabular-nums"
+          style={{ color: positive ? "var(--green)" : "var(--red)" }}
+        >
+          {fmtPct(returnPct, true)}
+        </span>
       </div>
-      <div className="mt-1 text-[10px] font-mono text-right" style={{ color: "var(--text-secondary)" }}>
-        {fmtPct(returnPct, true)}
+      <div
+        className="relative h-2.5 w-full overflow-hidden rounded-full"
+        style={{ background: positive ? "rgba(24,128,56,0.08)" : "rgba(217,48,37,0.08)" }}
+      >
+        <div
+          className="h-full rounded-full transition-all duration-500 ease-out"
+          style={{
+            width: `${width}%`,
+            background: positive
+              ? "linear-gradient(90deg, #22c55e 0%, #10b981 100%)"
+              : "linear-gradient(90deg, #f43f5e 0%, #ef4444 100%)",
+            boxShadow: intense
+              ? positive ? "0 0 8px rgba(34,197,94,0.4)" : "0 0 8px rgba(244,63,94,0.4)"
+              : "none",
+          }}
+        />
+        {intense && (
+          <div
+            className="absolute inset-0 rounded-full animate-pulse"
+            style={{
+              width: `${width}%`,
+              background: positive
+                ? "linear-gradient(90deg, transparent, rgba(34,197,94,0.15))"
+                : "linear-gradient(90deg, transparent, rgba(244,63,94,0.15))",
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -564,65 +598,160 @@ export default function BTCSpotScalper({
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full" style={{ background: "var(--green)" }} />
-                <span className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>
-                  {longCount} longs | {shortCount} shorts
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5" style={{ borderColor: "rgba(24,128,56,0.2)", background: "rgba(24,128,56,0.04)" }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--green)" }} />
+                  <span className="text-[11px] font-bold tabular-nums tracking-wide" style={{ color: "var(--green)" }}>
+                    {longCount}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase" style={{ color: "var(--text-muted)" }}>Long</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5" style={{ borderColor: "rgba(217,48,37,0.2)", background: "rgba(217,48,37,0.04)" }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--red)" }} />
+                  <span className="text-[11px] font-bold tabular-nums tracking-wide" style={{ color: "var(--red)" }}>
+                    {shortCount}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase" style={{ color: "var(--text-muted)" }}>Short</span>
+                </div>
               </div>
-              <span
-                className="rounded-full border px-3 py-1 text-xs font-medium"
+              <div
+                className="flex items-center gap-2 rounded-xl border px-4 py-2"
                 style={{
-                  background: stats.unrealizedPnl >= 0 ? "var(--green-dim)" : "var(--red-dim)",
-                  color: stats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)",
-                  borderColor: stats.unrealizedPnl >= 0 ? "rgba(24, 128, 56, 0.14)" : "rgba(217, 48, 37, 0.14)",
+                  background: stats.unrealizedPnl >= 0
+                    ? "linear-gradient(135deg, rgba(24,128,56,0.06) 0%, rgba(24,128,56,0.12) 100%)"
+                    : "linear-gradient(135deg, rgba(217,48,37,0.06) 0%, rgba(217,48,37,0.12) 100%)",
+                  borderColor: stats.unrealizedPnl >= 0 ? "rgba(24,128,56,0.20)" : "rgba(217,48,37,0.20)",
                 }}
               >
-                Unrealized {fmtUSD(stats.unrealizedPnl, { signed: true })}
-              </span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                  Unrealized
+                </span>
+                <span
+                  className="font-mono text-sm font-bold tabular-nums"
+                  style={{ color: stats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}
+                >
+                  {fmtUSD(stats.unrealizedPnl, { signed: true })}
+                </span>
+              </div>
             </div>
 
-            <div className="overflow-x-auto rounded-[20px] border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-              <table className="w-full text-left text-sm" style={{ minWidth: 980 }}>
-                <thead style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
-                  <tr className="text-[11px] uppercase tracking-[0.12em]">
-                    <th className="px-4 py-3 font-medium">Position</th>
-                    <th className="px-4 py-3 font-medium">Side</th>
-                    <th className="px-4 py-3 font-medium text-right">Entry</th>
-                    <th className="px-4 py-3 font-medium text-right">Mark</th>
-                    <th className="px-4 py-3 font-medium text-right">Notional</th>
-                    <th className="px-4 py-3 font-medium">Opened</th>
-                    <th className="px-4 py-3 font-medium text-right">PnL</th>
-                    <th className="px-4 py-3 font-medium text-right">Progress</th>
+            <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+              <table className="w-full text-left text-sm" style={{ minWidth: 1020 }}>
+                <thead>
+                  <tr
+                    className="text-[10px] uppercase tracking-[0.14em]"
+                    style={{
+                      background: "linear-gradient(180deg, var(--surface-2) 0%, var(--surface-1) 100%)",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    <th className="px-5 py-3.5 font-semibold">Position</th>
+                    <th className="px-4 py-3.5 font-semibold">Side</th>
+                    <th className="px-4 py-3.5 font-semibold text-right">Entry</th>
+                    <th className="px-4 py-3.5 font-semibold text-right">Mark</th>
+                    <th className="px-4 py-3.5 font-semibold text-right">Notional</th>
+                    <th className="px-4 py-3.5 font-semibold">Opened</th>
+                    <th className="px-4 py-3.5 font-semibold text-right">PnL</th>
+                    <th className="px-5 py-3.5 font-semibold text-right">Progress</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {positions.map((p) => (
-                    <tr key={p.id} className="border-t" style={{ borderColor: "var(--border-subtle)" }}>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{p.strategyName}</div>
-                        <div className="text-[11px]" style={{ color: "var(--text-secondary)" }}>
-                          Qty {p.quantity.toFixed(6)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3"><SideBadge side={p.side} /></td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">{p.entryPrice.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">{p.currentPrice.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">{fmtUSD(p.notional)}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <div className="font-mono" style={{ color: "var(--text-primary)" }}>{formatShortTime(p.entryTime)}</div>
-                        <div style={{ color: "var(--text-secondary)" }}>{formatShortDate(p.entryTime)}</div>
-                      </td>
-                      <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${p.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {fmtUSD(p.unrealizedPnl, { signed: true })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="ml-auto">
-                          <PositionProgressBar returnPct={p.returnPct} />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {positions.map((p, idx) => {
+                    const pnlPositive = p.unrealizedPnl >= 0;
+                    return (
+                      <tr
+                        key={p.id}
+                        className="group transition-colors duration-150"
+                        style={{
+                          borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
+                          background: pnlPositive
+                            ? "rgba(24,128,56,0.02)"
+                            : "rgba(217,48,37,0.02)",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = pnlPositive
+                            ? "rgba(24,128,56,0.06)"
+                            : "rgba(217,48,37,0.06)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = pnlPositive
+                            ? "rgba(24,128,56,0.02)"
+                            : "rgba(217,48,37,0.02)";
+                        }}
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className="relative flex h-2.5 w-2.5 shrink-0"
+                            >
+                              <span
+                                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+                                style={{ background: pnlPositive ? "var(--green)" : "var(--red)" }}
+                              />
+                              <span
+                                className="relative inline-flex h-2.5 w-2.5 rounded-full"
+                                style={{ background: pnlPositive ? "var(--green)" : "var(--red)" }}
+                              />
+                            </span>
+                            <div>
+                              <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                                {p.strategyName}
+                              </div>
+                              <div className="text-[10px] font-mono" style={{ color: "var(--text-muted)" }}>
+                                {p.quantity.toFixed(6)} BTC
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4"><SideBadge side={p.side} /></td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="font-mono text-xs tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                            {p.entryPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="font-mono text-xs font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                            {p.currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <span className="font-mono text-xs tabular-nums" style={{ color: "var(--text-secondary)" }}>
+                            {fmtUSD(p.notional)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="text-xs font-mono font-medium" style={{ color: "var(--text-primary)" }}>
+                            {formatShortTime(p.entryTime)}
+                          </div>
+                          <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            {formatShortDate(p.entryTime)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div
+                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-xs font-bold tabular-nums"
+                            style={{
+                              background: pnlPositive ? "rgba(24,128,56,0.10)" : "rgba(217,48,37,0.10)",
+                              color: pnlPositive ? "var(--green)" : "var(--red)",
+                            }}
+                          >
+                            <span
+                              className="text-[9px]"
+                              style={{ lineHeight: 1 }}
+                            >
+                              {pnlPositive ? "▲" : "▼"}
+                            </span>
+                            {fmtUSD(p.unrealizedPnl, { signed: true })}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="ml-auto">
+                            <PositionProgressBar returnPct={p.returnPct} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
