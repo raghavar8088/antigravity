@@ -9,21 +9,24 @@ const MAX_NOTIONAL_USD = 35;
 const MAX_OPEN_POSITIONS = 4;
 const MAX_BARS = 120;
 const MIN_BARS = 26;
-const SIGNAL_THRESHOLD = 62;
+const SIGNAL_THRESHOLD = 68;
 const POLL_MS = 2_000;
 const MAX_TRADES = 2_000;
 /** Taker-style round trip (entry + exit) — conservative vs Binance 0.2% VIP0. */
 const ROUND_TRIP_FEE_FRAC = 0.0015;
 const MAX_DRAWDOWN_LOCK_PCT = 22; // pause new entries if equity drawdown breaches this level
 
-const PROFIT_LOCK_PROGRESS = 0.3;
-const PROFIT_LOCK_SHARE = 0.42;
-const LATE_EXIT_PROGRESS = 0.42;
-const LATE_EXIT_MIN_GAIN = 0.02;
-const GRIND_EXIT_PROGRESS = 0.3;
-const GRIND_EXIT_SHARE = 0.24;
-const TRAIL_ACTIVATION_PCT = 0.15;
-const TRAIL_GIVEBACK_SHARE = 0.3;
+/** Fee breakeven — early exits must beat this to be net positive. */
+const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.15
+
+const PROFIT_LOCK_PROGRESS = 0.50;
+const PROFIT_LOCK_SHARE = 0.72;
+const LATE_EXIT_PROGRESS = 0.70;
+const LATE_EXIT_MIN_GAIN = 0.28;
+const GRIND_EXIT_PROGRESS = 0.50;
+const GRIND_EXIT_SHARE = 0.60;
+const TRAIL_ACTIVATION_PCT = 0.35;
+const TRAIL_GIVEBACK_SHARE = 0.15;
 const LOSS_COOLDOWN_PENALTY = 0.4;
 const VOL_SPIKE_RATIO = 1.45;
 const VOL_BOOST_POINTS = 4;
@@ -32,8 +35,8 @@ const VOL_HISTORY = 24;
 /** Each closed trade records at least this absolute net PnL (after fees) on the paper ledger. */
 const MIN_ABS_NET_PNL_USD = 2;
 
-// Bump key so wallet size / min PnL semantics do not inherit v3 snapshots.
-const LS_KEY = "btc_spot_scalper_paper_v4";
+// Bump key to clear stale state — v5 has fee-aware exits and wider TP targets.
+const LS_KEY = "btc_spot_scalper_paper_v5";
 const LS_PAUSE_ENTRIES = "btc_spot_pause_entries_v1";
 
 /** Clip notion band for dashboard copy. */
@@ -287,36 +290,36 @@ type DbPayload = {
 };
 
 const STRAT_DEFS: StratDef[] = [
-  { id: 1, name: "Micro Range Breakout", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.36, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 2, name: "Micro Range Breakdown", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.36, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 3, name: "EMA Ribbon Impulse Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.31, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 4, name: "EMA Ribbon Impulse Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.31, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 5, name: "RSI 1m Oversold Bounce", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.24, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
-  { id: 6, name: "RSI 1m Overbought Fade", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.24, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
-  { id: 7, name: "Session VWAP Reclaim", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.26, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 8, name: "Session VWAP Reject", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.26, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 16 },
-  { id: 9, name: "Trend Leg Continuation", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
-  { id: 10, name: "Trend Leg Exhaustion Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 24 },
-  { id: 11, name: "Micro Breakout Sprint Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.27, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
-  { id: 12, name: "Micro Breakout Sprint Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.27, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 14 },
-  { id: 13, name: "Breakout Continuation Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.38, slPct: 0.17, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 26 },
-  { id: 14, name: "Breakout Continuation Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.38, slPct: 0.17, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 26 },
-  { id: 15, name: "EMA Quick Cross Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.22, slPct: 0.12, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 12 },
-  { id: 16, name: "EMA Quick Cross Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.22, slPct: 0.12, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 12 },
-  { id: 17, name: "EMA Drive Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.33, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 22 },
-  { id: 18, name: "EMA Drive Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.33, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 22 },
-  { id: 19, name: "RSI Snapback Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.2, slPct: 0.11, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 10 },
-  { id: 20, name: "RSI Snapback Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.2, slPct: 0.11, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 10 },
-  { id: 21, name: "RSI Reversal Hold Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.29, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 18 },
-  { id: 22, name: "RSI Reversal Hold Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.29, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 18 },
-  { id: 23, name: "VWAP Pop Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.23, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 12 },
-  { id: 24, name: "VWAP Fade Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.23, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 12 },
-  { id: 25, name: "VWAP Trend Assist Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.31, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 26, name: "VWAP Trend Assist Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.31, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 20 },
-  { id: 27, name: "Trend Burst Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.29, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 18 },
-  { id: 28, name: "Trend Burst Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.29, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 18 },
-  { id: 29, name: "Trend Follow Through Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 30 },
-  { id: 30, name: "Trend Follow Through Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.4, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 1, name: "Micro Range Breakout", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.50, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 2, name: "Micro Range Breakdown", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.50, slPct: 0.18, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 3, name: "EMA Ribbon Impulse Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.44, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 4, name: "EMA Ribbon Impulse Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.44, slPct: 0.16, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 5, name: "RSI 1m Oversold Bounce", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.36, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+  { id: 6, name: "RSI 1m Overbought Fade", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.36, slPct: 0.13, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+  { id: 7, name: "Session VWAP Reclaim", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.38, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 8, name: "Session VWAP Reject", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.38, slPct: 0.13, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 26 },
+  { id: 9, name: "Trend Leg Continuation", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.56, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 38 },
+  { id: 10, name: "Trend Leg Exhaustion Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.56, slPct: 0.18, cooldownMinutes: 9, minBars: MIN_BARS, holdMinutes: 38 },
+  { id: 11, name: "Micro Breakout Sprint Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.40, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+  { id: 12, name: "Micro Breakout Sprint Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.40, slPct: 0.14, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 22 },
+  { id: 13, name: "Breakout Continuation Long", category: "Breakout", side: "LONG", signal: "BREAKOUT", tpPct: 0.54, slPct: 0.17, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 40 },
+  { id: 14, name: "Breakout Continuation Short", category: "Breakout", side: "SHORT", signal: "BREAKOUT_SHORT", tpPct: 0.54, slPct: 0.17, cooldownMinutes: 10, minBars: MIN_BARS, holdMinutes: 40 },
+  { id: 15, name: "EMA Quick Cross Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.34, slPct: 0.12, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 16, name: "EMA Quick Cross Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.34, slPct: 0.12, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 17, name: "EMA Drive Long", category: "Momentum", side: "LONG", signal: "EMA_CROSS", tpPct: 0.48, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 34 },
+  { id: 18, name: "EMA Drive Short", category: "Momentum", side: "SHORT", signal: "EMA_CROSS_SHORT", tpPct: 0.48, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 34 },
+  { id: 19, name: "RSI Snapback Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.32, slPct: 0.11, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 18 },
+  { id: 20, name: "RSI Snapback Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.32, slPct: 0.11, cooldownMinutes: 5, minBars: MIN_BARS, holdMinutes: 18 },
+  { id: 21, name: "RSI Reversal Hold Long", category: "Mean Reversion", side: "LONG", signal: "RSI_BOUNCE", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 22, name: "RSI Reversal Hold Short", category: "Mean Reversion", side: "SHORT", signal: "RSI_BOUNCE_SHORT", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 23, name: "VWAP Pop Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.34, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 24, name: "VWAP Fade Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.34, slPct: 0.12, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 20 },
+  { id: 25, name: "VWAP Trend Assist Long", category: "VWAP", side: "LONG", signal: "VWAP_RECLAIM", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 26, name: "VWAP Trend Assist Short", category: "VWAP", side: "SHORT", signal: "VWAP_RECLAIM_SHORT", tpPct: 0.44, slPct: 0.15, cooldownMinutes: 8, minBars: MIN_BARS, holdMinutes: 30 },
+  { id: 27, name: "Trend Burst Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 28, name: "Trend Burst Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.42, slPct: 0.14, cooldownMinutes: 7, minBars: MIN_BARS, holdMinutes: 28 },
+  { id: 29, name: "Trend Follow Through Long", category: "Trend", side: "LONG", signal: "TREND_CONT", tpPct: 0.58, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 45 },
+  { id: 30, name: "Trend Follow Through Short", category: "Trend", side: "SHORT", signal: "TREND_CONT_SHORT", tpPct: 0.58, slPct: 0.18, cooldownMinutes: 11, minBars: MIN_BARS, holdMinutes: 45 },
 ];
 
 function sma(values: number[], period: number): number {
@@ -437,15 +440,15 @@ function isCategoryAligned(category: string, regime: string): boolean {
 function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: string): boolean {
   if (!isCategoryAligned(def.category, regime)) return false;
   if (def.side === "LONG") {
-    if (def.category === "VWAP") return input.price >= input.mean20 * 0.9995 && input.rsi14 >= 46;
-    if (def.category === "Mean Reversion") return input.rsi14 <= 40 && input.price >= input.prevPrice * 0.9998;
-    if (def.category === "Breakout") return input.momentum3 > 0.02;
-    return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.02;
+    if (def.category === "VWAP") return input.price >= input.mean20 * 0.9992 && input.rsi14 >= 48 && input.momentum3 > 0;
+    if (def.category === "Mean Reversion") return input.rsi14 <= 35 && input.price >= input.prevPrice * 0.9998 && input.momentum3 >= -0.01;
+    if (def.category === "Breakout") return input.momentum3 > 0.04 && input.price > input.fast;
+    return input.price >= input.fast && input.fast >= input.slow && input.momentum3 > 0.03 && input.momentum6 > 0;
   }
-  if (def.category === "VWAP") return input.price <= input.mean20 * 1.0005 && input.rsi14 <= 54;
-  if (def.category === "Mean Reversion") return input.rsi14 >= 60 && input.price <= input.prevPrice * 1.0002;
-  if (def.category === "Breakout") return input.momentum3 < -0.02;
-  return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.02;
+  if (def.category === "VWAP") return input.price <= input.mean20 * 1.0008 && input.rsi14 <= 52 && input.momentum3 < 0;
+  if (def.category === "Mean Reversion") return input.rsi14 >= 65 && input.price <= input.prevPrice * 1.0002 && input.momentum3 <= 0.01;
+  if (def.category === "Breakout") return input.momentum3 < -0.04 && input.price < input.fast;
+  return input.price <= input.fast && input.fast <= input.slow && input.momentum3 < -0.03 && input.momentum6 < 0;
 }
 
 function calcPnl(side: Side, entry: number, exit: number, qty: number): number {
@@ -454,9 +457,11 @@ function calcPnl(side: Side, entry: number, exit: number, qty: number): number {
 
 function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: number): { reason: string; exitPrice: number } | null {
   const returnPct = pos.notional > 0 ? (calcPnl(pos.side, pos.entryPrice, price, pos.quantity) / pos.notional) * 100 : 0;
+  const netReturnPct = returnPct - FEE_BREAKEVEN_PCT;
   const maxHoldMs = def.holdMinutes * 60 * 1000;
   const progress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const lockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
+
   if (pos.side === "LONG") {
     if (price >= pos.tpPrice) return { reason: "TP", exitPrice: pos.tpPrice };
     if (price <= pos.slPrice) return { reason: "SL", exitPrice: pos.slPrice };
@@ -464,11 +469,15 @@ function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: n
     if (price <= pos.tpPrice) return { reason: "TP", exitPrice: pos.tpPrice };
     if (price >= pos.slPrice) return { reason: "SL", exitPrice: pos.slPrice };
   }
+
+  // All early exits require net-positive return after fees — prevents "winning" exits
+  // that are actually losses once fees are deducted (floored to -$2 by the min PnL rule).
+  if (netReturnPct <= 0) return null;
+
   if (progress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) return { reason: "PROFIT_LOCK", exitPrice: price };
   if (progress >= PROFIT_LOCK_PROGRESS && returnPct >= lockThreshold) return { reason: "PROFIT_LOCK", exitPrice: price };
-  if (pos.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.45) && returnPct > 0 && returnPct <= pos.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) return { reason: "TRAIL_STOP", exitPrice: price };
+  if (pos.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.50) && netReturnPct > 0 && returnPct <= pos.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) return { reason: "TRAIL_STOP", exitPrice: price };
   if (progress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN) return { reason: "LATE_EXIT", exitPrice: price };
-  // Keep runners alive: no hard time-based forced close on this desk.
   return null;
 }
 
