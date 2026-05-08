@@ -13,14 +13,16 @@ const SIGNAL_THRESHOLD = 61;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
 const ALLOCATION_USD = 50_000;        // 5% of the initial $1,000,000 capital per trade
-const PROFIT_LOCK_PROGRESS = 0.24;    // ↑ lock profits earlier in the hold
-const PROFIT_LOCK_SHARE = 0.35;       // ↑ lock at lower threshold
-const LATE_EXIT_PROGRESS = 0.54;
-const LATE_EXIT_MIN_GAIN = 0.05;
-const GRIND_EXIT_PROGRESS = 0.38;     // ↑ exit grinders earlier
-const GRIND_EXIT_SHARE = 0.18;        // ↑ lower threshold to exit grinders
-const TRAIL_ACTIVATION_PCT = 0.85;    // ↑ trailing protection kicks in sooner
-const TRAIL_GIVEBACK_SHARE = 0.26;    // ↓ give back less profit before trail exit
+const PROFIT_LOCK_PROGRESS = 0.52;
+const PROFIT_LOCK_SHARE = 0.65;
+const LATE_EXIT_PROGRESS = 0.70;
+const LATE_EXIT_MIN_GAIN = 0.14;
+const GRIND_EXIT_PROGRESS = 0.55;
+const GRIND_EXIT_SHARE = 0.50;
+const TRAIL_ACTIVATION_PCT = 0.85;
+const TRAIL_GIVEBACK_SHARE = 0.18;
+const ROUND_TRIP_FEE_PCT = 0.10;
+const BID_ASK_SPREAD_PCT = 0.05;
 const MIN_SIZE_MULTIPLIER = 0.5;
 const MAX_SIZE_MULTIPLIER = 2.25;     // ↑ allow larger size on hot strategies
 const LOSS_COOLDOWN_PENALTY = 0.35;
@@ -528,6 +530,7 @@ function calcPnl(side: Side, entryPrice: number, currentPrice: number, quantity:
 
 function resolveExit(position: InternalPosition, def: StratDef, currentPrice: number, now: number): { reason: string; exitPrice: number } | null {
   const returnPct = position.notional > 0 ? (calcPnl(position.side, position.entryPrice, currentPrice, position.quantity) / position.notional) * 100 : 0;
+  const netReturnPct = returnPct - ROUND_TRIP_FEE_PCT - BID_ASK_SPREAD_PCT;
   const maxHoldMs = def.holdMinutes * 60 * 1000;
   const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - position.entryTime) / maxHoldMs) : 0;
   const profitLockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
@@ -538,9 +541,10 @@ function resolveExit(position: InternalPosition, def: StratDef, currentPrice: nu
     if (currentPrice <= position.tpPrice) return { reason: "TP", exitPrice: position.tpPrice };
     if (currentPrice >= position.slPrice) return { reason: "SL", exitPrice: position.slPrice };
   }
+  if (netReturnPct <= 0) return null;
   if (timeProgress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) return { reason: "PROFIT_LOCK", exitPrice: currentPrice };
   if (timeProgress >= PROFIT_LOCK_PROGRESS && returnPct >= profitLockThreshold) return { reason: "PROFIT_LOCK", exitPrice: currentPrice };
-  if (position.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && returnPct > 0 && returnPct <= position.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) return { reason: "TRAIL_STOP", exitPrice: currentPrice };
+  if (position.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && netReturnPct > 0 && returnPct <= position.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) return { reason: "TRAIL_STOP", exitPrice: currentPrice };
   if (timeProgress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN) return { reason: "LATE_EXIT", exitPrice: currentPrice };
   if (maxHoldMs > 0 && now - position.entryTime >= maxHoldMs) return { reason: "TIME_EXIT", exitPrice: currentPrice };
   return null;
@@ -791,7 +795,9 @@ function openPosition(engine: EngineRef, strategy: InternalStrategyState, asset:
 function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitPrice: number, reason: string, now: number) {
   const position = strategy.position;
   if (!position) return;
-  const netPnl = calcPnl(position.side, position.entryPrice, exitPrice, position.quantity);
+  const grossPnl = calcPnl(position.side, position.entryPrice, exitPrice, position.quantity);
+  const fees = position.notional * (ROUND_TRIP_FEE_PCT + BID_ASK_SPREAD_PCT) / 100;
+  const netPnl = grossPnl - fees;
   const trade: InternalTrade = {
     id: position.id,
     strategyId: position.strategyId,

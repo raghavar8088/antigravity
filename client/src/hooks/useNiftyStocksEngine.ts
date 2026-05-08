@@ -14,15 +14,17 @@ const SIGNAL_THRESHOLD = 56;
 const POLL_MS = 3_000;
 const MAX_TRADES = 500;
 const ALLOCATION_INR = 10_000; // 1% of the initial capital budget per trade
-const STOCK_PROFIT_LOCK_PROGRESS = 0.28;
-const STOCK_PROFIT_LOCK_SHARE = 0.44;
-const STOCK_LATE_EXIT_PROGRESS = 0.56;
-const STOCK_LATE_EXIT_MIN_GAIN = 0.06;
-const STOCK_GRIND_EXIT_PROGRESS = 0.50;
-const STOCK_GRIND_EXIT_SHARE = 0.26;
-const STOCK_TRAIL_GIVEBACK_SHARE = 0.38;
+const STOCK_PROFIT_LOCK_PROGRESS = 0.52;
+const STOCK_PROFIT_LOCK_SHARE = 0.65;
+const STOCK_LATE_EXIT_PROGRESS = 0.70;
+const STOCK_LATE_EXIT_MIN_GAIN = 0.14;
+const STOCK_GRIND_EXIT_PROGRESS = 0.55;
+const STOCK_GRIND_EXIT_SHARE = 0.50;
+const STOCK_TRAIL_GIVEBACK_SHARE = 0.22;
 const STOCK_MIN_SIZE_MULTIPLIER = 0.5;
-const STOCK_MAX_SIZE_MULTIPLIER = 1.7;
+const STOCK_MAX_SIZE_MULTIPLIER = 1.3;
+const STOCK_ROUND_TRIP_FEE_PCT = 0.08;
+const STOCK_BID_ASK_SPREAD_PCT = 0.05;
 const STOCK_LOSS_COOLDOWN_PENALTY = 0.3;
 const STOCK_UNDERPERFORMING_MIN_TRADES = 8;
 const STOCK_UNDERPERFORMING_MAX_WINRATE = 35;
@@ -529,19 +531,21 @@ function resolveExit(
   now: number,
 ): { reason: string; exitPremium: number } | null {
   const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  const netGainPct = gainPct - (STOCK_ROUND_TRIP_FEE_PCT + STOCK_BID_ASK_SPREAD_PCT) / 100;
   const maxHoldMs = holdMinutesFor(def) * 60 * 1000;
   const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const profitLockThreshold = Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * STOCK_PROFIT_LOCK_SHARE);
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (netGainPct <= 0) return null;
   if (timeProgress >= STOCK_GRIND_EXIT_PROGRESS && gainPct >= Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * STOCK_GRIND_EXIT_SHARE)) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
   if (timeProgress >= STOCK_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
-  if (pos.peakGainPct >= Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - STOCK_TRAIL_GIVEBACK_SHARE)) {
+  if (pos.peakGainPct >= Math.max(STOCK_LATE_EXIT_MIN_GAIN, (def.tpPct / 100) * 0.4) && netGainPct > 0 && gainPct <= pos.peakGainPct * (1 - STOCK_TRAIL_GIVEBACK_SHARE)) {
     return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= STOCK_LATE_EXIT_PROGRESS && gainPct >= STOCK_LATE_EXIT_MIN_GAIN) {
@@ -596,8 +600,10 @@ function closePosition(
   const pos = strat.position;
   if (!pos) return;
 
-  const netPnl = (exitPremium - pos.entryPremium) * pos.numShares;
-  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100;
+  const grossPnl = (exitPremium - pos.entryPremium) * pos.numShares;
+  const fees = pos.initialCost * (STOCK_ROUND_TRIP_FEE_PCT + STOCK_BID_ASK_SPREAD_PCT) / 100;
+  const netPnl = grossPnl - fees;
+  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100 - STOCK_ROUND_TRIP_FEE_PCT - STOCK_BID_ASK_SPREAD_PCT;
   const holdSeconds = Math.round((now - pos.entryTime) / 1000);
 
   const trade: InternalTrade = {

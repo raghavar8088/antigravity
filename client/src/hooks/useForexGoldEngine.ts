@@ -16,15 +16,17 @@ const MIN_BARS_SLOW = 40;
 const SIGNAL_THRESHOLD = 64;
 const POLL_MS = 5_000;
 const MAX_TRADES = 20_000;
-const PROFIT_LOCK_PROGRESS = 0.30;
-const PROFIT_LOCK_SHARE = 0.42;
-const LATE_EXIT_PROGRESS = 0.60;
-const LATE_EXIT_MIN_GAIN = 0.05;
-const GRIND_EXIT_PROGRESS = 0.46;
-const GRIND_EXIT_SHARE = 0.24;
+const PROFIT_LOCK_PROGRESS = 0.52;
+const PROFIT_LOCK_SHARE = 0.65;
+const LATE_EXIT_PROGRESS = 0.70;
+const LATE_EXIT_MIN_GAIN = 0.14;
+const GRIND_EXIT_PROGRESS = 0.55;
+const GRIND_EXIT_SHARE = 0.50;
 const TRAIL_ACTIVATION_PCT = 0.30;
-const TRAIL_GIVEBACK_SHARE = 0.34;
+const TRAIL_GIVEBACK_SHARE = 0.20;
 const LOSS_COOLDOWN_PENALTY = 0.30;
+const ROUND_TRIP_FEE_PCT = 0.10;
+const BID_ASK_SPREAD_PCT = 0.06;
 const UNDERPERFORMING_PAUSE_MS = 120 * 60 * 1000;
 /** Stable key — NEVER change. Old versioned keys are migrated on load. */
 const LOCAL_STORAGE_KEY = "forex_gold_state";
@@ -670,6 +672,7 @@ function cooldownMsFor(strategy: InternalStrategyState, won: boolean): number {
 
 function resolveExit(position: InternalPosition, def: StratDef, price: number, now: number): { reason: string; exitPrice: number } | null {
   const returnPct = position.notional > 0 ? (calcPnl(position.side, position.entryPrice, price, position.quantity) / position.notional) * 100 : 0;
+  const netReturnPct = returnPct - ROUND_TRIP_FEE_PCT - BID_ASK_SPREAD_PCT;
   const maxHoldMs = def.holdMinutes * 60 * 1000;
   const progress = maxHoldMs > 0 ? Math.min(1, (now - position.entryTime) / maxHoldMs) : 0;
   const lockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
@@ -682,13 +685,14 @@ function resolveExit(position: InternalPosition, def: StratDef, price: number, n
     if (price >= position.slPrice) return { reason: "SL", exitPrice: position.slPrice };
   }
 
+  if (netReturnPct <= 0) return null;
   if (progress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) {
     return { reason: "PROFIT_LOCK", exitPrice: price };
   }
   if (progress >= PROFIT_LOCK_PROGRESS && returnPct >= lockThreshold) {
     return { reason: "PROFIT_LOCK", exitPrice: price };
   }
-  if (position.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && returnPct > 0 && returnPct <= position.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) {
+  if (position.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && netReturnPct > 0 && returnPct <= position.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) {
     return { reason: "TRAIL_STOP", exitPrice: price };
   }
   if (progress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN) {
@@ -765,7 +769,9 @@ function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitP
   const position = strategy.position;
   if (!position) return;
 
-  const netPnl = calcPnl(position.side, position.entryPrice, exitPrice, position.quantity);
+  const grossPnl = calcPnl(position.side, position.entryPrice, exitPrice, position.quantity);
+  const fees = position.notional * (ROUND_TRIP_FEE_PCT + BID_ASK_SPREAD_PCT) / 100;
+  const netPnl = grossPnl - fees;
   const trade: InternalTrade = {
     id: position.id,
     strategyId: position.strategyId,

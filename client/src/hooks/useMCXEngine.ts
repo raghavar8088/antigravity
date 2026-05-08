@@ -23,15 +23,17 @@ const INITIAL_BALANCE = 1_000_000;
 const MAX_CONCURRENT = 12;
 const MAX_BARS = 200;
 const TICK_MS = 5_000;
-const MCX_PROFIT_LOCK_PROGRESS = 0.28;
-const MCX_PROFIT_LOCK_SHARE = 0.42;
-const MCX_LATE_EXIT_PROGRESS = 0.56;
-const MCX_LATE_EXIT_MIN_GAIN = 0.06;
-const MCX_GRIND_EXIT_PROGRESS = 0.48;
-const MCX_GRIND_EXIT_SHARE = 0.26;
-const MCX_TRAIL_GIVEBACK_SHARE = 0.38;
+const MCX_PROFIT_LOCK_PROGRESS = 0.52;
+const MCX_PROFIT_LOCK_SHARE = 0.65;
+const MCX_LATE_EXIT_PROGRESS = 0.70;
+const MCX_LATE_EXIT_MIN_GAIN = 0.14;
+const MCX_GRIND_EXIT_PROGRESS = 0.55;
+const MCX_GRIND_EXIT_SHARE = 0.50;
+const MCX_TRAIL_GIVEBACK_SHARE = 0.22;
 const MCX_MIN_SIZE_MULTIPLIER = 0.5;
-const MCX_MAX_SIZE_MULTIPLIER = 1.75;
+const MCX_MAX_SIZE_MULTIPLIER = 1.3;
+const MCX_ROUND_TRIP_FEE_PCT = 0.06;
+const MCX_BID_ASK_SPREAD_PCT = 0.04;
 const MCX_LOSS_COOLDOWN_PENALTY = 0.3;
 const MCX_UNDERPERFORMING_MIN_TRADES = 8;
 const MCX_UNDERPERFORMING_MAX_WINRATE = 35;
@@ -785,19 +787,21 @@ function resolveExit(
   now: number,
 ): { reason: string; exitPremium: number } | null {
   const gainPct = pos.entryPremium > 0 ? (currentPremium - pos.entryPremium) / pos.entryPremium : 0;
+  const netGainPct = gainPct - (MCX_ROUND_TRIP_FEE_PCT + MCX_BID_ASK_SPREAD_PCT) / 100;
   const maxHoldMs = holdMinutesFor(pos.commodityId) * 60 * 1000;
   const timeProgress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const profitLockThreshold = Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * MCX_PROFIT_LOCK_SHARE);
 
   if (currentPremium >= pos.tpPremium) return { reason: "TP", exitPremium: pos.tpPremium };
   if (currentPremium <= pos.slPremium) return { reason: "SL", exitPremium: pos.slPremium };
+  if (netGainPct <= 0) return null;
   if (timeProgress >= MCX_GRIND_EXIT_PROGRESS && gainPct >= Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * MCX_GRIND_EXIT_SHARE)) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
   if (timeProgress >= MCX_PROFIT_LOCK_PROGRESS && gainPct >= profitLockThreshold) {
     return { reason: "PROFIT_LOCK", exitPremium: currentPremium };
   }
-  if (pos.peakGainPct >= Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * 0.4) && gainPct > 0 && gainPct <= pos.peakGainPct * (1 - MCX_TRAIL_GIVEBACK_SHARE)) {
+  if (pos.peakGainPct >= Math.max(MCX_LATE_EXIT_MIN_GAIN, def.tpPct * 0.4) && netGainPct > 0 && gainPct <= pos.peakGainPct * (1 - MCX_TRAIL_GIVEBACK_SHARE)) {
     return { reason: "TRAIL_STOP", exitPremium: currentPremium };
   }
   if (timeProgress >= MCX_LATE_EXIT_PROGRESS && gainPct >= MCX_LATE_EXIT_MIN_GAIN) {
@@ -1014,8 +1018,10 @@ function closePosition(eng: EngineRef, strat: InternalStratState, exitPremium: n
   const pos = strat.position;
   if (!pos) return;
   if (pos.entryPremium <= 0) { strat.position = null; eng.positions.delete(pos.id); return; }
-  const netPnl = (exitPremium - pos.entryPremium) * pos.quantity;
-  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100;
+  const grossPnl = (exitPremium - pos.entryPremium) * pos.quantity;
+  const fees = pos.costBasis * (MCX_ROUND_TRIP_FEE_PCT + MCX_BID_ASK_SPREAD_PCT) / 100;
+  const netPnl = grossPnl - fees;
+  const returnPct = ((exitPremium - pos.entryPremium) / pos.entryPremium) * 100 - MCX_ROUND_TRIP_FEE_PCT - MCX_BID_ASK_SPREAD_PCT;
 
   eng.trades.unshift({
     id: pos.id, strategyId: pos.strategyId, strategyName: pos.strategyName,
@@ -1373,9 +1379,8 @@ export default function useMCXEngine(_refreshKey = 0) {
       strat.status = "READY";
 
       const price = state.lastPrice;
-      const barsForEval = [...bars, price];
-      const fires = evalSignal(strat.def.signal, barsForEval, price);
-      const confirmed = fires && passesEntryConfirmation(strat.def, barsForEval, price);
+      const fires = evalSignal(strat.def.signal, bars, price);
+      const confirmed = fires && passesEntryConfirmation(strat.def, bars, price);
       strat.score = confirmed ? 82 : fires ? 56 : 0;
 
       if (!confirmed) continue;

@@ -24,15 +24,17 @@ const TRADE_CAP_MAX = 2_500;
 const LOCAL_STORAGE_KEY = "nifty_bees_paper_state";
 const LS_LEGACY_KEYS = ["nifty_bees_paper_v1"];
 
-const PROFIT_LOCK_PROGRESS = 0.28;
-const PROFIT_LOCK_SHARE = 0.4;
-const LATE_EXIT_PROGRESS = 0.55;
-const LATE_EXIT_MIN_GAIN = 0.04;
-const GRIND_EXIT_PROGRESS = 0.42;
-const GRIND_EXIT_SHARE = 0.22;
-const TRAIL_ACTIVATION_PCT = 0.2;
-const TRAIL_GIVEBACK_SHARE = 0.32;
+const PROFIT_LOCK_PROGRESS = 0.52;
+const PROFIT_LOCK_SHARE = 0.65;
+const LATE_EXIT_PROGRESS = 0.70;
+const LATE_EXIT_MIN_GAIN = 0.15;
+const GRIND_EXIT_PROGRESS = 0.55;
+const GRIND_EXIT_SHARE = 0.50;
+const TRAIL_ACTIVATION_PCT = 0.3;
+const TRAIL_GIVEBACK_SHARE = 0.20;
 const LOSS_COOLDOWN_PENALTY = 0.35;
+const ROUND_TRIP_FEE_PCT = 0.12;
+const BID_ASK_SPREAD_PCT = 0.05;
 
 type Side = "LONG" | "SHORT";
 type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
@@ -340,6 +342,7 @@ function cooldownMsFor(strategy: InternalStrategyState, won: boolean): number {
 function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: number): { reason: string; exitPrice: number } | null {
   const netPnl = calcPnl(pos.side, pos.entryPrice, price, pos.quantity);
   const returnPct = pos.notional > 0 ? (netPnl / pos.notional) * 100 : 0;
+  const netReturnPct = returnPct - ROUND_TRIP_FEE_PCT - BID_ASK_SPREAD_PCT;
   const maxHoldMs = def.holdMinutes * 60 * 1000;
   const progress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const lockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
@@ -350,10 +353,11 @@ function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: n
     if (price <= pos.tpPrice) return { reason: "TP", exitPrice: pos.tpPrice };
     if (price >= pos.slPrice) return { reason: "SL", exitPrice: pos.slPrice };
   }
+  if (netReturnPct <= 0) return null;
   if (progress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE))
     return { reason: "PROFIT_LOCK", exitPrice: price };
   if (progress >= PROFIT_LOCK_PROGRESS && returnPct >= lockThreshold) return { reason: "PROFIT_LOCK", exitPrice: price };
-  if (pos.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && returnPct > 0 && returnPct <= pos.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE))
+  if (pos.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.4) && netReturnPct > 0 && returnPct <= pos.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE))
     return { reason: "TRAIL_STOP", exitPrice: price };
   if (progress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN) return { reason: "LATE_EXIT", exitPrice: price };
   if (maxHoldMs > 0 && now - pos.entryTime >= maxHoldMs) return { reason: "TIME_EXIT", exitPrice: price };
@@ -431,7 +435,9 @@ function openPosition(engine: EngineRef, strategy: InternalStrategyState, entryP
 function closePosition(engine: EngineRef, strategy: InternalStrategyState, exitPrice: number, reason: string, now: number) {
   const pos = strategy.position;
   if (!pos) return;
-  const netPnl = calcPnl(pos.side, pos.entryPrice, exitPrice, pos.quantity);
+  const grossPnl = calcPnl(pos.side, pos.entryPrice, exitPrice, pos.quantity);
+  const fees = pos.notional * (ROUND_TRIP_FEE_PCT + BID_ASK_SPREAD_PCT) / 100;
+  const netPnl = grossPnl - fees;
   const trade: InternalTrade = {
     id: pos.id,
     strategyId: pos.strategyId,
@@ -880,6 +886,17 @@ export default function useNiftyBeesEngine() {
   const clearTrades = useCallback(() => {
     const e = engineRef.current;
     e.trades = [];
+    e.totalRealizedPnl = 0;
+    e.totalWins = 0;
+    e.totalLosses = 0;
+    for (const s of e.strategies) {
+      s.totalTrades = 0;
+      s.wins = 0;
+      s.losses = 0;
+      s.totalPnl = 0;
+      s.winRate = 0;
+      s.consecutiveLosses = 0;
+    }
     persist(e);
     pushDisplay();
   }, [pushDisplay]);
