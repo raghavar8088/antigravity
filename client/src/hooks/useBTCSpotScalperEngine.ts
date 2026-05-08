@@ -35,8 +35,14 @@ const VOL_HISTORY = 24;
 /** Each closed trade records at least this absolute net PnL (after fees) on the paper ledger. */
 const MIN_ABS_NET_PNL_USD = 2;
 
-// Bump key to clear stale state — v6 has 60 strategies with advanced indicators.
-const LS_KEY = "btc_spot_scalper_paper_v6";
+/** Stable localStorage key — NEVER change this. Old keys are migrated on load. */
+const LS_KEY = "btc_spot_scalper_paper_state";
+const LS_LEGACY_KEYS = [
+  "btc_spot_scalper_paper_v6",
+  "btc_spot_scalper_paper_v5",
+  "btc_spot_scalper_paper_v4",
+  "btc_spot_scalper_paper_v3",
+];
 const LS_PAUSE_ENTRIES = "btc_spot_pause_entries_v1";
 
 /** Clip notion band for dashboard copy. */
@@ -877,8 +883,20 @@ function saveLs(engine: EngineRef): void {
 function loadLs(): DbPayload | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    return normalizeDbPayload(JSON.parse(raw) as Partial<DbPayload>);
+    if (raw) return normalizeDbPayload(JSON.parse(raw) as Partial<DbPayload>);
+
+    for (const legacyKey of LS_LEGACY_KEYS) {
+      const legacy = localStorage.getItem(legacyKey);
+      if (legacy) {
+        const parsed = normalizeDbPayload(JSON.parse(legacy) as Partial<DbPayload>);
+        if (parsed) {
+          localStorage.setItem(LS_KEY, legacy);
+          localStorage.removeItem(legacyKey);
+          return parsed;
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -910,8 +928,7 @@ function compareSavedStates(a: DbPayload, b: DbPayload): number {
 
 function applySaved(engine: EngineRef, saved: DbPayload): void {
   const persistedBalance = typeof saved.balance === "number" && saved.balance >= 0 ? saved.balance : INITIAL_BALANCE;
-  // Hard-cap the paper wallet to the configured desk balance.
-  engine.balance = Math.min(INITIAL_BALANCE, persistedBalance);
+  engine.balance = persistedBalance;
   engine.totalWins = saved.totalWins ?? 0;
   engine.totalLosses = saved.totalLosses ?? 0;
   engine.totalRealizedPnl = saved.totalPnl ?? 0;
@@ -1423,12 +1440,12 @@ export default function useBTCSpotScalperEngine() {
       if (!loadedRef.current) return;
       saveLs(engineR.current);
       void saveDbState(engineR.current);
-    }, 60_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const onUnload = () => {
+    const flushState = () => {
       if (!loadedRef.current) return;
       saveLs(engineR.current);
       const payload = JSON.stringify(buildPayload(engineR.current));
@@ -1441,8 +1458,15 @@ export default function useBTCSpotScalperEngine() {
         keepalive: true,
       });
     };
-    window.addEventListener("beforeunload", onUnload);
-    return () => window.removeEventListener("beforeunload", onUnload);
+    const onVisChange = () => {
+      if (document.visibilityState === "hidden") flushState();
+    };
+    window.addEventListener("beforeunload", flushState);
+    document.addEventListener("visibilitychange", onVisChange);
+    return () => {
+      window.removeEventListener("beforeunload", flushState);
+      document.removeEventListener("visibilitychange", onVisChange);
+    };
   }, []);
 
   useEffect(() => {
