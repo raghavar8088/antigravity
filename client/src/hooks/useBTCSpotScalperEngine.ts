@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Mutable
 const INITIAL_BALANCE = 100;
 const MIN_NOTIONAL_USD = 10;
 const MAX_NOTIONAL_USD = 35;
-const MAX_OPEN_POSITIONS = 8;
+const MAX_OPEN_POSITIONS = 10;
 const MAX_BARS = 120;
 const MIN_BARS = 18;
 const SIGNAL_THRESHOLD = 55;
@@ -19,14 +19,20 @@ const MAX_DRAWDOWN_LOCK_PCT = 22; // pause new entries if equity drawdown breach
 /** Fee breakeven — early exits must beat this to be net positive. */
 const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.15
 
-const PROFIT_LOCK_PROGRESS = 0.55;
-const PROFIT_LOCK_SHARE = 0.55;
-const LATE_EXIT_PROGRESS = 0.65;
-const LATE_EXIT_MIN_GAIN = 0.18;
-const GRIND_EXIT_PROGRESS = 0.55;
-const GRIND_EXIT_SHARE = 0.45;
-const TRAIL_ACTIVATION_PCT = 0.25;
-const TRAIL_GIVEBACK_SHARE = 0.20;
+const PROFIT_LOCK_PROGRESS = 0.60;
+const PROFIT_LOCK_SHARE = 0.60;
+const LATE_EXIT_PROGRESS = 0.70;
+const LATE_EXIT_MIN_GAIN = 0.22;
+const GRIND_EXIT_PROGRESS = 0.60;
+const GRIND_EXIT_SHARE = 0.50;
+const TRAIL_ACTIVATION_PCT = 0.30;
+const TRAIL_GIVEBACK_SHARE = 0.18;
+/** Once return hits this fraction of TP, move SL to breakeven. */
+const BREAKEVEN_TRIGGER_FRAC = 0.40;
+/** For MTF strategies, give extra time (multiplier on holdMinutes). */
+const MTF_HOLD_BONUS = 1.3;
+/** When momentum is still favorable, extend hold by this factor. */
+const MOMENTUM_HOLD_EXTEND = 1.25;
 const LOSS_COOLDOWN_PENALTY = 0.4;
 const VOL_SPIKE_RATIO = 1.45;
 const VOL_BOOST_POINTS = 4;
@@ -99,6 +105,23 @@ type SignalInputs = {
   rsi21: number;
   macdHist: number;
   prevMacdHist: number;
+  // Multi-timeframe (HTF) fields — derived from 5m and 15m aggregation of 1m bars
+  htf5_fast: number;
+  htf5_slow: number;
+  htf5_rsi: number;
+  htf5_momentum: number;
+  htf5_trend: string;  // "UP" | "DOWN" | "FLAT"
+  htf15_fast: number;
+  htf15_slow: number;
+  htf15_rsi: number;
+  htf15_momentum: number;
+  htf15_trend: string; // "UP" | "DOWN" | "FLAT"
+  htf5_macdHist: number;
+  htf15_macdHist: number;
+  htf5_bbWidth: number;
+  htf15_bbWidth: number;
+  htf5_adx: number;
+  htf15_adx: number;
 };
 
 interface StratDef {
@@ -112,6 +135,8 @@ interface StratDef {
   cooldownMinutes: number;
   minBars: number;
   holdMinutes: number;
+  /** If true, this strategy requires HTF (5m/15m) trend alignment before entry. */
+  requiresHtf?: boolean;
 }
 
 interface InternalPosition {
@@ -123,12 +148,16 @@ interface InternalPosition {
   currentPrice: number;
   tpPrice: number;
   slPrice: number;
+  /** Adaptive SL — gets tightened once trade is in profit (breakeven move, then trailing). */
+  adaptiveSl: number;
   quantity: number;
   notional: number;
   entryTime: number;
   unrealizedPnl: number;
   returnPct: number;
   peakReturnPct: number;
+  /** Whether SL has been moved to breakeven. */
+  breakevenMoved: boolean;
 }
 
 interface InternalTrade {
@@ -499,6 +528,49 @@ const STRAT_DEFS: StratDef[] = [
   // Donchian + MACD — channel break with histogram confirmation
   { id: 109, name: "Donchian MACD Long", category: "Donchian Trend", side: "LONG", signal: "DONCHIAN_BREAK_LONG", tpPct: 0.78, slPct: 0.36, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 44 },
   { id: 110, name: "Donchian MACD Short", category: "Donchian Trend", side: "SHORT", signal: "DONCHIAN_BREAK_SHORT", tpPct: 0.78, slPct: 0.36, cooldownMinutes: 6, minBars: MIN_BARS, holdMinutes: 44 },
+
+  // ====== Multi-Timeframe Strategies (111-130): Higher win-rate via HTF alignment ======
+  // These use wider TP and longer holds because HTF confirmation filters out noise.
+
+  // MTF Trend Alignment — all 3 timeframes trending same direction
+  { id: 111, name: "MTF Trend Align Long", category: "MTF Trend", side: "LONG", signal: "MTF_TREND_ALIGN_LONG", tpPct: 0.85, slPct: 0.35, cooldownMinutes: 5, minBars: 30, holdMinutes: 55, requiresHtf: true },
+  { id: 112, name: "MTF Trend Align Short", category: "MTF Trend", side: "SHORT", signal: "MTF_TREND_ALIGN_SHORT", tpPct: 0.85, slPct: 0.35, cooldownMinutes: 5, minBars: 30, holdMinutes: 55, requiresHtf: true },
+
+  // MTF RSI Convergence — oversold/overbought across 1m, 5m, 15m
+  { id: 113, name: "MTF RSI Converge Long", category: "MTF Mean Revert", side: "LONG", signal: "MTF_RSI_CONVERGE_LONG", tpPct: 0.72, slPct: 0.32, cooldownMinutes: 6, minBars: 30, holdMinutes: 40, requiresHtf: true },
+  { id: 114, name: "MTF RSI Converge Short", category: "MTF Mean Revert", side: "SHORT", signal: "MTF_RSI_CONVERGE_SHORT", tpPct: 0.72, slPct: 0.32, cooldownMinutes: 6, minBars: 30, holdMinutes: 40, requiresHtf: true },
+
+  // MTF Momentum Cascade — momentum accelerating on all timeframes
+  { id: 115, name: "MTF Momentum Cascade Long", category: "MTF Trend", side: "LONG", signal: "MTF_MOM_CASCADE_LONG", tpPct: 0.90, slPct: 0.38, cooldownMinutes: 5, minBars: 30, holdMinutes: 60, requiresHtf: true },
+  { id: 116, name: "MTF Momentum Cascade Short", category: "MTF Trend", side: "SHORT", signal: "MTF_MOM_CASCADE_SHORT", tpPct: 0.90, slPct: 0.38, cooldownMinutes: 5, minBars: 30, holdMinutes: 60, requiresHtf: true },
+
+  // MTF MACD Alignment — histogram positive/negative on all 3 timeframes
+  { id: 117, name: "MTF MACD Align Long", category: "MTF MACD", side: "LONG", signal: "MTF_MACD_ALIGN_LONG", tpPct: 0.75, slPct: 0.34, cooldownMinutes: 5, minBars: 30, holdMinutes: 45, requiresHtf: true },
+  { id: 118, name: "MTF MACD Align Short", category: "MTF MACD", side: "SHORT", signal: "MTF_MACD_ALIGN_SHORT", tpPct: 0.75, slPct: 0.34, cooldownMinutes: 5, minBars: 30, holdMinutes: 45, requiresHtf: true },
+
+  // MTF Squeeze Fire — 5m squeeze with 15m trend + 1m momentum break
+  { id: 119, name: "MTF Squeeze Fire Long", category: "MTF Squeeze", side: "LONG", signal: "MTF_SQUEEZE_FIRE_LONG", tpPct: 0.88, slPct: 0.36, cooldownMinutes: 5, minBars: 30, holdMinutes: 50, requiresHtf: true },
+  { id: 120, name: "MTF Squeeze Fire Short", category: "MTF Squeeze", side: "SHORT", signal: "MTF_SQUEEZE_FIRE_SHORT", tpPct: 0.88, slPct: 0.36, cooldownMinutes: 5, minBars: 30, holdMinutes: 50, requiresHtf: true },
+
+  // MTF Pullback — 15m trend, 5m pullback, 1m reversal entry
+  { id: 121, name: "MTF Pullback Long", category: "MTF Pullback", side: "LONG", signal: "MTF_PULLBACK_LONG", tpPct: 0.70, slPct: 0.30, cooldownMinutes: 6, minBars: 30, holdMinutes: 42, requiresHtf: true },
+  { id: 122, name: "MTF Pullback Short", category: "MTF Pullback", side: "SHORT", signal: "MTF_PULLBACK_SHORT", tpPct: 0.70, slPct: 0.30, cooldownMinutes: 6, minBars: 30, holdMinutes: 42, requiresHtf: true },
+
+  // MTF ADX Power — strong directional movement on 5m + 15m
+  { id: 123, name: "MTF ADX Power Long", category: "MTF Trend", side: "LONG", signal: "MTF_ADX_POWER_LONG", tpPct: 0.92, slPct: 0.38, cooldownMinutes: 5, minBars: 30, holdMinutes: 60, requiresHtf: true },
+  { id: 124, name: "MTF ADX Power Short", category: "MTF Trend", side: "SHORT", signal: "MTF_ADX_POWER_SHORT", tpPct: 0.92, slPct: 0.38, cooldownMinutes: 5, minBars: 30, holdMinutes: 60, requiresHtf: true },
+
+  // MTF Breakout Confirm — 1m breakout confirmed by HTF trend
+  { id: 125, name: "MTF Breakout Long", category: "MTF Breakout", side: "LONG", signal: "MTF_BREAKOUT_LONG", tpPct: 0.82, slPct: 0.35, cooldownMinutes: 5, minBars: 30, holdMinutes: 48, requiresHtf: true },
+  { id: 126, name: "MTF Breakout Short", category: "MTF Breakout", side: "SHORT", signal: "MTF_BREAKOUT_SHORT", tpPct: 0.82, slPct: 0.35, cooldownMinutes: 5, minBars: 30, holdMinutes: 48, requiresHtf: true },
+
+  // MTF Mean Revert — 15m range, 5m/1m oversold triple confluence
+  { id: 127, name: "MTF Mean Revert Long", category: "MTF Mean Revert", side: "LONG", signal: "MTF_MEAN_REVERT_LONG", tpPct: 0.68, slPct: 0.30, cooldownMinutes: 7, minBars: 30, holdMinutes: 38, requiresHtf: true },
+  { id: 128, name: "MTF Mean Revert Short", category: "MTF Mean Revert", side: "SHORT", signal: "MTF_MEAN_REVERT_SHORT", tpPct: 0.68, slPct: 0.30, cooldownMinutes: 7, minBars: 30, holdMinutes: 38, requiresHtf: true },
+
+  // MTF Trend+Pullback Combo — wider TP, for strong trending environments
+  { id: 129, name: "MTF Trend Pullback Long", category: "MTF Pullback", side: "LONG", signal: "MTF_PULLBACK_LONG", tpPct: 0.80, slPct: 0.34, cooldownMinutes: 6, minBars: 30, holdMinutes: 50, requiresHtf: true },
+  { id: 130, name: "MTF Trend Pullback Short", category: "MTF Pullback", side: "SHORT", signal: "MTF_PULLBACK_SHORT", tpPct: 0.80, slPct: 0.34, cooldownMinutes: 6, minBars: 30, holdMinutes: 50, requiresHtf: true },
 ];
 
 function sma(values: number[], period: number): number {
@@ -645,6 +717,64 @@ function adxProxy(bars: number[], period: number): number {
   return Math.abs(plusSum - minusSum) / total * 100;
 }
 
+/** Aggregate 1m bars into higher-timeframe bars by taking every Nth bar (last close of each group). */
+function aggregateBars(bars1m: number[], periodMinutes: number): number[] {
+  const result: number[] = [];
+  for (let i = periodMinutes - 1; i < bars1m.length; i += periodMinutes) {
+    result.push(bars1m[i]);
+  }
+  if (bars1m.length > 0 && bars1m.length % periodMinutes !== 0) {
+    result.push(bars1m[bars1m.length - 1]);
+  }
+  return result;
+}
+
+function htfTrend(fast: number, slow: number, momentum: number): string {
+  if (fast > slow && momentum > 0.05) return "UP";
+  if (fast < slow && momentum < -0.05) return "DOWN";
+  return "FLAT";
+}
+
+function buildHtfFields(bars: number[]) {
+  const bars5 = aggregateBars(bars, 5);
+  const bars15 = aggregateBars(bars, 15);
+
+  const h5f = bars5.length >= 3 ? ema(bars5, 8) : 0;
+  const h5s = bars5.length >= 3 ? ema(bars5, 21) : 0;
+  const h5rsi = rsi(bars5, 14);
+  const h5mom = bars5.length >= 4 ? ((bars5[bars5.length - 1] - bars5[bars5.length - 3]) / bars5[bars5.length - 3]) * 100 : 0;
+  const h5mc = macd(bars5, 12, 26, 9);
+  const h5m20 = sma(bars5, 20);
+  const h5s20 = stdDev(bars5, 20);
+
+  const h15f = bars15.length >= 3 ? ema(bars15, 8) : 0;
+  const h15s = bars15.length >= 3 ? ema(bars15, 21) : 0;
+  const h15rsi = rsi(bars15, 14);
+  const h15mom = bars15.length >= 4 ? ((bars15[bars15.length - 1] - bars15[bars15.length - 3]) / bars15[bars15.length - 3]) * 100 : 0;
+  const h15mc = macd(bars15, 12, 26, 9);
+  const h15m20 = sma(bars15, 20);
+  const h15s20 = stdDev(bars15, 20);
+
+  return {
+    htf5_fast: h5f,
+    htf5_slow: h5s,
+    htf5_rsi: h5rsi,
+    htf5_momentum: h5mom,
+    htf5_trend: htfTrend(h5f, h5s, h5mom),
+    htf15_fast: h15f,
+    htf15_slow: h15s,
+    htf15_rsi: h15rsi,
+    htf15_momentum: h15mom,
+    htf15_trend: htfTrend(h15f, h15s, h15mom),
+    htf5_macdHist: h5mc.line - h5mc.signal,
+    htf15_macdHist: h15mc.line - h15mc.signal,
+    htf5_bbWidth: h5m20 > 0 ? (4 * h5s20) / h5m20 * 100 : 0,
+    htf15_bbWidth: h15m20 > 0 ? (4 * h15s20) / h15m20 * 100 : 0,
+    htf5_adx: adxProxy(bars5, 14),
+    htf15_adx: adxProxy(bars15, 14),
+  };
+}
+
 function buildSignalInputs(bars: number[], volRatio: number, volumes?: number[]): SignalInputs {
   const last = bars.length - 1;
   const price = bars[last];
@@ -701,6 +831,8 @@ function buildSignalInputs(bars: number[], volRatio: number, volumes?: number[])
     rsi21: rsi(bars, 21),
     macdHist: mc.line - mc.signal,
     prevMacdHist: mc.prevLine - mc.prevSignal,
+    // Multi-timeframe fields
+    ...buildHtfFields(bars),
   };
 }
 
@@ -988,6 +1120,94 @@ function evalMinuteSignal(signal: string, input: SignalInputs): number {
       return momentum3 > 0.12 && rsi7 >= 75 && input.williamsR > -15 && price <= prevPrice
         ? scoreClamp(73 + (rsi7 - 75) * 0.6 + momentum3 * 15) : 0;
 
+    // ====== MULTI-TIMEFRAME STRATEGIES (111-130) ======
+
+    // MTF Trend Alignment — 1m entry with 5m+15m trend confirmation
+    case "MTF_TREND_ALIGN_LONG":
+      return input.htf5_trend === "UP" && input.htf15_trend === "UP"
+        && fast > slow && rsi14 >= 50 && rsi14 <= 72 && momentum3 > 0.03
+        ? scoreClamp(76 + momentum3 * 20 + (rsi14 - 50) * 0.15 + input.htf5_momentum * 10) : 0;
+    case "MTF_TREND_ALIGN_SHORT":
+      return input.htf5_trend === "DOWN" && input.htf15_trend === "DOWN"
+        && fast < slow && rsi14 >= 28 && rsi14 <= 50 && momentum3 < -0.03
+        ? scoreClamp(76 + Math.abs(momentum3) * 20 + (50 - rsi14) * 0.15 + Math.abs(input.htf5_momentum) * 10) : 0;
+
+    // MTF RSI Convergence — all timeframes aligned in oversold/overbought
+    case "MTF_RSI_CONVERGE_LONG":
+      return input.htf5_rsi <= 38 && input.htf15_rsi <= 44 && rsi14 <= 35 && price >= prevPrice && stochK < 25
+        ? scoreClamp(74 + (35 - rsi14) * 0.5 + (38 - input.htf5_rsi) * 0.3 + (25 - stochK) * 0.2) : 0;
+    case "MTF_RSI_CONVERGE_SHORT":
+      return input.htf5_rsi >= 62 && input.htf15_rsi >= 56 && rsi14 >= 65 && price <= prevPrice && stochK > 75
+        ? scoreClamp(74 + (rsi14 - 65) * 0.5 + (input.htf5_rsi - 62) * 0.3 + (stochK - 75) * 0.2) : 0;
+
+    // MTF Momentum Cascade — momentum accelerating across all timeframes
+    case "MTF_MOM_CASCADE_LONG":
+      return input.htf15_momentum > 0.04 && input.htf5_momentum > 0.06 && momentum3 > 0.05
+        && fast > slow && rsi14 >= 52 && rsi14 <= 74
+        ? scoreClamp(75 + momentum3 * 20 + input.htf5_momentum * 15 + input.htf15_momentum * 10) : 0;
+    case "MTF_MOM_CASCADE_SHORT":
+      return input.htf15_momentum < -0.04 && input.htf5_momentum < -0.06 && momentum3 < -0.05
+        && fast < slow && rsi14 >= 26 && rsi14 <= 48
+        ? scoreClamp(75 + Math.abs(momentum3) * 20 + Math.abs(input.htf5_momentum) * 15 + Math.abs(input.htf15_momentum) * 10) : 0;
+
+    // MTF MACD Alignment — histogram positive on all timeframes
+    case "MTF_MACD_ALIGN_LONG":
+      return input.htf5_macdHist > 0 && input.htf15_macdHist > 0 && input.macdHist > 0
+        && input.macdHist > input.prevMacdHist && price > slow && rsi14 >= 48
+        ? scoreClamp(74 + (input.macdHist - input.prevMacdHist) / (atr14 || 1) * 200 + (rsi14 - 48) * 0.2) : 0;
+    case "MTF_MACD_ALIGN_SHORT":
+      return input.htf5_macdHist < 0 && input.htf15_macdHist < 0 && input.macdHist < 0
+        && input.macdHist < input.prevMacdHist && price < slow && rsi14 <= 52
+        ? scoreClamp(74 + (input.prevMacdHist - input.macdHist) / (atr14 || 1) * 200 + (52 - rsi14) * 0.2) : 0;
+
+    // MTF Squeeze Fire — BB squeeze on 5m, momentum break on 1m with 15m trend
+    case "MTF_SQUEEZE_FIRE_LONG":
+      return input.htf5_bbWidth < 0.5 && input.htf15_trend === "UP" && momentum3 > 0.05 && fast > slow && rsi14 >= 52
+        ? scoreClamp(75 + momentum3 * 25 + (0.5 - input.htf5_bbWidth) * 15) : 0;
+    case "MTF_SQUEEZE_FIRE_SHORT":
+      return input.htf5_bbWidth < 0.5 && input.htf15_trend === "DOWN" && momentum3 < -0.05 && fast < slow && rsi14 <= 48
+        ? scoreClamp(75 + Math.abs(momentum3) * 25 + (0.5 - input.htf5_bbWidth) * 15) : 0;
+
+    // MTF Pullback Entry — 15m uptrend, 5m pullback, 1m reversal
+    case "MTF_PULLBACK_LONG":
+      return input.htf15_trend === "UP" && input.htf5_rsi <= 42 && rsi14 <= 38 && price >= prevPrice
+        && stochK > prevStochK && input.htf15_rsi >= 48
+        ? scoreClamp(74 + (42 - input.htf5_rsi) * 0.4 + (38 - rsi14) * 0.3 + momentum3 * 15) : 0;
+    case "MTF_PULLBACK_SHORT":
+      return input.htf15_trend === "DOWN" && input.htf5_rsi >= 58 && rsi14 >= 62 && price <= prevPrice
+        && stochK < prevStochK && input.htf15_rsi <= 52
+        ? scoreClamp(74 + (input.htf5_rsi - 58) * 0.4 + (rsi14 - 62) * 0.3 + Math.abs(momentum3) * 15) : 0;
+
+    // MTF ADX Power Trend — strong trend on both 5m and 15m with 1m entry
+    case "MTF_ADX_POWER_LONG":
+      return input.htf5_adx > 25 && input.htf15_adx > 20 && fast > slow && slow > trend
+        && momentum6 > 0.06 && rsi14 >= 52
+        ? scoreClamp(76 + input.htf5_adx * 0.15 + input.htf15_adx * 0.1 + momentum6 * 20) : 0;
+    case "MTF_ADX_POWER_SHORT":
+      return input.htf5_adx > 25 && input.htf15_adx > 20 && fast < slow && slow < trend
+        && momentum6 < -0.06 && rsi14 <= 48
+        ? scoreClamp(76 + input.htf5_adx * 0.15 + input.htf15_adx * 0.1 + Math.abs(momentum6) * 20) : 0;
+
+    // MTF Breakout Confirm — 1m breakout confirmed by 5m trend and 15m support
+    case "MTF_BREAKOUT_LONG":
+      return price > high20 * 1.0008 && input.htf5_trend === "UP" && input.htf15_rsi >= 48
+        && momentum3 > 0.04 && rsi14 >= 52
+        ? scoreClamp(75 + (price / high20 - 1) * 7000 + momentum3 * 18 + input.htf5_momentum * 8) : 0;
+    case "MTF_BREAKOUT_SHORT":
+      return price < low20 * 0.9992 && input.htf5_trend === "DOWN" && input.htf15_rsi <= 52
+        && momentum3 < -0.04 && rsi14 <= 48
+        ? scoreClamp(75 + (low20 / price - 1) * 7000 + Math.abs(momentum3) * 18 + Math.abs(input.htf5_momentum) * 8) : 0;
+
+    // MTF Mean Revert — 15m range, 5m oversold, 1m bounce
+    case "MTF_MEAN_REVERT_LONG":
+      return input.htf15_trend === "FLAT" && input.htf5_rsi <= 35 && rsi7 <= 28
+        && price >= prevPrice && input.williamsR < -82 && stochK < 20
+        ? scoreClamp(74 + (28 - rsi7) * 0.5 + (35 - input.htf5_rsi) * 0.3 + (20 - stochK) * 0.3) : 0;
+    case "MTF_MEAN_REVERT_SHORT":
+      return input.htf15_trend === "FLAT" && input.htf5_rsi >= 65 && rsi7 >= 72
+        && price <= prevPrice && input.williamsR > -18 && stochK > 80
+        ? scoreClamp(74 + (rsi7 - 72) * 0.5 + (input.htf5_rsi - 65) * 0.3 + (stochK - 80) * 0.3) : 0;
+
     default:
       return 0;
   }
@@ -1003,8 +1223,8 @@ function classifyRegime(input: SignalInputs): string {
 }
 
 function isCategoryAligned(category: string, regime: string): boolean {
-  const mrCats = ["Mean Reversion", "Bollinger MR", "Williams MR", "CCI MR", "Keltner MR", "VWAP MR", "RSI Multi", "Exhaustion"];
-  const trendCats = ["Trend", "Volatility", "ADX Trend", "Donchian Trend", "ROC Trend", "Squeeze"];
+  const mrCats = ["Mean Reversion", "Bollinger MR", "Williams MR", "CCI MR", "Keltner MR", "VWAP MR", "RSI Multi", "Exhaustion", "MTF Mean Revert"];
+  const trendCats = ["Trend", "Volatility", "ADX Trend", "Donchian Trend", "ROC Trend", "Squeeze", "MTF Trend", "MTF Squeeze"];
   if (regime === "HIGH_VOL") return !mrCats.includes(category);
   if (regime === "RANGE") return !trendCats.includes(category);
   return true;
@@ -1045,6 +1265,12 @@ function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: str
     if (def.category === "Cloud") return input.price > Math.max(input.ema5, input.ema13) && input.rsi14 >= 48;
     if (def.category === "Swing") return input.momentum3 > 0.01 && input.cci20 > -60;
     if (def.category === "Exhaustion") return input.rsi7 <= 30 && input.price >= input.prevPrice;
+    if (def.category === "MTF Trend") return input.htf5_trend === "UP" && input.fast > input.slow;
+    if (def.category === "MTF Mean Revert") return input.htf5_rsi <= 42 && input.price >= input.prevPrice;
+    if (def.category === "MTF MACD") return input.htf5_macdHist > 0 && input.macdHist > 0;
+    if (def.category === "MTF Squeeze") return input.htf5_bbWidth < 0.6 && input.momentum3 > 0.02;
+    if (def.category === "MTF Pullback") return input.htf15_trend === "UP" && input.rsi14 <= 45;
+    if (def.category === "MTF Breakout") return input.htf5_trend === "UP" && input.momentum3 > 0.02;
     return input.price >= input.fast && input.momentum3 > 0;
   }
   if (def.category === "VWAP") return input.price <= input.mean20 * 1.001 && input.rsi14 <= 58;
@@ -1079,6 +1305,12 @@ function passesEntryConfirmation(def: StratDef, input: SignalInputs, regime: str
   if (def.category === "Cloud") return input.price < Math.min(input.ema5, input.ema13) && input.rsi14 <= 52;
   if (def.category === "Swing") return input.momentum3 < -0.01 && input.cci20 < 60;
   if (def.category === "Exhaustion") return input.rsi7 >= 70 && input.price <= input.prevPrice;
+  if (def.category === "MTF Trend") return input.htf5_trend === "DOWN" && input.fast < input.slow;
+  if (def.category === "MTF Mean Revert") return input.htf5_rsi >= 58 && input.price <= input.prevPrice;
+  if (def.category === "MTF MACD") return input.htf5_macdHist < 0 && input.macdHist < 0;
+  if (def.category === "MTF Squeeze") return input.htf5_bbWidth < 0.6 && input.momentum3 < -0.02;
+  if (def.category === "MTF Pullback") return input.htf15_trend === "DOWN" && input.rsi14 >= 55;
+  if (def.category === "MTF Breakout") return input.htf5_trend === "DOWN" && input.momentum3 < -0.02;
   return input.price <= input.fast && input.momentum3 < 0;
 }
 
@@ -1086,29 +1318,59 @@ function calcPnl(side: Side, entry: number, exit: number, qty: number): number {
   return (exit - entry) * qty * (side === "LONG" ? 1 : -1);
 }
 
-function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: number): { reason: string; exitPrice: number } | null {
+function resolveExit(pos: InternalPosition, def: StratDef, price: number, now: number, input?: SignalInputs): { reason: string; exitPrice: number } | null {
   const returnPct = pos.notional > 0 ? (calcPnl(pos.side, pos.entryPrice, price, pos.quantity) / pos.notional) * 100 : 0;
   const netReturnPct = returnPct - FEE_BREAKEVEN_PCT;
-  const maxHoldMs = def.holdMinutes * 60 * 1000;
+  const holdMultiplier = def.requiresHtf ? MTF_HOLD_BONUS : 1;
+  const maxHoldMs = def.holdMinutes * 60 * 1000 * holdMultiplier;
   const progress = maxHoldMs > 0 ? Math.min(1, (now - pos.entryTime) / maxHoldMs) : 0;
   const lockThreshold = Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * PROFIT_LOCK_SHARE);
 
+  // Hard TP/SL
   if (pos.side === "LONG") {
     if (price >= pos.tpPrice) return { reason: "TP", exitPrice: pos.tpPrice };
-    if (price <= pos.slPrice) return { reason: "SL", exitPrice: pos.slPrice };
+    if (price <= pos.adaptiveSl) return { reason: pos.breakevenMoved ? "BE_STOP" : "SL", exitPrice: pos.adaptiveSl };
   } else {
     if (price <= pos.tpPrice) return { reason: "TP", exitPrice: pos.tpPrice };
-    if (price >= pos.slPrice) return { reason: "SL", exitPrice: pos.slPrice };
+    if (price >= pos.adaptiveSl) return { reason: pos.breakevenMoved ? "BE_STOP" : "SL", exitPrice: pos.adaptiveSl };
   }
 
-  // All early exits require net-positive return after fees — prevents "winning" exits
-  // that are actually losses once fees are deducted (floored to -$2 by the min PnL rule).
+  // Early exits require net-positive return after fees
   if (netReturnPct <= 0) return null;
 
-  if (progress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE)) return { reason: "PROFIT_LOCK", exitPrice: price };
-  if (progress >= PROFIT_LOCK_PROGRESS && returnPct >= lockThreshold) return { reason: "PROFIT_LOCK", exitPrice: price };
-  if (pos.peakReturnPct >= Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.50) && netReturnPct > 0 && returnPct <= pos.peakReturnPct * (1 - TRAIL_GIVEBACK_SHARE)) return { reason: "TRAIL_STOP", exitPrice: price };
-  if (progress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN) return { reason: "LATE_EXIT", exitPrice: price };
+  // Momentum-aware hold extension: if momentum is still pushing in our favor, delay exits
+  const momFavorable = input ? (
+    pos.side === "LONG"
+      ? input.momentum3 > 0.03 && input.rsi14 >= 48 && input.rsi14 <= 74
+      : input.momentum3 < -0.03 && input.rsi14 >= 26 && input.rsi14 <= 52
+  ) : false;
+
+  // HTF trend still aligned — let MTF trades run further
+  const htfStillAligned = input && def.requiresHtf ? (
+    pos.side === "LONG"
+      ? input.htf5_trend === "UP" && input.htf15_rsi >= 44
+      : input.htf5_trend === "DOWN" && input.htf15_rsi <= 56
+  ) : false;
+
+  // Adjusted progress for momentum/HTF extension
+  const effectiveProgress = (momFavorable || htfStillAligned) ? progress / MOMENTUM_HOLD_EXTEND : progress;
+
+  // Adaptive trailing — tighter as return grows (captures more profit on big winners)
+  const trailActivation = Math.max(TRAIL_ACTIVATION_PCT, def.tpPct * 0.45);
+  if (pos.peakReturnPct >= trailActivation && netReturnPct > 0) {
+    const peakProgress = pos.peakReturnPct / def.tpPct;
+    const giveback = peakProgress >= 0.8 ? 0.12 : peakProgress >= 0.6 ? 0.15 : TRAIL_GIVEBACK_SHARE;
+    if (returnPct <= pos.peakReturnPct * (1 - giveback)) return { reason: "TRAIL_STOP", exitPrice: price };
+  }
+
+  // Time-based profit locks (use effectiveProgress for momentum extension)
+  if (effectiveProgress >= GRIND_EXIT_PROGRESS && returnPct >= Math.max(LATE_EXIT_MIN_GAIN, def.tpPct * GRIND_EXIT_SHARE))
+    return { reason: "PROFIT_LOCK", exitPrice: price };
+  if (effectiveProgress >= PROFIT_LOCK_PROGRESS && returnPct >= lockThreshold)
+    return { reason: "PROFIT_LOCK", exitPrice: price };
+  if (effectiveProgress >= LATE_EXIT_PROGRESS && returnPct >= LATE_EXIT_MIN_GAIN)
+    return { reason: "LATE_EXIT", exitPrice: price };
+
   return null;
 }
 
@@ -1320,12 +1582,14 @@ function applySaved(engine: EngineRef, saved: DbPayload): void {
       currentPrice: row.currentPrice,
       tpPrice: row.tpPrice,
       slPrice: row.slPrice,
+      adaptiveSl: (row as Record<string, unknown>).adaptiveSl as number ?? row.slPrice,
       quantity: row.quantity,
       notional: row.notional,
       entryTime: row.entryTime,
       unrealizedPnl: row.unrealizedPnl,
       returnPct: row.returnPct,
       peakReturnPct: row.peakReturnPct ?? row.returnPct,
+      breakevenMoved: ((row as Record<string, unknown>).breakevenMoved as boolean) ?? false,
     };
     engine.positions.set(pos.id, pos);
     const st = engine.strategies.find((s) => s.def.id === pos.strategyId);
@@ -1412,6 +1676,7 @@ function openPosition(engine: EngineRef, strategy: InternalStrategyState, price:
   engine.balance -= notional;
   const tpM = 1 + strategy.def.tpPct / 100;
   const slM = 1 - strategy.def.slPct / 100;
+  const slPrice = strategy.def.side === "LONG" ? price * slM : price * (2 - slM);
   const pos: InternalPosition = {
     id: `BTC-SPOT-${Date.now()}-${engine.seq}`,
     strategyId: strategy.def.id,
@@ -1420,13 +1685,15 @@ function openPosition(engine: EngineRef, strategy: InternalStrategyState, price:
     entryPrice: price,
     currentPrice: price,
     tpPrice: strategy.def.side === "LONG" ? price * tpM : price * (2 - tpM),
-    slPrice: strategy.def.side === "LONG" ? price * slM : price * (2 - slM),
+    slPrice,
+    adaptiveSl: slPrice,
     quantity,
     notional,
     entryTime: now,
     unrealizedPnl: 0,
     returnPct: 0,
     peakReturnPct: 0,
+    breakevenMoved: false,
   };
   strategy.position = pos;
   strategy.status = "IN_POSITION";
@@ -1740,15 +2007,36 @@ export default function useBTCSpotScalperEngine() {
           if (price > 0) {
             const u = calcPnl(strategy.position.side, strategy.position.entryPrice, price, strategy.position.quantity);
             const rp = strategy.position.notional > 0 ? (u / strategy.position.notional) * 100 : 0;
+            const peakRp = Math.max(strategy.position.peakReturnPct, rp);
+
+            // Breakeven move: once return reaches BREAKEVEN_TRIGGER_FRAC of TP, move adaptive SL to entry
+            let adaptiveSl = strategy.position.adaptiveSl;
+            let beMoved = strategy.position.breakevenMoved;
+            if (!beMoved && peakRp >= strategy.def.tpPct * BREAKEVEN_TRIGGER_FRAC) {
+              adaptiveSl = strategy.position.entryPrice;
+              beMoved = true;
+            }
+            // Ratchet adaptive SL: as peak return grows beyond 60% of TP, tighten SL to lock in more
+            if (beMoved && peakRp >= strategy.def.tpPct * 0.60) {
+              const lockFrac = 0.35;
+              const lockPrice = strategy.position.side === "LONG"
+                ? strategy.position.entryPrice * (1 + (peakRp * lockFrac) / 100)
+                : strategy.position.entryPrice * (1 - (peakRp * lockFrac) / 100);
+              if (strategy.position.side === "LONG" && lockPrice > adaptiveSl) adaptiveSl = lockPrice;
+              else if (strategy.position.side === "SHORT" && lockPrice < adaptiveSl) adaptiveSl = lockPrice;
+            }
+
             strategy.position = {
               ...strategy.position,
               currentPrice: price,
               unrealizedPnl: u,
               returnPct: rp,
-              peakReturnPct: Math.max(strategy.position.peakReturnPct, rp),
+              peakReturnPct: peakRp,
+              adaptiveSl,
+              breakevenMoved: beMoved,
             };
             engine.positions.set(strategy.position.id, strategy.position);
-            const ex = resolveExit(strategy.position, strategy.def, price, now);
+            const ex = resolveExit(strategy.position, strategy.def, price, now, input);
             if (ex) closePosition(engine, strategy, ex.exitPrice, ex.reason, now);
           }
           continue;
