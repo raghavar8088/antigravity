@@ -824,19 +824,37 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 
 	// Calculate PnL - fees already deducted at open, so this is gross PnL
 	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+
+	// Determine raw sign from PnL or exit reason
+	rawSign := 1.0
+	if grossPnL < 0 {
+		rawSign = -1.0
+	} else if grossPnL == 0 {
+		// Use exit reason to determine sign when PnL is zero
+		switch reason {
+		case ExitSL, ExitStrikePressure:
+			rawSign = -1.0
+		default:
+			rawSign = 1.0
+		}
+	}
+
+	// Enforce minimum $2 net PnL floor
 	netPnL := grossPnL
+	if math.Abs(netPnL) < MIN_ABS_NET_PNL_USD {
+		netPnL = rawSign * MIN_ABS_NET_PNL_USD
+	}
 
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
 	}
 
-	// DELTA CLOSE: Buy back to close
-	// 1. Pay exit premium * quantity
-	// 2. Margin is released (added back to available balance)
-	// 3. Net PnL = received - paid (already computed)
+	// DELTA CLOSE: Buy back to close with PnL adjustment
+	// If we enforced minimum PnL, adjust balance accordingly
 	exitCost := pos.CurrentPremium * pos.Quantity
-	e.balance -= exitCost
+	pnlAdjustment := netPnL - grossPnL // Difference if minimum was enforced
+	e.balance -= exitCost - pnlAdjustment
 	// Margin is now released (implicitly, since position is gone)
 
 	e.trades = append(e.trades, OptionTrade{
