@@ -579,16 +579,18 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	// RECEIVE premium as a seller
-	e.balance += positionUSD
+	// RECEIVE premium as a seller (less fees)
+	notional := pos.EntryPremium * pos.Quantity
+	fees := notional * ROUND_TRIP_FEE_PCT
+	e.balance += positionUSD - fees
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Balance: $%.0f",
-		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, e.balance)
+	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.2f | Fees: $%.2f | Balance: $%.0f",
+		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, fees, e.balance)
 
 	// Fire Delta live bridge hook (non-blocking, outside lock)
 	if hook := e.onOpenHook; hook != nil {
@@ -660,9 +662,13 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
+	// Cap quantity to prevent lot sizing explosion
 	quantity := positionUSD / pr.Premium
 	if quantity <= 0 {
 		return nil
+	}
+	if quantity > MAX_OPTION_QUANTITY {
+		quantity = MAX_OPTION_QUANTITY
 	}
 
 	e.tradeSeq++
@@ -691,13 +697,18 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 }
 
 func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
-	result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
+	// Use ask price for exit valuation (what you'd pay to buy back)
+	result := PriceOptionForExit(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
 	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
 	pos.IV = iv
 
-	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
-	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium - Fees
+	// Entry: received bid | Exit: pay ask | Fees: round-trip on notional
+	notional := pos.EntryPremium * pos.Quantity
+	fees := notional * ROUND_TRIP_FEE_PCT
+	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	pos.UnrealizedPnL = grossPnL - fees
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -759,15 +770,20 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
-	// PnL already computed in markToMarket
-	netPnL := pos.UnrealizedPnL
+	// Recalculate PnL with fresh exit pricing and fees
+	notional := pos.EntryPremium * pos.Quantity
+	fees := notional * ROUND_TRIP_FEE_PCT
+	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	netPnL := grossPnL - fees
+
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
 	}
 
 	// BUY back to close: balance decreases by current market value
-	e.balance -= pos.CurrentPremium * pos.Quantity
+	// Balance change: - (premium paid to close + fees)
+	e.balance -= pos.CurrentPremium*pos.Quantity + fees
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,

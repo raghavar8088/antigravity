@@ -25,6 +25,8 @@ type PriceResult struct {
 }
 
 // PriceOption calculates the Black-Scholes price and Greeks for a European option.
+// PriceOption calculates the Black-Scholes price and Greeks for a European option.
+// For selling: applies bid-ask spread so you receive less premium (bid side).
 func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType OptionType) PriceResult {
 	if iv <= 0 || math.IsNaN(iv) || math.IsInf(iv, 0) {
 		log.Printf("[PRICER] WARN: invalid IV %.4f for %s strike=%.0f — defaulting to 30%%", iv, optType, strike)
@@ -45,12 +47,12 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 	d1 := (math.Log(spot/strike) + (riskFreeRate+iv*iv/2)*T) / (iv * sqrtT)
 	d2 := d1 - iv*sqrtT
 
-	var premium, delta float64
+	var midPremium, delta float64
 	if optType == Call {
-		premium = spot*normCDF(d1) - strike*math.Exp(-riskFreeRate*T)*normCDF(d2)
+		midPremium = spot*normCDF(d1) - strike*math.Exp(-riskFreeRate*T)*normCDF(d2)
 		delta = normCDF(d1)
 	} else {
-		premium = strike*math.Exp(-riskFreeRate*T)*normCDF(-d2) - spot*normCDF(-d1)
+		midPremium = strike*math.Exp(-riskFreeRate*T)*normCDF(-d2) - spot*normCDF(-d1)
 		delta = normCDF(d1) - 1
 	}
 
@@ -64,17 +66,32 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 		theta = -(spot*normPDF(d1)*iv/(2*sqrtT) - riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(-d2)) / 365
 	}
 
-	if premium < 1.00 {
-		premium = 1.00
+	if midPremium < 1.00 {
+		midPremium = 1.00
 	}
 
+	// Apply bid-ask spread: seller receives less (bid side = mid * (1 - spread/2))
+	// Using half-spread since we're selling at bid
+	bidPremium := midPremium * (1 - BID_ASK_SPREAD_FRAC/2)
+
 	return PriceResult{
-		Premium: premium,
+		Premium: bidPremium,
 		Delta:   delta,
 		Gamma:   gamma,
 		Theta:   theta,
 		Vega:    vega,
 	}
+}
+
+// PriceOptionForExit calculates the ask price when closing a short position.
+// When buying back to close, you pay more (ask side).
+func PriceOptionForExit(spot, strike float64, expiry time.Time, iv float64, optType OptionType) PriceResult {
+	result := PriceOption(spot, strike, expiry, iv, optType)
+	// Convert bid back to mid, then to ask
+	mid := result.Premium / (1 - BID_ASK_SPREAD_FRAC/2)
+	ask := mid * (1 + BID_ASK_SPREAD_FRAC/2)
+	result.Premium = ask
+	return result
 }
 
 // EstimateIV derives implied volatility from 1-minute bar prices.

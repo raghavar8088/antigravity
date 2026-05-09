@@ -44,8 +44,17 @@ const (
 
 	optionColdStartSizeMultiplier = 0.95
 	optionMinSizeMultiplier       = 0.45
-	optionMaxSizeMultiplier       = 1.90
+	optionMaxSizeMultiplier       = 1.30
 	optionEarlyMaxMultiplier      = 1.15
+
+	// Bid-ask spread for short options — you receive less (bid) when opening and pay more (ask) when closing
+	BID_ASK_SPREAD_FRAC = 0.015 // 1.5% spread on premium
+
+	// Maximum quantity per position to prevent lot sizing explosion
+	MAX_OPTION_QUANTITY = 1000
+
+	// Round-trip fee on notional (conservative for short options)
+	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
 	optionLossStreakPenalty       = 0.10
 	optionAvgPnLBoost             = 0.22
 	optionAvgPnLPenalty           = 0.12
