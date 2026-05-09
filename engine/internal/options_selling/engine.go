@@ -31,6 +31,8 @@ type Engine struct {
 	trades           []OptionTrade
 	marketProfile    MarketProfile
 	balance          float64
+	dayStartBalance  float64 // balance at start of UTC day for daily loss limit
+	dayStartDate     int     // UTC day number when dayStartBalance was set
 	lastPrice        float64
 	priceHist        []float64
 	minuteBars       []float64
@@ -72,13 +74,16 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 		tickEvery = 1 * time.Second
 	}
 
+	now := time.Now().UTC()
 	engine := &Engine{
-		states:        states,
-		marketProfile: profile,
-		balance:       initialOptionsBalance,
-		tickEvery:     tickEvery,
+		states:          states,
+		marketProfile:   profile,
+		balance:         initialOptionsBalance,
+		dayStartBalance: initialOptionsBalance,
+		dayStartDate:    int(now.Unix() / 86400),
+		tickEvery:       tickEvery,
 	}
-	engine.refreshRosterLocked(optionMarketRegimeUnknown, time.Now().UTC())
+	engine.refreshRosterLocked(optionMarketRegimeUnknown, now)
 	return engine
 }
 
@@ -93,6 +98,21 @@ func (e *Engine) isPaperIndexDesk() bool {
 
 func (e *Engine) paperDeskAggressiveOpen() bool {
 	return e.isPaperIndexDesk() && e.lastPrice > 0
+}
+
+// checkDailyLossLimitLocked returns true if new entries should be halted due to daily loss limit.
+// Refreshes dayStartBalance if it's a new UTC day.
+func (e *Engine) checkDailyLossLimitLocked(now time.Time) bool {
+	currentDay := int(now.Unix() / 86400)
+	if currentDay != e.dayStartDate {
+		// New day - reset daily tracking
+		e.dayStartDate = currentDay
+		e.dayStartBalance = e.balance
+		return false
+	}
+	// Check if we've lost more than 3% of day-start balance
+	drawdown := (e.dayStartBalance - e.balance) / e.dayStartBalance
+	return drawdown >= sellerDailyLossLimitPct
 }
 
 func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
@@ -160,15 +180,17 @@ func (e *Engine) exportStateLocked() PersistedState {
 	}
 
 	return PersistedState{
-		Balance:    e.balance,
-		LastPrice:  e.lastPrice,
-		LastMinute: e.lastMinute,
-		TradeSeq:   e.tradeSeq,
-		PriceHist:  priceHist,
-		MinuteBars: minuteBars,
-		Trades:     trades,
-		Strategies: strategies,
-		SavedAt:    time.Now().UTC(),
+		Balance:         e.balance,
+		DayStartBalance: e.dayStartBalance,
+		DayStartDate:    e.dayStartDate,
+		LastPrice:       e.lastPrice,
+		LastMinute:      e.lastMinute,
+		TradeSeq:        e.tradeSeq,
+		PriceHist:       priceHist,
+		MinuteBars:      minuteBars,
+		Trades:          trades,
+		Strategies:      strategies,
+		SavedAt:         time.Now().UTC(),
 	}
 }
 
@@ -178,6 +200,17 @@ func (e *Engine) RestoreState(state PersistedState) {
 
 	if state.Balance > 0 {
 		e.balance = state.Balance
+	}
+	// Restore daily loss tracking fields
+	if state.DayStartBalance > 0 {
+		e.dayStartBalance = state.DayStartBalance
+	} else {
+		e.dayStartBalance = e.balance
+	}
+	if state.DayStartDate > 0 {
+		e.dayStartDate = state.DayStartDate
+	} else {
+		e.dayStartDate = int(time.Now().Unix() / 86400)
 	}
 	e.lastPrice = state.LastPrice
 	e.lastMinute = state.LastMinute
@@ -520,6 +553,10 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	if s.stats.RosterState != StrategyRosterActive {
 		return
 	}
+	// Check daily loss limit - halt new opens if down 3%+ today
+	if e.checkDailyLossLimitLocked(now) {
+		return
+	}
 	if *openCount >= maxConcurrentPositions {
 		return
 	}
@@ -582,15 +619,16 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	// RECEIVE premium as a seller (less fees)
 	notional := pos.EntryPremium * pos.Quantity
 	fees := notional * ROUND_TRIP_FEE_PCT
-	e.balance += positionUSD - fees
+	// Credit net premium received after fees
+	e.balance += notional - fees
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.2f | Fees: $%.2f | Balance: $%.0f",
-		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, fees, e.balance)
+	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.2f | Notional: $%.2f | Fees: $%.2f | Balance: $%.0f",
+		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, notional, fees, e.balance)
 
 	// Fire Delta live bridge hook (non-blocking, outside lock)
 	if hook := e.onOpenHook; hook != nil {
@@ -703,12 +741,9 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	pos.Delta = result.Delta
 	pos.IV = iv
 
-	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium - Fees
-	// Entry: received bid | Exit: pay ask | Fees: round-trip on notional
-	notional := pos.EntryPremium * pos.Quantity
-	fees := notional * ROUND_TRIP_FEE_PCT
-	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
-	pos.UnrealizedPnL = grossPnL - fees
+	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
+	// Gross PnL only - fees deducted once at close
+	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -770,11 +805,9 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
-	// Recalculate PnL with fresh exit pricing and fees
-	notional := pos.EntryPremium * pos.Quantity
-	fees := notional * ROUND_TRIP_FEE_PCT
+	// Calculate PnL - fees already deducted at open, so this is gross PnL
 	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
-	netPnL := grossPnL - fees
+	netPnL := grossPnL
 
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -782,8 +815,9 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 	}
 
 	// BUY back to close: balance decreases by current market value
-	// Balance change: - (premium paid to close + fees)
-	e.balance -= pos.CurrentPremium*pos.Quantity + fees
+	// We received (notional - fees) at open, now paying (exitPremium * qty)
+	// Net balance impact: - (exitPremium * qty)
+	e.balance -= pos.CurrentPremium * pos.Quantity
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,

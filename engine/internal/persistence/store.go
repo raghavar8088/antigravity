@@ -56,28 +56,32 @@ type NiftyOptionsState struct {
 
 // OptionsSellingState is the persisted snapshot for the BTC options selling (writing) engine.
 type OptionsSellingState struct {
-	Balance    float64         `json:"balance"`
-	LastPrice  float64         `json:"lastPrice"`
-	LastMinute int64           `json:"lastMinute"`
-	TradeSeq   int             `json:"tradeSeq"`
-	PriceHist  json.RawMessage `json:"priceHist"`
-	MinuteBars json.RawMessage `json:"minuteBars"`
-	Trades     json.RawMessage `json:"trades"`
-	Strategies json.RawMessage `json:"strategies"`
-	SavedAt    time.Time       `json:"savedAt"`
+	Balance         float64         `json:"balance"`
+	DayStartBalance float64         `json:"dayStartBalance"`
+	DayStartDate    int             `json:"dayStartDate"`
+	LastPrice       float64         `json:"lastPrice"`
+	LastMinute      int64           `json:"lastMinute"`
+	TradeSeq        int             `json:"tradeSeq"`
+	PriceHist       json.RawMessage `json:"priceHist"`
+	MinuteBars      json.RawMessage `json:"minuteBars"`
+	Trades          json.RawMessage `json:"trades"`
+	Strategies      json.RawMessage `json:"strategies"`
+	SavedAt         time.Time       `json:"savedAt"`
 }
 
 // NiftyOptionsSellingState is the persisted snapshot for the NIFTY options selling engine.
 type NiftyOptionsSellingState struct {
-	Balance    float64         `json:"balance"`
-	LastPrice  float64         `json:"lastPrice"`
-	LastMinute int64           `json:"lastMinute"`
-	TradeSeq   int             `json:"tradeSeq"`
-	PriceHist  json.RawMessage `json:"priceHist"`
-	MinuteBars json.RawMessage `json:"minuteBars"`
-	Trades     json.RawMessage `json:"trades"`
-	Strategies json.RawMessage `json:"strategies"`
-	SavedAt    time.Time       `json:"savedAt"`
+	Balance         float64         `json:"balance"`
+	DayStartBalance float64         `json:"dayStartBalance"`
+	DayStartDate    int             `json:"dayStartDate"`
+	LastPrice       float64         `json:"lastPrice"`
+	LastMinute      int64           `json:"lastMinute"`
+	TradeSeq        int             `json:"tradeSeq"`
+	PriceHist       json.RawMessage `json:"priceHist"`
+	MinuteBars      json.RawMessage `json:"minuteBars"`
+	Trades          json.RawMessage `json:"trades"`
+	Strategies      json.RawMessage `json:"strategies"`
+	SavedAt         time.Time       `json:"savedAt"`
 }
 
 // Store handles all database persistence operations.

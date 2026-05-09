@@ -80,15 +80,17 @@ func emptyOptionsStateFile() *OptionsState {
 
 func emptyOptionsSellingStateFile() *OptionsSellingState {
 	return &OptionsSellingState{
-		Balance:    0,
-		LastPrice:  0,
-		LastMinute: 0,
-		TradeSeq:   0,
-		PriceHist:  json.RawMessage("[]"),
-		MinuteBars: json.RawMessage("[]"),
-		Trades:     json.RawMessage("[]"),
-		Strategies: json.RawMessage("[]"),
-		SavedAt:    time.Time{},
+		Balance:         0,
+		DayStartBalance: 0,
+		DayStartDate:    0,
+		LastPrice:       0,
+		LastMinute:      0,
+		TradeSeq:        0,
+		PriceHist:       json.RawMessage("[]"),
+		MinuteBars:      json.RawMessage("[]"),
+		Trades:          json.RawMessage("[]"),
+		Strategies:      json.RawMessage("[]"),
+		SavedAt:         time.Time{},
 	}
 }
 

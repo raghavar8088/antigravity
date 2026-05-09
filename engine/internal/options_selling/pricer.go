@@ -66,8 +66,9 @@ func PriceOption(spot, strike float64, expiry time.Time, iv float64, optType Opt
 		theta = -(spot*normPDF(d1)*iv/(2*sqrtT) - riskFreeRate*strike*math.Exp(-riskFreeRate*T)*normCDF(-d2)) / 365
 	}
 
-	if midPremium < 1.00 {
-		midPremium = 1.00
+	// Enforce realistic minimum premium (1 cent) to prevent micro-premium spam
+	if midPremium < 0.01 {
+		midPremium = 0.01
 	}
 
 	// Apply bid-ask spread: seller receives less (bid side = mid * (1 - spread/2))

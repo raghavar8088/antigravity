@@ -55,6 +55,9 @@ const (
 
 	// Round-trip fee on notional (conservative for short options)
 	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
+
+	// Daily loss limit: halt new opens after 3% of day-start balance (like buyer module)
+	sellerDailyLossLimitPct = 0.03
 	optionLossStreakPenalty       = 0.10
 	optionAvgPnLBoost             = 0.22
 	optionAvgPnLPenalty           = 0.12

@@ -146,13 +146,15 @@ type PersistedStrategyState struct {
 
 // PersistedState is the durable snapshot of the options engine.
 type PersistedState struct {
-	Balance    float64                  `json:"balance"`
-	LastPrice  float64                  `json:"lastPrice"`
-	LastMinute int64                    `json:"lastMinute"`
-	TradeSeq   int                      `json:"tradeSeq"`
-	PriceHist  []float64                `json:"priceHist"`
-	MinuteBars []float64                `json:"minuteBars"`
-	Trades     []OptionTrade            `json:"trades"`
-	Strategies []PersistedStrategyState `json:"strategies"`
-	SavedAt    time.Time                `json:"savedAt"`
+	Balance         float64                  `json:"balance"`
+	DayStartBalance float64                  `json:"dayStartBalance"` // for daily loss limit tracking
+	DayStartDate    int                      `json:"dayStartDate"`    // UTC day number
+	LastPrice       float64                  `json:"lastPrice"`
+	LastMinute      int64                    `json:"lastMinute"`
+	TradeSeq        int                      `json:"tradeSeq"`
+	PriceHist       []float64                `json:"priceHist"`
+	MinuteBars      []float64                `json:"minuteBars"`
+	Trades          []OptionTrade            `json:"trades"`
+	Strategies      []PersistedStrategyState `json:"strategies"`
+	SavedAt         time.Time                `json:"savedAt"`
 }

@@ -260,25 +260,29 @@ func saveOptionsSellingSnapshot(ctx context.Context, store persistence.OptionsSe
 	}
 
 	return store.SaveOptionsSellingState(ctx, &persistence.OptionsSellingState{
-		Balance:    snapshot.Balance,
-		LastPrice:  snapshot.LastPrice,
-		LastMinute: snapshot.LastMinute,
-		TradeSeq:   snapshot.TradeSeq,
-		PriceHist:  priceHistJSON,
-		MinuteBars: minuteBarsJSON,
-		Trades:     tradesJSON,
-		Strategies: strategiesJSON,
-		SavedAt:    snapshot.SavedAt,
+		Balance:         snapshot.Balance,
+		DayStartBalance: snapshot.DayStartBalance,
+		DayStartDate:    snapshot.DayStartDate,
+		LastPrice:       snapshot.LastPrice,
+		LastMinute:      snapshot.LastMinute,
+		TradeSeq:        snapshot.TradeSeq,
+		PriceHist:       priceHistJSON,
+		MinuteBars:      minuteBarsJSON,
+		Trades:          tradesJSON,
+		Strategies:      strategiesJSON,
+		SavedAt:         snapshot.SavedAt,
 	})
 }
 
 func loadOptionsSellingSnapshot(state *persistence.OptionsSellingState) (options_selling.PersistedState, error) {
 	snapshot := options_selling.PersistedState{
-		Balance:    state.Balance,
-		LastPrice:  state.LastPrice,
-		LastMinute: state.LastMinute,
-		TradeSeq:   state.TradeSeq,
-		SavedAt:    state.SavedAt,
+		Balance:         state.Balance,
+		DayStartBalance: state.DayStartBalance,
+		DayStartDate:    state.DayStartDate,
+		LastPrice:       state.LastPrice,
+		LastMinute:      state.LastMinute,
+		TradeSeq:        state.TradeSeq,
+		SavedAt:         state.SavedAt,
 	}
 
 	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
@@ -324,24 +328,28 @@ func saveNiftyOptionsSellingSnapshot(ctx context.Context, store *persistence.Sto
 	}
 
 	return store.SaveNiftyOptionsSellingState(ctx, &persistence.NiftyOptionsSellingState{
-		Balance:    snapshot.Balance,
-		LastPrice:  snapshot.LastPrice,
-		LastMinute: snapshot.LastMinute,
-		TradeSeq:   snapshot.TradeSeq,
-		PriceHist:  priceHistJSON,
-		MinuteBars: minuteBarsJSON,
-		Trades:     tradesJSON,
-		Strategies: strategiesJSON,
+		Balance:         snapshot.Balance,
+		DayStartBalance: snapshot.DayStartBalance,
+		DayStartDate:    snapshot.DayStartDate,
+		LastPrice:       snapshot.LastPrice,
+		LastMinute:      snapshot.LastMinute,
+		TradeSeq:        snapshot.TradeSeq,
+		PriceHist:       priceHistJSON,
+		MinuteBars:      minuteBarsJSON,
+		Trades:          tradesJSON,
+		Strategies:      strategiesJSON,
 	})
 }
 
 func loadNiftyOptionsSellingSnapshot(state *persistence.NiftyOptionsSellingState) (options_selling.PersistedState, error) {
 	snapshot := options_selling.PersistedState{
-		Balance:    state.Balance,
-		LastPrice:  state.LastPrice,
-		LastMinute: state.LastMinute,
-		TradeSeq:   state.TradeSeq,
-		SavedAt:    state.SavedAt,
+		Balance:         state.Balance,
+		DayStartBalance: state.DayStartBalance,
+		DayStartDate:    state.DayStartDate,
+		LastPrice:       state.LastPrice,
+		LastMinute:      state.LastMinute,
+		TradeSeq:        state.TradeSeq,
+		SavedAt:         state.SavedAt,
 	}
 
 	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
