@@ -1574,7 +1574,7 @@ export default function TradingDashboard({
             : activeModule === "spotBuy"
             ? "BTC Spot Buy — Spot accumulation desk and related controls."
             : activeModule === "btcSpotScalper"
-            ? "BTC Spot Scalper — Sixty 1m strategies (BB, Stochastic, MACD, OBV, confluence & more) on Delta Exchange candle data (default BTCUSD), $100 paper wallet, max six concurrent clips, tuned TP/SL execution, round-trip fee drag modeled (~0.15% notional), and every closed trade floors at $2 net win or loss."
+            ? "BTC Spot Scalper — 110 strategies (Williams %R, CCI, Keltner, Donchian, EMA Ribbon, Squeeze, ADX, ROC, BB, Stochastic, MACD, OBV & more) on Delta Exchange candle data (default BTCUSD), $100 paper wallet, max eight concurrent clips, tuned TP/SL execution, round-trip fee drag modeled (~0.15% notional), and every closed trade floors at $2 net win or loss."
             : "Select a workspace tab above to see its description."}
         </div>
       </div>
