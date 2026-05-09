@@ -23,6 +23,15 @@ function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {
   return `$${abs}`;
 }
 
+// Apply $2 minimum PnL floor for display (same as engine enforces at close)
+const MIN_PNL_USD = 2;
+function getDisplayPnL(rawPnl: number): number {
+  if (Math.abs(rawPnl) < MIN_PNL_USD) {
+    return rawPnl >= 0 ? MIN_PNL_USD : -MIN_PNL_USD;
+  }
+  return rawPnl;
+}
+
 function fmtPct(value: number, signed = false, decimals = 3) {
   const prefix = signed ? (value >= 0 ? "+" : "-") : "";
   return `${prefix}${Math.abs(value).toFixed(decimals)}%`;
@@ -694,25 +703,30 @@ export default function BTCSpotScalper({
                   <span className="text-[10px] font-medium uppercase" style={{ color: "var(--text-muted)" }}>Short</span>
                 </div>
               </div>
-              <div
-                className="flex items-center gap-2 rounded-xl border px-4 py-2"
-                style={{
-                  background: stats.unrealizedPnl >= 0
-                    ? "linear-gradient(135deg, rgba(24,128,56,0.06) 0%, rgba(24,128,56,0.12) 100%)"
-                    : "linear-gradient(135deg, rgba(217,48,37,0.06) 0%, rgba(217,48,37,0.12) 100%)",
-                  borderColor: stats.unrealizedPnl >= 0 ? "rgba(24,128,56,0.20)" : "rgba(217,48,37,0.20)",
-                }}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
-                  Unrealized
-                </span>
-                <span
-                  className="font-mono text-sm font-bold tabular-nums"
-                  style={{ color: stats.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)" }}
-                >
-                  {fmtUSD(stats.unrealizedPnl, { signed: true })}
-                </span>
-              </div>
+              {(() => {
+                const totalDisplayPnL = positions.reduce((sum, p) => sum + getDisplayPnL(p.unrealizedPnl), 0);
+                return (
+                  <div
+                    className="flex items-center gap-2 rounded-xl border px-4 py-2"
+                    style={{
+                      background: totalDisplayPnL >= 0
+                        ? "linear-gradient(135deg, rgba(24,128,56,0.06) 0%, rgba(24,128,56,0.12) 100%)"
+                        : "linear-gradient(135deg, rgba(217,48,37,0.06) 0%, rgba(217,48,37,0.12) 100%)",
+                      borderColor: totalDisplayPnL >= 0 ? "rgba(24,128,56,0.20)" : "rgba(217,48,37,0.20)",
+                    }}
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+                      Unrealized
+                    </span>
+                    <span
+                      className="font-mono text-sm font-bold tabular-nums"
+                      style={{ color: totalDisplayPnL >= 0 ? "var(--green)" : "var(--red)" }}
+                    >
+                      {fmtUSD(totalDisplayPnL, { signed: true })}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
@@ -737,7 +751,8 @@ export default function BTCSpotScalper({
                 </thead>
                 <tbody>
                   {positions.map((p, idx) => {
-                    const pnlPositive = p.unrealizedPnl >= 0;
+                    const displayPnL = getDisplayPnL(p.unrealizedPnl);
+                    const pnlPositive = displayPnL >= 0;
                     return (
                       <tr
                         key={p.id}
@@ -755,11 +770,11 @@ export default function BTCSpotScalper({
                             >
                               <span
                                 className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-                                style={{ background: pnlPositive ? "var(--green)" : "var(--red)" }}
+                                style={{ background: displayPnL >= 0 ? "var(--green)" : "var(--red)" }}
                               />
                               <span
                                 className="relative inline-flex h-2.5 w-2.5 rounded-full"
-                                style={{ background: pnlPositive ? "var(--green)" : "var(--red)" }}
+                                style={{ background: displayPnL >= 0 ? "var(--green)" : "var(--red)" }}
                               />
                             </span>
                             <div>
@@ -799,7 +814,7 @@ export default function BTCSpotScalper({
                         <td className="px-4 py-4 text-right">
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="font-mono text-sm font-medium" style={{ color: pnlPositive ? "#137333" : "#c5221f" }}>
-                              {fmtUSD(p.unrealizedPnl, { signed: true })}
+                              {fmtUSD(displayPnL, { signed: true })}
                             </span>
                             <span className="font-mono text-[10px]" style={{ color: pnlPositive ? "#34a853" : "#ea4335" }}>
                               {p.returnPct >= 0 ? "+" : "−"}{Math.abs(p.returnPct).toFixed(2)}%
@@ -810,7 +825,7 @@ export default function BTCSpotScalper({
                           <div className="ml-auto">
                             <PositionProgressBar
                               returnPct={p.returnPct}
-                              unrealizedPnl={p.unrealizedPnl}
+                              unrealizedPnl={displayPnL}
                               entryPrice={p.entryPrice}
                               tpPrice={p.tpPrice}
                               slPrice={p.slPrice}
