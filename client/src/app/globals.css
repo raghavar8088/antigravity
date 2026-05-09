@@ -136,6 +136,10 @@ img {
   align-items: start;
 }
 
+.workspace-shell--no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* ── Gmail-style Sidebar ─────────────────────────────────────────────── */
 .workspace-sidebar {
   position: sticky;
@@ -331,7 +335,8 @@ img {
 }
 
 @media (max-width: 1180px) {
-  .workspace-shell {
+  .workspace-shell,
+  .workspace-shell--no-sidebar {
     grid-template-columns: 1fr;
   }
 

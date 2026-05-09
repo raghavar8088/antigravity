@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
 import ActivityFeed from "@/components/ActivityFeed";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -1168,49 +1167,7 @@ export default function TradingDashboard({
         <div className="milestone-toast">{milestoneToast}</div>
       )}
 
-      <div className="workspace-shell">
-        <aside className="workspace-sidebar">
-          <div className="workspace-sidebar-header">
-            <div className="workspace-sidebar-eyebrow">Navigation</div>
-            <div className="workspace-sidebar-title">Workspaces</div>
-          </div>
-
-          <div className="workspace-route-list">
-            {WORKSPACE_PRESETS.map((preset) => {
-              const active = activeModule === preset.module;
-              return (
-                <Link
-                  key={preset.path}
-                  href={preset.path}
-                  className={`workspace-route-card${active ? " active" : ""}`}
-                >
-                  <div className="workspace-route-label">{preset.label}</div>
-                  <div className="workspace-route-copy">{preset.description}</div>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div style={{ marginTop: "auto", padding: "12px" }}>
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: "var(--radius-card)",
-                background: "var(--accent-dim)",
-                fontSize: 12,
-                color: "var(--accent)",
-                fontFamily: "var(--font-display)",
-                fontWeight: 500,
-              }}
-            >
-              {activePreset.label}
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontWeight: 400 }}>
-                {activePreset.description}
-              </div>
-            </div>
-          </div>
-        </aside>
-
+      <div className="workspace-shell workspace-shell--no-sidebar">
         <div className="workspace-main" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {optionsModuleActive ? (
         <OptionsAccountHeader
