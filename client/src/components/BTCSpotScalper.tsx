@@ -118,13 +118,14 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
-function PositionProgressBar({ returnPct, unrealizedPnl, entryPrice, tpPrice, slPrice, currentPrice, side }: {
+function PositionProgressBar({ returnPct, unrealizedPnl, entryPrice, tpPrice, slPrice, currentPrice, quantity, side }: {
   returnPct: number;
   unrealizedPnl: number;
   entryPrice: number;
   tpPrice: number;
   slPrice: number;
   currentPrice: number;
+  quantity: number;
   side: "LONG" | "SHORT";
 }) {
   const positive = returnPct >= 0;
@@ -140,111 +141,104 @@ function PositionProgressBar({ returnPct, unrealizedPnl, entryPrice, tpPrice, sl
   }
 
   const isLeftOfEntry = currentPosition < 50;
-  const progressFromEntry = Math.abs(currentPosition - 50) / 50; // 0 at entry, 1 at target
+  const progressFromEntry = Math.abs(currentPosition - 50) / 50;
+
+  // Calculate PNL at SL and TP
+  const notional = entryPrice * quantity;
+  const slReturnPct = side === "LONG" ? ((slPrice - entryPrice) / entryPrice) * 100 : ((entryPrice - slPrice) / entryPrice) * 100;
+  const tpReturnPct = side === "LONG" ? ((tpPrice - entryPrice) / entryPrice) * 100 : ((entryPrice - tpPrice) / entryPrice) * 100;
+  const pnlAtSl = notional * (slReturnPct / 100);
+  const pnlAtTp = notional * (tpReturnPct / 100);
 
   return (
-    <div className="w-56">
-      {/* Header: Status Badge + PNL Values */}
-      <div className="flex items-center justify-between mb-2">
-        <div
-          className="flex items-center gap-1.5 px-2 py-1 rounded-md font-bold text-[10px] uppercase tracking-wider"
-          style={{
-            background: positive ? "rgba(34,197,94,0.12)" : "rgba(244,63,94,0.12)",
-            color: positive ? "#16a34a" : "#dc2626",
-            border: `1px solid ${positive ? "rgba(34,197,94,0.3)" : "rgba(244,63,94,0.3)"}`,
-          }}
-        >
-          <span>{positive ? "▲" : "▼"}</span>
-          <span>{positive ? "GAIN" : "LOSS"}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-sm font-bold tabular-nums" style={{ color: positive ? "#16a34a" : "#dc2626" }}>
-            {unrealizedPnl >= 0 ? "+" : "-"}${Math.abs(unrealizedPnl).toFixed(2)}
+    <div className="w-64">
+      {/* Google-style clean header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="px-2 py-0.5 rounded-sm text-[10px] font-medium"
+            style={{
+              background: positive ? "#e6f4ea" : "#fce8e8",
+              color: positive ? "#137333" : "#c5221f",
+            }}
+          >
+            {positive ? "+" : "−"}{Math.abs(returnPct).toFixed(2)}%
           </span>
-          <span className="font-mono text-xs font-semibold tabular-nums px-2 py-0.5 rounded" style={{ background: positive ? "rgba(34,197,94,0.1)" : "rgba(244,63,94,0.1)", color: positive ? "#15803d" : "#b91c1c" }}>
-            {returnPct >= 0 ? "+" : "-"}{Math.abs(returnPct).toFixed(3)}%
+          <span className="font-mono text-sm font-medium" style={{ color: positive ? "#137333" : "#c5221f" }}>
+            {unrealizedPnl >= 0 ? "+" : "−"}${Math.abs(unrealizedPnl).toFixed(2)}
           </span>
         </div>
       </div>
 
-      {/* Target Labels Row */}
-      <div className="flex justify-between items-center text-[10px] font-semibold uppercase tracking-wider mb-1">
-        <span style={{ color: "#dc2626" }}>▼ SL LOSS</span>
-        <span style={{ color: "#16a34a" }}>▲ TP PROFIT</span>
-      </div>
-
-      {/* Progress Track */}
-      <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, #fee2e2 0%, #fef3c7 45%, #d1fae5 55%, #dcfce7 100%)" }}>
-        {/* Zone dividers */}
-        <div className="absolute top-0 bottom-0 w-px bg-white/50 z-10" style={{ left: "20%" }} />
-        <div className="absolute top-0 bottom-0 w-px bg-white/50 z-10" style={{ left: "40%" }} />
-        <div className="absolute top-0 bottom-0 w-px bg-white/50 z-10" style={{ left: "60%" }} />
-        <div className="absolute top-0 bottom-0 w-px bg-white/50 z-10" style={{ left: "80%" }} />
-
-        {/* Entry marker (center) */}
-        <div className="absolute top-0 bottom-0 w-1 bg-zinc-800 z-20" style={{ left: "50%" }} />
-
-        {/* Current position indicator - a dot on the track */}
+      {/* Minimal progress bar - Google style */}
+      <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden mb-3">
+        {/* SL zone (left, red tint) */}
+        <div className="absolute top-0 bottom-0 left-0 w-[45%] bg-red-50" />
+        {/* TP zone (right, green tint) */}
+        <div className="absolute top-0 bottom-0 right-0 w-[45%] bg-green-50" />
+        {/* Entry marker */}
+        <div className="absolute top-0 bottom-0 w-0.5 bg-gray-600 z-10" style={{ left: "50%" }} />
+        {/* Progress indicator */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white shadow-md z-30 transition-all duration-300"
-          style={{
-            left: `calc(${currentPosition}% - 6px)`,
-            background: positive
-              ? intense ? "#16a34a" : "#22c55e"
-              : intense ? "#dc2626" : "#f43f5e",
-            boxShadow: intense
-              ? positive ? "0 0 10px rgba(34,197,94,0.6)" : "0 0 10px rgba(220,38,38,0.6)"
-              : "0 2px 4px rgba(0,0,0,0.2)",
-          }}
-        />
-
-        {/* Progress fill from entry to current */}
-        <div
-          className="absolute top-0 bottom-0 transition-all duration-300"
+          className="absolute top-0 bottom-0 rounded-full transition-all duration-300"
           style={{
             left: isLeftOfEntry ? `${currentPosition}%` : "50%",
             right: isLeftOfEntry ? "50%" : `${100 - currentPosition}%`,
-            background: positive
-              ? "linear-gradient(90deg, rgba(34,197,94,0.3) 0%, rgba(34,197,94,0.5) 100%)"
-              : "linear-gradient(90deg, rgba(244,63,94,0.5) 0%, rgba(244,63,94,0.3) 100%)",
+            background: positive ? "#34a853" : "#ea4335",
+          }}
+        />
+        {/* Current position dot */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white shadow-sm z-20"
+          style={{
+            left: `calc(${currentPosition}% - 5px)`,
+            background: positive ? "#137333" : "#c5221f",
+            boxShadow: intense ? `0 0 8px ${positive ? "#34a853" : "#ea4335"}` : "0 1px 3px rgba(0,0,0,0.2)",
           }}
         />
       </div>
 
-      {/* Price Scale */}
-      <div className="flex justify-between mt-1.5">
-        <div className="text-left">
-          <div className="font-mono text-[10px] font-semibold" style={{ color: "#dc2626" }}>
+      {/* Three-column layout: SL | Entry | TP */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {/* SL Column */}
+        <div className="p-2 rounded-lg" style={{ background: "#fef2f2" }}>
+          <div className="text-[9px] uppercase tracking-wide font-medium mb-1" style={{ color: "#991b1b" }}>Stop Loss</div>
+          <div className="font-mono text-[11px] font-semibold" style={{ color: "#dc2626" }}>
             {slPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-        </div>
-        <div className="text-center px-2">
-          <div className="font-mono text-[10px] font-bold" style={{ color: "var(--text-secondary)" }}>
-            Entry {entryPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div className="font-mono text-[10px] font-medium mt-1" style={{ color: "#dc2626" }}>
+            −${Math.abs(pnlAtSl).toFixed(2)}
           </div>
         </div>
-        <div className="text-right">
-          <div className="font-mono text-[10px] font-semibold" style={{ color: "#16a34a" }}>
+
+        {/* Entry Column */}
+        <div className="p-2 rounded-lg" style={{ background: "#f3f4f6" }}>
+          <div className="text-[9px] uppercase tracking-wide font-medium mb-1" style={{ color: "#4b5563" }}>Entry</div>
+          <div className="font-mono text-[11px] font-semibold" style={{ color: "#374151" }}>
+            {entryPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="font-mono text-[10px] font-medium mt-1" style={{ color: "#6b7280" }}>
+            {currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+        </div>
+
+        {/* TP Column */}
+        <div className="p-2 rounded-lg" style={{ background: "#f0fdf4" }}>
+          <div className="text-[9px] uppercase tracking-wide font-medium mb-1" style={{ color: "#166534" }}>Take Profit</div>
+          <div className="font-mono text-[11px] font-semibold" style={{ color: "#16a34a" }}>
             {tpPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div className="font-mono text-[10px] font-medium mt-1" style={{ color: "#16a34a" }}>
+            +${pnlAtTp.toFixed(2)}
           </div>
         </div>
       </div>
 
-      {/* Current Price Pill */}
+      {/* Progress to target */}
       <div className="flex justify-center mt-2">
-        <div
-          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold"
-          style={{
-            background: positive ? "rgba(34,197,94,0.1)" : "rgba(244,63,94,0.1)",
-            color: positive ? "#16a34a" : "#dc2626",
-            border: `1px solid ${positive ? "rgba(34,197,94,0.2)" : "rgba(244,63,94,0.2)"}`,
-          }}
-        >
-          <span>Current</span>
-          <span className="font-bold">{currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          <span style={{ opacity: 0.7 }}>{isLeftOfEntry ? "←" : "→"}</span>
-          <span style={{ opacity: 0.7 }}>{(progressFromEntry * 100).toFixed(0)}%</span>
-        </div>
+        <span className="text-[10px] text-gray-500">
+          {isLeftOfEntry ? "Towards SL" : "Towards TP"} · {(progressFromEntry * 100).toFixed(0)}% complete
+        </span>
       </div>
     </div>
   );
@@ -747,19 +741,11 @@ export default function BTCSpotScalper({
                     return (
                       <tr
                         key={p.id}
-                        className="group transition-all duration-200"
+                        className="group transition-all duration-200 hover:bg-gray-50"
                         style={{
-                          borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
+                          borderTop: idx === 0 ? "none" : "1px solid #e5e7eb",
                           background: "transparent",
-                          borderLeft: `4px solid ${pnlPositive ? "#22c55e" : "#ef4444"}`,
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = pnlPositive
-                            ? "rgba(34,197,94,0.04)"
-                            : "rgba(244,63,94,0.04)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = "transparent";
+                          borderLeft: `3px solid ${pnlPositive ? "#34a853" : "#ea4335"}`,
                         }}
                       >
                         <td className="px-5 py-4">
@@ -811,19 +797,12 @@ export default function BTCSpotScalper({
                           </div>
                         </td>
                         <td className="px-4 py-4 text-right">
-                          <div className="inline-flex flex-col items-end gap-1">
-                            <div
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-xs font-bold tabular-nums"
-                              style={{
-                                background: pnlPositive ? "rgba(34,197,94,0.1)" : "rgba(244,63,94,0.1)",
-                                color: pnlPositive ? "#16a34a" : "#dc2626",
-                              }}
-                            >
-                              <span>{pnlPositive ? "▲" : "▼"}</span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-mono text-sm font-medium" style={{ color: pnlPositive ? "#137333" : "#c5221f" }}>
                               {fmtUSD(p.unrealizedPnl, { signed: true })}
-                            </div>
-                            <span className="font-mono text-[10px] font-medium tabular-nums" style={{ color: pnlPositive ? "#22c55e" : "#f87171" }}>
-                              {fmtPct(p.returnPct, true)}
+                            </span>
+                            <span className="font-mono text-[10px]" style={{ color: pnlPositive ? "#34a853" : "#ea4335" }}>
+                              {p.returnPct >= 0 ? "+" : "−"}{Math.abs(p.returnPct).toFixed(2)}%
                             </span>
                           </div>
                         </td>
@@ -836,6 +815,7 @@ export default function BTCSpotScalper({
                               tpPrice={p.tpPrice}
                               slPrice={p.slPrice}
                               currentPrice={p.currentPrice}
+                              quantity={p.quantity}
                               side={p.side}
                             />
                           </div>
