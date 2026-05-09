@@ -118,54 +118,100 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
-function PositionProgressBar({ returnPct }: { returnPct: number }) {
-  const scaleTargetPct = 0.35;
+function PositionProgressBar({ returnPct, unrealizedPnl }: { returnPct: number; unrealizedPnl: number }) {
+  const scaleTargetPct = 0.50;
   const width = Math.min(100, Math.max(3, (Math.abs(returnPct) / scaleTargetPct) * 100));
   const positive = returnPct >= 0;
-  const intense = Math.abs(returnPct) >= 0.10;
+  const intense = Math.abs(returnPct) >= 0.15;
+  const nearTarget = Math.abs(returnPct) >= 0.35;
+
   return (
-    <div className="w-32">
-      <div className="flex items-center justify-between mb-1.5">
+    <div className="w-40">
+      {/* Top row: Badge + Values */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        {/* GAIN / LOSS Badge */}
         <span
-          className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: positive ? "var(--green)" : "var(--red)" }}
-        >
-          {positive ? "Gain" : "Loss"}
-        </span>
-        <span
-          className="font-mono text-[11px] font-bold tabular-nums"
-          style={{ color: positive ? "var(--green)" : "var(--red)" }}
-        >
-          {fmtPct(returnPct, true)}
-        </span>
-      </div>
-      <div
-        className="relative h-2.5 w-full overflow-hidden rounded-full"
-        style={{ background: positive ? "rgba(24,128,56,0.08)" : "rgba(217,48,37,0.08)" }}
-      >
-        <div
-          className="h-full rounded-full transition-all duration-500 ease-out"
+          className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.15em]"
           style={{
-            width: `${width}%`,
             background: positive
-              ? "linear-gradient(90deg, #22c55e 0%, #10b981 100%)"
-              : "linear-gradient(90deg, #f43f5e 0%, #ef4444 100%)",
-            boxShadow: intense
-              ? positive ? "0 0 8px rgba(34,197,94,0.4)" : "0 0 8px rgba(244,63,94,0.4)"
-              : "none",
+              ? nearTarget ? "rgba(22,163,74,0.15)" : "rgba(34,197,94,0.12)"
+              : nearTarget ? "rgba(220,38,38,0.15)" : "rgba(244,63,94,0.12)",
+            color: positive ? "#16a34a" : "#dc2626",
+            border: `1px solid ${positive ? "rgba(34,197,94,0.25)" : "rgba(244,63,94,0.25)"}`,
           }}
-        />
+        >
+          {positive ? "▲ GAIN" : "▼ LOSS"}
+        </span>
+
+        {/* Values: USD + Percentage */}
+        <div className="flex items-center gap-2">
+          {/* USD Value */}
+          <span
+            className="font-mono text-[11px] font-bold tabular-nums"
+            style={{ color: positive ? "#16a34a" : "#dc2626" }}
+          >
+            {unrealizedPnl >= 0 ? "+" : "-"}${Math.abs(unrealizedPnl).toFixed(2)}
+          </span>
+          {/* Percentage */}
+          <span
+            className="font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded"
+            style={{
+              background: positive ? "rgba(34,197,94,0.08)" : "rgba(244,63,94,0.08)",
+              color: positive ? "#15803d" : "#b91c1c",
+            }}
+          >
+            {returnPct >= 0 ? "+" : "-"}{Math.abs(returnPct).toFixed(3)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div
+        className="relative h-2 w-full overflow-hidden rounded-full"
+        style={{ background: positive ? "rgba(34,197,94,0.10)" : "rgba(244,63,94,0.10)" }}
+      >
+        {/* Glow effect for intense moves */}
         {intense && (
           <div
             className="absolute inset-0 rounded-full animate-pulse"
             style={{
-              width: `${width}%`,
               background: positive
-                ? "linear-gradient(90deg, transparent, rgba(34,197,94,0.15))"
-                : "linear-gradient(90deg, transparent, rgba(244,63,94,0.15))",
+                ? "radial-gradient(circle, rgba(34,197,94,0.3) 0%, transparent 70%)"
+                : "radial-gradient(circle, rgba(244,63,94,0.3) 0%, transparent 70%)",
             }}
           />
         )}
+        {/* Main bar */}
+        <div
+          className="h-full rounded-full transition-all duration-300 ease-out relative"
+          style={{
+            width: `${width}%`,
+            background: positive
+              ? intense
+                ? "linear-gradient(90deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
+                : "linear-gradient(90deg, #4ade80 0%, #22c55e 100%)"
+              : intense
+                ? "linear-gradient(90deg, #f87171 0%, #dc2626 50%, #b91c1c 100%)"
+                : "linear-gradient(90deg, #fb7185 0%, #f43f5e 100%)",
+            boxShadow: intense
+              ? positive ? "0 0 10px rgba(34,197,94,0.5)" : "0 0 10px rgba(220,38,38,0.5)"
+              : "none",
+          }}
+        >
+          {/* Shine effect */}
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 50%)",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Mini labels */}
+      <div className="flex justify-between mt-1">
+        <span className="text-[8px] text-zinc-400 uppercase tracking-wider">Entry</span>
+        <span className="text-[8px] text-zinc-400 uppercase tracking-wider">{nearTarget ? (positive ? "Near TP" : "Near SL") : "Target"}</span>
       </div>
     </div>
   );
@@ -668,22 +714,23 @@ export default function BTCSpotScalper({
                     return (
                       <tr
                         key={p.id}
-                        className="group transition-colors duration-150"
+                        className="group transition-all duration-200"
                         style={{
                           borderTop: idx === 0 ? "none" : "1px solid var(--border-subtle)",
                           background: pnlPositive
-                            ? "rgba(24,128,56,0.02)"
-                            : "rgba(217,48,37,0.02)",
+                            ? "linear-gradient(90deg, rgba(34,197,94,0.03) 0%, transparent 15%)"
+                            : "linear-gradient(90deg, rgba(244,63,94,0.03) 0%, transparent 15%)",
+                          borderLeft: `3px solid ${pnlPositive ? "#22c55e" : "#f43f5e"}`,
                         }}
                         onMouseEnter={(e) => {
                           (e.currentTarget as HTMLElement).style.background = pnlPositive
-                            ? "rgba(24,128,56,0.06)"
-                            : "rgba(217,48,37,0.06)";
+                            ? "linear-gradient(90deg, rgba(34,197,94,0.08) 0%, rgba(34,197,94,0.02) 20%, transparent 100%)"
+                            : "linear-gradient(90deg, rgba(244,63,94,0.08) 0%, rgba(244,63,94,0.02) 20%, transparent 100%)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.background = pnlPositive
-                            ? "rgba(24,128,56,0.02)"
-                            : "rgba(217,48,37,0.02)";
+                            ? "linear-gradient(90deg, rgba(34,197,94,0.03) 0%, transparent 15%)"
+                            : "linear-gradient(90deg, rgba(244,63,94,0.03) 0%, transparent 15%)";
                         }}
                       >
                         <td className="px-5 py-4">
@@ -736,24 +783,34 @@ export default function BTCSpotScalper({
                         </td>
                         <td className="px-4 py-4 text-right">
                           <div
-                            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-xs font-bold tabular-nums"
-                            style={{
-                              background: pnlPositive ? "rgba(24,128,56,0.10)" : "rgba(217,48,37,0.10)",
-                              color: pnlPositive ? "var(--green)" : "var(--red)",
-                            }}
+                            className="inline-flex flex-col items-end gap-0.5"
                           >
-                            <span
-                              className="text-[9px]"
-                              style={{ lineHeight: 1 }}
+                            {/* Main USD Value */}
+                            <div
+                              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-mono text-xs font-bold tabular-nums"
+                              style={{
+                                background: pnlPositive
+                                  ? "linear-gradient(135deg, rgba(34,197,94,0.12) 0%, rgba(22,163,74,0.08) 100%)"
+                                  : "linear-gradient(135deg, rgba(244,63,94,0.12) 0%, rgba(220,38,38,0.08) 100%)",
+                                color: pnlPositive ? "#16a34a" : "#dc2626",
+                                border: `1px solid ${pnlPositive ? "rgba(34,197,94,0.2)" : "rgba(244,63,94,0.2)"}`,
+                              }}
                             >
-                              {pnlPositive ? "▲" : "▼"}
+                              <span className="text-[10px]">{pnlPositive ? "▲" : "▼"}</span>
+                              {fmtUSD(p.unrealizedPnl, { signed: true })}
+                            </div>
+                            {/* Percentage subtext */}
+                            <span
+                              className="font-mono text-[10px] font-medium tabular-nums"
+                              style={{ color: pnlPositive ? "#22c55e" : "#f87171" }}
+                            >
+                              {fmtPct(p.returnPct, true)}
                             </span>
-                            {fmtUSD(p.unrealizedPnl, { signed: true })}
                           </div>
                         </td>
                         <td className="px-5 py-4">
                           <div className="ml-auto">
-                            <PositionProgressBar returnPct={p.returnPct} />
+                            <PositionProgressBar returnPct={p.returnPct} unrealizedPnl={p.unrealizedPnl} />
                           </div>
                         </td>
                       </tr>
