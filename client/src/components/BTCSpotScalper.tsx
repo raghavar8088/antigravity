@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import { formatShortDate, formatShortTime } from "@/lib/time";
 import {
@@ -185,6 +185,73 @@ function formatSavedAgo(ts: number | null): string {
   const m = Math.floor(sec / 60);
   if (m < 60) return `${m}m ago`;
   return `${Math.floor(m / 60)}h ago`;
+}
+
+function TradingViewChart() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = "";
+
+    const widgetDiv = document.createElement("div");
+    widgetDiv.className = "tradingview-widget-container__widget";
+    container.appendChild(widgetDiv);
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol: "BINANCE:BTCUSDT",
+      interval: "1",
+      timezone: "Asia/Kolkata",
+      theme: "light",
+      style: "1",
+      locale: "en",
+      allow_symbol_change: false,
+      calendar: false,
+      support_host: "https://www.tradingview.com",
+      hide_top_toolbar: false,
+      hide_legend: false,
+      save_image: false,
+      withdateranges: false,
+      hide_side_toolbar: true,
+      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+      show_popup_button: false,
+    });
+    container.appendChild(script);
+    scriptRef.current = script;
+
+    return () => {
+      if (container) container.innerHTML = "";
+    };
+  }, []);
+
+  return (
+    <div
+      className="glass-panel overflow-hidden"
+      style={{ height: 420, borderRadius: 16 }}
+    >
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            BTC / USDT · Live 1m Chart
+          </span>
+        </div>
+        <span className="text-[10px] text-zinc-400">via TradingView · Binance feed</span>
+      </div>
+      <div
+        className="tradingview-widget-container"
+        ref={containerRef}
+        style={{ height: 368, width: "100%" }}
+      />
+    </div>
+  );
 }
 
 function QuoteHero({ quote, marketRegime }: { quote: BTCSpotQuote; marketRegime: string }) {
@@ -493,6 +560,8 @@ export default function BTCSpotScalper({
 
         <QuoteHero quote={quote} marketRegime={stats.marketRegime} />
       </div>
+
+      <TradingViewChart />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <CompactMetric
