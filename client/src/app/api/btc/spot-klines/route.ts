@@ -76,6 +76,7 @@ export async function GET(): Promise<Response> {
     const rows = [...candlesJson.result].sort((a, b) => n(a.time) - n(b.time));
     const closes: number[] = [];
     const volumes: number[] = [];
+    const candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[] = [];
 
     for (const row of rows) {
       const close = n(row.close);
@@ -83,6 +84,14 @@ export async function GET(): Promise<Response> {
       if (close > 0) {
         closes.push(close);
         volumes.push(vol);
+        candles.push({
+          time: n(row.time),
+          open: n(row.open) || close,
+          high: n(row.high) || close,
+          low: n(row.low) || close,
+          close,
+          volume: vol,
+        });
       }
     }
 
@@ -113,6 +122,7 @@ export async function GET(): Promise<Response> {
       ok: true,
       closes,
       volumes,
+      candles,
       lastPrice,
       livePrice,
       changePct24h,
