@@ -616,19 +616,28 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		return
 	}
 
-	// RECEIVE premium as a seller (less fees)
+	// DELTA EXCHANGE MARGIN MODEL:
+	// 1. Margin is locked (not deducted from balance, but reserved)
+	// 2. Premium is received immediately (net of fees)
+	// 3. Balance shows available funds; margin is tracked separately
 	notional := pos.EntryPremium * pos.Quantity
 	fees := notional * ROUND_TRIP_FEE_PCT
-	// Credit net premium received after fees
+	marginRequired := pos.Strike * pos.Quantity * DELTA_MARGIN_PCT
+
+	// Credit net premium received (Delta adds this to available balance)
 	e.balance += notional - fees
+
+	// Track margin used (for Delta live bridge)
+	pos.MarginBlocked = marginRequired
+
 	s.position = pos
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.2f | Notional: $%.2f | Fees: $%.2f | Balance: $%.0f",
-		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, notional, fees, e.balance)
+	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.0f | Notional: $%.2f | Fees: $%.2f | Margin: $%.2f | Balance: $%.0f",
+		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, notional, fees, marginRequired, e.balance)
 
 	// Fire Delta live bridge hook (non-blocking, outside lock)
 	if hook := e.onOpenHook; hook != nil {
@@ -700,13 +709,21 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
-	// Cap quantity to prevent lot sizing explosion
-	quantity := positionUSD / pr.Premium
-	if quantity <= 0 {
-		return nil
+	// Delta Exchange realistic retail sizing: fixed quantity with multipliers
+	// Not inverse-premium (which created absurd sizes for cheap options)
+	baseQty := float64(DELTA_BASE_QUANTITY)
+	quantity := baseQty * mul
+	if quantity < DELTA_MIN_QUANTITY {
+		quantity = DELTA_MIN_QUANTITY
 	}
-	if quantity > MAX_OPTION_QUANTITY {
-		quantity = MAX_OPTION_QUANTITY
+	if quantity > DELTA_MAX_QUANTITY {
+		quantity = DELTA_MAX_QUANTITY
+	}
+
+	// Check margin requirement (20% of strike value)
+	marginRequired := strike * quantity * DELTA_MARGIN_PCT
+	if marginRequired > e.balance {
+		return nil // insufficient margin
 	}
 
 	e.tradeSeq++
@@ -814,10 +831,13 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
 	}
 
-	// BUY back to close: balance decreases by current market value
-	// We received (notional - fees) at open, now paying (exitPremium * qty)
-	// Net balance impact: - (exitPremium * qty)
-	e.balance -= pos.CurrentPremium * pos.Quantity
+	// DELTA CLOSE: Buy back to close
+	// 1. Pay exit premium * quantity
+	// 2. Margin is released (added back to available balance)
+	// 3. Net PnL = received - paid (already computed)
+	exitCost := pos.CurrentPremium * pos.Quantity
+	e.balance -= exitCost
+	// Margin is now released (implicitly, since position is gone)
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,

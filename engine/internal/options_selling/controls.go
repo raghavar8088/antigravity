@@ -42,19 +42,26 @@ const (
 	optionLateExitMinGain         = 0.05
 	optionStrikePressureBuffer    = 0.0025
 
-	optionColdStartSizeMultiplier = 0.95
-	optionMinSizeMultiplier       = 0.45
-	optionMaxSizeMultiplier       = 1.30
-	optionEarlyMaxMultiplier      = 1.15
+	optionColdStartSizeMultiplier = 0.80
+	optionMinSizeMultiplier       = 0.50
+	optionMaxSizeMultiplier       = 1.50
+	optionEarlyMaxMultiplier      = 1.10
 
 	// Bid-ask spread for short options — you receive less (bid) when opening and pay more (ask) when closing
 	BID_ASK_SPREAD_FRAC = 0.015 // 1.5% spread on premium
 
-	// Maximum quantity per position to prevent lot sizing explosion
-	MAX_OPTION_QUANTITY = 1000
+	// Delta Exchange realistic retail position limits
+	// Base quantity for retail: 100-500 contracts depending on account tier
+	DELTA_BASE_QUANTITY        = 200  // 200 contracts base (retail tier)
+	DELTA_MAX_QUANTITY         = 500  // 500 contracts max (capped for retail)
+	DELTA_MIN_QUANTITY         = 50   // minimum 50 contracts
 
 	// Round-trip fee on notional (conservative for short options)
 	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
+
+	// Delta Exchange margin requirement simulation (conservative)
+	// Short options require ~15-20% of strike value as margin
+	DELTA_MARGIN_PCT = 0.20 // 20% of strike value
 
 	// Daily loss limit: halt new opens after 3% of day-start balance (like buyer module)
 	sellerDailyLossLimitPct = 0.03

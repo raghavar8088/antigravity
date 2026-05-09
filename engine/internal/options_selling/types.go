@@ -48,6 +48,7 @@ type OptionPosition struct {
 	CurrentPremium float64    `json:"currentPremium"`
 	Quantity       float64    `json:"quantity"`
 	CostBasis      float64    `json:"costBasis"`
+	MarginBlocked  float64    `json:"marginBlocked"` // Delta Exchange margin requirement
 	EntryBTCPrice  float64    `json:"entryBtcPrice"`
 	EntryTime      time.Time  `json:"entryTime"`
 	UnrealizedPnL  float64    `json:"unrealizedPnl"`
