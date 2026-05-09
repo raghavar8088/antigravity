@@ -118,18 +118,40 @@ function ExitBadge({ reason }: { reason: string }) {
   );
 }
 
-function PositionProgressBar({ returnPct, unrealizedPnl }: { returnPct: number; unrealizedPnl: number }) {
-  const scaleTargetPct = 0.50;
-  const width = Math.min(100, Math.max(3, (Math.abs(returnPct) / scaleTargetPct) * 100));
+function PositionProgressBar({ returnPct, unrealizedPnl, entryPrice, tpPrice, slPrice, currentPrice, side }: {
+  returnPct: number;
+  unrealizedPnl: number;
+  entryPrice: number;
+  tpPrice: number;
+  slPrice: number;
+  currentPrice: number;
+  side: "LONG" | "SHORT";
+}) {
   const positive = returnPct >= 0;
   const intense = Math.abs(returnPct) >= 0.15;
   const nearTarget = Math.abs(returnPct) >= 0.35;
 
+  // Calculate position on the bar (0% = SL, 50% = Entry, 100% = TP)
+  const totalRange = Math.abs(tpPrice - slPrice);
+  const entryPosition = 50; // Entry is always at center
+  let currentPosition = 50;
+
+  if (totalRange > 0) {
+    // Calculate current price position relative to SL and TP
+    const slToCurrent = currentPrice - slPrice;
+    currentPosition = (slToCurrent / totalRange) * 100;
+    // Clamp between 0 and 100
+    currentPosition = Math.max(0, Math.min(100, currentPosition));
+  }
+
+  // Determine which side we're on
+  const isLeftOfEntry = currentPosition < 50;
+  const distanceFromEntry = Math.abs(currentPosition - 50);
+
   return (
-    <div className="w-40">
+    <div className="w-48">
       {/* Top row: Badge + Values */}
       <div className="flex items-center justify-between gap-2 mb-2">
-        {/* GAIN / LOSS Badge */}
         <span
           className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.15em]"
           style={{
@@ -142,76 +164,80 @@ function PositionProgressBar({ returnPct, unrealizedPnl }: { returnPct: number; 
         >
           {positive ? "▲ GAIN" : "▼ LOSS"}
         </span>
-
-        {/* Values: USD + Percentage */}
         <div className="flex items-center gap-2">
-          {/* USD Value */}
-          <span
-            className="font-mono text-[11px] font-bold tabular-nums"
-            style={{ color: positive ? "#16a34a" : "#dc2626" }}
-          >
+          <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: positive ? "#16a34a" : "#dc2626" }}>
             {unrealizedPnl >= 0 ? "+" : "-"}${Math.abs(unrealizedPnl).toFixed(2)}
           </span>
-          {/* Percentage */}
-          <span
-            className="font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded"
-            style={{
-              background: positive ? "rgba(34,197,94,0.08)" : "rgba(244,63,94,0.08)",
-              color: positive ? "#15803d" : "#b91c1c",
-            }}
-          >
+          <span className="font-mono text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded" style={{ background: positive ? "rgba(34,197,94,0.08)" : "rgba(244,63,94,0.08)", color: positive ? "#15803d" : "#b91c1c" }}>
             {returnPct >= 0 ? "+" : "-"}{Math.abs(returnPct).toFixed(3)}%
           </span>
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <div
-        className="relative h-2 w-full overflow-hidden rounded-full"
-        style={{ background: positive ? "rgba(34,197,94,0.10)" : "rgba(244,63,94,0.10)" }}
-      >
-        {/* Glow effect for intense moves */}
-        {intense && (
-          <div
-            className="absolute inset-0 rounded-full animate-pulse"
-            style={{
-              background: positive
-                ? "radial-gradient(circle, rgba(34,197,94,0.3) 0%, transparent 70%)"
-                : "radial-gradient(circle, rgba(244,63,94,0.3) 0%, transparent 70%)",
-            }}
-          />
-        )}
-        {/* Main bar */}
-        <div
-          className="h-full rounded-full transition-all duration-300 ease-out relative"
-          style={{
-            width: `${width}%`,
-            background: positive
-              ? intense
-                ? "linear-gradient(90deg, #22c55e 0%, #16a34a 50%, #15803d 100%)"
-                : "linear-gradient(90deg, #4ade80 0%, #22c55e 100%)"
-              : intense
-                ? "linear-gradient(90deg, #f87171 0%, #dc2626 50%, #b91c1c 100%)"
-                : "linear-gradient(90deg, #fb7185 0%, #f43f5e 100%)",
-            boxShadow: intense
-              ? positive ? "0 0 10px rgba(34,197,94,0.5)" : "0 0 10px rgba(220,38,38,0.5)"
-              : "none",
-          }}
-        >
-          {/* Shine effect */}
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 50%)",
-            }}
-          />
+      {/* Centered Progress Bar - Entry at center, SL left, TP right */}
+      <div className="relative">
+        {/* Labels above bar */}
+        <div className="flex justify-between text-[9px] font-semibold uppercase tracking-wider mb-1">
+          <span style={{ color: "#dc2626" }}>▼ SL Loss</span>
+          <span style={{ color: "#16a34a" }}>▲ TP Profit</span>
         </div>
-      </div>
 
-      {/* Mini labels */}
-      <div className="flex justify-between mt-1">
-        <span className="text-[8px] text-zinc-400 uppercase tracking-wider">Entry</span>
-        <span className="text-[8px] text-zinc-400 uppercase tracking-wider">{nearTarget ? (positive ? "Near TP" : "Near SL") : "Target"}</span>
+        {/* The Bar Container */}
+        <div className="relative h-3 w-full rounded-full overflow-hidden" style={{ background: "linear-gradient(90deg, rgba(244,63,94,0.15) 0%, rgba(244,63,94,0.05) 45%, rgba(34,197,94,0.05) 55%, rgba(34,197,94,0.15) 100%)" }}>
+          {/* Center Entry Marker Line */}
+          <div className="absolute top-0 bottom-0 w-0.5 bg-zinc-700 z-10" style={{ left: "50%" }} />
+
+          {/* Current Position Indicator */}
+          <div
+            className="absolute top-0 bottom-0 w-1 rounded-full transition-all duration-300 z-20"
+            style={{
+              left: `${currentPosition}%`,
+              transform: "translateX(-50%)",
+              background: positive
+                ? intense ? "linear-gradient(180deg, #16a34a 0%, #15803d 100%)" : "linear-gradient(180deg, #22c55e 0%, #16a34a 100%)"
+                : intense ? "linear-gradient(180deg, #dc2626 0%, #b91c1c 100%)" : "linear-gradient(180deg, #f43f5e 0%, #dc2626 100%)",
+              boxShadow: intense
+                ? positive ? "0 0 12px rgba(34,197,94,0.8), 0 0 4px rgba(34,197,94,0.5)" : "0 0 12px rgba(220,38,38,0.8), 0 0 4px rgba(220,38,38,0.5)"
+                : "0 0 6px rgba(0,0,0,0.2)",
+            }}
+          />
+
+          {/* Glow effect behind indicator */}
+          {intense && (
+            <div
+              className="absolute top-0 bottom-0 rounded-full animate-pulse z-10"
+              style={{
+                left: `${currentPosition}%`,
+                transform: "translateX(-50%)",
+                width: "20px",
+                background: positive
+                  ? "radial-gradient(circle, rgba(34,197,94,0.4) 0%, transparent 70%)"
+                  : "radial-gradient(circle, rgba(244,63,94,0.4) 0%, transparent 70%)",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Price Labels below bar */}
+        <div className="flex justify-between text-[9px] font-mono mt-1" style={{ color: "var(--text-muted)" }}>
+          <span>{slPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span className="font-semibold" style={{ color: "var(--text-secondary)" }}>Entry {entryPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span>{tpPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+
+        {/* Current Price indicator below entry */}
+        <div className="text-center mt-1">
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold"
+            style={{
+              background: positive ? "rgba(34,197,94,0.12)" : "rgba(244,63,94,0.12)",
+              color: positive ? "#16a34a" : "#dc2626",
+            }}
+          >
+            Current {currentPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {isLeftOfEntry ? " ←" : " →"}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -810,7 +836,15 @@ export default function BTCSpotScalper({
                         </td>
                         <td className="px-5 py-4">
                           <div className="ml-auto">
-                            <PositionProgressBar returnPct={p.returnPct} unrealizedPnl={p.unrealizedPnl} />
+                            <PositionProgressBar
+                              returnPct={p.returnPct}
+                              unrealizedPnl={p.unrealizedPnl}
+                              entryPrice={p.entryPrice}
+                              tpPrice={p.tpPrice}
+                              slPrice={p.slPrice}
+                              currentPrice={p.currentPrice}
+                              side={p.side}
+                            />
                           </div>
                         </td>
                       </tr>
