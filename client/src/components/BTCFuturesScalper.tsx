@@ -83,6 +83,29 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function CompactMetric({ label, value, detail, accent = "" }: {
+  label: string; value: string; detail?: string; accent?: string;
+}) {
+  return (
+    <div className="metric-card flex min-h-[104px] flex-col justify-between gap-3">
+      <div>
+        <div className="metric-label">{label}</div>
+        <div className={`metric-value ${accent}`}>{value}</div>
+      </div>
+      <div className="text-xs" style={{ color: "var(--text-secondary)", minHeight: 18 }}>{detail ?? ""}</div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className="summary-card flex min-h-[112px] flex-col justify-between gap-3">
+      <div className="summary-label">{label}</div>
+      <div className={`summary-value ${accent}`}>{value}</div>
+    </div>
+  );
+}
+
 // ========== PREMIUM BAR (Green/Red bars like options selling) ==========
 function PremiumBar({ progress, isPositive }: { progress: number; isPositive: boolean }) {
   const width = Math.min(100, Math.max(5, Math.abs(progress) * 2));
@@ -264,10 +287,10 @@ export function BTCFuturesScalper() {
       </div>
 
       {/* Main Equity Display */}
-      <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Left: Big Equity */}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5 lg:col-span-2">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+      <div className="mb-6 grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <div className="glass-panel relative overflow-hidden px-6 py-7 md:px-7">
+          <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
             BTC FUTURES SCALPER EQUITY
           </div>
           <div className="flex items-baseline gap-3">
@@ -283,7 +306,7 @@ export function BTCFuturesScalper() {
           </div>
 
           {quote && (
-            <div className="mt-4 flex items-center gap-4 border-t border-zinc-100 pt-3 text-xs">
+            <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-zinc-100 pt-3 text-xs">
               <span className="text-zinc-400">
                 BTC/USD <span className="font-mono text-zinc-900">${quote.markPrice.toLocaleString()}</span>
               </span>
@@ -299,75 +322,55 @@ export function BTCFuturesScalper() {
               </span>
             </div>
           )}
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <CompactMetric
+              label="Open Exposure"
+              value={`${stats.openPositions} positions`}
+              detail={`${longCount} long / ${shortCount} short`}
+              accent="text-zinc-900"
+            />
+            <CompactMetric
+              label="Session Runtime"
+              value={isReady ? "Live" : "Syncing"}
+              detail={`${strategyStatuses.length} strategies active`}
+              accent={isReady ? "text-emerald-600" : "text-amber-600"}
+            />
+            <CompactMetric
+              label="Last Closed Trade"
+              value={trades.length > 0 ? fmtUSD(sortedTrades[0].netPnl, { signed: true }) : "No exits yet"}
+              detail={trades.length > 0 ? sortedTrades[0].strategyName : "Waiting for first close"}
+              accent={trades.length > 0 && sortedTrades[0].netPnl >= 0 ? "text-emerald-600" : "text-zinc-900"}
+            />
+          </div>
         </div>
 
-        {/* Right: Session Stats */}
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="glass-panel px-5 py-6 md:px-6">
           <div className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             Equity And PnL
           </div>
-          <div className="space-y-3">
-            <div>
-              <div className="text-[10px] text-zinc-400">Account Equity</div>
-              <div className="text-lg font-bold text-zinc-900">{fmtUSD(equity)}</div>
-              <div className="text-[10px] text-zinc-400">Base $1,000.00</div>
-            </div>
-            <div className="border-t border-zinc-100 pt-3">
-              <div className="text-[10px] text-zinc-400">Net PnL</div>
-              <div className={`text-lg font-bold ${pnlPositive ? "text-emerald-600" : "text-rose-600"}`}>
-                {fmtUSD(sessionPnL, { signed: true })}
-              </div>
-              <div className="text-[10px] text-zinc-400">{fmtPct(totalReturn, true)} vs base</div>
-            </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <CompactMetric label="Account Equity" value={fmtUSD(equity)} detail="Base $1,000.00" accent="text-zinc-900" />
+            <CompactMetric label="Net PnL" value={fmtUSD(sessionPnL, { signed: true })} detail={`${fmtPct(totalReturn, true)} vs base`} accent={pnlPositive ? "text-emerald-600" : "text-rose-600"} />
+            <CompactMetric label="Closed PnL" value={fmtUSD(stats.netPnl, { signed: true })} detail={`${stats.totalTrades} completed trades`} accent={stats.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
+            <CompactMetric label="Unrealized" value={fmtUSD(totalUnrealized, { signed: true })} detail="Live open position PnL" accent={totalUnrealized >= 0 ? "text-emerald-600" : "text-rose-600"} />
           </div>
         </div>
       </div>
 
       {/* Compact Metric Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Win Rate</div>
-          <div className="text-xl font-bold text-zinc-900">{fmtPct(stats.winRate, false, 1)}</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Profit Factor</div>
-          <div className="text-xl font-bold text-zinc-900">{stats.profitFactor > 100 ? "∞" : stats.profitFactor.toFixed(2)}</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Trades</div>
-          <div className="text-xl font-bold text-zinc-900">{stats.totalTrades}</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Unrealized</div>
-          <div className={`text-xl font-bold ${totalUnrealized >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-            {fmtUSD(totalUnrealized, { signed: true })}
-          </div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Streak</div>
-          <div className="text-xl font-bold text-zinc-900">{stats.winCount}W</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Best Trade</div>
-          <div className="text-xl font-bold text-emerald-600">
-            {trades.length > 0 ? fmtUSD(Math.max(...trades.map(t => t.netPnl)), { signed: true }) : "$0.00"}
-          </div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Open Pos</div>
-          <div className="text-xl font-bold text-zinc-900">{stats.openPositions}</div>
-          <div className="text-[10px] text-zinc-400">{longCount} long / {shortCount} short</div>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Liq Risk</div>
-          <div className={`text-xl font-bold ${stats.liquidationRisk > 0 ? "text-rose-600" : "text-zinc-900"}`}>
-            {stats.liquidationRisk}
-          </div>
-        </div>
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-8">
+        <SummaryCard label="Win Rate" value={fmtPct(stats.winRate, false, 1)} accent="text-zinc-900" />
+        <SummaryCard label="Profit Factor" value={stats.profitFactor > 100 ? "∞" : stats.profitFactor.toFixed(2)} accent={stats.profitFactor >= 1 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Trades" value={`${stats.totalTrades}`} accent="text-zinc-900" />
+        <SummaryCard label="Unrealized" value={fmtUSD(totalUnrealized, { signed: true })} accent={totalUnrealized >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Streak" value={`${stats.winCount}W`} accent="text-amber-500" />
+        <SummaryCard label="Best Trade" value={trades.length > 0 ? fmtUSD(Math.max(...trades.map((t) => t.netPnl)), { signed: true }) : "$0.00"} accent="text-emerald-600" />
+        <SummaryCard label="Open Pos" value={`${stats.openPositions}`} accent="text-zinc-900" />
+        <SummaryCard label="Liq Risk" value={`${stats.liquidationRisk}`} accent={stats.liquidationRisk > 0 ? "text-rose-600" : "text-zinc-900"} />
       </div>
 
       {/* Open Positions */}
-      <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5">
+      <div className="mb-6 glass-panel px-5 py-6 md:px-6">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
@@ -452,7 +455,7 @@ export function BTCFuturesScalper() {
 
       {/* Daily PnL Ledger */}
       {trades.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="mb-6 glass-panel px-5 py-6 md:px-6">
           <div className="mb-4 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
             Daily PnL Ledger ({Object.keys(tradesByDay).length} trading days)
           </div>
@@ -491,7 +494,7 @@ export function BTCFuturesScalper() {
       )}
 
       {/* Strategy Leaderboard */}
-      <div className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5">
+      <div className="mb-6 glass-panel px-5 py-6 md:px-6">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
             Strategy Leaderboard ({strategyStatuses.length} strategies)
@@ -556,7 +559,7 @@ export function BTCFuturesScalper() {
 
       {/* Trade History */}
       {trades.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="glass-panel px-5 py-6 md:px-6">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="text-center">
