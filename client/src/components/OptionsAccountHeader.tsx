@@ -83,11 +83,12 @@ export default function OptionsAccountHeader({
         }}
       >
         {/* ── Left: Market Badge + Title ──────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 200, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flexShrink: 0 }}>
           <div
             style={{
-              width: 36,
-              height: 36,
+              width: brandLogoSrc ? 168 : 36,
+              height: brandLogoSrc ? 48 : 36,
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -101,9 +102,9 @@ export default function OptionsAccountHeader({
               <img
                 src={brandLogoSrc}
                 alt={brandLogoAlt}
-                width={36}
-                height={36}
-                style={{ width: "100%", height: "100%", objectFit: "contain", padding: 3 }}
+                width={168}
+                height={48}
+                style={{ width: "100%", height: "100%", objectFit: "contain", padding: "3px 6px" }}
               />
             ) : (
               <span

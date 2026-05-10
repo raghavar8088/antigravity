@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { resolveEngineApiUrl } from "@/lib/engineApi";
 
@@ -109,29 +108,24 @@ export default function DashboardHeader({
           height: "var(--header-height)",
         }}
       >
-        {/* ── Left: Logo + Title ──────────────────────────────────── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 200, flexShrink: 0 }}>
-          <div
+        {/* ── Left: Logo + Title (full wordmark — avoid tiny Next/Image thumbnail) ─ */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flexShrink: 0 }}>
+          <img
+            src="/branding/in-loop-logo.png"
+            alt="in.loop.com"
+            width={280}
+            height={56}
             style={{
-              width: 36,
-              height: 36,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "var(--radius-card)",
-              background: "var(--accent-dim)",
+              height: 52,
+              width: "auto",
+              maxWidth: "min(42vw, 280px)",
+              objectFit: "contain",
+              objectPosition: "left center",
+              flexShrink: 0,
+              display: "block",
             }}
-          >
-            <Image
-              src="/branding/in-loop-logo.png"
-              alt="in.loop.com"
-              width={22}
-              height={22}
-              priority
-              style={{ width: 22, height: 22, objectFit: "contain" }}
-            />
-          </div>
-          <div>
+          />
+          <div style={{ minWidth: 0 }}>
             <div
               style={{
                 fontFamily: "var(--font-display)",

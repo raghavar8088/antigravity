@@ -17,7 +17,7 @@ export default function AppBrandBar() {
         style={{
           maxWidth: 1680,
           margin: "0 auto",
-          padding: "10px 20px",
+          padding: "12px 20px",
           display: "flex",
           alignItems: "center",
           gap: 14,
@@ -27,9 +27,9 @@ export default function AppBrandBar() {
           src="/branding/in-loop-logo.png"
           alt="in.loop.com — autonomous trading in Indian and crypto markets"
           style={{
-            height: 44,
+            height: 64,
             width: "auto",
-            maxWidth: "min(100%, 520px)",
+            maxWidth: "min(100%, 900px)",
             objectFit: "contain",
             objectPosition: "left center",
           }}
