@@ -18,8 +18,6 @@ import OptionsSellingScalper from "@/components/OptionsSellingScalper";
 import BTCOptionChain from "@/components/BTCOptionChain";
 import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import Nifty50OptionSellingScalper from "@/components/Nifty50OptionSellingScalper";
-import Nifty50StocksScalper from "@/components/Nifty50StocksScalper";
-import MCXCommodityScalper from "@/components/MCXCommodityScalper";
 import NiftyBeesScalper from "@/components/NiftyBeesScalper";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
@@ -30,7 +28,6 @@ import useEngineState from "@/hooks/useEngineState";
 import useLiveBTCMarket from "@/hooks/useLiveBTCMarket";
 import useNiftyOptionsEngine from "@/hooks/useNiftyOptionsEngine";
 import useNiftyOptionsSellingEngine from "@/hooks/useNiftyOptionsSellingEngine";
-import useNiftyStocksEngine from "@/hooks/useNiftyStocksEngine";
 import useNiftyBeesEngine from "@/hooks/useNiftyBeesEngine";
 import useOptions from "@/hooks/useOptions";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
@@ -83,7 +80,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftySelling" | "niftyStocks" | "niftyBees" | "mcx" | "btcFuturesScalper";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftySelling" | "niftyBees" | "btcFuturesScalper";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -105,6 +102,8 @@ const REMOVED_MODULES = new Set<string>([
   "dashboard",
   "engine",
   "history",
+  "niftyStocks",
+  "mcx",
 ]);
 
 function sanitizeModule(module: DashboardModule): DashboardModule {
@@ -119,7 +118,6 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { path: "/crypto", label: "Crypto Workspace", description: "Jump straight into BTC options and futures desks.", group: "crypto", module: "options-selling" },
   { path: "/nifty-options", label: "NIFTY Options", description: "Dedicated route for the NIFTY 50 options workspace.", group: "india", module: "nifty" },
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
-  { path: "/mcx", label: "MCX Workspace", description: "Commodity-specific desk for Crude, Gold, Silver, Gas, and Copper.", group: "india", module: "mcx" },
   { path: "/nifty-bees", label: "Nifty BEES", description: "NSE ETF scalper on Angel/Yahoo live LTP with ₹10k paper and thirty strategies.", group: "india", module: "niftyBees" },
   { path: "/history", label: "Trade History", description: "Open the BTC options-selling workspace directly.", group: "crypto", module: "options-selling" },
   {
@@ -428,7 +426,6 @@ export default function TradingDashboard({
     barCount: niftySellingBarCount,
     enginePrice: niftySellingEnginePrice,
   } = useNiftyOptionsSellingEngine(resetRefreshKey);
-  const { quotes: niftyStockQuotes, positions: niftyStockPositions, trades: niftyStockTrades, strategies: niftyStockStrategies, stats: niftyStockStats, reset: niftyStockReset } = useNiftyStocksEngine();
   const {
     quote: niftyBeesQuote,
     positions: niftyBeesPositions,
@@ -930,7 +927,6 @@ export default function TradingDashboard({
   const btcOptionsSellingModuleActive = activeModule === "options-selling";
   const niftyOptionsModuleActive = activeModule === "nifty";
   const niftyOptionsSellingModuleActive = activeModule === "niftySelling";
-  const niftyStocksModuleActive = activeModule === "niftyStocks";
   const niftyBeesModuleActive = activeModule === "niftyBees";
   const optionsModuleActive = btcOptionsModuleActive || niftyOptionsModuleActive || btcOptionsSellingModuleActive || niftyOptionsSellingModuleActive;
   const selectedOptionsStats = btcOptionsSellingModuleActive ? optionSellingStats : niftyOptionsSellingModuleActive ? niftySellingStats : niftyOptionsModuleActive ? niftyOptionStats : optionStats;
@@ -963,11 +959,6 @@ export default function TradingDashboard({
     (btcOptionsSellingModuleActive && btcOptionsSellingDeskReachable) ||
     (niftyOptionsModuleActive && niftyOptionsDeskReachable) ||
     (niftyOptionsSellingModuleActive && niftyOptionsSellingDeskReachable);
-  // For NIFTY stocks: use client engine equity directly
-  const niftyStocksEquity = niftyStockStats?.equity ?? INITIAL_BALANCE;
-  const niftyStocksSessionPnl = niftyStocksEquity - INITIAL_BALANCE;
-  const niftyStocksOpenPositions = niftyStockPositions.length;
-  const niftyStocksOnline = niftyStockStats.lastUpdateAt > 0 || niftyStockPositions.length > 0;
   const INITIAL_BEES_BALANCE = 10_000;
   const niftyBeesEquity = niftyBeesStats?.equity ?? INITIAL_BEES_BALANCE;
   const niftyBeesSessionPnl = niftyBeesEquity - INITIAL_BEES_BALANCE;
@@ -1003,13 +994,6 @@ export default function TradingDashboard({
               description: `${strategy.category} · ${strategy.status}`,
               enabled: strategy.status !== "COOLING",
             }))
-          : niftyStocksModuleActive
-            ? niftyStockStrategies.slice(0, 10).map((strategy, index) => ({
-                id: String(strategy.id ?? `stocks-${index}`),
-                label: strategy.name,
-                description: `${strategy.category} · ${strategy.status}`,
-                enabled: strategy.status !== "COOLING",
-              }))
             : liveStrategies.slice(0, 10).map((strategy, index) => ({
               id: `btc-${index}`,
               label: strategy.name,
@@ -1017,7 +1001,7 @@ export default function TradingDashboard({
               enabled: !strategy.disabled,
               }));
   const workspaceCurrencyCode =
-    niftyOptionsModuleActive || niftyOptionsSellingModuleActive || niftyStocksModuleActive || niftyBeesModuleActive || activeModule === "mcx"
+    niftyOptionsModuleActive || niftyOptionsSellingModuleActive || niftyBeesModuleActive
       ? "INR"
       : "USD";
   const workspacePriceSeries =
@@ -1128,28 +1112,6 @@ export default function TradingDashboard({
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
-      ) : niftyStocksModuleActive ? (
-        <OptionsAccountHeader
-          online={niftyStocksOnline}
-          equity={niftyStocksEquity}
-          dailyPnL={niftyStocksSessionPnl}
-          openPositions={niftyStocksOpenPositions}
-          marketLabel="NIFTY 50"
-          marketCode="N50"
-          accountLabel="NIFTY 50 stocks paper account"
-          currencyCode="INR"
-          locale="en-IN"
-          workspaceTitle="RAIG NIFTY Stocks Workspace"
-          onlineLabel="Stocks engine live on NSE NIFTY 50 spot data"
-          offlineLabel="Stocks engine offline"
-          detailLabel={`${niftyStocksOpenPositions} open NIFTY 50 stock positions in the separate stocks account`}
-          accountBadgeLabel="Stocks Account"
-          equityLabel="Stocks Equity"
-          pnlLabel="Stocks PnL Today"
-          openLabel="Open Stocks"
-          actionsEnabled={actionsEnabled}
-          onToggleActions={setActionsEnabled}
-        />
       ) : (
         <DashboardHeader
           online={engineOnline}
@@ -1171,7 +1133,7 @@ export default function TradingDashboard({
         workspaceDescription={activePreset.description}
         currencyCode={workspaceCurrencyCode}
         defaultMode="paper"
-        defaultDataSource={activeGroup === "crypto" ? "binance" : activeModule === "mcx" || activeModule === "niftyBees" ? "angel" : "nse"}
+        defaultDataSource={activeGroup === "crypto" ? "binance" : activeModule === "niftyBees" ? "angel" : "nse"}
         strategyItems={workspaceStrategyItems}
       />
 
@@ -1218,9 +1180,7 @@ export default function TradingDashboard({
             {activeGroup === "india" && ([
               { key: "nifty",       label: "Nifty 50 Option Buying" },
               { key: "niftySelling",label: "Nifty Option Selling" },
-              { key: "niftyStocks", label: "Nifty 50 Equity" },
               { key: "niftyBees",   label: "Nifty BEES Scalper" },
-              { key: "mcx",         label: "Commodity Scalper" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => (
               <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
                 {module.label}
@@ -1305,12 +1265,8 @@ export default function TradingDashboard({
             ? "Options Selling — NIFTY 50 short-option workspace focused on premium decay."
             : activeModule === "nifty"
             ? "Options — Nifty 50 option scalper on live NSE data. Separate ₹1M paper account, 1% per trade."
-            : activeModule === "niftyStocks"
-            ? "Equity — Nifty 50 equity scalper with dedicated stock strategy roster. ₹1M paper capital."
             : activeModule === "niftyBees"
             ? "ETF — Nifty BEES (Nippon India ETF Nifty 50 BeES) on Angel/Yahoo live NSE prices. 30 strategies, ₹10,000 paper."
-            : activeModule === "mcx"
-            ? "Commodity — MCX option scalper: Crude, Gold, Silver, Gas, Copper. 20 strategies, ₹1M paper."
             : activeModule === "options-selling"
             ? "Options Selling — BTC short-premium workspace with theta-style decay and separate paper capital."
             : activeModule === "chain"
@@ -2317,8 +2273,6 @@ export default function TradingDashboard({
         />
       )}
 
-      {activeModule === "niftyStocks" && <Nifty50StocksScalper actionsEnabled={actionsEnabled} quotes={niftyStockQuotes} positions={niftyStockPositions} trades={niftyStockTrades} strategies={niftyStockStrategies} stats={niftyStockStats} reset={niftyStockReset} />}
-
       {activeModule === "niftyBees" && (
         <NiftyBeesScalper
           actionsEnabled={actionsEnabled}
@@ -2332,16 +2286,12 @@ export default function TradingDashboard({
         />
       )}
 
-      {activeModule === "mcx" && <MCXCommodityScalper actionsEnabled={actionsEnabled} />}
-
       <ReplayBacktestPanel
         workspaceLabel={activePreset.label}
         priceSeries={workspacePriceSeries}
         events={workspaceReplayEvents}
         summary={activeModule === "niftyBees"
             ? "Replay Nifty BEES ETF paper exits alongside the Angel One–driven live tape context."
-            : activeModule === "mcx"
-            ? "Use replay mode to validate commodity entries against operator notes and upcoming MCX support."
             : "Replay price movement, trade outcomes, and feed decisions without leaving the active workspace."}
       />
 
