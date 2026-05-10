@@ -550,4 +550,4 @@ const MIN_ABS_NET_PNL_USD = 2;
 const LEVERAGE = 25;
 
 // Strategy defs reference (matches hook)
-const STRAT_DEFS_COUNT = 130;
+const STRAT_DEFS_COUNT = 180;

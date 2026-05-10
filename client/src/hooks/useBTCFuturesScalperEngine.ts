@@ -28,7 +28,7 @@ const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.2%
 const INITIAL_BALANCE = 1000; // $1000 paper balance for futures (higher than spot)
 const MIN_CONTRACTS = 1;
 const MAX_CONTRACTS = 50;
-const MAX_OPEN_POSITIONS = 8;
+const MAX_OPEN_POSITIONS = 12;
 const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 
 // Risk management
@@ -431,6 +431,77 @@ const STRAT_DEFS: StratDef[] = [
   { id: 128, name: "MTF_MeanRev_Short", category: "MTF MR", signalKey: "MTF_MEAN_REVERT_SHORT", slPct: 0.34, tpPct: 0.64, cooldownMin: 5, holdMinutes: 24, confluenceMin: 3, requiresHtf: true },
   { id: 129, name: "MTF_Confluence_Long", category: "MTF Conf", signalKey: "MTF_CONFLUENCE_LONG", slPct: 0.24, tpPct: 0.88, cooldownMin: 8, holdMinutes: 36, confluenceMin: 6, requiresHtf: true },
   { id: 130, name: "MTF_Confluence_Short", category: "MTF Conf", signalKey: "MTF_CONFLUENCE_SHORT", slPct: 0.24, tpPct: 0.88, cooldownMin: 8, holdMinutes: 36, confluenceMin: 6, requiresHtf: true },
+
+  // 131-180: Advanced Futures Strategies (Pro Grade)
+  // Smart Money & Order Flow Concepts
+  { id: 131, name: "SmartMoney_Accum_Long", category: "Smart Money", signalKey: "SM_ACCUM_LONG", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
+  { id: 132, name: "SmartMoney_Distrib_Short", category: "Smart Money", signalKey: "SM_DISTRIB_SHORT", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
+  { id: 133, name: "OrderFlow_Break_Long", category: "Order Flow", signalKey: "OF_BREAK_LONG", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
+  { id: 134, name: "OrderFlow_Break_Short", category: "Order Flow", signalKey: "OF_BREAK_SHORT", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
+  { id: 135, name: "LiquidityGrab_Long", category: "Liquidity", signalKey: "LIQ_GRAB_LONG", slPct: 0.30, tpPct: 0.82, cooldownMin: 4, holdMinutes: 20, confluenceMin: 4 },
+  { id: 136, name: "LiquidityGrab_Short", category: "Liquidity", signalKey: "LIQ_GRAB_SHORT", slPct: 0.30, tpPct: 0.82, cooldownMin: 4, holdMinutes: 20, confluenceMin: 4 },
+  { id: 137, name: "StopHunt_Long", category: "Stop Hunt", signalKey: "STOP_HUNT_LONG", slPct: 0.32, tpPct: 0.78, cooldownMin: 3, holdMinutes: 16, confluenceMin: 4 },
+  { id: 138, name: "StopHunt_Short", category: "Stop Hunt", signalKey: "STOP_HUNT_SHORT", slPct: 0.32, tpPct: 0.78, cooldownMin: 3, holdMinutes: 16, confluenceMin: 4 },
+
+  // Wyckoff Method Strategies
+  { id: 139, name: "Wyckoff_Spring_Long", category: "Wyckoff", signalKey: "WYCKOFF_SPRING_LONG", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
+  { id: 140, name: "Wyckoff_Upthrust_Short", category: "Wyckoff", signalKey: "WYCKOFF_UPTHRUST_SHORT", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
+  { id: 141, name: "Wyckoff_MarkUp_Long", category: "Wyckoff", signalKey: "WYCKOFF_MARKUP_LONG", slPct: 0.24, tpPct: 0.88, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5 },
+  { id: 142, name: "Wyckoff_MarkDown_Short", category: "Wyckoff", signalKey: "WYCKOFF_MARKDOWN_SHORT", slPct: 0.24, tpPct: 0.88, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5 },
+
+  // Volume Profile & Market Structure
+  { id: 143, name: "VolProfile_HVN_Long", category: "Vol Profile", signalKey: "VP_HVN_LONG", slPct: 0.30, tpPct: 0.76, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4 },
+  { id: 144, name: "VolProfile_HVN_Short", category: "Vol Profile", signalKey: "VP_HVN_SHORT", slPct: 0.30, tpPct: 0.76, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4 },
+  { id: 145, name: "MarketStructure_BOS_Long", category: "Market Structure", signalKey: "MS_BOS_LONG", slPct: 0.26, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5 },
+  { id: 146, name: "MarketStructure_BOS_Short", category: "Market Structure", signalKey: "MS_BOS_SHORT", slPct: 0.26, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5 },
+  { id: 147, name: "CHoCH_Long", category: "Market Structure", signalKey: "CHOCH_LONG", slPct: 0.28, tpPct: 0.84, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
+  { id: 148, name: "CHoCH_Short", category: "Market Structure", signalKey: "CHOCH_SHORT", slPct: 0.28, tpPct: 0.84, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
+
+  // Institutional Style Strategies
+  { id: 149, name: "Institutional_Pivot_Long", category: "Institutional", signalKey: "INST_PIVOT_LONG", slPct: 0.25, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 6 },
+  { id: 150, name: "Institutional_Pivot_Short", category: "Institutional", signalKey: "INST_PIVOT_SHORT", slPct: 0.25, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 6 },
+  { id: 151, name: "OpeningDrive_Long", category: "Session", signalKey: "OPEN_DRIVE_LONG", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
+  { id: 152, name: "OpeningDrive_Short", category: "Session", signalKey: "OPEN_DRIVE_SHORT", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
+  { id: 153, name: "ClosingRange_Long", category: "Session", signalKey: "CLOSE_RANGE_LONG", slPct: 0.30, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
+  { id: 154, name: "ClosingRange_Short", category: "Session", signalKey: "CLOSE_RANGE_SHORT", slPct: 0.30, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
+
+  // Statistical & Quant Strategies
+  { id: 155, name: "StatArb_ZScore_Long", category: "Statistical", signalKey: "STAT_ZSCORE_LONG", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
+  { id: 156, name: "StatArb_ZScore_Short", category: "Statistical", signalKey: "STAT_ZSCORE_SHORT", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
+  { id: 157, name: "Regression_Mean_Long", category: "Statistical", signalKey: "REG_MEAN_LONG", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
+  { id: 158, name: "Regression_Mean_Short", category: "Statistical", signalKey: "REG_MEAN_SHORT", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
+  { id: 159, name: "Momentum_Divergence_Long", category: "Divergence", signalKey: "MOM_DIV_LONG", slPct: 0.30, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
+  { id: 160, name: "Momentum_Divergence_Short", category: "Divergence", signalKey: "MOM_DIV_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
+
+  // Harmonic & Pattern Strategies
+  { id: 161, name: "Harmonic_Bat_Long", category: "Harmonic", signalKey: "HARM_BAT_LONG", slPct: 0.28, tpPct: 0.86, cooldownMin: 8, holdMinutes: 36, confluenceMin: 5 },
+  { id: 162, name: "Harmonic_Bat_Short", category: "Harmonic", signalKey: "HARM_BAT_SHORT", slPct: 0.28, tpPct: 0.86, cooldownMin: 8, holdMinutes: 36, confluenceMin: 5 },
+  { id: 163, name: "Pattern_Flag_Long", category: "Chart Pattern", signalKey: "PATTERN_FLAG_LONG", slPct: 0.26, tpPct: 0.78, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4 },
+  { id: 164, name: "Pattern_Flag_Short", category: "Chart Pattern", signalKey: "PATTERN_FLAG_SHORT", slPct: 0.26, tpPct: 0.78, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4 },
+  { id: 165, name: "Pattern_Pennant_Long", category: "Chart Pattern", signalKey: "PATTERN_PENNANT_LONG", slPct: 0.27, tpPct: 0.80, cooldownMin: 6, holdMinutes: 30, confluenceMin: 4 },
+  { id: 166, name: "Pattern_Pennant_Short", category: "Chart Pattern", signalKey: "PATTERN_PENNANT_SHORT", slPct: 0.27, tpPct: 0.80, cooldownMin: 6, holdMinutes: 30, confluenceMin: 4 },
+
+  // Options Greeks Inspired (adapted for futures)
+  { id: 167, name: "Delta_Squeeze_Long", category: "Greek-Inspired", signalKey: "DELTA_SQUEEZE_LONG", slPct: 0.30, tpPct: 0.82, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
+  { id: 168, name: "Delta_Squeeze_Short", category: "Greek-Inspired", signalKey: "DELTA_SQUEEZE_SHORT", slPct: 0.30, tpPct: 0.82, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
+  { id: 169, name: "Gamma_Spike_Long", category: "Greek-Inspired", signalKey: "GAMMA_SPIKE_LONG", slPct: 0.34, tpPct: 0.76, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
+  { id: 170, name: "Gamma_Spike_Short", category: "Greek-Inspired", signalKey: "GAMMA_SPIKE_SHORT", slPct: 0.34, tpPct: 0.76, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
+
+  // Event & News Driven
+  { id: 171, name: "Event_Driven_Long", category: "Event", signalKey: "EVENT_LONG", slPct: 0.40, tpPct: 1.10, cooldownMin: 3, holdMinutes: 15, confluenceMin: 4 },
+  { id: 172, name: "Event_Driven_Short", category: "Event", signalKey: "EVENT_SHORT", slPct: 0.40, tpPct: 1.10, cooldownMin: 3, holdMinutes: 15, confluenceMin: 4 },
+  { id: 173, name: "PostEvent_Retrace_Long", category: "Event", signalKey: "POST_EVENT_LONG", slPct: 0.32, tpPct: 0.70, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
+  { id: 174, name: "PostEvent_Retrace_Short", category: "Event", signalKey: "POST_EVENT_SHORT", slPct: 0.32, tpPct: 0.70, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
+
+  // Machine Learning Style (rule-based approximations)
+  { id: 175, name: "ML_Ensemble_Long", category: "ML-Style", signalKey: "ML_ENSEMBLE_LONG", slPct: 0.26, tpPct: 0.84, cooldownMin: 6, holdMinutes: 30, confluenceMin: 6 },
+  { id: 176, name: "ML_Ensemble_Short", category: "ML-Style", signalKey: "ML_ENSEMBLE_SHORT", slPct: 0.26, tpPct: 0.84, cooldownMin: 6, holdMinutes: 30, confluenceMin: 6 },
+  { id: 177, name: "ML_Classifier_Long", category: "ML-Style", signalKey: "ML_CLASS_LONG", slPct: 0.28, tpPct: 0.80, cooldownMin: 5, holdMinutes: 26, confluenceMin: 5 },
+  { id: 178, name: "ML_Classifier_Short", category: "ML-Style", signalKey: "ML_CLASS_SHORT", slPct: 0.28, tpPct: 0.80, cooldownMin: 5, holdMinutes: 26, confluenceMin: 5 },
+
+  // Correlation & Intermarket
+  { id: 179, name: "RiskOn_Rally_Long", category: "Macro", signalKey: "RISK_ON_LONG", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
+  { id: 180, name: "RiskOff_Dump_Short", category: "Macro", signalKey: "RISK_OFF_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
 ];
 
 // ========== HELPER FUNCTIONS ==========
@@ -1049,6 +1120,93 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
     if (s.htf5_adx > 25) add(8, "HTF trending");
   }
 
+  // Smart Money & Order Flow (Pro Grade)
+  if (strat.category === "Smart Money") {
+    if (s.volRatio > 2 && s.price < s.mean20) add(14, "Accumulation vol");
+    if (s.obvSlope > 0 && s.momentum3 > 0) add(12, "Smart money in");
+  }
+
+  if (strat.category === "Order Flow") {
+    if (s.momentum3 > s.atr14 * 1.5) add(14, "Strong flow");
+    if (s.volRatio > 1.8 && s.price > s.vwapDev + s.mean20) add(12, "Buy flow");
+  }
+
+  if (strat.category === "Liquidity") {
+    if (s.price < s.low20 * 1.002) add(14, "Liquidity sweep");
+    if (s.williamsR < -85) add(12, "Oversold liquidity");
+  }
+
+  if (strat.category === "Stop Hunt") {
+    if (Math.abs(s.price - s.low20) < s.atr14 * 0.3) add(14, "Stop hunt zone");
+  }
+
+  // Wyckoff & Market Structure
+  if (strat.category === "Wyckoff") {
+    if (s.price > s.donchianMid && s.volRatio > 1.5) add(14, "Wyckoff markup");
+    if (s.cci20 > 100 && s.momentum6 > 0) add(12, "Spring complete");
+  }
+
+  if (strat.category === "Market Structure") {
+    if (s.price > s.high20 && s.htf5_trend > 0) add(14, "BOS bullish");
+    if (s.price < s.low20 && s.htf5_trend < 0) add(14, "BOS bearish");
+  }
+
+  // Statistical & Institutional
+  if (strat.category === "Statistical") {
+    const zscore = (s.price - s.mean20) / (s.std20 || 1);
+    if (Math.abs(zscore) > 2) add(14, "Statistical extreme");
+    if (zscore < -1.5 && s.rsi14 < 40) add(12, "Mean reversion long");
+  }
+
+  if (strat.category === "Institutional") {
+    if (s.adxProxy > 30 && s.volRatio > 2) add(14, "Inst activity");
+    if (s.htf5_adx > 25 && s.htf15_adx > 25) add(12, "Inst trend");
+  }
+
+  if (strat.category === "Session") {
+    if (s.momentum3 > 0 && s.volRatio > 1.5) add(12, "Session momentum");
+  }
+
+  // Harmonic & Patterns
+  if (strat.category === "Harmonic") {
+    if (Math.abs(s.price - s.bbLower) / s.price < 0.005) add(12, "Harmonic support");
+    if (s.rsi14 > 30 && s.rsi14 < 50 && s.stochK > s.stochD) add(10, "Harmonic bounce");
+  }
+
+  if (strat.category === "Chart Pattern") {
+    if (s.bbWidth < 0.015 && s.volRatio > 1.5) add(12, "Pattern breakout");
+    if (s.atr14 < s.mean20 * 0.008) add(10, "Consolidation pattern");
+  }
+
+  // Greek-Inspired (adapted for futures)
+  if (strat.category === "Greek-Inspired") {
+    if (s.bbWidth < 0.012 && s.adxProxy > 20) add(14, "Gamma squeeze setup");
+    if (s.volRatio > 3 && Math.abs(s.momentum3) > s.atr14) add(12, "Delta spike");
+  }
+
+  // Event & Macro
+  if (strat.category === "Event") {
+    if (s.volRatio > 4 && Math.abs(s.momentum3) > s.atr14 * 2) add(16, "Event volatility");
+  }
+
+  if (strat.category === "Macro") {
+    if (s.htf5_trend > 0 && s.htf15_trend > 0 && s.rsi14 > 50) add(14, "Risk on");
+    if (s.htf5_trend < 0 && s.htf15_trend < 0 && s.rsi14 < 50) add(14, "Risk off");
+  }
+
+  // ML-Style (multi-factor ensemble)
+  if (strat.category === "ML-Style") {
+    const factors = [
+      s.fast > s.slow,
+      s.rsi14 > 45 && s.rsi14 < 75,
+      s.macdHist > 0,
+      s.adxProxy > 20,
+      s.volRatio > 1.2,
+    ].filter(Boolean).length;
+    if (factors >= 4) add(16, "ML ensemble strong");
+    if (factors === 3) add(10, "ML ensemble medium");
+  }
+
   return { score, reason: reasons.slice(0, 3).join(", ") };
 }
 
@@ -1074,7 +1232,24 @@ function isCategoryAligned(signalKey: string, category: string): boolean {
     "Donchian Trend": ["DONCHIAN"],
     "ROC Trend": ["ROC"],
     Squeeze: ["SQUEEZE"],
-    MTF: ["MTF"],
+    Ribbon: ["RIBBON", "EMA_RIBBON"],
+    "Smart Money": ["SM_", "SMART"],
+    "Order Flow": ["OF_", "ORDER"],
+    Liquidity: ["LIQ_", "LIQUIDITY"],
+    "Stop Hunt": ["STOP_HUNT", "HUNT"],
+    Wyckoff: ["WYCKOFF"],
+    "Vol Profile": ["VP_", "VOL_PROFILE"],
+    "Market Structure": ["MS_", "CHOCH", "MARKET_STRUCTURE"],
+    Institutional: ["INST_", "INSTITUTIONAL"],
+    Session: ["OPEN", "CLOSE", "SESSION"],
+    Statistical: ["STAT_", "REG_", "STATISTICAL"],
+    Divergence: ["DIV", "DIVERGENCE"],
+    Harmonic: ["HARM_", "HARMONIC"],
+    "Chart Pattern": ["PATTERN", "FLAG", "PENNANT"],
+    "Greek-Inspired": ["DELTA_", "GAMMA_", "GREEK"],
+    Event: ["EVENT", "POST_EVENT"],
+    "ML-Style": ["ML_", "ENSEMBLE", "CLASSIFIER"],
+    Macro: ["RISK_ON", "RISK_OFF", "MACRO"],
   };
   const prefixes = map[category] || [category];
   return prefixes.some(p => signalKey.includes(p));
@@ -1138,6 +1313,79 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
     const htf5Trend = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
     const htf15Trend = htfTrend(s.htf15_fast, s.htf15_slow, s.htf15_momentum);
     if (htf5Trend === "NEUTRAL" || htf15Trend === "NEUTRAL") return false;
+  }
+
+  // Pro Grade category validations
+  if (strat.category === "Smart Money") {
+    if (s.volRatio < 1.5) return false;
+    if (s.obvSlope <= 0) return false;
+  }
+
+  if (strat.category === "Order Flow") {
+    if (s.momentum3 <= s.atr14) return false;
+    if (s.volRatio < 1.5) return false;
+  }
+
+  if (strat.category === "Liquidity") {
+    if (s.price > s.low20 * 1.005) return false;
+  }
+
+  if (strat.category === "Stop Hunt") {
+    if (Math.abs(s.price - s.low20) > s.atr14 * 0.5) return false;
+  }
+
+  if (strat.category === "Wyckoff") {
+    if (s.cci20 < 80) return false;
+    if (s.volRatio < 1.3) return false;
+  }
+
+  if (strat.category === "Market Structure") {
+    if (s.price < s.high20 * 0.998 && s.price > s.low20 * 1.002) return false;
+  }
+
+  if (strat.category === "Statistical") {
+    const zscore = Math.abs((s.price - s.mean20) / (s.std20 || 1));
+    if (zscore < 1.5) return false;
+  }
+
+  if (strat.category === "Institutional") {
+    if (s.adxProxy < 25) return false;
+    if (s.volRatio < 1.5) return false;
+  }
+
+  if (strat.category === "Session") {
+    if (s.volRatio < 1.3) return false;
+  }
+
+  if (strat.category === "Harmonic") {
+    if (s.rsi14 > 60 || s.rsi14 < 20) return false;
+  }
+
+  if (strat.category === "Chart Pattern") {
+    if (s.bbWidth > 0.02) return false;
+  }
+
+  if (strat.category === "Greek-Inspired") {
+    if (s.bbWidth > 0.015) return false;
+    if (s.adxProxy < 18) return false;
+  }
+
+  if (strat.category === "Event") {
+    if (s.volRatio < 2.5) return false;
+  }
+
+  if (strat.category === "Macro") {
+    if (s.htf5_rsi < 45 || s.htf5_rsi > 75) return false;
+  }
+
+  if (strat.category === "ML-Style") {
+    const factors = [
+      s.fast > s.slow,
+      s.rsi14 > 45 && s.rsi14 < 75,
+      s.macdHist > 0,
+      s.adxProxy > 20,
+    ].filter(Boolean).length;
+    if (factors < 3) return false;
   }
 
   return confluence >= strat.confluenceMin;
