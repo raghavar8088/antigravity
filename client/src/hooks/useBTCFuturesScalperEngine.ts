@@ -843,7 +843,24 @@ function buildHtfFields(
   lows: number[],
   volumes: number[],
   period: number,
-) {
+): {
+  htf5_fast: number;
+  htf5_slow: number;
+  htf5_rsi: number;
+  htf5_momentum: number;
+  htf5_trend: number;
+  htf5_macdHist: number;
+  htf5_bbWidth: number;
+  htf5_adx: number;
+  htf15_fast: number;
+  htf15_slow: number;
+  htf15_rsi: number;
+  htf15_momentum: number;
+  htf15_trend: number;
+  htf15_macdHist: number;
+  htf15_bbWidth: number;
+  htf15_adx: number;
+} {
   const aggClose = aggregateBars(closes, period);
   const aggHigh = aggregateBars(highs, period);
   const aggLow = aggregateBars(lows, period);
@@ -874,16 +891,35 @@ function buildHtfFields(
 
   const idx = aggClose.length - 1;
   const prefix = period === 5 ? "htf5" : "htf15";
-  return {
-    [`${prefix}_fast`]: fast[idx],
-    [`${prefix}_slow`]: slow[idx],
-    [`${prefix}_rsi`]: rsi[idx],
-    [`${prefix}_momentum`]: mom[idx],
-    [`${prefix}_trend`]: htfTrend(fast[idx], slow[idx], mom[idx]),
-    [`${prefix}_macdHist`]: macdVals.hist[idx],
-    [`${prefix}_bbWidth`]: bbWidth[idx],
-    [`${prefix}_adx`]: adxVals[idx],
-  } as Record<string, number>;
+
+  const result = {
+    htf5_fast: 0, htf5_slow: 0, htf5_rsi: 0, htf5_momentum: 0, htf5_trend: 0,
+    htf5_macdHist: 0, htf5_bbWidth: 0, htf5_adx: 0,
+    htf15_fast: 0, htf15_slow: 0, htf15_rsi: 0, htf15_momentum: 0, htf15_trend: 0,
+    htf15_macdHist: 0, htf15_bbWidth: 0, htf15_adx: 0,
+  };
+
+  if (period === 5) {
+    result.htf5_fast = fast[idx];
+    result.htf5_slow = slow[idx];
+    result.htf5_rsi = rsi[idx];
+    result.htf5_momentum = mom[idx];
+    result.htf5_trend = htfTrend(fast[idx], slow[idx], mom[idx]) === "UP" ? 1 : htfTrend(fast[idx], slow[idx], mom[idx]) === "DOWN" ? -1 : 0;
+    result.htf5_macdHist = macdVals.hist[idx];
+    result.htf5_bbWidth = bbWidth[idx];
+    result.htf5_adx = adxVals[idx];
+  } else {
+    result.htf15_fast = fast[idx];
+    result.htf15_slow = slow[idx];
+    result.htf15_rsi = rsi[idx];
+    result.htf15_momentum = mom[idx];
+    result.htf15_trend = htfTrend(fast[idx], slow[idx], mom[idx]) === "UP" ? 1 : htfTrend(fast[idx], slow[idx], mom[idx]) === "DOWN" ? -1 : 0;
+    result.htf15_macdHist = macdVals.hist[idx];
+    result.htf15_bbWidth = bbWidth[idx];
+    result.htf15_adx = adxVals[idx];
+  }
+
+  return result;
 }
 
 function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; reason: string } {
