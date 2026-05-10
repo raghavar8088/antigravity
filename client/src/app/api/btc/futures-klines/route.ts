@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 /** Delta Exchange India REST API */
@@ -5,7 +6,12 @@ const DELTA_REST_BASE =
   process.env.DELTA_API_BASE_URL?.replace(/\/+$/, "") ?? "https://api.india.delta.exchange";
 
 const DEFAULT_SYMBOL = process.env.DELTA_BTC_FUTURES_SYMBOL?.trim() || "BTCUSD";
-const PRODUCT_ID = 27; // BTCUSD perpetual on Delta Exchange
+
+function sanitizeSymbol(raw: string | null): string {
+  const s = raw?.trim().toUpperCase() ?? "";
+  if (!s || !/^[A-Z0-9]{2,20}$/.test(s)) return DEFAULT_SYMBOL;
+  return s;
+}
 
 const JSON_HEADERS = {
   Accept: "application/json",
@@ -46,9 +52,9 @@ type DeltaTickerResponse = {
   };
 };
 
-/** 1m candles for BTCUSD perpetual futures with mark price and funding rate */
-export async function GET(): Promise<Response> {
-  const symbol = DEFAULT_SYMBOL;
+/** 1m candles for perpetual futures (query: ?symbol=ETHUSD) with mark price and funding rate */
+export async function GET(request: NextRequest): Promise<Response> {
+  const symbol = sanitizeSymbol(request.nextUrl.searchParams.get("symbol"));
   const endSec = Math.floor(Date.now() / 1000);
   const startSec = endSec - 130 * 60;
 
@@ -137,7 +143,6 @@ export async function GET(): Promise<Response> {
       changePct24h,
       fundingRate,
       nextFunding,
-      productId: PRODUCT_ID,
       symbol,
       fetchedAt: new Date().toISOString(),
       source: "delta-exchange-futures-1m",
@@ -156,7 +161,6 @@ export async function GET(): Promise<Response> {
         changePct24h: 0,
         fundingRate: 0,
         nextFunding: 0,
-        productId: PRODUCT_ID,
         symbol: DEFAULT_SYMBOL,
         fetchedAt: new Date().toISOString(),
         deltaBase: DELTA_REST_BASE,

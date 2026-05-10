@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useMemo, type MutableRefObject } from "react";
+import { PRIMARY_QUOTE_SYMBOL, TRADING_SYMBOLS } from "@/lib/futuresMarketData";
 
 /**
- * BTC Futures Scalper Engine
- * Mirrors Delta Exchange BTCUSD perpetual futures trading (product_id: 27)
+ * Multi-asset futures paper engine (Delta India REST via /api/btc/futures-klines?symbol=)
+ * Each listed symbol runs the same strategy library on its own 1m candle stream.
  * Key features:
  * - 25x leverage support (4% margin requirement)
  * - Contract-based position sizing (notional/price)
@@ -15,8 +16,6 @@ import { useCallback, useEffect, useRef, useState, useMemo, type MutableRefObjec
  */
 
 // ========== FUTURES-SPECIFIC CONSTANTS ==========
-const PRODUCT_ID = 27; // BTCUSD on Delta Exchange
-const SYMBOL = "BTCUSD";
 const LEVERAGE = 25; // Default leverage
 const MARGIN_PCT = 1 / LEVERAGE; // 4% margin requirement
 const MAKER_FEE_PCT = 0.0005; // 0.05% maker
@@ -28,7 +27,7 @@ const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.2%
 const INITIAL_BALANCE = 1000; // $1000 paper balance for futures (higher than spot)
 const MIN_CONTRACTS = 1;
 const MAX_CONTRACTS = 50;
-const MAX_OPEN_POSITIONS = 12;
+const MAX_OPEN_POSITIONS = 48;
 const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 
 // Risk management
@@ -41,7 +40,9 @@ const LIQUIDATION_BUFFER_PCT = 10; // Close before liquidation (10% buffer)
 const SIGNAL_THRESHOLD = 48;
 const MAX_BARS = 120;
 const MIN_BARS = 18;
-const POLL_MS = 2_000;
+/** Slightly slower poll: many symbols × REST calls per tick */
+const POLL_MS = 4_000;
+const SYMBOL_FETCH_CHUNK = 5;
 const MAX_TRADES = 2_000;
 
 // Exit management
@@ -65,9 +66,11 @@ export type Side = "LONG" | "SHORT";
 export type Status = "WARMING" | "READY" | "IN_POSITION" | "COOLING";
 export type MarginMode = "isolated" | "cross";
 
-/** BTC Futures Position */
+/** Futures Position */
 export interface BTCFuturesPosition {
   id: string;
+  /** Perpetual contract symbol e.g. BTCUSD, ETHUSD */
+  symbol: string;
   strategyId: number;
   strategyName: string;
   side: Side;
@@ -95,9 +98,10 @@ export interface BTCFuturesPosition {
   initialMargin: number;
 }
 
-/** BTC Futures Trade (closed position) */
+/** Futures Trade (closed position) */
 export interface BTCFuturesTrade {
   id: string;
+  symbol: string;
   strategyId: number;
   strategyName: string;
   side: Side;
@@ -823,6 +827,35 @@ function calculateReturnOnMargin(unrealizedPnL: number, marginUsed: number): num
   return marginUsed > 0 ? (unrealizedPnL / marginUsed) * 100 : 0;
 }
 
+function applyMarkToPosition(
+  p: BTCFuturesPosition,
+  markPrice: number,
+  lastPrice: number,
+  fundingRate: number,
+): BTCFuturesPosition {
+  const unrealizedPnL = calculateUnrealizedPnL(p.entryPrice, markPrice, p.contracts, p.side);
+  const returnPct = calculateReturnOnMargin(unrealizedPnL, p.marginUsed);
+  const unrealizedPnLPct = p.notional > 0 ? (unrealizedPnL / p.notional) * 100 : 0;
+  const fundingCost = p.notional * fundingRate;
+  return {
+    ...p,
+    markPrice,
+    lastPrice,
+    unrealizedPnl: unrealizedPnL,
+    unrealizedPnlPct: unrealizedPnLPct,
+    returnPct,
+    fundingCosts: p.fundingCosts + fundingCost,
+  };
+}
+
+function chunkArray<T>(arr: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push([...arr.slice(i, i + size)]);
+  }
+  return out;
+}
+
 // ========== SIGNAL EVALUATION ==========
 function buildSignalInputs(
   closes: number[],
@@ -1514,6 +1547,10 @@ export function useBTCFuturesScalperEngine(): {
   const [trades, setTrades] = useState<BTCFuturesTrade[]>([]);
   const [quote, setQuote] = useState<EngineState["quote"]>(null);
   const [status, setStatus] = useState<Status>("WARMING");
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
   const [warmingPct, setWarmingPct] = useState(0);
   const [pauseEntries, setPauseEntries] = useState(false);
   const [disabledStrategies, setDisabledStrategies] = useState<number[]>([]);
@@ -1529,8 +1566,7 @@ export function useBTCFuturesScalperEngine(): {
   const disabledRef = useRef(disabledStrategies);
   const pauseRef = useRef(pauseEntries);
   const lastTradeAtRef = useRef(lastTradeAt);
-  const barsRef = useRef<{ closes: number[]; highs: number[]; lows: number[]; volumes: number[] }>({ closes: [], highs: [], lows: [], volumes: [] });
-  const stratCooldownsRef = useRef<Record<number, number>>({});
+  const stratCooldownsRef = useRef<Record<string, number>>({});
   const dayStartBalanceRef = useRef(dayStartBalance);
   const dayStartDateRef = useRef(dayStartDate);
 
@@ -1569,8 +1605,22 @@ export function useBTCFuturesScalperEngine(): {
     const saved = loadLs();
     if (saved) {
       if (typeof saved.balance === "number") setBalance(saved.balance);
-      if (Array.isArray(saved.positions)) setPositions(saved.positions);
-      if (Array.isArray(saved.trades)) setTrades(saved.trades.slice(-MAX_TRADES));
+      if (Array.isArray(saved.positions)) {
+        setPositions(
+          saved.positions.map((p: BTCFuturesPosition) => ({
+            ...p,
+            symbol: p.symbol || PRIMARY_QUOTE_SYMBOL,
+          })),
+        );
+      }
+      if (Array.isArray(saved.trades)) {
+        setTrades(
+          saved.trades.slice(-MAX_TRADES).map((t: BTCFuturesTrade) => ({
+            ...t,
+            symbol: t.symbol || PRIMARY_QUOTE_SYMBOL,
+          })),
+        );
+      }
       if (typeof saved.pauseEntries === "boolean") setPauseEntries(saved.pauseEntries);
       if (Array.isArray(saved.disabledStrategies)) setDisabledStrategies(saved.disabledStrategies);
       if (typeof saved.lastTradeAt === "number") setLastTradeAt(saved.lastTradeAt);
@@ -1626,9 +1676,10 @@ export function useBTCFuturesScalperEngine(): {
   }, []);
 
   const exportCSV = useCallback(() => {
-    const headers = ["ID", "Strategy", "Side", "Entry", "Exit", "Contracts", "Realized PnL", "Fees", "Net PnL", "Net PnL %", "Funding", "Opened", "Closed", "Exit Reason"];
+    const headers = ["ID", "Symbol", "Strategy", "Side", "Entry", "Exit", "Contracts", "Realized PnL", "Fees", "Net PnL", "Net PnL %", "Funding", "Opened", "Closed", "Exit Reason"];
     const rows = trades.map(t => [
       t.id,
+      t.symbol || PRIMARY_QUOTE_SYMBOL,
       t.strategyName,
       t.side,
       t.entryPrice.toFixed(2),
@@ -1722,7 +1773,9 @@ export function useBTCFuturesScalperEngine(): {
       const openCount = positions.filter(p => p.strategyId === strat.id).length;
       const stratTrades = trades.filter(t => t.strategyId === strat.id);
       const lastTrade = stratTrades[stratTrades.length - 1];
-      const inCooldown = (stratCooldownsRef.current[strat.id] ?? 0) > now;
+      const inCooldown = Object.entries(stratCooldownsRef.current).some(
+        ([key, until]) => key.endsWith(`:${strat.id}`) && (until ?? 0) > now,
+      );
       const wins = stratTrades.filter(t => t.netPnl > 0).length;
       const losses = stratTrades.filter(t => t.netPnl <= 0).length;
       const totalPnl = stratTrades.reduce((s, t) => s + t.netPnl, 0);
@@ -1751,9 +1804,10 @@ export function useBTCFuturesScalperEngine(): {
   }, [positions, trades, disabledStrategies]);
 
   // ========== POSITION MANAGEMENT ==========
-  const openPosition = useCallback((strat: StratDef, side: Side, price: number, markPrice: number) => {
-    const id = `${strat.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const notional = Math.min(Math.max(balance * 0.1, 100), 500); // 10% of balance, min $100, max $500
+  const openPosition = useCallback((strat: StratDef, side: Side, price: number, markPrice: number, symbol: string) => {
+    const id = `${symbol}-${strat.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const bal = balanceRef.current;
+    const notional = Math.min(Math.max(bal * 0.1, 100), 500); // 10% of balance, min $100, max $500
     const contracts = Math.max(MIN_CONTRACTS, Math.min(MAX_CONTRACTS, calculateContracts(notional, price)));
     const actualNotional = calculateNotional(contracts);
     const marginUsed = calculateMarginRequired(actualNotional, LEVERAGE);
@@ -1763,6 +1817,7 @@ export function useBTCFuturesScalperEngine(): {
 
     const position: BTCFuturesPosition = {
       id,
+      symbol,
       strategyId: strat.id,
       strategyName: strat.name,
       side,
@@ -1790,9 +1845,9 @@ export function useBTCFuturesScalperEngine(): {
 
     setPositions(prev => [...prev, position]);
     setBalance(prev => prev - marginUsed);
-    stratCooldownsRef.current[strat.id] = Date.now() + strat.cooldownMin * 60000;
+    stratCooldownsRef.current[`${symbol}:${strat.id}`] = Date.now() + strat.cooldownMin * 60000;
     setLastTradeAt(Date.now());
-  }, [balance]);
+  }, []);
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
     const grossPnL = calculateUnrealizedPnL(position.entryPrice, exitPrice, position.contracts, position.side);
@@ -1809,6 +1864,7 @@ export function useBTCFuturesScalperEngine(): {
 
     const trade: BTCFuturesTrade = {
       id: position.id,
+      symbol: position.symbol,
       strategyId: position.strategyId,
       strategyName: position.strategyName,
       side: position.side,
@@ -1832,27 +1888,6 @@ export function useBTCFuturesScalperEngine(): {
     setTrades(prev => [...prev.slice(-MAX_TRADES + 1), trade]);
     setPositions(prev => prev.filter(p => p.id !== position.id));
     setBalance(prev => prev + position.marginUsed + netPnl);
-  }, []);
-
-  const updatePositions = useCallback((markPrice: number, lastPrice: number, fundingRate: number) => {
-    setPositions(prev => prev.map(p => {
-      const unrealizedPnL = calculateUnrealizedPnL(p.entryPrice, markPrice, p.contracts, p.side);
-      const returnPct = calculateReturnOnMargin(unrealizedPnL, p.marginUsed);
-      const unrealizedPnLPct = (unrealizedPnL / p.notional) * 100;
-
-      // Update funding costs (every 8 hours approximation)
-      const fundingCost = p.notional * fundingRate;
-
-      return {
-        ...p,
-        markPrice,
-        lastPrice,
-        unrealizedPnl: unrealizedPnL,
-        unrealizedPnlPct: unrealizedPnLPct,
-        returnPct,
-        fundingCosts: p.fundingCosts + fundingCost,
-      };
-    }));
   }, []);
 
   const resolveExit = useCallback((p: BTCFuturesPosition, input: SignalInputs): { shouldClose: boolean; reason?: BTCFuturesPosition["exitReason"]; exitPrice: number } => {
@@ -1913,82 +1948,141 @@ export function useBTCFuturesScalperEngine(): {
     return { shouldClose: false, exitPrice: markPrice };
   }, []);
 
-  // ========== DATA POLLING ==========
+  // ========== DATA POLLING (multi-symbol) ==========
   useEffect(() => {
     let mounted = true;
     let interval: NodeJS.Timeout | null = null;
 
+    type KlinePayload = {
+      ok: boolean;
+      candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[];
+      lastPrice: number;
+      markPrice: number;
+      indexPrice: number;
+      changePct24h: number;
+      fundingRate: number;
+      nextFunding: number;
+      fetchedAt: string;
+    };
+
     const poll = async () => {
       try {
-        const res = await fetch("/api/btc/futures-klines", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json() as {
-          ok: boolean;
-          candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[];
-          lastPrice: number;
-          markPrice: number;
-          indexPrice: number;
-          changePct24h: number;
-          fundingRate: number;
-          nextFunding: number;
-          fetchedAt: string;
-        };
+        const payloads = new Map<string, KlinePayload>();
 
-        if (!data.ok || !mounted) return;
-
-        const candles = data.candles;
-        if (candles.length < MIN_BARS) return;
-
-        const closes = candles.map(c => c.close);
-        const highs = candles.map(c => c.high);
-        const lows = candles.map(c => c.low);
-        const volumes = candles.map(c => c.volume);
-
-        barsRef.current = { closes, highs, lows, volumes };
-
-        setQuote({
-          lastPrice: data.lastPrice,
-          markPrice: data.markPrice,
-          indexPrice: data.indexPrice,
-          changePct24h: data.changePct24h,
-          fundingRate: data.fundingRate,
-          nextFunding: data.nextFunding,
-          timestamp: new Date(data.fetchedAt).getTime(),
-        });
-
-        // Update positions with new mark price
-        updatePositions(data.markPrice, data.lastPrice, data.fundingRate);
-
-        // Warming progress
-        const warmupPct = Math.min(100, Math.round((closes.length / MIN_BARS) * 100));
-        setWarmingPct(warmupPct);
-        if (closes.length >= MIN_BARS && status === "WARMING") {
-          setStatus("READY");
-        }
-
-        // Process signals
-        if (status === "READY" && !pauseRef.current && positionsRef.current.length < MAX_OPEN_POSITIONS) {
-          const input = buildSignalInputs(closes, highs, lows, volumes, data.markPrice);
-
-          for (const strat of STRAT_DEFS) {
-            if (disabledRef.current.includes(strat.id)) continue;
-            if (positionsRef.current.some(p => p.strategyId === strat.id)) continue;
-            if ((stratCooldownsRef.current[strat.id] ?? 0) > Date.now()) continue;
-
-            const signal = evalMinuteSignal(input, strat);
-            if (signal.score >= SIGNAL_THRESHOLD && passesEntryConfirmation(input, strat)) {
-              const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
-              openPosition(strat, side, data.lastPrice, data.markPrice);
+        for (const batch of chunkArray(TRADING_SYMBOLS, SYMBOL_FETCH_CHUNK)) {
+          const results = await Promise.all(
+            batch.map(async (sym) => {
+              try {
+                const res = await fetch(
+                  `/api/btc/futures-klines?symbol=${encodeURIComponent(sym)}`,
+                  { cache: "no-store" },
+                );
+                if (!res.ok) return null;
+                return (await res.json()) as KlinePayload;
+              } catch {
+                return null;
+              }
+            }),
+          );
+          for (let i = 0; i < batch.length; i++) {
+            const sym = batch[i];
+            const j = results[i];
+            if (j?.ok && Array.isArray(j.candles) && j.candles.length >= MIN_BARS) {
+              payloads.set(sym, j);
             }
           }
         }
 
-        // Check exits
-        for (const pos of positionsRef.current) {
-          const input = buildSignalInputs(closes, highs, lows, volumes, data.markPrice);
+        if (!mounted) return;
+
+        const primary = payloads.get(PRIMARY_QUOTE_SYMBOL);
+        if (primary) {
+          setQuote({
+            lastPrice: primary.lastPrice,
+            markPrice: primary.markPrice,
+            indexPrice: primary.indexPrice,
+            changePct24h: primary.changePct24h,
+            fundingRate: primary.fundingRate,
+            nextFunding: primary.nextFunding,
+            timestamp: new Date(primary.fetchedAt).getTime(),
+          });
+          setWarmingPct(Math.min(100, Math.round((primary.candles.length / MIN_BARS) * 100)));
+          if (primary.candles.length >= MIN_BARS && statusRef.current === "WARMING") {
+            setStatus("READY");
+          }
+        }
+
+        setPositions((prev) =>
+          prev.map((p) => {
+            const d = payloads.get(p.symbol);
+            if (!d) return p;
+            return applyMarkToPosition(p, d.markPrice, d.lastPrice, d.fundingRate);
+          }),
+        );
+
+        const mergedForLogic = positionsRef.current.map((p) => {
+          const d = payloads.get(p.symbol);
+          if (!d) return p;
+          return applyMarkToPosition(p, d.markPrice, d.lastPrice, d.fundingRate);
+        });
+
+        const exitJobs: {
+          pos: BTCFuturesPosition;
+          exitPrice: number;
+          reason: NonNullable<BTCFuturesPosition["exitReason"]>;
+        }[] = [];
+
+        for (const pos of mergedForLogic) {
+          const d = payloads.get(pos.symbol);
+          if (!d || d.candles.length < MIN_BARS) continue;
+          const closes = d.candles.map((c) => c.close);
+          const highs = d.candles.map((c) => c.high);
+          const lows = d.candles.map((c) => c.low);
+          const volumes = d.candles.map((c) => c.volume);
+          const input = buildSignalInputs(closes, highs, lows, volumes, d.markPrice);
           const exit = resolveExit(pos, input);
           if (exit.shouldClose && exit.reason) {
-            closePosition(pos, exit.exitPrice, exit.reason);
+            exitJobs.push({ pos, exitPrice: exit.exitPrice, reason: exit.reason });
+          }
+        }
+
+        const exitingIds = new Set(exitJobs.map((j) => j.pos.id));
+        const remainingAfterExits = mergedForLogic.filter((p) => !exitingIds.has(p.id));
+
+        for (const job of exitJobs) {
+          closePosition(job.pos, job.exitPrice, job.reason);
+        }
+
+        let openCount = remainingAfterExits.length;
+        const occupied = new Set(remainingAfterExits.map((p) => `${p.symbol}:${p.strategyId}`));
+
+        if (statusRef.current === "READY" && !pauseRef.current) {
+          for (const symbol of TRADING_SYMBOLS) {
+            if (openCount >= MAX_OPEN_POSITIONS) break;
+            const d = payloads.get(symbol);
+            if (!d || d.candles.length < MIN_BARS) continue;
+
+            const closes = d.candles.map((c) => c.close);
+            const highs = d.candles.map((c) => c.high);
+            const lows = d.candles.map((c) => c.low);
+            const volumes = d.candles.map((c) => c.volume);
+            const input = buildSignalInputs(closes, highs, lows, volumes, d.markPrice);
+
+            for (const strat of STRAT_DEFS) {
+              if (openCount >= MAX_OPEN_POSITIONS) break;
+              if (disabledRef.current.includes(strat.id)) continue;
+              if (occupied.has(`${symbol}:${strat.id}`)) continue;
+              const ck = `${symbol}:${strat.id}`;
+              if ((stratCooldownsRef.current[ck] ?? 0) > Date.now()) continue;
+
+              const signal = evalMinuteSignal(input, strat);
+              if (signal.score >= SIGNAL_THRESHOLD && passesEntryConfirmation(input, strat)) {
+                const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+                openPosition(strat, side, d.lastPrice, d.markPrice, symbol);
+                occupied.add(`${symbol}:${strat.id}`);
+                openCount++;
+              }
+            }
           }
         }
       } catch (e) {
@@ -2002,7 +2096,7 @@ export function useBTCFuturesScalperEngine(): {
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [status, pauseEntries, disabledStrategies, openPosition, closePosition, updatePositions, resolveExit]);
+  }, [openPosition, closePosition, resolveExit]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
