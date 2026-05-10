@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useBTCFuturesScalperEngine,
   type BTCFuturesPosition,
@@ -96,6 +96,30 @@ function PremiumBar({ progress, isPositive }: { progress: number; isPositive: bo
   );
 }
 
+type FuturesWatchItem = {
+  symbol: string;
+  name: string;
+  leverage: string;
+  lastPrice: string;
+  change24h: string;
+  volume24h: string;
+};
+
+const FUTURES_WATCHLIST: FuturesWatchItem[] = [
+  { symbol: "BTCUSD", name: "Bitcoin Perpetual", leverage: "200x", lastPrice: "$80845", change24h: "0.68%", volume24h: "$374.18M" },
+  { symbol: "ETHUSD", name: "Ethereum Perpetual", leverage: "200x", lastPrice: "$2329.5", change24h: "0.94%", volume24h: "$267.65M" },
+  { symbol: "SOLUSD", name: "Solana Perpetual", leverage: "100x", lastPrice: "$93.926", change24h: "0.99%", volume24h: "$92.70M" },
+  { symbol: "LABUSD", name: "LAB Perpetual", leverage: "20x", lastPrice: "$4.789", change24h: "16.01%", volume24h: "$24.26M" },
+  { symbol: "SIRENUSD", name: "Siren Perpetual", leverage: "20x", lastPrice: "$1.17798", change24h: "-7.76%", volume24h: "$13.22M" },
+  { symbol: "LAYERUSD", name: "Solayer Perpetual", leverage: "20x", lastPrice: "$0.1297", change24h: "37.39%", volume24h: "$12.67M" },
+  { symbol: "SAHARAUSD", name: "Sahara AI Perpetual", leverage: "20x", lastPrice: "$0.03567", change24h: "-8.35%", volume24h: "$9.10M" },
+  { symbol: "ZECUSD", name: "Zcash Perpetual", leverage: "20x", lastPrice: "$599.94", change24h: "2.16%", volume24h: "$8.41M" },
+  { symbol: "AINUSD", name: "Ainfinity Ground Perpetual", leverage: "20x", lastPrice: "$0.0956", change24h: "-4.12%", volume24h: "$8.04M" },
+  { symbol: "VVVUSD", name: "Venice Token Perpetual", leverage: "20x", lastPrice: "$15.149", change24h: "-1.41%", volume24h: "$7.31M" },
+  { symbol: "SKYAIUSD", name: "SkyAI Perpetual", leverage: "20x", lastPrice: "$0.54383", change24h: "-5.67%", volume24h: "$7.30M" },
+  { symbol: "XRPUSD", name: "Ripple Perpetual", leverage: "100x", lastPrice: "$1.4345", change24h: "1.29%", volume24h: "$6.10M" },
+];
+
 // ========== MAIN COMPONENT ==========
 export function BTCFuturesScalper() {
   const {
@@ -117,6 +141,7 @@ export function BTCFuturesScalper() {
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
   const [showAllTrades, setShowAllTrades] = useState(false);
+  const [watchSearch, setWatchSearch] = useState("");
 
   const sessionPnL = equity - 1000; // vs $1,000 base
   const pnlPositive = sessionPnL >= 0;
@@ -131,6 +156,15 @@ export function BTCFuturesScalper() {
 
   const sortedTrades = [...trades].reverse();
   const visibleTrades = showAllTrades ? sortedTrades : sortedTrades.slice(0, 10);
+  const visibleWatchlist = useMemo(() => {
+    const q = watchSearch.trim().toLowerCase();
+    if (!q) return FUTURES_WATCHLIST;
+    return FUTURES_WATCHLIST.filter(
+      (item) =>
+        item.symbol.toLowerCase().includes(q) ||
+        item.name.toLowerCase().includes(q),
+    );
+  }, [watchSearch]);
 
   // Daily ledger
   const tradesByDay = trades.reduce((acc, t) => {
@@ -144,9 +178,9 @@ export function BTCFuturesScalper() {
   }, {} as Record<string, { trades: number; wins: number; losses: number; pnl: number }>);
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-4 md:p-6">
+    <div className="space-y-5 p-4 md:p-6">
       {/* Header */}
-      <div className="mb-6">
+      <div className="glass-panel px-6 py-6">
         <div className="flex items-center gap-2 mb-1">
           <span className="inline-flex items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -178,6 +212,54 @@ export function BTCFuturesScalper() {
               Clear Trades
             </button>
           </div>
+        </div>
+      </div>
+
+      <div className="glass-panel px-5 py-6 md:px-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+            Futures Watchlist
+          </h2>
+          <input
+            type="search"
+            value={watchSearch}
+            onChange={(e) => setWatchSearch(e.target.value)}
+            placeholder="Search symbol"
+            className="w-full max-w-56 rounded-lg border border-zinc-300 bg-white/90 px-3 py-2 text-xs text-zinc-800 outline-none focus:border-blue-400"
+          />
+        </div>
+        <div className="overflow-x-auto rounded-[16px] border border-zinc-200 bg-white/85">
+          <table className="w-full text-left text-xs" style={{ minWidth: 760 }}>
+            <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">
+              <tr>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Last Price</th>
+                <th className="px-4 py-3">24h Chg.</th>
+                <th className="px-4 py-3">24h Vol.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleWatchlist.map((item) => {
+                const positive = !item.change24h.startsWith("-");
+                return (
+                  <tr key={item.symbol} className="border-t border-zinc-100">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-zinc-900">
+                        {item.symbol}
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                          {item.leverage}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500">{item.name}</div>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-zinc-900">{item.lastPrice}</td>
+                    <td className={`px-4 py-3 font-mono ${positive ? "text-emerald-600" : "text-rose-600"}`}>{item.change24h}</td>
+                    <td className="px-4 py-3 font-mono text-zinc-800">{item.volume24h}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import TradingDashboard from "@/components/TradingDashboard";
 
 export default function HistoryWorkspacePage() {
-  return <TradingDashboard initialGroup="crypto" initialModule="history" />;
+  return <TradingDashboard initialGroup="crypto" initialModule="options-selling" />;
 }
