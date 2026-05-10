@@ -6,7 +6,7 @@ COPY go.mod ./
 COPY cmd/antigravity ./cmd/antigravity
 COPY internal ./internal
 
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /bin/antigravity antigravity-engine/cmd/antigravity
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /bin/antigravity ./cmd/antigravity
 
 FROM alpine:latest
 WORKDIR /app
