@@ -1995,7 +1995,11 @@ export function useBTCFuturesScalperEngine(): {
 
         if (!mounted) return;
 
-        const primary = payloads.get(PRIMARY_QUOTE_SYMBOL);
+        /** At least one symbol returned enough bars — drives quotes + entries (see statusRef note below). */
+        const hasMarketData = payloads.size > 0;
+
+        const primary =
+          payloads.get(PRIMARY_QUOTE_SYMBOL) ?? payloads.values().next().value ?? null;
         if (primary) {
           setQuote({
             lastPrice: primary.lastPrice,
@@ -2007,9 +2011,10 @@ export function useBTCFuturesScalperEngine(): {
             timestamp: new Date(primary.fetchedAt).getTime(),
           });
           setWarmingPct(Math.min(100, Math.round((primary.candles.length / MIN_BARS) * 100)));
-          if (primary.candles.length >= MIN_BARS && statusRef.current === "WARMING") {
-            setStatus("READY");
-          }
+        }
+
+        if (hasMarketData && statusRef.current === "WARMING") {
+          setStatus("READY");
         }
 
         setPositions((prev) =>
@@ -2056,7 +2061,9 @@ export function useBTCFuturesScalperEngine(): {
         let openCount = remainingAfterExits.length;
         const occupied = new Set(remainingAfterExits.map((p) => `${p.symbol}:${p.strategyId}`));
 
-        if (statusRef.current === "READY" && !pauseRef.current) {
+        // Do not gate entries on statusRef === READY: setStatus is async and statusRef updates next render,
+        // so same poll tick would never open trades. Use live payload presence instead.
+        if (hasMarketData && !pauseRef.current) {
           for (const symbol of TRADING_SYMBOLS) {
             if (openCount >= MAX_OPEN_POSITIONS) break;
             const d = payloads.get(symbol);
