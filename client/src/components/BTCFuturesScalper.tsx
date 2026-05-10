@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   useBTCFuturesScalperEngine,
   type BTCFuturesPosition,
@@ -26,54 +26,66 @@ function fmtContracts(n: number) {
   return n.toLocaleString("en-US");
 }
 
-function formatElapsed(total: number) {
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+function formatShortTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-// ========== COMPONENTS ==========
-function BadgePill({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "positive" | "negative" | "info" | "warning" }) {
-  const map: Record<string, string> = {
-    neutral: "border-zinc-200 bg-white text-zinc-600",
+function formatShortDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// ========== DESIGN PRIMITIVES ==========
+type BadgeTone = "neutral" | "positive" | "negative" | "info" | "warning";
+
+function BadgePill({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
+  const map: Record<BadgeTone, string> = {
+    neutral:  "border-zinc-200 bg-white text-zinc-600",
     positive: "border-emerald-200 bg-emerald-50 text-emerald-700",
     negative: "border-rose-200 bg-rose-50 text-rose-700",
-    info: "border-blue-200 bg-blue-50 text-blue-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-700",
+    info:     "border-blue-200 bg-blue-50 text-blue-700",
+    warning:  "border-amber-200 bg-amber-50 text-amber-700",
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${map[tone]}`}>
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] ${map[tone]}`}>
       {label}
     </span>
   );
 }
 
 function SideBadge({ side }: { side: "LONG" | "SHORT" }) {
-  const isLong = side === "LONG";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold ${isLong ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${isLong ? "bg-emerald-500" : "bg-rose-500"}`} />
-      {side}
-    </span>
+    <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold tracking-widest ${
+      side === "LONG"
+        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-600"
+        : "border-rose-500/25 bg-rose-500/10 text-rose-600"
+    }`}>{side}</span>
   );
 }
 
-function CompactMetric({ label, value, tone = "neutral", suffix = "" }: { label: string; value: string; tone?: "neutral" | "positive" | "negative"; suffix?: string }) {
-  const map: Record<string, string> = {
-    neutral: "text-zinc-900",
-    positive: "text-emerald-700",
-    negative: "text-rose-700",
-  };
+function CompactMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[10px] font-medium text-zinc-500">{label}</span>
-      <span className={`text-sm font-bold tabular-nums ${map[tone]}`}>
-        {value}{suffix}
-      </span>
+    <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 flex min-h-[88px] flex-col justify-between gap-2">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
+        <div className="text-lg font-bold tabular-nums text-zinc-900">{value}</div>
+      </div>
+      <div className="text-[10px] text-zinc-500 min-h-[16px]">{detail ?? ""}</div>
     </div>
   );
 }
 
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 flex min-h-[100px] flex-col justify-between gap-2">
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
+      <div className={`text-2xl font-bold tabular-nums ${accent || "text-zinc-900"}`}>{value}</div>
+    </div>
+  );
+}
+
+// ========== POSITION PROGRESS BAR ==========
 function PositionProgressBar({
   returnPct,
   unrealizedPnl,
@@ -81,8 +93,6 @@ function PositionProgressBar({
   tpPrice,
   slPrice,
   liquidationPrice,
-  currentPrice,
-  contracts,
   side,
 }: {
   returnPct: number;
@@ -91,120 +101,349 @@ function PositionProgressBar({
   tpPrice: number;
   slPrice: number;
   liquidationPrice: number;
-  currentPrice: number;
-  contracts: number;
   side: "LONG" | "SHORT";
 }) {
-  const isLong = side === "LONG";
-  const range = Math.max(tpPrice, slPrice, liquidationPrice) - Math.min(tpPrice, slPrice, liquidationPrice);
-  const minPrice = Math.min(entryPrice, tpPrice, slPrice, liquidationPrice) - range * 0.05;
-  const maxPrice = Math.max(entryPrice, tpPrice, slPrice, liquidationPrice) + range * 0.05;
-
-  const getPct = (price: number) => ((price - minPrice) / (maxPrice - minPrice)) * 100;
-
-  const liqDist = isLong
-    ? ((currentPrice - liquidationPrice) / currentPrice) * 100
-    : ((liquidationPrice - currentPrice) / currentPrice) * 100;
-
-  const projectedPnlAt = (price: number) => {
-    const diff = isLong ? price - entryPrice : entryPrice - price;
-    return (diff * contracts) / price;
-  };
+  const pnlPositive = unrealizedPnl >= 0;
 
   return (
-    <div className="w-full max-w-md">
-      {/* Header */}
+    <div className="w-full max-w-[200px]">
       <div className="mb-1 flex items-center justify-between">
-        <span className={`text-[10px] font-bold ${returnPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-          {returnPct >= 0 ? "▲ GAIN" : "▼ LOSS"} {fmtPct(returnPct, true)}
-        </span>
-        <span className={`text-[10px] ${returnPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-          {fmtUSD(unrealizedPnl, { signed: true })}
+        <span className={`text-[10px] font-bold ${pnlPositive ? "text-emerald-600" : "text-rose-600"}`}>
+          {pnlPositive ? "▲" : "▼"} {fmtPct(returnPct, true)}
         </span>
       </div>
-
-      {/* Progress Track */}
-      <div className="relative h-3 w-full rounded-full bg-zinc-100">
-        {/* Loss zone */}
-        <div className="absolute left-0 top-0 h-full w-1/2 rounded-l-full bg-rose-100/50" />
-        {/* Profit zone */}
-        <div className="absolute right-0 top-0 h-full w-1/2 rounded-r-full bg-emerald-100/50" />
-
-        {/* Entry marker */}
-        <div className="absolute top-1/2 z-10 h-4 w-0.5 -translate-y-1/2 rounded bg-blue-500" style={{ left: `${getPct(entryPrice)}%` }} />
-
-        {/* SL marker */}
-        <div className="absolute top-1/2 z-10 h-3 w-0.5 -translate-y-1/2 rounded bg-rose-500" style={{ left: `${getPct(slPrice)}%` }} />
-
-        {/* TP marker */}
-        <div className="absolute top-1/2 z-10 h-3 w-0.5 -translate-y-1/2 rounded bg-emerald-500" style={{ left: `${getPct(tpPrice)}%` }} />
-
-        {/* Liquidation marker */}
-        <div className="absolute top-1/2 z-10 h-5 w-1 -translate-y-1/2 rounded bg-red-700" style={{ left: `${getPct(liquidationPrice)}%` }} />
-
-        {/* Current price dot */}
-        <div
-          className={`absolute top-1/2 z-20 h-2.5 w-2.5 -translate-y-1/2 rounded-full ${returnPct >= 0 ? "bg-emerald-500 shadow-emerald-200" : "bg-rose-500 shadow-rose-200"} shadow-md`}
-          style={{ left: `${getPct(currentPrice)}%` }}
-        />
-
-        {/* Progress fill */}
-        <div
-          className={`absolute top-0 h-full rounded-full ${returnPct >= 0 ? "bg-emerald-500/30" : "bg-rose-500/30"}`}
-          style={{
-            left: `${getPct(entryPrice)}%`,
-            width: `${Math.abs(returnPct) / 2}%`,
-          }}
-        />
+      <div className="relative h-2 w-full rounded-full bg-zinc-100 overflow-hidden">
+        <div className="absolute left-0 top-0 h-full w-[20%] rounded-l-full bg-rose-100" />
+        <div className="absolute right-0 top-0 h-full w-[20%] rounded-r-full bg-emerald-100" />
+        <div className={`absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full ${pnlPositive ? "bg-emerald-500" : "bg-rose-500"}`}
+          style={{ left: `${Math.max(10, Math.min(90, 50 + returnPct * 2))}%` }} />
       </div>
-
-      {/* Labels */}
       <div className="mt-1 flex justify-between text-[9px] text-zinc-400">
-        <div className="text-center">
-          <div className="text-rose-600">SL</div>
-          <div>{fmtUSD(projectedPnlAt(slPrice), { signed: true })}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-blue-600">Entry</div>
-          <div>${entryPrice.toLocaleString()}</div>
-        </div>
-        <div className="text-center">
-          <div className="text-emerald-600">TP</div>
-          <div>{fmtUSD(projectedPnlAt(tpPrice), { signed: true })}</div>
-        </div>
+        <span>Liq ${Math.round(liquidationPrice).toLocaleString()}</span>
+        <span>Entry ${Math.round(entryPrice).toLocaleString()}</span>
+        <span>TP ${Math.round(tpPrice).toLocaleString()}</span>
       </div>
-
-      {/* Liquidation warning */}
-      {liqDist < 15 && (
-        <div className="mt-1 flex items-center gap-1 text-[9px] font-bold text-red-700">
-          <span>⚠️</span> Liquidation {liqDist.toFixed(1)}% away
-        </div>
-      )}
     </div>
   );
 }
 
-function DailyPnlLedger({ trades, balance, dayStartBalance }: { trades: BTCFuturesTrade[]; balance: number; dayStartBalance: number }) {
-  const today = new Date().toISOString().split("T")[0];
-  const todayTrades = trades.filter(t => t.closedAt.startsWith(today));
-  const dayPnl = todayTrades.reduce((s, t) => s + t.netPnl, 0);
-  const dayFees = todayTrades.reduce((s, t) => s + t.fees, 0);
-  const dayFunding = todayTrades.reduce((s, t) => s + t.fundingCosts, 0);
+// ========== MARKET HERO ==========
+function MarketHero({ quote, isReady }: { quote: any; isReady: boolean }) {
+  if (!quote) return null;
+
+  const changePositive = quote.changePct24h >= 0;
+  const fundingPositive = quote.fundingRate >= 0;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Daily Ledger (Today)</span>
-        <span className="text-[10px] text-zinc-400">{todayTrades.length} trades</span>
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {isReady ? "LIVE" : "WARMING"}
+          </span>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+            BTCUSD PERPETUAL FUTURES · 25x LEVERAGE
+          </span>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-zinc-500">
+          <span>Mark: <span className="font-mono font-medium text-zinc-900">${quote.markPrice.toLocaleString()}</span></span>
+          <span>Last: <span className="font-mono">${quote.lastPrice.toLocaleString()}</span></span>
+          <span>Funding: <span className={`font-mono ${fundingPositive ? "text-emerald-600" : "text-rose-600"}`}>{fmtPct(quote.fundingRate * 100, true, 4)}</span></span>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <CompactMetric label="Day PnL" value={fmtUSD(dayPnl, { signed: true })} tone={dayPnl >= 0 ? "positive" : "negative"} />
-        <CompactMetric label="Day Fees" value={fmtUSD(-dayFees)} tone="negative" />
-        <CompactMetric label="Day Funding" value={fmtUSD(-dayFunding)} tone="negative" />
-        <CompactMetric label="Day Net" value={fmtUSD(dayPnl - dayFees - dayFunding, { signed: true })} tone={dayPnl - dayFees - dayFunding >= 0 ? "positive" : "negative"} />
+
+      <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <CompactMetric label="Mark Price" value={`$${quote.markPrice.toLocaleString()}`} detail="Fair value for PnL" />
+        <CompactMetric label="24h Change" value={fmtPct(quote.changePct24h, true)} detail={changePositive ? "Bullish momentum" : "Bearish pressure"} />
+        <CompactMetric label="Funding Rate" value={fmtPct(quote.fundingRate * 100, true, 4)} detail={fundingPositive ? "Longs pay shorts" : "Shorts pay longs"} />
+        <CompactMetric label="Next Funding" value={new Date(quote.nextFunding * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} detail="Every 8 hours" />
       </div>
-      <div className="mt-3 border-t border-zinc-100 pt-2">
-        <CompactMetric label="Day Change" value={fmtPct(((balance - dayStartBalance) / dayStartBalance) * 100, true)} tone={balance >= dayStartBalance ? "positive" : "negative"} />
+    </div>
+  );
+}
+
+// ========== POSITIONS PANEL ==========
+function PositionsPanel({ positions, quote }: { positions: BTCFuturesPosition[]; quote: any }) {
+  const totalUnrealized = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
+  const longCount = positions.filter(p => p.side === "LONG").length;
+  const shortCount = positions.filter(p => p.side === "SHORT").length;
+
+  if (positions.length === 0) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700 mr-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            LIVE
+          </span>
+          OPEN FUTURES POSITIONS
+        </h2>
+        <div className="mt-4 flex min-h-[180px] items-center justify-center rounded-[20px] border border-dashed border-zinc-300 px-6 py-12 text-center text-sm text-zinc-500 bg-zinc-50">
+          No open futures positions yet — the engine scans 180 strategies on each tick for high-probability setups.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-700 mr-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            LIVE
+          </span>
+          OPEN FUTURES POSITIONS · {longCount} LONG / {shortCount} SHORT
+          <span className="font-mono ml-2 text-[10px] font-medium text-zinc-400">
+            ({positions.length} active)
+          </span>
+        </h2>
+        <span className="rounded-full border px-3 py-1 text-xs font-medium"
+          style={{
+            background: totalUnrealized >= 0 ? "rgba(16, 185, 129, 0.1)" : "rgba(244, 63, 94, 0.1)",
+            color: totalUnrealized >= 0 ? "#10b981" : "#f43f5e",
+            borderColor: totalUnrealized >= 0 ? "rgba(16, 185, 129, 0.2)" : "rgba(244, 63, 94, 0.2)",
+          }}>
+          Unrealized {fmtUSD(totalUnrealized, { signed: true })}
+        </span>
+      </div>
+
+      <div className="overflow-x-auto rounded-[20px] border border-zinc-200 bg-white">
+        <table className="w-full text-left text-sm" style={{ minWidth: 1100 }}>
+          <thead className="bg-zinc-50 text-zinc-500">
+            <tr className="text-[11px] uppercase tracking-[0.12em]">
+              <th className="px-4 py-3 font-medium">Position</th>
+              <th className="px-4 py-3 font-medium">Side</th>
+              <th className="px-4 py-3 font-medium">Contracts</th>
+              <th className="px-4 py-3 font-medium">Entry/Mark</th>
+              <th className="px-4 py-3 font-medium">Margin Used</th>
+              <th className="px-4 py-3 font-medium">Opened</th>
+              <th className="px-4 py-3 font-medium">PnL</th>
+              <th className="px-4 py-3 font-medium">Liq Price</th>
+              <th className="px-4 py-3 font-medium text-right">Progress</th>
+            </tr>
+          </thead>
+          <tbody>
+            {positions.map((pos) => (
+              <tr key={pos.id} className="border-t border-zinc-100">
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${pos.unrealizedPnl >= 0 ? "bg-emerald-500" : "bg-rose-500"}`} />
+                      <span className="text-sm font-semibold text-zinc-900">{pos.strategyName}</span>
+                    </div>
+                    <div className="text-[11px] text-zinc-500">{pos.leverage}x · {pos.marginMode}</div>
+                  </div>
+                </td>
+                <td className="px-4 py-3"><SideBadge side={pos.side} /></td>
+                <td className="px-4 py-3 text-xs font-mono text-zinc-900">{fmtContracts(pos.contracts)}</td>
+                <td className="px-4 py-3 text-xs">
+                  <div className="font-mono text-zinc-900">${pos.entryPrice.toLocaleString()}</div>
+                  <div className="text-zinc-500">→ ${pos.markPrice.toLocaleString()}</div>
+                </td>
+                <td className="px-4 py-3 text-xs font-mono text-zinc-900">{fmtUSD(pos.marginUsed)}</td>
+                <td className="px-4 py-3 text-xs">
+                  <div className="font-mono text-zinc-900">{formatShortTime(pos.openedAt)}</div>
+                  <div className="text-zinc-500">{formatShortDate(pos.openedAt)}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className={`font-mono text-sm font-semibold ${pos.unrealizedPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {fmtUSD(pos.unrealizedPnl, { signed: true })}
+                  </div>
+                  <div className="text-[11px] text-zinc-500">{fmtPct(pos.returnPct, true)}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className={`font-mono text-xs ${pos.side === "LONG" && pos.liquidationPrice >= pos.markPrice * 0.95 ? "text-red-600 font-bold" : pos.side === "SHORT" && pos.liquidationPrice <= pos.markPrice * 1.05 ? "text-red-600 font-bold" : "text-zinc-500"}`}>
+                    ${pos.liquidationPrice.toLocaleString()}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="ml-auto">
+                    <PositionProgressBar
+                      returnPct={pos.returnPct}
+                      unrealizedPnl={pos.unrealizedPnl}
+                      entryPrice={pos.entryPrice}
+                      tpPrice={pos.tpPrice}
+                      slPrice={pos.slPrice}
+                      liquidationPrice={pos.liquidationPrice}
+                      side={pos.side}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ========== STATS PANEL ==========
+function StatsPanel({ stats, balance, equity }: { stats: BTCFuturesEngineStats; balance: number; equity: number }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+      <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500 mb-4">
+        PERFORMANCE METRICS
+      </h2>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
+        <SummaryCard label="Balance" value={fmtUSD(balance)} />
+        <SummaryCard label="Equity" value={fmtUSD(equity, { signed: true })} accent={equity >= balance ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Total PnL" value={fmtUSD(stats.netPnl, { signed: true })} accent={stats.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
+        <SummaryCard label="Win Rate" value={fmtPct(stats.winRate)} accent={stats.winRate > 50 ? "text-emerald-600" : ""} />
+        <SummaryCard label="Trades" value={`${stats.totalTrades}`} />
+        <SummaryCard label="Open Pos" value={`${stats.openPositions}/${stats.maxPositions}`} accent={stats.openPositions > 8 ? "text-amber-600" : ""} />
+        <CompactMetric label="Available Margin" value={fmtUSD(stats.availableMargin)} detail={stats.marginUtilization > 80 ? "High utilization" : "Healthy buffer"} />
+        <CompactMetric label="Used Margin" value={fmtUSD(stats.usedMargin)} detail={`${fmtPct(stats.marginUtilization)} of balance`} />
+        <CompactMetric label="Long/Short" value={`${stats.longCount}/${stats.shortCount}`} detail="Position balance" />
+        <CompactMetric label="Liq Risk" value={`${stats.liquidationRisk}`} detail={stats.liquidationRisk > 0 ? "⚠️ Near liquidation" : "Safe distance"} />
+        <CompactMetric label="Avg Leverage" value={`${stats.avgLeverage.toFixed(1)}x`} detail="Target: 25x" />
+        <CompactMetric label="Profit Factor" value={stats.profitFactor.toFixed(2)} detail={stats.profitFactor > 1.5 ? "Strong edge" : "Building edge"} />
+      </div>
+    </div>
+  );
+}
+
+// ========== STRATEGIES PANEL ==========
+function StrategiesPanel({ strategies, disabledStrategies, setDisabledStrategies }: {
+  strategies: BTCFuturesStrategyStatus[];
+  disabledStrategies: number[];
+  setDisabledStrategies: (ids: number[]) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? strategies : strategies.slice(0, 24);
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
+          STRATEGIES — {strategies.length} TOTAL
+        </h2>
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600"
+        >
+          {showAll ? "Show Top 24" : `Show All ${strategies.length}`}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
+        {visible.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => {
+              const newDisabled = disabledStrategies.includes(s.id)
+                ? disabledStrategies.filter(id => id !== s.id)
+                : [...disabledStrategies, s.id];
+              setDisabledStrategies(newDisabled);
+            }}
+            className={`rounded-xl border p-3 text-left transition-all ${
+              s.disabled
+                ? "opacity-50 border-zinc-200 bg-zinc-100"
+                : s.status === "OPEN"
+                ? "border-emerald-200 bg-emerald-50"
+                : s.status === "COOLING"
+                ? "border-amber-200 bg-amber-50"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-zinc-400">#{s.id}</span>
+              {s.openCount > 0 && <BadgePill label={`${s.openCount} open`} tone="positive" />}
+            </div>
+            <div className="mt-1 text-xs font-semibold text-zinc-900 truncate">{s.name}</div>
+            <div className="text-[10px] text-zinc-500">{s.category}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ========== TRADES PANEL ==========
+function TradesPanel({ trades, clearTradeHistory }: { trades: BTCFuturesTrade[]; clearTradeHistory: () => void }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? trades.slice().reverse() : trades.slice().reverse().slice(0, 20);
+
+  if (trades.length === 0) {
+    return (
+      <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
+          TRADE HISTORY
+        </h2>
+        <div className="mt-4 rounded-[20px] border border-dashed border-zinc-300 px-6 py-12 text-center text-sm text-zinc-500 bg-zinc-50">
+          No closed trades yet — the engine will record each completed futures trade here.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-zinc-500">
+          TRADE HISTORY ({trades.length})
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600"
+          >
+            {showAll ? "Show Recent" : "Show All"}
+          </button>
+          <button
+            onClick={clearTradeHistory}
+            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-[20px] border border-zinc-200 bg-white">
+        <table className="w-full text-left text-xs" style={{ minWidth: 1000 }}>
+          <thead className="bg-zinc-50 text-zinc-500">
+            <tr className="text-[10px] uppercase tracking-widest">
+              <th className="px-3 py-2 font-medium">Time</th>
+              <th className="px-3 py-2 font-medium">Strategy</th>
+              <th className="px-3 py-2 font-medium">Side</th>
+              <th className="px-3 py-2 font-medium">Contracts</th>
+              <th className="px-3 py-2 font-medium">Entry/Exit</th>
+              <th className="px-3 py-2 font-medium">Gross PnL</th>
+              <th className="px-3 py-2 font-medium">Fees</th>
+              <th className="px-3 py-2 font-medium">Net PnL</th>
+              <th className="px-3 py-2 font-medium">Return %</th>
+              <th className="px-3 py-2 font-medium">Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((t) => (
+              <tr key={t.id} className="border-t border-zinc-100">
+                <td className="px-3 py-2 text-[10px] text-zinc-500">
+                  {formatShortTime(t.closedAt)} {formatShortDate(t.closedAt)}
+                </td>
+                <td className="px-3 py-2 text-xs font-medium text-zinc-900">{t.strategyName}</td>
+                <td className="px-3 py-2"><SideBadge side={t.side} /></td>
+                <td className="px-3 py-2 text-xs font-mono text-zinc-500">{fmtContracts(t.contracts)}</td>
+                <td className="px-3 py-2 text-xs font-mono text-zinc-500">
+                  ${t.entryPrice.toLocaleString()} → ${t.exitPrice.toLocaleString()}
+                </td>
+                <td className="px-3 py-2 text-xs font-mono text-zinc-900">{fmtUSD(t.realizedPnl, { signed: true })}</td>
+                <td className="px-3 py-2 text-xs font-mono text-rose-600">-{fmtUSD(t.fees)}</td>
+                <td className={`px-3 py-2 text-xs font-mono font-bold ${t.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {fmtUSD(t.netPnl, { signed: true })}
+                </td>
+                <td className={`px-3 py-2 text-xs font-mono ${t.netPnlPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {fmtPct(t.netPnlPct, true)}
+                </td>
+                <td className="px-3 py-2">
+                  <BadgePill label={t.exitReason} tone={t.exitReason === "TP" ? "positive" : t.exitReason === "SL" || t.exitReason === "LIQUIDATION_RISK" ? "negative" : "neutral"} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -217,8 +456,6 @@ export function BTCFuturesScalper() {
     trades,
     balance,
     equity,
-    availableMargin,
-    usedMargin,
     stats,
     quote,
     isReady,
@@ -228,326 +465,72 @@ export function BTCFuturesScalper() {
     resetPaperAccount,
     clearTradeHistory,
     setDisabledStrategies,
-    exportCSV,
-    exportJSON,
     strategyStatuses,
   } = useBTCFuturesScalperEngine();
 
-  const [showTrades, setShowTrades] = useState(false);
-  const [showStrategies, setShowStrategies] = useState(false);
-
-  const openLongs = positions.filter(p => p.side === "LONG").length;
-  const openShorts = positions.filter(p => p.side === "SHORT").length;
-
-  const liqRiskPositions = positions.filter(p => {
-    const dist = p.side === "LONG"
-      ? ((p.markPrice - p.liquidationPrice) / p.markPrice) * 100
-      : ((p.liquidationPrice - p.markPrice) / p.markPrice) * 100;
-    return dist < 10;
-  });
+  const [activeTab, setActiveTab] = useState<"positions" | "strategies" | "trades">("positions");
 
   return (
     <div className="min-h-screen bg-zinc-50 p-4">
       {/* Header */}
-      <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-zinc-900">BTC Futures Scalper</h1>
-            <p className="text-[11px] text-zinc-500">
-              {STRAT_DEFS_COUNT} strategies | {LEVERAGE}x leverage | ${INITIAL_BALANCE} paper | ${MIN_ABS_NET_PNL_USD} min PnL
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={togglePause}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold ${pauseEntries ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}
-            >
-              {pauseEntries ? "⏸ PAUSED" : "▶ LIVE"}
-            </button>
-            <button
-              onClick={() => setShowStrategies(!showStrategies)}
-              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-[11px] font-semibold text-zinc-700"
-            >
-              Strategies
-            </button>
-            <button
-              onClick={() => setShowTrades(!showTrades)}
-              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-[11px] font-semibold text-zinc-700"
-            >
-              Trades ({trades.length})
-            </button>
-          </div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-900">BTC Futures Scalper</h1>
+          <p className="text-[11px] text-zinc-500">
+            180 strategies · 25x leverage · $1,000 paper · Delta Exchange compatible
+          </p>
         </div>
-
-        {/* Quote Bar */}
-        {quote && (
-          <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg bg-zinc-100 p-2">
-            <CompactMetric label="Mark" value={`$${quote.markPrice.toLocaleString()}`} tone="neutral" />
-            <CompactMetric label="Last" value={`$${quote.lastPrice.toLocaleString()}`} tone="neutral" />
-            <CompactMetric label="Index" value={`$${quote.indexPrice.toLocaleString()}`} tone="neutral" />
-            <CompactMetric
-              label="24h"
-              value={fmtPct(quote.changePct24h, true)}
-              tone={quote.changePct24h >= 0 ? "positive" : "negative"}
-            />
-            <CompactMetric
-              label="Funding"
-              value={fmtPct(quote.fundingRate * 100, true, 4)}
-              tone={quote.fundingRate >= 0 ? "positive" : "negative"}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Stats Grid */}
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Balance" value={fmtUSD(balance)} tone="neutral" />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Equity" value={fmtUSD(equity, { signed: true })} tone={equity >= balance ? "positive" : "negative"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Available" value={fmtUSD(availableMargin)} tone={availableMargin > 100 ? "positive" : "neutral"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Used Margin" value={fmtUSD(usedMargin)} tone="neutral" />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Margin %" value={fmtPct(stats.marginUtilization)} tone={stats.marginUtilization > 80 ? "negative" : stats.marginUtilization > 50 ? "negative" : "neutral"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Leverage" value={stats.avgLeverage.toFixed(1)} suffix="x" tone="neutral" />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Win Rate" value={fmtPct(stats.winRate)} tone={stats.winRate > 50 ? "positive" : "neutral"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="PnL" value={fmtUSD(stats.netPnl, { signed: true })} tone={stats.netPnl >= 0 ? "positive" : "negative"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Trades" value={`${stats.totalTrades}`} tone="neutral" />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Open" value={`${stats.openPositions}/${stats.maxPositions}`} tone={stats.openPositions >= stats.maxPositions ? "negative" : "neutral"} />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Longs/Shorts" value={`${stats.longCount}/${stats.shortCount}`} tone="neutral" />
-        </div>
-        <div className="rounded-xl bg-white p-3 shadow-sm">
-          <CompactMetric label="Liq Risk" value={`${liqRiskPositions.length}`} tone={liqRiskPositions.length > 0 ? "negative" : "neutral"} />
+        <div className="flex gap-2">
+          <button
+            onClick={togglePause}
+            className={`rounded-lg border px-4 py-2 text-xs font-semibold ${
+              pauseEntries
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {pauseEntries ? "⏸ PAUSED" : "▶ LIVE"}
+          </button>
+          <button
+            onClick={resetPaperAccount}
+            className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700"
+          >
+            Reset Account
+          </button>
         </div>
       </div>
 
-      {/* Liquidation Warning */}
-      {liqRiskPositions.length > 0 && (
-        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          <strong>⚠️ Liquidation Risk:</strong> {liqRiskPositions.length} position(s) near liquidation. Consider closing or adjusting.
-        </div>
-      )}
-
-      {/* Positions Table */}
-      {positions.length > 0 && (
-        <div className="mb-4 overflow-x-auto rounded-2xl bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-zinc-100 text-[10px] uppercase tracking-wider text-zinc-500">
-                <th className="px-4 py-2">Position</th>
-                <th className="px-4 py-2">Side</th>
-                <th className="px-4 py-2 text-right">Contracts</th>
-                <th className="px-4 py-2 text-right">Entry</th>
-                <th className="px-4 py-2 text-right">Mark</th>
-                <th className="px-4 py-2 text-right">Margin</th>
-                <th className="px-4 py-2 text-right">PnL</th>
-                <th className="px-4 py-2 text-right">Liq Price</th>
-                <th className="px-4 py-2">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((p) => {
-                const pnlPositive = p.unrealizedPnl >= 0;
-                const liqDist = p.side === "LONG"
-                  ? ((p.markPrice - p.liquidationPrice) / p.markPrice) * 100
-                  : ((p.liquidationPrice - p.markPrice) / p.markPrice) * 100;
-
-                return (
-                  <tr key={p.id} className="border-t border-zinc-100 hover:bg-zinc-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 rounded-full ${pnlPositive ? "bg-emerald-500" : "bg-rose-500"}`} />
-                        <div>
-                          <div className="font-semibold text-zinc-900">{p.strategyName}</div>
-                          <div className="text-[10px] text-zinc-500">{p.leverage}x {p.marginMode}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3"><SideBadge side={p.side} /></td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">{fmtContracts(p.contracts)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">${p.entryPrice.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">${p.markPrice.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">{fmtUSD(p.marginUsed)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`font-mono font-bold ${pnlPositive ? "text-emerald-600" : "text-rose-600"}`}>
-                        {fmtUSD(p.unrealizedPnl, { signed: true })}
-                      </div>
-                      <div className="text-[10px] text-zinc-500">{fmtPct(p.returnPct, true)}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`font-mono text-xs ${liqDist < 10 ? "font-bold text-red-600" : "text-zinc-600"}`}>
-                        ${p.liquidationPrice.toLocaleString()}
-                      </div>
-                      <div className="text-[10px] text-zinc-500">{liqDist.toFixed(1)}% away</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <PositionProgressBar
-                        returnPct={p.returnPct}
-                        unrealizedPnl={p.unrealizedPnl}
-                        entryPrice={p.entryPrice}
-                        tpPrice={p.tpPrice}
-                        slPrice={p.slPrice}
-                        liquidationPrice={p.liquidationPrice}
-                        currentPrice={p.markPrice}
-                        contracts={p.contracts}
-                        side={p.side}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Trades History */}
-      {showTrades && trades.length > 0 && (
-        <div className="mb-4 overflow-x-auto rounded-2xl bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-zinc-100 p-4">
-            <h3 className="font-bold text-zinc-900">Trade History ({trades.length})</h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => navigator.clipboard.writeText(exportCSV())}
-                className="rounded-lg bg-zinc-100 px-3 py-1.5 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-200"
-              >
-                Copy CSV
-              </button>
-              <button
-                onClick={() => navigator.clipboard.writeText(exportJSON())}
-                className="rounded-lg bg-zinc-100 px-3 py-1.5 text-[11px] font-semibold text-zinc-700 hover:bg-zinc-200"
-              >
-                Copy JSON
-              </button>
-              <button
-                onClick={clearTradeHistory}
-                className="rounded-lg bg-rose-100 px-3 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-200"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-zinc-100 text-[10px] uppercase tracking-wider text-zinc-500">
-                <th className="px-4 py-2">Time</th>
-                <th className="px-4 py-2">Strategy</th>
-                <th className="px-4 py-2">Side</th>
-                <th className="px-4 py-2 text-right">Contracts</th>
-                <th className="px-4 py-2 text-right">Entry → Exit</th>
-                <th className="px-4 py-2 text-right">Gross</th>
-                <th className="px-4 py-2 text-right">Fees</th>
-                <th className="px-4 py-2 text-right">Net PnL</th>
-                <th className="px-4 py-2 text-right">Return %</th>
-                <th className="px-4 py-2">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trades.slice().reverse().slice(0, 50).map((t) => (
-                <tr key={t.id} className="border-t border-zinc-100 hover:bg-zinc-50">
-                  <td className="px-4 py-2 text-zinc-500">{new Date(t.closedAt).toLocaleTimeString()}</td>
-                  <td className="px-4 py-2 font-medium text-zinc-900">{t.strategyName}</td>
-                  <td className="px-4 py-2"><SideBadge side={t.side} /></td>
-                  <td className="px-4 py-2 text-right font-mono">{fmtContracts(t.contracts)}</td>
-                  <td className="px-4 py-2 text-right font-mono">${t.entryPrice.toLocaleString()} → ${t.exitPrice.toLocaleString()}</td>
-                  <td className="px-4 py-2 text-right font-mono">{fmtUSD(t.realizedPnl, { signed: true })}</td>
-                  <td className="px-4 py-2 text-right font-mono text-rose-600">-{fmtUSD(t.fees)}</td>
-                  <td className={`px-4 py-2 text-right font-mono font-bold ${t.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtUSD(t.netPnl, { signed: true })}
-                  </td>
-                  <td className={`px-4 py-2 text-right font-mono ${t.netPnlPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {fmtPct(t.netPnlPct, true)}
-                  </td>
-                  <td className="px-4 py-2">
-                    <BadgePill
-                      label={t.exitReason}
-                      tone={t.exitReason === "TP" ? "positive" : t.exitReason === "SL" || t.exitReason === "LIQUIDATION_RISK" ? "negative" : "neutral"}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Strategy Status */}
-      {showStrategies && (
-        <div className="mb-4 rounded-2xl bg-white p-4 shadow-sm">
-          <h3 className="mb-3 font-bold text-zinc-900">Strategy Status ({STRAT_DEFS_COUNT} total)</h3>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6">
-            {strategyStatuses.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  const newDisabled = disabledStrategies.includes(s.id)
-                    ? disabledStrategies.filter(id => id !== s.id)
-                    : [...disabledStrategies, s.id];
-                  setDisabledStrategies(newDisabled);
-                }}
-                className={`rounded-lg border p-2 text-left text-[11px] transition-all ${
-                  s.disabled
-                    ? "border-zinc-200 bg-zinc-100 opacity-50"
-                    : s.status === "OPEN"
-                    ? "border-emerald-200 bg-emerald-50"
-                    : s.status === "COOLING"
-                    ? "border-amber-200 bg-amber-50"
-                    : "border-zinc-200 bg-white hover:border-zinc-300"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold">#{s.id}</span>
-                  {s.openCount > 0 && <BadgePill label={`${s.openCount} open`} tone="positive" />}
-                </div>
-                <div className="mt-1 truncate text-zinc-600">{s.name}</div>
-                <div className="text-zinc-400">{s.category}</div>
-                {s.status === "COOLING" && <div className="text-amber-600">In cooldown</div>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Daily Ledger */}
+      {/* Market Hero */}
       <div className="mb-4">
-        <DailyPnlLedger trades={trades} balance={balance} dayStartBalance={INITIAL_BALANCE} />
+        <MarketHero quote={quote} isReady={isReady} />
       </div>
 
-      {/* Reset */}
-      <div className="flex justify-end">
-        <button
-          onClick={resetPaperAccount}
-          className="rounded-lg bg-rose-100 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-200"
-        >
-          Reset Paper Account
-        </button>
+      {/* Stats */}
+      <div className="mb-4">
+        <StatsPanel stats={stats} balance={balance} equity={equity} />
       </div>
+
+      {/* Tab Navigation */}
+      <div className="mb-4 flex gap-2">
+        {["positions", "strategies", "trades"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab as any)}
+            className={`rounded-lg border px-4 py-2 text-xs font-medium capitalize ${
+              activeTab === tab
+                ? "border-zinc-300 bg-zinc-100 text-zinc-900"
+                : "border-transparent text-zinc-500 hover:text-zinc-700"
+            }`}
+          >
+            {tab} ({tab === "positions" ? positions.length : tab === "strategies" ? 180 : trades.length})
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "positions" && <PositionsPanel positions={positions} quote={quote} />}
+      {activeTab === "strategies" && <StrategiesPanel strategies={strategyStatuses} disabledStrategies={disabledStrategies} setDisabledStrategies={setDisabledStrategies} />}
+      {activeTab === "trades" && <TradesPanel trades={trades} clearTradeHistory={clearTradeHistory} />}
     </div>
   );
 }
-
-// Constants for display
-const INITIAL_BALANCE = 1000;
-const MIN_ABS_NET_PNL_USD = 2;
-const LEVERAGE = 25;
-
-// Strategy defs reference (matches hook)
-const STRAT_DEFS_COUNT = 180;
