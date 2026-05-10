@@ -18,7 +18,6 @@ echo "📦 Archiving codebase..."
 tar -czvf /tmp/antigravity_build.tar.gz \
     --exclude='.git' \
     --exclude='node_modules' \
-    --exclude='client' \
     --exclude='bin' \
     -C ../ .
 
@@ -34,12 +33,21 @@ ssh -i "$SSH_KEY_PATH" $SERVER_USER@$SERVER_IP << 'EOF'
     tar -xzvf /tmp/antigravity_build.tar.gz -C ~/antigravity_prod/
     
     cd ~/antigravity_prod
+
+    if docker compose version >/dev/null 2>&1; then
+      COMPOSE_CMD="docker compose"
+    elif docker-compose version >/dev/null 2>&1; then
+      COMPOSE_CMD="docker-compose"
+    else
+      echo "Neither docker compose nor docker-compose is installed."
+      exit 1
+    fi
     
     echo "Restarting production Docker cluster in detached mode..."
     # Warning: Prunes dangling images to preserve tight free tier space!
-    docker compose -f docker-compose.prod.yml down
-    docker compose -f docker-compose.prod.yml build --pull
-    docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    $COMPOSE_CMD -f docker-compose.prod.yml down --remove-orphans
+    $COMPOSE_CMD -f docker-compose.prod.yml build --pull
+    $COMPOSE_CMD -f docker-compose.prod.yml up -d --remove-orphans
     echo "Waiting for engine health..."
     for i in {1..24}; do
       HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' antigravity_engine 2>/dev/null || echo "starting")
@@ -50,7 +58,21 @@ ssh -i "$SSH_KEY_PATH" $SERVER_USER@$SERVER_IP << 'EOF'
       sleep 5
       if [ "$i" -eq 24 ]; then
         echo "Engine failed healthcheck; printing logs."
-        docker compose -f docker-compose.prod.yml logs --tail=200 engine
+        $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=200 engine
+        exit 1
+      fi
+    done
+    echo "Waiting for frontend health..."
+    for i in {1..24}; do
+      HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' antigravity_client 2>/dev/null || echo "starting")
+      if [ "$HEALTH_STATUS" = "healthy" ]; then
+        echo "Frontend is healthy."
+        break
+      fi
+      sleep 5
+      if [ "$i" -eq 24 ]; then
+        echo "Frontend failed healthcheck; printing logs."
+        $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=200 client
         exit 1
       fi
     done

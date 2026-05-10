@@ -1,14 +1,43 @@
 version: '3.8'
 
 services:
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: antigravity_client
+    restart: unless-stopped
+    ports:
+      - "80:3000"
+    environment:
+      - NODE_ENV=production
+      - INTERNAL_API_URL=http://engine:8080
+      - ENGINE_URL=http://engine:8080
+      - LIGHTSAIL_ENGINE_URL=http://engine:8080
+    depends_on:
+      - engine
+    mem_limit: 700m
+    cpus: 1.00
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
   engine:
     build:
       context: ./engine
       dockerfile: Dockerfile
     container_name: antigravity_engine
     restart: unless-stopped
-    ports:
-      - "80:8080"
+    expose:
+      - "8080"
     env_file:
       - .env
     environment:
