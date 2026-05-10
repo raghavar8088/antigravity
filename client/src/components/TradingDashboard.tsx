@@ -26,6 +26,7 @@ import NiftyBeesScalper from "@/components/NiftyBeesScalper";
 import CryptoEquityScalper from "@/components/CryptoEquityScalper";
 import ForexScalper from "@/components/ForexScalper";
 import BTCSpotScalper from "@/components/BTCSpotScalper";
+import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import ForexGoldScalper from "@/components/ForexGoldScalper";
 import LiveDataLabPanel from "@/components/LiveDataLabPanel";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
@@ -44,6 +45,7 @@ import useCryptoEquityEngine from "@/hooks/useCryptoEquityEngine";
 import useForexEngine from "@/hooks/useForexEngine";
 import useForexGoldEngine from "@/hooks/useForexGoldEngine";
 import useBTCSpotScalperEngine from "@/hooks/useBTCSpotScalperEngine";
+import { useBTCFuturesScalperEngine } from "@/hooks/useBTCFuturesScalperEngine";
 import useOptions from "@/hooks/useOptions";
 import useOptionsSelling from "@/hooks/useOptionsSelling";
 import usePositions from "@/hooks/usePositions";
@@ -95,7 +97,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india" | "forex" | "charts";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "niftyBees" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "forexGold" | "notepad" | "spotBuy" | "btcSpotScalper";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "deltaLive" | "chain" | "cryptoEquity" | "nifty" | "niftySelling" | "niftyStocks" | "niftyBees" | "liveDataLab" | "mcx" | "charts" | "forexScalper" | "forexGold" | "notepad" | "spotBuy" | "btcSpotScalper" | "btcFuturesScalper";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -128,6 +130,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
   },
   { path: "/forex", label: "Forex Workspace", description: "Live forex scalping across 12 pairs with 10% of $1M paper capital per trade entry (10× prior allocation).", group: "forex", module: "forexScalper" },
   { path: "/forex/gold", label: "Gold Trading", description: "Dedicated gold desk under forex with 100 autonomous strategies and separate trade history.", group: "forex", module: "forexGold" },
+  { path: "/btc-futures", label: "BTC Futures", description: "BTCUSD perpetual futures scalper with 25x leverage, liquidation tracking, and funding rate awareness. $1,000 paper wallet.", group: "crypto", module: "btcFuturesScalper" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -942,6 +945,7 @@ export default function TradingDashboard({
   const btcOptionsSellingModuleActive = activeModule === "options-selling";
   const cryptoEquityModuleActive = activeModule === "cryptoEquity";
   const btcSpotScalperModuleActive = activeModule === "btcSpotScalper";
+  const btcFuturesScalperModuleActive = activeModule === "btcFuturesScalper";
   const forexModuleActive = activeModule === "forexScalper";
   const forexGoldModuleActive = activeModule === "forexGold";
   const niftyOptionsModuleActive = activeModule === "nifty";
@@ -1372,6 +1376,7 @@ export default function TradingDashboard({
               { key: "deltaLive",        label: "Delta Live" },
               { key: "spotBuy",          label: "BTC Spot Buy" },
               { key: "btcSpotScalper",   label: "BTC Spot Scalper" },
+              { key: "btcFuturesScalper", label: "BTC Futures Scalper" },
               { key: "dashboard",        label: "BTC Equity" },
               { key: "cryptoEquity",     label: "Crypto Equity" },
               { key: "notepad",          label: "📋 Notepad" },
@@ -1532,6 +1537,8 @@ export default function TradingDashboard({
             ? "BTC Spot Buy — Spot accumulation desk and related controls."
             : activeModule === "btcSpotScalper"
             ? "BTC Spot Scalper — 130 strategies incl. multi-timeframe (1m/5m/15m trend alignment, MTF pullback, squeeze fire, momentum cascade) + Williams %R, CCI, Keltner, Donchian, EMA Ribbon, ADX, ROC, BB, Stochastic, MACD, OBV & more. Smart exit: breakeven move, adaptive trailing, momentum-aware holds. $100 paper wallet, max 10 concurrent clips, ~0.15% fee model, $2 min net PnL."
+            : activeModule === "btcFuturesScalper"
+            ? "BTC Futures Scalper — BTCUSD perpetual futures with 25x leverage. 130 strategies incl. multi-timeframe analysis. Features: liquidation price tracking, funding rate awareness, margin management, contract-based sizing. $1,000 paper wallet, 0.1% taker fee, $2 min net PnL. Real Delta Exchange API compatible."
             : "Select a workspace tab above to see its description."}
         </div>
       </div>
@@ -2537,6 +2544,8 @@ export default function TradingDashboard({
           setEntriesPaused={btcSpotSetEntriesPaused}
         />
       )}
+
+      {activeModule === "btcFuturesScalper" && <BTCFuturesScalper />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
