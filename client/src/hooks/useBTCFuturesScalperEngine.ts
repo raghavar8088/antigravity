@@ -37,7 +37,8 @@ const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
 const LIQUIDATION_BUFFER_PCT = 10; // Close before liquidation (10% buffer)
 
 // Strategy parameters
-const SIGNAL_THRESHOLD = 55;
+// Threshold was set when confirmation only matched long setups; shorts were effectively blocked.
+const SIGNAL_THRESHOLD = 48;
 const MAX_BARS = 120;
 const MIN_BARS = 18;
 const POLL_MS = 2_000;
@@ -1262,41 +1263,82 @@ function isCategoryAligned(signalKey: string, category: string): boolean {
 }
 
 function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
-  const confluence = [
-    s.fast > s.slow,
-    s.rsi14 > 45 && s.rsi14 < 75,
-    s.macdLine > s.macdSignal,
-    s.stochK > s.stochD,
-    s.momentum3 > 0,
-    s.obvSlope > 0,
-    s.atr14 > 0,
-    s.bbWidth > 0,
-  ].filter(Boolean).length;
+  const isShort = strat.signalKey.includes("SHORT");
+
+  const confluence = (
+    isShort
+      ? [
+          s.fast < s.slow,
+          s.rsi14 > 25 && s.rsi14 < 55,
+          s.macdLine < s.macdSignal,
+          s.stochK < s.stochD,
+          s.momentum3 < 0,
+          s.obvSlope < 0,
+          s.atr14 > 0,
+          s.bbWidth > 0,
+        ]
+      : [
+          s.fast > s.slow,
+          s.rsi14 > 45 && s.rsi14 < 75,
+          s.macdLine > s.macdSignal,
+          s.stochK > s.stochD,
+          s.momentum3 > 0,
+          s.obvSlope > 0,
+          s.atr14 > 0,
+          s.bbWidth > 0,
+        ]
+  ).filter(Boolean).length;
 
   if (strat.category === "Trend" || strat.category === "MTF Trend") {
-    if (s.fast <= s.slow) return false;
-    if (s.rsi14 < 40 || s.rsi14 > 80) return false;
+    if (isShort) {
+      if (s.fast >= s.slow) return false;
+      if (s.rsi14 < 20 || s.rsi14 > 65) return false;
+    } else {
+      if (s.fast <= s.slow) return false;
+      if (s.rsi14 < 40 || s.rsi14 > 80) return false;
+    }
   }
 
   if (strat.category === "MeanRev" || strat.category === "MR") {
-    if (s.rsi14 > 45) return false;
-    if (s.price > s.bbLower && s.price > s.mean20) return false;
+    if (isShort) {
+      if (s.rsi14 < 55) return false;
+      if (s.price < s.bbUpper && s.price < s.mean20) return false;
+    } else {
+      if (s.rsi14 > 45) return false;
+      if (s.price > s.bbLower && s.price > s.mean20) return false;
+    }
   }
 
   if (strat.category === "Williams MR") {
-    if (s.williamsR > -70) return false;
+    if (isShort) {
+      if (s.williamsR < -25) return false;
+    } else {
+      if (s.williamsR > -70) return false;
+    }
   }
 
   if (strat.category === "CCI MR") {
-    if (s.cci20 > -80) return false;
+    if (isShort) {
+      if (s.cci20 < 80) return false;
+    } else {
+      if (s.cci20 > -80) return false;
+    }
   }
 
   if (strat.category === "Keltner MR") {
-    if (s.price > s.keltnerLower) return false;
+    if (isShort) {
+      if (s.price < s.keltnerUpper) return false;
+    } else {
+      if (s.price > s.keltnerLower) return false;
+    }
   }
 
   if (strat.category === "VWAP MR") {
-    if (s.vwapDev > -0.01 * s.price) return false;
+    if (isShort) {
+      if (s.vwapDev < 0.01 * s.price) return false;
+    } else {
+      if (s.vwapDev > -0.01 * s.price) return false;
+    }
   }
 
   if (strat.category === "ADX Trend") {
@@ -1304,11 +1346,19 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
   }
 
   if (strat.category === "Donchian Trend") {
-    if (s.price < s.donchianHigh * 0.99) return false;
+    if (isShort) {
+      if (s.price > s.donchianLow * 1.01) return false;
+    } else {
+      if (s.price < s.donchianHigh * 0.99) return false;
+    }
   }
 
   if (strat.category === "ROC Trend") {
-    if (s.roc10 < 0.3) return false;
+    if (isShort) {
+      if (s.roc10 > -0.3) return false;
+    } else {
+      if (s.roc10 < 0.3) return false;
+    }
   }
 
   if (strat.category === "Squeeze") {
@@ -1319,34 +1369,64 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
     const htf5Trend = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
     const htf15Trend = htfTrend(s.htf15_fast, s.htf15_slow, s.htf15_momentum);
     if (htf5Trend === "NEUTRAL" || htf15Trend === "NEUTRAL") return false;
+    if (isShort) {
+      if (htf5Trend !== "DOWN" || htf15Trend !== "DOWN") return false;
+    } else {
+      if (htf5Trend !== "UP" || htf15Trend !== "UP") return false;
+    }
   }
 
   // Pro Grade category validations
   if (strat.category === "Smart Money") {
     if (s.volRatio < 1.5) return false;
-    if (s.obvSlope <= 0) return false;
+    if (isShort) {
+      if (s.obvSlope >= 0) return false;
+    } else {
+      if (s.obvSlope <= 0) return false;
+    }
   }
 
   if (strat.category === "Order Flow") {
-    if (s.momentum3 <= s.atr14) return false;
+    if (isShort) {
+      if (s.momentum3 >= -s.atr14) return false;
+    } else {
+      if (s.momentum3 <= s.atr14) return false;
+    }
     if (s.volRatio < 1.5) return false;
   }
 
   if (strat.category === "Liquidity") {
-    if (s.price > s.low20 * 1.005) return false;
+    if (isShort) {
+      if (s.price < s.high20 * 0.995) return false;
+    } else {
+      if (s.price > s.low20 * 1.005) return false;
+    }
   }
 
   if (strat.category === "Stop Hunt") {
-    if (Math.abs(s.price - s.low20) > s.atr14 * 0.5) return false;
+    if (isShort) {
+      if (Math.abs(s.price - s.high20) > s.atr14 * 0.5) return false;
+    } else {
+      if (Math.abs(s.price - s.low20) > s.atr14 * 0.5) return false;
+    }
   }
 
   if (strat.category === "Wyckoff") {
-    if (s.cci20 < 80) return false;
-    if (s.volRatio < 1.3) return false;
+    if (isShort) {
+      if (s.cci20 > -80) return false;
+      if (s.volRatio < 1.3) return false;
+    } else {
+      if (s.cci20 < 80) return false;
+      if (s.volRatio < 1.3) return false;
+    }
   }
 
   if (strat.category === "Market Structure") {
-    if (s.price < s.high20 * 0.998 && s.price > s.low20 * 1.002) return false;
+    if (isShort) {
+      if (s.price > s.low20 * 1.002 && s.price < s.high20 * 0.998) return false;
+    } else {
+      if (s.price < s.high20 * 0.998 && s.price > s.low20 * 1.002) return false;
+    }
   }
 
   if (strat.category === "Statistical") {
@@ -1385,12 +1465,21 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
   }
 
   if (strat.category === "ML-Style") {
-    const factors = [
-      s.fast > s.slow,
-      s.rsi14 > 45 && s.rsi14 < 75,
-      s.macdHist > 0,
-      s.adxProxy > 20,
-    ].filter(Boolean).length;
+    const factors = (
+      isShort
+        ? [
+            s.fast < s.slow,
+            s.rsi14 > 25 && s.rsi14 < 55,
+            s.macdHist < 0,
+            s.adxProxy > 20,
+          ]
+        : [
+            s.fast > s.slow,
+            s.rsi14 > 45 && s.rsi14 < 75,
+            s.macdHist > 0,
+            s.adxProxy > 20,
+          ]
+    ).filter(Boolean).length;
     if (factors < 3) return false;
   }
 
