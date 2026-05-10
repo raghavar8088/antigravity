@@ -375,6 +375,10 @@ export default function TradingDashboard({
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [activeGroup, setActiveGroup] = useState<DashboardGroup>(initialGroup);
   const [activeModule, setActiveModule] = useState<DashboardModule>(sanitizeModule(initialModule));
+  const btcLegacyModuleActive =
+    activeModule === "dashboard" ||
+    activeModule === "engine" ||
+    activeModule === "history";
   const [activeTab, setActiveTab] = useState<"trade" | "stats" | "strategies" | "history" | "feed">("trade");
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
@@ -391,6 +395,11 @@ export default function TradingDashboard({
   }, [initialGroup, initialModule]);
 
   const { engineOnline } = useEngineState();
+  const btcOptionsActive = activeModule === "options";
+  const btcOptionsSellingActive = activeModule === "options-selling";
+  const niftyOptionsActive = activeModule === "nifty";
+  const niftySellingActive = activeModule === "niftySelling";
+  const niftyBeesActive = activeModule === "niftyBees";
   const {
     positions: optionPositions,
     stats: optionStats,
@@ -398,14 +407,14 @@ export default function TradingDashboard({
     trades: optionTrades,
     clearAll: optionBuyClearAll,
     btcFeed: optionEngineBtcFeed,
-  } = useOptions(resetRefreshKey);
+  } = useOptions(resetRefreshKey, btcOptionsActive);
   const {
     positions: optionSellingPositions,
     stats: optionSellingStats,
     strategies: optionSellingStrategies,
     trades: optionSellingTrades,
     clearAll: optionSellingClearAll,
-  } = useOptionsSelling(resetRefreshKey);
+  } = useOptionsSelling(resetRefreshKey, btcOptionsSellingActive);
   const {
     positions: niftyOptionPositions,
     trades: niftyOptionTrades,
@@ -415,7 +424,7 @@ export default function TradingDashboard({
     clearTradeHistory: niftyOptionClearTradeHistory,
     barCount: niftyBarCount,
     enginePrice: niftyEnginePrice,
-  } = useNiftyOptionsEngine(resetRefreshKey);
+  } = useNiftyOptionsEngine(resetRefreshKey, niftyOptionsActive);
   const {
     positions: niftySellingPositions,
     trades: niftySellingTrades,
@@ -425,7 +434,7 @@ export default function TradingDashboard({
     clearTradeHistory: niftySellingClearTradeHistory,
     barCount: niftySellingBarCount,
     enginePrice: niftySellingEnginePrice,
-  } = useNiftyOptionsSellingEngine(resetRefreshKey);
+  } = useNiftyOptionsSellingEngine(resetRefreshKey, niftySellingActive);
   const {
     quote: niftyBeesQuote,
     positions: niftyBeesPositions,
@@ -434,14 +443,14 @@ export default function TradingDashboard({
     stats: niftyBeesStats,
     reset: niftyBeesReset,
     clearTrades: niftyBeesClearTrades,
-  } = useNiftyBeesEngine();
+  } = useNiftyBeesEngine(niftyBeesActive);
   const market = useLiveBTCMarket();
   const deferredCandles = useDeferredValue(market.candles);
-  const { strategies: liveStrategies } = useStrategies(resetRefreshKey);
-  const { positions: livePositions } = usePositions(resetRefreshKey);
-  const { trades: liveTrades, stats: liveStats } = useTrades(resetRefreshKey);
-  const { logs: engineLogs } = useEngineLogs(resetRefreshKey);
-  const aiInsights = useAIInsights(resetRefreshKey);
+  const { strategies: liveStrategies } = useStrategies(resetRefreshKey, btcLegacyModuleActive);
+  const { positions: livePositions } = usePositions(resetRefreshKey, btcLegacyModuleActive);
+  const { trades: liveTrades, stats: liveStats } = useTrades(resetRefreshKey, btcLegacyModuleActive);
+  const { logs: engineLogs } = useEngineLogs(resetRefreshKey, btcLegacyModuleActive);
+  const aiInsights = useAIInsights(resetRefreshKey, btcLegacyModuleActive);
 
   const previousConnectionState = useRef<string>("");
   const previousExchange = useRef<string>("");

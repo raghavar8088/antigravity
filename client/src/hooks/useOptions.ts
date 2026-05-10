@@ -122,7 +122,7 @@ function parseBtcFeedJson(raw: unknown): OptionsBtcFeed | null {
   return { source, lastPrice, lastUpdated, tickerSymbol };
 }
 
-export default function useOptions(refreshKey = 0) {
+export default function useOptions(refreshKey = 0, enabled = true) {
   const cached = typeof window !== "undefined" ? readOptionsBuyCache() : null;
   const initialTrades = (cached?.trades as OptionTrade[]) ?? [];
   const initialStrategies = (cached?.strategies as OptionStrategyStatus[]) ?? [];
@@ -177,6 +177,7 @@ export default function useOptions(refreshKey = 0) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     void (async () => {
       const remote = await fetchPaperSnapshotFromServer(DESK);
@@ -194,9 +195,10 @@ export default function useOptions(refreshKey = 0) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const apiUrl = resolveEngineApiUrl();
     const fetch3 = async () => {
       try {
@@ -259,7 +261,7 @@ export default function useOptions(refreshKey = 0) {
     void fetch3();
     const interval = setInterval(() => void fetch3(), 3000);
     return () => clearInterval(interval);
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { positions, trades, strategies, stats, clearAll, btcFeed };
 }

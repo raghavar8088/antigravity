@@ -47,12 +47,13 @@ export type EngineStats = {
   candlesClosed: number;
 };
 
-export default function useTrades(refreshKey = 0) {
+export default function useTrades(refreshKey = 0, enabled = true) {
   const [trades, setTrades] = useState<TradeEntry[]>([]);
   const [stats, setStats] = useState<EngineStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return;
     const apiUrl = resolveEngineApiUrl();
     const fetchData = async () => {
       try {
@@ -85,7 +86,7 @@ export default function useTrades(refreshKey = 0) {
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { trades, stats, loading };
 }

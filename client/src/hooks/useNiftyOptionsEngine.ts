@@ -1361,7 +1361,7 @@ async function loadStateFromDb(eng: EngineRef): Promise<boolean> {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export default function useNiftyOptionsEngine(refreshKey = 0) {
+export default function useNiftyOptionsEngine(refreshKey = 0, enabled = true) {
   const engRef = useRef<EngineRef>(initEngine());
   const lastSavedSignatureRef = useRef(""); // empty = DB not yet loaded, block optimistic saves until loaded
   const dbLoadedRef = useRef(false);
@@ -1503,6 +1503,7 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
 
   // ── Subscribe to NIFTY SSE price stream ──────────────────────────────────
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const source = new EventSource("/api/nifty/stream");
 
@@ -1516,10 +1517,11 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
 
     source.onerror = () => { /* EventSource auto-reconnects */ };
     return () => { cancelled = true; source.close(); };
-  }, [feedPrice, engineTick]);
+  }, [feedPrice, engineTick, enabled]);
 
   // ── Load persisted state from DB on mount (only unlock saves after a successful load) ───
   useEffect(() => {
+    if (!enabled) return;
     const restore = async () => {
       const loaded = await loadStateFromDb(engRef.current);
       dbLoadedRef.current = loaded;
@@ -1534,18 +1536,20 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
       pushDisplayState();
     };
     void restore();
-  }, [pushDisplayState]);
+  }, [pushDisplayState, enabled]);
 
   // ── Periodic save every 60s — catches balance/strategy changes between trades
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => {
       if (dbLoadedRef.current) void saveStateToDb(engRef.current);
     }, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [enabled]);
 
   // ── Save on page close/refresh ─────────────────────────────────────────────
   useEffect(() => {
+    if (!enabled) return;
     const onUnload = () => {
       if (dbLoadedRef.current) {
         // Use sendBeacon for reliable delivery on page unload
@@ -1579,10 +1583,11 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, []);
+  }, [enabled]);
 
   // ── Pre-seed from today's 1-min candles ──────────────────────────────────
   useEffect(() => {
+    if (!enabled) return;
     const seed = async () => {
       try {
         const res = await fetch("/api/nifty/candles?interval=ONE_MINUTE");
@@ -1601,13 +1606,14 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
       } catch { /* silent */ }
     };
     void seed();
-  }, [pushDisplayState]);
+  }, [pushDisplayState, enabled]);
 
   // ── Engine tick interval ──────────────────────────────────────────────────
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => void engineTick(), TICK_MS);
     return () => clearInterval(id);
-  }, [engineTick]);
+  }, [engineTick, enabled]);
 
   // ── Reset ─────────────────────────────────────────────────────────────────
   const clearAll = useCallback(() => {
@@ -1641,6 +1647,7 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
   }, [pushDisplayState]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (refreshKey === 0) return;
     const run = async () => {
       const loaded = await loadStateFromDb(engRef.current);
@@ -1656,7 +1663,7 @@ export default function useNiftyOptionsEngine(refreshKey = 0) {
       pushDisplayState();
     };
     void run();
-  }, [refreshKey, pushDisplayState]);
+  }, [refreshKey, pushDisplayState, enabled]);
 
   return { positions, trades, strategies, stats, clearAll, clearTradeHistory, barCount, enginePrice };
 }

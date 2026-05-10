@@ -60,7 +60,7 @@ type AIInsightsState = {
 import { resolveEngineApiUrl } from "@/lib/engineApi";
 const API_URL = resolveEngineApiUrl();
 
-export default function useAIInsights(refreshKey = 0): AIInsightsState {
+export default function useAIInsights(refreshKey = 0, enabled = true): AIInsightsState {
   const [state, setState] = useState<AIInsightsState>({
     enabled: false,
     geminiEnabled: false,
@@ -71,6 +71,7 @@ export default function useAIInsights(refreshKey = 0): AIInsightsState {
   });
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
 
     const fetchInsights = async () => {
@@ -100,7 +101,7 @@ export default function useAIInsights(refreshKey = 0): AIInsightsState {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return state;
 }

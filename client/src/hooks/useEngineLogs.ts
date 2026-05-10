@@ -3,10 +3,11 @@ import { resolveEngineApiUrl } from "@/lib/engineApi";
 
 const API_URL = resolveEngineApiUrl();
 
-export default function useEngineLogs(refreshKey = 0) {
+export default function useEngineLogs(refreshKey = 0, enabled = true) {
   const [logs, setLogs] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
 
     const fetchLogs = async () => {
@@ -32,7 +33,7 @@ export default function useEngineLogs(refreshKey = 0) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { logs };
 }

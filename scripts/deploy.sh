@@ -38,8 +38,22 @@ ssh -i "$SSH_KEY_PATH" $SERVER_USER@$SERVER_IP << 'EOF'
     echo "Restarting production Docker cluster in detached mode..."
     # Warning: Prunes dangling images to preserve tight free tier space!
     docker compose -f docker-compose.prod.yml down
-    docker compose -f docker-compose.prod.yml build
-    docker compose -f docker-compose.prod.yml up -d
+    docker compose -f docker-compose.prod.yml build --pull
+    docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    echo "Waiting for engine health..."
+    for i in {1..24}; do
+      HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' antigravity_engine 2>/dev/null || echo "starting")
+      if [ "$HEALTH_STATUS" = "healthy" ]; then
+        echo "Engine is healthy."
+        break
+      fi
+      sleep 5
+      if [ "$i" -eq 24 ]; then
+        echo "Engine failed healthcheck; printing logs."
+        docker compose -f docker-compose.prod.yml logs --tail=200 engine
+        exit 1
+      fi
+    done
     
     docker image prune -a -f
     

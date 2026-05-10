@@ -1526,6 +1526,16 @@ func main() {
 		httpPort = "8080"
 	}
 
+	server := &http.Server{
+		Addr:              ":" + httpPort,
+		Handler:           nil,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB
+	}
+
 	go func() {
 		fmt.Printf("═══════════════════════════════════════════\n")
 		fmt.Printf("   RAIG AUTONOMOUS TRADING ENGINE ONLINE\n")
@@ -1538,7 +1548,7 @@ func main() {
 		fmt.Println("    GET    /api/stats        — Performance Data")
 		fmt.Println("    POST   /api/admin/kill   — Global Kill Switch")
 		fmt.Printf("═══════════════════════════════════════════\n")
-		if err := http.ListenAndServe(":"+httpPort, nil); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Println("[RAIG] Server error:", err)
 		}
 	}()
@@ -1555,6 +1565,11 @@ func main() {
 
 	log.Println("Hardware Kill Signal: Shutting down entire engine loop...")
 	cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("[RAIG] HTTP shutdown warning: %v", err)
+	}
 	coinbaseClient.Close()
 	if dbStore != nil {
 		dbStore.Close()

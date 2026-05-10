@@ -15,4 +15,8 @@ RUN apk --no-cache add ca-certificates tzdata
 
 COPY --from=builder /bin/antigravity /app/antigravity
 
+ENV GOMEMLIMIT=450MiB
+ENV GOGC=70
+ENV PORT=8080
+
 CMD ["/app/antigravity"]

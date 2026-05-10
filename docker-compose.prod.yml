@@ -6,12 +6,28 @@ services:
       context: ./engine
       dockerfile: Dockerfile
     container_name: antigravity_engine
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:8080"
     env_file:
       - .env
     environment:
       - SQLITE_PATH=/app/data/engine.db
+      - GOMEMLIMIT=450MiB
+      - GOGC=70
+      - PORT=8080
     volumes:
       - ./data:/app/data
+    mem_limit: 600m
+    cpus: 1.50
+    pids_limit: 512
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s

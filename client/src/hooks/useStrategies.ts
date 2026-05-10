@@ -17,11 +17,12 @@ export type StrategyData = {
   status: string;
 };
 
-export default function useStrategies(refreshKey = 0) {
+export default function useStrategies(refreshKey = 0, enabled = true) {
   const [strategies, setStrategies] = useState<StrategyData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return;
     const apiUrl = resolveEngineApiUrl();
     const fetchStrategies = async () => {
       try {
@@ -42,7 +43,7 @@ export default function useStrategies(refreshKey = 0) {
     fetchStrategies();
     const interval = setInterval(fetchStrategies, 3000);
     return () => clearInterval(interval);
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { strategies, loading };
 }

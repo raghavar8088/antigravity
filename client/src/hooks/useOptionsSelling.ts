@@ -27,7 +27,7 @@ import type { OptionPosition, OptionTrade, OptionStrategyStatus, OptionStats } f
 
 const DESK: OptionsDesk = "sell";
 
-export default function useOptionsSelling(refreshKey = 0) {
+export default function useOptionsSelling(refreshKey = 0, enabled = true) {
   const cached = typeof window !== "undefined" ? readOptionsSellCache() : null;
   const initialTrades = (cached?.trades as OptionTrade[]) ?? [];
   const initialStrategies = (cached?.strategies as OptionStrategyStatus[]) ?? [];
@@ -81,6 +81,7 @@ export default function useOptionsSelling(refreshKey = 0) {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     void (async () => {
       const remote = await fetchPaperSnapshotFromServer(DESK);
@@ -98,9 +99,10 @@ export default function useOptionsSelling(refreshKey = 0) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const apiUrl = resolveEngineApiUrl();
     const fetchAll = async () => {
       try {
@@ -154,7 +156,7 @@ export default function useOptionsSelling(refreshKey = 0) {
     void fetchAll();
     const interval = setInterval(() => void fetchAll(), 3000);
     return () => clearInterval(interval);
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { positions, trades, strategies, stats, clearAll };
 }

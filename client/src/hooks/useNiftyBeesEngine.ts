@@ -681,7 +681,7 @@ const EMPTY_STATS: NiftyBeesStats = {
   diagnostics: "Starting Nifty BEES engine.",
 };
 
-export default function useNiftyBeesEngine() {
+export default function useNiftyBeesEngine(enabled = true) {
   const engineRef = useRef<EngineRef>(initEngine());
   const [quote, setQuote] = useState<NiftyBeesQuote>({
     symbol: SYMBOL,
@@ -902,11 +902,13 @@ export default function useNiftyBeesEngine() {
   }, [pushDisplay]);
 
   useEffect(() => {
+    if (!enabled) return;
     loadPersisted(engineRef.current);
     pushDisplay();
-  }, [pushDisplay]);
+  }, [pushDisplay, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     (async () => {
       if (seededRef.current) return;
@@ -931,9 +933,10 @@ export default function useNiftyBeesEngine() {
     return () => {
       cancelled = true;
     };
-  }, [pushDisplay]);
+  }, [pushDisplay, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
@@ -966,14 +969,16 @@ export default function useNiftyBeesEngine() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [processTick]);
+  }, [processTick, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const interval = setInterval(() => persist(engineRef.current), 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const flush = () => persist(engineRef.current);
     const onHide = () => { if (document.visibilityState === "hidden") flush(); };
     window.addEventListener("beforeunload", flush);
@@ -982,7 +987,7 @@ export default function useNiftyBeesEngine() {
       window.removeEventListener("beforeunload", flush);
       document.removeEventListener("visibilitychange", onHide);
     };
-  }, []);
+  }, [enabled]);
 
   return { quote, positions, trades, strategies, stats, reset, clearTrades };
 }

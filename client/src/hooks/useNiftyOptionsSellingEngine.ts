@@ -559,7 +559,7 @@ function closePosition(eng: EngineRef, strategy: InternalStrategy, position: Int
   eng.trades.unshift(trade);
 }
 
-export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
+export default function useNiftyOptionsSellingEngine(refreshKey = 0, enabled = true) {
   const engRef = useRef<EngineRef>(initEngine());
   const lastSavedSignatureRef = useRef("");
   const dbLoadedRef = useRef(false);
@@ -734,6 +734,7 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
   }, [tickEngine]);
 
   useEffect(() => {
+    if (!enabled) return;
     void loadSellingState(engRef.current).then((loaded) => {
       dbLoadedRef.current = loaded;
       if (loaded) {
@@ -751,9 +752,10 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
       }
       pushDisplayState();
     });
-  }, [pushDisplayState]);
+  }, [pushDisplayState, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     const source = new EventSource("/api/nifty/stream");
     source.onmessage = (event) => {
@@ -769,9 +771,10 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
       cancelled = true;
       source.close();
     };
-  }, [feedPrice]);
+  }, [feedPrice, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const seed = async () => {
       try {
         const res = await fetch("/api/nifty/candles?interval=ONE_MINUTE");
@@ -794,21 +797,24 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
       }
     };
     void seed();
-  }, [pushDisplayState]);
+  }, [pushDisplayState, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => void tickEngine(), TICK_MS);
     return () => clearInterval(id);
-  }, [tickEngine]);
+  }, [tickEngine, enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const id = setInterval(() => {
       if (dbLoadedRef.current) void saveSellingState(engRef.current);
     }, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const onUnload = () => {
       if (!dbLoadedRef.current) return;
       const payload = JSON.stringify(buildPersistedPayload(engRef.current));
@@ -816,7 +822,7 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
     };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
-  }, []);
+  }, [enabled]);
 
   const clearAll = useCallback(() => {
     engRef.current = initEngine();
@@ -844,6 +850,7 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
   }, [pushDisplayState]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (refreshKey === 0) return;
     void loadSellingState(engRef.current).then((loaded) => {
       dbLoadedRef.current = loaded;
@@ -862,7 +869,7 @@ export default function useNiftyOptionsSellingEngine(refreshKey = 0) {
       }
       pushDisplayState();
     });
-  }, [refreshKey, pushDisplayState]);
+  }, [refreshKey, pushDisplayState, enabled]);
 
   return { positions, trades, strategies, stats, clearAll, clearTradeHistory, barCount, enginePrice };
 }

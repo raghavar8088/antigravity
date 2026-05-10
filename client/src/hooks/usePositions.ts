@@ -22,11 +22,12 @@ export type LivePosition = {
   originalSize: number;
 };
 
-export default function usePositions(refreshKey = 0) {
+export default function usePositions(refreshKey = 0, enabled = true) {
   const [positions, setPositions] = useState<LivePosition[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return;
     const apiUrl = resolveEngineApiUrl();
     const fetchPositions = async () => {
       try {
@@ -47,7 +48,7 @@ export default function usePositions(refreshKey = 0) {
     fetchPositions();
     const interval = setInterval(fetchPositions, 2000);
     return () => clearInterval(interval);
-  }, [refreshKey]);
+  }, [refreshKey, enabled]);
 
   return { positions, loading };
 }
