@@ -62,25 +62,11 @@ ssh -i "$SSH_KEY_PATH" $SERVER_USER@$SERVER_IP << 'EOF'
         exit 1
       fi
     done
-    echo "Waiting for frontend health..."
-    for i in {1..24}; do
-      HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}starting{{end}}' antigravity_client 2>/dev/null || echo "starting")
-      if [ "$HEALTH_STATUS" = "healthy" ]; then
-        echo "Frontend is healthy."
-        break
-      fi
-      sleep 5
-      if [ "$i" -eq 24 ]; then
-        echo "Frontend failed healthcheck; printing logs."
-        $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=200 client
-        exit 1
-      fi
-    done
-    
+
     docker image prune -a -f
-    
+
     echo "============================================="
-    echo "🟢 Antigravity Core is LIVE and executing trades!"
+    echo "🟢 Engine is LIVE (frontend: deploy separately on Vercel)."
     echo "============================================="
 EOF
 
