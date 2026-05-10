@@ -712,7 +712,11 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 	// Delta Exchange realistic retail sizing: fixed quantity with multipliers
 	// Not inverse-premium (which created absurd sizes for cheap options)
 	baseQty := float64(DELTA_BASE_QUANTITY)
-	quantity := baseQty * mul
+	sizeMultiplier := 1.0
+	if def.PositionUSD > 0 {
+		sizeMultiplier = positionUSD / def.PositionUSD
+	}
+	quantity := baseQty * sizeMultiplier
 	if quantity < DELTA_MIN_QUANTITY {
 		quantity = DELTA_MIN_QUANTITY
 	}
