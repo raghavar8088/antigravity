@@ -2,6 +2,7 @@
 
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
 import ActivityFeed from "@/components/ActivityFeed";
+import AppBrandBar from "@/components/AppBrandBar";
 import DashboardHeader from "@/components/DashboardHeader";
 import OptionsAccountHeader from "@/components/OptionsAccountHeader";
 import MarketChart from "@/components/MarketChart";
@@ -1068,6 +1069,7 @@ export default function TradingDashboard({
 
       <div className="workspace-shell workspace-shell--no-sidebar">
         <div className="workspace-main" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <AppBrandBar />
       {optionsModuleActive ? (
         <OptionsAccountHeader
           online={optionsOnline}

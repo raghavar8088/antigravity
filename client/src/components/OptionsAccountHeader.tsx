@@ -7,6 +7,9 @@ type OptionsAccountHeaderProps = {
   openPositions: number;
   marketLabel?: string;
   marketCode?: string;
+  /** When set, shown in the left badge instead of marketCode text (e.g. RAIG options mark). */
+  brandLogoSrc?: string;
+  brandLogoAlt?: string;
   accountLabel?: string;
   currencyCode?: string;
   locale?: string;
@@ -42,6 +45,8 @@ export default function OptionsAccountHeader({
   openPositions,
   marketLabel = "BTC",
   marketCode = "OPT",
+  brandLogoSrc,
+  brandLogoAlt = "",
   accountLabel = "BTC options paper account",
   currencyCode = "USD",
   locale = "en-US",
@@ -87,21 +92,26 @@ export default function OptionsAccountHeader({
               alignItems: "center",
               justifyContent: "center",
               borderRadius: "var(--radius-card)",
-              background: "var(--amber-dim)",
-              border: "1px solid rgba(227, 116, 0, 0.12)",
+              background: brandLogoSrc ? "#fff7ed" : "var(--amber-dim)",
+              border: brandLogoSrc ? "1px solid rgba(234, 88, 12, 0.18)" : "1px solid rgba(227, 116, 0, 0.12)",
+              overflow: "hidden",
             }}
           >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                color: "var(--amber)",
-                fontFamily: "var(--font-display)",
-              }}
-            >
-              {marketCode}
-            </span>
+            {brandLogoSrc ? (
+              <img src={brandLogoSrc} alt={brandLogoAlt} width={36} height={36} style={{ objectFit: "cover" }} />
+            ) : (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.1em",
+                  color: "var(--amber)",
+                  fontFamily: "var(--font-display)",
+                }}
+              >
+                {marketCode}
+              </span>
+            )}
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
