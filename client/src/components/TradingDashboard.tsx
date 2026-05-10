@@ -127,7 +127,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
     group: "crypto",
     module: "options-selling",
   },
-  { path: "/btc-futures", label: "BTC Futures", description: "BTCUSD perpetual futures scalper with 25x leverage, liquidation tracking, and funding rate awareness. $1,000 paper wallet.", group: "crypto", module: "btcFuturesScalper" },
+  { path: "/btc-futures", label: "Future Trading", description: "Multi-asset perpetual futures trading with 25x leverage, liquidation tracking, and funding rate awareness. $1,000 paper wallet.", group: "crypto", module: "btcFuturesScalper" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -1176,7 +1176,7 @@ export default function TradingDashboard({
             {activeGroup === "crypto" && ([
               { key: "options",          label: "BTC Option Buying" },
               { key: "options-selling",  label: "BTC Option Selling" },
-              { key: "btcFuturesScalper", label: "BTC Futures Scalper" },
+              { key: "btcFuturesScalper", label: "Future Trading" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => {
               return (
                 <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
@@ -1281,7 +1281,7 @@ export default function TradingDashboard({
             : activeModule === "chain"
             ? "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."
             : activeModule === "btcFuturesScalper"
-            ? "BTC Futures Scalper — BTCUSD perpetual futures with 25x leverage. 130 strategies incl. multi-timeframe analysis. Features: liquidation price tracking, funding rate awareness, margin management, contract-based sizing. $1,000 paper wallet, 0.1% taker fee, $2 min net PnL. Real Delta Exchange API compatible."
+            ? "Future Trading — multi-asset perpetual futures with 25x leverage. 130 strategies incl. multi-timeframe analysis. Features: liquidation price tracking, funding rate awareness, margin management, contract-based sizing. $1,000 paper wallet, 0.1% taker fee, $2 min net PnL. Real Delta Exchange API compatible."
             : "Select a workspace tab above to see its description."}
         </div>
       </div>
