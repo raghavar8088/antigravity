@@ -123,8 +123,8 @@ export default function DashboardHeader({
             }}
           >
             <Image
-              src="/raig-logo.png"
-              alt="RAIG"
+              src="/branding/in-loop-logo.png"
+              alt="in.loop.com"
               width={22}
               height={22}
               priority
@@ -141,7 +141,7 @@ export default function DashboardHeader({
                 lineHeight: 1.2,
               }}
             >
-              RAIG Workspace
+              in.loop.com Workspace
             </div>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
               Live BTC execution desk

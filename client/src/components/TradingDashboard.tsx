@@ -1085,9 +1085,9 @@ export default function TradingDashboard({
           detailLabel={optionsHeaderDetailLabel}
           workspaceTitle={
             btcOptionsSellingModuleActive
-              ? "RAIG BTC Options Selling Workspace"
+              ? "in.loop.com BTC Options Selling Workspace"
               : niftyOptionsSellingModuleActive
-                ? "RAIG NIFTY 50 Options Selling Workspace"
+                ? "in.loop.com NIFTY 50 Options Selling Workspace"
                 : undefined
           }
           accountBadgeLabel={
@@ -1112,7 +1112,7 @@ export default function TradingDashboard({
           accountLabel="Nifty BEES ETF paper account"
           currencyCode="INR"
           locale="en-IN"
-          workspaceTitle="RAIG Nifty BEES Workspace"
+          workspaceTitle="in.loop.com Nifty BEES Workspace"
           onlineLabel="Angel One live NSE LTP — Nippon India ETF Nifty 50 BeES"
           offlineLabel="Nifty BEES feed offline"
           detailLabel={niftyBeesStats.diagnostics}
@@ -1445,7 +1445,7 @@ export default function TradingDashboard({
 
         {/* AI Waveform indicator */}
         <div className="flex items-center gap-3">
-          <div style={{ fontSize: 8, fontFamily: "var(--font-display)", color: "var(--text-muted)", letterSpacing: "0.15em" }}>RAIG AI</div>
+          <div style={{ fontSize: 8, fontFamily: "var(--font-display)", color: "var(--text-muted)", letterSpacing: "0.15em" }}>in.loop AI</div>
           <div className="ai-waveform">
             {[1,2,3,4,5].map((i) => (
               <div key={i} className="ai-waveform-bar" style={{ animationDelay: `${(i-1)*0.15}s` }} />

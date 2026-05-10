@@ -34,7 +34,7 @@ function DecisionCard({ decision, compact = false, geminiEnabled }: { decision: 
     <div className="rounded-[20px] border p-4" style={{ borderColor: "var(--border)", background: compact ? "var(--surface-2)" : "var(--surface)" }}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>RAIG AI state</div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>in.loop AI state</div>
           <div className="mt-1 flex items-center gap-2">
             <VerdictPill action={decision.finalAction} />
             <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>{decision.regime}</span>
@@ -109,7 +109,7 @@ export default function AIInsightPanel({
     <div className="glass-panel p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>RAIG AI panel</div>
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-secondary)" }}>in.loop AI panel</div>
           <div className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>Live trade reasoning</div>
         </div>
         <span className="rounded-full px-3 py-1 text-[11px] font-medium" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>GPT active</span>

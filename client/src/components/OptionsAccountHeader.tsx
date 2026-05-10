@@ -7,7 +7,7 @@ type OptionsAccountHeaderProps = {
   openPositions: number;
   marketLabel?: string;
   marketCode?: string;
-  /** When set, shown in the left badge instead of marketCode text (e.g. RAIG options mark). */
+  /** When set, shown in the left badge instead of marketCode text (in.loop mark). */
   brandLogoSrc?: string;
   brandLogoAlt?: string;
   accountLabel?: string;
@@ -45,12 +45,12 @@ export default function OptionsAccountHeader({
   openPositions,
   marketLabel = "BTC",
   marketCode = "OPT",
-  brandLogoSrc,
-  brandLogoAlt = "",
+  brandLogoSrc = "/branding/in-loop-mark.png",
+  brandLogoAlt = "in.loop.com",
   accountLabel = "BTC options paper account",
   currencyCode = "USD",
   locale = "en-US",
-  workspaceTitle = "RAIG Options Workspace",
+  workspaceTitle = "in.loop.com Options Workspace",
   onlineLabel,
   offlineLabel = "Options engine offline",
   detailLabel,
@@ -92,13 +92,19 @@ export default function OptionsAccountHeader({
               alignItems: "center",
               justifyContent: "center",
               borderRadius: "var(--radius-card)",
-              background: brandLogoSrc ? "#fff7ed" : "var(--amber-dim)",
-              border: brandLogoSrc ? "1px solid rgba(234, 88, 12, 0.18)" : "1px solid rgba(227, 116, 0, 0.12)",
+              background: brandLogoSrc ? "#0c0a09" : "var(--amber-dim)",
+              border: brandLogoSrc ? "1px solid rgba(212, 175, 55, 0.22)" : "1px solid rgba(227, 116, 0, 0.12)",
               overflow: "hidden",
             }}
           >
             {brandLogoSrc ? (
-              <img src={brandLogoSrc} alt={brandLogoAlt} width={36} height={36} style={{ objectFit: "cover" }} />
+              <img
+                src={brandLogoSrc}
+                alt={brandLogoAlt}
+                width={36}
+                height={36}
+                style={{ width: "100%", height: "100%", objectFit: "contain", padding: 3 }}
+              />
             ) : (
               <span
                 style={{

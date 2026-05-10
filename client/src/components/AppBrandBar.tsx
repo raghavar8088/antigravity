@@ -2,7 +2,7 @@
 
 /**
  * Global product chrome — in.loop.com identity only.
- * Individual desks keep their own module titles (Future Trading, RAIG … Workspace, etc.).
+ * Individual desks keep their own module titles (Future Trading, Options, etc.).
  */
 export default function AppBrandBar() {
   return (
