@@ -221,6 +221,12 @@ export interface BTCFuturesStrategyStatus {
   disabled: boolean;
   openCount: number;
   lastTradeAt: number | null;
+  score: number; // Performance score (0-100)
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  totalPnl: number;
+  winRate: number;
 }
 
 // ========== SIGNAL INPUTS ==========
@@ -1625,8 +1631,18 @@ export function useBTCFuturesScalperEngine(): {
     const now = Date.now();
     return STRAT_DEFS.map(strat => {
       const openCount = positions.filter(p => p.strategyId === strat.id).length;
-      const lastTrade = trades.filter(t => t.strategyId === strat.id).pop();
+      const stratTrades = trades.filter(t => t.strategyId === strat.id);
+      const lastTrade = stratTrades[stratTrades.length - 1];
       const inCooldown = (stratCooldownsRef.current[strat.id] ?? 0) > now;
+      const wins = stratTrades.filter(t => t.netPnl > 0).length;
+      const losses = stratTrades.filter(t => t.netPnl <= 0).length;
+      const totalPnl = stratTrades.reduce((s, t) => s + t.netPnl, 0);
+      const winRate = stratTrades.length > 0 ? (wins / stratTrades.length) * 100 : 0;
+      // Score: weighted combination of win rate and total PnL
+      const score = stratTrades.length > 0
+        ? Math.min(100, winRate * 0.7 + Math.min(30, Math.abs(totalPnl) / 100) * 0.3)
+        : 0;
+
       return {
         id: strat.id,
         name: strat.name,
@@ -1635,6 +1651,12 @@ export function useBTCFuturesScalperEngine(): {
         disabled: disabledStrategies.includes(strat.id),
         openCount,
         lastTradeAt: lastTrade ? new Date(lastTrade.closedAt).getTime() : null,
+        score,
+        totalTrades: stratTrades.length,
+        wins,
+        losses,
+        totalPnl,
+        winRate,
       };
     });
   }, [positions, trades, disabledStrategies]);
