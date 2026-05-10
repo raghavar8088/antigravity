@@ -52,7 +52,7 @@ export default function TradeHistoryArchivePage() {
             <h1 className="text-xl font-semibold tracking-tight">Daily trade archive</h1>
             <p className="mt-2 text-sm text-zinc-400">
               One Excel workbook per UTC calendar day, aggregating archived trades from BTC futures, BTC options,
-              NIFTY options, stocks, MCX, crypto equity, and forex. Rows are stored in Postgres and are not removed when
+              NIFTY options, stocks, MCX, and crypto equity. Rows are stored in Postgres and are not removed when
               you reset paper accounts, as long as they were captured by a daily archive run.
             </p>
           </div>

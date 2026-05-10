@@ -285,12 +285,6 @@ export async function collectRowsForDay(client: PoolClient, targetDay: string): 
     addJsonTrades(out, "nifty_options_sell", parseJsonArray(eng[0].nifty_options_selling_trades_json), targetDay);
   }
 
-  const forex = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM forex_state WHERE id = 1`,
-  );
-  if (forex.length) addJsonTrades(out, "forex", parseJsonArray(forex[0].trades_json), targetDay);
-
   const crypto = await safeQuery<{ trades_json: string }>(
     client,
     `SELECT trades_json FROM crypto_equity_state WHERE id = 1`,
