@@ -1038,64 +1038,118 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
   const reasons: string[] = [];
 
   const add = (pts: number, desc: string) => { score += pts; if (pts > 0) reasons.push(desc); };
+  /** Short strategies must earn bearish points; legacy scoring was almost entirely long-biased. */
+  const short = strat.signalKey.includes("SHORT");
 
   // Category signals
   if (strat.category === "Trend" || strat.category === "MTF Trend") {
-    if (s.fast > s.slow && s.momentum3 > 0) add(10, "EMA bullish");
-    if (s.fast > s.slow && s.momentum6 > 0) add(8, "6m momentum");
-    if (s.rsi14 > 55 && s.rsi14 < 75) add(6, "RSI strong");
-    if (s.adxProxy > 25) add(8, "Trending(ADX)");
-    if (s.roc10 > 0.5) add(6, "ROC positive");
+    if (short) {
+      if (s.fast < s.slow && s.momentum3 < 0) add(10, "EMA bearish");
+      if (s.fast < s.slow && s.momentum6 < 0) add(8, "6m down");
+      if (s.rsi14 > 25 && s.rsi14 < 45) add(6, "RSI bear zone");
+      if (s.adxProxy > 25) add(8, "Trending(ADX)");
+      if (s.roc10 < -0.5) add(6, "ROC negative");
+    } else {
+      if (s.fast > s.slow && s.momentum3 > 0) add(10, "EMA bullish");
+      if (s.fast > s.slow && s.momentum6 > 0) add(8, "6m momentum");
+      if (s.rsi14 > 55 && s.rsi14 < 75) add(6, "RSI strong");
+      if (s.adxProxy > 25) add(8, "Trending(ADX)");
+      if (s.roc10 > 0.5) add(6, "ROC positive");
+    }
   }
 
   if (strat.category === "MeanRev" || strat.category === "MR") {
-    if (s.price < s.bbLower) add(12, "BB lower breach");
-    if (s.rsi14 < 35) add(10, "RSI oversold");
-    if (s.stochK < 20) add(8, "Stoch oversold");
-    if (s.vwapDev < -0.015 * s.price) add(6, "VWAP deviation");
+    if (short) {
+      if (s.price > s.bbUpper) add(12, "BB upper breach");
+      if (s.rsi14 > 65) add(10, "RSI overbought");
+      if (s.stochK > 80) add(8, "Stoch overbought");
+      if (s.vwapDev > 0.015 * s.price) add(6, "VWAP+ deviation");
+    } else {
+      if (s.price < s.bbLower) add(12, "BB lower breach");
+      if (s.rsi14 < 35) add(10, "RSI oversold");
+      if (s.stochK < 20) add(8, "Stoch oversold");
+      if (s.vwapDev < -0.015 * s.price) add(6, "VWAP deviation");
+    }
   }
 
   if (strat.category === "Momentum") {
     if (Math.abs(s.momentum3) > s.atr14 * 0.8) add(10, "Strong 3m momentum");
-    if (s.obvSlope > 0) add(8, "OBV rising");
-    if (s.macdHist > 0 && s.prevMacdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "MACD accel");
+    if (short) {
+      if (s.obvSlope < 0) add(8, "OBV falling");
+      if (s.macdHist < 0 && s.prevMacdHist < 0 && s.macdHist < s.prevMacdHist) add(8, "MACD accel down");
+    } else {
+      if (s.obvSlope > 0) add(8, "OBV rising");
+      if (s.macdHist > 0 && s.prevMacdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "MACD accel");
+    }
   }
 
   if (strat.category === "RSI") {
-    if (s.rsi14 < 32) add(12, "RSI extreme low");
-    if (s.rsi7 < s.rsi14 - 5) add(8, "RSI7 divergence");
+    if (short) {
+      if (s.rsi14 > 68) add(12, "RSI extreme high");
+      if (s.rsi7 > s.rsi14 + 5) add(8, "RSI7 bear div");
+    } else {
+      if (s.rsi14 < 32) add(12, "RSI extreme low");
+      if (s.rsi7 < s.rsi14 - 5) add(8, "RSI7 divergence");
+    }
   }
 
   if (strat.category === "Stoch") {
-    if (s.stochK < 20 && s.stochD < 20) add(12, "Stoch oversold");
-    if (s.stochK > s.stochD && s.prevStochK <= s.prevStochD) add(10, "Stoch cross up");
+    if (short) {
+      if (s.stochK > 80 && s.stochD > 80) add(12, "Stoch overbought");
+      if (s.stochK < s.stochD && s.prevStochK >= s.prevStochD) add(10, "Stoch cross down");
+    } else {
+      if (s.stochK < 20 && s.stochD < 20) add(12, "Stoch oversold");
+      if (s.stochK > s.stochD && s.prevStochK <= s.prevStochD) add(10, "Stoch cross up");
+    }
   }
 
   if (strat.category === "MACD") {
-    if (s.macdLine > s.macdSignal && s.prevMacdLine <= s.prevMacdSignal) add(12, "MACD cross");
-    if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "MACD rising");
+    if (short) {
+      if (s.macdLine < s.macdSignal && s.prevMacdLine >= s.prevMacdSignal) add(12, "MACD cross down");
+      if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(8, "MACD falling");
+    } else {
+      if (s.macdLine > s.macdSignal && s.prevMacdLine <= s.prevMacdSignal) add(12, "MACD cross");
+      if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "MACD rising");
+    }
   }
 
   if (strat.category === "OBV") {
-    if (s.obvSlope > 0 && s.momentum3 > 0) add(10, "OBV+price up");
-    if (s.obvSlope > s.atr14 * 10) add(8, "OBV strong");
+    if (short) {
+      if (s.obvSlope < 0 && s.momentum3 < 0) add(10, "OBV+price down");
+      if (s.obvSlope < -Math.abs(s.atr14) * 10) add(8, "OBV strong down");
+    } else {
+      if (s.obvSlope > 0 && s.momentum3 > 0) add(10, "OBV+price up");
+      if (s.obvSlope > s.atr14 * 10) add(8, "OBV strong");
+    }
   }
 
   if (strat.category === "Confluence") {
-    const checks = [
-      s.fast > s.slow,
-      s.rsi14 > 50 && s.rsi14 < 70,
-      s.macdLine > s.macdSignal,
-      s.stochK > s.stochD,
-      s.momentum3 > 0,
-    ];
+    const checks = short
+      ? [
+          s.fast < s.slow,
+          s.rsi14 > 30 && s.rsi14 < 50,
+          s.macdLine < s.macdSignal,
+          s.stochK < s.stochD,
+          s.momentum3 < 0,
+        ]
+      : [
+          s.fast > s.slow,
+          s.rsi14 > 50 && s.rsi14 < 70,
+          s.macdLine > s.macdSignal,
+          s.stochK > s.stochD,
+          s.momentum3 > 0,
+        ];
     const passed = checks.filter(Boolean).length;
     if (passed >= 3) add(10 + passed * 2, `Confluence(${passed})`);
   }
 
   if (strat.category === "Vol") {
     if (s.volRatio > 1.5) add(10, "Volume spike");
-    if (s.bbWidth < 0.015 && s.momentum3 > s.atr14) add(12, "Squeeze breakout");
+    if (short) {
+      if (s.bbWidth < 0.015 && s.momentum3 < -s.atr14) add(12, "Squeeze breakdown");
+    } else {
+      if (s.bbWidth < 0.015 && s.momentum3 > s.atr14) add(12, "Squeeze breakout");
+    }
   }
 
   if (strat.category === "BB") {
@@ -1116,6 +1170,28 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
     if (Math.abs(s.cci20) < 50) add(6, "CCI neutral");
   }
 
+  if (strat.category === "Williams Trend") {
+    if (short) {
+      if (s.williamsR > -35 && s.momentum3 < 0) add(12, "Williams bear trend");
+      if (s.williamsR > -22) add(10, "Williams elevated");
+      if (s.williamsR < s.prevWilliamsR && s.williamsR > -45) add(8, "Williams roll from OB");
+    } else {
+      if (s.williamsR < -65 && s.momentum3 > 0) add(12, "Williams bull trend");
+      if (s.williamsR < -80) add(10, "Williams deep OS");
+      if (s.williamsR > s.prevWilliamsR && s.williamsR < -50) add(8, "Williams bounce");
+    }
+  }
+
+  if (strat.category === "CCI Trend") {
+    if (short) {
+      if (s.cci20 > 40 && s.momentum3 < 0) add(12, "CCI bear trend");
+      if (s.cci20 > 120) add(10, "CCI extended high");
+    } else {
+      if (s.cci20 < -40 && s.momentum3 > 0) add(12, "CCI bull trend");
+      if (s.cci20 < -120) add(10, "CCI extended low");
+    }
+  }
+
   if (strat.category === "Keltner MR" || strat.category === "Keltner Trend") {
     if (s.price > s.keltnerUpper) add(10, "Keltner upper breach");
     if (s.price < s.keltnerLower) add(10, "Keltner lower breach");
@@ -1127,8 +1203,13 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
   }
 
   if (strat.category === "Ribbon") {
-    if (s.ema5 > s.ema13 && s.prevEma5 <= s.prevEma13) add(12, "Ribbon cross");
-    if (s.ema5 > s.ema13 && s.fast > s.slow) add(8, "Ribbon aligned");
+    if (short) {
+      if (s.ema5 < s.ema13 && s.prevEma5 >= s.prevEma13) add(12, "Ribbon cross down");
+      if (s.ema5 < s.ema13 && s.fast < s.slow) add(8, "Ribbon bear aligned");
+    } else {
+      if (s.ema5 > s.ema13 && s.prevEma5 <= s.prevEma13) add(12, "Ribbon cross");
+      if (s.ema5 > s.ema13 && s.fast > s.slow) add(8, "Ribbon aligned");
+    }
   }
 
   if (strat.category === "Squeeze") {
@@ -1138,7 +1219,11 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
 
   if (strat.category === "ADX Trend") {
     if (s.adxProxy > 30) add(12, "Strong trend");
-    if (s.adxProxy > 25 && s.fast > s.slow) add(10, "ADX + EMA");
+    if (short) {
+      if (s.adxProxy > 25 && s.fast < s.slow) add(10, "ADX + EMA bear");
+    } else {
+      if (s.adxProxy > 25 && s.fast > s.slow) add(10, "ADX + EMA");
+    }
   }
 
   if (strat.category === "ROC Trend") {
@@ -1153,37 +1238,68 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
 
     if (htf5Trend === "UP" && htf15Trend === "UP") add(14, "HTF aligned up");
     if (htf5Trend === "DOWN" && htf15Trend === "DOWN") add(14, "HTF aligned down");
-    if (s.htf5_rsi > 50 && s.htf5_rsi < 70) add(8, "HTF RSI healthy");
-    if (s.htf15_rsi > 50 && s.htf15_rsi < 70) add(6, "HTF15 RSI healthy");
-    if (s.htf5_macdHist > 0) add(8, "HTF MACD bullish");
-    if (s.htf15_macdHist > 0) add(6, "HTF15 MACD bullish");
+    if (short) {
+      if (s.htf5_rsi > 30 && s.htf5_rsi < 50) add(8, "HTF RSI bear zone");
+      if (s.htf15_rsi > 30 && s.htf15_rsi < 50) add(6, "HTF15 RSI bear zone");
+      if (s.htf5_macdHist < 0) add(8, "HTF MACD bear");
+      if (s.htf15_macdHist < 0) add(6, "HTF15 MACD bear");
+    } else {
+      if (s.htf5_rsi > 50 && s.htf5_rsi < 70) add(8, "HTF RSI healthy");
+      if (s.htf15_rsi > 50 && s.htf15_rsi < 70) add(6, "HTF15 RSI healthy");
+      if (s.htf5_macdHist > 0) add(8, "HTF MACD bullish");
+      if (s.htf15_macdHist > 0) add(6, "HTF15 MACD bullish");
+    }
     if (s.htf5_adx > 25) add(8, "HTF trending");
   }
 
   // Smart Money & Order Flow (Pro Grade)
   if (strat.category === "Smart Money") {
-    if (s.volRatio > 2 && s.price < s.mean20) add(14, "Accumulation vol");
-    if (s.obvSlope > 0 && s.momentum3 > 0) add(12, "Smart money in");
+    if (short) {
+      if (s.volRatio > 2 && s.price > s.mean20) add(14, "Distribution vol");
+      if (s.obvSlope < 0 && s.momentum3 < 0) add(12, "Smart money out");
+    } else {
+      if (s.volRatio > 2 && s.price < s.mean20) add(14, "Accumulation vol");
+      if (s.obvSlope > 0 && s.momentum3 > 0) add(12, "Smart money in");
+    }
   }
 
   if (strat.category === "Order Flow") {
-    if (s.momentum3 > s.atr14 * 1.5) add(14, "Strong flow");
-    if (s.volRatio > 1.8 && s.price > s.vwapDev + s.mean20) add(12, "Buy flow");
+    if (short) {
+      if (s.momentum3 < -s.atr14 * 1.5) add(14, "Strong flow down");
+      if (s.volRatio > 1.8 && s.momentum3 < 0) add(12, "Sell flow");
+    } else {
+      if (s.momentum3 > s.atr14 * 1.5) add(14, "Strong flow");
+      if (s.volRatio > 1.8 && s.price > s.vwapDev + s.mean20) add(12, "Buy flow");
+    }
   }
 
   if (strat.category === "Liquidity") {
-    if (s.price < s.low20 * 1.002) add(14, "Liquidity sweep");
-    if (s.williamsR < -85) add(12, "Oversold liquidity");
+    if (short) {
+      if (s.price > s.high20 * 0.998) add(14, "Liquidity at highs");
+      if (s.williamsR > -15) add(12, "Overbought liquidity");
+    } else {
+      if (s.price < s.low20 * 1.002) add(14, "Liquidity sweep");
+      if (s.williamsR < -85) add(12, "Oversold liquidity");
+    }
   }
 
   if (strat.category === "Stop Hunt") {
-    if (Math.abs(s.price - s.low20) < s.atr14 * 0.3) add(14, "Stop hunt zone");
+    if (short) {
+      if (Math.abs(s.price - s.high20) < s.atr14 * 0.3) add(14, "Stop hunt highs");
+    } else {
+      if (Math.abs(s.price - s.low20) < s.atr14 * 0.3) add(14, "Stop hunt zone");
+    }
   }
 
   // Wyckoff & Market Structure
   if (strat.category === "Wyckoff") {
-    if (s.price > s.donchianMid && s.volRatio > 1.5) add(14, "Wyckoff markup");
-    if (s.cci20 > 100 && s.momentum6 > 0) add(12, "Spring complete");
+    if (short) {
+      if (s.price < s.donchianMid && s.volRatio > 1.5) add(14, "Wyckoff markdown");
+      if (s.cci20 < -100 && s.momentum6 < 0) add(12, "Distribution leg");
+    } else {
+      if (s.price > s.donchianMid && s.volRatio > 1.5) add(14, "Wyckoff markup");
+      if (s.cci20 > 100 && s.momentum6 > 0) add(12, "Spring complete");
+    }
   }
 
   if (strat.category === "Market Structure") {
@@ -1195,7 +1311,11 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
   if (strat.category === "Statistical") {
     const zscore = (s.price - s.mean20) / (s.std20 || 1);
     if (Math.abs(zscore) > 2) add(14, "Statistical extreme");
-    if (zscore < -1.5 && s.rsi14 < 40) add(12, "Mean reversion long");
+    if (short) {
+      if (zscore > 1.5 && s.rsi14 > 60) add(12, "Mean reversion short");
+    } else {
+      if (zscore < -1.5 && s.rsi14 < 40) add(12, "Mean reversion long");
+    }
   }
 
   if (strat.category === "Institutional") {
@@ -1204,7 +1324,11 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
   }
 
   if (strat.category === "Session") {
-    if (s.momentum3 > 0 && s.volRatio > 1.5) add(12, "Session momentum");
+    if (short) {
+      if (s.momentum3 < 0 && s.volRatio > 1.5) add(12, "Session sell");
+    } else {
+      if (s.momentum3 > 0 && s.volRatio > 1.5) add(12, "Session momentum");
+    }
   }
 
   // Harmonic & Patterns
@@ -1236,13 +1360,23 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
 
   // ML-Style (multi-factor ensemble)
   if (strat.category === "ML-Style") {
-    const factors = [
-      s.fast > s.slow,
-      s.rsi14 > 45 && s.rsi14 < 75,
-      s.macdHist > 0,
-      s.adxProxy > 20,
-      s.volRatio > 1.2,
-    ].filter(Boolean).length;
+    const factors = (
+      short
+        ? [
+            s.fast < s.slow,
+            s.rsi14 > 25 && s.rsi14 < 55,
+            s.macdHist < 0,
+            s.adxProxy > 20,
+            s.volRatio > 1.2,
+          ]
+        : [
+            s.fast > s.slow,
+            s.rsi14 > 45 && s.rsi14 < 75,
+            s.macdHist > 0,
+            s.adxProxy > 20,
+            s.volRatio > 1.2,
+          ]
+    ).filter(Boolean).length;
     if (factors >= 4) add(16, "ML ensemble strong");
     if (factors === 3) add(10, "ML ensemble medium");
   }
@@ -1811,6 +1945,9 @@ export function useBTCFuturesScalperEngine(): {
     const contracts = Math.max(MIN_CONTRACTS, Math.min(MAX_CONTRACTS, calculateContracts(notional, price)));
     const actualNotional = calculateNotional(contracts);
     const marginUsed = calculateMarginRequired(actualNotional, LEVERAGE);
+    if (bal < marginUsed) return;
+    /** Keep ref in sync so multiple opens in one poll tick do not all read stale balance. */
+    balanceRef.current = bal - marginUsed;
     const liquidationPrice = calculateLiquidationPrice(price, side, LEVERAGE);
     const slPrice = side === "LONG" ? price * (1 - strat.slPct / 100) : price * (1 + strat.slPct / 100);
     const tpPrice = side === "LONG" ? price * (1 + strat.tpPct / 100) : price * (1 - strat.tpPct / 100);
@@ -1844,7 +1981,7 @@ export function useBTCFuturesScalperEngine(): {
     };
 
     setPositions(prev => [...prev, position]);
-    setBalance(prev => prev - marginUsed);
+    setBalance(balanceRef.current);
     stratCooldownsRef.current[`${symbol}:${strat.id}`] = Date.now() + strat.cooldownMin * 60000;
     setLastTradeAt(Date.now());
   }, []);
