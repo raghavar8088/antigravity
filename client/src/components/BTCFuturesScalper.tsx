@@ -7,6 +7,7 @@ import {
   type BTCFuturesTrade,
   type BTCFuturesEngineStats,
   type BTCFuturesStrategyStatus,
+  type BTCFuturesEngineOptions,
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
 
@@ -120,8 +121,22 @@ function PremiumBar({ progress, isPositive }: { progress: number; isPositive: bo
   );
 }
 
+type BTCFuturesScalperProps = {
+  title?: string;
+  moduleTagline?: string;
+  strategyIds?: BTCFuturesEngineOptions["strategyIds"];
+  storageNamespace?: string;
+  baseBalance?: number;
+};
+
 // ========== MAIN COMPONENT ==========
-export function BTCFuturesScalper() {
+export function BTCFuturesScalper({
+  title = "Future Trading",
+  moduleTagline = "MULTI-ASSET PERPETUAL FUTURES · 25x · STRATEGIES PER SYMBOL",
+  strategyIds,
+  storageNamespace,
+  baseBalance = 1000,
+}: BTCFuturesScalperProps = {}) {
   const {
     positions,
     trades,
@@ -137,15 +152,15 @@ export function BTCFuturesScalper() {
     clearTradeHistory,
     setDisabledStrategies,
     strategyStatuses,
-  } = useBTCFuturesScalperEngine();
+  } = useBTCFuturesScalperEngine({ strategyIds, storageNamespace });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
   const [showAllTrades, setShowAllTrades] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
 
-  const sessionPnL = equity - 1000; // vs $1,000 base
+  const sessionPnL = equity - baseBalance;
   const pnlPositive = sessionPnL >= 0;
-  const totalReturn = ((equity - 1000) / 1000) * 100;
+  const totalReturn = ((equity - baseBalance) / baseBalance) * 100;
 
   const longCount = positions.filter(p => p.side === "LONG").length;
   const shortCount = positions.filter(p => p.side === "SHORT").length;
@@ -187,11 +202,11 @@ export function BTCFuturesScalper() {
             {pauseEntries ? "PAUSED" : "LIVE"}
           </span>
           <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-            MULTI-ASSET PERPETUAL FUTURES · 25x · {FUTURES_WATCHLIST.length} MARKETS · STRATEGIES PER SYMBOL
+            {moduleTagline} · {FUTURES_WATCHLIST.length} MARKETS
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-zinc-900">Future Trading</h1>
+          <h1 className="text-xl font-bold text-zinc-900">{title}</h1>
           <div className="flex gap-2">
             <button
               onClick={togglePause}
@@ -268,7 +283,7 @@ export function BTCFuturesScalper() {
         <div className="glass-panel relative overflow-hidden px-6 py-7 md:px-7">
           <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-            FUTURE TRADING EQUITY
+            {title.toUpperCase()} EQUITY
           </div>
           <div className="flex items-baseline gap-3">
             <span className={`text-4xl font-bold tabular-nums ${pnlPositive ? "text-emerald-600" : "text-rose-600"}`}>
@@ -326,7 +341,7 @@ export function BTCFuturesScalper() {
             Equity And PnL
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <CompactMetric label="Account Equity" value={fmtUSD(equity)} detail="Base $1,000.00" accent="text-zinc-900" />
+            <CompactMetric label="Account Equity" value={fmtUSD(equity)} detail={`Base ${fmtUSD(baseBalance)}`} accent="text-zinc-900" />
             <CompactMetric label="Net PnL" value={fmtUSD(sessionPnL, { signed: true })} detail={`${fmtPct(totalReturn, true)} vs base`} accent={pnlPositive ? "text-emerald-600" : "text-rose-600"} />
             <CompactMetric label="Closed PnL" value={fmtUSD(stats.netPnl, { signed: true })} detail={`${stats.totalTrades} completed trades`} accent={stats.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"} />
             <CompactMetric label="Unrealized" value={fmtUSD(totalUnrealized, { signed: true })} detail="Live open position PnL" accent={totalUnrealized >= 0 ? "text-emerald-600" : "text-rose-600"} />
@@ -462,7 +477,7 @@ export function BTCFuturesScalper() {
                       {fmtUSD(data.pnl, { signed: true })}
                     </td>
                     <td className={`py-2 text-right font-mono ${data.pnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {fmtPct((data.pnl / 1000) * 100, true)}
+                      {fmtPct((data.pnl / baseBalance) * 100, true)}
                     </td>
                   </tr>
                 ))}

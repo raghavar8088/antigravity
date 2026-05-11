@@ -21,6 +21,7 @@ import Nifty50OptionScalper from "@/components/Nifty50OptionScalper";
 import Nifty50OptionSellingScalper from "@/components/Nifty50OptionSellingScalper";
 import NiftyBeesScalper from "@/components/NiftyBeesScalper";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
+import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsPanel, { type StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
 import useAIInsights from "@/hooks/useAIInsights";
@@ -81,7 +82,7 @@ type TradeReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUA
 type ChartPricePoint = { time: number; price: number };
 type ChartEquityPoint = { time: number; equity: number };
 type DashboardGroup = "crypto" | "india";
-type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftySelling" | "niftyBees" | "btcFuturesScalper";
+type DashboardModule = "dashboard" | "engine" | "history" | "options" | "options-selling" | "chain" | "nifty" | "niftySelling" | "niftyBees" | "btcFuturesScalper" | "btcFutureTrading";
 type WorkspacePreset = {
   path: string;
   label: string;
@@ -129,6 +130,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
     module: "options-selling",
   },
   { path: "/btc-futures", label: "Future Trading", description: "Multi-asset perpetual futures trading with 25x leverage, liquidation tracking, and funding rate awareness. $1,000 paper wallet.", group: "crypto", module: "btcFuturesScalper" },
+  { path: "/btc-future-trading", label: "BTC Future Trading", description: "Dedicated BTC futures module with 20 globally popular strategy archetypes (trend, breakout, order-flow, smart-money, MTF).", group: "crypto", module: "btcFutureTrading" },
 ];
 
 const DEFAULT_STRATEGIES: StrategyCardView[] = [
@@ -1179,6 +1181,7 @@ export default function TradingDashboard({
               { key: "options",          label: "BTC Option Buying" },
               { key: "options-selling",  label: "BTC Option Selling" },
               { key: "btcFuturesScalper", label: "Future Trading" },
+              { key: "btcFutureTrading", label: "BTC Future Trading" },
             ] as { key: typeof activeModule; label: string }[]).map((module) => {
               return (
                 <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
@@ -1284,6 +1287,8 @@ export default function TradingDashboard({
             ? "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."
             : activeModule === "btcFuturesScalper"
             ? "Future Trading — multi-asset perpetual futures with 25x leverage. 130 strategies incl. multi-timeframe analysis. Features: liquidation price tracking, funding rate awareness, margin management, contract-based sizing. $1,000 paper wallet, 0.1% taker fee, $2 min net PnL. Real Delta Exchange API compatible."
+            : activeModule === "btcFutureTrading"
+            ? "BTC Future Trading — curated 20-strategy BTC perpetual module (trend, breakout, smart-money, order-flow, and MTF alignment). Separate paper state, same risk and execution engine."
             : "Select a workspace tab above to see its description."}
         </div>
       </div>
@@ -2251,6 +2256,7 @@ export default function TradingDashboard({
         />
       )}
       {activeModule === "btcFuturesScalper" && <BTCFuturesScalper />}
+      {activeModule === "btcFutureTrading" && <BTCFutureTradingScalper />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 

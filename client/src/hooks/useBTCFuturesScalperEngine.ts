@@ -57,9 +57,7 @@ const TRAIL_GIVEBACK_SHARE = 0.18;
 const MTF_HOLD_BONUS = 1.3;
 const MOMENTUM_HOLD_EXTEND = 1.25;
 
-// Storage
-const LS_KEY = "btc_futures_scalper_paper_state";
-const LS_PAUSE_ENTRIES = "btc_futures_pause_entries_v1";
+// Storage namespace defaults are built per-hook instance.
 
 // ========== TYPES ==========
 export type Side = "LONG" | "SHORT";
@@ -233,6 +231,13 @@ export interface BTCFuturesStrategyStatus {
   totalPnl: number;
   winRate: number;
 }
+
+export type BTCFuturesEngineOptions = {
+  /** Separate persistence namespace so multiple futures modules don't share state. */
+  storageNamespace?: string;
+  /** Optional strategy allow-list. If empty, full strategy library runs. */
+  strategyIds?: number[];
+};
 
 // ========== SIGNAL INPUTS ==========
 type SignalInputs = {
@@ -1654,7 +1659,7 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
 }
 
 // ========== HOOK ==========
-export function useBTCFuturesScalperEngine(): {
+export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}): {
   positions: BTCFuturesPosition[];
   trades: BTCFuturesTrade[];
   balance: number;
@@ -1675,6 +1680,21 @@ export function useBTCFuturesScalperEngine(): {
   exportJSON: () => string;
   strategyStatuses: BTCFuturesStrategyStatus[];
 } {
+  const storageNamespace = options.storageNamespace?.trim() || "btc_futures_scalper";
+  const strategyIds = options.strategyIds ?? null;
+  const stateStorageKey = `${storageNamespace}_paper_state`;
+
+  const activeStratDefs = useMemo(() => {
+    if (!strategyIds || strategyIds.length === 0) return STRAT_DEFS;
+    const allow = new Set(strategyIds);
+    const filtered = STRAT_DEFS.filter((s) => allow.has(s.id));
+    return filtered.length > 0 ? filtered : STRAT_DEFS;
+  }, [strategyIds]);
+  const activeStrategyIdSet = useMemo(
+    () => new Set(activeStratDefs.map((s) => s.id)),
+    [activeStratDefs],
+  );
+
   // State
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [positions, setPositions] = useState<BTCFuturesPosition[]>([]);
@@ -1717,22 +1737,22 @@ export function useBTCFuturesScalperEngine(): {
   // ========== LOCAL STORAGE ==========
   const loadLs = useCallback((): Partial<EngineState> | null => {
     try {
-      const raw = localStorage.getItem(LS_KEY);
+      const raw = localStorage.getItem(stateStorageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as EngineState;
       return parsed;
     } catch {
       return null;
     }
-  }, []);
+  }, [stateStorageKey]);
 
   const saveLs = useCallback((state: EngineState) => {
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(state));
+      localStorage.setItem(stateStorageKey, JSON.stringify(state));
     } catch {
       // ignore
     }
-  }, []);
+  }, [stateStorageKey]);
 
   // Initial load
   useEffect(() => {
@@ -1756,12 +1776,14 @@ export function useBTCFuturesScalperEngine(): {
         );
       }
       if (typeof saved.pauseEntries === "boolean") setPauseEntries(saved.pauseEntries);
-      if (Array.isArray(saved.disabledStrategies)) setDisabledStrategies(saved.disabledStrategies);
+      if (Array.isArray(saved.disabledStrategies)) {
+        setDisabledStrategies(saved.disabledStrategies.filter((id) => activeStrategyIdSet.has(id)));
+      }
       if (typeof saved.lastTradeAt === "number") setLastTradeAt(saved.lastTradeAt);
       if (typeof saved.dayStartBalance === "number") setDayStartBalance(saved.dayStartBalance);
       if (typeof saved.dayStartDate === "number") setDayStartDate(saved.dayStartDate);
     }
-  }, [loadLs]);
+  }, [activeStrategyIdSet, loadLs]);
 
   // Periodic save
   useEffect(() => {
@@ -1796,8 +1818,8 @@ export function useBTCFuturesScalperEngine(): {
     setDayStartBalance(INITIAL_BALANCE);
     setDayStartDate(new Date().getDate());
     stratCooldownsRef.current = {};
-    localStorage.removeItem(LS_KEY);
-  }, []);
+    localStorage.removeItem(stateStorageKey);
+  }, [stateStorageKey]);
 
   const clearTradeHistory = useCallback(() => {
     setTrades([]);
@@ -1806,8 +1828,8 @@ export function useBTCFuturesScalperEngine(): {
   }, []);
 
   const setDisabledStrategiesHandler = useCallback((ids: number[]) => {
-    setDisabledStrategies(ids);
-  }, []);
+    setDisabledStrategies(ids.filter((id) => activeStrategyIdSet.has(id)));
+  }, [activeStrategyIdSet]);
 
   const exportCSV = useCallback(() => {
     const headers = ["ID", "Symbol", "Strategy", "Side", "Entry", "Exit", "Contracts", "Realized PnL", "Fees", "Net PnL", "Net PnL %", "Funding", "Opened", "Closed", "Exit Reason"];
@@ -1903,7 +1925,7 @@ export function useBTCFuturesScalperEngine(): {
   // ========== STRATEGY STATUSES ==========
   const strategyStatuses = useMemo((): BTCFuturesStrategyStatus[] => {
     const now = Date.now();
-    return STRAT_DEFS.map(strat => {
+    return activeStratDefs.map(strat => {
       const openCount = positions.filter(p => p.strategyId === strat.id).length;
       const stratTrades = trades.filter(t => t.strategyId === strat.id);
       const lastTrade = stratTrades[stratTrades.length - 1];
@@ -1935,7 +1957,7 @@ export function useBTCFuturesScalperEngine(): {
         winRate,
       };
     });
-  }, [positions, trades, disabledStrategies]);
+  }, [positions, trades, disabledStrategies, activeStratDefs]);
 
   // ========== POSITION MANAGEMENT ==========
   const openPosition = useCallback((strat: StratDef, side: Side, price: number, markPrice: number, symbol: string) => {
@@ -2212,7 +2234,7 @@ export function useBTCFuturesScalperEngine(): {
             const volumes = d.candles.map((c) => c.volume);
             const input = buildSignalInputs(closes, highs, lows, volumes, d.markPrice);
 
-            for (const strat of STRAT_DEFS) {
+            for (const strat of activeStratDefs) {
               if (openCount >= MAX_OPEN_POSITIONS) break;
               if (disabledRef.current.includes(strat.id)) continue;
               if (occupied.has(`${symbol}:${strat.id}`)) continue;
@@ -2240,7 +2262,7 @@ export function useBTCFuturesScalperEngine(): {
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, resolveExit]);
+  }, [openPosition, closePosition, resolveExit, activeStratDefs]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
