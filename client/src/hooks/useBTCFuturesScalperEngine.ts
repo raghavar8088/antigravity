@@ -33,7 +33,13 @@ const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 // Risk management
 const MAX_DRAWDOWN_LOCK_PCT = 25; // Pause entries if drawdown > 25%
 const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
-const LIQUIDATION_BUFFER_PCT = 10; // Close before liquidation (10% buffer)
+/** Stats: flag positions when mark is within this % of modeled liquidation (price space, not leverage “room”). */
+const LIQUIDATION_RISK_DISPLAY_PCT = 1.0;
+/**
+ * Pre-close when mark is within this % of liquidation price. Do NOT compare to leverage cushion (e.g. ~3.5% at 25x entry)
+ * or every position exits immediately as LIQUIDATION_RISK.
+ */
+const NEAR_LIQUIDATION_EXIT_PCT = 0.35;
 
 // Strategy parameters
 // Paper desk default: strict HTF rules used to reject almost all MTF entries when 5m/15m was NEUTRAL.
@@ -1970,7 +1976,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const liquidationRisk = positions.filter(p => {
       const dist = calculateDistanceToLiquidation(p.markPrice, p.liquidationPrice, p.side);
-      return dist < LIQUIDATION_BUFFER_PCT;
+      return dist >= 0 && dist < LIQUIDATION_RISK_DISPLAY_PCT;
     }).length;
 
     const avgLeverage = positions.length > 0 ? positions.reduce((s, p) => s + p.leverage, 0) / positions.length : 0;
@@ -2096,9 +2102,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const fees = position.notional * TAKER_FEE_PCT * 2; // Entry + exit
     let netPnl = grossPnL - fees - position.fundingCosts;
 
-    // Enforce minimum PnL
-    if (Math.abs(netPnl) < MIN_ABS_NET_PNL_USD) {
-      netPnl = netPnl >= 0 ? MIN_ABS_NET_PNL_USD : -MIN_ABS_NET_PNL_USD;
+    // Floor tiny wins only — do not inflate small losses to -MIN (was forcing -$2 on ~$2 margin → -100% return).
+    if (netPnl > 0 && netPnl < MIN_ABS_NET_PNL_USD) {
+      netPnl = MIN_ABS_NET_PNL_USD;
     }
 
     const netPnlPct = position.marginUsed > 0 ? (netPnl / position.marginUsed) * 100 : 0;
@@ -2146,9 +2152,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: p.liquidationPrice };
     }
 
-    // Near liquidation exit (risk management)
+    // Near liquidation exit (tight % of mark— not half of an unrelated 10% stat threshold).
     const liqDist = calculateDistanceToLiquidation(markPrice, p.liquidationPrice, p.side);
-    if (liqDist < LIQUIDATION_BUFFER_PCT / 2) {
+    if (liqDist >= 0 && liqDist < NEAR_LIQUIDATION_EXIT_PCT) {
       return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: markPrice };
     }
 
