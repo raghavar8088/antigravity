@@ -36,8 +36,8 @@ const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
 const LIQUIDATION_BUFFER_PCT = 10; // Close before liquidation (10% buffer)
 
 // Strategy parameters
-// Paper desk default: strict confirmation still filters junk, but 48 + full confluence rarely fired together.
-const SIGNAL_THRESHOLD = 36;
+// Paper desk default: strict HTF rules used to reject almost all MTF entries when 5m/15m was NEUTRAL.
+const SIGNAL_THRESHOLD = 28;
 const MAX_BARS = 120;
 const MIN_BARS = 18;
 /** Slightly slower poll: many symbols × REST calls per tick */
@@ -1598,11 +1598,22 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
   if (strat.requiresHtf) {
     const htf5Trend = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
     const htf15Trend = htfTrend(s.htf15_fast, s.htf15_slow, s.htf15_momentum);
-    if (htf5Trend === "NEUTRAL" || htf15Trend === "NEUTRAL") return false;
+    const ltfBull = s.fast > s.slow && s.momentum3 > 0;
+    const ltfBear = s.fast < s.slow && s.momentum3 < 0;
     if (isShort) {
-      if (htf5Trend !== "DOWN" || htf15Trend !== "DOWN") return false;
+      if (htf5Trend === "UP" || htf15Trend === "UP") return false;
+      if (htf5Trend === "DOWN" && htf15Trend === "DOWN") {
+        /* strict bearish HTF */
+      } else if (!ltfBear) {
+        return false;
+      }
     } else {
-      if (htf5Trend !== "UP" || htf15Trend !== "UP") return false;
+      if (htf5Trend === "DOWN" || htf15Trend === "DOWN") return false;
+      if (htf5Trend === "UP" && htf15Trend === "UP") {
+        /* strict bullish HTF */
+      } else if (!ltfBull) {
+        return false;
+      }
     }
   }
 

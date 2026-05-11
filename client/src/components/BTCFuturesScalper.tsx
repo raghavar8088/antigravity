@@ -138,7 +138,7 @@ export function BTCFuturesScalper({
   moduleTagline = "MULTI-ASSET PERPETUAL FUTURES · 25x · STRATEGIES PER SYMBOL",
   strategyIds,
   symbols,
-  signalThreshold,
+  signalThreshold = 28,
   watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
