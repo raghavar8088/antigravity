@@ -36,8 +36,8 @@ const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
 const LIQUIDATION_BUFFER_PCT = 10; // Close before liquidation (10% buffer)
 
 // Strategy parameters
-// Threshold was set when confirmation only matched long setups; shorts were effectively blocked.
-const SIGNAL_THRESHOLD = 48;
+// Paper desk default: strict confirmation still filters junk, but 48 + full confluence rarely fired together.
+const SIGNAL_THRESHOLD = 36;
 const MAX_BARS = 120;
 const MIN_BARS = 18;
 /** Slightly slower poll: many symbols × REST calls per tick */
@@ -1713,7 +1713,12 @@ function passesEntryConfirmation(s: SignalInputs, strat: StratDef): boolean {
     if (factors < 3) return false;
   }
 
-  return confluence >= strat.confluenceMin;
+  const strictConfluenceCategory =
+    strat.category === "Confluence" || strat.category === "MTF Conf";
+  const requiredHits = strictConfluenceCategory
+    ? strat.confluenceMin
+    : Math.max(2, strat.confluenceMin - 1);
+  return confluence >= requiredHits;
 }
 
 // ========== HOOK ==========
