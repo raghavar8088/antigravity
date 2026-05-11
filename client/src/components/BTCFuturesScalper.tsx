@@ -9,7 +9,7 @@ import {
   type BTCFuturesStrategyStatus,
   type BTCFuturesEngineOptions,
 } from "@/hooks/useBTCFuturesScalperEngine";
-import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
+import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 
 // ========== FORMATTERS ==========
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -125,6 +125,9 @@ type BTCFuturesScalperProps = {
   title?: string;
   moduleTagline?: string;
   strategyIds?: BTCFuturesEngineOptions["strategyIds"];
+  symbols?: BTCFuturesEngineOptions["symbols"];
+  signalThreshold?: BTCFuturesEngineOptions["signalThreshold"];
+  watchlist?: FuturesWatchItem[];
   storageNamespace?: string;
   baseBalance?: number;
 };
@@ -134,6 +137,9 @@ export function BTCFuturesScalper({
   title = "Future Trading",
   moduleTagline = "MULTI-ASSET PERPETUAL FUTURES · 25x · STRATEGIES PER SYMBOL",
   strategyIds,
+  symbols,
+  signalThreshold,
+  watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
 }: BTCFuturesScalperProps = {}) {
@@ -152,7 +158,7 @@ export function BTCFuturesScalper({
     clearTradeHistory,
     setDisabledStrategies,
     strategyStatuses,
-  } = useBTCFuturesScalperEngine({ strategyIds, storageNamespace });
+  } = useBTCFuturesScalperEngine({ strategyIds, symbols, signalThreshold, storageNamespace });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
   const [showAllTrades, setShowAllTrades] = useState(false);
@@ -173,13 +179,13 @@ export function BTCFuturesScalper({
   const visibleTrades = showAllTrades ? sortedTrades : sortedTrades.slice(0, 10);
   const visibleWatchlist = useMemo(() => {
     const q = watchSearch.trim().toLowerCase();
-    if (!q) return FUTURES_WATCHLIST;
-    return FUTURES_WATCHLIST.filter(
+    if (!q) return watchlist;
+    return watchlist.filter(
       (item) =>
         item.symbol.toLowerCase().includes(q) ||
         item.name.toLowerCase().includes(q),
     );
-  }, [watchSearch]);
+  }, [watchSearch, watchlist]);
 
   // Daily ledger
   const tradesByDay = trades.reduce((acc, t) => {
@@ -202,7 +208,7 @@ export function BTCFuturesScalper({
             {pauseEntries ? "PAUSED" : "LIVE"}
           </span>
           <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-            {moduleTagline} · {FUTURES_WATCHLIST.length} MARKETS
+            {moduleTagline} · {watchlist.length} MARKETS
           </span>
         </div>
         <div className="flex items-center justify-between">

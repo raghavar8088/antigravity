@@ -237,6 +237,10 @@ export type BTCFuturesEngineOptions = {
   storageNamespace?: string;
   /** Optional strategy allow-list. If empty, full strategy library runs. */
   strategyIds?: number[];
+  /** Optional symbol allow-list. If empty, full trading symbol list runs. */
+  symbols?: readonly string[];
+  /** Optional module-specific signal threshold override. */
+  signalThreshold?: number;
 };
 
 // ========== SIGNAL INPUTS ==========
@@ -1157,6 +1161,20 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
     }
   }
 
+  if (strat.category === "Breakout" || strat.category === "MTF Break") {
+    if (short) {
+      if (s.price < s.low20) add(14, "Range breakdown");
+      if (s.volRatio > 1.4) add(10, "Breakout volume");
+      if (s.adxProxy > 22) add(8, "Trend strength");
+      if (s.momentum3 < 0) add(8, "Breakout momentum");
+    } else {
+      if (s.price > s.high20) add(14, "Range breakout");
+      if (s.volRatio > 1.4) add(10, "Breakout volume");
+      if (s.adxProxy > 22) add(8, "Trend strength");
+      if (s.momentum3 > 0) add(8, "Breakout momentum");
+    }
+  }
+
   if (strat.category === "BB") {
     if (s.price < s.bbLower) add(12, "BB lower");
     if (s.price > s.bbUpper) add(10, "BB upper");
@@ -1234,6 +1252,46 @@ function evalMinuteSignal(s: SignalInputs, strat: StratDef): { score: number; re
   if (strat.category === "ROC Trend") {
     if (s.roc10 > 1) add(10, "ROC strong up");
     if (s.roc10 < -1) add(10, "ROC strong down");
+  }
+
+  if (strat.category === "MTF Trend") {
+    if (short) {
+      if (s.fast < s.slow) add(10, "LTF trend down");
+      if (s.momentum6 < 0) add(8, "LTF momentum down");
+      if (s.adxProxy > 20) add(6, "LTF ADX");
+    } else {
+      if (s.fast > s.slow) add(10, "LTF trend up");
+      if (s.momentum6 > 0) add(8, "LTF momentum up");
+      if (s.adxProxy > 20) add(6, "LTF ADX");
+    }
+  }
+
+  if (strat.category === "MTF MACD") {
+    if (short) {
+      if (s.macdLine < s.macdSignal) add(10, "LTF MACD bear");
+      if (s.macdHist < 0) add(8, "LTF hist below zero");
+      if (s.htf5_macdHist < 0) add(8, "HTF5 MACD bear");
+      if (s.htf15_macdHist < 0) add(6, "HTF15 MACD bear");
+    } else {
+      if (s.macdLine > s.macdSignal) add(10, "LTF MACD bull");
+      if (s.macdHist > 0) add(8, "LTF hist above zero");
+      if (s.htf5_macdHist > 0) add(8, "HTF5 MACD bull");
+      if (s.htf15_macdHist > 0) add(6, "HTF15 MACD bull");
+    }
+  }
+
+  if (strat.category === "MTF ADX") {
+    if (short) {
+      if (s.adxProxy > 22 && s.fast < s.slow) add(10, "LTF ADX bear");
+      if (s.htf5_adx > 24) add(8, "HTF5 ADX");
+      if (s.htf15_adx > 24) add(8, "HTF15 ADX");
+      if (s.htf5_trend < 0 && s.htf15_trend < 0) add(10, "HTF trend down");
+    } else {
+      if (s.adxProxy > 22 && s.fast > s.slow) add(10, "LTF ADX bull");
+      if (s.htf5_adx > 24) add(8, "HTF5 ADX");
+      if (s.htf15_adx > 24) add(8, "HTF15 ADX");
+      if (s.htf5_trend > 0 && s.htf15_trend > 0) add(10, "HTF trend up");
+    }
   }
 
   // MTF signals
@@ -1682,6 +1740,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 } {
   const storageNamespace = options.storageNamespace?.trim() || "btc_futures_scalper";
   const strategyIds = options.strategyIds ?? null;
+  const symbols = options.symbols ?? null;
+  const activeSignalThreshold = Number.isFinite(options.signalThreshold)
+    ? Math.max(1, Math.min(100, Number(options.signalThreshold)))
+    : SIGNAL_THRESHOLD;
   const stateStorageKey = `${storageNamespace}_paper_state`;
 
   const activeStratDefs = useMemo(() => {
@@ -1694,6 +1756,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     () => new Set(activeStratDefs.map((s) => s.id)),
     [activeStratDefs],
   );
+  const activeSymbols = useMemo(() => {
+    if (!symbols || symbols.length === 0) return [...TRADING_SYMBOLS];
+    const cleaned = symbols.map((s) => s.trim().toUpperCase()).filter(Boolean);
+    return cleaned.length > 0 ? cleaned : [...TRADING_SYMBOLS];
+  }, [symbols]);
 
   // State
   const [balance, setBalance] = useState(INITIAL_BALANCE);
@@ -2128,7 +2195,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       try {
         const payloads = new Map<string, KlinePayload>();
 
-        for (const batch of chunkArray(TRADING_SYMBOLS, SYMBOL_FETCH_CHUNK)) {
+        for (const batch of chunkArray(activeSymbols, SYMBOL_FETCH_CHUNK)) {
           const results = await Promise.all(
             batch.map(async (sym) => {
               try {
@@ -2223,7 +2290,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         // Do not gate entries on statusRef === READY: setStatus is async and statusRef updates next render,
         // so same poll tick would never open trades. Use live payload presence instead.
         if (hasMarketData && !pauseRef.current) {
-          for (const symbol of TRADING_SYMBOLS) {
+          for (const symbol of activeSymbols) {
             if (openCount >= MAX_OPEN_POSITIONS) break;
             const d = payloads.get(symbol);
             if (!d || d.candles.length < MIN_BARS) continue;
@@ -2242,7 +2309,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               if ((stratCooldownsRef.current[ck] ?? 0) > Date.now()) continue;
 
               const signal = evalMinuteSignal(input, strat);
-              if (signal.score >= SIGNAL_THRESHOLD && passesEntryConfirmation(input, strat)) {
+              if (signal.score >= activeSignalThreshold && passesEntryConfirmation(input, strat)) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
                 openPosition(strat, side, d.lastPrice, d.markPrice, symbol);
                 occupied.add(`${symbol}:${strat.id}`);
@@ -2262,7 +2329,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, resolveExit, activeStratDefs]);
+  }, [openPosition, closePosition, resolveExit, activeStratDefs, activeSymbols, activeSignalThreshold]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
