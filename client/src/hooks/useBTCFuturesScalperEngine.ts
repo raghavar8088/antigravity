@@ -8,6 +8,13 @@ import {
   resolveStrategyProfile,
   type FuturesStrategyProfile,
 } from "@/lib/futuresSessionMetrics";
+import {
+  paperLiquidationDistancePct,
+  paperLiquidationPrice,
+  paperLinearGrossPnl,
+  paperNetPnlOnClose,
+  paperResolveHardExit,
+} from "@/lib/futuresPaperMath";
 
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
 
@@ -42,7 +49,7 @@ const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 const MAX_DRAWDOWN_LOCK_PCT = 25; // Pause entries if drawdown > 25%
 const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
 /**
- * Stats only: mark is within this % of modeled liquidation (see calculateDistanceToLiquidation).
+ * Stats only: mark is within this % of modeled liquidation (see paperLiquidationDistancePct).
  */
 const LIQUIDATION_RISK_DISPLAY_PCT = 1.0;
 
@@ -816,26 +823,7 @@ function htfTrend(fast: number, slow: number, momentum: number): "UP" | "DOWN" |
   return "NEUTRAL";
 }
 
-// ========== LIQUIDATION CALCULATION ==========
-function calculateLiquidationPrice(entryPrice: number, side: Side, leverage: number, mmPct = 0.005): number {
-  // mmPct = maintenance margin (0.5% default)
-  // Liquidation when: margin - loss = maintenance margin
-  // For LONG: entry * (1 - 1/leverage + mm) 
-  // For SHORT: entry * (1 + 1/leverage - mm)
-  if (side === "LONG") {
-    return entryPrice * (1 - 1 / leverage + mmPct);
-  } else {
-    return entryPrice * (1 + 1 / leverage - mmPct);
-  }
-}
-
-function calculateDistanceToLiquidation(price: number, liquidationPrice: number, side: Side): number {
-  if (side === "LONG") {
-    return ((price - liquidationPrice) / price) * 100;
-  } else {
-    return ((liquidationPrice - price) / price) * 100;
-  }
-}
+// ========== LIQUIDATION / PnL (pure helpers live in @/lib/futuresPaperMath) ==========
 
 // ========== MARGIN CALCULATIONS ==========
 function calculateMarginRequired(notional: number, leverage: number): number {
@@ -850,14 +838,6 @@ function calculateNotional(contracts: number): number {
   return contracts * CONTRACT_SIZE;
 }
 
-// ========== PnL CALCULATIONS ==========
-/** USD PnL for isolated linear-style paper: notional moves ~1:1 with underlying % change. */
-function calculateUnrealizedPnL(entryPrice: number, markPrice: number, notional: number, side: Side): number {
-  if (!entryPrice || !Number.isFinite(notional) || notional <= 0) return 0;
-  const pct = side === "LONG" ? (markPrice - entryPrice) / entryPrice : (entryPrice - markPrice) / entryPrice;
-  return pct * notional;
-}
-
 function calculateReturnOnMargin(unrealizedPnL: number, marginUsed: number): number {
   return marginUsed > 0 ? (unrealizedPnL / marginUsed) * 100 : 0;
 }
@@ -868,7 +848,7 @@ function applyMarkToPosition(
   lastPrice: number,
   fundingRate: number,
 ): BTCFuturesPosition {
-  const unrealizedPnL = calculateUnrealizedPnL(p.entryPrice, markPrice, p.notional, p.side);
+  const unrealizedPnL = paperLinearGrossPnl(p.entryPrice, markPrice, p.notional, p.side);
   const returnPct = calculateReturnOnMargin(unrealizedPnL, p.marginUsed);
   const unrealizedPnLPct = p.notional > 0 ? (unrealizedPnL / p.notional) * 100 : 0;
   const fundingCost = p.notional * fundingRate;
@@ -2009,7 +1989,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const shortCount = positions.filter(p => p.side === "SHORT").length;
 
     const liquidationRisk = positions.filter(p => {
-      const dist = calculateDistanceToLiquidation(p.markPrice, p.liquidationPrice, p.side);
+      const dist = paperLiquidationDistancePct(p.markPrice, p.liquidationPrice, p.side);
       return dist >= 0 && dist < LIQUIDATION_RISK_DISPLAY_PCT;
     }).length;
 
@@ -2107,7 +2087,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     if (bal < marginUsed) return;
     /** Keep ref in sync so multiple opens in one poll tick do not all read stale balance. */
     balanceRef.current = bal - marginUsed;
-    const liquidationPrice = calculateLiquidationPrice(price, side, LEVERAGE);
+    const liquidationPrice = paperLiquidationPrice(price, side, LEVERAGE);
     const slPrice = side === "LONG" ? price * (1 - strat.slPct / 100) : price * (1 + strat.slPct / 100);
     const tpPrice = side === "LONG" ? price * (1 + strat.tpPct / 100) : price * (1 - strat.tpPct / 100);
 
@@ -2148,17 +2128,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, []);
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
-    const grossPnL = calculateUnrealizedPnL(position.entryPrice, exitPrice, position.notional, position.side);
-    const fees = position.notional * TAKER_FEE_PCT * 2; // Entry + exit
-    let netPnl = grossPnL - fees - position.fundingCosts;
-
-    // Floor tiny wins only — do not inflate small losses to -MIN (was forcing -$2 on ~$2 margin → -100% return).
-    if (netPnl > 0 && netPnl < MIN_ABS_NET_PNL_USD) {
-      netPnl = MIN_ABS_NET_PNL_USD;
-    }
+    const { grossPnl, fees, netPnl } = paperNetPnlOnClose({
+      entryPrice: position.entryPrice,
+      exitPrice,
+      notional: position.notional,
+      side: position.side,
+      takerFeePct: TAKER_FEE_PCT,
+      fundingCosts: position.fundingCosts,
+      minAbsNetWinUsd: MIN_ABS_NET_PNL_USD,
+    });
 
     const netPnlPct = position.marginUsed > 0 ? (netPnl / position.marginUsed) * 100 : 0;
-    const liqDist = calculateDistanceToLiquidation(exitPrice, position.liquidationPrice, position.side);
+    const liqDist = paperLiquidationDistancePct(exitPrice, position.liquidationPrice, position.side);
 
     const trade: BTCFuturesTrade = {
       id: position.id,
@@ -2171,7 +2152,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       contracts: position.contracts,
       notional: position.notional,
       marginUsed: position.marginUsed,
-      realizedPnl: grossPnL,
+      realizedPnl: grossPnl,
       fees,
       netPnl,
       netPnlPct,
@@ -2188,44 +2169,29 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setBalance(prev => prev + position.marginUsed + netPnl);
   }, []);
 
-  const resolveExit = useCallback((p: BTCFuturesPosition, input: SignalInputs): { shouldClose: boolean; reason?: BTCFuturesPosition["exitReason"]; exitPrice: number } => {
+  const resolveExit = useCallback((p: BTCFuturesPosition, _input: SignalInputs): { shouldClose: boolean; reason?: BTCFuturesPosition["exitReason"]; exitPrice: number } => {
     const markPrice = p.markPrice;
     const returnPct = p.returnPct;
     const progress = Math.abs(returnPct) / (Math.abs((p.tpPrice - p.entryPrice) / p.entryPrice) * 100);
-    const ageMin = (Date.now() - new Date(p.openedAt).getTime()) / 60000;
 
-    // Liquidation check
-    if (p.side === "LONG" && markPrice <= p.liquidationPrice) {
-      return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: p.liquidationPrice };
-    }
-    if (p.side === "SHORT" && markPrice >= p.liquidationPrice) {
-      return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: p.liquidationPrice };
-    }
-
-    // No "near liquidation" auto-close — any %-of-price heuristic collided with normal 25x cushion (~3–4%)
-    // and closed winners as LIQUIDATION_RISK. Paper desk exits on true liq cross above, then SL/TP/TIME.
-
-    // SL hit
-    if (p.side === "LONG" && markPrice <= p.adaptiveSl) {
-      return { shouldClose: true, reason: "SL", exitPrice: p.adaptiveSl };
-    }
-    if (p.side === "SHORT" && markPrice >= p.adaptiveSl) {
-      return { shouldClose: true, reason: "SL", exitPrice: p.adaptiveSl };
+    const hard = paperResolveHardExit({
+      side: p.side,
+      markPrice: p.markPrice,
+      liquidationPrice: p.liquidationPrice,
+      adaptiveSl: p.adaptiveSl,
+      tpPrice: p.tpPrice,
+      entryPrice: p.entryPrice,
+      openedAtMs: new Date(p.openedAt).getTime(),
+      nowMs: Date.now(),
+      holdMinutes: p.holdMinutes,
+      mtfHoldBonus: MTF_HOLD_BONUS,
+      holdTimeMul: profileHoldTimeMulRef.current,
+    });
+    if (hard.shouldClose) {
+      return { shouldClose: true, reason: hard.reason, exitPrice: hard.exitPrice };
     }
 
-    // TP hit
-    if (p.side === "LONG" && markPrice >= p.tpPrice) {
-      return { shouldClose: true, reason: "TP", exitPrice: p.tpPrice };
-    }
-    if (p.side === "SHORT" && markPrice <= p.tpPrice) {
-      return { shouldClose: true, reason: "TP", exitPrice: p.tpPrice };
-    }
-
-    // Time-based exit (profile may shorten max hold for higher scalp frequency)
-    const holdExtend = p.holdMinutes * MTF_HOLD_BONUS * profileHoldTimeMulRef.current;
-    if (ageMin >= holdExtend) {
-      return { shouldClose: true, reason: "TIME", exitPrice: markPrice };
-    }
+    // No preemptive liquidation — hard exits only via paperResolveHardExit (true liq cross, then SL/TP/TIME).
 
     // Trailing stop
     if (progress >= TRAIL_ACTIVATION_PCT && !p.breakevenMoved) {
