@@ -1,6 +1,7 @@
 "use client";
 
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
+import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
 
 /**
@@ -23,7 +24,12 @@ const BTC_FUTURE_TRADING_STRATEGY_IDS: number[] = [
 const BTC_ONLY_SYMBOLS = ["BTCUSD"] as const;
 const BTC_ONLY_WATCHLIST = FUTURES_WATCHLIST.filter((item) => item.symbol === "BTCUSD");
 
-export function BTCFutureTradingScalper() {
+export function BTCFutureTradingScalper({
+  strategyProfile,
+}: {
+  /** Optional A/B: e.g. `"scalp_aggro_v1"` — pair with a distinct `storageNamespace` in a forked route for clean comparison. */
+  strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
+} = {}) {
   return (
     <BTCFuturesScalper
       title="BTC Future Trading"
@@ -31,6 +37,7 @@ export function BTCFutureTradingScalper() {
       strategyIds={BTC_FUTURE_TRADING_STRATEGY_IDS}
       symbols={BTC_ONLY_SYMBOLS}
       signalThreshold={26}
+      strategyProfile={strategyProfile}
       watchlist={BTC_ONLY_WATCHLIST}
       storageNamespace="btc_future_trading_20"
       baseBalance={1000}

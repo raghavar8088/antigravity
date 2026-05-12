@@ -5,11 +5,11 @@ import {
   useBTCFuturesScalperEngine,
   type BTCFuturesPosition,
   type BTCFuturesTrade,
-  type BTCFuturesEngineStats,
   type BTCFuturesStrategyStatus,
   type BTCFuturesEngineOptions,
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
+import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 
 // ========== FORMATTERS ==========
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -127,6 +127,7 @@ type BTCFuturesScalperProps = {
   strategyIds?: BTCFuturesEngineOptions["strategyIds"];
   symbols?: BTCFuturesEngineOptions["symbols"];
   signalThreshold?: BTCFuturesEngineOptions["signalThreshold"];
+  strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
   watchlist?: FuturesWatchItem[];
   storageNamespace?: string;
   baseBalance?: number;
@@ -139,6 +140,7 @@ export function BTCFuturesScalper({
   strategyIds,
   symbols,
   signalThreshold = 28,
+  strategyProfile,
   watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
@@ -158,7 +160,7 @@ export function BTCFuturesScalper({
     clearTradeHistory,
     setDisabledStrategies,
     strategyStatuses,
-  } = useBTCFuturesScalperEngine({ strategyIds, symbols, signalThreshold, storageNamespace });
+  } = useBTCFuturesScalperEngine({ strategyIds, symbols, signalThreshold, strategyProfile, storageNamespace });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
   const [showAllTrades, setShowAllTrades] = useState(false);
@@ -365,6 +367,28 @@ export function BTCFuturesScalper({
         <SummaryCard label="Best Trade" value={trades.length > 0 ? fmtUSD(Math.max(...trades.map((t) => t.netPnl)), { signed: true }) : "$0.00"} accent="text-emerald-600" />
         <SummaryCard label="Open Pos" value={`${stats.openPositions}`} accent="text-zinc-900" />
         <SummaryCard label="Liq Risk" value={`${stats.liquidationRisk}`} accent={stats.liquidationRisk > 0 ? "text-rose-600" : "text-zinc-900"} />
+      </div>
+
+      <div className="mb-6 glass-panel px-5 py-4 md:px-6">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+          Desk profile & session flow
+        </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
+          <span className="rounded border border-zinc-200 bg-zinc-50 px-2 py-0.5 font-medium text-zinc-800">
+            {FUTURES_STRATEGY_PROFILES[stats.strategyProfile].label}
+          </span>
+          <span className="text-zinc-500">
+            Signal bar <span className="font-mono text-zinc-900">{stats.effectiveSignalThreshold}</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-xs">
+          <CompactMetric label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} detail="Closed ÷ session span" accent="text-zinc-900" />
+          <CompactMetric label="Expectancy" value={fmtUSD(stats.sessionExpectancyPerTrade, { signed: true })} detail="Avg net / closed trade" accent={stats.sessionExpectancyPerTrade >= 0 ? "text-emerald-600" : "text-rose-600"} />
+          <CompactMetric label="Fee / |gross|" value={fmtPct(stats.sessionFeePctOfAbsGross, false, 2)} detail="Round-trip drag vs |gross|" accent="text-amber-600" />
+          <CompactMetric label="Hold avg" value={`${stats.sessionAvgHoldMinutes.toFixed(1)}m`} detail="Mean minutes in trade" accent="text-zinc-900" />
+          <CompactMetric label="Hold median" value={`${stats.sessionMedianHoldMinutes.toFixed(1)}m`} detail="P50 minutes" accent="text-zinc-900" />
+          <CompactMetric label="Hold P95" value={`${stats.sessionHoldP95Minutes.toFixed(1)}m`} detail="Tail length" accent="text-zinc-900" />
+        </div>
       </div>
 
       {/* Open Positions */}

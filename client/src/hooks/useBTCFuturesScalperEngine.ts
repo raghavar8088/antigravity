@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo, type MutableRefObject } from "react";
 import { PRIMARY_QUOTE_SYMBOL, TRADING_SYMBOLS } from "@/lib/futuresMarketData";
+import {
+  computeSessionTradingMetrics,
+  FUTURES_STRATEGY_PROFILES,
+  resolveStrategyProfile,
+  type FuturesStrategyProfile,
+} from "@/lib/futuresSessionMetrics";
+
+export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
 
 /**
  * Multi-asset futures paper engine (Delta India REST via /api/btc/futures-klines?symbol=)
@@ -216,6 +224,17 @@ export interface BTCFuturesEngineStats {
   liquidationRisk: number; // Positions near liquidation
   avgLeverage: number;
   dayStartBalance: number;
+  /** Closed trades / session hour (earliest open → now). */
+  sessionTradesPerHour: number;
+  /** Mean net PnL per closed trade (expectancy proxy). */
+  sessionExpectancyPerTrade: number;
+  /** sum(fees) / sum(|realized gross|) × 100. */
+  sessionFeePctOfAbsGross: number;
+  sessionAvgHoldMinutes: number;
+  sessionMedianHoldMinutes: number;
+  sessionHoldP95Minutes: number;
+  strategyProfile: FuturesStrategyProfile;
+  effectiveSignalThreshold: number;
 }
 
 /** Strategy Status */
@@ -244,6 +263,8 @@ export type BTCFuturesEngineOptions = {
   symbols?: readonly string[];
   /** Optional module-specific signal threshold override. */
   signalThreshold?: number;
+  /** Paper-only: tune entry cadence / cooldown / time exits without editing STRAT_DEFS. */
+  strategyProfile?: FuturesStrategyProfile;
 };
 
 // ========== SIGNAL INPUTS ==========
@@ -1758,13 +1779,24 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   exportCSV: () => string;
   exportJSON: () => string;
   strategyStatuses: BTCFuturesStrategyStatus[];
+  strategyProfile: FuturesStrategyProfile;
+  effectiveSignalThreshold: number;
 } {
   const storageNamespace = options.storageNamespace?.trim() || "btc_futures_scalper";
   const strategyIds = options.strategyIds ?? null;
   const symbols = options.symbols ?? null;
-  const activeSignalThreshold = Number.isFinite(options.signalThreshold)
-    ? Math.max(1, Math.min(100, Number(options.signalThreshold)))
-    : SIGNAL_THRESHOLD;
+  const strategyProfile = useMemo(
+    () => resolveStrategyProfile(options.strategyProfile),
+    [options.strategyProfile],
+  );
+  const profileCfg = FUTURES_STRATEGY_PROFILES[strategyProfile];
+  const activeSignalThreshold = useMemo(() => {
+    const base = Number.isFinite(options.signalThreshold)
+      ? Number(options.signalThreshold)
+      : SIGNAL_THRESHOLD;
+    const adjusted = base + profileCfg.signalThresholdDelta;
+    return Math.max(18, Math.min(99, adjusted));
+  }, [options.signalThreshold, profileCfg.signalThresholdDelta]);
   const stateStorageKey = `${storageNamespace}_paper_state`;
 
   const activeStratDefs = useMemo(() => {
@@ -1809,6 +1841,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const pauseRef = useRef(pauseEntries);
   const lastTradeAtRef = useRef(lastTradeAt);
   const stratCooldownsRef = useRef<Record<string, number>>({});
+  const profileCooldownMulRef = useRef(1);
+  const profileHoldTimeMulRef = useRef(1);
   const dayStartBalanceRef = useRef(dayStartBalance);
   const dayStartDateRef = useRef(dayStartDate);
 
@@ -1821,6 +1855,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   useEffect(() => { lastTradeAtRef.current = lastTradeAt; }, [lastTradeAt]);
   useEffect(() => { dayStartBalanceRef.current = dayStartBalance; }, [dayStartBalance]);
   useEffect(() => { dayStartDateRef.current = dayStartDate; }, [dayStartDate]);
+
+  useEffect(() => {
+    profileCooldownMulRef.current = profileCfg.cooldownMul;
+    profileHoldTimeMulRef.current = profileCfg.holdTimeMul;
+  }, [profileCfg]);
 
   // ========== LOCAL STORAGE ==========
   const loadLs = useCallback((): Partial<EngineState> | null => {
@@ -1941,10 +1980,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
   }, [trades]);
 
-  const exportJSON = useCallback(() => {
-    return JSON.stringify({ balance, positions, trades, stats: calculateStats() }, null, 2);
-  }, [balance, positions, trades]);
-
   // ========== STATS ==========
   const calculateStats = useCallback((): BTCFuturesEngineStats => {
     const wins = trades.filter(t => t.netPnl > 0);
@@ -1980,6 +2015,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const avgLeverage = positions.length > 0 ? positions.reduce((s, p) => s + p.leverage, 0) / positions.length : 0;
 
+    const sm = computeSessionTradingMetrics(trades);
+
     return {
       totalTrades,
       winCount,
@@ -2007,8 +2044,20 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       liquidationRisk,
       avgLeverage,
       dayStartBalance: dayStartBalanceRef.current,
+      sessionTradesPerHour: sm.tradesPerHour,
+      sessionExpectancyPerTrade: sm.expectancyPerTrade,
+      sessionFeePctOfAbsGross: sm.feePctOfAbsGross,
+      sessionAvgHoldMinutes: sm.avgHoldMinutes,
+      sessionMedianHoldMinutes: sm.medianHoldMinutes,
+      sessionHoldP95Minutes: sm.holdP95Minutes,
+      strategyProfile,
+      effectiveSignalThreshold: activeSignalThreshold,
     };
-  }, [trades, positions, balance]);
+  }, [trades, positions, balance, strategyProfile, activeSignalThreshold]);
+
+  const exportJSON = useCallback(() => {
+    return JSON.stringify({ balance, positions, trades, stats: calculateStats() }, null, 2);
+  }, [balance, positions, trades, calculateStats]);
 
   // ========== STRATEGY STATUSES ==========
   const strategyStatuses = useMemo((): BTCFuturesStrategyStatus[] => {
@@ -2092,7 +2141,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     setPositions(prev => [...prev, position]);
     setBalance(balanceRef.current);
-    stratCooldownsRef.current[`${symbol}:${strat.id}`] = Date.now() + strat.cooldownMin * 60000;
+    stratCooldownsRef.current[`${symbol}:${strat.id}`] =
+      Date.now() +
+      Math.max(30_000, Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current));
     setLastTradeAt(Date.now());
   }, []);
 
@@ -2170,8 +2221,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       return { shouldClose: true, reason: "TP", exitPrice: p.tpPrice };
     }
 
-    // Time-based exit
-    const holdExtend = p.holdMinutes * MTF_HOLD_BONUS;
+    // Time-based exit (profile may shorten max hold for higher scalp frequency)
+    const holdExtend = p.holdMinutes * MTF_HOLD_BONUS * profileHoldTimeMulRef.current;
     if (ageMin >= holdExtend) {
       return { shouldClose: true, reason: "TIME", exitPrice: markPrice };
     }
@@ -2411,6 +2462,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     exportCSV,
     exportJSON,
     strategyStatuses,
+    strategyProfile,
+    effectiveSignalThreshold: activeSignalThreshold,
   };
 }
 
