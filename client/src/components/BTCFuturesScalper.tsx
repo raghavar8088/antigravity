@@ -160,6 +160,7 @@ export function BTCFuturesScalper({
     clearTradeHistory,
     setDisabledStrategies,
     strategyStatuses,
+    dataHealth,
   } = useBTCFuturesScalperEngine({ strategyIds, symbols, signalThreshold, strategyProfile, storageNamespace });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
@@ -237,6 +238,22 @@ export function BTCFuturesScalper({
           </div>
         </div>
       </div>
+
+      {dataHealth.showFeedWarning && (
+        <div
+          role="status"
+          className="rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-[11px] leading-snug text-amber-950 shadow-sm"
+        >
+          <span className="font-semibold">Futures kline feed is degraded.</span>{" "}
+          {dataHealth.lastError ? (
+            <span className="text-amber-900/95">{dataHealth.lastError}</span>
+          ) : null}{" "}
+          <span className="text-amber-800/85">
+            Signals may be stale until data recovers ({dataHealth.payloadsReady}/{dataHealth.symbolsRequested} symbols
+            ready).
+          </span>
+        </div>
+      )}
 
       <div className="glass-panel px-5 py-6 md:px-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

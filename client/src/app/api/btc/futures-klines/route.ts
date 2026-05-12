@@ -55,6 +55,30 @@ type DeltaTickerResponse = {
 /** 1m candles for perpetual futures (query: ?symbol=ETHUSD) with mark price and funding rate */
 export async function GET(request: NextRequest): Promise<Response> {
   const symbol = sanitizeSymbol(request.nextUrl.searchParams.get("symbol"));
+
+  if (
+    process.env.NODE_ENV === "development" &&
+    request.nextUrl.searchParams.get("debugFutures502") === "1"
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "debugFutures502 (dev only)",
+        candles: [],
+        lastPrice: 0,
+        markPrice: 0,
+        indexPrice: 0,
+        changePct24h: 0,
+        fundingRate: 0,
+        nextFunding: 0,
+        symbol,
+        fetchedAt: new Date().toISOString(),
+        deltaBase: DELTA_REST_BASE,
+      },
+      { status: 502 },
+    );
+  }
+
   const endSec = Math.floor(Date.now() / 1000);
   const startSec = endSec - 130 * 60;
 

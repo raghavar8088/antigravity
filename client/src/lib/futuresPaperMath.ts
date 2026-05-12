@@ -82,6 +82,30 @@ export function paperNetPnlOnClose(p: PaperNetCloseParams): { grossPnl: number; 
   return { grossPnl, fees, netPnl };
 }
 
+// ========== MARGIN / SIZING ==========
+
+/** Isolated margin required for a position. */
+export function paperMarginRequired(notional: number, leverage: number): number {
+  return notional / leverage;
+}
+
+/** Contract count (whole units) from a desired notional at a given contract size. */
+export function paperContracts(notional: number, contractSize: number): number {
+  return Math.floor(notional / contractSize);
+}
+
+/** Notional USD from contract count. */
+export function paperNotional(contracts: number, contractSize: number): number {
+  return contracts * contractSize;
+}
+
+/** Return-on-margin percentage (used for unrealized PnL display). */
+export function paperReturnOnMargin(unrealizedPnl: number, marginUsed: number): number {
+  return marginUsed > 0 ? (unrealizedPnl / marginUsed) * 100 : 0;
+}
+
+// ========== HARD EXIT ==========
+
 export type PaperHardExitInputs = {
   side: PaperSide;
   markPrice: number;
