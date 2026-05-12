@@ -33,13 +33,10 @@ const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 // Risk management
 const MAX_DRAWDOWN_LOCK_PCT = 25; // Pause entries if drawdown > 25%
 const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% loss per trade
-/** Stats: flag positions when mark is within this % of modeled liquidation (price space, not leverage “room”). */
-const LIQUIDATION_RISK_DISPLAY_PCT = 1.0;
 /**
- * Pre-close when mark is within this % of liquidation price. Do NOT compare to leverage cushion (e.g. ~3.5% at 25x entry)
- * or every position exits immediately as LIQUIDATION_RISK.
+ * Stats only: mark is within this % of modeled liquidation (see calculateDistanceToLiquidation).
  */
-const NEAR_LIQUIDATION_EXIT_PCT = 0.35;
+const LIQUIDATION_RISK_DISPLAY_PCT = 1.0;
 
 // Strategy parameters
 // Paper desk default: strict HTF rules used to reject almost all MTF entries when 5m/15m was NEUTRAL.
@@ -833,9 +830,11 @@ function calculateNotional(contracts: number): number {
 }
 
 // ========== PnL CALCULATIONS ==========
-function calculateUnrealizedPnL(entryPrice: number, markPrice: number, contracts: number, side: Side): number {
-  const priceDiff = side === "LONG" ? markPrice - entryPrice : entryPrice - markPrice;
-  return priceDiff * contracts * (CONTRACT_SIZE / markPrice);
+/** USD PnL for isolated linear-style paper: notional moves ~1:1 with underlying % change. */
+function calculateUnrealizedPnL(entryPrice: number, markPrice: number, notional: number, side: Side): number {
+  if (!entryPrice || !Number.isFinite(notional) || notional <= 0) return 0;
+  const pct = side === "LONG" ? (markPrice - entryPrice) / entryPrice : (entryPrice - markPrice) / entryPrice;
+  return pct * notional;
 }
 
 function calculateReturnOnMargin(unrealizedPnL: number, marginUsed: number): number {
@@ -848,7 +847,7 @@ function applyMarkToPosition(
   lastPrice: number,
   fundingRate: number,
 ): BTCFuturesPosition {
-  const unrealizedPnL = calculateUnrealizedPnL(p.entryPrice, markPrice, p.contracts, p.side);
+  const unrealizedPnL = calculateUnrealizedPnL(p.entryPrice, markPrice, p.notional, p.side);
   const returnPct = calculateReturnOnMargin(unrealizedPnL, p.marginUsed);
   const unrealizedPnLPct = p.notional > 0 ? (unrealizedPnL / p.notional) * 100 : 0;
   const fundingCost = p.notional * fundingRate;
@@ -2098,7 +2097,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, []);
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
-    const grossPnL = calculateUnrealizedPnL(position.entryPrice, exitPrice, position.contracts, position.side);
+    const grossPnL = calculateUnrealizedPnL(position.entryPrice, exitPrice, position.notional, position.side);
     const fees = position.notional * TAKER_FEE_PCT * 2; // Entry + exit
     let netPnl = grossPnL - fees - position.fundingCosts;
 
@@ -2152,11 +2151,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: p.liquidationPrice };
     }
 
-    // Near liquidation exit (tight % of mark— not half of an unrelated 10% stat threshold).
-    const liqDist = calculateDistanceToLiquidation(markPrice, p.liquidationPrice, p.side);
-    if (liqDist >= 0 && liqDist < NEAR_LIQUIDATION_EXIT_PCT) {
-      return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: markPrice };
-    }
+    // No "near liquidation" auto-close — any %-of-price heuristic collided with normal 25x cushion (~3–4%)
+    // and closed winners as LIQUIDATION_RISK. Paper desk exits on true liq cross above, then SL/TP/TIME.
 
     // SL hit
     if (p.side === "LONG" && markPrice <= p.adaptiveSl) {
