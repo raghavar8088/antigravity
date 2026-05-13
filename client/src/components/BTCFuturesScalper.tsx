@@ -423,6 +423,9 @@ export function BTCFuturesScalper({
             Skips regime filter: <span className="font-mono text-zinc-800">{stats.deskSkippedByRegime}</span>
             {stats.deskSkippedByRegime > 0 ? <span className="text-zinc-400"> ({stats.deskSkippedByRegimeBreakdown})</span> : null}
           </span>
+          <span>
+            Regime defaults applied: <span className="font-mono text-zinc-800">{stats.deskRegimeAnnotatedStratCount}</span> strats
+          </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 text-xs">
           <CompactMetric label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} detail="Closed ÷ session span" accent="text-zinc-900" />

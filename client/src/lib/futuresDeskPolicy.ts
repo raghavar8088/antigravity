@@ -12,7 +12,7 @@
  * `NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K` — ATR$ vs fee hurdle multiplier (default 1).
  */
 
-import type { FuturesStratDef } from "./futuresStrategies";
+import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
 import type { FuturesStrategyProfile } from "./futuresSessionMetrics";
 import { paperWidenTpToMinSlRatio } from "./futuresPaperMath";
 
@@ -112,11 +112,66 @@ export function deskHoldMinutesCategoryMul(category: string): number {
   return Math.min(raw, HOLD_MUL_CAP);
 }
 
+/**
+ * v1 desk default: **allow all three** regimes when category is unknown (future defs / fake-diversity names).
+ * Confluence uses the same — multi-timeframe stack can fire in any bucket until telemetry says otherwise.
+ */
+export const DESK_REGIME_FALLBACK_ALLOW_ALL: readonly RegimeTag[] = ["chop", "trendLow", "trendHigh"];
+
+/** Mean-reversion / range / oscillator dip — prefer chop + mild trend drift, exclude pure trendHigh. */
+const DESK_REGIME_MR: readonly RegimeTag[] = ["chop", "trendLow"];
+
+/** Directional / breakout / flow — prefer trend buckets, exclude pure chop. */
+const DESK_REGIME_IMPULSE: readonly RegimeTag[] = ["trendLow", "trendHigh"];
+
+/**
+ * Conservative **category → default `regimes[]`** for the paper desk when defs omit `regimes`.
+ * Explicit `strat.regimes` in `FUTURES_STRAT_DEFS` always wins (see `buildPaperDeskStrategies`).
+ *
+ * Risk if too strict: spikes `deskSkippedByRegime` and lowers trades/hr — tune after a live session snapshot.
+ */
+export const DESK_DEFAULT_REGIMES_BY_CATEGORY: Readonly<Record<string, readonly RegimeTag[]>> = {
+  MeanRev: DESK_REGIME_MR,
+  BB: DESK_REGIME_MR,
+  RSI: DESK_REGIME_MR,
+  Stoch: DESK_REGIME_MR,
+  VWAP: DESK_REGIME_MR,
+  "Williams MR": DESK_REGIME_MR,
+  "CCI MR": DESK_REGIME_MR,
+  "Keltner MR": DESK_REGIME_MR,
+  "Donchian MR": DESK_REGIME_MR,
+  "VWAP MR": DESK_REGIME_MR,
+  "RSI Div": DESK_REGIME_MR,
+  "MACD Div": DESK_REGIME_MR,
+  "Stoch Div": DESK_REGIME_MR,
+  Confluence: DESK_REGIME_FALLBACK_ALLOW_ALL,
+  Momentum: DESK_REGIME_IMPULSE,
+  Trend: DESK_REGIME_IMPULSE,
+  "Donchian Trend": DESK_REGIME_IMPULSE,
+  "ADX Trend": DESK_REGIME_IMPULSE,
+  Vol: DESK_REGIME_IMPULSE,
+  MACD: DESK_REGIME_IMPULSE,
+  OBV: DESK_REGIME_IMPULSE,
+  Ribbon: DESK_REGIME_IMPULSE,
+  Squeeze: DESK_REGIME_IMPULSE,
+  "Williams Trend": DESK_REGIME_IMPULSE,
+  "CCI Trend": DESK_REGIME_IMPULSE,
+  "Keltner Trend": DESK_REGIME_IMPULSE,
+  "ROC Trend": DESK_REGIME_IMPULSE,
+};
+
+export function defaultRegimesForCategory(category: string): RegimeTag[] {
+  const row = DESK_DEFAULT_REGIMES_BY_CATEGORY[category];
+  return [...(row ?? DESK_REGIME_FALLBACK_ALLOW_ALL)];
+}
+
 export type DeskStrategyBuildResult = {
   strategies: FuturesStratDef[];
   tpWidenedStratIds: readonly number[];
   lowRrSkippedStratIds: readonly number[];
   fakeDiversityFilteredCount: number;
+  /** Built strats where `regimes` was filled from `defaultRegimesForCategory` (defs had no non-empty `regimes`). */
+  deskRegimeAnnotatedStratCount: number;
 };
 
 /**
@@ -144,6 +199,7 @@ export function buildPaperDeskStrategies(
   });
 
   const strategies: FuturesStratDef[] = [];
+  let deskRegimeAnnotatedStratCount = 0;
   for (const d of afterAllow) {
     const w = paperWidenTpToMinSlRatio(d.slPct, d.tpPct, opts.minTpSlRatio, DESK_WIDEN_TP_MAX_PCT);
     if (!w.included) {
@@ -154,11 +210,15 @@ export function buildPaperDeskStrategies(
     if (widened) tpWidenedStratIds.push(d.id);
     const holdMul = deskHoldMinutesCategoryMul(d.category);
     const holdMinutes = Math.round(d.holdMinutes * holdMul * 100) / 100;
+    const hadExplicitRegimes = Array.isArray(d.regimes) && d.regimes.length > 0;
+    const regimes = hadExplicitRegimes ? [...d.regimes!] : defaultRegimesForCategory(d.category);
+    if (!hadExplicitRegimes) deskRegimeAnnotatedStratCount += 1;
     strategies.push({
       ...d,
       tpPct: w.tpPct,
       deskTpWidened: widened,
       holdMinutes,
+      regimes,
     });
   }
 
@@ -167,5 +227,6 @@ export function buildPaperDeskStrategies(
     tpWidenedStratIds,
     lowRrSkippedStratIds,
     fakeDiversityFilteredCount,
+    deskRegimeAnnotatedStratCount,
   };
 }

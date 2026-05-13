@@ -306,6 +306,8 @@ export interface BTCFuturesEngineStats {
   deskTpWidenedStratIds: string;
   /** Comma-separated strat IDs skipped for low RR after widen cap. */
   deskLowRrSkippedStratIds: string;
+  /** Built strats that received default `regimes[]` from category map (defs omitted regimes). */
+  deskRegimeAnnotatedStratCount: number;
   /** Opens where `scalp_aggro_v1` + desk-widened TP bumped base `holdMinutes` before `holdTimeMul`. */
   deskProfileAdjustedHoldAppliedCount: number;
   /** Last-N closed trades: exit reason × count and mean net (grouped expectancy). */
@@ -547,6 +549,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       fakeDiversityFiltered: deskStrategiesResult.fakeDiversityFilteredCount,
       tpWidenedIds: [...deskStrategiesResult.tpWidenedStratIds].sort((a, b) => a - b).join(","),
       lowRrSkippedIds: [...deskStrategiesResult.lowRrSkippedStratIds].sort((a, b) => a - b).join(","),
+      regimeAnnotatedCount: deskStrategiesResult.deskRegimeAnnotatedStratCount,
     }),
     [deskStrategiesResult],
   );
@@ -919,6 +922,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskFakeDiversityFilteredCount: deskPolicySnapshot.fakeDiversityFiltered,
       deskTpWidenedStratIds: deskPolicySnapshot.tpWidenedIds,
       deskLowRrSkippedStratIds: deskPolicySnapshot.lowRrSkippedIds,
+      deskRegimeAnnotatedStratCount: deskPolicySnapshot.regimeAnnotatedCount,
       deskProfileAdjustedHoldAppliedCount: deskProfileAdjustedHoldCountRef.current,
       sessionExitReasonSummary: formatExitReasonSessionSummary(exitAn.rows),
       sessionWorstTimeOffenders,

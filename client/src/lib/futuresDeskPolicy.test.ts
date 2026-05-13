@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
 import {
   buildPaperDeskStrategies,
+  defaultRegimesForCategory,
   deskEffectiveHoldMinutesAtOpen,
+  DESK_REGIME_FALLBACK_ALLOW_ALL,
   deskHoldMinutesCategoryMul,
   deskHoldTuningExportIntervalMsFromEnv,
   deskMaxSameDirNotionalFracFromEnv,
@@ -71,6 +73,60 @@ describe("buildPaperDeskStrategies", () => {
     });
     const built = r.strategies.find((s) => s.id === 3);
     expect(built!.holdMinutes).toBeCloseTo(raw.holdMinutes * deskHoldMinutesCategoryMul(raw.category), 4);
+  });
+
+  it("attaches default regimes by category when defs omit regimes", () => {
+    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    expect(raw.regimes).toBeUndefined();
+    const r = buildPaperDeskStrategies([raw], {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+    expect(r.strategies[0]!.regimes).toEqual(["chop", "trendLow"]);
+    expect(r.deskRegimeAnnotatedStratCount).toBe(1);
+  });
+
+  it("keeps explicit regimes from def and does not count toward annotation", () => {
+    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 5)!;
+    const r = buildPaperDeskStrategies([{ ...raw, regimes: ["trendHigh"] }], {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+    expect(r.strategies[0]!.regimes).toEqual(["trendHigh"]);
+    expect(r.deskRegimeAnnotatedStratCount).toBe(0);
+  });
+
+  it("empty regimes array on def is treated as missing → defaults apply", () => {
+    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    const r = buildPaperDeskStrategies([{ ...raw, regimes: [] }], {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+    expect(r.strategies[0]!.regimes).toEqual(["chop", "trendLow"]);
+    expect(r.deskRegimeAnnotatedStratCount).toBe(1);
+  });
+});
+
+describe("defaultRegimesForCategory", () => {
+  it("maps MeanRev / Confluence / unknown per v1 table", () => {
+    expect(defaultRegimesForCategory("MeanRev")).toEqual(["chop", "trendLow"]);
+    expect(defaultRegimesForCategory("Confluence")).toEqual([...DESK_REGIME_FALLBACK_ALLOW_ALL]);
+    expect(defaultRegimesForCategory("TotallyUnknownCategory")).toEqual([...DESK_REGIME_FALLBACK_ALLOW_ALL]);
+  });
+
+  it("full desk build annotates every included strat when defs omit regimes", () => {
+    const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+    expect(r.deskRegimeAnnotatedStratCount).toBe(r.strategies.length);
+    for (const s of r.strategies) {
+      expect(s.regimes?.length).toBeGreaterThan(0);
+    }
   });
 });
 
