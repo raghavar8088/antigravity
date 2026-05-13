@@ -4,7 +4,7 @@
  * The hook imports these — no logic duplication.
  */
 
-import type { FuturesStratDef } from "./futuresStrategies";
+import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
 
 // ========== SIGNAL INPUTS ==========
 export type FuturesSignalInputs = {
@@ -322,20 +322,99 @@ function donchian(high: number[], low: number[], period = 20): { upper: number[]
   return { upper, lower, mid };
 }
 
-function aggregateBars(bars1m: number[], periodMinutes: number): number[] {
-  const aggregated: number[] = [];
-  let sum = 0;
-  let count = 0;
-  for (let i = 0; i < bars1m.length; i++) {
-    sum += bars1m[i];
-    count++;
-    if (count === periodMinutes) {
-      aggregated.push(sum / periodMinutes);
-      sum = 0;
-      count = 0;
-    }
+/**
+ * Roll N consecutive 1m bars into one bar (true OHLCV): open=first open, high=max(highs),
+ * low=min(lows), close=last close, volume=sum(volumes). Remainder bars &lt; N are dropped.
+ */
+export function aggregate1mOhlcvToPeriodMinutes(
+  open1m: number[],
+  high1m: number[],
+  low1m: number[],
+  close1m: number[],
+  volume1m: number[],
+  periodMinutes: number,
+): { open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] } {
+  const n = close1m.length;
+  if (
+    periodMinutes < 2 ||
+    open1m.length !== n ||
+    high1m.length !== n ||
+    low1m.length !== n ||
+    volume1m.length !== n
+  ) {
+    return { open: [], high: [], low: [], close: [], volume: [] };
   }
-  return aggregated;
+  const ao: number[] = [];
+  const ah: number[] = [];
+  const al: number[] = [];
+  const ac: number[] = [];
+  const av: number[] = [];
+  for (let start = 0; start + periodMinutes <= n; start += periodMinutes) {
+    const end = start + periodMinutes;
+    let h = -Infinity;
+    let l = Infinity;
+    let vol = 0;
+    for (let i = start; i < end; i++) {
+      h = Math.max(h, high1m[i]);
+      l = Math.min(l, low1m[i]);
+      vol += volume1m[i] || 0;
+    }
+    ao.push(open1m[start]);
+    ah.push(h);
+    al.push(l);
+    ac.push(close1m[end - 1]);
+    av.push(vol);
+  }
+  return { open: ao, high: ah, low: al, close: ac, volume: av };
+}
+
+/**
+ * Classifies **15m** OHLC into a coarse regime using **ADX proxy** (trend strength) and **ATR14**
+ * **percentile rank** within a trailing window (volatility context).
+ *
+ * - **chop**: weak trend (`adx < 22`) **or** compressed ATR vs recent history (`atrPct < 0.2`).
+ * - **trendHigh**: strong trend and elevated vol (`adx ≥ 38` and `atrPct ≥ 0.5`).
+ * - **trendLow**: intermediate conditions.
+ *
+ * `atrPct` = fraction of ATR values in the lookback window (up to 48 bars, requiring ATR > 0) that are
+ * `≤` the current bar’s ATR (empirical CDF at the current point).
+ */
+export function classifyRegimeTagFrom15mBars(high: number[], low: number[], close: number[]): RegimeTag {
+  if (close.length < 25) return "chop";
+  const atrS = atr(high, low, close, 14);
+  const adxS = adxProxy(high, low, close);
+  let i = close.length - 1;
+  while (i >= 0 && (!Number.isFinite(atrS[i]) || !Number.isFinite(adxS[i]))) i--;
+  if (i < 1) return "chop";
+
+  const look = Math.min(48, i);
+  const from = Math.max(0, i - look);
+  const atrWindow: number[] = [];
+  for (let j = from; j <= i; j++) {
+    if (Number.isFinite(atrS[j]) && atrS[j] > 0) atrWindow.push(atrS[j]);
+  }
+  const curAtr = atrS[i];
+  let atrPct = 0.5;
+  if (atrWindow.length > 0 && Number.isFinite(curAtr) && curAtr > 0) {
+    atrPct = atrWindow.filter((v) => v <= curAtr).length / atrWindow.length;
+  }
+  const adx = adxS[i];
+  if (!Number.isFinite(adx)) return "chop";
+  if (adx < 22 || atrPct < 0.2) return "chop";
+  if (adx >= 38 && atrPct >= 0.5) return "trendHigh";
+  return "trendLow";
+}
+
+/** Aggregates 1m OHLCV to 15m bars, then `classifyRegimeTagFrom15mBars`. */
+export function classifyRegimeTagFrom1mOhlcv(
+  open1m: number[],
+  high1m: number[],
+  low1m: number[],
+  close1m: number[],
+  volume1m: number[],
+): RegimeTag {
+  const agg = aggregate1mOhlcvToPeriodMinutes(open1m, high1m, low1m, close1m, volume1m, 15);
+  return classifyRegimeTagFrom15mBars(agg.high, agg.low, agg.close);
 }
 
 export function htfTrend(fast: number, slow: number, momentum: number): "UP" | "DOWN" | "NEUTRAL" {
@@ -347,6 +426,7 @@ export function htfTrend(fast: number, slow: number, momentum: number): "UP" | "
 // ========== BUILD HTF FIELDS ==========
 
 function buildHtfFields(
+  opens: number[],
   closes: number[],
   highs: number[],
   lows: number[],
@@ -358,10 +438,11 @@ function buildHtfFields(
   htf15_fast: number; htf15_slow: number; htf15_rsi: number; htf15_momentum: number; htf15_trend: number;
   htf15_macdHist: number; htf15_bbWidth: number; htf15_adx: number;
 } {
-  const aggClose = aggregateBars(closes, period);
-  const aggHigh = aggregateBars(highs, period);
-  const aggLow = aggregateBars(lows, period);
-  const aggVol = aggregateBars(volumes, period);
+  const agg = aggregate1mOhlcvToPeriodMinutes(opens, highs, lows, closes, volumes, period);
+  const aggClose = agg.close;
+  const aggHigh = agg.high;
+  const aggLow = agg.low;
+  const aggVol = agg.volume;
 
   const fast = ema(aggClose, 9);
   const slow = ema(aggClose, 21);
@@ -421,6 +502,7 @@ function buildHtfFields(
 // ========== BUILD SIGNAL INPUTS ==========
 
 export function buildSignalInputs(
+  opens: number[],
   closes: number[],
   highs: number[],
   lows: number[],
@@ -453,8 +535,8 @@ export function buildSignalInputs(
   const ema13 = ema(closes, 13);
 
   const idx = closes.length - 1;
-  const htf5 = buildHtfFields(closes, highs, lows, volumes, 5);
-  const htf15 = buildHtfFields(closes, highs, lows, volumes, 15);
+  const htf5 = buildHtfFields(opens, closes, highs, lows, volumes, 5);
+  const htf15 = buildHtfFields(opens, closes, highs, lows, volumes, 15);
 
   return {
     price: closes[idx],

@@ -5,6 +5,10 @@ import {
   deskEffectiveHoldMinutesAtOpen,
   deskHoldMinutesCategoryMul,
   deskHoldTuningExportIntervalMsFromEnv,
+  deskMaxSameDirNotionalFracFromEnv,
+  deskMinExpectedMoveSafetyKFromEnv,
+  DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT,
+  DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT,
   FAKE_DIVERSITY_STRAT_IDS,
   HOLD_MUL_AFTER_TP_WIDEN,
 } from "./futuresDeskPolicy";
@@ -89,5 +93,23 @@ describe("deskHoldTuningExportIntervalMsFromEnv", () => {
   it("returns floored positive milliseconds", () => {
     vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "45000.9");
     expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(45000);
+  });
+});
+
+describe("deskMaxSameDirNotionalFracFromEnv / deskMinExpectedMoveSafetyKFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults for same-dir frac and safety K", () => {
+    expect(deskMaxSameDirNotionalFracFromEnv()).toBe(DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT);
+    expect(deskMinExpectedMoveSafetyKFromEnv()).toBe(DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT);
+  });
+
+  it("parses valid overrides", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_SAME_DIR_FRAC_OF_EQUITY", "0.5");
+    vi.stubEnv("NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K", "1.5");
+    expect(deskMaxSameDirNotionalFracFromEnv()).toBe(0.5);
+    expect(deskMinExpectedMoveSafetyKFromEnv()).toBe(1.5);
   });
 });

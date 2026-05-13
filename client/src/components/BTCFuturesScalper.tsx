@@ -405,8 +405,23 @@ export function BTCFuturesScalper({
           <span className="rounded border border-zinc-200 bg-zinc-50 px-2 py-0.5 font-medium text-zinc-800">
             {FUTURES_STRATEGY_PROFILES[stats.strategyProfile].label}
           </span>
+          <span className="rounded border border-sky-200 bg-sky-50 px-2 py-0.5 font-medium text-sky-900">
+            Regime {stats.deskLastRegimeTag}
+          </span>
           <span className="text-zinc-500">
             Signal bar <span className="font-mono text-zinc-900">{stats.effectiveSignalThreshold}</span>
+          </span>
+        </div>
+        <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500">
+          <span>
+            Skips ATR vs fees: <span className="font-mono text-zinc-800">{stats.deskSkippedMinExpectedMove}</span>
+          </span>
+          <span>
+            Skips same-dir cap: <span className="font-mono text-zinc-800">{stats.deskSkippedSameDirCap}</span>
+          </span>
+          <span>
+            Skips regime filter: <span className="font-mono text-zinc-800">{stats.deskSkippedByRegime}</span>
+            {stats.deskSkippedByRegime > 0 ? <span className="text-zinc-400"> ({stats.deskSkippedByRegimeBreakdown})</span> : null}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 text-xs">

@@ -1,15 +1,107 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyFundingAccrual,
+  DELTA_PAPER_FUNDING_INTERVAL_MS,
+  paperApplyFuturesExitPatches,
   paperContracts,
+  paperEstimatedMaxLossAtStopSl,
+  paperFuturesProgressTowardTp,
   paperLiquidationCrossed,
   paperLiquidationPrice,
   paperMarginRequired,
   paperNetPnlOnClose,
   paperNotional,
+  paperMinExpectedMoveVsFees,
   paperResolveHardExit,
   paperReturnOnMargin,
   paperRoundTripTakerFees,
+  paperSameDirNotionalWouldExceedCap,
+  paperWidenTpToMinSlRatio,
+  type PaperFuturesExitPatchConsts,
 } from "./futuresPaperMath";
+
+describe("applyFundingAccrual (time-scaled periodic funding)", () => {
+  const interval = DELTA_PAPER_FUNDING_INTERVAL_MS; // 8h
+  const notional = 50;
+  const rate = 0.0001; // 0.01% per full period on notional
+
+  it("60s hold accrues << one naive per-poll full notional*rate charge", () => {
+    const elapsedMs = 60_000;
+    const longAcc = applyFundingAccrual({
+      side: "LONG",
+      notional,
+      fundingRate: rate,
+      elapsedMs,
+      fundingIntervalMs: interval,
+    });
+    const naivePerPoll = notional * rate;
+    expect(longAcc).toBeCloseTo(notional * rate * (elapsedMs / interval), 12);
+    expect(Math.abs(longAcc)).toBeLessThan(naivePerPoll * 0.01);
+  });
+
+  it("LONG pays positive rate; SHORT receives (opposite sign)", () => {
+    const elapsedMs = 60_000;
+    const longAcc = applyFundingAccrual({
+      side: "LONG",
+      notional,
+      fundingRate: rate,
+      elapsedMs,
+      fundingIntervalMs: interval,
+    });
+    const shortAcc = applyFundingAccrual({
+      side: "SHORT",
+      notional,
+      fundingRate: rate,
+      elapsedMs,
+      fundingIntervalMs: interval,
+    });
+    expect(longAcc).toBeGreaterThan(0);
+    expect(shortAcc).toBeLessThan(0);
+    expect(shortAcc).toBeCloseTo(-longAcc, 12);
+  });
+
+  it("negative rate flips payer/receiver", () => {
+    const elapsedMs = 120_000;
+    const r = -0.0001;
+    const longAcc = applyFundingAccrual({
+      side: "LONG",
+      notional,
+      fundingRate: r,
+      elapsedMs,
+      fundingIntervalMs: interval,
+    });
+    const shortAcc = applyFundingAccrual({
+      side: "SHORT",
+      notional,
+      fundingRate: r,
+      elapsedMs,
+      fundingIntervalMs: interval,
+    });
+    expect(longAcc).toBeLessThan(0);
+    expect(shortAcc).toBeGreaterThan(0);
+  });
+
+  it("returns 0 for non-positive elapsed or notional", () => {
+    expect(
+      applyFundingAccrual({
+        side: "LONG",
+        notional: 50,
+        fundingRate: 0.0001,
+        elapsedMs: 0,
+        fundingIntervalMs: interval,
+      }),
+    ).toBe(0);
+    expect(
+      applyFundingAccrual({
+        side: "LONG",
+        notional: 0,
+        fundingRate: 0.0001,
+        elapsedMs: 60_000,
+        fundingIntervalMs: interval,
+      }),
+    ).toBe(0);
+  });
+});
 
 describe("paperLiquidationPrice + paperLiquidationCrossed", () => {
   it("long: modeled liq below entry; crossed when mark at or below liq", () => {
@@ -324,6 +416,60 @@ describe("paperNetPnlOnClose (fees + win floor)", () => {
   });
 });
 
+describe("paperFuturesProgressTowardTp + paperApplyFuturesExitPatches + paperEstimatedMaxLossAtStopSl", () => {
+  const patchC: PaperFuturesExitPatchConsts = {
+    breakevenTriggerProgress: 0.4,
+    trailActivationProgress: 0.3,
+    trailGivebackShare: 0.18,
+  };
+
+  it("progress = |return on margin %| / entry→TP distance (%)", () => {
+    expect(paperFuturesProgressTowardTp(10, 100_000, 102_000)).toBeCloseTo(5, 9);
+  });
+
+  it("breakeven raises LONG adaptiveSl toward entry when threshold met", () => {
+    const out = paperApplyFuturesExitPatches(
+      {
+        side: "LONG",
+        entryPrice: 100,
+        markPrice: 101,
+        adaptiveSl: 95,
+        breakevenMoved: false,
+        returnPctOnMargin: 10,
+        peakReturnPctOnMargin: 10,
+        progressTowardTp: 0.5,
+      },
+      patchC,
+    );
+    expect(out.breakevenMoved).toBe(true);
+    expect(out.adaptiveSl).toBeGreaterThanOrEqual(100);
+  });
+
+  it("estimated max loss at SL = adverse gross + round-trip fees", () => {
+    const est = paperEstimatedMaxLossAtStopSl(100_000, 99_000, 50, "LONG", 0.001);
+    expect(est).toBeCloseTo(0.5 + 0.1, 9);
+  });
+});
+
+describe("paperWidenTpToMinSlRatio", () => {
+  it("leaves strat unchanged when ratio already >= min", () => {
+    const r = paperWidenTpToMinSlRatio(0.3, 0.7, 2, 5);
+    expect(r.included).toBe(true);
+    expect(r.tpPct).toBeCloseTo(0.7, 9);
+  });
+
+  it("widens TP to sl*minRatio when below floor", () => {
+    const r = paperWidenTpToMinSlRatio(0.32, 0.58, 2, 5);
+    expect(r.included).toBe(true);
+    expect(r.tpPct).toBeCloseTo(0.64, 9);
+  });
+
+  it("excludes when required TP exceeds cap", () => {
+    const r = paperWidenTpToMinSlRatio(3.0, 2.0, 2, 4.8);
+    expect(r.included).toBe(false);
+  });
+});
+
 describe("paperMarginRequired / paperContracts / paperNotional / paperReturnOnMargin", () => {
   it("margin = notional / leverage", () => {
     expect(paperMarginRequired(500, 25)).toBe(20);
@@ -346,5 +492,52 @@ describe("paperMarginRequired / paperContracts / paperNotional / paperReturnOnMa
     expect(paperReturnOnMargin(5, 20)).toBeCloseTo(25, 9);
     expect(paperReturnOnMargin(-3, 20)).toBeCloseTo(-15, 9);
     expect(paperReturnOnMargin(10, 0)).toBe(0);
+  });
+});
+
+describe("paperMinExpectedMoveVsFees", () => {
+  const fee = 0.001;
+  const n = 1000;
+
+  it("fails when markPrice is 0", () => {
+    const r = paperMinExpectedMoveVsFees(0, 50, n, fee, 1);
+    expect(r.ok).toBe(false);
+  });
+
+  it("fails when ATR14 is 0", () => {
+    const r = paperMinExpectedMoveVsFees(100_000, 0, n, fee, 1);
+    expect(r.ok).toBe(false);
+  });
+
+  it("computes moveUsd = (ATR/mark)×notional and compares to K×round-trip fees", () => {
+    const mark = 100_000;
+    const atr = 200;
+    const r = paperMinExpectedMoveVsFees(mark, atr, n, fee, 1);
+    const move = (atr / mark) * n;
+    const rt = paperRoundTripTakerFees(n, fee);
+    expect(r.expectedMoveUsd).toBeCloseTo(move, 9);
+    expect(r.thresholdUsd).toBeCloseTo(rt, 9);
+    expect(r.ok).toBe(move >= rt);
+  });
+
+  it("passes when move clears K×fees", () => {
+    const r = paperMinExpectedMoveVsFees(50_000, 500, n, fee, 1);
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("paperSameDirNotionalWouldExceedCap", () => {
+  it("blocks when adding notional exceeds equity×frac on that side", () => {
+    const book = [
+      { side: "LONG" as const, notional: 200 },
+      { side: "LONG" as const, notional: 100 },
+    ];
+    expect(paperSameDirNotionalWouldExceedCap(book, "LONG", 50, 1000, 0.35)).toBe(false); // 350 cap, 350 next → not >
+    expect(paperSameDirNotionalWouldExceedCap(book, "LONG", 51, 1000, 0.35)).toBe(true);
+  });
+
+  it("SHORT side uses short sum only", () => {
+    const book = [{ side: "LONG" as const, notional: 400 }, { side: "SHORT" as const, notional: 301 }];
+    expect(paperSameDirNotionalWouldExceedCap(book, "SHORT", 50, 1000, 0.35)).toBe(true); // 351 > 350
   });
 });

@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, useMemo, type MutableRefObject } from "react";
 import { PRIMARY_QUOTE_SYMBOL, TRADING_SYMBOLS } from "@/lib/futuresMarketData";
-import { FUTURES_STRAT_DEFS, type FuturesStratDef } from "@/lib/futuresStrategies";
+import { FUTURES_STRAT_DEFS, type FuturesStratDef, type RegimeTag } from "@/lib/futuresStrategies";
 import {
   buildPaperDeskStrategies,
   deskEffectiveHoldMinutesAtOpen,
   deskFakeDiversityEnabledViaEnv,
   deskHoldTuningAnalysisModeEnabled,
   deskHoldTuningExportIntervalMsFromEnv,
+  deskMaxSameDirNotionalFracFromEnv,
+  deskMinExpectedMoveSafetyKFromEnv,
   deskMinTpSlRatioFromEnv,
 } from "@/lib/futuresDeskPolicy";
 import {
@@ -19,6 +21,7 @@ import {
 } from "@/lib/futuresHoldTuningAnalysis";
 import {
   buildSignalInputs,
+  classifyRegimeTagFrom1mOhlcv,
   effectiveSignalThreshold as computeEffectiveThreshold,
   evalMinuteSignal,
   passesEntryConfirmation,
@@ -45,8 +48,10 @@ import {
   paperMarginRequired,
   paperNetPnlOnClose,
   paperNotional,
+  paperMinExpectedMoveVsFees,
   paperResolveHardExit,
   paperReturnOnMargin,
+  paperSameDirNotionalWouldExceedCap,
   type PaperFuturesExitPatchConsts,
 } from "@/lib/futuresPaperMath";
 import type {
@@ -58,6 +63,7 @@ import { FUTURES_FEED_WARNING_AFTER_MS } from "@/lib/futuresDataHealth.types";
 
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
 export type { WorstTimeOffenderRow } from "@/lib/futuresHoldTuningAnalysis";
+export type { RegimeTag } from "@/lib/futuresStrategies";
 export type { FuturesDataHealth, FuturesDataHealthStatus, FuturesDataHealthSymbolIssue } from "@/lib/futuresDataHealth.types";
 
 /**
@@ -306,6 +312,16 @@ export interface BTCFuturesEngineStats {
   sessionExitReasonSummary: string;
   /** Last-N closed: top TIME bleeders by total net at TIME (read-only tuning hint). */
   sessionWorstTimeOffenders: WorstTimeOffenderRow[];
+  /** Last sampled 15m regime (primary symbol poll). */
+  deskLastRegimeTag: RegimeTag;
+  /** Skips: ATR$ move below K× round-trip fees. */
+  deskSkippedMinExpectedMove: number;
+  /** Skips: same-side notional would exceed equity × frac. */
+  deskSkippedSameDirCap: number;
+  /** Skips: strategy `regimes` filter. */
+  deskSkippedByRegime: number;
+  /** e.g. `chop×3 · trendLow×1` */
+  deskSkippedByRegimeBreakdown: string;
 }
 
 /** Strategy Status */
@@ -586,6 +602,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const lastTradeAtRef = useRef(lastTradeAt);
   const stratCooldownsRef = useRef<Record<string, number>>({});
   const deskProfileAdjustedHoldCountRef = useRef(0);
+  const deskSkippedMinExpectedMoveRef = useRef(0);
+  const deskSkippedSameDirCapRef = useRef(0);
+  const deskSkippedByRegimeRef = useRef<Record<RegimeTag, number>>({ chop: 0, trendLow: 0, trendHigh: 0 });
+  const deskLastRegimeTagRef = useRef<RegimeTag>("chop");
   const activeStratDefsRef = useRef(activeStratDefs);
   const profileCooldownMulRef = useRef(1);
   const profileHoldTimeMulRef = useRef(1);
@@ -750,6 +770,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     peakEquityForDrawdownRef.current = INITIAL_BALANCE;
     drawdownEntryPausedRef.current = false;
     deskProfileAdjustedHoldCountRef.current = 0;
+    deskSkippedMinExpectedMoveRef.current = 0;
+    deskSkippedSameDirCapRef.current = 0;
+    deskSkippedByRegimeRef.current = { chop: 0, trendLow: 0, trendHigh: 0 };
+    deskLastRegimeTagRef.current = "chop";
     localStorage.removeItem(stateStorageKey);
   }, [stateStorageKey]);
 
@@ -845,6 +869,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const deskBuckets = reduceTradesToStrategyDeskBuckets(tuningRows, stratDeskW, stratCat, 400);
     const sessionWorstTimeOffenders = rankWorstTimeOffenders(deskBuckets, 5);
 
+    const br = deskSkippedByRegimeRef.current;
+    const deskSkippedByRegime = br.chop + br.trendLow + br.trendHigh;
+    const deskSkippedByRegimeBreakdown =
+      (["chop", "trendLow", "trendHigh"] as const)
+        .map((k) => (br[k] > 0 ? `${k}×${br[k]}` : null))
+        .filter(Boolean)
+        .join(" · ") || "—";
+
     return {
       totalTrades,
       winCount,
@@ -890,6 +922,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskProfileAdjustedHoldAppliedCount: deskProfileAdjustedHoldCountRef.current,
       sessionExitReasonSummary: formatExitReasonSessionSummary(exitAn.rows),
       sessionWorstTimeOffenders,
+      deskLastRegimeTag: deskLastRegimeTagRef.current,
+      deskSkippedMinExpectedMove: deskSkippedMinExpectedMoveRef.current,
+      deskSkippedSameDirCap: deskSkippedSameDirCapRef.current,
+      deskSkippedByRegime,
+      deskSkippedByRegimeBreakdown,
     };
   }, [trades, positions, balance, strategyProfile, activeSignalThreshold, deskPolicySnapshot, activeStratDefs]);
 
@@ -935,62 +972,104 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, [positions, trades, disabledStrategies, activeStratDefs]);
 
   // ========== POSITION MANAGEMENT ==========
-  const openPosition = useCallback((strat: StratDef, side: Side, price: number, markPrice: number, symbol: string) => {
-    const id = `${symbol}-${strat.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const bal = balanceRef.current;
-    const notional = Math.min(Math.max(bal * 0.1, 100), 500); // 10% of balance, min $100, max $500
-    const contracts = Math.max(MIN_CONTRACTS, Math.min(MAX_CONTRACTS, calculateContracts(notional, price)));
-    const actualNotional = calculateNotional(contracts);
-    const marginUsed = calculateMarginRequired(actualNotional, LEVERAGE);
-    if (bal < marginUsed) return;
-    const slPrice = side === "LONG" ? price * (1 - strat.slPct / 100) : price * (1 + strat.slPct / 100);
-    const tpPrice = side === "LONG" ? price * (1 + strat.tpPct / 100) : price * (1 - strat.tpPct / 100);
-    const riskCap = bal * (MAX_LOSS_PER_TRADE_PCT / 100);
-    if (paperEstimatedMaxLossAtStopSl(price, slPrice, actualNotional, side, TAKER_FEE_PCT) > riskCap) return;
-    /** Keep ref in sync so multiple opens in one poll tick do not all read stale balance. */
-    balanceRef.current = bal - marginUsed;
-    const liquidationPrice = paperLiquidationPrice(price, side, LEVERAGE);
+  type PaperOpenGateCtx = {
+    atr14: number;
+    regime: RegimeTag;
+    entryBook: ReadonlyArray<{ side: Side; notional: number }>;
+    equityUsd: number;
+  };
 
-    const holdRes = deskEffectiveHoldMinutesAtOpen(strat.holdMinutes, strategyProfile, strat.deskTpWidened);
-    if (holdRes.profileAdjusted) deskProfileAdjustedHoldCountRef.current += 1;
+  const openPosition = useCallback(
+    (strat: StratDef, side: Side, price: number, markPrice: number, symbol: string, gate: PaperOpenGateCtx): number => {
+      if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(gate.regime)) {
+        deskSkippedByRegimeRef.current[gate.regime] += 1;
+        return 0;
+      }
 
-    const position: BTCFuturesPosition = {
-      id,
-      symbol,
-      strategyId: strat.id,
-      strategyName: strat.name,
-      side,
-      entryPrice: price,
-      markPrice,
-      lastPrice: price,
-      contracts,
-      notional: actualNotional,
-      marginUsed,
-      leverage: LEVERAGE,
-      liquidationPrice,
-      unrealizedPnl: 0,
-      unrealizedPnlPct: 0,
-      returnPct: 0,
-      peakReturnPct: 0,
-      tpPrice,
-      slPrice,
-      fundingCosts: 0,
-      lastFundingAppliedAt: Date.now(),
-      openedAt: new Date().toISOString(),
-      holdMinutes: holdRes.holdMinutes,
-      marginMode: "isolated",
-      adaptiveSl: slPrice,
-      breakevenMoved: false,
-      initialMargin: marginUsed,
-    };
+      const id = `${symbol}-${strat.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const bal = balanceRef.current;
+      const notional = Math.min(Math.max(bal * 0.1, 100), 500); // 10% of balance, min $100, max $500
+      const contracts = Math.max(MIN_CONTRACTS, Math.min(MAX_CONTRACTS, calculateContracts(notional, price)));
+      const actualNotional = calculateNotional(contracts);
 
-    setPositions(prev => [...prev, position]);
-    setBalance(balanceRef.current);
-    stratCooldownsRef.current[`${symbol}:${strat.id}`] =
-      Date.now() +
-      Math.max(30_000, Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current));
-    setLastTradeAt(Date.now());
-  }, [strategyProfile]);
+      const moveGate = paperMinExpectedMoveVsFees(
+        markPrice,
+        gate.atr14,
+        actualNotional,
+        TAKER_FEE_PCT,
+        deskMinExpectedMoveSafetyKFromEnv(),
+      );
+      if (!moveGate.ok) {
+        deskSkippedMinExpectedMoveRef.current += 1;
+        return 0;
+      }
+
+      if (
+        paperSameDirNotionalWouldExceedCap(
+          gate.entryBook,
+          side,
+          actualNotional,
+          gate.equityUsd,
+          deskMaxSameDirNotionalFracFromEnv(),
+        )
+      ) {
+        deskSkippedSameDirCapRef.current += 1;
+        return 0;
+      }
+
+      const marginUsed = calculateMarginRequired(actualNotional, LEVERAGE);
+      if (bal < marginUsed) return 0;
+      const slPrice = side === "LONG" ? price * (1 - strat.slPct / 100) : price * (1 + strat.slPct / 100);
+      const tpPrice = side === "LONG" ? price * (1 + strat.tpPct / 100) : price * (1 - strat.tpPct / 100);
+      const riskCap = bal * (MAX_LOSS_PER_TRADE_PCT / 100);
+      if (paperEstimatedMaxLossAtStopSl(price, slPrice, actualNotional, side, TAKER_FEE_PCT) > riskCap) return 0;
+      /** Keep ref in sync so multiple opens in one poll tick do not all read stale balance. */
+      balanceRef.current = bal - marginUsed;
+      const liquidationPrice = paperLiquidationPrice(price, side, LEVERAGE);
+
+      const holdRes = deskEffectiveHoldMinutesAtOpen(strat.holdMinutes, strategyProfile, strat.deskTpWidened);
+      if (holdRes.profileAdjusted) deskProfileAdjustedHoldCountRef.current += 1;
+
+      const position: BTCFuturesPosition = {
+        id,
+        symbol,
+        strategyId: strat.id,
+        strategyName: strat.name,
+        side,
+        entryPrice: price,
+        markPrice,
+        lastPrice: price,
+        contracts,
+        notional: actualNotional,
+        marginUsed,
+        leverage: LEVERAGE,
+        liquidationPrice,
+        unrealizedPnl: 0,
+        unrealizedPnlPct: 0,
+        returnPct: 0,
+        peakReturnPct: 0,
+        tpPrice,
+        slPrice,
+        fundingCosts: 0,
+        lastFundingAppliedAt: Date.now(),
+        openedAt: new Date().toISOString(),
+        holdMinutes: holdRes.holdMinutes,
+        marginMode: "isolated",
+        adaptiveSl: slPrice,
+        breakevenMoved: false,
+        initialMargin: marginUsed,
+      };
+
+      setPositions(prev => [...prev, position]);
+      setBalance(balanceRef.current);
+      stratCooldownsRef.current[`${symbol}:${strat.id}`] =
+        Date.now() +
+        Math.max(30_000, Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current));
+      setLastTradeAt(Date.now());
+      return actualNotional;
+    },
+    [strategyProfile],
+  );
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
     const { grossPnl, fees, netPnl } = paperNetPnlOnClose({
@@ -1275,6 +1354,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         // Do not gate entries on statusRef === READY: setStatus is async and statusRef updates next render,
         // so same poll tick would never open trades. Use live payload presence instead.
         if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current) {
+          const equityForEntry = balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0);
+          const intraBook: { side: Side; notional: number }[] = [];
+
           for (const symbol of activeSymbols) {
             if (openCount >= MAX_OPEN_POSITIONS) break;
             const d = payloads.get(symbol);
@@ -1286,6 +1368,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const lows = d.candles.map((c) => c.low);
             const volumes = d.candles.map((c) => c.volume);
             const input = buildSignalInputs(opens, closes, highs, lows, volumes, d.markPrice);
+            const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
+            if (symbol === PRIMARY_QUOTE_SYMBOL) {
+              deskLastRegimeTagRef.current = regime;
+            }
 
             for (const strat of activeStratDefs) {
               if (openCount >= MAX_OPEN_POSITIONS) break;
@@ -1297,9 +1383,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               const signal = evalMinuteSignal(input, strat);
               if (signal.score >= activeSignalThreshold && passesEntryConfirmation(input, strat)) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
-                openPosition(strat, side, d.lastPrice, d.markPrice, symbol);
-                occupied.add(`${symbol}:${strat.id}`);
-                openCount++;
+                const entryBook = [...survivors.map((p) => ({ side: p.side, notional: p.notional })), ...intraBook];
+                const opened = openPosition(strat, side, d.lastPrice, d.markPrice, symbol, {
+                  atr14: input.atr14,
+                  regime,
+                  entryBook,
+                  equityUsd: equityForEntry,
+                });
+                if (opened > 0) {
+                  intraBook.push({ side, notional: opened });
+                  occupied.add(`${symbol}:${strat.id}`);
+                  openCount++;
+                }
               }
             }
           }

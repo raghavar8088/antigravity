@@ -8,6 +8,8 @@
  * `DESK_HOLD_MINUTES_MUL_BY_CATEGORY` or raw defs.
  * Optional: `NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS` (positive ms) throttles auto `console.info` of that
  * payload while analysis mode is on; unset = no auto-log.
+ * `NEXT_PUBLIC_DESK_MAX_SAME_DIR_FRAC_OF_EQUITY` — max fraction of equity for sum of notionals per side (default 0.35).
+ * `NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K` — ATR$ vs fee hurdle multiplier (default 1).
  */
 
 import type { FuturesStratDef } from "./futuresStrategies";
@@ -68,6 +70,26 @@ export function deskHoldTuningExportIntervalMsFromEnv(): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.floor(n);
+}
+
+/** Default cap on same-direction **$ notional** vs equity (`equity * frac`). */
+export const DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT = 0.35;
+
+export function deskMaxSameDirNotionalFracFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_SAME_DIR_FRAC_OF_EQUITY;
+  if (raw === undefined || raw === "") return DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT;
+}
+
+/** Default \(K\) in `paperMinExpectedMoveVsFees` (ATR$ move ≥ K × round-trip fees). */
+export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 1;
+
+export function deskMinExpectedMoveSafetyKFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K;
+  if (raw === undefined || raw === "") return DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
 }
 
 /**

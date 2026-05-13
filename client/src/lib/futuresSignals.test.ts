@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { FuturesStratDef } from "./futuresStrategies";
 import {
+  aggregate1mOhlcvToPeriodMinutes,
   buildSignalInputs,
+  classifyRegimeTagFrom1mOhlcv,
+  classifyRegimeTagFrom15mBars,
   effectiveSignalThreshold,
   evalMinuteSignal,
   passesEntryConfirmation,
@@ -16,6 +19,7 @@ import {
  * Each bar closes ~0.2% higher to create a clear up-trend with rising momentum.
  */
 function bullishBars(base = 100_000, count = 40) {
+  const opens: number[] = [];
   const closes: number[] = [];
   const highs: number[] = [];
   const lows: number[] = [];
@@ -25,16 +29,19 @@ function bullishBars(base = 100_000, count = 40) {
     price *= 1.002 + (i % 3) * 0.0003;
     const h = price * 1.001;
     const l = price * 0.998;
+    const o = i === 0 ? l : closes[i - 1];
+    opens.push(o);
     closes.push(price);
     highs.push(h);
     lows.push(l);
     volumes.push(5000 + i * 200);
   }
-  return { closes, highs, lows, volumes };
+  return { opens, closes, highs, lows, volumes };
 }
 
 /** Trending-down mirror. */
 function bearishBars(base = 100_000, count = 40) {
+  const opens: number[] = [];
   const closes: number[] = [];
   const highs: number[] = [];
   const lows: number[] = [];
@@ -44,12 +51,14 @@ function bearishBars(base = 100_000, count = 40) {
     price *= 0.998 - (i % 3) * 0.0003;
     const h = price * 1.002;
     const l = price * 0.999;
+    const o = i === 0 ? h : closes[i - 1];
+    opens.push(o);
     closes.push(price);
     highs.push(h);
     lows.push(l);
     volumes.push(5000 + i * 200);
   }
-  return { closes, highs, lows, volumes };
+  return { opens, closes, highs, lows, volumes };
 }
 
 /**
@@ -58,6 +67,7 @@ function bearishBars(base = 100_000, count = 40) {
  * EMA(9) should hover close to EMA(21) so Trend category gate rejects.
  */
 function choppyBars(base = 100_000, count = 40) {
+  const opens: number[] = [];
   const closes: number[] = [];
   const highs: number[] = [];
   const lows: number[] = [];
@@ -65,18 +75,20 @@ function choppyBars(base = 100_000, count = 40) {
   for (let i = 0; i < count; i++) {
     const delta = (i % 2 === 0 ? 1 : -1) * base * 0.00005;
     const price = base + delta;
+    const o = i === 0 ? price : closes[i - 1];
+    opens.push(o);
     closes.push(price);
     highs.push(price + base * 0.00008);
     lows.push(price - base * 0.00008);
     volumes.push(3000);
   }
-  return { closes, highs, lows, volumes };
+  return { opens, closes, highs, lows, volumes };
 }
 
 /** Helper: build SignalInputs from synthetic bars. */
 function inputs(bars: ReturnType<typeof bullishBars>, markPrice?: number): FuturesSignalInputs {
   const mark = markPrice ?? bars.closes[bars.closes.length - 1];
-  return buildSignalInputs(bars.closes, bars.highs, bars.lows, bars.volumes, mark);
+  return buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, mark);
 }
 
 // ========== STRATEGY FIXTURES ==========
@@ -259,7 +271,45 @@ describe("buildSignalInputs", () => {
   it("mark price is forwarded through", () => {
     const bars = bullishBars();
     const customMark = 99_999;
-    const s = buildSignalInputs(bars.closes, bars.highs, bars.lows, bars.volumes, customMark);
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, customMark);
     expect(s.markPrice).toBe(customMark);
+  });
+});
+
+describe("aggregate1mOhlcvToPeriodMinutes (HTF OHLCV)", () => {
+  it("5×1m → 1 five-minute bar: true high/low, first open, last close, summed volume", () => {
+    const open1m = [100, 101, 102, 103, 104];
+    const high1m = [105, 106, 110, 108, 109];
+    const low1m = [99, 100, 101, 102, 103];
+    const close1m = [104, 105, 106, 107, 108];
+    const vol1m = [10, 20, 30, 40, 50];
+    const agg = aggregate1mOhlcvToPeriodMinutes(open1m, high1m, low1m, close1m, vol1m, 5);
+    expect(agg.open).toEqual([100]);
+    expect(agg.high).toEqual([110]);
+    expect(agg.low).toEqual([99]);
+    expect(agg.close).toEqual([108]);
+    expect(agg.volume).toEqual([150]);
+  });
+});
+
+describe("classifyRegimeTagFrom15mBars / classifyRegimeTagFrom1mOhlcv", () => {
+  it("smoke: flat 15m series yields a valid regime bucket", () => {
+    const n = 40;
+    const close = Array.from({ length: n }, () => 100);
+    const high = close.map((c) => c + 0.2);
+    const low = close.map((c) => c - 0.2);
+    const tag = classifyRegimeTagFrom15mBars(high, low, close);
+    expect(["chop", "trendLow", "trendHigh"]).toContain(tag);
+  });
+
+  it("short 1m history → aggregated bars < 25 → chop", () => {
+    const bars = bullishBars(100_000, 90);
+    expect(classifyRegimeTagFrom1mOhlcv(bars.opens, bars.highs, bars.lows, bars.closes, bars.volumes)).toBe("chop");
+  });
+
+  it("long bullish 1m run yields a valid regime tag", () => {
+    const bars = bullishBars(100_000, 400);
+    const t = classifyRegimeTagFrom1mOhlcv(bars.opens, bars.highs, bars.lows, bars.closes, bars.volumes);
+    expect(["chop", "trendLow", "trendHigh"]).toContain(t);
   });
 });

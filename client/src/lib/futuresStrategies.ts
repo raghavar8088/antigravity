@@ -3,6 +3,9 @@
  * Shape and values must remain identical to the original inline STRAT_DEFS.
  */
 
+/** 15m book regime from ADX proxy + ATR percentile (`classifyRegimeTagFrom1mOhlcv`). Empty / omit `regimes` → allow all. */
+export type RegimeTag = "chop" | "trendLow" | "trendHigh";
+
 export interface FuturesStratDef {
   id: number;
   name: string;
@@ -16,6 +19,8 @@ export interface FuturesStratDef {
   requiresHtf?: boolean;
   /** Set by `buildPaperDeskStrategies` when `tpPct` was raised for min TP/SL ratio. */
   deskTpWidened?: boolean;
+  /** If set and non-empty, entries only when `classifyRegimeTagFrom1mOhlcv` is in this set. */
+  regimes?: RegimeTag[];
 }
 
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
