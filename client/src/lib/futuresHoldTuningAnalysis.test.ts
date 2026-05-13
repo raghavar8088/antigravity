@@ -90,3 +90,78 @@ describe("buildDeskHoldTuningDumpPayload", () => {
     expect(p.buckets[0]?.exitReasons.TIME?.meanNet).toBe(-4);
   });
 });
+
+/**
+ * Synthetic ledger of exactly 400 closes: 394 padding trades + 6 TIME trades.
+ * Hand TIME totals: id10 (nw) −2+(−4)=−6; id30 (nw) −5; id20 (w) −1×3=−3 → rank 10, 30, 20.
+ */
+describe("last-400 worst-TIME ranking (synthetic ledger)", () => {
+  it("matches hand-calculated TIME sumNet order", () => {
+    const widened = new Map<number, boolean>([
+      [10, false],
+      [20, true],
+      [30, false],
+      [100, false],
+    ]);
+    const cats = new Map<number, string>([
+      [10, "MeanRev"],
+      [20, "Momentum"],
+      [30, "Trend"],
+      [100, "Vol"],
+    ]);
+    const filler: TradeRowForHoldTuning[] = Array.from({ length: 394 }, () => ({
+      strategyId: 100,
+      strategyName: "Pad",
+      category: "Vol",
+      exitReason: "TP",
+      netPnl: 0.001,
+    }));
+    const tail: TradeRowForHoldTuning[] = [
+      { strategyId: 10, strategyName: "S10", category: "MeanRev", exitReason: "TIME", netPnl: -2 },
+      { strategyId: 10, strategyName: "S10", category: "MeanRev", exitReason: "TIME", netPnl: -4 },
+      { strategyId: 30, strategyName: "S30", category: "Trend", exitReason: "TIME", netPnl: -5 },
+      { strategyId: 20, strategyName: "S20", category: "Momentum", exitReason: "TIME", netPnl: -1 },
+      { strategyId: 20, strategyName: "S20", category: "Momentum", exitReason: "TIME", netPnl: -1 },
+      { strategyId: 20, strategyName: "S20", category: "Momentum", exitReason: "TIME", netPnl: -1 },
+    ];
+    const ledger400 = [...filler, ...tail];
+    expect(ledger400).toHaveLength(400);
+
+    const buckets = reduceTradesToStrategyDeskBuckets(ledger400, widened, cats, 400);
+    const ranked = rankWorstTimeOffenders(buckets, 5).map((r) => ({
+      strategyId: r.strategyId,
+      category: r.category,
+      deskTpWidened: r.deskTpWidened,
+      timeCount: r.timeCount,
+      timeSumNet: r.timeSumNet,
+      timeMeanNet: r.timeMeanNet,
+    }));
+
+    expect(ranked).toMatchSnapshot();
+
+    expect(ranked[0]).toEqual({
+      strategyId: 10,
+      category: "MeanRev",
+      deskTpWidened: false,
+      timeCount: 2,
+      timeSumNet: -6,
+      timeMeanNet: -3,
+    });
+    expect(ranked[1]).toEqual({
+      strategyId: 30,
+      category: "Trend",
+      deskTpWidened: false,
+      timeCount: 1,
+      timeSumNet: -5,
+      timeMeanNet: -5,
+    });
+    expect(ranked[2]).toEqual({
+      strategyId: 20,
+      category: "Momentum",
+      deskTpWidened: true,
+      timeCount: 3,
+      timeSumNet: -3,
+      timeMeanNet: -1,
+    });
+  });
+});

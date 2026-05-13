@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`last-400 worst-TIME ranking (synthetic ledger) > matches hand-calculated TIME sumNet order 1`] = `
+[
+  {
+    "category": "MeanRev",
+    "deskTpWidened": false,
+    "strategyId": 10,
+    "timeCount": 2,
+    "timeMeanNet": -3,
+    "timeSumNet": -6,
+  },
+  {
+    "category": "Trend",
+    "deskTpWidened": false,
+    "strategyId": 30,
+    "timeCount": 1,
+    "timeMeanNet": -5,
+    "timeSumNet": -5,
+  },
+  {
+    "category": "Momentum",
+    "deskTpWidened": true,
+    "strategyId": 20,
+    "timeCount": 3,
+    "timeMeanNet": -1,
+    "timeSumNet": -3,
+  },
+]
+`;

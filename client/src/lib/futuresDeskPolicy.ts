@@ -6,6 +6,8 @@
  * Hold tuning: `NEXT_PUBLIC_DESK_HOLD_TUNING_ANALYSIS_MODE=1` in **development** registers
  * `window.__deskHoldTuningDump()` (JSON per strat × deskTpWidened × exitReason). Use before changing
  * `DESK_HOLD_MINUTES_MUL_BY_CATEGORY` or raw defs.
+ * Optional: `NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS` (positive ms) throttles auto `console.info` of that
+ * payload while analysis mode is on; unset = no auto-log.
  */
 
 import type { FuturesStratDef } from "./futuresStrategies";
@@ -54,6 +56,18 @@ export function deskMinTpSlRatioFromEnv(): number {
  */
 export function deskHoldTuningAnalysisModeEnabled(): boolean {
   return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DESK_HOLD_TUNING_ANALYSIS_MODE === "1";
+}
+
+/**
+ * Parses `NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS`. Returns **0** when unset/invalid (no auto-log).
+ * Only used when `deskHoldTuningAnalysisModeEnabled()` is true (see hook).
+ */
+export function deskHoldTuningExportIntervalMsFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS;
+  if (raw === undefined || raw === "") return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n);
 }
 
 /**

@@ -439,11 +439,12 @@ export function BTCFuturesScalper({
             <p className="text-zinc-500">No TIME exits in window yet.</p>
           ) : (
             <div className="overflow-x-auto rounded border border-zinc-200 bg-zinc-50/80">
-              <table className="w-full min-w-[520px] text-left text-[10px]">
+              <table className="w-full min-w-[640px] text-left text-[10px]">
                 <thead className="border-b border-zinc-200 text-zinc-500">
                   <tr>
                     <th className="px-2 py-1.5 font-semibold">Strategy</th>
-                    <th className="px-2 py-1.5 font-semibold">TP↑</th>
+                    <th className="px-2 py-1.5 font-semibold">Category</th>
+                    <th className="px-2 py-1.5 font-semibold">Desk TP</th>
                     <th className="px-2 py-1.5 font-semibold">TIME n</th>
                     <th className="px-2 py-1.5 font-semibold">TIME Σ net</th>
                     <th className="px-2 py-1.5 font-semibold">TIME avg</th>
@@ -456,7 +457,20 @@ export function BTCFuturesScalper({
                       <td className="px-2 py-1.5">
                         <span className="font-mono text-zinc-500">{r.strategyId}</span> {r.strategyName}
                       </td>
-                      <td className="px-2 py-1.5 font-mono">{r.deskTpWidened ? "Y" : "—"}</td>
+                      <td className="px-2 py-1.5">
+                        <span className="inline-block max-w-[120px] truncate rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-medium text-zinc-700" title={r.category}>
+                          {r.category}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {r.deskTpWidened ? (
+                          <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-800">
+                            TP↑
+                          </span>
+                        ) : (
+                          <span className="rounded border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-zinc-600">Base</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 font-mono">{r.timeCount}</td>
                       <td className={`px-2 py-1.5 font-mono ${r.timeSumNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                         {fmtUSD(r.timeSumNet, { signed: true })}

@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
 import {
   buildPaperDeskStrategies,
   deskEffectiveHoldMinutesAtOpen,
   deskHoldMinutesCategoryMul,
+  deskHoldTuningExportIntervalMsFromEnv,
   FAKE_DIVERSITY_STRAT_IDS,
   HOLD_MUL_AFTER_TP_WIDEN,
 } from "./futuresDeskPolicy";
@@ -66,5 +67,27 @@ describe("buildPaperDeskStrategies", () => {
     });
     const built = r.strategies.find((s) => s.id === 3);
     expect(built!.holdMinutes).toBeCloseTo(raw.holdMinutes * deskHoldMinutesCategoryMul(raw.category), 4);
+  });
+});
+
+describe("deskHoldTuningExportIntervalMsFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns 0 when unset, empty, non-positive, or non-finite", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "");
+    expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(0);
+    vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "0");
+    expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(0);
+    vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "-10");
+    expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(0);
+    vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "nan");
+    expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(0);
+  });
+
+  it("returns floored positive milliseconds", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_HOLD_TUNING_EXPORT_MS", "45000.9");
+    expect(deskHoldTuningExportIntervalMsFromEnv()).toBe(45000);
   });
 });

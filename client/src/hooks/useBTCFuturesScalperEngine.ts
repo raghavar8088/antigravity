@@ -8,6 +8,7 @@ import {
   deskEffectiveHoldMinutesAtOpen,
   deskFakeDiversityEnabledViaEnv,
   deskHoldTuningAnalysisModeEnabled,
+  deskHoldTuningExportIntervalMsFromEnv,
   deskMinTpSlRatioFromEnv,
 } from "@/lib/futuresDeskPolicy";
 import {
@@ -629,6 +630,30 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     return () => {
       delete w.__deskHoldTuningDump;
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !deskHoldTuningAnalysisModeEnabled()) return;
+    const intervalMs = deskHoldTuningExportIntervalMsFromEnv();
+    if (intervalMs <= 0) return;
+
+    const logPayload = () => {
+      const defs = activeStratDefsRef.current;
+      const deskW = new Map(defs.map((s) => [s.id, s.deskTpWidened === true]));
+      const cat = new Map(defs.map((s) => [s.id, s.category]));
+      const rows = tradesRef.current.map((t) => ({
+        strategyId: t.strategyId,
+        strategyName: t.strategyName,
+        category: cat.get(t.strategyId) ?? "?",
+        exitReason: t.exitReason,
+        netPnl: t.netPnl,
+      }));
+      const payload = buildDeskHoldTuningDumpPayload(rows, deskW, cat, 400);
+      console.info("[desk-hold-tuning]", JSON.stringify(payload));
+    };
+
+    const id = window.setInterval(logPayload, intervalMs);
+    return () => window.clearInterval(id);
   }, []);
 
   // ========== LOCAL STORAGE ==========
