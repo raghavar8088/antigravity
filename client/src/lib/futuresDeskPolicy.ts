@@ -2,6 +2,10 @@
  * BTC futures **paper** desk policy (Phase 2–3).
  * Phase 3: IDs 79–110 are “fake diversity” placeholders without dedicated `evalMinuteSignal` wiring
  * for their branded categories — excluded by default. Set `NEXT_PUBLIC_DESK_ENABLE_FAKE_DIV_STRATS=1` to include.
+ *
+ * Hold tuning: `NEXT_PUBLIC_DESK_HOLD_TUNING_ANALYSIS_MODE=1` in **development** registers
+ * `window.__deskHoldTuningDump()` (JSON per strat × deskTpWidened × exitReason). Use before changing
+ * `DESK_HOLD_MINUTES_MUL_BY_CATEGORY` or raw defs.
  */
 
 import type { FuturesStratDef } from "./futuresStrategies";
@@ -44,6 +48,34 @@ export function deskMinTpSlRatioFromEnv(): number {
   return Number.isFinite(n) && n >= 1 ? n : 2;
 }
 
+/**
+ * Dev-only: register `window.__deskHoldTuningDump()` JSON export (per strat × deskTpWidened × exitReason).
+ * Requires `next dev` (NODE_ENV=development) so production bundles never expose the hook.
+ */
+export function deskHoldTuningAnalysisModeEnabled(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DESK_HOLD_TUNING_ANALYSIS_MODE === "1";
+}
+
+/**
+ * Optional desk-side **base** `holdMinutes` multiplier by strategy `category` (applied in `buildPaperDeskStrategies`).
+ * Goal: give a bit more clock where TIME exits bleed before TP; keep bumps modest (≤~15%) to limit fee churn.
+ * Re-verify with `__deskHoldTuningDump()` + `rankWorstTimeOffenders` before raising further.
+ */
+export const DESK_HOLD_MINUTES_MUL_BY_CATEGORY: Readonly<Record<string, number>> = {
+  MeanRev: 1.15,
+  Stoch: 1.12,
+  RSI: 1.12,
+  Momentum: 1.1,
+};
+
+const HOLD_MUL_CAP = 1.25;
+
+export function deskHoldMinutesCategoryMul(category: string): number {
+  const raw = DESK_HOLD_MINUTES_MUL_BY_CATEGORY[category];
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 1) return 1;
+  return Math.min(raw, HOLD_MUL_CAP);
+}
+
 export type DeskStrategyBuildResult = {
   strategies: FuturesStratDef[];
   tpWidenedStratIds: readonly number[];
@@ -84,10 +116,13 @@ export function buildPaperDeskStrategies(
     }
     const widened = Math.abs(w.tpPct - d.tpPct) > 1e-9;
     if (widened) tpWidenedStratIds.push(d.id);
+    const holdMul = deskHoldMinutesCategoryMul(d.category);
+    const holdMinutes = Math.round(d.holdMinutes * holdMul * 100) / 100;
     strategies.push({
       ...d,
       tpPct: w.tpPct,
       deskTpWidened: widened,
+      holdMinutes,
     });
   }
 

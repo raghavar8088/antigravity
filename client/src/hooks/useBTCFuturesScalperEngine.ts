@@ -7,8 +7,15 @@ import {
   buildPaperDeskStrategies,
   deskEffectiveHoldMinutesAtOpen,
   deskFakeDiversityEnabledViaEnv,
+  deskHoldTuningAnalysisModeEnabled,
   deskMinTpSlRatioFromEnv,
 } from "@/lib/futuresDeskPolicy";
+import {
+  buildDeskHoldTuningDumpPayload,
+  rankWorstTimeOffenders,
+  reduceTradesToStrategyDeskBuckets,
+  type WorstTimeOffenderRow,
+} from "@/lib/futuresHoldTuningAnalysis";
 import {
   buildSignalInputs,
   effectiveSignalThreshold as computeEffectiveThreshold,
@@ -49,6 +56,7 @@ import type {
 import { FUTURES_FEED_WARNING_AFTER_MS } from "@/lib/futuresDataHealth.types";
 
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
+export type { WorstTimeOffenderRow } from "@/lib/futuresHoldTuningAnalysis";
 export type { FuturesDataHealth, FuturesDataHealthStatus, FuturesDataHealthSymbolIssue } from "@/lib/futuresDataHealth.types";
 
 /**
@@ -295,6 +303,8 @@ export interface BTCFuturesEngineStats {
   deskProfileAdjustedHoldAppliedCount: number;
   /** Last-N closed trades: exit reason × count and mean net (grouped expectancy). */
   sessionExitReasonSummary: string;
+  /** Last-N closed: top TIME bleeders by total net at TIME (read-only tuning hint). */
+  sessionWorstTimeOffenders: WorstTimeOffenderRow[];
 }
 
 /** Strategy Status */
@@ -575,6 +585,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const lastTradeAtRef = useRef(lastTradeAt);
   const stratCooldownsRef = useRef<Record<string, number>>({});
   const deskProfileAdjustedHoldCountRef = useRef(0);
+  const activeStratDefsRef = useRef(activeStratDefs);
   const profileCooldownMulRef = useRef(1);
   const profileHoldTimeMulRef = useRef(1);
   const dayStartBalanceRef = useRef(dayStartBalance);
@@ -594,6 +605,31 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     profileCooldownMulRef.current = profileCfg.cooldownMul;
     profileHoldTimeMulRef.current = profileCfg.holdTimeMul;
   }, [profileCfg]);
+
+  useEffect(() => {
+    activeStratDefsRef.current = activeStratDefs;
+  }, [activeStratDefs]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !deskHoldTuningAnalysisModeEnabled()) return;
+    const w = window as Window & { __deskHoldTuningDump?: () => string };
+    w.__deskHoldTuningDump = () => {
+      const defs = activeStratDefsRef.current;
+      const deskW = new Map(defs.map((s) => [s.id, s.deskTpWidened === true]));
+      const cat = new Map(defs.map((s) => [s.id, s.category]));
+      const rows = tradesRef.current.map((t) => ({
+        strategyId: t.strategyId,
+        strategyName: t.strategyName,
+        category: cat.get(t.strategyId) ?? "?",
+        exitReason: t.exitReason,
+        netPnl: t.netPnl,
+      }));
+      return JSON.stringify(buildDeskHoldTuningDumpPayload(rows, deskW, cat, 400), null, 2);
+    };
+    return () => {
+      delete w.__deskHoldTuningDump;
+    };
+  }, []);
 
   // ========== LOCAL STORAGE ==========
   const loadLs = useCallback((): Partial<EngineState> | null => {
@@ -772,6 +808,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const sm = computeSessionTradingMetrics(trades);
     const exitAn = computeSessionExitReasonAnalytics(trades);
 
+    const stratDeskW = new Map(activeStratDefs.map((s) => [s.id, s.deskTpWidened === true]));
+    const stratCat = new Map(activeStratDefs.map((s) => [s.id, s.category]));
+    const tuningRows = trades.map((t) => ({
+      strategyId: t.strategyId,
+      strategyName: t.strategyName,
+      category: stratCat.get(t.strategyId) ?? "?",
+      exitReason: t.exitReason,
+      netPnl: t.netPnl,
+    }));
+    const deskBuckets = reduceTradesToStrategyDeskBuckets(tuningRows, stratDeskW, stratCat, 400);
+    const sessionWorstTimeOffenders = rankWorstTimeOffenders(deskBuckets, 5);
+
     return {
       totalTrades,
       winCount,
@@ -816,8 +864,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskLowRrSkippedStratIds: deskPolicySnapshot.lowRrSkippedIds,
       deskProfileAdjustedHoldAppliedCount: deskProfileAdjustedHoldCountRef.current,
       sessionExitReasonSummary: formatExitReasonSessionSummary(exitAn.rows),
+      sessionWorstTimeOffenders,
     };
-  }, [trades, positions, balance, strategyProfile, activeSignalThreshold, deskPolicySnapshot]);
+  }, [trades, positions, balance, strategyProfile, activeSignalThreshold, deskPolicySnapshot, activeStratDefs]);
 
   const exportJSON = useCallback(() => {
     return JSON.stringify({ balance, positions, trades, stats: calculateStats() }, null, 2);

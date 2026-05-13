@@ -3,6 +3,7 @@ import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
 import {
   buildPaperDeskStrategies,
   deskEffectiveHoldMinutesAtOpen,
+  deskHoldMinutesCategoryMul,
   FAKE_DIVERSITY_STRAT_IDS,
   HOLD_MUL_AFTER_TP_WIDEN,
 } from "./futuresDeskPolicy";
@@ -53,5 +54,17 @@ describe("buildPaperDeskStrategies", () => {
     for (const s of r.strategies) {
       expect(typeof s.deskTpWidened).toBe("boolean");
     }
+  });
+
+  it("applies category hold multiplier in desk build (MeanRev > raw)", () => {
+    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    expect(deskHoldMinutesCategoryMul(raw.category)).toBeGreaterThan(1);
+    const r = buildPaperDeskStrategies([raw], {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+    const built = r.strategies.find((s) => s.id === 3);
+    expect(built!.holdMinutes).toBeCloseTo(raw.holdMinutes * deskHoldMinutesCategoryMul(raw.category), 4);
   });
 });

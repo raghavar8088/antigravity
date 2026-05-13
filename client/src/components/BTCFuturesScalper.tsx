@@ -431,6 +431,49 @@ export function BTCFuturesScalper({
             <span className="font-mono font-medium text-zinc-800">{stats.deskProfileAdjustedHoldAppliedCount}</span>
           </p>
         </div>
+        <div className="mt-3 border-t border-zinc-100 pt-3 text-[10px] text-zinc-600">
+          <div className="mb-1.5 font-semibold uppercase tracking-wide text-zinc-500">
+            Worst TIME contributors (last 400 · by total net at TIME)
+          </div>
+          {stats.sessionWorstTimeOffenders.length === 0 ? (
+            <p className="text-zinc-500">No TIME exits in window yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded border border-zinc-200 bg-zinc-50/80">
+              <table className="w-full min-w-[520px] text-left text-[10px]">
+                <thead className="border-b border-zinc-200 text-zinc-500">
+                  <tr>
+                    <th className="px-2 py-1.5 font-semibold">Strategy</th>
+                    <th className="px-2 py-1.5 font-semibold">TP↑</th>
+                    <th className="px-2 py-1.5 font-semibold">TIME n</th>
+                    <th className="px-2 py-1.5 font-semibold">TIME Σ net</th>
+                    <th className="px-2 py-1.5 font-semibold">TIME avg</th>
+                    <th className="px-2 py-1.5 font-semibold">TP avg</th>
+                  </tr>
+                </thead>
+                <tbody className="text-zinc-800">
+                  {stats.sessionWorstTimeOffenders.map((r) => (
+                    <tr key={`${r.strategyId}-${r.deskTpWidened ? "w" : "nw"}`} className="border-b border-zinc-100 last:border-0">
+                      <td className="px-2 py-1.5">
+                        <span className="font-mono text-zinc-500">{r.strategyId}</span> {r.strategyName}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono">{r.deskTpWidened ? "Y" : "—"}</td>
+                      <td className="px-2 py-1.5 font-mono">{r.timeCount}</td>
+                      <td className={`px-2 py-1.5 font-mono ${r.timeSumNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {fmtUSD(r.timeSumNet, { signed: true })}
+                      </td>
+                      <td className={`px-2 py-1.5 font-mono ${r.timeMeanNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                        {fmtUSD(r.timeMeanNet, { signed: true })}
+                      </td>
+                      <td className="px-2 py-1.5 font-mono text-zinc-600">
+                        {r.tpCount > 0 ? fmtUSD(r.tpMeanNet, { signed: true }) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Open Positions */}
