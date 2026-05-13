@@ -318,8 +318,19 @@ export function BTCFuturesScalper({
               {fmtPct(totalReturn, true)}
             </span>
           </div>
-          <div className="mt-2 text-xs text-zinc-500">
-            Session PnL {fmtUSD(sessionPnL, { signed: true })} · {stats.totalTrades} completed trades
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+            <span>
+              Session PnL {fmtUSD(sessionPnL, { signed: true })} · {stats.totalTrades} completed trades
+            </span>
+            <span className="text-zinc-400">|</span>
+            <span>
+              DD vs peak equity <span className="font-mono text-zinc-800">{fmtPct(stats.drawdownPct, false, 2)}</span>
+              {stats.isDrawdownLocked ? (
+                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                  entries locked
+                </span>
+              ) : null}
+            </span>
           </div>
 
           {quote && (
@@ -398,13 +409,27 @@ export function BTCFuturesScalper({
             Signal bar <span className="font-mono text-zinc-900">{stats.effectiveSignalThreshold}</span>
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-xs">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 text-xs">
           <CompactMetric label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} detail="Closed ÷ session span" accent="text-zinc-900" />
           <CompactMetric label="Expectancy" value={fmtUSD(stats.sessionExpectancyPerTrade, { signed: true })} detail="Avg net / closed trade" accent={stats.sessionExpectancyPerTrade >= 0 ? "text-emerald-600" : "text-rose-600"} />
           <CompactMetric label="Fee / |gross|" value={fmtPct(stats.sessionFeePctOfAbsGross, false, 2)} detail="Round-trip drag vs |gross|" accent="text-amber-600" />
           <CompactMetric label="Hold avg" value={`${stats.sessionAvgHoldMinutes.toFixed(1)}m`} detail="Mean minutes in trade" accent="text-zinc-900" />
           <CompactMetric label="Hold median" value={`${stats.sessionMedianHoldMinutes.toFixed(1)}m`} detail="P50 minutes" accent="text-zinc-900" />
           <CompactMetric label="Hold P95" value={`${stats.sessionHoldP95Minutes.toFixed(1)}m`} detail="Tail length" accent="text-zinc-900" />
+          <CompactMetric
+            label="Desk RR"
+            value={`${stats.deskTpWidenedStratCount} TP↑`}
+            detail={`LowRR skip ${stats.deskLowRrSkippedStratCount} · FakeDiv −${stats.deskFakeDiversityFilteredCount}`}
+            accent="text-zinc-900"
+          />
+        </div>
+        <div className="mt-3 border-t border-zinc-100 pt-3 text-[10px] text-zinc-600">
+          <div className="mb-1 font-semibold uppercase tracking-wide text-zinc-500">Exit reasons (last 400 closed · count & avg net)</div>
+          <p className="font-mono leading-relaxed break-all text-zinc-700">{stats.sessionExitReasonSummary}</p>
+          <p className="mt-1 text-zinc-500">
+            Widened-hold bump opens (ScalpAggro + desk TP↑):{" "}
+            <span className="font-mono font-medium text-zinc-800">{stats.deskProfileAdjustedHoldAppliedCount}</span>
+          </p>
         </div>
       </div>
 

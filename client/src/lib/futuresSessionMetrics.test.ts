@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  computeSessionExitReasonAnalytics,
   computeSessionTradingMetrics,
+  formatExitReasonSessionSummary,
   FUTURES_STRATEGY_PROFILES,
   resolveStrategyProfile,
 } from "./futuresSessionMetrics";
@@ -39,6 +41,36 @@ describe("computeSessionTradingMetrics", () => {
     expect(m.medianHoldMinutes).toBeCloseTo(5, 5);
     expect(m.holdP95Minutes).toBeCloseTo(5, 5);
     expect(m.tradesPerHour).toBeGreaterThan(0);
+  });
+});
+
+describe("computeSessionExitReasonAnalytics", () => {
+  const t0 = "2026-05-11T10:00:00.000Z";
+  const t1 = "2026-05-11T10:05:00.000Z";
+
+  it("groups counts and mean net by exitReason", () => {
+    const trades = [
+      { openedAt: t0, closedAt: t1, netPnl: 2, fees: 0.2, realizedPnl: 2.2, exitReason: "TP" },
+      { openedAt: t0, closedAt: t1, netPnl: 1, fees: 0.2, realizedPnl: 1.2, exitReason: "TP" },
+      { openedAt: t0, closedAt: t1, netPnl: -0.5, fees: 0.2, realizedPnl: -0.3, exitReason: "TIME" },
+    ];
+    const { rows, totalInWindow } = computeSessionExitReasonAnalytics(trades, 400);
+    expect(totalInWindow).toBe(3);
+    const tp = rows.find((r) => r.reason === "TP");
+    const time = rows.find((r) => r.reason === "TIME");
+    expect(tp?.count).toBe(2);
+    expect(tp?.avgNet).toBeCloseTo(1.5, 5);
+    expect(time?.count).toBe(1);
+    expect(time?.avgNet).toBeCloseTo(-0.5, 5);
+  });
+
+  it("formats a compact summary string", () => {
+    const trades = [
+      { openedAt: t0, closedAt: t1, netPnl: 2, fees: 0.1, realizedPnl: 2.1, exitReason: "SL" },
+    ];
+    const s = formatExitReasonSessionSummary(computeSessionExitReasonAnalytics(trades).rows);
+    expect(s).toContain("SL×1");
+    expect(s).toContain("avg+");
   });
 });
 

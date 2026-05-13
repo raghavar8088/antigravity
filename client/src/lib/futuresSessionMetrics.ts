@@ -86,6 +86,14 @@ export function computeSessionTradingMetrics(
 
 export type FuturesStrategyProfile = "baseline" | "scalp_aggro_v1";
 
+/**
+ * Desk coherence: `buildPaperDeskStrategies` may **widen** `tpPct` (min TP/SL vs fees). The
+ * `scalp_aggro_v1` profile shortens time exits via `holdTimeMul` below 1, which otherwise fights
+ * wider targets (more TIME exits before TP). For **widened** strats under **scalp_aggro_v1** only,
+ * `deskEffectiveHoldMinutesAtOpen` lengthens base `holdMinutes` by `HOLD_MUL_AFTER_TP_WIDEN` before
+ * the existing `holdTimeMul` is applied in `paperResolveHardExit` — do not stack ad-hoc extra
+ * `holdTimeMul` cuts on top of that without review.
+ */
 export const FUTURES_STRATEGY_PROFILES: Record<
   FuturesStrategyProfile,
   { label: string; signalThresholdDelta: number; cooldownMul: number; holdTimeMul: number }
@@ -102,11 +110,55 @@ export const FUTURES_STRATEGY_PROFILES: Record<
     signalThresholdDelta: -4,
     /** Shorter post-exit lockout → more re-entries (whipsaw risk). */
     cooldownMul: 0.65,
-    /** Earlier time exits → higher turnover, more fee events. */
+    /**
+     * Earlier time exits vs baseline (`×0.85` in `paperResolveHardExit`). Widened-TP strats get
+     * a compensating **base** hold bump in the hook — see module doc above.
+     */
     holdTimeMul: 0.85,
   },
 };
 
 export function resolveStrategyProfile(raw: string | undefined): FuturesStrategyProfile {
   return raw === "scalp_aggro_v1" ? "scalp_aggro_v1" : "baseline";
+}
+
+/** Closed trade with optional exit reason (paper desk). */
+export type SessionClosedTradeWithReason = SessionTradeLike & { exitReason?: string };
+
+export type ExitReasonSessionRow = {
+  reason: string;
+  count: number;
+  /** Mean net PnL for this exit reason in the window (expectancy slice). */
+  avgNet: number;
+};
+
+/**
+ * Last-N closed trades: counts and mean net per `exitReason` (which exit types pay vs bleed).
+ * Not a Pearson correlation — grouped expectancy by bucket vs histogram counts.
+ */
+export function computeSessionExitReasonAnalytics(
+  trades: readonly SessionClosedTradeWithReason[],
+  lastN = 400,
+): { rows: ExitReasonSessionRow[]; totalInWindow: number } {
+  const window = trades.length <= lastN ? [...trades] : trades.slice(-lastN);
+  const by = new Map<string, { sum: number; n: number }>();
+  for (const t of window) {
+    const r = (t.exitReason ?? "UNKNOWN").trim() || "UNKNOWN";
+    const cur = by.get(r) ?? { sum: 0, n: 0 };
+    cur.sum += t.netPnl;
+    cur.n += 1;
+    by.set(r, cur);
+  }
+  const rows = [...by.entries()]
+    .map(([reason, v]) => ({ reason, count: v.n, avgNet: v.n ? v.sum / v.n : 0 }))
+    .sort((a, b) => b.count - a.count);
+  return { rows, totalInWindow: window.length };
+}
+
+export function formatExitReasonSessionSummary(rows: readonly ExitReasonSessionRow[], maxReasons = 8): string {
+  if (!rows.length) return "—";
+  return rows
+    .slice(0, maxReasons)
+    .map((r) => `${r.reason}×${r.count} ${r.avgNet >= 0 ? "avg+" : "avg"}${r.avgNet.toFixed(2)}`)
+    .join(" · ");
 }
