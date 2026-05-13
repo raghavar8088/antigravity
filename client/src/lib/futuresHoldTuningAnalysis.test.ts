@@ -88,6 +88,32 @@ describe("buildDeskHoldTuningDumpPayload", () => {
     );
     expect(p.buckets[0]?.deskTpWidened).toBe(true);
     expect(p.buckets[0]?.exitReasons.TIME?.meanNet).toBe(-4);
+    expect(p.primaryRegimePollWatch).toBeUndefined();
+  });
+
+  it("includes primaryRegimePollWatch when provided", () => {
+    const watch = {
+      symbol: "BTCUSDT",
+      pollWindowMax: 200,
+      sampleCount: 4,
+      counts: { chop: 1, trendLow: 1, trendHigh: 2 },
+      share: { chop: 0.25, trendLow: 0.25, trendHigh: 0.5 },
+    };
+    const p = buildDeskHoldTuningDumpPayload([], new Map(), new Map(), 400, watch);
+    expect(p.primaryRegimePollWatch).toEqual(watch);
+  });
+
+  it("includes primaryRegimeHistogram24h when provided", () => {
+    const h24 = {
+      symbol: "BTCUSDT",
+      windowMs: 86_400_000,
+      sampleCount: 2,
+      oldestEventAgeMs: 60_000,
+      counts: { chop: 2, trendLow: 0, trendHigh: 0 },
+      share: { chop: 1, trendLow: 0, trendHigh: 0 },
+    };
+    const p = buildDeskHoldTuningDumpPayload([], new Map(), new Map(), 400, undefined, h24);
+    expect(p.primaryRegimeHistogram24h).toEqual(h24);
   });
 });
 

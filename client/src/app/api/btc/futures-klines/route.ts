@@ -158,6 +158,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const effectiveLastPrice = lastPrice > 0 ? lastPrice : candleLastPrice;
     const effectiveMarkPrice = markPrice > 0 ? markPrice : effectiveLastPrice;
 
+    /** `fundingRate`: fraction for one funding period (not per HTTP poll). `nextFunding`: Unix seconds, next funding timestamp (Delta `next_funding_time`). */
     return NextResponse.json({
       ok: true,
       candles,

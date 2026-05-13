@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState, useMemo, type MutableRefObjec
 import { PRIMARY_QUOTE_SYMBOL, TRADING_SYMBOLS } from "@/lib/futuresMarketData";
 import { FUTURES_STRAT_DEFS, type FuturesStratDef, type RegimeTag } from "@/lib/futuresStrategies";
 import {
+  appendPrunedDeskRegimePersistEvent,
   buildPaperDeskStrategies,
+  DESK_REGIME_HISTOGRAM_LS_WINDOW_MS,
   deskEffectiveHoldMinutesAtOpen,
   deskFakeDiversityEnabledViaEnv,
   deskHoldTuningAnalysisModeEnabled,
@@ -12,11 +14,21 @@ import {
   deskMaxSameDirNotionalFracFromEnv,
   deskMinExpectedMoveSafetyKFromEnv,
   deskMinTpSlRatioFromEnv,
+  deskRegimeHistogramDevPersistEnabled,
+  deskRegimeWatchIntervalMsFromEnv,
+  deskRegimeWatchPollWindowFromEnv,
+  type DeskRegimePersistEvent,
+  histogramRegimePolls,
+  parseDeskRegimePersistLsPayload,
+  regimeHistogramShares,
+  serializeDeskRegimePersistLsPayload,
 } from "@/lib/futuresDeskPolicy";
 import {
   buildDeskHoldTuningDumpPayload,
   rankWorstTimeOffenders,
   reduceTradesToStrategyDeskBuckets,
+  type PrimaryRegimeHistogram24h,
+  type PrimaryRegimePollWatch,
   type WorstTimeOffenderRow,
 } from "@/lib/futuresHoldTuningAnalysis";
 import {
@@ -529,6 +541,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     return computeEffectiveThreshold(base, profileCfg.signalThresholdDelta);
   }, [options.signalThreshold, profileCfg.signalThresholdDelta]);
   const stateStorageKey = `${storageNamespace}_paper_state`;
+  const regimeHistogramLsKey = `${storageNamespace}_desk_regime_24h_v1`;
+
+  const DESK_REGIME_LS_SAVE_INTERVAL_MS = 15_000;
 
   const deskStrategiesResult = useMemo(() => {
     const allow = strategyIds && strategyIds.length > 0 ? new Set(strategyIds) : null;
@@ -608,7 +623,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const deskSkippedMinExpectedMoveRef = useRef(0);
   const deskSkippedSameDirCapRef = useRef(0);
   const deskSkippedByRegimeRef = useRef<Record<RegimeTag, number>>({ chop: 0, trendLow: 0, trendHigh: 0 });
+  /** Dev LS persist: sliding 24h primary-symbol regime events (see `deskRegimeHistogramDevPersistEnabled`). */
+  const deskRegime24hEventsRef = useRef<DeskRegimePersistEvent[]>([]);
+  const deskRegimeLsLastSaveRef = useRef(0);
   const deskLastRegimeTagRef = useRef<RegimeTag>("chop");
+  /** Dev analysis: rolling `classifyRegimeTag` samples on primary symbol (cap from env). */
+  const deskRegimePollHistoryRef = useRef<RegimeTag[]>([]);
   const activeStratDefsRef = useRef(activeStratDefs);
   const profileCooldownMulRef = useRef(1);
   const profileHoldTimeMulRef = useRef(1);
@@ -635,25 +655,90 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, [activeStratDefs]);
 
   useEffect(() => {
+    if (typeof localStorage === "undefined" || !deskRegimeHistogramDevPersistEnabled()) return;
+    try {
+      const raw = localStorage.getItem(regimeHistogramLsKey);
+      if (!raw) return;
+      deskRegime24hEventsRef.current = parseDeskRegimePersistLsPayload(JSON.parse(raw) as unknown, Date.now());
+    } catch {
+      // ignore corrupt / legacy payloads
+    }
+  }, [regimeHistogramLsKey]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !deskRegimeHistogramDevPersistEnabled()) return;
+    const flush = () => {
+      if (document.visibilityState !== "hidden") return;
+      const ev = deskRegime24hEventsRef.current;
+      if (ev.length === 0) return;
+      try {
+        localStorage.setItem(regimeHistogramLsKey, serializeDeskRegimePersistLsPayload(ev));
+        deskRegimeLsLastSaveRef.current = Date.now();
+      } catch {
+        // quota / private mode
+      }
+    };
+    document.addEventListener("visibilitychange", flush);
+    return () => document.removeEventListener("visibilitychange", flush);
+  }, [regimeHistogramLsKey]);
+
+  const buildHoldDumpPayload = useCallback(() => {
+    const defs = activeStratDefsRef.current;
+    const deskW = new Map(defs.map((s) => [s.id, s.deskTpWidened === true]));
+    const cat = new Map(defs.map((s) => [s.id, s.category]));
+    const rows = tradesRef.current.map((t) => ({
+      strategyId: t.strategyId,
+      strategyName: t.strategyName,
+      category: cat.get(t.strategyId) ?? "?",
+      exitReason: t.exitReason,
+      netPnl: t.netPnl,
+    }));
+    const polls = deskRegimePollHistoryRef.current;
+    let primaryRegimePollWatch: PrimaryRegimePollWatch | undefined;
+    if (polls.length > 0) {
+      const counts = histogramRegimePolls(polls);
+      primaryRegimePollWatch = {
+        symbol: PRIMARY_QUOTE_SYMBOL,
+        pollWindowMax: deskRegimeWatchPollWindowFromEnv(),
+        sampleCount: polls.length,
+        counts,
+        share: regimeHistogramShares(counts),
+      };
+    }
+    const ev24 = deskRegime24hEventsRef.current;
+    let primaryRegimeHistogram24h: PrimaryRegimeHistogram24h | undefined;
+    if (ev24.length > 0) {
+      const tags = ev24.map((x) => x.tag);
+      const counts24 = histogramRegimePolls(tags);
+      const tMin = ev24.reduce((acc, x) => Math.min(acc, x.t), ev24[0]!.t);
+      const nowMs = Date.now();
+      primaryRegimeHistogram24h = {
+        symbol: PRIMARY_QUOTE_SYMBOL,
+        windowMs: DESK_REGIME_HISTOGRAM_LS_WINDOW_MS,
+        sampleCount: ev24.length,
+        oldestEventAgeMs: Number.isFinite(tMin) ? Math.max(0, nowMs - tMin) : null,
+        counts: counts24,
+        share: regimeHistogramShares(counts24),
+      };
+    }
+    return buildDeskHoldTuningDumpPayload(
+      rows,
+      deskW,
+      cat,
+      400,
+      primaryRegimePollWatch,
+      primaryRegimeHistogram24h,
+    );
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined" || !deskHoldTuningAnalysisModeEnabled()) return;
     const w = window as Window & { __deskHoldTuningDump?: () => string };
-    w.__deskHoldTuningDump = () => {
-      const defs = activeStratDefsRef.current;
-      const deskW = new Map(defs.map((s) => [s.id, s.deskTpWidened === true]));
-      const cat = new Map(defs.map((s) => [s.id, s.category]));
-      const rows = tradesRef.current.map((t) => ({
-        strategyId: t.strategyId,
-        strategyName: t.strategyName,
-        category: cat.get(t.strategyId) ?? "?",
-        exitReason: t.exitReason,
-        netPnl: t.netPnl,
-      }));
-      return JSON.stringify(buildDeskHoldTuningDumpPayload(rows, deskW, cat, 400), null, 2);
-    };
+    w.__deskHoldTuningDump = () => JSON.stringify(buildHoldDumpPayload(), null, 2);
     return () => {
       delete w.__deskHoldTuningDump;
     };
-  }, []);
+  }, [buildHoldDumpPayload]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !deskHoldTuningAnalysisModeEnabled()) return;
@@ -661,21 +746,35 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     if (intervalMs <= 0) return;
 
     const logPayload = () => {
-      const defs = activeStratDefsRef.current;
-      const deskW = new Map(defs.map((s) => [s.id, s.deskTpWidened === true]));
-      const cat = new Map(defs.map((s) => [s.id, s.category]));
-      const rows = tradesRef.current.map((t) => ({
-        strategyId: t.strategyId,
-        strategyName: t.strategyName,
-        category: cat.get(t.strategyId) ?? "?",
-        exitReason: t.exitReason,
-        netPnl: t.netPnl,
-      }));
-      const payload = buildDeskHoldTuningDumpPayload(rows, deskW, cat, 400);
-      console.info("[desk-hold-tuning]", JSON.stringify(payload));
+      console.info("[desk-hold-tuning]", JSON.stringify(buildHoldDumpPayload()));
     };
 
     const id = window.setInterval(logPayload, intervalMs);
+    return () => window.clearInterval(id);
+  }, [buildHoldDumpPayload]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !deskHoldTuningAnalysisModeEnabled()) return;
+    const intervalMs = deskRegimeWatchIntervalMsFromEnv();
+    if (intervalMs <= 0) return;
+
+    const logRegime = () => {
+      const polls = deskRegimePollHistoryRef.current;
+      if (polls.length === 0) return;
+      const counts = histogramRegimePolls(polls);
+      console.info(
+        "[desk-regime-watch]",
+        JSON.stringify({
+          symbol: PRIMARY_QUOTE_SYMBOL,
+          sampleCount: polls.length,
+          pollWindowMax: deskRegimeWatchPollWindowFromEnv(),
+          counts,
+          share: regimeHistogramShares(counts),
+        }),
+      );
+    };
+
+    const id = window.setInterval(logRegime, intervalMs);
     return () => window.clearInterval(id);
   }, []);
 
@@ -777,6 +876,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedSameDirCapRef.current = 0;
     deskSkippedByRegimeRef.current = { chop: 0, trendLow: 0, trendHigh: 0 };
     deskLastRegimeTagRef.current = "chop";
+    deskRegimePollHistoryRef.current = [];
     localStorage.removeItem(stateStorageKey);
   }, [stateStorageKey]);
 
@@ -1375,6 +1475,31 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
             if (symbol === PRIMARY_QUOTE_SYMBOL) {
               deskLastRegimeTagRef.current = regime;
+              if (deskHoldTuningAnalysisModeEnabled()) {
+                const buf = deskRegimePollHistoryRef.current;
+                buf.push(regime);
+                const cap = deskRegimeWatchPollWindowFromEnv();
+                while (buf.length > cap) buf.shift();
+              }
+              if (deskRegimeHistogramDevPersistEnabled()) {
+                deskRegime24hEventsRef.current = appendPrunedDeskRegimePersistEvent(
+                  deskRegime24hEventsRef.current,
+                  { t: now, tag: regime },
+                  now,
+                );
+                const lastSav = deskRegimeLsLastSaveRef.current;
+                if (now - lastSav >= DESK_REGIME_LS_SAVE_INTERVAL_MS) {
+                  deskRegimeLsLastSaveRef.current = now;
+                  try {
+                    localStorage.setItem(
+                      regimeHistogramLsKey,
+                      serializeDeskRegimePersistLsPayload(deskRegime24hEventsRef.current),
+                    );
+                  } catch {
+                    // quota / private mode
+                  }
+                }
+              }
             }
 
             for (const strat of activeStratDefs) {
@@ -1435,7 +1560,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile]);
+  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {

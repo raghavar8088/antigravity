@@ -129,17 +129,40 @@ export type DeskHoldTuningDumpBucket = {
   exitReasons: Record<string, ReasonAgg>;
 };
 
+/** Rolling primary-quote regime tag histogram (dev analysis mode; see `NEXT_PUBLIC_DESK_REGIME_WATCH_MS`). */
+export type PrimaryRegimePollWatch = {
+  symbol: string;
+  pollWindowMax: number;
+  sampleCount: number;
+  counts: { chop: number; trendLow: number; trendHigh: number };
+  share: { chop: number; trendLow: number; trendHigh: number };
+};
+
+/** Sliding 24h primary-quote regime histogram (dev LS persist; see `NEXT_PUBLIC_DESK_REGIME_HISTOGRAM_LS_PERSIST`). */
+export type PrimaryRegimeHistogram24h = {
+  symbol: string;
+  windowMs: number;
+  sampleCount: number;
+  oldestEventAgeMs: number | null;
+  counts: { chop: number; trendLow: number; trendHigh: number };
+  share: { chop: number; trendLow: number; trendHigh: number };
+};
+
 export function buildDeskHoldTuningDumpPayload(
   trades: readonly TradeRowForHoldTuning[],
   stratDeskWidenedById: ReadonlyMap<number, boolean>,
   stratCategoryById: ReadonlyMap<number, string>,
   lastN: number,
+  primaryRegimePollWatch?: PrimaryRegimePollWatch,
+  primaryRegimeHistogram24h?: PrimaryRegimeHistogram24h,
 ): {
   window: number;
   lastN: number;
   bucketCount: number;
   note: string;
   buckets: DeskHoldTuningDumpBucket[];
+  primaryRegimePollWatch?: PrimaryRegimePollWatch;
+  primaryRegimeHistogram24h?: PrimaryRegimeHistogram24h;
 } {
   const buckets = reduceTradesToStrategyDeskBuckets(trades, stratDeskWidenedById, stratCategoryById, lastN);
   const window = trades.length <= lastN ? trades.length : lastN;
@@ -158,5 +181,7 @@ export function buildDeskHoldTuningDumpPayload(
         Object.entries(b.perReason).map(([k, v]) => [k, reasonAggToView(v)]),
       ),
     })),
+    ...(primaryRegimePollWatch ? { primaryRegimePollWatch } : {}),
+    ...(primaryRegimeHistogram24h ? { primaryRegimeHistogram24h } : {}),
   };
 }

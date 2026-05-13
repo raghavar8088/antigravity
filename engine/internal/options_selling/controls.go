@@ -272,8 +272,13 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 }
 
 func isNSEMarketOpen(utcHour, utcMin int) bool {
+	// NSE is closed Sat/Sun; skip time-window check entirely.
+	now := time.Now().UTC()
+	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		return false
+	}
 	total := utcHour*60 + utcMin
-	return total >= 225 && total <= 600
+	return total >= 225 && total <= 600 // 03:45–10:00 UTC
 }
 
 func isNSEPreClose(utcHour, utcMin int) bool {

@@ -97,7 +97,9 @@ func (e *Engine) isPaperIndexDesk() bool {
 }
 
 func (e *Engine) paperDeskAggressiveOpen() bool {
-	return e.isPaperIndexDesk() && e.lastPrice > 0
+	// Only BTC paper desk uses aggressive open (skips signals for demo rotation).
+	// NIFTY must respect all signal, regime, and entry confirmation gates.
+	return e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0
 }
 
 // checkDailyLossLimitLocked returns true if new entries should be halted due to daily loss limit.
@@ -589,7 +591,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 			return
 		}
 
-		fn, ok := Signals[s.def.Signal]
+		fn, ok := e.signalFuncFor(s.def.Signal)
 		if !ok {
 			log.Printf("[OPTIONS_SELLING] WARN: unknown signal %q for strategy %q — skipping", s.def.Signal, s.def.Name)
 			return
@@ -657,7 +659,7 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 		return
 	}
 
-	fn, ok := Signals[s.def.Signal]
+	fn, ok := e.signalFuncFor(s.def.Signal)
 	if !ok || !fn(ctx) {
 		return
 	}
@@ -681,6 +683,19 @@ func (e *Engine) entryConfirmedFor(def StrategyDef, ctx SignalContext, regime st
 		return niftyEntryConfirmed(def, ctx, regime)
 	}
 	return optionEntryConfirmed(def, ctx, regime)
+}
+
+// signalFuncFor returns the appropriate signal function for the engine's market.
+// NIFTY engines use NiftySignals (with NIFTY-calibrated thresholds), falling
+// back to the base Signals map for any key not overridden.
+func (e *Engine) signalFuncFor(key string) (SignalFunc, bool) {
+	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
+		if fn, ok := NiftySignals[key]; ok {
+			return fn, true
+		}
+	}
+	fn, ok := Signals[key]
+	return fn, ok
 }
 
 func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float64, now time.Time, prefix string) *OptionPosition {
