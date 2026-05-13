@@ -14,6 +14,8 @@ export interface FuturesStratDef {
   holdMinutes: number;
   confluenceMin: number;
   requiresHtf?: boolean;
+  /** Set by `buildPaperDeskStrategies` when `tpPct` was raised for min TP/SL ratio. */
+  deskTpWidened?: boolean;
 }
 
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
