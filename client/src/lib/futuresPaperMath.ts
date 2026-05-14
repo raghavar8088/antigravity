@@ -59,6 +59,17 @@ export function paperLinearGrossPnl(
   return pct * notional;
 }
 
+/**
+ * Underlying **price** return % from entry → exit (not leverage-scaled).
+ * Same sign convention as {@link paperLinearGrossPnl} before notional multiply.
+ */
+export function paperPriceMovePctOnNotional(entryPrice: number, exitPrice: number, side: PaperSide): number {
+  if (!entryPrice || !Number.isFinite(entryPrice) || !Number.isFinite(exitPrice)) return 0;
+  return side === "LONG"
+    ? ((exitPrice - entryPrice) / entryPrice) * 100
+    : ((entryPrice - exitPrice) / entryPrice) * 100;
+}
+
 export function paperRoundTripTakerFees(notional: number, takerFeePct: number): number {
   return notional * takerFeePct * 2;
 }

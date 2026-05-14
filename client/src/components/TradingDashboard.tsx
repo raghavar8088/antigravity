@@ -109,15 +109,15 @@ const REMOVED_MODULES = new Set<string>([
 ]);
 
 function sanitizeModule(module: DashboardModule): DashboardModule {
-  return REMOVED_MODULES.has(module) ? "options-selling" : module;
+  return REMOVED_MODULES.has(module) ? "btcFutureTrading" : module;
 }
 
 const SOUND_STORAGE_KEY = "raig.sound.enabled";
 const INITIAL_BALANCE = 1000000;
 const INITIAL_OPTIONS_BALANCE = 1000000;
 const WORKSPACE_PRESETS: WorkspacePreset[] = [
-  { path: "/", label: "BTC Option Selling", description: "Default crypto option selling desk with BTC theta decay context.", group: "crypto", module: "options-selling" },
-  { path: "/crypto", label: "Crypto Workspace", description: "Jump straight into BTC options and futures desks.", group: "crypto", module: "options-selling" },
+  { path: "/", label: "BTC Future Trading", description: "Default desk: dedicated BTC perpetual futures paper module.", group: "crypto", module: "btcFutureTrading" },
+  { path: "/crypto", label: "Crypto Workspace", description: "BTC futures, options selling, and related crypto desks.", group: "crypto", module: "btcFutureTrading" },
   { path: "/nifty-options", label: "NIFTY Options", description: "Dedicated route for the NIFTY 50 options workspace.", group: "india", module: "nifty" },
   { path: "/nifty-selling", label: "NIFTY Selling", description: "Short-option premium decay workspace with separate paper capital.", group: "india", module: "niftySelling" },
   { path: "/nifty-bees", label: "Nifty BEES", description: "NSE ETF scalper on Angel/Yahoo live LTP with ₹10k paper and thirty strategies.", group: "india", module: "niftyBees" },
@@ -371,7 +371,7 @@ function CompactMetric({
 
 export default function TradingDashboard({
   initialGroup = "crypto",
-  initialModule = "options-selling",
+  initialModule = "btcFutureTrading",
 }: TradingDashboardProps) {
   const [resetRefreshKey, setResetRefreshKey] = useState(0);
   const [sessionStartedAt] = useState(() => Date.now());

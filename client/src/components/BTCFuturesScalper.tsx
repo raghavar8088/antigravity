@@ -10,6 +10,7 @@ import {
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
+import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 
 // ========== FORMATTERS ==========
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -26,6 +27,12 @@ function fmtPct(value: number, signed = false, decimals = 2) {
 
 function fmtContracts(n: number) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+function tradePriceMovePct(t: BTCFuturesTrade): number {
+  return typeof t.priceMovePct === "number" && Number.isFinite(t.priceMovePct)
+    ? t.priceMovePct
+    : paperPriceMovePctOnNotional(t.entryPrice, t.exitPrice, t.side);
 }
 
 function formatShortTime(iso: string) {
@@ -709,7 +716,19 @@ export function BTCFuturesScalper({
               </div>
               <div className="text-center">
                 <div className="text-xs text-zinc-400">Win Rate</div>
-                <div className="text-xl font-bold text-emerald-600">{fmtPct(stats.winRate, false, 1)}</div>
+                <div
+                  className={`text-xl font-bold ${
+                    stats.totalTrades === 0
+                      ? "text-zinc-400"
+                      : stats.winRate >= 50
+                        ? "text-emerald-600"
+                        : stats.winRate > 0
+                          ? "text-amber-600"
+                          : "text-rose-600"
+                  }`}
+                >
+                  {fmtPct(stats.winRate, false, 1)}
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-xs text-zinc-400">Net PnL</div>
@@ -731,7 +750,7 @@ export function BTCFuturesScalper({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs" style={{ minWidth: 1000 }}>
+            <table className="w-full text-left text-xs" style={{ minWidth: 1120 }}>
               <thead className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 <tr className="border-b border-zinc-200">
                   <th className="py-2 pr-3">Time</th>
@@ -739,10 +758,21 @@ export function BTCFuturesScalper({
                   <th className="py-2 pr-3">Strategy</th>
                   <th className="py-2 pr-3">Side</th>
                   <th className="py-2 pr-3">Contracts</th>
-                  <th className="py-2 pr-3">Entry/Exit</th>
+                  <th className="py-2 pr-3">Entry / exit</th>
                   <th className="py-2 pr-3">Duration</th>
                   <th className="py-2 pr-3">Exit</th>
-                  <th className="py-2 pr-3">Return</th>
+                  <th
+                    className="py-2 pr-3"
+                    title="Net PnL ÷ isolated margin × 100 (≈ leverage × underlying move after fees & funding)."
+                  >
+                    Net % margin
+                  </th>
+                  <th
+                    className="py-2 pr-3"
+                    title="Price change on booked entry→exit (same basis as gross PnL before fees)."
+                  >
+                    Price %
+                  </th>
                   <th className="py-2 text-right">Net PnL</th>
                 </tr>
               </thead>
@@ -759,7 +789,10 @@ export function BTCFuturesScalper({
                     </td>
                     <td className="py-2 pr-3"><SideBadge side={t.side} /></td>
                     <td className="py-2 pr-3 font-mono">{fmtContracts(t.contracts)}</td>
-                    <td className="py-2 pr-3 font-mono text-zinc-500">
+                    <td
+                      className="py-2 pr-3 font-mono text-zinc-500"
+                      title="Booked fills: entry = last at open; exit = mark (or TP/SL/liq price) at close — same prices used for PnL."
+                    >
                       ${t.entryPrice.toLocaleString()} → ${t.exitPrice.toLocaleString()}
                     </td>
                     <td className="py-2 pr-3 font-mono text-zinc-500">
@@ -776,6 +809,9 @@ export function BTCFuturesScalper({
                     </td>
                     <td className={`py-2 pr-3 font-mono ${t.netPnlPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {fmtPct(t.netPnlPct, true)}
+                    </td>
+                    <td className={`py-2 pr-3 font-mono ${tradePriceMovePct(t) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {fmtPct(tradePriceMovePct(t), true)}
                     </td>
                     <td className={`py-2 text-right font-mono font-bold ${t.netPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {fmtUSD(t.netPnl, { signed: true })}

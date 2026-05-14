@@ -60,6 +60,7 @@ import {
   paperMarginRequired,
   paperNetPnlOnClose,
   paperNotional,
+  paperPriceMovePctOnNotional,
   paperMinExpectedMoveVsFees,
   paperResolveHardExit,
   paperReturnOnMargin,
@@ -197,7 +198,10 @@ export interface BTCFuturesTrade {
   realizedPnl: number; // Gross PnL
   fees: number; // Entry + exit fees
   netPnl: number; // Net after fees
-  netPnlPct: number; // Net % return on margin
+  /** Net PnL as % of isolated margin (`≈ leverage ×` notional price move % for small moves). */
+  netPnlPct: number;
+  /** Entry→exit price move % (same basis as booked gross / `paperLinearGrossPnl`). */
+  priceMovePct: number;
   fundingCosts: number; // Total funding paid/received
   /** Debug: ms epoch after last funding accrual tick (optional export). */
   lastFundingAppliedAt?: number;
@@ -891,8 +895,30 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, [activeStrategyIdSet]);
 
   const exportCSV = useCallback(() => {
-    const headers = ["ID", "Symbol", "Strategy", "Side", "Entry", "Exit", "Contracts", "Realized PnL", "Fees", "Net PnL", "Net PnL %", "Funding", "Opened", "Closed", "Exit Reason"];
-    const rows = trades.map(t => [
+    const headers = [
+      "ID",
+      "Symbol",
+      "Strategy",
+      "Side",
+      "Entry",
+      "Exit",
+      "Contracts",
+      "Realized PnL",
+      "Fees",
+      "Net PnL",
+      "Net PnL % on margin",
+      "Price move %",
+      "Funding",
+      "Opened",
+      "Closed",
+      "Exit Reason",
+    ];
+    const rows = trades.map((t) => {
+      const pm =
+        typeof t.priceMovePct === "number" && Number.isFinite(t.priceMovePct)
+          ? t.priceMovePct
+          : paperPriceMovePctOnNotional(t.entryPrice, t.exitPrice, t.side);
+      return [
       t.id,
       t.symbol || PRIMARY_QUOTE_SYMBOL,
       t.strategyName,
@@ -904,11 +930,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       t.fees.toFixed(4),
       t.netPnl.toFixed(2),
       t.netPnlPct.toFixed(2),
+      pm.toFixed(4),
       t.fundingCosts.toFixed(4),
       t.openedAt,
       t.closedAt,
       t.exitReason,
-    ]);
+    ];
+    });
     return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
   }, [trades]);
 
@@ -1186,7 +1214,20 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       minAbsNetWinUsd: MIN_ABS_NET_PNL_USD,
     });
 
+    if (process.env.NODE_ENV === "development" && exitReason === "TP" && grossPnl > 0 && netPnl < 0) {
+      console.warn("[btc-futures-paper] TP booked with positive gross but negative net — check fees/funding", {
+        id: position.id,
+        grossPnl,
+        fees,
+        fundingCosts: position.fundingCosts,
+        netPnl,
+        entryPrice: position.entryPrice,
+        exitPrice,
+      });
+    }
+
     const netPnlPct = position.marginUsed > 0 ? (netPnl / position.marginUsed) * 100 : 0;
+    const priceMovePct = paperPriceMovePctOnNotional(position.entryPrice, exitPrice, position.side);
     const liqDist = paperLiquidationDistancePct(exitPrice, position.liquidationPrice, position.side);
     const closedAtIso = new Date().toISOString();
     const openedMs = new Date(position.openedAt).getTime();
@@ -1209,6 +1250,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       fees,
       netPnl,
       netPnlPct,
+      priceMovePct,
       fundingCosts: position.fundingCosts,
       lastFundingAppliedAt: position.lastFundingAppliedAt,
       fundingSinceOpenMs,

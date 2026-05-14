@@ -3,5 +3,5 @@
 import TradingDashboard from "@/components/TradingDashboard";
 
 export default function Home() {
-  return <TradingDashboard initialGroup="crypto" initialModule="options-selling" />;
+  return <TradingDashboard initialGroup="crypto" initialModule="btcFutureTrading" />;
 }

@@ -8,10 +8,12 @@ import {
   paperFuturesProgressTowardTp,
   paperLiquidationCrossed,
   paperLiquidationPrice,
+  paperLinearGrossPnl,
   paperMarginRequired,
   paperNetPnlOnClose,
   paperNotional,
   paperMinExpectedMoveVsFees,
+  paperPriceMovePctOnNotional,
   paperResolveHardExit,
   paperReturnOnMargin,
   paperRoundTripTakerFees,
@@ -266,6 +268,51 @@ describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → T
       holdTimeMul: 1,
     });
     expect(r).toEqual({ shouldClose: false });
+  });
+});
+
+describe("paperPriceMovePctOnNotional", () => {
+  it("LONG: exit above entry is positive %", () => {
+    expect(paperPriceMovePctOnNotional(100_000, 101_000, "LONG")).toBeCloseTo(1, 8);
+  });
+  it("SHORT: exit below entry is positive %", () => {
+    expect(paperPriceMovePctOnNotional(100_000, 99_000, "SHORT")).toBeCloseTo(1, 8);
+  });
+  it("matches linear gross direction on notional", () => {
+    const entry = 80_000;
+    const exit = 81_000;
+    const notional = 500;
+    const pct = paperPriceMovePctOnNotional(entry, exit, "LONG");
+    const gross = paperLinearGrossPnl(entry, exit, notional, "LONG");
+    expect(pct).toBeCloseTo(1.25, 8);
+    expect(gross).toBeCloseTo(notional * (pct / 100), 6);
+  });
+});
+
+describe("booked LONG close: gross, net, margin % vs price %", () => {
+  it("hand math: favorable move, fees only, no funding", () => {
+    const entry = 80_000;
+    const exit = 81_000;
+    const notional = 500;
+    const leverage = 25;
+    const margin = notional / leverage;
+    const taker = 0.001;
+    const { grossPnl, fees, netPnl } = paperNetPnlOnClose({
+      entryPrice: entry,
+      exitPrice: exit,
+      notional,
+      side: "LONG",
+      takerFeePct: taker,
+      fundingCosts: 0,
+      minAbsNetWinUsd: 0,
+    });
+    expect(grossPnl).toBeCloseTo(6.25, 8);
+    expect(fees).toBeCloseTo(notional * taker * 2, 8);
+    expect(netPnl).toBeCloseTo(grossPnl - fees, 8);
+    const netPctOnMargin = (netPnl / margin) * 100;
+    const pricePct = paperPriceMovePctOnNotional(entry, exit, "LONG");
+    expect(pricePct).toBeCloseTo(1.25, 8);
+    expect(Math.abs(netPctOnMargin)).toBeGreaterThan(Math.abs(pricePct));
   });
 });
 
