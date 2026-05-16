@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { DeskBanner } from "@/components/desk/ui/DeskBanner";
+import { DeskButton } from "@/components/desk/ui/DeskButton";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 
 type BalanceSnippet = { asset: string; availableBalance: number };
@@ -166,20 +168,15 @@ export function TestnetOpsPanel() {
   }
 
   return (
-    <div className="rounded-lg border-2 border-amber-500 bg-amber-50/90 p-4 shadow-sm">
-      <p className="mb-3 text-center text-sm font-extrabold uppercase tracking-widest text-amber-900">
-        ⚠ Testnet only — manual orders · not paper desk · not mainnet
-      </p>
+    <div>
+      <DeskBanner variant="warning" title="TESTNET ONLY">
+        Manual Delta testnet orders only. Not paper desk. Not mainnet.
+      </DeskBanner>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void refresh()}
-          className="rounded border border-amber-400 bg-white px-2 py-1 text-[11px] font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
-        >
+      <div className="mb-3 flex flex-wrap items-center gap-2" style={{ marginTop: 16 }}>
+        <DeskButton variant="outlined" disabled={busy} onClick={() => void refresh()} style={{ minHeight: 36 }}>
           {busy ? "…" : "Refresh"}
-        </button>
+        </DeskButton>
         {balances?.length ? (
           <span className="text-[11px] text-amber-900">
             {balances.map((b) => `${b.asset}: ${b.availableBalance}`).join(" · ")}

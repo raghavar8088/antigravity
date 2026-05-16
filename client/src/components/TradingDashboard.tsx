@@ -23,7 +23,10 @@ import NiftyBeesScalper from "@/components/NiftyBeesScalper";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
-import WorkspaceSettingsPanel, { type StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
+import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
+import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
+import type { StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
+import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 import useAIInsights from "@/hooks/useAIInsights";
 import useEngineLogs from "@/hooks/useEngineLogs";
 import useEngineState from "@/hooks/useEngineState";
@@ -1145,7 +1148,7 @@ export default function TradingDashboard({
         />
       )}
 
-      <WorkspaceSettingsPanel
+      <WorkspaceSettingsCard
         key={activeModule}
         workspaceKey={activeModule}
         workspaceLabel={activePreset.label}
@@ -1156,148 +1159,20 @@ export default function TradingDashboard({
         strategyItems={workspaceStrategyItems}
       />
 
-      {/* ── Google Finance-style navigation panel ─────────────────────────── */}
-      <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-card)", overflow: "hidden" }}>
-        {/* Group tabs */}
-        <div className="market-group-bar" style={{ padding: "0 20px" }}>
-          {([
-            { key: "crypto", label: "Crypto" },
-            { key: "india",  label: "Indian Market" },
-          ] as { key: DashboardGroup; label: string }[]).map((g) => (
-            <button
-              key={g.key}
-              type="button"
-              onClick={() => {
-                setActiveGroup(g.key);
-                if (g.key === "crypto")  setActiveModule("options");
-                if (g.key === "india")   setActiveModule("nifty");
-              }}
-              className={`market-group-tab${activeGroup === g.key ? " active" : ""}`}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Sub-tabs + action toggle */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px", borderTop: "1px solid var(--border-subtle)", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 0, overflowX: "auto" }}>
-            {/* Crypto sub-tabs */}
-            {activeGroup === "crypto" && ([
-              { key: "options",          label: "BTC Option Buying" },
-              { key: "options-selling",  label: "BTC Option Selling" },
-              { key: "btcFuturesScalper", label: "Future Trading" },
-              { key: "btcFutureTrading", label: "BTC Future Trading" },
-            ] as { key: typeof activeModule; label: string }[]).map((module) => {
-              return (
-                <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
-                  {module.label}
-                </button>
-              );
-            })}
-
-            {/* Indian Market sub-tabs */}
-            {activeGroup === "india" && ([
-              { key: "nifty",       label: "Nifty 50 Option Buying" },
-              { key: "niftySelling",label: "Nifty Option Selling" },
-              { key: "niftyBees",   label: "Nifty BEES Scalper" },
-            ] as { key: typeof activeModule; label: string }[]).map((module) => (
-              <button type="button" key={module.key} onClick={() => setActiveModule(module.key)} className={`groww-tab${activeModule === module.key ? " active" : ""}`}>
-                {module.label}
-              </button>
-            ))}
-
-          </div>
-
-          {/* Dangerous actions (does not stop server-side paper engines) */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 4px 4px 12px",
-              borderRadius: "var(--radius-chip)",
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-            }}
-            title={actionToggleTitle}
-          >
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)", fontFamily: "var(--font-display)" }}>
-              Controls
-            </span>
-            <div style={{ display: "inline-flex", borderRadius: "var(--radius-chip)", overflow: "hidden", border: "1px solid var(--border-subtle)", background: "var(--surface-2)" }}>
-              <button
-                type="button"
-                onClick={() => setActionsEnabled(false)}
-                aria-pressed={!actionsEnabled}
-                title="Hide reset/clear/kill/close-all"
-                style={{
-                  padding: "4px 12px",
-                  border: "none",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  fontFamily: "var(--font-display)",
-                  cursor: "pointer",
-                  background: !actionsEnabled ? "var(--surface)" : "transparent",
-                  color: !actionsEnabled ? "var(--text-primary)" : "var(--text-muted)",
-                  boxShadow: !actionsEnabled ? "var(--shadow-xs)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                Locked
-              </button>
-              <button
-                type="button"
-                onClick={() => setActionsEnabled(true)}
-                aria-pressed={actionsEnabled}
-                title="Show reset/clear/kill/close-all"
-                style={{
-                  padding: "4px 12px",
-                  border: "none",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  fontFamily: "var(--font-display)",
-                  cursor: "pointer",
-                  background: actionsEnabled ? "var(--green)" : "transparent",
-                  color: actionsEnabled ? "#fff" : "var(--text-muted)",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                Actions
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Module description */}
-        <div
-          style={{
-            padding: "8px 20px 12px",
-            fontSize: 12,
-            lineHeight: 1.5,
-            color: "var(--text-muted)",
-            borderTop: "1px solid var(--border-subtle)",
-          }}
-        >
-          {activeModule === "options"
-            ? "Options — 50 autonomous BTC option scalping strategies. Separate $1M paper account, 1% per trade."
-            : activeModule === "niftySelling"
-            ? "Options Selling — NIFTY 50 short-option workspace focused on premium decay."
-            : activeModule === "nifty"
-            ? "Options — Nifty 50 option scalper on live NSE data. Separate ₹1M paper account, 1% per trade."
-            : activeModule === "niftyBees"
-            ? "ETF — Nifty BEES (Nippon India ETF Nifty 50 BeES) on Angel/Yahoo live NSE prices. 30 strategies, ₹10,000 paper."
-            : activeModule === "options-selling"
-            ? "Options Selling — BTC short-premium workspace with theta-style decay and separate paper capital."
-            : activeModule === "chain"
-            ? "Options View — Live BTC option chain with full Greeks and IV smile. Read-only."
-            : activeModule === "btcFuturesScalper"
-            ? "Future Trading — multi-asset perpetual futures with 25x leverage. 130 strategies incl. multi-timeframe analysis. Features: liquidation price tracking, funding rate awareness, margin management, contract-based sizing. $1,000 paper wallet, 0.1% taker fee, $2 min net PnL. Real Delta Exchange API compatible."
-            : activeModule === "btcFutureTrading"
-            ? "BTC Future Trading — curated 20-strategy BTC perpetual module (trend, breakout, smart-money, order-flow, and MTF alignment). Separate paper state, same risk and execution engine."
-            : "Select a workspace tab above to see its description."}
-        </div>
-      </div>
+      <WorkspaceNavPanel
+        activeGroup={activeGroup}
+        activeModule={activeModule}
+        onGroupChange={(g) => {
+          setActiveGroup(g);
+          if (g === "crypto") setActiveModule("options");
+          if (g === "india") setActiveModule("nifty");
+        }}
+        onModuleChange={setActiveModule}
+        actionsEnabled={actionsEnabled}
+        onActionsEnabledChange={setActionsEnabled}
+        actionToggleTitle={actionToggleTitle}
+        moduleDescription={workspaceModuleDescription(activeModule)}
+      />
 
       {activeModule === "dashboard" && (
         <div className="space-y-5">

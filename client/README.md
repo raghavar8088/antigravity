@@ -11,7 +11,25 @@ Paper futures desks use a shared **M3-style** layer (Tailwind v4 + CSS tokens, n
 | Number formatting (`en-US`, hydration-safe equity in app bar) | `src/lib/deskFormat.ts` |
 | Theme toggle | `DeskThemeToggle` — sets `data-theme` on `<html>` and `body.combat-mode` for dark |
 
-**BTC Future Trading** uses `DeskShell` + `DeskAppBar` inside `BTCFuturesScalper.tsx`. The workspace shell (`TradingDashboard`) hides the legacy header on BTC futures modules so equity and auth live in the desk app bar.
+**BTC Future Trading** uses `DeskShell` + `DeskAppBar` inside `BTCFuturesScalper.tsx`. Inner panels live in `BTCFuturesDeskPanels.tsx`. The workspace shell (`TradingDashboard`) uses `WorkspaceSettingsCard` and `WorkspaceNavPanel`.
+
+### Component map
+
+| UI area | Primitive |
+|---------|-----------|
+| App bar, equity, status | `DeskAppBar`, `StatusBadge` |
+| Cards / sections | `DeskCard`, `DeskSectionHeader` |
+| KPIs | `DeskMetricTile` |
+| Tables (watchlist, positions, trades, leaderboard) | `DeskDataTable` |
+| Tags (regime, exit reason, side) | `DeskChip` |
+| Actions | `DeskButton` (filled / tonal / outlined) |
+| Strategy on/off | `DeskSwitch` |
+| Warnings (feed, testnet, replay off) | `DeskBanner` |
+| Empty states | `DeskEmptyState` |
+| Loading under app bar | `DeskLinearProgress` |
+| Workspace nav | `DeskTabs` in `WorkspaceNavPanel` |
+
+Theme: `DeskThemeToggle` + existing combat/light body class; `data-theme` on `<html>`.
 
 ## Getting Started
 
@@ -29,7 +47,7 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## Auth (P1-L) — Supabase magic link
+## Auth (P1-L) — Supabase magic link {#desk-auth-setup}
 
 1. In Supabase Dashboard → **Authentication** → enable **Email** provider (magic link).
 2. Add redirect URL: `http://localhost:3000/auth/callback` (and your production origin).

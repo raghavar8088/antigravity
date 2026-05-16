@@ -2,6 +2,12 @@
 
 import { useCallback, useState } from "react";
 import type { ShadowIntentListItem } from "@/lib/shadowTradeIntentTypes";
+import { DeskButton } from "@/components/desk/ui/DeskButton";
+import { DeskChip } from "@/components/desk/ui/DeskChip";
+import type { DeskColumn } from "@/components/desk/ui/DeskDataTable";
+import { DeskDataTable } from "@/components/desk/ui/DeskDataTable";
+import { DeskEmptyState } from "@/components/desk/ui/DeskEmptyState";
+import { DeskSectionHeader } from "@/components/desk/ui/DeskSectionHeader";
 
 const SHADOW_LOG_LIMIT = 20;
 
@@ -47,67 +53,81 @@ export function ShadowIntentLogPanel({
 
   if (!enabled) return null;
 
+  const columns: DeskColumn<ShadowIntentListItem>[] = [
+    {
+      id: "time",
+      header: "Time",
+      cell: (row) => row.createdAt.slice(11, 19),
+    },
+    {
+      id: "kind",
+      header: "Kind",
+      cell: (row) => <DeskChip tone="primary">{row.intentKind}</DeskChip>,
+    },
+    {
+      id: "sym",
+      header: "Symbol",
+      cell: (row) => row.symbol,
+    },
+    {
+      id: "side",
+      header: "Side",
+      cell: (row) => row.side,
+    },
+    {
+      id: "detail",
+      header: "Detail",
+      cell: (row) =>
+        row.intentKind === "close"
+          ? `${row.entryPrice.toFixed(0)}→${row.exitPrice?.toFixed(0) ?? "—"} ${row.exitReason ?? ""}`
+          : `@ ${row.entryPrice.toFixed(0)}`,
+    },
+    {
+      id: "testnet",
+      header: "Testnet",
+      align: "right",
+      cell: (row) => (
+        <DeskChip tone={row.wouldPlaceTestnet ? "success" : "default"}>
+          {row.wouldPlaceTestnet ? "Would place" : "No"}
+        </DeskChip>
+      ),
+    },
+  ];
+
   return (
-    <div className="mt-3 border-t border-zinc-100 pt-3">
-      <button
-        type="button"
-        onClick={() => {
-          const next = !open;
-          setOpen(next);
-          if (next && intents === null) void load();
-        }}
-        className="text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500 hover:text-zinc-700"
-      >
-        Shadow log (last {SHADOW_LOG_LIMIT}) {open ? "▾" : "▸"}
-      </button>
+    <div style={{ marginTop: 16 }}>
+      <DeskSectionHeader
+        title={`Shadow log (last ${SHADOW_LOG_LIMIT})`}
+        subtitle="Paper intents only — no testnet orders"
+        actions={
+          <>
+            <DeskButton variant="outlined" style={{ minHeight: 36 }} onClick={() => setOpen((v) => !v)}>
+              {open ? "Collapse" : "Expand"}
+            </DeskButton>
+            {signedIn ? (
+              <DeskButton variant="outlined" style={{ minHeight: 36 }} disabled={loading} onClick={() => void load()}>
+                {loading ? "Loading…" : "Refresh"}
+              </DeskButton>
+            ) : null}
+          </>
+        }
+      />
       {open ? (
-        <div className="mt-2">
-          {!signedIn ? (
-            <p className="text-[10px] text-zinc-500">Sign in to record and view shadow intents.</p>
-          ) : (
-            <>
-              <div className="mb-2 flex gap-2">
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void load()}
-                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-                >
-                  {loading ? "Loading…" : "Refresh"}
-                </button>
-                <span className="text-[10px] text-zinc-400">Paper only — no testnet orders</span>
-              </div>
-              {error ? <p className="text-[10px] text-rose-600">{error}</p> : null}
-              {!error && intents?.length === 0 ? (
-                <p className="text-[10px] text-zinc-400">No shadow intents yet.</p>
-              ) : null}
-              {intents && intents.length > 0 ? (
-                <ul className="max-h-48 space-y-1 overflow-y-auto text-[10px] font-mono text-zinc-700">
-                  {intents.map((row) => (
-                    <li key={row.id} className="border-b border-zinc-50 pb-1 last:border-0">
-                      <span className="text-zinc-400">{row.createdAt.slice(11, 19)}</span>{" "}
-                      <span className="font-semibold text-zinc-800">{row.intentKind}</span>{" "}
-                      {row.symbol} {row.side} ${row.notional.toFixed(0)}{" "}
-                      {row.intentKind === "close" ? (
-                        <>
-                          {row.entryPrice.toFixed(0)}→{row.exitPrice?.toFixed(0)} {row.exitReason}
-                        </>
-                      ) : (
-                        <>@ {row.entryPrice.toFixed(0)}</>
-                      )}{" "}
-                      #{row.strategyId}{" "}
-                      {row.wouldPlaceTestnet ? (
-                        <span className="text-violet-700">testnet✓</span>
-                      ) : (
-                        <span className="text-zinc-400">testnet✗</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </>
-          )}
-        </div>
+        !signedIn ? (
+          <p className="desk-label-md">Sign in to record and view shadow intents.</p>
+        ) : error ? (
+          <p className="desk-label-md" style={{ color: "var(--desk-error)" }}>
+            {error}
+          </p>
+        ) : (
+          <DeskDataTable
+            columns={columns}
+            rows={intents ?? []}
+            getRowKey={(row) => row.id}
+            minWidth={520}
+            empty={<DeskEmptyState title="No shadow intents yet" />}
+          />
+        )
       ) : null}
     </div>
   );

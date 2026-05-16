@@ -9,6 +9,7 @@ export { DeskLinearProgress } from "./DeskLinearProgress";
 export { DeskMetricTile } from "./DeskMetricTile";
 export { DeskSearchField } from "./DeskSearchField";
 export { DeskSectionHeader } from "./DeskSectionHeader";
+export { DeskSwitch } from "./DeskSwitch";
 export { DeskShell } from "./DeskShell";
 export { DeskTabs, type DeskTabItem } from "./DeskTabs";
 export { StatusBadge, type DeskEngineStatus } from "./StatusBadge";

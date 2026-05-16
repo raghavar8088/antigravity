@@ -6,6 +6,12 @@ import {
   deskVolSizedNotionalEnabledFromEnv,
 } from "@/lib/futuresDeskPolicy";
 import type { PaperReplayApiSuccess } from "@/lib/futuresReplayUi";
+import { DeskBanner } from "@/components/desk/ui/DeskBanner";
+import { DeskButton } from "@/components/desk/ui/DeskButton";
+import { DeskCard } from "@/components/desk/ui/DeskCard";
+import { DeskChip } from "@/components/desk/ui/DeskChip";
+import { DeskMetricTile } from "@/components/desk/ui/DeskMetricTile";
+import { DeskSectionHeader } from "@/components/desk/ui/DeskSectionHeader";
 import {
   buildDeskReplaySearchParams,
   formatReplaySummary,
@@ -185,57 +191,36 @@ export default function ReplayBacktestPanel({
   };
 
   return (
-    <section className="glass-panel px-5 py-5 md:px-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Replay And Backtest</div>
-          <div className="text-xl font-semibold text-zinc-900">{workspaceLabel}</div>
-          <div className="max-w-[820px] text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-            {summary}
-          </div>
-          {deskReplay && !isDeskReplayUiEnabled() ? (
-            <p className="text-xs text-amber-700">
-              Desk replay API is disabled. Use development mode or set{" "}
-              <span className="font-mono">NEXT_PUBLIC_DESK_REPLAY_UI=1</span>.
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn-gold text-sm" onClick={() => setIsExpanded((value) => !value)}>
-            {isExpanded ? "Hide Replay" : "Open Replay"}
-          </button>
-          {replayEnabled ? (
-            <button
-              type="button"
-              className="btn-primary text-sm"
-              onClick={() => void runDeskReplay()}
-              disabled={replayLoading}
-            >
-              {replayLoading ? "Running…" : "Run replay"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn-primary text-sm"
-              onClick={onPlayClick}
-              disabled={!isExpanded || visibleSeries.length < 2}
-            >
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-          )}
-          {replayEnabled ? (
-            <button
-              type="button"
-              className="btn-primary text-sm opacity-80"
-              onClick={onPlayClick}
-              disabled={!isExpanded || visibleSeries.length < 2}
-            >
-              {isPlaying ? "Pause tape" : "Play tape"}
-            </button>
-          ) : null}
-        </div>
-      </div>
+    <DeskCard>
+      <DeskSectionHeader
+        title="Replay & backtest"
+        subtitle={workspaceLabel}
+        actions={
+          <>
+            {deskReplay ? <DeskChip tone="warning">Dev API</DeskChip> : null}
+            <DeskButton variant="outlined" onClick={() => setIsExpanded((value) => !value)}>
+              {isExpanded ? "Hide replay" : "Open replay"}
+            </DeskButton>
+            {replayEnabled ? (
+              <DeskButton onClick={() => void runDeskReplay()} disabled={replayLoading}>
+                {replayLoading ? "Running…" : "Run replay"}
+              </DeskButton>
+            ) : (
+              <DeskButton onClick={onPlayClick} disabled={!isExpanded || visibleSeries.length < 2}>
+                {isPlaying ? "Pause" : "Play"}
+              </DeskButton>
+            )}
+          </>
+        }
+      />
+      <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", marginBottom: 12, maxWidth: 820 }}>
+        {summary}
+      </p>
+      {deskReplay && !isDeskReplayUiEnabled() ? (
+        <DeskBanner variant="warning" title="Replay API disabled">
+          Enable desk replay in development (see README for the replay UI environment flag).
+        </DeskBanner>
+      ) : null}
 
       {replayEnabled && replaySummary ? (
         <div className="mt-4 rounded-[16px] border border-zinc-200 bg-zinc-50/80 px-4 py-3 text-xs text-zinc-700">
@@ -454,6 +439,6 @@ export default function ReplayBacktestPanel({
           </div>
         </div>
       )}
-    </section>
+    </DeskCard>
   );
 }
