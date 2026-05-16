@@ -9,6 +9,7 @@ type DeskChipProps = {
   children: ReactNode;
   tone?: DeskChipTone;
   className?: string;
+  title?: string;
 };
 
 const toneStyles: Record<DeskChipTone, { bg: string; color: string; border: string }> = {
@@ -39,10 +40,11 @@ const toneStyles: Record<DeskChipTone, { bg: string; color: string; border: stri
   },
 };
 
-export function DeskChip({ children, tone = "default", className }: DeskChipProps) {
+export function DeskChip({ children, tone = "default", className, title }: DeskChipProps) {
   const t = toneStyles[tone];
   return (
     <span
+      title={title}
       className={cn("desk-chip", className)}
       style={{
         display: "inline-flex",

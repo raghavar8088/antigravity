@@ -31,6 +31,10 @@ Paper futures desks use a shared **M3-style** layer (Tailwind v4 + CSS tokens, n
 
 Theme: `DeskThemeToggle` + existing combat/light body class; `data-theme` on `<html>`.
 
+### Workspace vs paper equity
+
+Two numbers appear on desk routes and mean different things. **Paper desk balance** (app bar chip **Paper**) is the live engine paper wallet for the active module—for example ~$1,000 on BTC futures or ~$1M on BTC options. It changes with trades and resets. **Workspace display** in **Workspace settings** (chip **Workspace**) is a local preference for sizing labels and risk sliders (often $1M or ₹1M). It does not fund trades and does not sync to the engine. If they disagree, trust **Paper** for account state and **Workspace** for display defaults only.
+
 ## Getting Started
 
 First, run the development server:

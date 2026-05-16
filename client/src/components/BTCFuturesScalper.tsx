@@ -32,6 +32,7 @@ import {
   type DeskEngineStatus,
 } from "@/components/desk/ui";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+import { useDeskMounted } from "@/hooks/useDeskMounted";
 import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
@@ -187,6 +188,7 @@ export function BTCFuturesScalper({
   baseBalance = 1000,
 }: BTCFuturesScalperProps = {}) {
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
+  const deskMounted = useDeskMounted();
   const [deskDark, setDeskDark] = useState(false);
 
   useEffect(() => {
@@ -369,6 +371,7 @@ export function BTCFuturesScalper({
           title={title}
           subtitle={`${moduleTagline} · ${watchlist.length} markets`}
           equity={equity}
+          equityDetail={`Base ${formatDeskUsd(baseBalance, { decimals: 0 })} paper wallet`}
           status={engineStatus}
           authSlot={<PaperDeskAuthBar compact />}
           themeToggle={<DeskThemeToggle dark={deskDark} onToggle={() => setDeskDark((d) => !d)} />}
@@ -407,17 +410,17 @@ export function BTCFuturesScalper({
         <div className="desk-metrics-row">
           <DeskMetricTile
             label="BTC mark"
-            value={formatDeskUsd(quote.markPrice, { decimals: 0 })}
+            value={deskMounted ? formatDeskUsd(quote.markPrice, { decimals: 0 }) : "—"}
           />
           <DeskMetricTile
             label="24h change"
-            value={formatDeskPct(quote.changePct24h, { signed: true })}
-            valueClassName={pnlToneClass(quote.changePct24h)}
+            value={deskMounted ? formatDeskPct(quote.changePct24h, { signed: true }) : "—"}
+            valueClassName={deskMounted ? pnlToneClass(quote.changePct24h) : undefined}
           />
           <DeskMetricTile
             label="Funding"
-            value={formatDeskPct(quote.fundingRate * 100, { signed: true, decimals: 4 })}
-            valueClassName={pnlToneClass(quote.fundingRate)}
+            value={deskMounted ? formatDeskPct(quote.fundingRate * 100, { signed: true, decimals: 4 }) : "—"}
+            valueClassName={deskMounted ? pnlToneClass(quote.fundingRate) : undefined}
           />
           <DeskMetricTile label="Markets" value={String(watchlist.length)} detail="On watchlist" compact />
         </div>

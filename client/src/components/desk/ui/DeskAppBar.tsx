@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { formatDeskUsd } from "@/lib/deskFormat";
+import { formatDeskInr, formatDeskUsd } from "@/lib/deskFormat";
+import { DeskChip } from "./DeskChip";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
 import { StatusBadge, type DeskEngineStatus } from "./StatusBadge";
 import { cn } from "./cn";
@@ -11,6 +12,10 @@ type DeskAppBarProps = {
   title: string;
   subtitle?: string;
   equity?: number;
+  /** Shown under the paper balance amount (e.g. session PnL hint). */
+  equityDetail?: string;
+  equityCurrency?: "USD" | "INR";
+  equityLabel?: string;
   status: DeskEngineStatus;
   trailing?: ReactNode;
   authSlot?: ReactNode;
@@ -18,11 +23,18 @@ type DeskAppBarProps = {
   className?: string;
 };
 
+function formatDeskEquity(value: number, currency: "USD" | "INR") {
+  return currency === "INR" ? formatDeskInr(value) : formatDeskUsd(value);
+}
+
 export function DeskAppBar({
   workspaceName = "in.loop.com",
   title,
   subtitle,
   equity,
+  equityDetail,
+  equityCurrency = "USD",
+  equityLabel = "Paper desk balance",
   status,
   trailing,
   authSlot,
@@ -30,6 +42,8 @@ export function DeskAppBar({
   className,
 }: DeskAppBarProps) {
   const mounted = useDeskMounted();
+  const paperTooltip =
+    "Live paper wallet for this module (engine state). Workspace settings capital is display-only.";
 
   return (
     <header
@@ -93,11 +107,29 @@ export function DeskAppBar({
           }}
         >
           {equity !== undefined ? (
-            <div style={{ textAlign: "right" }}>
-              <p className="desk-label-md">Equity</p>
+            <div style={{ textAlign: "right" }} title={paperTooltip}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: 6,
+                  marginBottom: 2,
+                }}
+              >
+                <DeskChip tone="primary" title={paperTooltip}>
+                  Paper
+                </DeskChip>
+                <p className="desk-label-md">{equityLabel}</p>
+              </div>
               <p className="desk-mono desk-title-md">
-                {mounted ? formatDeskUsd(equity) : "—"}
+                {mounted ? formatDeskEquity(equity, equityCurrency) : "—"}
               </p>
+              {equityDetail ? (
+                <p className="desk-label-md" style={{ fontWeight: 400, marginTop: 2 }}>
+                  {equityDetail}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {authSlot}

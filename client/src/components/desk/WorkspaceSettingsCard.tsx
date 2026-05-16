@@ -9,6 +9,8 @@ import {
   DeskSectionHeader,
 } from "@/components/desk/ui";
 import type { StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
+import { formatDeskInr, formatDeskUsd } from "@/lib/deskFormat";
+import { useDeskMounted } from "@/hooks/useDeskMounted";
 
 type WorkspaceMode = "paper" | "live" | "analysis";
 type DataSource = "binance" | "bybit" | "nse" | "angel" | "yahoo";
@@ -34,9 +36,8 @@ type Props = {
   strategyItems: StrategyToggleItem[];
 };
 
-function formatCurrencyLabel(currencyCode: "USD" | "INR") {
-  return currencyCode === "INR" ? "Rs" : "$";
-}
+const WORKSPACE_CAPITAL_TOOLTIP =
+  "Display-only sizing for workspace settings. Does not change the module paper wallet (see Paper desk balance in the app bar).";
 
 function buildDefaultState(
   currencyCode: "USD" | "INR",
@@ -92,9 +93,14 @@ export default function WorkspaceSettingsCard({
     }
   }, [settings, storageKey]);
 
+  const mounted = useDeskMounted();
   const enabledCount = strategyItems.filter((item) => settings.strategyStates[item.id] ?? item.enabled).length;
-  const locale = currencyCode === "INR" ? "en-IN" : "en-US";
-  const capitalDisplay = `${formatCurrencyLabel(currencyCode)} ${Number(settings.capital || 0).toLocaleString(locale)}`;
+  const capitalNum = Number(settings.capital || 0);
+  const capitalDisplay = !mounted
+    ? "—"
+    : currencyCode === "INR"
+      ? formatDeskInr(capitalNum, { decimals: 0 })
+      : formatDeskUsd(capitalNum, { decimals: 0 });
 
   return (
     <DeskCard>
@@ -111,13 +117,20 @@ export default function WorkspaceSettingsCard({
         {workspaceDescription}
       </p>
       <div className="desk-metrics-row" style={{ marginBottom: 12 }}>
-        <DeskMetricTile label="Capital" value={capitalDisplay} compact />
+        <DeskMetricTile
+          label="Workspace display"
+          value={capitalDisplay}
+          detail="Not paper wallet"
+          compact
+          title={WORKSPACE_CAPITAL_TOOLTIP}
+        />
         <DeskMetricTile label="Per-trade risk" value={`${settings.perTradeRisk.toFixed(2)}%`} compact />
         <DeskMetricTile label="Cooldown" value={`${settings.cooldownMinutes} min`} compact />
         <DeskMetricTile label="Execution" value={settings.autoExecute ? "Armed" : "Manual"} compact />
         <DeskMetricTile label="Default desk" value={settings.dataSource} detail={`${settings.mode} mode`} compact />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <DeskChip title={WORKSPACE_CAPITAL_TOOLTIP}>Workspace</DeskChip>
         <DeskChip tone="primary">{settings.mode}</DeskChip>
         <DeskChip>{settings.dataSource}</DeskChip>
         <DeskChip>
@@ -139,8 +152,8 @@ export default function WorkspaceSettingsCard({
               Execution rules
             </p>
             <div className="settings-field-grid" style={{ display: "grid", gap: 12 }}>
-              <label className="settings-field">
-                <span className="desk-label-md">Capital</span>
+              <label className="settings-field" title={WORKSPACE_CAPITAL_TOOLTIP}>
+                <span className="desk-label-md">Workspace display capital (not paper wallet)</span>
                 <input
                   value={settings.capital}
                   onChange={(e) =>

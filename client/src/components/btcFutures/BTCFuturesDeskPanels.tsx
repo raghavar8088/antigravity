@@ -445,7 +445,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         <DeskSectionHeader title="Equity & PnL" subtitle={title} />
         <div className="desk-metrics-row">
           <DeskMetricTile
-            label="Account equity"
+            label="Paper desk balance"
             value={mounted ? formatDeskUsd(equity) : "—"}
             valueClassName="desk-mono"
           />

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useRef, useState, type ReactNode } from "react";
 import ActivityFeed from "@/components/ActivityFeed";
 import AppBrandBar from "@/components/AppBrandBar";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -23,8 +23,10 @@ import NiftyBeesScalper from "@/components/NiftyBeesScalper";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel, { type ReplayEvent } from "@/components/ReplayBacktestPanel";
+import { DeskModuleChrome } from "@/components/desk/DeskModuleChrome";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
+import { deskModuleChromeConfig, usesDeskModuleChrome } from "@/lib/deskModuleChrome";
 import type { StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 import useAIInsights from "@/hooks/useAIInsights";
@@ -391,6 +393,7 @@ export default function TradingDashboard({
   const [isClearingLedger, setIsClearingLedger] = useState(false);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const [combatMode, setCombatMode] = useState(false);
+  const [deskDark, setDeskDark] = useState(false);
   const [milestoneToast, setMilestoneToast] = useState<string | null>(null);
   const milestoneRef = useRef<Set<number>>(new Set());
   const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1031,6 +1034,80 @@ export default function TradingDashboard({
     activeModule === "chain"
       ? deferredCandles.map((candle) => ({ time: candle.time, value: candle.close }))
       : [];
+  const deskChromeModule = usesDeskModuleChrome(activeModule) ? activeModule : null;
+
+  useEffect(() => {
+    if (!deskChromeModule) return;
+    const root = document.documentElement;
+    if (deskDark) {
+      document.body.classList.add("combat-mode");
+      root.setAttribute("data-theme", "dark");
+    } else {
+      document.body.classList.remove("combat-mode");
+      root.setAttribute("data-theme", "light");
+    }
+  }, [deskChromeModule, deskDark]);
+
+  const hideWorkspaceBrandHeader =
+    deskChromeModule !== null ||
+    activeModule === "btcFuturesScalper" ||
+    activeModule === "btcFutureTrading";
+
+  const showLegacyOptionsHeader =
+    optionsModuleActive &&
+    !(
+      activeModule === "options" ||
+      activeModule === "options-selling" ||
+      activeModule === "nifty" ||
+      activeModule === "niftySelling"
+    );
+
+  const showLegacyNiftyBeesHeader = niftyBeesModuleActive && activeModule !== "niftyBees";
+
+  const wrapDeskModuleContent = (node: ReactNode) => {
+    if (!deskChromeModule) return node;
+    const paperOnline =
+      deskChromeModule === "nifty"
+        ? niftyOptionsDeskReachable || engineOnline
+        : deskChromeModule === "niftySelling"
+          ? niftyOptionsSellingDeskReachable || engineOnline
+          : deskChromeModule === "niftyBees"
+            ? niftyBeesOnline
+            : deskChromeModule === "btcFuturesScalper"
+              ? engineOnline
+              : optionsOnline;
+    const paperEquity =
+      deskChromeModule === "nifty"
+        ? niftyOptionEquity
+        : deskChromeModule === "niftySelling"
+          ? niftySellingEquity
+          : deskChromeModule === "niftyBees"
+            ? niftyBeesEquity
+            : deskChromeModule === "options" || deskChromeModule === "options-selling"
+              ? optionEquity
+              : undefined;
+    const cfg = deskModuleChromeConfig(deskChromeModule, {
+      online: paperOnline,
+      paperEquity,
+    });
+    if (cfg.embedsOwnShell) return node;
+    return (
+      <DeskModuleChrome
+        title={cfg.title}
+        tagline={cfg.tagline}
+        description={cfg.description}
+        chips={cfg.chips}
+        status={cfg.status}
+        paperEquity={cfg.paperEquity}
+        paperCurrency={cfg.paperCurrency}
+        deskDark={deskDark}
+        onToggleDeskDark={() => setDeskDark((d) => !d)}
+      >
+        {node}
+      </DeskModuleChrome>
+    );
+  };
+
   const workspaceReplayEvents: ReplayEvent[] = [
     ...(niftyOptionsModuleActive
         ? niftyOptionTrades.slice(0, 8).map((trade) => ({
@@ -1080,8 +1157,8 @@ export default function TradingDashboard({
 
       <div className="workspace-shell workspace-shell--no-sidebar">
         <div className="workspace-main" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <AppBrandBar />
-      {optionsModuleActive ? (
+      {!hideWorkspaceBrandHeader ? <AppBrandBar /> : null}
+      {showLegacyOptionsHeader ? (
         <OptionsAccountHeader
           online={optionsOnline}
           equity={optionEquity}
@@ -1112,7 +1189,7 @@ export default function TradingDashboard({
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
-      ) : niftyBeesModuleActive ? (
+      ) : showLegacyNiftyBeesHeader ? (
         <OptionsAccountHeader
           online={niftyBeesOnline}
           equity={niftyBeesEquity}
@@ -2107,7 +2184,8 @@ export default function TradingDashboard({
         </div>
       )}
 
-      {activeModule === "options" && (
+      {activeModule === "options" &&
+        wrapDeskModuleContent(
         <OptionsScalper
           actionsEnabled={actionsEnabled}
           btcSpotUsd={price}
@@ -2119,10 +2197,11 @@ export default function TradingDashboard({
           stats={optionStats}
           clearAll={optionBuyClearAll}
           onPollRefresh={() => setResetRefreshKey((k) => k + 1)}
-        />
-      )}
+        />,
+        )}
 
-      {activeModule === "options-selling" && (
+      {activeModule === "options-selling" &&
+        wrapDeskModuleContent(
         <OptionsSellingScalper
           actionsEnabled={actionsEnabled}
           btcSpotUsd={price}
@@ -2134,14 +2213,15 @@ export default function TradingDashboard({
           stats={optionSellingStats}
           clearAll={optionSellingClearAll}
           onPollRefresh={() => setResetRefreshKey((k) => k + 1)}
-        />
-      )}
-      {activeModule === "btcFuturesScalper" && <BTCFuturesScalper />}
+        />,
+        )}
+      {activeModule === "btcFuturesScalper" && wrapDeskModuleContent(<BTCFuturesScalper />)}
       {activeModule === "btcFutureTrading" && <BTCFutureTradingScalper />}
 
       {activeModule === "chain" && <BTCOptionChain />}
 
-      {activeModule === "nifty" && (
+      {activeModule === "nifty" &&
+        wrapDeskModuleContent(
         <Nifty50OptionScalper
           actionsEnabled={actionsEnabled}
           positions={niftyOptionPositions}
@@ -2153,10 +2233,11 @@ export default function TradingDashboard({
           barCount={niftyBarCount}
           enginePrice={niftyEnginePrice}
           onRefresh={() => setResetRefreshKey((current) => current + 1)}
-        />
-      )}
+        />,
+        )}
 
-      {activeModule === "niftySelling" && (
+      {activeModule === "niftySelling" &&
+        wrapDeskModuleContent(
         <Nifty50OptionSellingScalper
           actionsEnabled={actionsEnabled}
           positions={niftySellingPositions}
@@ -2168,10 +2249,11 @@ export default function TradingDashboard({
           barCount={niftySellingBarCount}
           enginePrice={niftySellingEnginePrice}
           onRefresh={() => setResetRefreshKey((current) => current + 1)}
-        />
-      )}
+        />,
+        )}
 
-      {activeModule === "niftyBees" && (
+      {activeModule === "niftyBees" &&
+        wrapDeskModuleContent(
         <NiftyBeesScalper
           actionsEnabled={actionsEnabled}
           quote={niftyBeesQuote}
@@ -2181,8 +2263,8 @@ export default function TradingDashboard({
           stats={niftyBeesStats}
           reset={niftyBeesReset}
           clearTrades={niftyBeesClearTrades}
-        />
-      )}
+        />,
+        )}
 
       <ReplayBacktestPanel
         workspaceLabel={activePreset.label}

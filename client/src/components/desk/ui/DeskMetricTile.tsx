@@ -9,6 +9,7 @@ type DeskMetricTileProps = {
   detail?: ReactNode;
   valueClassName?: string;
   compact?: boolean;
+  title?: string;
 };
 
 export function DeskMetricTile({
@@ -17,9 +18,11 @@ export function DeskMetricTile({
   detail,
   valueClassName,
   compact = false,
+  title,
 }: DeskMetricTileProps) {
   return (
     <div
+      title={title}
       className="desk-metric-tile"
       style={{
         background: "var(--desk-surface-container)",
