@@ -15,6 +15,7 @@ import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPanels";
+import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import { DeskThemeToggle } from "@/components/desk/DeskThemeToggle";
 import {
   DeskAppBar,
@@ -227,6 +228,7 @@ export function BTCFuturesScalper({
     addDisabledStrategyIds,
     strategyStatuses,
     dataHealth,
+    entryDebug,
   } = useBTCFuturesScalperEngine({
     strategyIds,
     symbols,
@@ -398,6 +400,31 @@ export function BTCFuturesScalper({
         />
         <PaperDeskAuthBar />
       </DeskCard>
+
+      {pauseEntries || stats.isDrawdownLocked ? (
+        <DeskBanner variant="warning" title="Paper entries paused">
+          {pauseEntries ? "Pause entries is on — no new paper opens until you resume. " : null}
+          {stats.isDrawdownLocked
+            ? `Drawdown lock active (${stats.drawdownPct.toFixed(1)}% vs session peak) — entries resume after partial recovery. `
+            : null}
+          This desk is paper-only; Testnet Ops does not auto-open these strategy slots.
+        </DeskBanner>
+      ) : null}
+
+      <EntryDebugPanel
+        entryDebug={entryDebug}
+        pauseEntries={pauseEntries}
+        drawdownLocked={stats.isDrawdownLocked}
+        sessionSkips={{
+          minMove: stats.deskSkippedMinExpectedMove,
+          regime: stats.deskSkippedByRegime,
+          spread: stats.deskSkippedSpread,
+          session: stats.deskSkippedOutsideSession,
+          category: stats.deskSkippedCategoryCap,
+          lowPriority: stats.deskSkippedLowPriorityEntry,
+          regimeBreakdown: stats.deskSkippedByRegimeBreakdown,
+        }}
+      />
 
       {dataHealth.showFeedWarning ? (
         <DeskBanner variant="warning" title="Futures kline feed is degraded">

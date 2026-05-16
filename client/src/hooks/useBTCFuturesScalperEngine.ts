@@ -42,6 +42,11 @@ import {
   serializeDeskRegimePersistLsPayload,
 } from "@/lib/futuresDeskPolicy";
 import {
+  createEmptyEntryPollDebug,
+  deskEntryDebugEnabledFromEnv,
+  type DeskEntryPollDebug,
+} from "@/lib/futuresEntryDebug";
+import {
   buildDeskHoldTuningDumpPayload,
   rankWorstTimeOffenders,
   reduceTradesToStrategyDeskBuckets,
@@ -462,6 +467,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   strategyProfile: FuturesStrategyProfile;
   effectiveSignalThreshold: number;
   dataHealth: FuturesDataHealth;
+  /** Last poll entry funnel (when `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1`). */
+  entryDebug: DeskEntryPollDebug | null;
 } {
   const storageNamespace = options.storageNamespace?.trim() || "btc_futures_scalper";
   const cloudAccountKey = useMemo(
@@ -497,7 +504,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     return buildPaperDeskStrategies(base, {
       strategyIdAllowlist: null,
       minTpSlRatio: deskMinTpSlRatioFromEnv(),
-      allowFakeDiversity: deskFakeDiversityEnabledViaEnv(),
+      // Explicit module rosters (e.g. BTC Future Trading 91–96) must not be dropped: IDs 91–96
+      // sit inside the global 79–110 fake-diversity range but have full signal wiring.
+      allowFakeDiversity:
+        deskFakeDiversityEnabledViaEnv() || Boolean(strategyIds && strategyIds.length > 0),
     });
   }, [strategyIds]);
 
@@ -540,6 +550,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const [lastTradeAt, setLastTradeAt] = useState(0);
   const [dayStartBalance, setDayStartBalance] = useState(INITIAL_BALANCE);
   const [dayStartDate, setDayStartDate] = useState(() => new Date().getDate());
+  const entryDebugEnabled = deskEntryDebugEnabledFromEnv();
+  const [entryDebug, setEntryDebug] = useState<DeskEntryPollDebug | null>(null);
+  const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
   const [dataHealth, setDataHealth] = useState<FuturesDataHealth>(() => ({
     status: "stale",
     lastError: null,
@@ -1197,6 +1210,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     (strat: StratDef, side: Side, price: number, markPrice: number, symbol: string, gate: PaperOpenGateCtx): BTCFuturesPosition | null => {
       if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(gate.regime)) {
         deskSkippedByRegimeRef.current[gate.regime] += 1;
+        if (entryDebugLiveRef.current) entryDebugLiveRef.current.failOpenRegime += 1;
         return null;
       }
 
@@ -1244,6 +1258,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       );
       if (!moveGate.ok) {
         deskSkippedMinExpectedMoveRef.current += 1;
+        if (entryDebugLiveRef.current) entryDebugLiveRef.current.failMinMove += 1;
         return null;
       }
 
@@ -1257,14 +1272,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         )
       ) {
         deskSkippedSameDirCapRef.current += 1;
+        if (entryDebugLiveRef.current) entryDebugLiveRef.current.failSameDirCap += 1;
         return null;
       }
 
       const marginUsed = calculateMarginRequired(actualNotional, LEVERAGE);
-      if (bal < marginUsed) return null;
+      if (bal < marginUsed) {
+        if (entryDebugLiveRef.current) entryDebugLiveRef.current.failMargin += 1;
+        return null;
+      }
 
       const riskCap = bal * (MAX_LOSS_PER_TRADE_PCT / 100);
       if (paperEstimatedMaxLossAtStopSl(entryPrice, slPrice, actualNotional, side, TAKER_FEE_PCT) > riskCap) {
+        if (entryDebugLiveRef.current) entryDebugLiveRef.current.failMaxLoss += 1;
         return null;
       }
 
@@ -1620,6 +1640,21 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
         // Do not gate entries on statusRef === READY: setStatus is async and statusRef updates next render,
         // so same poll tick would never open trades. Use live payload presence instead.
+        const pollDebug = entryDebugEnabled
+          ? {
+              ...createEmptyEntryPollDebug(activeSignalThreshold),
+              pollAt: now,
+              pauseEntries: pauseRef.current,
+              drawdownLocked: drawdownEntryPausedRef.current,
+              hasMarketData,
+              payloadsReady: payloads.size,
+              symbolsRequested: activeSymbols.length,
+              dataHealthStatus: status,
+              activeStratCount: activeStratDefs.length,
+            }
+          : null;
+        entryDebugLiveRef.current = pollDebug;
+
         if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current) {
           const equityForEntry = balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0);
           const replaceWeakest = deskEntryReplaceWeakestFromEnv();
@@ -1677,15 +1712,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             }
 
             for (const strat of activeStratDefs) {
+              if (pollDebug) pollDebug.evalPairs += 1;
               if (
                 disabledRef.current.includes(strat.id) ||
                 autoDisabledRef.current.has(strat.id)
               ) {
+                if (pollDebug) pollDebug.failDisabled += 1;
                 continue;
               }
               const slotKey = `${symbol}:${strat.id}`;
-              if (occupied.has(slotKey)) continue;
-              if ((stratCooldownsRef.current[slotKey] ?? 0) > Date.now()) continue;
+              if (occupied.has(slotKey)) {
+                if (pollDebug) pollDebug.failOccupied += 1;
+                continue;
+              }
+              if ((stratCooldownsRef.current[slotKey] ?? 0) > Date.now()) {
+                if (pollDebug) pollDebug.failCooldown += 1;
+                continue;
+              }
 
               const signal = evalMinuteSignal(input, strat);
               if (signal.score >= activeSignalThreshold && passesEntryConfirmation(input, strat)) {
@@ -1710,6 +1753,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   }),
                   slotKey,
                 });
+                if (pollDebug) pollDebug.candidatesBuilt += 1;
+              } else if (pollDebug) {
+                if (signal.score < activeSignalThreshold) pollDebug.failSignal += 1;
+                else pollDebug.failConfirm += 1;
               }
             }
           }
@@ -1732,18 +1779,22 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           let categoryOpenCounts = countOpenByCategory(workingPositions, categoryByStrategyId);
 
           const tryOpenCandidate = (c: EntryCandidate): boolean => {
+            if (pollDebug) pollDebug.openAttempts += 1;
             if (paperLastMarkSpreadPct(c.lastPrice, c.markPrice) > maxSpreadPct) {
               deskSkippedSpreadRef.current += 1;
+              if (pollDebug) pollDebug.failSpread += 1;
               return false;
             }
             if (!entryUtcSessionOpen) {
               deskSkippedOutsideSessionRef.current += 1;
+              if (pollDebug) pollDebug.failSession += 1;
               return false;
             }
             const category = c.strat.category?.trim() || "unknown";
             const categoryOpen = categoryOpenCounts.get(category) ?? 0;
             if (!canOpenCategory(category, categoryOpen, maxOpenPerCategory)) {
               deskSkippedCategoryCapRef.current += 1;
+              if (pollDebug) pollDebug.failCategoryCap += 1;
               return false;
             }
             const entryBook = [
@@ -1758,6 +1809,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               entryPriorityScore: c.priority,
             });
             if (!opened) return false;
+            if (pollDebug) pollDebug.openedThisPoll += 1;
             intraBook.push({ side: opened.side, notional: opened.notional });
             workingPositions.push(opened);
             categoryOpenCounts.set(category, categoryOpen + 1);
@@ -1776,6 +1828,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
             if (!replaceWeakest) {
               deskSkippedLowPriorityEntryRef.current += 1;
+              if (pollDebug) pollDebug.failLowPriority += 1;
               continue;
             }
 
@@ -1784,6 +1837,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const weakPriority = weak?.entryPriorityScore ?? 0;
             if (!weak || c.priority <= weakPriority) {
               deskSkippedLowPriorityEntryRef.current += 1;
+              if (pollDebug) pollDebug.failLowPriority += 1;
               continue;
             }
 
@@ -1795,8 +1849,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
             if (!tryOpenCandidate(c)) {
               deskSkippedLowPriorityEntryRef.current += 1;
+              if (pollDebug) pollDebug.failLowPriority += 1;
             }
           }
+        }
+
+        if (pollDebug) {
+          entryDebugLiveRef.current = null;
+          setEntryDebug(pollDebug);
         }
       } catch (e) {
         if (!mounted) return;
@@ -1900,6 +1960,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     strategyProfile,
     effectiveSignalThreshold: activeSignalThreshold,
     dataHealth,
+    entryDebug: entryDebugEnabled ? entryDebug : null,
   };
 }
 

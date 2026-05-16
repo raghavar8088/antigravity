@@ -31,6 +31,19 @@ Paper futures desks use a shared **M3-style** layer (Tailwind v4 + CSS tokens, n
 
 Theme: `DeskThemeToggle` + existing combat/light body class; `data-theme` on `<html>`.
 
+### No paper trades on BTC Future Trading?
+
+Checklist (paper desk only — not Delta exchange orders unless Testnet Ops):
+
+1. **Pause entries** — resume in the hero card; persisted in `btc_future_trading_20_paper_state`.
+2. **Feed banner** — degraded/stale klines block entries (`payloads.size === 0`); need ≥18 bars on BTCUSD.
+3. **Drawdown lock** — 25% peak-to-trough pauses new entries (`isDrawdownLocked` in desk profile).
+4. **Signal bar** — default effective threshold **26**; many polls fail `evalMinuteSignal` or `passesEntryConfirmation` before `tryOpenCandidate`.
+5. **Regime** — Trend strats skip in `chop`; see **Skip regime** in expanded desk profile.
+6. **Min move vs fees** — `paperMinExpectedMoveVsFees` on ~$100 min notional.
+7. **Auto-disabled** — `NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS=1` + Supabase kill switch.
+8. **Entry debug** — set `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1`, reload, read **Entry debug (last poll)** panel.
+
 ### Workspace vs paper equity
 
 Two numbers appear on desk routes and mean different things. **Paper desk balance** (app bar chip **Paper**) is the live engine paper wallet for the active module—for example ~$1,000 on BTC futures or ~$1M on BTC options. It changes with trades and resets. **Workspace display** in **Workspace settings** (chip **Workspace**) is a local preference for sizing labels and risk sliders (often $1M or ₹1M). It does not fund trades and does not sync to the engine. If they disagree, trust **Paper** for account state and **Workspace** for display defaults only.
