@@ -1,0 +1,195 @@
+/* Material Design 3 desk tokens — light default, dark via [data-theme="dark"] or body.combat-mode */
+
+:root,
+[data-theme="light"] {
+  --desk-primary: #1a73e8;
+  --desk-on-primary: #ffffff;
+  --desk-primary-container: #d3e3fd;
+  --desk-on-primary-container: #041e49;
+
+  --desk-surface: #ffffff;
+  --desk-surface-dim: #f8f9fa;
+  --desk-surface-container: #f1f3f4;
+  --desk-surface-container-high: #e8eaed;
+  --desk-surface-container-highest: #dfe1e5;
+  --desk-on-surface: #202124;
+  --desk-on-surface-variant: #5f6368;
+  --desk-outline: #dadce0;
+  --desk-outline-variant: #e8eaed;
+
+  --desk-error: #d93025;
+  --desk-on-error: #ffffff;
+  --desk-error-container: #fce8e6;
+  --desk-success: #1e8e3e;
+  --desk-success-container: #e6f4ea;
+  --desk-warning: #e37400;
+  --desk-warning-container: #fef7e0;
+
+  --desk-elevation-0: none;
+  --desk-elevation-1: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  --desk-elevation-2: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  --desk-elevation-3: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+
+  --desk-space-1: 4px;
+  --desk-space-2: 8px;
+  --desk-space-3: 12px;
+  --desk-space-4: 16px;
+  --desk-space-5: 24px;
+  --desk-space-6: 32px;
+
+  --desk-radius-card: 12px;
+  --desk-radius-chip: 8px;
+  --desk-radius-button: 28px;
+  --desk-radius-input: 8px;
+
+  --desk-font-display: var(--font-desk-display, "Google Sans", "Roboto", Arial, sans-serif);
+  --desk-font-body: var(--font-desk-body, "Roboto", Arial, sans-serif);
+  --desk-font-mono: var(--font-desk-mono, "Roboto Mono", ui-monospace, monospace);
+
+  --desk-header-height: 64px;
+  --desk-page-max: 1400px;
+}
+
+[data-theme="dark"],
+body.combat-mode {
+  --desk-primary: #8ab4f8;
+  --desk-on-primary: #062e6f;
+  --desk-primary-container: #0842a0;
+  --desk-on-primary-container: #d3e3fd;
+
+  --desk-surface: #292a2d;
+  --desk-surface-dim: #1f1f1f;
+  --desk-surface-container: #35363a;
+  --desk-surface-container-high: #3c4043;
+  --desk-surface-container-highest: #4d5156;
+  --desk-on-surface: #e8eaed;
+  --desk-on-surface-variant: #9aa0a6;
+  --desk-outline: #3c4043;
+  --desk-outline-variant: #35363a;
+
+  --desk-error: #f28b82;
+  --desk-error-container: #5c1a18;
+  --desk-success: #81c995;
+  --desk-success-container: #1e3a29;
+  --desk-warning: #fdd663;
+  --desk-warning-container: #4a4000;
+}
+
+/* Typography scale */
+.desk-display-lg {
+  font-family: var(--desk-font-display);
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--desk-on-surface);
+}
+
+.desk-title-md {
+  font-family: var(--desk-font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--desk-on-surface);
+}
+
+.desk-label-md {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--desk-on-surface-variant);
+}
+
+.desk-body-md {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--desk-on-surface);
+}
+
+.desk-mono {
+  font-family: var(--desk-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.desk-pnl-positive {
+  color: var(--desk-success);
+}
+
+.desk-pnl-negative {
+  color: var(--desk-error);
+}
+
+.desk-pnl-neutral {
+  color: var(--desk-on-surface-variant);
+}
+
+/* Page shell */
+.desk-page {
+  width: 100%;
+  max-width: var(--desk-page-max);
+  margin: 0 auto;
+  padding: var(--desk-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--desk-space-5);
+}
+
+@media (max-width: 640px) {
+  .desk-page {
+    padding: var(--desk-space-4);
+    gap: var(--desk-space-4);
+  }
+}
+
+.desk-grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--desk-space-5);
+}
+
+.desk-col-12 {
+  grid-column: span 12;
+}
+
+.desk-col-8 {
+  grid-column: span 8;
+}
+
+.desk-col-6 {
+  grid-column: span 6;
+}
+
+.desk-col-4 {
+  grid-column: span 4;
+}
+
+@media (max-width: 1024px) {
+  .desk-col-8,
+  .desk-col-6,
+  .desk-col-4 {
+    grid-column: span 12;
+  }
+}
+
+.desk-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--desk-space-3);
+}
+
+@keyframes desk-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.desk-linear-progress-bar {
+  height: 100%;
+  width: 40%;
+  background: var(--desk-primary);
+  animation: desk-indeterminate 1.2s ease-in-out infinite;
+}

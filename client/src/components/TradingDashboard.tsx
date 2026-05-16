@@ -859,12 +859,18 @@ export default function TradingDashboard({
 
   // ── Combat Mode body class ──────────────────────────────────────
   useEffect(() => {
+    const root = document.documentElement;
     if (combatMode) {
       document.body.classList.add("combat-mode");
+      root.setAttribute("data-theme", "dark");
     } else {
       document.body.classList.remove("combat-mode");
+      root.setAttribute("data-theme", "light");
     }
-    return () => document.body.classList.remove("combat-mode");
+    return () => {
+      document.body.classList.remove("combat-mode");
+      root.setAttribute("data-theme", "light");
+    };
   }, [combatMode]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────
@@ -1125,7 +1131,7 @@ export default function TradingDashboard({
           actionsEnabled={actionsEnabled}
           onToggleActions={setActionsEnabled}
         />
-      ) : (
+      ) : activeModule === "btcFuturesScalper" || activeModule === "btcFutureTrading" ? null : (
         <DashboardHeader
           online={engineOnline}
           balance={INITIAL_BALANCE + closedPnl}

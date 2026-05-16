@@ -16,7 +16,24 @@ import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
 import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
+import { DeskThemeToggle } from "@/components/desk/DeskThemeToggle";
+import {
+  DeskAppBar,
+  DeskBanner,
+  DeskButton,
+  DeskCard,
+  DeskChip,
+  type DeskColumn,
+  DeskDataTable,
+  DeskEmptyState,
+  DeskMetricTile,
+  DeskSearchField,
+  DeskSectionHeader,
+  DeskShell,
+  type DeskEngineStatus,
+} from "@/components/desk/ui";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
@@ -371,7 +388,19 @@ export function BTCFuturesScalper({
   storageNamespace,
   baseBalance = 1000,
 }: BTCFuturesScalperProps = {}) {
-  const { user: authUser } = usePaperDeskAuth();
+  const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
+  const [deskDark, setDeskDark] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (deskDark) {
+      document.body.classList.add("combat-mode");
+      root.setAttribute("data-theme", "dark");
+    } else {
+      document.body.classList.remove("combat-mode");
+      root.setAttribute("data-theme", "light");
+    }
+  }, [deskDark]);
   const cloudAccountKey = useMemo(
     () =>
       resolveCloudPaperTradesAccountKey({
@@ -482,110 +511,141 @@ export function BTCFuturesScalper({
     return acc;
   }, {} as Record<string, { trades: number; wins: number; losses: number; pnl: number }>);
 
-  return (
-    <div className="space-y-5 p-4 md:p-6">
-      {/* Header */}
-      <div className="glass-panel px-6 py-6">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex items-center gap-1.5 rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {pauseEntries ? "PAUSED" : "LIVE"}
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-            {moduleTagline} · {watchlist.length} MARKETS
-          </span>
-        </div>
-        <div className="mb-3 border-b border-zinc-100 pb-3">
-          <PaperDeskAuthBar />
-        </div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-zinc-900">{title}</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={togglePause}
-              className="rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
-            >
-              {pauseEntries ? "Resume" : "Pause"}
-            </button>
-            <button
-              onClick={resetPaperAccount}
-              className="rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100"
-            >
-              Reset Account
-            </button>
-            <button
-              onClick={clearTradeHistory}
-              className="rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
-            >
-              Clear Trades
-            </button>
+
+  const watchColumns = useMemo((): DeskColumn<FuturesWatchItem>[] => [
+    {
+      id: "symbol",
+      header: "Symbol",
+      cell: (item) => (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span className="desk-body-md" style={{ fontWeight: 600 }}>{item.symbol}</span>
+            <DeskChip tone="warning">{item.leverage}</DeskChip>
           </div>
+          <p className="desk-label-md" style={{ marginTop: 4 }}>{item.name}</p>
         </div>
-      </div>
-
-      {dataHealth.showFeedWarning && (
-        <div
-          role="status"
-          className="rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-[11px] leading-snug text-amber-950 shadow-sm"
-        >
-          <span className="font-semibold">Futures kline feed is degraded.</span>{" "}
-          {dataHealth.lastError ? (
-            <span className="text-amber-900/95">{dataHealth.lastError}</span>
-          ) : null}{" "}
-          <span className="text-amber-800/85">
-            Signals may be stale until data recovers ({dataHealth.payloadsReady}/{dataHealth.symbolsRequested} symbols
-            ready).
+      ),
+    },
+    {
+      id: "last",
+      header: "Last",
+      align: "right",
+      cell: (item) => <span className="desk-mono">{item.lastPrice}</span>,
+    },
+    {
+      id: "chg",
+      header: "24h",
+      align: "right",
+      cell: (item) => {
+        const positive = !item.change24h.startsWith("-");
+        return (
+          <span className={positive ? "desk-pnl-positive desk-mono" : "desk-pnl-negative desk-mono"}>
+            {item.change24h}
           </span>
-        </div>
-      )}
+        );
+      },
+    },
+    {
+      id: "vol",
+      header: "Volume",
+      align: "right",
+      cell: (item) => <span className="desk-mono">{item.volume24h}</span>,
+    },
+  ], []);
 
-      <div className="glass-panel px-5 py-6 md:px-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-            Futures Watchlist
-          </h2>
-          <input
-            type="search"
-            value={watchSearch}
-            onChange={(e) => setWatchSearch(e.target.value)}
-            placeholder="Search symbol"
-            className="w-full max-w-56 rounded-lg border border-zinc-300 bg-white/90 px-3 py-2 text-xs text-zinc-800 outline-none focus:border-blue-400"
+  const engineStatus: DeskEngineStatus = !authConfigured
+    ? "cloud-off"
+    : dataHealth.showFeedWarning
+      ? "degraded"
+      : pauseEntries
+        ? "paused"
+        : isReady
+          ? "live"
+          : "syncing";
+
+  return (
+    <DeskShell
+      loading={!isReady}
+      appBar={
+        <DeskAppBar
+          title={title}
+          subtitle={`${moduleTagline} · ${watchlist.length} markets`}
+          equity={equity}
+          status={engineStatus}
+          authSlot={<PaperDeskAuthBar compact />}
+          themeToggle={<DeskThemeToggle dark={deskDark} onToggle={() => setDeskDark((d) => !d)} />}
+        />
+      }
+    >
+      <DeskCard>
+        <DeskSectionHeader
+          title={title}
+          subtitle={moduleTagline}
+          actions={
+            <>
+              <DeskButton variant="tonal" onClick={togglePause}>
+                {pauseEntries ? "Resume entries" : "Pause entries"}
+              </DeskButton>
+              <DeskButton variant="danger-tonal" onClick={resetPaperAccount}>
+                Reset account
+              </DeskButton>
+              <DeskButton variant="outlined" onClick={clearTradeHistory}>
+                Clear trades
+              </DeskButton>
+            </>
+          }
+        />
+        <PaperDeskAuthBar />
+      </DeskCard>
+
+      {dataHealth.showFeedWarning ? (
+        <DeskBanner variant="warning" title="Futures kline feed is degraded">
+          {dataHealth.lastError ? <span>{dataHealth.lastError} </span> : null}
+          Signals may be stale until data recovers ({dataHealth.payloadsReady}/{dataHealth.symbolsRequested} symbols ready).
+        </DeskBanner>
+      ) : null}
+
+      {quote ? (
+        <div className="desk-metrics-row">
+          <DeskMetricTile
+            label="BTC mark"
+            value={formatDeskUsd(quote.markPrice, { decimals: 0 })}
           />
+          <DeskMetricTile
+            label="24h change"
+            value={formatDeskPct(quote.changePct24h, { signed: true })}
+            valueClassName={pnlToneClass(quote.changePct24h)}
+          />
+          <DeskMetricTile
+            label="Funding"
+            value={formatDeskPct(quote.fundingRate * 100, { signed: true, decimals: 4 })}
+            valueClassName={pnlToneClass(quote.fundingRate)}
+          />
+          <DeskMetricTile label="Markets" value={String(watchlist.length)} detail="On watchlist" compact />
         </div>
-        <div className="overflow-x-auto rounded-[16px] border border-zinc-200 bg-white/85">
-          <table className="w-full text-left text-xs" style={{ minWidth: 760 }}>
-            <thead className="bg-zinc-50 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Last Price</th>
-                <th className="px-4 py-3">24h Chg.</th>
-                <th className="px-4 py-3">24h Vol.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleWatchlist.map((item) => {
-                const positive = !item.change24h.startsWith("-");
-                return (
-                  <tr key={item.symbol} className="border-t border-zinc-100">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-zinc-900">
-                        {item.symbol}
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
-                          {item.leverage}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-zinc-500">{item.name}</div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-zinc-900">{item.lastPrice}</td>
-                    <td className={`px-4 py-3 font-mono ${positive ? "text-emerald-600" : "text-rose-600"}`}>{item.change24h}</td>
-                    <td className="px-4 py-3 font-mono text-zinc-800">{item.volume24h}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      ) : null}
+
+      <DeskCard>
+        <DeskSectionHeader
+          title="Watchlist"
+          subtitle="Perpetual futures symbols"
+          actions={
+            <DeskSearchField
+              value={watchSearch}
+              onChange={(e) => setWatchSearch(e.target.value)}
+              placeholder="Search symbol or name"
+              aria-label="Search watchlist"
+            />
+          }
+        />
+        <DeskDataTable
+          minWidth={640}
+          columns={watchColumns}
+          rows={visibleWatchlist}
+          getRowKey={(item) => item.symbol}
+          empty={<DeskEmptyState title="No symbols match" subtitle="Try a different search term." />}
+        />
+      </DeskCard>
 
       {/* Main Equity Display */}
       <div className="mb-6 grid grid-cols-1 gap-5 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
@@ -1150,6 +1210,6 @@ export function BTCFuturesScalper({
           <TestnetOpsPanel />
         </div>
       ) : null}
-    </div>
+    </DeskShell>
   );
 }

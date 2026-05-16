@@ -1,5 +1,20 @@
 import type { Metadata } from "next";
+import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
+
+const roboto = Roboto({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-desk-body",
+  display: "swap",
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-desk-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "in.loop.com",
@@ -12,13 +27,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light" className={`${roboto.variable} ${robotoMono.variable}`}>
       <head>
-        <meta name="theme-color" content="#1c1917" />
+        <meta name="theme-color" content="#f8f9fa" />
       </head>
-      <body>
-        {children}
-      </body>
+      <body className={roboto.className}>{children}</body>
     </html>
   );
 }

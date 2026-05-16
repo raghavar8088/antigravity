@@ -1,5 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Desk UI (Material Design 3)
+
+Paper futures desks use a shared **M3-style** layer (Tailwind v4 + CSS tokens, no MUI):
+
+| Piece | Location |
+|-------|----------|
+| Color, elevation, spacing, typography | `src/styles/desk-tokens.css` (imported from `globals.css`) |
+| Primitives (cards, buttons, tables, app bar) | `src/components/desk/ui/` |
+| Number formatting (`en-US`, hydration-safe equity in app bar) | `src/lib/deskFormat.ts` |
+| Theme toggle | `DeskThemeToggle` — sets `data-theme` on `<html>` and `body.combat-mode` for dark |
+
+**BTC Future Trading** uses `DeskShell` + `DeskAppBar` inside `BTCFuturesScalper.tsx`. The workspace shell (`TradingDashboard`) hides the legacy header on BTC futures modules so equity and auth live in the desk app bar.
+
 ## Getting Started
 
 First, run the development server:

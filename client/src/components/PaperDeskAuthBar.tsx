@@ -2,48 +2,53 @@
 
 import { useState } from "react";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+import { DeskBanner } from "@/components/desk/ui/DeskBanner";
+import { DeskButton } from "@/components/desk/ui/DeskButton";
 
-export function PaperDeskAuthBar() {
+export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
   const { configured, user, loading, message, signInWithEmail, signOut } = usePaperDeskAuth();
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
 
   if (!configured) {
     return (
-      <p className="text-[10px] text-amber-700">
-        Cloud sync disabled — set <span className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</span> in{" "}
-        <span className="font-mono">.env.local</span>.
-      </p>
+      <DeskBanner variant="warning" title="Cloud sync disabled">
+        Sign in requires Supabase. Add keys per{" "}
+        <a href="https://github.com/raghavar8088/antigravity/blob/main/client/docs/DEPLOY.md" style={{ textDecoration: "underline" }}>
+          DEPLOY.md
+        </a>{" "}
+        (magic link + RLS), then reload.
+      </DeskBanner>
     );
   }
 
   if (loading) {
-    return <p className="text-[10px] text-zinc-500">Checking sign-in…</p>;
+    return <p className="desk-label-md">Checking sign-in…</p>;
   }
 
   if (user) {
     return (
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-600">
-        <span>
-          Signed in as <span className="font-mono text-zinc-900">{user.email ?? user.id.slice(0, 8)}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: "0.8125rem" }}>
+        <span className="desk-body-md">
+          Signed in as <span className="desk-mono">{user.email ?? user.id.slice(0, 8)}</span>
         </span>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-700 hover:bg-zinc-50"
-        >
+        <DeskButton variant="outlined" onClick={() => void signOut()} style={{ minHeight: 36, padding: "0 12px" }}>
           Sign out
-        </button>
-        <span className="text-zinc-400">Trades sync to your account across devices.</span>
+        </DeskButton>
+        {!compact ? (
+          <span className="desk-label-md" style={{ fontWeight: 400 }}>
+            Trades sync to your account across devices.
+          </span>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <span className="text-[11px] text-zinc-600">Sign in to sync paper trades across devices.</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {!compact ? <span className="desk-label-md">Sign in to sync paper trades across devices.</span> : null}
       <form
-        className="flex flex-wrap items-center gap-2"
+        style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
         onSubmit={(e) => {
           e.preventDefault();
           setPending(true);
@@ -55,21 +60,24 @@ export function PaperDeskAuthBar() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="rounded border border-zinc-200 px-2 py-1 text-[11px] text-zinc-800"
           autoComplete="email"
+          style={{
+            flex: "1 1 180px",
+            minHeight: 44,
+            padding: "0 12px",
+            borderRadius: "var(--desk-radius-input)",
+            border: "1px solid var(--desk-outline)",
+            background: "var(--desk-surface)",
+          }}
         />
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50"
-        >
+        <DeskButton type="submit" disabled={pending} style={{ minHeight: 44 }}>
           {pending ? "Sending…" : "Sign in"}
-        </button>
-        <a href="/sign-in" className="text-[10px] text-sky-700 underline">
+        </DeskButton>
+        <a href="/sign-in" className="desk-label-md" style={{ color: "var(--desk-primary)" }}>
           Sign-in page
         </a>
       </form>
-      {message ? <p className="w-full text-[10px] text-zinc-600">{message}</p> : null}
+      {message ? <p className="desk-label-md">{message}</p> : null}
     </div>
   );
 }
