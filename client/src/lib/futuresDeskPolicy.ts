@@ -15,6 +15,14 @@
  * 24h `{t,tag}[]` for the primary symbol in `localStorage` (throttled writes); dump may include `primaryRegimeHistogram24h`.
  * `NEXT_PUBLIC_DESK_MAX_SAME_DIR_FRAC_OF_EQUITY` — max fraction of equity for sum of notionals per side (default 0.35).
  * `NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K` — ATR$ vs fee hurdle multiplier (default 1).
+ * `NEXT_PUBLIC_DESK_SLIPPAGE_BPS` — adverse entry/exit slippage in bps (default 0, clamp 0–50).
+ * `NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS=1` — auto-disable losing strats from Supabase rolling stats.
+ * `NEXT_PUBLIC_DESK_KILL_MIN_TRADES`, `NEXT_PUBLIC_DESK_KILL_MAX_EXPECTANCY_USD`, `NEXT_PUBLIC_DESK_KILL_MAX_SUM_NET_USD`, `NEXT_PUBLIC_DESK_KILL_WINDOW_DAYS`.
+ * `NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL=1` — size opens from SL risk % of equity (`NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY`, default 0.01).
+ * `NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST=1` — at max positions, close lowest `entryPriorityScore` open slot (mark `TIME`) when a strictly higher-priority candidate arrives; default is queue-only (skip).
+ * `NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT` — max |last−mark|/mark % before entry skip (default 0.05, clamp 0–1).
+ * `NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY` — max concurrent opens per strategy `category` (default 3, clamp 1–12).
+ * `NEXT_PUBLIC_DESK_ENTRY_UTC_START` / `NEXT_PUBLIC_DESK_ENTRY_UTC_END` — UTC entry window (0–23 / 0–24); default 0 and 24 = always open; supports wrap (e.g. 22→6).
  */
 
 import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
@@ -244,6 +252,263 @@ export function deskMinExpectedMoveSafetyKFromEnv(): number {
   if (raw === undefined || raw === "") return DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
+}
+
+/** Default adverse slippage (bps) on paper entry/exit fills. */
+export const DESK_SLIPPAGE_BPS_DEFAULT = 0;
+
+/** Parses `NEXT_PUBLIC_DESK_SLIPPAGE_BPS`; clamps to [0, 50]. */
+export function deskSlippageBpsFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_SLIPPAGE_BPS;
+  if (raw === undefined || raw === "") return DESK_SLIPPAGE_BPS_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DESK_SLIPPAGE_BPS_DEFAULT;
+  return Math.min(50, Math.max(0, n));
+}
+
+/** Default max last vs mark spread (%) for new entries. */
+export const DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT = 0.05;
+
+/** Parses `NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT`; clamps to [0, 1] (%). */
+export function deskMaxLastMarkSpreadPctFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT;
+  if (raw === undefined || raw === "") return DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT;
+  return Math.min(1, Math.max(0, n));
+}
+
+/** Default max concurrent positions per strategy category. */
+export const DESK_MAX_OPEN_PER_CATEGORY_DEFAULT = 3;
+
+/** Parses `NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY`; clamps to [1, 12]. */
+export function deskMaxOpenPerCategoryFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY;
+  if (raw === undefined || raw === "") return DESK_MAX_OPEN_PER_CATEGORY_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return DESK_MAX_OPEN_PER_CATEGORY_DEFAULT;
+  return Math.min(12, Math.max(1, Math.floor(n)));
+}
+
+export type PositionForCategoryCount = {
+  strategyId: number;
+  category?: string;
+};
+
+/** Open position count by `category` (resolves via `category` on row or `categoryByStrategyId`). */
+export function countOpenByCategory(
+  positions: ReadonlyArray<PositionForCategoryCount>,
+  categoryByStrategyId?: ReadonlyMap<number, string>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of positions) {
+    const cat =
+      (p.category?.trim() || categoryByStrategyId?.get(p.strategyId)?.trim() || "unknown");
+    counts.set(cat, (counts.get(cat) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** True when another open in `category` is allowed (`categoryOpenCount` is current opens in that category). */
+export function canOpenCategory(category: string, categoryOpenCount: number, max: number): boolean {
+  if (!Number.isFinite(max) || max <= 0) return true;
+  void category;
+  return categoryOpenCount < max;
+}
+
+export type DeskEntryUtcSession = {
+  startHour: number;
+  endHour: number;
+};
+
+function parseDeskUtcHourEnv(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.floor(n);
+}
+
+/** UTC entry window from env; default `{ startHour: 0, endHour: 24 }` = always open. */
+export function deskEntryUtcSessionFromEnv(): DeskEntryUtcSession {
+  const startRaw = parseDeskUtcHourEnv(process.env.NEXT_PUBLIC_DESK_ENTRY_UTC_START, 0);
+  const endRaw = parseDeskUtcHourEnv(process.env.NEXT_PUBLIC_DESK_ENTRY_UTC_END, 24);
+  const startHour = Math.min(23, Math.max(0, startRaw));
+  const endHour = Math.min(24, Math.max(0, endRaw));
+  return { startHour, endHour };
+}
+
+export function isEntryUtcSessionAlwaysOpen(session: DeskEntryUtcSession): boolean {
+  return session.startHour === 0 && session.endHour >= 24;
+}
+
+/**
+ * Half-open UTC hour window `[startHour, endHour)`; wrap when `startHour > endHour` (e.g. 22→6 → 22–23, 0–5).
+ */
+export function isUtcHourInSession(hour: number, startHour: number, endHour: number): boolean {
+  if (startHour === 0 && endHour >= 24) return true;
+  const h = ((Math.floor(hour) % 24) + 24) % 24;
+  const start = Math.min(23, Math.max(0, startHour));
+  const end = Math.min(24, Math.max(0, endHour));
+  if (start === end) return false;
+  if (start < end) return h >= start && h < end;
+  return h >= start || h < end;
+}
+
+export function formatDeskEntryUtcSessionLabel(session: DeskEntryUtcSession): string {
+  if (isEntryUtcSessionAlwaysOpen(session)) return "Entries UTC 24h";
+  if (session.startHour < session.endHour) {
+    return `Entries UTC ${session.startHour}–${session.endHour}`;
+  }
+  return `Entries UTC ${session.startHour}–${session.endHour}`;
+}
+
+export function deskAutoDisableStratsEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS === "1";
+}
+
+export function deskKillMinTradesFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_KILL_MIN_TRADES;
+  if (raw === undefined || raw === "") return 5;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+}
+
+export function deskKillMaxExpectancyUsdFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_EXPECTANCY_USD;
+  if (raw === undefined || raw === "") return -0.05;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : -0.05;
+}
+
+export function deskKillMaxSumNetUsdFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_SUM_NET_USD;
+  if (raw === undefined || raw === "") return -1;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : -1;
+}
+
+export function deskKillWindowDaysFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_KILL_WINDOW_DAYS;
+  if (raw === undefined || raw === "") return 14;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 14;
+  return Math.min(90, Math.max(1, Math.floor(n)));
+}
+
+export function deskVolSizedNotionalEnabledFromEnv(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL === "1";
+}
+
+export const DESK_RISK_PCT_OF_EQUITY_DEFAULT = 0.01;
+
+/** Parses `NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY`; clamps to [0.002, 0.05]. */
+export function deskRiskPctOfEquityFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY;
+  if (raw === undefined || raw === "") return DESK_RISK_PCT_OF_EQUITY_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DESK_RISK_PCT_OF_EQUITY_DEFAULT;
+  return Math.min(0.05, Math.max(0.002, n));
+}
+
+/** Default: queue-only at max slots (skip lower-priority candidates). */
+export function deskEntryReplaceWeakestFromEnv(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST === "1";
+}
+
+// ========== Entry priority (P1-F) ==========
+
+/**
+ * Heuristic entry rank when more signals pass than `MAX_OPEN_POSITIONS` slots.
+ * Higher = fill slot first. Not ML — uses live signal score + desk policy bonuses.
+ *
+ * Components: `signalScore` (dominant), +3 regime match, +2 desk-widened TP, +0.5×min(tp/sl,4) for RR.
+ */
+export type PaperEntryPriorityInput = {
+  signalScore: number;
+  stratId: number;
+  category: string;
+  regimeMatch: boolean;
+  deskTpWidened?: boolean;
+  slPct: number;
+  tpPct: number;
+};
+
+export function paperEntryPriorityScore(input: PaperEntryPriorityInput): number {
+  const sl = Number.isFinite(input.slPct) && input.slPct > 0 ? input.slPct : 0;
+  const tp = Number.isFinite(input.tpPct) && input.tpPct > 0 ? input.tpPct : 0;
+  const tpSlRatio = sl > 0 ? tp / sl : 0;
+  let score = Number.isFinite(input.signalScore) ? input.signalScore : 0;
+  if (input.regimeMatch) score += 3;
+  if (input.deskTpWidened === true) score += 2;
+  score += Math.min(4, tpSlRatio * 0.5);
+  return score;
+}
+
+export type PaperEntryPriorityCandidate<T> = {
+  priority: number;
+  payload: T;
+};
+
+export type EntryPriorityDispatchResult<T> = {
+  toOpen: T[];
+  skippedLowPriority: number;
+  replaceWeakestCount: number;
+};
+
+/**
+ * Slot policy per poll tick:
+ * - **Queue-only** (`replaceWeakest=false`): open top-N by priority while slots remain; skip the rest.
+ * - **Replace-weakest** (`replaceWeakest=true`): when full, allow at most one swap if best candidate strictly beats weakest incumbent priority.
+ */
+export function dispatchEntryPriorityCandidates<T>(
+  candidates: PaperEntryPriorityCandidate<T>[],
+  openSlots: number,
+  options: { replaceWeakest: boolean; weakestIncumbentPriority: number | null },
+): EntryPriorityDispatchResult<T> {
+  const sorted = [...candidates].sort((a, b) => b.priority - a.priority);
+  const toOpen: T[] = [];
+  let slots = Math.max(0, openSlots);
+  let skippedLowPriority = 0;
+  let replaceWeakestCount = 0;
+  let weakest = options.weakestIncumbentPriority;
+
+  for (const c of sorted) {
+    if (slots > 0) {
+      toOpen.push(c.payload);
+      slots -= 1;
+      continue;
+    }
+    if (
+      options.replaceWeakest &&
+      weakest !== null &&
+      Number.isFinite(weakest) &&
+      c.priority > weakest
+    ) {
+      toOpen.push(c.payload);
+      replaceWeakestCount += 1;
+      weakest = c.priority;
+      continue;
+    }
+    skippedLowPriority += 1;
+  }
+
+  return { toOpen, skippedLowPriority, replaceWeakestCount };
+}
+
+export function weakestEntryPriorityIndex(
+  incumbents: ReadonlyArray<{ entryPriorityScore?: number }>,
+): number {
+  let idx = -1;
+  let min = Infinity;
+  for (let i = 0; i < incumbents.length; i++) {
+    const p = incumbents[i]?.entryPriorityScore;
+    const v = Number.isFinite(p) ? (p as number) : 0;
+    if (v < min) {
+      min = v;
+      idx = i;
+    }
+  }
+  return idx;
 }
 
 /**

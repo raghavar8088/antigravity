@@ -10,11 +10,28 @@ import {
   deskHoldTuningExportIntervalMsFromEnv,
   deskMaxSameDirNotionalFracFromEnv,
   deskMinExpectedMoveSafetyKFromEnv,
+  deskAutoDisableStratsEnabled,
+  deskKillMinTradesFromEnv,
+  deskRiskPctOfEquityFromEnv,
+  deskSlippageBpsFromEnv,
+  deskVolSizedNotionalEnabledFromEnv,
+  deskEntryReplaceWeakestFromEnv,
+  canOpenCategory,
+  countOpenByCategory,
+  deskMaxOpenPerCategoryFromEnv,
+  DESK_MAX_OPEN_PER_CATEGORY_DEFAULT,
+  deskEntryUtcSessionFromEnv,
+  formatDeskEntryUtcSessionLabel,
+  isEntryUtcSessionAlwaysOpen,
+  isUtcHourInSession,
+  paperEntryPriorityScore,
+  dispatchEntryPriorityCandidates,
   deskRegimeHistogramDevPersistEnabled,
   deskRegimeWatchIntervalMsFromEnv,
   deskRegimeWatchPollWindowFromEnv,
   DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT,
   DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT,
+  DESK_SLIPPAGE_BPS_DEFAULT,
   DESK_REGIME_HISTOGRAM_LS_MAX_EVENTS,
   DESK_REGIME_HISTOGRAM_LS_WINDOW_MS,
   FAKE_DIVERSITY_STRAT_IDS,
@@ -312,5 +329,214 @@ describe("deskMaxSameDirNotionalFracFromEnv / deskMinExpectedMoveSafetyKFromEnv"
     vi.stubEnv("NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K", "1.5");
     expect(deskMaxSameDirNotionalFracFromEnv()).toBe(0.5);
     expect(deskMinExpectedMoveSafetyKFromEnv()).toBe(1.5);
+  });
+});
+
+describe("deskAutoDisableStratsEnabled / deskKillMinTradesFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("auto-disable off by default", () => {
+    expect(deskAutoDisableStratsEnabled()).toBe(false);
+    expect(deskKillMinTradesFromEnv()).toBe(5);
+  });
+
+  it("enables with flag and parses kill overrides", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS", "1");
+    vi.stubEnv("NEXT_PUBLIC_DESK_KILL_MIN_TRADES", "8");
+    expect(deskAutoDisableStratsEnabled()).toBe(true);
+    expect(deskKillMinTradesFromEnv()).toBe(8);
+  });
+});
+
+describe("deskVolSizedNotionalEnabledFromEnv / deskRiskPctOfEquityFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("vol sizing off by default", () => {
+    expect(deskVolSizedNotionalEnabledFromEnv()).toBe(false);
+    expect(deskRiskPctOfEquityFromEnv()).toBe(0.01);
+  });
+
+  it("parses vol sizing and risk pct", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL", "1");
+    vi.stubEnv("NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY", "0.02");
+    expect(deskVolSizedNotionalEnabledFromEnv()).toBe(true);
+    expect(deskRiskPctOfEquityFromEnv()).toBe(0.02);
+    vi.stubEnv("NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY", "0.2");
+    expect(deskRiskPctOfEquityFromEnv()).toBe(0.05);
+  });
+});
+
+describe("deskSlippageBpsFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to 0", () => {
+    expect(deskSlippageBpsFromEnv()).toBe(DESK_SLIPPAGE_BPS_DEFAULT);
+  });
+
+  it("parses and clamps to 50", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_SLIPPAGE_BPS", "5");
+    expect(deskSlippageBpsFromEnv()).toBe(5);
+    vi.stubEnv("NEXT_PUBLIC_DESK_SLIPPAGE_BPS", "99");
+    expect(deskSlippageBpsFromEnv()).toBe(50);
+    vi.stubEnv("NEXT_PUBLIC_DESK_SLIPPAGE_BPS", "-3");
+    expect(deskSlippageBpsFromEnv()).toBe(0);
+  });
+});
+
+describe("deskEntryUtcSession / isUtcHourInSession (P1-J)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to always-on (0–24)", () => {
+    const s = deskEntryUtcSessionFromEnv();
+    expect(isEntryUtcSessionAlwaysOpen(s)).toBe(true);
+    expect(isUtcHourInSession(3, s.startHour, s.endHour)).toBe(true);
+    expect(formatDeskEntryUtcSessionLabel(s)).toBe("Entries UTC 24h");
+  });
+
+  it("non-wrap window 12–22", () => {
+    expect(isUtcHourInSession(11, 12, 22)).toBe(false);
+    expect(isUtcHourInSession(12, 12, 22)).toBe(true);
+    expect(isUtcHourInSession(21, 12, 22)).toBe(true);
+    expect(isUtcHourInSession(22, 12, 22)).toBe(false);
+    expect(formatDeskEntryUtcSessionLabel({ startHour: 12, endHour: 22 })).toBe("Entries UTC 12–22");
+  });
+
+  it("wrap-around 22→6", () => {
+    expect(isUtcHourInSession(21, 22, 6)).toBe(false);
+    expect(isUtcHourInSession(22, 22, 6)).toBe(true);
+    expect(isUtcHourInSession(23, 22, 6)).toBe(true);
+    expect(isUtcHourInSession(0, 22, 6)).toBe(true);
+    expect(isUtcHourInSession(5, 22, 6)).toBe(true);
+    expect(isUtcHourInSession(6, 22, 6)).toBe(false);
+    expect(isUtcHourInSession(12, 22, 6)).toBe(false);
+  });
+
+  it("single-hour allow block (only hour 17)", () => {
+    expect(isUtcHourInSession(16, 17, 18)).toBe(false);
+    expect(isUtcHourInSession(17, 17, 18)).toBe(true);
+    expect(isUtcHourInSession(18, 17, 18)).toBe(false);
+  });
+
+  it("parses env overrides", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_ENTRY_UTC_START", "12");
+    vi.stubEnv("NEXT_PUBLIC_DESK_ENTRY_UTC_END", "22");
+    const s = deskEntryUtcSessionFromEnv();
+    expect(s).toEqual({ startHour: 12, endHour: 22 });
+    expect(isEntryUtcSessionAlwaysOpen(s)).toBe(false);
+  });
+});
+
+describe("deskMaxOpenPerCategoryFromEnv / countOpenByCategory / canOpenCategory (P1-M)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to 3 and clamps 1–12", () => {
+    expect(deskMaxOpenPerCategoryFromEnv()).toBe(DESK_MAX_OPEN_PER_CATEGORY_DEFAULT);
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "8");
+    expect(deskMaxOpenPerCategoryFromEnv()).toBe(8);
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "99");
+    expect(deskMaxOpenPerCategoryFromEnv()).toBe(12);
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "0");
+    expect(deskMaxOpenPerCategoryFromEnv()).toBe(3);
+  });
+
+  it("4 MeanRev candidates at max 3 → 4th blocked", () => {
+    const max = 3;
+    let meanRevOpen = 0;
+    let skipped = 0;
+    for (let i = 0; i < 4; i++) {
+      if (canOpenCategory("MeanRev", meanRevOpen, max)) {
+        meanRevOpen += 1;
+      } else {
+        skipped += 1;
+      }
+    }
+    expect(meanRevOpen).toBe(3);
+    expect(skipped).toBe(1);
+  });
+
+  it("different categories can each reach max", () => {
+    const max = 3;
+    const counts = countOpenByCategory([
+      { strategyId: 1, category: "MeanRev" },
+      { strategyId: 2, category: "MeanRev" },
+      { strategyId: 3, category: "MeanRev" },
+      { strategyId: 4, category: "Momentum" },
+      { strategyId: 5, category: "Momentum" },
+      { strategyId: 6, category: "Momentum" },
+    ]);
+    expect(counts.get("MeanRev")).toBe(3);
+    expect(counts.get("Momentum")).toBe(3);
+    expect(canOpenCategory("MeanRev", counts.get("MeanRev") ?? 0, max)).toBe(false);
+    expect(canOpenCategory("Momentum", counts.get("Momentum") ?? 0, max)).toBe(false);
+    expect(canOpenCategory("Breakout", 0, max)).toBe(true);
+  });
+});
+
+describe("paperEntryPriorityScore / dispatchEntryPriorityCandidates (P1-F)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("ranks higher signal and regime match above baseline", () => {
+    const base = paperEntryPriorityScore({
+      signalScore: 30,
+      stratId: 1,
+      category: "momentum",
+      regimeMatch: false,
+      slPct: 0.5,
+      tpPct: 1,
+    });
+    const boosted = paperEntryPriorityScore({
+      signalScore: 30,
+      stratId: 1,
+      category: "momentum",
+      regimeMatch: true,
+      deskTpWidened: true,
+      slPct: 0.5,
+      tpPct: 1,
+    });
+    expect(boosted).toBeGreaterThan(base);
+    expect(boosted - base).toBeCloseTo(5, 5);
+  });
+
+  it("3 candidates and 1 slot opens highest priority (queue-only)", () => {
+    const candidates = [
+      { priority: 10, payload: "a" },
+      { priority: 30, payload: "b" },
+      { priority: 20, payload: "c" },
+    ];
+    const r = dispatchEntryPriorityCandidates(candidates, 1, {
+      replaceWeakest: false,
+      weakestIncumbentPriority: null,
+    });
+    expect(r.toOpen).toEqual(["b"]);
+    expect(r.skippedLowPriority).toBe(2);
+    expect(r.replaceWeakestCount).toBe(0);
+  });
+
+  it("replace-weakest allows one swap when candidate beats incumbent", () => {
+    const r = dispatchEntryPriorityCandidates([{ priority: 35, payload: "new" }], 0, {
+      replaceWeakest: true,
+      weakestIncumbentPriority: 20,
+    });
+    expect(r.toOpen).toEqual(["new"]);
+    expect(r.replaceWeakestCount).toBe(1);
+    expect(r.skippedLowPriority).toBe(0);
+  });
+
+  it("deskEntryReplaceWeakestFromEnv defaults off", () => {
+    expect(deskEntryReplaceWeakestFromEnv()).toBe(false);
+    vi.stubEnv("NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST", "1");
+    expect(deskEntryReplaceWeakestFromEnv()).toBe(true);
   });
 });

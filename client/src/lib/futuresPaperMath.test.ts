@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyFundingAccrual,
   DELTA_PAPER_FUNDING_INTERVAL_MS,
+  paperApplyEntrySlippage,
+  paperApplyExitSlippage,
   paperApplyFuturesExitPatches,
   paperContracts,
   paperEstimatedMaxLossAtStopSl,
@@ -12,6 +14,8 @@ import {
   paperMarginRequired,
   paperNetPnlOnClose,
   paperNotional,
+  paperNotionalForTargetRisk,
+  paperLastMarkSpreadPct,
   paperMinExpectedMoveVsFees,
   paperPriceMovePctOnNotional,
   paperResolveHardExit,
@@ -268,6 +272,155 @@ describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → T
       holdTimeMul: 1,
     });
     expect(r).toEqual({ shouldClose: false });
+  });
+});
+
+describe("paperNotionalForTargetRisk", () => {
+  const taker = 0.001;
+  const minN = 100;
+  const maxN = 500;
+  const entry = 100_000;
+  const mark = 100_000;
+  const riskPct = 0.01;
+
+  const baseArgs = {
+    equityUsd: 1000,
+    atr14: 500,
+    markPrice: mark,
+    entryPrice: entry,
+    side: "LONG" as const,
+    takerFeePct: taker,
+    riskPctOfEquity: riskPct,
+    minNotional: minN,
+    maxNotional: maxN,
+  };
+
+  it("higher slPct → lower notional for fixed risk%", () => {
+    const tight = paperNotionalForTargetRisk({
+      ...baseArgs,
+      equityUsd: 2000,
+      slPct: 1.0,
+    });
+    const wide = paperNotionalForTargetRisk({
+      ...baseArgs,
+      equityUsd: 2000,
+      slPct: 5.0,
+    });
+    expect(tight).toBeGreaterThan(wide);
+    expect(tight).toBeLessThanOrEqual(maxN);
+    expect(wide).toBeGreaterThanOrEqual(minN);
+  });
+
+  it("higher equity → higher notional within clamp", () => {
+    const small = paperNotionalForTargetRisk({ ...baseArgs, equityUsd: 400, slPct: 3.0 });
+    const large = paperNotionalForTargetRisk({ ...baseArgs, equityUsd: 1200, slPct: 3.0 });
+    expect(large).toBeGreaterThan(small);
+    expect(large).toBeLessThanOrEqual(maxN);
+  });
+
+  it("result always within [min, max]", () => {
+    const n = paperNotionalForTargetRisk({ ...baseArgs, slPct: 0.4 });
+    expect(n).toBeGreaterThanOrEqual(minN);
+    expect(n).toBeLessThanOrEqual(maxN);
+    const loss = paperEstimatedMaxLossAtStopSl(
+      entry,
+      entry * (1 - 0.4 / 100),
+      n,
+      "LONG",
+      taker,
+    );
+    expect(loss).toBeLessThanOrEqual(1000 * riskPct + 1e-9);
+  });
+
+  it("tiny slPct hits maxNotional clamp", () => {
+    const n = paperNotionalForTargetRisk({ ...baseArgs, slPct: 0.05 });
+    expect(n).toBe(maxN);
+  });
+
+  it("example: equity $1000, risk 1%, sl 0.4%, taker 0.1%", () => {
+    const vol = paperNotionalForTargetRisk({ ...baseArgs, slPct: 0.4 });
+    const flat = Math.min(Math.max(1000 * 0.1, minN), maxN);
+    expect(vol).toBe(maxN);
+    expect(flat).toBe(100);
+    expect(vol).toBeGreaterThan(flat);
+  });
+});
+
+describe("paperApplyEntrySlippage / paperApplyExitSlippage", () => {
+  it("0 bps leaves price unchanged", () => {
+    expect(paperApplyEntrySlippage("LONG", 100_000, 0)).toBe(100_000);
+    expect(paperApplyExitSlippage("LONG", 100_200, 0)).toBe(100_200);
+    expect(paperApplyEntrySlippage("SHORT", 50_000, -1)).toBe(50_000);
+  });
+
+  it("LONG entry pays higher, exit receives lower", () => {
+    expect(paperApplyEntrySlippage("LONG", 100_000, 5)).toBeCloseTo(100_050, 8);
+    expect(paperApplyExitSlippage("LONG", 100_200, 5)).toBeCloseTo(100_149.9, 6);
+  });
+
+  it("SHORT entry pays lower, exit covers higher", () => {
+    expect(paperApplyEntrySlippage("SHORT", 100_000, 5)).toBeCloseTo(99_950, 8);
+    expect(paperApplyExitSlippage("SHORT", 99_800, 5)).toBeCloseTo(99_849.9, 6);
+  });
+});
+
+describe("paper slippage on close (~$50 notional, LONG small favorable move)", () => {
+  const TAKER = 0.001;
+  const notional = 50;
+  const entryLast = 100_000;
+  const exitLevel = 100_200;
+  const slipBps = 5;
+
+  it("5 bps RT slip reduces net vs 0 bps on borderline gross ≈ fees", () => {
+    const noSlip = paperNetPnlOnClose({
+      entryPrice: entryLast,
+      exitPrice: exitLevel,
+      notional,
+      side: "LONG",
+      takerFeePct: TAKER,
+      fundingCosts: 0,
+      minAbsNetWinUsd: 0,
+    });
+    const entry = paperApplyEntrySlippage("LONG", entryLast, slipBps);
+    const exit = paperApplyExitSlippage("LONG", exitLevel, slipBps);
+    const withSlip = paperNetPnlOnClose({
+      entryPrice: entry,
+      exitPrice: exit,
+      notional,
+      side: "LONG",
+      takerFeePct: TAKER,
+      fundingCosts: 0,
+      minAbsNetWinUsd: 0,
+    });
+    expect(noSlip.grossPnl).toBeCloseTo(0.1, 8);
+    expect(noSlip.netPnl).toBeCloseTo(0, 8);
+    expect(withSlip.grossPnl).toBeLessThan(noSlip.grossPnl);
+    expect(withSlip.netPnl).toBeLessThan(noSlip.netPnl);
+    expect(withSlip.netPnl).toBeLessThan(0);
+    expect(withSlip.fees).toBe(noSlip.fees);
+  });
+
+  it("SL level then exit slip: worse fill than level alone", () => {
+    const slLevel = 99_500;
+    const atLevel = paperNetPnlOnClose({
+      entryPrice: paperApplyEntrySlippage("LONG", entryLast, slipBps),
+      exitPrice: slLevel,
+      notional,
+      side: "LONG",
+      takerFeePct: TAKER,
+      fundingCosts: 0,
+      minAbsNetWinUsd: 0,
+    });
+    const slipped = paperNetPnlOnClose({
+      entryPrice: paperApplyEntrySlippage("LONG", entryLast, slipBps),
+      exitPrice: paperApplyExitSlippage("LONG", slLevel, slipBps),
+      notional,
+      side: "LONG",
+      takerFeePct: TAKER,
+      fundingCosts: 0,
+      minAbsNetWinUsd: 0,
+    });
+    expect(slipped.netPnl).toBeLessThan(atLevel.netPnl);
   });
 });
 
@@ -539,6 +692,18 @@ describe("paperMarginRequired / paperContracts / paperNotional / paperReturnOnMa
     expect(paperReturnOnMargin(5, 20)).toBeCloseTo(25, 9);
     expect(paperReturnOnMargin(-3, 20)).toBeCloseTo(-15, 9);
     expect(paperReturnOnMargin(10, 0)).toBe(0);
+  });
+});
+
+describe("paperLastMarkSpreadPct", () => {
+  it("returns |last−mark|/mark × 100", () => {
+    expect(paperLastMarkSpreadPct(100_050, 100_000)).toBeCloseTo(0.05, 9);
+    expect(paperLastMarkSpreadPct(99_950, 100_000)).toBeCloseTo(0.05, 9);
+  });
+
+  it("returns Infinity for invalid mark", () => {
+    expect(paperLastMarkSpreadPct(100, 0)).toBe(Infinity);
+    expect(paperLastMarkSpreadPct(Number.NaN, 100_000)).toBe(Infinity);
   });
 });
 

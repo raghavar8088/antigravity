@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   computeSessionExitReasonAnalytics,
   computeSessionTradingMetrics,
+  effectiveMinExpectedMoveSafetyK,
   formatExitReasonSessionSummary,
   FUTURES_STRATEGY_PROFILES,
   resolveStrategyProfile,
 } from "./futuresSessionMetrics";
+import { effectiveSignalThreshold } from "./futuresSignals";
 
 describe("computeSessionTradingMetrics", () => {
   const t0 = "2026-05-11T10:00:00.000Z";
@@ -78,12 +80,25 @@ describe("strategy profiles", () => {
   it("resolves known profiles", () => {
     expect(resolveStrategyProfile(undefined)).toBe("baseline");
     expect(resolveStrategyProfile("scalp_aggro_v1")).toBe("scalp_aggro_v1");
+    expect(resolveStrategyProfile("fee_aware_v1")).toBe("fee_aware_v1");
     expect(resolveStrategyProfile("unknown")).toBe("baseline");
   });
 
   it("keeps invariant-friendly multipliers", () => {
     expect(FUTURES_STRATEGY_PROFILES.baseline.cooldownMul).toBe(1);
+    expect(FUTURES_STRATEGY_PROFILES.baseline.minExpectedMoveSafetyKMul).toBe(1);
     expect(FUTURES_STRATEGY_PROFILES.scalp_aggro_v1.cooldownMul).toBeLessThan(1);
     expect(FUTURES_STRATEGY_PROFILES.scalp_aggro_v1.holdTimeMul).toBeLessThanOrEqual(1);
+    expect(FUTURES_STRATEGY_PROFILES.scalp_aggro_v1.minExpectedMoveSafetyKMul).toBe(1);
+  });
+
+  it("fee_aware_v1: +6 signal delta, 1.25× min-move K, unit hold/cooldown", () => {
+    const p = FUTURES_STRATEGY_PROFILES.fee_aware_v1;
+    expect(p.signalThresholdDelta).toBe(6);
+    expect(p.minExpectedMoveSafetyKMul).toBe(1.25);
+    expect(p.holdTimeMul).toBe(1);
+    expect(p.cooldownMul).toBe(1);
+    expect(effectiveSignalThreshold(26, p.signalThresholdDelta)).toBe(32);
+    expect(effectiveMinExpectedMoveSafetyK(1, p)).toBe(1.25);
   });
 });

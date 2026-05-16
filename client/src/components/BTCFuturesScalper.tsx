@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { StrategyLeaderboardRow } from "@/lib/paperTradesAnalytics";
 import {
   useBTCFuturesScalperEngine,
   type BTCFuturesPosition,
@@ -11,6 +12,14 @@ import {
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
+import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
+import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
+import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
+import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
+import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+
+const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
+const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
 
 // ========== FORMATTERS ==========
 function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
@@ -140,6 +149,216 @@ type BTCFuturesScalperProps = {
   baseBalance?: number;
 };
 
+const LEADERBOARD_WINDOW_DAYS = 30;
+const LEADERBOARD_TABLE_LIMIT = 10;
+const PAPER_EXPORT_WINDOW_DAYS = 30;
+
+type LeaderboardState = {
+  top: StrategyLeaderboardRow[];
+  bottom: StrategyLeaderboardRow[];
+};
+
+function DisabledBadge() {
+  return (
+    <span className="ml-1 inline-flex rounded border border-zinc-200 bg-zinc-100 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
+      Disabled
+    </span>
+  );
+}
+
+function StrategyLeaderboardPanel({
+  cloudAccountKey,
+  disabledStrategyIds,
+  onAddDisabledStrategyIds,
+}: {
+  /** Authenticated user id for cloud leaderboard; null when logged out. */
+  cloudAccountKey: string | null;
+  disabledStrategyIds: readonly number[];
+  onAddDisabledStrategyIds: (ids: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<LeaderboardState | null>(null);
+
+  const disabledSet = useMemo(() => new Set(disabledStrategyIds), [disabledStrategyIds]);
+
+  const load = useCallback(async () => {
+    if (!cloudAccountKey) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        window_days: String(LEADERBOARD_WINDOW_DAYS),
+        limit: String(LEADERBOARD_TABLE_LIMIT),
+      });
+      const res = await fetch(`/api/paper-trades/leaderboard?${params.toString()}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        top?: StrategyLeaderboardRow[];
+        bottom?: StrategyLeaderboardRow[];
+      };
+      if (!res.ok || !body.ok) {
+        setError(body.error ?? `HTTP ${res.status}`);
+        setData(null);
+        return;
+      }
+      setData({ top: body.top ?? [], bottom: body.bottom ?? [] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [cloudAccountKey]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const disableAllBottom = () => {
+    if (!data?.bottom.length) return;
+    const ids = data.bottom.map((r) => r.strategyId);
+    const names = data.bottom.map((r) => `#${r.strategyId} ${r.strategyName}`).join("\n");
+    const ok = window.confirm(
+      `Disable all ${ids.length} bottom leaderboard strategies?\n\nThey are added to your manual disable list (P1-B auto-disable is unchanged).\n\n${names}`,
+    );
+    if (ok) onAddDisabledStrategyIds(ids);
+  };
+
+  const renderTable = (
+    title: string,
+    rows: StrategyLeaderboardRow[],
+    opts?: { showDisableActions?: boolean; headerExtra?: ReactNode },
+  ) => (
+    <div className="min-w-0 flex-1">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</div>
+        {opts?.headerExtra}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-[10px] text-zinc-400">No closed trades in window.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[10px] text-zinc-700">
+            <thead>
+              <tr className="border-b border-zinc-100 text-zinc-400">
+                <th className="py-1 pr-2 font-medium">Strategy</th>
+                <th className="py-1 pr-2 font-medium text-right">n</th>
+                <th className="py-1 pr-2 font-medium text-right">Sum net</th>
+                <th className="py-1 pr-2 font-medium text-right">Exp</th>
+                {opts?.showDisableActions ? <th className="py-1 font-medium text-right"> </th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const isDisabled = disabledSet.has(r.strategyId);
+                return (
+                <tr key={`${title}-${r.strategyId}`} className="border-b border-zinc-50">
+                  <td className="max-w-[140px] truncate py-1 pr-2 font-medium text-zinc-800" title={r.strategyName}>
+                    <span className="inline-flex max-w-full items-center">
+                      <span className="truncate">
+                        #{r.strategyId} {r.strategyName}
+                      </span>
+                      {isDisabled ? <DisabledBadge /> : null}
+                    </span>
+                  </td>
+                  <td className="py-1 pr-2 text-right font-mono">{r.tradeCount}</td>
+                  <td
+                    className={`py-1 pr-2 text-right font-mono ${r.sumNet >= 0 ? "text-emerald-700" : "text-rose-700"}`}
+                  >
+                    {fmtUSD(r.sumNet, { signed: true })}
+                  </td>
+                  <td
+                    className={`py-1 pr-2 text-right font-mono ${r.expectancy >= 0 ? "text-emerald-700" : "text-rose-700"}`}
+                  >
+                    {fmtUSD(r.expectancy, { signed: true })}
+                  </td>
+                  {opts?.showDisableActions ? (
+                    <td className="py-1 text-right">
+                      {isDisabled ? (
+                        <span className="text-[9px] text-zinc-400">—</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onAddDisabledStrategyIds([r.strategyId])}
+                          className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-medium text-rose-800 hover:bg-rose-100"
+                        >
+                          Disable
+                        </button>
+                      )}
+                    </td>
+                  ) : null}
+                </tr>
+              );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="mt-3 border-t border-zinc-100 pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-left text-[10px] font-semibold uppercase tracking-wide text-zinc-500 hover:text-zinc-700"
+        >
+          Strategy leaderboard ({LEADERBOARD_WINDOW_DAYS}d) {open ? "▾" : "▸"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+      {open ? (
+        <div className="mt-2">
+          {!cloudAccountKey ? (
+            <p className="text-[10px] text-zinc-500">Sign in to load your cloud strategy leaderboard.</p>
+          ) : error ? (
+            <p className="text-[10px] text-rose-600">{error}</p>
+          ) : data ? (
+            <div className="flex flex-col gap-4 lg:flex-row">
+              {renderTable("Top", data.top)}
+              {renderTable("Bottom", data.bottom, {
+                showDisableActions: true,
+                headerExtra:
+                  data.bottom.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={disableAllBottom}
+                      className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-medium text-rose-800 hover:bg-rose-100"
+                    >
+                      Disable all bottom {data.bottom.length}
+                    </button>
+                  ) : null,
+              })}
+            </div>
+          ) : (
+            <p className="text-[10px] text-zinc-400">{loading ? "Loading…" : "No data"}</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ========== MAIN COMPONENT ==========
 export function BTCFuturesScalper({
   title = "Future Trading",
@@ -152,6 +371,16 @@ export function BTCFuturesScalper({
   storageNamespace,
   baseBalance = 1000,
 }: BTCFuturesScalperProps = {}) {
+  const { user: authUser } = usePaperDeskAuth();
+  const cloudAccountKey = useMemo(
+    () =>
+      resolveCloudPaperTradesAccountKey({
+        supabaseUserId: authUser?.id,
+        storageNamespace: storageNamespace?.trim() || "btc_futures_scalper",
+      }),
+    [authUser?.id, storageNamespace],
+  );
+
   const {
     positions,
     trades,
@@ -166,13 +395,58 @@ export function BTCFuturesScalper({
     resetPaperAccount,
     clearTradeHistory,
     setDisabledStrategies,
+    addDisabledStrategyIds,
     strategyStatuses,
     dataHealth,
-  } = useBTCFuturesScalperEngine({ strategyIds, symbols, signalThreshold, strategyProfile, storageNamespace });
+  } = useBTCFuturesScalperEngine({
+    strategyIds,
+    symbols,
+    signalThreshold,
+    strategyProfile,
+    storageNamespace,
+    supabaseUserId: authUser?.id ?? null,
+  });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
   const [showAllTrades, setShowAllTrades] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
+  const [exportingCsv, setExportingCsv] = useState(false);
+
+  const downloadPaperTradesCsv = useCallback(async () => {
+    if (!cloudAccountKey) return;
+    setExportingCsv(true);
+    try {
+      const params = new URLSearchParams({ window_days: String(PAPER_EXPORT_WINDOW_DAYS) });
+      const res = await fetch(`/api/paper-trades/export?${params.toString()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        let message = `Export failed (${res.status})`;
+        try {
+          const body = (await res.json()) as { error?: string };
+          if (body.error) message = body.error;
+        } catch {
+          // CSV error body unlikely
+        }
+        window.alert(message);
+        return;
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `paper-trades-${PAPER_EXPORT_WINDOW_DAYS}d.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setExportingCsv(false);
+    }
+  }, [cloudAccountKey]);
 
   const sessionPnL = equity - baseBalance;
   const pnlPositive = sessionPnL >= 0;
@@ -220,6 +494,9 @@ export function BTCFuturesScalper({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             {moduleTagline} · {watchlist.length} MARKETS
           </span>
+        </div>
+        <div className="mb-3 border-b border-zinc-100 pb-3">
+          <PaperDeskAuthBar />
         </div>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-zinc-900">{title}</h1>
@@ -418,6 +695,20 @@ export function BTCFuturesScalper({
           <span className="text-zinc-500">
             Signal bar <span className="font-mono text-zinc-900">{stats.effectiveSignalThreshold}</span>
           </span>
+          {stats.deskVolSizedNotionalEnabled ? (
+            <span className="rounded border border-violet-200 bg-violet-50 px-2 py-0.5 font-medium text-violet-900">
+              Vol-sized notional: on
+            </span>
+          ) : null}
+          <button
+            type="button"
+            disabled={!cloudAccountKey || exportingCsv}
+            title={cloudAccountKey ? undefined : "Sign in to export cloud trade history"}
+            onClick={() => void downloadPaperTradesCsv()}
+            className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportingCsv ? "Exporting…" : `Export CSV (${PAPER_EXPORT_WINDOW_DAYS}d)`}
+          </button>
         </div>
         <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-zinc-500">
           <span>
@@ -431,8 +722,32 @@ export function BTCFuturesScalper({
             {stats.deskSkippedByRegime > 0 ? <span className="text-zinc-400"> ({stats.deskSkippedByRegimeBreakdown})</span> : null}
           </span>
           <span>
+            Skips entry priority: <span className="font-mono text-zinc-800">{stats.deskSkippedLowPriorityEntry}</span>
+            {stats.deskEntryReplaceWeakestEnabled ? (
+              <span className="text-zinc-400"> · replace-weakest on</span>
+            ) : null}
+          </span>
+          <span>
+            Skips last/mark spread: <span className="font-mono text-zinc-800">{stats.deskSkippedSpread}</span>
+            <span className="text-zinc-400"> (max {stats.deskMaxLastMarkSpreadPct}%)</span>
+          </span>
+          <span>
+            Skips category cap: <span className="font-mono text-zinc-800">{stats.deskSkippedCategoryCap}</span>
+            <span className="text-zinc-400"> (max {stats.deskMaxOpenPerCategory}/cat)</span>
+          </span>
+          <span>
+            Skips outside UTC session: <span className="font-mono text-zinc-800">{stats.deskSkippedOutsideSession}</span>
+            <span className="text-zinc-400"> · {stats.deskEntryUtcSessionLabel}</span>
+          </span>
+          <span>
             Regime defaults applied: <span className="font-mono text-zinc-800">{stats.deskRegimeAnnotatedStratCount}</span> strats
           </span>
+          {stats.deskAutoDisableEnabled && stats.deskAutoDisabledStratCount > 0 ? (
+            <span title={stats.deskAutoDisabledStratIds}>
+              Auto-disabled ({stats.deskKillWindowDays}d):{" "}
+              <span className="font-mono text-zinc-800">{stats.deskAutoDisabledStratCount}</span>
+            </span>
+          ) : null}
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7 text-xs">
           <CompactMetric label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} detail="Closed ÷ session span" accent="text-zinc-900" />
@@ -456,6 +771,7 @@ export function BTCFuturesScalper({
             <span className="font-mono font-medium text-zinc-800">{stats.deskProfileAdjustedHoldAppliedCount}</span>
           </p>
         </div>
+        <ShadowIntentLogPanel enabled={deskShadowIntentsEnabled} signedIn={Boolean(cloudAccountKey)} />
         <div className="mt-3 border-t border-zinc-100 pt-3 text-[10px] text-zinc-600">
           <div className="mb-1.5 font-semibold uppercase tracking-wide text-zinc-500">
             Worst TIME contributors (last 400 · by total net at TIME)
@@ -513,6 +829,11 @@ export function BTCFuturesScalper({
             </div>
           )}
         </div>
+        <StrategyLeaderboardPanel
+          cloudAccountKey={cloudAccountKey}
+          disabledStrategyIds={disabledStrategies}
+          onAddDisabledStrategyIds={addDisabledStrategyIds}
+        />
       </div>
 
       {/* Open Positions */}
@@ -823,6 +1144,12 @@ export function BTCFuturesScalper({
           </div>
         </div>
       )}
+
+      {deskTestnetOpsEnabled ? (
+        <div className="mt-6">
+          <TestnetOpsPanel />
+        </div>
+      ) : null}
     </div>
   );
 }

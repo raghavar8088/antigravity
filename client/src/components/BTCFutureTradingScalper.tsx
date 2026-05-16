@@ -27,7 +27,10 @@ const BTC_ONLY_WATCHLIST = FUTURES_WATCHLIST.filter((item) => item.symbol === "B
 export function BTCFutureTradingScalper({
   strategyProfile,
 }: {
-  /** Optional A/B: e.g. `"scalp_aggro_v1"` — pair with a distinct `storageNamespace` in a forked route for clean comparison. */
+  /**
+   * Optional A/B profile: `"scalp_aggro_v1"` | `"fee_aware_v1"` (default baseline).
+   * Pair with a distinct `storageNamespace` in a forked route for clean localStorage comparison.
+   */
   strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
 } = {}) {
   return (

@@ -84,7 +84,7 @@ export function computeSessionTradingMetrics(
   };
 }
 
-export type FuturesStrategyProfile = "baseline" | "scalp_aggro_v1";
+export type FuturesStrategyProfile = "baseline" | "scalp_aggro_v1" | "fee_aware_v1";
 
 /**
  * Desk coherence: `buildPaperDeskStrategies` may **widen** `tpPct` (min TP/SL vs fees). The
@@ -94,15 +94,22 @@ export type FuturesStrategyProfile = "baseline" | "scalp_aggro_v1";
  * the existing `holdTimeMul` is applied in `paperResolveHardExit` — do not stack ad-hoc extra
  * `holdTimeMul` cuts on top of that without review.
  */
-export const FUTURES_STRATEGY_PROFILES: Record<
-  FuturesStrategyProfile,
-  { label: string; signalThresholdDelta: number; cooldownMul: number; holdTimeMul: number }
-> = {
+export type FuturesStrategyProfileConfig = {
+  label: string;
+  signalThresholdDelta: number;
+  cooldownMul: number;
+  holdTimeMul: number;
+  /** Multiplier on desk `minExpectedMoveSafetyK` (env + profile). */
+  minExpectedMoveSafetyKMul: number;
+};
+
+export const FUTURES_STRATEGY_PROFILES: Record<FuturesStrategyProfile, FuturesStrategyProfileConfig> = {
   baseline: {
     label: "Baseline",
     signalThresholdDelta: 0,
     cooldownMul: 1,
     holdTimeMul: 1,
+    minExpectedMoveSafetyKMul: 1,
   },
   scalp_aggro_v1: {
     label: "ScalpAggro v1",
@@ -115,11 +122,30 @@ export const FUTURES_STRATEGY_PROFILES: Record<
      * a compensating **base** hold bump in the hook — see module doc above.
      */
     holdTimeMul: 0.85,
+    minExpectedMoveSafetyKMul: 1,
+  },
+  fee_aware_v1: {
+    label: "FeeAware v1",
+    /** Stricter entries vs baseline (higher bar score required). */
+    signalThresholdDelta: 6,
+    cooldownMul: 1,
+    holdTimeMul: 1,
+    /** Tighter ATR$ vs fee hurdle (`deskMinExpectedMoveSafetyK × 1.25`). */
+    minExpectedMoveSafetyKMul: 1.25,
   },
 };
 
 export function resolveStrategyProfile(raw: string | undefined): FuturesStrategyProfile {
-  return raw === "scalp_aggro_v1" ? "scalp_aggro_v1" : "baseline";
+  if (raw === "scalp_aggro_v1") return "scalp_aggro_v1";
+  if (raw === "fee_aware_v1") return "fee_aware_v1";
+  return "baseline";
+}
+
+export function effectiveMinExpectedMoveSafetyK(
+  baseK: number,
+  profileCfg: Pick<FuturesStrategyProfileConfig, "minExpectedMoveSafetyKMul">,
+): number {
+  return baseK * profileCfg.minExpectedMoveSafetyKMul;
 }
 
 /** Closed trade with optional exit reason (paper desk). */

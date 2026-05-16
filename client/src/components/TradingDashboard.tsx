@@ -2307,9 +2307,24 @@ export default function TradingDashboard({
         workspaceLabel={activePreset.label}
         priceSeries={workspacePriceSeries}
         events={workspaceReplayEvents}
-        summary={activeModule === "niftyBees"
-            ? "Replay Nifty BEES ETF paper exits alongside the Angel One–driven live tape context."
-            : "Replay price movement, trade outcomes, and feed decisions without leaving the active workspace."}
+        deskReplay={
+          activeModule === "btcFuturesScalper" || activeModule === "btcFutureTrading"
+            ? {
+                symbol: "BTCUSD",
+                bars: 500,
+                fixture: "live",
+                accountKey:
+                  activeModule === "btcFutureTrading" ? "btc_future_trading_20" : "btc_futures_scalper",
+              }
+            : undefined
+        }
+        summary={
+          activeModule === "btcFutureTrading" || activeModule === "btcFuturesScalper"
+            ? "Run offline desk replay (dev API) on fixture klines — does not change live paper wallet or open positions."
+            : activeModule === "niftyBees"
+              ? "Replay Nifty BEES ETF paper exits alongside the Angel One–driven live tape context."
+              : "Replay price movement, trade outcomes, and feed decisions without leaving the active workspace."
+        }
       />
 
         </div>

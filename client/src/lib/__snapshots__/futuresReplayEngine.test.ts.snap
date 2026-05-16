@@ -1,0 +1,80 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and first clientTradeId 1`] = `
+{
+  "finalBalance": 1003.6338,
+  "firstClientTradeId": "c6dfe5f2-58e8-4334-8000-0046d4bc7",
+  "stats": {
+    "count": 10,
+    "exitReasonCounts": {
+      "PROFIT_LOCK": 9,
+      "SL": 1,
+    },
+    "expectancy": 0.3633758191498536,
+    "sumNet": 3.633758191498536,
+  },
+  "tradeCount": 10,
+  "trades": [
+    {
+      "clientTradeId": "c6dfe5f2-58e8-4334-8000-0046d4bc7",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.0511,
+      "strategyId": 111,
+    },
+    {
+      "clientTradeId": "e3aaa03c-7d9d-4641-8000-021180e09",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.0646,
+      "strategyId": 112,
+    },
+    {
+      "clientTradeId": "0fa7b6ff-9190-4a4c-8000-0cd1518ca",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.0126,
+      "strategyId": 112,
+    },
+    {
+      "clientTradeId": "c064d893-5e53-458f-8000-002d676a6",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": 2,
+      "strategyId": 112,
+    },
+    {
+      "clientTradeId": "787e63bc-e649-4d95-8000-0bacccd89",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": 2,
+      "strategyId": 112,
+    },
+    {
+      "clientTradeId": "cf2619fa-5111-4acd-8000-00d94b7cf",
+      "exitReason": "SL",
+      "netPnl": -0.1,
+      "strategyId": 112,
+    },
+    {
+      "clientTradeId": "ab437220-3574-4ea8-8000-069f1dc15",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.0196,
+      "strategyId": 111,
+    },
+    {
+      "clientTradeId": "5fc382c9-c1f4-4a28-8000-09d712cfc",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.024,
+      "strategyId": 111,
+    },
+    {
+      "clientTradeId": "868fb2fa-18b8-4647-8000-0443d1ccf",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.0103,
+      "strategyId": 111,
+    },
+    {
+      "clientTradeId": "3e5a4a01-a06d-4bb1-8000-0fce8e434",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": -0.084,
+      "strategyId": 111,
+    },
+  ],
+}
+`;

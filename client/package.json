@@ -7,9 +7,14 @@
     "build": "node --max-old-space-size=1024 ./node_modules/next/dist/bin/next build",
     "start": "node --max-old-space-size=512 ./node_modules/next/dist/bin/next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "replay": "npx tsx scripts/replay-paper-desk.ts",
+    "replay:fetch": "npx tsx scripts/replay-fetch.ts",
+    "replay:compare": "npx tsx scripts/replay-compare.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.105.4",
     "@types/pg": "^8.20.0",
     "exceljs": "^4.4.0",
     "https-proxy-agent": "^9.0.0",
@@ -18,7 +23,8 @@
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "undici": "^5.28.0"
+    "undici": "^5.28.0",
+    "zod": "^4.4.3"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -31,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.3",
     "typescript": "^5",
     "vitest": "^3.2.4"
   }

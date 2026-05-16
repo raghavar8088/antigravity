@@ -11,6 +11,41 @@
 
 export type PaperSide = "LONG" | "SHORT";
 
+/**
+ * Adverse fill adjustment in basis points (1 bps = 0.01%).
+ * `slippageUsd = price × (slippageBps / 10_000)`.
+ *
+ * Entry (taker worse fill):
+ * - LONG: `price × (1 + bps/10_000)`
+ * - SHORT: `price × (1 − bps/10_000)`
+ *
+ * Exit (taker worse fill vs level/mark):
+ * - LONG: `price × (1 − bps/10_000)` (receive less)
+ * - SHORT: `price × (1 + bps/10_000)` (cover higher)
+ *
+ * `slippageBps ≤ 0` or non-finite inputs → unchanged `price`.
+ */
+export function paperApplyEntrySlippage(side: PaperSide, price: number, slippageBps: number): number {
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(slippageBps) || slippageBps <= 0) return price;
+  const mul = slippageBps / 10_000;
+  return side === "LONG" ? price * (1 + mul) : price * (1 - mul);
+}
+
+export function paperApplyExitSlippage(side: PaperSide, price: number, slippageBps: number): number {
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(slippageBps) || slippageBps <= 0) return price;
+  const mul = slippageBps / 10_000;
+  return side === "LONG" ? price * (1 - mul) : price * (1 + mul);
+}
+
+/**
+ * |last − mark| / mark × 100 (%). Used to skip entries when last/mark diverge too far.
+ * Invalid or non-positive mark → `Infinity` (callers should treat as over any finite cap).
+ */
+export function paperLastMarkSpreadPct(last: number, mark: number): number {
+  if (!Number.isFinite(last) || !Number.isFinite(mark) || mark <= 0) return Infinity;
+  return (Math.abs(last - mark) / mark) * 100;
+}
+
 export type PaperHardExitReason = "LIQUIDATION_RISK" | "SL" | "TP" | "TIME";
 
 export type PaperHardExitResult =
@@ -244,6 +279,68 @@ export function paperApplyFuturesExitPatches(
   }
 
   return { adaptiveSl, breakevenMoved, peakReturnPctOnMargin };
+}
+
+export type PaperNotionalForTargetRiskArgs = {
+  equityUsd: number;
+  /** Context / future gates; sizing uses `slPct` + `entryPrice`. */
+  atr14: number;
+  markPrice: number;
+  /** Fill price for SL distance; defaults to `markPrice`. */
+  entryPrice?: number;
+  side: PaperSide;
+  /** Strategy stop % in the same units as `FuturesStratDef.slPct` (e.g. 0.4 = 0.4%). */
+  slPct: number;
+  takerFeePct: number;
+  /** Fraction of equity to risk at SL + round-trip fees (e.g. 0.01 = 1%). */
+  riskPctOfEquity: number;
+  minNotional: number;
+  maxNotional: number;
+};
+
+/**
+ * Target position notional so `paperEstimatedMaxLossAtStopSl` ≤ `equityUsd × riskPctOfEquity`,
+ * then clamp to `[minNotional, maxNotional]`.
+ *
+ * Uses linear scaling: loss at notional `N` is `N × lossPerDollar` where `lossPerDollar` is
+ * evaluated at `N = 1`. If no positive budget or invalid inputs → `minNotional`.
+ */
+export function paperNotionalForTargetRisk(args: PaperNotionalForTargetRiskArgs): number {
+  const {
+    equityUsd,
+    markPrice,
+    entryPrice: entryArg,
+    side,
+    slPct,
+    takerFeePct,
+    riskPctOfEquity,
+    minNotional,
+    maxNotional,
+  } = args;
+
+  const minN = Number.isFinite(minNotional) && minNotional > 0 ? minNotional : 100;
+  const maxN = Number.isFinite(maxNotional) && maxNotional >= minN ? maxNotional : minN;
+
+  if (!Number.isFinite(equityUsd) || equityUsd <= 0) return minN;
+  if (!Number.isFinite(slPct) || slPct <= 0) return minN;
+  if (!Number.isFinite(riskPctOfEquity) || riskPctOfEquity <= 0) return minN;
+
+  const entry = Number.isFinite(entryArg) && (entryArg ?? 0) > 0 ? (entryArg as number) : markPrice;
+  if (!Number.isFinite(entry) || entry <= 0) return minN;
+
+  const slFrac = slPct / 100;
+  const slPrice =
+    side === "LONG" ? entry * (1 - slFrac) : entry * (1 + slFrac);
+  if (!Number.isFinite(slPrice) || slPrice <= 0) return minN;
+
+  const lossPerUnit = paperEstimatedMaxLossAtStopSl(entry, slPrice, 1, side, takerFeePct);
+  if (!Number.isFinite(lossPerUnit) || lossPerUnit <= 0) return minN;
+
+  const riskBudget = equityUsd * riskPctOfEquity;
+  const raw = riskBudget / lossPerUnit;
+  if (!Number.isFinite(raw) || raw <= 0) return minN;
+
+  return Math.min(maxN, Math.max(minN, raw));
 }
 
 /**
