@@ -12,6 +12,7 @@ import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
 import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
+import { StrategyResearchPanel } from "@/components/btcFutures/StrategyResearchPanel";
 import {
   DeskButton,
   DeskCard,
@@ -246,6 +247,15 @@ export type BTCFuturesDeskPanelsProps = {
   setDisabledStrategies: (ids: number[]) => void;
   deskShadowIntentsEnabled: boolean;
   deskTestnetOpsEnabled: boolean;
+  researchMode?: boolean;
+  researchPoolIds?: number[];
+  researchWinners?: number[];
+  researchRetiredIds?: ReadonlySet<number>;
+  onPromoteResearchWinner?: (id: number) => void;
+  onRetireResearchStrategy?: (id: number) => void;
+  onUnretireResearchStrategy?: (id: number) => void;
+  onAutoRetireResearchLosers?: (ids: number[]) => void;
+  storageNamespace: string;
 };
 
 export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
@@ -280,6 +290,15 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
     setDisabledStrategies,
     deskShadowIntentsEnabled,
     deskTestnetOpsEnabled,
+    researchMode,
+    researchPoolIds,
+    researchWinners = [],
+    researchRetiredIds = new Set<number>(),
+    onPromoteResearchWinner,
+    onRetireResearchStrategy,
+    onUnretireResearchStrategy,
+    onAutoRetireResearchLosers,
+    storageNamespace,
   } = props;
 
   const [profileOpen, setProfileOpen] = useState(true);
@@ -587,6 +606,21 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
               )}
             </div>
             <ShadowIntentLogPanel enabled={deskShadowIntentsEnabled} signedIn={Boolean(cloudAccountKey)} />
+            {researchMode ? (
+              <div style={{ marginTop: 16 }}>
+                <StrategyResearchPanel
+                  cloudAccountKey={cloudAccountKey}
+                  storageNamespace={storageNamespace}
+                  winners={researchWinners}
+                  retiredIds={researchRetiredIds}
+                  onPromote={onPromoteResearchWinner ?? (() => undefined)}
+                  onRetire={onRetireResearchStrategy ?? (() => undefined)}
+                  onUnretire={onUnretireResearchStrategy ?? (() => undefined)}
+                  onAutoRetireLosers={onAutoRetireResearchLosers}
+                  poolIds={researchPoolIds}
+                />
+              </div>
+            ) : null}
             <CloudLeaderboardPanel
               cloudAccountKey={cloudAccountKey}
               disabledStrategyIds={disabledStrategies}

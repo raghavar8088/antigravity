@@ -70,5 +70,22 @@ NEXT_PUBLIC_DESK_ENTRY_UTC_END=24
 
 Storage/sync reminder: localhost uses browser `localStorage` for paper state, while Vercel/Supabase sync can merge trade history by account key. A stale local pause or disabled strategy list can make a desk look live but block opens; Reset account now clears `pauseEntries`, drawdown lock, cooldowns, and local paper state. On AWS/Vercel, verify the same user/session and storage namespace are being used before comparing browser state to cloud history.
 
+## BTC FT Research Mode
+
+Research/tournament mode is paper-only and env gated:
+
+```shell
+NEXT_PUBLIC_BTC_FT_RESEARCH_MODE=1
+NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD=22
+NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1
+NEXT_PUBLIC_BTC_FT_COOLDOWN_MUL=0.5
+NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL=0.85
+NEXT_PUBLIC_BTC_FT_SESSION=0-24
+NEXT_PUBLIC_BTC_FT_DISABLE_AUTO_KILL=1
+NEXT_PUBLIC_DESK_SLIPPAGE_BPS=5
+```
+
+Research mode rotates 30 active strategies from the verified BTC FT pool, keeps 12 max open slots, keeps spread/category/priority gates, charges slippage, funding, and fees, and writes Supabase paper trades for per-strategy ranking. Production mode stays conservative: CORE roster, threshold 26, and no automatic mainnet orders. Promote winners manually, then run production with `NEXT_PUBLIC_BTC_FT_WINNER_IDS=...`.
+
 ## 🛑 Safety Notice
 This codebase is an algorithmic framework theoretically capable of executing raw financial operations upon global centralized exchanges. Always mathematically verify Strategy algorithms internally inside `cmd/backtest/main.go` before swapping the engine over into the real-world `binance_live.go` physical pipeline!

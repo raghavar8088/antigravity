@@ -164,6 +164,20 @@ type BTCFuturesScalperProps = {
   strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
   relaxEntryConfirmation?: BTCFuturesEngineOptions["relaxEntryConfirmation"];
   forceProbeOpen?: BTCFuturesEngineOptions["forceProbeOpen"];
+  cooldownMultiplier?: BTCFuturesEngineOptions["cooldownMultiplier"];
+  minMoveKMultiplier?: BTCFuturesEngineOptions["minMoveKMultiplier"];
+  slippageBpsOverride?: BTCFuturesEngineOptions["slippageBpsOverride"];
+  disableAutoKill?: BTCFuturesEngineOptions["disableAutoKill"];
+  researchEnsureTrades?: BTCFuturesEngineOptions["researchEnsureTrades"];
+  entryUtcSessionOverride?: BTCFuturesEngineOptions["entryUtcSessionOverride"];
+  researchMode?: boolean;
+  researchPoolIds?: number[];
+  researchWinners?: number[];
+  researchRetiredIds?: ReadonlySet<number>;
+  onPromoteResearchWinner?: (id: number) => void;
+  onRetireResearchStrategy?: (id: number) => void;
+  onUnretireResearchStrategy?: (id: number) => void;
+  onAutoRetireResearchLosers?: (ids: number[]) => void;
   watchlist?: FuturesWatchItem[];
   storageNamespace?: string;
   baseBalance?: number;
@@ -188,6 +202,20 @@ export function BTCFuturesScalper({
   strategyProfile,
   relaxEntryConfirmation,
   forceProbeOpen,
+  cooldownMultiplier,
+  minMoveKMultiplier,
+  slippageBpsOverride,
+  disableAutoKill,
+  researchEnsureTrades,
+  entryUtcSessionOverride,
+  researchMode = false,
+  researchPoolIds,
+  researchWinners = [],
+  researchRetiredIds = new Set(),
+  onPromoteResearchWinner,
+  onRetireResearchStrategy,
+  onUnretireResearchStrategy,
+  onAutoRetireResearchLosers,
   watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
@@ -240,6 +268,12 @@ export function BTCFuturesScalper({
     strategyProfile,
     relaxEntryConfirmation,
     forceProbeOpen,
+    cooldownMultiplier,
+    minMoveKMultiplier,
+    slippageBpsOverride,
+    disableAutoKill,
+    researchEnsureTrades,
+    entryUtcSessionOverride,
     storageNamespace,
     supabaseUserId: authUser?.id ?? null,
   });
@@ -511,6 +545,15 @@ export function BTCFuturesScalper({
         setDisabledStrategies={setDisabledStrategies}
         deskShadowIntentsEnabled={deskShadowIntentsEnabled}
         deskTestnetOpsEnabled={deskTestnetOpsEnabled}
+        researchMode={researchMode}
+        researchPoolIds={researchPoolIds}
+        researchWinners={researchWinners}
+        researchRetiredIds={researchRetiredIds}
+        onPromoteResearchWinner={onPromoteResearchWinner}
+        onRetireResearchStrategy={onRetireResearchStrategy}
+        onUnretireResearchStrategy={onUnretireResearchStrategy}
+        onAutoRetireResearchLosers={onAutoRetireResearchLosers}
+        storageNamespace={storageNamespace?.trim() || "btc_futures_scalper"}
       />
 
     </DeskShell>

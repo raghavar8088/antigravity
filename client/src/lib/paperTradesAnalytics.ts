@@ -6,6 +6,12 @@ export type StratTradeRow = {
   strategyId: number;
   netPnl: number;
   closedAt?: string;
+  /** Optional: gross PnL before fees (for feePctOfGross calculation). */
+  grossPnl?: number;
+  /** Optional: total fees on this trade. */
+  fees?: number;
+  /** Optional: open→close duration in minutes. */
+  holdMinutes?: number;
 };
 
 export type StrategyStatRow = {
@@ -172,6 +178,7 @@ export function splitLeaderboardTopBottom(
   return { top, bottom };
 }
 
+
 export function leaderboardRowsFromDb(
   rows: ReadonlyArray<{
     strategy_id: number;
@@ -187,3 +194,102 @@ export function leaderboardRowsFromDb(
     closedAt: r.closed_at,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Research tournament: richer per-strategy stats + verdict
+// ---------------------------------------------------------------------------
+
+export type ResearchDbRow = {
+  strategy_id: number;
+  strategy_name?: string;
+  net_pnl: number;
+  gross_pnl?: number;
+  fees?: number;
+  opened_at?: string;
+  closed_at?: string;
+};
+
+export type ResearchAggRow = {
+  strategyId: number;
+  strategyName: string;
+  tradeCount: number;
+  sumNet: number;
+  expectancy: number;
+  winRate: number;
+  /** sum(fees) / sum(|gross_pnl|) * 100 — null when gross is 0. */
+  feePctOfGross: number | null;
+  avgHoldMin: number | null;
+  lastTradeAt: string | null;
+};
+
+/** Aggregate research tournament stats from raw DB rows (includes hold time + fee ratio). */
+export function aggregateResearchStratStats(rows: ResearchDbRow[]): ResearchAggRow[] {
+  const map = new Map<
+    number,
+    {
+      name: string;
+      count: number;
+      sumNet: number;
+      wins: number;
+      sumGross: number;
+      sumFees: number;
+      sumHoldMin: number;
+      holdMinCount: number;
+      lastAt: string | null;
+    }
+  >();
+
+  for (const r of rows) {
+    if (!Number.isFinite(r.strategy_id) || !Number.isFinite(r.net_pnl)) continue;
+    const cur = map.get(r.strategy_id) ?? {
+      name: r.strategy_name?.trim() || `Strat ${r.strategy_id}`,
+      count: 0,
+      sumNet: 0,
+      wins: 0,
+      sumGross: 0,
+      sumFees: 0,
+      sumHoldMin: 0,
+      holdMinCount: 0,
+      lastAt: null,
+    };
+
+    cur.count += 1;
+    cur.sumNet += r.net_pnl;
+    if (r.net_pnl > 0) cur.wins += 1;
+    if (typeof r.gross_pnl === "number" && Number.isFinite(r.gross_pnl)) cur.sumGross += Math.abs(r.gross_pnl);
+    if (typeof r.fees === "number" && Number.isFinite(r.fees)) cur.sumFees += r.fees;
+    if (r.strategy_name?.trim()) cur.name = r.strategy_name.trim();
+
+    // Hold minutes from opened_at + closed_at
+    if (r.opened_at && r.closed_at) {
+      const openMs = Date.parse(r.opened_at);
+      const closeMs = Date.parse(r.closed_at);
+      if (Number.isFinite(openMs) && Number.isFinite(closeMs) && closeMs > openMs) {
+        cur.sumHoldMin += (closeMs - openMs) / 60_000;
+        cur.holdMinCount += 1;
+      }
+    }
+
+    // Latest closed trade
+    if (r.closed_at) {
+      if (!cur.lastAt || r.closed_at > cur.lastAt) cur.lastAt = r.closed_at;
+    }
+
+    map.set(r.strategy_id, cur);
+  }
+
+  return [...map.entries()]
+    .map(([strategyId, s]) => ({
+      strategyId,
+      strategyName: s.name,
+      tradeCount: s.count,
+      sumNet: Math.round(s.sumNet * 100) / 100,
+      expectancy: s.count > 0 ? Math.round((s.sumNet / s.count) * 1000) / 1000 : 0,
+      winRate: s.count > 0 ? Math.round((s.wins / s.count) * 1000) / 1000 : 0,
+      feePctOfGross: s.sumGross > 0 ? Math.round((s.sumFees / s.sumGross) * 10000) / 100 : null,
+      avgHoldMin: s.holdMinCount > 0 ? Math.round((s.sumHoldMin / s.holdMinCount) * 10) / 10 : null,
+      lastTradeAt: s.lastAt,
+    }))
+    .sort((a, b) => b.sumNet - a.sumNet);
+}
+
