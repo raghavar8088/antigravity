@@ -17,7 +17,12 @@
  */
 
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
-import { BTC_FUTURE_TRADING_STRATEGY_IDS, CORE_BTC_FT_STRATEGY_IDS } from "@/lib/btcFtRoster";
+import {
+  BTC_FUTURE_TRADING_STRATEGY_IDS,
+  CORE_BTC_FT_STRATEGY_IDS,
+  resolveBtcFtActiveStrategyIds as resolveBaseBtcFtActiveStrategyIds,
+  type BtcFtRosterSource,
+} from "@/lib/btcFtRoster";
 import type { DeskEntryUtcSession } from "@/lib/futuresDeskPolicy";
 
 // ---------------------------------------------------------------------------
@@ -26,6 +31,10 @@ import type { DeskEntryUtcSession } from "@/lib/futuresDeskPolicy";
 
 export function isResearchModeEnabled(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_RESEARCH_MODE === "1";
+}
+
+export function isWinnersOnlyModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_BTC_FT_WINNERS_ONLY === "1";
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +184,104 @@ export function resolveCoreWinners(ns: string): number[] {
   const envWinners = loadWinnersFromEnv();
   if (envWinners.length > 0) return envWinners;
   return loadWinnersFromStorage(ns).filter((id) => BTC_FUTURE_TRADING_STRATEGY_IDS.includes(id)).slice(0, 15);
+}
+
+function parseExplicitBtcFtStrategyIds(cap: number): number[] {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_STRATEGY_IDS;
+  if (!raw || raw.trim() === "") return [];
+  const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((id) => Number.isFinite(id) && valid.has(id)),
+    ),
+  ].slice(0, cap);
+}
+
+export type BtcFtResearchRosterSource = BtcFtRosterSource | "winners" | "winners-empty";
+
+export type BtcFtResearchRosterResolution = {
+  ids: number[];
+  source: BtcFtResearchRosterSource;
+  isLargeRoster: boolean;
+  winnersOnly: boolean;
+};
+
+/**
+ * BTC Future Trading roster resolver with the production winners-only override.
+ *
+ * When NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1, research rotation and ranked/core
+ * fallback are bypassed. The active roster is promoted winners only, capped at
+ * 20. If no promoted winners exist, an explicit NEXT_PUBLIC_BTC_FT_STRATEGY_IDS
+ * line may be used as the manual production roster; otherwise ids=[] so the UI
+ * can stop the engine instead of accidentally running the full library.
+ */
+export function resolveBtcFtActiveStrategyIds(opts: {
+  storageNamespace?: string;
+  winnerIds?: readonly number[];
+} = {}): BtcFtResearchRosterResolution {
+  if (isWinnersOnlyModeEnabled()) {
+    const ns = opts.storageNamespace ?? "btc_future_trading_20";
+    const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+    const promoted = [
+      ...new Set(
+        (opts.winnerIds ?? resolveCoreWinners(ns))
+          .map((id) => Math.floor(id))
+          .filter((id) => valid.has(id)),
+      ),
+    ].slice(0, 20);
+    if (promoted.length > 0) {
+      return { ids: promoted, source: "winners", isLargeRoster: false, winnersOnly: true };
+    }
+
+    const explicit = parseExplicitBtcFtStrategyIds(20);
+    if (explicit.length > 0) {
+      return { ids: explicit, source: "env", isLargeRoster: false, winnersOnly: true };
+    }
+
+    return { ids: [], source: "winners-empty", isLargeRoster: false, winnersOnly: true };
+  }
+
+  const base = resolveBaseBtcFtActiveStrategyIds();
+  return { ...base, winnersOnly: false };
+}
+
+export async function loadPromotedWinnerIds(opts: {
+  storageNamespace: string;
+  cloudAccountKey?: string | null;
+  fetcher?: typeof fetch;
+}): Promise<number[]> {
+  const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+  const local = loadWinnersFromStorage(opts.storageNamespace).filter((id) => valid.has(id));
+  const fetcher = opts.fetcher ?? (typeof fetch !== "undefined" ? fetch : null);
+  if (!fetcher || !opts.cloudAccountKey) {
+    return [...new Set(local)].slice(0, 20);
+  }
+
+  try {
+    const params = new URLSearchParams({
+      promotions: "1",
+      account_key: opts.cloudAccountKey,
+    });
+    const res = await fetcher(`/api/paper-trades/strategy-research?${params.toString()}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return [...new Set(local)].slice(0, 20);
+    const body = (await res.json()) as {
+      ok?: boolean;
+      promotions?: Array<{ strategyId?: unknown; status?: unknown }>;
+    };
+    const cloud = (body.ok && Array.isArray(body.promotions) ? body.promotions : [])
+      .filter((row) => row.status === "winner")
+      .map((row) => Number(row.strategyId))
+      .filter((id) => Number.isFinite(id) && valid.has(id));
+    return [...new Set([...local, ...cloud])].slice(0, 20);
+  } catch {
+    return [...new Set(local)].slice(0, 20);
+  }
 }
 
 export function saveWinnersToStorage(ns: string, ids: number[]): void {

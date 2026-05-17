@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   computeVerdict,
   resolveResearchActiveIds,
   isResearchModeEnabled,
+  resolveBtcFtActiveStrategyIds,
 } from "./btcFtResearch";
 import { aggregateResearchStratStats, type ResearchDbRow } from "./paperTradesAnalytics";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // ---------------------------------------------------------------------------
 // Verdict logic tests
@@ -162,5 +167,42 @@ describe("isResearchModeEnabled", () => {
   it("returns false when env is not set", () => {
     // In vitest, NEXT_PUBLIC_BTC_FT_RESEARCH_MODE is unset by default
     expect(isResearchModeEnabled()).toBe(false);
+  });
+});
+
+describe("resolveBtcFtActiveStrategyIds winners-only", () => {
+  it("uses promoted winners only and caps to 20 when WINNERS_ONLY=1", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_WINNERS_ONLY", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
+    const winnerIds = Array.from({ length: 25 }, (_, i) => 200 + i);
+
+    const result = resolveBtcFtActiveStrategyIds({ winnerIds });
+
+    expect(result.winnersOnly).toBe(true);
+    expect(result.source).toBe("winners");
+    expect(result.ids).toEqual(winnerIds.slice(0, 20));
+    expect(result.isLargeRoster).toBe(false);
+  });
+
+  it("falls back to explicit BTC_FT_STRATEGY_IDS when winners-only has no promoted winners", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_WINNERS_ONLY", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "91,92,95");
+
+    const result = resolveBtcFtActiveStrategyIds({ winnerIds: [] });
+
+    expect(result.winnersOnly).toBe(true);
+    expect(result.source).toBe("env");
+    expect(result.ids).toEqual([91, 92, 95]);
+  });
+
+  it("returns empty winners roster when no promoted or explicit IDs exist", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_WINNERS_ONLY", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
+
+    const result = resolveBtcFtActiveStrategyIds({ winnerIds: [] });
+
+    expect(result.winnersOnly).toBe(true);
+    expect(result.source).toBe("winners-empty");
+    expect(result.ids).toEqual([]);
   });
 });

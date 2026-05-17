@@ -52,7 +52,7 @@ function fmtPct(n: number | null) {
 
 export function StrategyResearchPanel({
   cloudAccountKey,
-  storageNamespace: _ns,
+  storageNamespace,
   winners,
   retiredIds,
   onPromote,
@@ -65,6 +65,7 @@ export function StrategyResearchPanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [windowDays, setWindowDays] = useState(60);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     if (!cloudAccountKey) return;
@@ -109,6 +110,38 @@ export function StrategyResearchPanel({
 
   const isWinner = (id: number) => winners.includes(id);
   const isRetired = (id: number) => retiredIds.has(id);
+  const winnerIds = [...new Set(winners)].sort((a, b) => a - b);
+  const winnersEnvLine = `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS=${winnerIds.join(",")}`;
+  const downloadWinnersJson = useCallback(() => {
+    setExportMessage(null);
+    const payload = {
+      storageNamespace,
+      exportedAt: new Date().toISOString(),
+      strategyIds: winnerIds,
+      env: winnersEnvLine,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "btc-ft-winners.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setExportMessage(`Exported ${winnerIds.length} winners.`);
+  }, [storageNamespace, winnerIds, winnersEnvLine]);
+
+  const copyWinnersEnvLine = useCallback(async () => {
+    setExportMessage(null);
+    try {
+      await navigator.clipboard.writeText(winnersEnvLine);
+      setExportMessage("Copied NEXT_PUBLIC_BTC_FT_STRATEGY_IDS line.");
+    } catch {
+      setExportMessage(winnersEnvLine);
+    }
+  }, [winnersEnvLine]);
+
   const persistPromotion = useCallback(async (strategyId: number, status: "winner" | "retired") => {
     if (!cloudAccountKey) return;
     try {
@@ -252,6 +285,22 @@ export function StrategyResearchPanel({
         subtitle={`${windowDays}d window · ${rows.length} strategies · paper only`}
         actions={
           <>
+            <DeskButton
+              variant="outlined"
+              onClick={downloadWinnersJson}
+              disabled={winnerIds.length === 0}
+              style={{ fontSize: 11 }}
+            >
+              Export winners JSON
+            </DeskButton>
+            <DeskButton
+              variant="outlined"
+              onClick={() => void copyWinnersEnvLine()}
+              disabled={winnerIds.length === 0}
+              style={{ fontSize: 11 }}
+            >
+              Copy env line
+            </DeskButton>
             {[30, 60, 90].map((d) => (
               <DeskButton
                 key={d}
@@ -297,6 +346,12 @@ export function StrategyResearchPanel({
       {error && (
         <div style={{ marginBottom: 12 }}>
           <DeskBanner variant="warning" title="Load error">{error}</DeskBanner>
+        </div>
+      )}
+
+      {exportMessage && (
+        <div style={{ marginBottom: 12 }}>
+          <DeskBanner variant="info" title="Winners export">{exportMessage}</DeskBanner>
         </div>
       )}
 

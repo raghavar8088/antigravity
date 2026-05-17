@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const windowDaysRaw = Number(url.searchParams.get("window_days") ?? "60");
   const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw > 0 ? Math.min(365, windowDaysRaw) : 60;
   const poolIdsRaw = url.searchParams.get("pool_ids") ?? "";
+  const promotionsOnly = url.searchParams.get("promotions") === "1";
 
   const match = assertCloudAccountMatchesSession(auth.ctx.userId, accountKeyParam);
   if (!match.ok) {
@@ -40,6 +41,30 @@ export async function GET(req: Request) {
   }
 
   const account_key = match.userId;
+
+  if (promotionsOnly) {
+    const { data, error } = await supabase
+      .from("strategy_promotions")
+      .select("strategy_id, status, promoted_at")
+      .eq("user_id", account_key)
+      .order("promoted_at", { ascending: false });
+
+    if (error) {
+      console.error("[paper-trades/strategy-research] promotions", error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      accountKey: account_key,
+      promotions: (data ?? []).map((row) => ({
+        strategyId: row.strategy_id,
+        status: row.status,
+        promotedAt: row.promoted_at,
+      })),
+    });
+  }
+
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
 
   let query = supabase

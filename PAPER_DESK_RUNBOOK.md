@@ -42,3 +42,21 @@ npm run research:rank-btc-ft
 ```
 
 The script reads Supabase `paper_trades` using the service role key, merges optional replay rankings, and writes `fixtures/research/btc_ft_verdicts.json`.
+
+## After Research -> Winners Only
+
+1. In the Strategy Research / Tournament panel, promote only strategies with enough data and positive net expectancy.
+2. Use **Export winners JSON** for an audit file and **Copy env line** to copy `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS=...`.
+3. Switch the BTC FT desk to production winners mode:
+
+```shell
+NEXT_PUBLIC_BTC_FT_RESEARCH_MODE=0
+NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1
+NEXT_PUBLIC_BTC_FT_STRATEGY_IDS=200,204,211,224,240
+NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD=26
+NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=0
+```
+
+Winners-only mode runs promoted/manual winners only, capped at 20 IDs. It forces production-safe gates even if research mode was accidentally left on: threshold 26, relaxed confirmation off, cooldown 1x, min-move K 1x, and auto-kill on. If no winners are available, the desk shows "No winners - run research or set BTC_FT_STRATEGY_IDS" and does not start the full library.
+
+Keep this as live-prep paper until you manually review results. There is no Delta mainnet auto-order path in this mode.

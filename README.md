@@ -87,5 +87,18 @@ NEXT_PUBLIC_DESK_SLIPPAGE_BPS=5
 
 Research mode rotates 30 active strategies from the verified BTC FT pool, keeps 12 max open slots, keeps spread/category/priority gates, charges slippage, funding, and fees, and writes Supabase paper trades for per-strategy ranking. Production mode stays conservative: CORE roster, threshold 26, and no automatic mainnet orders. Promote winners manually, then run production with `NEXT_PUBLIC_BTC_FT_WINNER_IDS=...`.
 
+### After Research -> Winners Only
+
+When the tournament has enough closed paper trades, promote winners from the Strategy Research panel and switch to winners production mode:
+
+```shell
+NEXT_PUBLIC_BTC_FT_RESEARCH_MODE=0
+NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1
+# Optional manual fallback copied from the panel:
+NEXT_PUBLIC_BTC_FT_STRATEGY_IDS=91,92,95
+```
+
+Winners-only mode disables research rotation and forces production gates even if `NEXT_PUBLIC_BTC_FT_RESEARCH_MODE` is accidentally still `1`: threshold 26, relaxed confirmation off, cooldown 1x, min-move K 1x, and auto-kill on. If no promoted winners are found in localStorage/Supabase and no manual `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS` list is set, the desk shows a warning and does not start the full strategy library. This is still paper-only; it does not place Delta mainnet orders.
+
 ## 🛑 Safety Notice
 This codebase is an algorithmic framework theoretically capable of executing raw financial operations upon global centralized exchanges. Always mathematically verify Strategy algorithms internally inside `cmd/backtest/main.go` before swapping the engine over into the real-world `binance_live.go` physical pipeline!
