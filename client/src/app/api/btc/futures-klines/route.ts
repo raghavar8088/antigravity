@@ -18,6 +18,16 @@ const JSON_HEADERS = {
   "User-Agent": "RAIG-Trading/1.0",
 };
 
+async function fetchWithRetry(url: string, retries = 2, delayMs = 300): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(url, { headers: JSON_HEADERS, cache: "no-store" });
+    if (res.ok || attempt === retries) return res;
+    await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+  }
+  // unreachable but satisfies TypeScript
+  return fetch(url, { headers: JSON_HEADERS, cache: "no-store" });
+}
+
 function n(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -85,14 +95,10 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     // Fetch candles, ticker (for mark price), and funding rate
     const [candlesRes, tickerRes] = await Promise.all([
-      fetch(
+      fetchWithRetry(
         `${DELTA_REST_BASE}/v2/history/candles?resolution=1m&symbol=${encodeURIComponent(symbol)}&start=${startSec}&end=${endSec}`,
-        { headers: JSON_HEADERS, cache: "no-store" }
       ),
-      fetch(`${DELTA_REST_BASE}/v2/tickers/${encodeURIComponent(symbol)}`, {
-        headers: JSON_HEADERS,
-        cache: "no-store",
-      }),
+      fetchWithRetry(`${DELTA_REST_BASE}/v2/tickers/${encodeURIComponent(symbol)}`),
     ]);
 
     if (!candlesRes.ok) {

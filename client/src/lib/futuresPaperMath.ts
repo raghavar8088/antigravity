@@ -59,10 +59,13 @@ export function paperLiquidationPrice(
   leverage: number,
   maintenanceMarginPct = 0.005,
 ): number {
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0) return 0;
+  // Leverage must be >= 1; below 1x isolated margin the formula produces a negative liq price
+  const lev = Math.max(1, leverage);
   if (side === "LONG") {
-    return entryPrice * (1 - 1 / leverage + maintenanceMarginPct);
+    return entryPrice * (1 - 1 / lev + maintenanceMarginPct);
   }
-  return entryPrice * (1 + 1 / leverage - maintenanceMarginPct);
+  return entryPrice * (1 + 1 / lev - maintenanceMarginPct);
 }
 
 /** True when mark has crossed through modeled liquidation (first liq check in runtime). */
@@ -73,6 +76,7 @@ export function paperLiquidationCrossed(side: PaperSide, markPrice: number, liqu
 
 /** % distance from price to liquidation (used for stats / trade record), same as legacy hook. */
 export function paperLiquidationDistancePct(price: number, liquidationPrice: number, side: PaperSide): number {
+  if (!Number.isFinite(price) || price <= 0) return Infinity;
   if (side === "LONG") {
     return ((price - liquidationPrice) / price) * 100;
   }
@@ -86,7 +90,7 @@ export function paperLinearGrossPnl(
   notional: number,
   side: PaperSide,
 ): number {
-  if (!entryPrice || !Number.isFinite(notional) || notional <= 0) return 0;
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(notional) || notional <= 0) return 0;
   const pct =
     side === "LONG"
       ? (markOrExitPrice - entryPrice) / entryPrice
@@ -99,7 +103,7 @@ export function paperLinearGrossPnl(
  * Same sign convention as {@link paperLinearGrossPnl} before notional multiply.
  */
 export function paperPriceMovePctOnNotional(entryPrice: number, exitPrice: number, side: PaperSide): number {
-  if (!entryPrice || !Number.isFinite(entryPrice) || !Number.isFinite(exitPrice)) return 0;
+  if (!Number.isFinite(entryPrice) || entryPrice <= 0 || !Number.isFinite(exitPrice)) return 0;
   return side === "LONG"
     ? ((exitPrice - entryPrice) / entryPrice) * 100
     : ((entryPrice - exitPrice) / entryPrice) * 100;

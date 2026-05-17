@@ -524,24 +524,42 @@ type AgentSignalForExec struct {
 	confidence    float64
 }
 
-// computeRSI calculates RSI(n) from a price slice.
+// computeRSI calculates RSI(n) using Wilder's smoothed average method.
+// Requires at least period+1 prices; returns neutral 50 when insufficient data.
 func computeRSI(prices []float64, period int) float64 {
 	if len(prices) < period+1 {
 		return 50.0
 	}
-	gains, losses := 0.0, 0.0
-	for i := len(prices) - period; i < len(prices); i++ {
+
+	// Seed: simple average of first `period` deltas
+	avgGain, avgLoss := 0.0, 0.0
+	for i := 1; i <= period; i++ {
 		delta := prices[i] - prices[i-1]
 		if delta > 0 {
-			gains += delta
+			avgGain += delta
 		} else {
-			losses -= delta
+			avgLoss -= delta
 		}
 	}
-	if losses == 0 {
+	avgGain /= float64(period)
+	avgLoss /= float64(period)
+
+	// Wilder smoothing over remaining bars
+	for i := period + 1; i < len(prices); i++ {
+		delta := prices[i] - prices[i-1]
+		if delta > 0 {
+			avgGain = (avgGain*float64(period-1) + delta) / float64(period)
+			avgLoss = (avgLoss * float64(period-1)) / float64(period)
+		} else {
+			avgGain = (avgGain * float64(period-1)) / float64(period)
+			avgLoss = (avgLoss*float64(period-1) + (-delta)) / float64(period)
+		}
+	}
+
+	if avgLoss == 0 {
 		return 100.0
 	}
-	rs := (gains / float64(period)) / (losses / float64(period))
+	rs := avgGain / avgLoss
 	return 100 - (100 / (1 + rs))
 }
 
@@ -1185,8 +1203,8 @@ func (o *Orchestrator) GetLastPrice() float64 {
 func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool) {
 	adjusted := sig
 
-	if adjusted.Confidence == 0 {
-		adjusted.Confidence = 1.0
+	if adjusted.Confidence <= 0 {
+		return adjusted, fmt.Sprintf("confidence %.2f is invalid (must be > 0)", adjusted.Confidence), false
 	}
 	if adjusted.Confidence < 0.78 {
 		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, 0.78), false
@@ -1241,10 +1259,10 @@ func isTrustedStrategy(name string, confidence float64) bool {
 }
 
 func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) float64 {
-	adjusted := confidence
-	if adjusted == 0 {
-		adjusted = 1.0
+	if confidence <= 0 {
+		return 0
 	}
+	adjusted := confidence
 
 	if executionWeight < 1 {
 		adjusted *= 0.80 + 0.20*executionWeight
