@@ -419,12 +419,26 @@ export function deskEntryReplaceWeakestFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST === "1";
 }
 
+/**
+ * Module-only signal threshold for BTC Future Trading route.
+ * Env: `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD`, default 26, clamp [18, 32].
+ * Lower values (e.g. 24 or 22) allow more candidates on chop — only change via env, never globally.
+ */
 export function btcFtSignalThresholdFromEnv(fallback = 26): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
-  return Math.min(28, Math.max(22, Math.round(n)));
+  // Clamp 18–32: dev-friendly (18) to conservative (32); 26 is prod baseline.
+  return Math.min(32, Math.max(18, Math.round(n)));
+}
+
+/**
+ * Alias used by engine to read the BTC FT module-only threshold.
+ * Named separately so call-sites in the hook stay explicit about which module they serve.
+ */
+export function deskBtcFtSignalThresholdFromEnv(): number {
+  return btcFtSignalThresholdFromEnv(26);
 }
 
 export function btcFtRelaxConfirmEnabledFromEnv(): boolean {

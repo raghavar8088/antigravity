@@ -10,7 +10,8 @@
     "test": "vitest run",
     "replay": "npx tsx scripts/replay-paper-desk.ts",
     "replay:fetch": "npx tsx scripts/replay-fetch.ts",
-    "replay:compare": "npx tsx scripts/replay-compare.ts"
+    "replay:compare": "npx tsx scripts/replay-compare.ts",
+    "rank:btc-ft": "npx tsx scripts/rank-btc-ft-strategies.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",

@@ -31,18 +31,87 @@ Paper futures desks use a shared **M3-style** layer (Tailwind v4 + CSS tokens, n
 
 Theme: `DeskThemeToggle` + existing combat/light body class; `data-theme` on `<html>`.
 
-### No paper trades on BTC Future Trading?
+## BTC Future Trading — troubleshooting zero trades {#btc-ft-no-trades}
 
-Checklist (paper desk only — not Delta exchange orders unless Testnet Ops):
+### Problem statement
 
-1. **Pause entries** — resume in the hero card; persisted in `btc_future_trading_20_paper_state`.
-2. **Feed banner** — degraded/stale klines block entries (`payloads.size === 0`); need ≥18 bars on BTCUSD.
-3. **Drawdown lock** — 25% peak-to-trough pauses new entries (`isDrawdownLocked` in desk profile).
-4. **Signal bar** — default effective threshold **26**; many polls fail `evalMinuteSignal` or `passesEntryConfirmation` before `tryOpenCandidate`.
-5. **Regime** — Trend strats skip in `chop`; see **Skip regime** in expanded desk profile.
-6. **Min move vs fees** — `paperMinExpectedMoveVsFees` on ~$100 min notional.
-7. **Auto-disabled** — `NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS=1` + Supabase kill switch.
-8. **Entry debug** — set `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1`, reload, read **Entry debug (last poll)** panel.
+**Before fix:** 120 strategies × 1 symbol (BTCUSD) × threshold 26 + regime/min-move/session gates → on choppy 1m bars `evalPairs` is high but `candidatesBuilt ≈ 0`. Not a missing feature; the roster + gates were too strict for typical 1m chop.
+
+**After fix:** Default roster is CORE only (~20 curated IDs). Threshold is module-only env-gated. Dominant blocker is shown prominently in EntryDebugPanel.
+
+---
+
+### PR change summary
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Active strats (default) | 120 | CORE ~20 |
+| Threshold clamp | 22–28 (hardcoded) | 18–32 (env-gated, module-only) |
+| Dominant blocker UI | Absent | Prominent callout + % of evals |
+| Large-roster warning | None | DeskBanner when > 30 IDs |
+| Rank script | None | `npm run rank:btc-ft` stub |
+
+---
+
+### Dominant blocker troubleshooting table
+
+Enable `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1` to see the **Dominant blocker** tile in the Entry debug panel.
+
+| Blocker | Root cause | Env / action |
+|---------|-----------|--------------|
+| `SIGNAL` | Score < threshold on 1m bars | Lower `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD` (try 24); wait for volatility |
+| `CONFIRM` | HTF/confluence extras failing | Set `NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1` (dev only) or wait for trend |
+| `REGIME` | Chop but strat requires trend | Wait for breakout; tune `DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID` |
+| `MIN_MOVE` | ATR below fee hurdle | Lower `NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K`; wait for volatility |
+| `SESSION` | Outside UTC entry window | Check `NEXT_PUBLIC_DESK_ENTRY_UTC_START` / `END` |
+| `SPREAD` | Last–mark spread too wide | Lower `NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT` |
+| `CATEGORY` | Per-category cap reached | Raise `NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY` or wait for closes |
+| `PAUSED` | Entries manually paused | Click "Resume entries" in hero card |
+| `DRAWDOWN` | 25% equity drawdown lock | Wait for recovery or reset paper account |
+| `DATA` | No market data | Check feed banner; wait for BTCUSD klines |
+| `NONE` | No skips — entries opening | Normal operation |
+
+---
+
+### Roster sizing
+
+Increasing active count above CORE **requires** explicit opt-in:
+
+```bash
+# Use comma list (cap 120):
+NEXT_PUBLIC_BTC_FT_STRATEGY_IDS=91,92,95,96,111,112,...
+
+# Use CORE + top-10 from rankings (requires npm run rank:btc-ft first):
+NEXT_PUBLIC_BTC_FT_USE_RANKED=1
+```
+
+> **Warning** — enabling > 30 IDs on a single symbol (BTCUSD) with threshold 26 produces few or zero entries on chop. This is expected behavior, not a bug. A DeskBanner will appear as a reminder.
+
+---
+
+### Dev smoke test flags (dev only, default OFF)
+
+| Flag | Effect | Safety |
+|------|--------|--------|
+| `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD=24` | Lower module threshold | Module-only; do NOT lower global desk threshold |
+| `NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1` | Skip HTF/confluence extras | Dev/chop testing only; **never** in production |
+| `NEXT_PUBLIC_DESK_FORCE_PROBE_OPEN=1` | One probe LONG after first ready poll | Proves ledger path; paper-only |
+| `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1` | Entry funnel panel | Safe in any env; shows dominant blocker |
+
+---
+
+### Manual verify checklist
+
+1. **Fresh deploy, default env** → Active strategies chip shows ≤ 30 (e.g. "20 strategies (CORE)")
+2. **ENTRY_DEBUG=1** → Reload → `dominantBlocker` visible in Entry debug panel
+3. **Resume entries, 15 min, feed OK** → `candidatesBuilt > 0` at least once on a volatile BTC day; if still 0 check blocker table above
+4. **Optional threshold 24** (`NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD=24`) → More `failSignal` passes, not guaranteed profit
+
+---
+
+### Previous behavior (for reference only)
+
+
 
 ### Workspace vs paper equity
 
