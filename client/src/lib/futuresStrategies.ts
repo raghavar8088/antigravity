@@ -1,29 +1,14 @@
 /**
  * Futures strategy definitions — shared by the hook, signal engine, and tests.
- * Shape and values must remain identical to the original inline STRAT_DEFS.
+ * Extended BTC FT proof defs (200–219) merged from `btcFtStrategyTemplates.ts`.
  */
 
-/** 15m book regime from ADX proxy + ATR percentile (`classifyRegimeTagFrom1mOhlcv`). Empty / omit `regimes` → allow all. */
-export type RegimeTag = "chop" | "trendLow" | "trendHigh";
+import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+import { BTC_FT_EXTENDED_DEFS_PROOF } from "@/lib/btcFtStrategyTemplates";
 
-export interface FuturesStratDef {
-  id: number;
-  name: string;
-  category: string;
-  signalKey: string;
-  slPct: number;
-  tpPct: number;
-  cooldownMin: number;
-  holdMinutes: number;
-  confluenceMin: number;
-  requiresHtf?: boolean;
-  /** Set by `buildPaperDeskStrategies` when `tpPct` was raised for min TP/SL ratio. */
-  deskTpWidened?: boolean;
-  /** If set and non-empty, entries only when `classifyRegimeTagFrom1mOhlcv` is in this set. */
-  regimes?: RegimeTag[];
-}
+export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
-export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
+const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
   // 1-30: Original strategies (EMA, BB, RSI, Stoch, MACD, OBV, Confluence)
   { id: 1, name: "EMA_Cross_Long", category: "Trend", signalKey: "EMA_CROSS_LONG", slPct: 0.28, tpPct: 0.62, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
   { id: 2, name: "EMA_Cross_Short", category: "Trend", signalKey: "EMA_CROSS_SHORT", slPct: 0.28, tpPct: 0.62, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
@@ -214,3 +199,5 @@ export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
   { id: 179, name: "RiskOn_Rally_Long", category: "Macro", signalKey: "RISK_ON_LONG", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
   { id: 180, name: "RiskOff_Dump_Short", category: "Macro", signalKey: "RISK_OFF_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
 ];
+
+export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [...BASE_FUTURES_STRAT_DEFS, ...BTC_FT_EXTENDED_DEFS_PROOF];

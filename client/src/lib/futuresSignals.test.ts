@@ -114,13 +114,13 @@ const confluenceLong: FuturesStratDef = {
 const mtfTrendLong: FuturesStratDef = {
   id: 111, name: "MTF_Trend_Align_Long", category: "MTF Trend",
   signalKey: "MTF_TREND_ALIGN_LONG", slPct: 0.26, tpPct: 0.82,
-  cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true,
+  cooldownMin: 6, holdMinutes: 32, confluenceMin: 3, requiresHtf: true,
 };
 
 const mtfTrendShort: FuturesStratDef = {
   id: 112, name: "MTF_Trend_Align_Short", category: "MTF Trend",
   signalKey: "MTF_TREND_ALIGN_SHORT", slPct: 0.26, tpPct: 0.82,
-  cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true,
+  cooldownMin: 6, holdMinutes: 32, confluenceMin: 3, requiresHtf: true,
 };
 
 // ========== TESTS ==========
@@ -240,7 +240,7 @@ describe("HTF entry confirmation", () => {
   it("HTF neutral + bearish LTF bias → short MTF may pass (relaxed gate)", () => {
     const bars = bearishBars();
     const s = inputs(bars);
-    const isLtfBear = s.fast < s.slow && s.momentum3 < 0;
+    const isLtfBear = s.fast < s.slow && (s.momentum3 < 0 || s.momentum6 < 0);
     const htf5Neutral = s.htf5_trend === 0;
     const htf15Neutral = s.htf15_trend === 0;
     if (htf5Neutral && htf15Neutral && isLtfBear) {

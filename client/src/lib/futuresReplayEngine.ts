@@ -383,7 +383,7 @@ export function runPaperDeskReplay(
     const lows = window.map((c) => c.low);
     const volumes = window.map((c) => c.volume);
     const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
-    const input = buildSignalInputs(opens, closes, highs, lows, volumes, markPrice);
+    const input = buildSignalInputs(opens, closes, highs, lows, volumes, markPrice, nowMs);
 
     const marked = positions.map((p) =>
       applyMarkToFuturesPosition(p, markPrice, lastPrice, { fundingRate, nowMs }),

@@ -177,7 +177,10 @@ describe("defaultRegimesForCategory", () => {
       minTpSlRatio: 2,
       allowFakeDiversity: true,
     });
-    expect(r.deskRegimeAnnotatedStratCount).toBe(r.strategies.length);
+    const expectedAnnotated = FUTURES_STRAT_DEFS.filter(
+      (d) => !Array.isArray(d.regimes) || d.regimes.length === 0,
+    ).length;
+    expect(r.deskRegimeAnnotatedStratCount).toBe(expectedAnnotated);
     for (const s of r.strategies) {
       expect(s.regimes?.length).toBeGreaterThan(0);
     }

@@ -2,23 +2,35 @@
 
 exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and first clientTradeId 1`] = `
 {
-  "finalBalance": 1003.6338,
-  "firstClientTradeId": "c6dfe5f2-58e8-4334-8000-0046d4bc7",
+  "finalBalance": 1003.4338,
+  "firstClientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
   "stats": {
-    "count": 10,
+    "count": 12,
     "exitReasonCounts": {
       "PROFIT_LOCK": 9,
-      "SL": 1,
+      "SL": 3,
     },
-    "expectancy": 0.3633758191498536,
-    "sumNet": 3.633758191498536,
+    "expectancy": 0.2861465159582114,
+    "sumNet": 3.4337581914985367,
   },
-  "tradeCount": 10,
+  "tradeCount": 12,
   "trades": [
+    {
+      "clientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
+      "exitReason": "SL",
+      "netPnl": -0.1,
+      "strategyId": 112,
+    },
     {
       "clientTradeId": "c6dfe5f2-58e8-4334-8000-0046d4bc7",
       "exitReason": "PROFIT_LOCK",
       "netPnl": -0.0511,
+      "strategyId": 111,
+    },
+    {
+      "clientTradeId": "57740f52-c943-429f-8000-095c6a167",
+      "exitReason": "SL",
+      "netPnl": -0.1,
       "strategyId": 111,
     },
     {

@@ -4,7 +4,7 @@
  * The hook imports these — no logic duplication.
  */
 
-import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
+import type { FuturesStratDef, RegimeTag } from "./futuresStratTypes";
 
 // ========== SIGNAL INPUTS ==========
 export type FuturesSignalInputs = {
@@ -73,6 +73,8 @@ export type FuturesSignalInputs = {
   htf15_bbWidth: number;
   htf5_adx: number;
   htf15_adx: number;
+  /** Closed-bar exchange time (ms); optional — SESSION_OPEN template uses UTC hour when set. */
+  lastBarTimeMs?: number;
 };
 
 // ========== INDICATOR HELPERS (private) ==========
@@ -142,7 +144,8 @@ function rsi(closes: number[], period = 14): number[] {
       out.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + rs));
     }
   }
-  return out;
+  // Align with `closes` indices: index `i` uses change into closes[i]; rsi[0] is unused (NaN).
+  return [NaN, ...out];
 }
 
 function stdDev(arr: number[], period: number): number[] {
@@ -508,6 +511,7 @@ export function buildSignalInputs(
   lows: number[],
   volumes: number[],
   markPrice: number,
+  lastBarTimeMs?: number,
 ): FuturesSignalInputs {
   const fast = ema(closes, 9);
   const slow = ema(closes, 21);
@@ -590,12 +594,242 @@ export function buildSignalInputs(
     rsi21: rsi21[idx],
     ...htf5,
     ...htf15,
+    lastBarTimeMs,
   };
+}
+
+// ========== BTC FT EXTENDED TEMPLATES (dedicated paths; no generic confluence fallback) ==========
+
+function utcHourFromMs(ms: number | undefined): number | null {
+  if (ms === undefined || !Number.isFinite(ms)) return null;
+  return new Date(ms).getUTCHours();
+}
+
+/** London/NY-style liquidity windows in UTC (approximate). */
+function btcFtSessionExpansionHour(hour: number | null): boolean {
+  if (hour === null) return false;
+  const london = hour >= 7 && hour <= 9;
+  const ny = hour >= 13 && hour <= 15;
+  return london || ny;
+}
+
+export function evalBtcFtTemplateSignal(
+  s: FuturesSignalInputs,
+  strat: FuturesStratDef,
+): { score: number; reason: string } {
+  const tpl = strat.btcFtTemplate;
+  if (!tpl) return { score: 0, reason: "" };
+
+  let score = 0;
+  const reasons: string[] = [];
+  const add = (pts: number, desc: string) => {
+    score += pts;
+    if (pts > 0) reasons.push(desc);
+  };
+  const short = strat.signalKey.includes("SHORT");
+  const v = strat.btcFtVariant ?? 0;
+  const px = s.price || 1;
+  const vwapPct = s.vwapDev / px;
+
+  if (tpl === "MTF_TREND") {
+    if (short) {
+      if (s.htf5_trend < 0 && s.htf15_trend < 0) add(18, "HTF bear stack");
+      if (s.fast < s.slow) add(12, "LTF EMA bear");
+      if (s.momentum6 < 0) add(10, "mom6-");
+      if (s.htf5_macdHist < 0) add(8, "HTF5 MACD-");
+      if (s.adxProxy > 22) add(6, "ADX");
+    } else {
+      if (s.htf5_trend > 0 && s.htf15_trend > 0) add(18, "HTF bull stack");
+      if (s.fast > s.slow) add(12, "LTF EMA bull");
+      if (s.momentum6 > 0) add(10, "mom6+");
+      if (s.htf5_macdHist > 0) add(8, "HTF5 MACD+");
+      if (s.adxProxy > 22) add(6, "ADX");
+    }
+  } else if (tpl === "MTF_BREAK") {
+    if (short) {
+      if (s.price < s.low20 * 1.0005) add(20, "20L break");
+      if (s.volRatio > 1.35) add(12, "vol break");
+      if (s.htf5_trend <= 0 && s.htf15_trend <= 0) add(12, "HTF bear tail");
+      if (s.momentum3 < -s.atr14 * 0.45) add(10, "break impulse-");
+    } else {
+      if (s.price > s.high20 * 0.9995) add(20, "20H break");
+      if (s.volRatio > 1.35) add(12, "vol break");
+      if (s.htf5_trend >= 0 && s.htf15_trend >= 0) add(12, "HTF bull tail");
+      if (s.momentum3 > s.atr14 * 0.45) add(10, "break impulse+");
+    }
+  } else if (tpl === "MEAN_REVERT_BB") {
+    if (short) {
+      if (s.price > s.bbUpper) add(16, "above BB");
+      if (s.rsi14 > 64) add(12, "RSI OB");
+      if (s.stochK > 78) add(8, "stoch OB");
+      if (s.bbWidth > 0.008) add(6, "BB width");
+    } else {
+      if (s.price < s.bbLower) add(16, "below BB");
+      if (s.rsi14 < 36) add(12, "RSI OS");
+      if (s.stochK < 22) add(8, "stoch OS");
+      if (s.bbWidth > 0.008) add(6, "BB width");
+    }
+  } else if (tpl === "VWAP_REVERT") {
+    if (short) {
+      if (vwapPct > 0.014) add(18, "rich vs VWAP");
+      if (vwapPct > 0.009) add(10, "VWAP premium");
+      if (s.rsi14 > 58) add(8, "RSI firm");
+    } else {
+      if (vwapPct < -0.014) add(18, "cheap vs VWAP");
+      if (vwapPct < -0.009) add(10, "VWAP discount");
+      if (s.rsi14 < 42) add(8, "RSI soft");
+    }
+  } else if (tpl === "MOMENTUM_IMPULSE") {
+    if (short) {
+      if (s.momentum3 < -s.atr14 * 0.88) add(18, "ATR impulse-");
+      if (s.obvSlope < 0 && s.momentum3 < 0) add(12, "OBV agree-");
+      if (s.macdHist < s.prevMacdHist && s.macdHist < 0) add(10, "MACD accel-");
+      if (s.volRatio > 1.42) add(8, "volume");
+    } else {
+      if (s.momentum3 > s.atr14 * 0.88) add(18, "ATR impulse+");
+      if (s.obvSlope > 0 && s.momentum3 > 0) add(12, "OBV agree+");
+      if (s.macdHist > s.prevMacdHist && s.macdHist > 0) add(10, "MACD accel+");
+      if (s.volRatio > 1.42) add(8, "volume");
+    }
+  } else if (tpl === "SESSION_OPEN") {
+    const sess = btcFtSessionExpansionHour(utcHourFromMs(s.lastBarTimeMs));
+    if (short) {
+      if (sess && s.momentum3 < -s.atr14 * 0.42) add(16, "session fade-");
+      if (sess && s.volRatio > 1.48) add(12, "session vol");
+      if (s.bbWidth > 0.011) add(8, "vol regime");
+      if (s.fast < s.slow) add(8, "LTF bias-");
+    } else {
+      if (sess && s.momentum3 > s.atr14 * 0.42) add(16, "session drive+");
+      if (sess && s.volRatio > 1.48) add(12, "session vol");
+      if (s.bbWidth > 0.011) add(8, "vol regime");
+      if (s.fast > s.slow) add(8, "LTF bias+");
+    }
+  } else if (tpl === "WYCKOFF_TRAP") {
+    const mid = s.donchianMid;
+    if (short) {
+      if (s.price >= mid * 0.997 && s.cci20 > 35 && s.cci20 < 130) add(16, "CCI thrust OB");
+      if (s.volRatio > 1.28) add(10, "vol trap");
+      if (s.momentum3 < 0) add(10, "mom-");
+      if (s.price > s.mean20) add(8, "above mean");
+    } else {
+      if (s.price <= mid * 1.003 && s.cci20 < -35 && s.cci20 > -130) add(16, "CCI thrust OS");
+      if (s.cci20 < -70) add(6, "CCI spring stress");
+      if (s.volRatio > 1.28) add(10, "vol spring");
+      if (s.momentum3 > 0) add(10, "mom+");
+      if (s.price < s.mean20) add(8, "below mean");
+    }
+  } else if (tpl === "ORDERFLOW_PROXY") {
+    if (short) {
+      if (s.momentum3 < -s.atr14 * 1.08 && s.volRatio > 1.65) add(20, "flow burst-");
+      if (s.volRatio > 2 && s.momentum3 < 0) add(14, "heavy sell vol");
+      if (s.obvSlope < -Math.abs(s.atr14) * 8) add(10, "OBV dump");
+    } else {
+      if (s.momentum3 > s.atr14 * 1.08 && s.volRatio > 1.65) add(20, "flow burst+");
+      if (s.volRatio > 2 && s.momentum3 > 0) add(14, "heavy buy vol");
+      if (s.obvSlope > Math.abs(s.atr14) * 8) add(10, "OBV thrust");
+    }
+  }
+
+  score += Math.max(0, 3 - v) * 2;
+  return { score, reason: reasons.slice(0, 3).join(", ") };
+}
+
+export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
+  const tpl = strat.btcFtTemplate;
+  if (!tpl) return true;
+
+  const short = strat.signalKey.includes("SHORT");
+  const px = s.price || 1;
+  const vwapPct = s.vwapDev / px;
+
+  if (tpl === "MTF_TREND") {
+    if (short) {
+      return (
+        s.fast < s.slow &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 < 96 &&
+        (s.momentum3 < 0 || s.momentum6 < 0)
+      );
+    }
+    return (
+      s.fast > s.slow &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 > 16 &&
+      (s.momentum3 > 0 || s.momentum6 > 0)
+    );
+  }
+
+  if (tpl === "MTF_BREAK") {
+    if (short) {
+      return s.price <= s.low20 * 1.0008 && s.volRatio > 1.06;
+    }
+    return s.price >= s.high20 * 0.9992 && s.volRatio > 1.06;
+  }
+
+  if (tpl === "MEAN_REVERT_BB") {
+    if (short) {
+      return s.price >= s.bbUpper * 0.998 && s.rsi14 > 56;
+    }
+    return s.price <= s.bbLower * 1.012 || (s.rsi14 < 46 && s.price < s.mean20);
+  }
+
+  if (tpl === "VWAP_REVERT") {
+    if (short) {
+      return vwapPct > 0.0012 || (s.price > s.mean20 * 1.0012 && s.rsi14 > 46);
+    }
+    return vwapPct < -0.0045 && s.rsi14 < 48;
+  }
+
+  if (tpl === "MOMENTUM_IMPULSE") {
+    if (short) {
+      return s.momentum3 < -s.atr14 * 0.52 && s.volRatio > 1.18 && s.obvSlope < 0;
+    }
+    return s.momentum3 > s.atr14 * 0.52 && s.volRatio > 1.18 && s.obvSlope > 0;
+  }
+
+  if (tpl === "SESSION_OPEN") {
+    const hour = utcHourFromMs(s.lastBarTimeMs);
+    if (hour === null) return false;
+    if (!btcFtSessionExpansionHour(hour)) return false;
+    if (short) {
+      return s.momentum3 < -s.atr14 * 0.32 && s.volRatio > 1.22;
+    }
+    return s.momentum3 > s.atr14 * 0.32 && s.volRatio > 1.22;
+  }
+
+  if (tpl === "WYCKOFF_TRAP") {
+    const mid = s.donchianMid;
+    if (short) {
+      return (
+        s.volRatio > 1.18 &&
+        s.price >= mid * 0.994 &&
+        s.cci20 > 28 &&
+        s.momentum3 < 0
+      );
+    }
+    return (
+      s.volRatio > 1.02 &&
+      (s.price <= mid * 1.022 || s.price < s.mean20 * 1.004 || s.cci20 < 55)
+    );
+  }
+
+  if (tpl === "ORDERFLOW_PROXY") {
+    if (short) {
+      return s.momentum3 < -s.atr14 * 0.92 && s.volRatio > 1.38;
+    }
+    return s.momentum3 > s.atr14 * 0.92 && s.volRatio > 1.38;
+  }
+
+  return false;
 }
 
 // ========== SIGNAL SCORING ==========
 
 export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef): { score: number; reason: string } {
+  if (strat.btcFtTemplate) {
+    return evalBtcFtTemplateSignal(s, strat);
+  }
+
   let score = 0;
   const reasons: string[] = [];
 
@@ -969,21 +1203,25 @@ export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef)
 // ========== ENTRY CONFIRMATION ==========
 
 export function passesEntryConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
+  if (strat.btcFtTemplate) {
+    return passesBtcFtTemplateConfirmation(s, strat);
+  }
+
   const isShort = strat.signalKey.includes("SHORT");
 
   const confluence = (
     isShort
-      ? [s.fast < s.slow, s.rsi14 > 25 && s.rsi14 < 55, s.macdLine < s.macdSignal, s.stochK < s.stochD, s.momentum3 < 0, s.obvSlope < 0, s.atr14 > 0, s.bbWidth > 0]
-      : [s.fast > s.slow, s.rsi14 > 45 && s.rsi14 < 75, s.macdLine > s.macdSignal, s.stochK > s.stochD, s.momentum3 > 0, s.obvSlope > 0, s.atr14 > 0, s.bbWidth > 0]
+      ? [s.fast < s.slow, Number.isFinite(s.rsi14) && s.rsi14 < 72, s.macdLine < s.macdSignal, s.stochK < s.stochD, s.momentum3 < 0, s.obvSlope < 0, s.atr14 > 0, s.bbWidth > 0]
+      : [s.fast > s.slow, s.rsi14 > 40, s.macdLine > s.macdSignal, s.stochK > s.stochD, s.momentum3 > 0, s.obvSlope > 0, s.atr14 > 0, s.bbWidth > 0]
   ).filter(Boolean).length;
 
   if (strat.category === "Trend" || strat.category === "MTF Trend") {
     if (isShort) {
       if (s.fast >= s.slow) return false;
-      if (s.rsi14 < 20 || s.rsi14 > 65) return false;
+      if (!Number.isFinite(s.rsi14) || s.rsi14 > 88) return false;
     } else {
       if (s.fast <= s.slow) return false;
-      if (s.rsi14 < 40 || s.rsi14 > 80) return false;
+      if (!Number.isFinite(s.rsi14) || s.rsi14 < 32) return false;
     }
   }
 
@@ -1056,8 +1294,8 @@ export function passesEntryConfirmation(s: FuturesSignalInputs, strat: FuturesSt
   if (strat.requiresHtf) {
     const htf5T = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
     const htf15T = htfTrend(s.htf15_fast, s.htf15_slow, s.htf15_momentum);
-    const ltfBull = s.fast > s.slow && s.momentum3 > 0;
-    const ltfBear = s.fast < s.slow && s.momentum3 < 0;
+    const ltfBull = s.fast > s.slow && (s.momentum3 > 0 || s.momentum6 > 0);
+    const ltfBear = s.fast < s.slow && (s.momentum3 < 0 || s.momentum6 < 0);
     if (isShort) {
       if (htf5T === "UP" || htf15T === "UP") return false;
       if (htf5T === "DOWN" && htf15T === "DOWN") {

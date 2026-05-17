@@ -1680,7 +1680,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const highs = d.candles.map((c) => c.high);
             const lows = d.candles.map((c) => c.low);
             const volumes = d.candles.map((c) => c.volume);
-            const input = buildSignalInputs(opens, closes, highs, lows, volumes, d.markPrice);
+            const lastBarMs = d.candles[d.candles.length - 1]?.time;
+            const input = buildSignalInputs(opens, closes, highs, lows, volumes, d.markPrice, lastBarMs);
             const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
             if (symbol === PRIMARY_QUOTE_SYMBOL) {
               deskLastRegimeTagRef.current = regime;
