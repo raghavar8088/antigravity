@@ -432,9 +432,29 @@ export type BTCFuturesEngineOptions = {
   paperEnsureTrades?: boolean;
   /** Force entry debug panel (BTC FT module sets true). */
   entryDebugEnabled?: boolean;
+  /**
+   * Paper-only: after ~8m with zero closed trades, open one probe position to prove
+   * the ledger path (works in production, not only NODE_ENV=development).
+   */
+  paperBootstrapProbe?: boolean;
   /** Module-specific UTC entry session override. */
   entryUtcSessionOverride?: DeskEntryUtcSession;
 };
+
+/** Progressive threshold reduction so quiet strats get samples on chop. */
+export function paperEnsureThresholdDrop(
+  enabled: boolean,
+  nowMs: number,
+  mountedAtMs: number,
+  stratTradeCount: number,
+): number {
+  if (!enabled || stratTradeCount >= 2) return 0;
+  const mins = (nowMs - mountedAtMs) / 60_000;
+  if (mins >= 15) return 10;
+  if (mins >= 5) return 8;
+  if (mins >= 2) return 4;
+  return 0;
+}
 
 // Signal inputs type imported from @/lib/futuresSignals
 type SignalInputs = FuturesSignalInputs;
@@ -510,9 +530,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     [options.strategyProfile],
   );
   const relaxEntryConfirmation = options.relaxEntryConfirmation === true;
+  const paperBootstrapProbe = options.paperBootstrapProbe === true;
   const forceProbeOpen =
-    process.env.NODE_ENV === "development" &&
-    (options.forceProbeOpen === true || deskForceProbeOpenEnabledFromEnv());
+    paperBootstrapProbe ||
+    (process.env.NODE_ENV === "development" &&
+      (options.forceProbeOpen === true || deskForceProbeOpenEnabledFromEnv()));
   const cooldownMultiplier =
     Number.isFinite(options.cooldownMultiplier) && (options.cooldownMultiplier ?? 0) > 0
       ? Math.min(2, Math.max(0.1, options.cooldownMultiplier as number))
@@ -1317,7 +1339,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           profileCfg,
         ) *
           minMoveKMultiplier *
-          (relaxEntryGatesRef.current ? 0.7 : 1),
+          (relaxEntryGatesRef.current ? 0.45 : 1),
       );
       if (!moveGate.ok) {
         deskSkippedMinExpectedMoveRef.current += 1;
@@ -1730,13 +1752,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           : null;
         entryDebugLiveRef.current = pollDebug;
 
-        if (
-          forceProbeOpen &&
+        const bootstrapProbeDue =
+          paperBootstrapProbe &&
+          tradesRef.current.length === 0 &&
+          now - researchMountedAtRef.current >= 8 * 60 * 1000;
+        const shouldRunProbe =
+          (forceProbeOpen || bootstrapProbeDue) &&
           hasMarketData &&
           !pauseRef.current &&
           !drawdownEntryPausedRef.current &&
-          !forceProbeOpenedRef.current
-        ) {
+          !forceProbeOpenedRef.current;
+
+        if (shouldRunProbe) {
           const probePayload = primary;
           if (probePayload && probePayload.candles.length >= MIN_BARS) {
             forceProbeOpenedRef.current = true;
@@ -1748,8 +1775,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const lastBarMs = probePayload.candles[probePayload.candles.length - 1]?.time;
             const input = buildSignalInputs(opens, closes, highs, lows, volumes, probePayload.markPrice, lastBarMs);
             const probeStrat: StratDef = {
-              id: 0,
-              name: "DEV_FORCE_PROBE_OPEN",
+              id: 99999,
+              name: bootstrapProbeDue ? "PAPER_BOOTSTRAP_PROBE" : "DEV_FORCE_PROBE_OPEN",
               category: "Probe",
               signalKey: "DEV_FORCE_PROBE_LONG",
               slPct: 0.3,
@@ -1765,9 +1792,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               equityUsd: balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0),
               entryPriorityScore: 999,
             });
-            if (process.env.NODE_ENV === "development") {
-              console.info("[btc-futures-paper] force probe open", {
-                enabled: true,
+            if (process.env.NODE_ENV === "development" || bootstrapProbeDue) {
+              console.info("[btc-futures-paper] paper probe open", {
+                bootstrap: bootstrapProbeDue,
                 opened: Boolean(opened),
                 symbol: opened?.symbol,
                 positionId: opened?.id,
@@ -1858,11 +1885,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 now - researchMountedAtRef.current >= 2 * 60 * 60 * 1000 &&
                 stratTradeCount < 3
                 ? 4
-                : paperEnsureTrades &&
-                    now - researchMountedAtRef.current >= 45 * 60 * 1000 &&
-                    stratTradeCount < 2
-                  ? 8
-                  : 0;
+                : paperEnsureThresholdDrop(
+                    paperEnsureTrades,
+                    now,
+                    researchMountedAtRef.current,
+                    stratTradeCount,
+                  );
               const effectiveThresholdForStrat = Math.max(18, activeSignalThreshold - ensureDataThresholdDrop);
               const confirmPasses =
                 passesEntryConfirmation(input, strat) ||
@@ -2024,7 +2052,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
+  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, paperBootstrapProbe, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {

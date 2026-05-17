@@ -170,6 +170,7 @@ type BTCFuturesScalperProps = {
   disableAutoKill?: BTCFuturesEngineOptions["disableAutoKill"];
   researchEnsureTrades?: BTCFuturesEngineOptions["researchEnsureTrades"];
   paperEnsureTrades?: BTCFuturesEngineOptions["paperEnsureTrades"];
+  paperBootstrapProbe?: BTCFuturesEngineOptions["paperBootstrapProbe"];
   entryDebugEnabled?: BTCFuturesEngineOptions["entryDebugEnabled"];
   entryUtcSessionOverride?: BTCFuturesEngineOptions["entryUtcSessionOverride"];
   researchMode?: boolean;
@@ -210,6 +211,7 @@ export function BTCFuturesScalper({
   disableAutoKill,
   researchEnsureTrades,
   paperEnsureTrades,
+  paperBootstrapProbe,
   entryDebugEnabled,
   entryUtcSessionOverride,
   researchMode = false,

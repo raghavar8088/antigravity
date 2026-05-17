@@ -34,10 +34,11 @@ import {
   saveRetiredToStorage,
   saveWinnersToStorage,
 } from "@/lib/btcFtResearch";
+import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
 
 const BTC_ONLY_SYMBOLS = ["BTCUSD"] as const;
 const BTC_ONLY_WATCHLIST = FUTURES_WATCHLIST.filter((item) => item.symbol === "BTCUSD");
-const STORAGE_NS = "btc_future_trading_v3";
+const STORAGE_NS = "btc_future_trading_v4";
 
 // Resolve once at module load; env flags are stable for the browser bundle.
 const RESEARCH_MODE = isResearchModeEnabled();
@@ -123,18 +124,18 @@ export function BTCFutureTradingScalper({
     ? 26
     : EFFECTIVE_RESEARCH_MODE
     ? researchSignalThreshold()
-    : btcFtSignalThresholdFromEnv(22);
+    : btcFtSignalThresholdFromEnv(20);
   const relaxConfirm = WINNERS_ONLY_MODE
     ? false
     : EFFECTIVE_RESEARCH_MODE
     ? researchRelaxConfirm()
-    : btcFtRelaxConfirmEnabledFromEnv() || rosterInfo.isLargeRoster;
+    : true;
   const minMoveKMul = WINNERS_ONLY_MODE
     ? 1
     : EFFECTIVE_RESEARCH_MODE
     ? researchMinMoveKMul()
     : rosterInfo.isLargeRoster
-    ? btcFtMinMoveKMulFromEnv(0.65)
+    ? btcFtMinMoveKMulFromEnv(0.55)
     : 1;
   const paperEnsureTrades =
     !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && rosterInfo.isLargeRoster && btcFtPaperEnsureTradesFromEnv();
@@ -159,7 +160,7 @@ export function BTCFutureTradingScalper({
     ? `BTC PERPETUAL FUTURES - 25x - ${rosterInfo.ids.length} WINNER STRATEGIES - THRESHOLD ${threshold} - PRODUCTION`
     : EFFECTIVE_RESEARCH_MODE
     ? `BTC PERPETUAL FUTURES - 25x - ${rosterInfo.ids.length} ACTIVE OF ${rosterInfo.poolSize ?? rosterInfo.ids.length} POOL - THRESHOLD ${threshold} - RESEARCH`
-    : `BTC PERPETUAL FUTURES - 25x - ${rosterInfo.ids.length} STRATEGIES (${sourceLabel.toUpperCase()}) - THRESHOLD ${threshold}`;
+    : `BTC PERPETUAL FUTURES - 25x - ${rosterInfo.ids.length} STRATEGIES (${sourceLabel.toUpperCase()}) - THRESHOLD ${threshold} - BUILD ${BTC_FT_DESK_BUILD}`;
 
   const shouldRenderEngine = !WINNERS_ONLY_MODE || rosterInfo.ids.length > 0;
 
@@ -194,13 +195,10 @@ export function BTCFutureTradingScalper({
       )}
 
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
-        <DeskBanner variant="warning" title="Large roster on single symbol">
-          You have {rosterInfo.ids.length} strategies active via NEXT_PUBLIC_BTC_FT_STRATEGY_IDS.
-          On choppy 1m bars with threshold {threshold}, candidatesBuilt is expected to be low. See{" "}
-          <a href="#btc-ft-no-trades" style={{ textDecoration: "underline", fontWeight: 600 }}>
-            README#btc-ft-no-trades
-          </a>{" "}
-          for troubleshooting.
+        <DeskBanner variant="info" title="Paper desk entry mode">
+          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 8m
+          with zero trades. Check Entry debug below for dominantBlocker (DATA / CONFIRM / MIN_MOVE). Build{" "}
+          {BTC_FT_DESK_BUILD} is the Vercel client — AWS engine is separate.
         </DeskBanner>
       )}
 
@@ -218,6 +216,7 @@ export function BTCFutureTradingScalper({
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
           researchEnsureTrades={EFFECTIVE_RESEARCH_MODE ? researchEnsureTradesEnabled() : false}
           paperEnsureTrades={paperEnsureTrades}
+          paperBootstrapProbe={paperEnsureTrades}
           entryDebugEnabled={entryDebugEnabled}
           entryUtcSessionOverride={EFFECTIVE_RESEARCH_MODE ? researchEntryUtcSession() : undefined}
           researchMode={EFFECTIVE_RESEARCH_MODE}
