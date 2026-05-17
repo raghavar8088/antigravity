@@ -676,15 +676,24 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
       ) : null}
 
       <DeskCard>
-        <DeskSectionHeader
-          title="Strategy leaderboard"
-          subtitle={`${strategyStatuses.length} strategies · live roster`}
-          actions={
-            <DeskButton variant="outlined" style={{ minHeight: 36 }} onClick={() => setShowAllStrategies(!showAllStrategies)}>
-              {showAllStrategies ? "Top 12" : `All ${strategyStatuses.length}`}
-            </DeskButton>
-          }
-        />
+        {(() => {
+          const poolCount = strategyStatuses.filter((s) => s.status === "POOL").length;
+          const activeCount = strategyStatuses.length - poolCount;
+          const subtitle = poolCount > 0
+            ? `${activeCount} active · ${poolCount} in research pool · ${strategyStatuses.length} total`
+            : `${strategyStatuses.length} strategies · live roster`;
+          return (
+            <DeskSectionHeader
+              title="Strategy leaderboard"
+              subtitle={subtitle}
+              actions={
+                <DeskButton variant="outlined" style={{ minHeight: 36 }} onClick={() => setShowAllStrategies(!showAllStrategies)}>
+                  {showAllStrategies ? "Top 12" : `All ${strategyStatuses.length}`}
+                </DeskButton>
+              }
+            />
+          );
+        })()}
         <DeskDataTable
           columns={strategyColumns}
           rows={visibleStrategies}

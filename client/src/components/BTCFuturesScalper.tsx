@@ -13,6 +13,7 @@ import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketDat
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
+import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPanels";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
@@ -335,7 +336,45 @@ export function BTCFuturesScalper({
   const shortCount = positions.filter(p => p.side === "SHORT").length;
   const totalUnrealized = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
 
-  const sortedStrategies = [...strategyStatuses].sort((a, b) => b.score - a.score);
+  // Merge active roster statuses with POOL-only entries so the user can see every registered
+  // strategy in the leaderboard — including research pool IDs (300–399) that aren't in the
+  // current active batch. POOL entries are display-only; they cannot fire trades until rotated in.
+  const augmentedStrategyStatuses = useMemo<BTCFuturesStrategyStatus[]>(() => {
+    const activeIds = new Set(strategyStatuses.map((s) => s.id));
+    const poolOverlayIds = researchPoolIds && researchPoolIds.length > 0
+      ? researchPoolIds
+      : FUTURES_STRAT_DEFS.map((d) => d.id);
+    const poolOnly: BTCFuturesStrategyStatus[] = [];
+    for (const id of poolOverlayIds) {
+      if (activeIds.has(id)) continue;
+      const def = FUTURES_STRAT_DEFS.find((d) => d.id === id);
+      if (!def) continue;
+      poolOnly.push({
+        id: def.id,
+        name: def.name,
+        category: def.category,
+        status: "POOL",
+        disabled: false,
+        openCount: 0,
+        lastTradeAt: null,
+        score: 0,
+        totalTrades: 0,
+        wins: 0,
+        losses: 0,
+        totalPnl: 0,
+        winRate: 0,
+      });
+    }
+    return [...strategyStatuses, ...poolOnly];
+  }, [strategyStatuses, researchPoolIds]);
+
+  const sortedStrategies = [...augmentedStrategyStatuses].sort((a, b) => {
+    // Active roster first (POOL last), then by score
+    const aPool = a.status === "POOL" ? 1 : 0;
+    const bPool = b.status === "POOL" ? 1 : 0;
+    if (aPool !== bPool) return aPool - bPool;
+    return b.score - a.score;
+  });
   const visibleStrategies = showAllStrategies ? sortedStrategies : sortedStrategies.slice(0, 12);
 
   const sortedTrades = [...trades].reverse();
@@ -537,7 +576,7 @@ export function BTCFuturesScalper({
         totalUnrealized={totalUnrealized}
         sortedTrades={sortedTrades}
         trades={trades}
-        strategyStatuses={strategyStatuses}
+        strategyStatuses={augmentedStrategyStatuses}
         visibleStrategies={visibleStrategies}
         showAllStrategies={showAllStrategies}
         setShowAllStrategies={setShowAllStrategies}

@@ -389,7 +389,13 @@ export interface BTCFuturesStrategyStatus {
   id: number;
   name: string;
   category: string;
-  status: "OPEN" | "COOLING" | "AVAILABLE";
+  /**
+   * - OPEN: currently holds at least one position
+   * - COOLING: in per-strategy cooldown window
+   * - AVAILABLE: in the active roster, ready to fire
+   * - POOL: registered in the research pool but NOT in the active batch (display-only)
+   */
+  status: "OPEN" | "COOLING" | "AVAILABLE" | "POOL";
   disabled: boolean;
   openCount: number;
   lastTradeAt: number | null;
