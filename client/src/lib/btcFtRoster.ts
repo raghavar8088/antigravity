@@ -15,10 +15,15 @@
  */
 
 import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
+import {
+  BTC_FT_GENERATED_STRATEGY_IDS,
+  isGeneratedPoolEnabled,
+} from "@/lib/btcFtStrategyGenerator";
 
 // ---------------------------------------------------------------------------
 // CORE basket — legacy curated IDs with full evalMinuteSignal wiring.
 // Trend, breakout, MTF, flow, session, etc. — verified strats only.
+// 300–399 generated IDs are NEVER added here — research pool only.
 // ---------------------------------------------------------------------------
 export const CORE_BTC_FT_STRATEGY_IDS: readonly number[] = [
   91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
@@ -27,10 +32,22 @@ export const CORE_BTC_FT_STRATEGY_IDS: readonly number[] = [
 /** Extended IDs built from BTC FT templates (200–299). */
 export const BTC_FT_EXTENDED_STRATEGY_IDS: readonly number[] = BTC_FT_EXTENDED_DEFS_FULL.map((d) => d.id);
 
-/** Legacy full roster (CORE + extended). Kept for backward compat. */
+/** Generated IDs from Phase 1 pool (300–399). Research-only — gated by isGeneratedPoolEnabled(). */
+export { BTC_FT_GENERATED_STRATEGY_IDS, isGeneratedPoolEnabled };
+
+/** Legacy full roster (CORE + extended). Production-safe — does NOT include generated 300–399 IDs. */
 export const BTC_FUTURE_TRADING_STRATEGY_IDS: number[] = [
   ...CORE_BTC_FT_STRATEGY_IDS,
   ...BTC_FT_EXTENDED_STRATEGY_IDS,
+];
+
+/**
+ * Research-only roster (CORE + extended + generated). Use this when building the
+ * research pool. Production-default roster is `BTC_FUTURE_TRADING_STRATEGY_IDS`.
+ */
+export const BTC_FT_RESEARCH_FULL_POOL: number[] = [
+  ...BTC_FUTURE_TRADING_STRATEGY_IDS,
+  ...BTC_FT_GENERATED_STRATEGY_IDS,
 ];
 
 // ---------------------------------------------------------------------------

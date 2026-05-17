@@ -2,9 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   computeVerdict,
   resolveResearchActiveIds,
+  resolveResearchPool,
+  poolGeneratedCount,
   isResearchModeEnabled,
   resolveBtcFtActiveStrategyIds,
 } from "./btcFtResearch";
+import {
+  BTC_FT_GENERATED_STRATEGY_IDS,
+  BTC_FUTURE_TRADING_STRATEGY_IDS,
+} from "./btcFtRoster";
 import { aggregateResearchStratStats, type ResearchDbRow } from "./paperTradesAnalytics";
 
 afterEach(() => {
@@ -94,6 +100,52 @@ describe("resolveResearchActiveIds", () => {
     const result = resolveResearchActiveIds({ pool: smallPool, batchSize: 30, nowMs: 0 });
     expect(result.activeIds.length).toBe(3);
     expect(result.totalBatches).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveResearchPool / poolGeneratedCount — generated 300–399 inclusion
+// ---------------------------------------------------------------------------
+describe("resolveResearchPool — generated pool gating", () => {
+  it("excludes 300–399 by default (research mode off)", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_RESEARCH_MODE", "");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_GENERATED_POOL", "");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_POOL_IDS", "");
+    const pool = resolveResearchPool();
+    const hasGenerated = pool.some((id) => id >= 300 && id <= 399);
+    expect(hasGenerated).toBe(false);
+    expect(pool.length).toBeLessThanOrEqual(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
+    expect(poolGeneratedCount()).toBe(0);
+  });
+
+  it("includes 300–399 when research mode is on (default gen=ON)", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_RESEARCH_MODE", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_GENERATED_POOL", "");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_POOL_IDS", "");
+    const pool = resolveResearchPool();
+    const genCount = pool.filter((id) => id >= 300 && id <= 399).length;
+    expect(genCount).toBe(BTC_FT_GENERATED_STRATEGY_IDS.length);
+    expect(poolGeneratedCount()).toBe(genCount);
+  });
+
+  it("env override gates generated IDs through validation", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_RESEARCH_MODE", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_GENERATED_POOL", "1");
+    // Include 3 generated IDs explicitly
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_POOL_IDS", "91,92,300,301,305");
+    const pool = resolveResearchPool();
+    expect(pool).toContain(300);
+    expect(pool).toContain(301);
+    expect(pool).toContain(305);
+    expect(poolGeneratedCount()).toBe(3);
+  });
+
+  it("explicit GENERATED_POOL=0 strips 300–399 even when research mode is on", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_RESEARCH_MODE", "1");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_GENERATED_POOL", "0");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_POOL_IDS", "");
+    const pool = resolveResearchPool();
+    expect(pool.some((id) => id >= 300 && id <= 399)).toBe(false);
   });
 });
 

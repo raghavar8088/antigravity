@@ -728,6 +728,118 @@ export function evalBtcFtTemplateSignal(
       if (s.volRatio > 2 && s.momentum3 > 0) add(14, "heavy buy vol");
       if (s.obvSlope > Math.abs(s.atr14) * 8) add(10, "OBV thrust");
     }
+  } else if (tpl === "MTF_EMA_STACK") {
+    // HTF 5m & 15m EMA9>EMA21 alignment + LTF EMA bias + momentum
+    if (short) {
+      if (s.htf5_fast < s.htf5_slow && s.htf15_fast < s.htf15_slow) add(20, "HTF EMA bear stack");
+      if (s.fast < s.slow) add(10, "LTF EMA bear");
+      if (s.ema5 < s.ema13) add(8, "5/13 bear");
+      if (s.rsi14 < 50 && s.rsi14 > 25) add(8, "RSI bear zone");
+      if (s.momentum6 < 0) add(6, "mom6-");
+    } else {
+      if (s.htf5_fast > s.htf5_slow && s.htf15_fast > s.htf15_slow) add(20, "HTF EMA bull stack");
+      if (s.fast > s.slow) add(10, "LTF EMA bull");
+      if (s.ema5 > s.ema13) add(8, "5/13 bull");
+      if (s.rsi14 > 50 && s.rsi14 < 75) add(8, "RSI bull zone");
+      if (s.momentum6 > 0) add(6, "mom6+");
+    }
+  } else if (tpl === "MTF_MACD_HIST") {
+    // HTF MACD histogram polarity + LTF accel (hist > prevHist with same sign)
+    if (short) {
+      if (s.htf5_macdHist < 0 && s.htf15_macdHist < 0) add(20, "HTF MACD- stack");
+      if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(12, "LTF MACD accel-");
+      if (s.macdLine < s.macdSignal) add(8, "MACD line<signal");
+      if (s.momentum3 < 0) add(6, "mom3-");
+    } else {
+      if (s.htf5_macdHist > 0 && s.htf15_macdHist > 0) add(20, "HTF MACD+ stack");
+      if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(12, "LTF MACD accel+");
+      if (s.macdLine > s.macdSignal) add(8, "MACD line>signal");
+      if (s.momentum3 > 0) add(6, "mom3+");
+    }
+  } else if (tpl === "MTF_ADX_DI") {
+    // ADX strength + DI proxy from HTF EMA slope (fast vs slow)
+    const htfBull = s.htf5_fast > s.htf5_slow && s.htf15_fast > s.htf15_slow;
+    const htfBear = s.htf5_fast < s.htf5_slow && s.htf15_fast < s.htf15_slow;
+    if (short) {
+      if (s.adxProxy > 25 && htfBear) add(20, "ADX+DI- agree");
+      if (s.htf5_adx > 22 || s.htf15_adx > 22) add(10, "HTF ADX");
+      if (s.fast < s.slow && s.momentum3 < 0) add(8, "LTF bear");
+      if (s.rsi14 < 50) add(6, "RSI bear");
+    } else {
+      if (s.adxProxy > 25 && htfBull) add(20, "ADX+DI+ agree");
+      if (s.htf5_adx > 22 || s.htf15_adx > 22) add(10, "HTF ADX");
+      if (s.fast > s.slow && s.momentum3 > 0) add(8, "LTF bull");
+      if (s.rsi14 > 50) add(6, "RSI bull");
+    }
+  } else if (tpl === "MTF_DONCHIAN_BREAK") {
+    // Donchian channel break + HTF trend tail + volume confirmation
+    if (short) {
+      if (s.price <= s.donchianLow * 1.0005) add(20, "Donch low break");
+      if (s.volRatio > 1.3) add(10, "vol surge");
+      if (s.htf5_trend <= 0 && s.htf15_trend <= 0) add(10, "HTF bear tail");
+      if (s.momentum3 < -s.atr14 * 0.4) add(8, "impulse-");
+    } else {
+      if (s.price >= s.donchianHigh * 0.9995) add(20, "Donch high break");
+      if (s.volRatio > 1.3) add(10, "vol surge");
+      if (s.htf5_trend >= 0 && s.htf15_trend >= 0) add(10, "HTF bull tail");
+      if (s.momentum3 > s.atr14 * 0.4) add(8, "impulse+");
+    }
+  } else if (tpl === "MEANREV_RSI") {
+    // RSI extreme + price vs mean20 + volume not exploding
+    if (short) {
+      if (s.rsi14 > 70) add(18, "RSI OB");
+      if (s.price > s.mean20 * 1.003) add(10, "above mean20");
+      if (s.rsi7 > 80) add(8, "RSI7 OB");
+      if (s.volRatio < 1.6) add(6, "vol calm");
+    } else {
+      if (s.rsi14 < 30) add(18, "RSI OS");
+      if (s.price < s.mean20 * 0.997) add(10, "below mean20");
+      if (s.rsi7 < 20) add(8, "RSI7 OS");
+      if (s.volRatio < 1.6) add(6, "vol calm");
+    }
+  } else if (tpl === "SESSION_RANGE_BREAK") {
+    // London/NY session + range expansion (high20/low20 reclaim or break)
+    const sess = btcFtSessionExpansionHour(utcHourFromMs(s.lastBarTimeMs));
+    if (short) {
+      if (sess && s.price <= s.low20 * 1.0008) add(18, "session range break-");
+      if (sess && s.volRatio > 1.4) add(10, "session vol");
+      if (s.momentum3 < -s.atr14 * 0.35) add(8, "impulse-");
+      if (s.bbWidth > 0.009) add(6, "expansion");
+    } else {
+      if (sess && s.price >= s.high20 * 0.9992) add(18, "session range break+");
+      if (sess && s.volRatio > 1.4) add(10, "session vol");
+      if (s.momentum3 > s.atr14 * 0.35) add(8, "impulse+");
+      if (s.bbWidth > 0.009) add(6, "expansion");
+    }
+  } else if (tpl === "WYCKOFF_SPRING") {
+    // Spring: price prints under prior low20, then reclaims (proxy: prevPrice below low20, current above)
+    const sprungUp = s.prevPrice <= s.low20 * 1.001 && s.price > s.low20 * 1.001;
+    const upthrustDown = s.prevPrice >= s.high20 * 0.999 && s.price < s.high20 * 0.999;
+    if (short) {
+      if (upthrustDown) add(20, "upthrust reject");
+      if (s.volRatio > 1.4) add(10, "vol trap");
+      if (s.cci20 > 60 && s.cci20 < 200) add(8, "CCI stretched");
+      if (s.momentum3 < 0) add(6, "mom-");
+    } else {
+      if (sprungUp) add(20, "spring reclaim");
+      if (s.volRatio > 1.4) add(10, "vol trap");
+      if (s.cci20 < -60 && s.cci20 > -200) add(8, "CCI oversold");
+      if (s.momentum3 > 0) add(6, "mom+");
+    }
+  } else if (tpl === "SMART_MONEY_FVG") {
+    // FVG proxy: large ATR-scaled gap from prev close + OBV thrust agreeing with side
+    const gapAtr = Math.abs(s.price - s.prevPrice) / Math.max(s.atr14, 1e-9);
+    if (short) {
+      if (s.obvSlope < -Math.abs(s.atr14) * 6 && s.price < s.prevPrice) add(18, "OBV dump + gap-");
+      if (gapAtr > 0.6 && s.price < s.prevPrice) add(10, "ATR gap-");
+      if (s.momentum6 < 0 && s.macdHist < 0) add(8, "agree-");
+      if (s.volRatio > 1.5) add(6, "vol");
+    } else {
+      if (s.obvSlope > Math.abs(s.atr14) * 6 && s.price > s.prevPrice) add(18, "OBV thrust + gap+");
+      if (gapAtr > 0.6 && s.price > s.prevPrice) add(10, "ATR gap+");
+      if (s.momentum6 > 0 && s.macdHist > 0) add(8, "agree+");
+      if (s.volRatio > 1.5) add(6, "vol");
+    }
   }
 
   score += Math.max(0, 3 - v) * 2;
@@ -818,6 +930,67 @@ export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: F
       return s.momentum3 < -s.atr14 * 0.92 && s.volRatio > 1.38;
     }
     return s.momentum3 > s.atr14 * 0.92 && s.volRatio > 1.38;
+  }
+
+  if (tpl === "MTF_EMA_STACK") {
+    if (short) {
+      return s.htf5_fast < s.htf5_slow && s.fast < s.slow && Number.isFinite(s.rsi14) && s.rsi14 < 88;
+    }
+    return s.htf5_fast > s.htf5_slow && s.fast > s.slow && Number.isFinite(s.rsi14) && s.rsi14 > 12;
+  }
+
+  if (tpl === "MTF_MACD_HIST") {
+    if (short) {
+      return s.htf5_macdHist < 0 && s.macdHist < 0 && s.macdHist <= s.prevMacdHist;
+    }
+    return s.htf5_macdHist > 0 && s.macdHist > 0 && s.macdHist >= s.prevMacdHist;
+  }
+
+  if (tpl === "MTF_ADX_DI") {
+    if (s.adxProxy < 22) return false;
+    if (short) {
+      return s.htf5_fast < s.htf5_slow && s.fast < s.slow;
+    }
+    return s.htf5_fast > s.htf5_slow && s.fast > s.slow;
+  }
+
+  if (tpl === "MTF_DONCHIAN_BREAK") {
+    if (short) {
+      return s.price <= s.donchianLow * 1.001 && s.volRatio > 1.05 && s.htf5_trend <= 0;
+    }
+    return s.price >= s.donchianHigh * 0.999 && s.volRatio > 1.05 && s.htf5_trend >= 0;
+  }
+
+  if (tpl === "MEANREV_RSI") {
+    if (short) {
+      return Number.isFinite(s.rsi14) && s.rsi14 > 66 && s.price > s.mean20;
+    }
+    return Number.isFinite(s.rsi14) && s.rsi14 < 34 && s.price < s.mean20;
+  }
+
+  if (tpl === "SESSION_RANGE_BREAK") {
+    const hour = utcHourFromMs(s.lastBarTimeMs);
+    if (hour === null) return false;
+    if (!btcFtSessionExpansionHour(hour)) return false;
+    if (short) {
+      return s.price <= s.low20 * 1.001 && s.volRatio > 1.2;
+    }
+    return s.price >= s.high20 * 0.999 && s.volRatio > 1.2;
+  }
+
+  if (tpl === "WYCKOFF_SPRING") {
+    if (short) {
+      return s.prevPrice >= s.high20 * 0.999 && s.price < s.high20 && s.volRatio > 1.15;
+    }
+    return s.prevPrice <= s.low20 * 1.001 && s.price > s.low20 && s.volRatio > 1.15;
+  }
+
+  if (tpl === "SMART_MONEY_FVG") {
+    const gapAtr = Math.abs(s.price - s.prevPrice) / Math.max(s.atr14, 1e-9);
+    if (short) {
+      return gapAtr > 0.4 && s.price < s.prevPrice && s.obvSlope < 0;
+    }
+    return gapAtr > 0.4 && s.price > s.prevPrice && s.obvSlope > 0;
   }
 
   return false;

@@ -19,7 +19,10 @@
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import {
   BTC_FUTURE_TRADING_STRATEGY_IDS,
+  BTC_FT_GENERATED_STRATEGY_IDS,
+  BTC_FT_RESEARCH_FULL_POOL,
   CORE_BTC_FT_STRATEGY_IDS,
+  isGeneratedPoolEnabled,
   resolveBtcFtActiveStrategyIds as resolveBaseBtcFtActiveStrategyIds,
   type BtcFtRosterSource,
 } from "@/lib/btcFtRoster";
@@ -43,12 +46,26 @@ export function isWinnersOnlyModeEnabled(): boolean {
 
 /**
  * All valid candidate IDs for research tournament.
- * Uses NEXT_PUBLIC_BTC_FT_POOL_IDS (comma list) OR the verified BTC Future
- * Trading roster (CORE + BTC FT templates). This intentionally does not
- * default to every global futures ID, avoiding fake-diversity/unwired entries.
+ *
+ * Resolution order:
+ *  1. `NEXT_PUBLIC_BTC_FT_POOL_IDS` (explicit comma list) — always honored if set.
+ *     Each ID must exist in FUTURES_STRAT_DEFS AND be in the verified BTC FT
+ *     roster (CORE + extended + generated). Caps at 200.
+ *  2. `NEXT_PUBLIC_BTC_FT_GENERATED_POOL=1` (default when research mode is on) →
+ *     CORE + extended (200–299) + generated (300–399). Cap 200.
+ *  3. Default → CORE + extended (200–299) only. Cap 200.
+ *
+ * Generated 300–399 IDs are NEVER in the production CORE roster — they only join
+ * the research pool when explicitly enabled. See `btcFtStrategyGenerator.ts`.
  */
+/** Hard cap on pool size to prevent runaway resource use. 300 = 120 CORE/extended + 100 generated + headroom. */
+const RESEARCH_POOL_CAP = 300;
+
 export function resolveResearchPool(): number[] {
-  const verifiedIds = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+  const includeGenerated = isGeneratedPoolEnabled();
+  const verifiedIds = new Set<number>(
+    includeGenerated ? BTC_FT_RESEARCH_FULL_POOL : BTC_FUTURE_TRADING_STRATEGY_IDS,
+  );
   const envPool = process.env.NEXT_PUBLIC_BTC_FT_POOL_IDS;
   if (envPool && envPool.trim() !== "") {
     const parsed = envPool
@@ -56,9 +73,25 @@ export function resolveResearchPool(): number[] {
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isFinite(n) && n > 0);
     const validIds = new Set(FUTURES_STRAT_DEFS.map((s) => s.id));
-    return [...new Set(parsed.filter((id) => validIds.has(id) && verifiedIds.has(id)))].slice(0, 200);
+    return [...new Set(parsed.filter((id) => validIds.has(id) && verifiedIds.has(id)))].slice(0, RESEARCH_POOL_CAP);
   }
-  return [...BTC_FUTURE_TRADING_STRATEGY_IDS].slice(0, 200);
+  const base = includeGenerated ? BTC_FT_RESEARCH_FULL_POOL : BTC_FUTURE_TRADING_STRATEGY_IDS;
+  return [...base].slice(0, RESEARCH_POOL_CAP);
+}
+
+/** Diagnostic: count of generated IDs currently in the pool. UI banner uses this. */
+export function poolGeneratedCount(): number {
+  if (!isGeneratedPoolEnabled()) return 0;
+  const envPool = process.env.NEXT_PUBLIC_BTC_FT_POOL_IDS;
+  const generated = new Set<number>(BTC_FT_GENERATED_STRATEGY_IDS);
+  if (envPool && envPool.trim() !== "") {
+    const parsed = envPool
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && generated.has(n));
+    return new Set(parsed).size;
+  }
+  return BTC_FT_GENERATED_STRATEGY_IDS.length;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
 import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
+import { BTC_FT_GENERATED_DEFS } from "@/lib/btcFtStrategyGenerator";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
@@ -200,4 +201,13 @@ const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
   { id: 180, name: "RiskOff_Dump_Short", category: "Macro", signalKey: "RISK_OFF_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
 ];
 
-export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [...BASE_FUTURES_STRAT_DEFS, ...BTC_FT_EXTENDED_DEFS_FULL];
+/**
+ * Full strategy registry: base (1–180) + BTC FT extended (200–299) + BTC FT generated research pool (300–399).
+ * The 300–399 IDs are registered here so evalMinuteSignal can find them, but `btcFtRoster` and
+ * `btcFtResearch` decide whether the pool is actually exposed to the running desk.
+ */
+export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
+  ...BASE_FUTURES_STRAT_DEFS,
+  ...BTC_FT_EXTENDED_DEFS_FULL,
+  ...BTC_FT_GENERATED_DEFS,
+];

@@ -126,6 +126,95 @@ export const BTC_FT_TEMPLATE_META: Record<BtcFtTemplateId, BtcFtTemplateMeta> = 
     baseCooldownMin: 5,
     requiresHtf: false,
   },
+  // ---- Phase 1 generator templates (research pool only, IDs 300–399) ----
+  MTF_EMA_STACK: {
+    id: "MTF_EMA_STACK",
+    category: "BTC FT Gen MTF EMA",
+    label: "5m/15m EMA stack alignment with LTF momentum gate",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.28,
+    baseTpPct: 0.78,
+    baseHoldMinutes: 28,
+    baseCooldownMin: 6,
+    requiresHtf: true,
+  },
+  MTF_MACD_HIST: {
+    id: "MTF_MACD_HIST",
+    category: "BTC FT Gen MTF MACD",
+    label: "HTF MACD histogram polarity + LTF accel",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.3,
+    baseTpPct: 0.82,
+    baseHoldMinutes: 26,
+    baseCooldownMin: 6,
+    requiresHtf: true,
+  },
+  MTF_ADX_DI: {
+    id: "MTF_ADX_DI",
+    category: "BTC FT Gen MTF ADX",
+    label: "ADX strength + DI-proxy via EMA slope",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.3,
+    baseTpPct: 0.72,
+    baseHoldMinutes: 24,
+    baseCooldownMin: 5,
+    requiresHtf: true,
+  },
+  MTF_DONCHIAN_BREAK: {
+    id: "MTF_DONCHIAN_BREAK",
+    category: "BTC FT Gen MTF Donchian",
+    label: "Donchian high/low break + HTF tail confirmation",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.3,
+    baseTpPct: 0.88,
+    baseHoldMinutes: 26,
+    baseCooldownMin: 6,
+    requiresHtf: true,
+  },
+  MEANREV_RSI: {
+    id: "MEANREV_RSI",
+    category: "BTC FT Gen MR RSI",
+    label: "RSI extreme + price below/above mean20 revert",
+    defaultRegimes: ["chop", "trendLow"],
+    baseSlPct: 0.32,
+    baseTpPct: 0.6,
+    baseHoldMinutes: 20,
+    baseCooldownMin: 4,
+    requiresHtf: false,
+  },
+  SESSION_RANGE_BREAK: {
+    id: "SESSION_RANGE_BREAK",
+    category: "BTC FT Gen Session Range",
+    label: "Session-window range expansion (UTC London/NY)",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.32,
+    baseTpPct: 0.76,
+    baseHoldMinutes: 18,
+    baseCooldownMin: 4,
+    requiresHtf: false,
+  },
+  WYCKOFF_SPRING: {
+    id: "WYCKOFF_SPRING",
+    category: "BTC FT Gen Wyckoff Spring",
+    label: "False breakdown/breakout reclaim + volume",
+    defaultRegimes: ["chop", "trendLow"],
+    baseSlPct: 0.3,
+    baseTpPct: 0.9,
+    baseHoldMinutes: 30,
+    baseCooldownMin: 6,
+    requiresHtf: false,
+  },
+  SMART_MONEY_FVG: {
+    id: "SMART_MONEY_FVG",
+    category: "BTC FT Gen SMC FVG",
+    label: "Fair-value gap proxy via OBV thrust + ATR gap",
+    defaultRegimes: ["trendLow", "trendHigh"],
+    baseSlPct: 0.28,
+    baseTpPct: 0.84,
+    baseHoldMinutes: 24,
+    baseCooldownMin: 5,
+    requiresHtf: false,
+  },
 };
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -142,7 +231,7 @@ function variantRisk(variant: number): { slMul: number; tpMul: number; holdMul: 
   };
 }
 
-function templateShortName(tpl: BtcFtTemplateId): string {
+export function templateShortName(tpl: BtcFtTemplateId): string {
   switch (tpl) {
     case "MTF_TREND":
       return "MTFT";
@@ -160,6 +249,22 @@ function templateShortName(tpl: BtcFtTemplateId): string {
       return "WYCK";
     case "ORDERFLOW_PROXY":
       return "OFLO";
+    case "MTF_EMA_STACK":
+      return "MEMA";
+    case "MTF_MACD_HIST":
+      return "MMAC";
+    case "MTF_ADX_DI":
+      return "MADX";
+    case "MTF_DONCHIAN_BREAK":
+      return "MDNC";
+    case "MEANREV_RSI":
+      return "MRRI";
+    case "SESSION_RANGE_BREAK":
+      return "SRNG";
+    case "WYCKOFF_SPRING":
+      return "WSPR";
+    case "SMART_MONEY_FVG":
+      return "SMFG";
     default:
       return String(tpl);
   }

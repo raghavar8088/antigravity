@@ -7,6 +7,7 @@ export type RegimeTag = "chop" | "trendLow" | "trendHigh";
 
 /** Keys for dedicated BTC FT extended scoring (`futuresSignals.ts`). */
 export type BtcFtTemplateId =
+  // Original extended templates (IDs 200–299)
   | "MTF_TREND"
   | "MTF_BREAK"
   | "MEAN_REVERT_BB"
@@ -14,7 +15,16 @@ export type BtcFtTemplateId =
   | "MOMENTUM_IMPULSE"
   | "SESSION_OPEN"
   | "WYCKOFF_TRAP"
-  | "ORDERFLOW_PROXY";
+  | "ORDERFLOW_PROXY"
+  // Phase 1 generator templates (research pool, IDs 300–399, never auto-active in production)
+  | "MTF_EMA_STACK"
+  | "MTF_MACD_HIST"
+  | "MTF_ADX_DI"
+  | "MTF_DONCHIAN_BREAK"
+  | "MEANREV_RSI"
+  | "SESSION_RANGE_BREAK"
+  | "WYCKOFF_SPRING"
+  | "SMART_MONEY_FVG";
 
 export interface FuturesStratDef {
   id: number;

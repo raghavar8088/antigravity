@@ -31,6 +31,7 @@ import {
   resolveCoreWinners,
   resolveResearchActiveIds,
   resolveResearchPool,
+  poolGeneratedCount,
   saveRetiredToStorage,
   saveWinnersToStorage,
 } from "@/lib/btcFtResearch";
@@ -171,12 +172,21 @@ export function BTCFutureTradingScalper({
           variant="info"
           title={`Research / Tournament mode - batch ${(rosterInfo.batchIndex ?? 0) + 1}/${rosterInfo.totalBatches ?? 1}`}
         >
-          Running {rosterInfo.ids.length} active strategies of {rosterInfo.poolSize ?? rosterInfo.ids.length} pool.
+          Running {rosterInfo.ids.length} active strategies of {rosterInfo.poolSize ?? rosterInfo.ids.length} pool
+          {poolGeneratedCount() > 0 ? ` (${poolGeneratedCount()} generated + core)` : ""}.
           Threshold {threshold}, relax-confirm {relaxConfirm ? "ON" : "OFF"}, cooldown 0.5x.
           Auto-kill disabled. Winners: {winners.length} promoted.{" "}
           <a href="#btc-ft-research-mode" style={{ textDecoration: "underline", fontWeight: 600 }}>
             How it works
           </a>
+        </DeskBanner>
+      )}
+
+      {EFFECTIVE_RESEARCH_MODE && (rosterInfo.poolSize ?? 0) > 80 && (
+        <DeskBanner variant="warning" title={`Large research pool — ${rosterInfo.poolSize} strategies`}>
+          Single symbol BTC — pool is for research rotation, not simultaneous edge.
+          Only ~{rosterInfo.ids.length} strategies trade per 24h batch; the rest cycle in over time.
+          Expect long runway before per-strategy verdicts converge.
         </DeskBanner>
       )}
 
