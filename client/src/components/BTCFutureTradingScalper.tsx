@@ -26,7 +26,7 @@ export function BTCFutureTradingScalper({
       signalThreshold={26}
       strategyProfile={strategyProfile}
       watchlist={BTC_ONLY_WATCHLIST}
-      storageNamespace="btc_future_trading_desk_v2"
+      storageNamespace="btc_future_trading_desk_v3"
       baseBalance={1000}
     />
   );

@@ -1,10 +1,10 @@
 /**
  * Futures strategy definitions — shared by the hook, signal engine, and tests.
- * Extended BTC FT proof defs (200–219) merged from `btcFtStrategyTemplates.ts`.
+ * Extended BTC FT defs (IDs 200–299) merged from `btcFtStrategyTemplates.ts`.
  */
 
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
-import { BTC_FT_EXTENDED_DEFS_PROOF } from "@/lib/btcFtStrategyTemplates";
+import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
@@ -200,4 +200,4 @@ const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
   { id: 180, name: "RiskOff_Dump_Short", category: "Macro", signalKey: "RISK_OFF_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
 ];
 
-export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [...BASE_FUTURES_STRAT_DEFS, ...BTC_FT_EXTENDED_DEFS_PROOF];
+export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [...BASE_FUTURES_STRAT_DEFS, ...BTC_FT_EXTENDED_DEFS_FULL];

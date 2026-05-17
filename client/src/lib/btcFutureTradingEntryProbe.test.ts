@@ -59,7 +59,7 @@ describe("BTC Future Trading desk roster entry probe", () => {
     allowFakeDiversity: true,
   });
 
-  it("roster includes core archetypes plus extended BTC FT proof IDs (200+)", () => {
+  it("roster includes core archetypes plus extended BTC FT IDs (200–299)", () => {
     expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBeGreaterThan(20);
     expect(BTC_FUTURE_TRADING_STRATEGY_IDS.some((id) => id >= 200)).toBe(true);
     expect(raw.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);

@@ -213,13 +213,13 @@ export function buildBtcFtStrategyDefs(
   return out;
 }
 
-/** Proof batch: 20 strategies, IDs 200–219. */
+/** Proof batch: 20 strategies, IDs 200–219 (subset of {@link BTC_FT_EXTENDED_DEFS_FULL}). */
 export const BTC_FT_EXTENDED_DEFS_PROOF = buildBtcFtStrategyDefs(200, 20);
 
-/**
- * Scale toward 100 additional defs (IDs 200–299). Call from maintenance scripts only;
- * merge into FUTURES_STRAT_DEFS intentionally capped by roster policy in the UI module.
- */
+/** Full extended basket: 100 strategies, IDs 200–299. */
+export const BTC_FT_EXTENDED_DEFS_FULL = buildBtcFtStrategyDefs(200, 100);
+
+/** Same as {@link BTC_FT_EXTENDED_DEFS_FULL} (stable array reference). */
 export function buildBtcFtExtendedDefsFull(): FuturesStratDef[] {
-  return buildBtcFtStrategyDefs(200, 100);
+  return BTC_FT_EXTENDED_DEFS_FULL;
 }
