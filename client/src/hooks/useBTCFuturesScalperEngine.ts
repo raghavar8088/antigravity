@@ -23,6 +23,7 @@ import {
   deskMaxLastMarkSpreadPctFromEnv,
   deskMaxOpenPerCategoryFromEnv,
   deskEntryUtcSessionFromEnv,
+  deskForceProbeOpenEnabledFromEnv,
   formatDeskEntryUtcSessionLabel,
   isUtcHourInSession,
   canOpenCategory,
@@ -44,6 +45,7 @@ import {
 import {
   createEmptyEntryPollDebug,
   deskEntryDebugEnabledFromEnv,
+  finalizeEntryPollDebug,
   type DeskEntryPollDebug,
 } from "@/lib/futuresEntryDebug";
 import {
@@ -60,6 +62,7 @@ import {
   effectiveSignalThreshold as computeEffectiveThreshold,
   evalMinuteSignal,
   passesEntryConfirmation,
+  passesRelaxedBtcFtEntryConfirmation,
   type FuturesSignalInputs,
 } from "@/lib/futuresSignals";
 import {
@@ -410,6 +413,10 @@ export type BTCFuturesEngineOptions = {
   signalThreshold?: number;
   /** Paper-only: tune entry cadence / cooldown / time exits without editing STRAT_DEFS. */
   strategyProfile?: FuturesStrategyProfile;
+  /** Dev-only diagnostic for BTC Future Trading: loosen template confirmation while keeping score gates. */
+  relaxEntryConfirmation?: boolean;
+  /** Dev-only diagnostic: open one tiny paper probe after market data is ready. */
+  forceProbeOpen?: boolean;
 };
 
 // Signal inputs type imported from @/lib/futuresSignals
@@ -485,6 +492,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     () => resolveStrategyProfile(options.strategyProfile),
     [options.strategyProfile],
   );
+  const relaxEntryConfirmation =
+    process.env.NODE_ENV === "development" && options.relaxEntryConfirmation === true;
+  const forceProbeOpen =
+    process.env.NODE_ENV === "development" &&
+    (options.forceProbeOpen === true || deskForceProbeOpenEnabledFromEnv());
   const profileCfg = FUTURES_STRATEGY_PROFILES[strategyProfile];
   const activeSignalThreshold = useMemo(() => {
     const base = Number.isFinite(options.signalThreshold)
@@ -553,6 +565,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const entryDebugEnabled = deskEntryDebugEnabledFromEnv();
   const [entryDebug, setEntryDebug] = useState<DeskEntryPollDebug | null>(null);
   const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
+  const forceProbeOpenedRef = useRef(false);
+  const entryDebugLoggedOnceRef = useRef(false);
   const [dataHealth, setDataHealth] = useState<FuturesDataHealth>(() => ({
     status: "stale",
     lastError: null,
@@ -908,6 +922,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setBalance(INITIAL_BALANCE);
     setPositions([]);
     setTrades([]);
+    setPauseEntries(false);
     setLastTradeAt(0);
     setDayStartBalance(INITIAL_BALANCE);
     setDayStartDate(new Date().getDate());
@@ -925,6 +940,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedOutsideSessionRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
+    forceProbeOpenedRef.current = false;
     localStorage.removeItem(stateStorageKey);
   }, [stateStorageKey]);
 
@@ -1637,6 +1653,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
         let openCount = survivors.length;
         const occupied = new Set(survivors.map((p) => `${p.symbol}:${p.strategyId}`));
+        const utcSession = deskEntryUtcSessionFromEnv();
+        const utcHour = new Date(now).getUTCHours();
+        const entryUtcSessionOpen = isUtcHourInSession(
+          utcHour,
+          utcSession.startHour,
+          utcSession.endHour,
+        );
 
         // Do not gate entries on statusRef === READY: setStatus is async and statusRef updates next render,
         // so same poll tick would never open trades. Use live payload presence instead.
@@ -1651,9 +1674,60 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               symbolsRequested: activeSymbols.length,
               dataHealthStatus: status,
               activeStratCount: activeStratDefs.length,
+              disabledStratCount: disabledRef.current.length,
+              autoDisabledStratCount: autoDisabledRef.current.size,
+              utcHour,
+              entryUtcSessionOpen,
+              sessionSkipTotal: deskSkippedOutsideSessionRef.current,
             }
           : null;
         entryDebugLiveRef.current = pollDebug;
+
+        if (
+          forceProbeOpen &&
+          hasMarketData &&
+          !pauseRef.current &&
+          !drawdownEntryPausedRef.current &&
+          !forceProbeOpenedRef.current
+        ) {
+          const probePayload = primary;
+          if (probePayload && probePayload.candles.length >= MIN_BARS) {
+            forceProbeOpenedRef.current = true;
+            const closes = probePayload.candles.map((c) => c.close);
+            const opens = probePayload.candles.map((c) => c.open);
+            const highs = probePayload.candles.map((c) => c.high);
+            const lows = probePayload.candles.map((c) => c.low);
+            const volumes = probePayload.candles.map((c) => c.volume);
+            const lastBarMs = probePayload.candles[probePayload.candles.length - 1]?.time;
+            const input = buildSignalInputs(opens, closes, highs, lows, volumes, probePayload.markPrice, lastBarMs);
+            const probeStrat: StratDef = {
+              id: 0,
+              name: "DEV_FORCE_PROBE_OPEN",
+              category: "Probe",
+              signalKey: "DEV_FORCE_PROBE_LONG",
+              slPct: 0.3,
+              tpPct: 0.6,
+              cooldownMin: 1,
+              holdMinutes: 1,
+              confluenceMin: 1,
+            };
+            const opened = openPosition(probeStrat, "LONG", probePayload.lastPrice, probePayload.markPrice, probePayload === primary ? PRIMARY_QUOTE_SYMBOL : activeSymbols[0] ?? PRIMARY_QUOTE_SYMBOL, {
+              atr14: Math.max(input.atr14, probePayload.markPrice * 0.003),
+              regime: "chop",
+              entryBook: survivors.map((p) => ({ side: p.side, notional: p.notional })),
+              equityUsd: balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0),
+              entryPriorityScore: 999,
+            });
+            if (process.env.NODE_ENV === "development") {
+              console.info("[btc-futures-paper] force probe open", {
+                enabled: true,
+                opened: Boolean(opened),
+                symbol: opened?.symbol,
+                positionId: opened?.id,
+              });
+            }
+          }
+        }
 
         if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current) {
           const equityForEntry = balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0);
@@ -1732,7 +1806,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               }
 
               const signal = evalMinuteSignal(input, strat);
-              if (signal.score >= activeSignalThreshold && passesEntryConfirmation(input, strat)) {
+              const confirmPasses =
+                passesEntryConfirmation(input, strat) ||
+                (relaxEntryConfirmation && passesRelaxedBtcFtEntryConfirmation(input, strat));
+              if (signal.score >= activeSignalThreshold && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
                 const regimeMatch = strat.regimes?.includes(regime) ?? false;
                 entryCandidates.push({
@@ -1769,13 +1846,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
           const maxSpreadPct = deskMaxLastMarkSpreadPctFromEnv();
           const maxOpenPerCategory = deskMaxOpenPerCategoryFromEnv();
-          const utcSession = deskEntryUtcSessionFromEnv();
-          const utcHour = new Date(now).getUTCHours();
-          const entryUtcSessionOpen = isUtcHourInSession(
-            utcHour,
-            utcSession.startHour,
-            utcSession.endHour,
-          );
           const categoryByStrategyId = new Map(activeStratDefs.map((s) => [s.id, s.category]));
           let categoryOpenCounts = countOpenByCategory(workingPositions, categoryByStrategyId);
 
@@ -1857,7 +1927,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
         if (pollDebug) {
           entryDebugLiveRef.current = null;
-          setEntryDebug(pollDebug);
+          const finalizedDebug = finalizeEntryPollDebug(pollDebug);
+          if (process.env.NODE_ENV === "development" && !entryDebugLoggedOnceRef.current) {
+            entryDebugLoggedOnceRef.current = true;
+            console.info("[btc-futures-paper] entry funnel poll", finalizedDebug);
+          }
+          setEntryDebug(finalizedDebug);
         }
       } catch (e) {
         if (!mounted) return;
@@ -1891,7 +1966,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey]);
+  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
@@ -1964,4 +2039,3 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     entryDebug: entryDebugEnabled ? entryDebug : null,
   };
 }
-

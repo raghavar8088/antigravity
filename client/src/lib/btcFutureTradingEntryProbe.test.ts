@@ -60,12 +60,27 @@ describe("BTC Future Trading desk roster entry probe", () => {
   });
 
   it("roster includes core archetypes plus extended BTC FT IDs (200–299)", () => {
-    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBeGreaterThan(20);
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBe(120);
     expect(BTC_FUTURE_TRADING_STRATEGY_IDS.some((id) => id >= 200)).toBe(true);
     expect(raw.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.fakeDiversityFilteredCount).toBe(0);
     expect(built.strategies.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.lowRrSkippedStratIds.length).toBe(0);
+  });
+
+  it("keeps all 120 explicit BTC Future Trading IDs active after desk policy build", () => {
+    const explicitIds = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+    const explicitRaw = FUTURES_STRAT_DEFS.filter((s) => explicitIds.has(s.id));
+    const explicitBuilt = buildPaperDeskStrategies(explicitRaw, {
+      strategyIdAllowlist: null,
+      minTpSlRatio: 2,
+      allowFakeDiversity: true,
+    });
+
+    expect(explicitBuilt.strategies).toHaveLength(120);
+    expect(explicitBuilt.strategies.map((s) => s.id).sort((a, b) => a - b)).toEqual(
+      [...BTC_FUTURE_TRADING_STRATEGY_IDS].sort((a, b) => a - b),
+    );
   });
 
   it("on strong bullish synthetic bars, at least one strat passes signal+confirm at threshold 26", () => {

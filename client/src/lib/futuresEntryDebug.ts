@@ -13,7 +13,13 @@ export type DeskEntryPollDebug = {
   symbolsRequested: number;
   dataHealthStatus: string;
   activeStratCount: number;
+  disabledStratCount: number;
+  autoDisabledStratCount: number;
   effectiveThreshold: number;
+  utcHour: number;
+  entryUtcSessionOpen: boolean;
+  sessionSkipTotal: number;
+  dominantBlocker: string;
   evalPairs: number;
   failDisabled: number;
   failOccupied: number;
@@ -34,6 +40,60 @@ export type DeskEntryPollDebug = {
   failLowPriority: number;
 };
 
+type DebugCountKey =
+  | "failDisabled"
+  | "failOccupied"
+  | "failCooldown"
+  | "failSignal"
+  | "failConfirm"
+  | "failSpread"
+  | "failSession"
+  | "failCategoryCap"
+  | "failOpenRegime"
+  | "failMinMove"
+  | "failSameDirCap"
+  | "failMaxLoss"
+  | "failMargin"
+  | "failLowPriority";
+
+const DEBUG_BLOCKER_LABELS: ReadonlyArray<{ key: DebugCountKey; label: string }> = [
+  { key: "failSignal", label: "SIGNAL" },
+  { key: "failConfirm", label: "CONFIRM" },
+  { key: "failOpenRegime", label: "REGIME" },
+  { key: "failMinMove", label: "MIN_MOVE" },
+  { key: "failSpread", label: "SPREAD" },
+  { key: "failSession", label: "SESSION" },
+  { key: "failCategoryCap", label: "CATEGORY_CAP" },
+  { key: "failSameDirCap", label: "SAME_DIR_CAP" },
+  { key: "failMaxLoss", label: "MAX_LOSS" },
+  { key: "failMargin", label: "MARGIN" },
+  { key: "failLowPriority", label: "LOW_PRIORITY" },
+  { key: "failDisabled", label: "DISABLED" },
+  { key: "failCooldown", label: "COOLDOWN" },
+  { key: "failOccupied", label: "OCCUPIED" },
+];
+
+export function dominantEntryBlocker(debug: DeskEntryPollDebug): string {
+  if (debug.pauseEntries) return "PAUSE";
+  if (debug.drawdownLocked) return "DRAWDOWN";
+  if (!debug.hasMarketData) return "DATA";
+  if (debug.activeStratCount <= 0) return "NO_STRATEGIES";
+  let best = { label: "NONE", value: 0 };
+  for (const row of DEBUG_BLOCKER_LABELS) {
+    const value = debug[row.key];
+    if (value > best.value) best = { label: row.label, value };
+  }
+  if (debug.candidatesBuilt > 0 && debug.openedThisPoll <= 0 && best.value <= 0) return "OPEN_GATE";
+  return best.value > 0 ? best.label : "NONE";
+}
+
+export function finalizeEntryPollDebug(debug: DeskEntryPollDebug): DeskEntryPollDebug {
+  return {
+    ...debug,
+    dominantBlocker: dominantEntryBlocker(debug),
+  };
+}
+
 export function createEmptyEntryPollDebug(effectiveThreshold: number): DeskEntryPollDebug {
   return {
     pollAt: 0,
@@ -44,7 +104,13 @@ export function createEmptyEntryPollDebug(effectiveThreshold: number): DeskEntry
     symbolsRequested: 0,
     dataHealthStatus: "unknown",
     activeStratCount: 0,
+    disabledStratCount: 0,
+    autoDisabledStratCount: 0,
     effectiveThreshold,
+    utcHour: 0,
+    entryUtcSessionOpen: true,
+    sessionSkipTotal: 0,
+    dominantBlocker: "NONE",
     evalPairs: 0,
     failDisabled: 0,
     failOccupied: 0,

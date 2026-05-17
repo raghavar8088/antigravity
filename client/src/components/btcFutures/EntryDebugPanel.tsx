@@ -73,6 +73,19 @@ export function EntryDebugPanel({
             <DeskMetricTile label="Feed" value={poll.dataHealthStatus} detail={`${poll.payloadsReady}/${poll.symbolsRequested} symbols`} compact />
             <DeskMetricTile label="Threshold" value={String(poll.effectiveThreshold)} compact />
             <DeskMetricTile label="Strategies" value={String(poll.activeStratCount)} compact />
+            <DeskMetricTile label="Dominant block" value={poll.dominantBlocker} compact />
+            <DeskMetricTile
+              label="UTC session"
+              value={poll.entryUtcSessionOpen ? "open" : "closed"}
+              detail={`UTC ${poll.utcHour}; skipped ${poll.sessionSkipTotal}`}
+              compact
+            />
+            <DeskMetricTile
+              label="Disabled"
+              value={`${poll.disabledStratCount}/${poll.autoDisabledStratCount}`}
+              detail="manual/auto"
+              compact
+            />
             <DeskMetricTile label="Eval pairs" value={String(poll.evalPairs)} compact />
             <DeskMetricTile label="Candidates" value={String(poll.candidatesBuilt)} compact />
             <DeskMetricTile label="Opened" value={String(poll.openedThisPoll)} compact />

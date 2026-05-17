@@ -2,6 +2,7 @@
 
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
+import { btcFtRelaxConfirmEnabledFromEnv, btcFtSignalThresholdFromEnv } from "@/lib/futuresDeskPolicy";
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
@@ -23,7 +24,8 @@ export function BTCFutureTradingScalper({
       moduleTagline={`BTC PERPETUAL FUTURES · 25x · ${BTC_FUTURE_TRADING_STRATEGY_IDS.length} STRATEGIES (CORE + BTC FT TEMPLATES)`}
       strategyIds={BTC_FUTURE_TRADING_STRATEGY_IDS}
       symbols={BTC_ONLY_SYMBOLS}
-      signalThreshold={26}
+      signalThreshold={btcFtSignalThresholdFromEnv(26)}
+      relaxEntryConfirmation={btcFtRelaxConfirmEnabledFromEnv()}
       strategyProfile={strategyProfile}
       watchlist={BTC_ONLY_WATCHLIST}
       storageNamespace="btc_future_trading_desk_v3"
@@ -31,4 +33,3 @@ export function BTCFutureTradingScalper({
     />
   );
 }
-

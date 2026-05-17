@@ -46,5 +46,29 @@ go run cmd/antigravity/main.go
 ```
 *Note: Using the massive Red Kill Switch located inside the Next.js UI physically signals a cancellation context to the Go-Routine running above!*
 
+## BTC Future Trading: 120 Strategies But No Paper Trades
+
+The BTC Future Trading desk can show 120 active strategy rows while opening no paper positions. That does not mean the wallet or close path is broken: the 120 IDs are evaluated on one BTCUSD stream, then the desk applies signal score, confirmation, cooldown, disabled strategy, UTC session, spread, regime, ATR-vs-fee, category-cap, same-direction notional, max-loss, margin, and 12-slot priority gates.
+
+For diagnosis, run the frontend with:
+
+```shell
+NEXT_PUBLIC_DESK_ENTRY_DEBUG=1 npm run dev
+```
+
+The Entry debug panel shows the last poll's `Dominant block`, active strategy count, data health, UTC session state, disabled/auto-disabled counts, eval pairs, candidates, and opened count. If `Strategies` is `0`, the explicit roster/build filter is wrong. If `SIGNAL` or `CONFIRM` dominates for many BTCUSD polls, the market is too quiet for the current threshold/confirmation or the kline inputs are bad. If a post-candidate blocker dominates, use the named blocker: `REGIME`, `MIN_MOVE`, `SPREAD`, `SESSION`, `CATEGORY_CAP`, `LOW_PRIORITY`, `MAX_LOSS`, or `MARGIN`.
+
+BTC Future Trading module-only knobs:
+
+```shell
+NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD=22   # default 26, clamped 22-28
+NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1       # dev only; diagnostic, higher risk
+NEXT_PUBLIC_DESK_FORCE_PROBE_OPEN=1      # dev only; opens one tiny paper long after data is ready
+NEXT_PUBLIC_DESK_ENTRY_UTC_START=0
+NEXT_PUBLIC_DESK_ENTRY_UTC_END=24
+```
+
+Storage/sync reminder: localhost uses browser `localStorage` for paper state, while Vercel/Supabase sync can merge trade history by account key. A stale local pause or disabled strategy list can make a desk look live but block opens; Reset account now clears `pauseEntries`, drawdown lock, cooldowns, and local paper state. On AWS/Vercel, verify the same user/session and storage namespace are being used before comparing browser state to cloud history.
+
 ## 🛑 Safety Notice
 This codebase is an algorithmic framework theoretically capable of executing raw financial operations upon global centralized exchanges. Always mathematically verify Strategy algorithms internally inside `cmd/backtest/main.go` before swapping the engine over into the real-world `binance_live.go` physical pipeline!

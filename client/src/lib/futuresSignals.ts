@@ -823,6 +823,34 @@ export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: F
   return false;
 }
 
+/**
+ * Dev-only BTC Future Trading diagnostic confirmation. This is deliberately
+ * weaker than `passesBtcFtTemplateConfirmation` but still requires usable bars
+ * and directionally sensible inputs, so it can separate "confirm is too strict"
+ * from broken data without turning the production desk loose.
+ */
+export function passesRelaxedBtcFtEntryConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
+  if (!strat.btcFtTemplate) return false;
+  if (
+    !Number.isFinite(s.price) ||
+    !Number.isFinite(s.markPrice) ||
+    !Number.isFinite(s.atr14) ||
+    s.price <= 0 ||
+    s.markPrice <= 0 ||
+    s.atr14 <= 0
+  ) {
+    return false;
+  }
+
+  const short = strat.signalKey.includes("SHORT");
+  const momentumOk = short ? s.momentum3 < 0 || s.momentum6 < 0 : s.momentum3 > 0 || s.momentum6 > 0;
+  const trendOk = short ? s.fast < s.slow || s.htf5_trend <= 0 : s.fast > s.slow || s.htf5_trend >= 0;
+  const oscillatorOk = short
+    ? Number.isFinite(s.rsi14) && s.rsi14 < 86
+    : Number.isFinite(s.rsi14) && s.rsi14 > 14;
+  return oscillatorOk && (momentumOk || trendOk);
+}
+
 // ========== SIGNAL SCORING ==========
 
 export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef): { score: number; reason: string } {

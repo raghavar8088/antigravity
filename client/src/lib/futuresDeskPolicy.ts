@@ -23,6 +23,10 @@
  * `NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT` — max |last−mark|/mark % before entry skip (default 0.05, clamp 0–1).
  * `NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY` — max concurrent opens per strategy `category` (default 3, clamp 1–12).
  * `NEXT_PUBLIC_DESK_ENTRY_UTC_START` / `NEXT_PUBLIC_DESK_ENTRY_UTC_END` — UTC entry window (0–23 / 0–24); default 0 and 24 = always open; supports wrap (e.g. 22→6).
+ * BTC Future Trading module-only:
+ * `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD` — base signal threshold for that route only (default 26, clamp 22–28).
+ * `NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1` — dev-only relaxed confirmation for BTC FT route diagnostics.
+ * `NEXT_PUBLIC_DESK_FORCE_PROBE_OPEN=1` — dev-only one tiny paper open after first ready BTC FT poll.
  */
 
 import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
@@ -413,6 +417,22 @@ export function deskRiskPctOfEquityFromEnv(): number {
 /** Default: queue-only at max slots (skip lower-priority candidates). */
 export function deskEntryReplaceWeakestFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST === "1";
+}
+
+export function btcFtSignalThresholdFromEnv(fallback = 26): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(28, Math.max(22, Math.round(n)));
+}
+
+export function btcFtRelaxConfirmEnabledFromEnv(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
+}
+
+export function deskForceProbeOpenEnabledFromEnv(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_DESK_FORCE_PROBE_OPEN === "1";
 }
 
 // ========== Entry priority (P1-F) ==========

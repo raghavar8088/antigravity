@@ -162,6 +162,8 @@ type BTCFuturesScalperProps = {
   symbols?: BTCFuturesEngineOptions["symbols"];
   signalThreshold?: BTCFuturesEngineOptions["signalThreshold"];
   strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
+  relaxEntryConfirmation?: BTCFuturesEngineOptions["relaxEntryConfirmation"];
+  forceProbeOpen?: BTCFuturesEngineOptions["forceProbeOpen"];
   watchlist?: FuturesWatchItem[];
   storageNamespace?: string;
   baseBalance?: number;
@@ -184,6 +186,8 @@ export function BTCFuturesScalper({
   symbols,
   signalThreshold = 28,
   strategyProfile,
+  relaxEntryConfirmation,
+  forceProbeOpen,
   watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
@@ -234,6 +238,8 @@ export function BTCFuturesScalper({
     symbols,
     signalThreshold,
     strategyProfile,
+    relaxEntryConfirmation,
+    forceProbeOpen,
     storageNamespace,
     supabaseUserId: authUser?.id ?? null,
   });
@@ -426,7 +432,7 @@ export function BTCFuturesScalper({
         }}
       />
 
-      {dataHealth.showFeedWarning ? (
+      {dataHealth.showFeedWarning || dataHealth.lastError ? (
         <DeskBanner variant="warning" title="Futures kline feed is degraded">
           {dataHealth.lastError ? <span>{dataHealth.lastError} </span> : null}
           Signals may be stale until data recovers ({dataHealth.payloadsReady}/{dataHealth.symbolsRequested} symbols ready).
