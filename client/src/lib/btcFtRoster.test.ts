@@ -10,21 +10,24 @@ afterEach(() => {
 });
 
 describe("btcFtRoster — resolveBtcFtActiveStrategyIds", () => {
-  it("defaults to CORE only (≤ 30 IDs) when no env is set", () => {
+  it("defaults to full roster (120 IDs) when no env is set", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_RANKED", "");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY", "");
     const result = resolveBtcFtActiveStrategyIds();
-    expect(result.source).toBe("core");
-    expect(result.ids.length).toBeGreaterThan(0);
-    expect(result.ids.length).toBeLessThanOrEqual(30);
-    expect(result.isLargeRoster).toBe(false);
+    expect(result.source).toBe("full");
+    expect(result.ids.length).toBe(120);
+    expect(result.isLargeRoster).toBe(true);
   });
 
-  it("CORE IDs match CORE_BTC_FT_STRATEGY_IDS in default mode", () => {
+  it("USE_CORE_ONLY=1 returns CORE basket only", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_RANKED", "");
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY", "1");
     const result = resolveBtcFtActiveStrategyIds();
+    expect(result.source).toBe("core");
     expect(result.ids).toEqual([...CORE_BTC_FT_STRATEGY_IDS]);
+    expect(result.isLargeRoster).toBe(false);
   });
 
   it("env comma list parses correctly and caps at 120", () => {

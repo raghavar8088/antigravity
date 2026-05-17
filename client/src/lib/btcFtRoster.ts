@@ -4,11 +4,12 @@
  * Problem: running 120 strategies × 1 symbol × threshold 26 × regime/min-move/session gates
  * → on choppy 1m bars evalPairs is high but candidatesBuilt ≈ 0.
  *
- * Fix: DEFAULT to CORE only (~20 IDs). Extended roster requires explicit env opt-in.
+ * Default: full roster (CORE + BTC FT 200–299, 120 IDs). Set USE_CORE_ONLY=1 for ~20 IDs.
  *
  * Env controls:
- *   NEXT_PUBLIC_BTC_FT_STRATEGY_IDS   comma-separated id list (cap 120)
- *   NEXT_PUBLIC_BTC_FT_USE_RANKED=1   CORE + top-10 from btc_ft_strategy_rankings.json (if present)
+ *   NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY=1  legacy ~20-strategy basket only
+ *   NEXT_PUBLIC_BTC_FT_STRATEGY_IDS       comma-separated id list (cap 120)
+ *   NEXT_PUBLIC_BTC_FT_USE_RANKED=1       CORE + top-10 from btc_ft_strategy_rankings.json (if present)
  *
  * See: README.md#btc-ft-no-trades
  */
@@ -77,7 +78,7 @@ export function loadExtendedIdsFromRankings(topN = 10, minTrades = 10): number[]
 // Roster resolution
 // ---------------------------------------------------------------------------
 
-export type BtcFtRosterSource = "env" | "core+ranked" | "core";
+export type BtcFtRosterSource = "env" | "core+ranked" | "core" | "full";
 
 export type BtcFtRosterResolution = {
   ids: number[];
@@ -91,7 +92,8 @@ export type BtcFtRosterResolution = {
  * Priority:
  *  1. `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS` (comma list, cap 120)
  *  2. `NEXT_PUBLIC_BTC_FT_USE_RANKED=1` → CORE + top-10 from rankings
- *  3. Default → CORE only (≤ 30 IDs)
+ *  3. `NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY=1` → CORE only (~20 IDs)
+ *  4. Default → full roster (120 IDs)
  *
  * Hard cap: 120 IDs regardless of env.
  */
@@ -116,6 +118,10 @@ export function resolveBtcFtActiveStrategyIds(): BtcFtRosterResolution {
     return { ids: merged, source: "core+ranked", isLargeRoster: false };
   }
 
-  // Default: CORE only
-  return { ids: [...CORE_BTC_FT_STRATEGY_IDS], source: "core", isLargeRoster: false };
+  if (process.env.NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY === "1") {
+    return { ids: [...CORE_BTC_FT_STRATEGY_IDS], source: "core", isLargeRoster: false };
+  }
+
+  const ids = [...BTC_FUTURE_TRADING_STRATEGY_IDS];
+  return { ids, source: "full", isLargeRoster: ids.length > 30 };
 }

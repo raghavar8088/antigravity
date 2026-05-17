@@ -441,8 +441,18 @@ export function deskBtcFtSignalThresholdFromEnv(): number {
   return btcFtSignalThresholdFromEnv(26);
 }
 
+/** Paper desk only — relaxes HTF/confluence confirm for BTC FT module when env is set. */
 export function btcFtRelaxConfirmEnabledFromEnv(): boolean {
-  return process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
+  return process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
+}
+
+/** Module-only min-move K multiplier (default 1). Use 0.85–0.9 on chop with large rosters. */
+export function btcFtMinMoveKMulFromEnv(fallback = 1): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(2, Math.max(0.5, n));
 }
 
 export function deskForceProbeOpenEnabledFromEnv(): boolean {

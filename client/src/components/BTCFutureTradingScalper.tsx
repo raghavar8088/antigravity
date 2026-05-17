@@ -4,7 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
-import { btcFtRelaxConfirmEnabledFromEnv, btcFtSignalThresholdFromEnv } from "@/lib/futuresDeskPolicy";
+import {
+  btcFtMinMoveKMulFromEnv,
+  btcFtRelaxConfirmEnabledFromEnv,
+  btcFtSignalThresholdFromEnv,
+} from "@/lib/futuresDeskPolicy";
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
 import { DeskBanner } from "@/components/desk/ui";
 import {
@@ -31,7 +35,7 @@ import {
 
 const BTC_ONLY_SYMBOLS = ["BTCUSD"] as const;
 const BTC_ONLY_WATCHLIST = FUTURES_WATCHLIST.filter((item) => item.symbol === "BTCUSD");
-const STORAGE_NS = "btc_future_trading_20";
+const STORAGE_NS = "btc_future_trading_v3";
 
 // Resolve once at module load; env flags are stable for the browser bundle.
 const RESEARCH_MODE = isResearchModeEnabled();
@@ -117,12 +121,19 @@ export function BTCFutureTradingScalper({
     ? 26
     : EFFECTIVE_RESEARCH_MODE
     ? researchSignalThreshold()
-    : btcFtSignalThresholdFromEnv(26);
+    : btcFtSignalThresholdFromEnv(24);
   const relaxConfirm = WINNERS_ONLY_MODE
     ? false
     : EFFECTIVE_RESEARCH_MODE
     ? researchRelaxConfirm()
-    : btcFtRelaxConfirmEnabledFromEnv();
+    : btcFtRelaxConfirmEnabledFromEnv() || rosterInfo.isLargeRoster;
+  const minMoveKMul = WINNERS_ONLY_MODE
+    ? 1
+    : EFFECTIVE_RESEARCH_MODE
+    ? researchMinMoveKMul()
+    : rosterInfo.isLargeRoster
+    ? btcFtMinMoveKMulFromEnv(0.9)
+    : 1;
 
   const sourceLabel =
     rosterInfo.source === "research"
@@ -135,6 +146,8 @@ export function BTCFutureTradingScalper({
       ? "env"
       : rosterInfo.source === "core+ranked"
       ? "core + ranked"
+      : rosterInfo.source === "full"
+      ? "full roster"
       : "core";
 
   const tagline = WINNERS_ONLY_MODE
@@ -195,7 +208,7 @@ export function BTCFutureTradingScalper({
           signalThreshold={threshold}
           relaxEntryConfirmation={relaxConfirm}
           cooldownMultiplier={EFFECTIVE_RESEARCH_MODE ? researchCooldownMul() : 1}
-          minMoveKMultiplier={EFFECTIVE_RESEARCH_MODE ? researchMinMoveKMul() : 1}
+          minMoveKMultiplier={minMoveKMul}
           slippageBpsOverride={EFFECTIVE_RESEARCH_MODE ? researchSlippageBps() : undefined}
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
           researchEnsureTrades={EFFECTIVE_RESEARCH_MODE ? researchEnsureTradesEnabled() : false}
