@@ -8,10 +8,9 @@ import {
   type ReplayFixtureKind,
 } from "../src/lib/futuresReplayFixtures";
 import type { PaperReplayConfig } from "../src/lib/futuresReplayEngine";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "../src/lib/btcFutureTradingRoster";
 
-export const BTC_FUTURE_TRADING_STRATEGY_IDS = [
-  91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
-];
+export { BTC_FUTURE_TRADING_STRATEGY_IDS };
 
 export function loadEnvLocal(): void {
   const path = join(process.cwd(), ".env.local");

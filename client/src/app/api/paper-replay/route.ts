@@ -10,12 +10,9 @@ import { loadReplayFixture, type ReplayFixtureKind } from "@/lib/futuresReplayFi
 import { runPaperDeskReplay, type PaperReplayConfig } from "@/lib/futuresReplayEngine";
 import { isPaperReplayApiAllowed } from "@/lib/futuresReplayUi";
 import { createServiceSupabase } from "@/lib/supabase/server";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
 export const dynamic = "force-dynamic";
-
-const BTC_FUTURE_TRADING_STRATEGY_IDS = [
-  91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
-];
 
 function loadFixtureCandles(bars: number, kind: ReplayFixtureKind) {
   try {

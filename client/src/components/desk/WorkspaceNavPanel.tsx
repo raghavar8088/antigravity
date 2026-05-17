@@ -4,6 +4,7 @@ import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskChip } from "@/components/desk/ui/DeskChip";
 import { DeskTabs, type DeskTabItem } from "@/components/desk/ui/DeskTabs";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/client";
 
 type DashboardGroup = "crypto" | "india";
@@ -36,7 +37,7 @@ const INDIA_MODULES: DeskTabItem<DashboardModule>[] = [
 export function moduleStatusChips(module: DashboardModule): string[] {
   switch (module) {
     case "btcFutureTrading":
-      return ["Paper", "25× leverage", "20 strategies", "1 market"];
+      return ["Paper", "25× leverage", `${BTC_FUTURE_TRADING_STRATEGY_IDS.length} strategies`, "1 market"];
     case "btcFuturesScalper":
       return ["Paper", "25× leverage", "130 strategies", "Multi-asset"];
     case "options":

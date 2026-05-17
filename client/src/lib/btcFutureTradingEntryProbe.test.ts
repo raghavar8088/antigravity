@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "./btcFutureTradingRoster";
 import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
-import { buildPaperDeskStrategies, deskFakeDiversityEnabledViaEnv, deskMinTpSlRatioFromEnv } from "./futuresDeskPolicy";
+import { buildPaperDeskStrategies, deskMinTpSlRatioFromEnv } from "./futuresDeskPolicy";
 import {
   buildSignalInputs,
   classifyRegimeTagFrom1mOhlcv,
@@ -8,9 +9,6 @@ import {
   passesEntryConfirmation,
 } from "./futuresSignals";
 
-const BTC_FUTURE_TRADING_STRATEGY_IDS = [
-  91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
-];
 const THRESHOLD = 26;
 
 function bullishBars(base = 100_000, count = 40) {
@@ -53,7 +51,7 @@ function choppyBars(base = 100_000, count = 40) {
   return { opens, closes, highs, lows, volumes };
 }
 
-describe("BTC Future Trading 20-strategy entry probe", () => {
+describe("BTC Future Trading desk roster entry probe", () => {
   const raw = FUTURES_STRAT_DEFS.filter((s) => BTC_FUTURE_TRADING_STRATEGY_IDS.includes(s.id));
   const built = buildPaperDeskStrategies(raw, {
     strategyIdAllowlist: null,
@@ -61,10 +59,12 @@ describe("BTC Future Trading 20-strategy entry probe", () => {
     allowFakeDiversity: true,
   });
 
-  it("explicit roster keeps IDs 91–96 (inside fake-diversity range 79–110)", () => {
-    expect(raw.length).toBe(20);
+  it("roster includes core archetypes plus extended BTC FT proof IDs (200+)", () => {
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBeGreaterThan(20);
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.some((id) => id >= 200)).toBe(true);
+    expect(raw.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.fakeDiversityFilteredCount).toBe(0);
-    expect(built.strategies.length).toBe(20);
+    expect(built.strategies.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.lowRrSkippedStratIds.length).toBe(0);
   });
 
@@ -93,6 +93,6 @@ describe("BTC Future Trading 20-strategy entry probe", () => {
       const signal = evalMinuteSignal(input, strat);
       if (signal.score >= THRESHOLD && passesEntryConfirmation(input, strat)) passBoth += 1;
     }
-    expect(passBoth).toBeLessThan(5);
+    expect(passBoth).toBeLessThan(Math.ceil(BTC_FUTURE_TRADING_STRATEGY_IDS.length * 0.2));
   });
 });

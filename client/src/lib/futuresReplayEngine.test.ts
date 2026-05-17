@@ -5,16 +5,14 @@ import {
   runPaperDeskReplay,
   type PaperReplayConfig,
 } from "./futuresReplayEngine";
+import { BTC_FUTURE_TRADING_CORE_STRATEGY_IDS } from "./btcFutureTradingRoster";
 
-const BTC_20 = [
-  91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
-];
-
+/** Golden replay stays on the 20-strategy core basket for a compact stable snapshot; live desk uses `BTC_FUTURE_TRADING_STRATEGY_IDS`. */
 const goldenConfig: PaperReplayConfig = {
   initialBalance: 1000,
   leverage: 25,
   slippageBps: 0,
-  strategyIds: BTC_20,
+  strategyIds: [...BTC_FUTURE_TRADING_CORE_STRATEGY_IDS],
   maxPositions: 12,
   barMs: 60_000,
   symbol: "BTCUSD",
