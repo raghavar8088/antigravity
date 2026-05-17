@@ -63,7 +63,7 @@ import {
   effectiveSignalThreshold as computeEffectiveThreshold,
   evalMinuteSignal,
   passesEntryConfirmation,
-  passesRelaxedBtcFtEntryConfirmation,
+  passesRelaxedDeskEntryConfirmation,
   type FuturesSignalInputs,
 } from "@/lib/futuresSignals";
 import {
@@ -428,6 +428,10 @@ export type BTCFuturesEngineOptions = {
   disableAutoKill?: boolean;
   /** Research tournament: lower threshold by 4 for zero-trade active strats after two hours. */
   researchEnsureTrades?: boolean;
+  /** BTC FT paper desk: lower threshold for quiet strats after ~45m (default on module). */
+  paperEnsureTrades?: boolean;
+  /** Force entry debug panel (BTC FT module sets true). */
+  entryDebugEnabled?: boolean;
   /** Module-specific UTC entry session override. */
   entryUtcSessionOverride?: DeskEntryUtcSession;
 };
@@ -523,7 +527,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       : null;
   const disableAutoKill = options.disableAutoKill === true;
   const researchEnsureTrades = options.researchEnsureTrades === true;
+  const paperEnsureTrades = options.paperEnsureTrades === true;
   const entryUtcSessionOverride = options.entryUtcSessionOverride;
+  const relaxEntryGatesRef = useRef(relaxEntryConfirmation);
+  useEffect(() => {
+    relaxEntryGatesRef.current = relaxEntryConfirmation;
+  }, [relaxEntryConfirmation]);
   const profileCfg = FUTURES_STRATEGY_PROFILES[strategyProfile];
   const activeSignalThreshold = useMemo(() => {
     const base = Number.isFinite(options.signalThreshold)
@@ -589,7 +598,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const [lastTradeAt, setLastTradeAt] = useState(0);
   const [dayStartBalance, setDayStartBalance] = useState(INITIAL_BALANCE);
   const [dayStartDate, setDayStartDate] = useState(() => new Date().getDate());
-  const entryDebugEnabled = deskEntryDebugEnabledFromEnv();
+  const entryDebugEnabled =
+    options.entryDebugEnabled === true || deskEntryDebugEnabledFromEnv();
   const [entryDebug, setEntryDebug] = useState<DeskEntryPollDebug | null>(null);
   const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
   const forceProbeOpenedRef = useRef(false);
@@ -1254,7 +1264,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   const openPosition = useCallback(
     (strat: StratDef, side: Side, price: number, markPrice: number, symbol: string, gate: PaperOpenGateCtx): BTCFuturesPosition | null => {
-      if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(gate.regime)) {
+      if (
+        !relaxEntryGatesRef.current &&
+        strat.regimes &&
+        strat.regimes.length > 0 &&
+        !strat.regimes.includes(gate.regime)
+      ) {
         deskSkippedByRegimeRef.current[gate.regime] += 1;
         if (entryDebugLiveRef.current) entryDebugLiveRef.current.failOpenRegime += 1;
         return null;
@@ -1300,7 +1315,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         effectiveMinExpectedMoveSafetyK(
           deskMinExpectedMoveSafetyKFromEnv(),
           profileCfg,
-        ) * minMoveKMultiplier,
+        ) *
+          minMoveKMultiplier *
+          (relaxEntryGatesRef.current ? 0.7 : 1),
       );
       if (!moveGate.ok) {
         deskSkippedMinExpectedMoveRef.current += 1;
@@ -1837,16 +1854,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
               const signal = evalMinuteSignal(input, strat);
               const stratTradeCount = tradesRef.current.filter((t) => t.strategyId === strat.id).length;
-              const ensureDataThresholdDrop =
-                researchEnsureTrades &&
+              const ensureDataThresholdDrop = researchEnsureTrades &&
                 now - researchMountedAtRef.current >= 2 * 60 * 60 * 1000 &&
                 stratTradeCount < 3
-                  ? 4
+                ? 4
+                : paperEnsureTrades &&
+                    now - researchMountedAtRef.current >= 45 * 60 * 1000 &&
+                    stratTradeCount < 2
+                  ? 8
                   : 0;
               const effectiveThresholdForStrat = Math.max(18, activeSignalThreshold - ensureDataThresholdDrop);
               const confirmPasses =
                 passesEntryConfirmation(input, strat) ||
-                (relaxEntryConfirmation && passesRelaxedBtcFtEntryConfirmation(input, strat));
+                (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(input, strat));
               if (signal.score >= effectiveThresholdForStrat && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
                 const regimeMatch = strat.regimes?.includes(regime) ?? false;
@@ -2004,7 +2024,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, researchEnsureTrades, entryUtcSessionOverride]);
+  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {

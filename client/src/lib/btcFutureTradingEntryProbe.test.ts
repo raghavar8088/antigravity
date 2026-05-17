@@ -8,6 +8,7 @@ import {
   classifyRegimeTagFrom1mOhlcv,
   evalMinuteSignal,
   passesEntryConfirmation,
+  passesRelaxedDeskEntryConfirmation,
 } from "./futuresSignals";
 
 const THRESHOLD = 26;
@@ -167,5 +168,17 @@ describe("BTC Future Trading desk roster entry probe", () => {
     }
     // Threshold 24 must admit at least as many as threshold 26 (monotone gate).
     expect(pass24).toBeGreaterThanOrEqual(pass26);
+  });
+
+  it("relaxed confirm admits CORE trend strats when strict confirm fails on mild-bullish bars", () => {
+    const bars = mildBullishBars();
+    const input = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const trendLong = built.strategies.find((s) => s.id === 91);
+    expect(trendLong).toBeDefined();
+    const signal = evalMinuteSignal(input, trendLong!);
+    expect(signal.score).toBeGreaterThanOrEqual(22);
+    const strict = passesEntryConfirmation(input, trendLong!);
+    const relaxed = passesRelaxedDeskEntryConfirmation(input, trendLong!);
+    expect(strict || relaxed).toBe(true);
   });
 });

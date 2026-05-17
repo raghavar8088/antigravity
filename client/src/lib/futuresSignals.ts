@@ -851,6 +851,21 @@ export function passesRelaxedBtcFtEntryConfirmation(s: FuturesSignalInputs, stra
   return oscillatorOk && (momentumOk || trendOk);
 }
 
+/** Paper-only relaxed confirm for CORE + template strats when the BTC FT desk enables relax mode. */
+export function passesRelaxedDeskEntryConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
+  if (strat.btcFtTemplate) {
+    return passesRelaxedBtcFtEntryConfirmation(s, strat);
+  }
+  if (!Number.isFinite(s.atr14) || s.atr14 <= 0 || !Number.isFinite(s.rsi14)) {
+    return false;
+  }
+  const short = strat.signalKey.includes("SHORT");
+  const momentumOk = short ? s.momentum3 < 0 || s.momentum6 < 0 : s.momentum3 > 0 || s.momentum6 > 0;
+  const trendOk = short ? s.fast <= s.slow : s.fast >= s.slow;
+  const rsiOk = s.rsi14 > 12 && s.rsi14 < 88;
+  return rsiOk && (momentumOk || trendOk);
+}
+
 // ========== SIGNAL SCORING ==========
 
 export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef): { score: number; reason: string } {

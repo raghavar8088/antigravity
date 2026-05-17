@@ -5,7 +5,9 @@ import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 import {
+  btcFtEntryDebugEnabledFromEnv,
   btcFtMinMoveKMulFromEnv,
+  btcFtPaperEnsureTradesFromEnv,
   btcFtRelaxConfirmEnabledFromEnv,
   btcFtSignalThresholdFromEnv,
 } from "@/lib/futuresDeskPolicy";
@@ -121,7 +123,7 @@ export function BTCFutureTradingScalper({
     ? 26
     : EFFECTIVE_RESEARCH_MODE
     ? researchSignalThreshold()
-    : btcFtSignalThresholdFromEnv(24);
+    : btcFtSignalThresholdFromEnv(22);
   const relaxConfirm = WINNERS_ONLY_MODE
     ? false
     : EFFECTIVE_RESEARCH_MODE
@@ -132,8 +134,11 @@ export function BTCFutureTradingScalper({
     : EFFECTIVE_RESEARCH_MODE
     ? researchMinMoveKMul()
     : rosterInfo.isLargeRoster
-    ? btcFtMinMoveKMulFromEnv(0.9)
+    ? btcFtMinMoveKMulFromEnv(0.65)
     : 1;
+  const paperEnsureTrades =
+    !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && rosterInfo.isLargeRoster && btcFtPaperEnsureTradesFromEnv();
+  const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;
 
   const sourceLabel =
     rosterInfo.source === "research"
@@ -212,6 +217,8 @@ export function BTCFutureTradingScalper({
           slippageBpsOverride={EFFECTIVE_RESEARCH_MODE ? researchSlippageBps() : undefined}
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
           researchEnsureTrades={EFFECTIVE_RESEARCH_MODE ? researchEnsureTradesEnabled() : false}
+          paperEnsureTrades={paperEnsureTrades}
+          entryDebugEnabled={entryDebugEnabled}
           entryUtcSessionOverride={EFFECTIVE_RESEARCH_MODE ? researchEntryUtcSession() : undefined}
           researchMode={EFFECTIVE_RESEARCH_MODE}
           researchPoolIds={EFFECTIVE_RESEARCH_MODE ? poolRef.current : undefined}

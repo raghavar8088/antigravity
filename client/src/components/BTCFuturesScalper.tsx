@@ -169,6 +169,8 @@ type BTCFuturesScalperProps = {
   slippageBpsOverride?: BTCFuturesEngineOptions["slippageBpsOverride"];
   disableAutoKill?: BTCFuturesEngineOptions["disableAutoKill"];
   researchEnsureTrades?: BTCFuturesEngineOptions["researchEnsureTrades"];
+  paperEnsureTrades?: BTCFuturesEngineOptions["paperEnsureTrades"];
+  entryDebugEnabled?: BTCFuturesEngineOptions["entryDebugEnabled"];
   entryUtcSessionOverride?: BTCFuturesEngineOptions["entryUtcSessionOverride"];
   researchMode?: boolean;
   researchPoolIds?: number[];
@@ -207,6 +209,8 @@ export function BTCFuturesScalper({
   slippageBpsOverride,
   disableAutoKill,
   researchEnsureTrades,
+  paperEnsureTrades,
+  entryDebugEnabled,
   entryUtcSessionOverride,
   researchMode = false,
   researchPoolIds,
@@ -273,6 +277,8 @@ export function BTCFuturesScalper({
     slippageBpsOverride,
     disableAutoKill,
     researchEnsureTrades,
+    paperEnsureTrades,
+    entryDebugEnabled,
     entryUtcSessionOverride,
     storageNamespace,
     supabaseUserId: authUser?.id ?? null,

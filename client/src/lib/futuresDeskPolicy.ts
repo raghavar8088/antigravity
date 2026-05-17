@@ -446,6 +446,19 @@ export function btcFtRelaxConfirmEnabledFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
 }
 
+/** Show entry funnel panel on BTC Future Trading without global DESK_ENTRY_DEBUG. */
+export function btcFtEntryDebugEnabledFromEnv(): boolean {
+  return (
+    process.env.NEXT_PUBLIC_BTC_FT_ENTRY_DEBUG === "1" ||
+    process.env.NEXT_PUBLIC_DESK_ENTRY_DEBUG === "1"
+  );
+}
+
+/** After ~45m, lower threshold for strats with few trades (paper discovery on chop). */
+export function btcFtPaperEnsureTradesFromEnv(): boolean {
+  return process.env.NEXT_PUBLIC_BTC_FT_PAPER_ENSURE_TRADES !== "0";
+}
+
 /** Module-only min-move K multiplier (default 1). Use 0.85–0.9 on chop with large rosters. */
 export function btcFtMinMoveKMulFromEnv(fallback = 1): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL;
