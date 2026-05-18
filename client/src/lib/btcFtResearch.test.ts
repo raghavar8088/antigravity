@@ -53,6 +53,37 @@ describe("computeVerdict", () => {
     // trades >= 15 and sumNet < -2 → LOSER (checked before WINNER)
     expect(computeVerdict({ tradeCount: 20, sumNet: -3, expectancy: -0.15 })).toBe("LOSER");
   });
+
+  // ---- Tighter v2 thresholds (12 trades, sumNet < -$1 OR expectancy < -$0.05) ----
+  it("LOSER fires at 12 trades when sumNet < -1 (was 15 trades / -$2)", () => {
+    expect(computeVerdict({ tradeCount: 12, sumNet: -1.2, expectancy: -0.1 })).toBe("LOSER");
+  });
+
+  it("LOSER fires at 12 trades when expectancy < -0.05 (was -0.10)", () => {
+    expect(computeVerdict({ tradeCount: 13, sumNet: -0.5, expectancy: -0.06 })).toBe("LOSER");
+  });
+
+  it("11 trades is still INSUFFICIENT_DATA territory (no premature retire)", () => {
+    expect(computeVerdict({ tradeCount: 11, sumNet: -5, expectancy: -1 })).toBe("CANDIDATE");
+  });
+
+  it("WINNER blocked when feePctOfGross >= 80 — fee-dominated edge is rejected", () => {
+    expect(
+      computeVerdict({ tradeCount: 25, sumNet: 1.5, expectancy: 0.06, feePctOfGross: 85 }),
+    ).toBe("CANDIDATE");
+  });
+
+  it("WINNER granted when feePctOfGross < 80 and other gates pass", () => {
+    expect(
+      computeVerdict({ tradeCount: 25, sumNet: 1.5, expectancy: 0.06, feePctOfGross: 60 }),
+    ).toBe("WINNER");
+  });
+
+  it("WINNER granted when feePctOfGross is null (legacy stats without fee data)", () => {
+    expect(
+      computeVerdict({ tradeCount: 25, sumNet: 1.5, expectancy: 0.06, feePctOfGross: null }),
+    ).toBe("WINNER");
+  });
 });
 
 // ---------------------------------------------------------------------------

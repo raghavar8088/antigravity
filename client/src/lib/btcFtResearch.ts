@@ -120,11 +120,26 @@ export function computeVerdict(stats: {
   tradeCount: number;
   sumNet: number;
   expectancy: number;
+  /**
+   * Total fees paid as % of total positive gross PnL. WINNER requires < 80% —
+   * a strategy that gives up 80%+ of its gross to fees is fee-bleeding even
+   * if net is barely positive (often via the $2 win-floor).
+   */
+  feePctOfGross?: number | null;
 }): ResearchVerdict {
-  const { tradeCount, sumNet, expectancy } = stats;
+  const { tradeCount, sumNet, expectancy, feePctOfGross } = stats;
   if (tradeCount < 10) return "INSUFFICIENT_DATA";
-  if (tradeCount >= 15 && (sumNet < -2 || expectancy < -0.1)) return "LOSER";
-  if (tradeCount >= 20 && expectancy > 0 && sumNet > 0) return "WINNER";
+  // Tighter LOSER: retire after 12 trades when sumNet < -$1 OR expectancy < -$0.05.
+  // Previous threshold (15 trades, sumNet < -$2) allowed strategies to fee-bleed for days.
+  if (tradeCount >= 12 && (sumNet < -1 || expectancy < -0.05)) return "LOSER";
+  if (tradeCount >= 20 && expectancy > 0 && sumNet > 0) {
+    // Reject strategies whose positive net is dominated by fees — usually
+    // means the gross edge is too thin and one bad batch wipes it out.
+    if (feePctOfGross !== null && feePctOfGross !== undefined && feePctOfGross >= 80) {
+      return "CANDIDATE";
+    }
+    return "WINNER";
+  }
   return "CANDIDATE";
 }
 
@@ -363,7 +378,8 @@ export function researchSignalThreshold(): number {
 }
 
 /**
- * Cooldown multiplier for research mode (default 0.5 = half cooldown = more trade frequency).
+ * Cooldown multiplier for research mode. Default 0.75 (was 0.5) — slows the re-entry
+ * cadence so we don't fee-bleed the same strategy in successive ticks.
  * Only active when RESEARCH_MODE=1.
  */
 export function researchCooldownMul(): number {
@@ -373,11 +389,12 @@ export function researchCooldownMul(): number {
     const n = Number(env);
     if (Number.isFinite(n) && n > 0) return Math.min(2, Math.max(0.1, n));
   }
-  return 0.5;
+  return 0.75;
 }
 
 /**
- * Min-move safety K multiplier for research (default 0.85 — slightly relaxed fee hurdle).
+ * Min-move safety K multiplier for research. Default 1.0 (was 0.85) — keep the
+ * full fee hurdle so trades that barely beat fees don't open and then fee-bleed.
  * Only active when RESEARCH_MODE=1.
  */
 export function researchMinMoveKMul(): number {
@@ -387,15 +404,63 @@ export function researchMinMoveKMul(): number {
     const n = Number(env);
     if (Number.isFinite(n) && n > 0) return Math.min(2, Math.max(0.5, n));
   }
-  return 0.85;
+  return 1.0;
 }
 
 export function researchEnsureTradesEnabled(): boolean {
   return isResearchModeEnabled() && process.env.NEXT_PUBLIC_BTC_FT_RESEARCH_ENSURE_TRADES === "1";
 }
 
+/**
+ * Maximum trade closes per strategy per UTC day in research mode. Default 8.
+ * Once a strategy hits the cap, new entries are skipped (with
+ * `deskSkippedDailyStratCap` increment) until the next UTC day.
+ * Env: `NEXT_PUBLIC_BTC_FT_DAILY_STRAT_CAP`. Clamped to [1, 100].
+ * Returns 0 (disabled) outside research mode.
+ */
+export function researchDailyStratCap(): number {
+  if (!isResearchModeEnabled()) return 0;
+  const env = process.env.NEXT_PUBLIC_BTC_FT_DAILY_STRAT_CAP;
+  if (env && env.trim() !== "") {
+    const n = Math.floor(Number(env));
+    if (Number.isFinite(n) && n > 0) return Math.min(100, Math.max(1, n));
+  }
+  return 8;
+}
+
+/**
+ * Extract the template-family key from a strategy name. Same family means
+ * "same evalMinuteSignal branch" — VWAP_V0_LONG_203, VWAP_V0_LONG_243,
+ * VWAP_V0_LONG_283 are all family `BTCFT_VWAP_V0_LONG`.
+ *
+ * Research-mode dedupe rule: at most ONE open position per template family per side,
+ * so we don't pay 3× round-trip fees for one signal.
+ */
+export function btcFtTemplateFamilyKey(name: string): string {
+  // Strip trailing _<digits> ID suffix.
+  const m = name.match(/^(.*?)(?:_\d+)?$/);
+  return m ? m[1]! : name;
+}
+
 export function researchSlippageBps(): number {
   return isResearchModeEnabled() ? 5 : 0;
+}
+
+/**
+ * Min absolute net win USD floor used in `paperNetPnlOnClose`. The legacy floor
+ * (`$2.00`) inflates tiny gross wins to a fake "$2 outlier" — useful for display
+ * polish, harmful for honest expectancy measurement.
+ *
+ * Default returns 0 in research mode (raw, untruncated net) and 2.0 outside.
+ * Env `NEXT_PUBLIC_DESK_MIN_ABS_NET_WIN_USD` overrides; clamped to [0, 5].
+ */
+export function deskMinAbsNetWinUsd(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MIN_ABS_NET_WIN_USD;
+  if (raw !== undefined && raw.trim() !== "") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return Math.min(5, n);
+  }
+  return isResearchModeEnabled() ? 0 : 2;
 }
 
 export function researchEntryUtcSession(): DeskEntryUtcSession {

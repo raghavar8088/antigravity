@@ -158,3 +158,121 @@ cd client
 npm run test
 npm run build
 ```
+
+---
+
+## All trades red in research — troubleshooting
+
+If research mode is placing many trades but net PnL is almost always negative,
+work through these in order. Each step has a verification query.
+
+### 1) PROFIT_LOCK firing on micro-gains that lose to fees
+
+**Symptom:** trades with `exit_reason = 'PROFIT_LOCK'` and `net_pnl` between
+−$0.03 and −$0.10. Strategy hits the lock at +0.3–0.5% return-on-margin (gross)
+but books a loss after the round-trip taker fees and 5 bps exit slippage.
+
+**Fix:** the engine now requires a positive projected net (after fees + slip)
+before firing PROFIT_LOCK. Tune via env:
+
+```bash
+NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_NET_USD=0.05     # default; raise to be stricter
+NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_PROGRESS=0.55    # default progress gate
+```
+
+**Verify:**
+
+```sql
+SELECT count(*) FILTER (WHERE exit_reason = 'PROFIT_LOCK' AND net_pnl < 0)::float /
+       NULLIF(count(*) FILTER (WHERE exit_reason = 'PROFIT_LOCK'), 0) AS pl_loss_ratio
+FROM paper_trades WHERE closed_at >= now() - interval '24 hours';
+```
+Should drop from ~80% to <20% after the fix.
+
+### 2) Synthetic +$2.00 outliers from the win floor
+
+**Symptom:** rare +$2.00 wins on BTCFT_VWAP_V0_SHORT_* (or any strategy) that
+cluster at *exactly* $2.00. These are `MIN_ABS_NET_PNL_USD = 2` flooring tiny
+gross wins (e.g. +$0.01 raw) up to $2 for display polish.
+
+**Fix:** in research mode the floor defaults to 0 (raw expectancy). To force it
+to 0 everywhere:
+
+```bash
+NEXT_PUBLIC_DESK_MIN_ABS_NET_WIN_USD=0
+```
+
+**Verify:**
+
+```sql
+SELECT count(*) AS floored_two_dollar_wins
+FROM paper_trades
+WHERE closed_at >= now() - interval '24 hours'
+  AND net_pnl >= 1.99 AND net_pnl <= 2.01;
+```
+Should drop to ~0 in research mode.
+
+### 3) Template-family churn paying fees N times for one signal
+
+**Symptom:** within-minute concurrent opens of `BTCFT_VWAP_V0_LONG_204`,
+`*_244`, `*_284` (same template, different pool slots). One signal → 3× the
+round-trip fee bill.
+
+**Fix:** research mode now dedupes by template family — at most one open
+position per `BTCFT_<TPL>_V<n>_<SIDE>` family. Stat exposed in entry debug as
+`deskSkippedTemplateFamily`.
+
+**Verify:**
+
+```sql
+WITH minute_buckets AS (
+  SELECT date_trunc('minute', opened_at) AS bucket,
+         regexp_replace(strategy_name, '_\d+$', '') AS template_key
+  FROM paper_trades WHERE opened_at >= now() - interval '24 hours'
+)
+SELECT count(*) FROM minute_buckets
+GROUP BY template_key, bucket HAVING count(*) > 1;
+```
+Should be ~0 after the fix.
+
+### 4) Strategy fee-bleeding for days before LOSER
+
+**Symptom:** strategies with sumNet between −$0.50 and −$1.50 never auto-retire
+because the old threshold required sumNet < −$2 at 15+ trades.
+
+**Fix:** v2 LOSER threshold tightened to 12 trades + sumNet < −$1 OR
+expectancy < −$0.05. WINNER now also requires `feePctOfGross < 80%` to reject
+fee-dominated edges.
+
+### 5) Same strategy firing 30× per day
+
+**Symptom:** one strategy hits ~30 trades/day, each net −$0.05 → −$1.50 daily
+fee-bleed per strategy.
+
+**Fix:** new daily strat cap (default 8 closes/day per strategy in research):
+
+```bash
+NEXT_PUBLIC_BTC_FT_DAILY_STRAT_CAP=8
+```
+Stat exposed in entry debug as `deskSkippedDailyStratCap`. Cooldown multiplier
+also bumped 0.5 → 0.75 to slow re-entry on the same slot.
+
+### 6) Min-move gate letting in marginal trades
+
+**Symptom:** entries that barely clear the ATR-vs-fees hurdle, then fee-bleed
+on close.
+
+**Fix:** research-mode `NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL` raised 0.85 → 1.0
+(full fee hurdle, no relaxation). Set explicitly to override:
+
+```bash
+NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL=1.0
+```
+
+### Don't do these (they fake wins, not find edge)
+
+- Disable fees: hides the real cost of trading, makes any noise look profitable
+- Lower slippage below 5 bps: production routing pays 5–15 bps adverse
+- Add more strategies: the problem is exit logic + churn, not roster size
+- Raise the $2 win floor: same as disabling fees — masks losses
+

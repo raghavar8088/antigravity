@@ -270,6 +270,31 @@ export function deskSlippageBpsFromEnv(): number {
   return Math.min(50, Math.max(0, n));
 }
 
+/**
+ * Min projected USD net required to fire PROFIT_LOCK. Defaults to $0.05.
+ * Stops the desk from booking a "lock" that nets a loss after fees + slippage.
+ * Env: `NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_NET_USD`. Clamped to [0, 5].
+ */
+export function deskProfitLockMinNetUsdFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_NET_USD;
+  if (raw === undefined || raw.trim() === "") return 0.05;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0.05;
+  return Math.min(5, n);
+}
+
+/**
+ * Minimum progress-toward-TP before PROFIT_LOCK may fire. Default 0.55.
+ * Env: `NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_PROGRESS`. Clamped to [0.3, 0.9].
+ */
+export function deskProfitLockMinProgressFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_PROGRESS;
+  if (raw === undefined || raw.trim() === "") return 0.55;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0.55;
+  return Math.min(0.9, Math.max(0.3, n));
+}
+
 /** Default max last vs mark spread (%) for new entries. */
 export const DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT = 0.05;
 

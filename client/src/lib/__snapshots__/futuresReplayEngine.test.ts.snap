@@ -2,18 +2,18 @@
 
 exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and first clientTradeId 1`] = `
 {
-  "finalBalance": 1003.4338,
+  "finalBalance": 1011.6947,
   "firstClientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
   "stats": {
-    "count": 12,
+    "count": 11,
     "exitReasonCounts": {
-      "PROFIT_LOCK": 9,
-      "SL": 3,
+      "PROFIT_LOCK": 7,
+      "SL": 4,
     },
-    "expectancy": 0.2861465159582114,
-    "sumNet": 3.4337581914985367,
+    "expectancy": 1.2449763674592693,
+    "sumNet": 13.694740042051963,
   },
-  "tradeCount": 12,
+  "tradeCount": 11,
   "trades": [
     {
       "clientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
@@ -22,27 +22,27 @@ exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and
       "strategyId": 112,
     },
     {
-      "clientTradeId": "c6dfe5f2-58e8-4334-8000-0046d4bc7",
-      "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.0511,
+      "clientTradeId": "ed4be651-737c-48a0-8000-02ff94864",
+      "exitReason": "SL",
+      "netPnl": -0.0053,
       "strategyId": 111,
     },
     {
-      "clientTradeId": "57740f52-c943-429f-8000-095c6a167",
+      "clientTradeId": "16f0f1c9-88c7-431b-8000-0d4425ffc",
       "exitReason": "SL",
       "netPnl": -0.1,
       "strategyId": 111,
     },
     {
-      "clientTradeId": "e3aaa03c-7d9d-4641-8000-021180e09",
+      "clientTradeId": "3676212c-a841-439d-8000-0f4c48f19",
       "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.0646,
+      "netPnl": 2,
       "strategyId": 112,
     },
     {
-      "clientTradeId": "0fa7b6ff-9190-4a4c-8000-0cd1518ca",
+      "clientTradeId": "2ea6f50d-b091-4b4d-8000-0ec145b38",
       "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.0126,
+      "netPnl": 2,
       "strategyId": 112,
     },
     {
@@ -64,27 +64,21 @@ exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and
       "strategyId": 112,
     },
     {
-      "clientTradeId": "ab437220-3574-4ea8-8000-069f1dc15",
+      "clientTradeId": "af39da32-310e-4ad2-8000-06d8b7407",
       "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.0196,
+      "netPnl": 2,
       "strategyId": 111,
     },
     {
-      "clientTradeId": "5fc382c9-c1f4-4a28-8000-09d712cfc",
+      "clientTradeId": "a5da20ca-3bed-4031-8000-067688eff",
       "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.024,
+      "netPnl": 2,
       "strategyId": 111,
     },
     {
-      "clientTradeId": "868fb2fa-18b8-4647-8000-0443d1ccf",
+      "clientTradeId": "a12d009c-3f1a-44c6-8000-0639faea9",
       "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.0103,
-      "strategyId": 111,
-    },
-    {
-      "clientTradeId": "3e5a4a01-a06d-4bb1-8000-0fce8e434",
-      "exitReason": "PROFIT_LOCK",
-      "netPnl": -0.084,
+      "netPnl": 2,
       "strategyId": 111,
     },
   ],

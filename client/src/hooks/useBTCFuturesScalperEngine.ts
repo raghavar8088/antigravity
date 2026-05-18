@@ -32,6 +32,8 @@ import {
   paperEntryPriorityScore,
   weakestEntryPriorityIndex,
   deskMinTpSlRatioFromEnv,
+  deskProfitLockMinNetUsdFromEnv,
+  deskProfitLockMinProgressFromEnv,
   deskSlippageBpsFromEnv,
   deskRegimeHistogramDevPersistEnabled,
   deskRegimeWatchIntervalMsFromEnv,
@@ -120,6 +122,7 @@ import {
   shadowIntentFromPaperOpen,
 } from "@/lib/shadowTradeIntentMapper";
 import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
+import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
 
 export type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
@@ -382,6 +385,10 @@ export interface BTCFuturesEngineStats {
   deskSkippedOutsideSession: number;
   /** Active UTC entry window label for UI. */
   deskEntryUtcSessionLabel: string;
+  /** Skips: strategy hit its per-UTC-day close cap (research-mode anti-churn). */
+  deskSkippedDailyStratCap: number;
+  /** Skips: another open position already covers this template family (research-mode anti-churn). */
+  deskSkippedTemplateFamily: number;
 }
 
 /** Strategy Status */
@@ -669,6 +676,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const deskSkippedSpreadRef = useRef(0);
   const deskSkippedCategoryCapRef = useRef(0);
   const deskSkippedOutsideSessionRef = useRef(0);
+  const deskSkippedDailyStratCapRef = useRef(0);
+  const deskSkippedTemplateFamilyRef = useRef(0);
   /** Dev LS persist: sliding 24h primary-symbol regime events (see `deskRegimeHistogramDevPersistEnabled`). */
   const deskRegime24hEventsRef = useRef<DeskRegimePersistEvent[]>([]);
   const deskRegimeLsLastSaveRef = useRef(0);
@@ -1004,6 +1013,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedSpreadRef.current = 0;
     deskSkippedCategoryCapRef.current = 0;
     deskSkippedOutsideSessionRef.current = 0;
+    deskSkippedDailyStratCapRef.current = 0;
+    deskSkippedTemplateFamilyRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1226,6 +1237,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskMaxOpenPerCategory: deskMaxOpenPerCategoryFromEnv(),
       deskSkippedOutsideSession: deskSkippedOutsideSessionRef.current,
       deskEntryUtcSessionLabel: formatDeskEntryUtcSessionLabel(entryUtcSessionOverride ?? deskEntryUtcSessionFromEnv()),
+      deskSkippedDailyStratCap: deskSkippedDailyStratCapRef.current,
+      deskSkippedTemplateFamily: deskSkippedTemplateFamilyRef.current,
     };
   }, [
     trades,
@@ -1442,7 +1455,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       side: position.side,
       takerFeePct: TAKER_FEE_PCT,
       fundingCosts: position.fundingCosts,
-      minAbsNetWinUsd: MIN_ABS_NET_PNL_USD,
+      // Research mode → 0 (raw expectancy, no $2 floor inflating fake outliers).
+      // Production default = $2 (MIN_ABS_NET_PNL_USD). Env override via
+      // NEXT_PUBLIC_DESK_MIN_ABS_NET_WIN_USD.
+      minAbsNetWinUsd: deskMinAbsNetWinUsd(),
     });
 
     if (process.env.NODE_ENV === "development" && exitReason === "TP" && grossPnl > 0 && netPnl < 0) {
@@ -1697,7 +1713,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         const patchedPositions = markedPositions.map((pos) => {
           const d = payloads.get(pos.symbol);
           if (!d || d.candles.length < MIN_BARS) return pos;
-          const { patched, close } = resolveFuturesExitStep(pos, profileHoldTimeMulRef.current, now);
+          const { patched, close } = resolveFuturesExitStep(pos, profileHoldTimeMulRef.current, now, {
+            profitLockMinNetUsd: deskProfitLockMinNetUsdFromEnv(),
+            profitLockMinProgress: deskProfitLockMinProgressFromEnv(),
+            takerFeePct: TAKER_FEE_PCT,
+            exitSlippageBps: slippageBpsOverride ?? deskSlippageBpsFromEnv(),
+          });
           const merged: BTCFuturesPosition = { ...pos, ...patched };
           if (close.shouldClose && close.reason) {
             exitJobs.push({ pos: merged, exitPrice: close.exitPrice, reason: close.reason });
@@ -1883,6 +1904,40 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               if ((stratCooldownsRef.current[slotKey] ?? 0) > Date.now()) {
                 if (pollDebug) pollDebug.failCooldown += 1;
                 continue;
+              }
+
+              // Research-mode anti-churn gate: per-strategy daily close cap.
+              // Skips entries once the strategy has hit researchDailyStratCap()
+              // closed trades within the current UTC day. Outside research mode
+              // researchDailyStratCap() returns 0 → gate is a no-op.
+              const dailyCap = researchDailyStratCap();
+              if (dailyCap > 0) {
+                const todayUtcStartMs = Date.UTC(
+                  new Date().getUTCFullYear(),
+                  new Date().getUTCMonth(),
+                  new Date().getUTCDate(),
+                );
+                const todayCloses = tradesRef.current.filter(
+                  (t) => t.strategyId === strat.id && new Date(t.closedAt).getTime() >= todayUtcStartMs,
+                ).length;
+                if (todayCloses >= dailyCap) {
+                  deskSkippedDailyStratCapRef.current += 1;
+                  continue;
+                }
+              }
+
+              // Research-mode anti-churn gate: template-family dedup.
+              // If another open position already belongs to the same template family
+              // (e.g. BTCFT_VWAP_V0_LONG), skip — pays 1× fees for 1 signal instead of N×.
+              if (dailyCap > 0) {
+                const myFamily = btcFtTemplateFamilyKey(strat.name);
+                const familyAlreadyOpen = positionsRef.current.some(
+                  (p) => btcFtTemplateFamilyKey(p.strategyName ?? "") === myFamily,
+                );
+                if (familyAlreadyOpen) {
+                  deskSkippedTemplateFamilyRef.current += 1;
+                  continue;
+                }
               }
 
               const signal = evalMinuteSignal(input, strat);

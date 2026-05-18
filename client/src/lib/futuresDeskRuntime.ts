@@ -6,9 +6,11 @@
 import {
   applyFundingAccrual,
   DELTA_PAPER_FUNDING_INTERVAL_MS,
+  paperApplyExitSlippage,
   paperApplyFuturesExitPatches,
   paperFuturesProgressTowardTp,
   paperLinearGrossPnl,
+  paperNetPnlOnClose,
   paperResolveHardExit,
   paperReturnOnMargin,
   type PaperFuturesExitPatchConsts,
@@ -18,10 +20,16 @@ import {
 export const DESK_EXIT_BREAKEVEN_TRIGGER_FRAC = 0.4;
 export const DESK_EXIT_TRAIL_ACTIVATION_PCT = 0.3;
 export const DESK_EXIT_TRAIL_GIVEBACK_SHARE = 0.18;
-export const DESK_EXIT_PROFIT_LOCK_PROGRESS = 0.6;
+export const DESK_EXIT_PROFIT_LOCK_PROGRESS = 0.55;
 export const DESK_EXIT_PROFIT_LOCK_SHARE = 0.6;
 export const DESK_EXIT_LATE_EXIT_MIN_GAIN = 0.22;
 export const DESK_EXIT_MTF_HOLD_BONUS = 1.3;
+/**
+ * Default minimum projected USD net (after exit slippage + round-trip fees + funding)
+ * required to fire PROFIT_LOCK. Skips lock-outs that would book a micro-loss.
+ * Overridable via `NEXT_PUBLIC_DESK_PROFIT_LOCK_MIN_NET_USD`.
+ */
+export const DESK_EXIT_PROFIT_LOCK_MIN_NET_USD = 0.05;
 
 export const FUTURES_EXIT_PATCH_CONSTS: PaperFuturesExitPatchConsts = {
   breakevenTriggerProgress: DESK_EXIT_BREAKEVEN_TRIGGER_FRAC,
@@ -96,12 +104,32 @@ export function applyMarkToFuturesPosition<P extends FuturesMarkPosition>(
 }
 
 /**
+ * Knobs passed into {@link resolveFuturesExitStep}. Production wires the live
+ * hook's slippage + fee constants; replay wires its fixture-matching defaults.
+ */
+export type FuturesExitStepOpts = {
+  /**
+   * Minimum projected USD net (after exit slippage, round-trip fees, funding) required to
+   * book a PROFIT_LOCK exit. Below this, the lock is skipped and we let TRAIL / TP / SL
+   * decide. Default {@link DESK_EXIT_PROFIT_LOCK_MIN_NET_USD}.
+   */
+  profitLockMinNetUsd?: number;
+  /** Progress-toward-TP gate before lock can fire. Default {@link DESK_EXIT_PROFIT_LOCK_PROGRESS}. */
+  profitLockMinProgress?: number;
+  /** Taker round-trip fee % used for the net-projection. Default 0.001 (0.10%). */
+  takerFeePct?: number;
+  /** Adverse exit slippage in bps applied to mark before the net projection. Default 5. */
+  exitSlippageBps?: number;
+};
+
+/**
  * One step: trail / breakeven / peak → hard exits (liq→SL→TP→TIME) → profit-lock → trail giveback.
  */
 export function resolveFuturesExitStep(
   p: FuturesExitStepPosition,
   holdTimeMul: number,
   nowMs: number,
+  opts: FuturesExitStepOpts = {},
 ): FuturesExitStepResult {
   const progress = paperFuturesProgressTowardTp(p.returnPct, p.entryPrice, p.tpPrice);
   const soft = paperApplyFuturesExitPatches(
@@ -141,8 +169,27 @@ export function resolveFuturesExitStep(
 
   const tpPctAbs = Math.abs((q.tpPrice - q.entryPrice) / q.entryPrice) * 100;
   const lockTh = Math.max(DESK_EXIT_LATE_EXIT_MIN_GAIN, tpPctAbs * DESK_EXIT_PROFIT_LOCK_SHARE);
-  if (progress >= DESK_EXIT_PROFIT_LOCK_PROGRESS && q.returnPct >= lockTh) {
-    return { patched: q, close: { shouldClose: true, reason: "PROFIT_LOCK", exitPrice: q.markPrice } };
+  const profitLockMinProgress = opts.profitLockMinProgress ?? DESK_EXIT_PROFIT_LOCK_PROGRESS;
+  const profitLockMinNetUsd = opts.profitLockMinNetUsd ?? DESK_EXIT_PROFIT_LOCK_MIN_NET_USD;
+  if (progress >= profitLockMinProgress && q.returnPct >= lockTh) {
+    // Project the actual net at slipped mark — if it's negative or below threshold,
+    // skip the lock so we don't book a micro-loss. The trade falls through to TRAIL/TP/SL.
+    const takerFeePct = opts.takerFeePct ?? 0.001;
+    const exitSlippageBps = opts.exitSlippageBps ?? 5;
+    const slippedMark = paperApplyExitSlippage(q.side, q.markPrice, exitSlippageBps);
+    const { netPnl: projectedNet } = paperNetPnlOnClose({
+      entryPrice: q.entryPrice,
+      exitPrice: slippedMark,
+      notional: q.notional,
+      side: q.side,
+      takerFeePct,
+      fundingCosts: q.fundingCosts,
+      minAbsNetWinUsd: 0, // raw net for the decision — don't let the floor mask a loss
+    });
+    if (projectedNet >= profitLockMinNetUsd) {
+      return { patched: q, close: { shouldClose: true, reason: "PROFIT_LOCK", exitPrice: q.markPrice } };
+    }
+    // else: fall through; TRAIL / TP / SL / TIME still resolve normally
   }
 
   const peak = soft.peakReturnPctOnMargin;

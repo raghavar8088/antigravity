@@ -391,7 +391,10 @@ export function runPaperDeskReplay(
 
     const stillOpen: ReplayPosition[] = [];
     for (const pos of marked) {
-      const { patched, close } = resolveFuturesExitStep(pos, holdTimeMul, nowMs);
+      const { patched, close } = resolveFuturesExitStep(pos, holdTimeMul, nowMs, {
+        takerFeePct: TAKER_FEE_PCT,
+        exitSlippageBps: slippageBps,
+      });
       const merged: ReplayPosition = { ...pos, ...patched };
       if (close.shouldClose && close.reason) {
         const { trade, marginReturn, netPnl } = closeReplayPosition(
