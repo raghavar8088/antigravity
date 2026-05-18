@@ -132,6 +132,7 @@ import {
 } from "@/lib/shadowTradeIntentMapper";
 import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
 import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
+import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremiumStrategies";
 import {
   atrPctFromAtr,
   computeAdaptiveTpPct,
@@ -1500,9 +1501,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           deskAllocationScaledCountRef.current += 1;
         }
       }
+      // Premium tier strategies get 2× notional (their hypotheses are conviction
+      // designs, not parameter sweeps — backed by an explicit edge thesis).
+      // Stacks multiplicatively with allocation multiplier; final clamp keeps
+      // the size within MIN/MAX_POSITION_NOTIONAL.
+      const premiumMul = isPremiumStrategy(strat) ? PREMIUM_NOTIONAL_MULTIPLIER : 1.0;
       const targetNotional = Math.min(
         maxNotionalEff,
-        Math.max(MIN_POSITION_NOTIONAL, baseTargetNotional * allocationMultiplier),
+        Math.max(MIN_POSITION_NOTIONAL, baseTargetNotional * allocationMultiplier * premiumMul),
       );
 
       const contracts = Math.max(

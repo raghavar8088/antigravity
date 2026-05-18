@@ -10,13 +10,13 @@ afterEach(() => {
 });
 
 describe("btcFtRoster — resolveBtcFtActiveStrategyIds", () => {
-  it("defaults to full roster (120 IDs) when no env is set", () => {
+  it("defaults to full roster (124 IDs: 20 CORE + 4 premium + 100 extended) when no env is set", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_RANKED", "");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_USE_CORE_ONLY", "");
     const result = resolveBtcFtActiveStrategyIds();
     expect(result.source).toBe("full");
-    expect(result.ids.length).toBe(120);
+    expect(result.ids.length).toBe(124);
     expect(result.isLargeRoster).toBe(true);
   });
 
@@ -58,7 +58,7 @@ describe("btcFtRoster — resolveBtcFtActiveStrategyIds", () => {
     expect(CORE_BTC_FT_STRATEGY_IDS).toContain(96);
   });
 
-  it("full BTC_FUTURE_TRADING_STRATEGY_IDS still contains 120 IDs (backward compat)", () => {
-    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBe(120);
+  it("full BTC_FUTURE_TRADING_STRATEGY_IDS contains 124 IDs (20 CORE + 4 premium + 100 extended)", () => {
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBe(124);
   });
 });

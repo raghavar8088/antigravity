@@ -24,7 +24,11 @@ export type BtcFtTemplateId =
   | "MEANREV_RSI"
   | "SESSION_RANGE_BREAK"
   | "WYCKOFF_SPRING"
-  | "SMART_MONEY_FVG";
+  | "SMART_MONEY_FVG"
+  // Premium hypothesis-driven strategies (IDs 500–503). Each has a documented
+  // microstructure thesis, not pattern-matching. Tier "premium" treatment in hook.
+  | "PRM_VWAP_REJECT"
+  | "PRM_VOL_DIVERGENCE";
 
 export interface FuturesStratDef {
   id: number;
@@ -43,4 +47,11 @@ export interface FuturesStratDef {
   btcFtTemplate?: BtcFtTemplateId;
   /** Parameter grid index 0–3 (SL/TP/hold scaling in generator). */
   btcFtVariant?: number;
+  /**
+   * Tier classification. "premium" strategies are hypothesis-driven
+   * (e.g. VWAP session reject, volume divergence) and receive special
+   * treatment in the hook: 2× notional, separate UI badge, always active
+   * in production roster regardless of pool-mode env flags.
+   */
+  tier?: "premium";
 }

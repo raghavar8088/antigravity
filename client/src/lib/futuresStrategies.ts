@@ -6,6 +6,7 @@
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
 import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
 import { BTC_FT_GENERATED_DEFS } from "@/lib/btcFtStrategyGenerator";
+import { BTC_FT_PREMIUM_DEFS } from "@/lib/btcFtPremiumStrategies";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
@@ -210,4 +211,6 @@ export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
   ...BASE_FUTURES_STRAT_DEFS,
   ...BTC_FT_EXTENDED_DEFS_FULL,
   ...BTC_FT_GENERATED_DEFS,
+  // Premium hypothesis-driven strategies (IDs 500–503). Always active.
+  ...BTC_FT_PREMIUM_DEFS,
 ];

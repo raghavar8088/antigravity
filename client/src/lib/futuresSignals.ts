@@ -840,6 +840,50 @@ export function evalBtcFtTemplateSignal(
       if (s.momentum6 > 0 && s.macdHist > 0) add(8, "agree+");
       if (s.volRatio > 1.5) add(6, "vol");
     }
+  } else if (tpl === "PRM_VWAP_REJECT") {
+    // PREMIUM: session-open mean rejection.
+    // Hypothesis: First 60min of London (UTC 08-09) or NY (UTC 13-14) open, price extends
+    // 0.5%+ from recent mean → mean reverts as overnight inventory clears and desks fade extremes.
+    // Mechanism: forced liquidation flows at session boundary, not new conviction.
+    // (Uses mean20 rather than the buggy vwapDev field — same hypothesis, cleaner signal.)
+    const hr = utcHourFromMs(s.lastBarTimeMs);
+    const inSession = hr !== null && ((hr >= 8 && hr <= 9) || (hr >= 13 && hr <= 14));
+    const meanDistPct = s.mean20 > 0 ? ((s.price - s.mean20) / s.mean20) * 100 : 0;
+    if (short) {
+      // SHORT setup: price extended ABOVE mean, expect mean-revert DOWN
+      if (inSession && meanDistPct > 0.5) add(22, "mean +0.5%+ in session");
+      if (s.volRatio > 1.5) add(12, "vol surge");
+      if (s.rsi14 > 70) add(10, "RSI overbought");
+      if (s.htf5_trend < 0) add(8, "HTF trend down (fade rip)");
+      if (s.momentum3 < 0) add(6, "mom reversing-");
+    } else {
+      // LONG setup: price extended BELOW mean, expect mean-revert UP
+      if (inSession && meanDistPct < -0.5) add(22, "mean -0.5%+ in session");
+      if (s.volRatio > 1.5) add(12, "vol surge");
+      if (s.rsi14 < 35) add(10, "RSI oversold");
+      if (s.htf5_trend > 0) add(8, "HTF trend up (fade dip)");
+      if (s.momentum3 > 0) add(6, "mom reversing+");
+    }
+  } else if (tpl === "PRM_VOL_DIVERGENCE") {
+    // PREMIUM: new 20-bar extreme + OBV divergence + thin volume = exhaustion.
+    // Hypothesis: New extreme without volume confirmation has no real conviction;
+    // thin volume on the extreme means no big players defending the level → reversal.
+    // Mechanism: position-trapping at the extreme, momentum traders out of ammo.
+    if (short) {
+      // SHORT: new 20-bar HIGH, but OBV is FALLING (divergence) and volume THIN
+      if (s.price >= s.high20 * 0.999) add(20, "new 20-bar high");
+      if (s.obvSlope < 0) add(14, "OBV diverges- (no convict)");
+      if (s.volRatio < 1.2) add(10, "thin volume on high");
+      if (s.rsi14 > 65) add(8, "RSI extended");
+      if (s.momentum3 < 0) add(8, "mom turning-");
+    } else {
+      // LONG: new 20-bar LOW, but OBV is RISING (divergence) and volume THIN
+      if (s.price <= s.low20 * 1.001) add(20, "new 20-bar low");
+      if (s.obvSlope > 0) add(14, "OBV diverges+ (no convict)");
+      if (s.volRatio < 1.2) add(10, "thin volume on low");
+      if (s.rsi14 < 35) add(8, "RSI extended");
+      if (s.momentum3 > 0) add(8, "mom turning+");
+    }
   }
 
   score += Math.max(0, 3 - v) * 2;
@@ -991,6 +1035,53 @@ export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: F
       return gapAtr > 0.4 && s.price < s.prevPrice && s.obvSlope < 0;
     }
     return gapAtr > 0.4 && s.price > s.prevPrice && s.obvSlope > 0;
+  }
+
+  if (tpl === "PRM_VWAP_REJECT") {
+    // Hard gate: MUST be in session window AND price MUST be far enough from recent mean.
+    // Uses mean20 (true 20-bar SMA), not the buggy vwapDev field.
+    const hr = utcHourFromMs(s.lastBarTimeMs);
+    if (hr === null) return false;
+    const inSession = (hr >= 8 && hr <= 9) || (hr >= 13 && hr <= 14);
+    if (!inSession) return false;
+    if (!Number.isFinite(s.mean20) || s.mean20 <= 0) return false;
+    const meanDistPct = ((s.price - s.mean20) / s.mean20) * 100;
+    if (short) {
+      return (
+        meanDistPct > 0.5 &&
+        s.volRatio > 1.4 &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 > 65 &&
+        s.htf5_trend <= 0
+      );
+    }
+    return (
+      meanDistPct < -0.5 &&
+      s.volRatio > 1.4 &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 < 40 &&
+      s.htf5_trend >= 0
+    );
+  }
+
+  if (tpl === "PRM_VOL_DIVERGENCE") {
+    // Hard gate: divergence is the entire thesis. Without it, skip.
+    if (short) {
+      return (
+        s.price >= s.high20 * 0.998 &&
+        s.obvSlope < 0 &&
+        s.volRatio < 1.3 &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 > 60
+      );
+    }
+    return (
+      s.price <= s.low20 * 1.002 &&
+      s.obvSlope > 0 &&
+      s.volRatio < 1.3 &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 < 40
+    );
   }
 
   return false;

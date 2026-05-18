@@ -215,6 +215,31 @@ export const BTC_FT_TEMPLATE_META: Record<BtcFtTemplateId, BtcFtTemplateMeta> = 
     baseCooldownMin: 5,
     requiresHtf: false,
   },
+  // ---- Premium hypothesis-driven templates (IDs 500–503) ----
+  PRM_VWAP_REJECT: {
+    id: "PRM_VWAP_REJECT",
+    category: "PREMIUM VWAP Reject",
+    label:
+      "Session-open VWAP rejection (UTC 08–09 London / 13–14 NY): price 0.5%+ from VWAP, RSI extreme, HTF aligned, vol surge",
+    defaultRegimes: ["chop", "trendLow"],
+    baseSlPct: 0.35,
+    baseTpPct: 0.9,
+    baseHoldMinutes: 60,
+    baseCooldownMin: 30,
+    requiresHtf: true,
+  },
+  PRM_VOL_DIVERGENCE: {
+    id: "PRM_VOL_DIVERGENCE",
+    category: "PREMIUM Vol Divergence",
+    label:
+      "New 20-bar extreme without OBV confirmation + thin volume → exhaustion reversal",
+    defaultRegimes: ["chop", "trendLow", "trendHigh"],
+    baseSlPct: 0.4,
+    baseTpPct: 1.0,
+    baseHoldMinutes: 75,
+    baseCooldownMin: 30,
+    requiresHtf: false,
+  },
 };
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -265,6 +290,10 @@ export function templateShortName(tpl: BtcFtTemplateId): string {
       return "WSPR";
     case "SMART_MONEY_FVG":
       return "SMFG";
+    case "PRM_VWAP_REJECT":
+      return "PVR";
+    case "PRM_VOL_DIVERGENCE":
+      return "PVD";
     default:
       return String(tpl);
   }
