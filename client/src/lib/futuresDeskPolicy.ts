@@ -295,6 +295,66 @@ export function deskProfitLockMinProgressFromEnv(): number {
   return Math.min(0.9, Math.max(0.3, n));
 }
 
+/**
+ * Feature flag: scale per-strategy notional by observed edge
+ * (Kelly fraction + Sharpe vs cohort). Default OFF — opt-in once you have
+ * a few weeks of trade history. With insufficient sample the multiplier
+ * is 1.0 anyway, so enabling early is safe but useless.
+ *
+ * Env: `NEXT_PUBLIC_DESK_ALLOCATION_BY_EDGE` (=1 to enable).
+ */
+export function deskAllocationByEdgeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_ALLOCATION_BY_EDGE === "1";
+}
+
+/**
+ * Feature flag: scale TP% by ATR volatility (high vol → wider TP, low → tighter).
+ * Default ON — safe and immediately useful since ATR is computed at every bar.
+ * Env: `NEXT_PUBLIC_DESK_ADAPTIVE_TP` (=0 to disable explicitly).
+ */
+export function deskAdaptiveTpEnabled(): boolean {
+  const raw = process.env.NEXT_PUBLIC_DESK_ADAPTIVE_TP;
+  if (raw === undefined || raw.trim() === "") return true;
+  return raw === "1";
+}
+
+/**
+ * Feature flag: per-strategy time-of-day gating. A strategy is blocked from
+ * opening at UTC hour H when historical stats show win rate < 35% at that hour.
+ * Default OFF — opt-in once you have ≥50 trades per strategy.
+ * Env: `NEXT_PUBLIC_DESK_SESSION_GATE` (=1 to enable).
+ */
+export function deskSessionGateEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_SESSION_GATE === "1";
+}
+
+/**
+ * Max concurrent open positions per side (LONG/SHORT). Default 6 — forces
+ * the book to stay balanced and not pile 12 longs at the same time.
+ * Env: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE`. Clamped to [1, 12].
+ */
+export function deskMaxOpenPerSideFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE;
+  if (raw === undefined || raw.trim() === "") return 6;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n <= 0) return 6;
+  return Math.min(12, Math.max(1, n));
+}
+
+/**
+ * Max concurrent open positions per template family (e.g. BTCFT_VWAP_V0_LONG).
+ * Default 2 — prevents 3+ variants of the same template from piling on a
+ * single signal and paying N× round-trip fees. Set to 1 for strict dedup.
+ * Env: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE`. Clamped to [1, 6].
+ */
+export function deskMaxOpenPerTemplateFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE;
+  if (raw === undefined || raw.trim() === "") return 2;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n <= 0) return 2;
+  return Math.min(6, Math.max(1, n));
+}
+
 /** Default max last vs mark spread (%) for new entries. */
 export const DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT = 0.05;
 

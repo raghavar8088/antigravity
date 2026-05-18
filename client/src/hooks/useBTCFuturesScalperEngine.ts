@@ -32,8 +32,13 @@ import {
   paperEntryPriorityScore,
   weakestEntryPriorityIndex,
   deskMinTpSlRatioFromEnv,
+  deskAdaptiveTpEnabled,
+  deskAllocationByEdgeEnabled,
+  deskMaxOpenPerSideFromEnv,
+  deskMaxOpenPerTemplateFromEnv,
   deskProfitLockMinNetUsdFromEnv,
   deskProfitLockMinProgressFromEnv,
+  deskSessionGateEnabled,
   deskSlippageBpsFromEnv,
   deskRegimeHistogramDevPersistEnabled,
   deskRegimeWatchIntervalMsFromEnv,
@@ -123,6 +128,16 @@ import {
 } from "@/lib/shadowTradeIntentMapper";
 import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
 import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
+import {
+  atrPctFromAtr,
+  computeAdaptiveTpPct,
+  computeAllocationMultiplier,
+  computeStrategyEdgeStats,
+} from "@/lib/strategyAllocation";
+import {
+  computeStrategyHourlyStats,
+  isStrategyInProvenSession,
+} from "@/lib/strategySessionStats";
 
 export type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
@@ -389,6 +404,16 @@ export interface BTCFuturesEngineStats {
   deskSkippedDailyStratCap: number;
   /** Skips: another open position already covers this template family (research-mode anti-churn). */
   deskSkippedTemplateFamily: number;
+  /** Skips: max-open-per-side cap reached (#5 correlation-aware cap). */
+  deskSkippedSideCap: number;
+  /** Skips: max-open-per-template-family cap reached (#5 stricter than research dedup). */
+  deskSkippedTemplateCap: number;
+  /** Skips: strategy not in proven session for this UTC hour (#4). */
+  deskSkippedOutsideProvenSession: number;
+  /** Count of opens where allocation multiplier scaled notional up (>1.05) or down (<0.95). */
+  deskAllocationScaledCount: number;
+  /** Count of opens where adaptive TP widened or tightened the strategy's nominal TP. */
+  deskAdaptiveTpAppliedCount: number;
 }
 
 /** Strategy Status */
@@ -678,6 +703,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const deskSkippedOutsideSessionRef = useRef(0);
   const deskSkippedDailyStratCapRef = useRef(0);
   const deskSkippedTemplateFamilyRef = useRef(0);
+  const deskSkippedSideCapRef = useRef(0);
+  const deskSkippedTemplateCapRef = useRef(0);
+  const deskSkippedOutsideProvenSessionRef = useRef(0);
+  const deskAllocationScaledCountRef = useRef(0);
+  const deskAdaptiveTpAppliedCountRef = useRef(0);
   /** Dev LS persist: sliding 24h primary-symbol regime events (see `deskRegimeHistogramDevPersistEnabled`). */
   const deskRegime24hEventsRef = useRef<DeskRegimePersistEvent[]>([]);
   const deskRegimeLsLastSaveRef = useRef(0);
@@ -1015,6 +1045,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedOutsideSessionRef.current = 0;
     deskSkippedDailyStratCapRef.current = 0;
     deskSkippedTemplateFamilyRef.current = 0;
+    deskSkippedSideCapRef.current = 0;
+    deskSkippedTemplateCapRef.current = 0;
+    deskSkippedOutsideProvenSessionRef.current = 0;
+    deskAllocationScaledCountRef.current = 0;
+    deskAdaptiveTpAppliedCountRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1239,6 +1274,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskEntryUtcSessionLabel: formatDeskEntryUtcSessionLabel(entryUtcSessionOverride ?? deskEntryUtcSessionFromEnv()),
       deskSkippedDailyStratCap: deskSkippedDailyStratCapRef.current,
       deskSkippedTemplateFamily: deskSkippedTemplateFamilyRef.current,
+      deskSkippedSideCap: deskSkippedSideCapRef.current,
+      deskSkippedTemplateCap: deskSkippedTemplateCapRef.current,
+      deskSkippedOutsideProvenSession: deskSkippedOutsideProvenSessionRef.current,
+      deskAllocationScaledCount: deskAllocationScaledCountRef.current,
+      deskAdaptiveTpAppliedCount: deskAdaptiveTpAppliedCountRef.current,
     };
   }, [
     trades,
@@ -1316,18 +1356,62 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         return null;
       }
 
+      // ---- #5 correlation-aware caps: per-side + per-template-family ----
+      const openPositions = positionsRef.current;
+      const maxPerSide = deskMaxOpenPerSideFromEnv();
+      const sameSideCount = openPositions.filter((p) => p.side === side).length;
+      if (sameSideCount >= maxPerSide) {
+        deskSkippedSideCapRef.current += 1;
+        return null;
+      }
+      const maxPerTemplate = deskMaxOpenPerTemplateFromEnv();
+      const myFamily = btcFtTemplateFamilyKey(strat.name);
+      const sameFamilyCount = openPositions.filter(
+        (p) => btcFtTemplateFamilyKey(p.strategyName ?? "") === myFamily,
+      ).length;
+      if (sameFamilyCount >= maxPerTemplate) {
+        deskSkippedTemplateCapRef.current += 1;
+        return null;
+      }
+
+      // ---- #4 session gate: only if explicitly enabled AND enough sample exists ----
+      if (deskSessionGateEnabled()) {
+        const sessionStats = computeStrategyHourlyStats(
+          strat.id,
+          tradesRef.current.map((t) => ({
+            strategyId: t.strategyId,
+            netPnl: t.netPnl,
+            closedAtMs: new Date(t.closedAt).getTime(),
+          })),
+        );
+        const utcHour = new Date().getUTCHours();
+        if (!isStrategyInProvenSession(sessionStats, utcHour)) {
+          deskSkippedOutsideProvenSessionRef.current += 1;
+          return null;
+        }
+      }
+
       const id = `${symbol}-${strat.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const bal = balanceRef.current;
       const slipBps = slippageBpsOverride ?? deskSlippageBpsFromEnv();
       const entryPrice = paperApplyEntrySlippage(side, price, slipBps);
       const slPrice =
         side === "LONG" ? entryPrice * (1 - strat.slPct / 100) : entryPrice * (1 + strat.slPct / 100);
+
+      // ---- #3 adaptive TP: scale strat.tpPct by current ATR regime ----
+      const baseTpPct = strat.tpPct;
+      const effectiveTpPct = deskAdaptiveTpEnabled()
+        ? computeAdaptiveTpPct(baseTpPct, atrPctFromAtr(gate.atr14, markPrice))
+        : baseTpPct;
+      if (Math.abs(effectiveTpPct - baseTpPct) / baseTpPct > 0.05) {
+        deskAdaptiveTpAppliedCountRef.current += 1;
+      }
       const tpPrice =
-        side === "LONG" ? entryPrice * (1 + strat.tpPct / 100) : entryPrice * (1 - strat.tpPct / 100);
+        side === "LONG" ? entryPrice * (1 + effectiveTpPct / 100) : entryPrice * (1 - effectiveTpPct / 100);
 
       const equityForSizing = gate.equityUsd;
       const volSized = deskVolSizedNotionalEnabledFromEnv();
-      const targetNotional = volSized
+      const baseTargetNotional = volSized
         ? paperNotionalForTargetRisk({
             equityUsd: equityForSizing,
             atr14: gate.atr14,
@@ -1341,6 +1425,46 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             maxNotional: MAX_POSITION_NOTIONAL,
           })
         : Math.min(Math.max(bal * 0.1, MIN_POSITION_NOTIONAL), MAX_POSITION_NOTIONAL);
+
+      // ---- #1+#2 allocation by edge: Kelly + Sharpe-weighted multiplier ----
+      let allocationMultiplier = 1.0;
+      if (deskAllocationByEdgeEnabled()) {
+        const allTradesNow = tradesRef.current;
+        const stratTrades = allTradesNow
+          .filter((t) => t.strategyId === strat.id)
+          .map((t) => ({
+            netPnl: t.netPnl,
+            notional: t.notional,
+            holdMinutes: Math.max(
+              0,
+              (new Date(t.closedAt).getTime() - new Date(t.openedAt).getTime()) / 60_000,
+            ),
+          }));
+        const stratStats = computeStrategyEdgeStats(stratTrades);
+        // Cohort: each active strategy's Sharpe (computed lazily per open — cost is bounded
+        // by roster size × trades-per-strat; replay tests stay snappy at 100 bars).
+        const cohortSharpes = activeStratDefs.map((s) => {
+          const tt = allTradesNow
+            .filter((t) => t.strategyId === s.id)
+            .map((t) => ({
+            netPnl: t.netPnl,
+            notional: t.notional,
+            holdMinutes: Math.max(
+              0,
+              (new Date(t.closedAt).getTime() - new Date(t.openedAt).getTime()) / 60_000,
+            ),
+          }));
+          return computeStrategyEdgeStats(tt).sharpe;
+        });
+        allocationMultiplier = computeAllocationMultiplier({ stats: stratStats, cohortSharpes });
+        if (Math.abs(allocationMultiplier - 1) > 0.05) {
+          deskAllocationScaledCountRef.current += 1;
+        }
+      }
+      const targetNotional = Math.min(
+        MAX_POSITION_NOTIONAL,
+        Math.max(MIN_POSITION_NOTIONAL, baseTargetNotional * allocationMultiplier),
+      );
 
       const contracts = Math.max(
         MIN_CONTRACTS,

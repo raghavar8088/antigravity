@@ -276,3 +276,101 @@ NEXT_PUBLIC_BTC_FT_MIN_MOVE_K_MUL=1.0
 - Add more strategies: the problem is exit logic + churn, not roster size
 - Raise the $2 win floor: same as disabling fees — masks losses
 
+
+---
+
+## v2 expectancy features (5 toggles)
+
+These features ship in commit-after-c9ced1b. They are **honest amplifiers**:
+each requires real trade data to engage, and none can fake profits by
+hiding costs.
+
+### #1 + #2 — Capital allocation by edge
+
+Per-strategy notional is scaled by a combined Kelly + Sharpe-vs-cohort
+multiplier in `[0.25, 3.0]`. Strategies with proven edge get more notional;
+losers get less. Below 20 trades the multiplier is locked at 1.0.
+
+```bash
+NEXT_PUBLIC_DESK_ALLOCATION_BY_EDGE=1   # enable
+```
+
+**When to enable:** After ≥3 days of paper data. Earlier is safe but useless
+(every strategy sits at 1.0×). Stat: `deskAllocationScaledCount` in entry debug
+counts opens where the multiplier diverged from 1.0 by more than 5%.
+
+**Verify behavior:**
+
+```sql
+SELECT strategy_name,
+       avg(notional) AS avg_notional,
+       count(*) AS trades
+FROM paper_trades
+WHERE closed_at >= now() - interval '24 hours'
+GROUP BY strategy_name
+ORDER BY avg_notional DESC LIMIT 10;
+```
+
+After 3+ days with `ALLOCATION_BY_EDGE=1`, top-Sharpe strategies should show
+visibly larger `avg_notional` than bottom-Sharpe peers.
+
+### #3 — Adaptive TP
+
+`strat.tpPct` is scaled by current ATR/price:
+
+| ATR/price | Multiplier | Effect |
+|---|---|---|
+| ≤ 0.10% | 0.8× | Tighten (low vol — TP would never be hit) |
+| 0.25% | 1.0× | Neutral pivot |
+| 0.50% | 1.2× | Widen (elevated vol) |
+| ≥ 0.80% | 1.4× | Max widen (high vol — let winners run) |
+
+**Default: ON** (`NEXT_PUBLIC_DESK_ADAPTIVE_TP=1`). Disable explicitly:
+
+```bash
+NEXT_PUBLIC_DESK_ADAPTIVE_TP=0
+```
+
+Stat: `deskAdaptiveTpAppliedCount` counts opens where the TP shifted by >5%
+from the strategy's nominal.
+
+### #4 — Time-of-day session gate
+
+Blocks entry at UTC hours where rolling stats show winRate < 35% AND
+expectancy < 0. Engages only after ≥50 total trades for the strategy AND
+≥5 trades in the queried hour. Otherwise allows all entries.
+
+```bash
+NEXT_PUBLIC_DESK_SESSION_GATE=1   # enable
+```
+
+**When to enable:** After ≥1 week of paper data. Stat:
+`deskSkippedOutsideProvenSession`.
+
+### #5 — Correlation-aware caps
+
+In addition to `MAX_OPEN_POSITIONS=12`:
+- Max LONG positions concurrently: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE` (default 6)
+- Max SHORT positions concurrently: same env
+- Max per template family (e.g. `BTCFT_VWAP_V0_LONG_*`): `NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE` (default 2)
+
+Forces book diversity. Stats: `deskSkippedSideCap`, `deskSkippedTemplateCap`.
+
+**Always on** — these defaults apply automatically. To loosen:
+
+```bash
+NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE=12
+NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE=4
+```
+
+### Recommended rollout
+
+1. **Week 1**: defaults only (`ADAPTIVE_TP=1` + correlation caps active).
+   Collect baseline data.
+2. **Week 2**: enable `ALLOCATION_BY_EDGE=1`. Watch top-strategy notional
+   diverge from bottom.
+3. **Week 3**: enable `SESSION_GATE=1`. Expect 10–20% drop in trade count
+   focused on weak hours.
+4. **Week 4+**: review verdicts in StrategyResearchPanel. Promote winners,
+   retire losers. Flip `WINNERS_ONLY=1` for production.
+
