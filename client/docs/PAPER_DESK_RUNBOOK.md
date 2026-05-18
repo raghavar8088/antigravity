@@ -374,3 +374,82 @@ NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE=4
 4. **Week 4+**: review verdicts in StrategyResearchPanel. Promote winners,
    retire losers. Flip `WINNERS_ONLY=1` for production.
 
+
+---
+
+## Firehose mode — fast verdict discovery (research only)
+
+Enables maximum trade volume so you collect 20+ trades per strategy per day
+in the shortest possible calendar time. **Do not run firehose in production.**
+The mode is for answering "which of my 220 strategies actually has edge?"
+as quickly as paper data allows.
+
+### Honest cost / benefit
+
+| Aspect | Without firehose | With firehose |
+|---|---|---|
+| Concurrent open positions | up to 12 | up to 60 |
+| Per-side cap | 6 | 30 |
+| Per-template family cap | 2 | 10 |
+| Per-strategy daily close cap | 8 | disabled |
+| Trades per minute (typical) | 2–4 | 10–20 |
+| Days to ≥20 trades per strategy | 5–10 | 1–2 |
+| Expected fee bleed | low | high |
+| Expected net PnL | mixed | usually negative |
+
+The trade-off is direct: more samples cost more fees. That's fine in paper
+mode — fees are the price of information. **You are NOT trying to make
+money in firehose mode.** You are trying to find out which strategies make
+money in *normal* mode.
+
+### Recommended config for "$1M paper, 1% per trade, max volume"
+
+Add to Vercel env vars:
+
+```bash
+NEXT_PUBLIC_BTC_FT_RESEARCH_MODE=1
+NEXT_PUBLIC_BTC_FT_FIREHOSE=1
+NEXT_PUBLIC_BTC_FT_GENERATED_POOL=1
+NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD=1000000
+NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY=1.0
+NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS=60
+# Keep ADAPTIVE_TP on for better R:R; turn off allocation/session until
+# you have data (they're no-ops below their thresholds anyway):
+NEXT_PUBLIC_DESK_ADAPTIVE_TP=1
+NEXT_PUBLIC_DESK_ALLOCATION_BY_EDGE=0
+NEXT_PUBLIC_DESK_SESSION_GATE=0
+```
+
+Redeploy the client. Within the first hour you should see the firehose
+warning banner and the position count climbing past 12.
+
+### What to do after 3–7 days of firehose
+
+1. **Query Supabase** for verdict-grade stats per strategy (see ROOT_CAUSE.md
+   for the exact SQL). Look for strategies with:
+   - `tradeCount >= 20`
+   - `sumNet > 0`
+   - `feePctOfGross < 80%`
+
+2. **Promote winners** in the StrategyResearchPanel (or set
+   `NEXT_PUBLIC_BTC_FT_WINNER_IDS=...`).
+
+3. **Disable firehose** and flip to winners-only mode:
+   ```bash
+   NEXT_PUBLIC_BTC_FT_FIREHOSE=0
+   NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1
+   NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD=1000   # back to default
+   NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY=0   # back to vol-sized
+   ```
+
+4. **Run that for 1+ week** with the *promoted winners only*. THAT is your
+   real signal of whether the system has profit potential.
+
+### Common mistakes with firehose
+
+- ❌ Running firehose in production thinking "more trades = more profit"
+- ❌ Leaving firehose on after winners are promoted (correlated open positions
+  will still fee-bleed even with the better strategies)
+- ❌ Using firehose results directly without filtering by `feePctOfGross < 80%`
+- ❌ Reducing fees / slippage to "make firehose green" (this is faking)
+

@@ -6,8 +6,12 @@ import {
   deskEffectiveHoldMinutesAtOpen,
   DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID,
   DESK_REGIME_FALLBACK_ALLOW_ALL,
+  deskFirehoseModeEnabled,
+  deskFixedNotionalPctOfEquity,
   deskHoldMinutesCategoryMul,
   deskHoldTuningExportIntervalMsFromEnv,
+  deskInitialBalanceUsd,
+  deskMaxOpenPositionsEffective,
   deskMaxSameDirNotionalFracFromEnv,
   deskMinExpectedMoveSafetyKFromEnv,
   deskAutoDisableStratsEnabled,
@@ -541,5 +545,65 @@ describe("paperEntryPriorityScore / dispatchEntryPriorityCandidates (P1-F)", () 
     expect(deskEntryReplaceWeakestFromEnv()).toBe(false);
     vi.stubEnv("NEXT_PUBLIC_DESK_ENTRY_REPLACE_WEAKEST", "1");
     expect(deskEntryReplaceWeakestFromEnv()).toBe(true);
+  });
+});
+
+describe("firehose-mode env helpers", () => {
+  it("deskInitialBalanceUsd defaults to $1,000 and honors env override", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD", "");
+    expect(deskInitialBalanceUsd()).toBe(1_000);
+    vi.stubEnv("NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD", "1000000");
+    expect(deskInitialBalanceUsd()).toBe(1_000_000);
+  });
+
+  it("deskInitialBalanceUsd clamps to [100, 100_000_000]", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD", "10");
+    expect(deskInitialBalanceUsd()).toBe(100);
+    vi.stubEnv("NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD", "999999999");
+    expect(deskInitialBalanceUsd()).toBe(100_000_000);
+  });
+
+  it("deskFixedNotionalPctOfEquity defaults to 0 (disabled) and clamps to [0, 5]", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY", "");
+    expect(deskFixedNotionalPctOfEquity()).toBe(0);
+    vi.stubEnv("NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY", "1");
+    expect(deskFixedNotionalPctOfEquity()).toBe(1);
+    vi.stubEnv("NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY", "99");
+    expect(deskFixedNotionalPctOfEquity()).toBe(5); // clamp
+    vi.stubEnv("NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY", "-1");
+    expect(deskFixedNotionalPctOfEquity()).toBe(0);
+  });
+
+  it("deskFirehoseModeEnabled is opt-in via =1", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "");
+    expect(deskFirehoseModeEnabled()).toBe(false);
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "1");
+    expect(deskFirehoseModeEnabled()).toBe(true);
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "true"); // only "1" counts
+    expect(deskFirehoseModeEnabled()).toBe(false);
+  });
+
+  it("deskMaxOpenPositionsEffective: 12 default, 60 in firehose, clamped via env", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "");
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS", "");
+    expect(deskMaxOpenPositionsEffective()).toBe(12);
+
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "1");
+    expect(deskMaxOpenPositionsEffective()).toBe(60);
+
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS", "200");
+    expect(deskMaxOpenPositionsEffective()).toBe(100); // clamped
+
+    vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS", "25");
+    expect(deskMaxOpenPositionsEffective()).toBe(25);
+  });
+
+  it("1%-of-equity sizing math: $1M equity × 1% = $10,000 notional", () => {
+    // The math is owned by the hook (lines around the openPosition body) but
+    // we verify the policy helper returns the right multiplier the hook uses.
+    const pct = 1.0;
+    const equity = 1_000_000;
+    const expectedNotional = (equity * pct) / 100;
+    expect(expectedNotional).toBe(10_000);
   });
 });

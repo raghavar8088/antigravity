@@ -355,6 +355,65 @@ export function deskMaxOpenPerTemplateFromEnv(): number {
   return Math.min(6, Math.max(1, n));
 }
 
+/**
+ * Initial paper balance in USD. Default $1,000 (legacy). Bump to $1,000,000 for
+ * research / firehose modes so 1% sizing = $10K notional per trade.
+ * Env: `NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD`. Clamped to [100, 100_000_000].
+ */
+export function deskInitialBalanceUsd(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD;
+  if (raw === undefined || raw.trim() === "") return 1_000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 1_000;
+  return Math.min(100_000_000, Math.max(100, n));
+}
+
+/**
+ * Fixed % of equity to use as notional per trade. When set (> 0) this OVERRIDES
+ * the vol-based sizing path so every trade uses the same notional regardless of
+ * volatility — desirable for research / cohort comparison.
+ *
+ * Default 0 (disabled → fall back to vol-based or 10% sizing).
+ * Env: `NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY`. Clamped to [0, 5].
+ * 1.0 means 1% of equity (e.g. $10K notional on $1M paper balance).
+ */
+export function deskFixedNotionalPctOfEquity(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_FIXED_NOTIONAL_PCT_OF_EQUITY;
+  if (raw === undefined || raw.trim() === "") return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(5, n);
+}
+
+/**
+ * Firehose mode — maximizes trade frequency for fastest per-strategy verdict
+ * discovery. NOT for production live trading. When enabled:
+ *   - MAX_OPEN_POSITIONS effective cap raised (see deskMaxOpenPositionsEffective)
+ *   - Per-side / per-template caps loosened
+ *   - Daily strat cap effectively unlimited
+ *   - Cooldown / min-move gates relaxed
+ *   - UI shows a prominent warning banner
+ *
+ * Honest invariants kept: fees, slippage, liq cross, funding accrual — all on.
+ * Env: `NEXT_PUBLIC_BTC_FT_FIREHOSE` (=1 to enable).
+ */
+export function deskFirehoseModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_BTC_FT_FIREHOSE === "1";
+}
+
+/**
+ * Effective MAX_OPEN_POSITIONS — 12 by default; 60 in firehose mode.
+ * Env override: `NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS` (clamp [1, 100]).
+ */
+export function deskMaxOpenPositionsEffective(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS;
+  if (raw && raw.trim() !== "") {
+    const n = Math.floor(Number(raw));
+    if (Number.isFinite(n) && n > 0) return Math.min(100, Math.max(1, n));
+  }
+  return deskFirehoseModeEnabled() ? 60 : 12;
+}
+
 /** Default max last vs mark spread (%) for new entries. */
 export const DESK_MAX_LAST_MARK_SPREAD_PCT_DEFAULT = 0.05;
 

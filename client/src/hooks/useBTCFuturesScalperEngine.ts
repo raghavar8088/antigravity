@@ -34,8 +34,12 @@ import {
   deskMinTpSlRatioFromEnv,
   deskAdaptiveTpEnabled,
   deskAllocationByEdgeEnabled,
+  deskFirehoseModeEnabled,
+  deskFixedNotionalPctOfEquity,
+  deskInitialBalanceUsd,
   deskMaxOpenPerSideFromEnv,
   deskMaxOpenPerTemplateFromEnv,
+  deskMaxOpenPositionsEffective,
   deskProfitLockMinNetUsdFromEnv,
   deskProfitLockMinProgressFromEnv,
   deskSessionGateEnabled,
@@ -167,11 +171,15 @@ const ROUND_TRIP_FEE_FRAC = TAKER_FEE_PCT * 2; // 0.2% round trip
 const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.2%
 
 // Account settings
-const INITIAL_BALANCE = 1000; // $1000 paper balance for futures (higher than spot)
+// Initial paper balance — env override via NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD so
+// research mode can run $1M with 1%-of-equity notional ($10K/trade) without
+// recompiling. Resolved per-hook-instance below so tests can stub the env.
+const INITIAL_BALANCE_DEFAULT = 1000;
 const MIN_CONTRACTS = 1;
-const MAX_CONTRACTS = 50;
-/** Fewer concurrent micro-positions → more margin headroom per idea; raise only if product needs more parallel symbols×strategies. */
-const MAX_OPEN_POSITIONS = 12;
+const MAX_CONTRACTS = 50_000;
+/** Concurrent position ceiling. Resolved per-hook-instance via
+ *  `deskMaxOpenPositionsEffective()` so firehose mode can raise it to 60. */
+const MAX_OPEN_POSITIONS_FALLBACK = 12;
 const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 
 // Risk management
@@ -180,7 +188,17 @@ const MAX_DRAWDOWN_LOCK_PCT = 25; // Pause entries if drawdown > 25%
 const DRAWDOWN_LOCK_RECOVERY_FRAC = 0.84;
 const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% of balance at risk (SL + fees) per new position; skip if exceeded
 const MIN_POSITION_NOTIONAL = 100;
-const MAX_POSITION_NOTIONAL = 500;
+const MAX_POSITION_NOTIONAL_DEFAULT = 500;
+/**
+ * Per-trade max notional. Firehose mode raises this to $20K so 1%-of-$1M
+ * sizing ($10K) fits comfortably. Production keeps the $500 micro-cap.
+ */
+function maxPositionNotionalEffective(): number {
+  if (deskFirehoseModeEnabled() || deskFixedNotionalPctOfEquity() > 0) {
+    return 20_000;
+  }
+  return MAX_POSITION_NOTIONAL_DEFAULT;
+}
 /**
  * Stats only: mark is within this % of modeled liquidation (see paperLiquidationDistancePct).
  */
@@ -642,6 +660,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, [symbols]);
 
   // State
+  // Resolve env-tunable initial balance once per hook instance (stable across renders).
+  // Default 1000; firehose / research can set NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD=1000000.
+  const INITIAL_BALANCE = useMemo(() => deskInitialBalanceUsd() || INITIAL_BALANCE_DEFAULT, []);
+  // Resolve concurrent-positions ceiling once. Firehose mode raises to 60 (vs default 12).
+  const MAX_OPEN_POSITIONS = useMemo(
+    () => deskMaxOpenPositionsEffective() || MAX_OPEN_POSITIONS_FALLBACK,
+    [],
+  );
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [positions, setPositions] = useState<BTCFuturesPosition[]>([]);
   const [trades, setTrades] = useState<BTCFuturesTrade[]>([]);
@@ -1357,14 +1383,17 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       }
 
       // ---- #5 correlation-aware caps: per-side + per-template-family ----
+      // Firehose mode loosens these caps so concurrent open positions hit ~MAX_OPEN_POSITIONS
+      // for fastest verdict discovery. Defaults stay tight in production.
+      const firehose = deskFirehoseModeEnabled();
       const openPositions = positionsRef.current;
-      const maxPerSide = deskMaxOpenPerSideFromEnv();
+      const maxPerSide = firehose ? Math.max(30, deskMaxOpenPerSideFromEnv()) : deskMaxOpenPerSideFromEnv();
       const sameSideCount = openPositions.filter((p) => p.side === side).length;
       if (sameSideCount >= maxPerSide) {
         deskSkippedSideCapRef.current += 1;
         return null;
       }
-      const maxPerTemplate = deskMaxOpenPerTemplateFromEnv();
+      const maxPerTemplate = firehose ? Math.max(10, deskMaxOpenPerTemplateFromEnv()) : deskMaxOpenPerTemplateFromEnv();
       const myFamily = btcFtTemplateFamilyKey(strat.name);
       const sameFamilyCount = openPositions.filter(
         (p) => btcFtTemplateFamilyKey(p.strategyName ?? "") === myFamily,
@@ -1410,21 +1439,31 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         side === "LONG" ? entryPrice * (1 + effectiveTpPct / 100) : entryPrice * (1 - effectiveTpPct / 100);
 
       const equityForSizing = gate.equityUsd;
+      const fixedPct = deskFixedNotionalPctOfEquity();
       const volSized = deskVolSizedNotionalEnabledFromEnv();
-      const baseTargetNotional = volSized
-        ? paperNotionalForTargetRisk({
-            equityUsd: equityForSizing,
-            atr14: gate.atr14,
-            markPrice,
-            entryPrice,
-            side,
-            slPct: strat.slPct,
-            takerFeePct: TAKER_FEE_PCT,
-            riskPctOfEquity: deskRiskPctOfEquityFromEnv(),
-            minNotional: MIN_POSITION_NOTIONAL,
-            maxNotional: MAX_POSITION_NOTIONAL,
-          })
-        : Math.min(Math.max(bal * 0.1, MIN_POSITION_NOTIONAL), MAX_POSITION_NOTIONAL);
+      const maxNotionalEff = maxPositionNotionalEffective();
+      let baseTargetNotional: number;
+      if (fixedPct > 0) {
+        // Flat sizing — every trade is `fixedPct%` of equity regardless of vol.
+        // 1.0 → 1% of equity ($10K on $1M paper balance). Clamped to MIN/MAX.
+        const flat = (equityForSizing * fixedPct) / 100;
+        baseTargetNotional = Math.min(maxNotionalEff, Math.max(MIN_POSITION_NOTIONAL, flat));
+      } else if (volSized) {
+        baseTargetNotional = paperNotionalForTargetRisk({
+          equityUsd: equityForSizing,
+          atr14: gate.atr14,
+          markPrice,
+          entryPrice,
+          side,
+          slPct: strat.slPct,
+          takerFeePct: TAKER_FEE_PCT,
+          riskPctOfEquity: deskRiskPctOfEquityFromEnv(),
+          minNotional: MIN_POSITION_NOTIONAL,
+          maxNotional: maxNotionalEff,
+        });
+      } else {
+        baseTargetNotional = Math.min(Math.max(bal * 0.1, MIN_POSITION_NOTIONAL), maxNotionalEff);
+      }
 
       // ---- #1+#2 allocation by edge: Kelly + Sharpe-weighted multiplier ----
       let allocationMultiplier = 1.0;
@@ -1462,7 +1501,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         }
       }
       const targetNotional = Math.min(
-        MAX_POSITION_NOTIONAL,
+        maxNotionalEff,
         Math.max(MIN_POSITION_NOTIONAL, baseTargetNotional * allocationMultiplier),
       );
 
@@ -2034,7 +2073,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               // Skips entries once the strategy has hit researchDailyStratCap()
               // closed trades within the current UTC day. Outside research mode
               // researchDailyStratCap() returns 0 → gate is a no-op.
-              const dailyCap = researchDailyStratCap();
+              // FIREHOSE MODE: bypass entirely (volume IS the goal there).
+              const dailyCap = deskFirehoseModeEnabled() ? 0 : researchDailyStratCap();
               if (dailyCap > 0) {
                 const todayUtcStartMs = Date.UTC(
                   new Date().getUTCFullYear(),

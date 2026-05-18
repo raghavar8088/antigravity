@@ -190,6 +190,16 @@ export function BTCFutureTradingScalper({
         </DeskBanner>
       )}
 
+      {process.env.NEXT_PUBLIC_BTC_FT_FIREHOSE === "1" && (
+        <DeskBanner variant="warning" title="⚠ Firehose mode active — research only, NOT for live trading">
+          MAX_OPEN_POSITIONS raised to 60. Per-side cap loosened to 30. Per-template
+          cap loosened to 10. Daily strat cap disabled. Expect 10–20+ concurrent
+          trades and heavy fee bleed — this mode is for fast verdict discovery,
+          not profitability. Disable for production by removing
+          NEXT_PUBLIC_BTC_FT_FIREHOSE from env.
+        </DeskBanner>
+      )}
+
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Production winners mode - ${rosterInfo.ids.length} strategies`}>
           Running only promoted BTC FT winners with production gates: threshold 26, relax-confirm OFF,
