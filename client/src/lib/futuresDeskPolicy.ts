@@ -854,3 +854,76 @@ export function buildPaperDeskStrategies(
     deskRegimeAnnotatedStratCount,
   };
 }
+
+// ============================================================
+// WINNERS_ONLY + RESEARCH_MODE production gating (2026 blueprint)
+// ============================================================
+
+/**
+ * Research mode gate.
+ *
+ * When OFF (default): only strategies with a verified positive expectancy
+ * (from MongoDB) are eligible for the live execution path — WINNERS_ONLY mode.
+ *
+ * When ON (`NEXT_PUBLIC_FUTURES_RESEARCH_MODE=1`): the full 120+ strategy pool
+ * is available, including unverified hypotheses. Intended for paper-only
+ * research sessions; must never be set in production-adjacent environments.
+ *
+ * Env: `NEXT_PUBLIC_FUTURES_RESEARCH_MODE` (=1 to unlock full pool).
+ */
+export function deskResearchModeEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_FUTURES_RESEARCH_MODE === "1";
+}
+
+/**
+ * WINNERS_ONLY filter: given a set of strategy IDs with verified positive
+ * expectancy (from the MongoDB analytics endpoint), filter `stratDefs` to
+ * only include promoted winners.
+ *
+ * When `promotedIds` is empty (no data yet) or research mode is on, returns
+ * `stratDefs` unchanged so the desk doesn't go dark on first boot.
+ *
+ * Call this BEFORE `buildPaperDeskStrategies` to apply the production gate.
+ */
+export function applyWinnersOnlyGate(
+  stratDefs: readonly FuturesStratDef[],
+  promotedIds: ReadonlySet<number>,
+): FuturesStratDef[] {
+  if (deskResearchModeEnabled()) return [...stratDefs];
+  if (promotedIds.size === 0) return [...stratDefs];
+  return stratDefs.filter((d) => promotedIds.has(d.id));
+}
+
+/**
+ * Rolling expectancy block: returns `true` when the engine should be
+ * prevented from opening new positions because rolling 100-trade expectancy
+ * is ≤ 0 for the module.
+ *
+ * Requires research mode to be OFF (production-adjacent only).
+ * `expectancy` should come from the `/api/paper-trades/analytics` endpoint
+ * aggregated over the last 100+ closed trades for this module.
+ *
+ * `tradeCount` is used as a guard: below 100 trades the sample is too small
+ * to block reliably, so the gate passes (returns `false`).
+ */
+export function deskRollingExpectancyBlocked(
+  expectancy: number,
+  tradeCount: number,
+  minTrades = 100,
+): boolean {
+  if (deskResearchModeEnabled()) return false;
+  if (!Number.isFinite(expectancy) || !Number.isFinite(tradeCount)) return false;
+  if (tradeCount < minTrades) return false;
+  return expectancy <= 0;
+}
+
+/**
+ * Max open positions per templateFamily — hard cap of 1 for production mode.
+ * In research mode this is relaxed to `deskMaxOpenPerTemplateFromEnv()`.
+ *
+ * This prevents correlated over-exposure when multiple strategy IDs share
+ * the same underlying template logic.
+ */
+export function deskEffectiveMaxOpenPerFamily(): number {
+  return deskResearchModeEnabled() ? deskMaxOpenPerTemplateFromEnv() : 1;
+}

@@ -3,6 +3,7 @@
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskChip } from "@/components/desk/ui/DeskChip";
+import { DeskCopyButton } from "@/components/desk/ui/DeskCopyButton";
 import { DeskTabs, type DeskTabItem } from "@/components/desk/ui/DeskTabs";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/client";
@@ -21,18 +22,58 @@ type DashboardModule =
   | "btcFuturesScalper"
   | "btcFutureTrading";
 
-const CRYPTO_MODULES: DeskTabItem<DashboardModule>[] = [
+type ModuleTab = Omit<DeskTabItem<DashboardModule>, "trailing">;
+
+const CRYPTO_MODULES: ModuleTab[] = [
   { key: "options", label: "BTC Option Buying" },
   { key: "options-selling", label: "BTC Option Selling" },
   { key: "btcFuturesScalper", label: "Future Trading" },
   { key: "btcFutureTrading", label: "BTC Future Trading" },
 ];
 
-const INDIA_MODULES: DeskTabItem<DashboardModule>[] = [
+const INDIA_MODULES: ModuleTab[] = [
   { key: "nifty", label: "Nifty 50 Option Buying" },
   { key: "niftySelling", label: "Nifty Option Selling" },
   { key: "niftyBees", label: "Nifty BEES Scalper" },
 ];
+
+/**
+ * Resolve the deep-link URL for a workspace module. Modules with dedicated
+ * routes return the canonical path; the rest land on the workspace root
+ * with a `module` query param so the dashboard can preselect the tab when
+ * deep-linked.
+ */
+export function moduleDeepLinkUrl(module: DashboardModule): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  switch (module) {
+    case "btcFutureTrading":
+      return `${origin}/btc-future-trading`;
+    case "nifty":
+      return `${origin}/nifty-options`;
+    case "niftySelling":
+      return `${origin}/nifty-selling`;
+    case "niftyBees":
+      return `${origin}/nifty-bees`;
+    case "btcFuturesScalper":
+    case "options":
+    case "options-selling":
+      return `${origin}/?module=${module}`;
+    default:
+      return origin || "/";
+  }
+}
+
+function moduleItemsWithCopy(items: ModuleTab[]): DeskTabItem<DashboardModule>[] {
+  return items.map((item) => ({
+    ...item,
+    trailing: (
+      <DeskCopyButton
+        text={moduleDeepLinkUrl(item.key)}
+        ariaLabel={`Copy link to ${item.label}`}
+      />
+    ),
+  }));
+}
 
 export function moduleStatusChips(module: DashboardModule): string[] {
   switch (module) {
@@ -110,7 +151,7 @@ export function WorkspaceNavPanel({
         <div style={{ overflowX: "auto", flex: "1 1 200px", minWidth: 0 }}>
           <DeskTabs
             variant="secondary"
-            items={activeGroup === "crypto" ? CRYPTO_MODULES : INDIA_MODULES}
+            items={moduleItemsWithCopy(activeGroup === "crypto" ? CRYPTO_MODULES : INDIA_MODULES)}
             active={activeModule}
             onChange={onModuleChange}
           />

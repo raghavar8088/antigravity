@@ -26,8 +26,11 @@ export type PaperTradeInsertRow = {
   net_pnl: number;
   exit_reason: string;
   payload: Record<string, unknown>;
-  /** Optional — when provided, persisted so dashboards can filter per-module. */
   module_key?: PaperTradeModuleKey;
+  /** Parent algorithm family — used for cross-strategy research leaderboards. */
+  template_family?: string;
+  /** Exchange where execution was simulated (e.g. "binance", "delta", "nse"). */
+  exchange?: string;
 };
 
 export function btcFuturesTradeToClientPayload(trade: BTCFuturesTrade): PaperTradeClientPayload {
@@ -64,6 +67,8 @@ export function clientPayloadToInsertRow(
   accountKey: string,
   trade: PaperTradeClientPayload,
   moduleKey?: PaperTradeModuleKey,
+  templateFamily?: string,
+  exchange?: string,
 ): PaperTradeInsertRow {
   const row: PaperTradeInsertRow = {
     account_key: accountKey,
@@ -87,6 +92,8 @@ export function clientPayloadToInsertRow(
     payload: { ...trade },
   };
   if (moduleKey) row.module_key = moduleKey;
+  if (templateFamily) row.template_family = templateFamily;
+  if (exchange) row.exchange = exchange;
   return row;
 }
 

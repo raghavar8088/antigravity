@@ -446,6 +446,11 @@ func main() {
 	paperExecute := execution.NewPaperClient(initialPaperBalanceUSD)
 
 	// ═══════════════════════════════════════════════════
+	// 5b. Paper OMS — canonical execution (Epic 1)
+	// ═══════════════════════════════════════════════════
+	paperOMS := execution.NewPaperOMS(initialPaperBalanceUSD)
+
+	// ═══════════════════════════════════════════════════
 	// 6. Position Manager (Trailing SL/TP)
 	// ═══════════════════════════════════════════════════
 	posMgr := positions.NewManager()
@@ -1083,6 +1088,9 @@ func main() {
 	http.HandleFunc("/api/options-selling/stats", optionsSellingEngine.HandleStats)
 	http.HandleFunc("/api/options-selling/reset", optionsSellingEngine.HandleReset)
 	http.HandleFunc("/api/options-selling/clear-history", optionsSellingEngine.HandleClearHistory)
+
+	// Paper OMS — canonical execution endpoints (Epic 1)
+	http.Handle("/paper/", &execution.PaperOMSHandler{OMS: paperOMS, Symbol: "BTCUSDT"})
 
 	// Delta Exchange Live Bridge endpoints
 	http.HandleFunc("/api/delta-live/stats", func(w http.ResponseWriter, r *http.Request) {

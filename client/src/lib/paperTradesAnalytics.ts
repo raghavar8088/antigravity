@@ -47,7 +47,12 @@ export type BuildStratDisableOpts = {
   maxSumNetUsd: number;
 };
 
-export const DESK_KILL_MIN_TRADES_DEFAULT = 5;
+/**
+ * Minimum closed trades before a strategy can be auto-disabled.
+ * Set to 100 per the 2026 blueprint: below this sample size expectancy
+ * estimates are statistically unreliable and prone to false kills.
+ */
+export const DESK_KILL_MIN_TRADES_DEFAULT = 100;
 export const DESK_KILL_MAX_EXPECTANCY_USD_DEFAULT = -0.05;
 export const DESK_KILL_MAX_SUM_NET_USD_DEFAULT = -1;
 
@@ -57,22 +62,43 @@ const DEFAULT_DISABLE_OPTS: BuildStratDisableOpts = {
   maxSumNetUsd: DESK_KILL_MAX_SUM_NET_USD_DEFAULT,
 };
 
-/** Aggregate closed trades by `strategyId` (expectancy = sumNet / tradeCount). */
+/**
+ * Proper quantitative expectancy: E = (W × Pavg) − (L × Lavg)
+ *
+ * Where:
+ *  W    = win rate (wins / total)
+ *  Pavg = average net PnL of winning trades
+ *  L    = loss rate (1 − W)
+ *  Lavg = average absolute net PnL of losing trades
+ *
+ * Degrades gracefully to sumNet/count when no wins or no losses exist.
+ */
+export function calcQuantExpectancy(rows: StratTradeRow[]): number {
+  if (rows.length === 0) return 0;
+  const wins = rows.filter((r) => r.netPnl > 0);
+  const losses = rows.filter((r) => r.netPnl <= 0);
+  const W = wins.length / rows.length;
+  const L = losses.length / rows.length;
+  const Pavg = wins.length > 0 ? wins.reduce((s, r) => s + r.netPnl, 0) / wins.length : 0;
+  const Lavg = losses.length > 0 ? Math.abs(losses.reduce((s, r) => s + r.netPnl, 0) / losses.length) : 0;
+  return W * Pavg - L * Lavg;
+}
+
+/** Aggregate closed trades by `strategyId` using proper W×Pavg − L×Lavg expectancy. */
 export function aggregateStrategyStats(rows: StratTradeRow[]): StrategyStatRow[] {
-  const map = new Map<number, { count: number; sum: number }>();
+  const map = new Map<number, StratTradeRow[]>();
   for (const row of rows) {
     if (!Number.isFinite(row.strategyId) || !Number.isFinite(row.netPnl)) continue;
-    const cur = map.get(row.strategyId) ?? { count: 0, sum: 0 };
-    cur.count += 1;
-    cur.sum += row.netPnl;
-    map.set(row.strategyId, cur);
+    const bucket = map.get(row.strategyId) ?? [];
+    bucket.push(row);
+    map.set(row.strategyId, bucket);
   }
   return [...map.entries()]
-    .map(([strategyId, { count, sum }]) => ({
+    .map(([strategyId, bucket]) => ({
       strategyId,
-      tradeCount: count,
-      sumNet: sum,
-      expectancy: count > 0 ? sum / count : 0,
+      tradeCount: bucket.length,
+      sumNet: bucket.reduce((s, r) => s + r.netPnl, 0),
+      expectancy: calcQuantExpectancy(bucket),
     }))
     .sort((a, b) => a.sumNet - b.sumNet);
 }
@@ -139,29 +165,25 @@ export function strategyStatsRowsFromDb(
 
 /** Aggregate closed trades by `strategyId` (includes name + win rate for leaderboard). */
 export function aggregateStrategyLeaderboard(rows: LeaderboardTradeRow[]): StrategyLeaderboardRow[] {
-  const map = new Map<number, { name: string; count: number; sum: number; wins: number }>();
+  const map = new Map<number, { name: string; trades: LeaderboardTradeRow[] }>();
   for (const row of rows) {
     if (!Number.isFinite(row.strategyId) || !Number.isFinite(row.netPnl)) continue;
     const cur = map.get(row.strategyId) ?? {
       name: row.strategyName?.trim() || `Strat ${row.strategyId}`,
-      count: 0,
-      sum: 0,
-      wins: 0,
+      trades: [],
     };
-    cur.count += 1;
-    cur.sum += row.netPnl;
-    if (row.netPnl > 0) cur.wins += 1;
+    cur.trades.push(row);
     if (row.strategyName?.trim()) cur.name = row.strategyName.trim();
     map.set(row.strategyId, cur);
   }
   return [...map.entries()]
-    .map(([strategyId, { name, count, sum, wins }]) => ({
+    .map(([strategyId, { name, trades }]) => ({
       strategyId,
       strategyName: name,
-      tradeCount: count,
-      sumNet: sum,
-      expectancy: count > 0 ? sum / count : 0,
-      winRate: count > 0 ? wins / count : 0,
+      tradeCount: trades.length,
+      sumNet: trades.reduce((s, r) => s + r.netPnl, 0),
+      expectancy: calcQuantExpectancy(trades),
+      winRate: trades.length > 0 ? trades.filter((r) => r.netPnl > 0).length / trades.length : 0,
     }))
     .sort((a, b) => b.sumNet - a.sumNet);
 }
@@ -207,6 +229,9 @@ export type ResearchDbRow = {
   fees?: number;
   opened_at?: string;
   closed_at?: string;
+  /** module_key for cross-module leaderboards. */
+  module_key?: string;
+  template_family?: string;
 };
 
 export type ResearchAggRow = {
@@ -214,23 +239,30 @@ export type ResearchAggRow = {
   strategyName: string;
   tradeCount: number;
   sumNet: number;
+  /** E = W × Pavg − L × Lavg (proper quant expectancy). */
   expectancy: number;
   winRate: number;
   /** sum(fees) / sum(|gross_pnl|) * 100 — null when gross is 0. */
   feePctOfGross: number | null;
   avgHoldMin: number | null;
   lastTradeAt: string | null;
+  /** Maximum Adverse Excursion proxy: avg loss magnitude on losing trades. */
+  mae: number | null;
+  /** Maximum Favorable Excursion proxy: avg gross on winning trades. */
+  mfe: number | null;
+  /** Sharpe-like: expectancy / stddev of net PnL (null when stddev = 0). */
+  sharpeProxy: number | null;
 };
 
-/** Aggregate research tournament stats from raw DB rows (includes hold time + fee ratio). */
+/** Aggregate research tournament stats from raw DB rows (proper expectancy + MAE/MFE/Sharpe). */
 export function aggregateResearchStratStats(rows: ResearchDbRow[]): ResearchAggRow[] {
   const map = new Map<
     number,
     {
       name: string;
-      count: number;
-      sumNet: number;
-      wins: number;
+      trades: number[];
+      grossWins: number[];
+      grossLosses: number[];
       sumGross: number;
       sumFees: number;
       sumHoldMin: number;
@@ -243,9 +275,9 @@ export function aggregateResearchStratStats(rows: ResearchDbRow[]): ResearchAggR
     if (!Number.isFinite(r.strategy_id) || !Number.isFinite(r.net_pnl)) continue;
     const cur = map.get(r.strategy_id) ?? {
       name: r.strategy_name?.trim() || `Strat ${r.strategy_id}`,
-      count: 0,
-      sumNet: 0,
-      wins: 0,
+      trades: [],
+      grossWins: [],
+      grossLosses: [],
       sumGross: 0,
       sumFees: 0,
       sumHoldMin: 0,
@@ -253,14 +285,16 @@ export function aggregateResearchStratStats(rows: ResearchDbRow[]): ResearchAggR
       lastAt: null,
     };
 
-    cur.count += 1;
-    cur.sumNet += r.net_pnl;
-    if (r.net_pnl > 0) cur.wins += 1;
+    cur.trades.push(r.net_pnl);
+    if (r.net_pnl > 0) {
+      cur.grossWins.push(typeof r.gross_pnl === "number" ? r.gross_pnl : r.net_pnl);
+    } else {
+      cur.grossLosses.push(typeof r.gross_pnl === "number" ? r.gross_pnl : r.net_pnl);
+    }
     if (typeof r.gross_pnl === "number" && Number.isFinite(r.gross_pnl)) cur.sumGross += Math.abs(r.gross_pnl);
     if (typeof r.fees === "number" && Number.isFinite(r.fees)) cur.sumFees += r.fees;
     if (r.strategy_name?.trim()) cur.name = r.strategy_name.trim();
 
-    // Hold minutes from opened_at + closed_at
     if (r.opened_at && r.closed_at) {
       const openMs = Date.parse(r.opened_at);
       const closeMs = Date.parse(r.closed_at);
@@ -270,26 +304,45 @@ export function aggregateResearchStratStats(rows: ResearchDbRow[]): ResearchAggR
       }
     }
 
-    // Latest closed trade
-    if (r.closed_at) {
-      if (!cur.lastAt || r.closed_at > cur.lastAt) cur.lastAt = r.closed_at;
-    }
-
+    if (r.closed_at && (!cur.lastAt || r.closed_at > cur.lastAt)) cur.lastAt = r.closed_at;
     map.set(r.strategy_id, cur);
   }
 
   return [...map.entries()]
-    .map(([strategyId, s]) => ({
-      strategyId,
-      strategyName: s.name,
-      tradeCount: s.count,
-      sumNet: Math.round(s.sumNet * 100) / 100,
-      expectancy: s.count > 0 ? Math.round((s.sumNet / s.count) * 1000) / 1000 : 0,
-      winRate: s.count > 0 ? Math.round((s.wins / s.count) * 1000) / 1000 : 0,
-      feePctOfGross: s.sumGross > 0 ? Math.round((s.sumFees / s.sumGross) * 10000) / 100 : null,
-      avgHoldMin: s.holdMinCount > 0 ? Math.round((s.sumHoldMin / s.holdMinCount) * 10) / 10 : null,
-      lastTradeAt: s.lastAt,
-    }))
+    .map(([strategyId, s]) => {
+      const tradeRows: StratTradeRow[] = s.trades.map((netPnl) => ({ strategyId, netPnl }));
+      const expectancy = calcQuantExpectancy(tradeRows);
+      const sumNet = s.trades.reduce((a, b) => a + b, 0);
+      const winCount = s.grossWins.length;
+      const lossCount = s.grossLosses.length;
+      const count = s.trades.length;
+
+      // Sharpe proxy: expectancy / stddev
+      let sharpeProxy: number | null = null;
+      if (count > 1) {
+        const mean = sumNet / count;
+        const variance = s.trades.reduce((acc, v) => acc + (v - mean) ** 2, 0) / count;
+        const stddev = Math.sqrt(variance);
+        if (stddev > 0) sharpeProxy = Math.round((expectancy / stddev) * 1000) / 1000;
+      }
+
+      return {
+        strategyId,
+        strategyName: s.name,
+        tradeCount: count,
+        sumNet: Math.round(sumNet * 100) / 100,
+        expectancy: Math.round(expectancy * 1000) / 1000,
+        winRate: count > 0 ? Math.round((winCount / count) * 1000) / 1000 : 0,
+        feePctOfGross: s.sumGross > 0 ? Math.round((s.sumFees / s.sumGross) * 10000) / 100 : null,
+        avgHoldMin: s.holdMinCount > 0 ? Math.round((s.sumHoldMin / s.holdMinCount) * 10) / 10 : null,
+        lastTradeAt: s.lastAt,
+        // MAE: avg absolute loss on losing trades (intra-trade drawdown proxy)
+        mae: lossCount > 0 ? Math.round((Math.abs(s.grossLosses.reduce((a, b) => a + b, 0)) / lossCount) * 100) / 100 : null,
+        // MFE: avg gross on winning trades (TP too conservative if much > netPnl avg)
+        mfe: winCount > 0 ? Math.round((s.grossWins.reduce((a, b) => a + b, 0) / winCount) * 100) / 100 : null,
+        sharpeProxy,
+      };
+    })
     .sort((a, b) => b.sumNet - a.sumNet);
 }
 

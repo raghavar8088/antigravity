@@ -8,13 +8,22 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
+// Exchange fee constants (2026 base tier, Binance USD-M Futures).
+// Taker orders remove liquidity (market orders); maker orders add it (limit/post-only).
+const (
+	BinanceFuturesTakerFeePct = 0.00050 // 0.05%
+	BinanceFuturesMakerFeePct = 0.00020 // 0.02%
+)
+
 // PaperClient fakes live executions by storing balances locally in RAM,
 // using whatever the most recent market price stream is.
+// All fills deduct the Binance taker fee so paper PnL reflects real net returns.
 type PaperClient struct {
 	initialUSD     float64
 	balanceUSD     float64
 	positionBTC    float64 // Signed net BTC position; negative values represent shorts.
 	lastKnownPrice float64
+	totalFeesUSD   float64 // Cumulative taker fees deducted across all fills.
 }
 
 func NewPaperClient(startingUSD float64) *PaperClient {
@@ -70,32 +79,46 @@ func (p *PaperClient) executionPrice(mode OrderMode, action strategy.Action) flo
 	return execPrice
 }
 
-func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode OrderMode) error {
-	if sig.Action == strategy.ActionBuy {
-		cost := sig.TargetSize * execPrice
+// takerFeePct returns 0 for post-only (maker) orders, BinanceFuturesTakerFeePct otherwise.
+func takerFeePct(mode OrderMode) float64 {
+	if mode == OrderModePostOnly {
+		return BinanceFuturesMakerFeePct
+	}
+	return BinanceFuturesTakerFeePct
+}
 
-		if cost > p.balanceUSD {
-			log.Printf("[PAPER EXEC] INSUFFICIENT FUNDS! Wants $%.2f, has $%.2f", cost, p.balanceUSD)
-			return fmt.Errorf("insufficient funds: wants %.2f, has %.2f", cost, p.balanceUSD)
+func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode OrderMode) error {
+	notional := sig.TargetSize * execPrice
+	fee := notional * takerFeePct(mode)
+
+	if sig.Action == strategy.ActionBuy {
+		totalCost := notional + fee
+		if totalCost > p.balanceUSD {
+			log.Printf("[PAPER EXEC] INSUFFICIENT FUNDS! Wants $%.2f (incl fee $%.4f), has $%.2f",
+				totalCost, fee, p.balanceUSD)
+			return fmt.Errorf("insufficient funds: wants %.2f, has %.2f", totalCost, p.balanceUSD)
 		}
 
-		p.balanceUSD -= cost
+		p.balanceUSD -= totalCost
 		p.positionBTC += sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
-		log.Printf("[PAPER EXEC] %s BUY %.4f BTC @ $%.2f | Balance: $%.2f",
-			mode, sig.TargetSize, execPrice, p.balanceUSD)
+		p.totalFeesUSD += fee
+		log.Printf("[PAPER EXEC] %s BUY %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
+			mode, sig.TargetSize, execPrice, fee, p.balanceUSD)
 
 	} else if sig.Action == strategy.ActionSell {
 		if p.positionBTC <= 0 {
 			log.Printf("[PAPER EXEC] %s SHORT %.4f BTC @ $%.2f", mode, sig.TargetSize, execPrice)
 		}
 
-		revenue := sig.TargetSize * execPrice
+		// Revenue net of taker fee (fee paid on sell side too).
+		netRevenue := notional - fee
 		p.positionBTC -= sig.TargetSize
 		p.positionBTC = clampNearZero(p.positionBTC)
-		p.balanceUSD += revenue
-		log.Printf("[PAPER EXEC] %s SELL %.4f BTC @ $%.2f | Balance: $%.2f",
-			mode, sig.TargetSize, execPrice, p.balanceUSD)
+		p.balanceUSD += netRevenue
+		p.totalFeesUSD += fee
+		log.Printf("[PAPER EXEC] %s SELL %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
+			mode, sig.TargetSize, execPrice, fee, p.balanceUSD)
 	}
 
 	return nil
@@ -140,7 +163,7 @@ func (p *PaperClient) GetEquityUSD() float64 {
 }
 
 func (p *PaperClient) GetTotalFees() float64 {
-	return 0
+	return p.totalFeesUSD
 }
 
 func (p *PaperClient) GetLastPrice() float64 {
@@ -177,8 +200,9 @@ func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float
 	}
 }
 
-// RestoreBalance restores balance and fees from database on restart.
+// RestoreBalance restores balance and accumulated fees from database on restart.
 func (p *PaperClient) RestoreBalance(balance, fees float64) {
 	p.balanceUSD = balance
-	log.Printf("[PAPER EXEC] Restored balance: $%.2f | Fees ignored in zero-fee mode (was: $%.4f)", balance, fees)
+	p.totalFeesUSD = fees
+	log.Printf("[PAPER EXEC] Restored balance: $%.2f | Cumulative fees: $%.4f", balance, fees)
 }

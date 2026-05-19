@@ -405,6 +405,144 @@ export function paperNetPnlOnClose(p: PaperNetCloseParams): { grossPnl: number; 
 
 // ========== MARGIN / SIZING ==========
 
+// ========== EXCHANGE-SPECIFIC FEE CALCULATORS ==========
+// Rates locked to 2026 schedule. All return USD cost (positive = cost to trader).
+
+/**
+ * Binance USD-M Futures fees (2026 base tier).
+ * Taker: 0.05%  |  Maker: 0.02%
+ * Round-trip assumes both legs are taker unless `makerEntry` is specified.
+ */
+export type BinanceFeeParams = {
+  notional: number;
+  isTakerEntry?: boolean;
+  isTakerExit?: boolean;
+};
+export function calcBinanceFutureFee(p: BinanceFeeParams): number {
+  const TAKER = 0.0005;
+  const MAKER = 0.0002;
+  if (!Number.isFinite(p.notional) || p.notional <= 0) return 0;
+  const entryFee = p.notional * (p.isTakerEntry === false ? MAKER : TAKER);
+  const exitFee = p.notional * (p.isTakerExit === false ? MAKER : TAKER);
+  return entryFee + exitFee;
+}
+
+/**
+ * Delta Exchange fees (2026).
+ * Futures: Taker 0.05% / Maker 0.02%
+ * Options: 0.03% of notional, capped at min(3.5%, 7.5%) of option premium.
+ *
+ * Per-leg call (entry or exit) — multiply by 2 for round-trip futures.
+ * For options, pass `optionPremiumUsd` and the cap is applied automatically.
+ */
+export type DeltaFeeParams = {
+  notional: number;
+  isFutures: boolean;
+  isTaker?: boolean;
+  /** USD value of the option premium (used only when !isFutures). */
+  optionPremiumUsd?: number;
+  /** Use 7.5% cap (USDT-settled indices) instead of 3.5% (default). */
+  useHigherPremiumCap?: boolean;
+};
+export function calcDeltaFeePerLeg(p: DeltaFeeParams): number {
+  if (!Number.isFinite(p.notional) || p.notional <= 0) return 0;
+  if (p.isFutures) {
+    const rate = p.isTaker === false ? 0.0002 : 0.0005;
+    return p.notional * rate;
+  }
+  // Options: min(notional × 0.03%, premium × cap%)
+  const notionalFee = p.notional * 0.0003;
+  const premium = p.optionPremiumUsd ?? 0;
+  if (premium > 0 && Number.isFinite(premium)) {
+    const capPct = p.useHigherPremiumCap ? 0.075 : 0.035;
+    return Math.min(notionalFee, premium * capPct);
+  }
+  return notionalFee;
+}
+
+/**
+ * Full Indian market cost stack for one trade leg (Angel One / NSE, 2026 budget).
+ *
+ * Charges included:
+ *  1. Brokerage: min(₹20, 0.1% of turnover) — applied both buy + sell
+ *  2. NSE Exchange Transaction: 0.03503% options / 0.00173% futures (both sides)
+ *  3. SEBI Turnover Fee: 0.0001% (both sides)
+ *  4. GST: 18% on (Brokerage + Exchange + SEBI) only
+ *  5. STT: 0.15% options / 0.05% futures — sell side ONLY
+ *  6. Stamp Duty: 0.003% options / 0.002% futures — buy side ONLY
+ *
+ * `turnoverInr`: contract value in INR for this leg.
+ * `premiumInr`:  option premium × lot-size in INR (0 for futures).
+ * `isBuy`:       true for entry/buy leg, false for sell/exit leg.
+ * `isOptions`:   true for Nifty/MCX options, false for futures.
+ *
+ * Returns total INR cost for this leg.
+ */
+export type IndianMarketFeeParams = {
+  turnoverInr: number;
+  premiumInr: number;
+  isBuy: boolean;
+  isOptions: boolean;
+};
+export function calcIndianMarketFeeInr(p: IndianMarketFeeParams): number {
+  if (!Number.isFinite(p.turnoverInr) || p.turnoverInr <= 0) return 0;
+
+  // 1. Brokerage
+  const brokerage = Math.min(20, p.turnoverInr * 0.001);
+
+  // 2. Exchange Transaction Charge
+  const txnRate = p.isOptions ? 0.0003503 : 0.0000173;
+  const txn = p.isOptions ? p.premiumInr * txnRate : p.turnoverInr * txnRate;
+
+  // 3. SEBI Turnover Fee
+  const sebi = p.turnoverInr * 0.000001;
+
+  // 4. GST on (Brokerage + Txn + SEBI)
+  const gst = (brokerage + txn + sebi) * 0.18;
+
+  // 5. STT — sell side only
+  const sttRate = p.isOptions ? 0.0015 : 0.0005;
+  const stt = p.isBuy ? 0 : (p.isOptions ? p.premiumInr * sttRate : p.turnoverInr * sttRate);
+
+  // 6. Stamp Duty — buy side only
+  const stampRate = p.isOptions ? 0.00003 : 0.00002;
+  const stamp = p.isBuy ? p.turnoverInr * stampRate : 0;
+
+  return brokerage + txn + sebi + gst + stt + stamp;
+}
+
+/**
+ * Round-trip Indian market fee in INR (buy leg + sell leg).
+ * Used for paper desk entry gates on Nifty / MCX modules.
+ */
+export function calcIndianRoundTripFeeInr(
+  turnoverInr: number,
+  premiumInr: number,
+  isOptions: boolean,
+): number {
+  return (
+    calcIndianMarketFeeInr({ turnoverInr, premiumInr, isBuy: true, isOptions }) +
+    calcIndianMarketFeeInr({ turnoverInr, premiumInr, isBuy: false, isOptions })
+  );
+}
+
+/**
+ * Profit-lock gate: only proceed with a TP close if net profit after
+ * maximum expected slippage and all fees exceeds `minNetUsd`.
+ *
+ * Returns `true` when it is safe to take profit.
+ */
+export function paperProfitLockGate(
+  grossPnl: number,
+  fees: number,
+  maxSlippageUsd: number,
+  minNetUsd: number,
+): boolean {
+  if (!Number.isFinite(grossPnl) || !Number.isFinite(fees) || !Number.isFinite(maxSlippageUsd)) return false;
+  const projected = grossPnl - fees - Math.abs(maxSlippageUsd);
+  return projected >= minNetUsd;
+}
+
 /** Isolated margin required for a position. */
 export function paperMarginRequired(notional: number, leverage: number): number {
   return notional / leverage;

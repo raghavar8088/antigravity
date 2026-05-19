@@ -1,10 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { cn } from "./cn";
 
 export type DeskTabItem<T extends string = string> = {
   key: T;
   label: string;
+  /** Optional inline element rendered next to the label (e.g. copy button). */
+  trailing?: ReactNode;
 };
 
 type DeskTabsProps<T extends string> = {
@@ -35,9 +38,8 @@ export function DeskTabs<T extends string>({
     >
       {items.map((item) => {
         const isActive = item.key === active;
-        return (
+        const tabButton = (
           <button
-            key={item.key}
             type="button"
             role="tab"
             aria-selected={isActive}
@@ -78,6 +80,22 @@ export function DeskTabs<T extends string>({
             ) : null}
           </button>
         );
+
+        // When the item has a trailing slot (e.g. copy button), wrap tab + trailing
+        // as flex siblings so the trailing is its own clickable element (avoids invalid
+        // nested-button HTML). Without trailing, render the tab button alone.
+        if (item.trailing !== undefined) {
+          return (
+            <div
+              key={item.key}
+              style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}
+            >
+              {tabButton}
+              {item.trailing}
+            </div>
+          );
+        }
+        return <span key={item.key}>{tabButton}</span>;
       })}
     </div>
   );

@@ -5,6 +5,7 @@ import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { assertCloudAccountMatchesSession } from "@/lib/paperTradesAuth";
 import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
 import { createServiceSupabase } from "@/lib/supabase/server";
+import { isMongoConfigured, getTradesCollection } from "@/lib/mongoTradesClient";
 
 export const dynamic = "force-dynamic";
 
@@ -67,29 +68,59 @@ export async function GET(req: Request) {
 
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
 
-  let query = supabase
-    .from("paper_trades")
-    .select("strategy_id, strategy_name, net_pnl, gross_pnl, fees, opened_at, closed_at")
-    .eq("account_key", account_key)
-    .gte("closed_at", cutoff);
-
-  // Filter by pool IDs if provided
   const poolIds = poolIdsRaw
     .split(",")
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && n > 0);
-  if (poolIds.length > 0) {
-    query = query.in("strategy_id", poolIds);
+
+  let rows: ResearchDbRow[] = [];
+
+  // PRIMARY: MongoDB
+  if (isMongoConfigured()) {
+    try {
+      const col = await getTradesCollection();
+      const filter: Record<string, unknown> = {
+        account_key,
+        closed_at: { $gte: cutoff },
+      };
+      if (poolIds.length > 0) filter.strategy_id = { $in: poolIds };
+      const docs = await col
+        .find(filter)
+        .project({
+          strategy_id: 1,
+          strategy_name: 1,
+          net_pnl: 1,
+          gross_pnl: 1,
+          fees: 1,
+          opened_at: 1,
+          closed_at: 1,
+          module_key: 1,
+          template_family: 1,
+          _id: 0,
+        })
+        .toArray();
+      rows = docs as ResearchDbRow[];
+    } catch (err) {
+      console.warn("[paper-trades/strategy-research] mongo failed, falling back to supabase", err);
+      // fall through to supabase
+    }
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("[paper-trades/strategy-research]", error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  // FALLBACK: Supabase (when mongo not configured or threw)
+  if (rows.length === 0 && supabase) {
+    let query = supabase
+      .from("paper_trades")
+      .select("strategy_id, strategy_name, net_pnl, gross_pnl, fees, opened_at, closed_at")
+      .eq("account_key", account_key)
+      .gte("closed_at", cutoff);
+    if (poolIds.length > 0) query = query.in("strategy_id", poolIds);
+    const { data, error } = await query;
+    if (error) {
+      console.error("[paper-trades/strategy-research]", error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    rows = (data ?? []) as ResearchDbRow[];
   }
-
-  const rows = (data ?? []) as ResearchDbRow[];
   const stats = aggregateResearchStratStats(rows);
   const byId = new Map(stats.map((s) => [s.strategyId, s]));
   const nameById = new Map(FUTURES_STRAT_DEFS.map((s) => [s.id, s.name]));

@@ -55,6 +55,8 @@ export async function POST(req: Request) {
     resolvedAccountKey,
     parsed.data.trade,
     parsed.data.moduleKey,
+    parsed.data.templateFamily,
+    parsed.data.exchange,
   );
 
   // PRIMARY: MongoDB. When configured, a Mongo write failure aborts the request

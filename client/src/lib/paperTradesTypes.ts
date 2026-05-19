@@ -69,6 +69,14 @@ export const paperTradePostBodySchema = z.object({
   accountKey: z.string().min(1).max(128).optional(),
   /** Optional module identifier — persisted with the row so dashboards can filter per-tab. */
   moduleKey: paperTradeModuleKeySchema.optional(),
+  /**
+   * Parent algorithm family (e.g. "momentum_reversion", "vol_breakout").
+   * Used for cross-strategy grouping in research leaderboards; more stable than
+   * individual strategy IDs which may be renumbered.
+   */
+  templateFamily: z.string().min(1).max(128).optional(),
+  /** Exchange where the simulated execution occurred (e.g. "binance", "delta", "nse"). */
+  exchange: z.string().min(1).max(64).optional(),
   trade: paperTradeClientSchema,
 });
 
@@ -98,10 +106,15 @@ export type PaperTradeDbRow = {
   net_pnl: number;
   exit_reason: string;
   payload: unknown;
-  /** Module identifier (added in v3 schema). Optional for backward-compat
-   *  with rows persisted before the column existed; reader can fall back to
-   *  inferring from `strategy_name` / `symbol` if needed. */
+  /** Module identifier (added in v3 schema). */
   module_key?: string | null;
+  /**
+   * Parent algorithm family (added in v4 schema). Groups related strategy IDs
+   * for cross-strategy leaderboards and production gating.
+   */
+  template_family?: string | null;
+  /** Exchange where execution was simulated (e.g. "binance", "delta", "nse"). */
+  exchange?: string | null;
 };
 
 export const paperTradeGetQuerySchema = z.object({
@@ -126,4 +139,21 @@ export const paperTradeLeaderboardQuerySchema = z.object({
 export const paperTradeExportQuerySchema = z.object({
   account_key: z.string().min(1).max(128).optional(),
   window_days: z.coerce.number().int().min(1).max(90).default(30),
+});
+
+/**
+ * Query schema for the `/api/paper-trades/analytics` aggregation endpoint.
+ * Supports filtering by module and/or templateFamily for cross-desk research.
+ */
+export const paperTradeAnalyticsQuerySchema = z.object({
+  account_key: z.string().min(1).max(128).optional(),
+  window_days: z.coerce.number().int().min(1).max(365).default(30),
+  module_key: paperTradeModuleKeySchema.optional(),
+  /** Filter to a specific templateFamily (e.g. "momentum_reversion"). */
+  template_family: z.string().min(1).max(128).optional(),
+  /**
+   * Minimum closed trades before a strategy is included in results.
+   * Default 100 — the statistical threshold for reliable expectancy.
+   */
+  min_trades: z.coerce.number().int().min(1).max(10000).default(100),
 });
