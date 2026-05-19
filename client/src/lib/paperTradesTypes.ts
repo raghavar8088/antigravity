@@ -13,6 +13,26 @@ export const PAPER_TRADE_EXIT_REASONS = [
   "PROFIT_LOCK",
 ] as const;
 
+/**
+ * Module identifier persisted alongside each paper trade so the dashboard can
+ * filter leaderboards, exports, and analytics per workspace tab.
+ *
+ * Stable string keys (never renumber — they become DB column values).
+ */
+export const PAPER_TRADE_MODULE_KEYS = [
+  "btc_future_trading",   // BTC Future Trading (specific BTC FT desk)
+  "btc_futures_scalper",  // Future Trading (multi-symbol futures scalper)
+  "btc_option_buying",    // BTC Option Buying (OptionsScalper)
+  "btc_option_selling",   // BTC Option Selling (OptionsSellingScalper)
+  "nifty_option_buying",  // Nifty 50 Option Buying
+  "nifty_option_selling", // Nifty Option Selling
+  "nifty_bees",           // Nifty BEES ETF scalper
+] as const;
+
+export type PaperTradeModuleKey = (typeof PAPER_TRADE_MODULE_KEYS)[number];
+
+export const paperTradeModuleKeySchema = z.enum(PAPER_TRADE_MODULE_KEYS);
+
 export const paperTradeSideSchema = z.enum(["LONG", "SHORT"]);
 export const paperTradeExitReasonSchema = z.enum(PAPER_TRADE_EXIT_REASONS);
 
@@ -47,6 +67,8 @@ export const paperTradeClientSchema = z.object({
 export const paperTradePostBodySchema = z.object({
   /** Ignored when authenticated — server sets `account_key` from session user id. */
   accountKey: z.string().min(1).max(128).optional(),
+  /** Optional module identifier — persisted with the row so dashboards can filter per-tab. */
+  moduleKey: paperTradeModuleKeySchema.optional(),
   trade: paperTradeClientSchema,
 });
 
@@ -76,12 +98,18 @@ export type PaperTradeDbRow = {
   net_pnl: number;
   exit_reason: string;
   payload: unknown;
+  /** Module identifier (added in v3 schema). Optional for backward-compat
+   *  with rows persisted before the column existed; reader can fall back to
+   *  inferring from `strategy_name` / `symbol` if needed. */
+  module_key?: string | null;
 };
 
 export const paperTradeGetQuerySchema = z.object({
   account_key: z.string().min(1).max(128).optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   cursor: z.string().datetime().optional(),
+  /** Filter by module (e.g. only show trades for the BTC Option Buying desk). */
+  module_key: paperTradeModuleKeySchema.optional(),
 });
 
 export const paperTradeStrategyStatsQuerySchema = z.object({

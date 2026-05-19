@@ -263,6 +263,7 @@ export function BTCFutureTradingScalper({
           watchlist={BTC_ONLY_WATCHLIST}
           storageNamespace={STORAGE_NS}
           baseBalance={1000}
+          moduleKey="btc_future_trading"
         />
       )}
     </>

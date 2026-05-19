@@ -58,6 +58,37 @@ describe("paperTradesMapper", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("clientPayloadToInsertRow attaches module_key when provided", () => {
+    const payload = btcFuturesTradeToClientPayload(sampleTrade);
+    const row = clientPayloadToInsertRow("acct-1", payload, "btc_future_trading");
+    expect(row.module_key).toBe("btc_future_trading");
+  });
+
+  it("clientPayloadToInsertRow omits module_key field when not provided (backward-compat)", () => {
+    const payload = btcFuturesTradeToClientPayload(sampleTrade);
+    const row = clientPayloadToInsertRow("acct-1", payload);
+    expect(row.module_key).toBeUndefined();
+  });
+
+  it("POST body schema accepts valid moduleKey", () => {
+    const payload = btcFuturesTradeToClientPayload(sampleTrade);
+    const parsed = paperTradePostBodySchema.safeParse({
+      trade: payload,
+      moduleKey: "btc_option_buying",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.moduleKey).toBe("btc_option_buying");
+  });
+
+  it("POST body schema rejects unknown moduleKey", () => {
+    const payload = btcFuturesTradeToClientPayload(sampleTrade);
+    const parsed = paperTradePostBodySchema.safeParse({
+      trade: payload,
+      moduleKey: "not_a_real_module",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it("dbRowToBtcFuturesTrade prefers payload snapshot", () => {
     const row = clientPayloadToInsertRow(
       "btc_future_trading_20",

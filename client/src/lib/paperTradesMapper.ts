@@ -1,5 +1,9 @@
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
-import type { PaperTradeClientPayload, PaperTradeDbRow } from "@/lib/paperTradesTypes";
+import type {
+  PaperTradeClientPayload,
+  PaperTradeDbRow,
+  PaperTradeModuleKey,
+} from "@/lib/paperTradesTypes";
 import { paperTradeExitReasonSchema, paperTradeSideSchema } from "@/lib/paperTradesTypes";
 
 export type PaperTradeInsertRow = {
@@ -22,6 +26,8 @@ export type PaperTradeInsertRow = {
   net_pnl: number;
   exit_reason: string;
   payload: Record<string, unknown>;
+  /** Optional — when provided, persisted so dashboards can filter per-module. */
+  module_key?: PaperTradeModuleKey;
 };
 
 export function btcFuturesTradeToClientPayload(trade: BTCFuturesTrade): PaperTradeClientPayload {
@@ -57,8 +63,9 @@ export function btcFuturesTradeToClientPayload(trade: BTCFuturesTrade): PaperTra
 export function clientPayloadToInsertRow(
   accountKey: string,
   trade: PaperTradeClientPayload,
+  moduleKey?: PaperTradeModuleKey,
 ): PaperTradeInsertRow {
-  return {
+  const row: PaperTradeInsertRow = {
     account_key: accountKey,
     client_trade_id: trade.clientTradeId,
     opened_at: trade.openedAt,
@@ -79,6 +86,8 @@ export function clientPayloadToInsertRow(
     exit_reason: trade.exitReason,
     payload: { ...trade },
   };
+  if (moduleKey) row.module_key = moduleKey;
+  return row;
 }
 
 export function dbRowToBtcFuturesTrade(row: PaperTradeDbRow): BTCFuturesTrade {

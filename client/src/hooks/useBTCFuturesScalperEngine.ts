@@ -119,7 +119,9 @@ import {
   mergeDisabledStrategyIds,
   type StrategyStatRow,
 } from "@/lib/paperTradesAnalytics";
+import type { PaperTradeModuleKey } from "@/lib/paperTradesTypes";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
+import { getOrCreateAnonAccountKey } from "@/lib/anonAccountKey";
 import {
   flushTradeSyncQueue,
   persistTradeToServer,
@@ -496,6 +498,12 @@ export type BTCFuturesEngineOptions = {
   paperBootstrapProbe?: boolean;
   /** Module-specific UTC entry session override. */
   entryUtcSessionOverride?: DeskEntryUtcSession;
+  /**
+   * Module identifier persisted with each closed paper trade so dashboards
+   * can filter leaderboards / exports per workspace tab. Optional —
+   * legacy callers without a moduleKey keep working (row stored without it).
+   */
+  moduleKey?: PaperTradeModuleKey;
 };
 
 /** Progressive threshold reduction so quiet strats get samples on chop. */
@@ -577,7 +585,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       resolveCloudPaperTradesAccountKey({
         supabaseUserId: options.supabaseUserId,
         storageNamespace,
-      }),
+      }) ?? getOrCreateAnonAccountKey(),
     [options.supabaseUserId, storageNamespace],
   );
   const strategyIds = options.strategyIds ?? null;
@@ -608,6 +616,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const researchEnsureTrades = options.researchEnsureTrades === true;
   const paperEnsureTrades = options.paperEnsureTrades === true;
   const entryUtcSessionOverride = options.entryUtcSessionOverride;
+  const moduleKey = options.moduleKey;
   const relaxEntryGatesRef = useRef(relaxEntryConfirmation);
   useEffect(() => {
     relaxEntryGatesRef.current = relaxEntryConfirmation;
@@ -1683,7 +1692,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setTrades(prev => [...prev.slice(-MAX_TRADES + 1), trade]);
     setPositions(prev => prev.filter(p => p.id !== position.id));
     setBalance(prev => prev + position.marginUsed + netPnl);
-    persistTradeToServer(trade, cloudAccountKey);
+    persistTradeToServer(trade, cloudAccountKey, moduleKey);
     persistShadowTradeIntent(cloudAccountKey, shadowIntentFromPaperClose(trade));
   }, [cloudAccountKey, slippageBpsOverride]);
 

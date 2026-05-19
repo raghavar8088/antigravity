@@ -27,6 +27,7 @@ import { DeskModuleChrome } from "@/components/desk/DeskModuleChrome";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
 import { deskModuleChromeConfig, usesDeskModuleChrome } from "@/lib/deskModuleChrome";
+import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import type { StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 import useAIInsights from "@/hooks/useAIInsights";
@@ -1102,6 +1103,7 @@ export default function TradingDashboard({
         paperCurrency={cfg.paperCurrency}
         deskDark={deskDark}
         onToggleDeskDark={() => setDeskDark((d) => !d)}
+        authSlot={<PaperDeskAuthBar compact />}
       >
         {node}
       </DeskModuleChrome>

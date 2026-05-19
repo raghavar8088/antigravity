@@ -109,14 +109,15 @@ describe("upsertTradeMongo", () => {
     await _closeMongoForTests();
   });
 
-  it("creates the unique + per-account indexes on first access", async () => {
+  it("creates the unique + per-account + per-module indexes on first access", async () => {
     const { upsertTradeMongo, _closeMongoForTests } = await import("./mongoTradesClient");
     await upsertTradeMongo(sampleRow());
 
-    expect(mockCol.createIndex).toHaveBeenCalledTimes(3);
+    expect(mockCol.createIndex).toHaveBeenCalledTimes(4);
     const indexCalls = mockCol.createIndex.mock.calls.map((c) => c[0]);
     expect(indexCalls).toContainEqual({ client_trade_id: 1 });
     expect(indexCalls).toContainEqual({ account_key: 1, closed_at: -1 });
+    expect(indexCalls).toContainEqual({ account_key: 1, module_key: 1, closed_at: -1 });
 
     await _closeMongoForTests();
   });
@@ -127,7 +128,7 @@ describe("upsertTradeMongo", () => {
     await upsertTradeMongo(sampleRow({ client_trade_id: "00000000-0000-0000-0000-000000000002" }));
 
     // createIndex should only have run once (per first call) — second call uses cached indexesEnsured
-    expect(mockCol.createIndex).toHaveBeenCalledTimes(3);
+    expect(mockCol.createIndex).toHaveBeenCalledTimes(4);
     expect(mockCol.updateOne).toHaveBeenCalledTimes(2);
 
     await _closeMongoForTests();

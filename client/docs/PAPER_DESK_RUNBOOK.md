@@ -453,3 +453,94 @@ warning banner and the position count climbing past 12.
 - ❌ Using firehose results directly without filtering by `feePctOfGross < 80%`
 - ❌ Reducing fees / slippage to "make firehose green" (this is faking)
 
+
+---
+
+## Per-module trade persistence (v3 schema: `module_key`)
+
+Each closed paper trade now carries an optional `module_key` column that
+identifies the workspace tab it originated from. Dashboards can scope
+leaderboards, exports, and analytics per-tab without parsing
+`strategy_name` patterns.
+
+### Stable keys
+
+| Module | `module_key` |
+|---|---|
+| BTC Future Trading | `btc_future_trading` |
+| Future Trading (multi-symbol) | `btc_futures_scalper` |
+| BTC Option Buying | `btc_option_buying` |
+| BTC Option Selling | `btc_option_selling` |
+| Nifty 50 Option Buying | `nifty_option_buying` |
+| Nifty Option Selling | `nifty_option_selling` |
+| Nifty BEES | `nifty_bees` |
+
+These strings are the source of truth — never renumber them, they become
+DB column values. See [src/lib/paperTradesTypes.ts](../src/lib/paperTradesTypes.ts) →
+`PAPER_TRADE_MODULE_KEYS`.
+
+### Module → engine parity matrix (v3)
+
+| Feature | BTC Future Trading | Future Trading | BTC Option Buy | BTC Option Sell | Nifty Buy | Nifty Sell |
+|---|---|---|---|---|---|---|
+| DeskShell + DeskAppBar chrome | ✅ self-embedded | ✅ self-embedded | ✅ outer chrome | ✅ outer chrome | ✅ outer chrome | ✅ outer chrome |
+| Paper chip + balance tooltip | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Hydration-safe equity (`useDeskMounted`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Auth slot in app bar | ✅ | ✅ | ✅ (v3) | ✅ (v3) | ✅ (v3) | ✅ (v3) |
+| Pause / Reset / Clear actions | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Market strip (DeskMetricTile) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Strategy leaderboard (live) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cloud leaderboard (30d) | ✅ | ✅ | ⚠ deferred | ⚠ deferred | ⚠ deferred | ⚠ deferred |
+| Strategy Research panel | ✅ | ✅ | n/a | n/a | n/a | n/a |
+| Entry Debug panel | ✅ | ✅ | n/a (different engine) | n/a (different engine) | n/a | n/a |
+| `module_key` on persisted trades | ✅ (v3) | ✅ (v3) | ⚠ engine writes server-side | ⚠ engine writes server-side | ⚠ engine writes server-side | ⚠ engine writes server-side |
+| Premium tier (2× notional) | ✅ | ✅ | ⚠ deferred | ⚠ deferred | ⚠ deferred | ⚠ deferred |
+| Research / firehose mode | ✅ | ✅ | n/a | n/a | n/a | n/a |
+
+### What "⚠ deferred" means for options modules
+
+The two BTC options modules (`OptionsScalper`, `OptionsSellingScalper`) and the
+Nifty modules each have their own engine API path
+(`/api/options/*`, `/api/options-selling/*`, `/api/nifty/*`). They do NOT
+currently POST closed trades to `/api/paper-trades`. To wire them up we need
+either:
+
+1. **Client-side fetch + persist**: hook intercepts engine trade reads and
+   POSTs to `/api/paper-trades` with the appropriate `module_key`.
+2. **Engine-side write**: the Go engine writes directly to Supabase/Mongo
+   tagged with module key.
+
+Both paths preserve the same schema (column is in place). See
+follow-up PR for option module wiring.
+
+### Migration
+
+```bash
+# Run once on the Supabase project (idempotent, IF NOT EXISTS):
+psql -f client/supabase/migrations/007_paper_trades_module_key.sql
+```
+
+MongoDB requires no migration — the new index is created lazily on first
+read via `ensureIndexes()` in [mongoTradesClient.ts](../src/lib/mongoTradesClient.ts).
+
+### Querying per-module
+
+REST (server reads):
+```
+GET /api/paper-trades?module_key=btc_future_trading&limit=100
+```
+
+SQL (Supabase):
+```sql
+SELECT * FROM paper_trades
+WHERE account_key = $1
+  AND module_key = 'btc_future_trading'
+  AND closed_at >= now() - interval '30 days'
+ORDER BY closed_at DESC LIMIT 100;
+```
+
+MongoDB:
+```js
+db.paper_trades.find({ account_key: uid, module_key: "btc_future_trading" })
+  .sort({ closed_at: -1 }).limit(100);
+```

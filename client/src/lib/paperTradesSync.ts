@@ -1,6 +1,6 @@
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 import { btcFuturesTradeToClientPayload } from "@/lib/paperTradesMapper";
-import { PAPER_TRADES_MAX_LOCAL } from "@/lib/paperTradesTypes";
+import { PAPER_TRADES_MAX_LOCAL, type PaperTradeModuleKey } from "@/lib/paperTradesTypes";
 
 const MAX_SYNC_RETRIES = 3;
 let syncFailureLogged = false;
@@ -11,6 +11,8 @@ type QueuedPaperTrade = {
   accountKey: string;
   trade: BTCFuturesTrade;
   retries: number;
+  /** Module identifier — persisted with the row when re-POSTing from queue. */
+  moduleKey?: PaperTradeModuleKey;
 };
 
 export function tradeSyncQueueKey(accountKey: string): string {
@@ -42,18 +44,28 @@ function writeQueue(accountKey: string, items: QueuedPaperTrade[]): void {
   }
 }
 
-export function enqueuePaperTrade(accountKey: string, trade: BTCFuturesTrade): void {
+export function enqueuePaperTrade(
+  accountKey: string,
+  trade: BTCFuturesTrade,
+  moduleKey?: PaperTradeModuleKey,
+): void {
   const queue = readQueue(accountKey);
   const key = trade.clientTradeId ?? trade.id;
   if (queue.some((q) => (q.trade.clientTradeId ?? q.trade.id) === key)) return;
-  queue.push({ accountKey, trade, retries: 0 });
+  queue.push({ accountKey, trade, retries: 0, moduleKey });
   writeQueue(accountKey, queue);
 }
 
-async function postPaperTrade(accountKey: string, trade: BTCFuturesTrade): Promise<boolean> {
-  const body = {
+async function postPaperTrade(
+  accountKey: string,
+  trade: BTCFuturesTrade,
+  moduleKey?: PaperTradeModuleKey,
+): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    accountKey,
     trade: btcFuturesTradeToClientPayload(trade),
   };
+  if (moduleKey) body.moduleKey = moduleKey;
   const res = await fetch("/api/paper-trades", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -68,16 +80,23 @@ async function postPaperTrade(accountKey: string, trade: BTCFuturesTrade): Promi
 /**
  * Fire-and-forget: persist one closed trade when `accountKey` is set (logged-in user id).
  * Logged out → no-op (local paper only).
+ *
+ * `moduleKey` (optional) tags the row with the originating workspace tab so
+ * dashboards can filter per-module leaderboards / exports.
  */
-export function persistTradeToServer(trade: BTCFuturesTrade, accountKey: string | null): void {
+export function persistTradeToServer(
+  trade: BTCFuturesTrade,
+  accountKey: string | null,
+  moduleKey?: PaperTradeModuleKey,
+): void {
   if (!accountKey?.trim()) return;
   const key = accountKey.trim();
   void (async () => {
     try {
-      const ok = await postPaperTrade(key, trade);
-      if (!ok) enqueuePaperTrade(key, trade);
+      const ok = await postPaperTrade(key, trade, moduleKey);
+      if (!ok) enqueuePaperTrade(key, trade, moduleKey);
     } catch {
-      enqueuePaperTrade(key, trade);
+      enqueuePaperTrade(key, trade, moduleKey);
     }
   })();
 }
@@ -92,7 +111,7 @@ export async function flushTradeSyncQueue(accountKey: string | null): Promise<vo
   const remaining: QueuedPaperTrade[] = [];
   for (const item of queue) {
     try {
-      const ok = await postPaperTrade(item.accountKey, item.trade);
+      const ok = await postPaperTrade(item.accountKey, item.trade, item.moduleKey);
       if (ok) continue;
     } catch {
       // fall through to retry
@@ -115,7 +134,7 @@ export async function fetchPaperTradesFromServer(
   limit = 50,
 ): Promise<BTCFuturesTrade[]> {
   if (!accountKey?.trim()) return [];
-  const params = new URLSearchParams({ limit: String(limit) });
+  const params = new URLSearchParams({ limit: String(limit), account_key: accountKey });
   const res = await fetch(`/api/paper-trades?${params.toString()}`, {
     cache: "no-store",
     credentials: "include",

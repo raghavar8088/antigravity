@@ -80,6 +80,8 @@ async function ensureIndexes(entry: CachedClient): Promise<void> {
     col.createIndex({ client_trade_id: 1 }, { unique: true, name: "uniq_client_trade_id" }),
     col.createIndex({ account_key: 1, closed_at: -1 }, { name: "by_account_closed" }),
     col.createIndex({ account_key: 1, strategy_id: 1, closed_at: -1 }, { name: "by_account_strat_closed" }),
+    // Module-scoped reads (per-tab leaderboards, exports filtered by module).
+    col.createIndex({ account_key: 1, module_key: 1, closed_at: -1 }, { name: "by_account_module_closed" }),
   ]);
   entry.indexesEnsured = true;
 }
@@ -115,6 +117,8 @@ export type ListTradesOpts = {
   limit: number;
   /** ISO timestamp; rows with `closed_at < cursor` are returned (cursor pagination). */
   cursor?: string;
+  /** Optional module filter (e.g. show only btc_option_buying trades). */
+  moduleKey?: string;
 };
 
 /** Mirrors the Supabase GET path: per-account list ordered by closed_at desc. */
@@ -123,6 +127,9 @@ export async function listTradesMongo(opts: ListTradesOpts): Promise<PaperTradeD
   const filter: Record<string, unknown> = { account_key: opts.accountKey };
   if (opts.cursor) {
     filter.closed_at = { $lt: opts.cursor };
+  }
+  if (opts.moduleKey) {
+    filter.module_key = opts.moduleKey;
   }
   return col.find(filter).sort({ closed_at: -1 }).limit(opts.limit).toArray();
 }

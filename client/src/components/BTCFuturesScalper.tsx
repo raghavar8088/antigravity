@@ -185,6 +185,12 @@ type BTCFuturesScalperProps = {
   watchlist?: FuturesWatchItem[];
   storageNamespace?: string;
   baseBalance?: number;
+  /**
+   * Module identifier persisted with closed paper trades so the dashboard can
+   * filter per-tab leaderboards and exports. Pass `"btc_futures_scalper"` from
+   * the multi-symbol desk; `"btc_future_trading"` from the BTC FT wrapper.
+   */
+  moduleKey?: import("@/lib/paperTradesTypes").PaperTradeModuleKey;
 };
 
 const LEADERBOARD_WINDOW_DAYS = 30;
@@ -226,6 +232,7 @@ export function BTCFuturesScalper({
   watchlist = FUTURES_WATCHLIST,
   storageNamespace,
   baseBalance = 1000,
+  moduleKey = "btc_futures_scalper",
 }: BTCFuturesScalperProps = {}) {
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
@@ -285,6 +292,7 @@ export function BTCFuturesScalper({
     entryUtcSessionOverride,
     storageNamespace,
     supabaseUserId: authUser?.id ?? null,
+    moduleKey,
   });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
