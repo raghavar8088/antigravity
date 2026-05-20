@@ -4,17 +4,12 @@ import {
   leaderboardRowsFromDb,
   splitLeaderboardTopBottom,
 } from "@/lib/paperTradesAnalytics";
-import { assertCloudAccountMatchesSession } from "@/lib/paperTradesAuth";
-import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
 import { paperTradeLeaderboardQuerySchema } from "@/lib/paperTradesTypes";
-import { createServiceSupabase } from "@/lib/supabase/server";
+import { isMongoConfigured, getTradesCollection } from "@/lib/mongoTradesClient";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const auth = await getAuthenticatedPaperApiUser();
-  if (!auth.ok) return auth.response;
-
   const url = new URL(req.url);
   const parsed = paperTradeLeaderboardQuerySchema.safeParse({
     account_key: url.searchParams.get("account_key") ?? undefined,
@@ -29,48 +24,46 @@ export async function GET(req: Request) {
     );
   }
 
-  const match = assertCloudAccountMatchesSession(auth.ctx.userId, parsed.data.account_key);
-  if (!match.ok) {
-    return NextResponse.json({ ok: false, error: match.error }, { status: match.status });
-  }
-
-  const supabase = createServiceSupabase();
-  if (!supabase) {
-    return NextResponse.json({ ok: false, error: "Supabase client unavailable" }, { status: 503 });
+  const account_key = parsed.data.account_key as string;
+  if (!account_key?.trim()) {
+    return NextResponse.json({ ok: false, error: "account_key is required" }, { status: 400 });
   }
 
   const { window_days, limit } = parsed.data;
-  const account_key = match.userId;
   const cutoffMs = Date.now() - window_days * 24 * 60 * 60 * 1000;
   const cutoff = new Date(cutoffMs).toISOString();
 
-  const { data, error } = await supabase
-    .from("paper_trades")
-    .select("strategy_id, strategy_name, net_pnl, closed_at")
-    .eq("account_key", account_key)
-    .gte("closed_at", cutoff);
-
-  if (error) {
-    console.error("[paper-trades/leaderboard]", error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!isMongoConfigured()) {
+    return NextResponse.json({ ok: false, error: "No MongoDB configured" }, { status: 503 });
   }
 
-  const rows = leaderboardRowsFromDb(
-    (data ?? []) as {
-      strategy_id: number;
-      strategy_name: string;
-      net_pnl: number;
-      closed_at: string;
-    }[],
-  );
-  const aggregated = aggregateStrategyLeaderboard(rows);
-  const { top, bottom } = splitLeaderboardTopBottom(aggregated, limit);
+  try {
+    const col = await getTradesCollection();
+    const docs = await col
+      .find({ account_key, closed_at: { $gte: cutoff } })
+      .project({ strategy_id: 1, strategy_name: 1, net_pnl: 1, closed_at: 1, _id: 0 })
+      .toArray();
 
-  return NextResponse.json({
-    ok: true,
-    accountKey: account_key,
-    windowDays: window_days,
-    top,
-    bottom,
-  });
+    const rows = leaderboardRowsFromDb(
+      docs as {
+        strategy_id: number;
+        strategy_name: string;
+        net_pnl: number;
+        closed_at: string;
+      }[],
+    );
+    const aggregated = aggregateStrategyLeaderboard(rows);
+    const { top, bottom } = splitLeaderboardTopBottom(aggregated, limit);
+
+    return NextResponse.json({
+      ok: true,
+      accountKey: account_key,
+      windowDays: window_days,
+      top,
+      bottom,
+    });
+  } catch (err) {
+    console.error("[paper-trades/leaderboard]", err);
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Mongo read failed" }, { status: 500 });
+  }
 }

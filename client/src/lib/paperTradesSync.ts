@@ -78,8 +78,8 @@ async function postPaperTrade(
 }
 
 /**
- * Fire-and-forget: persist one closed trade when `accountKey` is set (logged-in user id).
- * Logged out → no-op (local paper only).
+ * Fire-and-forget: persist one closed trade when `accountKey` is set.
+ * Local paper-only mode remains if no key is available.
  *
  * `moduleKey` (optional) tags the row with the originating workspace tab so
  * dashboards can filter per-module leaderboards / exports.
@@ -122,7 +122,7 @@ export async function flushTradeSyncQueue(accountKey: string | null): Promise<vo
     } else if (!syncFailureLogged) {
       syncFailureLogged = true;
       console.warn(
-        "[paper-trades] Dropped trade(s) from sync queue after max retries. Sign in and check Supabase env.",
+        "[paper-trades] Dropped trade(s) from sync queue after max retries. Check MongoDB env and server connectivity.",
       );
     }
   }

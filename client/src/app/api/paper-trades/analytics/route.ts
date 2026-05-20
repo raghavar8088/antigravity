@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
-import { assertCloudAccountMatchesSession } from "@/lib/paperTradesAuth";
 import { paperTradeAnalyticsQuerySchema } from "@/lib/paperTradesTypes";
 import { isMongoConfigured, getTradesCollection } from "@/lib/mongoTradesClient";
-import { isAnonAccountKey } from "@/lib/anonAccountKey";
 
 export const dynamic = "force-dynamic";
-
-const ANON_ENABLED = process.env.ALLOW_ANON_PAPER_TRADES === "1";
 
 /**
  * GET /api/paper-trades/analytics
@@ -23,7 +18,7 @@ const ANON_ENABLED = process.env.ALLOW_ANON_PAPER_TRADES === "1";
  * Only strategies with tradeCount >= min_trades (default 100) are returned,
  * enforcing the statistical significance threshold from the 2026 blueprint.
  *
- * Falls back to an in-process JS aggregation when MongoDB isn't configured.
+ * Requires MongoDB and returns analytics directly from the Mongo trade store.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -43,17 +38,9 @@ export async function GET(req: Request) {
     );
   }
 
-  let accountKey: string;
-  if (ANON_ENABLED && isAnonAccountKey(parsed.data.account_key)) {
-    accountKey = parsed.data.account_key!;
-  } else {
-    const auth = await getAuthenticatedPaperApiUser();
-    if (!auth.ok) return auth.response;
-    const match = assertCloudAccountMatchesSession(auth.ctx.userId, parsed.data.account_key);
-    if (!match.ok) {
-      return NextResponse.json({ ok: false, error: match.error }, { status: match.status });
-    }
-    accountKey = match.userId;
+  const accountKey = parsed.data.account_key as string;
+  if (!accountKey?.trim()) {
+    return NextResponse.json({ ok: false, error: "account_key is required" }, { status: 400 });
   }
 
   const { window_days, module_key, template_family, min_trades } = parsed.data;

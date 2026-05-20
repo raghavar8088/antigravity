@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { buildPaperTradesCsv, type PaperTradeCsvExportRow } from "@/lib/paperTradesExport";
-import { assertCloudAccountMatchesSession } from "@/lib/paperTradesAuth";
-import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
 import { paperTradeExportQuerySchema } from "@/lib/paperTradesTypes";
-import { createServiceSupabase } from "@/lib/supabase/server";
+import { isMongoConfigured, getTradesCollection } from "@/lib/mongoTradesClient";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const auth = await getAuthenticatedPaperApiUser();
-  if (!auth.ok) return auth.response;
-
   const url = new URL(req.url);
   const parsed = paperTradeExportQuerySchema.safeParse({
     account_key: url.searchParams.get("account_key") ?? undefined,
@@ -24,45 +19,53 @@ export async function GET(req: Request) {
     );
   }
 
-  const match = assertCloudAccountMatchesSession(auth.ctx.userId, parsed.data.account_key);
-  if (!match.ok) {
-    return NextResponse.json({ ok: false, error: match.error }, { status: match.status });
-  }
-
-  const supabase = createServiceSupabase();
-  if (!supabase) {
-    return NextResponse.json({ ok: false, error: "Supabase client unavailable" }, { status: 503 });
+  const account_key = parsed.data.account_key as string;
+  if (!account_key?.trim()) {
+    return NextResponse.json({ ok: false, error: "account_key is required" }, { status: 400 });
   }
 
   const { window_days } = parsed.data;
-  const account_key = match.userId;
   const cutoffMs = Date.now() - window_days * 24 * 60 * 60 * 1000;
   const cutoff = new Date(cutoffMs).toISOString();
 
-  const { data, error } = await supabase
-    .from("paper_trades")
-    .select(
-      "closed_at, symbol, strategy_name, side, entry_price, exit_price, net_pnl, fees, funding_costs, exit_reason",
-    )
-    .eq("account_key", account_key)
-    .gte("closed_at", cutoff)
-    .order("closed_at", { ascending: false });
-
-  if (error) {
-    console.error("[paper-trades/export]", error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (!isMongoConfigured()) {
+    return NextResponse.json({ ok: false, error: "No MongoDB configured" }, { status: 503 });
   }
 
-  const rows = (data ?? []) as PaperTradeCsvExportRow[];
-  const csv = buildPaperTradesCsv(rows);
-  const filename = `paper-trades-${window_days}d.csv`;
+  try {
+    const col = await getTradesCollection();
+    const docs = await col
+      .find({ account_key, closed_at: { $gte: cutoff } })
+      .project({
+        closed_at: 1,
+        symbol: 1,
+        strategy_name: 1,
+        side: 1,
+        entry_price: 1,
+        exit_price: 1,
+        net_pnl: 1,
+        fees: 1,
+        funding_costs: 1,
+        exit_reason: 1,
+        _id: 0,
+      })
+      .sort({ closed_at: -1 })
+      .toArray();
 
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+    const rows = docs as PaperTradeCsvExportRow[];
+    const csv = buildPaperTradesCsv(rows);
+    const filename = `paper-trades-${window_days}d.csv`;
+
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("[paper-trades/export]", err);
+    return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Mongo read failed" }, { status: 500 });
+  }
 }
