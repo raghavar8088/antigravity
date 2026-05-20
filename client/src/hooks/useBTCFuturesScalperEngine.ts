@@ -1957,7 +1957,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           : null;
         entryDebugLiveRef.current = pollDebug;
 
-        const sessionTradeCount = tradesRef.current.filter((t) => t.entryTime >= researchMountedAtRef.current).length;
+        const sessionTradeCount = tradesRef.current.filter(
+          (t) => new Date(t.openedAt).getTime() >= researchMountedAtRef.current,
+        ).length;
         const bootstrapProbeDue =
           paperBootstrapProbe &&
           sessionTradeCount === 0 &&
