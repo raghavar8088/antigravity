@@ -6,21 +6,9 @@ import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 
 export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
-  const { configured, user, loading, message, signInWithEmail, signOut } = usePaperDeskAuth();
+  const { user, loading, message, signInWithEmail, signOut } = usePaperDeskAuth();
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
-
-  if (!configured) {
-    return (
-      <DeskBanner variant="warning" title="Cloud sync disabled">
-        Sign in requires Supabase. Add keys per{" "}
-        <a href="https://github.com/raghavar8088/antigravity/blob/main/client/docs/DEPLOY.md" style={{ textDecoration: "underline" }}>
-          DEPLOY.md
-        </a>{" "}
-        (magic link + RLS), then reload.
-      </DeskBanner>
-    );
-  }
 
   if (loading) {
     return <p className="desk-label-md">Checking sign-in…</p>;
@@ -71,7 +59,7 @@ export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
           }}
         />
         <DeskButton type="submit" disabled={pending} style={{ minHeight: 44 }}>
-          {pending ? "Sending…" : "Sign in"}
+          {pending ? "Signing in…" : "Sign in"}
         </DeskButton>
         <a href="/sign-in" className="desk-label-md" style={{ color: "var(--desk-primary)" }}>
           Sign-in page

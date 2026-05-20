@@ -7,7 +7,7 @@ export default function SignInPage() {
       <div>
         <h1 className="text-lg font-bold text-zinc-900">Paper desk sign-in</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Magic-link email — same trade history on phone and desktop.
+          Enter your email — same trade history on phone and desktop.
         </p>
       </div>
       <PaperDeskAuthBar />

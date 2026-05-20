@@ -86,6 +86,12 @@ async function ensureIndexes(entry: CachedClient): Promise<void> {
   entry.indexesEnsured = true;
 }
 
+/** Shared DB handle — lets other modules (e.g. mongoAuthClient) reuse the same connection pool. */
+export async function getDb(): Promise<Db> {
+  const entry = await connect();
+  return entry.db;
+}
+
 export async function getTradesCollection(): Promise<Collection<PaperTradeDbRow>> {
   const entry = await connect();
   await ensureIndexes(entry);
