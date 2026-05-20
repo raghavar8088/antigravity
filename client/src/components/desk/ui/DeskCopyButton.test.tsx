@@ -59,19 +59,8 @@ describe("DeskCopyButton — clipboard write", () => {
 });
 
 describe("moduleDeepLinkUrl — module → URL mapping", () => {
-  it("returns canonical paths for modules with dedicated routes", async () => {
+  it("returns the BTC Future Trading canonical path", async () => {
     const { moduleDeepLinkUrl } = await import("../WorkspaceNavPanel");
-    // jsdom origin defaults to http://localhost:3000 typically; check suffix.
-    expect(moduleDeepLinkUrl("btcFutureTrading").endsWith("/btc-future-trading")).toBe(true);
-    expect(moduleDeepLinkUrl("nifty").endsWith("/nifty-options")).toBe(true);
-    expect(moduleDeepLinkUrl("niftySelling").endsWith("/nifty-selling")).toBe(true);
-    expect(moduleDeepLinkUrl("niftyBees").endsWith("/nifty-bees")).toBe(true);
-  });
-
-  it("returns workspace root with ?module= for tabs without dedicated routes", async () => {
-    const { moduleDeepLinkUrl } = await import("../WorkspaceNavPanel");
-    expect(moduleDeepLinkUrl("options").endsWith("/?module=options")).toBe(true);
-    expect(moduleDeepLinkUrl("options-selling").endsWith("/?module=options-selling")).toBe(true);
-    expect(moduleDeepLinkUrl("btcFuturesScalper").endsWith("/?module=btcFuturesScalper")).toBe(true);
+    expect(moduleDeepLinkUrl().endsWith("/btc-future-trading")).toBe(true);
   });
 });
