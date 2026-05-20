@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { StrategyLeaderboardRow } from "@/lib/paperTradesAnalytics";
 import {
   useBTCFuturesScalperEngine,
@@ -11,7 +11,6 @@ import {
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
-import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
@@ -40,121 +39,6 @@ import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
 
-// ========== FORMATTERS ==========
-function fmtUSD(value: number, opts: { signed?: boolean; decimals?: number } = {}) {
-  const { signed = false, decimals = 2 } = opts;
-  const abs = Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  if (signed) return `${value >= 0 ? "+" : "-"}$${abs}`;
-  return `$${abs}`;
-}
-
-function fmtPct(value: number, signed = false, decimals = 2) {
-  const prefix = signed ? (value >= 0 ? "+" : "-") : "";
-  return `${prefix}${Math.abs(value).toFixed(decimals)}%`;
-}
-
-function fmtContracts(n: number) {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
-function tradePriceMovePct(t: BTCFuturesTrade): number {
-  return typeof t.priceMovePct === "number" && Number.isFinite(t.priceMovePct)
-    ? t.priceMovePct
-    : paperPriceMovePctOnNotional(t.entryPrice, t.exitPrice, t.side);
-}
-
-function formatShortTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-function formatShortDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-// ========== DESIGN PRIMITIVES ==========
-type BadgeTone = "neutral" | "positive" | "negative" | "info" | "warning";
-
-function BadgePill({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
-  const map: Record<BadgeTone, string> = {
-    neutral:  "border-zinc-200 bg-white text-zinc-600",
-    positive: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    negative: "border-rose-200 bg-rose-50 text-rose-700",
-    info:     "border-blue-200 bg-blue-50 text-blue-700",
-    warning:  "border-amber-200 bg-amber-50 text-amber-700",
-  };
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.1em] ${map[tone]}`}>
-      {label}
-    </span>
-  );
-}
-
-function SideBadge({ side }: { side: "LONG" | "SHORT" }) {
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider ${
-      side === "LONG"
-        ? "bg-emerald-100 text-emerald-700"
-        : "bg-rose-100 text-rose-700"
-    }`}>{side}</span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    READY:       "bg-emerald-100 text-emerald-700",
-    IN_POSITION: "bg-blue-100 text-blue-700",
-    COOLING:     "bg-amber-100 text-amber-700",
-    AVAILABLE:   "bg-zinc-100 text-zinc-600",
-  };
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider ${map[status] ?? "bg-zinc-100 text-zinc-500"}`}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
-
-function CompactMetric({ label, value, detail, accent = "" }: {
-  label: string; value: string; detail?: string; accent?: string;
-}) {
-  return (
-    <div className="metric-card flex min-h-[104px] flex-col justify-between gap-3">
-      <div>
-        <div className="metric-label">{label}</div>
-        <div className={`metric-value ${accent}`}>{value}</div>
-      </div>
-      <div className="text-xs" style={{ color: "var(--text-secondary)", minHeight: 18 }}>{detail ?? ""}</div>
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return (
-    <div className="summary-card flex min-h-[112px] flex-col justify-between gap-3">
-      <div className="summary-label">{label}</div>
-      <div className={`summary-value ${accent}`}>{value}</div>
-    </div>
-  );
-}
-
-// ========== PREMIUM BAR (Green/Red bars like options selling) ==========
-function PremiumBar({ progress, isPositive }: { progress: number; isPositive: boolean }) {
-  const width = Math.min(100, Math.max(5, Math.abs(progress) * 2));
-  return (
-    <div className="h-1.5 w-20 rounded-full bg-zinc-200 overflow-hidden">
-      <div
-        className={`h-full rounded-full ${isPositive ? "bg-emerald-500" : "bg-rose-500"}`}
-        style={{ width: `${width}%` }}
-      />
-    </div>
-  );
-}
 
 type BTCFuturesScalperProps = {
   title?: string;
@@ -193,8 +77,6 @@ type BTCFuturesScalperProps = {
   moduleKey?: import("@/lib/paperTradesTypes").PaperTradeModuleKey;
 };
 
-const LEADERBOARD_WINDOW_DAYS = 30;
-const LEADERBOARD_TABLE_LIMIT = 10;
 const PAPER_EXPORT_WINDOW_DAYS = 30;
 
 type LeaderboardState = {
@@ -271,7 +153,6 @@ export function BTCFuturesScalper({
     resetPaperAccount,
     clearTradeHistory,
     setDisabledStrategies,
-    addDisabledStrategyIds,
     strategyStatuses,
     dataHealth,
     entryDebug,
@@ -299,9 +180,11 @@ export function BTCFuturesScalper({
   const [showAllTrades, setShowAllTrades] = useState(false);
   const [watchSearch, setWatchSearch] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
+  const exportInFlightRef = useRef(false);
 
   const downloadPaperTradesCsv = useCallback(async () => {
-    if (!cloudAccountKey) return;
+    if (!cloudAccountKey || exportInFlightRef.current) return;
+    exportInFlightRef.current = true;
     setExportingCsv(true);
     try {
       const params = new URLSearchParams({ window_days: String(PAPER_EXPORT_WINDOW_DAYS) });
@@ -333,6 +216,7 @@ export function BTCFuturesScalper({
       window.alert(e instanceof Error ? e.message : "Export failed");
     } finally {
       setExportingCsv(false);
+      exportInFlightRef.current = false;
     }
   }, [cloudAccountKey]);
 
@@ -340,9 +224,11 @@ export function BTCFuturesScalper({
   const pnlPositive = sessionPnL >= 0;
   const totalReturn = ((equity - baseBalance) / baseBalance) * 100;
 
-  const longCount = positions.filter(p => p.side === "LONG").length;
-  const shortCount = positions.filter(p => p.side === "SHORT").length;
-  const totalUnrealized = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
+  const { longCount, shortCount, totalUnrealized } = useMemo(() => ({
+    longCount: positions.filter((p) => p.side === "LONG").length,
+    shortCount: positions.filter((p) => p.side === "SHORT").length,
+    totalUnrealized: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
+  }), [positions]);
 
   // Merge active roster statuses with POOL-only entries so the user can see every registered
   // strategy in the leaderboard — including research pool IDs (300–399) that aren't in the
@@ -376,17 +262,27 @@ export function BTCFuturesScalper({
     return [...strategyStatuses, ...poolOnly];
   }, [strategyStatuses, researchPoolIds]);
 
-  const sortedStrategies = [...augmentedStrategyStatuses].sort((a, b) => {
-    // Active roster first (POOL last), then by score
-    const aPool = a.status === "POOL" ? 1 : 0;
-    const bPool = b.status === "POOL" ? 1 : 0;
-    if (aPool !== bPool) return aPool - bPool;
-    return b.score - a.score;
-  });
-  const visibleStrategies = showAllStrategies ? sortedStrategies : sortedStrategies.slice(0, 12);
+  const sortedStrategies = useMemo(
+    () =>
+      [...augmentedStrategyStatuses].sort((a, b) => {
+        // Active roster entries first (POOL last), then by score descending
+        const aPool = a.status === "POOL" ? 1 : 0;
+        const bPool = b.status === "POOL" ? 1 : 0;
+        if (aPool !== bPool) return aPool - bPool;
+        return b.score - a.score;
+      }),
+    [augmentedStrategyStatuses],
+  );
+  const visibleStrategies = useMemo(
+    () => (showAllStrategies ? sortedStrategies : sortedStrategies.slice(0, 12)),
+    [showAllStrategies, sortedStrategies],
+  );
 
-  const sortedTrades = [...trades].reverse();
-  const visibleTrades = showAllTrades ? sortedTrades : sortedTrades.slice(0, 10);
+  const sortedTrades = useMemo(() => [...trades].reverse(), [trades]);
+  const visibleTrades = useMemo(
+    () => (showAllTrades ? sortedTrades : sortedTrades.slice(0, 10)),
+    [showAllTrades, sortedTrades],
+  );
   const visibleWatchlist = useMemo(() => {
     const q = watchSearch.trim().toLowerCase();
     if (!q) return watchlist;
@@ -397,16 +293,22 @@ export function BTCFuturesScalper({
     );
   }, [watchSearch, watchlist]);
 
-  // Daily ledger
-  const tradesByDay = trades.reduce((acc, t) => {
-    const day = t.closedAt.split("T")[0];
-    if (!acc[day]) acc[day] = { trades: 0, wins: 0, losses: 0, pnl: 0 };
-    acc[day].trades++;
-    if (t.netPnl > 0) acc[day].wins++;
-    else acc[day].losses++;
-    acc[day].pnl += t.netPnl;
-    return acc;
-  }, {} as Record<string, { trades: number; wins: number; losses: number; pnl: number }>);
+  const tradesByDay = useMemo(
+    () =>
+      trades.reduce<Record<string, { trades: number; wins: number; losses: number; pnl: number }>>(
+        (acc, t) => {
+          const day = t.closedAt.split("T")[0];
+          if (!acc[day]) acc[day] = { trades: 0, wins: 0, losses: 0, pnl: 0 };
+          acc[day].trades++;
+          if (t.netPnl > 0) acc[day].wins++;
+          else acc[day].losses++;
+          acc[day].pnl += t.netPnl;
+          return acc;
+        },
+        {},
+      ),
+    [trades],
+  );
 
 
   const watchColumns = useMemo((): DeskColumn<FuturesWatchItem>[] => [

@@ -25,7 +25,15 @@ import {
   DeskSwitch,
 } from "@/components/desk/ui";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
-import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
+import {
+  formatDeskContracts,
+  formatDeskPct,
+  formatDeskUsd,
+  formatFullDate,
+  formatShortDate,
+  formatShortTime,
+  pnlToneClass,
+} from "@/lib/deskFormat";
 import {
   ExitReasonChip,
   exitReasonChipTone,
@@ -39,22 +47,6 @@ const LEADERBOARD_TABLE_LIMIT = 10;
 const PAPER_EXPORT_WINDOW_DAYS = 30;
 
 type Stats = BTCFuturesEngineStats;
-
-function formatShortTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-function formatShortDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-}
-
-function fmtContracts(n: number) {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
 
 function tradePriceMovePct(t: BTCFuturesTrade): number {
   return typeof t.priceMovePct === "number" && Number.isFinite(t.priceMovePct)
@@ -321,7 +313,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
       ),
     },
     { id: "side", header: "Side", cell: (p) => <SideChip side={p.side} /> },
-    { id: "ct", header: "Contracts", align: "right", cell: (p) => fmtContracts(p.contracts) },
+    { id: "ct", header: "Contracts", align: "right", cell: (p) => formatDeskContracts(p.contracts) },
     {
       id: "entry",
       header: "Entry",
@@ -659,7 +651,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
           <DeskDataTable
             minWidth={520}
             columns={[
-              { id: "d", header: "Date", cell: ([day]) => formatDate(day) },
+              { id: "d", header: "Date", cell: ([day]) => formatFullDate(day) },
               { id: "t", header: "Trades", align: "right", cell: ([, d]) => d.trades },
               { id: "wl", header: "W / L", align: "right", cell: ([, d]) => `${d.wins}W / ${d.losses}L` },
               {

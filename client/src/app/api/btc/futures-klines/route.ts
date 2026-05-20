@@ -18,14 +18,20 @@ const JSON_HEADERS = {
   "User-Agent": "RAIG-Trading/1.0",
 };
 
+const FETCH_TIMEOUT_MS = 5_000;
+
 async function fetchWithRetry(url: string, retries = 2, delayMs = 300): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, { headers: JSON_HEADERS, cache: "no-store" });
+    const res = await fetch(url, {
+      headers: JSON_HEADERS,
+      cache: "no-store",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (res.ok || attempt === retries) return res;
     await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
   }
-  // unreachable but satisfies TypeScript
-  return fetch(url, { headers: JSON_HEADERS, cache: "no-store" });
+  // unreachable — satisfies TypeScript exhaustiveness check
+  return fetch(url, { headers: JSON_HEADERS, cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
 }
 
 function n(value: unknown): number {

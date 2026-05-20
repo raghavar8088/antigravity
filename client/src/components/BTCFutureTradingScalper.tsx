@@ -69,10 +69,14 @@ export function BTCFutureTradingScalper({
 
   useEffect(() => {
     if (!WINNERS_ONLY_MODE) return;
+    let cancelled = false;
     void loadPromotedWinnerIds({
       storageNamespace: STORAGE_NS,
       cloudAccountKey: auth.user?.id ?? null,
-    }).then((ids) => setWinners(ids));
+    }).then((ids) => {
+      if (!cancelled) setWinners(ids);
+    });
+    return () => { cancelled = true; };
   }, [auth.user?.id]);
 
   const rosterInfo = useMemo(() => {
@@ -101,7 +105,6 @@ export function BTCFutureTradingScalper({
     }
 
     const pool = resolveResearchPool();
-    poolRef.current = pool;
     const batch = resolveResearchActiveIds({ pool, retiredIds, batchSize: 30, rotateEveryHours: 24 });
     return {
       ids: batch.activeIds,
@@ -112,6 +115,10 @@ export function BTCFutureTradingScalper({
       poolSize: batch.poolSize,
     };
   }, [retiredIds, winners]);
+
+  useEffect(() => {
+    if (EFFECTIVE_RESEARCH_MODE) poolRef.current = resolveResearchPool();
+  }, [retiredIds]);
 
   useEffect(() => {
     if (EFFECTIVE_RESEARCH_MODE) saveRetiredToStorage(STORAGE_NS, retiredIds);

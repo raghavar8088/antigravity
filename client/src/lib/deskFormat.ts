@@ -1,4 +1,8 @@
-/** Fixed en-US formatting for desk UI (consistent SSR + client). */
+/**
+ * Fixed en-US formatting for desk UI.
+ * All functions use a hard-coded locale so SSR and client output always match
+ * (avoids hydration mismatches from system locale differences).
+ */
 
 const LOCALE = "en-US";
 
@@ -49,4 +53,25 @@ export function pnlToneClass(value: number): "desk-pnl-positive" | "desk-pnl-neg
   if (value > 0) return "desk-pnl-positive";
   if (value < 0) return "desk-pnl-negative";
   return "desk-pnl-neutral";
+}
+
+/** Integer count (contracts, trades, etc.) with thousand-separator. */
+export function formatDeskContracts(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString(LOCALE, { maximumFractionDigits: 0 });
+}
+
+/** HH:MM time extracted from an ISO-8601 string. */
+export function formatShortTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+/** "Mon D" short date from an ISO-8601 string. */
+export function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
+}
+
+/** "Mon D, YYYY" full date from an ISO-8601 string. */
+export function formatFullDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(LOCALE, { year: "numeric", month: "short", day: "numeric" });
 }
