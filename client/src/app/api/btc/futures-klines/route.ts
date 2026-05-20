@@ -102,7 +102,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const endSec = Math.floor(Date.now() / 1000);
-  const startSec = endSec - 130 * 60;
+  const startSec = endSec - 400 * 60;
 
   try {
     // Fetch candles, ticker (for mark price), and funding rate

@@ -393,8 +393,9 @@ export function researchCooldownMul(): number {
 }
 
 /**
- * Min-move safety K multiplier for research. Default 1.0 (was 0.85) — keep the
- * full fee hurdle so trades that barely beat fees don't open and then fee-bleed.
+ * Min-move safety K multiplier for research. Default 0.7 — keeps a meaningful
+ * fee hurdle while allowing entries during moderate-volatility periods.
+ * (Previous default 1.0 blocked entries when 1m ATR < ~$90 at $95k BTC.)
  * Only active when RESEARCH_MODE=1.
  */
 export function researchMinMoveKMul(): number {
@@ -404,7 +405,7 @@ export function researchMinMoveKMul(): number {
     const n = Number(env);
     if (Number.isFinite(n) && n > 0) return Math.min(2, Math.max(0.5, n));
   }
-  return 1.0;
+  return 0.7;
 }
 
 export function researchEnsureTradesEnabled(): boolean {
