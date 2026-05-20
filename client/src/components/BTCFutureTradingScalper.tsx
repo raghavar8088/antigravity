@@ -142,7 +142,7 @@ export function BTCFutureTradingScalper({
     ? 1
     : EFFECTIVE_RESEARCH_MODE
     ? researchMinMoveKMul()
-    : btcFtMinMoveKMulFromEnv(0.5);
+    : btcFtMinMoveKMulFromEnv(0.45);
   const paperEnsureTrades =
     !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv();
   const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;
@@ -221,7 +221,7 @@ export function BTCFutureTradingScalper({
 
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
-          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 8m
+          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 5m
           with zero trades. Check Entry debug below for dominantBlocker (DATA / CONFIRM / MIN_MOVE). Build{" "}
           {BTC_FT_DESK_BUILD} is the Vercel client — AWS engine is separate.
         </DeskBanner>

@@ -211,7 +211,7 @@ const LIQUIDATION_RISK_DISPLAY_PCT = 1.0;
 // Paper desk default: strict HTF rules used to reject almost all MTF entries when 5m/15m was NEUTRAL.
 const SIGNAL_THRESHOLD = 28;
 const MAX_BARS = 120;
-const MIN_BARS = 18;
+const MIN_BARS = 15;
 /** Slightly slower poll: many symbols × REST calls per tick */
 const POLL_MS = 4_000;
 const SYMBOL_FETCH_CHUNK = 5;
@@ -513,11 +513,11 @@ export function paperEnsureThresholdDrop(
   mountedAtMs: number,
   stratTradeCount: number,
 ): number {
-  if (!enabled || stratTradeCount >= 2) return 0;
+  if (!enabled || stratTradeCount >= 1) return 0;
   const mins = (nowMs - mountedAtMs) / 60_000;
-  if (mins >= 15) return 10;
-  if (mins >= 5) return 8;
-  if (mins >= 2) return 4;
+  if (mins >= 10) return 12;
+  if (mins >= 5) return 10;
+  if (mins >= 2) return 6;
   return 0;
 }
 
@@ -1957,10 +1957,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           : null;
         entryDebugLiveRef.current = pollDebug;
 
+        const sessionTradeCount = tradesRef.current.filter((t) => t.entryTime >= researchMountedAtRef.current).length;
         const bootstrapProbeDue =
           paperBootstrapProbe &&
-          tradesRef.current.length === 0 &&
-          now - researchMountedAtRef.current >= 8 * 60 * 1000;
+          sessionTradeCount === 0 &&
+          now - researchMountedAtRef.current >= 5 * 60 * 1000;
         const shouldRunProbe =
           (forceProbeOpen || bootstrapProbeDue) &&
           hasMarketData &&
