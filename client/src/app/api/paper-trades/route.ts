@@ -26,7 +26,10 @@ export async function POST(req: Request) {
   }
 
   // No authentication: accept the provided accountKey verbatim.
-  const resolvedAccountKey: string = parsed.data.accountKey;
+  const resolvedAccountKey = parsed.data.accountKey;
+  if (!resolvedAccountKey) {
+    return NextResponse.json({ ok: false, error: "accountKey is required" }, { status: 400 });
+  }
 
   const row = clientPayloadToInsertRow(
     resolvedAccountKey,
