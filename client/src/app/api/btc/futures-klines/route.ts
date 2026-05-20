@@ -18,20 +18,26 @@ const JSON_HEADERS = {
   "User-Agent": "RAIG-Trading/1.0",
 };
 
-const FETCH_TIMEOUT_MS = 5_000;
+/** Per-attempt timeout. Generous enough for Vercel cold start + Delta Exchange India latency. */
+const FETCH_TIMEOUT_MS = 9_000;
 
-async function fetchWithRetry(url: string, retries = 2, delayMs = 300): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 2, delayMs = 400): Promise<Response> {
+  let lastErr: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await fetch(url, {
-      headers: JSON_HEADERS,
-      cache: "no-store",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (res.ok || attempt === retries) return res;
+    try {
+      const res = await fetch(url, {
+        headers: JSON_HEADERS,
+        cache: "no-store",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (res.ok || attempt === retries) return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries) break;
+    }
     await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
   }
-  // unreachable — satisfies TypeScript exhaustiveness check
-  return fetch(url, { headers: JSON_HEADERS, cache: "no-store", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  throw lastErr ?? new Error("fetchWithRetry: all attempts exhausted");
 }
 
 function n(value: unknown): number {

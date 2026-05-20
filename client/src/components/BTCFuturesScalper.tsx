@@ -169,6 +169,7 @@ export function BTCFuturesScalper({
     disableAutoKill,
     researchEnsureTrades,
     paperEnsureTrades,
+    paperBootstrapProbe,
     entryDebugEnabled,
     entryUtcSessionOverride,
     storageNamespace,
