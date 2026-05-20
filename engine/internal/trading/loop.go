@@ -24,14 +24,14 @@ const (
 	futuresPositionCapitalPct = 0.01 // 1% of paper capital per futures entry (BTC Equity)
 	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
-	minExecutableConfidence     = 0.78 // Push further toward higher-quality entries
+	minExecutableConfidence     = 0.82 // Require higher-quality signals in live execution
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio        = 2.20 // Slightly stronger edge requirement
-	minSignalTakeProfitPct      = 0.35 // Wider TP — captures real BTC moves, not just noise
-	maxSignalStopLossPct        = 0.16 // Trim losers faster on futures flow
-	defaultSignalStopLossPct    = 0.12 // Tighter default SL — noise filter
+	minRewardToRiskRatio        = 2.40 // Stronger edge requirement for scalping signals
+	minSignalTakeProfitPct      = 0.50 // Wider TP — avoid noise-driven exits
+	maxSignalStopLossPct        = 0.20 // Allow slightly wider SL for more stable execution
+	defaultSignalStopLossPct    = 0.18 // Safer default SL — reduce micro noise losses
 
-	minExecutionWeightToTrade = 0.34 // Further bias toward strategies with demonstrated edge
+	minExecutionWeightToTrade = 0.50 // Require stronger strategy quality before execution
 	marketHistoryMaxSamples   = 320
 
 	marketRegimeUnknown  = "UNKNOWN"
@@ -1203,30 +1203,33 @@ func (o *Orchestrator) GetLastPrice() float64 {
 func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool) {
 	adjusted := sig
 
-	if adjusted.Confidence <= 0 {
-		return adjusted, fmt.Sprintf("confidence %.2f is invalid (must be > 0)", adjusted.Confidence), false
+	if adjusted.Confidence < 0 {
+		return adjusted, fmt.Sprintf("confidence %.2f is invalid (must be >= 0)", adjusted.Confidence), false
 	}
-	if adjusted.Confidence < 0.78 {
-		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, 0.78), false
+	if adjusted.Confidence == 0 {
+		adjusted.Confidence = 1.0
+	}
+	if adjusted.Confidence < minExecutableConfidence {
+		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, minExecutableConfidence), false
 	}
 
 	if adjusted.StopLossPct <= 0 {
 		adjusted.StopLossPct = 0.10
 	}
-	if adjusted.StopLossPct > 0.15 {
-		adjusted.StopLossPct = 0.15
+	if adjusted.StopLossPct > maxSignalStopLossPct {
+		adjusted.StopLossPct = maxSignalStopLossPct
 	}
 
 	if adjusted.TakeProfitPct <= 0 {
-		adjusted.TakeProfitPct = 0.40
+		adjusted.TakeProfitPct = minSignalTakeProfitPct
 	}
 
-	minTakeProfitByRR := adjusted.StopLossPct * 2.20
+	minTakeProfitByRR := adjusted.StopLossPct * minRewardToRiskRatio
 	if adjusted.TakeProfitPct < minTakeProfitByRR {
 		adjusted.TakeProfitPct = minTakeProfitByRR
 	}
-	if adjusted.TakeProfitPct < 0.40 {
-		adjusted.TakeProfitPct = 0.40
+	if adjusted.TakeProfitPct < minSignalTakeProfitPct {
+		adjusted.TakeProfitPct = minSignalTakeProfitPct
 	}
 
 	return adjusted, "", true
@@ -1259,8 +1262,11 @@ func isTrustedStrategy(name string, confidence float64) bool {
 }
 
 func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) float64 {
-	if confidence <= 0 {
+	if confidence < 0 {
 		return 0
+	}
+	if confidence == 0 {
+		confidence = 1.0
 	}
 	adjusted := confidence
 

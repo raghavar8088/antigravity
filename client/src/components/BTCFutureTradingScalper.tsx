@@ -132,7 +132,7 @@ export function BTCFutureTradingScalper({
     ? 26
     : EFFECTIVE_RESEARCH_MODE
     ? researchSignalThreshold()
-    : btcFtSignalThresholdFromEnv(20);
+    : btcFtSignalThresholdFromEnv(18);
   const relaxConfirm = WINNERS_ONLY_MODE
     ? false
     : EFFECTIVE_RESEARCH_MODE
@@ -142,11 +142,9 @@ export function BTCFutureTradingScalper({
     ? 1
     : EFFECTIVE_RESEARCH_MODE
     ? researchMinMoveKMul()
-    : rosterInfo.isLargeRoster
-    ? btcFtMinMoveKMulFromEnv(0.55)
-    : 1;
+    : btcFtMinMoveKMulFromEnv(0.5);
   const paperEnsureTrades =
-    !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && rosterInfo.isLargeRoster && btcFtPaperEnsureTradesFromEnv();
+    !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv();
   const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;
 
   const sourceLabel =

@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	// Tuned for a ~30-strategy BTC paper roster: allow fresh names through without
-	// legacy live-performance boosts while still blocking pure coin-flip batches.
-	minSelectiveScore  = 1.21 // Above generic 1.0 conf + 0.2 category (1.20); named boosts still pass
-	minDominanceRatio  = 1.10 // e.g. 1.75 vs 1.60 ≈ 1.09 → skip (weak two-sided tape)
-	minDominanceLead   = 0.14
-	maxApprovedSignals = 3 // Allow top 3 best setups per batch
+	// Tuned for a safer live portfolio: bias toward strong consensus and reduce
+	// fast, noisy scalping entries that rarely achieve durable edge.
+	minSelectiveScore  = 1.30 // Higher bar for batch approval
+	minDominanceRatio  = 1.25 // Require clearer directional dominance in the signal pool
+	minDominanceLead   = 0.18
+	maxApprovedSignals = 2 // Only execute the top 2 setups each batch
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and
