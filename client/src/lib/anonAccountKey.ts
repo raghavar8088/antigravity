@@ -28,7 +28,8 @@ function newId(): string {
  * flag is off OR when localStorage is unavailable (SSR / private mode).
  */
 export function getOrCreateAnonAccountKey(): string | null {
-  if (process.env.NEXT_PUBLIC_ALLOW_ANON_PAPER_TRADES !== "1") return null;
+  // Default to enabled if not explicitly disabled
+  if (process.env.NEXT_PUBLIC_ALLOW_ANON_PAPER_TRADES === "0") return null;
   if (typeof localStorage === "undefined") return null;
   try {
     const existing = localStorage.getItem(STORAGE_KEY);

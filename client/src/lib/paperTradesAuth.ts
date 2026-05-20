@@ -2,6 +2,8 @@
  * Paper-trades Supabase account key resolution and API auth guards (P1-L).
  */
 
+import { getOrCreateAnonAccountKey } from "./anonAccountKey";
+
 export type PaperTradesAuthFailureStatus = 401 | 503;
 
 export type RequireAuthenticatedUserResult =
@@ -17,13 +19,14 @@ export type ResolvePaperTradesAccountKeyInput = {
 
 /**
  * Cloud Supabase `account_key`: authenticated user id only.
- * Logged out → `null` (local paper continues; cloud APIs return 401).
+ * Logged out → Anonymous device key if enabled, else null.
  */
 export function resolveCloudPaperTradesAccountKey(
   input: ResolvePaperTradesAccountKeyInput,
 ): string | null {
   const id = input.supabaseUserId?.trim();
-  return id ? id : null;
+  if (id) return id;
+  return getOrCreateAnonAccountKey();
 }
 
 /** @deprecated Use resolveCloudPaperTradesAccountKey — kept for tests naming clarity. */
