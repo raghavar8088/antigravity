@@ -109,42 +109,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : "Mongo read failed" }, { status: 500 });
   }
 }
-  const stats = aggregateResearchStratStats(rows);
-  const byId = new Map(stats.map((s) => [s.strategyId, s]));
-  const nameById = new Map(FUTURES_STRAT_DEFS.map((s) => [s.id, s.name]));
-  const statsWithPool =
-    poolIds.length > 0
-      ? poolIds.map((id) => {
-          const existing = byId.get(id);
-          if (existing) return existing;
-          return {
-            strategyId: id,
-            strategyName: nameById.get(id) ?? `Strat ${id}`,
-            tradeCount: 0,
-            sumNet: 0,
-            expectancy: 0,
-            winRate: 0,
-            feePctOfGross: null,
-            avgHoldMin: null,
-            lastTradeAt: null,
-          };
-        })
-      : stats;
-
-  // Attach verdict
-  const statsWithVerdict = statsWithPool.map((s) => ({
-    ...s,
-    verdict: computeVerdict(s),
-  })).sort((a, b) => b.sumNet - a.sumNet);
-
-  return NextResponse.json({
-    ok: true,
-    accountKey: account_key,
-    windowDays,
-    poolFilter: poolIds.length > 0 ? poolIds : null,
-    stats: statsWithVerdict,
-  });
-}
 
 export async function POST(_req: Request) {
   return NextResponse.json(
