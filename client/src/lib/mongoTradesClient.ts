@@ -35,10 +35,13 @@ type CachedClient = {
 let cached: CachedClient | null = null;
 let connectPromise: Promise<CachedClient> | null = null;
 
-/** Return `true` only when MONGODB_URI is configured. Used to gate dual-write logic. */
+/** Return `true` only when MONGODB_URI is a non-empty `mongodb+srv://` or `mongodb://` URI. */
 export function isMongoConfigured(): boolean {
   const uri = process.env.MONGODB_URI;
-  return typeof uri === "string" && uri.trim().length > 0;
+  if (typeof uri !== "string") return false;
+  const trimmed = uri.trim();
+  if (trimmed.length === 0) return false;
+  return trimmed.startsWith("mongodb+srv://") || trimmed.startsWith("mongodb://");
 }
 
 async function connect(): Promise<CachedClient> {
@@ -109,24 +112,46 @@ export async function getTradesCollection(): Promise<Collection<PaperTradeDbRow>
   return entry.db.collection<PaperTradeDbRow>(TRADES_COLLECTION);
 }
 
+export type UpsertTradeResult =
+  | { ok: true; upsertedCount: number; modifiedCount: number; matchedCount: number }
+  | { ok: false; error: string };
+
 /**
- * Idempotent upsert on `client_trade_id`. Mirrors the Supabase
- * `.upsert({}, { onConflict: "client_trade_id", ignoreDuplicates: true })` semantics
- * — re-sending the same trade is a no-op.
+ * Upsert keyed by `client_trade_id`. `$set` writes the full row on every call;
+ * `$setOnInsert` stamps `created_at` only when the document is first created.
+ *
+ * Re-sending the same `client_trade_id` overwrites the row (idempotent by key,
+ * but values can be refreshed — useful for late-arriving fees/funding updates).
+ *
+ * Returns a structured result; never throws on driver/connection errors so the
+ * route handler can map them to consistent error codes.
  */
-export async function upsertTradeMongo(row: Omit<PaperTradeDbRow, "id" | "created_at">): Promise<void> {
-  const col = await getTradesCollection();
-  const now = new Date().toISOString();
-  await col.updateOne(
-    { client_trade_id: row.client_trade_id },
-    {
-      $setOnInsert: {
-        created_at: now,
-        ...row,
+export async function upsertTradeMongo(
+  row: Omit<PaperTradeDbRow, "id" | "created_at">,
+): Promise<UpsertTradeResult> {
+  try {
+    const col = await getTradesCollection();
+    const now = new Date().toISOString();
+    const result = await col.updateOne(
+      { client_trade_id: row.client_trade_id },
+      {
+        $set: { ...row },
+        $setOnInsert: { created_at: now },
       },
-    },
-    { upsert: true },
-  );
+      { upsert: true },
+    );
+    return {
+      ok: true,
+      upsertedCount: result.upsertedCount ?? 0,
+      modifiedCount: result.modifiedCount ?? 0,
+      matchedCount: result.matchedCount ?? 0,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "unknown mongo error",
+    };
+  }
 }
 
 export type ListTradesOpts = {

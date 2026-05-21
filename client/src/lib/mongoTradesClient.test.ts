@@ -92,19 +92,21 @@ describe("upsertTradeMongo", () => {
     vi.stubEnv("MONGODB_DB", "test_db");
   });
 
-  it("performs an idempotent upsert keyed by client_trade_id", async () => {
+  it("upserts by client_trade_id with $set for row fields and $setOnInsert for created_at", async () => {
     const { upsertTradeMongo, _closeMongoForTests } = await import("./mongoTradesClient");
     const row = sampleRow();
-    await upsertTradeMongo(row);
+    const result = await upsertTradeMongo(row);
 
+    expect(result.ok).toBe(true);
     expect(mockCol.updateOne).toHaveBeenCalledOnce();
     const [filter, update, opts] = mockCol.updateOne.mock.calls[0]!;
     expect(filter).toEqual({ client_trade_id: row.client_trade_id });
     expect(opts).toEqual({ upsert: true });
-    expect(update).toHaveProperty("$setOnInsert");
-    // The created_at stamp should be added at insert time only (preserves idempotency).
-    expect((update as { $setOnInsert: Record<string, unknown> }).$setOnInsert).toHaveProperty("created_at");
-    expect((update as { $setOnInsert: Record<string, unknown> }).$setOnInsert).toMatchObject(row);
+    const u = update as { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> };
+    expect(u.$set).toMatchObject(row);
+    expect(u.$setOnInsert).toHaveProperty("created_at");
+    // created_at must only be in $setOnInsert so updates don't overwrite the original insert timestamp.
+    expect(u.$set).not.toHaveProperty("created_at");
 
     await _closeMongoForTests();
   });
@@ -134,10 +136,14 @@ describe("upsertTradeMongo", () => {
     await _closeMongoForTests();
   });
 
-  it("throws when MONGODB_URI is missing", async () => {
+  it("returns { ok:false, error } when MONGODB_URI is missing", async () => {
     vi.stubEnv("MONGODB_URI", "");
     const { upsertTradeMongo } = await import("./mongoTradesClient");
-    await expect(upsertTradeMongo(sampleRow())).rejects.toThrow(/MONGODB_URI/);
+    const result = await upsertTradeMongo(sampleRow());
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/MONGODB_URI/);
+    }
   });
 });
 

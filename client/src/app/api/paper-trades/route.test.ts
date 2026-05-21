@@ -3,12 +3,26 @@ import { randomUUID } from "crypto";
 
 vi.mock("@/lib/mongoTradesClient", () => ({
   isMongoConfigured: vi.fn().mockReturnValue(true),
-  upsertTradeMongo: vi.fn().mockResolvedValue(undefined),
+  upsertTradeMongo: vi.fn().mockResolvedValue({
+    ok: true,
+    upsertedCount: 1,
+    modifiedCount: 0,
+    matchedCount: 0,
+  }),
   listTradesMongo: vi.fn().mockResolvedValue([]),
+  pingMongo: vi.fn().mockResolvedValue(true),
+}));
+
+// next/headers `cookies()` returns an async ReadonlyRequestCookies. Stub it
+// so the route's auth path skips the JWT lookup and falls back to anon.
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({ get: () => undefined }),
 }));
 
 import { POST } from "./route";
 import * as mongoClient from "@/lib/mongoTradesClient";
+
+const OLD_ENV = { ...process.env };
 
 function makeValidTrade() {
   const now = new Date().toISOString();
@@ -48,33 +62,82 @@ function makeRequest(body: unknown) {
 
 describe("POST /api/paper-trades", () => {
   beforeEach(() => {
+    process.env = { ...OLD_ENV, ALLOW_PAPER_TRADES_ANON: "1" };
     vi.mocked(mongoClient.isMongoConfigured).mockReturnValue(true);
-    vi.mocked(mongoClient.upsertTradeMongo).mockResolvedValue(undefined as never);
+    vi.mocked(mongoClient.upsertTradeMongo).mockResolvedValue({
+      ok: true,
+      upsertedCount: 1,
+      modifiedCount: 0,
+      matchedCount: 0,
+    });
   });
 
-  it("returns 200 with ok:true for a valid closed trade", async () => {
-    const res = await POST(makeRequest({ accountKey: "anon_test-key", trade: makeValidTrade() }));
+  it("returns 200 with storage:'mongo' for a valid closed trade", async () => {
+    const trade = makeValidTrade();
+    const res = await POST(makeRequest({ accountKey: "anon_test-key", trade }));
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; persistedTo: { mongo: boolean }; clientTradeId: string };
+    const body = await res.json() as {
+      ok: boolean;
+      storage: string;
+      clientTradeId: string;
+      upsertedCount: number;
+    };
     expect(body.ok).toBe(true);
-    expect(body.persistedTo.mongo).toBe(true);
-    expect(typeof body.clientTradeId).toBe("string");
+    expect(body.storage).toBe("mongo");
+    expect(body.clientTradeId).toBe(trade.clientTradeId);
+    expect(body.upsertedCount).toBe(1);
   });
 
-  it("returns 503 when Mongo is not configured", async () => {
+  it("returns 503 MONGO_NOT_CONFIGURED when Mongo is not configured", async () => {
     vi.mocked(mongoClient.isMongoConfigured).mockReturnValue(false);
     const res = await POST(makeRequest({ accountKey: "anon_test-key", trade: makeValidTrade() }));
     expect(res.status).toBe(503);
-    const body = await res.json() as { ok: boolean };
+    const body = await res.json() as { ok: boolean; code: string };
     expect(body.ok).toBe(false);
+    expect(body.code).toBe("MONGO_NOT_CONFIGURED");
   });
 
-  it("returns 400 when accountKey is missing", async () => {
+  it("returns 500 MONGO_WRITE_FAILED when upsert returns ok:false", async () => {
+    vi.mocked(mongoClient.upsertTradeMongo).mockResolvedValue({
+      ok: false,
+      error: "connection refused",
+    });
+    const res = await POST(makeRequest({ accountKey: "anon_test-key", trade: makeValidTrade() }));
+    expect(res.status).toBe(500);
+    const body = await res.json() as { ok: boolean; code: string; message: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("MONGO_WRITE_FAILED");
+    expect(body.message).toContain("connection refused");
+  });
+
+  it("returns 401 AUTH_REQUIRED when no session and anon disabled", async () => {
+    delete process.env.ALLOW_PAPER_TRADES_ANON;
+    delete process.env.ALLOW_ANON_PAPER_TRADES;
+    const res = await POST(makeRequest({ accountKey: "anon_key", trade: makeValidTrade() }));
+    expect(res.status).toBe(401);
+    const body = await res.json() as { ok: boolean; code: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("AUTH_REQUIRED");
+  });
+
+  it("returns 401 AUTH_REQUIRED when no accountKey and no session", async () => {
     const res = await POST(makeRequest({ trade: makeValidTrade() }));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(401);
+    const body = await res.json() as { ok: boolean; code: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("AUTH_REQUIRED");
   });
 
-  it("returns 400 on invalid JSON body", async () => {
+  it("returns 400 VALIDATION_FAILED when clientTradeId is not a valid UUID", async () => {
+    const trade = { ...makeValidTrade(), clientTradeId: "not-a-uuid" };
+    const res = await POST(makeRequest({ accountKey: "anon_key", trade }));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { ok: boolean; code: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("returns 400 INVALID_JSON on malformed body", async () => {
     const req = new Request("http://localhost/api/paper-trades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -82,23 +145,7 @@ describe("POST /api/paper-trades", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(400);
-  });
-
-  it("returns 400 when clientTradeId is not a valid UUID", async () => {
-    const trade = { ...makeValidTrade(), clientTradeId: "not-a-uuid" };
-    const res = await POST(makeRequest({ accountKey: "anon_key", trade }));
-    expect(res.status).toBe(400);
-    const body = await res.json() as { ok: boolean; error: string };
-    expect(body.ok).toBe(false);
-    expect(body.error).toBe("Validation failed");
-  });
-
-  it("returns 500 when Mongo upsert throws", async () => {
-    vi.mocked(mongoClient.upsertTradeMongo).mockRejectedValue(new Error("connection refused"));
-    const res = await POST(makeRequest({ accountKey: "anon_key", trade: makeValidTrade() }));
-    expect(res.status).toBe(500);
-    const body = await res.json() as { ok: boolean; detail: string };
-    expect(body.ok).toBe(false);
-    expect(body.detail).toContain("connection refused");
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("INVALID_JSON");
   });
 });

@@ -3,7 +3,9 @@ import { btcFuturesTradeToClientPayload } from "@/lib/paperTradesMapper";
 import { PAPER_TRADES_MAX_LOCAL, type PaperTradeModuleKey } from "@/lib/paperTradesTypes";
 
 const MAX_SYNC_RETRIES = 3;
+const FLUSH_THROTTLE_MS = 10_000;
 let syncFailureLogged = false;
+let lastFlushAtMs = 0;
 
 const fetchOpts: RequestInit = { credentials: "include" };
 
@@ -61,25 +63,49 @@ async function postPaperTrade(
   trade: BTCFuturesTrade,
   moduleKey?: PaperTradeModuleKey,
 ): Promise<boolean> {
+  const tradeId = trade.clientTradeId ?? trade.id;
   const body: Record<string, unknown> = {
     accountKey,
     trade: btcFuturesTradeToClientPayload(trade),
   };
   if (moduleKey) body.moduleKey = moduleKey;
-  const res = await fetch("/api/paper-trades", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  if (res.status === 401) return false;
-  if (res.status === 503) return false;
-  if (!res.ok) {
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[paper-sync] POST start", { tradeId, accountKey, moduleKey });
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("/api/paper-trades", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
     if (process.env.NODE_ENV === "development") {
-      const text = await res.text().catch(() => "");
-      console.warn("[paper-trades-sync] POST /api/paper-trades failed", res.status, text.slice(0, 500));
+      console.warn("[paper-sync] POST network error", {
+        tradeId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     return false;
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[paper-sync] POST failed", {
+        tradeId,
+        status: res.status,
+        body: text.slice(0, 500),
+      });
+    }
+    return false;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[paper-sync] POST ok", { tradeId, status: res.status });
   }
   return true;
 }
@@ -108,9 +134,21 @@ export function persistTradeToServer(
   })();
 }
 
-/** POST all queued trades (max retries per item). No-op when logged out. */
-export async function flushTradeSyncQueue(accountKey: string | null): Promise<void> {
+/**
+ * POST all queued trades (max retries per item). No-op when logged out.
+ *
+ * Throttled to once per 10s globally to keep the poll loop cheap. Pass
+ * `{ force: true }` on mount / after sign-in so the queue drains immediately
+ * even when a recent flush attempt happened.
+ */
+export async function flushTradeSyncQueue(
+  accountKey: string | null,
+  opts?: { force?: boolean },
+): Promise<void> {
   if (!accountKey?.trim()) return;
+  const now = Date.now();
+  if (!opts?.force && now - lastFlushAtMs < FLUSH_THROTTLE_MS) return;
+  lastFlushAtMs = now;
   const key = accountKey.trim();
   const queue = readQueue(key);
   if (queue.length === 0) return;

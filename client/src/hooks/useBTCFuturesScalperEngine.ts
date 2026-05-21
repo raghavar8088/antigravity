@@ -961,7 +961,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     let cancelled = false;
     void (async () => {
-      await flushTradeSyncQueue(cloudAccountKey);
+      // Mount: force-flush bypasses the global throttle so any queued trades
+      // from the previous session POST immediately.
+      await flushTradeSyncQueue(cloudAccountKey, { force: true });
       if (cancelled) return;
       const local = hydratedTrades.length > 0 ? hydratedTrades : tradesRef.current;
       const merged = await pullAndMergePaperTrades(cloudAccountKey, local);
@@ -1692,6 +1694,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setTrades(prev => [...prev.slice(-MAX_TRADES + 1), trade]);
     setPositions(prev => prev.filter(p => p.id !== position.id));
     setBalance(prev => prev + position.marginUsed + netPnl);
+    if (process.env.NODE_ENV === "development") {
+      console.log("[paper-close]", {
+        clientTradeId,
+        accountKey: cloudAccountKey,
+        moduleKey,
+        netPnl,
+        exitReason,
+      });
+    }
     persistTradeToServer(trade, cloudAccountKey, moduleKey);
     persistShadowTradeIntent(cloudAccountKey, shadowIntentFromPaperClose(trade));
   }, [cloudAccountKey, slippageBpsOverride]);
