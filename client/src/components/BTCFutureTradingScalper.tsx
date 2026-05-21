@@ -241,7 +241,7 @@ export function BTCFutureTradingScalper({
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
           researchEnsureTrades={EFFECTIVE_RESEARCH_MODE ? researchEnsureTradesEnabled() : false}
           paperEnsureTrades={paperEnsureTrades}
-          paperBootstrapProbe={paperEnsureTrades}
+          paperBootstrapProbe={paperEnsureTrades || EFFECTIVE_RESEARCH_MODE}
           entryDebugEnabled={entryDebugEnabled}
           entryUtcSessionOverride={EFFECTIVE_RESEARCH_MODE ? researchEntryUtcSession() : undefined}
           researchMode={EFFECTIVE_RESEARCH_MODE}

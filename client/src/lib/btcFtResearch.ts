@@ -364,7 +364,7 @@ export function saveRetiredToStorage(ns: string, ids: ReadonlySet<number>): void
 // ---------------------------------------------------------------------------
 
 /**
- * Signal threshold for research mode (default 22 — lower than production 26).
+ * Signal threshold for research mode (default 20 — matches production floor).
  * Only active when RESEARCH_MODE=1; never affects other modules.
  */
 export function researchSignalThreshold(): number {
@@ -372,9 +372,9 @@ export function researchSignalThreshold(): number {
   const env = process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD;
   if (env && env.trim() !== "") {
     const n = Number(env);
-    if (Number.isFinite(n)) return Math.min(28, Math.max(22, Math.round(n)));
+    if (Number.isFinite(n)) return Math.min(28, Math.max(18, Math.round(n)));
   }
-  return 22; // research default
+  return 20; // research default (was 22 — too high for generated templates with limited HTF data)
 }
 
 /**
@@ -409,7 +409,11 @@ export function researchMinMoveKMul(): number {
 }
 
 export function researchEnsureTradesEnabled(): boolean {
-  return isResearchModeEnabled() && process.env.NEXT_PUBLIC_BTC_FT_RESEARCH_ENSURE_TRADES === "1";
+  if (!isResearchModeEnabled()) return false;
+  // Default ON in research mode — after 2h with zero trades, threshold drops by 4
+  // (floor 18) so zero-data strategies get a chance to accumulate verdicts.
+  // Set NEXT_PUBLIC_BTC_FT_RESEARCH_ENSURE_TRADES=0 to disable.
+  return process.env.NEXT_PUBLIC_BTC_FT_RESEARCH_ENSURE_TRADES !== "0";
 }
 
 /**
