@@ -79,7 +79,10 @@ export async function GET(req: Request) {
     );
   }
 
-  const account_key: string = parsed.data.account_key as string;
+  const account_key = parsed.data.account_key;
+  if (!account_key) {
+    return NextResponse.json({ ok: false, error: "account_key is required" }, { status: 400 });
+  }
   const { limit, cursor, module_key: moduleKey } = parsed.data;
 
   if (!isMongoConfigured()) {

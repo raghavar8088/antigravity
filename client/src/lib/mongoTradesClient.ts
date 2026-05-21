@@ -92,6 +92,17 @@ export async function getDb(): Promise<Db> {
   return entry.db;
 }
 
+/** Returns true when Atlas is reachable; used by the health endpoint. */
+export async function pingMongo(): Promise<boolean> {
+  try {
+    const entry = await connect();
+    await entry.db.command({ ping: 1 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function getTradesCollection(): Promise<Collection<PaperTradeDbRow>> {
   const entry = await connect();
   await ensureIndexes(entry);

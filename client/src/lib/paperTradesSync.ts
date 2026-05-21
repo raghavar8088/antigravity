@@ -74,7 +74,14 @@ async function postPaperTrade(
   });
   if (res.status === 401) return false;
   if (res.status === 503) return false;
-  return res.ok;
+  if (!res.ok) {
+    if (process.env.NODE_ENV === "development") {
+      const text = await res.text().catch(() => "");
+      console.warn("[paper-trades-sync] POST /api/paper-trades failed", res.status, text.slice(0, 500));
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
