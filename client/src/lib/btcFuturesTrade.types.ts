@@ -9,7 +9,8 @@ export type FuturesTradeExitReason =
   | "TRAIL"
   | "BREAKEVEN"
   | "LIQUIDATION_RISK"
-  | "PROFIT_LOCK";
+  | "PROFIT_LOCK"
+  | "MOM_DECAY";
 
 export interface BTCFuturesTrade {
   id: string;

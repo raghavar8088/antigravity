@@ -140,6 +140,7 @@ import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
 import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
 import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremiumStrategies";
 import { btcFtUseRankedEnabled, winnerIdsFromRankings, type BtcFtStrategyRankingRow } from "@/lib/btcFtRoster";
+import { computeAdaptiveThreshold } from "@/lib/futuresDeskPolicy";
 import {
   atrPctFromAtr,
   computeAdaptiveTpPct,
@@ -649,6 +650,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   // Ranked winners from /api/strategy-rankings — populated when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
   const [rankedWinnerIds, setRankedWinnerIds] = useState<ReadonlySet<number>>(new Set());
+  const [strategyRankings, setStrategyRankings] = useState<ReadonlyArray<BtcFtStrategyRankingRow>>([]);
 
   const deskStrategiesResult = useMemo(() => {
     const allow = strategyIds && strategyIds.length > 0 ? new Set(strategyIds) : null;
@@ -660,7 +662,20 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         ? applyWinnersOnlyGate(raw, rankedWinnerIds)
         : raw;
     const base = gated.length > 0 ? gated : raw;
-    return buildPaperDeskStrategies(base, {
+    // Inject per-strategy adaptive thresholds (P1.1.2) when rankings are available
+    const baseThreshold = 28;
+    const rankingById = new Map(strategyRankings.map((r) => [r.id, r]));
+    const withThresholds = base.map((s) => {
+      const row = rankingById.get(s.id);
+      if (!row) return s;
+      const adaptive = computeAdaptiveThreshold(
+        baseThreshold,
+        row.winRate ?? null,
+        row.trades,
+      );
+      return adaptive !== null ? { ...s, dynamicThreshold: adaptive } : s;
+    });
+    return buildPaperDeskStrategies(withThresholds, {
       strategyIdAllowlist: null,
       minTpSlRatio: deskMinTpSlRatioFromEnv(),
       // Explicit module rosters (e.g. BTC Future Trading 91–96) must not be dropped: IDs 91–96
@@ -668,7 +683,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       allowFakeDiversity:
         deskFakeDiversityEnabledViaEnv() || Boolean(strategyIds && strategyIds.length > 0),
     });
-  }, [strategyIds, rankedWinnerIds]);
+  }, [strategyIds, rankedWinnerIds, strategyRankings]);
 
   const activeStratDefs = deskStrategiesResult.strategies;
   const deskPolicySnapshot = useMemo(
@@ -1011,6 +1026,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         const ids = winnerIdsFromRankings(body.rankings);
         if (cancelled) return;
         setRankedWinnerIds(ids);
+        setStrategyRankings(body.rankings);
         if (process.env.NODE_ENV === "development") {
           console.info("[btc-futures-paper] ranked winners loaded", {
             winnerCount: ids.size,
@@ -2213,7 +2229,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     researchMountedAtRef.current,
                     stratTradeCount,
                   );
-              const effectiveThresholdForStrat = Math.max(18, activeSignalThreshold - ensureDataThresholdDrop);
+              // P1.1.2: use per-strategy dynamic threshold when available, else fall back to global
+              const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
+              const effectiveThresholdForStrat = Math.max(18, stratBaseThreshold - ensureDataThresholdDrop);
               const confirmPasses =
                 passesEntryConfirmation(input, strat) ||
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(input, strat));

@@ -54,4 +54,11 @@ export interface FuturesStratDef {
    * in production roster regardless of pool-mode env flags.
    */
   tier?: "premium";
+  /**
+   * Per-strategy signal threshold override (P1.1.2 adaptive threshold).
+   * When set, replaces the global `signalThreshold` for this strategy only.
+   * Computed from rolling win-rate by `computeAdaptiveThreshold`; injected
+   * at runtime by the hook or ranking pipeline, never hard-coded in strat defs.
+   */
+  dynamicThreshold?: number;
 }

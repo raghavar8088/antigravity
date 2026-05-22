@@ -120,6 +120,13 @@ export type FuturesExitStepOpts = {
   takerFeePct?: number;
   /** Adverse exit slippage in bps applied to mark before the net projection. Default 5. */
   exitSlippageBps?: number;
+  /**
+   * Current bar's ATR14 in USD. When provided and > 0, activates ATR-based trailing:
+   * once the position reaches TRAIL_ACTIVATION progress, the trail stop is set at
+   * peakMarkPrice − 0.5×ATR (LONG) / peakMarkPrice + 0.5×ATR (SHORT).
+   * Falls back to pct-giveback trail when omitted.
+   */
+  atr14?: number;
 };
 
 /**
@@ -193,12 +200,31 @@ export function resolveFuturesExitStep(
   }
 
   const peak = soft.peakReturnPctOnMargin;
+  const atr14 = opts.atr14;
   if (
     progress >= DESK_EXIT_TRAIL_ACTIVATION_PCT &&
-    peak > DESK_EXIT_LATE_EXIT_MIN_GAIN &&
-    q.returnPct <= peak * (1 - DESK_EXIT_TRAIL_GIVEBACK_SHARE)
+    peak > DESK_EXIT_LATE_EXIT_MIN_GAIN
   ) {
-    return { patched: q, close: { shouldClose: true, reason: "TRAIL", exitPrice: q.markPrice } };
+    if (atr14 && atr14 > 0 && q.marginUsed > 0) {
+      // ATR-based trail: reconstruct approximate peak mark price from peakReturnPct.
+      // peakReturnPct is % of margin; grossPnl = returnPct/100 * marginUsed.
+      // For LONG: grossPnl = (peakMark - entry) / entry * notional → peakMark = entry + grossPnl * entry / notional.
+      const grossPnlAtPeak = (peak / 100) * q.marginUsed;
+      const peakMarkApprox =
+        q.side === "LONG"
+          ? q.entryPrice + (grossPnlAtPeak * q.entryPrice) / q.notional
+          : q.entryPrice - (grossPnlAtPeak * q.entryPrice) / q.notional;
+      const atrTrailStop =
+        q.side === "LONG" ? peakMarkApprox - 0.5 * atr14 : peakMarkApprox + 0.5 * atr14;
+      const atrTrailHit =
+        q.side === "LONG" ? q.markPrice <= atrTrailStop : q.markPrice >= atrTrailStop;
+      if (atrTrailHit) {
+        return { patched: q, close: { shouldClose: true, reason: "TRAIL", exitPrice: q.markPrice } };
+      }
+    } else if (q.returnPct <= peak * (1 - DESK_EXIT_TRAIL_GIVEBACK_SHARE)) {
+      // Fallback pct-giveback trail when ATR is not available.
+      return { patched: q, close: { shouldClose: true, reason: "TRAIL", exitPrice: q.markPrice } };
+    }
   }
 
   return { patched: q, close: { shouldClose: false, exitPrice: q.markPrice } };

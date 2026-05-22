@@ -141,6 +141,8 @@ type ReplayPosition = FuturesExitStepPosition & {
   slPrice: number;
   leverage: number;
   initialMargin: number;
+  /** Consecutive bars below the momentum-decay threshold. Resets on reversal. */
+  momDecayBars: number;
 };
 
 /** Stable UUID-shaped id for golden snapshots (no crypto.randomUUID). */
@@ -383,6 +385,7 @@ export function runPaperDeskReplay(
       adaptiveSl: slPrice,
       breakevenMoved: false,
       initialMargin: marginUsed,
+      momDecayBars: 0,
     });
 
     balance -= marginUsed;
@@ -415,13 +418,43 @@ export function runPaperDeskReplay(
       applyMarkToFuturesPosition(p, markPrice, lastPrice, { fundingRate, nowMs }),
     );
 
+    const MOM_DECAY_THRESHOLD = 3; // consecutive bars
+    const MOM_DECAY_ATR_FRAC = 0.3; // mom3 < 0.3 × ATR → decaying bar
     const stillOpen: ReplayPosition[] = [];
     for (const pos of marked) {
+      // Momentum-decay pre-screen: count consecutive low-momentum bars.
+      // Only fires when position is profitable (unrealizedPnl > 0) to avoid cutting losers early.
+      const isMomDecayBar =
+        Number.isFinite(input.momentum3) &&
+        Number.isFinite(input.atr14) &&
+        input.atr14 > 0 &&
+        (pos.side === "LONG"
+          ? input.momentum3 < MOM_DECAY_ATR_FRAC * input.atr14
+          : input.momentum3 > -MOM_DECAY_ATR_FRAC * input.atr14);
+      const newDecayBars = isMomDecayBar ? pos.momDecayBars + 1 : 0;
+      const momDecayFired =
+        newDecayBars >= MOM_DECAY_THRESHOLD && pos.unrealizedPnl > 0;
+
+      if (momDecayFired) {
+        const merged: ReplayPosition = { ...pos, momDecayBars: newDecayBars };
+        const { trade, marginReturn, netPnl } = closeReplayPosition(
+          merged,
+          markPrice,
+          "MOM_DECAY",
+          nowMs,
+          slippageBps,
+        );
+        trades.push(trade);
+        balance += marginReturn + netPnl;
+        continue;
+      }
+
       const { patched, close } = resolveFuturesExitStep(pos, holdTimeMul, nowMs, {
         takerFeePct: TAKER_FEE_PCT,
         exitSlippageBps: slippageBps,
+        atr14: input.atr14,
       });
-      const merged: ReplayPosition = { ...pos, ...patched };
+      const merged: ReplayPosition = { ...pos, ...patched, momDecayBars: newDecayBars };
       if (close.shouldClose && close.reason) {
         const { trade, marginReturn, netPnl } = closeReplayPosition(
           merged,
@@ -488,7 +521,8 @@ export function runPaperDeskReplay(
       }
 
       const signal = evalMinuteSignal(input, strat);
-      if (signal.score >= signalThreshold && passesEntryConfirmation(input, strat)) {
+      const stratThreshold = strat.dynamicThreshold ?? signalThreshold;
+      if (signal.score >= stratThreshold && passesEntryConfirmation(input, strat)) {
         const side: PaperSide = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
         if (
           tryOpen(strat, side, lastPrice, markPrice, regime, input.atr14, nowMs, equityUsd, intraBook)

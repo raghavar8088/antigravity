@@ -408,7 +408,32 @@ export function classifyRegimeTagFrom15mBars(high: number[], low: number[], clos
   return "trendLow";
 }
 
-/** Aggregates 1m OHLCV to 15m bars, then `classifyRegimeTagFrom15mBars`. */
+/**
+ * Multi-TF composite regime classifier (P1.1.3).
+ *
+ * Combines 1m, 5m, and 15m ADX signals using a conservative confirmation rule:
+ * - **chop** if 15m is chop OR (5m ADX < 20 and 1m ADX < 25) — disagrees downgrade
+ * - **trendHigh** only when 15m=trendHigh AND 5m ADX ≥ 22 — both TFs must confirm
+ * - **trendLow** otherwise (15m trend detected but 5m doesn't fully confirm trendHigh)
+ *
+ * Reduces false trendHigh entries during brief momentum spikes on the 15m.
+ */
+export function classifyRegimeTagComposite(
+  adx1m: number,
+  adx5m: number,
+  regime15m: RegimeTag,
+): RegimeTag {
+  if (regime15m === "chop") return "chop";
+  // Both 5m and 1m weak → downgrade to chop
+  if (adx5m < 20 && adx1m < 25) return "chop";
+  if (regime15m === "trendHigh" && adx5m >= 22) return "trendHigh";
+  return "trendLow";
+}
+
+/**
+ * Aggregates 1m OHLCV to 5m and 15m bars, then applies multi-TF composite regime fusion.
+ * Replaces the legacy single-TF `classifyRegimeTagFrom15mBars` call.
+ */
 export function classifyRegimeTagFrom1mOhlcv(
   open1m: number[],
   high1m: number[],
@@ -416,8 +441,22 @@ export function classifyRegimeTagFrom1mOhlcv(
   close1m: number[],
   volume1m: number[],
 ): RegimeTag {
-  const agg = aggregate1mOhlcvToPeriodMinutes(open1m, high1m, low1m, close1m, volume1m, 15);
-  return classifyRegimeTagFrom15mBars(agg.high, agg.low, agg.close);
+  const agg15 = aggregate1mOhlcvToPeriodMinutes(open1m, high1m, low1m, close1m, volume1m, 15);
+  const regime15m = classifyRegimeTagFrom15mBars(agg15.high, agg15.low, agg15.close);
+
+  // Compute 5m ADX for the composite (reuse adxProxy on 5m aggregated bars)
+  const agg5 = aggregate1mOhlcvToPeriodMinutes(open1m, high1m, low1m, close1m, volume1m, 5);
+  const adx5Vals = adxProxy(agg5.high, agg5.low, agg5.close);
+  const adx5 = adx5Vals[adx5Vals.length - 1];
+
+  // 1m ADX from the raw bars
+  const adx1Vals = adxProxy(high1m, low1m, close1m);
+  const adx1 = adx1Vals[adx1Vals.length - 1];
+
+  if (!Number.isFinite(adx5) || !Number.isFinite(adx1)) {
+    return regime15m; // insufficient bars — fall back to 15m only
+  }
+  return classifyRegimeTagComposite(adx1, adx5, regime15m);
 }
 
 export function htfTrend(fast: number, slow: number, momentum: number): "UP" | "DOWN" | "NEUTRAL" {

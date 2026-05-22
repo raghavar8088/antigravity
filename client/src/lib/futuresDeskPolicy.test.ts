@@ -376,12 +376,18 @@ describe("deskVolSizedNotionalEnabledFromEnv / deskRiskPctOfEquityFromEnv", () =
     vi.unstubAllEnvs();
   });
 
-  it("vol sizing off by default", () => {
-    expect(deskVolSizedNotionalEnabledFromEnv()).toBe(false);
+  it("vol sizing ON by default (P1.3.1)", () => {
+    // Default is now ON; disable explicitly with NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL=0
+    expect(deskVolSizedNotionalEnabledFromEnv()).toBe(true);
     expect(deskRiskPctOfEquityFromEnv()).toBe(0.01);
   });
 
-  it("parses vol sizing and risk pct", () => {
+  it("can be disabled by setting env to '0'", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL", "0");
+    expect(deskVolSizedNotionalEnabledFromEnv()).toBe(false);
+  });
+
+  it("parses risk pct when vol sizing env is '1'", () => {
     vi.stubEnv("NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL", "1");
     vi.stubEnv("NEXT_PUBLIC_DESK_RISK_PCT_OF_EQUITY", "0.02");
     expect(deskVolSizedNotionalEnabledFromEnv()).toBe(true);

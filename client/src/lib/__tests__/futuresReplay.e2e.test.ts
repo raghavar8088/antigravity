@@ -58,7 +58,7 @@ describe("P0.5.2 – replay pipeline E2E", () => {
       expect(trade.strategyId).toBeGreaterThan(0);
       expect(typeof trade.netPnl).toBe("number");
       expect(Number.isFinite(trade.netPnl)).toBe(true);
-      expect(["TP", "SL", "TIME", "TRAIL", "BREAKEVEN", "LIQUIDATION_RISK", "PROFIT_LOCK"]).toContain(
+      expect(["TP", "SL", "TIME", "TRAIL", "BREAKEVEN", "LIQUIDATION_RISK", "PROFIT_LOCK", "MOM_DECAY"]).toContain(
         trade.exitReason,
       );
       expect(typeof trade.openedAt).toBe("string");

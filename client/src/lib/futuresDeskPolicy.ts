@@ -622,7 +622,8 @@ export function deskKillWindowDaysFromEnv(): number {
 }
 
 export function deskVolSizedNotionalEnabledFromEnv(): boolean {
-  return process.env.NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL === "1";
+  // Default ON (P1.3.1): set NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL=0 to disable.
+  return process.env.NEXT_PUBLIC_DESK_VOL_SIZED_NOTIONAL !== "0";
 }
 
 export const DESK_RISK_PCT_OF_EQUITY_DEFAULT = 0.01;
@@ -669,6 +670,30 @@ export function deskBtcFtSignalThresholdFromEnv(): number {
 /** Paper desk only — relaxes HTF/confluence confirm for BTC FT module when env is set. */
 export function btcFtRelaxConfirmEnabledFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
+}
+
+/**
+ * Compute a per-strategy adaptive threshold (P1.1.2).
+ *
+ * Adjusts the global base threshold ±4 based on the strategy's rolling win-rate:
+ * - win-rate ≥ 55%  → lower threshold by 4 (let this edge run more freely)
+ * - win-rate 45–55% → keep base (neutral)
+ * - win-rate 35–45% → raise by 2 (higher conviction required)
+ * - win-rate < 35%  → raise by 4 (near-dormant; only fire on very clear signals)
+ *
+ * Returns `null` when `minTrades` is not yet met (caller should use global threshold).
+ */
+export function computeAdaptiveThreshold(
+  baseThreshold: number,
+  winRate: number | null,
+  trades: number,
+  minTrades = 8,
+): number | null {
+  if (winRate === null || trades < minTrades) return null;
+  if (winRate >= 0.55) return Math.max(18, baseThreshold - 4);
+  if (winRate >= 0.45) return baseThreshold;
+  if (winRate >= 0.35) return Math.min(32, baseThreshold + 2);
+  return Math.min(32, baseThreshold + 4);
 }
 
 /** Show entry funnel panel on BTC Future Trading without global DESK_ENTRY_DEBUG. */
