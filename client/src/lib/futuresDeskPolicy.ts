@@ -673,6 +673,31 @@ export function btcFtRelaxConfirmEnabledFromEnv(): boolean {
 }
 
 /**
+ * P2.3.2: maps strategy `category` → correlation cluster.
+ *
+ * Groups categories whose entries tend to fire on the same market structure
+ * (trend continuation, reversion at extremes, breakout). Cluster-level caps
+ * prevent the desk from stacking concurrent trades that bleed together when
+ * a single regime shifts against them.
+ *
+ * Unknown categories map to "OTHER" (no cluster cap applied).
+ */
+export function strategyCorrelationCluster(category: string): string {
+  const c = (category ?? "").trim();
+  if (c === "Trend" || c === "MTF Trend" || c === "MTF MACD" || c === "MTF ADX") {
+    return "TREND";
+  }
+  if (c === "Breakout" || c === "MTF Break") return "BREAKOUT";
+  if (c === "Smart Money" || c === "Wyckoff") return "REVERSION";
+  if (c === "Order Flow") return "MOMENTUM";
+  if (c === "Session") return "SESSION";
+  return "OTHER";
+}
+
+/** Default max concurrent open positions per correlation cluster (P2.3.2). */
+export const DESK_MAX_OPEN_PER_CLUSTER = 3;
+
+/**
  * Compute a per-strategy adaptive threshold (P1.1.2).
  *
  * Adjusts the global base threshold ±4 based on the strategy's rolling win-rate:

@@ -10,6 +10,8 @@ import {
   countOpenByCategory,
   deskEffectiveHoldMinutesAtOpen,
   isUtcHourInSession,
+  strategyCorrelationCluster,
+  DESK_MAX_OPEN_PER_CLUSTER,
 } from "@/lib/futuresDeskPolicy";
 import {
   applyMarkToFuturesPosition,
@@ -20,6 +22,8 @@ import {
   paperApplyEntrySlippage,
   paperApplyExitSlippage,
   paperContracts,
+  paperDynamicSlippageBps,
+  paperEquityCurveSizingMul,
   paperEstimatedMaxLossAtStopSl,
   paperLiquidationDistancePct,
   paperLiquidationPrice,
@@ -284,11 +288,12 @@ export function runPaperDeskReplay(
     nowMs: number,
     equityUsd: number,
     entryBook: ReadonlyArray<{ side: PaperSide; notional: number }>,
+    slipBps: number = slippageBps,
   ): boolean => {
     if (disabled.has(strat.id)) return false;
     if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(regime)) return false;
 
-    const entryPrice = paperApplyEntrySlippage(side, lastPrice, slippageBps);
+    const entryPrice = paperApplyEntrySlippage(side, lastPrice, slipBps);
     const slPrice =
       side === "LONG"
         ? entryPrice * (1 - strat.slPct / 100)
@@ -298,7 +303,7 @@ export function runPaperDeskReplay(
         ? entryPrice * (1 + strat.tpPct / 100)
         : entryPrice * (1 - strat.tpPct / 100);
 
-    const targetNotional = config.volSizedNotional
+    const baseNotional = config.volSizedNotional
       ? paperNotionalForTargetRisk({
           equityUsd,
           atr14,
@@ -315,6 +320,10 @@ export function runPaperDeskReplay(
           Math.max(balance * 0.1, MIN_POSITION_NOTIONAL),
           MAX_POSITION_NOTIONAL,
         );
+    // P2.3.3 Kelly-lite: halve notional after ≥2 consecutive losses (last-10 window)
+    const recentPnls = trades.slice(-10).map((t) => t.netPnl).reverse();
+    const sizingMul = paperEquityCurveSizingMul(recentPnls);
+    const targetNotional = Math.max(MIN_POSITION_NOTIONAL, baseNotional * sizingMul);
 
     const contracts = Math.max(
       MIN_CONTRACTS,
@@ -414,6 +423,9 @@ export function runPaperDeskReplay(
     const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
     const input = buildSignalInputs(opens, closes, highs, lows, volumes, markPrice, nowMs);
 
+    // Vol-scaled slippage (P2.2.4): widens slip in vol spikes, tightens in calm regimes.
+    const dynSlipBps = paperDynamicSlippageBps(slippageBps, input.atr14, input.atr14Avg30);
+
     const marked = positions.map((p) =>
       applyMarkToFuturesPosition(p, markPrice, lastPrice, { fundingRate, nowMs }),
     );
@@ -442,7 +454,7 @@ export function runPaperDeskReplay(
           markPrice,
           "MOM_DECAY",
           nowMs,
-          slippageBps,
+          dynSlipBps,
         );
         trades.push(trade);
         balance += marginReturn + netPnl;
@@ -451,7 +463,7 @@ export function runPaperDeskReplay(
 
       const { patched, close } = resolveFuturesExitStep(pos, holdTimeMul, nowMs, {
         takerFeePct: TAKER_FEE_PCT,
-        exitSlippageBps: slippageBps,
+        exitSlippageBps: dynSlipBps,
         atr14: input.atr14,
       });
       const merged: ReplayPosition = { ...pos, ...patched, momDecayBars: newDecayBars };
@@ -461,7 +473,7 @@ export function runPaperDeskReplay(
           close.exitPrice,
           close.reason,
           nowMs,
-          slippageBps,
+          dynSlipBps,
         );
         trades.push(trade);
         balance += marginReturn + netPnl;
@@ -509,6 +521,27 @@ export function runPaperDeskReplay(
         ? countOpenByCategory(positions, categoryByStrategyId)
         : null;
 
+    // P2.1.4 cross-template consensus boost: scout pass to detect distinct
+    // template families firing same-direction with near-threshold conviction.
+    const scoutByStrat = new Map<number, { score: number; side: PaperSide }>();
+    const longTemplateFamilies = new Set<string>();
+    const shortTemplateFamilies = new Set<string>();
+    for (const strat of activeStrats) {
+      if (occupied.has(`${symbol}:${strat.id}`)) continue;
+      if ((cooldownUntil[`${symbol}:${strat.id}`] ?? 0) > nowMs) continue;
+      const sig = evalMinuteSignal(input, strat);
+      const side: PaperSide = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+      scoutByStrat.set(strat.id, { score: sig.score, side });
+      const stratTh = strat.dynamicThreshold ?? signalThreshold;
+      const tplKey = strat.btcFtTemplate ?? strat.category ?? `id:${strat.id}`;
+      if (sig.score >= stratTh * 0.85) {
+        if (side === "LONG") longTemplateFamilies.add(tplKey);
+        else shortTemplateFamilies.add(tplKey);
+      }
+    }
+    const consensusBoost = (side: PaperSide): number =>
+      (side === "LONG" ? longTemplateFamilies.size : shortTemplateFamilies.size) >= 2 ? 1.1 : 1.0;
+
     for (const strat of activeStrats) {
       if (positions.length >= config.maxPositions) break;
       if (occupied.has(`${symbol}:${strat.id}`)) continue;
@@ -520,12 +553,27 @@ export function runPaperDeskReplay(
         if (!canOpenCategory(category, catOpen, config.maxOpenPerCategory)) continue;
       }
 
-      const signal = evalMinuteSignal(input, strat);
+      // P2.3.2 cluster-level cap: prevent stacking correlated strats
+      const cluster = strategyCorrelationCluster(strat.category ?? "");
+      if (cluster !== "OTHER") {
+        const clusterOpen = positions.filter(
+          (p) => strategyCorrelationCluster(
+            activeStrats.find((s) => s.id === p.strategyId)?.category ?? "",
+          ) === cluster,
+        ).length;
+        if (clusterOpen >= DESK_MAX_OPEN_PER_CLUSTER) continue;
+      }
+
+      const scout = scoutByStrat.get(strat.id);
+      const rawSignal = scout ? scout.score : evalMinuteSignal(input, strat).score;
+      const sideForBoost: PaperSide = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+      const boost = consensusBoost(sideForBoost);
+      const signal = { score: rawSignal * boost };
       const stratThreshold = strat.dynamicThreshold ?? signalThreshold;
       if (signal.score >= stratThreshold && passesEntryConfirmation(input, strat)) {
         const side: PaperSide = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
         if (
-          tryOpen(strat, side, lastPrice, markPrice, regime, input.atr14, nowMs, equityUsd, intraBook)
+          tryOpen(strat, side, lastPrice, markPrice, regime, input.atr14, nowMs, equityUsd, intraBook, dynSlipBps)
         ) {
           const last = positions[positions.length - 1]!;
           intraBook.push({ side: last.side, notional: last.notional });

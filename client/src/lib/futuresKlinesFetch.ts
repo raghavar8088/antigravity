@@ -12,6 +12,38 @@ const JSON_HEADERS = {
   "User-Agent": "RAIG-Trading/1.0",
 };
 
+/**
+ * Retry/backoff for Delta REST calls (P2.5.1).
+ *
+ * - 3 attempts total
+ * - Exponential backoff with jitter: 200ms, 400ms, 800ms (±25% jitter)
+ * - Retries on 5xx responses and network errors only; 4xx are surfaced immediately
+ */
+export async function fetchWithRetry(
+  url: string,
+  init?: RequestInit,
+  opts: { attempts?: number; baseDelayMs?: number } = {},
+): Promise<Response> {
+  const attempts = opts.attempts ?? 3;
+  const base = opts.baseDelayMs ?? 200;
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.ok || res.status < 500) return res; // success or non-retryable 4xx
+      lastErr = new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+    }
+    if (i < attempts - 1) {
+      const backoff = base * Math.pow(2, i);
+      const jitter = backoff * (0.75 + Math.random() * 0.5);
+      await new Promise((r) => setTimeout(r, jitter));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 function n(value: unknown): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -44,11 +76,11 @@ export async function fetchDeltaFutures1mCandles(
   const startSec = endSec - count * 60 - 120;
 
   const [candlesRes, tickerRes] = await Promise.all([
-    fetch(
+    fetchWithRetry(
       `${DELTA_REST_BASE}/v2/history/candles?resolution=1m&symbol=${encodeURIComponent(sym)}&start=${startSec}&end=${endSec}`,
       { headers: JSON_HEADERS, cache: "no-store" },
     ),
-    fetch(`${DELTA_REST_BASE}/v2/tickers/${encodeURIComponent(sym)}`, {
+    fetchWithRetry(`${DELTA_REST_BASE}/v2/tickers/${encodeURIComponent(sym)}`, {
       headers: JSON_HEADERS,
       cache: "no-store",
     }),

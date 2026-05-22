@@ -11,6 +11,7 @@ export const PAPER_TRADE_EXIT_REASONS = [
   "BREAKEVEN",
   "LIQUIDATION_RISK",
   "PROFIT_LOCK",
+  "MOM_DECAY",
 ] as const;
 
 /**

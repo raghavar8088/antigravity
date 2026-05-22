@@ -46,6 +46,27 @@ export function paperLastMarkSpreadPct(last: number, mark: number): number {
   return (Math.abs(last - mark) / mark) * 100;
 }
 
+/**
+ * Volatility-scaled slippage in bps (P2.2.4).
+ *
+ * Scales base slippage by `clamp(currentAtr / avgAtr30, 0.5, 2.5)`:
+ * - Low vol regime (curATR < avgATR): slippage is reduced (down to 50% of base)
+ * - High vol regime (curATR > avgATR): slippage is widened (up to 250% of base)
+ *
+ * Returns `baseBps` unchanged when ATR inputs are invalid (no behavior change).
+ */
+export function paperDynamicSlippageBps(
+  baseBps: number,
+  currentAtr: number,
+  avgAtr30: number,
+): number {
+  if (!Number.isFinite(baseBps) || baseBps <= 0) return baseBps;
+  if (!Number.isFinite(currentAtr) || currentAtr <= 0) return baseBps;
+  if (!Number.isFinite(avgAtr30) || avgAtr30 <= 0) return baseBps;
+  const ratio = Math.min(2.5, Math.max(0.5, currentAtr / avgAtr30));
+  return baseBps * ratio;
+}
+
 export type PaperHardExitReason = "LIQUIDATION_RISK" | "SL" | "TP" | "TIME";
 
 export type PaperHardExitResult =
@@ -345,6 +366,28 @@ export type PaperNotionalForTargetRiskArgs = {
   minNotional: number;
   maxNotional: number;
 };
+
+/**
+ * Equity-curve aware sizing multiplier (P2.3.3, Kelly-lite).
+ *
+ * Adjusts position size based on the last N closed-trade outcomes (most-recent first):
+ * - ≥2 consecutive losses → 0.5× (halve next notional)
+ * - ≥3 consecutive wins   → restore to 1.0× (default; capped at 1.0 to avoid Kelly blow-up)
+ *
+ * Returns 1.0 when fewer than 2 trades in the window. Clamped to [0.5, 1.0].
+ *
+ * `recentNetPnls` is ordered most-recent-first (index 0 = last closed trade).
+ */
+export function paperEquityCurveSizingMul(recentNetPnls: ReadonlyArray<number>): number {
+  if (!recentNetPnls || recentNetPnls.length < 2) return 1.0;
+  let consecLosses = 0;
+  for (const p of recentNetPnls) {
+    if (Number.isFinite(p) && p < 0) consecLosses++;
+    else break;
+  }
+  if (consecLosses >= 2) return 0.5;
+  return 1.0;
+}
 
 /**
  * Target position notional so `paperEstimatedMaxLossAtStopSl` ≤ `equityUsd × riskPctOfEquity`,

@@ -202,6 +202,8 @@ const CONTRACT_SIZE = 1; // 1 USD per contract on Delta
 const MAX_DRAWDOWN_LOCK_PCT = 25; // Pause entries if drawdown > 25%
 /** Hysteresis: resume entries when drawdown falls to this fraction of the lock threshold (e.g. 0.84 → 21%). */
 const DRAWDOWN_LOCK_RECOVERY_FRAC = 0.84;
+/** Intraday soft DD lock (P2.3.4): pause entries when daily P&L drops to −2% of day-start equity. */
+const INTRADAY_SOFT_DD_LOCK_PCT = 2;
 const MAX_LOSS_PER_TRADE_PCT = 2; // Max 2% of balance at risk (SL + fees) per new position; skip if exceeded
 const MIN_POSITION_NOTIONAL = 100;
 const MAX_POSITION_NOTIONAL_DEFAULT = 500;
@@ -757,6 +759,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const fundingTickerMetaWarnedRef = useRef(false);
   const peakEquityForDrawdownRef = useRef(INITIAL_BALANCE);
   const drawdownEntryPausedRef = useRef(false);
+  // Intraday soft DD lock — pauses entries when day-over-day equity drops 2%; resets at UTC midnight.
+  const dailyStartEquityRef = useRef(INITIAL_BALANCE);
+  const dailyStartUtcDayRef = useRef<string>(new Date().toISOString().slice(0, 10));
+  const intradayDdPausedRef = useRef(false);
   const positionsRef = useRef(positions);
   const tradesRef = useRef(trades);
   const balanceRef = useRef(balance);
@@ -2013,6 +2019,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           drawdownEntryPausedRef.current = false;
         }
 
+        // Intraday soft DD lock (P2.3.4): roll daily snapshot at UTC midnight, pause at −2%.
+        const currentUtcDay = new Date(now).toISOString().slice(0, 10);
+        if (currentUtcDay !== dailyStartUtcDayRef.current) {
+          dailyStartUtcDayRef.current = currentUtcDay;
+          dailyStartEquityRef.current = equityForDrawdown;
+          intradayDdPausedRef.current = false;
+        }
+        const dailyDdPct =
+          dailyStartEquityRef.current > 0
+            ? ((dailyStartEquityRef.current - equityForDrawdown) / dailyStartEquityRef.current) * 100
+            : 0;
+        if (dailyDdPct >= INTRADAY_SOFT_DD_LOCK_PCT) intradayDdPausedRef.current = true;
+
         setPositions(survivors);
 
         for (const job of exitJobs) {
@@ -2063,6 +2082,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           hasMarketData &&
           !pauseRef.current &&
           !drawdownEntryPausedRef.current &&
+          !intradayDdPausedRef.current &&
           !forceProbeOpenedRef.current;
 
         if (shouldRunProbe) {
@@ -2105,7 +2125,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           }
         }
 
-        if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current) {
+        if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current && !intradayDdPausedRef.current) {
           const equityForEntry = balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0);
           const replaceWeakest = deskEntryReplaceWeakestFromEnv();
           type EntryCandidate = {

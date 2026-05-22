@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/rank-strategies",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/policy-snapshot",
+      "schedule": "5 0 * * *"
     }
   ]
 }

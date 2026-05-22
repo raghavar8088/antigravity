@@ -36,6 +36,10 @@ export type FuturesSignalInputs = {
   prevMacdLine: number;
   prevMacdSignal: number;
   atr14: number;
+  /** Rolling 30-bar average of ATR14 — used for vol-scaled slippage and feature engineering. */
+  atr14Avg30: number;
+  /** Volume Z-score over last 30 bars (P2.1.5). */
+  volZ30: number;
   obvSlope: number;
   momentum10: number;
   rsi7: number;
@@ -613,6 +617,30 @@ export function buildSignalInputs(
     macdHist: macdVals.hist[idx],
     prevMacdHist: macdVals.hist[idx - 1] ?? macdVals.hist[idx],
     atr14: atr14[idx],
+    atr14Avg30: (() => {
+      const from = Math.max(0, idx - 29);
+      let sum = 0;
+      let n = 0;
+      for (let j = from; j <= idx; j++) {
+        const v = atr14[j];
+        if (Number.isFinite(v) && v > 0) { sum += v; n++; }
+      }
+      return n > 0 ? sum / n : atr14[idx];
+    })(),
+    volZ30: (() => {
+      const from = Math.max(0, idx - 29);
+      const window: number[] = [];
+      for (let j = from; j <= idx; j++) {
+        const v = volumes[j];
+        if (Number.isFinite(v)) window.push(v);
+      }
+      if (window.length < 5) return 0;
+      const mean = window.reduce((s, v) => s + v, 0) / window.length;
+      const variance = window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length;
+      const sd = Math.sqrt(variance);
+      const cur = volumes[idx];
+      return sd > 0 ? (cur - mean) / sd : 0;
+    })(),
     obvSlope: obvSlopeVals[idx],
     williamsR: williamsR_vals[idx],
     prevWilliamsR: williamsR_vals[idx - 1] ?? williamsR_vals[idx],
@@ -769,10 +797,15 @@ export function evalBtcFtTemplateSignal(
       if (s.momentum3 < -s.atr14 * 1.08 && s.volRatio > 1.65) add(20, "flow burst-");
       if (s.volRatio > 2 && s.momentum3 < 0) add(14, "heavy sell vol");
       if (s.obvSlope < -Math.abs(s.atr14) * 8) add(10, "OBV dump");
+      // P2.1.5: vol Z-score + funding sentiment (low initial weight; calibrate later)
+      if (s.volZ30 > 1.5) add(4, "volZ30 spike");
+      if (s.volZ30 > 2.5 && s.momentum3 < 0) add(4, "volZ30 spike-");
     } else {
       if (s.momentum3 > s.atr14 * 1.08 && s.volRatio > 1.65) add(20, "flow burst+");
       if (s.volRatio > 2 && s.momentum3 > 0) add(14, "heavy buy vol");
       if (s.obvSlope > Math.abs(s.atr14) * 8) add(10, "OBV thrust");
+      if (s.volZ30 > 1.5) add(4, "volZ30 spike");
+      if (s.volZ30 > 2.5 && s.momentum3 > 0) add(4, "volZ30 spike+");
     }
   } else if (tpl === "MTF_EMA_STACK") {
     // HTF 5m & 15m EMA9>EMA21 alignment + LTF EMA bias + momentum
