@@ -13,6 +13,7 @@
     "replay:compare": "npx tsx scripts/replay-compare.ts",
     "rank:btc-ft": "npx tsx scripts/rank-btc-ft-strategies.ts",
     "research:rank-btc-ft": "npx tsx scripts/research-rank-btc-ft.ts",
+    "calibrate:weights": "npx tsx scripts/calibrate-signal-weights.ts",
     "test:mongo": "node --env-file=.env.local scripts/test-mongo.mjs"
   },
   "dependencies": {

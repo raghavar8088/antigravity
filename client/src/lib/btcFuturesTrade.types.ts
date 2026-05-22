@@ -37,4 +37,10 @@ export interface BTCFuturesTrade {
   liquidationDistancePct: number;
   /** Stable id for Supabase upsert / sync queue (set at close). */
   clientTradeId?: string;
+  /**
+   * Signal feature contributions at entry — used for offline weight calibration.
+   * Populated when the strategy has a btcFtTemplate; omitted on simple signal-key strats.
+   * Schema: [{ reason: "HTF bull stack", pts: 18 }, ...]
+   */
+  signalContributions?: Array<{ reason: string; pts: number }>;
 }

@@ -50,6 +50,7 @@ import {
   deskPaperMakerFillModelEnabled,
   deskPaperMakerFeePctFromEnv,
   deskPaperMakerFillProbabilityFromEnv,
+  applyWinnersOnlyGate,
   type DeskRegimePersistEvent,
   type DeskEntryUtcSession,
   histogramRegimePolls,
@@ -138,6 +139,7 @@ import {
 import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
 import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
 import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremiumStrategies";
+import { btcFtUseRankedEnabled, winnerIdsFromRankings, type BtcFtStrategyRankingRow } from "@/lib/btcFtRoster";
 import {
   atrPctFromAtr,
   computeAdaptiveTpPct,
@@ -274,6 +276,8 @@ export interface BTCFuturesPosition {
   initialMargin: number;
   /** P1-F: rank at open for slot competition when `MAX_OPEN_POSITIONS` is full. */
   entryPriorityScore?: number;
+  /** Signal feature contributions at entry — for offline weight calibration (P0.1.1). */
+  signalContributions?: Array<{ reason: string; pts: number }>;
 }
 
 /** Strategy Definition — imported from @/lib/futuresStrategies */
@@ -643,10 +647,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   const DESK_REGIME_LS_SAVE_INTERVAL_MS = 15_000;
 
+  // Ranked winners from /api/strategy-rankings — populated when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
+  const [rankedWinnerIds, setRankedWinnerIds] = useState<ReadonlySet<number>>(new Set());
+
   const deskStrategiesResult = useMemo(() => {
     const allow = strategyIds && strategyIds.length > 0 ? new Set(strategyIds) : null;
-    const raw = !allow ? [...STRAT_DEFS] : STRAT_DEFS.filter((s) => allow.has(s.id));
-    const base = raw.length > 0 ? raw : [...STRAT_DEFS];
+    let raw = !allow ? [...STRAT_DEFS] : STRAT_DEFS.filter((s) => allow.has(s.id));
+    if (raw.length === 0) raw = [...STRAT_DEFS];
+    // Apply winners gate when ranked mode is on and we have winner data
+    const gated =
+      btcFtUseRankedEnabled() && rankedWinnerIds.size > 0
+        ? applyWinnersOnlyGate(raw, rankedWinnerIds)
+        : raw;
+    const base = gated.length > 0 ? gated : raw;
     return buildPaperDeskStrategies(base, {
       strategyIdAllowlist: null,
       minTpSlRatio: deskMinTpSlRatioFromEnv(),
@@ -655,7 +668,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       allowFakeDiversity:
         deskFakeDiversityEnabledViaEnv() || Boolean(strategyIds && strategyIds.length > 0),
     });
-  }, [strategyIds]);
+  }, [strategyIds, rankedWinnerIds]);
 
   const activeStratDefs = deskStrategiesResult.strategies;
   const deskPolicySnapshot = useMemo(
@@ -985,7 +998,33 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     };
   }, [activeStrategyIdSet, loadLs, cloudAccountKey]);
 
-  // Supabase rolling expectancy → auto-disable losers (union with manual list; never auto re-enable)
+  // Ranked winners gate — fetch strategy rankings when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
+  useEffect(() => {
+    if (!btcFtUseRankedEnabled()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/strategy-rankings", { cache: "no-store" });
+        if (cancelled || !res.ok) return;
+        const body = (await res.json()) as { ok?: boolean; rankings?: BtcFtStrategyRankingRow[] };
+        if (!body.ok || !Array.isArray(body.rankings)) return;
+        const ids = winnerIdsFromRankings(body.rankings);
+        if (cancelled) return;
+        setRankedWinnerIds(ids);
+        if (process.env.NODE_ENV === "development") {
+          console.info("[btc-futures-paper] ranked winners loaded", {
+            winnerCount: ids.size,
+            totalRanked: body.rankings.length,
+          });
+        }
+      } catch {
+        // Network/parse — keep prior winner set
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // fetch once on mount; re-run requires page refresh (rankings change on rebuild)
+
+  // Rolling expectancy → auto-disable losers (union with manual list; never auto re-enable)
   useEffect(() => {
     if (disableAutoKill || !deskAutoDisableStratsEnabled()) {
       setAutoDisabledStratIds([]);
@@ -1402,6 +1441,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     atr14: number;
     regime: RegimeTag;
     entryBook: ReadonlyArray<{ side: Side; notional: number }>;
+    signalContributions?: Array<{ reason: string; pts: number }>;
     equityUsd: number;
     entryPriorityScore: number;
   };
@@ -1634,6 +1674,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         breakevenMoved: false,
         initialMargin: marginUsed,
         entryPriorityScore: gate.entryPriorityScore,
+        signalContributions: gate.signalContributions,
       };
 
       setPositions(prev => [...prev, position]);
@@ -1714,6 +1755,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       exitReason: exitReason!,
       liquidationPrice: position.liquidationPrice,
       liquidationDistancePct: liqDist,
+      signalContributions: position.signalContributions,
     };
 
     setTrades(prev => [...prev.slice(-MAX_TRADES + 1), trade]);
@@ -2060,6 +2102,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             regime: RegimeTag;
             priority: number;
             slotKey: string;
+            signalContributions?: Array<{ reason: string; pts: number }>;
           };
           const entryCandidates: EntryCandidate[] = [];
 
@@ -2195,6 +2238,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     tpPct: strat.tpPct,
                   }),
                   slotKey,
+                  signalContributions: signal.contributions,
                 });
                 if (pollDebug) pollDebug.candidatesBuilt += 1;
               } else if (pollDebug) {
@@ -2243,6 +2287,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               entryBook,
               equityUsd: equityForEntry,
               entryPriorityScore: c.priority,
+              signalContributions: c.signalContributions,
             });
             if (!opened) return false;
             if (pollDebug) pollDebug.openedThisPoll += 1;

@@ -2,18 +2,18 @@
 
 exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and first clientTradeId 1`] = `
 {
-  "finalBalance": 1013.805,
+  "finalBalance": 1009.87,
   "firstClientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
   "stats": {
-    "count": 11,
+    "count": 8,
     "exitReasonCounts": {
-      "PROFIT_LOCK": 8,
-      "SL": 3,
+      "PROFIT_LOCK": 6,
+      "SL": 2,
     },
-    "expectancy": 1.436818181818182,
-    "sumNet": 15.805000000000001,
+    "expectancy": 1.4837500000000001,
+    "sumNet": 11.870000000000001,
   },
-  "tradeCount": 11,
+  "tradeCount": 8,
   "trades": [
     {
       "clientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
@@ -28,31 +28,19 @@ exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and
       "strategyId": 111,
     },
     {
-      "clientTradeId": "57740f52-c943-429f-8000-095c6a167",
-      "exitReason": "SL",
-      "netPnl": -0.065,
-      "strategyId": 111,
-    },
-    {
       "clientTradeId": "3676212c-a841-439d-8000-0f4c48f19",
       "exitReason": "PROFIT_LOCK",
       "netPnl": 2,
       "strategyId": 112,
     },
     {
-      "clientTradeId": "2ea6f50d-b091-4b4d-8000-0ec145b38",
+      "clientTradeId": "026f6ddc-9c58-4784-8000-0c0ddc3e9",
       "exitReason": "PROFIT_LOCK",
       "netPnl": 2,
       "strategyId": 112,
     },
     {
-      "clientTradeId": "c064d893-5e53-458f-8000-002d676a6",
-      "exitReason": "PROFIT_LOCK",
-      "netPnl": 2,
-      "strategyId": 112,
-    },
-    {
-      "clientTradeId": "787e63bc-e649-4d95-8000-0bacccd89",
+      "clientTradeId": "50874473-ceb0-456c-8000-09235ea46",
       "exitReason": "PROFIT_LOCK",
       "netPnl": 2,
       "strategyId": 112,
@@ -70,13 +58,7 @@ exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and
       "strategyId": 111,
     },
     {
-      "clientTradeId": "a5da20ca-3bed-4031-8000-067688eff",
-      "exitReason": "PROFIT_LOCK",
-      "netPnl": 2,
-      "strategyId": 111,
-    },
-    {
-      "clientTradeId": "a12d009c-3f1a-44c6-8000-0639faea9",
+      "clientTradeId": "50423454-ce75-45a9-8000-092f09a61",
       "exitReason": "PROFIT_LOCK",
       "netPnl": 2,
       "strategyId": 111,

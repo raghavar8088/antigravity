@@ -613,18 +613,25 @@ function btcFtSessionExpansionHour(hour: number | null): boolean {
   return london || ny;
 }
 
+/** Single feature contribution for calibration logging. */
+export type SignalContribution = { reason: string; pts: number };
+
 export function evalBtcFtTemplateSignal(
   s: FuturesSignalInputs,
   strat: FuturesStratDef,
-): { score: number; reason: string } {
+): { score: number; reason: string; contributions: SignalContribution[] } {
   const tpl = strat.btcFtTemplate;
-  if (!tpl) return { score: 0, reason: "" };
+  if (!tpl) return { score: 0, reason: "", contributions: [] };
 
   let score = 0;
   const reasons: string[] = [];
+  const contributions: SignalContribution[] = [];
   const add = (pts: number, desc: string) => {
     score += pts;
-    if (pts > 0) reasons.push(desc);
+    if (pts > 0) {
+      reasons.push(desc);
+      contributions.push({ reason: desc, pts });
+    }
   };
   const short = strat.signalKey.includes("SHORT");
   const v = strat.btcFtVariant ?? 0;
@@ -887,7 +894,7 @@ export function evalBtcFtTemplateSignal(
   }
 
   score += Math.max(0, 3 - v) * 2;
-  return { score, reason: reasons.slice(0, 3).join(", ") };
+  return { score, reason: reasons.slice(0, 3).join(", "), contributions };
 }
 
 export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
@@ -1132,7 +1139,7 @@ export function passesRelaxedDeskEntryConfirmation(s: FuturesSignalInputs, strat
 
 // ========== SIGNAL SCORING ==========
 
-export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef): { score: number; reason: string } {
+export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef): { score: number; reason: string; contributions?: SignalContribution[] } {
   if (strat.btcFtTemplate) {
     return evalBtcFtTemplateSignal(s, strat);
   }
