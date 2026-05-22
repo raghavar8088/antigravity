@@ -10,6 +10,7 @@ import {
   type BTCFuturesEngineOptions,
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
+import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
