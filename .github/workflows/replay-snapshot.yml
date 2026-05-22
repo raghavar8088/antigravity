@@ -1,0 +1,54 @@
+name: Replay Snapshot Gate
+
+# P2.5.4: Block merges that regress the paper desk replay (signal math, PnL accounting,
+# or sizing changes). Runs on PRs that touch the three core signal/math/replay modules.
+
+on:
+  pull_request:
+    paths:
+      - "client/src/lib/futuresSignals.ts"
+      - "client/src/lib/futuresPaperMath.ts"
+      - "client/src/lib/futuresReplayEngine.ts"
+      - "client/src/lib/futuresDeskRuntime.ts"
+      - "client/src/lib/futuresStrategies.ts"
+      - "client/src/lib/btcFtStrategyTemplates.ts"
+      - "client/src/lib/__tests__/**"
+      - "client/src/lib/__snapshots__/**"
+
+jobs:
+  replay-gate:
+    name: Replay regression gate
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --ignore-scripts
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+      - name: Run full test suite (includes replay E2E + golden snapshot)
+        run: npm test -- --reporter=verbose
+
+      - name: Replay regression summary
+        if: failure()
+        run: |
+          echo "::error::Replay snapshot gate failed."
+          echo "::error::If the snapshot diff is an EXPECTED improvement (e.g. new P2 lever),"
+          echo "::error::update it locally with: cd client && npx vitest run -u"
+          echo "::error::then commit the updated .snap file alongside your code changes."
+          echo "::error::If sumNet regressed (lower than baseline), investigate before merging."

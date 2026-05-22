@@ -57,6 +57,11 @@ import {
 } from "@/lib/futuresSessionMetrics";
 import type { ReplayCandle } from "@/lib/futuresReplayFixtures";
 
+/** P2.2.2: price move % required to trigger the 50% partial exit at TP1. */
+const TP1_PRICE_MOVE_PCT = 0.4;
+/** P2.2.2: fraction of the position to close at TP1. */
+const TP1_PARTIAL_FRACTION = 0.5;
+
 const RAW_TAKER_FEE_PCT = 0.001;
 
 /**
@@ -147,6 +152,8 @@ type ReplayPosition = FuturesExitStepPosition & {
   initialMargin: number;
   /** Consecutive bars below the momentum-decay threshold. Resets on reversal. */
   momDecayBars: number;
+  /** True after the first 50% of the position exits at TP1; prevents double-fire. */
+  halfExited: boolean;
 };
 
 /** Stable UUID-shaped id for golden snapshots (no crypto.randomUUID). */
@@ -155,8 +162,9 @@ export function replayClientTradeId(
   strategyId: number,
   openedAtMs: number,
   closedAtMs: number,
+  suffix = "",
 ): string {
-  const seed = `${symbol}:${strategyId}:${openedAtMs}:${closedAtMs}`;
+  const seed = `${symbol}:${strategyId}:${openedAtMs}:${closedAtMs}${suffix}`;
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i);
@@ -239,6 +247,81 @@ function closeReplayPosition(
     ),
   };
   return { trade, marginReturn: pos.marginUsed, netPnl };
+}
+
+/**
+ * P2.2.2: Close exactly half of a position (TP1 partial exit).
+ * Returns the partial trade record, the portion of margin returned, the partial netPnl,
+ * and the updated remaining position with halfExited=true and halved notional/margin/contracts.
+ * Only call when pos.contracts >= 2.
+ */
+function closeReplayPositionPartial(
+  pos: ReplayPosition,
+  exitPriceLevel: number,
+  exitReason: FuturesTradeExitReason,
+  closedAtMs: number,
+  slippageBps: number,
+): { trade: BTCFuturesTrade; marginReturn: number; netPnl: number; remainingPos: ReplayPosition } {
+  const halfContracts = Math.max(1, Math.floor(pos.contracts * TP1_PARTIAL_FRACTION));
+  const halfNotional = paperNotional(halfContracts, CONTRACT_SIZE);
+  const halfFraction = pos.notional > 0 ? halfNotional / pos.notional : TP1_PARTIAL_FRACTION;
+  const halfMargin = pos.marginUsed * halfFraction;
+  const halfFunding = pos.fundingCosts * halfFraction;
+
+  const slippedExit = paperApplyExitSlippage(pos.side, exitPriceLevel, slippageBps);
+  const { grossPnl, fees, netPnl } = paperNetPnlOnClose({
+    entryPrice: pos.entryPrice,
+    exitPrice: slippedExit,
+    notional: halfNotional,
+    side: pos.side,
+    takerFeePct: TAKER_FEE_PCT,
+    fundingCosts: halfFunding,
+    minAbsNetWinUsd: 0, // no artificial floor for partial; the position is still open
+  });
+  const netPnlPct = halfMargin > 0 ? (netPnl / halfMargin) * 100 : 0;
+  const openedAtMs = new Date(pos.openedAt).getTime();
+
+  const trade: BTCFuturesTrade = {
+    clientTradeId: replayClientTradeId(pos.symbol, pos.strategyId, openedAtMs, closedAtMs, ":tp1"),
+    id: `${pos.id}-tp1`,
+    symbol: pos.symbol,
+    strategyId: pos.strategyId,
+    strategyName: pos.strategyName,
+    side: pos.side,
+    entryPrice: pos.entryPrice,
+    exitPrice: slippedExit,
+    contracts: halfContracts,
+    notional: halfNotional,
+    marginUsed: halfMargin,
+    realizedPnl: grossPnl,
+    fees,
+    netPnl,
+    netPnlPct,
+    priceMovePct: paperPriceMovePctOnNotional(pos.entryPrice, slippedExit, pos.side),
+    fundingCosts: halfFunding,
+    lastFundingAppliedAt: pos.lastFundingAppliedAt,
+    fundingSinceOpenMs: Math.max(0, closedAtMs - openedAtMs),
+    openedAt: pos.openedAt,
+    closedAt: new Date(closedAtMs).toISOString(),
+    exitReason,
+    liquidationPrice: pos.liquidationPrice,
+    liquidationDistancePct: paperLiquidationDistancePct(slippedExit, pos.liquidationPrice, pos.side),
+  };
+
+  const remainingContracts = pos.contracts - halfContracts;
+  const remainingNotional = pos.notional - halfNotional;
+  const remainingMargin = pos.marginUsed - halfMargin;
+
+  const remainingPos: ReplayPosition = {
+    ...pos,
+    contracts: remainingContracts,
+    notional: remainingNotional,
+    marginUsed: remainingMargin,
+    fundingCosts: pos.fundingCosts - halfFunding,
+    halfExited: true,
+  };
+
+  return { trade, marginReturn: halfMargin, netPnl, remainingPos };
 }
 
 export function runPaperDeskReplay(
@@ -395,6 +478,7 @@ export function runPaperDeskReplay(
       breakevenMoved: false,
       initialMargin: marginUsed,
       momDecayBars: 0,
+      halfExited: false,
     });
 
     balance -= marginUsed;
@@ -461,12 +545,39 @@ export function runPaperDeskReplay(
         continue;
       }
 
-      const { patched, close } = resolveFuturesExitStep(pos, holdTimeMul, nowMs, {
+      // P2.2.2: partial exit at TP1 — when price has moved ≥TP1_PRICE_MOVE_PCT in
+      // trade direction but not yet past full TP, close half the position.
+      // Requires ≥2 contracts so the remaining position is non-zero.
+      let posForExit: ReplayPosition = { ...pos, momDecayBars: newDecayBars };
+      if (!pos.halfExited && pos.contracts >= 2) {
+        const tp1Price =
+          pos.side === "LONG"
+            ? pos.entryPrice * (1 + TP1_PRICE_MOVE_PCT / 100)
+            : pos.entryPrice * (1 - TP1_PRICE_MOVE_PCT / 100);
+        const tp1Hit =
+          pos.side === "LONG"
+            ? pos.markPrice >= tp1Price && pos.markPrice < pos.tpPrice
+            : pos.markPrice <= tp1Price && pos.markPrice > pos.tpPrice;
+        if (tp1Hit) {
+          const { trade, marginReturn, netPnl: tp1Net, remainingPos } = closeReplayPositionPartial(
+            pos,
+            markPrice,
+            "PROFIT_LOCK",
+            nowMs,
+            dynSlipBps,
+          );
+          trades.push(trade);
+          balance += marginReturn + tp1Net;
+          posForExit = { ...remainingPos, momDecayBars: newDecayBars };
+        }
+      }
+
+      const { patched, close } = resolveFuturesExitStep(posForExit, holdTimeMul, nowMs, {
         takerFeePct: TAKER_FEE_PCT,
         exitSlippageBps: dynSlipBps,
         atr14: input.atr14,
       });
-      const merged: ReplayPosition = { ...pos, ...patched, momDecayBars: newDecayBars };
+      const merged: ReplayPosition = { ...posForExit, ...patched, momDecayBars: newDecayBars };
       if (close.shouldClose && close.reason) {
         const { trade, marginReturn, netPnl } = closeReplayPosition(
           merged,
