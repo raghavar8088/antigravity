@@ -8,47 +8,57 @@ import { BTC_FT_PREMIUM_DEFS } from "@/lib/btcFtPremiumStrategies";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
-/** CORE 20 — curated, empirically-validated winners. */
+/**
+ * CORE 20 — curated winners.
+ *
+ * SL/TP calibration (2026-05-22):
+ *   Previous SL 0.26-0.32% was inside BTC's 1-min ATR noise band (~0.15-0.30%).
+ *   Result: 0-4% win rate — almost every trade stopped by normal candle noise.
+ *   Fix: SL widened to 0.50-0.60% (1.5-2× ATR), TP to 1.50-1.80% (3:1 R:R).
+ *   At 3:1 R:R a strategy needs only 26%+ WR to be profitable.
+ *   HoldMinutes extended ~50% so TP has time to be reached.
+ *   ConfluenceMin raised to 5-6 to reduce marginal entries.
+ */
 const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
-  // ADX Trend
-  { id: 91, name: "Trend_Continuation_Long", category: "Trend", signalKey: "TREND_CONT_LONG", slPct: 0.26, tpPct: 0.80, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 },
-  { id: 92, name: "Trend_Continuation_Short", category: "Trend", signalKey: "TREND_CONT_SHORT", slPct: 0.26, tpPct: 0.80, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 },
+  // ADX Trend — strong directional confirmation required
+  { id: 91, name: "Trend_Continuation_Long",  category: "Trend",     signalKey: "TREND_CONT_LONG",        slPct: 0.50, tpPct: 1.50, cooldownMin: 8,  holdMinutes: 40, confluenceMin: 5 },
+  { id: 92, name: "Trend_Continuation_Short", category: "Trend",     signalKey: "TREND_CONT_SHORT",       slPct: 0.50, tpPct: 1.50, cooldownMin: 8,  holdMinutes: 40, confluenceMin: 5 },
 
-  // Breakout
-  { id: 95, name: "Breakout_Long", category: "Breakout", signalKey: "BREAKOUT_LONG", slPct: 0.32, tpPct: 0.85, cooldownMin: 5, holdMinutes: 20, confluenceMin: 5 },
-  { id: 96, name: "Breakout_Short", category: "Breakout", signalKey: "BREAKOUT_SHORT", slPct: 0.32, tpPct: 0.85, cooldownMin: 5, holdMinutes: 20, confluenceMin: 5 },
+  // Breakout — needs room for false-break shake-out
+  { id: 95, name: "Breakout_Long",            category: "Breakout",  signalKey: "BREAKOUT_LONG",          slPct: 0.55, tpPct: 1.65, cooldownMin: 7,  holdMinutes: 32, confluenceMin: 5 },
+  { id: 96, name: "Breakout_Short",           category: "Breakout",  signalKey: "BREAKOUT_SHORT",         slPct: 0.55, tpPct: 1.65, cooldownMin: 7,  holdMinutes: 32, confluenceMin: 5 },
 
-  // MTF Trend
-  { id: 111, name: "MTF_Trend_Align_Long", category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_LONG", slPct: 0.26, tpPct: 0.82, cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true },
-  { id: 112, name: "MTF_Trend_Align_Short", category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_SHORT", slPct: 0.26, tpPct: 0.82, cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true },
+  // MTF Trend — HTF alignment gives higher conviction, hold longer
+  { id: 111, name: "MTF_Trend_Align_Long",    category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_LONG",   slPct: 0.50, tpPct: 1.55, cooldownMin: 8,  holdMinutes: 50, confluenceMin: 5, requiresHtf: true },
+  { id: 112, name: "MTF_Trend_Align_Short",   category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_SHORT",  slPct: 0.50, tpPct: 1.55, cooldownMin: 8,  holdMinutes: 50, confluenceMin: 5, requiresHtf: true },
 
-  // MTF MACD
-  { id: 117, name: "MTF_MACD_Align_Long", category: "MTF MACD", signalKey: "MTF_MACD_ALIGN_LONG", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
-  { id: 118, name: "MTF_MACD_Align_Short", category: "MTF MACD", signalKey: "MTF_MACD_ALIGN_SHORT", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
+  // MTF MACD — momentum cross needs space for oscillation noise
+  { id: 117, name: "MTF_MACD_Align_Long",     category: "MTF MACD",  signalKey: "MTF_MACD_ALIGN_LONG",    slPct: 0.52, tpPct: 1.56, cooldownMin: 8,  holdMinutes: 45, confluenceMin: 5, requiresHtf: true },
+  { id: 118, name: "MTF_MACD_Align_Short",    category: "MTF MACD",  signalKey: "MTF_MACD_ALIGN_SHORT",   slPct: 0.52, tpPct: 1.56, cooldownMin: 8,  holdMinutes: 45, confluenceMin: 5, requiresHtf: true },
 
-  // MTF ADX
-  { id: 123, name: "MTF_ADX_Power_Long", category: "MTF ADX", signalKey: "MTF_ADX_POWER_LONG", slPct: 0.28, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 5, requiresHtf: true },
-  { id: 124, name: "MTF_ADX_Power_Short", category: "MTF ADX", signalKey: "MTF_ADX_POWER_SHORT", slPct: 0.28, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 5, requiresHtf: true },
+  // MTF ADX — trend-strength filter, allow more hold time
+  { id: 123, name: "MTF_ADX_Power_Long",      category: "MTF ADX",   signalKey: "MTF_ADX_POWER_LONG",     slPct: 0.52, tpPct: 1.56, cooldownMin: 9,  holdMinutes: 52, confluenceMin: 5, requiresHtf: true },
+  { id: 124, name: "MTF_ADX_Power_Short",     category: "MTF ADX",   signalKey: "MTF_ADX_POWER_SHORT",    slPct: 0.52, tpPct: 1.56, cooldownMin: 9,  holdMinutes: 52, confluenceMin: 5, requiresHtf: true },
 
-  // MTF Breakout
-  { id: 125, name: "MTF_Breakout_Long", category: "MTF Break", signalKey: "MTF_BREAKOUT_LONG", slPct: 0.30, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5, requiresHtf: true },
-  { id: 126, name: "MTF_Breakout_Short", category: "MTF Break", signalKey: "MTF_BREAKOUT_SHORT", slPct: 0.30, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5, requiresHtf: true },
+  // MTF Breakout — multi-TF breakout confirmation, widest TP target
+  { id: 125, name: "MTF_Breakout_Long",       category: "MTF Break", signalKey: "MTF_BREAKOUT_LONG",      slPct: 0.55, tpPct: 1.65, cooldownMin: 8,  holdMinutes: 45, confluenceMin: 5, requiresHtf: true },
+  { id: 126, name: "MTF_Breakout_Short",      category: "MTF Break", signalKey: "MTF_BREAKOUT_SHORT",     slPct: 0.55, tpPct: 1.65, cooldownMin: 8,  holdMinutes: 45, confluenceMin: 5, requiresHtf: true },
 
-  // Smart Money
-  { id: 131, name: "SmartMoney_Accum_Long", category: "Smart Money", signalKey: "SM_ACCUM_LONG", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
-  { id: 132, name: "SmartMoney_Distrib_Short", category: "Smart Money", signalKey: "SM_DISTRIB_SHORT", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
+  // Smart Money — institutional-level setups, higher conviction
+  { id: 131, name: "SmartMoney_Accum_Long",   category: "Smart Money", signalKey: "SM_ACCUM_LONG",        slPct: 0.50, tpPct: 1.55, cooldownMin: 8,  holdMinutes: 50, confluenceMin: 6 },
+  { id: 132, name: "SmartMoney_Distrib_Short",category: "Smart Money", signalKey: "SM_DISTRIB_SHORT",     slPct: 0.50, tpPct: 1.55, cooldownMin: 8,  holdMinutes: 50, confluenceMin: 6 },
 
-  // Order Flow
-  { id: 133, name: "OrderFlow_Break_Long", category: "Order Flow", signalKey: "OF_BREAK_LONG", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 134, name: "OrderFlow_Break_Short", category: "Order Flow", signalKey: "OF_BREAK_SHORT", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
+  // Order Flow — aggressive breakout, needs shake-out room
+  { id: 133, name: "OrderFlow_Break_Long",    category: "Order Flow",  signalKey: "OF_BREAK_LONG",        slPct: 0.52, tpPct: 1.56, cooldownMin: 7,  holdMinutes: 38, confluenceMin: 5 },
+  { id: 134, name: "OrderFlow_Break_Short",   category: "Order Flow",  signalKey: "OF_BREAK_SHORT",       slPct: 0.52, tpPct: 1.56, cooldownMin: 7,  holdMinutes: 38, confluenceMin: 5 },
 
-  // Wyckoff
-  { id: 139, name: "Wyckoff_Spring_Long", category: "Wyckoff", signalKey: "WYCKOFF_SPRING_LONG", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
-  { id: 140, name: "Wyckoff_Upthrust_Short", category: "Wyckoff", signalKey: "WYCKOFF_UPTHRUST_SHORT", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
+  // Wyckoff — slow structural pattern, longest hold
+  { id: 139, name: "Wyckoff_Spring_Long",     category: "Wyckoff",   signalKey: "WYCKOFF_SPRING_LONG",    slPct: 0.55, tpPct: 1.65, cooldownMin: 10, holdMinutes: 60, confluenceMin: 6 },
+  { id: 140, name: "Wyckoff_Upthrust_Short",  category: "Wyckoff",   signalKey: "WYCKOFF_UPTHRUST_SHORT", slPct: 0.55, tpPct: 1.65, cooldownMin: 10, holdMinutes: 60, confluenceMin: 6 },
 
-  // Session
-  { id: 151, name: "OpeningDrive_Long", category: "Session", signalKey: "OPEN_DRIVE_LONG", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
-  { id: 152, name: "OpeningDrive_Short", category: "Session", signalKey: "OPEN_DRIVE_SHORT", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
+  // Session / Opening Drive — time-sensitive, moderate hold
+  { id: 151, name: "OpeningDrive_Long",       category: "Session",   signalKey: "OPEN_DRIVE_LONG",        slPct: 0.50, tpPct: 1.50, cooldownMin: 5,  holdMinutes: 30, confluenceMin: 5 },
+  { id: 152, name: "OpeningDrive_Short",      category: "Session",   signalKey: "OPEN_DRIVE_SHORT",       slPct: 0.50, tpPct: 1.50, cooldownMin: 5,  holdMinutes: 30, confluenceMin: 5 },
 ];
 
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
