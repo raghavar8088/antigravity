@@ -1,38 +1,43 @@
 /**
  * BTC Future Trading — roster resolution.
- * Only the CORE 20 winners basket is active. Extended / generated pools removed.
  *
- * When `NEXT_PUBLIC_BTC_FT_USE_RANKED=1`, the roster is filtered by the
- * rankings JSON produced by `npm run rank:btc-ft`. Strategies below
- * `NEXT_PUBLIC_BTC_FT_RANKED_MIN_EXPECTANCY` (default 0) or with fewer than
- * `NEXT_PUBLIC_BTC_FT_RANKED_MIN_TRADES` (default 5) trades are excluded.
- * When no rankings file is available, falls back to full CORE basket.
+ * Resolution order:
+ *  1. Explicit `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS` env list (operator override)
+ *  2. CORE IDs filtered by winners gate when `opts.winnerIds` provided + non-empty
+ *  3. Full CORE basket
+ *
+ * Extended (200–299) and generated (300–399) pools are handled by `btcFtResearch.ts`
+ * when research mode is active.
  */
 
 import { applyWinnersOnlyGate } from "@/lib/futuresDeskPolicy";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { BTC_FT_PREMIUM_STRATEGY_IDS } from "@/lib/btcFtPremiumStrategies";
 
+/** CORE 20 winners basket — only active strategies. */
 export const CORE_BTC_FT_STRATEGY_IDS: readonly number[] = [
   91, 92, 95, 96, 111, 112, 117, 118, 123, 124, 125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
   ...BTC_FT_PREMIUM_STRATEGY_IDS,
 ];
 
-/** Extended IDs — empty (research pool removed). */
-export const BTC_FT_EXTENDED_STRATEGY_IDS: readonly number[] = [];
+/** Extended IDs (200–299) — research pool. */
+export const BTC_FT_EXTENDED_STRATEGY_IDS: readonly number[] = Array.from({ length: 100 }, (_, i) => 200 + i);
 
-/** Generated IDs — empty (research pool removed). */
-export const BTC_FT_GENERATED_STRATEGY_IDS: readonly number[] = [];
+/** Generated IDs (300–399) — research pool. */
+export const BTC_FT_GENERATED_STRATEGY_IDS: readonly number[] = Array.from({ length: 100 }, (_, i) => 300 + i);
 
 /** Re-export so legacy imports compile. */
 export { BTC_FT_PREMIUM_STRATEGY_IDS };
-export function isGeneratedPoolEnabled(): boolean { return false; }
 
-/** Full production roster = CORE only. */
+/** Full production roster = CORE 20 + premium. */
 export const BTC_FUTURE_TRADING_STRATEGY_IDS: number[] = [...CORE_BTC_FT_STRATEGY_IDS];
 
-/** Research full pool = CORE only (no extended/generated). */
-export const BTC_FT_RESEARCH_FULL_POOL: number[] = [...CORE_BTC_FT_STRATEGY_IDS];
+/** Research full pool = CORE + extended + generated. */
+export const BTC_FT_RESEARCH_FULL_POOL: number[] = [
+  ...CORE_BTC_FT_STRATEGY_IDS,
+  ...BTC_FT_EXTENDED_STRATEGY_IDS,
+  ...BTC_FT_GENERATED_STRATEGY_IDS,
+];
 
 export type BtcFtRosterSource = "env" | "core+ranked" | "core" | "winners" | "full";
 
@@ -48,8 +53,6 @@ export type BtcFtStrategyRankingRow = {
   trades: number;
   winRate?: number;
 };
-
-export function loadExtendedIdsFromRankings(_topN = 10, _minTrades = 10): number[] { return []; }
 
 /** True when `NEXT_PUBLIC_BTC_FT_USE_RANKED=1`. */
 export function btcFtUseRankedEnabled(): boolean {
@@ -74,8 +77,6 @@ export function btcFtRankedMinTradesFromEnv(): number {
 
 /**
  * Derive winner IDs from a rankings array produced by `npm run rank:btc-ft`.
- * Strategies that meet minExpectancy + minTrades thresholds are promoted.
- * Returns empty set when no rows qualify (caller should fall back to CORE).
  */
 export function winnerIdsFromRankings(
   rankings: ReadonlyArray<BtcFtStrategyRankingRow>,
@@ -90,11 +91,6 @@ export function winnerIdsFromRankings(
 
 /**
  * Resolve the active strategy IDs for BTC Future Trading module.
- *
- * Priority:
- * 1. Explicit `NEXT_PUBLIC_BTC_FT_STRATEGY_IDS` env list (operator override)
- * 2. CORE IDs filtered by winners gate when `opts.winnerIds` provided + non-empty
- * 3. Full CORE basket
  */
 export function resolveBtcFtActiveStrategyIds(
   opts?: { storageNamespace?: string; winnerIds?: ReadonlySet<number> },
@@ -108,16 +104,15 @@ export function resolveBtcFtActiveStrategyIds(
       .filter(Boolean)
       .map(Number)
       .filter((n) => Number.isFinite(n) && n > 0);
-    const ids = [...new Set(parsed)].slice(0, 120);
-    return { ids, source: "env", isLargeRoster: false };
+    const ids = [...new Set(parsed)].slice(0, 200);
+    return { ids, source: "env", isLargeRoster: ids.length > 50 };
   }
 
-  // 2. Winners gate — only when caller provides non-empty winnerIds
+  // 2. Winners gate
   const winnerIds = opts?.winnerIds;
   if (winnerIds && winnerIds.size > 0) {
     const coreDefs = FUTURES_STRAT_DEFS.filter((d) => CORE_BTC_FT_STRATEGY_IDS.includes(d.id));
     const gated = applyWinnersOnlyGate(coreDefs, winnerIds);
-    // Fall back to full CORE if gate would empty the desk
     if (gated.length > 0) {
       return { ids: gated.map((d) => d.id), source: "core+ranked", isLargeRoster: false };
     }

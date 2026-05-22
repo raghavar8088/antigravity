@@ -237,7 +237,7 @@ export function resolveCoreWinners(ns: string): number[] {
 function parseExplicitBtcFtStrategyIds(cap: number): number[] {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_STRATEGY_IDS;
   if (!raw || raw.trim() === "") return [];
-  const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+  const valid = new Set(BTC_FT_RESEARCH_FULL_POOL);
   return [
     ...new Set(
       raw
@@ -272,10 +272,10 @@ export function resolveBtcFtActiveStrategyIds(opts: {
 } = {}): BtcFtResearchRosterResolution {
   if (isWinnersOnlyModeEnabled()) {
     const ns = opts.storageNamespace ?? "btc_future_trading_20";
-    const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+    const valid = new Set(BTC_FT_RESEARCH_FULL_POOL);
     const promoted = [
       ...new Set(
-        (opts.winnerIds ?? resolveCoreWinners(ns))
+        (opts.winnerIds && opts.winnerIds.length > 0 ? opts.winnerIds : resolveCoreWinners(ns))
           .map((id) => Math.floor(id))
           .filter((id) => valid.has(id)),
       ),

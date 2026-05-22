@@ -1,9 +1,11 @@
 /**
- * Futures strategy definitions — CORE 20 WINNERS basket only.
- * All research / extended / generated pools have been removed.
+ * Futures strategy definitions — shared by the hook, signal engine, and tests.
+ * Extended BTC FT defs (IDs 200–299) merged from `btcFtStrategyTemplates.ts`.
  */
 
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
+import { BTC_FT_GENERATED_DEFS } from "@/lib/btcFtStrategyGenerator";
 import { BTC_FT_PREMIUM_DEFS } from "@/lib/btcFtPremiumStrategies";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
@@ -61,7 +63,12 @@ const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
   { id: 152, name: "OpeningDrive_Short",      category: "Session",   signalKey: "OPEN_DRIVE_SHORT",       slPct: 0.50, tpPct: 1.50, cooldownMin: 5,  holdMinutes: 30, confluenceMin: 5 },
 ];
 
+/**
+ * Full strategy registry: CORE 20 + extended (200–299) + generated research pool (300–399) + premium (500–503).
+ */
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
   ...BASE_FUTURES_STRAT_DEFS,
+  ...BTC_FT_EXTENDED_DEFS_FULL,
+  ...BTC_FT_GENERATED_DEFS,
   ...BTC_FT_PREMIUM_DEFS,
 ];

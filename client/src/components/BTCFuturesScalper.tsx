@@ -237,14 +237,16 @@ export function BTCFuturesScalper({
     const activeIds = new Set(strategyStatuses.map((s) => s.id));
     const poolOverlayIds = researchPoolIds && researchPoolIds.length > 0
       ? researchPoolIds
-      : (strategyIds && strategyIds.length > 0 ? strategyIds : []);
+      : FUTURES_STRAT_DEFS.map((d) => d.id);
     const poolOnly: BTCFuturesStrategyStatus[] = [];
     for (const id of poolOverlayIds) {
       if (activeIds.has(id)) continue;
+      const def = FUTURES_STRAT_DEFS.find((d) => d.id === id);
+      if (!def) continue;
       poolOnly.push({
-        id,
-        name: `Strategy ${id}`,
-        category: "Unknown",
+        id: def.id,
+        name: def.name,
+        category: def.category,
         status: "POOL",
         disabled: false,
         openCount: 0,
