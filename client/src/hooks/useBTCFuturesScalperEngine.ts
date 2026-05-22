@@ -1105,6 +1105,21 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   }, [stateStorageKey]);
 
   const clearTradeHistory = useCallback(() => {
+    const now = new Date();
+    const ts =
+      now.getFullYear().toString() +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      String(now.getDate()).padStart(2, "0") +
+      "_" +
+      String(now.getHours()).padStart(2, "0") +
+      String(now.getMinutes()).padStart(2, "0") +
+      String(now.getSeconds()).padStart(2, "0");
+    const newCollection = `loop_trades_${ts}`;
+    try {
+      localStorage.setItem("btc_ft_active_collection", newCollection);
+    } catch {
+      // quota / private mode
+    }
     setTrades([]);
     setLastTradeAt(0);
     stratCooldownsRef.current = {};

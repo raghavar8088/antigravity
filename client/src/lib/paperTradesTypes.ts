@@ -77,6 +77,12 @@ export const paperTradePostBodySchema = z.object({
   templateFamily: z.string().min(1).max(128).optional(),
   /** Exchange where the simulated execution occurred (e.g. "binance", "delta", "nse"). */
   exchange: z.string().min(1).max(64).optional(),
+  /**
+   * Target MongoDB collection. Generated when user clears trade history in the UI
+   * (format: paper_trades_YYYYMMDD_HHMMSS). Defaults to "paper_trades".
+   * Server validates the name to prevent injection.
+   */
+  collectionName: z.string().min(1).max(80).regex(/^(paper_trades|loop_trades)(_[a-z0-9_]+)?$/).optional(),
   trade: paperTradeClientSchema,
 });
 
