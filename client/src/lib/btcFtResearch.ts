@@ -237,7 +237,7 @@ export function resolveCoreWinners(ns: string): number[] {
 function parseExplicitBtcFtStrategyIds(cap: number): number[] {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_STRATEGY_IDS;
   if (!raw || raw.trim() === "") return [];
-  const valid = new Set(BTC_FT_RESEARCH_FULL_POOL);
+  const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
   return [
     ...new Set(
       raw
@@ -260,11 +260,8 @@ export type BtcFtResearchRosterResolution = {
 /**
  * BTC Future Trading roster resolver with the production winners-only override.
  *
- * When NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1, research rotation and ranked/core
- * fallback are bypassed. The active roster is promoted winners only, capped at
- * 20. If no promoted winners exist, an explicit NEXT_PUBLIC_BTC_FT_STRATEGY_IDS
- * line may be used as the manual production roster; otherwise ids=[] so the UI
- * can stop the engine instead of accidentally running the full library.
+ * When NEXT_PUBLIC_BTC_FT_WINNERS_ONLY=1, research rotation is bypassed.
+ * Priority: explicit env IDs → promoted winners → CORE 20 basket (never empty).
  */
 export function resolveBtcFtActiveStrategyIds(opts: {
   storageNamespace?: string;
@@ -272,7 +269,13 @@ export function resolveBtcFtActiveStrategyIds(opts: {
 } = {}): BtcFtResearchRosterResolution {
   if (isWinnersOnlyModeEnabled()) {
     const ns = opts.storageNamespace ?? "btc_future_trading_20";
-    const valid = new Set(BTC_FT_RESEARCH_FULL_POOL);
+    const valid = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
+
+    const explicit = parseExplicitBtcFtStrategyIds(24);
+    if (explicit.length > 0) {
+      return { ids: explicit, source: "env", isLargeRoster: false, winnersOnly: true };
+    }
+
     const promoted = [
       ...new Set(
         (opts.winnerIds && opts.winnerIds.length > 0 ? opts.winnerIds : resolveCoreWinners(ns))
@@ -284,12 +287,12 @@ export function resolveBtcFtActiveStrategyIds(opts: {
       return { ids: promoted, source: "winners", isLargeRoster: false, winnersOnly: true };
     }
 
-    const explicit = parseExplicitBtcFtStrategyIds(20);
-    if (explicit.length > 0) {
-      return { ids: explicit, source: "env", isLargeRoster: false, winnersOnly: true };
-    }
-
-    return { ids: [], source: "winners-empty", isLargeRoster: false, winnersOnly: true };
+    return {
+      ids: [...CORE_BTC_FT_STRATEGY_IDS],
+      source: "core",
+      isLargeRoster: false,
+      winnersOnly: true,
+    };
   }
 
   const base = resolveBaseBtcFtActiveStrategyIds();

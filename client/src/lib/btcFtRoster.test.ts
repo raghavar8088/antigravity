@@ -18,12 +18,13 @@ describe("btcFtRoster — resolveBtcFtActiveStrategyIds", () => {
     expect(result.isLargeRoster).toBe(false);
   });
 
-  it("env comma list parses correctly and caps at 120", () => {
-    const ids = Array.from({ length: 130 }, (_, i) => i + 91).join(",");
+  it("env comma list filters to CORE IDs and caps at 24", () => {
+    const ids = [...CORE_BTC_FT_STRATEGY_IDS, 999, 1000].join(",");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", ids);
     const result = resolveBtcFtActiveStrategyIds();
     expect(result.source).toBe("env");
-    expect(result.ids.length).toBe(120);
+    expect(result.ids.length).toBe(CORE_BTC_FT_STRATEGY_IDS.length);
+    expect(result.ids).not.toContain(999);
   });
 
   it("env list parses correctly", () => {

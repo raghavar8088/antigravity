@@ -230,14 +230,14 @@ export function BTCFuturesScalper({
     totalUnrealized: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
   }), [positions]);
 
-  // Merge active roster statuses with POOL-only entries (research mode) or just show the active
-  // strategies (WINNERS_ONLY / production). In non-research mode researchPoolIds is undefined,
-  // so we fall back to the active strategyIds rather than the full 200+ definition list.
+  // POOL overlay only in research mode. Production / winners-only shows active roster only.
   const augmentedStrategyStatuses = useMemo<BTCFuturesStrategyStatus[]>(() => {
     const activeIds = new Set(strategyStatuses.map((s) => s.id));
     const poolOverlayIds = researchPoolIds && researchPoolIds.length > 0
       ? researchPoolIds
-      : FUTURES_STRAT_DEFS.map((d) => d.id);
+      : strategyIds && strategyIds.length > 0
+        ? strategyIds
+        : [];
     const poolOnly: BTCFuturesStrategyStatus[] = [];
     for (const id of poolOverlayIds) {
       if (activeIds.has(id)) continue;

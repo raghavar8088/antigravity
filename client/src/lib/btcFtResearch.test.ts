@@ -253,14 +253,14 @@ describe("resolveBtcFtActiveStrategyIds winners-only", () => {
     expect(result.ids).toEqual([91, 92, 95]);
   });
 
-  it("returns empty winners roster when no promoted or explicit IDs exist", () => {
+  it("falls back to CORE basket when no promoted or explicit IDs exist", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_WINNERS_ONLY", "1");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", "");
 
     const result = resolveBtcFtActiveStrategyIds({ winnerIds: [] });
 
     expect(result.winnersOnly).toBe(true);
-    expect(result.source).toBe("winners-empty");
-    expect(result.ids).toEqual([]);
+    expect(result.source).toBe("core");
+    expect(result.ids.length).toBeGreaterThan(0);
   });
 });

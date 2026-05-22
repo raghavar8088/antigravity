@@ -212,13 +212,6 @@ export function BTCFutureTradingScalper({
         </DeskBanner>
       )}
 
-      {WINNERS_ONLY_MODE && rosterInfo.ids.length === 0 && (
-        <DeskBanner variant="warning" title="No winners - run research or set BTC_FT_STRATEGY_IDS">
-          Winners-only mode is enabled, but no promoted winner IDs were found in localStorage or Supabase.
-          Run research and promote winners, or set NEXT_PUBLIC_BTC_FT_STRATEGY_IDS to a manual winners roster.
-        </DeskBanner>
-      )}
-
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
           {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 5m
