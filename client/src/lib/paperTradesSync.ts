@@ -58,15 +58,28 @@ export function enqueuePaperTrade(
   writeQueue(accountKey, queue);
 }
 
+export const ACTIVE_COLLECTION_LS_KEY = "btc_ft_active_collection";
+
+function getActiveCollection(): string {
+  if (typeof localStorage === "undefined") return "paper_trades";
+  try {
+    return localStorage.getItem(ACTIVE_COLLECTION_LS_KEY) || "paper_trades";
+  } catch {
+    return "paper_trades";
+  }
+}
+
 async function postPaperTrade(
   accountKey: string,
   trade: BTCFuturesTrade,
   moduleKey?: PaperTradeModuleKey,
 ): Promise<boolean> {
   const tradeId = trade.clientTradeId ?? trade.id;
+  const collectionName = getActiveCollection();
   const body: Record<string, unknown> = {
     accountKey,
     trade: btcFuturesTradeToClientPayload(trade),
+    collectionName,
   };
   if (moduleKey) body.moduleKey = moduleKey;
 

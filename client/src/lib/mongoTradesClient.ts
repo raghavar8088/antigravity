@@ -76,17 +76,19 @@ async function connect(): Promise<CachedClient> {
   return connectPromise;
 }
 
-async function ensureIndexes(entry: CachedClient): Promise<void> {
-  if (entry.indexesEnsured) return;
-  const col = entry.db.collection<PaperTradeDbRow>(TRADES_COLLECTION);
+// Track which collections already have indexes to avoid redundant createIndex calls.
+const indexedCollections = new Set<string>();
+
+async function ensureIndexes(entry: CachedClient, collectionName: string): Promise<void> {
+  if (indexedCollections.has(collectionName)) return;
+  const col = entry.db.collection<PaperTradeDbRow>(collectionName);
   await Promise.all([
     col.createIndex({ client_trade_id: 1 }, { unique: true, name: "uniq_client_trade_id" }),
     col.createIndex({ account_key: 1, closed_at: -1 }, { name: "by_account_closed" }),
     col.createIndex({ account_key: 1, strategy_id: 1, closed_at: -1 }, { name: "by_account_strat_closed" }),
-    // Module-scoped reads (per-tab leaderboards, exports filtered by module).
     col.createIndex({ account_key: 1, module_key: 1, closed_at: -1 }, { name: "by_account_module_closed" }),
   ]);
-  entry.indexesEnsured = true;
+  indexedCollections.add(collectionName);
 }
 
 /** Shared DB handle — lets other modules (e.g. mongoAuthClient) reuse the same connection pool. */
@@ -106,10 +108,10 @@ export async function pingMongo(): Promise<boolean> {
   }
 }
 
-export async function getTradesCollection(): Promise<Collection<PaperTradeDbRow>> {
+export async function getTradesCollection(collectionName = TRADES_COLLECTION): Promise<Collection<PaperTradeDbRow>> {
   const entry = await connect();
-  await ensureIndexes(entry);
-  return entry.db.collection<PaperTradeDbRow>(TRADES_COLLECTION);
+  await ensureIndexes(entry, collectionName);
+  return entry.db.collection<PaperTradeDbRow>(collectionName);
 }
 
 export type UpsertTradeResult =
@@ -128,9 +130,10 @@ export type UpsertTradeResult =
  */
 export async function upsertTradeMongo(
   row: Omit<PaperTradeDbRow, "id" | "created_at">,
+  collectionName = TRADES_COLLECTION,
 ): Promise<UpsertTradeResult> {
   try {
-    const col = await getTradesCollection();
+    const col = await getTradesCollection(collectionName);
     const now = new Date().toISOString();
     const result = await col.updateOne(
       { client_trade_id: row.client_trade_id },
@@ -164,8 +167,8 @@ export type ListTradesOpts = {
 };
 
 /** Mirrors the Supabase GET path: per-account list ordered by closed_at desc. */
-export async function listTradesMongo(opts: ListTradesOpts): Promise<PaperTradeDbRow[]> {
-  const col = await getTradesCollection();
+export async function listTradesMongo(opts: ListTradesOpts & { collectionName?: string }): Promise<PaperTradeDbRow[]> {
+  const col = await getTradesCollection(opts.collectionName ?? TRADES_COLLECTION);
   const filter: Record<string, unknown> = { account_key: opts.accountKey };
   if (opts.cursor) {
     filter.closed_at = { $lt: opts.cursor };

@@ -91,6 +91,8 @@ export async function POST(req: Request) {
   const accountKey = auth.accountKey;
   const tradeId = parsed.data.trade.clientTradeId;
   const moduleKey = parsed.data.moduleKey;
+  // Use the client-supplied collection (created on clear) or the default.
+  const collectionName = parsed.data.collectionName ?? "paper_trades";
 
   if (!isMongoConfigured()) {
     console.warn("[paper-trades POST] MONGO_NOT_CONFIGURED", { tradeId, accountKey, moduleKey });
@@ -119,9 +121,10 @@ export async function POST(req: Request) {
     tradeId,
     accountKey,
     moduleKey: row.module_key,
+    collectionName,
   });
 
-  const mongoResult = await upsertTradeMongo(row);
+  const mongoResult = await upsertTradeMongo(row, collectionName);
   if (!mongoResult.ok) {
     console.error("[paper-trades POST] MONGO_WRITE_FAILED", { tradeId, error: mongoResult.error });
     return NextResponse.json(
