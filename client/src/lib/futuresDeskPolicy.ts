@@ -53,7 +53,9 @@ export function deskEffectiveHoldMinutesAtOpen(
 }
 
 /** Inclusive range 79…110 — see Phase 3 note in module header. */
-export const FAKE_DIVERSITY_STRAT_IDS: readonly number[] = Array.from({ length: 32 }, (_, i) => 79 + i);
+// CORE 20 winners include IDs 91, 92, 95, 96 which fall in the old 79–110 fake-diversity range.
+// Since all non-CORE strategies have been removed, there are no fake-diversity strategies left.
+export const FAKE_DIVERSITY_STRAT_IDS: readonly number[] = [];
 
 /** Hard cap on widened TP% — beyond this, strategy is excluded rather than distorting intent. */
 export const DESK_WIDEN_TP_MAX_PCT = 4.8;

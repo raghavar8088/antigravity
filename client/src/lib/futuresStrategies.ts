@@ -1,216 +1,57 @@
 /**
- * Futures strategy definitions — shared by the hook, signal engine, and tests.
- * Extended BTC FT defs (IDs 200–299) merged from `btcFtStrategyTemplates.ts`.
+ * Futures strategy definitions — CORE 20 WINNERS basket only.
+ * All research / extended / generated pools have been removed.
  */
 
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
-import { BTC_FT_EXTENDED_DEFS_FULL } from "@/lib/btcFtStrategyTemplates";
-import { BTC_FT_GENERATED_DEFS } from "@/lib/btcFtStrategyGenerator";
 import { BTC_FT_PREMIUM_DEFS } from "@/lib/btcFtPremiumStrategies";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
+/** CORE 20 — curated, empirically-validated winners. */
 const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
-  // 1-30: Original strategies (EMA, BB, RSI, Stoch, MACD, OBV, Confluence)
-  { id: 1, name: "EMA_Cross_Long", category: "Trend", signalKey: "EMA_CROSS_LONG", slPct: 0.28, tpPct: 0.62, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 2, name: "EMA_Cross_Short", category: "Trend", signalKey: "EMA_CROSS_SHORT", slPct: 0.28, tpPct: 0.62, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 3, name: "BB_MeanRev_Long", category: "MeanRev", signalKey: "BB_MEANREV_LONG", slPct: 0.32, tpPct: 0.58, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 4, name: "BB_MeanRev_Short", category: "MeanRev", signalKey: "BB_MEANREV_SHORT", slPct: 0.32, tpPct: 0.58, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 5, name: "Momentum_Surge_Long", category: "Momentum", signalKey: "MOM_SURGE_LONG", slPct: 0.30, tpPct: 0.70, cooldownMin: 5, holdMinutes: 15, confluenceMin: 4 },
-  { id: 6, name: "Momentum_Surge_Short", category: "Momentum", signalKey: "MOM_SURGE_SHORT", slPct: 0.30, tpPct: 0.70, cooldownMin: 5, holdMinutes: 15, confluenceMin: 4 },
-  { id: 7, name: "RSI_Dip_Long", category: "RSI", signalKey: "RSI_DIP_LONG", slPct: 0.30, tpPct: 0.62, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
-  { id: 8, name: "RSI_Spike_Short", category: "RSI", signalKey: "RSI_SPIKE_SHORT", slPct: 0.30, tpPct: 0.62, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
-  { id: 9, name: "Stoch_Oversold_Long", category: "Stoch", signalKey: "STOCH_OVERSOLD_LONG", slPct: 0.28, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 10, name: "Stoch_Overbought_Short", category: "Stoch", signalKey: "STOCH_OVERBOUGHT_SHORT", slPct: 0.28, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 11, name: "MACD_Hist_Rise_Long", category: "MACD", signalKey: "MACD_HIST_RISE_LONG", slPct: 0.30, tpPct: 0.65, cooldownMin: 5, holdMinutes: 20, confluenceMin: 3 },
-  { id: 12, name: "MACD_Hist_Fall_Short", category: "MACD", signalKey: "MACD_HIST_FALL_SHORT", slPct: 0.30, tpPct: 0.65, cooldownMin: 5, holdMinutes: 20, confluenceMin: 3 },
-  { id: 13, name: "OBV_Trend_Long", category: "OBV", signalKey: "OBV_TREND_LONG", slPct: 0.32, tpPct: 0.60, cooldownMin: 4, holdMinutes: 24, confluenceMin: 4 },
-  { id: 14, name: "OBV_Trend_Short", category: "OBV", signalKey: "OBV_TREND_SHORT", slPct: 0.32, tpPct: 0.60, cooldownMin: 4, holdMinutes: 24, confluenceMin: 4 },
-  { id: 15, name: "Confluence_Break_Long", category: "Confluence", signalKey: "CONF_BREAK_LONG", slPct: 0.26, tpPct: 0.75, cooldownMin: 6, holdMinutes: 20, confluenceMin: 5 },
-  { id: 16, name: "Confluence_Break_Short", category: "Confluence", signalKey: "CONF_BREAK_SHORT", slPct: 0.26, tpPct: 0.75, cooldownMin: 6, holdMinutes: 20, confluenceMin: 5 },
-  { id: 17, name: "Vol_Spike_Long", category: "Vol", signalKey: "VOL_SPIKE_LONG", slPct: 0.34, tpPct: 0.68, cooldownMin: 4, holdMinutes: 16, confluenceMin: 4 },
-  { id: 18, name: "Vol_Spike_Short", category: "Vol", signalKey: "VOL_SPIKE_SHORT", slPct: 0.34, tpPct: 0.68, cooldownMin: 4, holdMinutes: 16, confluenceMin: 4 },
-  { id: 19, name: "BB_Squeeze_Long", category: "BB", signalKey: "BB_SQUEEZE_LONG", slPct: 0.30, tpPct: 0.72, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 20, name: "BB_Squeeze_Short", category: "BB", signalKey: "BB_SQUEEZE_SHORT", slPct: 0.30, tpPct: 0.72, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 21, name: "Stoch_Cross_Long", category: "Stoch", signalKey: "STOCH_CROSS_LONG", slPct: 0.28, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 22, name: "Stoch_Cross_Short", category: "Stoch", signalKey: "STOCH_CROSS_SHORT", slPct: 0.28, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 23, name: "MACD_ZeroCross_Long", category: "MACD", signalKey: "MACD_ZERO_LONG", slPct: 0.32, tpPct: 0.68, cooldownMin: 5, holdMinutes: 20, confluenceMin: 3 },
-  { id: 24, name: "MACD_ZeroCross_Short", category: "MACD", signalKey: "MACD_ZERO_SHORT", slPct: 0.32, tpPct: 0.68, cooldownMin: 5, holdMinutes: 20, confluenceMin: 3 },
-  { id: 25, name: "ATR_Break_Long", category: "Vol", signalKey: "ATR_BREAK_LONG", slPct: 0.35, tpPct: 0.70, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 26, name: "ATR_Break_Short", category: "Vol", signalKey: "ATR_BREAK_SHORT", slPct: 0.35, tpPct: 0.70, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 27, name: "VWAP_Dev_Long", category: "VWAP", signalKey: "VWAP_DEV_LONG", slPct: 0.30, tpPct: 0.65, cooldownMin: 4, holdMinutes: 22, confluenceMin: 4 },
-  { id: 28, name: "VWAP_Dev_Short", category: "VWAP", signalKey: "VWAP_DEV_SHORT", slPct: 0.30, tpPct: 0.65, cooldownMin: 4, holdMinutes: 22, confluenceMin: 4 },
-  { id: 29, name: "Multi_Conf_Long", category: "Confluence", signalKey: "MULTI_CONF_LONG", slPct: 0.24, tpPct: 0.85, cooldownMin: 8, holdMinutes: 24, confluenceMin: 6 },
-  { id: 30, name: "Multi_Conf_Short", category: "Confluence", signalKey: "MULTI_CONF_SHORT", slPct: 0.24, tpPct: 0.85, cooldownMin: 8, holdMinutes: 24, confluenceMin: 6 },
-
-  // 31-60: Advanced indicators
-  { id: 31, name: "Williams_Oversold_Long", category: "Williams MR", signalKey: "WILLIAMS_OVERSOLD_LONG", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 32, name: "Williams_Overbought_Short", category: "Williams MR", signalKey: "WILLIAMS_OVERBOUGHT_SHORT", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 33, name: "CCI_Oversold_Long", category: "CCI MR", signalKey: "CCI_OVERSOLD_LONG", slPct: 0.34, tpPct: 0.62, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 34, name: "CCI_Overbought_Short", category: "CCI MR", signalKey: "CCI_OVERBOUGHT_SHORT", slPct: 0.34, tpPct: 0.62, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 35, name: "Keltner_Breakout_Long", category: "Keltner MR", signalKey: "KELTNER_BREAKOUT_LONG", slPct: 0.30, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 36, name: "Keltner_Breakout_Short", category: "Keltner MR", signalKey: "KELTNER_BREAKOUT_SHORT", slPct: 0.30, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 37, name: "Donchian_Break_Long", category: "Donchian Trend", signalKey: "DONCHIAN_BREAK_LONG", slPct: 0.28, tpPct: 0.72, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 38, name: "Donchian_Break_Short", category: "Donchian Trend", signalKey: "DONCHIAN_BREAK_SHORT", slPct: 0.28, tpPct: 0.72, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 39, name: "EMA_Ribbon_Long", category: "Ribbon", signalKey: "EMA_RIBBON_LONG", slPct: 0.26, tpPct: 0.70, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 40, name: "EMA_Ribbon_Short", category: "Ribbon", signalKey: "EMA_RIBBON_SHORT", slPct: 0.26, tpPct: 0.70, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 41, name: "Squeeze_Fire_Long", category: "Squeeze", signalKey: "SQUEEZE_FIRE_LONG", slPct: 0.32, tpPct: 0.78, cooldownMin: 5, holdMinutes: 20, confluenceMin: 4 },
-  { id: 42, name: "Squeeze_Fire_Short", category: "Squeeze", signalKey: "SQUEEZE_FIRE_SHORT", slPct: 0.32, tpPct: 0.78, cooldownMin: 5, holdMinutes: 20, confluenceMin: 4 },
-  { id: 43, name: "ADX_Trend_Long", category: "ADX Trend", signalKey: "ADX_TREND_LONG", slPct: 0.30, tpPct: 0.66, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4 },
-  { id: 44, name: "ADX_Trend_Short", category: "ADX Trend", signalKey: "ADX_TREND_SHORT", slPct: 0.30, tpPct: 0.66, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4 },
-  { id: 45, name: "ROC_Reversal_Long", category: "ROC Trend", signalKey: "ROC_REVERSAL_LONG", slPct: 0.34, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 46, name: "ROC_Reversal_Short", category: "ROC Trend", signalKey: "ROC_REVERSAL_SHORT", slPct: 0.34, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 47, name: "VWAP_MeanRev_Long", category: "VWAP MR", signalKey: "VWAP_MEANREV_LONG", slPct: 0.30, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 48, name: "VWAP_MeanRev_Short", category: "VWAP MR", signalKey: "VWAP_MEANREV_SHORT", slPct: 0.30, tpPct: 0.60, cooldownMin: 3, holdMinutes: 18, confluenceMin: 3 },
-  { id: 49, name: "Williams_Strong_Long", category: "Williams MR", signalKey: "WILLIAMS_STRONG_LONG", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 50, name: "Williams_Strong_Short", category: "Williams MR", signalKey: "WILLIAMS_STRONG_SHORT", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 51, name: "CCI_Extreme_Long", category: "CCI MR", signalKey: "CCI_EXTREME_LONG", slPct: 0.36, tpPct: 0.60, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 52, name: "CCI_Extreme_Short", category: "CCI MR", signalKey: "CCI_EXTREME_SHORT", slPct: 0.36, tpPct: 0.60, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 53, name: "Keltner_Squeeze_Long", category: "Keltner MR", signalKey: "KELTNER_SQUEEZE_LONG", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 54, name: "Keltner_Squeeze_Short", category: "Keltner MR", signalKey: "KELTNER_SQUEEZE_SHORT", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 55, name: "Donchian_MeanRev_Long", category: "Donchian MR", signalKey: "DONCHIAN_MR_LONG", slPct: 0.30, tpPct: 0.58, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 56, name: "Donchian_MeanRev_Short", category: "Donchian MR", signalKey: "DONCHIAN_MR_SHORT", slPct: 0.30, tpPct: 0.58, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 57, name: "Ribbon_Accel_Long", category: "Ribbon", signalKey: "RIBBON_ACCEL_LONG", slPct: 0.28, tpPct: 0.74, cooldownMin: 5, holdMinutes: 20, confluenceMin: 4 },
-  { id: 58, name: "Ribbon_Accel_Short", category: "Ribbon", signalKey: "RIBBON_ACCEL_SHORT", slPct: 0.28, tpPct: 0.74, cooldownMin: 5, holdMinutes: 20, confluenceMin: 4 },
-  { id: 59, name: "Squeeze_Continuation_Long", category: "Squeeze", signalKey: "SQUEEZE_CONT_LONG", slPct: 0.32, tpPct: 0.72, cooldownMin: 6, holdMinutes: 24, confluenceMin: 4 },
-  { id: 60, name: "Squeeze_Continuation_Short", category: "Squeeze", signalKey: "SQUEEZE_CONT_SHORT", slPct: 0.32, tpPct: 0.72, cooldownMin: 6, holdMinutes: 24, confluenceMin: 4 },
-
-  // 61-110: Extended strategies
-  { id: 61, name: "Williams_Momentum_Long", category: "Williams Trend", signalKey: "WILLIAMS_MOM_LONG", slPct: 0.32, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 62, name: "Williams_Momentum_Short", category: "Williams Trend", signalKey: "WILLIAMS_MOM_SHORT", slPct: 0.32, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 63, name: "CCI_Momentum_Long", category: "CCI Trend", signalKey: "CCI_MOM_LONG", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 64, name: "CCI_Momentum_Short", category: "CCI Trend", signalKey: "CCI_MOM_SHORT", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 65, name: "Keltner_Momentum_Long", category: "Keltner Trend", signalKey: "KELTNER_MOM_LONG", slPct: 0.30, tpPct: 0.70, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 66, name: "Keltner_Momentum_Short", category: "Keltner Trend", signalKey: "KELTNER_MOM_SHORT", slPct: 0.30, tpPct: 0.70, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 67, name: "Donchian_Momentum_Long", category: "Donchian Trend", signalKey: "DONCHIAN_MOM_LONG", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 68, name: "Donchian_Momentum_Short", category: "Donchian Trend", signalKey: "DONCHIAN_MOM_SHORT", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 69, name: "Ribbon_Momentum_Long", category: "Ribbon", signalKey: "RIBBON_MOM_LONG", slPct: 0.26, tpPct: 0.76, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 70, name: "Ribbon_Momentum_Short", category: "Ribbon", signalKey: "RIBBON_MOM_SHORT", slPct: 0.26, tpPct: 0.76, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 71, name: "Squeeze_Momentum_Long", category: "Squeeze", signalKey: "SQUEEZE_MOM_LONG", slPct: 0.32, tpPct: 0.80, cooldownMin: 6, holdMinutes: 22, confluenceMin: 4 },
-  { id: 72, name: "Squeeze_Momentum_Short", category: "Squeeze", signalKey: "SQUEEZE_MOM_SHORT", slPct: 0.32, tpPct: 0.80, cooldownMin: 6, holdMinutes: 22, confluenceMin: 4 },
-  { id: 73, name: "ADX_Momentum_Long", category: "ADX Trend", signalKey: "ADX_MOM_LONG", slPct: 0.30, tpPct: 0.72, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4 },
-  { id: 74, name: "ADX_Momentum_Short", category: "ADX Trend", signalKey: "ADX_MOM_SHORT", slPct: 0.30, tpPct: 0.72, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4 },
-  { id: 75, name: "ROC_Momentum_Long", category: "ROC Trend", signalKey: "ROC_MOM_LONG", slPct: 0.34, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 76, name: "ROC_Momentum_Short", category: "ROC Trend", signalKey: "ROC_MOM_SHORT", slPct: 0.34, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 77, name: "Volatility_Break_Long", category: "Vol", signalKey: "VOL_BREAK_LONG", slPct: 0.36, tpPct: 0.74, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
-  { id: 78, name: "Volatility_Break_Short", category: "Vol", signalKey: "VOL_BREAK_SHORT", slPct: 0.36, tpPct: 0.74, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
-  { id: 79, name: "RSI_Divergence_Long", category: "RSI Div", signalKey: "RSI_DIV_LONG", slPct: 0.32, tpPct: 0.70, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 80, name: "RSI_Divergence_Short", category: "RSI Div", signalKey: "RSI_DIV_SHORT", slPct: 0.32, tpPct: 0.70, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 81, name: "MACD_Divergence_Long", category: "MACD Div", signalKey: "MACD_DIV_LONG", slPct: 0.32, tpPct: 0.72, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 82, name: "MACD_Divergence_Short", category: "MACD Div", signalKey: "MACD_DIV_SHORT", slPct: 0.32, tpPct: 0.72, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 83, name: "Stoch_Divergence_Long", category: "Stoch Div", signalKey: "STOCH_DIV_LONG", slPct: 0.30, tpPct: 0.68, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 84, name: "Stoch_Divergence_Short", category: "Stoch Div", signalKey: "STOCH_DIV_SHORT", slPct: 0.30, tpPct: 0.68, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 85, name: "BB_Divergence_Long", category: "BB Div", signalKey: "BB_DIV_LONG", slPct: 0.32, tpPct: 0.66, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 86, name: "BB_Divergence_Short", category: "BB Div", signalKey: "BB_DIV_SHORT", slPct: 0.32, tpPct: 0.66, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 87, name: "VWAP_Divergence_Long", category: "VWAP Div", signalKey: "VWAP_DIV_LONG", slPct: 0.30, tpPct: 0.64, cooldownMin: 5, holdMinutes: 22, confluenceMin: 3 },
-  { id: 88, name: "VWAP_Divergence_Short", category: "VWAP Div", signalKey: "VWAP_DIV_SHORT", slPct: 0.30, tpPct: 0.64, cooldownMin: 5, holdMinutes: 22, confluenceMin: 3 },
-  { id: 89, name: "Support_Bounce_Long", category: "SR", signalKey: "SUPPORT_BOUNCE_LONG", slPct: 0.28, tpPct: 0.70, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 90, name: "Resistance_Bounce_Short", category: "SR", signalKey: "RESISTANCE_BOUNCE_SHORT", slPct: 0.28, tpPct: 0.70, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
+  // ADX Trend
   { id: 91, name: "Trend_Continuation_Long", category: "Trend", signalKey: "TREND_CONT_LONG", slPct: 0.26, tpPct: 0.80, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 },
   { id: 92, name: "Trend_Continuation_Short", category: "Trend", signalKey: "TREND_CONT_SHORT", slPct: 0.26, tpPct: 0.80, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 },
-  { id: 93, name: "Mean_Reversion_Long", category: "MR", signalKey: "MEAN_REV_LONG", slPct: 0.34, tpPct: 0.62, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 94, name: "Mean_Reversion_Short", category: "MR", signalKey: "MEAN_REV_SHORT", slPct: 0.34, tpPct: 0.62, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
+
+  // Breakout
   { id: 95, name: "Breakout_Long", category: "Breakout", signalKey: "BREAKOUT_LONG", slPct: 0.32, tpPct: 0.85, cooldownMin: 5, holdMinutes: 20, confluenceMin: 5 },
   { id: 96, name: "Breakout_Short", category: "Breakout", signalKey: "BREAKOUT_SHORT", slPct: 0.32, tpPct: 0.85, cooldownMin: 5, holdMinutes: 20, confluenceMin: 5 },
-  { id: 97, name: "False_Breakout_Long", category: "False Break", signalKey: "FALSE_BREAK_LONG", slPct: 0.30, tpPct: 0.60, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 98, name: "False_Breakout_Short", category: "False Break", signalKey: "FALSE_BREAK_SHORT", slPct: 0.30, tpPct: 0.60, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 99, name: "Range_Bound_Long", category: "Range", signalKey: "RANGE_BOUND_LONG", slPct: 0.32, tpPct: 0.58, cooldownMin: 3, holdMinutes: 16, confluenceMin: 3 },
-  { id: 100, name: "Range_Bound_Short", category: "Range", signalKey: "RANGE_BOUND_SHORT", slPct: 0.32, tpPct: 0.58, cooldownMin: 3, holdMinutes: 16, confluenceMin: 3 },
-  { id: 101, name: "Gap_Fill_Long", category: "Gap", signalKey: "GAP_FILL_LONG", slPct: 0.30, tpPct: 0.64, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 102, name: "Gap_Fill_Short", category: "Gap", signalKey: "GAP_FILL_SHORT", slPct: 0.30, tpPct: 0.64, cooldownMin: 4, holdMinutes: 18, confluenceMin: 3 },
-  { id: 103, name: "News_Driven_Long", category: "News", signalKey: "NEWS_LONG", slPct: 0.38, tpPct: 0.90, cooldownMin: 3, holdMinutes: 14, confluenceMin: 4 },
-  { id: 104, name: "News_Driven_Short", category: "News", signalKey: "NEWS_SHORT", slPct: 0.38, tpPct: 0.90, cooldownMin: 3, holdMinutes: 14, confluenceMin: 4 },
-  { id: 105, name: "Flash_Crash_Long", category: "Crash", signalKey: "FLASH_CRASH_LONG", slPct: 0.42, tpPct: 1.00, cooldownMin: 2, holdMinutes: 12, confluenceMin: 3 },
-  { id: 106, name: "Flash_Pump_Short", category: "Pump", signalKey: "FLASH_PUMP_SHORT", slPct: 0.42, tpPct: 1.00, cooldownMin: 2, holdMinutes: 12, confluenceMin: 3 },
-  { id: 107, name: "Algorithmic_Long", category: "Algo", signalKey: "ALGO_LONG", slPct: 0.28, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 108, name: "Algorithmic_Short", category: "Algo", signalKey: "ALGO_SHORT", slPct: 0.28, tpPct: 0.68, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 109, name: "Quantitative_Long", category: "Quant", signalKey: "QUANT_LONG", slPct: 0.26, tpPct: 0.72, cooldownMin: 6, holdMinutes: 24, confluenceMin: 5 },
-  { id: 110, name: "Quantitative_Short", category: "Quant", signalKey: "QUANT_SHORT", slPct: 0.26, tpPct: 0.72, cooldownMin: 6, holdMinutes: 24, confluenceMin: 5 },
 
-  // 111-130: Multi-Timeframe strategies
+  // MTF Trend
   { id: 111, name: "MTF_Trend_Align_Long", category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_LONG", slPct: 0.26, tpPct: 0.82, cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true },
   { id: 112, name: "MTF_Trend_Align_Short", category: "MTF Trend", signalKey: "MTF_TREND_ALIGN_SHORT", slPct: 0.26, tpPct: 0.82, cooldownMin: 6, holdMinutes: 32, confluenceMin: 4, requiresHtf: true },
-  { id: 113, name: "MTF_RSI_Converge_Long", category: "MTF RSI", signalKey: "MTF_RSI_CONVERGE_LONG", slPct: 0.28, tpPct: 0.76, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
-  { id: 114, name: "MTF_RSI_Converge_Short", category: "MTF RSI", signalKey: "MTF_RSI_CONVERGE_SHORT", slPct: 0.28, tpPct: 0.76, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
-  { id: 115, name: "MTF_Mom_Cascade_Long", category: "MTF Mom", signalKey: "MTF_MOM_CASCADE_LONG", slPct: 0.30, tpPct: 0.78, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5, requiresHtf: true },
-  { id: 116, name: "MTF_Mom_Cascade_Short", category: "MTF Mom", signalKey: "MTF_MOM_CASCADE_SHORT", slPct: 0.30, tpPct: 0.78, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5, requiresHtf: true },
+
+  // MTF MACD
   { id: 117, name: "MTF_MACD_Align_Long", category: "MTF MACD", signalKey: "MTF_MACD_ALIGN_LONG", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
   { id: 118, name: "MTF_MACD_Align_Short", category: "MTF MACD", signalKey: "MTF_MACD_ALIGN_SHORT", slPct: 0.28, tpPct: 0.74, cooldownMin: 6, holdMinutes: 28, confluenceMin: 4, requiresHtf: true },
-  { id: 119, name: "MTF_Squeeze_Fire_Long", category: "MTF Squeeze", signalKey: "MTF_SQUEEZE_FIRE_LONG", slPct: 0.30, tpPct: 0.86, cooldownMin: 7, holdMinutes: 32, confluenceMin: 5, requiresHtf: true },
-  { id: 120, name: "MTF_Squeeze_Fire_Short", category: "MTF Squeeze", signalKey: "MTF_SQUEEZE_FIRE_SHORT", slPct: 0.30, tpPct: 0.86, cooldownMin: 7, holdMinutes: 32, confluenceMin: 5, requiresHtf: true },
-  { id: 121, name: "MTF_Pullback_Long", category: "MTF Pullback", signalKey: "MTF_PULLBACK_LONG", slPct: 0.32, tpPct: 0.70, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4, requiresHtf: true },
-  { id: 122, name: "MTF_Pullback_Short", category: "MTF Pullback", signalKey: "MTF_PULLBACK_SHORT", slPct: 0.32, tpPct: 0.70, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4, requiresHtf: true },
+
+  // MTF ADX
   { id: 123, name: "MTF_ADX_Power_Long", category: "MTF ADX", signalKey: "MTF_ADX_POWER_LONG", slPct: 0.28, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 5, requiresHtf: true },
   { id: 124, name: "MTF_ADX_Power_Short", category: "MTF ADX", signalKey: "MTF_ADX_POWER_SHORT", slPct: 0.28, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 5, requiresHtf: true },
+
+  // MTF Breakout
   { id: 125, name: "MTF_Breakout_Long", category: "MTF Break", signalKey: "MTF_BREAKOUT_LONG", slPct: 0.30, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5, requiresHtf: true },
   { id: 126, name: "MTF_Breakout_Short", category: "MTF Break", signalKey: "MTF_BREAKOUT_SHORT", slPct: 0.30, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5, requiresHtf: true },
-  { id: 127, name: "MTF_MeanRev_Long", category: "MTF MR", signalKey: "MTF_MEAN_REVERT_LONG", slPct: 0.34, tpPct: 0.64, cooldownMin: 5, holdMinutes: 24, confluenceMin: 3, requiresHtf: true },
-  { id: 128, name: "MTF_MeanRev_Short", category: "MTF MR", signalKey: "MTF_MEAN_REVERT_SHORT", slPct: 0.34, tpPct: 0.64, cooldownMin: 5, holdMinutes: 24, confluenceMin: 3, requiresHtf: true },
-  { id: 129, name: "MTF_Confluence_Long", category: "MTF Conf", signalKey: "MTF_CONFLUENCE_LONG", slPct: 0.24, tpPct: 0.88, cooldownMin: 8, holdMinutes: 36, confluenceMin: 6, requiresHtf: true },
-  { id: 130, name: "MTF_Confluence_Short", category: "MTF Conf", signalKey: "MTF_CONFLUENCE_SHORT", slPct: 0.24, tpPct: 0.88, cooldownMin: 8, holdMinutes: 36, confluenceMin: 6, requiresHtf: true },
 
-  // 131-180: Advanced Futures Strategies (Pro Grade)
+  // Smart Money
   { id: 131, name: "SmartMoney_Accum_Long", category: "Smart Money", signalKey: "SM_ACCUM_LONG", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
   { id: 132, name: "SmartMoney_Distrib_Short", category: "Smart Money", signalKey: "SM_DISTRIB_SHORT", slPct: 0.26, tpPct: 0.85, cooldownMin: 6, holdMinutes: 32, confluenceMin: 5 },
+
+  // Order Flow
   { id: 133, name: "OrderFlow_Break_Long", category: "Order Flow", signalKey: "OF_BREAK_LONG", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
   { id: 134, name: "OrderFlow_Break_Short", category: "Order Flow", signalKey: "OF_BREAK_SHORT", slPct: 0.28, tpPct: 0.90, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 135, name: "LiquidityGrab_Long", category: "Liquidity", signalKey: "LIQ_GRAB_LONG", slPct: 0.30, tpPct: 0.82, cooldownMin: 4, holdMinutes: 20, confluenceMin: 4 },
-  { id: 136, name: "LiquidityGrab_Short", category: "Liquidity", signalKey: "LIQ_GRAB_SHORT", slPct: 0.30, tpPct: 0.82, cooldownMin: 4, holdMinutes: 20, confluenceMin: 4 },
-  { id: 137, name: "StopHunt_Long", category: "Stop Hunt", signalKey: "STOP_HUNT_LONG", slPct: 0.32, tpPct: 0.78, cooldownMin: 3, holdMinutes: 16, confluenceMin: 4 },
-  { id: 138, name: "StopHunt_Short", category: "Stop Hunt", signalKey: "STOP_HUNT_SHORT", slPct: 0.32, tpPct: 0.78, cooldownMin: 3, holdMinutes: 16, confluenceMin: 4 },
+
+  // Wyckoff
   { id: 139, name: "Wyckoff_Spring_Long", category: "Wyckoff", signalKey: "WYCKOFF_SPRING_LONG", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
   { id: 140, name: "Wyckoff_Upthrust_Short", category: "Wyckoff", signalKey: "WYCKOFF_UPTHRUST_SHORT", slPct: 0.28, tpPct: 0.95, cooldownMin: 8, holdMinutes: 38, confluenceMin: 5 },
-  { id: 141, name: "Wyckoff_MarkUp_Long", category: "Wyckoff", signalKey: "WYCKOFF_MARKUP_LONG", slPct: 0.24, tpPct: 0.88, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5 },
-  { id: 142, name: "Wyckoff_MarkDown_Short", category: "Wyckoff", signalKey: "WYCKOFF_MARKDOWN_SHORT", slPct: 0.24, tpPct: 0.88, cooldownMin: 6, holdMinutes: 30, confluenceMin: 5 },
-  { id: 143, name: "VolProfile_HVN_Long", category: "Vol Profile", signalKey: "VP_HVN_LONG", slPct: 0.30, tpPct: 0.76, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4 },
-  { id: 144, name: "VolProfile_HVN_Short", category: "Vol Profile", signalKey: "VP_HVN_SHORT", slPct: 0.30, tpPct: 0.76, cooldownMin: 5, holdMinutes: 26, confluenceMin: 4 },
-  { id: 145, name: "MarketStructure_BOS_Long", category: "Market Structure", signalKey: "MS_BOS_LONG", slPct: 0.26, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5 },
-  { id: 146, name: "MarketStructure_BOS_Short", category: "Market Structure", signalKey: "MS_BOS_SHORT", slPct: 0.26, tpPct: 0.92, cooldownMin: 6, holdMinutes: 28, confluenceMin: 5 },
-  { id: 147, name: "CHoCH_Long", category: "Market Structure", signalKey: "CHOCH_LONG", slPct: 0.28, tpPct: 0.84, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 148, name: "CHoCH_Short", category: "Market Structure", signalKey: "CHOCH_SHORT", slPct: 0.28, tpPct: 0.84, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 149, name: "Institutional_Pivot_Long", category: "Institutional", signalKey: "INST_PIVOT_LONG", slPct: 0.25, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 6 },
-  { id: 150, name: "Institutional_Pivot_Short", category: "Institutional", signalKey: "INST_PIVOT_SHORT", slPct: 0.25, tpPct: 0.80, cooldownMin: 7, holdMinutes: 34, confluenceMin: 6 },
+
+  // Session
   { id: 151, name: "OpeningDrive_Long", category: "Session", signalKey: "OPEN_DRIVE_LONG", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
   { id: 152, name: "OpeningDrive_Short", category: "Session", signalKey: "OPEN_DRIVE_SHORT", slPct: 0.32, tpPct: 0.72, cooldownMin: 3, holdMinutes: 18, confluenceMin: 4 },
-  { id: 153, name: "ClosingRange_Long", category: "Session", signalKey: "CLOSE_RANGE_LONG", slPct: 0.30, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 154, name: "ClosingRange_Short", category: "Session", signalKey: "CLOSE_RANGE_SHORT", slPct: 0.30, tpPct: 0.68, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 155, name: "StatArb_ZScore_Long", category: "Statistical", signalKey: "STAT_ZSCORE_LONG", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 156, name: "StatArb_ZScore_Short", category: "Statistical", signalKey: "STAT_ZSCORE_SHORT", slPct: 0.34, tpPct: 0.66, cooldownMin: 5, holdMinutes: 22, confluenceMin: 4 },
-  { id: 157, name: "Regression_Mean_Long", category: "Statistical", signalKey: "REG_MEAN_LONG", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 158, name: "Regression_Mean_Short", category: "Statistical", signalKey: "REG_MEAN_SHORT", slPct: 0.32, tpPct: 0.64, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 },
-  { id: 159, name: "Momentum_Divergence_Long", category: "Divergence", signalKey: "MOM_DIV_LONG", slPct: 0.30, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 160, name: "Momentum_Divergence_Short", category: "Divergence", signalKey: "MOM_DIV_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 6, holdMinutes: 26, confluenceMin: 4 },
-  { id: 161, name: "Harmonic_Bat_Long", category: "Harmonic", signalKey: "HARM_BAT_LONG", slPct: 0.28, tpPct: 0.86, cooldownMin: 8, holdMinutes: 36, confluenceMin: 5 },
-  { id: 162, name: "Harmonic_Bat_Short", category: "Harmonic", signalKey: "HARM_BAT_SHORT", slPct: 0.28, tpPct: 0.86, cooldownMin: 8, holdMinutes: 36, confluenceMin: 5 },
-  { id: 163, name: "Pattern_Flag_Long", category: "Chart Pattern", signalKey: "PATTERN_FLAG_LONG", slPct: 0.26, tpPct: 0.78, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4 },
-  { id: 164, name: "Pattern_Flag_Short", category: "Chart Pattern", signalKey: "PATTERN_FLAG_SHORT", slPct: 0.26, tpPct: 0.78, cooldownMin: 5, holdMinutes: 28, confluenceMin: 4 },
-  { id: 165, name: "Pattern_Pennant_Long", category: "Chart Pattern", signalKey: "PATTERN_PENNANT_LONG", slPct: 0.27, tpPct: 0.80, cooldownMin: 6, holdMinutes: 30, confluenceMin: 4 },
-  { id: 166, name: "Pattern_Pennant_Short", category: "Chart Pattern", signalKey: "PATTERN_PENNANT_SHORT", slPct: 0.27, tpPct: 0.80, cooldownMin: 6, holdMinutes: 30, confluenceMin: 4 },
-  { id: 167, name: "Delta_Squeeze_Long", category: "Greek-Inspired", signalKey: "DELTA_SQUEEZE_LONG", slPct: 0.30, tpPct: 0.82, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 168, name: "Delta_Squeeze_Short", category: "Greek-Inspired", signalKey: "DELTA_SQUEEZE_SHORT", slPct: 0.30, tpPct: 0.82, cooldownMin: 5, holdMinutes: 24, confluenceMin: 5 },
-  { id: 169, name: "Gamma_Spike_Long", category: "Greek-Inspired", signalKey: "GAMMA_SPIKE_LONG", slPct: 0.34, tpPct: 0.76, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
-  { id: 170, name: "Gamma_Spike_Short", category: "Greek-Inspired", signalKey: "GAMMA_SPIKE_SHORT", slPct: 0.34, tpPct: 0.76, cooldownMin: 4, holdMinutes: 18, confluenceMin: 4 },
-  { id: 171, name: "Event_Driven_Long", category: "Event", signalKey: "EVENT_LONG", slPct: 0.40, tpPct: 1.10, cooldownMin: 3, holdMinutes: 15, confluenceMin: 4 },
-  { id: 172, name: "Event_Driven_Short", category: "Event", signalKey: "EVENT_SHORT", slPct: 0.40, tpPct: 1.10, cooldownMin: 3, holdMinutes: 15, confluenceMin: 4 },
-  { id: 173, name: "PostEvent_Retrace_Long", category: "Event", signalKey: "POST_EVENT_LONG", slPct: 0.32, tpPct: 0.70, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
-  { id: 174, name: "PostEvent_Retrace_Short", category: "Event", signalKey: "POST_EVENT_SHORT", slPct: 0.32, tpPct: 0.70, cooldownMin: 4, holdMinutes: 22, confluenceMin: 3 },
-  { id: 175, name: "ML_Ensemble_Long", category: "ML-Style", signalKey: "ML_ENSEMBLE_LONG", slPct: 0.26, tpPct: 0.84, cooldownMin: 6, holdMinutes: 30, confluenceMin: 6 },
-  { id: 176, name: "ML_Ensemble_Short", category: "ML-Style", signalKey: "ML_ENSEMBLE_SHORT", slPct: 0.26, tpPct: 0.84, cooldownMin: 6, holdMinutes: 30, confluenceMin: 6 },
-  { id: 177, name: "ML_Classifier_Long", category: "ML-Style", signalKey: "ML_CLASS_LONG", slPct: 0.28, tpPct: 0.80, cooldownMin: 5, holdMinutes: 26, confluenceMin: 5 },
-  { id: 178, name: "ML_Classifier_Short", category: "ML-Style", signalKey: "ML_CLASS_SHORT", slPct: 0.28, tpPct: 0.80, cooldownMin: 5, holdMinutes: 26, confluenceMin: 5 },
-  { id: 179, name: "RiskOn_Rally_Long", category: "Macro", signalKey: "RISK_ON_LONG", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
-  { id: 180, name: "RiskOff_Dump_Short", category: "Macro", signalKey: "RISK_OFF_SHORT", slPct: 0.30, tpPct: 0.74, cooldownMin: 5, holdMinutes: 24, confluenceMin: 4 },
 ];
 
-/**
- * Full strategy registry: base (1–180) + BTC FT extended (200–299) + BTC FT generated research pool (300–399).
- * The 300–399 IDs are registered here so evalMinuteSignal can find them, but `btcFtRoster` and
- * `btcFtResearch` decide whether the pool is actually exposed to the running desk.
- */
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
   ...BASE_FUTURES_STRAT_DEFS,
-  ...BTC_FT_EXTENDED_DEFS_FULL,
-  ...BTC_FT_GENERATED_DEFS,
-  // Premium hypothesis-driven strategies (IDs 500–503). Always active.
   ...BTC_FT_PREMIUM_DEFS,
 ];

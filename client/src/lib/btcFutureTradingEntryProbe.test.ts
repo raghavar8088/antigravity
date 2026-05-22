@@ -83,16 +83,16 @@ describe("BTC Future Trading desk roster entry probe", () => {
     allowFakeDiversity: true,
   });
 
-  it("roster includes core archetypes plus extended BTC FT IDs (200–299)", () => {
-    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBe(120);
-    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.some((id) => id >= 200)).toBe(true);
+  it("roster contains only CORE 20 + premium (extended pool removed)", () => {
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.length).toBe(CORE_BTC_FT_STRATEGY_IDS.length);
+    expect(BTC_FUTURE_TRADING_STRATEGY_IDS.some((id) => id >= 200 && id < 500)).toBe(false);
     expect(raw.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.fakeDiversityFilteredCount).toBe(0);
     expect(built.strategies.length).toBe(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(built.lowRrSkippedStratIds.length).toBe(0);
   });
 
-  it("keeps all 120 explicit BTC Future Trading IDs active after desk policy build", () => {
+  it("keeps all CORE IDs active after desk policy build", () => {
     const explicitIds = new Set(BTC_FUTURE_TRADING_STRATEGY_IDS);
     const explicitRaw = FUTURES_STRAT_DEFS.filter((s) => explicitIds.has(s.id));
     const explicitBuilt = buildPaperDeskStrategies(explicitRaw, {
@@ -101,7 +101,7 @@ describe("BTC Future Trading desk roster entry probe", () => {
       allowFakeDiversity: true,
     });
 
-    expect(explicitBuilt.strategies).toHaveLength(120);
+    expect(explicitBuilt.strategies).toHaveLength(BTC_FUTURE_TRADING_STRATEGY_IDS.length);
     expect(explicitBuilt.strategies.map((s) => s.id).sort((a, b) => a - b)).toEqual(
       [...BTC_FUTURE_TRADING_STRATEGY_IDS].sort((a, b) => a - b),
     );

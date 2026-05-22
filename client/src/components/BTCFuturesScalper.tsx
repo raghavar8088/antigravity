@@ -12,7 +12,6 @@ import {
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
-import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPanels";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
@@ -231,23 +230,21 @@ export function BTCFuturesScalper({
     totalUnrealized: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
   }), [positions]);
 
-  // Merge active roster statuses with POOL-only entries so the user can see every registered
-  // strategy in the leaderboard — including research pool IDs (300–399) that aren't in the
-  // current active batch. POOL entries are display-only; they cannot fire trades until rotated in.
+  // Merge active roster statuses with POOL-only entries (research mode) or just show the active
+  // strategies (WINNERS_ONLY / production). In non-research mode researchPoolIds is undefined,
+  // so we fall back to the active strategyIds rather than the full 200+ definition list.
   const augmentedStrategyStatuses = useMemo<BTCFuturesStrategyStatus[]>(() => {
     const activeIds = new Set(strategyStatuses.map((s) => s.id));
     const poolOverlayIds = researchPoolIds && researchPoolIds.length > 0
       ? researchPoolIds
-      : FUTURES_STRAT_DEFS.map((d) => d.id);
+      : (strategyIds && strategyIds.length > 0 ? strategyIds : []);
     const poolOnly: BTCFuturesStrategyStatus[] = [];
     for (const id of poolOverlayIds) {
       if (activeIds.has(id)) continue;
-      const def = FUTURES_STRAT_DEFS.find((d) => d.id === id);
-      if (!def) continue;
       poolOnly.push({
-        id: def.id,
-        name: def.name,
-        category: def.category,
+        id,
+        name: `Strategy ${id}`,
+        category: "Unknown",
         status: "POOL",
         disabled: false,
         openCount: 0,

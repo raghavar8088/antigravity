@@ -66,23 +66,23 @@ describe("deskEffectiveHoldMinutesAtOpen", () => {
 });
 
 describe("buildPaperDeskStrategies", () => {
-  it("filters fake-diversity IDs 79–110 when allowFakeDiversity is false", () => {
+  it("fake-diversity filter is a no-op (FAKE_DIVERSITY_STRAT_IDS is empty, extended pool removed)", () => {
+    expect(FAKE_DIVERSITY_STRAT_IDS.length).toBe(0);
     const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
       strategyIdAllowlist: null,
       minTpSlRatio: 2,
       allowFakeDiversity: false,
     });
-    const ids = new Set(r.strategies.map((s) => s.id));
-    for (const id of FAKE_DIVERSITY_STRAT_IDS) {
-      expect(ids.has(id)).toBe(false);
-    }
-    expect(r.fakeDiversityFilteredCount).toBe(FAKE_DIVERSITY_STRAT_IDS.length);
+    expect(r.fakeDiversityFilteredCount).toBe(0);
+    // All CORE 20 + premium strategies should still be present
+    expect(r.strategies.length).toBe(FUTURES_STRAT_DEFS.length);
   });
 
   it("records TP-widened ids when ratio was below min", () => {
+    // CORE 20 strategies all have TP/SL > 2, so use ratio=4 to force widening
     const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
       strategyIdAllowlist: null,
-      minTpSlRatio: 2,
+      minTpSlRatio: 4,
       allowFakeDiversity: true,
     });
     expect(r.tpWidenedStratIds.length).toBeGreaterThan(0);
@@ -92,7 +92,7 @@ describe("buildPaperDeskStrategies", () => {
   it("tags strategies with deskTpWidened when TP% was raised", () => {
     const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
       strategyIdAllowlist: null,
-      minTpSlRatio: 2,
+      minTpSlRatio: 4,
       allowFakeDiversity: true,
     });
     const widened = r.strategies.filter((s) => s.deskTpWidened === true);
@@ -103,7 +103,8 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("applies category hold multiplier in desk build (MeanRev > raw)", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    // Inline fixture: MeanRev category (id=3 slot, which is in DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID)
+    const raw = { id: 3, name: "Fixture_MR", category: "MeanRev", signalKey: "TEST_MR", slPct: 0.32, tpPct: 0.90, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 };
     expect(deskHoldMinutesCategoryMul(raw.category)).toBeGreaterThan(1);
     const r = buildPaperDeskStrategies([raw], {
       strategyIdAllowlist: null,
@@ -115,8 +116,8 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("attaches default regimes by category when defs omit regimes, plus desk extra tokens when mapped", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
-    expect(raw.regimes).toBeUndefined();
+    // id=3 is in DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3] = ["trendHigh"]; MeanRev category
+    const raw = { id: 3, name: "Fixture_MR", category: "MeanRev", signalKey: "TEST_MR", slPct: 0.32, tpPct: 0.90, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 };
     expect(DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]?.length).toBeGreaterThan(0);
     const r = buildPaperDeskStrategies([raw], {
       strategyIdAllowlist: null,
@@ -130,8 +131,9 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("does not merge desk regime extras when strat id is not in override map", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 5)!;
-    expect(DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[5]).toBeUndefined();
+    // id=91 is NOT in DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID; Trend category
+    const raw = { id: 91, name: "Fixture_Trend", category: "Trend", signalKey: "TEST_TREND", slPct: 0.26, tpPct: 0.90, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 };
+    expect(DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[91]).toBeUndefined();
     const r = buildPaperDeskStrategies([raw], {
       strategyIdAllowlist: null,
       minTpSlRatio: 2,
@@ -141,7 +143,7 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("keeps explicit regimes from def and does not count toward annotation", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 5)!;
+    const raw = { id: 91, name: "Fixture_Trend", category: "Trend", signalKey: "TEST_TREND", slPct: 0.26, tpPct: 0.90, cooldownMin: 6, holdMinutes: 26, confluenceMin: 5 };
     const r = buildPaperDeskStrategies([{ ...raw, regimes: ["trendHigh"] }], {
       strategyIdAllowlist: null,
       minTpSlRatio: 2,
@@ -152,7 +154,8 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("does not merge desk regime extras onto explicit regimes (even when id is in override map)", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    // id=3 is in DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3] but explicit regimes block merging
+    const raw = { id: 3, name: "Fixture_MR", category: "MeanRev", signalKey: "TEST_MR", slPct: 0.32, tpPct: 0.90, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 };
     expect(DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]).toBeDefined();
     const r = buildPaperDeskStrategies([{ ...raw, regimes: ["chop"] }], {
       strategyIdAllowlist: null,
@@ -164,14 +167,13 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("empty regimes array on def is treated as missing → defaults + desk extras when mapped", () => {
-    const raw = FUTURES_STRAT_DEFS.find((s) => s.id === 3)!;
+    const raw = { id: 3, name: "Fixture_MR", category: "MeanRev", signalKey: "TEST_MR", slPct: 0.32, tpPct: 0.90, cooldownMin: 4, holdMinutes: 20, confluenceMin: 3 };
     const r = buildPaperDeskStrategies([{ ...raw, regimes: [] }], {
       strategyIdAllowlist: null,
       minTpSlRatio: 2,
       allowFakeDiversity: true,
     });
-    // MeanRev: chop pruned (deskDisableChopForMrEnabled=true by default);
-    // trendHigh added via DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]
+    // MeanRev: chop pruned; trendHigh added via DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]
     expect(r.strategies[0]!.regimes).toEqual(["trendLow", "trendHigh"]);
     expect(r.deskRegimeAnnotatedStratCount).toBe(1);
   });
