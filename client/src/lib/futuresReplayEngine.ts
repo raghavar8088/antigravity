@@ -32,6 +32,11 @@ import {
   paperSameDirNotionalWouldExceedCap,
   type PaperSide,
 } from "@/lib/futuresPaperMath";
+import {
+  deskPaperMakerFillModelEnabled,
+  deskPaperMakerFeePctFromEnv,
+  deskPaperMakerFillProbabilityFromEnv,
+} from "@/lib/futuresDeskPolicy";
 import { FUTURES_STRAT_DEFS, type FuturesStratDef, type RegimeTag } from "@/lib/futuresStrategies";
 import {
   buildSignalInputs,
@@ -48,7 +53,28 @@ import {
 } from "@/lib/futuresSessionMetrics";
 import type { ReplayCandle } from "@/lib/futuresReplayFixtures";
 
-const TAKER_FEE_PCT = 0.001;
+const RAW_TAKER_FEE_PCT = 0.001;
+
+/**
+ * Effective per-leg fee for paper math.
+ *
+ * When `deskPaperMakerFillModelEnabled()` is OFF (default 2026-05-21): equals
+ * RAW_TAKER_FEE_PCT (0.10% per leg → 0.20% RT) — the conservative all-taker model.
+ *
+ * When ON (env `NEXT_PUBLIC_DESK_PAPER_MAKER_FILL_MODEL=1`): blended per-leg
+ * fee = p_maker * makerFeePct + (1 - p_maker) * takerFeePct. With Delta's
+ * 0.05% maker / 0.10% taker rates and 70% maker fill probability, drops to
+ * ~0.065% per leg → ~0.13% RT. The live execution path must actually place
+ * post-only orders with taker-fallback timeout for this model to hold.
+ *
+ * Captured at module load so the replay run is deterministic per env config.
+ */
+const TAKER_FEE_PCT: number = (() => {
+  if (!deskPaperMakerFillModelEnabled()) return RAW_TAKER_FEE_PCT;
+  const pMaker = deskPaperMakerFillProbabilityFromEnv();
+  const makerFee = deskPaperMakerFeePctFromEnv();
+  return pMaker * makerFee + (1 - pMaker) * RAW_TAKER_FEE_PCT;
+})();
 const CONTRACT_SIZE = 1;
 const MIN_CONTRACTS = 1;
 const MAX_CONTRACTS = 50;

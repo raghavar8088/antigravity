@@ -114,6 +114,50 @@ export function paperRoundTripTakerFees(notional: number, takerFeePct: number): 
 }
 
 /**
+ * Delta India maker fee on perpetuals — 0.05% per leg (matches `MAKER_FEE_PCT`
+ * in `useBTCFuturesScalperEngine.ts`). Used by `paperRoundTripBlendedFees`
+ * to model a maker-first entry path with taker fallback.
+ */
+export const PAPER_MAKER_FEE_PCT_DEFAULT = 0.0005;
+
+/**
+ * Probability a limit (post-only) entry actually fills as maker before timeout.
+ * 0.7 is conservative for 1m scalps — fills happen when price ticks through the limit,
+ * which is common but not guaranteed within an N-second window.
+ */
+export const PAPER_MAKER_FILL_PROBABILITY_DEFAULT = 0.7;
+
+/**
+ * Round-trip fees under a maker-first entry path with taker fallback.
+ *
+ * Blended per-leg fee = `p_maker * makerFeePct + (1 - p_maker) * takerFeePct`.
+ * Round-trip = `2 * blended * notional`.
+ *
+ * Used by paper math when `deskPaperMakerFillModelEnabled()` is on. With Delta's
+ * standard rates (0.02% maker, 0.10% taker) and `p_maker = 0.7`, RT drops from
+ * 0.20% (all-taker) to ~0.088% — a ~56% reduction in fee drag.
+ *
+ * IMPORTANT: this is a *model* of expected fee outcomes under a maker-first
+ * implementation. The live execution layer must actually place post-only orders
+ * with a taker-fallback timeout for the model to be honest. This function
+ * intentionally returns a higher number than pure-maker math would, so paper
+ * results stay conservative against optimistic execution assumptions.
+ */
+export function paperRoundTripBlendedFees(
+  notional: number,
+  makerFeePct: number,
+  takerFeePct: number,
+  makerFillProbability: number,
+): number {
+  if (!Number.isFinite(notional) || notional <= 0) return 0;
+  const pm = Math.min(1, Math.max(0, Number.isFinite(makerFillProbability) ? makerFillProbability : 0));
+  const makerPerLeg = Number.isFinite(makerFeePct) && makerFeePct >= 0 ? makerFeePct : 0;
+  const takerPerLeg = Number.isFinite(takerFeePct) && takerFeePct >= 0 ? takerFeePct : 0;
+  const blendedPerLeg = pm * makerPerLeg + (1 - pm) * takerPerLeg;
+  return notional * blendedPerLeg * 2;
+}
+
+/**
  * **Minimum expected move vs round-trip fees** (paper desk entry quality gate).
  *
  * Treats **ATR14 / markPrice** as a one-bar **relative** excursion; scaled to the position:

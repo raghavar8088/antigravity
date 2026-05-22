@@ -2,35 +2,35 @@
 
 exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and first clientTradeId 1`] = `
 {
-  "finalBalance": 1011.6947,
+  "finalBalance": 1013.805,
   "firstClientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
   "stats": {
     "count": 11,
     "exitReasonCounts": {
-      "PROFIT_LOCK": 7,
-      "SL": 4,
+      "PROFIT_LOCK": 8,
+      "SL": 3,
     },
-    "expectancy": 1.2449763674592693,
-    "sumNet": 13.694740042051963,
+    "expectancy": 1.436818181818182,
+    "sumNet": 15.805000000000001,
   },
   "tradeCount": 11,
   "trades": [
     {
       "clientTradeId": "bcd75408-22e0-493c-8000-07e65fa3d",
       "exitReason": "SL",
-      "netPnl": -0.1,
+      "netPnl": -0.065,
       "strategyId": 112,
     },
     {
-      "clientTradeId": "ed4be651-737c-48a0-8000-02ff94864",
-      "exitReason": "SL",
-      "netPnl": -0.0053,
+      "clientTradeId": "bd5bf61e-236c-48b0-8000-07fe9582b",
+      "exitReason": "PROFIT_LOCK",
+      "netPnl": 2,
       "strategyId": 111,
     },
     {
-      "clientTradeId": "16f0f1c9-88c7-431b-8000-0d4425ffc",
+      "clientTradeId": "57740f52-c943-429f-8000-095c6a167",
       "exitReason": "SL",
-      "netPnl": -0.1,
+      "netPnl": -0.065,
       "strategyId": 111,
     },
     {
@@ -60,7 +60,7 @@ exports[`runPaperDeskReplay > golden: 100-bar fixture → stable trade count and
     {
       "clientTradeId": "cf2619fa-5111-4acd-8000-00d94b7cf",
       "exitReason": "SL",
-      "netPnl": -0.1,
+      "netPnl": -0.065,
       "strategyId": 112,
     },
     {

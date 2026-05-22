@@ -47,6 +47,11 @@ import {
   pruneDeskRegimePersistEvents,
   regimeHistogramShares,
   serializeDeskRegimePersistLsPayload,
+  deskPaperMakerFillModelEnabled,
+  deskPaperMakerFeePctFromEnv,
+  deskPaperMakerFillProbabilityFromEnv,
+  deskDisableChopForMrEnabled,
+  DESK_CHOP_DISABLED_MR_CATEGORIES,
 } from "./futuresDeskPolicy";
 
 describe("deskEffectiveHoldMinutesAtOpen", () => {
@@ -118,7 +123,9 @@ describe("buildPaperDeskStrategies", () => {
       minTpSlRatio: 2,
       allowFakeDiversity: true,
     });
-    expect(r.strategies[0]!.regimes).toEqual(["chop", "trendLow", "trendHigh"]);
+    // MeanRev: chop pruned (deskDisableChopForMrEnabled=true by default);
+    // trendHigh added via DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]
+    expect(r.strategies[0]!.regimes).toEqual(["trendLow", "trendHigh"]);
     expect(r.deskRegimeAnnotatedStratCount).toBe(1);
   });
 
@@ -163,14 +170,17 @@ describe("buildPaperDeskStrategies", () => {
       minTpSlRatio: 2,
       allowFakeDiversity: true,
     });
-    expect(r.strategies[0]!.regimes).toEqual(["chop", "trendLow", "trendHigh"]);
+    // MeanRev: chop pruned (deskDisableChopForMrEnabled=true by default);
+    // trendHigh added via DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID[3]
+    expect(r.strategies[0]!.regimes).toEqual(["trendLow", "trendHigh"]);
     expect(r.deskRegimeAnnotatedStratCount).toBe(1);
   });
 });
 
 describe("defaultRegimesForCategory", () => {
   it("maps MeanRev / Confluence / unknown per v1 table", () => {
-    expect(defaultRegimesForCategory("MeanRev")).toEqual(["chop", "trendLow"]);
+    // chop is pruned from MeanRev by default (deskDisableChopForMrEnabled=true)
+    expect(defaultRegimesForCategory("MeanRev")).toEqual(["trendLow"]);
     expect(defaultRegimesForCategory("Confluence")).toEqual([...DESK_REGIME_FALLBACK_ALLOW_ALL]);
     expect(defaultRegimesForCategory("TotallyUnknownCategory")).toEqual([...DESK_REGIME_FALLBACK_ALLOW_ALL]);
   });
@@ -344,16 +354,18 @@ describe("deskAutoDisableStratsEnabled / deskKillMinTradesFromEnv", () => {
     vi.unstubAllEnvs();
   });
 
-  it("auto-disable off by default", () => {
-    expect(deskAutoDisableStratsEnabled()).toBe(false);
-    expect(deskKillMinTradesFromEnv()).toBe(5);
-  });
-
-  it("enables with flag and parses kill overrides", () => {
-    vi.stubEnv("NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS", "1");
-    vi.stubEnv("NEXT_PUBLIC_DESK_KILL_MIN_TRADES", "8");
+  it("auto-disable ON by default (hardening 2026-05-21); disable with =0", () => {
     expect(deskAutoDisableStratsEnabled()).toBe(true);
     expect(deskKillMinTradesFromEnv()).toBe(8);
+    vi.stubEnv("NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS", "0");
+    expect(deskAutoDisableStratsEnabled()).toBe(false);
+  });
+
+  it("enables with any non-zero flag and parses kill overrides", () => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS", "1");
+    vi.stubEnv("NEXT_PUBLIC_DESK_KILL_MIN_TRADES", "12");
+    expect(deskAutoDisableStratsEnabled()).toBe(true);
+    expect(deskKillMinTradesFromEnv()).toBe(12);
   });
 });
 
@@ -392,7 +404,7 @@ describe("deskSlippageBpsFromEnv", () => {
     vi.stubEnv("NEXT_PUBLIC_DESK_SLIPPAGE_BPS", "99");
     expect(deskSlippageBpsFromEnv()).toBe(50);
     vi.stubEnv("NEXT_PUBLIC_DESK_SLIPPAGE_BPS", "-3");
-    expect(deskSlippageBpsFromEnv()).toBe(0);
+    expect(deskSlippageBpsFromEnv()).toBe(DESK_SLIPPAGE_BPS_DEFAULT); // invalid → default (5)
   });
 });
 
@@ -446,14 +458,14 @@ describe("deskMaxOpenPerCategoryFromEnv / countOpenByCategory / canOpenCategory 
     vi.unstubAllEnvs();
   });
 
-  it("defaults to 3 and clamps 1–12", () => {
+  it("defaults to DESK_MAX_OPEN_PER_CATEGORY_DEFAULT (2) and clamps 1–12", () => {
     expect(deskMaxOpenPerCategoryFromEnv()).toBe(DESK_MAX_OPEN_PER_CATEGORY_DEFAULT);
     vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "8");
     expect(deskMaxOpenPerCategoryFromEnv()).toBe(8);
     vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "99");
     expect(deskMaxOpenPerCategoryFromEnv()).toBe(12);
     vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY", "0");
-    expect(deskMaxOpenPerCategoryFromEnv()).toBe(3);
+    expect(deskMaxOpenPerCategoryFromEnv()).toBe(DESK_MAX_OPEN_PER_CATEGORY_DEFAULT);
   });
 
   it("4 MeanRev candidates at max 3 → 4th blocked", () => {
@@ -583,10 +595,10 @@ describe("firehose-mode env helpers", () => {
     expect(deskFirehoseModeEnabled()).toBe(false);
   });
 
-  it("deskMaxOpenPositionsEffective: 12 default, 60 in firehose, clamped via env", () => {
+  it("deskMaxOpenPositionsEffective: 6 default (hardening 2026-05-21), 60 in firehose, clamped via env", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "");
     vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS", "");
-    expect(deskMaxOpenPositionsEffective()).toBe(12);
+    expect(deskMaxOpenPositionsEffective()).toBe(6);
 
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "1");
     expect(deskMaxOpenPositionsEffective()).toBe(60);
@@ -605,5 +617,42 @@ describe("firehose-mode env helpers", () => {
     const equity = 1_000_000;
     const expectedNotional = (equity * pct) / 100;
     expect(expectedNotional).toBe(10_000);
+  });
+});
+
+describe("deskPaperMakerFillModelEnabled / makerFee / makerFillProbability", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("maker-fill model ON by default; disable with =0", () => {
+    expect(deskPaperMakerFillModelEnabled()).toBe(true);
+    vi.stubEnv("NEXT_PUBLIC_DESK_PAPER_MAKER_FILL_MODEL", "0");
+    expect(deskPaperMakerFillModelEnabled()).toBe(false);
+  });
+
+  it("maker fee defaults to 0.0005 (Delta 0.05% maker)", () => {
+    expect(deskPaperMakerFeePctFromEnv()).toBe(0.0005);
+  });
+
+  it("maker fill probability defaults to 0.70", () => {
+    expect(deskPaperMakerFillProbabilityFromEnv()).toBe(0.7);
+  });
+});
+
+describe("deskDisableChopForMrEnabled / DESK_CHOP_DISABLED_MR_CATEGORIES", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("chop-disable for MR is ON by default; disable with =0", () => {
+    expect(deskDisableChopForMrEnabled()).toBe(true);
+    vi.stubEnv("NEXT_PUBLIC_DESK_DISABLE_CHOP_FOR_MR", "0");
+    expect(deskDisableChopForMrEnabled()).toBe(false);
+  });
+
+  it("DESK_CHOP_DISABLED_MR_CATEGORIES contains expected MR labels", () => {
+    expect(DESK_CHOP_DISABLED_MR_CATEGORIES.has("MeanRev")).toBe(true);
+    expect(DESK_CHOP_DISABLED_MR_CATEGORIES.has("Breakout")).toBe(false);
   });
 });

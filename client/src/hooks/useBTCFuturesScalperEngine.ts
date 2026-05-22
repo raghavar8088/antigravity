@@ -47,6 +47,9 @@ import {
   deskRegimeHistogramDevPersistEnabled,
   deskRegimeWatchIntervalMsFromEnv,
   deskRegimeWatchPollWindowFromEnv,
+  deskPaperMakerFillModelEnabled,
+  deskPaperMakerFeePctFromEnv,
+  deskPaperMakerFillProbabilityFromEnv,
   type DeskRegimePersistEvent,
   type DeskEntryUtcSession,
   histogramRegimePolls,
@@ -168,10 +171,17 @@ export type { FuturesDataHealth, FuturesDataHealthStatus, FuturesDataHealthSymbo
 // ========== FUTURES-SPECIFIC CONSTANTS ==========
 const LEVERAGE = 25; // Default leverage
 const MARGIN_PCT = 1 / LEVERAGE; // 4% margin requirement
-const MAKER_FEE_PCT = 0.0005; // 0.05% maker
-const TAKER_FEE_PCT = 0.001; // 0.10% taker (market orders)
-const ROUND_TRIP_FEE_FRAC = TAKER_FEE_PCT * 2; // 0.2% round trip
-const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100; // 0.2%
+const MAKER_FEE_PCT = 0.0005; // 0.05% maker (Delta Exchange)
+const RAW_TAKER_FEE_PCT = 0.001; // 0.10% taker (market orders)
+// When maker-first fill model is ON, blend taker fee down based on expected fill probability.
+const TAKER_FEE_PCT: number = (() => {
+  if (!deskPaperMakerFillModelEnabled()) return RAW_TAKER_FEE_PCT;
+  const pMaker = deskPaperMakerFillProbabilityFromEnv();
+  const makerFee = deskPaperMakerFeePctFromEnv();
+  return pMaker * makerFee + (1 - pMaker) * RAW_TAKER_FEE_PCT;
+})();
+const ROUND_TRIP_FEE_FRAC = TAKER_FEE_PCT * 2;
+const FEE_BREAKEVEN_PCT = ROUND_TRIP_FEE_FRAC * 100;
 
 // Account settings
 // Initial paper balance — env override via NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD so

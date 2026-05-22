@@ -248,8 +248,12 @@ export function deskMaxSameDirNotionalFracFromEnv(): number {
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : DESK_MAX_SAME_DIR_FRAC_OF_EQUITY_DEFAULT;
 }
 
-/** Default \(K\) in `paperMinExpectedMoveVsFees` (ATR$ move ≥ K × round-trip fees). */
-export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 1;
+/**
+ * Default \(K\) in `paperMinExpectedMoveVsFees` (ATR$ move ≥ K × round-trip fees).
+ * Tightened 2026-05-21 from 1.0 → 1.1 to require a 10% safety margin over fees;
+ * stops entries where a single-ATR move barely covers the round-trip cost.
+ */
+export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 1.1;
 
 export function deskMinExpectedMoveSafetyKFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K;
@@ -258,8 +262,51 @@ export function deskMinExpectedMoveSafetyKFromEnv(): number {
   return Number.isFinite(n) && n > 0 ? n : DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
 }
 
-/** Default adverse slippage (bps) on paper entry/exit fills. */
-export const DESK_SLIPPAGE_BPS_DEFAULT = 0;
+/**
+ * Maker-first paper fee model.
+ *
+ * When ON (default 2026-05-21): paper math uses `paperRoundTripBlendedFees`
+ * (~0.088% RT with Delta's 0.02% maker + 0.10% taker rates and 70% maker fill
+ * probability), modeling a post-only entry path with taker fallback.
+ *
+ * When OFF: paper math falls back to `paperRoundTripTakerFees` (all-taker,
+ * 0.20% RT) — useful for honest worst-case comparison.
+ *
+ * IMPORTANT: this is the *model* only. The live trading boundary must actually
+ * implement post-only orders with a taker-fallback timeout for the math to
+ * hold. The model intentionally stays conservative against pure-maker assumptions.
+ *
+ * Env to disable: `NEXT_PUBLIC_DESK_PAPER_MAKER_FILL_MODEL=0`.
+ */
+export function deskPaperMakerFillModelEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_PAPER_MAKER_FILL_MODEL !== "0";
+}
+
+/** Per-leg maker fee assumed by the maker-first paper model. Override via env. */
+export function deskPaperMakerFeePctFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_PAPER_MAKER_FEE_PCT;
+  if (raw === undefined || raw.trim() === "") return 0.0005;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0.0005;
+  return Math.min(0.005, n);
+}
+
+/** Probability a limit entry fills as maker before timeout (0.7 conservative). */
+export function deskPaperMakerFillProbabilityFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_PAPER_MAKER_FILL_PROBABILITY;
+  if (raw === undefined || raw.trim() === "") return 0.7;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0.7;
+  return Math.min(1, Math.max(0, n));
+}
+
+/**
+ * Default adverse slippage (bps) on paper entry/exit fills.
+ * Tightened 2026-05-21 from 0 → 5 for honest paper math: a 0-bps assumption
+ * makes paper results look better than live would. 5 bps × 2 legs = 10 bps RT slip
+ * on top of the 20 bps RT taker fee floor. Override via env if simulating maker fills.
+ */
+export const DESK_SLIPPAGE_BPS_DEFAULT = 5;
 
 /** Parses `NEXT_PUBLIC_DESK_SLIPPAGE_BPS`; clamps to [0, 50]. */
 export function deskSlippageBpsFromEnv(): number {
@@ -329,29 +376,30 @@ export function deskSessionGateEnabled(): boolean {
 }
 
 /**
- * Max concurrent open positions per side (LONG/SHORT). Default 6 — forces
- * the book to stay balanced and not pile 12 longs at the same time.
+ * Max concurrent open positions per side (LONG/SHORT). Default 3 — concentrated
+ * book. Tightened 2026-05-21 from 6 → 3 for profitability hardening: fewer trades,
+ * higher conviction per trade, lower aggregate fee drag. Env to revert: =6.
  * Env: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE`. Clamped to [1, 12].
  */
 export function deskMaxOpenPerSideFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_PER_SIDE;
-  if (raw === undefined || raw.trim() === "") return 6;
+  if (raw === undefined || raw.trim() === "") return 3;
   const n = Math.floor(Number(raw));
-  if (!Number.isFinite(n) || n <= 0) return 6;
+  if (!Number.isFinite(n) || n <= 0) return 3;
   return Math.min(12, Math.max(1, n));
 }
 
 /**
  * Max concurrent open positions per template family (e.g. BTCFT_VWAP_V0_LONG).
- * Default 2 — prevents 3+ variants of the same template from piling on a
- * single signal and paying N× round-trip fees. Set to 1 for strict dedup.
- * Env: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE`. Clamped to [1, 6].
+ * Default 1 — strict dedup. Tightened 2026-05-21 from 2 → 1: same template
+ * firing 2× on the same signal pays 2× round-trip fees with correlated risk.
+ * Env to revert: =2. Env: `NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE`. Clamped to [1, 6].
  */
 export function deskMaxOpenPerTemplateFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_MAX_OPEN_PER_TEMPLATE;
-  if (raw === undefined || raw.trim() === "") return 2;
+  if (raw === undefined || raw.trim() === "") return 1;
   const n = Math.floor(Number(raw));
-  if (!Number.isFinite(n) || n <= 0) return 2;
+  if (!Number.isFinite(n) || n <= 0) return 1;
   return Math.min(6, Math.max(1, n));
 }
 
@@ -402,7 +450,10 @@ export function deskFirehoseModeEnabled(): boolean {
 }
 
 /**
- * Effective MAX_OPEN_POSITIONS — 12 by default; 60 in firehose mode.
+ * Effective MAX_OPEN_POSITIONS — 6 by default; 60 in firehose mode.
+ * Tightened 2026-05-21 from 12 → 6 for profitability hardening (concentration
+ * over shotgun). Firehose mode unchanged at 60 since research mode wants volume
+ * for verdict discovery, not edge optimization. Env to revert: =12.
  * Env override: `NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS` (clamp [1, 100]).
  */
 export function deskMaxOpenPositionsEffective(): number {
@@ -411,7 +462,7 @@ export function deskMaxOpenPositionsEffective(): number {
     const n = Math.floor(Number(raw));
     if (Number.isFinite(n) && n > 0) return Math.min(100, Math.max(1, n));
   }
-  return deskFirehoseModeEnabled() ? 60 : 12;
+  return deskFirehoseModeEnabled() ? 60 : 6;
 }
 
 /** Default max last vs mark spread (%) for new entries. */
@@ -426,8 +477,12 @@ export function deskMaxLastMarkSpreadPctFromEnv(): number {
   return Math.min(1, Math.max(0, n));
 }
 
-/** Default max concurrent positions per strategy category. */
-export const DESK_MAX_OPEN_PER_CATEGORY_DEFAULT = 3;
+/**
+ * Default max concurrent positions per strategy category.
+ * Tightened 2026-05-21 from 3 → 2 for profitability hardening: avoids paying
+ * for 3 correlated entries on the same category-level signal.
+ */
+export const DESK_MAX_OPEN_PER_CATEGORY_DEFAULT = 2;
 
 /** Parses `NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY`; clamps to [1, 12]. */
 export function deskMaxOpenPerCategoryFromEnv(): number {
@@ -510,36 +565,57 @@ export function formatDeskEntryUtcSessionLabel(session: DeskEntryUtcSession): st
   return `Entries UTC ${session.startHour}–${session.endHour}`;
 }
 
+/**
+ * Auto-disable losing strategies from Supabase rolling stats.
+ * Flipped 2026-05-21 from opt-in to default-ON for profitability hardening:
+ * fee-bleeding strategies should retire fast, not linger. Env to disable: =0.
+ */
 export function deskAutoDisableStratsEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS === "1";
+  return process.env.NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS !== "0";
 }
 
+/**
+ * Minimum trades before kill-switch can fire. Tightened 2026-05-21 from 5 → 8
+ * for better statistical confidence before retiring a strategy.
+ */
 export function deskKillMinTradesFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MIN_TRADES;
-  if (raw === undefined || raw === "") return 5;
+  if (raw === undefined || raw === "") return 8;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 8;
 }
 
+/**
+ * Max per-trade expectancy USD before kill. Tightened 2026-05-21 from -$0.05 → -$0.02
+ * for profitability hardening: kill earlier on persistent fee-bleeders.
+ */
 export function deskKillMaxExpectancyUsdFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_EXPECTANCY_USD;
-  if (raw === undefined || raw === "") return -0.05;
+  if (raw === undefined || raw === "") return -0.02;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : -0.05;
+  return Number.isFinite(n) ? n : -0.02;
 }
 
+/**
+ * Max cumulative net USD before kill. Tightened 2026-05-21 from -$1 → -$0.50
+ * for profitability hardening: shorter rope.
+ */
 export function deskKillMaxSumNetUsdFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_SUM_NET_USD;
-  if (raw === undefined || raw === "") return -1;
+  if (raw === undefined || raw === "") return -0.5;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : -1;
+  return Number.isFinite(n) ? n : -0.5;
 }
 
+/**
+ * Rolling kill window (days). Tightened 2026-05-21 from 14 → 7 for faster
+ * turnover — losing strategies retired within a week of the bleed.
+ */
 export function deskKillWindowDaysFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_WINDOW_DAYS;
-  if (raw === undefined || raw === "") return 14;
+  if (raw === undefined || raw === "") return 7;
   const n = Number(raw);
-  if (!Number.isFinite(n)) return 14;
+  if (!Number.isFinite(n)) return 7;
   return Math.min(90, Math.max(1, Math.floor(n)));
 }
 
@@ -565,10 +641,13 @@ export function deskEntryReplaceWeakestFromEnv(): boolean {
 
 /**
  * Module-only signal threshold for BTC Future Trading route.
- * Env: `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD`, default 26, clamp [18, 32].
+ * Env: `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD`, default 28, clamp [18, 32].
+ * Tightened 2026-05-21 production baseline from 26 → 28 for profitability
+ * hardening (higher conviction per fire, fewer marginal entries paying fees).
+ * Research mode lowers via env (commit ec0e18a set 20 for research probes).
  * Lower values (e.g. 24 or 22) allow more candidates on chop — only change via env, never globally.
  */
-export function btcFtSignalThresholdFromEnv(fallback = 26): number {
+export function btcFtSignalThresholdFromEnv(fallback = 28): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -582,7 +661,7 @@ export function btcFtSignalThresholdFromEnv(fallback = 26): number {
  * Named separately so call-sites in the hook stay explicit about which module they serve.
  */
 export function deskBtcFtSignalThresholdFromEnv(): number {
-  return btcFtSignalThresholdFromEnv(26);
+  return btcFtSignalThresholdFromEnv(28);
 }
 
 /** Paper desk only — relaxes HTF/confluence confirm for BTC FT module when env is set. */
@@ -780,9 +859,44 @@ export const DESK_DEFAULT_REGIMES_BY_CATEGORY: Readonly<Record<string, readonly 
   "ROC Trend": DESK_REGIME_IMPULSE,
 };
 
+/**
+ * Categories whose default-regimes have `chop` pruned when chop-disable is on.
+ * MR / oscillator desks chronically underperform in chop after fees: a 0.4–0.5%
+ * mean-reversion target is too tight to beat the 0.3% RT fee+slip floor.
+ * Premium-tier and explicit per-strat regimes are NOT affected.
+ */
+export const DESK_CHOP_DISABLED_MR_CATEGORIES: ReadonlySet<string> = new Set([
+  "MeanRev",
+  "BB",
+  "RSI",
+  "Stoch",
+  "VWAP",
+  "Williams MR",
+  "CCI MR",
+  "Keltner MR",
+  "Donchian MR",
+  "VWAP MR",
+  "RSI Div",
+  "MACD Div",
+  "Stoch Div",
+]);
+
+/**
+ * Disable `chop` regime for MR categories listed in `DESK_CHOP_DISABLED_MR_CATEGORIES`.
+ * Default ON: chop + 0.2% taker + 5 bps slip is the highest-loss-rate state for these desks.
+ * Env to revert: `NEXT_PUBLIC_DESK_DISABLE_CHOP_FOR_MR=0`.
+ */
+export function deskDisableChopForMrEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_DESK_DISABLE_CHOP_FOR_MR !== "0";
+}
+
 export function defaultRegimesForCategory(category: string): RegimeTag[] {
   const row = DESK_DEFAULT_REGIMES_BY_CATEGORY[category];
-  return [...(row ?? DESK_REGIME_FALLBACK_ALLOW_ALL)];
+  const base = [...(row ?? DESK_REGIME_FALLBACK_ALLOW_ALL)];
+  if (deskDisableChopForMrEnabled() && DESK_CHOP_DISABLED_MR_CATEGORIES.has(category)) {
+    return base.filter((r) => r !== "chop");
+  }
+  return base;
 }
 
 export type DeskStrategyBuildResult = {
