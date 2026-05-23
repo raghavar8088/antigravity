@@ -18,6 +18,7 @@ import {
   CATEGORY_POOL_160,
   LEGACY_CORE_CATEGORY_MAP,
 } from "../futuresCategoryStrategies";
+import { CATEGORY_REGISTRY as CR } from "../futuresCategoryRegistry";
 import {
   CATEGORY_REGISTRY,
   CATEGORY_ID_RANGES,
@@ -155,9 +156,97 @@ describe("SCALPING_STRATEGIES (Category 1, 600–619)", () => {
   });
 });
 
-describe("Categories 2–8 (stubs, PRs 3–9)", () => {
+describe("DAY_TRADING_STRATEGIES (Category 2, 620–639)", () => {
+  it("contains exactly 20 strategies", () => {
+    expect(DAY_TRADING_STRATEGIES.length).toBe(20);
+  });
+
+  it("all IDs are unique and in range 620–639", () => {
+    const ids = DAY_TRADING_STRATEGIES.map((d) => d.id);
+    expect(new Set(ids).size).toBe(20);
+    for (const id of ids) {
+      expect(id).toBeGreaterThanOrEqual(620);
+      expect(id).toBeLessThanOrEqual(639);
+    }
+  });
+
+  it("all signal keys are unique and start with DAY_", () => {
+    const keys = DAY_TRADING_STRATEGIES.map((d) => d.signalKey);
+    expect(new Set(keys).size).toBe(20);
+    for (const k of keys) {
+      expect(k.startsWith("DAY_")).toBe(true);
+    }
+  });
+
+  it("all defs researchOnly:true, tradingCategory:day_trading", () => {
+    for (const d of DAY_TRADING_STRATEGIES) {
+      expect(d.researchOnly).toBe(true);
+      expect(d.tradingCategory).toBe("day_trading");
+    }
+  });
+
+  it("all SL within day_trading band [0.50, 1.00]", () => {
+    const p = CR.day_trading;
+    for (const d of DAY_TRADING_STRATEGIES) {
+      expect(d.slPct).toBeGreaterThanOrEqual(p.slPctMin);
+      expect(d.slPct).toBeLessThanOrEqual(p.slPctMax);
+    }
+  });
+
+  it("TP:SL ratio ≥ category min (2.0) for all 620–639", () => {
+    const minRatio = CR.day_trading.tpSlRatioMin;
+    for (const d of DAY_TRADING_STRATEGIES) {
+      const ratio = d.tpPct / d.slPct;
+      expect(ratio, `id ${d.id}`).toBeGreaterThanOrEqual(minRatio - 1e-9);
+    }
+  });
+
+  it("hold within day_trading band [30, 480]", () => {
+    const p = CR.day_trading;
+    for (const d of DAY_TRADING_STRATEGIES) {
+      expect(d.holdMinutes).toBeGreaterThanOrEqual(p.holdMinutesMin);
+      expect(d.holdMinutes).toBeLessThanOrEqual(p.holdMinutesMax);
+    }
+  });
+
+  it("leverage ≤ day_trading maxLeverage (20)", () => {
+    for (const d of DAY_TRADING_STRATEGIES) {
+      expect(d.defaultLeverage ?? 0).toBeLessThanOrEqual(CR.day_trading.maxLeverage);
+    }
+  });
+
+  it("primaryBarInterval is 5m for all day_trading", () => {
+    for (const d of DAY_TRADING_STRATEGIES) {
+      expect(d.primaryBarInterval).toBe("5m");
+    }
+  });
+
+  it("HTF strats carry confirmBarInterval: 15m", () => {
+    for (const d of DAY_TRADING_STRATEGIES) {
+      if (d.requiresHtf) {
+        expect(d.confirmBarInterval).toBe("15m");
+      }
+    }
+  });
+
+  it("each templateFamily appears as both LONG and SHORT", () => {
+    const families = new Map<string, { long: boolean; short: boolean }>();
+    for (const d of DAY_TRADING_STRATEGIES) {
+      const fam = d.templateFamily!;
+      const entry = families.get(fam) ?? { long: false, short: false };
+      if (d.signalKey.endsWith("_LONG")) entry.long = true;
+      if (d.signalKey.endsWith("_SHORT")) entry.short = true;
+      families.set(fam, entry);
+    }
+    for (const [fam, sides] of families) {
+      expect(sides.long, `family ${fam} missing LONG`).toBe(true);
+      expect(sides.short, `family ${fam} missing SHORT`).toBe(true);
+    }
+  });
+});
+
+describe("Categories 3–8 (stubs, PRs 4–9)", () => {
   it("are all empty arrays in this PR", () => {
-    expect(DAY_TRADING_STRATEGIES.length).toBe(0);
     expect(SWING_TRADING_STRATEGIES.length).toBe(0);
     expect(POSITION_TRADING_STRATEGIES.length).toBe(0);
     expect(TREND_TRADING_STRATEGIES.length).toBe(0);
@@ -168,8 +257,8 @@ describe("Categories 2–8 (stubs, PRs 3–9)", () => {
 });
 
 describe("CATEGORY_POOL_160 — combined pool", () => {
-  it("contains 20 strategies in this PR (Scalping only)", () => {
-    expect(CATEGORY_POOL_160.length).toBe(20);
+  it("contains 40 strategies after PR3 (Scalping + Day)", () => {
+    expect(CATEGORY_POOL_160.length).toBe(40);
   });
 
   it("no ID collides with CORE 91–152 or premium 500–503", () => {
@@ -220,10 +309,17 @@ describe("CATEGORY_STRATEGY_IDS roster", () => {
     expect(CATEGORY_STRATEGY_IDS.scalping.length).toBe(20);
   });
 
-  it("other categories are empty (stubs)", () => {
-    expect(CATEGORY_STRATEGY_IDS.day_trading.length).toBe(0);
+  it("day_trading has exactly 20 IDs", () => {
+    expect(CATEGORY_STRATEGY_IDS.day_trading.length).toBe(20);
+  });
+
+  it("remaining categories are empty (stubs)", () => {
     expect(CATEGORY_STRATEGY_IDS.swing_trading.length).toBe(0);
     expect(CATEGORY_STRATEGY_IDS.position_trading.length).toBe(0);
+    expect(CATEGORY_STRATEGY_IDS.trend_trading.length).toBe(0);
+    expect(CATEGORY_STRATEGY_IDS.range_trading.length).toBe(0);
+    expect(CATEGORY_STRATEGY_IDS.breakout_trading.length).toBe(0);
+    expect(CATEGORY_STRATEGY_IDS.momentum_trading.length).toBe(0);
   });
 });
 
@@ -237,8 +333,17 @@ describe("buildCategoryRoster", () => {
     }
   });
 
-  it("returns empty when category has no defs", () => {
+  it("returns ≤8 day_trading defs in research mode", () => {
     const roster: FuturesStratDef[] = buildCategoryRoster("day_trading", { researchMode: true });
+    expect(roster.length).toBeGreaterThan(0);
+    expect(roster.length).toBeLessThanOrEqual(8);
+    for (const d of roster) {
+      expect(d.tradingCategory).toBe("day_trading");
+    }
+  });
+
+  it("returns empty for still-stub category", () => {
+    const roster: FuturesStratDef[] = buildCategoryRoster("swing_trading", { researchMode: true });
     expect(roster.length).toBe(0);
   });
 

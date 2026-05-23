@@ -92,11 +92,16 @@ The builder applies:
 
 ## Implementation Status
 
+**Strategies implemented: 40 / 160** (Scalping + Day Trading)
+**Pool size in `FUTURES_STRAT_DEFS`**: 20 CORE + 4 premium + 40 research = **64 total** (40 of which are `researchOnly: true`)
+**Engine wiring**: still 1m scalp-only — multi-bar-interval routing is PR 10.
+
+
 | PR | Category | IDs | Status |
 |---|---|---|---|
 | 1 | Scaffolding | — | ✅ Types, registry, scorer dispatch, roster, docs |
 | 2 | Scalping | 600–619 | ✅ 20 defs + real `scoreScalping` + 46 tests |
-| 3 | Day Trading | 620–639 | ⏳ Pending |
+| 3 | Day Trading | 620–639 | ✅ 20 defs + real `scoreDay` (10 templateFamily branches) + 21 tests |
 | 4 | Swing Trading | 640–659 | ⏳ Pending |
 | 5 | Position Trading | 660–679 | ⏳ Pending |
 | 6 | Trend Trading | 680–699 | ⏳ Pending |

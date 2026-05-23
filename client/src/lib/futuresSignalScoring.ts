@@ -274,8 +274,251 @@ export function scoreScalping(s: FuturesSignalInputs, strat: FuturesStratDef): S
 
 // ─── Stubs for categories 2–8 (filled in subsequent PRs) ──────────────────────
 
-export function scoreDay(_s: FuturesSignalInputs, _strat: FuturesStratDef): ScoringResult {
-  return NO_SIGNAL;
+// ─── Day Trading (620–639) ───────────────────────────────────────────────────
+// Primary TF: 5m (tests use 5m-shaped fixtures; same buildSignalInputs path).
+// Confirm TF: 15m via htf15_* fields when requiresHtf.
+//
+// Score scale matches scalping (0–100). A canonical "valid setup" pairs the
+// PRIMARY indicator (12–16 pts) with 2–3 confirms to clear a ~26-pt threshold.
+
+export function scoreDay(s: FuturesSignalInputs, strat: FuturesStratDef): ScoringResult {
+  let score = 0;
+  const parts: string[] = [];
+  const add = (pts: number, label: string) => { score += pts; parts.push(label); };
+  const isShort = strat.signalKey.endsWith("_SHORT");
+
+  switch (strat.signalKey) {
+    // ── VWAP Trend (620/621): price vs VWAP + slope confirm ─────────────────
+    case "DAY_VWAP_TREND_LONG":
+    case "DAY_VWAP_TREND_SHORT": {
+      const vwapPct = s.price > 0 ? s.vwapDev / s.price : 0;
+      if (isShort) {
+        if (vwapPct < -0.002) add(14, "below_vwap");
+        else if (vwapPct < 0) add(7, "near_vwap_dn");
+        if (s.fast < s.slow) add(8, "ema_bearish");
+        if (s.momentum6 < 0 && s.momentum3 < 0) add(7, "mom_aligned_dn");
+        if (s.htf15_fast < s.htf15_slow) add(6, "htf15_bear");
+        if (s.adxProxy > 20) add(5, "trend_strength");
+      } else {
+        if (vwapPct > 0.002) add(14, "above_vwap");
+        else if (vwapPct > 0) add(7, "near_vwap_up");
+        if (s.fast > s.slow) add(8, "ema_bullish");
+        if (s.momentum6 > 0 && s.momentum3 > 0) add(7, "mom_aligned_up");
+        if (s.htf15_fast > s.htf15_slow) add(6, "htf15_bull");
+        if (s.adxProxy > 20) add(5, "trend_strength");
+      }
+      break;
+    }
+
+    // ── ORB Break (622/623): first-range break with volume ──────────────────
+    case "DAY_ORB_BREAK_LONG":
+    case "DAY_ORB_BREAK_SHORT": {
+      if (isShort) {
+        if (s.price < s.low20) add(14, "orb_low_break");
+        else if (s.price < s.donchianLow * 1.001) add(8, "near_orb_lo");
+        if (s.volRatio > 1.2) add(7, "vol_confirm");
+        if (s.momentum3 < -s.atr14 * 0.3) add(6, "thrust_dn");
+        if (s.adxProxy > 18) add(4, "adx_active");
+        if (s.macdHist < 0) add(3, "macd_neg");
+      } else {
+        if (s.price > s.high20) add(14, "orb_high_break");
+        else if (s.price > s.donchianHigh * 0.999) add(8, "near_orb_hi");
+        if (s.volRatio > 1.2) add(7, "vol_confirm");
+        if (s.momentum3 > s.atr14 * 0.3) add(6, "thrust_up");
+        if (s.adxProxy > 18) add(4, "adx_active");
+        if (s.macdHist > 0) add(3, "macd_pos");
+      }
+      break;
+    }
+
+    // ── MTF Align (624/625): 5m + 15m same direction ────────────────────────
+    case "DAY_MTF_ALIGN_LONG":
+    case "DAY_MTF_ALIGN_SHORT": {
+      const ltfBull = s.fast > s.slow;
+      const htfBull = s.htf15_fast > s.htf15_slow;
+      if (isShort) {
+        if (!ltfBull && !htfBull) add(14, "both_tf_bearish");
+        else if (!ltfBull) add(6, "ltf_only_bear");
+        if (s.htf15_rsi < 50) add(7, "htf_rsi_bear");
+        if (s.momentum3 < 0 && s.momentum6 < 0) add(6, "mom_aligned");
+        if (s.htf15_macdHist < 0) add(5, "htf_macd_neg");
+        if (s.adxProxy > 18) add(3, "adx_ok");
+      } else {
+        if (ltfBull && htfBull) add(14, "both_tf_bullish");
+        else if (ltfBull) add(6, "ltf_only_bull");
+        if (s.htf15_rsi > 50) add(7, "htf_rsi_bull");
+        if (s.momentum3 > 0 && s.momentum6 > 0) add(6, "mom_aligned");
+        if (s.htf15_macdHist > 0) add(5, "htf_macd_pos");
+        if (s.adxProxy > 18) add(3, "adx_ok");
+      }
+      break;
+    }
+
+    // ── MACD Zero (626/627): MACD line cross zero + hist expanding ──────────
+    case "DAY_MACD_ZERO_LONG":
+    case "DAY_MACD_ZERO_SHORT": {
+      if (isShort) {
+        if (s.macdLine < 0 && s.prevMacdLine >= 0) add(16, "macd_zero_cross_dn");
+        else if (s.macdLine < 0) add(8, "macd_below_zero");
+        if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(8, "macd_hist_expand_dn");
+        if (s.fast < s.slow) add(5, "ema_bear");
+        if (s.rsi14 < 50) add(4, "rsi_dn");
+        if (s.momentum3 < 0) add(3, "mom3_dn");
+      } else {
+        if (s.macdLine > 0 && s.prevMacdLine <= 0) add(16, "macd_zero_cross_up");
+        else if (s.macdLine > 0) add(8, "macd_above_zero");
+        if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "macd_hist_expand_up");
+        if (s.fast > s.slow) add(5, "ema_bull");
+        if (s.rsi14 > 50) add(4, "rsi_up");
+        if (s.momentum3 > 0) add(3, "mom3_up");
+      }
+      break;
+    }
+
+    // ── EMA Pullback (628/629): trend + pullback touch + reject ─────────────
+    case "DAY_PB_EMA_LONG":
+    case "DAY_PB_EMA_SHORT": {
+      if (isShort) {
+        if (s.htf15_fast < s.htf15_slow) add(10, "htf15_downtrend");
+        const pullbackZone = s.price > s.fast && s.price < s.slow;
+        if (pullbackZone) add(10, "pullback_to_ema");
+        else if (s.price > s.fast * 0.998) add(5, "near_fast_ema");
+        if (s.momentum3 < 0) add(7, "rejection_dn");
+        if (s.rsi14 > 40 && s.rsi14 < 60) add(5, "rsi_mid");
+        if (s.fast < s.slow) add(4, "ltf_aligned");
+      } else {
+        if (s.htf15_fast > s.htf15_slow) add(10, "htf15_uptrend");
+        const pullbackZone = s.price < s.fast && s.price > s.slow;
+        if (pullbackZone) add(10, "pullback_to_ema");
+        else if (s.price < s.fast * 1.002) add(5, "near_fast_ema");
+        if (s.momentum3 > 0) add(7, "rejection_up");
+        if (s.rsi14 > 40 && s.rsi14 < 60) add(5, "rsi_mid");
+        if (s.fast > s.slow) add(4, "ltf_aligned");
+      }
+      break;
+    }
+
+    // ── Range Expansion (630/631): BB width rising + direction ──────────────
+    case "DAY_RANGE_EXP_LONG":
+    case "DAY_RANGE_EXP_SHORT": {
+      const expanding = s.bbWidth > 0.018 && s.atr14 > s.atr14Avg30;
+      if (isShort) {
+        if (expanding && s.momentum3 < -s.atr14 * 0.4) add(16, "range_expand_dn");
+        else if (expanding) add(8, "expansion_dn");
+        if (s.price < s.bbLower) add(7, "below_bb_dn");
+        if (s.volRatio > 1.3) add(5, "vol_expand");
+        if (s.fast < s.slow) add(4, "ema_dn");
+        if (s.adxProxy > 22) add(3, "adx_rising");
+      } else {
+        if (expanding && s.momentum3 > s.atr14 * 0.4) add(16, "range_expand_up");
+        else if (expanding) add(8, "expansion_up");
+        if (s.price > s.bbUpper) add(7, "above_bb_up");
+        if (s.volRatio > 1.3) add(5, "vol_expand");
+        if (s.fast > s.slow) add(4, "ema_up");
+        if (s.adxProxy > 22) add(3, "adx_rising");
+      }
+      break;
+    }
+
+    // ── Volume Climax (632/633): vol > 2× avg + wide-range bar direction ────
+    case "DAY_VOL_CLIMAX_LONG":
+    case "DAY_VOL_CLIMAX_SHORT": {
+      const climax = s.volRatio > 2.0 || s.volZ30 > 1.5;
+      if (isShort) {
+        if (climax && s.price < s.prevPrice) add(16, "vol_climax_dn");
+        else if (s.volRatio > 1.5) add(8, "high_vol");
+        if (s.momentum3 < -s.atr14 * 0.5) add(7, "wide_range_dn");
+        if (s.obvSlope < 0) add(5, "obv_dn");
+        if (s.fast < s.slow) add(4, "ema_dn");
+        if (s.macdHist < s.prevMacdHist) add(3, "macd_falling");
+      } else {
+        if (climax && s.price > s.prevPrice) add(16, "vol_climax_up");
+        else if (s.volRatio > 1.5) add(8, "high_vol");
+        if (s.momentum3 > s.atr14 * 0.5) add(7, "wide_range_up");
+        if (s.obvSlope > 0) add(5, "obv_up");
+        if (s.fast > s.slow) add(4, "ema_up");
+        if (s.macdHist > s.prevMacdHist) add(3, "macd_rising");
+      }
+      break;
+    }
+
+    // ── Market Structure (634/635): HH+HL (long) / LL+LH (short) ────────────
+    case "DAY_STRUCT_HH_LONG":
+    case "DAY_STRUCT_LL_SHORT": {
+      if (isShort) {
+        // LL+LH: price below 20-bar low region + EMA aligned
+        if (s.price < s.low20 * 1.005) add(12, "lower_low_zone");
+        if (s.price < s.mean20) add(6, "below_mean");
+        if (s.htf15_fast < s.htf15_slow) add(8, "htf_struct_dn");
+        if (s.fast < s.slow && s.prevFast < s.prevSlow) add(6, "persistent_bear");
+        if (s.momentum6 < 0) add(5, "momentum_aligned");
+        if (s.rsi14 < 50) add(3, "rsi_dn");
+      } else {
+        // HH+HL: price near 20-bar high + EMA aligned
+        if (s.price > s.high20 * 0.995) add(12, "higher_high_zone");
+        if (s.price > s.mean20) add(6, "above_mean");
+        if (s.htf15_fast > s.htf15_slow) add(8, "htf_struct_up");
+        if (s.fast > s.slow && s.prevFast > s.prevSlow) add(6, "persistent_bull");
+        if (s.momentum6 > 0) add(5, "momentum_aligned");
+        if (s.rsi14 > 50) add(3, "rsi_up");
+      }
+      break;
+    }
+
+    // ── Midday Fade (636/637): mean revert in UTC 11–14 window ──────────────
+    case "DAY_MIDDAY_FADE_LONG":
+    case "DAY_MIDDAY_FADE_SHORT": {
+      const hour = s.lastBarTimeMs != null ? new Date(s.lastBarTimeMs).getUTCHours() : -1;
+      const middayWindow = hour >= 11 && hour < 14;
+      const windowBonus = middayWindow ? 10 : 2;
+      const vwapPct = s.price > 0 ? s.vwapDev / s.price : 0;
+      if (isShort) {
+        add(windowBonus, middayWindow ? "midday_window" : "off_window");
+        if (vwapPct > 0.003) add(10, "above_vwap_fade");
+        else if (vwapPct > 0.001) add(5, "vwap_extended_up");
+        if (s.rsi14 > 60) add(6, "rsi_overextended");
+        if (s.adxProxy < 22) add(5, "low_adx_revert");
+        if (s.momentum3 < 0) add(4, "fade_starting");
+      } else {
+        add(windowBonus, middayWindow ? "midday_window" : "off_window");
+        if (vwapPct < -0.003) add(10, "below_vwap_fade");
+        else if (vwapPct < -0.001) add(5, "vwap_extended_dn");
+        if (s.rsi14 < 40) add(6, "rsi_oversold");
+        if (s.adxProxy < 22) add(5, "low_adx_revert");
+        if (s.momentum3 > 0) add(4, "fade_starting");
+      }
+      break;
+    }
+
+    // ── Close Momentum (638/639): late-session momentum push ────────────────
+    case "DAY_CLOSE_MOM_LONG":
+    case "DAY_CLOSE_MOM_SHORT": {
+      const hour = s.lastBarTimeMs != null ? new Date(s.lastBarTimeMs).getUTCHours() : -1;
+      const lateWindow = hour >= 19 && hour < 21;
+      const windowBonus = lateWindow ? 8 : 2;
+      if (isShort) {
+        add(windowBonus, lateWindow ? "close_window" : "off_window");
+        if (s.momentum3 < -s.atr14 * 0.4) add(12, "close_mom_dn");
+        if (s.fast < s.slow) add(6, "ema_aligned");
+        if (s.volRatio > 1.2) add(5, "vol_confirm");
+        if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(4, "macd_accel_dn");
+        if (s.rsi14 < 50) add(3, "rsi_dn");
+      } else {
+        add(windowBonus, lateWindow ? "close_window" : "off_window");
+        if (s.momentum3 > s.atr14 * 0.4) add(12, "close_mom_up");
+        if (s.fast > s.slow) add(6, "ema_aligned");
+        if (s.volRatio > 1.2) add(5, "vol_confirm");
+        if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(4, "macd_accel_up");
+        if (s.rsi14 > 50) add(3, "rsi_up");
+      }
+      break;
+    }
+
+    default:
+      return NO_SIGNAL;
+  }
+
+  return { score, reason: parts.join(",") || "no_signal" };
 }
 
 export function scoreSwing(_s: FuturesSignalInputs, _strat: FuturesStratDef): ScoringResult {

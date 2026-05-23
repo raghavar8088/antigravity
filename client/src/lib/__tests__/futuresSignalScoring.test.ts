@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 import { buildSignalInputs, evalMinuteSignal, passesEntryConfirmation } from "../futuresSignals";
-import { scoreCategoryStrategy, scoreScalping } from "../futuresSignalScoring";
-import { SCALPING_STRATEGIES } from "../futuresCategoryStrategies";
+import { scoreCategoryStrategy, scoreScalping, scoreDay } from "../futuresSignalScoring";
+import { SCALPING_STRATEGIES, DAY_TRADING_STRATEGIES } from "../futuresCategoryStrategies";
 import type { FuturesStratDef } from "../futuresStratTypes";
 
 // ─── Bar fixtures ─────────────────────────────────────────────────────────────
@@ -59,6 +59,27 @@ function findStrat(id: number): FuturesStratDef {
   return s;
 }
 
+function findDayStrat(id: number): FuturesStratDef {
+  const s = DAY_TRADING_STRATEGIES.find((d) => d.id === id);
+  if (!s) throw new Error(`day strat ${id} missing`);
+  return s;
+}
+
+/** UTC midday timestamp (12:30) — for DAY_MIDDAY_FADE tests. */
+function utcMiddayMs(): number {
+  return Date.UTC(2026, 4, 22, 12, 30, 0);
+}
+
+/** UTC late-session timestamp (19:30) — for DAY_CLOSE_MOM tests. */
+function utcLateSessionMs(): number {
+  return Date.UTC(2026, 4, 22, 19, 30, 0);
+}
+
+/** Off-window timestamp (06:30 UTC). */
+function utcOffWindowMs(): number {
+  return Date.UTC(2026, 4, 22, 6, 30, 0);
+}
+
 // ─── Scoring tests ───────────────────────────────────────────────────────────
 
 describe("scoreScalping — dispatch + structure", () => {
@@ -75,13 +96,14 @@ describe("scoreScalping — dispatch + structure", () => {
     expect(r.reason).toBe("no_signal");
   });
 
-  it("scoreCategoryStrategy dispatches non-SCP_ to category stub (score=0)", () => {
+  it("scoreCategoryStrategy dispatches still-stub categories to NO_SIGNAL (score=0)", () => {
     const bars = bullishBars();
     const inputs = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    // SWG_ is still a stub in PR 3 — should always return 0
     const fake: FuturesStratDef = {
-      id: 1001, name: "fake_day", category: "Day Trading", signalKey: "DAY_VWAP_TREND_LONG",
-      slPct: 0.6, tpPct: 1.8, holdMinutes: 180, cooldownMin: 15, confluenceMin: 5,
-      tradingCategory: "day_trading", researchOnly: true,
+      id: 1001, name: "fake_swing", category: "Swing Trading", signalKey: "SWG_TREND_RIDE_LONG",
+      slPct: 1.5, tpPct: 4.5, holdMinutes: 4320, cooldownMin: 240, confluenceMin: 6,
+      tradingCategory: "swing_trading", researchOnly: true,
     };
     const r = scoreCategoryStrategy(inputs, fake);
     expect(r.score).toBe(0);
@@ -216,5 +238,188 @@ describe("passesEntryConfirmation — scalping gates", () => {
     const s = buildSignalInputs(flat, flat, flat, flat, vol, 100_000);
     // Should fail volRatio gate
     expect(passesEntryConfirmation(s, findStrat(600))).toBe(false);
+  });
+});
+
+// ─── Day trading scoring tests (PR 3) ────────────────────────────────────────
+
+describe("scoreDay — dispatch + structure", () => {
+  it("returns no_signal for unknown DAY_ key", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const fake: FuturesStratDef = {
+      id: 9999, name: "fakeday", category: "Day Trading", signalKey: "DAY_BOGUS_LONG",
+      slPct: 0.6, tpPct: 1.8, holdMinutes: 180, cooldownMin: 15, confluenceMin: 5,
+      tradingCategory: "day_trading", researchOnly: true,
+    };
+    const r = scoreDay(s, fake);
+    expect(r.score).toBe(0);
+    expect(r.reason).toBe("no_signal");
+  });
+
+  it("scoreCategoryStrategy dispatches DAY_ to scoreDay (non-zero for valid)", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreCategoryStrategy(s, findDayStrat(620));
+    expect(r.score).toBeGreaterThan(0);
+  });
+});
+
+describe("DAY_VWAP_TREND (620/621)", () => {
+  it("LONG fires on bullish bars (above-VWAP + EMA up + HTF up)", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(620));
+    expect(r.score).toBeGreaterThan(10);
+  });
+
+  it("SHORT fires on bearish bars", () => {
+    const bars = bearishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(621));
+    expect(r.score).toBeGreaterThan(10);
+  });
+
+  it("LONG quiet in chop", () => {
+    const bars = choppyBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(620));
+    expect(r.score).toBeLessThan(15);
+  });
+});
+
+describe("DAY_ORB_BREAK (622/623)", () => {
+  it("LONG fires on bullish bars (20-bar high break + volume)", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(622));
+    expect(r.score).toBeGreaterThan(10);
+  });
+
+  it("LONG does NOT fire on bearish bars (price below high20)", () => {
+    const bars = bearishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(622));
+    expect(r.score).toBeLessThan(10);
+  });
+});
+
+describe("DAY_MTF_ALIGN (624/625)", () => {
+  it("LONG fires when both 5m + 15m are bullish", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(624));
+    expect(r.score).toBeGreaterThan(10);
+  });
+
+  it("SHORT fires when both TFs bearish", () => {
+    const bars = bearishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(625));
+    expect(r.score).toBeGreaterThan(10);
+  });
+});
+
+describe("DAY_MACD_ZERO (626/627)", () => {
+  it("LONG fires when MACD positive on uptrend", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(626));
+    expect(r.score).toBeGreaterThan(8);
+  });
+
+  it("SHORT fires when MACD negative on downtrend", () => {
+    const bars = bearishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(627));
+    expect(r.score).toBeGreaterThan(8);
+  });
+});
+
+describe("DAY_VOL_CLIMAX (632/633)", () => {
+  it("LONG scores on bullish bars with rising volume", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(632));
+    // Synthetic vol is rising linearly; volRatio likely > 1.5
+    expect(r.score).toBeGreaterThan(8);
+  });
+
+  it("quiet in chop", () => {
+    const bars = choppyBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(632));
+    expect(r.score).toBeLessThan(15);
+  });
+});
+
+describe("DAY_STRUCT_HH / LL (634/635)", () => {
+  it("LONG fires on persistent uptrend (HH+HL zone)", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(634));
+    expect(r.score).toBeGreaterThan(10);
+  });
+
+  it("SHORT fires on persistent downtrend (LL+LH zone)", () => {
+    const bars = bearishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = scoreDay(s, findDayStrat(635));
+    expect(r.score).toBeGreaterThan(10);
+  });
+});
+
+describe("DAY_MIDDAY_FADE (636/637) — session-window aware", () => {
+  it("LONG scores higher in UTC midday window than off-window", () => {
+    const bars = bearishBars();   // below VWAP → fade long
+    const sMid = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcMiddayMs());
+    const sOff = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcOffWindowMs());
+    const rMid = scoreDay(sMid, findDayStrat(636));
+    const rOff = scoreDay(sOff, findDayStrat(636));
+    expect(rMid.score).toBeGreaterThan(rOff.score);
+  });
+
+  it("SHORT scores higher in midday on overextended bullish bars", () => {
+    const bars = bullishBars();   // above VWAP → fade short
+    const sMid = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcMiddayMs());
+    const sOff = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcOffWindowMs());
+    const rMid = scoreDay(sMid, findDayStrat(637));
+    const rOff = scoreDay(sOff, findDayStrat(637));
+    expect(rMid.score).toBeGreaterThan(rOff.score);
+  });
+});
+
+describe("DAY_CLOSE_MOM (638/639) — session-window aware", () => {
+  it("LONG scores higher in late-session UTC window", () => {
+    const bars = bullishBars();
+    const sLate = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcLateSessionMs());
+    const sOff = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!, utcOffWindowMs());
+    const rLate = scoreDay(sLate, findDayStrat(638));
+    const rOff = scoreDay(sOff, findDayStrat(638));
+    expect(rLate.score).toBeGreaterThan(rOff.score);
+  });
+});
+
+describe("evalMinuteSignal — DAY_ dispatch via researchOnly flag", () => {
+  it("routes DAY_ strats through scoreCategoryStrategy", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    const r = evalMinuteSignal(s, findDayStrat(620));
+    expect(r.score).toBeGreaterThan(0);
+  });
+});
+
+describe("passesEntryConfirmation — day_trading gates", () => {
+  it("passes on healthy 5m-shaped bullish bars", () => {
+    const bars = bullishBars();
+    const s = buildSignalInputs(bars.opens, bars.closes, bars.highs, bars.lows, bars.volumes, bars.closes.at(-1)!);
+    expect(passesEntryConfirmation(s, findDayStrat(620))).toBe(true);
+  });
+
+  it("rejects when ATR is zero (degenerate)", () => {
+    const flat = Array.from({ length: 30 }, () => 100_000);
+    const vol = Array.from({ length: 30 }, () => 0);
+    const s = buildSignalInputs(flat, flat, flat, flat, vol, 100_000);
+    expect(passesEntryConfirmation(s, findDayStrat(620))).toBe(false);
   });
 });
