@@ -464,7 +464,7 @@ export function deskMaxOpenPositionsEffective(): number {
     const n = Math.floor(Number(raw));
     if (Number.isFinite(n) && n > 0) return Math.min(100, Math.max(1, n));
   }
-  return deskFirehoseModeEnabled() ? 60 : 6;
+  return deskFirehoseModeEnabled() ? 60 : 8;
 }
 
 /** Default max last vs mark spread (%) for new entries. */
@@ -1092,4 +1092,106 @@ export function deskRollingExpectancyBlocked(
  */
 export function deskEffectiveMaxOpenPerFamily(): number {
   return deskResearchModeEnabled() ? deskMaxOpenPerTemplateFromEnv() : 1;
+}
+
+// ============================================================
+// Entry burst guard (P3.1)
+// Prevents correlated entry bursts on the same symbol/template
+// family within a single poll tick, and blocks opposite-side
+// entries when the same symbol has an open or recently-closed
+// position in the opposing direction.
+// ============================================================
+
+/** Max new entries per symbol per poll tick. Env: NEXT_PUBLIC_DESK_BURST_MAX_PER_SYMBOL. */
+export const ENTRY_BURST_MAX_PER_SYMBOL_DEFAULT = 2;
+
+/** Max new entries per template family per poll tick (1 = strict dedup within tick). */
+export const ENTRY_BURST_MAX_PER_FAMILY_DEFAULT = 1;
+
+/** Window (ms) during which an opposite-side close blocks new entry on the same symbol. */
+export const ENTRY_OPPOSITE_SIDE_WINDOW_MS = 5 * 60 * 1000;
+
+export function entryBurstMaxPerSymbolFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_DESK_BURST_MAX_PER_SYMBOL;
+  if (raw === undefined || raw.trim() === "") return ENTRY_BURST_MAX_PER_SYMBOL_DEFAULT;
+  const n = Math.floor(Number(raw));
+  return Number.isFinite(n) && n >= 1 ? Math.min(10, n) : ENTRY_BURST_MAX_PER_SYMBOL_DEFAULT;
+}
+
+/** Mutable state accumulated within one poll tick. Reset at the start of each tick. */
+export type EntryBurstContext = {
+  openedThisPollBySymbol: Map<string, number>;
+  openedThisPollByFamily: Map<string, number>;
+};
+
+export function createEntryBurstContext(): EntryBurstContext {
+  return {
+    openedThisPollBySymbol: new Map(),
+    openedThisPollByFamily: new Map(),
+  };
+}
+
+/** Call this immediately after a position is confirmed opened to keep context current. */
+export function recordBurstEntry(ctx: EntryBurstContext, symbol: string, templateFamily: string): void {
+  ctx.openedThisPollBySymbol.set(symbol, (ctx.openedThisPollBySymbol.get(symbol) ?? 0) + 1);
+  ctx.openedThisPollByFamily.set(templateFamily, (ctx.openedThisPollByFamily.get(templateFamily) ?? 0) + 1);
+}
+
+export type EntryBurstGuardReason = "burst_symbol" | "family_cap" | "opposite_side";
+
+export type EntryBurstGuardResult =
+  | { blocked: false }
+  | { blocked: true; reason: EntryBurstGuardReason };
+
+/**
+ * Pure guard called in `tryOpenCandidate` before `openPosition`.
+ *
+ * Blocks when:
+ *   - `burst_symbol`: already opened ≥ maxPerSymbolPerPoll entries for this symbol this tick
+ *   - `family_cap`:   already opened ≥ maxPerFamilyPerPoll entries for this template family this tick
+ *   - `opposite_side`: same symbol has an open position on the opposing side, or had one close
+ *                      within `oppositeSideWindowMs`
+ */
+export function checkEntryBurstGuard(
+  symbol: string,
+  side: "LONG" | "SHORT",
+  templateFamily: string,
+  ctx: EntryBurstContext,
+  openPositions: ReadonlyArray<{ symbol: string; side: string }>,
+  recentTrades: ReadonlyArray<{ symbol: string; side: string; closedAt: string }>,
+  opts: {
+    maxPerSymbolPerPoll?: number;
+    maxPerFamilyPerPoll?: number;
+    oppositeSideWindowMs?: number;
+    nowMs: number;
+  },
+): EntryBurstGuardResult {
+  const maxSym = opts.maxPerSymbolPerPoll ?? entryBurstMaxPerSymbolFromEnv();
+  const maxFam = opts.maxPerFamilyPerPoll ?? ENTRY_BURST_MAX_PER_FAMILY_DEFAULT;
+  const oppWindow = opts.oppositeSideWindowMs ?? ENTRY_OPPOSITE_SIDE_WINDOW_MS;
+
+  if ((ctx.openedThisPollBySymbol.get(symbol) ?? 0) >= maxSym) {
+    return { blocked: true, reason: "burst_symbol" };
+  }
+
+  if ((ctx.openedThisPollByFamily.get(templateFamily) ?? 0) >= maxFam) {
+    return { blocked: true, reason: "family_cap" };
+  }
+
+  const oppSide = side === "LONG" ? "SHORT" : "LONG";
+
+  if (openPositions.some((p) => p.symbol === symbol && p.side === oppSide)) {
+    return { blocked: true, reason: "opposite_side" };
+  }
+
+  const hasRecentClose = recentTrades.some((t) => {
+    if (t.symbol !== symbol || t.side !== oppSide) return false;
+    const ms = new Date(t.closedAt).getTime();
+    return Number.isFinite(ms) && opts.nowMs - ms < oppWindow;
+  });
+  if (hasRecentClose) {
+    return { blocked: true, reason: "opposite_side" };
+  }
+
+  return { blocked: false };
 }

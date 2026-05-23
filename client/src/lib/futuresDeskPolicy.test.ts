@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
 import {
   buildPaperDeskStrategies,
+  checkEntryBurstGuard,
+  createEntryBurstContext,
+  recordBurstEntry,
+  ENTRY_BURST_MAX_PER_SYMBOL_DEFAULT,
+  ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
+  ENTRY_OPPOSITE_SIDE_WINDOW_MS,
   defaultRegimesForCategory,
   deskEffectiveHoldMinutesAtOpen,
   DESK_REGIME_EXTRA_TOKENS_BY_STRAT_ID,
@@ -603,10 +609,10 @@ describe("firehose-mode env helpers", () => {
     expect(deskFirehoseModeEnabled()).toBe(false);
   });
 
-  it("deskMaxOpenPositionsEffective: 6 default (hardening 2026-05-21), 60 in firehose, clamped via env", () => {
+  it("deskMaxOpenPositionsEffective: 8 default (burst-guard era), 60 in firehose, clamped via env", () => {
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "");
     vi.stubEnv("NEXT_PUBLIC_DESK_MAX_OPEN_POSITIONS", "");
-    expect(deskMaxOpenPositionsEffective()).toBe(6);
+    expect(deskMaxOpenPositionsEffective()).toBe(8);
 
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_FIREHOSE", "1");
     expect(deskMaxOpenPositionsEffective()).toBe(60);
@@ -662,5 +668,93 @@ describe("deskDisableChopForMrEnabled / DESK_CHOP_DISABLED_MR_CATEGORIES", () =>
   it("DESK_CHOP_DISABLED_MR_CATEGORIES contains expected MR labels", () => {
     expect(DESK_CHOP_DISABLED_MR_CATEGORIES.has("MeanRev")).toBe(true);
     expect(DESK_CHOP_DISABLED_MR_CATEGORIES.has("Breakout")).toBe(false);
+  });
+});
+
+// ─── entryBurstGuard ──────────────────────────────────────────────────────────
+
+describe("checkEntryBurstGuard", () => {
+  const NOW = 1_700_000_000_000;
+  const noPositions: { symbol: string; side: string }[] = [];
+  const noTrades: { symbol: string; side: string; closedAt: string }[] = [];
+  const opts = {
+    maxPerSymbolPerPoll: ENTRY_BURST_MAX_PER_SYMBOL_DEFAULT,
+    maxPerFamilyPerPoll: ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
+    oppositeSideWindowMs: ENTRY_OPPOSITE_SIDE_WINDOW_MS,
+    nowMs: NOW,
+  };
+
+  it("allows first two entries on same symbol per poll tick", () => {
+    const ctx = createEntryBurstContext();
+    const r1 = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_VWAP_V0", ctx, noPositions, noTrades, opts);
+    expect(r1.blocked).toBe(false);
+    recordBurstEntry(ctx, "BTCUSD", "BTCFT_VWAP_V0");
+
+    // second entry on same symbol but DIFFERENT family — still allowed (symbol cap = 2)
+    const r2 = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_RSI_V0", ctx, noPositions, noTrades, opts);
+    expect(r2.blocked).toBe(false);
+  });
+
+  it("blocks 3rd same-symbol entry (burst_symbol)", () => {
+    const ctx = createEntryBurstContext();
+    recordBurstEntry(ctx, "BTCUSD", "BTCFT_VWAP_V0");
+    recordBurstEntry(ctx, "BTCUSD", "BTCFT_RSI_V0");
+
+    const r = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_MACD_V0", ctx, noPositions, noTrades, opts);
+    expect(r.blocked).toBe(true);
+    if (r.blocked) expect(r.reason).toBe("burst_symbol");
+  });
+
+  it("blocks 2nd same-family entry (family_cap = 1)", () => {
+    const ctx = createEntryBurstContext();
+    recordBurstEntry(ctx, "BTCUSD", "BTCFT_VWAP_V0");
+
+    // second entry: different symbol but same family key → family_cap
+    const r = checkEntryBurstGuard("ETHUSD", "LONG", "BTCFT_VWAP_V0", ctx, noPositions, noTrades, opts);
+    expect(r.blocked).toBe(true);
+    if (r.blocked) expect(r.reason).toBe("family_cap");
+  });
+
+  it("blocks entry when same symbol has open opposite-side position (opposite_side)", () => {
+    const ctx = createEntryBurstContext();
+    const openShort = [{ symbol: "BTCUSD", side: "SHORT" }];
+    const r = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_VWAP_V0", ctx, openShort, noTrades, opts);
+    expect(r.blocked).toBe(true);
+    if (r.blocked) expect(r.reason).toBe("opposite_side");
+  });
+
+  it("blocks entry when same symbol had recent opposite-side close within window", () => {
+    const ctx = createEntryBurstContext();
+    const recentClose = [
+      {
+        symbol: "BTCUSD",
+        side: "SHORT",
+        closedAt: new Date(NOW - ENTRY_OPPOSITE_SIDE_WINDOW_MS / 2).toISOString(),
+      },
+    ];
+    const r = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_VWAP_V0", ctx, noPositions, recentClose, opts);
+    expect(r.blocked).toBe(true);
+    if (r.blocked) expect(r.reason).toBe("opposite_side");
+  });
+
+  it("allows entry when opposite-side close is older than the window", () => {
+    const ctx = createEntryBurstContext();
+    const staleClose = [
+      {
+        symbol: "BTCUSD",
+        side: "SHORT",
+        closedAt: new Date(NOW - ENTRY_OPPOSITE_SIDE_WINDOW_MS - 1000).toISOString(),
+      },
+    ];
+    const r = checkEntryBurstGuard("BTCUSD", "LONG", "BTCFT_VWAP_V0", ctx, noPositions, staleClose, opts);
+    expect(r.blocked).toBe(false);
+  });
+
+  it("does not block a different symbol even if same family fired", () => {
+    const ctx = createEntryBurstContext();
+    recordBurstEntry(ctx, "BTCUSD", "BTCFT_VWAP_V0");
+    // ETHUSD on a different family — no block
+    const r = checkEntryBurstGuard("ETHUSD", "LONG", "BTCFT_RSI_V0", ctx, noPositions, noTrades, opts);
+    expect(r.blocked).toBe(false);
   });
 });

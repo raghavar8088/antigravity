@@ -75,6 +75,8 @@ type BTCFuturesScalperProps = {
    * the multi-symbol desk; `"btc_future_trading"` from the BTC FT wrapper.
    */
   moduleKey?: import("@/lib/paperTradesTypes").PaperTradeModuleKey;
+  /** Promoted strategy IDs — premium strats only receive 2× notional when their ID appears here. */
+  promotedStrategyIds?: BTCFuturesEngineOptions["promotedStrategyIds"];
 };
 
 const PAPER_EXPORT_WINDOW_DAYS = 30;
@@ -115,6 +117,7 @@ export function BTCFuturesScalper({
   storageNamespace,
   baseBalance = 1000,
   moduleKey = "btc_futures_scalper",
+  promotedStrategyIds,
 }: BTCFuturesScalperProps = {}) {
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
@@ -175,6 +178,7 @@ export function BTCFuturesScalper({
     storageNamespace,
     supabaseUserId: authUser?.id ?? null,
     moduleKey,
+    promotedStrategyIds,
   });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);

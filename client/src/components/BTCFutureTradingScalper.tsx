@@ -66,10 +66,14 @@ function useResolvedModes() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function BTCFutureTradingScalper({
-  strategyProfile,
+  strategyProfile: strategyProfileProp,
 }: {
   strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
 } = {}) {
+  // scalp_aggro_v1 lowers the signal threshold by 4 — too aggressive for the
+  // production BTC FT desk. Remap it to baseline so a misconfigured prop
+  // cannot override the production gate.
+  const strategyProfile = strategyProfileProp === "scalp_aggro_v1" ? "baseline" : strategyProfileProp;
   const auth = usePaperDeskAuth();
   const { RESEARCH_MODE, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE } = useResolvedModes();
 
@@ -179,7 +183,7 @@ export function BTCFutureTradingScalper({
   const threshold = useMemo(() => {
     if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(26);
     if (EFFECTIVE_RESEARCH_MODE) return researchSignalThreshold();
-    return btcFtSignalThresholdFromEnv(18);
+    return btcFtSignalThresholdFromEnv(20);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
 
   const relaxConfirm = useMemo(() => {
@@ -302,6 +306,7 @@ export function BTCFutureTradingScalper({
           onUnretireResearchStrategy={handleUnretire}
           onAutoRetireResearchLosers={handleAutoRetireLosers}
           strategyProfile={strategyProfile}
+          promotedStrategyIds={winners}
           watchlist={BTC_ONLY_WATCHLIST}
           storageNamespace={STORAGE_NS}
           baseBalance={1000}

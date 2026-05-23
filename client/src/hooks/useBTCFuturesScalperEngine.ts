@@ -51,6 +51,13 @@ import {
   deskPaperMakerFeePctFromEnv,
   deskPaperMakerFillProbabilityFromEnv,
   applyWinnersOnlyGate,
+  checkEntryBurstGuard,
+  createEntryBurstContext,
+  recordBurstEntry,
+  ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
+  ENTRY_OPPOSITE_SIDE_WINDOW_MS,
+  entryBurstMaxPerSymbolFromEnv,
+  type EntryBurstContext,
   type DeskRegimePersistEvent,
   type DeskEntryUtcSession,
   histogramRegimePolls,
@@ -452,6 +459,12 @@ export interface BTCFuturesEngineStats {
   deskAllocationScaledCount: number;
   /** Count of opens where adaptive TP widened or tightened the strategy's nominal TP. */
   deskAdaptiveTpAppliedCount: number;
+  /** Skips: per-symbol burst cap (>= maxPerSymbolPerPoll new entries for same symbol this tick). */
+  deskBurstBlockedCount: number;
+  /** Skips: per-family burst cap (>= maxPerFamilyPerPoll new entries for same template family this tick). */
+  deskFamilyCapBlockedCount: number;
+  /** Skips: same symbol has open or recently-closed opposite-side position (chop guard). */
+  deskOppositeSideBlockedCount: number;
 }
 
 /** Strategy Status */
@@ -521,6 +534,13 @@ export type BTCFuturesEngineOptions = {
    * legacy callers without a moduleKey keep working (row stored without it).
    */
   moduleKey?: PaperTradeModuleKey;
+  /**
+   * IDs of strategies with verified positive expectancy (from MongoDB promotions
+   * or `winnerIdsFromRankings`). When set, premium strategies (tier: "premium") only
+   * receive 2× notional if their ID appears here — otherwise they trade at 1× until
+   * they earn it.
+   */
+  promotedStrategyIds?: ReadonlySet<number> | readonly number[];
 };
 
 /** Progressive threshold reduction so quiet strats get samples on chop. */
@@ -634,6 +654,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const paperEnsureTrades = options.paperEnsureTrades === true;
   const entryUtcSessionOverride = options.entryUtcSessionOverride;
   const moduleKey = options.moduleKey;
+  const promotedIdsSet = useMemo((): ReadonlySet<number> => {
+    const raw = options.promotedStrategyIds;
+    if (!raw) return new Set();
+    if (raw instanceof Set) return raw as ReadonlySet<number>;
+    return new Set(raw as readonly number[]);
+  }, [options.promotedStrategyIds]);
   const relaxEntryGatesRef = useRef(relaxEntryConfirmation);
   useEffect(() => {
     relaxEntryGatesRef.current = relaxEntryConfirmation;
@@ -788,6 +814,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const deskSkippedOutsideProvenSessionRef = useRef(0);
   const deskAllocationScaledCountRef = useRef(0);
   const deskAdaptiveTpAppliedCountRef = useRef(0);
+  const deskBurstBlockedRef = useRef(0);
+  const deskFamilyCapBlockedRef = useRef(0);
+  const deskOppositeSideBlockedRef = useRef(0);
   /** Dev LS persist: sliding 24h primary-symbol regime events (see `deskRegimeHistogramDevPersistEnabled`). */
   const deskRegime24hEventsRef = useRef<DeskRegimePersistEvent[]>([]);
   const deskRegimeLsLastSaveRef = useRef(0);
@@ -1160,6 +1189,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedOutsideProvenSessionRef.current = 0;
     deskAllocationScaledCountRef.current = 0;
     deskAdaptiveTpAppliedCountRef.current = 0;
+    deskBurstBlockedRef.current = 0;
+    deskFamilyCapBlockedRef.current = 0;
+    deskOppositeSideBlockedRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1377,6 +1409,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskSkippedOutsideProvenSession: deskSkippedOutsideProvenSessionRef.current,
       deskAllocationScaledCount: deskAllocationScaledCountRef.current,
       deskAdaptiveTpAppliedCount: deskAdaptiveTpAppliedCountRef.current,
+      deskBurstBlockedCount: deskBurstBlockedRef.current,
+      deskFamilyCapBlockedCount: deskFamilyCapBlockedRef.current,
+      deskOppositeSideBlockedCount: deskOppositeSideBlockedRef.current,
     };
   }, [
     trades,
@@ -1573,11 +1608,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           deskAllocationScaledCountRef.current += 1;
         }
       }
-      // Premium tier strategies get 2× notional (their hypotheses are conviction
-      // designs, not parameter sweeps — backed by an explicit edge thesis).
-      // Stacks multiplicatively with allocation multiplier; final clamp keeps
-      // the size within MIN/MAX_POSITION_NOTIONAL.
-      const premiumMul = isPremiumStrategy(strat) ? PREMIUM_NOTIONAL_MULTIPLIER : 1.0;
+      // Premium tier: 2× notional only once the strategy ID is in the promoted set.
+      // Before promotion, premium strategies trade at 1× — same as core — so they
+      // don't bleed double dollars while their edge is still unverified.
+      const premiumMul =
+        isPremiumStrategy(strat) && promotedIdsSet.has(strat.id)
+          ? PREMIUM_NOTIONAL_MULTIPLIER
+          : 1.0;
       const targetNotional = Math.min(
         maxNotionalEff,
         Math.max(MIN_POSITION_NOTIONAL, baseTargetNotional * allocationMultiplier * premiumMul),
@@ -1684,7 +1721,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       }
       return position;
     },
-    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride],
+    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet],
   );
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
@@ -2253,14 +2290,40 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
           const intraBook: { side: Side; notional: number }[] = [];
           const workingPositions: BTCFuturesPosition[] = [...survivors];
+          const burstCtx: EntryBurstContext = createEntryBurstContext();
 
           const maxSpreadPct = deskMaxLastMarkSpreadPctFromEnv();
           const maxOpenPerCategory = deskMaxOpenPerCategoryFromEnv();
           const categoryByStrategyId = new Map(activeStratDefs.map((s) => [s.id, s.category]));
           let categoryOpenCounts = countOpenByCategory(workingPositions, categoryByStrategyId);
 
+          const burstOpts = {
+            maxPerSymbolPerPoll: entryBurstMaxPerSymbolFromEnv(),
+            maxPerFamilyPerPoll: ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
+            oppositeSideWindowMs: ENTRY_OPPOSITE_SIDE_WINDOW_MS,
+            nowMs: now,
+          };
+
           const tryOpenCandidate = (c: EntryCandidate): boolean => {
             if (pollDebug) pollDebug.openAttempts += 1;
+
+            // ---- Burst guard: per-symbol cap, per-family cap, opposite-side block ----
+            const burstResult = checkEntryBurstGuard(
+              c.symbol,
+              c.side,
+              btcFtTemplateFamilyKey(c.strat.name),
+              burstCtx,
+              workingPositions,
+              tradesRef.current,
+              burstOpts,
+            );
+            if (burstResult.blocked) {
+              if (burstResult.reason === "burst_symbol") deskBurstBlockedRef.current += 1;
+              else if (burstResult.reason === "family_cap") deskFamilyCapBlockedRef.current += 1;
+              else deskOppositeSideBlockedRef.current += 1;
+              return false;
+            }
+
             if (paperLastMarkSpreadPct(c.lastPrice, c.markPrice) > maxSpreadPct) {
               deskSkippedSpreadRef.current += 1;
               if (pollDebug) pollDebug.failSpread += 1;
@@ -2297,6 +2360,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             categoryOpenCounts.set(category, categoryOpen + 1);
             occupied.add(c.slotKey);
             openCount += 1;
+            recordBurstEntry(burstCtx, c.symbol, btcFtTemplateFamilyKey(c.strat.name));
             return true;
           };
 
