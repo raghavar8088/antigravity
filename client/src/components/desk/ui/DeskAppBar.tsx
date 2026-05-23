@@ -11,6 +11,8 @@ type DeskAppBarProps = {
   workspaceName?: string;
   title: string;
   subtitle?: string;
+  /** Short pills shown under title instead of a long subtitle string. */
+  statusChips?: string[];
   equity?: number;
   /** Shown under the paper balance amount (e.g. session PnL hint). */
   equityDetail?: string;
@@ -31,6 +33,7 @@ export function DeskAppBar({
   workspaceName = "in.loop.com",
   title,
   subtitle,
+  statusChips,
   equity,
   equityDetail,
   equityCurrency = "USD",
@@ -47,7 +50,7 @@ export function DeskAppBar({
 
   return (
     <header
-      className={cn("desk-app-bar", className)}
+      className={cn("desk-app-bar", "desk-app-bar--trading", className)}
       style={{
         position: "sticky",
         top: 0,
@@ -84,7 +87,15 @@ export function DeskAppBar({
             <p className="desk-title-md" style={{ lineHeight: 1.2 }}>
               {title}
             </p>
-            {subtitle ? (
+            {statusChips && statusChips.length > 0 ? (
+              <div className="desk-app-bar__subtitle-chips">
+                {statusChips.map((chip) => (
+                  <DeskChip key={chip} tone="default">
+                    {chip}
+                  </DeskChip>
+                ))}
+              </div>
+            ) : subtitle ? (
               <p className="desk-label-md" style={{ fontWeight: 400, marginTop: 2 }}>
                 {subtitle}
               </p>

@@ -5,7 +5,9 @@ import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
+import { DeskChip } from "@/components/desk/ui";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
 const SOUND_STORAGE_KEY = "raig.sound.enabled";
 
@@ -44,7 +46,10 @@ export default function TradingDashboard() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === " ") { e.preventDefault(); setCombatMode((p) => !p); }
+      if (e.key === " ") {
+        e.preventDefault();
+        setCombatMode((p) => !p);
+      }
       if (e.key === "m" || e.key === "M") setIsSoundOn((p) => !p);
     };
     window.addEventListener("keydown", handler);
@@ -56,19 +61,24 @@ export default function TradingDashboard() {
     : "Locked: reset/clear/kill/close-all hidden. Server-side paper engines still run.";
 
   return (
-    <main className="gmail-shell">
-      <div className="workspace-shell workspace-shell--no-sidebar">
-        <div className="workspace-main" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <WorkspaceSettingsCard
-            workspaceKey="btcFutureTrading"
-            workspaceLabel="BTC Future Trading"
-            workspaceDescription="Dedicated BTC futures module with 20 globally popular strategy archetypes (trend, breakout, order-flow, smart-money, MTF)."
-            currencyCode="USD"
-            defaultMode="paper"
-            defaultDataSource="binance"
-            strategyItems={[]}
-          />
+    <main className="trading-shell">
+      <div className="trading-shell__inner">
+        <header className="trading-landing-header">
+          <div>
+            <h1 className="trading-landing-header__title">BTC Future Trading</h1>
+            <p className="trading-landing-header__desc">
+              Paper perpetual futures desk — curated strategy basket, live BTC marks, and Mongo-backed trade history.
+            </p>
+          </div>
+          <div className="trading-landing-header__chips">
+            <DeskChip tone="primary">Paper</DeskChip>
+            <DeskChip tone="default">25× leverage</DeskChip>
+            <DeskChip tone="default">{BTC_FUTURE_TRADING_STRATEGY_IDS.length} strategies</DeskChip>
+            <DeskChip tone="default">BTCUSD</DeskChip>
+          </div>
+        </header>
 
+        <div className="workspace-nav--slim">
           <WorkspaceNavPanel
             activeModule="btcFutureTrading"
             onModuleChange={() => {}}
@@ -77,22 +87,37 @@ export default function TradingDashboard() {
             actionToggleTitle={actionToggleTitle}
             moduleDescription={workspaceModuleDescription("btcFutureTrading")}
           />
-
-          <BTCFutureTradingScalper />
-
-          <ReplayBacktestPanel
-            workspaceLabel="BTC Future Trading"
-            priceSeries={[]}
-            events={[]}
-            deskReplay={{
-              symbol: "BTCUSD",
-              bars: 500,
-              fixture: "live",
-              accountKey: "btc_future_trading_20",
-            }}
-            summary="Run offline desk replay (dev API) on fixture klines — does not change live paper wallet or open positions."
-          />
         </div>
+
+        <BTCFutureTradingScalper />
+
+        <details className="trading-replay-fold">
+          <summary>Developer tools — replay backtest (offline)</summary>
+          <div className="trading-replay-fold__body">
+            <ReplayBacktestPanel
+              workspaceLabel="BTC Future Trading"
+              priceSeries={[]}
+              events={[]}
+              deskReplay={{
+                symbol: "BTCUSD",
+                bars: 500,
+                fixture: "live",
+                accountKey: "btc_future_trading_20",
+              }}
+              summary="Run offline desk replay on fixture klines — does not change live paper wallet or open positions."
+            />
+          </div>
+        </details>
+
+        <WorkspaceSettingsCard
+          workspaceKey="btcFutureTrading"
+          workspaceLabel="BTC Future Trading"
+          workspaceDescription="Display-only workspace preferences. Paper wallet balance is controlled by the desk engine above."
+          currencyCode="USD"
+          defaultMode="paper"
+          defaultDataSource="binance"
+          strategyItems={[]}
+        />
       </div>
     </main>
   );

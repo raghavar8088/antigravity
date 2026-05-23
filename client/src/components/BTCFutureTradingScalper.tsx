@@ -246,6 +246,17 @@ export function BTCFutureTradingScalper({
 
   const shouldRenderEngine = !WINNERS_ONLY_MODE || rosterInfo.ids.length > 0;
 
+  const statusChips = useMemo(
+    () => [
+      WINNERS_ONLY_MODE ? "Winners" : EFFECTIVE_RESEARCH_MODE ? "Research" : "Paper",
+      "25×",
+      `${rosterInfo.ids.length} active`,
+      `TH ${threshold}`,
+      BTC_FT_DESK_BUILD !== "dev" ? `BUILD ${BTC_FT_DESK_BUILD}` : "",
+    ].filter(Boolean),
+    [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, rosterInfo.ids.length, threshold],
+  );
+
   return (
     <>
       <ResearchBanners
@@ -284,6 +295,7 @@ export function BTCFutureTradingScalper({
         <BTCFuturesScalper
           title={EFFECTIVE_RESEARCH_MODE ? "BTC Future Trading - Research" : "BTC Future Trading"}
           moduleTagline={tagline}
+          statusChips={statusChips}
           strategyIds={rosterInfo.ids}
           symbols={BTC_ONLY_SYMBOLS}
           signalThreshold={threshold}

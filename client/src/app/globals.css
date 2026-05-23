@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../styles/desk-tokens.css";
+@import "../styles/desk-trading.css";
 
 :root {
   /* ── Google Material Design 3 Color System ────────────────────────── */

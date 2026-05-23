@@ -2,6 +2,7 @@
 
 :root,
 [data-theme="light"] {
+  --desk-btc-accent: #f7931a;
   --desk-primary: #1a73e8;
   --desk-on-primary: #ffffff;
   --desk-primary-container: #d3e3fd;

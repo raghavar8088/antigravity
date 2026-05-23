@@ -16,7 +16,9 @@ import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPanels";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
+import { DeskHeroStrip } from "@/components/desk/DeskHeroStrip";
 import { DeskThemeToggle } from "@/components/desk/DeskThemeToggle";
+import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
 import {
   DeskAppBar,
   DeskBanner,
@@ -77,6 +79,8 @@ type BTCFuturesScalperProps = {
   moduleKey?: import("@/lib/paperTradesTypes").PaperTradeModuleKey;
   /** Promoted strategy IDs — premium strats only receive 2× notional when their ID appears here. */
   promotedStrategyIds?: BTCFuturesEngineOptions["promotedStrategyIds"];
+  /** Short status pills for the app bar (e.g. "20 strategies", "Paper", "BUILD abc"). */
+  statusChips?: string[];
 };
 
 const PAPER_EXPORT_WINDOW_DAYS = 30;
@@ -118,6 +122,7 @@ export function BTCFuturesScalper({
   baseBalance = 1000,
   moduleKey = "btc_futures_scalper",
   promotedStrategyIds,
+  statusChips,
 }: BTCFuturesScalperProps = {}) {
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
@@ -357,6 +362,17 @@ export function BTCFuturesScalper({
     },
   ], []);
 
+  const appBarChips = useMemo(() => {
+    if (statusChips && statusChips.length > 0) return statusChips;
+    const count = strategyIds?.length ?? 0;
+    return [
+      "Paper",
+      "25×",
+      count > 0 ? `${count} strategies` : "No roster",
+      BTC_FT_DESK_BUILD !== "dev" ? `BUILD ${BTC_FT_DESK_BUILD}` : "",
+    ].filter(Boolean);
+  }, [statusChips, strategyIds]);
+
   const engineStatus: DeskEngineStatus = !authConfigured
     ? "cloud-off"
     : dataHealth.showFeedWarning
@@ -373,35 +389,62 @@ export function BTCFuturesScalper({
       appBar={
         <DeskAppBar
           title={title}
-          subtitle={`${moduleTagline} · ${watchlist.length} markets`}
+          statusChips={appBarChips}
           equity={equity}
-          equityDetail={`Base ${formatDeskUsd(baseBalance, { decimals: 0 })} paper wallet`}
+          equityDetail={
+            deskMounted
+              ? `Session ${pnlPositive ? "+" : ""}${formatDeskUsd(sessionPnL)} · ${formatDeskPct(totalReturn, { signed: true })}`
+              : undefined
+          }
           status={engineStatus}
           authSlot={<PaperDeskAuthBar compact />}
           themeToggle={<DeskThemeToggle dark={deskDark} onToggle={() => setDeskDark((d) => !d)} />}
         />
       }
     >
-      <DeskCard>
-        <DeskSectionHeader
-          title={title}
-          subtitle={moduleTagline}
-          actions={
-            <>
-              <DeskButton variant="tonal" onClick={togglePause}>
-                {pauseEntries ? "Resume entries" : "Pause entries"}
-              </DeskButton>
-              <DeskButton variant="danger-tonal" onClick={resetPaperAccount}>
-                Reset account
-              </DeskButton>
-              <DeskButton variant="outlined" onClick={clearTradeHistory}>
-                Clear trades
-              </DeskButton>
-            </>
-          }
-        />
-        <PaperDeskAuthBar />
-      </DeskCard>
+      <DeskHeroStrip
+        metrics={[
+          {
+            label: "Session PnL",
+            value: deskMounted ? formatDeskUsd(sessionPnL, { signed: true }) : "—",
+            detail: deskMounted ? `${formatDeskPct(totalReturn, { signed: true })} return` : undefined,
+            valueClassName: deskMounted ? pnlToneClass(sessionPnL) : undefined,
+            highlight: true,
+          },
+          {
+            label: "Equity",
+            value: deskMounted ? formatDeskUsd(equity, { decimals: 0 }) : "—",
+            detail: `Base ${formatDeskUsd(baseBalance, { decimals: 0 })}`,
+          },
+          {
+            label: "Open positions",
+            value: `${stats.openPositions} / ${stats.maxPositions}`,
+            detail: `${longCount} long · ${shortCount} short`,
+          },
+          {
+            label: "Win rate",
+            value: deskMounted && stats.totalTrades > 0 ? formatDeskPct(stats.winRate) : "—",
+            detail: deskMounted ? `${stats.totalTrades} closed trades` : undefined,
+          },
+        ]}
+      />
+
+      <div className="desk-toolbar">
+        <p className="desk-label-md" style={{ margin: 0, maxWidth: "min(100%, 480px)" }}>
+          {moduleTagline}
+        </p>
+        <div className="desk-toolbar__actions">
+          <DeskButton variant="tonal" onClick={togglePause}>
+            {pauseEntries ? "Resume entries" : "Pause entries"}
+          </DeskButton>
+          <DeskButton variant="danger-tonal" onClick={resetPaperAccount}>
+            Reset account
+          </DeskButton>
+          <DeskButton variant="outlined" onClick={clearTradeHistory}>
+            Clear trades
+          </DeskButton>
+        </div>
+      </div>
 
       {pauseEntries || stats.isDrawdownLocked ? (
         <DeskBanner variant="warning" title="Paper entries paused">
@@ -440,6 +483,7 @@ export function BTCFuturesScalper({
           <DeskMetricTile
             label="BTC mark"
             value={deskMounted ? formatDeskUsd(quote.markPrice, { decimals: 0 }) : "—"}
+            highlight
           />
           <DeskMetricTile
             label="24h change"
@@ -451,7 +495,12 @@ export function BTCFuturesScalper({
             value={deskMounted ? formatDeskPct(quote.fundingRate * 100, { signed: true, decimals: 4 }) : "—"}
             valueClassName={deskMounted ? pnlToneClass(quote.fundingRate) : undefined}
           />
-          <DeskMetricTile label="Markets" value={String(watchlist.length)} detail="On watchlist" compact />
+          <DeskMetricTile
+            label="Unrealized"
+            value={deskMounted ? formatDeskUsd(totalUnrealized, { signed: true }) : "—"}
+            valueClassName={deskMounted ? pnlToneClass(totalUnrealized) : undefined}
+            compact
+          />
         </div>
       ) : null}
 

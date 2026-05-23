@@ -9,6 +9,7 @@ type DeskMetricTileProps = {
   detail?: ReactNode;
   valueClassName?: string;
   compact?: boolean;
+  highlight?: boolean;
   title?: string;
 };
 
@@ -18,12 +19,18 @@ export function DeskMetricTile({
   detail,
   valueClassName,
   compact = false,
+  highlight = false,
   title,
 }: DeskMetricTileProps) {
   return (
     <div
       title={title}
-      className="desk-metric-tile"
+      className={cn(
+        "desk-metric-tile",
+        highlight && "desk-metric-tile--highlight",
+        valueClassName?.includes("desk-pnl-positive") && "desk-metric-tile--pnl-positive",
+        valueClassName?.includes("desk-pnl-negative") && "desk-metric-tile--pnl-negative",
+      )}
       style={{
         background: "var(--desk-surface-container)",
         borderRadius: "var(--desk-radius-chip)",

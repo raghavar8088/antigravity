@@ -1,0 +1,218 @@
+/* BTC trading desk — visual upgrade layer */
+
+.trading-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(247, 147, 26, 0.08), transparent 50%),
+    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(26, 115, 232, 0.06), transparent 45%),
+    var(--desk-surface-dim);
+}
+
+[data-theme="dark"] .trading-shell,
+body.combat-mode .trading-shell {
+  background:
+    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(247, 147, 26, 0.12), transparent 50%),
+    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(138, 180, 248, 0.08), transparent 45%),
+    var(--desk-surface-dim);
+}
+
+.trading-shell__inner {
+  max-width: var(--desk-page-max);
+  margin: 0 auto;
+  padding: var(--desk-space-4) var(--desk-space-5) var(--desk-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--desk-space-4);
+}
+
+@media (max-width: 640px) {
+  .trading-shell__inner {
+    padding: var(--desk-space-3);
+  }
+}
+
+/* Landing header above desk */
+.trading-landing-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--desk-space-4);
+  padding: var(--desk-space-4) var(--desk-space-5);
+  background: var(--desk-surface);
+  border: 1px solid var(--desk-outline);
+  border-radius: var(--desk-radius-card);
+  box-shadow: var(--desk-elevation-1);
+}
+
+.trading-landing-header__title {
+  font-family: var(--desk-font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--desk-on-surface);
+  margin: 0 0 4px;
+}
+
+.trading-landing-header__desc {
+  font-size: 0.875rem;
+  color: var(--desk-on-surface-variant);
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.trading-landing-header__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* App bar upgrade */
+.desk-app-bar--trading {
+  background: color-mix(in srgb, var(--desk-surface) 92%, transparent) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--desk-outline) !important;
+}
+
+.desk-app-bar--trading::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--desk-btc-accent, #f7931a) 0%,
+    var(--desk-primary) 40%,
+    transparent 100%
+  );
+  opacity: 0.85;
+}
+
+.desk-app-bar--trading {
+  position: relative;
+}
+
+.desk-app-bar__subtitle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Hero strip under app bar */
+.desk-hero-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--desk-space-3);
+  padding: var(--desk-space-4);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--desk-primary-container) 40%, var(--desk-surface)) 0%,
+    var(--desk-surface) 60%
+  );
+  border: 1px solid var(--desk-outline);
+  border-radius: var(--desk-radius-card);
+  box-shadow: var(--desk-elevation-1);
+}
+
+[data-theme="dark"] .desk-hero-strip,
+body.combat-mode .desk-hero-strip {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--desk-primary-container) 25%, var(--desk-surface)) 0%,
+    var(--desk-surface) 70%
+  );
+}
+
+.desk-hero-strip__highlight {
+  border-left: 3px solid var(--desk-btc-accent, #f7931a);
+  padding-left: calc(var(--desk-space-3) - 3px);
+}
+
+/* Metric tiles */
+.desk-metric-tile--highlight {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--desk-btc-accent, #f7931a) 12%, var(--desk-surface-container)) 0%,
+    var(--desk-surface-container) 100%
+  ) !important;
+  border: 1px solid color-mix(in srgb, var(--desk-btc-accent, #f7931a) 35%, var(--desk-outline));
+}
+
+.desk-metric-tile--pnl-positive {
+  border-color: color-mix(in srgb, var(--desk-success) 40%, var(--desk-outline));
+}
+
+.desk-metric-tile--pnl-negative {
+  border-color: color-mix(in srgb, var(--desk-error) 40%, var(--desk-outline));
+}
+
+/* Compact toolbar */
+.desk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--desk-space-3);
+  padding: var(--desk-space-3) var(--desk-space-4);
+  background: var(--desk-surface-container);
+  border: 1px solid var(--desk-outline-variant);
+  border-radius: var(--desk-radius-chip);
+}
+
+.desk-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Slim workspace nav */
+.workspace-nav--slim .desk-card {
+  padding: var(--desk-space-3) var(--desk-space-4) !important;
+}
+
+/* Banner spacing */
+.desk-page > .desk-banner:first-child {
+  margin-top: 0;
+}
+
+/* Table polish */
+.desk-data-table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Replay panel collapsed */
+.trading-replay-fold {
+  border: 1px dashed var(--desk-outline);
+  border-radius: var(--desk-radius-card);
+  overflow: hidden;
+}
+
+.trading-replay-fold summary {
+  cursor: pointer;
+  padding: var(--desk-space-3) var(--desk-space-4);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--desk-on-surface-variant);
+  background: var(--desk-surface-container);
+  list-style: none;
+}
+
+.trading-replay-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.trading-replay-fold[open] summary {
+  border-bottom: 1px solid var(--desk-outline-variant);
+}
+
+.trading-replay-fold__body {
+  padding: var(--desk-space-4);
+}
