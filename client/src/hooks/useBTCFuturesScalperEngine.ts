@@ -968,6 +968,16 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   // Initial load + Supabase sync (after localStorage hydrate)
   useEffect(() => {
+    // Read clearedAt FIRST — used to filter both localStorage and cloud trades
+    let clearedAtMs = 0;
+    try {
+      const raw = localStorage.getItem(`${stateStorageKey}_cleared_at`);
+      if (raw) clearedAtMs = Number(raw);
+    } catch { /* ignore */ }
+
+    const afterClear = (t: BTCFuturesTrade) =>
+      clearedAtMs === 0 || new Date(t.closedAt).getTime() > clearedAtMs;
+
     const saved = loadLs();
     let hydratedTrades: BTCFuturesTrade[] = [];
     if (saved) {
@@ -988,10 +998,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         );
       }
       if (Array.isArray(saved.trades)) {
-        hydratedTrades = saved.trades.slice(-MAX_TRADES).map((t: BTCFuturesTrade) => ({
-          ...t,
-          symbol: t.symbol || PRIMARY_QUOTE_SYMBOL,
-        }));
+        hydratedTrades = saved.trades
+          .slice(-MAX_TRADES)
+          .map((t: BTCFuturesTrade) => ({ ...t, symbol: t.symbol || PRIMARY_QUOTE_SYMBOL }))
+          .filter(afterClear); // drop trades that pre-date the last "Clear trades"
         setTrades(hydratedTrades);
       }
       if (typeof saved.pauseEntries === "boolean") setPauseEntries(saved.pauseEntries);
@@ -1003,12 +1013,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       if (typeof saved.dayStartDate === "number") setDayStartDate(saved.dayStartDate);
     }
 
-    let clearedAtMs = 0;
-    try {
-      const raw = localStorage.getItem(`${stateStorageKey}_cleared_at`);
-      if (raw) clearedAtMs = Number(raw);
-    } catch { /* ignore */ }
-
     let cancelled = false;
     void (async () => {
       // Mount: force-flush bypasses the global throttle so any queued trades
@@ -1017,11 +1021,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       if (cancelled) return;
       const local = hydratedTrades.length > 0 ? hydratedTrades : tradesRef.current;
       const merged = await pullAndMergePaperTrades(cloudAccountKey, local);
-      // Filter out trades that existed before the last "Clear trades" action
-      const visible = clearedAtMs > 0
-        ? merged.filter((t) => new Date(t.closedAt).getTime() > clearedAtMs)
-        : merged;
-      if (!cancelled) setTrades(visible);
+      // Filter cloud trades the same way — MongoDB still holds pre-clear trades
+      if (!cancelled) setTrades(merged.filter(afterClear));
     })();
 
     return () => {
