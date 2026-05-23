@@ -1003,6 +1003,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       if (typeof saved.dayStartDate === "number") setDayStartDate(saved.dayStartDate);
     }
 
+    let clearedAtMs = 0;
+    try {
+      const raw = localStorage.getItem(`${stateStorageKey}_cleared_at`);
+      if (raw) clearedAtMs = Number(raw);
+    } catch { /* ignore */ }
+
     let cancelled = false;
     void (async () => {
       // Mount: force-flush bypasses the global throttle so any queued trades
@@ -1011,7 +1017,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       if (cancelled) return;
       const local = hydratedTrades.length > 0 ? hydratedTrades : tradesRef.current;
       const merged = await pullAndMergePaperTrades(cloudAccountKey, local);
-      if (!cancelled) setTrades(merged);
+      // Filter out trades that existed before the last "Clear trades" action
+      const visible = clearedAtMs > 0
+        ? merged.filter((t) => new Date(t.closedAt).getTime() > clearedAtMs)
+        : merged;
+      if (!cancelled) setTrades(visible);
     })();
 
     return () => {
@@ -1176,15 +1186,26 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       String(now.getMinutes()).padStart(2, "0") +
       String(now.getSeconds()).padStart(2, "0");
     const newCollection = `loop_trades_${ts}`;
+    const clearedAtMs = Date.now();
     try {
       localStorage.setItem("btc_ft_active_collection", newCollection);
+      // Persist cleared trades so they don't reload from localStorage on refresh
+      const raw = localStorage.getItem(stateStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as EngineState;
+        parsed.trades = [];
+        parsed.lastTradeAt = 0;
+        localStorage.setItem(stateStorageKey, JSON.stringify(parsed));
+      }
+      // Store clearedAt so cloud pull on next mount filters out older trades
+      localStorage.setItem(`${stateStorageKey}_cleared_at`, String(clearedAtMs));
     } catch {
       // quota / private mode
     }
     setTrades([]);
     setLastTradeAt(0);
     stratCooldownsRef.current = {};
-  }, []);
+  }, [stateStorageKey]);
 
   const setDisabledStrategiesHandler = useCallback((ids: number[]) => {
     setDisabledStrategies(ids.filter((id) => activeStrategyIdSet.has(id)));
