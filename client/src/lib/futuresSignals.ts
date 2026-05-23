@@ -5,6 +5,7 @@
  */
 
 import type { FuturesStratDef, RegimeTag } from "./futuresStratTypes";
+import { scoreCategoryStrategy } from "./futuresSignalScoring";
 
 // ========== SIGNAL INPUTS ==========
 export type FuturesSignalInputs = {
@@ -1216,6 +1217,13 @@ export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef)
     return evalBtcFtTemplateSignal(s, strat);
   }
 
+  // Research-pool strategies (IDs 600–759) use dedicated category scorers.
+  // Prefix dispatch: SCP_ / DAY_ / SWG_ / POS_ / TRD_ / RNG_ / BRK_ / MOM_
+  // No generic fallback — unrecognised research keys return score=0 (never fires).
+  if (strat.researchOnly) {
+    return scoreCategoryStrategy(s, strat);
+  }
+
   let score = 0;
   const reasons: string[] = [];
 
@@ -1588,9 +1596,100 @@ export function evalMinuteSignal(s: FuturesSignalInputs, strat: FuturesStratDef)
 
 // ========== ENTRY CONFIRMATION ==========
 
+/**
+ * Confirmation gates for research-pool strategies (IDs 600–759).
+ * Each tradingCategory has specific regime and indicator requirements
+ * that the signal score alone doesn't enforce.
+ */
+function passesCategoryConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
+  const isShort = strat.signalKey.endsWith("_SHORT");
+  const cat = strat.tradingCategory;
+
+  // ── Scalping gates ──────────────────────────────────────────────────────
+  if (cat === "scalping") {
+    // Need non-zero ATR (valid bars) and some volume
+    if (!Number.isFinite(s.atr14) || s.atr14 <= 0) return false;
+    if (s.volRatio < 0.5) return false;
+    // Don't enter against a very strong opposing trend (EMA spread > 3× ATR)
+    const emaDist = Math.abs(s.fast - s.slow);
+    if (isShort && s.fast > s.slow && emaDist > s.atr14 * 3) return false;
+    if (!isShort && s.fast < s.slow && emaDist > s.atr14 * 3) return false;
+    return true;
+  }
+
+  // ── Day trading gates ────────────────────────────────────────────────────
+  if (cat === "day_trading") {
+    if (!Number.isFinite(s.atr14) || s.atr14 <= 0) return false;
+    // Block new entries in EOD window (last 30 min before configured EOD flat)
+    // This is enforced at the desk level via requiresEodFlat; no-op here.
+    return true;
+  }
+
+  // ── Swing / Position: require HTF alignment when requiresHtf ────────────
+  if (cat === "swing_trading" || cat === "position_trading") {
+    if (strat.requiresHtf) {
+      const htf5T = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
+      if (isShort && htf5T === "UP") return false;
+      if (!isShort && htf5T === "DOWN") return false;
+    }
+    return true;
+  }
+
+  // ── Trend trading: EMA alignment required, ADX gate ─────────────────────
+  if (cat === "trend_trading") {
+    if (isShort && s.fast >= s.slow) return false;
+    if (!isShort && s.fast <= s.slow) return false;
+    if (s.adxProxy < 18) return false;
+    return true;
+  }
+
+  // ── Range trading: ADX must be LOW (not trending) ───────────────────────
+  if (cat === "range_trading") {
+    if (s.adxProxy > 28) return false;
+    if (isShort) {
+      if (s.rsi14 < 50) return false;
+    } else {
+      if (s.rsi14 > 50) return false;
+    }
+    return true;
+  }
+
+  // ── Breakout trading: ADX rising OR volume expansion required ───────────
+  if (cat === "breakout_trading") {
+    const adxRising = s.adxProxy > 20;
+    const volExpanding = s.volRatio > 1.3;
+    if (!adxRising && !volExpanding) return false;
+    if (isShort && s.price > s.mean20) return false;
+    if (!isShort && s.price < s.mean20) return false;
+    return true;
+  }
+
+  // ── Momentum trading: RSI/MACD direction must match side ────────────────
+  if (cat === "momentum_trading") {
+    if (isShort) {
+      if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) return false;
+      if (s.rsi14 > 70) { /* keep — extreme territory, valid */ }
+      else if (s.rsi14 > 55 && s.momentum3 > 0) return false;
+    } else {
+      if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) return false;
+      if (s.rsi14 < 30) { /* keep — extreme territory, valid */ }
+      else if (s.rsi14 < 45 && s.momentum3 < 0) return false;
+    }
+    return true;
+  }
+
+  // Default: pass (unknown category — let score gate filter)
+  return true;
+}
+
 export function passesEntryConfirmation(s: FuturesSignalInputs, strat: FuturesStratDef): boolean {
   if (strat.btcFtTemplate) {
     return passesBtcFtTemplateConfirmation(s, strat);
+  }
+
+  // ── Research-pool category gates ──────────────────────────────────────────
+  if (strat.researchOnly) {
+    return passesCategoryConfirmation(s, strat);
   }
 
   const isShort = strat.signalKey.includes("SHORT");

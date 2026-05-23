@@ -6,6 +6,22 @@
 export type RegimeTag = "chop" | "trendLow" | "trendHigh";
 
 /**
+ * Semantic trading category — describes the *strategy type*, not the time horizon.
+ * Each category has its own ID block (600–759), signal scorer, and entry gates.
+ * CORE 20 legacy strategies are retroactively tagged via the migration map in
+ * futuresCategoryStrategies.ts; they keep their original IDs and scoring.
+ */
+export type TradingCategoryId =
+  | "scalping"
+  | "day_trading"
+  | "swing_trading"
+  | "position_trading"
+  | "trend_trading"
+  | "range_trading"
+  | "breakout_trading"
+  | "momentum_trading";
+
+/**
  * Time-horizon module identifiers. Each represents a distinct desk with its own
  * bar interval, poll cadence, leverage, and hold-time window.
  */
@@ -94,4 +110,31 @@ export interface FuturesStratDef {
    * Overrides the style-level MIN_BARS default when present.
    */
   minBars?: number;
+  /**
+   * Semantic trading category. Required for all IDs 600–759 (research pool).
+   * Optional on CORE 20 (91–152) and premium (500–503) — set via migration map.
+   */
+  tradingCategory?: TradingCategoryId;
+  /**
+   * Primary bar interval this strategy was designed for. Defaults to the desk
+   * bar interval when absent; used by multi-TF engine to fetch the right cache.
+   */
+  primaryBarInterval?: "1m" | "5m" | "15m" | "4h" | "1d";
+  /**
+   * Optional higher-timeframe confirmation bar interval.
+   * When set, the engine fetches this TF and passes htf fields to scoring.
+   */
+  confirmBarInterval?: "5m" | "15m" | "1h" | "4h";
+  /**
+   * Per-strategy leverage override. When set, overrides the category default
+   * from CATEGORY_REGISTRY. Must not exceed category maxLeverage.
+   */
+  defaultLeverage?: number;
+  /**
+   * When true: strategy is in the research pool only.
+   * It will NOT appear in the live production roster unless explicitly promoted
+   * via rankings (winnerIdsFromRankings) and WINNERS_ONLY mode.
+   * All IDs 600–759 are researchOnly: true.
+   */
+  researchOnly?: boolean;
 }

@@ -1,9 +1,18 @@
 /**
- * Futures strategy definitions — CORE 20 winners basket only.
+ * Futures strategy definitions.
+ *
+ * FUTURES_STRAT_DEFS contains:
+ *   - CORE 20 (IDs 91–152): always active production winners
+ *   - Premium (IDs 500–503): active when in promotedStrategyIds set
+ *   - CATEGORY_POOL_160 (IDs 600–759): researchOnly: true — NOT auto-active;
+ *     enter live roster only via winners promotion or research mode flag
+ *
+ * Never add researchOnly strategies to CORE_BTC_FT_STRATEGY_IDS.
  */
 
 import type { FuturesStratDef } from "@/lib/futuresStratTypes";
 import { BTC_FT_PREMIUM_DEFS } from "@/lib/btcFtPremiumStrategies";
+import { CATEGORY_POOL_160 } from "@/lib/futuresCategoryStrategies";
 
 export type { BtcFtTemplateId, FuturesStratDef, RegimeTag } from "@/lib/futuresStratTypes";
 
@@ -39,4 +48,5 @@ const BASE_FUTURES_STRAT_DEFS: FuturesStratDef[] = [
 export const FUTURES_STRAT_DEFS: readonly FuturesStratDef[] = [
   ...BASE_FUTURES_STRAT_DEFS,
   ...BTC_FT_PREMIUM_DEFS,
+  ...CATEGORY_POOL_160,
 ];
