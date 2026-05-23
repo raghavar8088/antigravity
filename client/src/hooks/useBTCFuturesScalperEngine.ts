@@ -822,33 +822,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     activeStratDefsRef.current = activeStratDefs;
   }, [activeStratDefs]);
 
-  useEffect(() => {
-    if (typeof localStorage === "undefined" || !deskRegimeHistogramDevPersistEnabled()) return;
-    try {
-      const raw = localStorage.getItem(regimeHistogramLsKey);
-      if (!raw) return;
-      deskRegime24hEventsRef.current = parseDeskRegimePersistLsPayload(JSON.parse(raw) as unknown, Date.now());
-    } catch {
-      // ignore corrupt / legacy payloads
-    }
-  }, [regimeHistogramLsKey]);
-
-  useEffect(() => {
-    if (typeof document === "undefined" || !deskRegimeHistogramDevPersistEnabled()) return;
-    const flush = () => {
-      if (document.visibilityState !== "hidden") return;
-      const ev = deskRegime24hEventsRef.current;
-      if (ev.length === 0) return;
-      try {
-        localStorage.setItem(regimeHistogramLsKey, serializeDeskRegimePersistLsPayload(ev));
-        deskRegimeLsLastSaveRef.current = Date.now();
-      } catch {
-        // quota / private mode
-      }
-    };
-    document.addEventListener("visibilitychange", flush);
-    return () => document.removeEventListener("visibilitychange", flush);
-  }, [regimeHistogramLsKey]);
+  // Regime histogram dev persistence removed (no localStorage).
 
   const buildHoldDumpPayload = useCallback(() => {
     const defs = activeStratDefsRef.current;
@@ -946,81 +920,119 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     return () => window.clearInterval(id);
   }, []);
 
-  // ========== LOCAL STORAGE ==========
-  const loadLs = useCallback((): Partial<EngineState> | null => {
-    try {
-      const raw = localStorage.getItem(stateStorageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as EngineState;
-      return parsed;
-    } catch {
-      return null;
-    }
-  }, [stateStorageKey]);
+  // ========== MONGODB STATE (no localStorage) ==========
 
-  const saveLs = useCallback((state: EngineState) => {
-    try {
-      localStorage.setItem(stateStorageKey, JSON.stringify(state));
-    } catch {
-      // ignore
-    }
-  }, [stateStorageKey]);
+  const [clearedAt, setClearedAt] = useState(0);
 
-  // Initial load + Supabase sync (after localStorage hydrate)
+  /** POST current engine state to MongoDB paper_state collection. */
+  const saveToMongo = useCallback((overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
+    if (!cloudAccountKey) return;
+    const body = {
+      accountKey: cloudAccountKey,
+      balance: overrides?.balance ?? balance,
+      positions,
+      pauseEntries: overrides?.pauseEntries ?? pauseEntries,
+      disabledStrategies: overrides?.disabledStrategies ?? disabledStrategies,
+      lastTradeAt,
+      dayStartBalance,
+      dayStartDate,
+      clearedAt: overrides?.clearedAt ?? clearedAt,
+    };
+    void fetch("/api/paper-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    }).catch(() => { /* non-fatal */ });
+  }, [cloudAccountKey, balance, positions, pauseEntries, disabledStrategies, lastTradeAt, dayStartBalance, dayStartDate, clearedAt]);
+
+  // Initial load: migrate any existing localStorage data to MongoDB, then fetch from MongoDB
   useEffect(() => {
-    // Read clearedAt FIRST — used to filter both localStorage and cloud trades
-    let clearedAtMs = 0;
-    try {
-      const raw = localStorage.getItem(`${stateStorageKey}_cleared_at`);
-      if (raw) clearedAtMs = Number(raw);
-    } catch { /* ignore */ }
-
-    const afterClear = (t: BTCFuturesTrade) =>
-      clearedAtMs === 0 || new Date(t.closedAt).getTime() > clearedAtMs;
-
-    const saved = loadLs();
-    if (saved) {
-      if (typeof saved.balance === "number") setBalance(saved.balance);
-      if (Array.isArray(saved.positions)) {
-        const hydratedNow = Date.now();
-        setPositions(
-          saved.positions.map((p: BTCFuturesPosition) => ({
-            ...p,
-            symbol: p.symbol || PRIMARY_QUOTE_SYMBOL,
-            lastFundingAppliedAt:
-              typeof p.lastFundingAppliedAt === "number" && Number.isFinite(p.lastFundingAppliedAt)
-                ? p.lastFundingAppliedAt
-                : hydratedNow,
-            peakReturnPct:
-              typeof p.peakReturnPct === "number" && Number.isFinite(p.peakReturnPct) ? p.peakReturnPct : 0,
-          })),
-        );
-      }
-      // Trades are sourced from MongoDB only — skip localStorage trade hydration
-      if (typeof saved.pauseEntries === "boolean") setPauseEntries(saved.pauseEntries);
-      if (Array.isArray(saved.disabledStrategies)) {
-        setDisabledStrategies(saved.disabledStrategies.filter((id) => activeStrategyIdSet.has(id)));
-      }
-      if (typeof saved.lastTradeAt === "number") setLastTradeAt(saved.lastTradeAt);
-      if (typeof saved.dayStartBalance === "number") setDayStartBalance(saved.dayStartBalance);
-      if (typeof saved.dayStartDate === "number") setDayStartDate(saved.dayStartDate);
-    }
-
     let cancelled = false;
     void (async () => {
-      // Mount: force-flush bypasses the global throttle so any queued trades
-      // from the previous session POST immediately.
+      // ── One-time migration of legacy localStorage state ──────────────────────
+      if (typeof localStorage !== "undefined") {
+        try {
+          const legacyRaw = localStorage.getItem(stateStorageKey);
+          if (legacyRaw) {
+            const legacy = JSON.parse(legacyRaw) as Partial<EngineState>;
+            const legacyClearedAt = Number(localStorage.getItem(`${stateStorageKey}_cleared_at`) || "0");
+            // POST legacy state to MongoDB so data is not lost
+            await fetch("/api/paper-state", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                accountKey: cloudAccountKey,
+                balance: legacy.balance ?? 1000,
+                positions: legacy.positions ?? [],
+                pauseEntries: legacy.pauseEntries ?? false,
+                disabledStrategies: legacy.disabledStrategies ?? [],
+                lastTradeAt: legacy.lastTradeAt ?? 0,
+                dayStartBalance: legacy.dayStartBalance ?? 1000,
+                dayStartDate: legacy.dayStartDate ?? 0,
+                clearedAt: legacyClearedAt,
+              }),
+            }).catch(() => {});
+            // Clear migrated localStorage keys
+            localStorage.removeItem(stateStorageKey);
+            localStorage.removeItem(`${stateStorageKey}_cleared_at`);
+            localStorage.removeItem("btc_ft_active_collection");
+          }
+        } catch { /* ignore corrupt legacy data */ }
+      }
+
+      if (cancelled) return;
+
+      // ── Fetch account state from MongoDB ─────────────────────────────────────
+      let resolvedClearedAt = 0;
+      try {
+        const res = await fetch(`/api/paper-state?account_key=${encodeURIComponent(cloudAccountKey ?? "")}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { ok?: boolean; state?: Partial<{ balance: number; positions: unknown[]; pause_entries: boolean; disabled_strategies: number[]; last_trade_at: number; day_start_balance: number; day_start_date: number; cleared_at: number }> };
+          if (data.ok && data.state) {
+            const s = data.state;
+            resolvedClearedAt = s.cleared_at ?? 0;
+            setClearedAt(resolvedClearedAt);
+            if (typeof s.balance === "number") setBalance(s.balance);
+            if (Array.isArray(s.positions)) {
+              const now = Date.now();
+              setPositions(
+                (s.positions as BTCFuturesPosition[]).map((p) => ({
+                  ...p,
+                  symbol: p.symbol || PRIMARY_QUOTE_SYMBOL,
+                  lastFundingAppliedAt: typeof p.lastFundingAppliedAt === "number" && Number.isFinite(p.lastFundingAppliedAt) ? p.lastFundingAppliedAt : now,
+                  peakReturnPct: typeof p.peakReturnPct === "number" && Number.isFinite(p.peakReturnPct) ? p.peakReturnPct : 0,
+                })),
+              );
+            }
+            if (typeof s.pause_entries === "boolean") setPauseEntries(s.pause_entries);
+            if (Array.isArray(s.disabled_strategies)) {
+              setDisabledStrategies((s.disabled_strategies as number[]).filter((id) => activeStrategyIdSet.has(id)));
+            }
+            if (typeof s.last_trade_at === "number") setLastTradeAt(s.last_trade_at);
+            if (typeof s.day_start_balance === "number") setDayStartBalance(s.day_start_balance);
+            if (typeof s.day_start_date === "number") setDayStartDate(s.day_start_date);
+          }
+        }
+      } catch { /* non-fatal; start with defaults */ }
+
+      if (cancelled) return;
+
+      // ── Fetch trades from MongoDB ─────────────────────────────────────────────
       await flushTradeSyncQueue(cloudAccountKey, { force: true });
       if (cancelled) return;
       const merged = await pullAndMergePaperTrades(cloudAccountKey, []);
-      // Filter cloud trades the same way — MongoDB still holds pre-clear trades
+      const afterClear = (t: BTCFuturesTrade) =>
+        resolvedClearedAt === 0 || new Date(t.closedAt).getTime() > resolvedClearedAt;
       if (!cancelled) setTrades(merged.filter(afterClear));
     })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [activeStrategyIdSet, loadLs, cloudAccountKey]);
+    return () => { cancelled = true; };
+  }, [activeStrategyIdSet, cloudAccountKey, stateStorageKey]);
 
   // Ranked winners gate — fetch strategy rankings when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
   useEffect(() => {
@@ -1110,25 +1122,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     };
   }, [activeStrategyIdSet, cloudAccountKey, disableAutoKill]);
 
-  // Periodic save
+  // Periodic save to MongoDB
   useEffect(() => {
-    const id = setInterval(() => {
-      saveLs({
-        balance,
-        positions,
-        trades: [], // trades stored in MongoDB only, not localStorage
-        quote,
-        status,
-        warmingPct,
-        disabledStrategies,
-        pauseEntries,
-        lastTradeAt,
-        dayStartBalance,
-        dayStartDate,
-      });
-    }, 30000);
+    const id = setInterval(() => saveToMongo(), 30000);
     return () => clearInterval(id);
-  }, [balance, positions, quote, status, warmingPct, disabledStrategies, pauseEntries, lastTradeAt, dayStartBalance, dayStartDate, saveLs]);
+  }, [saveToMongo]);
 
   // ========== ACTIONS ==========
   const togglePause = useCallback(() => {
@@ -1165,62 +1163,32 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
-    localStorage.removeItem(stateStorageKey);
-  }, [stateStorageKey]);
+    saveToMongo({ balance: INITIAL_BALANCE, pauseEntries: false, disabledStrategies: [] });
+  }, [saveToMongo]);
 
   const clearTradeHistory = useCallback(() => {
-    const now = new Date();
-    const ts =
-      now.getFullYear().toString() +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      String(now.getDate()).padStart(2, "0") +
-      "_" +
-      String(now.getHours()).padStart(2, "0") +
-      String(now.getMinutes()).padStart(2, "0") +
-      String(now.getSeconds()).padStart(2, "0");
-    const newCollection = `loop_trades_${ts}`;
     const clearedAtMs = Date.now();
-    try {
-      localStorage.setItem("btc_ft_active_collection", newCollection);
-      // Persist timestamp so the MongoDB pull on next mount filters out pre-clear trades
-      localStorage.setItem(`${stateStorageKey}_cleared_at`, String(clearedAtMs));
-    } catch {
-      // quota / private mode
-    }
+    setClearedAt(clearedAtMs);
     setTrades([]);
     setLastTradeAt(0);
     stratCooldownsRef.current = {};
-  }, [stateStorageKey]);
+    saveToMongo({ clearedAt: clearedAtMs });
+  }, [saveToMongo]);
 
   const setDisabledStrategiesHandler = useCallback((ids: number[]) => {
     setDisabledStrategies(ids.filter((id) => activeStrategyIdSet.has(id)));
   }, [activeStrategyIdSet]);
-
-  const persistManualDisabledToLs = useCallback(
-    (ids: number[]) => {
-      try {
-        const raw = localStorage.getItem(stateStorageKey);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as EngineState;
-        parsed.disabledStrategies = ids;
-        localStorage.setItem(stateStorageKey, JSON.stringify(parsed));
-      } catch {
-        // quota / private mode
-      }
-    },
-    [stateStorageKey],
-  );
 
   const addDisabledStrategyIds = useCallback(
     (ids: number[]) => {
       if (!ids.length) return;
       setDisabledStrategies((prev) => {
         const next = mergeDisabledStrategyIds(prev, ids).filter((id) => activeStrategyIdSet.has(id));
-        persistManualDisabledToLs(next);
+        saveToMongo({ disabledStrategies: next });
         return next;
       });
     },
-    [activeStrategyIdSet, persistManualDisabledToLs],
+    [activeStrategyIdSet, saveToMongo],
   );
 
   const exportCSV = useCallback(() => {
@@ -2174,18 +2142,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   { t: now, tag: regime },
                   now,
                 );
-                const lastSav = deskRegimeLsLastSaveRef.current;
-                if (now - lastSav >= DESK_REGIME_LS_SAVE_INTERVAL_MS) {
-                  deskRegimeLsLastSaveRef.current = now;
-                  try {
-                    localStorage.setItem(
-                      regimeHistogramLsKey,
-                      serializeDeskRegimePersistLsPayload(deskRegime24hEventsRef.current),
-                    );
-                  } catch {
-                    // quota / private mode
-                  }
-                }
+                deskRegimeLsLastSaveRef.current = now; // timestamp kept for interval throttle
               }
             }
 

@@ -179,6 +179,84 @@ export async function listTradesMongo(opts: ListTradesOpts & { collectionName?: 
   return col.find(filter).sort({ closed_at: -1 }).limit(opts.limit).toArray();
 }
 
+// ── paper_state collection ────────────────────────────────────────────────────
+
+const STATE_COLLECTION = "paper_state";
+const RESEARCH_COLLECTION = "paper_research";
+
+export type PaperStateDoc = {
+  account_key: string;
+  balance: number;
+  positions: unknown[];
+  pause_entries: boolean;
+  disabled_strategies: number[];
+  last_trade_at: number;
+  day_start_balance: number;
+  day_start_date: number;
+  cleared_at: number;
+  updated_at: string;
+};
+
+export type PaperResearchDoc = {
+  account_key: string;
+  namespace: string;
+  winners: number[];
+  retired_ids: number[];
+  updated_at: string;
+};
+
+export async function getAccountState(accountKey: string): Promise<PaperStateDoc | null> {
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    await col.createIndex({ account_key: 1 }, { unique: true, name: "uniq_account_key_state" }).catch(() => {});
+    return await col.findOne({ account_key: accountKey }) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertAccountState(doc: PaperStateDoc): Promise<void> {
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    await col.createIndex({ account_key: 1 }, { unique: true, name: "uniq_account_key_state" }).catch(() => {});
+    await col.updateOne(
+      { account_key: doc.account_key },
+      { $set: { ...doc, updated_at: new Date().toISOString() } },
+      { upsert: true },
+    );
+  } catch {
+    // non-fatal — periodic save; next interval will retry
+  }
+}
+
+export async function getResearchState(accountKey: string, namespace: string): Promise<PaperResearchDoc | null> {
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperResearchDoc>(RESEARCH_COLLECTION);
+    await col.createIndex({ account_key: 1, namespace: 1 }, { unique: true, name: "uniq_account_ns" }).catch(() => {});
+    return await col.findOne({ account_key: accountKey, namespace }) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertResearchState(doc: PaperResearchDoc): Promise<void> {
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperResearchDoc>(RESEARCH_COLLECTION);
+    await col.createIndex({ account_key: 1, namespace: 1 }, { unique: true, name: "uniq_account_ns" }).catch(() => {});
+    await col.updateOne(
+      { account_key: doc.account_key, namespace: doc.namespace },
+      { $set: { ...doc, updated_at: new Date().toISOString() } },
+      { upsert: true },
+    );
+  } catch {
+    // non-fatal
+  }
+}
+
 /**
  * Test-only: close cached client (used by Vitest cleanup so the suite doesn't hang
  * on open sockets). Safe no-op when nothing is connected.

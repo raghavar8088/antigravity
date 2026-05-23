@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
+import { getOrCreateAnonAccountKey } from "@/lib/anonAccountKey";
 import {
   btcFtEntryDebugEnabledFromEnv,
   btcFtMinMoveKMulFromEnv,
@@ -15,9 +17,7 @@ import { DeskBanner } from "@/components/desk/ui";
 import {
   isResearchModeEnabled,
   isWinnersOnlyModeEnabled,
-  loadPromotedWinnerIds,
-  loadRetiredFromStorage,
-  loadWinnersFromStorage,
+  loadResearchStateFromMongo,
   researchCooldownMul,
   researchDisableAutoKill,
   researchEnsureTradesEnabled,
@@ -36,12 +36,12 @@ import {
 } from "@/lib/btcFtResearch";
 import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
 
-// ── Constants (zero runtime cost after tree-shaking) ─────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const BTC_ONLY_SYMBOLS = ["BTCUSD"] as const;
 const BTC_ONLY_WATCHLIST = FUTURES_WATCHLIST.filter((item) => item.symbol === "BTCUSD");
 const STORAGE_NS = "btc_future_trading_v4";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 type RosterInfo = {
   ids: number[];
   source: string;
@@ -51,7 +51,7 @@ type RosterInfo = {
   poolSize: number | null;
 };
 
-// ── Hook: lazy env reads (avoids module-scope side effects) ──────────────────
+// ── Hook: lazy env reads ──────────────────────────────────────────────────────
 function useResolvedModes() {
   return useMemo(() => {
     const research = isResearchModeEnabled();
@@ -64,46 +64,94 @@ function useResolvedModes() {
   }, []);
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 export function BTCFutureTradingScalper({
   strategyProfile,
 }: {
-  /**
-   * Optional A/B profile: `"scalp_aggro_v1"` | `"fee_aware_v1"` (default baseline).
-   * Pair with a distinct `storageNamespace` in a forked route for clean localStorage comparison.
-   */
   strategyProfile?: BTCFuturesEngineOptions["strategyProfile"];
 } = {}) {
   const auth = usePaperDeskAuth();
   const { RESEARCH_MODE, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE } = useResolvedModes();
 
-  // ── State (lazy initializers only run on first mount) ──────────────────────
-  const [retiredIds, setRetiredIds] = useState<Set<number>>(
-    () => (EFFECTIVE_RESEARCH_MODE ? loadRetiredFromStorage(STORAGE_NS) : new Set()),
+  // Resolve the same account key the engine will use so research state is co-located
+  const accountKey = useMemo(
+    () =>
+      resolveCloudPaperTradesAccountKey({
+        supabaseUserId: auth.user?.id,
+        storageNamespace: STORAGE_NS,
+      }) ?? getOrCreateAnonAccountKey() ?? "",
+    [auth.user?.id],
   );
 
-  const [winners, setWinners] = useState<number[]>(() =>
-    RESEARCH_MODE || WINNERS_ONLY_MODE
-      ? loadWinnersFromStorage(STORAGE_NS)
-      : resolveCoreWinners(STORAGE_NS),
-  );
+  // State — default empty; loaded from MongoDB in useEffect
+  const [retiredIds, setRetiredIds] = useState<Set<number>>(new Set());
+  const [winners, setWinners] = useState<number[]>([]);
+  const [researchLoaded, setResearchLoaded] = useState(false);
 
-  // ── Cloud-sync winners for production winners-only mode ────────────────────
+  // Load research state from MongoDB on mount
   useEffect(() => {
-    if (!WINNERS_ONLY_MODE) return;
+    if (!RESEARCH_MODE && !WINNERS_ONLY_MODE) {
+      // Non-research: use core winners from env (no async needed)
+      setWinners(resolveCoreWinners(STORAGE_NS));
+      setResearchLoaded(true);
+      return;
+    }
     let cancelled = false;
-    loadPromotedWinnerIds({
-      storageNamespace: STORAGE_NS,
-      cloudAccountKey: auth.user?.id ?? null,
-    })
-      .then((ids) => {
-        if (!cancelled) setWinners(ids);
-      })
-      .catch((err) => {
-        console.warn("[BTCFutureTradingScalper] Failed to load promoted winners:", err);
-      });
+    void loadResearchStateFromMongo(STORAGE_NS, accountKey).then(({ winners: w, retiredIds: r }) => {
+      if (cancelled) return;
+      // Also migrate any old localStorage data
+      if (typeof localStorage !== "undefined") {
+        try {
+          const legacyWinnersRaw = localStorage.getItem(`${STORAGE_NS}_btc_ft_winners`);
+          const legacyRetiredRaw = localStorage.getItem(`${STORAGE_NS}_btc_ft_retired`);
+          if (legacyWinnersRaw) {
+            const legacyW = JSON.parse(legacyWinnersRaw) as number[];
+            if (Array.isArray(legacyW) && legacyW.length > 0) {
+              const merged = [...new Set([...w, ...legacyW])].slice(0, 20);
+              saveWinnersToStorage(STORAGE_NS, merged, accountKey);
+              w = merged;
+            }
+            localStorage.removeItem(`${STORAGE_NS}_btc_ft_winners`);
+          }
+          if (legacyRetiredRaw) {
+            const legacyR = new Set(JSON.parse(legacyRetiredRaw) as number[]);
+            if (legacyR.size > 0) {
+              const merged = new Set([...r, ...legacyR]);
+              saveRetiredToStorage(STORAGE_NS, merged, accountKey);
+              r = merged;
+            }
+            localStorage.removeItem(`${STORAGE_NS}_btc_ft_retired`);
+          }
+        } catch { /* ignore corrupt legacy */ }
+      }
+      setWinners(w);
+      setRetiredIds(r);
+      setResearchLoaded(true);
+    });
     return () => { cancelled = true; };
-  }, [auth.user?.id, WINNERS_ONLY_MODE]);
+  }, [RESEARCH_MODE, WINNERS_ONLY_MODE, accountKey]);
+
+  // Cloud-sync promoted winners for WINNERS_ONLY mode
+  useEffect(() => {
+    if (!WINNERS_ONLY_MODE || !researchLoaded) return;
+    let cancelled = false;
+    void loadResearchStateFromMongo(STORAGE_NS, accountKey).then(({ winners: w }) => {
+      if (!cancelled && w.length > 0) setWinners(w);
+    });
+    return () => { cancelled = true; };
+  }, [WINNERS_ONLY_MODE, researchLoaded, accountKey, auth.user?.id]);
+
+  // Persist winners to MongoDB whenever they change
+  useEffect(() => {
+    if (!researchLoaded) return;
+    if (RESEARCH_MODE || WINNERS_ONLY_MODE) saveWinnersToStorage(STORAGE_NS, winners, accountKey);
+  }, [RESEARCH_MODE, WINNERS_ONLY_MODE, winners, accountKey, researchLoaded]);
+
+  // Persist retired IDs to MongoDB whenever they change
+  useEffect(() => {
+    if (!researchLoaded || !EFFECTIVE_RESEARCH_MODE) return;
+    saveRetiredToStorage(STORAGE_NS, retiredIds, accountKey);
+  }, [EFFECTIVE_RESEARCH_MODE, retiredIds, accountKey, researchLoaded]);
 
   // ── Roster resolution ──────────────────────────────────────────────────────
   const rosterInfo = useMemo((): RosterInfo => {
@@ -111,12 +159,10 @@ export function BTCFutureTradingScalper({
       const r = resolveBtcFtActiveStrategyIds({ storageNamespace: STORAGE_NS, winnerIds: winners });
       return { ids: r.ids, source: r.source, isLargeRoster: r.isLargeRoster, batchIndex: null, totalBatches: null, poolSize: null };
     }
-
     if (!EFFECTIVE_RESEARCH_MODE) {
       const r = resolveBtcFtActiveStrategyIds({ storageNamespace: STORAGE_NS });
       return { ids: r.ids, source: r.source, isLargeRoster: r.isLargeRoster, batchIndex: null, totalBatches: null, poolSize: null };
     }
-
     const pool = resolveResearchPool();
     const batch = resolveResearchActiveIds({ pool, retiredIds, batchSize: 30, rotateEveryHours: 24 });
     return {
@@ -128,12 +174,6 @@ export function BTCFutureTradingScalper({
       poolSize: batch.poolSize,
     };
   }, [retiredIds, winners, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
-
-  // ── Consolidated persistence (single effect = single localStorage flush) ───
-  useEffect(() => {
-    if (EFFECTIVE_RESEARCH_MODE) saveRetiredToStorage(STORAGE_NS, retiredIds);
-    if (RESEARCH_MODE || WINNERS_ONLY_MODE) saveWinnersToStorage(STORAGE_NS, winners);
-  }, [EFFECTIVE_RESEARCH_MODE, RESEARCH_MODE, WINNERS_ONLY_MODE, retiredIds, winners]);
 
   // ── Derived engine options ─────────────────────────────────────────────────
   const threshold = useMemo(() => {
@@ -158,7 +198,7 @@ export function BTCFutureTradingScalper({
 
   const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;
 
-  // ── Stable callbacks (prevent child re-renders) ────────────────────────────
+  // ── Stable callbacks ───────────────────────────────────────────────────────
   const handlePromote = useCallback((id: number) => {
     setWinners((prev) => [...new Set([...prev, id])].slice(0, 20));
   }, []);
@@ -195,13 +235,8 @@ export function BTCFutureTradingScalper({
 
   const tagline = useMemo(() => {
     const count = rosterInfo.ids.length;
-    if (WINNERS_ONLY_MODE) {
-      return `BTC PERPETUAL FUTURES - 25x - ${count} WINNER STRATEGIES - THRESHOLD ${threshold} - PRODUCTION`;
-    }
-    if (EFFECTIVE_RESEARCH_MODE) {
-      const total = rosterInfo.poolSize ?? count;
-      return `BTC PERPETUAL FUTURES - 25x - ${count} ACTIVE OF ${total} POOL - THRESHOLD ${threshold} - RESEARCH`;
-    }
+    if (WINNERS_ONLY_MODE) return `BTC PERPETUAL FUTURES - 25x - ${count} WINNER STRATEGIES - THRESHOLD ${threshold} - PRODUCTION`;
+    if (EFFECTIVE_RESEARCH_MODE) return `BTC PERPETUAL FUTURES - 25x - ${count} ACTIVE OF ${rosterInfo.poolSize ?? count} POOL - THRESHOLD ${threshold} - RESEARCH`;
     return `BTC PERPETUAL FUTURES - 25x - ${count} STRATEGIES (${sourceLabel.toUpperCase()}) - THRESHOLD ${threshold} - BUILD ${BTC_FT_DESK_BUILD}`;
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, rosterInfo, threshold, sourceLabel]);
 
@@ -227,18 +262,16 @@ export function BTCFutureTradingScalper({
 
       {process.env.NEXT_PUBLIC_BTC_FT_FIREHOSE === "1" && (
         <DeskBanner variant="warning" title="⚠ Firehose mode active — research only, NOT for live trading">
-          MAX_OPEN_POSITIONS raised to 60. Per-side cap loosened to 30. Per-template
-          cap loosened to 10. Daily strat cap disabled. Expect 10–20+ concurrent
-          trades and heavy fee bleed — this mode is for fast verdict discovery,
-          not profitability. Disable for production by removing
-          NEXT_PUBLIC_BTC_FT_FIREHOSE from env.
+          MAX_OPEN_POSITIONS raised to 60. Per-side cap loosened to 30. Per-template cap loosened to 10.
+          Daily strat cap disabled. Expect 10–20+ concurrent trades and heavy fee bleed.
+          Disable by removing NEXT_PUBLIC_BTC_FT_FIREHOSE from env.
         </DeskBanner>
       )}
 
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
           {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 5m
-          with zero trades. Check Entry debug below for dominantBlocker (DATA / CONFIRM / MIN_MOVE). Build{" "}
+          with zero trades. Check Entry debug below for dominantBlocker. Build{" "}
           {BTC_FT_DESK_BUILD} is the Vercel client — AWS engine is separate.
         </DeskBanner>
       )}
@@ -296,10 +329,8 @@ function ResearchBanners({
   generatedCount: number;
 }) {
   if (!researchMode) return null;
-
   const batchLabel = `batch ${(rosterInfo.batchIndex ?? 0) + 1}/${rosterInfo.totalBatches ?? 1}`;
   const poolSize = rosterInfo.poolSize ?? rosterInfo.ids.length;
-
   return (
     <>
       <DeskBanner variant="info" title={`Research / Tournament mode - ${batchLabel}`}>
@@ -311,12 +342,10 @@ function ResearchBanners({
           How it works
         </a>
       </DeskBanner>
-
       {(rosterInfo.poolSize ?? 0) > 80 && (
         <DeskBanner variant="warning" title={`Large research pool — ${poolSize} strategies`}>
           Single symbol BTC — pool is for research rotation, not simultaneous edge.
           Only ~{rosterInfo.ids.length} strategies trade per 24h batch; the rest cycle in over time.
-          Expect long runway before per-strategy verdicts converge.
         </DeskBanner>
       )}
     </>

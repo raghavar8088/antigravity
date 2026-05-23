@@ -201,17 +201,9 @@ export function resolveResearchActiveIds(opts: {
 export const RESEARCH_WINNERS_LS_KEY_SUFFIX = "_btc_ft_winners";
 export const RESEARCH_RETIRED_LS_KEY_SUFFIX = "_btc_ft_retired";
 
-export function loadWinnersFromStorage(ns: string): number[] {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(`${ns}${RESEARCH_WINNERS_LS_KEY_SUFFIX}`);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return (parsed as unknown[]).filter((x): x is number => typeof x === "number" && Number.isFinite(x));
-  } catch {
-    return [];
-  }
+/** @deprecated localStorage removed — returns [] synchronously; use loadResearchStateFromMongo for async load. */
+export function loadWinnersFromStorage(_ns: string): number[] {
+  return [];
 }
 
 export function loadWinnersFromEnv(): number[] {
@@ -335,31 +327,53 @@ export async function loadPromotedWinnerIds(opts: {
   }
 }
 
-export function saveWinnersToStorage(ns: string, ids: number[]): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(`${ns}${RESEARCH_WINNERS_LS_KEY_SUFFIX}`, JSON.stringify(ids));
-  } catch { /* quota */ }
+/** Save winners to MongoDB paper_research collection. */
+export function saveWinnersToStorage(ns: string, ids: number[], accountKey?: string): void {
+  if (!accountKey) return;
+  void fetch("/api/paper-research", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ accountKey, namespace: ns, winners: ids }),
+  }).catch(() => {});
 }
 
-export function loadRetiredFromStorage(ns: string): Set<number> {
-  if (typeof localStorage === "undefined") return new Set();
+/** @deprecated localStorage removed — returns empty Set; use loadResearchStateFromMongo for async load. */
+export function loadRetiredFromStorage(_ns: string): Set<number> {
+  return new Set();
+}
+
+/** Save retired IDs to MongoDB paper_research collection. */
+export function saveRetiredToStorage(ns: string, ids: ReadonlySet<number>, accountKey?: string): void {
+  if (!accountKey) return;
+  void fetch("/api/paper-research", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ accountKey, namespace: ns, retiredIds: [...ids] }),
+  }).catch(() => {});
+}
+
+/** Load winners and retired IDs from MongoDB for a given namespace. */
+export async function loadResearchStateFromMongo(
+  ns: string,
+  accountKey: string,
+): Promise<{ winners: number[]; retiredIds: Set<number> }> {
   try {
-    const raw = localStorage.getItem(`${ns}${RESEARCH_RETIRED_LS_KEY_SUFFIX}`);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set((parsed as unknown[]).filter((x): x is number => typeof x === "number" && Number.isFinite(x)));
+    const params = new URLSearchParams({ account_key: accountKey, namespace: ns });
+    const res = await fetch(`/api/paper-research?${params.toString()}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!res.ok) return { winners: [], retiredIds: new Set() };
+    const data = (await res.json()) as { ok?: boolean; winners?: number[]; retiredIds?: number[] };
+    return {
+      winners: Array.isArray(data.winners) ? data.winners : [],
+      retiredIds: new Set(Array.isArray(data.retiredIds) ? data.retiredIds : []),
+    };
   } catch {
-    return new Set();
+    return { winners: [], retiredIds: new Set() };
   }
-}
-
-export function saveRetiredToStorage(ns: string, ids: ReadonlySet<number>): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(`${ns}${RESEARCH_RETIRED_LS_KEY_SUFFIX}`, JSON.stringify([...ids]));
-  } catch { /* quota */ }
 }
 
 // ---------------------------------------------------------------------------

@@ -7,46 +7,30 @@ const FLUSH_THROTTLE_MS = 10_000;
 let syncFailureLogged = false;
 let lastFlushAtMs = 0;
 
-const fetchOpts: RequestInit = { credentials: "include" };
-
 type QueuedPaperTrade = {
   accountKey: string;
   trade: BTCFuturesTrade;
   retries: number;
-  /** Module identifier — persisted with the row when re-POSTing from queue. */
   moduleKey?: PaperTradeModuleKey;
 };
 
-export function tradeSyncQueueKey(accountKey: string): string {
-  return `${accountKey}_trade_sync_queue`;
-}
+// In-memory retry queue — no localStorage. Trades are POSTed immediately on
+// close; this queue only holds items that failed and need retry on next flush.
+const inMemoryQueues = new Map<string, QueuedPaperTrade[]>();
 
 function readQueue(accountKey: string): QueuedPaperTrade[] {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(tradeSyncQueueKey(accountKey));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as QueuedPaperTrade[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return inMemoryQueues.get(accountKey) ?? [];
 }
 
 function writeQueue(accountKey: string, items: QueuedPaperTrade[]): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    if (items.length === 0) {
-      localStorage.removeItem(tradeSyncQueueKey(accountKey));
-      return;
-    }
-    localStorage.setItem(tradeSyncQueueKey(accountKey), JSON.stringify(items));
-  } catch {
-    // quota / private mode
+  if (items.length === 0) {
+    inMemoryQueues.delete(accountKey);
+  } else {
+    inMemoryQueues.set(accountKey, items);
   }
 }
 
-export function enqueuePaperTrade(
+function enqueuePaperTrade(
   accountKey: string,
   trade: BTCFuturesTrade,
   moduleKey?: PaperTradeModuleKey,
@@ -58,28 +42,16 @@ export function enqueuePaperTrade(
   writeQueue(accountKey, queue);
 }
 
-export const ACTIVE_COLLECTION_LS_KEY = "btc_ft_active_collection";
-
-function getActiveCollection(): string {
-  if (typeof localStorage === "undefined") return "paper_trades";
-  try {
-    return localStorage.getItem(ACTIVE_COLLECTION_LS_KEY) || "paper_trades";
-  } catch {
-    return "paper_trades";
-  }
-}
-
 async function postPaperTrade(
   accountKey: string,
   trade: BTCFuturesTrade,
   moduleKey?: PaperTradeModuleKey,
 ): Promise<boolean> {
   const tradeId = trade.clientTradeId ?? trade.id;
-  const collectionName = getActiveCollection();
   const body: Record<string, unknown> = {
     accountKey,
     trade: btcFuturesTradeToClientPayload(trade),
-    collectionName,
+    collectionName: "paper_trades",
   };
   if (moduleKey) body.moduleKey = moduleKey;
 
@@ -106,13 +78,9 @@ async function postPaperTrade(
   }
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
     if (process.env.NODE_ENV === "development") {
-      console.warn("[paper-sync] POST failed", {
-        tradeId,
-        status: res.status,
-        body: text.slice(0, 500),
-      });
+      const text = await res.text().catch(() => "");
+      console.warn("[paper-sync] POST failed", { tradeId, status: res.status, body: text.slice(0, 500) });
     }
     return false;
   }
@@ -125,10 +93,6 @@ async function postPaperTrade(
 
 /**
  * Fire-and-forget: persist one closed trade when `accountKey` is set.
- * Local paper-only mode remains if no key is available.
- *
- * `moduleKey` (optional) tags the row with the originating workspace tab so
- * dashboards can filter per-module leaderboards / exports.
  */
 export function persistTradeToServer(
   trade: BTCFuturesTrade,
@@ -148,11 +112,8 @@ export function persistTradeToServer(
 }
 
 /**
- * POST all queued trades (max retries per item). No-op when logged out.
- *
- * Throttled to once per 10s globally to keep the poll loop cheap. Pass
- * `{ force: true }` on mount / after sign-in so the queue drains immediately
- * even when a recent flush attempt happened.
+ * Flush the in-memory retry queue. Throttled to once per 10s; pass
+ * `{ force: true }` on mount to drain immediately.
  */
 export async function flushTradeSyncQueue(
   accountKey: string | null,
@@ -179,9 +140,7 @@ export async function flushTradeSyncQueue(
       remaining.push({ ...item, retries: nextRetries });
     } else if (!syncFailureLogged) {
       syncFailureLogged = true;
-      console.warn(
-        "[paper-trades] Dropped trade(s) from sync queue after max retries. Check MongoDB env and server connectivity.",
-      );
+      console.warn("[paper-trades] Dropped trade(s) from sync queue after max retries.");
     }
   }
   writeQueue(key, remaining);
