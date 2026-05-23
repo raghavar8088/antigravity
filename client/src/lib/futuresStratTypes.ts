@@ -5,6 +5,19 @@
 
 export type RegimeTag = "chop" | "trendLow" | "trendHigh";
 
+/**
+ * Time-horizon module identifiers. Each represents a distinct desk with its own
+ * bar interval, poll cadence, leverage, and hold-time window.
+ */
+export type TradingStyleId = "scalp" | "day" | "swing" | "position";
+
+/**
+ * Signal-and-confirmation overlays that filter strategies within a desk.
+ * They are NOT separate modules — they reduce the active roster and adjust
+ * entry confirmation, hold multiplier, and cooldown.
+ */
+export type PlaybookId = "trend" | "range" | "breakout" | "momentum";
+
 /** Keys for dedicated BTC FT extended scoring (`futuresSignals.ts`). */
 export type BtcFtTemplateId =
   // Original extended templates (IDs 200–299)
@@ -61,4 +74,24 @@ export interface FuturesStratDef {
    * at runtime by the hook or ranking pipeline, never hard-coded in strat defs.
    */
   dynamicThreshold?: number;
+  /**
+   * Which time-horizon desks may use this strategy. When absent, all styles
+   * are eligible (backward-compatible with pre-tagging strats).
+   */
+  styles?: readonly TradingStyleId[];
+  /**
+   * Signal/confirmation playbooks this strategy is suited for.
+   * When absent, the strategy is eligible regardless of active playbook filter.
+   */
+  playbooks?: readonly PlaybookId[];
+  /**
+   * Explicit family dedup key for burst guard and template-family cap.
+   * Falls back to `btcFtTemplateFamilyKey(name)` when absent.
+   */
+  templateFamily?: string;
+  /**
+   * Minimum warm-up bars required by this strategy's indicators.
+   * Overrides the style-level MIN_BARS default when present.
+   */
+  minBars?: number;
 }

@@ -91,6 +91,9 @@ export const BTC_FT_PREMIUM_DEFS: ReadonlyArray<FuturesStratDef> = [
     btcFtTemplate: "PRM_VWAP_REJECT",
     btcFtVariant: 0,
     tier: "premium",
+    styles: ["scalp", "day"],
+    playbooks: ["range"],
+    templateFamily: "PRM_VWAP_REJECT",
   },
   {
     id: 501,
@@ -107,6 +110,9 @@ export const BTC_FT_PREMIUM_DEFS: ReadonlyArray<FuturesStratDef> = [
     btcFtTemplate: "PRM_VWAP_REJECT",
     btcFtVariant: 0,
     tier: "premium",
+    styles: ["scalp", "day"],
+    playbooks: ["range"],
+    templateFamily: "PRM_VWAP_REJECT",
   },
   // -------------------- Strategy 2: Volume-Price Divergence --------------------
   {
@@ -124,6 +130,9 @@ export const BTC_FT_PREMIUM_DEFS: ReadonlyArray<FuturesStratDef> = [
     btcFtTemplate: "PRM_VOL_DIVERGENCE",
     btcFtVariant: 0,
     tier: "premium",
+    styles: ["scalp", "day"],
+    playbooks: ["momentum"],
+    templateFamily: "PRM_VOL_DIVERGENCE",
   },
   {
     id: 503,
@@ -140,6 +149,9 @@ export const BTC_FT_PREMIUM_DEFS: ReadonlyArray<FuturesStratDef> = [
     btcFtTemplate: "PRM_VOL_DIVERGENCE",
     btcFtVariant: 0,
     tier: "premium",
+    styles: ["scalp", "day"],
+    playbooks: ["momentum"],
+    templateFamily: "PRM_VOL_DIVERGENCE",
   },
 ];
 
