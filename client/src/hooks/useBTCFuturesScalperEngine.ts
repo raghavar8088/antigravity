@@ -979,7 +979,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       clearedAtMs === 0 || new Date(t.closedAt).getTime() > clearedAtMs;
 
     const saved = loadLs();
-    let hydratedTrades: BTCFuturesTrade[] = [];
     if (saved) {
       if (typeof saved.balance === "number") setBalance(saved.balance);
       if (Array.isArray(saved.positions)) {
@@ -997,13 +996,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           })),
         );
       }
-      if (Array.isArray(saved.trades)) {
-        hydratedTrades = saved.trades
-          .slice(-MAX_TRADES)
-          .map((t: BTCFuturesTrade) => ({ ...t, symbol: t.symbol || PRIMARY_QUOTE_SYMBOL }))
-          .filter(afterClear); // drop trades that pre-date the last "Clear trades"
-        setTrades(hydratedTrades);
-      }
+      // Trades are sourced from MongoDB only — skip localStorage trade hydration
       if (typeof saved.pauseEntries === "boolean") setPauseEntries(saved.pauseEntries);
       if (Array.isArray(saved.disabledStrategies)) {
         setDisabledStrategies(saved.disabledStrategies.filter((id) => activeStrategyIdSet.has(id)));
@@ -1019,8 +1012,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       // from the previous session POST immediately.
       await flushTradeSyncQueue(cloudAccountKey, { force: true });
       if (cancelled) return;
-      const local = hydratedTrades.length > 0 ? hydratedTrades : tradesRef.current;
-      const merged = await pullAndMergePaperTrades(cloudAccountKey, local);
+      const merged = await pullAndMergePaperTrades(cloudAccountKey, []);
       // Filter cloud trades the same way — MongoDB still holds pre-clear trades
       if (!cancelled) setTrades(merged.filter(afterClear));
     })();
@@ -1124,7 +1116,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       saveLs({
         balance,
         positions,
-        trades: trades.slice(-MAX_TRADES),
+        trades: [], // trades stored in MongoDB only, not localStorage
         quote,
         status,
         warmingPct,
@@ -1136,7 +1128,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       });
     }, 30000);
     return () => clearInterval(id);
-  }, [balance, positions, trades, quote, status, warmingPct, disabledStrategies, pauseEntries, lastTradeAt, dayStartBalance, dayStartDate, saveLs]);
+  }, [balance, positions, quote, status, warmingPct, disabledStrategies, pauseEntries, lastTradeAt, dayStartBalance, dayStartDate, saveLs]);
 
   // ========== ACTIONS ==========
   const togglePause = useCallback(() => {
@@ -1190,15 +1182,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const clearedAtMs = Date.now();
     try {
       localStorage.setItem("btc_ft_active_collection", newCollection);
-      // Persist cleared trades so they don't reload from localStorage on refresh
-      const raw = localStorage.getItem(stateStorageKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as EngineState;
-        parsed.trades = [];
-        parsed.lastTradeAt = 0;
-        localStorage.setItem(stateStorageKey, JSON.stringify(parsed));
-      }
-      // Store clearedAt so cloud pull on next mount filters out older trades
+      // Persist timestamp so the MongoDB pull on next mount filters out pre-clear trades
       localStorage.setItem(`${stateStorageKey}_cleared_at`, String(clearedAtMs));
     } catch {
       // quota / private mode
