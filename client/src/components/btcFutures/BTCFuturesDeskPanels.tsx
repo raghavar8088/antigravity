@@ -76,12 +76,15 @@ function CloudLeaderboardPanel({
   const disabledSet = useMemo(() => new Set(disabledStrategyIds), [disabledStrategyIds]);
 
   const load = useCallback(async () => {
-    if (!cloudAccountKey) return;
+    if (!cloudAccountKey || cloudAccountKey.trim() === "") {
+      console.warn("[Leaderboard] Skipping — account_key empty");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        account_key: cloudAccountKey ?? "",
+        account_key: cloudAccountKey,
         window_days: String(LEADERBOARD_WINDOW_DAYS),
         limit: String(LEADERBOARD_TABLE_LIMIT),
       });

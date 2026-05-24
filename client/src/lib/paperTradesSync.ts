@@ -78,10 +78,8 @@ async function postPaperTrade(
   }
 
   if (!res.ok) {
-    if (process.env.NODE_ENV === "development") {
-      const text = await res.text().catch(() => "");
-      console.warn("[paper-sync] POST failed", { tradeId, status: res.status, body: text.slice(0, 500) });
-    }
+    const body = await res.json().catch(() => ({}));
+    console.error("[paper-sync] POST failed", { tradeId, status: res.status, body });
     return false;
   }
 
