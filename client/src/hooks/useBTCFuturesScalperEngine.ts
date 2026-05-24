@@ -63,6 +63,9 @@ import {
   ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
   ENTRY_OPPOSITE_SIDE_WINDOW_MS,
   entryBurstMaxPerSymbolFromEnv,
+  computeChopAwareThreshold,
+  isSameSideCapped,
+  MAX_SAME_SIDE_POSITIONS,
   type EntryBurstContext,
   type DeskRegimePersistEvent,
   type DeskEntryUtcSession,
@@ -71,6 +74,7 @@ import {
   regimeHistogramShares,
   serializeDeskRegimePersistLsPayload,
 } from "@/lib/futuresDeskPolicy";
+import { logSkipReason, getSkipReasonSummary, resetSkipReasonLog } from "@/lib/entrySkipReason";
 import {
   createEmptyEntryPollDebug,
   deskEntryDebugEnabledFromEnv,
@@ -523,6 +527,10 @@ export interface BTCFuturesEngineStats {
   deskFamilyCapBlockedCount: number;
   /** Skips: same symbol has open or recently-closed opposite-side position (chop guard). */
   deskOppositeSideBlockedCount: number;
+  /** Skips: PR-6 same-side correlated position count cap (MAX_SAME_SIDE_POSITIONS). */
+  deskSkippedCorrelatedCap: number;
+  /** Last-60s skip reason frequency (PR-6 entry quality diagnostics). */
+  skipReasonSummary: Array<{ reason: string; count: number }>;
 }
 
 /** Strategy Status */
@@ -932,6 +940,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const deskBurstBlockedRef = useRef(0);
   const deskFamilyCapBlockedRef = useRef(0);
   const deskOppositeSideBlockedRef = useRef(0);
+  const deskSkippedCorrelatedCapRef = useRef(0);
   /** Dev LS persist: sliding 24h primary-symbol regime events (see `deskRegimeHistogramDevPersistEnabled`). */
   const deskRegime24hEventsRef = useRef<DeskRegimePersistEvent[]>([]);
   const deskRegimeLsLastSaveRef = useRef(0);
@@ -1348,6 +1357,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskBurstBlockedRef.current = 0;
     deskFamilyCapBlockedRef.current = 0;
     deskOppositeSideBlockedRef.current = 0;
+    deskSkippedCorrelatedCapRef.current = 0;
+    resetSkipReasonLog();
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1577,6 +1588,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskBurstBlockedCount: deskBurstBlockedRef.current,
       deskFamilyCapBlockedCount: deskFamilyCapBlockedRef.current,
       deskOppositeSideBlockedCount: deskOppositeSideBlockedRef.current,
+      deskSkippedCorrelatedCap: deskSkippedCorrelatedCapRef.current,
+      skipReasonSummary: getSkipReasonSummary(),
     };
   }, [
     trades,
@@ -2591,12 +2604,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     stratTradeCount,
                   );
               // P1.1.2: use per-strategy dynamic threshold when available, else fall back to global
+              // PR-6: apply chop-regime boost (CHOP_THRESHOLD_BOOST) before comparing score.
               const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
               const thresholdFloor = paperEnsureTrades ? 16 : 18;
+              const chopAwareBase = computeChopAwareThreshold(stratBaseThreshold, regime);
               const effectiveThresholdForStrat = Math.max(
                 thresholdFloor,
-                stratBaseThreshold - ensureDataThresholdDrop - quietEntryBoost,
+                chopAwareBase - ensureDataThresholdDrop - quietEntryBoost,
               );
+              // PR-6 Change 4: block strategies with an explicit regimes[] list when
+              // the current regime isn't in it — catch this early before candidate push.
+              const regimeMatch = strat.regimes?.includes(regime) ?? true;
+              if (strat.regimes && strat.regimes.length > 0 && !regimeMatch) {
+                logSkipReason(strat.id, "REGIME_BLOCKED", { regime, stratRegimes: strat.regimes });
+                if (pollDebug) pollDebug.failOpenRegime += 1;
+                deskSkippedByRegimeRef.current[regime] += 1;
+                continue;
+              }
               const confirmPasses =
                 passesEntryConfirmation(stratInput, strat) ||
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
@@ -2612,7 +2636,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     continue;
                   }
                 }
-                const regimeMatch = strat.regimes?.includes(regime) ?? false;
                 entryCandidates.push({
                   strat,
                   side,
@@ -2635,8 +2658,16 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 });
                 if (pollDebug) pollDebug.candidatesBuilt += 1;
               } else if (pollDebug) {
-                if (signal.score < effectiveThresholdForStrat) pollDebug.failSignal += 1;
-                else pollDebug.failConfirm += 1;
+                if (signal.score < effectiveThresholdForStrat) {
+                  pollDebug.failSignal += 1;
+                  logSkipReason(strat.id, "THRESHOLD_NOT_MET", {
+                    score: signal.score,
+                    required: effectiveThresholdForStrat,
+                    regime,
+                  });
+                } else {
+                  pollDebug.failConfirm += 1;
+                }
               }
             }
           }
@@ -2689,7 +2720,22 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             // ATR% pre-filter: skip when market is too thin to cover fees (atr/price < 0.06%).
             if (c.markPrice > 0 && c.atr14 / c.markPrice < 0.0006) {
               deskSkippedMinExpectedMoveRef.current += 1;
+              logSkipReason(c.strat.id, "ATR_TOO_LOW", {
+                atrPct: (c.atr14 / c.markPrice).toFixed(6),
+                required: 0.0006,
+              });
               if (pollDebug) pollDebug.failMinMove += 1;
+              return false;
+            }
+            // PR-6 Change 2: correlated position count cap — max MAX_SAME_SIDE_POSITIONS per side.
+            if (isSameSideCapped(workingPositions, c.side, MAX_SAME_SIDE_POSITIONS)) {
+              deskSkippedCorrelatedCapRef.current += 1;
+              logSkipReason(c.strat.id, "CORRELATED_CAP", {
+                side: c.side,
+                openCount: workingPositions.filter((p) => p.side === c.side).length,
+                max: MAX_SAME_SIDE_POSITIONS,
+              });
+              if (pollDebug) pollDebug.failSameDirCap += 1;
               return false;
             }
             if (!entryUtcSessionOpen) {

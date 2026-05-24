@@ -25,10 +25,13 @@ describe("isProbeOrBootstrapTrade", () => {
     expect(isProbeOrBootstrapTrade({ strategy_name: null })).toBe(false);
   });
 
-  it("prefers strategyName over strategy_name", () => {
-    // strategyName is production, strategy_name is probe — should use first non-null
-    expect(isProbeOrBootstrapTrade({ strategyName: "btc_scalp_v1", strategy_name: "bootstrap" })).toBe(false);
+  it("prefers strategy_name (DB snake_case field) over strategyName when both are set", () => {
+    // strategy_name is checked first (DB format) — if it's a probe name, returns true
+    // even if strategyName looks like a production name
+    expect(isProbeOrBootstrapTrade({ strategyName: "btc_scalp_v1", strategy_name: "bootstrap" })).toBe(true);
     expect(isProbeOrBootstrapTrade({ strategyName: null, strategy_name: "bootstrap" })).toBe(true);
+    // When strategy_name is null/undefined, falls back to strategyName
+    expect(isProbeOrBootstrapTrade({ strategyName: "btc_scalp_v1", strategy_name: null })).toBe(false);
   });
 });
 

@@ -258,6 +258,43 @@ export function deskMaxSameDirNotionalFracFromEnv(): number {
  */
 export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 3.0;
 
+// ── Regime-aware threshold ────────────────────────────────────────────────────
+
+/**
+ * Extra points added to the signal threshold when market is in "chop" regime.
+ * Chop markets have lower signal-to-noise — a higher bar prevents marginal entries
+ * that would win in trend but lose fees in choppy conditions.
+ */
+export const CHOP_THRESHOLD_BOOST = 6;
+
+/**
+ * Returns the effective entry threshold adjusted for the current regime.
+ * In chop, adds CHOP_THRESHOLD_BOOST to the base; all other regimes are unchanged.
+ */
+export function computeChopAwareThreshold(
+  baseThreshold: number,
+  regime: import("./futuresStrategies").RegimeTag,
+): number {
+  return regime === "chop" ? baseThreshold + CHOP_THRESHOLD_BOOST : baseThreshold;
+}
+
+// ── Correlated position cap ───────────────────────────────────────────────────
+
+/** Maximum concurrent same-side positions (PR-6 correlated-exposure gate). */
+export const MAX_SAME_SIDE_POSITIONS = 2;
+
+/**
+ * Returns true when opening another `side` position would exceed `maxSameSide`.
+ * Pure — accepts any array with a `side` field.
+ */
+export function isSameSideCapped(
+  openPositions: ReadonlyArray<{ side: string }>,
+  side: string,
+  maxSameSide: number = MAX_SAME_SIDE_POSITIONS,
+): boolean {
+  return openPositions.filter((p) => p.side === side).length >= maxSameSide;
+}
+
 export function deskMinExpectedMoveSafetyKFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K;
   if (raw === undefined || raw === "") return DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;

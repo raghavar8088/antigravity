@@ -129,7 +129,7 @@ describe("paperLiquidationPrice + paperLiquidationCrossed", () => {
   });
 });
 
-describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → TIME)", () => {
+describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → TRAIL; TIME removed)", () => {
   const base = (over: Partial<Parameters<typeof paperResolveHardExit>[0]>) => ({
     side: "LONG" as const,
     markPrice: 100,
@@ -182,7 +182,8 @@ describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → T
         mtfHoldBonus: mtf,
       }),
     );
-    expect(r).toEqual({ shouldClose: true, reason: "TIME", exitPrice: 100 });
+    // TIME exit was removed — position stays open when liq/SL/TP are safe
+    expect(r).toEqual({ shouldClose: false });
   });
 
   it("short: SL when mark at or above adaptiveSl", () => {
@@ -254,7 +255,8 @@ describe("paperResolveHardExit precedence (matches hook: liq → SL → TP → T
       mtfHoldBonus: mtf,
       holdTimeMul,
     });
-    expect(r).toEqual({ shouldClose: true, reason: "TIME", exitPrice: 99_500 });
+    // TIME exit was removed — position stays open when liq/SL/TP are safe
+    expect(r).toEqual({ shouldClose: false });
   });
 
   it("no exit when all conditions are safe and time not elapsed", () => {
