@@ -50,10 +50,11 @@ import {
   deskPaperMakerFillModelEnabled,
   deskPaperMakerFeePctFromEnv,
   deskPaperMakerFillProbabilityFromEnv,
-  btcFtPaperBreakevenProgressFromEnv,
   btcFtPaperMinHoldBeforeSlMinFromEnv,
+  btcFtPaperQuickTpMinNetUsdFromEnv,
   btcFtPaperSlPctMulFromEnv,
   isBtcFtPaperDeskMode,
+  paperDeskEffectiveStops,
   paperDeskWidenPositionStops,
   applyWinnersOnlyGate,
   checkEntryBurstGuard,
@@ -1715,14 +1716,20 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const isBootstrapProbeStrat =
         strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
       const paperSlMul = paperDeskMode ? btcFtPaperSlPctMulFromEnv() : 1;
-      const slPctUsed = isBootstrapProbeStrat
-        ? Math.max(strat.slPct, 1.0)
-        : strat.slPct * paperSlMul;
+      const paperStops =
+        paperDeskMode && !isBootstrapProbeStrat
+          ? paperDeskEffectiveStops(strat, paperSlMul)
+          : {
+              slPct: isBootstrapProbeStrat ? Math.max(strat.slPct, 1.0) : strat.slPct * paperSlMul,
+              tpPct: isBootstrapProbeStrat ? 0.5 : strat.tpPct,
+            };
       const slPrice =
-        side === "LONG" ? entryPrice * (1 - slPctUsed / 100) : entryPrice * (1 + slPctUsed / 100);
+        side === "LONG"
+          ? entryPrice * (1 - paperStops.slPct / 100)
+          : entryPrice * (1 + paperStops.slPct / 100);
 
       // ---- #3 adaptive TP: scale strat.tpPct by current ATR regime ----
-      const baseTpPct = strat.tpPct;
+      const baseTpPct = paperStops.tpPct;
       const effectiveTpPct = deskAdaptiveTpEnabled()
         ? computeAdaptiveTpPct(baseTpPct, atrPctFromAtr(gate.atr14, markPrice))
         : baseTpPct;
@@ -1926,7 +1933,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       // Research mode → 0 (raw expectancy, no $2 floor inflating fake outliers).
       // Production default = $2 (MIN_ABS_NET_PNL_USD). Env override via
       // NEXT_PUBLIC_DESK_MIN_ABS_NET_WIN_USD.
-      minAbsNetWinUsd: deskMinAbsNetWinUsd(),
+      minAbsNetWinUsd: paperDeskMode ? 0 : deskMinAbsNetWinUsd(),
     });
 
     if (process.env.NODE_ENV === "development" && exitReason === "TP" && grossPnl > 0 && netPnl < 0) {
@@ -1994,7 +2001,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     }
     persistTradeToServer(trade, cloudAccountKey, moduleKey);
     persistShadowTradeIntent(cloudAccountKey, shadowIntentFromPaperClose(trade));
-  }, [cloudAccountKey, slippageBpsOverride]);
+  }, [cloudAccountKey, slippageBpsOverride, paperDeskMode, moduleKey]);
 
   const openPositionRef = useRef(openPosition);
   const closePositionRef = useRef(closePosition);
@@ -2262,7 +2269,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             ...(paperDeskMode
               ? {
                   minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
-                  breakevenTriggerProgress: btcFtPaperBreakevenProgressFromEnv(),
+                  breakevenTriggerProgress: 0.98,
+                  trailActivationProgress: 1.01,
+                  profitLockMinProgress: 0.18,
+                  profitLockMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
+                  paperTpBeforeSl: true,
+                  paperQuickTpMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
                 }
               : {}),
           });
@@ -2571,6 +2583,16 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
               if (signal.score >= effectiveThresholdForStrat && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+                if (paperDeskMode) {
+                  const momentumAligned =
+                    side === "LONG"
+                      ? stratInput.momentum3 > 0 && stratInput.momentum6 >= 0
+                      : stratInput.momentum3 < 0 && stratInput.momentum6 <= 0;
+                  if (!momentumAligned) {
+                    if (pollDebug) pollDebug.failConfirm += 1;
+                    continue;
+                  }
+                }
                 const regimeMatch = strat.regimes?.includes(regime) ?? false;
                 entryCandidates.push({
                   strat,

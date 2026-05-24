@@ -729,8 +729,26 @@ export function btcFtEntryDebugEnabledFromEnv(): boolean {
   );
 }
 
-/** Widen strategy SL% on paper desk (default 2× → 0.5% becomes 1.0%). */
-export function btcFtPaperSlPctMulFromEnv(fallback = 2): number {
+/** Paper scalp TP % cap (default 0.45) — much closer than production 1.5% so TP hits before SL. */
+export function btcFtPaperTpPctCapFromEnv(fallback = 0.45): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_TP_PCT;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(2, Math.max(0.2, n));
+}
+
+/** Min projected net USD to fire paper quick-take-profit (after SL grace). */
+export function btcFtPaperQuickTpMinNetUsdFromEnv(fallback = 0.35): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_QUICK_TP_MIN_NET;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(10, n);
+}
+
+/** Widen strategy SL% on paper desk (default 2.5× → 0.5% becomes 1.25%). */
+export function btcFtPaperSlPctMulFromEnv(fallback = 2.5): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_SL_MUL;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -738,8 +756,8 @@ export function btcFtPaperSlPctMulFromEnv(fallback = 2): number {
   return Math.min(4, Math.max(1, n));
 }
 
-/** Minutes before hard SL can fire (TP/TIME still apply). Default 5 on paper. */
-export function btcFtPaperMinHoldBeforeSlMinFromEnv(fallback = 5): number {
+/** Minutes before hard SL can fire (TP/quick-TP still apply). Default 8 on paper. */
+export function btcFtPaperMinHoldBeforeSlMinFromEnv(fallback = 8): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_MIN_HOLD_SL_MIN;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -783,6 +801,19 @@ export function isBtcFtPaperDeskMode(opts: {
   );
 }
 
+/**
+ * Paper desk stop/target: wide SL + tight scalp TP so favorable ticks hit TP before noise hits SL.
+ */
+export function paperDeskEffectiveStops(
+  strat: { slPct: number; tpPct: number },
+  slMul: number,
+): { slPct: number; tpPct: number } {
+  const slPct = strat.slPct * slMul;
+  const tpCap = btcFtPaperTpPctCapFromEnv();
+  const tpPct = Math.min(strat.tpPct, Math.max(0.35, Math.min(tpCap, slPct * 0.55)));
+  return { slPct, tpPct };
+}
+
 /** Re-apply widened SL/TP from strategy defs (fixes Mongo-restored tight stops). */
 export function paperDeskWidenPositionStops(
   p: {
@@ -805,15 +836,15 @@ export function paperDeskWidenPositionStops(
       breakevenMoved: p.breakevenMoved ?? false,
     };
   }
-  const slPct = strat.slPct * slMul;
+  const { slPct, tpPct } = paperDeskEffectiveStops(strat, slMul);
   const sl =
     p.side === "LONG"
       ? p.entryPrice * (1 - slPct / 100)
       : p.entryPrice * (1 + slPct / 100);
   const tp =
     p.side === "LONG"
-      ? p.entryPrice * (1 + strat.tpPct / 100)
-      : p.entryPrice * (1 - strat.tpPct / 100);
+      ? p.entryPrice * (1 + tpPct / 100)
+      : p.entryPrice * (1 - tpPct / 100);
   return { slPrice: sl, adaptiveSl: sl, tpPrice: tp, breakevenMoved: false };
 }
 

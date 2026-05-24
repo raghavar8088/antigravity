@@ -131,6 +131,12 @@ export type FuturesExitStepOpts = {
   minAgeBeforeSlMs?: number;
   /** Override breakeven progress gate (default DESK_EXIT_BREAKEVEN_TRIGGER_FRAC). */
   breakevenTriggerProgress?: number;
+  /** Override trail activation progress (default DESK_EXIT_TRAIL_ACTIVATION_PCT). */
+  trailActivationProgress?: number;
+  /** Paper: evaluate TP before SL so scalp targets win on small favorable moves. */
+  paperTpBeforeSl?: boolean;
+  /** Paper: close as TP when projected net ≥ this after SL grace (scalp take). */
+  paperQuickTpMinNetUsd?: number;
 };
 
 /**
@@ -154,6 +160,9 @@ export function resolveFuturesExitStep(
     ...(opts.breakevenTriggerProgress !== undefined
       ? { breakevenTriggerProgress: opts.breakevenTriggerProgress }
       : {}),
+    ...(opts.trailActivationProgress !== undefined
+      ? { trailActivationProgress: opts.trailActivationProgress }
+      : {}),
     // During paper grace: do not tighten SL via breakeven/trail patches.
     ...(inEarlyHold ? { breakevenTriggerProgress: 1.01, trailActivationProgress: 1.01 } : {}),
   };
@@ -171,6 +180,38 @@ export function resolveFuturesExitStep(
     patchConsts,
   );
   const q: FuturesExitStepPosition = { ...p, ...soft, peakReturnPct: soft.peakReturnPctOnMargin };
+
+  if (opts.paperTpBeforeSl) {
+    if (q.side === "LONG" && q.markPrice >= q.tpPrice) {
+      return { patched: q, close: { shouldClose: true, reason: "TP", exitPrice: q.tpPrice } };
+    }
+    if (q.side === "SHORT" && q.markPrice <= q.tpPrice) {
+      return { patched: q, close: { shouldClose: true, reason: "TP", exitPrice: q.tpPrice } };
+    }
+  }
+
+  if (
+    !inEarlyHold &&
+    opts.paperQuickTpMinNetUsd !== undefined &&
+    Number.isFinite(opts.paperQuickTpMinNetUsd) &&
+    (opts.paperQuickTpMinNetUsd as number) > 0
+  ) {
+    const takerFeePct = opts.takerFeePct ?? 0.001;
+    const exitSlippageBps = opts.exitSlippageBps ?? 5;
+    const slippedMark = paperApplyExitSlippage(q.side, q.markPrice, exitSlippageBps);
+    const { netPnl: projectedNet } = paperNetPnlOnClose({
+      entryPrice: q.entryPrice,
+      exitPrice: slippedMark,
+      notional: q.notional,
+      side: q.side,
+      takerFeePct,
+      fundingCosts: q.fundingCosts,
+      minAbsNetWinUsd: 0,
+    });
+    if (projectedNet >= (opts.paperQuickTpMinNetUsd as number)) {
+      return { patched: q, close: { shouldClose: true, reason: "TP", exitPrice: q.markPrice } };
+    }
+  }
 
   const hard = paperResolveHardExit({
     side: q.side,
@@ -197,6 +238,7 @@ export function resolveFuturesExitStep(
   const lockTh = Math.max(DESK_EXIT_LATE_EXIT_MIN_GAIN, tpPctAbs * DESK_EXIT_PROFIT_LOCK_SHARE);
   const profitLockMinProgress = opts.profitLockMinProgress ?? DESK_EXIT_PROFIT_LOCK_PROGRESS;
   const profitLockMinNetUsd = opts.profitLockMinNetUsd ?? DESK_EXIT_PROFIT_LOCK_MIN_NET_USD;
+  const trailDisabled = opts.breakevenTriggerProgress !== undefined && opts.breakevenTriggerProgress >= 0.95;
   if (!inEarlyHold && progress >= profitLockMinProgress && q.returnPct >= lockTh) {
     // Project the actual net at slipped mark — if it's negative or below threshold,
     // skip the lock so we don't book a micro-loss. The trade falls through to TRAIL/TP/SL.
@@ -221,6 +263,7 @@ export function resolveFuturesExitStep(
   const peak = soft.peakReturnPctOnMargin;
   const atr14 = opts.atr14;
   if (
+    !trailDisabled &&
     !inEarlyHold &&
     progress >= DESK_EXIT_TRAIL_ACTIVATION_PCT &&
     peak > DESK_EXIT_LATE_EXIT_MIN_GAIN

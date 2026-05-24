@@ -58,6 +58,7 @@ import {
   deskPaperMakerFillProbabilityFromEnv,
   deskDisableChopForMrEnabled,
   DESK_CHOP_DISABLED_MR_CATEGORIES,
+  paperDeskEffectiveStops,
 } from "./futuresDeskPolicy";
 
 describe("deskEffectiveHoldMinutesAtOpen", () => {
@@ -760,5 +761,14 @@ describe("checkEntryBurstGuard", () => {
     // ETHUSD on a different family — no block
     const r = checkEntryBurstGuard("ETHUSD", "LONG", "BTCFT_RSI_V0", ctx, noPositions, noTrades, opts);
     expect(r.blocked).toBe(false);
+  });
+});
+
+describe("paperDeskEffectiveStops", () => {
+  it("uses wide SL and tight scalp TP on paper", () => {
+    const r = paperDeskEffectiveStops({ slPct: 0.5, tpPct: 1.5 }, 2.5);
+    expect(r.slPct).toBeCloseTo(1.25, 4);
+    expect(r.tpPct).toBeLessThanOrEqual(0.45);
+    expect(r.tpPct).toBeGreaterThan(0.35);
   });
 });

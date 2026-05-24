@@ -124,4 +124,22 @@ describe("resolveFuturesExitStep — PROFIT_LOCK net-projection guard", () => {
     // Verifies the lockTh = max(LATE_EXIT_MIN_GAIN, ...) constant is preserved.
     expect(DESK_EXIT_LATE_EXIT_MIN_GAIN).toBe(0.22);
   });
+
+  it("paperTpBeforeSl books TP before SL would fire on small favorable move", () => {
+    const pos = buildMicroGainLongPos({
+      markPrice: 100_450,
+      tpPrice: 100_450,
+      slPrice: 99_000,
+      adaptiveSl: 99_000,
+      returnPct: 1.2,
+      peakReturnPct: 1.2,
+      openedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+    });
+    const { close } = resolveFuturesExitStep(pos, 1, Date.now(), {
+      paperTpBeforeSl: true,
+      minAgeBeforeSlMs: 0,
+    });
+    expect(close.shouldClose).toBe(true);
+    expect(close.reason).toBe("TP");
+  });
 });

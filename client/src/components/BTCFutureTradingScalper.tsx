@@ -316,8 +316,8 @@ export function BTCFutureTradingScalper({
 
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
-          CORE winner roster · threshold {threshold} · paper SL ~2× wider · min 5m before stop-out · relax-confirm{" "}
-          {relaxConfirm ? "ON" : "OFF"}. Keep this tab open — polling every ~4s while active. Paper only.
+          CORE winner roster · threshold {threshold} · scalp TP ~0.45% · wide SL · 8m SL grace ·
+          profit-bias exits ON. Keep tab open. Paper only — not guaranteed wins on live BTC.
         </DeskBanner>
       )}
 
