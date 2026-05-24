@@ -73,6 +73,7 @@ export async function GET(req: Request) {
       diagnostics,
       healthCheck,
       trades: tradesForTuner,
+      tradesAll: rows,
       tradeCount: rows.length,
       accountKey,
       window: windowN,

@@ -44,6 +44,7 @@ import {
 import { CATEGORY_REGISTRY } from "@/lib/futuresCategoryRegistry";
 import type { TradingCategoryId } from "@/lib/futuresStratTypes";
 import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
+import { profitModeFromEnv } from "@/lib/futuresProfitMode";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BTC_ONLY_SYMBOLS = ["BTCUSD"] as const;
@@ -82,7 +83,13 @@ export function BTCFutureTradingScalper({
   // scalp_aggro_v1 lowers the signal threshold by 4 — too aggressive for the
   // production BTC FT desk. Remap it to baseline so a misconfigured prop
   // cannot override the production gate.
-  const strategyProfile = strategyProfileProp === "scalp_aggro_v1" ? "baseline" : strategyProfileProp;
+  const profitMode = useMemo(() => profitModeFromEnv(), []);
+  const strategyProfile = useMemo(() => {
+    if (strategyProfileProp === "scalp_aggro_v1") return "baseline" as const;
+    if (strategyProfileProp) return strategyProfileProp;
+    if (profitMode.enabled) return "fee_aware_v1" as const;
+    return undefined;
+  }, [strategyProfileProp, profitMode.enabled]);
   const auth = usePaperDeskAuth();
   const { RESEARCH_MODE, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE } = useResolvedModes();
 
@@ -215,22 +222,26 @@ export function BTCFutureTradingScalper({
 
   // ── Derived engine options ─────────────────────────────────────────────────
   const threshold = useMemo(() => {
-    // Paper desk (incl. winners-only): default 20 so signals fire; env can raise for live gates.
+    if (profitMode.enabled && !EFFECTIVE_RESEARCH_MODE) {
+      return btcFtSignalThresholdFromEnv(28);
+    }
     if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(20);
     if (EFFECTIVE_RESEARCH_MODE) return researchSignalThreshold();
     return btcFtSignalThresholdFromEnv(20);
-  }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
+  }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, profitMode.enabled]);
 
   const relaxConfirm = useMemo(() => {
+    if (profitMode.enabled && !EFFECTIVE_RESEARCH_MODE) return false;
     if (EFFECTIVE_RESEARCH_MODE) return researchRelaxConfirm();
     return true;
-  }, [EFFECTIVE_RESEARCH_MODE]);
+  }, [EFFECTIVE_RESEARCH_MODE, profitMode.enabled]);
 
   const minMoveKMul = useMemo(() => {
+    if (profitMode.enabled && !EFFECTIVE_RESEARCH_MODE) return 1;
     if (WINNERS_ONLY_MODE) return btcFtMinMoveKMulFromEnv(0.55);
     if (EFFECTIVE_RESEARCH_MODE) return researchMinMoveKMul();
     return btcFtMinMoveKMulFromEnv(0.45);
-  }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
+  }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, profitMode.enabled]);
 
   /** Paper discovery: always on for BTC FT desk unless explicitly disabled via env or WINNERS_ONLY (which must only trade on merit). */
   const paperEnsureTrades =
@@ -313,6 +324,14 @@ export function BTCFutureTradingScalper({
         winnersCount={winners.length}
         generatedCount={poolGeneratedCount()}
       />
+
+      {profitMode.enabled && !EFFECTIVE_RESEARCH_MODE && (
+        <DeskBanner variant="success" title="Profit mode ON — trade less, trade better">
+          Quality ≥{profitMode.minQualityScore} · MTF ≥{profitMode.minMtfConfluence} · chop same-side max{" "}
+          {profitMode.maxSameSideChop} · max {profitMode.maxOpenPositions} open · {profitMode.dailyStratCap}
+          /day/strat · fee_aware profile · threshold {threshold} · relaxed confirm OFF. Paper only.
+        </DeskBanner>
+      )}
 
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>

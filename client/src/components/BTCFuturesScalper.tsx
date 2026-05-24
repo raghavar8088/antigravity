@@ -164,9 +164,12 @@ export function BTCFuturesScalper({
     resetPaperAccount,
     clearTradeHistory,
     setDisabledStrategies,
+    updateSuspendedStrategies,
+    restoreRotationStrategy,
     strategyStatuses,
     dataHealth,
     entryDebug,
+    setReplaySignFlipRate,
   } = useBTCFuturesScalperEngine({
     strategyIds,
     symbols,
@@ -562,6 +565,9 @@ export function BTCFuturesScalper({
         onUnretireResearchStrategy={onUnretireResearchStrategy}
         onAutoRetireResearchLosers={onAutoRetireResearchLosers}
         storageNamespace={storageNamespace?.trim() || "btc_futures_scalper"}
+        onRotationReport={updateSuspendedStrategies}
+        onRestoreRotationStrategy={restoreRotationStrategy}
+        setReplaySignFlipRate={setReplaySignFlipRate}
       />
 
     </DeskShell>

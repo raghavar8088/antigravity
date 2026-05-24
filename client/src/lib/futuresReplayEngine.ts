@@ -56,6 +56,12 @@ import {
   type FuturesStrategyProfile,
 } from "@/lib/futuresSessionMetrics";
 import type { ReplayCandle } from "@/lib/futuresReplayFixtures";
+import { scoreSignalQuality } from "@/lib/futuresSignalQuality";
+import {
+  buildTFSnapshotsFromInputMap,
+  computeMTFConfluence,
+  mtfSkipReason,
+} from "@/lib/futuresMTFConfluence";
 
 /** P2.2.2: price move % required to trigger the 50% partial exit at TP1. */
 const TP1_PRICE_MOVE_PCT = 0.4;
@@ -683,6 +689,44 @@ export function runPaperDeskReplay(
       const stratThreshold = strat.dynamicThreshold ?? signalThreshold;
       if (signal.score >= stratThreshold && passesEntryConfirmation(input, strat)) {
         const side: PaperSide = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+
+        // Replay must match live entry gate order (PR-13): quality → MTF before open.
+        const stratClosed = trades.filter((t) => t.strategyId === strat.id);
+        const strategyWinRate = stratClosed.length
+          ? stratClosed.filter((t) => t.netPnl > 0).length / stratClosed.length
+          : 0;
+        const cooldownRemainMs = Math.max(
+          0,
+          (cooldownUntil[`${symbol}:${strat.id}`] ?? 0) - nowMs,
+        );
+        const spreadPct =
+          markPrice > 0 ? Math.abs(lastPrice - markPrice) / markPrice : 0;
+        const atrPct = markPrice > 0 ? input.atr14 / markPrice : 0;
+        const regimeFitsStrategy = strat.regimes?.includes(regime) ?? true;
+
+        const quality = scoreSignalQuality({
+          signalScore: signal.score,
+          atrPct,
+          spreadPct,
+          volumeRatio: input.volRatio,
+          regime,
+          regimeFitsStrategy,
+          ema20AboveEma50: input.fast > input.slow,
+          priceAboveEma20: markPrice > input.fast,
+          side,
+          openPositionCount: positions.length,
+          sameSideCount: positions.filter((p) => p.side === side).length,
+          hoursIntoSession: new Date(nowMs).getUTCHours(),
+          strategyWinRate,
+          strategyTrades: stratClosed.length,
+          cooldownRemainMs,
+        });
+        if (!quality.pass) continue;
+
+        const tfSnapshots = buildTFSnapshotsFromInputMap(new Map([["1m", input]]));
+        const mtfResult = computeMTFConfluence(tfSnapshots, side);
+        if (mtfSkipReason(mtfResult, 55)) continue;
+
         if (
           tryOpen(strat, side, lastPrice, markPrice, regime, input.atr14, nowMs, equityUsd, intraBook, dynSlipBps)
         ) {

@@ -7,8 +7,13 @@
  *        top/bottom strategies, runtime blocklist.
  * Polls via useDeskPerformanceMonitor (read-only diagnostics fetch).
  */
-import { useMemo, useState } from "react";
-import { useDeskPerformanceMonitor } from "@/hooks/useDeskPerformanceMonitor";
+import { useEffect, useMemo, useState } from "react";
+import {
+  useDeskPerformanceMonitor,
+  type RotationReport,
+} from "@/hooks/useDeskPerformanceMonitor";
+import { StrategyRotationPanel } from "@/components/StrategyRotationPanel";
+import { generateHealthReport } from "@/lib/futuresHealthReport";
 import {
   blockStrategyRuntime,
   getRuntimeBlocklist,
@@ -20,6 +25,15 @@ import {
   type ReadinessReport,
 } from "@/lib/futuresProductionReadiness";
 import type { TuningRecommendation } from "@/hooks/useDeskPerformanceMonitor";
+import { deriveDeskRecommendation, type DeskRecommendation } from "@/lib/futuresDeskRecommendation";
+import type { AttributionReport } from "@/lib/futuresAttribution";
+import { computeGoLiveGates } from "@/lib/futuresGoLiveGates";
+import { generateValidationReport } from "@/lib/futuresValidationReport";
+import { GoLiveGatesPanel } from "@/components/GoLiveGatesPanel";
+import type { DiagnosticSummary } from "@/lib/futuresStrategyDiagnostics";
+import { suggestWinnersFromScorecard } from "@/lib/futuresWinnersRefresh";
+import type { SoakDaySnapshot } from "@/lib/futuresSoakTracker";
+import type { UnifiedReadiness } from "@/lib/futuresUnifiedReadiness";
 
 type SkipSummaryRow = { reason: string; count: number };
 
@@ -37,6 +51,21 @@ export interface DeskMonitorPanelProps {
   mongoConnected?: boolean;
   currentTpPct?: number;
   currentSlPct?: number;
+  onRotationReport?: (report: RotationReport) => void;
+  onRestoreRotationStrategy?: (strategyId: number) => void;
+  attributionReport?: AttributionReport | null;
+  rotationReport?: RotationReport | null;
+  qualitySkipCount?: number;
+  mtfSkipCount?: number;
+  gateEvaluationCount?: number;
+  engineDeskRecommendation?: DeskRecommendation | null;
+  strategyDiagnostics?: DiagnosticSummary | null;
+  unifiedReadiness?: UnifiedReadiness | null;
+  unifiedReadinessBlockers?: string[];
+  unifiedReadinessNextStep?: string;
+  soakHistory?: SoakDaySnapshot[];
+  engineReplaySignFlipRate?: number | null;
+  onReplaySignFlipRate?: (rate: number | null) => void;
 }
 
 const SEV_COLOR: Record<TuningRecommendation["severity"], string> = {
@@ -76,6 +105,21 @@ export function DeskMonitorPanel({
   mongoConnected = false,
   currentTpPct = 1.5,
   currentSlPct = 0.5,
+  onRotationReport,
+  onRestoreRotationStrategy,
+  attributionReport = null,
+  rotationReport: rotationReportProp = null,
+  qualitySkipCount = 0,
+  mtfSkipCount = 0,
+  gateEvaluationCount = 0,
+  engineDeskRecommendation = null,
+  strategyDiagnostics: engineStrategyDiagnostics = null,
+  unifiedReadiness = null,
+  unifiedReadinessBlockers = [],
+  unifiedReadinessNextStep,
+  soakHistory = [],
+  engineReplaySignFlipRate = null,
+  onReplaySignFlipRate,
 }: DeskMonitorPanelProps) {
   const monitor = useDeskPerformanceMonitor(
     accountKey,
@@ -93,10 +137,59 @@ export function DeskMonitorPanel({
     diagnostics,
     tuneRecommendation,
     timeExitCount,
+    gradeHistory,
+    rotationReport,
+    goLiveGates: monitorGoLiveGates,
+    replaySignFlipRate: monitorReplaySignFlipRate,
+    tradesAll,
     lastFetchAt,
     fetchError,
     isFetching,
   } = monitor;
+
+  const replaySignFlipRate = monitorReplaySignFlipRate ?? engineReplaySignFlipRate;
+
+  useEffect(() => {
+    onReplaySignFlipRate?.(monitorReplaySignFlipRate);
+  }, [monitorReplaySignFlipRate, onReplaySignFlipRate]);
+
+  useEffect(() => {
+    if (rotationReport && onRotationReport) {
+      onRotationReport(rotationReport);
+    }
+  }, [rotationReport, onRotationReport]);
+
+  const deskRecommendation = useMemo(() => {
+    const fromMonitor = deriveDeskRecommendation({
+      attribution: attributionReport,
+      rotation: rotationReport ?? rotationReportProp,
+      tune: tuneRecommendation,
+      qualitySkipCount,
+      mtfSkipCount,
+      totalEvaluations: gateEvaluationCount,
+    });
+    if (fromMonitor.action !== "NO_CHANGE") return fromMonitor;
+    return engineDeskRecommendation ?? fromMonitor;
+  }, [
+    attributionReport,
+    diagnostics,
+    rotationReport,
+    rotationReportProp,
+    tuneRecommendation,
+    qualitySkipCount,
+    mtfSkipCount,
+    gateEvaluationCount,
+    engineDeskRecommendation,
+  ]);
+
+  useEffect(() => {
+    if (deskRecommendation.action !== "NO_CHANGE") {
+      console.info(
+        `[DeskRec] action=${deskRecommendation.action} confidence=${deskRecommendation.confidence} ` +
+          `rationale=${deskRecommendation.rationale}`,
+      );
+    }
+  }, [deskRecommendation]);
 
   const displayBlocklist = useMemo(() => {
     void blocklistRevision;
@@ -147,7 +240,51 @@ export function DeskMonitorPanel({
     accountKey,
   ]);
 
+  const goLiveGates = useMemo(() => {
+    if (!healthCheck || tradesAll.length < 10) return monitorGoLiveGates;
+    return computeGoLiveGates({
+      trades: tradesAll,
+      health: healthCheck,
+      readiness,
+      shadowIntentCount: undefined,
+      replaySignFlipRate,
+    });
+  }, [tradesAll, healthCheck, readiness, monitorGoLiveGates, replaySignFlipRate]);
+
+  const copyValidationReport = () => {
+    if (!goLiveGates) return;
+    const text = generateValidationReport({
+      gates: goLiveGates,
+      health: healthCheck,
+      readiness,
+      attribution: attributionReport,
+      accountKey: accountKey ?? "unknown",
+      generatedAt: Date.now(),
+      unifiedReadiness,
+      unifiedBlockers: unifiedReadinessBlockers,
+      unifiedNextStep: unifiedReadinessNextStep,
+      soakHistory,
+      replaySignFlipRate,
+    });
+    void navigator.clipboard.writeText(text).then(() => {
+      console.info("[Monitor] Validation report copied to clipboard");
+    });
+  };
+
   const bumpBlocklist = () => setBlocklistRevision((n) => n + 1);
+
+  const winnersSuggestion = useMemo(() => {
+    const rows = engineStrategyDiagnostics?.rows ?? diagnostics?.rows;
+    if (!rows?.length) return null;
+    return suggestWinnersFromScorecard(rows);
+  }, [engineStrategyDiagnostics?.rows, diagnostics?.rows]);
+
+  const copyWinnersEnv = () => {
+    if (!winnersSuggestion) return;
+    void navigator.clipboard.writeText(winnersSuggestion.strategyIdsEnvLine).then(() => {
+      console.info("[Monitor] Suggested roster env copied");
+    });
+  };
 
   return (
     <div
@@ -429,6 +566,60 @@ export function DeskMonitorPanel({
             </div>
           ) : null}
 
+          {winnersSuggestion ? (
+            <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: "#58a6ff" }}>
+                Suggested roster (read-only)
+              </div>
+              <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 6 }}>
+                {winnersSuggestion.rationale}
+              </div>
+              {winnersSuggestion.promote.length > 0 ? (
+                <div style={{ fontSize: 10, marginBottom: 4 }}>
+                  <span style={{ color: "#3fb950", fontWeight: 600 }}>Promote: </span>
+                  {winnersSuggestion.promote.join(", ")}
+                </div>
+              ) : null}
+              {winnersSuggestion.demote.length > 0 ? (
+                <div style={{ fontSize: 10, marginBottom: 6 }}>
+                  <span style={{ color: "#f85149", fontWeight: 600 }}>Demote: </span>
+                  {winnersSuggestion.demote.join(", ")}
+                </div>
+              ) : null}
+              <pre
+                style={{
+                  fontSize: 9,
+                  background: "#0d1117",
+                  padding: 6,
+                  borderRadius: 4,
+                  color: "#8b949e",
+                  overflow: "auto",
+                }}
+              >
+                {winnersSuggestion.strategyIdsEnvLine}
+              </pre>
+              <button
+                type="button"
+                onClick={copyWinnersEnv}
+                style={{
+                  marginTop: 4,
+                  fontSize: 10,
+                  padding: "3px 10px",
+                  background: "#161b22",
+                  border: "1px solid #58a6ff",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  color: "#58a6ff",
+                }}
+              >
+                Copy roster env line
+              </button>
+              <div style={{ fontSize: 9, color: "#6e7681", marginTop: 4 }}>
+                Paste into .env.local — does not change roster until you restart
+              </div>
+            </div>
+          ) : null}
+
           {skipEntries.length > 0 ? (
             <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>Entry Skip Reasons (session)</div>
@@ -530,12 +721,115 @@ export function DeskMonitorPanel({
             </div>
           ) : null}
 
+          {gradeHistory.length > 0 ? (
+            <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                Grade History (last {gradeHistory.length} changes)
+              </div>
+              {gradeHistory.map((entry, i) => (
+                <div
+                  key={`${entry.timestamp}-${entry.grade}-${i}`}
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    fontSize: 10,
+                    color:
+                      entry.grade === "A"
+                        ? "#3fb950"
+                        : entry.grade === "B"
+                          ? "#d29922"
+                          : entry.grade === "C"
+                            ? "#ff7c2c"
+                            : "#f85149",
+                  }}
+                >
+                  <span style={{ minWidth: 14, fontWeight: 700 }}>{entry.grade}</span>
+                  <span style={{ color: "#8b949e", minWidth: 80 }}>
+                    {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>
+                  <span>
+                    E:${entry.expectancy.toFixed(2)} WR:{(entry.winRate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {deskRecommendation.action !== "NO_CHANGE" ? (
+            <div
+              style={{
+                marginTop: 8,
+                borderTop: "1px solid #21262d",
+                paddingTop: 6,
+                border: "1px solid #388bfd33",
+                borderRadius: 6,
+                padding: 8,
+                background: "#161b22",
+              }}
+            >
+              <div style={{ fontWeight: 700, color: "#58a6ff", marginBottom: 4 }}>
+                Closed-loop recommendation ({deskRecommendation.confidence})
+              </div>
+              <div style={{ fontSize: 11, color: "#e6edf3", marginBottom: 4 }}>
+                {deskRecommendation.action.replace(/_/g, " ")}
+                {deskRecommendation.suggestedValue != null
+                  ? ` → ${deskRecommendation.suggestedValue}`
+                  : ""}
+              </div>
+              <div style={{ fontSize: 10, color: "#8b949e" }}>{deskRecommendation.rationale}</div>
+              <div style={{ fontSize: 9, color: "#6e7681", marginTop: 4 }}>
+                Recommendation only — not auto-applied
+              </div>
+            </div>
+          ) : null}
+
+          <GoLiveGatesPanel report={goLiveGates} onCopyReport={copyValidationReport} />
+
+          <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => {
+                const report = generateHealthReport({
+                  health: healthCheck,
+                  diagnostics,
+                  rotation: rotationReport,
+                  tune: tuneRecommendation,
+                  readiness,
+                  accountKey: accountKey ?? "unknown",
+                  generatedAt: Date.now(),
+                });
+                void navigator.clipboard.writeText(report).then(() => {
+                  console.info("[Monitor] Health report copied to clipboard");
+                });
+              }}
+              style={{
+                fontSize: 11,
+                padding: "4px 12px",
+                background: "#161b22",
+                border: "1px solid #58a6ff",
+                borderRadius: 4,
+                cursor: "pointer",
+                color: "#58a6ff",
+              }}
+            >
+              📋 Copy Health Report
+            </button>
+            <span style={{ color: "#8b949e", fontSize: 10, marginLeft: 8 }}>
+              Paste into notes or share with team
+            </span>
+          </div>
+
           <div style={{ color: "#8b949e", marginTop: 6, fontSize: 10 }}>
             Updated: {lastFetchAt ? new Date(lastFetchAt).toLocaleTimeString() : "never"} · polls
             every 60s
           </div>
         </>
       ) : null}
+
+      <StrategyRotationPanel
+        report={rotationReport}
+        onRestore={onRestoreRotationStrategy}
+      />
     </div>
   );
 }

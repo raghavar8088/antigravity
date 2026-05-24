@@ -137,6 +137,11 @@ export type FuturesExitStepOpts = {
   paperTpBeforeSl?: boolean;
   /** Paper: close as TP when projected net ≥ this after SL grace (scalp take). */
   paperQuickTpMinNetUsd?: number;
+  /**
+   * PROFIT_LOCK only when gross PnL (at slipped mark) ≥ roundTripFees × this multiplier.
+   * Profit mode default 2.0 — blocks fee-eating micro locks.
+   */
+  minGrossMultipleOfFees?: number;
 };
 
 /**
@@ -254,7 +259,15 @@ export function resolveFuturesExitStep(
       fundingCosts: q.fundingCosts,
       minAbsNetWinUsd: 0, // raw net for the decision — don't let the floor mask a loss
     });
-    if (projectedNet >= profitLockMinNetUsd) {
+    const roundTripFees = q.notional * takerFeePct * 2;
+    const grossAtExit = paperLinearGrossPnl(q.entryPrice, slippedMark, q.notional, q.side);
+    const grossFeeMul = opts.minGrossMultipleOfFees;
+    const grossOk =
+      grossFeeMul == null ||
+      !Number.isFinite(grossFeeMul) ||
+      grossFeeMul <= 0 ||
+      grossAtExit >= roundTripFees * grossFeeMul;
+    if (grossOk && projectedNet >= profitLockMinNetUsd) {
       return { patched: q, close: { shouldClose: true, reason: "PROFIT_LOCK", exitPrice: q.markPrice } };
     }
     // else: fall through; TRAIL / TP / SL / TIME still resolve normally

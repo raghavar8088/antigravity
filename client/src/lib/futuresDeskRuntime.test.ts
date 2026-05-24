@@ -75,6 +75,23 @@ describe("resolveFuturesExitStep — PROFIT_LOCK net-projection guard", () => {
     expect(close.reason).toBe("PROFIT_LOCK");
   });
 
+  it("suppresses PROFIT_LOCK when gross < minGrossMultipleOfFees × round-trip fees", () => {
+    const pos = buildMicroGainLongPos({
+      markPrice: 100_300,
+      unrealizedPnl: 15,
+      returnPct: 7.5,
+      peakReturnPct: 7.5,
+    });
+    const { close } = resolveFuturesExitStep(pos, 1, Date.now(), {
+      profitLockMinNetUsd: 0.05,
+      profitLockMinProgress: 0.55,
+      minGrossMultipleOfFees: 100,
+      takerFeePct: 0.001,
+      exitSlippageBps: 5,
+    });
+    expect(close.shouldClose).toBe(false);
+  });
+
   it("default opts (no overrides) still apply the guard — production-safe default", () => {
     const pos = buildMicroGainLongPos();
     const { close } = resolveFuturesExitStep(pos, 1, Date.now());

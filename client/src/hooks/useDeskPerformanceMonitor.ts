@@ -17,8 +17,15 @@ import {
   type TuneRecommendation,
 } from "@/lib/futuresParameterTuner";
 import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
+import {
+  computeStrategyRotation,
+  type RotationReport,
+} from "@/lib/futuresStrategyRotation";
+import { computeGoLiveGates, type GoLiveGateReport } from "@/lib/futuresGoLiveGates";
+import { deskReplayGateEnabled } from "@/lib/futuresReplayCompare";
+import { utcDateString } from "@/lib/futuresSoakTracker";
 
-export type { TuneRecommendation };
+export type { TuneRecommendation, RotationReport };
 
 export interface TuningRecommendation {
   type:
@@ -38,18 +45,70 @@ export interface TuningRecommendation {
   currentValue?: number;
 }
 
+export type GradeHistoryEntry = {
+  grade: HealthCheckResult["grade"];
+  timestamp: number;
+  expectancy: number;
+  winRate: number;
+};
+
 export interface MonitorState {
   diagnostics: DiagnosticSummary | null;
   healthCheck: HealthCheckResult | null;
   recommendations: TuningRecommendation[];
   tuneRecommendation: TuneRecommendation | null;
   timeExitCount: number;
+  gradeHistory: GradeHistoryEntry[];
+  rotationReport: RotationReport | null;
+  goLiveGates: GoLiveGateReport | null;
+  replaySignFlipRate: number | null;
+  tradesAll: PaperTradeDbRow[];
   lastFetchAt: number | null;
   fetchError: string | null;
   isFetching: boolean;
 }
 
 const POLL_INTERVAL_MS = 60_000;
+const REPLAY_FETCH_INTERVAL_MS = 3_600_000;
+
+function priorUtcDates(count: number, nowMs = Date.now()): string[] {
+  const dates: string[] = [];
+  const base = new Date(nowMs);
+  for (let i = 0; i < count; i++) {
+    const d = new Date(
+      Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() - i),
+    );
+    dates.push(utcDateString(d.getTime()));
+  }
+  return dates;
+}
+
+async function fetchReplaySignFlipRate(accountKey: string): Promise<number | null> {
+  if (!deskReplayGateEnabled()) return null;
+
+  const dates = priorUtcDates(3);
+  const rates: number[] = [];
+
+  for (const date of dates) {
+    try {
+      const params = new URLSearchParams({ account_key: accountKey, date });
+      const res = await fetch(`/api/paper-replay-compare?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const body = (await res.json()) as {
+        ok?: boolean;
+        signFlipRate?: number;
+      };
+      if (body.ok && typeof body.signFlipRate === "number") {
+        rates.push(body.signFlipRate);
+      }
+    } catch {
+      /* network / 503 — skip day */
+    }
+  }
+
+  return rates.length ? Math.max(...rates) : null;
+}
 
 function deriveRecommendations(
   diagnostics: DiagnosticSummary,
@@ -150,12 +209,20 @@ export function useDeskPerformanceMonitor(
     recommendations: [],
     tuneRecommendation: null,
     timeExitCount: 0,
+    gradeHistory: [],
+    rotationReport: null,
+    goLiveGates: null,
+    replaySignFlipRate: null,
+    tradesAll: [],
     lastFetchAt: null,
     fetchError: null,
     isFetching: false,
   });
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevGradeRef = useRef<string | null>(null);
+  const lastReplayFetchAtRef = useRef(0);
+  const replaySignFlipRateRef = useRef<number | null>(null);
 
   const fetchDiagnostics = useCallback(async () => {
     if (!accountKey || accountKey.trim() === "") return;
@@ -178,6 +245,7 @@ export function useDeskPerformanceMonitor(
         diagnostics?: DiagnosticSummary;
         healthCheck?: HealthCheckResult;
         trades?: PaperTradeDbRow[];
+        tradesAll?: PaperTradeDbRow[];
       };
 
       if (!res.ok || !data.ok) {
@@ -187,6 +255,7 @@ export function useDeskPerformanceMonitor(
       const diagnostics = data.diagnostics ?? null;
       const healthCheck = data.healthCheck ?? null;
       const trades = data.trades ?? [];
+      const tradesAll = data.tradesAll ?? trades;
 
       const timeExitCount = trades.filter((t) => t.exit_reason === "TIME").length;
 
@@ -219,15 +288,84 @@ export function useDeskPerformanceMonitor(
         .filter((r) => r.severity === "CRITICAL")
         .forEach((r) => console.warn("[Monitor] CRITICAL:", r.reason));
 
-      setState({
-        diagnostics,
-        healthCheck,
-        recommendations,
-        tuneRecommendation,
-        timeExitCount,
-        lastFetchAt: Date.now(),
-        fetchError: null,
-        isFetching: false,
+      const rotationReport = diagnostics
+        ? computeStrategyRotation(diagnostics.rows)
+        : null;
+
+      if (rotationReport) {
+        console.info(
+          `[Rotation] Active:${rotationReport.active.length} ` +
+            `Promoted:${rotationReport.promoted.length} ` +
+            `Probation:${rotationReport.probation.length} ` +
+            `Suspended:${rotationReport.suspended.length}`,
+        );
+      }
+
+      let replaySignFlipRate = replaySignFlipRateRef.current;
+      const now = Date.now();
+      if (
+        accountKey.trim() &&
+        deskReplayGateEnabled() &&
+        now - lastReplayFetchAtRef.current >= REPLAY_FETCH_INTERVAL_MS
+      ) {
+        lastReplayFetchAtRef.current = now;
+        replaySignFlipRate = await fetchReplaySignFlipRate(accountKey);
+        replaySignFlipRateRef.current = replaySignFlipRate;
+        if (replaySignFlipRate != null) {
+          console.info(
+            `[ReplayGate] signFlip=${(replaySignFlipRate * 100).toFixed(1)}% (max of last 3 UTC days)`,
+          );
+        }
+      }
+
+      const goLiveGates =
+        tradesAll.length >= 10
+          ? computeGoLiveGates({
+              trades: tradesAll,
+              health: healthCheck,
+              readiness: null,
+              replaySignFlipRate,
+            })
+          : null;
+
+      if (goLiveGates) {
+        console.info(
+          `[GoLive] ${goLiveGates.recommendation} score=${(goLiveGates.score * 100).toFixed(0)}% ` +
+            `blockers=${goLiveGates.blockers.filter((g) => !g.pass).length}`,
+        );
+      }
+
+      setState((prev) => {
+        let nextGradeHistory = prev.gradeHistory;
+        if (healthCheck && healthCheck.grade !== prevGradeRef.current) {
+          const entry: GradeHistoryEntry = {
+            grade: healthCheck.grade,
+            timestamp: Date.now(),
+            expectancy: healthCheck.expectancy,
+            winRate: healthCheck.winRate,
+          };
+          nextGradeHistory = [entry, ...prev.gradeHistory].slice(0, 20);
+          console.info(
+            `[Monitor] Grade change: ${prevGradeRef.current ?? "N/A"} → ${healthCheck.grade} at ${new Date().toISOString()}`,
+          );
+          prevGradeRef.current = healthCheck.grade;
+        }
+
+        return {
+          diagnostics,
+          healthCheck,
+          recommendations,
+          tuneRecommendation,
+          timeExitCount,
+          gradeHistory: nextGradeHistory,
+          rotationReport,
+          goLiveGates,
+          replaySignFlipRate,
+          tradesAll,
+          lastFetchAt: Date.now(),
+          fetchError: null,
+          isFetching: false,
+        };
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

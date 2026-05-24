@@ -79,6 +79,51 @@ import {
   serializeDeskRegimePersistLsPayload,
 } from "@/lib/futuresDeskPolicy";
 import { logSkipReason, getSkipReasonSummary, resetSkipReasonLog } from "@/lib/entrySkipReason";
+import { scoreSignalQuality, type SignalQualityScore } from "@/lib/futuresSignalQuality";
+import {
+  buildTFSnapshotsFromInputMap,
+  computeMTFConfluence,
+  mtfSkipReason,
+  type MTFConfluenceResult,
+} from "@/lib/futuresMTFConfluence";
+import { computeAttribution, type AttributionReport } from "@/lib/futuresAttribution";
+import { deriveDeskRecommendation, type DeskRecommendation } from "@/lib/futuresDeskRecommendation";
+import { computeGoLiveGates, type GoLiveGateReport } from "@/lib/futuresGoLiveGates";
+import {
+  applyProfitModeThreshold,
+  profitModeAllowsRotationStrategy,
+  profitModeAllowsStrategyInChop,
+  profitModeAllocationByEdgeEnabled,
+  profitModeCounterTrendSkip,
+  profitModeDailyStratCap,
+  profitModeExitConfig,
+  profitModeFromEnv,
+  profitModeMaxOpenPositions,
+  profitModeMaxSameSide,
+  profitModeMinExpectedMoveK,
+  profitModeMtfMinScore,
+  profitModePassesQuality,
+  profitModeSessionGateEnabled,
+  type ProfitModeConfig,
+} from "@/lib/futuresProfitMode";
+import {
+  computeDeskRollingPnLScorecard,
+  type DeskRollingPnLScorecard,
+} from "@/lib/futuresDeskPnLTracker";
+import { deriveScorecardAction, type ScorecardAction } from "@/lib/futuresScorecardActions";
+import {
+  appendSoakSnapshot,
+  loadSoakHistory,
+  saveSoakHistory,
+  soakTrendSummary,
+  type SoakDaySnapshot,
+} from "@/lib/futuresSoakTracker";
+import {
+  computeUnifiedReadiness,
+  type UnifiedReadiness,
+} from "@/lib/futuresUnifiedReadiness";
+import { recommendOneTune } from "@/lib/futuresParameterTuner";
+import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
 import {
   createEmptyEntryPollDebug,
   deskEntryDebugEnabledFromEnv,
@@ -172,7 +217,12 @@ import {
   computeStrategyHourlyStats,
   isStrategyInProvenSession,
 } from "@/lib/strategySessionStats";
-import { setCanonicalMark } from "@/lib/canonicalMarkPrice";
+import { markAgeMs, setCanonicalMark } from "@/lib/canonicalMarkPrice";
+import { runProductionReadiness } from "@/lib/futuresProductionReadiness";
+import {
+  getSuspendedStrategyIds,
+  type RotationReport,
+} from "@/lib/futuresStrategyRotation";
 import {
   computeStrategyDiagnostics,
   computeRollingHealthCheck,
@@ -414,6 +464,8 @@ export interface EngineRef {
   clearTradeHistory: () => void;
   setDisabledStrategies: (ids: number[]) => void;
   addDisabledStrategyIds: (ids: number[]) => void;
+  updateSuspendedStrategies: (report: RotationReport) => void;
+  restoreRotationStrategy: (strategyId: number) => void;
   exportCSV: () => string;
   exportJSON: () => string;
   dataHealth: FuturesDataHealth;
@@ -548,6 +600,38 @@ export interface BTCFuturesEngineStats {
   rollingHealthCheck: HealthCheckResult | null;
   /** PR-8: monitor-driven runtime blocks (session-only, not persisted). */
   runtimeBlocklistIds: number[];
+  /** PR-12: latest rotation report from monitor (null until diagnostics poll). */
+  rotationReport: RotationReport | null;
+  /** PR-12: count of strategies suspended by rotation engine this session. */
+  suspendedStrategyCount: number;
+  /** PR-13: performance attribution by hold, side, exit, hour (>= 10 production trades). */
+  attributionReport: AttributionReport | null;
+  /** PR-14: last entry candidate signal quality breakdown. */
+  lastSignalQuality: SignalQualityScore | null;
+  /** PR-14: last entry candidate MTF confluence result. */
+  lastMtfConfluence: MTFConfluenceResult | null;
+  /** PR-14: session count of quality-gate rejects. */
+  qualitySkipCount: number;
+  /** PR-14: session count of MTF-gate rejects. */
+  mtfSkipCount: number;
+  /** PR-14: session count of PR-13 gate evaluations (quality + MTF). */
+  gateEvaluationCount: number;
+  /** PR-14: closed-loop desk recommendation (never auto-applied). */
+  deskRecommendation: DeskRecommendation | null;
+  /** PR-15: go-live gates vs LIVE_TRADING_PHASE.md §3 (read-only). */
+  goLiveGates: GoLiveGateReport | null;
+  profitModeEnabled: boolean;
+  profitModeSkipCount: number;
+  profitModeExitActive: boolean;
+  deskPnLScorecard: DeskRollingPnLScorecard | null;
+  scorecardAction: ScorecardAction | null;
+  /** PR-19: last 7–14 UTC daily soak snapshots (localStorage). */
+  soakHistory: SoakDaySnapshot[];
+  soakSummary: ReturnType<typeof soakTrendSummary>;
+  unifiedReadiness: UnifiedReadiness;
+  unifiedReadinessBlockers: string[];
+  unifiedReadinessNextStep: string;
+  replaySignFlipRate: number | null;
 }
 
 /** Strategy Status */
@@ -710,6 +794,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   clearTradeHistory: () => void;
   setDisabledStrategies: (ids: number[]) => void;
   addDisabledStrategyIds: (ids: number[]) => void;
+  updateSuspendedStrategies: (report: RotationReport) => void;
+  restoreRotationStrategy: (strategyId: number) => void;
   exportCSV: () => string;
   exportJSON: () => string;
   strategyStatuses: BTCFuturesStrategyStatus[];
@@ -718,6 +804,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   dataHealth: FuturesDataHealth;
   /** Last poll entry funnel (when `NEXT_PUBLIC_DESK_ENTRY_DEBUG=1`). */
   entryDebug: DeskEntryPollDebug | null;
+  /** PR-19: feed replay sign-flip from monitor (throttled API fetch). */
+  setReplaySignFlipRate: (rate: number | null) => void;
 } {
   const storageNamespace = options.storageNamespace?.trim() || "btc_futures_scalper";
   const cloudAccountKey = useMemo(
@@ -870,10 +958,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   // Resolve env-tunable initial balance once per hook instance (stable across renders).
   // Default 1000; firehose / research can set NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD=1000000.
   const INITIAL_BALANCE = useMemo(() => deskInitialBalanceUsd() || INITIAL_BALANCE_DEFAULT, []);
+  const profitModeCfg = useMemo(() => profitModeFromEnv(), []);
   // Resolve concurrent-positions ceiling once. Firehose mode raises to 60 (vs default 12).
   const MAX_OPEN_POSITIONS = useMemo(
-    () => deskMaxOpenPositionsEffective() || MAX_OPEN_POSITIONS_FALLBACK,
-    [],
+    () =>
+      profitModeMaxOpenPositions(
+        deskMaxOpenPositionsEffective() || MAX_OPEN_POSITIONS_FALLBACK,
+        profitModeCfg,
+      ),
+    [profitModeCfg],
   );
   const [balance, setBalance] = useState(INITIAL_BALANCE);
   const [positions, setPositions] = useState<BTCFuturesPosition[]>([]);
@@ -938,6 +1031,50 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const pauseRef = useRef(pauseEntries);
   const lastTradeAtRef = useRef(lastTradeAt);
   const stratCooldownsRef = useRef<Record<string, number>>({});
+  const suspendedStrategiesRef = useRef<Set<number>>(new Set());
+  const rotationReportRef = useRef<RotationReport | null>(null);
+  const rotationOverrideRef = useRef<Set<number>>(new Set());
+  const lastSignalQualityRef = useRef<SignalQualityScore | null>(null);
+  const lastMtfConfluenceRef = useRef<MTFConfluenceResult | null>(null);
+  const qualitySkipCountRef = useRef(0);
+  const mtfSkipCountRef = useRef(0);
+  const profitModeSkipCountRef = useRef(0);
+  const replaySignFlipRateRef = useRef<number | null>(null);
+  const lastSoakLogDateRef = useRef<string | null>(null);
+  const soakHistoryRef = useRef<SoakDaySnapshot[]>([]);
+  const setReplaySignFlipRate = useCallback((rate: number | null) => {
+    replaySignFlipRateRef.current = rate;
+  }, []);
+  const gateEvaluationCountRef = useRef(0);
+
+  const applyRotationReport = useCallback((report: RotationReport) => {
+    rotationReportRef.current = report;
+    const suspended = getSuspendedStrategyIds(report);
+    for (const id of rotationOverrideRef.current) {
+      suspended.delete(id);
+    }
+    suspendedStrategiesRef.current = suspended;
+  }, []);
+
+  const updateSuspendedStrategies = useCallback(
+    (report: RotationReport) => {
+      applyRotationReport(report);
+    },
+    [applyRotationReport],
+  );
+
+  const restoreRotationStrategy = useCallback(
+    (strategyId: number) => {
+      rotationOverrideRef.current.add(strategyId);
+      if (rotationReportRef.current) {
+        applyRotationReport(rotationReportRef.current);
+      } else {
+        suspendedStrategiesRef.current.delete(strategyId);
+      }
+      console.info(`[Rotation] Override restore for strategy ${strategyId}`);
+    },
+    [applyRotationReport],
+  );
   const deskProfileAdjustedHoldCountRef = useRef(0);
   const deskSkippedMinExpectedMoveRef = useRef(0);
   const deskSkippedSameDirCapRef = useRef(0);
@@ -1377,6 +1514,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskSkippedCorrelatedCapRef.current = 0;
     resetSkipReasonLog();
     clearRuntimeBlocklist();
+    suspendedStrategiesRef.current = new Set();
+    rotationReportRef.current = null;
+    rotationOverrideRef.current = new Set();
+    lastSignalQualityRef.current = null;
+    lastMtfConfluenceRef.current = null;
+    qualitySkipCountRef.current = 0;
+    mtfSkipCountRef.current = 0;
+    profitModeSkipCountRef.current = 0;
+    gateEvaluationCountRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1509,6 +1655,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const avgLeverage = positions.length > 0 ? positions.reduce((s, p) => s + p.leverage, 0) / positions.length : 0;
 
     const sm = computeSessionTradingMetrics(productionTrades);
+    const deskPnLScorecard =
+      productionTrades.length >= 5
+        ? computeDeskRollingPnLScorecard(
+            productionTrades.map((t) => ({
+              closedAt: t.closedAt,
+              netPnl: t.netPnl,
+              grossPnl: t.realizedPnl,
+              fees: t.fees,
+              strategyName: t.strategyName,
+            })),
+          )
+        : null;
     const exitAn = computeSessionExitReasonAnalytics(productionTrades);
     const strategyDiagnostics = productionTrades.length >= 5
       ? computeStrategyDiagnosticsFromEngineTrades(productionTrades)
@@ -1547,6 +1705,138 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         .map((k) => (br[k] > 0 ? `${k}×${br[k]}` : null))
         .filter(Boolean)
         .join(" · ") || "—";
+
+    const attributionRows: PaperTradeDbRow[] = productionTrades.map((t) => ({
+      strategy_name: t.strategyName,
+      net_pnl: t.netPnl,
+      gross_pnl: t.realizedPnl,
+      fees: t.fees,
+      exit_reason: t.exitReason,
+      side: t.side,
+      template_family: btcFtTemplateFamilyKey(t.strategyName),
+      opened_at: t.openedAt,
+      closed_at: t.closedAt,
+    })) as PaperTradeDbRow[];
+
+    const attributionReport =
+      productionTrades.length >= 10 ? computeAttribution(attributionRows) : null;
+
+    if (attributionReport) {
+      const longE = attributionReport.bySide.find((s) => s.label === "LONG")?.avgNetPnl ?? 0;
+      const shortE = attributionReport.bySide.find((s) => s.label === "SHORT")?.avgNetPnl ?? 0;
+      console.info(
+        `[Attribution] bestHold=${attributionReport.bestHoldBucket ?? "N/A"} ` +
+          `LONG_E=$${longE.toFixed(2)} SHORT_E=$${shortE.toFixed(2)}`,
+      );
+    }
+
+    const tuneRecommendation =
+      productionTrades.length >= 10
+        ? recommendOneTune(
+            attributionRows,
+            activeSignalThreshold,
+            1.5,
+            0.5,
+            MAX_SAME_SIDE_POSITIONS,
+            50,
+          )
+        : null;
+
+    const deskRecommendation = deriveDeskRecommendation({
+      attribution: attributionReport,
+      rotation: rotationReportRef.current,
+      tune: tuneRecommendation,
+      qualitySkipCount: qualitySkipCountRef.current,
+      mtfSkipCount: mtfSkipCountRef.current,
+      totalEvaluations: gateEvaluationCountRef.current,
+    });
+
+    const scorecardAction = deriveScorecardAction(
+      deskPnLScorecard,
+      tuneRecommendation,
+      rotationReportRef.current,
+      activeSignalThreshold,
+    );
+
+    if (scorecardAction.severity !== "OK") {
+      console.info(
+        `[ScorecardAction] ${scorecardAction.severity} ${scorecardAction.action} — ${scorecardAction.rationale}`,
+      );
+    }
+
+    if (deskRecommendation.action !== "NO_CHANGE") {
+      console.info(
+        `[DeskRec] action=${deskRecommendation.action} confidence=${deskRecommendation.confidence} ` +
+          `rationale=${deskRecommendation.rationale}`,
+      );
+    }
+
+    const readinessForGates = runProductionReadiness({
+      signalThreshold: activeSignalThreshold,
+      leverage: 25,
+      takerFeePct: 0.001,
+      maxSameSide: MAX_SAME_SIDE_POSITIONS,
+      minPositionNotional: 100,
+      openPositionCount: positions.length,
+      currentRegime: deskLastRegimeTagRef.current,
+      markPriceAgeMs: markAgeMs(),
+      runtimeBlocklist: getRuntimeBlocklist(),
+      timeExitCount: productionTrades.filter((t) => t.exitReason === "TIME").length,
+      health: rollingHealthCheck,
+      closedTradeCount: productionTrades.length,
+      nodeEnv: process.env.NODE_ENV ?? "",
+      mongoConnected: Boolean(cloudAccountKey?.trim()),
+      accountKeySet: Boolean(cloudAccountKey?.trim()),
+    });
+
+    const soakStorageKey = `${storageNamespace}_soak_history`;
+    let soakHistory = soakHistoryRef.current;
+    if (deskPnLScorecard) {
+      soakHistory = appendSoakSnapshot(
+        loadSoakHistory(soakStorageKey),
+        deskPnLScorecard,
+        profitModeSkipCountRef.current,
+      );
+      saveSoakHistory(soakStorageKey, soakHistory);
+      soakHistoryRef.current = soakHistory;
+      const lastSnap = soakHistory[soakHistory.length - 1];
+      if (lastSnap && lastSoakLogDateRef.current !== lastSnap.dateUtc) {
+        console.info(
+          `[Soak] day=${lastSnap.dateUtc} grade=${lastSnap.grade} closes=${lastSnap.closes} ` +
+            `E=$${lastSnap.expectancy.toFixed(2)}`,
+        );
+        lastSoakLogDateRef.current = lastSnap.dateUtc;
+      }
+    } else if (!soakHistory.length && typeof window !== "undefined") {
+      soakHistory = loadSoakHistory(soakStorageKey);
+      soakHistoryRef.current = soakHistory;
+    }
+    const soakSummary = soakTrendSummary(soakHistory);
+
+    const goLiveGates =
+      productionTrades.length >= 10
+        ? computeGoLiveGates({
+            trades: attributionRows,
+            health: rollingHealthCheck,
+            readiness: readinessForGates,
+            replaySignFlipRate: replaySignFlipRateRef.current,
+          })
+        : null;
+
+    if (goLiveGates) {
+      console.info(
+        `[GoLive] ${goLiveGates.recommendation} score=${(goLiveGates.score * 100).toFixed(0)}% ` +
+          `blockers=${goLiveGates.blockers.filter((g) => !g.pass).length}`,
+      );
+    }
+
+    const unified = computeUnifiedReadiness({
+      scorecard: deskPnLScorecard,
+      goLive: goLiveGates,
+      soak: soakSummary,
+      replaySignFlipRate: replaySignFlipRateRef.current,
+      profitModeEnabled: profitModeCfg.enabled,
+    });
 
     return {
       totalTrades,
@@ -1628,6 +1918,27 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       strategyDiagnostics,
       rollingHealthCheck,
       runtimeBlocklistIds: getRuntimeBlocklist(),
+      rotationReport: rotationReportRef.current,
+      suspendedStrategyCount: suspendedStrategiesRef.current.size,
+      attributionReport,
+      lastSignalQuality: lastSignalQualityRef.current,
+      lastMtfConfluence: lastMtfConfluenceRef.current,
+      qualitySkipCount: qualitySkipCountRef.current,
+      mtfSkipCount: mtfSkipCountRef.current,
+      gateEvaluationCount: gateEvaluationCountRef.current,
+      deskRecommendation,
+      goLiveGates,
+      profitModeEnabled: profitModeCfg.enabled,
+      profitModeSkipCount: profitModeSkipCountRef.current,
+      profitModeExitActive: profitModeCfg.enabled && Boolean(profitModeExitConfig(profitModeCfg)),
+      deskPnLScorecard,
+      scorecardAction,
+      soakHistory,
+      soakSummary,
+      unifiedReadiness: unified.state,
+      unifiedReadinessBlockers: unified.blockers,
+      unifiedReadinessNextStep: unified.nextStep,
+      replaySignFlipRate: replaySignFlipRateRef.current,
     };
   }, [
     trades,
@@ -1640,6 +1951,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     autoDisabledStratIds,
     disableAutoKill,
     entryUtcSessionOverride,
+    storageNamespace,
+    profitModeCfg.enabled,
+    cloudAccountKey,
   ]);
 
   const exportJSON = useCallback(() => {
@@ -1757,7 +2071,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       }
 
       // ---- #4 session gate: only if explicitly enabled AND enough sample exists ----
-      if (deskSessionGateEnabled()) {
+      if (profitModeSessionGateEnabled(profitModeCfg)) {
         const sessionStats = computeStrategyHourlyStats(
           strat.id,
           tradesRef.current.map((t) => ({
@@ -1832,7 +2146,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
       // ---- #1+#2 allocation by edge: Kelly + Sharpe-weighted multiplier ----
       let allocationMultiplier = 1.0;
-      if (deskAllocationByEdgeEnabled()) {
+      if (profitModeAllocationByEdgeEnabled(profitModeCfg)) {
         const allTradesNow = tradesRef.current;
         const stratTrades = allTradesNow
           .filter((t) => t.strategyId === strat.id)
@@ -1883,17 +2197,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       );
       const actualNotional = calculateNotional(contracts);
 
+      const baseMoveK = effectiveMinExpectedMoveSafetyK(
+        deskMinExpectedMoveSafetyKFromEnv(),
+        profileCfg,
+      );
+      const regimeMoveK = profitModeMinExpectedMoveK(
+        gate.regime,
+        profitModeCfg,
+        baseMoveK,
+      );
+      const relaxMul =
+        profitModeCfg.enabled ? 1 : relaxEntryGatesRef.current ? 0.45 : 1;
       const moveGate = paperMinExpectedMoveVsFees(
         markPrice,
         gate.atr14,
         actualNotional,
         TAKER_FEE_PCT,
-        effectiveMinExpectedMoveSafetyK(
-          deskMinExpectedMoveSafetyKFromEnv(),
-          profileCfg,
-        ) *
-          minMoveKMultiplier *
-          (relaxEntryGatesRef.current ? 0.45 : 1),
+        regimeMoveK * minMoveKMultiplier * relaxMul,
       );
       if (!moveGate.ok && !isBootstrapProbeStrat) {
         deskSkippedMinExpectedMoveRef.current += 1;
@@ -1981,7 +2301,16 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       }
       return position;
     },
-    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet, paperDeskMode],
+    [
+      strategyProfile,
+      cloudAccountKey,
+      cooldownMultiplier,
+      minMoveKMultiplier,
+      slippageBpsOverride,
+      promotedIdsSet,
+      paperDeskMode,
+      profitModeCfg,
+    ],
   );
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
@@ -2326,22 +2655,39 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 : Math.max(pos.adaptiveSl, stops.adaptiveSl);
             posForExit = { ...pos, ...stops, adaptiveSl, slPrice: adaptiveSl };
           }
+          const profitExit = profitModeExitConfig(profitModeCfg);
           const { patched, close } = resolveFuturesExitStep(posForExit, profileHoldTimeMulRef.current, now, {
-            profitLockMinNetUsd: deskProfitLockMinNetUsdFromEnv(),
-            profitLockMinProgress: deskProfitLockMinProgressFromEnv(),
             takerFeePct: TAKER_FEE_PCT,
             exitSlippageBps: slippageBpsOverride ?? deskSlippageBpsFromEnv(),
             ...(paperDeskMode
-              ? {
-                  minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
-                  breakevenTriggerProgress: 0.98,
-                  trailActivationProgress: 1.01,
-                  profitLockMinProgress: 0.18,
-                  profitLockMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
-                  paperTpBeforeSl: true,
-                  paperQuickTpMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
-                }
-              : {}),
+              ? profitExit
+                ? {
+                    minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
+                    breakevenTriggerProgress: profitExit.breakevenTriggerProgress,
+                    trailActivationProgress: profitExit.trailActivationProgress,
+                    profitLockMinProgress: profitExit.profitLockMinProgress,
+                    profitLockMinNetUsd: profitExit.profitLockMinNetUsd,
+                    minGrossMultipleOfFees: profitExit.minGrossMultipleOfFees,
+                    paperTpBeforeSl: true,
+                    ...(profitExit.disablePaperQuickTp
+                      ? {}
+                      : {
+                          paperQuickTpMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
+                        }),
+                  }
+                : {
+                    minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
+                    breakevenTriggerProgress: 0.98,
+                    trailActivationProgress: 1.01,
+                    profitLockMinProgress: 0.18,
+                    profitLockMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
+                    paperTpBeforeSl: true,
+                    paperQuickTpMinNetUsd: btcFtPaperQuickTpMinNetUsdFromEnv(),
+                  }
+              : {
+                  profitLockMinNetUsd: deskProfitLockMinNetUsdFromEnv(),
+                  profitLockMinProgress: deskProfitLockMinProgressFromEnv(),
+                }),
           });
           const merged: BTCFuturesPosition = { ...pos, ...patched };
           // Sync slPrice with adaptiveSl so SL checks use the most protective stop.
@@ -2513,6 +2859,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             regime: RegimeTag;
             priority: number;
             slotKey: string;
+            signalScore: number;
+            stratInput: FuturesSignalInputs;
+            inputByTf: Map<BarInterval, FuturesSignalInputs>;
             signalContributions?: Array<{ reason: string; pts: number }>;
           };
           const entryCandidates: EntryCandidate[] = [];
@@ -2593,6 +2942,29 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 continue;
               }
 
+              if (suspendedStrategiesRef.current.has(strat.id)) {
+                if (pollDebug) pollDebug.failDisabled += 1;
+                logSkipReason(strat.id, "ROTATION_SUSPENDED", {
+                  score: "below threshold",
+                });
+                continue;
+              }
+
+              if (
+                !profitModeAllowsRotationStrategy(
+                  strat.id,
+                  rotationReportRef.current,
+                  profitModeCfg,
+                )
+              ) {
+                profitModeSkipCountRef.current += 1;
+                logSkipReason(strat.id, "PROFIT_MODE_ROTATION", {
+                  only: "ACTIVE|PROMOTED",
+                });
+                if (pollDebug) pollDebug.failDisabled += 1;
+                continue;
+              }
+
               /** PR 10 — pick the right signal-inputs cache for this strategy's
                *  primaryBarInterval. Strategies without a declared TF (legacy
                *  CORE 20, premium) keep using 1m. If the strategy's TF payload
@@ -2613,7 +2985,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               // closed trades within the current UTC day. Outside research mode
               // researchDailyStratCap() returns 0 → gate is a no-op.
               // FIREHOSE MODE: bypass entirely (volume IS the goal there).
-              const dailyCap = deskFirehoseModeEnabled() ? 0 : researchDailyStratCap();
+              const profitCap = profitModeDailyStratCap(profitModeCfg);
+              const dailyCap = deskFirehoseModeEnabled()
+                ? 0
+                : profitCap > 0
+                  ? profitCap
+                  : researchDailyStratCap();
               if (dailyCap > 0) {
                 const todayUtcStartMs = Date.UTC(
                   new Date().getUTCFullYear(),
@@ -2664,9 +3041,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 rollingHealthForEntry?.grade ?? null,
                 rollingHealthForEntry?.feePctOfAbsGross ?? null,
               );
+              const profitAwareBase = applyProfitModeThreshold(
+                adaptiveBase,
+                regime,
+                profitModeCfg,
+              );
+              const thresholdDrop = profitModeCfg.enabled ? 0 : ensureDataThresholdDrop;
               const effectiveThresholdForStrat = Math.max(
                 thresholdFloor,
-                adaptiveBase - ensureDataThresholdDrop - quietEntryBoost,
+                profitAwareBase - thresholdDrop - quietEntryBoost,
               );
               // PR-6 Change 4: block strategies with an explicit regimes[] list when
               // the current regime isn't in it — catch this early before candidate push.
@@ -2677,6 +3060,27 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 deskSkippedByRegimeRef.current[regime] += 1;
                 continue;
               }
+
+              const templateFamily =
+                strat.templateFamily ?? btcFtTemplateFamilyKey(strat.name);
+              if (
+                !profitModeAllowsStrategyInChop(
+                  templateFamily,
+                  strat.name,
+                  strat.regimes,
+                  regime,
+                  profitModeCfg,
+                )
+              ) {
+                profitModeSkipCountRef.current += 1;
+                logSkipReason(strat.id, "PROFIT_MODE_CHOP_TEMPLATE", {
+                  templateFamily,
+                  regime,
+                });
+                if (pollDebug) pollDebug.failOpenRegime += 1;
+                continue;
+              }
+
               const confirmPasses =
                 passesEntryConfirmation(stratInput, strat) ||
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
@@ -2710,6 +3114,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     tpPct: strat.tpPct,
                   }),
                   slotKey,
+                  signalScore: signal.score,
+                  stratInput,
+                  inputByTf: new Map(inputByTf),
                   signalContributions: signal.contributions,
                 });
                 if (pollDebug) pollDebug.candidatesBuilt += 1;
@@ -2784,17 +3191,108 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               if (pollDebug) pollDebug.failMinMove += 1;
               return false;
             }
-            // PR-6 Change 2: correlated position count cap — max MAX_SAME_SIDE_POSITIONS per side.
-            if (isSameSideCapped(workingPositions, c.side, MAX_SAME_SIDE_POSITIONS)) {
+            const maxSameSide = profitModeMaxSameSide(c.regime, profitModeCfg);
+            if (isSameSideCapped(workingPositions, c.side, maxSameSide)) {
               deskSkippedCorrelatedCapRef.current += 1;
               logSkipReason(c.strat.id, "CORRELATED_CAP", {
                 side: c.side,
                 openCount: workingPositions.filter((p) => p.side === c.side).length,
-                max: MAX_SAME_SIDE_POSITIONS,
+                max: maxSameSide,
               });
               if (pollDebug) pollDebug.failSameDirCap += 1;
               return false;
             }
+
+            const stratClosed = tradesRef.current.filter(
+              (t) =>
+                t.strategyId === c.strat.id &&
+                !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+            );
+            const strategyWinRate = stratClosed.length
+              ? stratClosed.filter((t) => t.netPnl > 0).length / stratClosed.length
+              : 0;
+            const cooldownRemainMs = Math.max(
+              0,
+              (stratCooldownsRef.current[c.slotKey] ?? 0) - now,
+            );
+            const spreadPct =
+              c.markPrice > 0 ? paperLastMarkSpreadPct(c.lastPrice, c.markPrice) / 100 : 0;
+            const atrPct = c.markPrice > 0 ? c.atr14 / c.markPrice : 0;
+            const regimeFitsStrategy = c.strat.regimes?.includes(c.regime) ?? true;
+
+            gateEvaluationCountRef.current += 1;
+
+            const quality = scoreSignalQuality({
+              signalScore: c.signalScore,
+              atrPct,
+              spreadPct,
+              volumeRatio: c.stratInput.volRatio,
+              regime: c.regime,
+              regimeFitsStrategy,
+              ema20AboveEma50: c.stratInput.fast > c.stratInput.slow,
+              priceAboveEma20: c.markPrice > c.stratInput.fast,
+              side: c.side,
+              openPositionCount: workingPositions.length,
+              sameSideCount: workingPositions.filter((p) => p.side === c.side).length,
+              hoursIntoSession: new Date().getUTCHours(),
+              strategyWinRate,
+              strategyTrades: stratClosed.length,
+              cooldownRemainMs,
+            });
+
+            const profitQuality = profitModePassesQuality(
+              quality.total,
+              quality.isHighQuality,
+              c.regime,
+              profitModeCfg,
+            );
+            if (!quality.pass || !profitQuality.pass) {
+              qualitySkipCountRef.current += 1;
+              if (!profitQuality.pass) profitModeSkipCountRef.current += 1;
+              logSkipReason(c.strat.id, profitQuality.reason ?? "SIGNAL_QUALITY_FAIL", {
+                qualityScore: quality.total,
+                minPass: profitModeCfg.enabled
+                  ? profitModeCfg.minQualityScore
+                  : quality.minPassScore,
+                deductions: quality.deductions,
+              });
+              if (pollDebug) pollDebug.failMinMove += 1;
+              return false;
+            }
+            lastSignalQualityRef.current = quality;
+
+            const tfSnapshots = buildTFSnapshotsFromInputMap(c.inputByTf);
+            const mtfResult = computeMTFConfluence(tfSnapshots, c.side);
+            lastMtfConfluenceRef.current = mtfResult;
+            const mtfMin = profitModeMtfMinScore(profitModeCfg, 55);
+            const mtfSkip = mtfSkipReason(mtfResult, mtfMin);
+            if (mtfSkip) {
+              mtfSkipCountRef.current += 1;
+              if (profitModeCfg.enabled) profitModeSkipCountRef.current += 1;
+              logSkipReason(c.strat.id, mtfSkip, {
+                confluenceScore: mtfResult.confluenceScore,
+                overallBias: mtfResult.overallBias,
+                minScore: mtfMin,
+              });
+              if (pollDebug) pollDebug.failConfirm += 1;
+              return false;
+            }
+
+            const counterTrendSkip = profitModeCounterTrendSkip(
+              c.side,
+              mtfResult,
+              profitModeCfg,
+            );
+            if (counterTrendSkip) {
+              profitModeSkipCountRef.current += 1;
+              logSkipReason(c.strat.id, counterTrendSkip, {
+                overallBias: mtfResult.overallBias,
+                side: c.side,
+              });
+              if (pollDebug) pollDebug.failConfirm += 1;
+              return false;
+            }
+
             if (!entryUtcSessionOpen) {
               deskSkippedOutsideSessionRef.current += 1;
               if (pollDebug) pollDebug.failSession += 1;
@@ -2906,11 +3404,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       clearTradeHistory,
       setDisabledStrategies: setDisabledStrategiesHandler,
       addDisabledStrategyIds,
+      updateSuspendedStrategies,
+      restoreRotationStrategy,
       exportCSV,
       exportJSON,
       dataHealth,
     };
-  }, [positions, trades, balance, quote, status, pauseEntries, disabledStrategies, calculateStats, togglePause, resetPaperAccount, clearTradeHistory, setDisabledStrategiesHandler, addDisabledStrategyIds, exportCSV, exportJSON, dataHealth]);
+  }, [positions, trades, balance, quote, status, pauseEntries, disabledStrategies, calculateStats, togglePause, resetPaperAccount, clearTradeHistory, setDisabledStrategiesHandler, addDisabledStrategyIds, updateSuspendedStrategies, restoreRotationStrategy, exportCSV, exportJSON, dataHealth]);
 
   // ========== DAILY RESET ==========
   useEffect(() => {
@@ -2951,6 +3451,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     clearTradeHistory,
     setDisabledStrategies: setDisabledStrategiesHandler,
     addDisabledStrategyIds,
+    updateSuspendedStrategies,
+    restoreRotationStrategy,
     exportCSV,
     exportJSON,
     strategyStatuses,
@@ -2958,5 +3460,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     effectiveSignalThreshold: activeSignalThreshold,
     dataHealth,
     entryDebug: entryDebugEnabled ? entryDebug : null,
+    setReplaySignFlipRate,
   };
 }
