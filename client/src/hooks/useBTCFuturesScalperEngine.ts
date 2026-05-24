@@ -255,6 +255,40 @@ function isBarInterval(v: unknown): v is BarInterval {
   return typeof v === "string" && (BAR_INTERVALS_SUPPORTED as readonly string[]).includes(v);
 }
 
+/**
+ * Per-TF poll cadence (ms). Picked as the minimum across categories that use
+ * each TF so the fastest strategy on a TF still gets the data it needs.
+ *
+ *   1m  → 4s   (scalping: 1m bars tick every minute, 15 polls/bar is fine)
+ *   5m  → 15s  (day/breakout/momentum: 20 polls/bar)
+ *   15m → 15s  (trend/range: 60 polls/bar — same fetch as 5m, no reason slower)
+ *   4h  → 60s  (swing: 240 polls/bar of 4h — diminishing returns past 60s)
+ *   1d  → 300s (position: 288 polls/bar of 1d — only need a few/day)
+ *
+ * Skipping a fetch when its cadence hasn't elapsed cuts HTTP traffic
+ * 5–60× per non-1m TF without losing signal freshness.
+ */
+const INTERVAL_POLL_MS: Record<BarInterval, number> = {
+  "1m": 4_000,
+  "5m": 15_000,
+  "15m": 15_000,
+  "4h": 60_000,
+  "1d": 300_000,
+};
+
+/** Shared between the polling effect and the cached-payload refs. */
+type KlinePayload = {
+  ok: boolean;
+  candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[];
+  lastPrice: number;
+  markPrice: number;
+  indexPrice: number;
+  changePct24h: number;
+  fundingRate: number;
+  nextFunding: number;
+  fetchedAt: string;
+};
+
 // Exit management
 const MIN_ABS_NET_PNL_USD = 2;
 const MOMENTUM_HOLD_EXTEND = 1.25;
@@ -815,6 +849,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   // Refs
   const engineRef = useRef<EngineRef | null>(null);
   const notOkSinceRef = useRef<number | null>(null);
+
+  /** PR 10 (poll cadence) — per-TF kline cache that persists across polls. The
+   *  polling effect re-fetches 1m every tick (4s) but only re-fetches non-1m
+   *  TFs when their cadence has elapsed (see INTERVAL_POLL_MS). Between fetches
+   *  the previous payloads are reused, so signal eval always has data even on
+   *  ticks where, say, 4h wasn't refreshed.                                  */
+  const cachedPayloadsRef = useRef<Map<BarInterval, Map<string, KlinePayload>>>(new Map());
+  const lastFetchedByIntervalRef = useRef<Map<BarInterval, number>>(new Map());
   const fundingTickerMetaWarnedRef = useRef(false);
   const peakEquityForDrawdownRef = useRef(INITIAL_BALANCE);
   const drawdownEntryPausedRef = useRef(false);
@@ -1845,18 +1887,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     let mounted = true;
     let interval: NodeJS.Timeout | null = null;
 
-    type KlinePayload = {
-      ok: boolean;
-      candles: { time: number; open: number; high: number; low: number; close: number; volume: number }[];
-      lastPrice: number;
-      markPrice: number;
-      indexPrice: number;
-      changePct24h: number;
-      fundingRate: number;
-      nextFunding: number;
-      fetchedAt: string;
-    };
-
     const poll = async () => {
       const debug502 = process.env.NEXT_PUBLIC_SIMULATE_FUTURES_502 === "1";
       const klineQuery = (sym: string, tf: BarInterval = "1m") =>
@@ -1951,12 +1981,28 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
         // Always populate "1m" first — it powers regime/mark/exits/probe.
         payloadsByInterval.set("1m", payloads);
+        // Refresh the 1m slot of the persistent cache + bump its timestamp so
+        // skip-when-not-due accounting stays consistent across all TFs.
+        cachedPayloadsRef.current.set("1m", payloads);
+        lastFetchedByIntervalRef.current.set("1m", Date.now());
 
-        // PR 10 — additionally fetch every non-1m TF the active roster needs.
-        // Failures on these are soft: signal eval falls back to the strategy's
-        // 1m payload if its declared TF didn't return enough bars.
+        // PR 10 (cadence) — additionally fetch every non-1m TF the active roster
+        // needs, BUT skip the fetch when the per-TF cadence (INTERVAL_POLL_MS)
+        // hasn't elapsed since its last fetch. Cached payloads are reused on
+        // skipped polls, so signal eval always has data — just not freshly
+        // refetched. Failures are soft: a skipped/failed TF means the strategy
+        // is skipped that poll, not the whole desk.
         const extraIntervals = requiredBarIntervals.filter((tf) => tf !== "1m");
         for (const tf of extraIntervals) {
+          const cadenceMs = INTERVAL_POLL_MS[tf];
+          const lastFetched = lastFetchedByIntervalRef.current.get(tf) ?? 0;
+          const dueNow = Date.now() - lastFetched >= cadenceMs;
+          if (!dueNow) {
+            // Reuse cached payloads from a previous tick (if any).
+            const cached = cachedPayloadsRef.current.get(tf);
+            if (cached) payloadsByInterval.set(tf, cached);
+            continue;
+          }
           const tfMap = new Map<string, KlinePayload>();
           for (const batch of chunkArray(activeSymbols, SYMBOL_FETCH_CHUNK)) {
             const results = await Promise.all(
@@ -1979,6 +2025,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             }
           }
           payloadsByInterval.set(tf, tfMap);
+          cachedPayloadsRef.current.set(tf, tfMap);
+          lastFetchedByIntervalRef.current.set(tf, Date.now());
         }
 
         if (!mounted) return;
