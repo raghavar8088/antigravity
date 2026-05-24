@@ -613,6 +613,21 @@ export function paperEnsureThresholdDrop(
   return drop;
 }
 
+/** When the desk is idle (no opens), nudge threshold down so paper keeps sampling. */
+export function paperQuietEntryBoost(
+  enabled: boolean,
+  nowMs: number,
+  lastClosedMs: number,
+  openCount: number,
+): number {
+  if (!enabled || openCount > 0) return 0;
+  const quietMs = lastClosedMs > 0 ? nowMs - lastClosedMs : 0;
+  if (quietMs >= 10 * 60_000) return 6;
+  if (quietMs >= 5 * 60_000) return 4;
+  if (quietMs >= 2 * 60_000) return 3;
+  return 0;
+}
+
 // Signal inputs type imported from @/lib/futuresSignals
 type SignalInputs = FuturesSignalInputs;
 
@@ -844,6 +859,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const [entryDebug, setEntryDebug] = useState<DeskEntryPollDebug | null>(null);
   const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
   const forceProbeOpenedRef = useRef(false);
+  const pollInFlightRef = useRef(false);
   const entryDebugLoggedOnceRef = useRef(false);
   const researchMountedAtRef = useRef(Date.now());
   const [dataHealth, setDataHealth] = useState<FuturesDataHealth>(() => ({
@@ -927,7 +943,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   useEffect(() => { pauseRef.current = pauseEntries; }, [pauseEntries]);
   useEffect(() => { lastTradeAtRef.current = lastTradeAt; }, [lastTradeAt]);
   useEffect(() => { dayStartBalanceRef.current = dayStartBalance; }, [dayStartBalance]);
-  useEffect(() => { dayStartDateRef.current = dayStartDate; }, [dayStartDate]);
+  useEffect(() => {
+    dayStartDateRef.current = dayStartDate;
+  }, [dayStartDate]);
+  useEffect(() => {
+    if (dayStartBalance > 0) dailyStartEquityRef.current = dayStartBalance;
+  }, [dayStartBalance]);
 
   useEffect(() => {
     profileCooldownMulRef.current = profileCfg.cooldownMul;
@@ -1130,7 +1151,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               setDisabledStrategies((s.disabled_strategies as number[]).filter((id) => activeStrategyIdSet.has(id)));
             }
             if (typeof s.last_trade_at === "number") setLastTradeAt(s.last_trade_at);
-            if (typeof s.day_start_balance === "number") setDayStartBalance(s.day_start_balance);
+            if (typeof s.day_start_balance === "number") {
+              setDayStartBalance(s.day_start_balance);
+              dailyStartEquityRef.current = s.day_start_balance;
+            }
             if (typeof s.day_start_date === "number") setDayStartDate(s.day_start_date);
           }
         }
@@ -1932,12 +1956,21 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     persistShadowTradeIntent(cloudAccountKey, shadowIntentFromPaperClose(trade));
   }, [cloudAccountKey, slippageBpsOverride]);
 
+  const openPositionRef = useRef(openPosition);
+  const closePositionRef = useRef(closePosition);
+  useEffect(() => {
+    openPositionRef.current = openPosition;
+    closePositionRef.current = closePosition;
+  }, [openPosition, closePosition]);
+
   // ========== DATA POLLING (multi-symbol) ==========
   useEffect(() => {
     let mounted = true;
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       const debug502 = process.env.NEXT_PUBLIC_SIMULATE_FUTURES_502 === "1";
       const klineQuery = (sym: string, tf: BarInterval = "1m") =>
         `/api/btc/futures-klines?symbol=${encodeURIComponent(sym)}&interval=${tf}${debug502 ? "&debugFutures502=1" : ""}`;
@@ -2216,10 +2249,20 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         setPositions(survivors);
 
         for (const job of exitJobs) {
-          closePosition(job.pos, job.exitPrice, job.reason);
+          closePositionRef.current(job.pos, job.exitPrice, job.reason);
         }
 
         let openCount = survivors.length;
+        const lastClosedMs = tradesRef.current.reduce(
+          (max, t) => Math.max(max, new Date(t.closedAt).getTime()),
+          0,
+        );
+        const quietEntryBoost = paperQuietEntryBoost(
+          paperEnsureTrades,
+          now,
+          lastClosedMs,
+          survivors.length,
+        );
         const occupied = new Set(survivors.map((p) => `${p.symbol}:${p.strategyId}`));
         const utcSession = entryUtcSessionOverride ?? deskEntryUtcSessionFromEnv();
         const utcHour = new Date(now).getUTCHours();
@@ -2255,10 +2298,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         const sessionTradeCount = tradesRef.current.filter(
           (t) => new Date(t.openedAt).getTime() >= researchMountedAtRef.current,
         ).length;
+        const bootstrapWaitMs = paperEnsureTrades ? 90_000 : 3 * 60_000;
         const bootstrapProbeDue =
           paperBootstrapProbe &&
           sessionTradeCount === 0 &&
-          now - researchMountedAtRef.current >= 3 * 60 * 1000;
+          now - researchMountedAtRef.current >= bootstrapWaitMs;
         const shouldRunProbe =
           (forceProbeOpen || bootstrapProbeDue) &&
           hasMarketData &&
@@ -2289,7 +2333,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               holdMinutes: 1,
               confluenceMin: 1,
             };
-            const opened = openPosition(probeStrat, "LONG", probePayload.lastPrice, probePayload.markPrice, probePayload === primary ? PRIMARY_QUOTE_SYMBOL : activeSymbols[0] ?? PRIMARY_QUOTE_SYMBOL, {
+            const opened = openPositionRef.current(probeStrat, "LONG", probePayload.lastPrice, probePayload.markPrice, probePayload === primary ? PRIMARY_QUOTE_SYMBOL : activeSymbols[0] ?? PRIMARY_QUOTE_SYMBOL, {
               atr14: Math.max(input.atr14, probePayload.markPrice * 0.003),
               regime: "chop",
               entryBook: survivors.map((p) => ({ side: p.side, notional: p.notional })),
@@ -2460,7 +2504,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   );
               // P1.1.2: use per-strategy dynamic threshold when available, else fall back to global
               const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
-              const effectiveThresholdForStrat = Math.max(18, stratBaseThreshold - ensureDataThresholdDrop);
+              const thresholdFloor = paperEnsureTrades ? 16 : 18;
+              const effectiveThresholdForStrat = Math.max(
+                thresholdFloor,
+                stratBaseThreshold - ensureDataThresholdDrop - quietEntryBoost,
+              );
               const confirmPasses =
                 passesEntryConfirmation(stratInput, strat) ||
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
@@ -2556,7 +2604,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               ...workingPositions.map((p) => ({ side: p.side, notional: p.notional })),
               ...intraBook,
             ];
-            const opened = openPosition(c.strat, c.side, c.lastPrice, c.markPrice, c.symbol, {
+            const opened = openPositionRef.current(c.strat, c.side, c.lastPrice, c.markPrice, c.symbol, {
               atr14: c.atr14,
               regime: c.regime,
               entryBook,
@@ -2599,7 +2647,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             }
 
             const weakPayload = payloads.get(weak.symbol);
-            closePosition(weak, weakPayload?.markPrice ?? weak.markPrice, "TIME");
+            closePositionRef.current(weak, weakPayload?.markPrice ?? weak.markPrice, "TIME");
             workingPositions.splice(weakIdx, 1);
             occupied.delete(`${weak.symbol}:${weak.strategyId}`);
             openCount -= 1;
@@ -2643,16 +2691,24 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           symbolsRequested: activeSymbols.length,
           showFeedWarning,
         }));
+      } finally {
+        pollInFlightRef.current = false;
       }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && mounted) void poll();
     };
 
     poll();
     interval = setInterval(poll, POLL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       mounted = false;
       if (interval) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, requiredBarIntervals, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, paperBootstrapProbe, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
+  }, [activeStratDefs, activeSymbols, requiredBarIntervals, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, paperBootstrapProbe, researchEnsureTrades, paperEnsureTrades, disableIntradayDdLock, entryUtcSessionOverride, entryDebugEnabled]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
@@ -2686,7 +2742,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const currentDate = now.getDate();
       if (currentDate !== dayStartDateRef.current) {
         setDayStartDate(currentDate);
-        setDayStartBalance(balanceRef.current);
+        const bal = balanceRef.current;
+        setDayStartBalance(bal);
+        dailyStartEquityRef.current = bal;
       }
     };
     const id = setInterval(checkDay, 60000);

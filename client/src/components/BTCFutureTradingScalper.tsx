@@ -316,7 +316,8 @@ export function BTCFutureTradingScalper({
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
           CORE winner roster · threshold {threshold} · relax-confirm {relaxConfirm ? "ON" : "OFF"} · min-move K{" "}
-          {minMoveKMul} · bootstrap probe after 3m with zero trades. Paper only — no Delta mainnet orders.
+          {minMoveKMul} · bootstrap after 90s with zero trades. Keep this tab open — polling runs every ~4s only
+          while the page is active. Paper only — no Delta mainnet orders.
         </DeskBanner>
       )}
 
@@ -330,9 +331,9 @@ export function BTCFutureTradingScalper({
 
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
-          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 3m
-          with zero trades. Check Entry debug below for dominantBlocker. Build{" "}
-          {BTC_FT_DESK_BUILD} is the Vercel client — AWS engine is separate.
+          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 90s
+          with zero trades. Keep this browser tab open — polling runs every ~4s only while the page is active.
+          Check Entry debug for dominantBlocker. Build {BTC_FT_DESK_BUILD}.
         </DeskBanner>
       )}
 
