@@ -700,11 +700,5 @@ export function paperResolveHardExit(i: PaperHardExitInputs): PaperHardExitResul
     return { shouldClose: true, reason: "TP", exitPrice: i.tpPrice };
   }
 
-  const ageMin = (i.nowMs - i.openedAtMs) / 60_000;
-  const holdExtend = i.holdMinutes * i.mtfHoldBonus * i.holdTimeMul;
-  if (ageMin >= holdExtend) {
-    return { shouldClose: true, reason: "TIME", exitPrice: i.markPrice };
-  }
-
   return { shouldClose: false };
 }

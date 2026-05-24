@@ -2704,37 +2704,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
           for (const c of entryCandidates) {
             if (occupied.has(c.slotKey)) continue;
-
-            if (openCount < MAX_OPEN_POSITIONS) {
-              tryOpenCandidate(c);
-              continue;
-            }
-
-            if (!replaceWeakest) {
-              deskSkippedLowPriorityEntryRef.current += 1;
-              if (pollDebug) pollDebug.failLowPriority += 1;
-              continue;
-            }
-
-            const weakIdx = weakestEntryPriorityIndex(workingPositions);
-            const weak = weakIdx >= 0 ? workingPositions[weakIdx] : undefined;
-            const weakPriority = weak?.entryPriorityScore ?? 0;
-            if (!weak || c.priority <= weakPriority) {
-              deskSkippedLowPriorityEntryRef.current += 1;
-              if (pollDebug) pollDebug.failLowPriority += 1;
-              continue;
-            }
-
-            const weakPayload = payloads.get(weak.symbol);
-            closePositionRef.current(weak, weakPayload?.markPrice ?? weak.markPrice, "TIME");
-            workingPositions.splice(weakIdx, 1);
-            occupied.delete(`${weak.symbol}:${weak.strategyId}`);
-            openCount -= 1;
-
-            if (!tryOpenCandidate(c)) {
-              deskSkippedLowPriorityEntryRef.current += 1;
-              if (pollDebug) pollDebug.failLowPriority += 1;
-            }
+            tryOpenCandidate(c);
           }
         }
 
