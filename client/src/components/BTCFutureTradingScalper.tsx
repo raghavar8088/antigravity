@@ -315,9 +315,8 @@ export function BTCFutureTradingScalper({
 
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
-          CORE winner roster · threshold {threshold} · relax-confirm {relaxConfirm ? "ON" : "OFF"} · min-move K{" "}
-          {minMoveKMul} · bootstrap after 90s with zero trades. Keep this tab open — polling runs every ~4s only
-          while the page is active. Paper only — no Delta mainnet orders.
+          CORE winner roster · threshold {threshold} · paper SL ~2× wider · min 3m before stop-out · relax-confirm{" "}
+          {relaxConfirm ? "ON" : "OFF"}. Keep this tab open — polling every ~4s while active. Paper only.
         </DeskBanner>
       )}
 

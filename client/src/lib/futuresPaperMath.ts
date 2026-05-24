@@ -664,6 +664,8 @@ export type PaperHardExitInputs = {
   holdMinutes: number;
   mtfHoldBonus: number;
   holdTimeMul: number;
+  /** Paper discovery: skip SL until position age reaches this (TP/TIME/liq still apply). */
+  minAgeBeforeSlMs?: number;
 };
 
 /**
@@ -678,10 +680,16 @@ export function paperResolveHardExit(i: PaperHardExitInputs): PaperHardExitResul
     return { shouldClose: true, reason: "LIQUIDATION_RISK", exitPrice: i.liquidationPrice };
   }
 
-  if (i.side === "LONG" && i.markPrice <= i.adaptiveSl) {
+  const ageMs = Math.max(0, i.nowMs - i.openedAtMs);
+  const slAllowed =
+    !Number.isFinite(i.minAgeBeforeSlMs) ||
+    (i.minAgeBeforeSlMs ?? 0) <= 0 ||
+    ageMs >= (i.minAgeBeforeSlMs as number);
+
+  if (slAllowed && i.side === "LONG" && i.markPrice <= i.adaptiveSl) {
     return { shouldClose: true, reason: "SL", exitPrice: i.adaptiveSl };
   }
-  if (i.side === "SHORT" && i.markPrice >= i.adaptiveSl) {
+  if (slAllowed && i.side === "SHORT" && i.markPrice >= i.adaptiveSl) {
     return { shouldClose: true, reason: "SL", exitPrice: i.adaptiveSl };
   }
 

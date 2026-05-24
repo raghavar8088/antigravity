@@ -87,10 +87,24 @@ describe("resolveFuturesExitStep — PROFIT_LOCK net-projection guard", () => {
       markPrice: 99_700,    // below SL 99_750
       returnPct: -3,
       peakReturnPct: 0.75,
+      openedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
     });
     const { close } = resolveFuturesExitStep(pos, 1, Date.now());
     expect(close.shouldClose).toBe(true);
     expect(close.reason).toBe("SL");
+  });
+
+  it("suppresses SL during minAgeBeforeSlMs grace (paper discovery)", () => {
+    const pos = buildMicroGainLongPos({
+      markPrice: 99_700,
+      returnPct: -3,
+      peakReturnPct: -3,
+      openedAt: new Date(Date.now() - 30_000).toISOString(),
+    });
+    const { close } = resolveFuturesExitStep(pos, 1, Date.now(), {
+      minAgeBeforeSlMs: 3 * 60_000,
+    });
+    expect(close.shouldClose).toBe(false);
   });
 
   it("LATE_EXIT_MIN_GAIN floor still applies via lockTh", () => {

@@ -127,6 +127,10 @@ export type FuturesExitStepOpts = {
    * Falls back to pct-giveback trail when omitted.
    */
   atr14?: number;
+  /** Skip SL until position age ≥ this (paper discovery; TP/TIME/liq still apply). */
+  minAgeBeforeSlMs?: number;
+  /** Override breakeven progress gate (default DESK_EXIT_BREAKEVEN_TRIGGER_FRAC). */
+  breakevenTriggerProgress?: number;
 };
 
 /**
@@ -139,6 +143,12 @@ export function resolveFuturesExitStep(
   opts: FuturesExitStepOpts = {},
 ): FuturesExitStepResult {
   const progress = paperFuturesProgressTowardTp(p.returnPct, p.entryPrice, p.tpPrice);
+  const patchConsts: PaperFuturesExitPatchConsts = {
+    ...FUTURES_EXIT_PATCH_CONSTS,
+    ...(opts.breakevenTriggerProgress !== undefined
+      ? { breakevenTriggerProgress: opts.breakevenTriggerProgress }
+      : {}),
+  };
   const soft = paperApplyFuturesExitPatches(
     {
       side: p.side,
@@ -150,7 +160,7 @@ export function resolveFuturesExitStep(
       peakReturnPctOnMargin: p.peakReturnPct ?? p.returnPct,
       progressTowardTp: progress,
     },
-    FUTURES_EXIT_PATCH_CONSTS,
+    patchConsts,
   );
   const q: FuturesExitStepPosition = { ...p, ...soft, peakReturnPct: soft.peakReturnPctOnMargin };
 
@@ -166,6 +176,7 @@ export function resolveFuturesExitStep(
     holdMinutes: q.holdMinutes,
     mtfHoldBonus: DESK_EXIT_MTF_HOLD_BONUS,
     holdTimeMul,
+    minAgeBeforeSlMs: opts.minAgeBeforeSlMs,
   });
   if (hard.shouldClose) {
     return {

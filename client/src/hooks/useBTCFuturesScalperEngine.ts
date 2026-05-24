@@ -50,6 +50,9 @@ import {
   deskPaperMakerFillModelEnabled,
   deskPaperMakerFeePctFromEnv,
   deskPaperMakerFillProbabilityFromEnv,
+  btcFtPaperBreakevenProgressFromEnv,
+  btcFtPaperMinHoldBeforeSlMinFromEnv,
+  btcFtPaperSlPctMulFromEnv,
   applyWinnersOnlyGate,
   checkEntryBurstGuard,
   createEntryBurstContext,
@@ -1676,8 +1679,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const bal = balanceRef.current;
       const slipBps = slippageBpsOverride ?? deskSlippageBpsFromEnv();
       const entryPrice = paperApplyEntrySlippage(side, price, slipBps);
+      const isBootstrapProbeStrat =
+        strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
+      const paperSlMul = paperEnsureTrades ? btcFtPaperSlPctMulFromEnv() : 1;
+      const slPctUsed = isBootstrapProbeStrat
+        ? Math.max(strat.slPct, 1.0)
+        : strat.slPct * paperSlMul;
       const slPrice =
-        side === "LONG" ? entryPrice * (1 - strat.slPct / 100) : entryPrice * (1 + strat.slPct / 100);
+        side === "LONG" ? entryPrice * (1 - slPctUsed / 100) : entryPrice * (1 + slPctUsed / 100);
 
       // ---- #3 adaptive TP: scale strat.tpPct by current ATR regime ----
       const baseTpPct = strat.tpPct;
@@ -1770,8 +1779,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       );
       const actualNotional = calculateNotional(contracts);
 
-      const isBootstrapProbeStrat =
-        strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
       const moveGate = paperMinExpectedMoveVsFees(
         markPrice,
         gate.atr14,
@@ -2208,6 +2215,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             profitLockMinProgress: deskProfitLockMinProgressFromEnv(),
             takerFeePct: TAKER_FEE_PCT,
             exitSlippageBps: slippageBpsOverride ?? deskSlippageBpsFromEnv(),
+            ...(paperEnsureTrades
+              ? {
+                  minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
+                  breakevenTriggerProgress: btcFtPaperBreakevenProgressFromEnv(),
+                }
+              : {}),
           });
           const merged: BTCFuturesPosition = { ...pos, ...patched };
           if (close.shouldClose && close.reason) {
@@ -2327,10 +2340,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               name: bootstrapProbeDue ? "PAPER_BOOTSTRAP_PROBE" : "DEV_FORCE_PROBE_OPEN",
               category: "Probe",
               signalKey: "DEV_FORCE_PROBE_LONG",
-              slPct: 0.3,
-              tpPct: 0.6,
+              slPct: 1.0,
+              tpPct: 1.2,
               cooldownMin: 1,
-              holdMinutes: 1,
+              holdMinutes: 5,
               confluenceMin: 1,
             };
             const opened = openPositionRef.current(probeStrat, "LONG", probePayload.lastPrice, probePayload.markPrice, probePayload === primary ? PRIMARY_QUOTE_SYMBOL : activeSymbols[0] ?? PRIMARY_QUOTE_SYMBOL, {

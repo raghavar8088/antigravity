@@ -729,6 +729,33 @@ export function btcFtEntryDebugEnabledFromEnv(): boolean {
   );
 }
 
+/** Widen strategy SL% on paper desk (default 2× → 0.5% becomes 1.0%). */
+export function btcFtPaperSlPctMulFromEnv(fallback = 2): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_SL_MUL;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(4, Math.max(1, n));
+}
+
+/** Minutes before hard SL can fire (TP/TIME still apply). Default 3 on paper. */
+export function btcFtPaperMinHoldBeforeSlMinFromEnv(fallback = 3): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_MIN_HOLD_SL_MIN;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(30, Math.max(0, n));
+}
+
+/** Breakeven progress gate on paper (default 0.55 vs production 0.40). */
+export function btcFtPaperBreakevenProgressFromEnv(fallback = 0.55): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_BE_PROGRESS;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(0.9, Math.max(0.3, n));
+}
+
 /** Paper desk cooldown multiplier (default 0.25 → 8m strat cooldown ≈ 2m). */
 export function btcFtPaperCooldownMultiplierFromEnv(fallback = 0.25): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_COOLDOWN_MUL;
