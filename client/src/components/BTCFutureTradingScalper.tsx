@@ -34,6 +34,7 @@ import {
   saveRetiredToStorage,
   saveWinnersToStorage,
 } from "@/lib/btcFtResearch";
+import { BTC_FT_RESEARCH_CATEGORY_IDS } from "@/lib/btcFtRoster";
 import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -310,7 +311,11 @@ export function BTCFutureTradingScalper({
           entryDebugEnabled={entryDebugEnabled}
           entryUtcSessionOverride={EFFECTIVE_RESEARCH_MODE ? researchEntryUtcSession() : undefined}
           researchMode={EFFECTIVE_RESEARCH_MODE}
-          researchPoolIds={EFFECTIVE_RESEARCH_MODE ? resolveResearchPool() : undefined}
+          researchPoolIds={
+            EFFECTIVE_RESEARCH_MODE
+              ? resolveResearchPool()
+              : [...BTC_FT_RESEARCH_CATEGORY_IDS]
+          }
           researchWinners={winners}
           researchRetiredIds={retiredIds}
           onPromoteResearchWinner={handlePromote}
