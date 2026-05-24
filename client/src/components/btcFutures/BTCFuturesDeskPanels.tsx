@@ -344,14 +344,12 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
       id: "name",
       header: "Strategy",
       cell: (s) => (
-        <div>
-          <p className="desk-body-md" style={{ fontWeight: 500 }}>
-            {s.name}
-          </p>
-          <p className="desk-label-md">{s.category}</p>
-        </div>
+        <span className="desk-body-md" style={{ fontWeight: 500 }}>
+          {s.name}
+        </span>
       ),
     },
+    { id: "cat", header: "Category", cell: (s) => <span className="desk-label-md">{s.category}</span> },
     {
       id: "status",
       header: "Status",
