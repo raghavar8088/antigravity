@@ -171,6 +171,8 @@ import {
 } from "@/lib/strategySessionStats";
 import { setCanonicalMark } from "@/lib/canonicalMarkPrice";
 import {
+  computeStrategyDiagnostics,
+  computeRollingHealthCheck,
   computeStrategyDiagnosticsFromEngineTrades,
   computeRollingHealthCheckFromEngineTrades,
   type DiagnosticSummary,
@@ -537,10 +539,10 @@ export interface BTCFuturesEngineStats {
   deskSkippedCorrelatedCap: number;
   /** Last-60s skip reason frequency (PR-6 entry quality diagnostics). */
   skipReasonSummary: Array<{ reason: string; count: number }>;
-  /** Per-strategy aggregated performance (PR-7 edge diagnostics). */
-  strategyDiagnostics: DiagnosticSummary;
-  /** Rolling 20-trade health check with grade A/B/C/F (PR-7). */
-  rollingHealthCheck: HealthCheckResult;
+  /** Per-strategy aggregated performance (PR-7 edge diagnostics). Null until >= 5 production trades. */
+  strategyDiagnostics: DiagnosticSummary | null;
+  /** Rolling 20-trade health check with grade A/B/C/F (PR-7). Null until >= 5 production trades. */
+  rollingHealthCheck: HealthCheckResult | null;
 }
 
 /** Strategy Status */
@@ -1502,8 +1504,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const sm = computeSessionTradingMetrics(productionTrades);
     const exitAn = computeSessionExitReasonAnalytics(productionTrades);
-    const strategyDiagnostics = computeStrategyDiagnosticsFromEngineTrades(productionTrades);
-    const rollingHealthCheck = computeRollingHealthCheckFromEngineTrades(productionTrades);
+    const strategyDiagnostics = productionTrades.length >= 5
+      ? computeStrategyDiagnosticsFromEngineTrades(productionTrades)
+      : null;
+
+    const rollingHealthCheck = productionTrades.length >= 5
+      ? computeRollingHealthCheckFromEngineTrades(productionTrades)
+      : null;
+
+    if (rollingHealthCheck) {
+      console.info(
+        `[HealthCheck] Grade=${rollingHealthCheck.grade}` +
+        ` Expectancy=${rollingHealthCheck.expectancy.toFixed(2)}` +
+        ` WinRate=${(rollingHealthCheck.winRate * 100).toFixed(1)}%` +
+        ` fee/gross=${(rollingHealthCheck.feePctOfAbsGross * 100).toFixed(1)}%` +
+        ` TP=${rollingHealthCheck.tpHits}/${rollingHealthCheck.window}`,
+      );
+    }
 
     const stratDeskW = new Map(activeStratDefs.map((s) => [s.id, s.deskTpWidened === true]));
     const stratCat = new Map(activeStratDefs.map((s) => [s.id, s.category]));
