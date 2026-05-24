@@ -1625,8 +1625,31 @@ function passesCategoryConfirmation(s: FuturesSignalInputs, strat: FuturesStratD
     return true;
   }
 
-  // ── Swing / Position: require HTF alignment when requiresHtf ────────────
-  if (cat === "swing_trading" || cat === "position_trading") {
+  // ── Swing trading: tighter than day, looser than position ──────────────
+  if (cat === "swing_trading") {
+    if (!Number.isFinite(s.atr14) || s.atr14 <= 0) return false;
+    // Mean-reversion swings demand a non-trending regime; everything else
+    // requires the opposite (ADX must show some structure).
+    const isMeanRevert = strat.templateFamily === "swg_mean_revert_bb";
+    if (isMeanRevert) {
+      if (s.adxProxy > 28) return false;
+    } else {
+      // Don't enter a swing trend trade against a hard opposing micro trend.
+      if (strat.requiresHtf) {
+        const htf5T = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
+        if (isShort && htf5T === "UP") return false;
+        if (!isShort && htf5T === "DOWN") return false;
+      }
+      // Macro EMA cannot point hard the wrong way (>2× ATR opposing spread).
+      const emaDist = Math.abs(s.fast - s.slow);
+      if (isShort && s.fast > s.slow && emaDist > s.atr14 * 2) return false;
+      if (!isShort && s.fast < s.slow && emaDist > s.atr14 * 2) return false;
+    }
+    return true;
+  }
+
+  // ── Position trading: HTF alignment only (per-strat configurable) ───────
+  if (cat === "position_trading") {
     if (strat.requiresHtf) {
       const htf5T = htfTrend(s.htf5_fast, s.htf5_slow, s.htf5_momentum);
       if (isShort && htf5T === "UP") return false;

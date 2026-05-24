@@ -92,8 +92,8 @@ The builder applies:
 
 ## Implementation Status
 
-**Strategies implemented: 40 / 160** (Scalping + Day Trading)
-**Pool size in `FUTURES_STRAT_DEFS`**: 20 CORE + 4 premium + 40 research = **64 total** (40 of which are `researchOnly: true`)
+**Strategies implemented: 60 / 160** (Scalping + Day Trading + Swing Trading)
+**Pool size in `FUTURES_STRAT_DEFS`**: 20 CORE + 4 premium + 60 research = **84 total** (60 of which are `researchOnly: true`)
 **Engine wiring**: still 1m scalp-only — multi-bar-interval routing is PR 10.
 
 
@@ -102,13 +102,28 @@ The builder applies:
 | 1 | Scaffolding | — | ✅ Types, registry, scorer dispatch, roster, docs |
 | 2 | Scalping | 600–619 | ✅ 20 defs + real `scoreScalping` + 46 tests |
 | 3 | Day Trading | 620–639 | ✅ 20 defs + real `scoreDay` (10 templateFamily branches) + 21 tests |
-| 4 | Swing Trading | 640–659 | ⏳ Pending |
+| 4 | Swing Trading | 640–659 | ✅ 20 defs + real `scoreSwing` (10 templateFamily branches) + 22 tests + tightened gate (mean-revert ADX<28, trend-ride opposing-EMA cap 2× ATR) |
 | 5 | Position Trading | 660–679 | ⏳ Pending |
 | 6 | Trend Trading | 680–699 | ⏳ Pending |
 | 7 | Range Trading | 700–719 | ⏳ Pending |
 | 8 | Breakout Trading | 720–739 | ⏳ Pending |
 | 9 | Momentum Trading | 740–759 | ⏳ Pending |
 | 10 | UI category filter + namespace | — | ⏳ Pending |
+
+### Swing template families (PR 4)
+
+| Family | LONG/SHORT IDs | Thesis |
+|---|---|---|
+| `swg_trend_ride` | 640 / 641 | HTF-aligned persistent EMA trend + ADX>22 + momentum aligned |
+| `swg_macd_cross` | 642 / 643 | 4h MACD signal-line cross with HTF MACD direction match |
+| `swg_breakout_4h` | 644 / 645 | 20-bar high/low break on 4h with volume + thrust confirm |
+| `swg_pivot_bounce` | 646 / 647 | Bounce off 4h mean20 pivot zone with HTF bias |
+| `swg_donchian_4h` | 648 / 649 | Donchian channel break on 4h with momentum |
+| `swg_rsi_divergence` | 650 / 651 | RSI extreme + HTF trend resumption (RSI<28 long, >72 short) |
+| `swg_ema_pullback` | 652 / 653 | HTF trend + pullback into fast/slow EMA zone + rejection |
+| `swg_struct_break` | 654 / 655 | Higher-high (long) / lower-low (short) zone + persistent EMA |
+| `swg_mean_revert_bb` | 656 / 657 | BB extreme reversion — **only valid when ADX<28** (range gate) |
+| `swg_atr_volatility` | 658 / 659 | ATR > 1.15× 30-bar avg + directional thrust |
 
 Each PR follows: types → defs → scoring → confirmation gates → tests → docs update.
 

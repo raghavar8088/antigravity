@@ -85,8 +85,11 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("records TP-widened ids when ratio was below min", () => {
-    // CORE 20 strategies all have TP/SL > 2, so use ratio=4 to force widening
-    const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
+    // Restrict to CORE+premium pool (small SL ≤ 0.5%) so the 4.8% TP-widen cap
+    // can always reach a 4× RR. Research-pool swing strats (SL up to 2.5%) would
+    // otherwise be skipped at this ratio — covered by the dedicated swing tests.
+    const coreOnly = FUTURES_STRAT_DEFS.filter((d) => !d.researchOnly);
+    const r = buildPaperDeskStrategies(coreOnly, {
       strategyIdAllowlist: null,
       minTpSlRatio: 4,
       allowFakeDiversity: true,
@@ -96,7 +99,8 @@ describe("buildPaperDeskStrategies", () => {
   });
 
   it("tags strategies with deskTpWidened when TP% was raised", () => {
-    const r = buildPaperDeskStrategies(FUTURES_STRAT_DEFS, {
+    const coreOnly = FUTURES_STRAT_DEFS.filter((d) => !d.researchOnly);
+    const r = buildPaperDeskStrategies(coreOnly, {
       strategyIdAllowlist: null,
       minTpSlRatio: 4,
       allowFakeDiversity: true,
