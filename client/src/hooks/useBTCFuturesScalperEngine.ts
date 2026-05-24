@@ -53,6 +53,8 @@ import {
   btcFtPaperBreakevenProgressFromEnv,
   btcFtPaperMinHoldBeforeSlMinFromEnv,
   btcFtPaperSlPctMulFromEnv,
+  isBtcFtPaperDeskMode,
+  paperDeskWidenPositionStops,
   applyWinnersOnlyGate,
   checkEntryBurstGuard,
   createEntryBurstContext,
@@ -726,10 +728,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const allStrategiesAvailable = options.allStrategiesAvailable === true;
   const researchEnsureTrades = options.researchEnsureTrades === true;
   const paperEnsureTrades = options.paperEnsureTrades === true;
-  const disableIntradayDdLock =
-    paperEnsureTrades || options.allStrategiesAvailable === true;
-  const entryUtcSessionOverride = options.entryUtcSessionOverride;
   const moduleKey = options.moduleKey;
+  const paperDeskMode = isBtcFtPaperDeskMode({
+    paperEnsureTrades,
+    allStrategiesAvailable,
+    moduleKey,
+  });
+  const disableIntradayDdLock = paperDeskMode;
+  const entryUtcSessionOverride = options.entryUtcSessionOverride;
   const promotedIdsSet = useMemo((): ReadonlySet<number> => {
     const raw = options.promotedStrategyIds;
     if (!raw) return new Set();
@@ -1140,13 +1146,33 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             if (typeof s.balance === "number") setBalance(s.balance);
             if (Array.isArray(s.positions)) {
               const now = Date.now();
+              const slMul = btcFtPaperSlPctMulFromEnv();
+              const paperModeOnLoad = isBtcFtPaperDeskMode({
+                paperEnsureTrades,
+                allStrategiesAvailable,
+                moduleKey,
+              });
               setPositions(
-                (s.positions as BTCFuturesPosition[]).map((p) => ({
-                  ...p,
-                  symbol: p.symbol || PRIMARY_QUOTE_SYMBOL,
-                  lastFundingAppliedAt: typeof p.lastFundingAppliedAt === "number" && Number.isFinite(p.lastFundingAppliedAt) ? p.lastFundingAppliedAt : now,
-                  peakReturnPct: typeof p.peakReturnPct === "number" && Number.isFinite(p.peakReturnPct) ? p.peakReturnPct : 0,
-                })),
+                (s.positions as BTCFuturesPosition[]).map((p) => {
+                  const base = {
+                    ...p,
+                    symbol: p.symbol || PRIMARY_QUOTE_SYMBOL,
+                    lastFundingAppliedAt:
+                      typeof p.lastFundingAppliedAt === "number" && Number.isFinite(p.lastFundingAppliedAt)
+                        ? p.lastFundingAppliedAt
+                        : now,
+                    peakReturnPct:
+                      typeof p.peakReturnPct === "number" && Number.isFinite(p.peakReturnPct) ? p.peakReturnPct : 0,
+                  };
+                  if (!paperModeOnLoad) return base;
+                  const strat = STRAT_DEFS.find((d) => d.id === p.strategyId);
+                  const stops = paperDeskWidenPositionStops(base, strat, slMul);
+                  const adaptiveSl =
+                    base.side === "LONG"
+                      ? Math.min(base.adaptiveSl, stops.adaptiveSl)
+                      : Math.max(base.adaptiveSl, stops.adaptiveSl);
+                  return { ...base, ...stops, adaptiveSl, slPrice: adaptiveSl };
+                }),
               );
             }
             if (typeof s.pause_entries === "boolean") setPauseEntries(s.pause_entries);
@@ -1175,7 +1201,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     })();
 
     return () => { cancelled = true; };
-  }, [activeStrategyIdSet, allStrategiesAvailable, cloudAccountKey, stateStorageKey]);
+  }, [
+    activeStrategyIdSet,
+    allStrategiesAvailable,
+    cloudAccountKey,
+    stateStorageKey,
+    paperEnsureTrades,
+    moduleKey,
+  ]);
 
   useEffect(() => {
     if (!allStrategiesAvailable) return;
@@ -1681,7 +1714,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const entryPrice = paperApplyEntrySlippage(side, price, slipBps);
       const isBootstrapProbeStrat =
         strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
-      const paperSlMul = paperEnsureTrades ? btcFtPaperSlPctMulFromEnv() : 1;
+      const paperSlMul = paperDeskMode ? btcFtPaperSlPctMulFromEnv() : 1;
       const slPctUsed = isBootstrapProbeStrat
         ? Math.max(strat.slPct, 1.0)
         : strat.slPct * paperSlMul;
@@ -1868,7 +1901,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       stratCooldownsRef.current[`${symbol}:${strat.id}`] =
         Date.now() +
         Math.max(
-          paperEnsureTrades ? 15_000 : 30_000,
+          paperDeskMode ? 15_000 : 30_000,
           Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current * cooldownMultiplier),
         );
       setLastTradeAt(Date.now());
@@ -1877,7 +1910,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       }
       return position;
     },
-    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet, paperEnsureTrades],
+    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet, paperDeskMode],
   );
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
@@ -2207,15 +2240,26 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           reason: NonNullable<BTCFuturesPosition["exitReason"]>;
         }[] = [];
 
+        const paperSlMulLive = paperDeskMode ? btcFtPaperSlPctMulFromEnv() : 1;
         const patchedPositions = markedPositions.map((pos) => {
           const d = payloads.get(pos.symbol);
           if (!d || d.candles.length < MIN_BARS) return pos;
-          const { patched, close } = resolveFuturesExitStep(pos, profileHoldTimeMulRef.current, now, {
+          let posForExit = pos;
+          if (paperDeskMode) {
+            const strat = STRAT_DEFS.find((s) => s.id === pos.strategyId);
+            const stops = paperDeskWidenPositionStops(pos, strat, paperSlMulLive);
+            const adaptiveSl =
+              pos.side === "LONG"
+                ? Math.min(pos.adaptiveSl, stops.adaptiveSl)
+                : Math.max(pos.adaptiveSl, stops.adaptiveSl);
+            posForExit = { ...pos, ...stops, adaptiveSl, slPrice: adaptiveSl };
+          }
+          const { patched, close } = resolveFuturesExitStep(posForExit, profileHoldTimeMulRef.current, now, {
             profitLockMinNetUsd: deskProfitLockMinNetUsdFromEnv(),
             profitLockMinProgress: deskProfitLockMinProgressFromEnv(),
             takerFeePct: TAKER_FEE_PCT,
             exitSlippageBps: slippageBpsOverride ?? deskSlippageBpsFromEnv(),
-            ...(paperEnsureTrades
+            ...(paperDeskMode
               ? {
                   minAgeBeforeSlMs: btcFtPaperMinHoldBeforeSlMinFromEnv() * 60_000,
                   breakevenTriggerProgress: btcFtPaperBreakevenProgressFromEnv(),

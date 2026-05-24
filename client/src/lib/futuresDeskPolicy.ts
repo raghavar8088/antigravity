@@ -738,8 +738,8 @@ export function btcFtPaperSlPctMulFromEnv(fallback = 2): number {
   return Math.min(4, Math.max(1, n));
 }
 
-/** Minutes before hard SL can fire (TP/TIME still apply). Default 3 on paper. */
-export function btcFtPaperMinHoldBeforeSlMinFromEnv(fallback = 3): number {
+/** Minutes before hard SL can fire (TP/TIME still apply). Default 5 on paper. */
+export function btcFtPaperMinHoldBeforeSlMinFromEnv(fallback = 5): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_MIN_HOLD_SL_MIN;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -768,6 +768,53 @@ export function btcFtPaperCooldownMultiplierFromEnv(fallback = 0.25): number {
 /** After ~45m, lower threshold for strats with few trades (paper discovery on chop). */
 export function btcFtPaperEnsureTradesFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_PAPER_ENSURE_TRADES !== "0";
+}
+
+/** True when BTC FT / paper desk exit+entry relaxations should apply. */
+export function isBtcFtPaperDeskMode(opts: {
+  paperEnsureTrades?: boolean;
+  allStrategiesAvailable?: boolean;
+  moduleKey?: string;
+}): boolean {
+  return (
+    opts.paperEnsureTrades === true ||
+    opts.allStrategiesAvailable === true ||
+    opts.moduleKey === "btc_future_trading"
+  );
+}
+
+/** Re-apply widened SL/TP from strategy defs (fixes Mongo-restored tight stops). */
+export function paperDeskWidenPositionStops(
+  p: {
+    side: "LONG" | "SHORT";
+    entryPrice: number;
+    strategyId: number;
+    slPrice: number;
+    adaptiveSl: number;
+    tpPrice: number;
+    breakevenMoved?: boolean;
+  },
+  strat: { slPct: number; tpPct: number } | undefined,
+  slMul: number,
+): { slPrice: number; adaptiveSl: number; tpPrice: number; breakevenMoved: boolean } {
+  if (!strat || !Number.isFinite(p.entryPrice) || p.entryPrice <= 0) {
+    return {
+      slPrice: p.slPrice,
+      adaptiveSl: p.adaptiveSl,
+      tpPrice: p.tpPrice,
+      breakevenMoved: p.breakevenMoved ?? false,
+    };
+  }
+  const slPct = strat.slPct * slMul;
+  const sl =
+    p.side === "LONG"
+      ? p.entryPrice * (1 - slPct / 100)
+      : p.entryPrice * (1 + slPct / 100);
+  const tp =
+    p.side === "LONG"
+      ? p.entryPrice * (1 + strat.tpPct / 100)
+      : p.entryPrice * (1 - strat.tpPct / 100);
+  return { slPrice: sl, adaptiveSl: sl, tpPrice: tp, breakevenMoved: false };
 }
 
 /** Module-only min-move K multiplier (default 1). Use 0.85–0.9 on chop with large rosters. */

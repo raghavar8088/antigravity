@@ -142,12 +142,20 @@ export function resolveFuturesExitStep(
   nowMs: number,
   opts: FuturesExitStepOpts = {},
 ): FuturesExitStepResult {
+  const openedAtMs = new Date(p.openedAt).getTime();
+  const inEarlyHold =
+    Number.isFinite(opts.minAgeBeforeSlMs) &&
+    (opts.minAgeBeforeSlMs ?? 0) > 0 &&
+    nowMs - openedAtMs < (opts.minAgeBeforeSlMs as number);
+
   const progress = paperFuturesProgressTowardTp(p.returnPct, p.entryPrice, p.tpPrice);
   const patchConsts: PaperFuturesExitPatchConsts = {
     ...FUTURES_EXIT_PATCH_CONSTS,
     ...(opts.breakevenTriggerProgress !== undefined
       ? { breakevenTriggerProgress: opts.breakevenTriggerProgress }
       : {}),
+    // During paper grace: do not tighten SL via breakeven/trail patches.
+    ...(inEarlyHold ? { breakevenTriggerProgress: 1.01, trailActivationProgress: 1.01 } : {}),
   };
   const soft = paperApplyFuturesExitPatches(
     {
@@ -189,7 +197,7 @@ export function resolveFuturesExitStep(
   const lockTh = Math.max(DESK_EXIT_LATE_EXIT_MIN_GAIN, tpPctAbs * DESK_EXIT_PROFIT_LOCK_SHARE);
   const profitLockMinProgress = opts.profitLockMinProgress ?? DESK_EXIT_PROFIT_LOCK_PROGRESS;
   const profitLockMinNetUsd = opts.profitLockMinNetUsd ?? DESK_EXIT_PROFIT_LOCK_MIN_NET_USD;
-  if (progress >= profitLockMinProgress && q.returnPct >= lockTh) {
+  if (!inEarlyHold && progress >= profitLockMinProgress && q.returnPct >= lockTh) {
     // Project the actual net at slipped mark — if it's negative or below threshold,
     // skip the lock so we don't book a micro-loss. The trade falls through to TRAIL/TP/SL.
     const takerFeePct = opts.takerFeePct ?? 0.001;
@@ -213,6 +221,7 @@ export function resolveFuturesExitStep(
   const peak = soft.peakReturnPctOnMargin;
   const atr14 = opts.atr14;
   if (
+    !inEarlyHold &&
     progress >= DESK_EXIT_TRAIL_ACTIVATION_PCT &&
     peak > DESK_EXIT_LATE_EXIT_MIN_GAIN
   ) {

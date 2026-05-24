@@ -102,7 +102,20 @@ describe("resolveFuturesExitStep — PROFIT_LOCK net-projection guard", () => {
       openedAt: new Date(Date.now() - 30_000).toISOString(),
     });
     const { close } = resolveFuturesExitStep(pos, 1, Date.now(), {
-      minAgeBeforeSlMs: 3 * 60_000,
+      minAgeBeforeSlMs: 5 * 60_000,
+    });
+    expect(close.shouldClose).toBe(false);
+  });
+
+  it("suppresses TRAIL during minAgeBeforeSlMs grace (paper discovery)", () => {
+    const pos = buildMicroGainLongPos({
+      markPrice: 99_750,
+      returnPct: -0.5,
+      peakReturnPct: 2,
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    const { close } = resolveFuturesExitStep(pos, 1, Date.now(), {
+      minAgeBeforeSlMs: 5 * 60_000,
     });
     expect(close.shouldClose).toBe(false);
   });

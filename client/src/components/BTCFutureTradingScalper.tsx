@@ -232,9 +232,10 @@ export function BTCFutureTradingScalper({
     return btcFtMinMoveKMulFromEnv(0.45);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
 
-  /** Paper discovery: threshold decay + bootstrap probe (all non-research modes, incl. winners). */
+  /** Paper discovery: always on for BTC FT desk unless explicitly disabled via env. */
   const paperEnsureTrades =
     !EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv();
+  const paperDeskActive = paperEnsureTrades;
   const paperBootstrapProbe =
     (!EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv()) ||
     (EFFECTIVE_RESEARCH_MODE && researchEnsureTradesEnabled());
@@ -315,7 +316,7 @@ export function BTCFutureTradingScalper({
 
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
         <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
-          CORE winner roster · threshold {threshold} · paper SL ~2× wider · min 3m before stop-out · relax-confirm{" "}
+          CORE winner roster · threshold {threshold} · paper SL ~2× wider · min 5m before stop-out · relax-confirm{" "}
           {relaxConfirm ? "ON" : "OFF"}. Keep this tab open — polling every ~4s while active. Paper only.
         </DeskBanner>
       )}
@@ -348,7 +349,7 @@ export function BTCFutureTradingScalper({
           cooldownMultiplier={
             EFFECTIVE_RESEARCH_MODE
               ? researchCooldownMul()
-              : paperEnsureTrades
+              : paperDeskActive
                 ? btcFtPaperCooldownMultiplierFromEnv()
                 : 1
           }
