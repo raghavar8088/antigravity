@@ -13,9 +13,11 @@ const SEV_COLOR: Record<ScorecardAction["severity"], string> = {
 interface Props {
   scorecard: DeskRollingPnLScorecard | null;
   action: ScorecardAction | null;
+  /** Command center: inline body without duplicate outer card / copy button. */
+  embedded?: boolean;
 }
 
-export function ScorecardActionPanel({ scorecard, action }: Props) {
+export function ScorecardActionPanel({ scorecard, action, embedded = false }: Props) {
   if (!scorecard || !action) return null;
   if (scorecard.paperReadyHint === "ON_TRACK" && action.severity === "OK") return null;
 
@@ -24,9 +26,42 @@ export function ScorecardActionPanel({ scorecard, action }: Props) {
 
   const copyEnv = () => {
     void navigator.clipboard.writeText(envText).then(() => {
-      console.info("[ScorecardAction] Env lines copied to clipboard");
+      console.info("[UI] Copied to clipboard");
     });
   };
+
+  if (embedded) {
+    return (
+      <div style={{ fontSize: 11, color: "#e6edf3" }}>
+        <p style={{ margin: "0 0 8px", fontWeight: 700, color: sevColor }}>
+          {action.severity} · {action.action.replace(/_/g, " ")}
+        </p>
+        <p style={{ margin: 0, color: "#c9d1d9", lineHeight: 1.45 }}>{action.rationale}</p>
+        {action.worstStrategyId != null ? (
+          <p style={{ margin: "8px 0 0", fontSize: 10, color: "#8b949e" }}>
+            Worst: #{action.worstStrategyId} {action.worstStrategyName ?? ""}
+          </p>
+        ) : null}
+        {action.suggestedEnv && Object.keys(action.suggestedEnv).length > 0 ? (
+          <pre
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--desk-font-mono, monospace)",
+              background: "#0d1117",
+              padding: 8,
+              borderRadius: 4,
+              overflow: "auto",
+              color: "#8b949e",
+              marginTop: 8,
+              maxWidth: "100%",
+            }}
+          >
+            {envText}
+          </pre>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -10,6 +10,8 @@ interface Props {
   profitModeSkipCount: number;
   sessionGateOn: boolean;
   allocationByEdgeOn: boolean;
+  /** Command center: metrics + pass chips only (no outer card chrome). */
+  embedded?: boolean;
 }
 
 function passChip(pass: boolean, label: string) {
@@ -35,11 +37,57 @@ export function DeskPnLScorecardPanel({
   profitModeSkipCount,
   sessionGateOn,
   allocationByEdgeOn,
+  embedded = false,
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const exitCfg = profitModeExitConfig(profitMode);
 
   if (!scorecard && !profitMode.enabled) return null;
+
+  const metricsBody = scorecard ? (
+    <>
+      <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 8 }}>
+        {scorecard.closes48h} closes in 48h · targets: fee/|gross| &lt; {scorecard.targets.feePctMax}% · E
+        &gt; $0 · WR ≥ {(scorecard.targets.winRateMin * 100).toFixed(0)}% or PF ≥{" "}
+        {scorecard.targets.profitFactorMin}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Last {scorecard.last20.tradeCount}/20</div>
+          <div style={{ fontSize: 10, color: "#8b949e" }}>
+            E ${scorecard.last20.expectancy.toFixed(2)} · WR{" "}
+            {(scorecard.last20.winRate * 100).toFixed(0)}% · PF{" "}
+            {scorecard.last20.profitFactor === Infinity
+              ? "∞"
+              : scorecard.last20.profitFactor.toFixed(2)}{" "}
+            · fee/gross {scorecard.last20.feePctOfAbsGross.toFixed(1)}%
+          </div>
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Last {scorecard.last50.tradeCount}/50</div>
+          <div style={{ fontSize: 10, color: "#8b949e" }}>
+            E ${scorecard.last50.expectancy.toFixed(2)} · WR{" "}
+            {(scorecard.last50.winRate * 100).toFixed(0)}% · PF{" "}
+            {scorecard.last50.profitFactor === Infinity
+              ? "∞"
+              : scorecard.last50.profitFactor.toFixed(2)}{" "}
+            · fee/gross {scorecard.last50.feePctOfAbsGross.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {passChip(scorecard.passesFeeTarget50, `fee/gross < ${scorecard.targets.feePctMax}% (50)`)}
+        {passChip(scorecard.passesExpectancyTarget50, "E > $0 (50)")}
+        {passChip(scorecard.passesWinRateOrPf50, "WR≥35% or PF≥1 (50)")}
+      </div>
+    </>
+  ) : (
+    <div style={{ fontSize: 10, color: "#8b949e" }}>Need ≥5 production closes for rolling scorecard.</div>
+  );
+
+  if (embedded) {
+    return <div style={{ fontSize: 11, color: "#e6edf3" }}>{metricsBody}</div>;
+  }
 
   const hintColor =
     scorecard?.paperReadyHint === "ON_TRACK"
@@ -99,50 +147,7 @@ export function DeskPnLScorecardPanel({
         </div>
       ) : null}
 
-      {expanded && scorecard ? (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 8 }}>
-            {scorecard.closes48h} closes in 48h · targets: fee/|gross| &lt; {scorecard.targets.feePctMax}% · E
-            &gt; $0 · WR ≥ {(scorecard.targets.winRateMin * 100).toFixed(0)}% or PF ≥{" "}
-            {scorecard.targets.profitFactorMin}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Last {scorecard.last20.tradeCount}/20</div>
-              <div style={{ fontSize: 10, color: "#8b949e" }}>
-                E ${scorecard.last20.expectancy.toFixed(2)} · WR{" "}
-                {(scorecard.last20.winRate * 100).toFixed(0)}% · PF{" "}
-                {scorecard.last20.profitFactor === Infinity
-                  ? "∞"
-                  : scorecard.last20.profitFactor.toFixed(2)}{" "}
-                · fee/gross {scorecard.last20.feePctOfAbsGross.toFixed(1)}%
-              </div>
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Last {scorecard.last50.tradeCount}/50</div>
-              <div style={{ fontSize: 10, color: "#8b949e" }}>
-                E ${scorecard.last50.expectancy.toFixed(2)} · WR{" "}
-                {(scorecard.last50.winRate * 100).toFixed(0)}% · PF{" "}
-                {scorecard.last50.profitFactor === Infinity
-                  ? "∞"
-                  : scorecard.last50.profitFactor.toFixed(2)}{" "}
-                · fee/gross {scorecard.last50.feePctOfAbsGross.toFixed(1)}%
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {passChip(scorecard.passesFeeTarget50, `fee/gross < ${scorecard.targets.feePctMax}% (50)`)}
-            {passChip(scorecard.passesExpectancyTarget50, "E > $0 (50)")}
-            {passChip(scorecard.passesWinRateOrPf50, "WR≥35% or PF≥1 (50)")}
-          </div>
-        </div>
-      ) : expanded ? (
-        <div style={{ marginTop: 8, fontSize: 10, color: "#8b949e" }}>
-          Need ≥5 production closes for rolling scorecard.
-        </div>
-      ) : null}
+      {expanded ? <div style={{ marginTop: 10 }}>{metricsBody}</div> : null}
     </div>
   );
 }

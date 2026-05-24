@@ -202,7 +202,9 @@ export function useDeskPerformanceMonitor(
   currentTpPct = 1.5,
   currentSlPct = 0.5,
   currentSameSide = 2,
+  options?: { enabled?: boolean },
 ): MonitorState {
+  const pollingEnabled = options?.enabled !== false;
   const [state, setState] = useState<MonitorState>({
     diagnostics: null,
     healthCheck: null,
@@ -225,6 +227,7 @@ export function useDeskPerformanceMonitor(
   const replaySignFlipRateRef = useRef<number | null>(null);
 
   const fetchDiagnostics = useCallback(async () => {
+    if (!pollingEnabled) return;
     if (!accountKey || accountKey.trim() === "") return;
 
     setState((prev) => ({ ...prev, isFetching: true, fetchError: null }));
@@ -376,9 +379,10 @@ export function useDeskPerformanceMonitor(
         fetchError: msg,
       }));
     }
-  }, [accountKey, currentThreshold, currentTpPct, currentSlPct, currentSameSide]);
+  }, [accountKey, currentThreshold, currentTpPct, currentSlPct, currentSameSide, pollingEnabled]);
 
   useEffect(() => {
+    if (!pollingEnabled) return;
     if (!accountKey || accountKey.trim() === "") return;
 
     void fetchDiagnostics();
@@ -389,7 +393,7 @@ export function useDeskPerformanceMonitor(
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [accountKey, fetchDiagnostics]);
+  }, [accountKey, fetchDiagnostics, pollingEnabled]);
 
   return state;
 }

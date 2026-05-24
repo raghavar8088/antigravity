@@ -18,7 +18,10 @@ import { MTFConfluencePanel } from "@/components/MTFConfluencePanel";
 import { DeskPnLScorecardPanel } from "@/components/DeskPnLScorecardPanel";
 import { ScorecardActionPanel } from "@/components/ScorecardActionPanel";
 import { SoakTrendPanel } from "@/components/SoakTrendPanel";
+import { DeskCommandCenter } from "@/components/DeskCommandCenter";
 import { profitModeFromEnv, profitModeAllocationByEdgeEnabled, profitModeSessionGateEnabled } from "@/lib/futuresProfitMode";
+import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
+import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
 import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
 import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
 import { StrategyResearchPanel } from "@/components/btcFutures/StrategyResearchPanel";
@@ -269,6 +272,10 @@ export type BTCFuturesDeskPanelsProps = {
 export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
   const mounted = useDeskMounted();
   const profitModeCfg = useMemo(() => profitModeFromEnv(), []);
+  const uiCompact = useMemo(
+    () => deskUiCompactFromEnv(profitModeCfg.enabled),
+    [profitModeCfg.enabled],
+  );
   const {
     title,
     baseBalance,
@@ -501,6 +508,14 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
             valueClassName={pnlToneClass(sessionPnL)}
             detail={`${formatDeskPct(totalReturn, { signed: true })} vs base`}
           />
+          {uiCompact ? (
+            <DeskMetricTile
+              compact
+              label="Readiness"
+              value={unifiedReadinessLabel(stats.unifiedReadiness)}
+              detail={`${stats.soakSummary.greenDays}/7 green soak`}
+            />
+          ) : null}
           <DeskMetricTile
             label="Closed PnL"
             value={formatDeskUsd(stats.netPnl, { signed: true })}
@@ -547,30 +562,46 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         )}
       </DeskCard>
 
-      {profitModeCfg.enabled ? (
-        <SoakTrendPanel
-          unifiedState={stats.unifiedReadiness}
-          blockers={stats.unifiedReadinessBlockers}
-          nextStep={stats.unifiedReadinessNextStep}
-          soakHistory={stats.soakHistory}
-          soakSummary={stats.soakSummary}
-          replaySignFlipRate={stats.replaySignFlipRate}
-          accountKey={cloudAccountKey}
+      {uiCompact ? (
+        <DeskCommandCenter
+          stats={stats}
+          cloudAccountKey={cloudAccountKey}
+          profitModeCfg={profitModeCfg}
+          setReplaySignFlipRate={setReplaySignFlipRate}
+          onRotationReport={onRotationReport}
+          onRestoreRotationStrategy={onRestoreRotationStrategy}
+          deskShadowIntentsEnabled={deskShadowIntentsEnabled}
+          deskTestnetOpsEnabled={deskTestnetOpsEnabled}
+          advancedTabGated={profitModeCfg.enabled}
         />
-      ) : null}
+      ) : (
+        <>
+          {profitModeCfg.enabled ? (
+            <SoakTrendPanel
+              unifiedState={stats.unifiedReadiness}
+              blockers={stats.unifiedReadinessBlockers}
+              nextStep={stats.unifiedReadinessNextStep}
+              soakHistory={stats.soakHistory}
+              soakSummary={stats.soakSummary}
+              replaySignFlipRate={stats.replaySignFlipRate}
+              accountKey={cloudAccountKey}
+            />
+          ) : null}
 
-      <DeskPnLScorecardPanel
-        scorecard={stats.deskPnLScorecard ?? null}
-        profitMode={profitModeCfg}
-        profitModeSkipCount={stats.profitModeSkipCount ?? 0}
-        sessionGateOn={profitModeSessionGateEnabled(profitModeCfg)}
-        allocationByEdgeOn={profitModeAllocationByEdgeEnabled(profitModeCfg)}
-      />
+          <DeskPnLScorecardPanel
+            scorecard={stats.deskPnLScorecard ?? null}
+            profitMode={profitModeCfg}
+            profitModeSkipCount={stats.profitModeSkipCount ?? 0}
+            sessionGateOn={profitModeSessionGateEnabled(profitModeCfg)}
+            allocationByEdgeOn={profitModeAllocationByEdgeEnabled(profitModeCfg)}
+          />
 
-      <ScorecardActionPanel
-        scorecard={stats.deskPnLScorecard ?? null}
-        action={stats.scorecardAction ?? null}
-      />
+          <ScorecardActionPanel
+            scorecard={stats.deskPnLScorecard ?? null}
+            action={stats.scorecardAction ?? null}
+          />
+        </>
+      )}
 
       <DeskCard>
         <DeskSectionHeader
@@ -624,63 +655,67 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
                 compact
               />
             </div>
-            <DeskHealthBadge health={stats.rollingHealthCheck ?? null} />
-            <DeskMonitorPanel
-              accountKey={cloudAccountKey}
-              skipReasonSummary={stats.skipReasonSummary}
-              runtimeBlocklist={stats.runtimeBlocklistIds}
-              signalThreshold={stats.effectiveSignalThreshold}
-              leverage={25}
-              takerFeePct={0.001}
-              maxSameSide={2}
-              minNotional={100}
-              openPositionCount={stats.openPositions}
-              currentRegime={stats.deskLastRegimeTag}
-              mongoConnected={Boolean(cloudAccountKey)}
-              currentTpPct={1.5}
-              currentSlPct={0.5}
-              onRotationReport={onRotationReport}
-              onRestoreRotationStrategy={onRestoreRotationStrategy}
-              attributionReport={stats.attributionReport}
-              rotationReport={stats.rotationReport}
-              qualitySkipCount={stats.qualitySkipCount}
-              mtfSkipCount={stats.mtfSkipCount}
-              gateEvaluationCount={stats.gateEvaluationCount}
-              engineDeskRecommendation={stats.deskRecommendation}
-              strategyDiagnostics={stats.strategyDiagnostics}
-              unifiedReadiness={stats.unifiedReadiness}
-              unifiedReadinessBlockers={stats.unifiedReadinessBlockers}
-              unifiedReadinessNextStep={stats.unifiedReadinessNextStep}
-              soakHistory={stats.soakHistory}
-              engineReplaySignFlipRate={stats.replaySignFlipRate}
-              onReplaySignFlipRate={setReplaySignFlipRate}
-            />
-            <AttributionPanel report={stats.attributionReport ?? null} />
-            <SignalQualityPanel
-              quality={stats.lastSignalQuality ?? null}
-              skipCount={stats.qualitySkipCount ?? 0}
-            />
-            <MTFConfluencePanel
-              result={stats.lastMtfConfluence ?? null}
-              skipCount={stats.mtfSkipCount ?? 0}
-            />
-            <div className="desk-metrics-row" style={{ marginTop: 8 }}>
-              <DeskMetricTile
-                label="Profit-mode skips"
-                value={String(stats.profitModeSkipCount ?? 0)}
-                detail={stats.gateEvaluationCount ? `of ${stats.gateEvaluationCount} evals` : undefined}
-                compact
-              />
-              <DeskMetricTile label="Quality skips" value={String(stats.qualitySkipCount ?? 0)} compact />
-              <DeskMetricTile label="MTF skips" value={String(stats.mtfSkipCount ?? 0)} compact />
-              <DeskMetricTile label="Skip ATR/fees" value={String(stats.deskSkippedMinExpectedMove)} compact />
-              <DeskMetricTile label="Skip same-dir" value={String(stats.deskSkippedSameDirCap)} compact />
-              <DeskMetricTile label="Skip regime" value={String(stats.deskSkippedByRegime)} compact />
-              <DeskMetricTile label="Skip priority" value={String(stats.deskSkippedLowPriorityEntry)} compact />
-              <DeskMetricTile label="Skip spread" value={String(stats.deskSkippedSpread)} compact />
-              <DeskMetricTile label="Skip category" value={String(stats.deskSkippedCategoryCap)} compact />
-              <DeskMetricTile label="Skip session" value={String(stats.deskSkippedOutsideSession)} compact />
-            </div>
+            {!uiCompact ? (
+              <>
+                <DeskHealthBadge health={stats.rollingHealthCheck ?? null} />
+                <DeskMonitorPanel
+                  accountKey={cloudAccountKey}
+                  skipReasonSummary={stats.skipReasonSummary}
+                  runtimeBlocklist={stats.runtimeBlocklistIds}
+                  signalThreshold={stats.effectiveSignalThreshold}
+                  leverage={25}
+                  takerFeePct={0.001}
+                  maxSameSide={2}
+                  minNotional={100}
+                  openPositionCount={stats.openPositions}
+                  currentRegime={stats.deskLastRegimeTag}
+                  mongoConnected={Boolean(cloudAccountKey)}
+                  currentTpPct={1.5}
+                  currentSlPct={0.5}
+                  onRotationReport={onRotationReport}
+                  onRestoreRotationStrategy={onRestoreRotationStrategy}
+                  attributionReport={stats.attributionReport}
+                  rotationReport={stats.rotationReport}
+                  qualitySkipCount={stats.qualitySkipCount}
+                  mtfSkipCount={stats.mtfSkipCount}
+                  gateEvaluationCount={stats.gateEvaluationCount}
+                  engineDeskRecommendation={stats.deskRecommendation}
+                  strategyDiagnostics={stats.strategyDiagnostics}
+                  unifiedReadiness={stats.unifiedReadiness}
+                  unifiedReadinessBlockers={stats.unifiedReadinessBlockers}
+                  unifiedReadinessNextStep={stats.unifiedReadinessNextStep}
+                  soakHistory={stats.soakHistory}
+                  engineReplaySignFlipRate={stats.replaySignFlipRate}
+                  onReplaySignFlipRate={setReplaySignFlipRate}
+                />
+                <AttributionPanel report={stats.attributionReport ?? null} />
+                <SignalQualityPanel
+                  quality={stats.lastSignalQuality ?? null}
+                  skipCount={stats.qualitySkipCount ?? 0}
+                />
+                <MTFConfluencePanel
+                  result={stats.lastMtfConfluence ?? null}
+                  skipCount={stats.mtfSkipCount ?? 0}
+                />
+                <div className="desk-metrics-row" style={{ marginTop: 8 }}>
+                  <DeskMetricTile
+                    label="Profit-mode skips"
+                    value={String(stats.profitModeSkipCount ?? 0)}
+                    detail={stats.gateEvaluationCount ? `of ${stats.gateEvaluationCount} evals` : undefined}
+                    compact
+                  />
+                  <DeskMetricTile label="Quality skips" value={String(stats.qualitySkipCount ?? 0)} compact />
+                  <DeskMetricTile label="MTF skips" value={String(stats.mtfSkipCount ?? 0)} compact />
+                  <DeskMetricTile label="Skip ATR/fees" value={String(stats.deskSkippedMinExpectedMove)} compact />
+                  <DeskMetricTile label="Skip same-dir" value={String(stats.deskSkippedSameDirCap)} compact />
+                  <DeskMetricTile label="Skip regime" value={String(stats.deskSkippedByRegime)} compact />
+                  <DeskMetricTile label="Skip priority" value={String(stats.deskSkippedLowPriorityEntry)} compact />
+                  <DeskMetricTile label="Skip spread" value={String(stats.deskSkippedSpread)} compact />
+                  <DeskMetricTile label="Skip category" value={String(stats.deskSkippedCategoryCap)} compact />
+                  <DeskMetricTile label="Skip session" value={String(stats.deskSkippedOutsideSession)} compact />
+                </div>
+              </>
+            ) : null}
             <p className="desk-label-md" style={{ marginTop: 16, marginBottom: 8 }}>
               Exit reasons (last 400)
             </p>
@@ -711,7 +746,9 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
                 />
               )}
             </div>
-            <ShadowIntentLogPanel enabled={deskShadowIntentsEnabled} signedIn={Boolean(cloudAccountKey)} />
+            {!uiCompact ? (
+              <ShadowIntentLogPanel enabled={deskShadowIntentsEnabled} signedIn={Boolean(cloudAccountKey)} />
+            ) : null}
             {researchMode ? (
               <div style={{ marginTop: 16 }}>
                 <StrategyResearchPanel
@@ -814,7 +851,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         </DeskCard>
       ) : null}
 
-      {deskTestnetOpsEnabled ? (
+      {deskTestnetOpsEnabled && !uiCompact ? (
         <DeskCard variant="outlined">
           <TestnetOpsPanel />
         </DeskCard>

@@ -27,6 +27,8 @@ interface Props {
   };
   replaySignFlipRate: number | null;
   accountKey?: string | null;
+  /** full = hero+table+blockers; tableOnly = 7-day table (command center Today tab). */
+  variant?: "full" | "tableOnly";
 }
 
 export function SoakTrendPanel({
@@ -37,11 +39,67 @@ export function SoakTrendPanel({
   soakSummary,
   replaySignFlipRate,
   accountKey,
+  variant = "full",
 }: Props) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(variant === "full");
   const color = STATE_COLOR[unifiedState];
   const last7 = soakHistory.slice(-7);
   const replayGateOn = deskReplayGateEnabled();
+
+  if (variant === "tableOnly") {
+    return (
+      <div style={{ fontSize: 11, color: "#e6edf3" }}>
+        {last7.length > 0 ? (
+          <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ color: "#8b949e", textAlign: "left" }}>
+                <th>UTC date</th>
+                <th>closes</th>
+                <th>E</th>
+                <th>fee/gross</th>
+                <th>grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {last7.map((d) => (
+                <tr key={d.dateUtc} style={{ borderTop: "1px solid #21262d" }}>
+                  <td>{d.dateUtc}</td>
+                  <td>{d.closes}</td>
+                  <td style={{ color: d.expectancy >= 0 ? "#3fb950" : "#f85149" }}>
+                    ${d.expectancy.toFixed(2)}
+                  </td>
+                  <td>{d.feePctOfAbsGross.toFixed(1)}%</td>
+                  <td
+                    style={{
+                      color:
+                        d.grade === "GREEN"
+                          ? "#3fb950"
+                          : d.grade === "YELLOW"
+                            ? "#d29922"
+                            : "#f85149",
+                    }}
+                  >
+                    {d.grade}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ color: "#8b949e" }}>No soak days recorded yet — snapshots append daily.</div>
+        )}
+        {replaySignFlipRate != null && replaySignFlipRate > 0.15 ? (
+          <p style={{ marginTop: 8, fontSize: 10, color: "#d29922" }}>
+            Run replay compare:{" "}
+            <code style={{ fontSize: 9, fontFamily: "var(--desk-font-mono, monospace)" }}>
+              npm run replay:compare -- --account_key={accountKey ?? "<key>"} --date=
+              {new Date().toISOString().slice(0, 10)}
+            </code>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div

@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   useDeskPerformanceMonitor,
+  type MonitorState,
   type RotationReport,
 } from "@/hooks/useDeskPerformanceMonitor";
 import { StrategyRotationPanel } from "@/components/StrategyRotationPanel";
@@ -66,6 +67,16 @@ export interface DeskMonitorPanelProps {
   soakHistory?: SoakDaySnapshot[];
   engineReplaySignFlipRate?: number | null;
   onReplaySignFlipRate?: (rate: number | null) => void;
+  /** Shared monitor from DeskCommandCenter — avoids duplicate polling. */
+  monitorState?: MonitorState;
+  /** UI-20: go-live shown on Health tab instead. */
+  hideGoLiveGates?: boolean;
+  /** UI-20: rotation shown on Health tab instead. */
+  hideStrategyRotation?: boolean;
+  /** UI-20: winners roster shown in Advanced tab instead. */
+  hideWinnersSuggestion?: boolean;
+  /** UI-20: collapsed recommendations count on Health tab. */
+  compactRecommendations?: boolean;
 }
 
 const SEV_COLOR: Record<TuningRecommendation["severity"], string> = {
@@ -120,14 +131,21 @@ export function DeskMonitorPanel({
   soakHistory = [],
   engineReplaySignFlipRate = null,
   onReplaySignFlipRate,
+  monitorState: monitorStateProp,
+  hideGoLiveGates = false,
+  hideStrategyRotation = false,
+  hideWinnersSuggestion = false,
+  compactRecommendations = false,
 }: DeskMonitorPanelProps) {
-  const monitor = useDeskPerformanceMonitor(
+  const internalMonitor = useDeskPerformanceMonitor(
     accountKey,
     signalThreshold,
     currentTpPct,
     currentSlPct,
     maxSameSide,
+    { enabled: monitorStateProp === undefined },
   );
+  const monitor = monitorStateProp ?? internalMonitor;
   const [expanded, setExpanded] = useState(false);
   const [blocklistRevision, setBlocklistRevision] = useState(0);
 
@@ -372,7 +390,14 @@ export function DeskMonitorPanel({
             </div>
           ) : null}
 
-          {recommendations.length > 0 ? (
+          {recommendations.length > 0 && compactRecommendations ? (
+            <div style={{ marginTop: 8, fontSize: 10, color: "#8b949e" }}>
+              {recommendations.length} tuning recommendation
+              {recommendations.length === 1 ? "" : "s"} — expand Health tab monitor for details
+            </div>
+          ) : null}
+
+          {recommendations.length > 0 && !compactRecommendations ? (
             <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>
                 Recommendations ({recommendations.length})
@@ -566,7 +591,7 @@ export function DeskMonitorPanel({
             </div>
           ) : null}
 
-          {winnersSuggestion ? (
+          {winnersSuggestion && !hideWinnersSuggestion ? (
             <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
               <div style={{ fontWeight: 600, marginBottom: 4, color: "#58a6ff" }}>
                 Suggested roster (read-only)
@@ -783,7 +808,9 @@ export function DeskMonitorPanel({
             </div>
           ) : null}
 
-          <GoLiveGatesPanel report={goLiveGates} onCopyReport={copyValidationReport} />
+          {!hideGoLiveGates ? (
+            <GoLiveGatesPanel report={goLiveGates} onCopyReport={copyValidationReport} />
+          ) : null}
 
           <div style={{ marginTop: 8, borderTop: "1px solid #21262d", paddingTop: 6 }}>
             <button
@@ -826,10 +853,12 @@ export function DeskMonitorPanel({
         </>
       ) : null}
 
-      <StrategyRotationPanel
-        report={rotationReport}
-        onRestore={onRestoreRotationStrategy}
-      />
+      {!hideStrategyRotation ? (
+        <StrategyRotationPanel
+          report={rotationReport}
+          onRestore={onRestoreRotationStrategy}
+        />
+      ) : null}
     </div>
   );
 }
