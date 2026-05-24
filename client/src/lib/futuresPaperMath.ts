@@ -669,7 +669,10 @@ export type PaperHardExitInputs = {
 };
 
 /**
- * Hard exits only, **same order as runtime** `resolveExit` (liq → SL → TP → TIME).
+ * Hard exits only, **same order as runtime** `resolveExit` (liq → SL → TP).
+ * TIME exits are LEGACY ONLY — stored in DB for old trades.
+ * This function MUST NOT return `TIME` for any new position.
+ * `PaperHardExitReason` still includes `TIME` for type compatibility only.
  * Trailing / breakeven branches stay in the hook (need position mutation + progress).
  */
 export function paperResolveHardExit(i: PaperHardExitInputs): PaperHardExitResult {

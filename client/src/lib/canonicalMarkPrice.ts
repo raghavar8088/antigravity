@@ -13,6 +13,12 @@ export function setCanonicalMark(price: number, source: string): void {
 }
 
 export function getCanonicalMark(): number | null {
+  if (markAgeMs() > 30_000) {
+    console.warn(
+      "[MarkPrice] Stale mark — age > 30s, last:",
+      _canonical?.price ?? "none",
+    );
+  }
   return _canonical?.price ?? null;
 }
 

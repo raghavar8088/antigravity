@@ -53,6 +53,18 @@ export function computeSessionTradingMetrics(
     (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
   );
 
+  if (process.env.NODE_ENV === "development") {
+    const probeCount = trades.filter((t) =>
+      isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+    ).length;
+    if (probeCount > 0) {
+      console.error(
+        `[Metrics] WARNING: ${probeCount} probe trades reached metrics. ` +
+          "isProbeOrBootstrapTrade filter may not be applied upstream.",
+      );
+    }
+  }
+
   if (!productionTrades.length) {
     return {
       tradesPerHour: 0,

@@ -116,7 +116,15 @@ export async function getTradesCollection(collectionName = TRADES_COLLECTION): P
 
 export type UpsertTradeResult =
   | { ok: true; upsertedCount: number; modifiedCount: number; matchedCount: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; skipped?: boolean };
+
+function accountKeyMissing(accountKey: string | undefined | null): boolean {
+  if (!accountKey || typeof accountKey !== "string" || !accountKey.trim()) {
+    console.warn("[Mongo] Skipping upsert — account_key missing or empty");
+    return true;
+  }
+  return false;
+}
 
 /**
  * Upsert keyed by `client_trade_id`. `$set` writes the full row on every call;
@@ -132,6 +140,9 @@ export async function upsertTradeMongo(
   row: Omit<PaperTradeDbRow, "id" | "created_at">,
   collectionName = TRADES_COLLECTION,
 ): Promise<UpsertTradeResult> {
+  if (accountKeyMissing(row.account_key)) {
+    return { ok: false, error: "account_key missing", skipped: true };
+  }
   try {
     const col = await getTradesCollection(collectionName);
     const now = new Date().toISOString();
@@ -168,6 +179,9 @@ export type ListTradesOpts = {
 
 /** Mirrors the Supabase GET path: per-account list ordered by closed_at desc. */
 export async function listTradesMongo(opts: ListTradesOpts & { collectionName?: string }): Promise<PaperTradeDbRow[]> {
+  if (accountKeyMissing(opts.accountKey)) {
+    return [];
+  }
   const col = await getTradesCollection(opts.collectionName ?? TRADES_COLLECTION);
   const filter: Record<string, unknown> = { account_key: opts.accountKey };
   if (opts.cursor) {
@@ -206,6 +220,7 @@ export type PaperResearchDoc = {
 };
 
 export async function getAccountState(accountKey: string): Promise<PaperStateDoc | null> {
+  if (accountKeyMissing(accountKey)) return null;
   try {
     const entry = await connect();
     const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
@@ -217,6 +232,7 @@ export async function getAccountState(accountKey: string): Promise<PaperStateDoc
 }
 
 export async function upsertAccountState(doc: PaperStateDoc): Promise<void> {
+  if (accountKeyMissing(doc.account_key)) return;
   try {
     const entry = await connect();
     const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
@@ -232,6 +248,7 @@ export async function upsertAccountState(doc: PaperStateDoc): Promise<void> {
 }
 
 export async function getResearchState(accountKey: string, namespace: string): Promise<PaperResearchDoc | null> {
+  if (accountKeyMissing(accountKey)) return null;
   try {
     const entry = await connect();
     const col = entry.db.collection<PaperResearchDoc>(RESEARCH_COLLECTION);
@@ -243,6 +260,7 @@ export async function getResearchState(accountKey: string, namespace: string): P
 }
 
 export async function upsertResearchState(doc: PaperResearchDoc): Promise<void> {
+  if (accountKeyMissing(doc.account_key)) return;
   try {
     const entry = await connect();
     const col = entry.db.collection<PaperResearchDoc>(RESEARCH_COLLECTION);

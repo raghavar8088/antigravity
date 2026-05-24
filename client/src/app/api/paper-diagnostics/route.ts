@@ -66,10 +66,13 @@ export async function GET(req: Request) {
     const diagnostics = computeStrategyDiagnostics(rows);
     const healthCheck = computeRollingHealthCheck(rows, windowN);
 
+    const tradesForTuner = rows.slice(0, 50);
+
     return NextResponse.json({
       ok: true,
       diagnostics,
       healthCheck,
+      trades: tradesForTuner,
       tradeCount: rows.length,
       accountKey,
       window: windowN,

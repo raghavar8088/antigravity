@@ -34,7 +34,6 @@ import {
   DeskShell,
   type DeskEngineStatus,
 } from "@/components/desk/ui";
-import { useDeskPerformanceMonitor } from "@/hooks/useDeskPerformanceMonitor";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
 import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
@@ -150,8 +149,6 @@ export function BTCFuturesScalper({
       }),
     [authUser?.id, storageNamespace],
   );
-
-  useDeskPerformanceMonitor(cloudAccountKey);
 
   const {
     positions,

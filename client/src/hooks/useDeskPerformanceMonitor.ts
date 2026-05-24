@@ -4,15 +4,21 @@
  * useDeskPerformanceMonitor
  * Polls /api/paper-diagnostics every 60s.
  * Emits tuning recommendations based on real closed-trade data.
- * Applies CRITICAL BLOCK_STRATEGY recommendations via runtime blocklist only
- * (no engine state, no DB persistence).
+ * Read-only recommendations — runtime blocks require explicit user action
+ * in DeskMonitorPanel (no auto-block on poll).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { blockStrategyRuntime } from "@/lib/futuresDeskPolicy";
 import type {
   DiagnosticSummary,
   HealthCheckResult,
 } from "@/lib/futuresStrategyDiagnostics";
+import {
+  recommendOneTune,
+  type TuneRecommendation,
+} from "@/lib/futuresParameterTuner";
+import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
+
+export type { TuneRecommendation };
 
 export interface TuningRecommendation {
   type:
@@ -36,6 +42,8 @@ export interface MonitorState {
   diagnostics: DiagnosticSummary | null;
   healthCheck: HealthCheckResult | null;
   recommendations: TuningRecommendation[];
+  tuneRecommendation: TuneRecommendation | null;
+  timeExitCount: number;
   lastFetchAt: number | null;
   fetchError: string | null;
   isFetching: boolean;
@@ -131,11 +139,17 @@ function deriveRecommendations(
 
 export function useDeskPerformanceMonitor(
   accountKey: string | null | undefined,
+  currentThreshold = 28,
+  currentTpPct = 1.5,
+  currentSlPct = 0.5,
+  currentSameSide = 2,
 ): MonitorState {
   const [state, setState] = useState<MonitorState>({
     diagnostics: null,
     healthCheck: null,
     recommendations: [],
+    tuneRecommendation: null,
+    timeExitCount: 0,
     lastFetchAt: null,
     fetchError: null,
     isFetching: false,
@@ -163,6 +177,7 @@ export function useDeskPerformanceMonitor(
         error?: string;
         diagnostics?: DiagnosticSummary;
         healthCheck?: HealthCheckResult;
+        trades?: PaperTradeDbRow[];
       };
 
       if (!res.ok || !data.ok) {
@@ -171,6 +186,29 @@ export function useDeskPerformanceMonitor(
 
       const diagnostics = data.diagnostics ?? null;
       const healthCheck = data.healthCheck ?? null;
+      const trades = data.trades ?? [];
+
+      const timeExitCount = trades.filter((t) => t.exit_reason === "TIME").length;
+
+      const tuneRecommendation =
+        trades.length >= 10
+          ? recommendOneTune(
+              trades,
+              currentThreshold,
+              currentTpPct,
+              currentSlPct,
+              currentSameSide,
+              50,
+            )
+          : null;
+
+      if (tuneRecommendation && tuneRecommendation.target !== "NO_CHANGE") {
+        console.info(
+          `[Tuner] Recommend: ${tuneRecommendation.target} ` +
+            `${tuneRecommendation.currentValue} → ${tuneRecommendation.suggestedValue} ` +
+            `(${tuneRecommendation.confidence} confidence, ${tuneRecommendation.tradesAnalyzed} trades)`,
+        );
+      }
 
       const recommendations =
         diagnostics && healthCheck
@@ -181,20 +219,12 @@ export function useDeskPerformanceMonitor(
         .filter((r) => r.severity === "CRITICAL")
         .forEach((r) => console.warn("[Monitor] CRITICAL:", r.reason));
 
-      for (const r of recommendations) {
-        if (
-          r.type === "BLOCK_STRATEGY" &&
-          r.severity === "CRITICAL" &&
-          r.strategyId != null
-        ) {
-          blockStrategyRuntime(r.strategyId);
-        }
-      }
-
       setState({
         diagnostics,
         healthCheck,
         recommendations,
+        tuneRecommendation,
+        timeExitCount,
         lastFetchAt: Date.now(),
         fetchError: null,
         isFetching: false,
@@ -208,7 +238,7 @@ export function useDeskPerformanceMonitor(
         fetchError: msg,
       }));
     }
-  }, [accountKey]);
+  }, [accountKey, currentThreshold, currentTpPct, currentSlPct, currentSameSide]);
 
   useEffect(() => {
     if (!accountKey || accountKey.trim() === "") return;

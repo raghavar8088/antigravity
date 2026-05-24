@@ -11,6 +11,7 @@ import type {
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { DeskHealthBadge } from "@/components/DeskHealthBadge";
+import { DeskMonitorPanel } from "@/components/DeskMonitorPanel";
 import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
 import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
 import { StrategyResearchPanel } from "@/components/btcFutures/StrategyResearchPanel";
@@ -579,6 +580,21 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
               />
             </div>
             <DeskHealthBadge health={stats.rollingHealthCheck ?? null} />
+            <DeskMonitorPanel
+              accountKey={cloudAccountKey}
+              skipReasonSummary={stats.skipReasonSummary}
+              runtimeBlocklist={stats.runtimeBlocklistIds}
+              signalThreshold={stats.effectiveSignalThreshold}
+              leverage={25}
+              takerFeePct={0.001}
+              maxSameSide={2}
+              minNotional={100}
+              openPositionCount={stats.openPositions}
+              currentRegime={stats.deskLastRegimeTag}
+              mongoConnected={Boolean(cloudAccountKey)}
+              currentTpPct={1.5}
+              currentSlPct={0.5}
+            />
             <div className="desk-metrics-row" style={{ marginTop: 8 }}>
               <DeskMetricTile label="Skip ATR/fees" value={String(stats.deskSkippedMinExpectedMove)} compact />
               <DeskMetricTile label="Skip same-dir" value={String(stats.deskSkippedSameDirCap)} compact />
