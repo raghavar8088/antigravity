@@ -3,6 +3,14 @@
 import { DeskBanner, DeskCard, DeskMetricTile, DeskSectionHeader } from "@/components/desk/ui";
 import { deskEntryDebugEnabledFromEnv, type DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 
+/** True when either DESK_ENTRY_DEBUG or BTC_FT_ENTRY_DEBUG env flag is set. */
+export function entryDebugEnabledForPanel(): boolean {
+  return (
+    deskEntryDebugEnabledFromEnv() ||
+    process.env.NEXT_PUBLIC_BTC_FT_ENTRY_DEBUG === "1"
+  );
+}
+
 type EntryDebugPanelProps = {
   entryDebug: DeskEntryPollDebug | null;
   sessionSkips: {
@@ -16,6 +24,10 @@ type EntryDebugPanelProps = {
   };
   pauseEntries: boolean;
   drawdownLocked: boolean;
+  /** When true, render regardless of env flags (used by Command Center dev fold). */
+  forceVisible?: boolean;
+  /** Adjust hint copy to avoid recommending threshold/gate loosening in profit mode. */
+  profitModeEnabled?: boolean;
 };
 
 function topSkipRows(debug: DeskEntryPollDebug) {
@@ -59,16 +71,20 @@ function blockerSharePct(debug: DeskEntryPollDebug, blockerKey: string): number 
   return Math.round((val / debug.evalPairs) * 100);
 }
 
-function blockerHint(blocker: string): string {
+function blockerHint(blocker: string, profitModeEnabled = false): string {
   switch (blocker) {
     case "SIGNAL":
-      return "Lower NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD (default 26 → try 24) or wait for volatile conditions.";
+      return profitModeEnabled
+        ? "Raise threshold or wait — profit mode favors fewer, higher-quality entries. Do not lower threshold."
+        : "Lower NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD (default 26 → try 24) or wait for volatile conditions.";
     case "CONFIRM":
       return "HTF/confluence extras failing. Enable NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM=1 (dev only) or wait for trend.";
     case "REGIME":
       return "Market is in chop but strategies require trend regime. Wait for breakout or widen DESK_REGIME_EXTRA_TOKENS.";
     case "MIN_MOVE":
-      return "ATR below fee hurdle. Reduce NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K or wait for volatility.";
+      return profitModeEnabled
+        ? "Expected — profit mode uses K=3 in chop. Wait for higher ATR before entries open naturally."
+        : "ATR below fee hurdle. Reduce NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K or wait for volatility.";
     case "SESSION":
       return "Entry UTC window closed. Check NEXT_PUBLIC_DESK_ENTRY_UTC_START / END.";
     case "SPREAD":
@@ -90,8 +106,10 @@ export function EntryDebugPanel({
   sessionSkips,
   pauseEntries,
   drawdownLocked,
+  forceVisible = false,
+  profitModeEnabled = false,
 }: EntryDebugPanelProps) {
-  if (!deskEntryDebugEnabledFromEnv()) return null;
+  if (!forceVisible && !entryDebugEnabledForPanel()) return null;
 
   const poll = entryDebug;
   const top = poll ? topSkipRows(poll) : [];
@@ -117,7 +135,7 @@ export function EntryDebugPanel({
               (blockerPct !== null ? ` (${blockerPct}% of evals)` : "")
             }
           >
-            {blockerHint(blocker)}{" "}
+            {blockerHint(blocker, profitModeEnabled)}{" "}
             <a
               href="#btc-ft-no-trades"
               style={{ textDecoration: "underline", fontWeight: 600 }}

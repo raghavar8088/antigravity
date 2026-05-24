@@ -37,6 +37,10 @@ import {
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
 import { formatDeskPct, formatDeskUsd, pnlToneClass } from "@/lib/deskFormat";
+import { profitModeFromEnv } from "@/lib/futuresProfitMode";
+import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
+import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
+import { ProfitModeChecklist } from "@/components/ProfitModeChecklist";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
@@ -130,6 +134,9 @@ export function BTCFuturesScalper({
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
   const [deskDark, setDeskDark] = useState(false);
+
+  const profitModeCfg = useMemo(() => profitModeFromEnv(), []);
+  const uiCompact = useMemo(() => deskUiCompactFromEnv(profitModeCfg.enabled), [profitModeCfg.enabled]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -393,7 +400,9 @@ export function BTCFuturesScalper({
           equity={equity}
           equityDetail={
             deskMounted
-              ? `Session ${pnlPositive ? "+" : ""}${formatDeskUsd(sessionPnL)} · ${formatDeskPct(totalReturn, { signed: true })}`
+              ? uiCompact
+                ? unifiedReadinessLabel(stats.unifiedReadiness)
+                : `Session ${pnlPositive ? "+" : ""}${formatDeskUsd(sessionPnL)} · ${formatDeskPct(totalReturn, { signed: true })}`
               : undefined
           }
           status={engineStatus}
@@ -402,32 +411,34 @@ export function BTCFuturesScalper({
         />
       }
     >
-      <DeskHeroStrip
-        metrics={[
-          {
-            label: "Session PnL",
-            value: deskMounted ? formatDeskUsd(sessionPnL, { signed: true }) : "—",
-            detail: deskMounted ? `${formatDeskPct(totalReturn, { signed: true })} return` : undefined,
-            valueClassName: deskMounted ? pnlToneClass(sessionPnL) : undefined,
-            highlight: true,
-          },
-          {
-            label: "Equity",
-            value: deskMounted ? formatDeskUsd(equity, { decimals: 0 }) : "—",
-            detail: `Base ${formatDeskUsd(baseBalance, { decimals: 0 })}`,
-          },
-          {
-            label: "Open positions",
-            value: `${stats.openPositions} / ${stats.maxPositions}`,
-            detail: `${longCount} long · ${shortCount} short`,
-          },
-          {
-            label: "Win rate",
-            value: deskMounted && stats.totalTrades > 0 ? formatDeskPct(stats.winRate) : "—",
-            detail: deskMounted ? `${stats.totalTrades} closed trades` : undefined,
-          },
-        ]}
-      />
+      {!uiCompact && (
+        <DeskHeroStrip
+          metrics={[
+            {
+              label: "Session PnL",
+              value: deskMounted ? formatDeskUsd(sessionPnL, { signed: true }) : "—",
+              detail: deskMounted ? `${formatDeskPct(totalReturn, { signed: true })} return` : undefined,
+              valueClassName: deskMounted ? pnlToneClass(sessionPnL) : undefined,
+              highlight: true,
+            },
+            {
+              label: "Equity",
+              value: deskMounted ? formatDeskUsd(equity, { decimals: 0 }) : "—",
+              detail: `Base ${formatDeskUsd(baseBalance, { decimals: 0 })}`,
+            },
+            {
+              label: "Open positions",
+              value: `${stats.openPositions} / ${stats.maxPositions}`,
+              detail: `${longCount} long · ${shortCount} short`,
+            },
+            {
+              label: "Win rate",
+              value: deskMounted && stats.totalTrades > 0 ? formatDeskPct(stats.winRate) : "—",
+              detail: deskMounted ? `${stats.totalTrades} closed trades` : undefined,
+            },
+          ]}
+        />
+      )}
 
       <div className="desk-toolbar">
         <p className="desk-label-md" style={{ margin: 0, maxWidth: "min(100%, 480px)" }}>
@@ -456,20 +467,31 @@ export function BTCFuturesScalper({
         </DeskBanner>
       ) : null}
 
-      <EntryDebugPanel
-        entryDebug={entryDebug}
-        pauseEntries={pauseEntries}
-        drawdownLocked={stats.isDrawdownLocked}
-        sessionSkips={{
-          minMove: stats.deskSkippedMinExpectedMove,
-          regime: stats.deskSkippedByRegime,
-          spread: stats.deskSkippedSpread,
-          session: stats.deskSkippedOutsideSession,
-          category: stats.deskSkippedCategoryCap,
-          lowPriority: stats.deskSkippedLowPriorityEntry,
-          regimeBreakdown: stats.deskSkippedByRegimeBreakdown,
-        }}
-      />
+      {/* In compact mode entry debug moves to Command Center Advanced tab */}
+      {!uiCompact && (
+        <EntryDebugPanel
+          entryDebug={entryDebug}
+          pauseEntries={pauseEntries}
+          drawdownLocked={stats.isDrawdownLocked}
+          profitModeEnabled={profitModeCfg.enabled}
+          sessionSkips={{
+            minMove: stats.deskSkippedMinExpectedMove,
+            regime: stats.deskSkippedByRegime,
+            spread: stats.deskSkippedSpread,
+            session: stats.deskSkippedOutsideSession,
+            category: stats.deskSkippedCategoryCap,
+            lowPriority: stats.deskSkippedLowPriorityEntry,
+            regimeBreakdown: stats.deskSkippedByRegimeBreakdown,
+          }}
+        />
+      )}
+
+      {uiCompact && profitModeCfg.enabled && stats.totalTrades < 10 && (
+        <ProfitModeChecklist
+          storageNamespace={storageNamespace?.trim() || "btc_futures_scalper"}
+          totalTrades={stats.totalTrades}
+        />
+      )}
 
       {dataHealth.showFeedWarning || dataHealth.lastError ? (
         <DeskBanner variant="warning" title="Futures kline feed is degraded">
@@ -568,6 +590,8 @@ export function BTCFuturesScalper({
         onRotationReport={updateSuspendedStrategies}
         onRestoreRotationStrategy={restoreRotationStrategy}
         setReplaySignFlipRate={setReplaySignFlipRate}
+        entryDebug={entryDebug}
+        pauseEntries={pauseEntries}
       />
 
     </DeskShell>

@@ -173,10 +173,25 @@ body.combat-mode {
   }
 }
 
+/* Readiness level color tokens — mirrors READINESS_COLOR in DeskCommandCenter */
+:root {
+  --desk-readiness-not-ready:         #f85149;
+  --desk-readiness-collect-data:      #8b949e;
+  --desk-readiness-paper-edge-ok:     #d29922;
+  --desk-readiness-paper-ready:       #58a6ff;
+  --desk-readiness-testnet-soak-ready:#3fb950;
+}
+
 .desk-metrics-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--desk-space-3);
+}
+
+@media (max-width: 640px) {
+  .desk-metrics-row {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
 }
 
 @keyframes desk-indeterminate {

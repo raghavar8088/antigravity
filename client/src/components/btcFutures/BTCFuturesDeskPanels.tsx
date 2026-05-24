@@ -8,6 +8,7 @@ import type {
   BTCFuturesStrategyStatus,
   BTCFuturesTrade,
 } from "@/hooks/useBTCFuturesScalperEngine";
+import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
 import { DeskHealthBadge } from "@/components/DeskHealthBadge";
@@ -267,6 +268,9 @@ export type BTCFuturesDeskPanelsProps = {
   onRotationReport?: (report: import("@/lib/futuresStrategyRotation").RotationReport) => void;
   onRestoreRotationStrategy?: (strategyId: number) => void;
   setReplaySignFlipRate?: (rate: number | null) => void;
+  /** Forwarded to DeskCommandCenter Advanced tab entry debug fold (compact mode). */
+  entryDebug?: DeskEntryPollDebug | null;
+  pauseEntries?: boolean;
 };
 
 export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
@@ -318,9 +322,11 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
     onRotationReport,
     onRestoreRotationStrategy,
     setReplaySignFlipRate,
+    entryDebug,
+    pauseEntries,
   } = props;
 
-  const [profileOpen, setProfileOpen] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(!uiCompact);
   const exitChips = useMemo(() => parseExitReasonSummary(stats.sessionExitReasonSummary), [stats.sessionExitReasonSummary]);
 
   const positionColumns: DeskColumn<BTCFuturesPosition>[] = [
@@ -498,7 +504,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         <DeskSectionHeader title="Equity & PnL" subtitle={title} />
         <div className="desk-metrics-row">
           <DeskMetricTile
-            label="Paper desk balance"
+            label="Balance"
             value={mounted ? formatDeskUsd(equity) : "—"}
             valueClassName="desk-mono"
           />
@@ -508,45 +514,60 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
             valueClassName={pnlToneClass(sessionPnL)}
             detail={`${formatDeskPct(totalReturn, { signed: true })} vs base`}
           />
-          {uiCompact ? (
-            <DeskMetricTile
-              compact
-              label="Readiness"
-              value={unifiedReadinessLabel(stats.unifiedReadiness)}
-              detail={`${stats.soakSummary.greenDays}/7 green soak`}
-            />
-          ) : null}
           <DeskMetricTile
             label="Closed PnL"
             value={formatDeskUsd(stats.netPnl, { signed: true })}
             valueClassName={pnlToneClass(stats.netPnl)}
             detail={`${stats.totalTrades} trades`}
+            compact={uiCompact}
           />
           <DeskMetricTile
             label="Unrealized"
             value={formatDeskUsd(totalUnrealized, { signed: true })}
             valueClassName={pnlToneClass(totalUnrealized)}
+            compact={uiCompact}
           />
-          <DeskMetricTile label="Win rate" value={formatDeskPct(stats.winRate, { decimals: 1 })} compact />
-          <DeskMetricTile
-            label="Profit factor"
-            value={stats.profitFactor > 100 ? "∞" : stats.profitFactor.toFixed(2)}
-            valueClassName={stats.profitFactor >= 1 ? "desk-pnl-positive" : "desk-pnl-negative"}
-            compact
-          />
-          <DeskMetricTile
-            label="Drawdown"
-            value={formatDeskPct(stats.drawdownPct)}
-            detail={stats.isDrawdownLocked ? "Entries locked" : `Base ${formatDeskUsd(baseBalance)}`}
-            compact
-          />
-          <DeskMetricTile
-            label="Open exposure"
-            value={`${stats.openPositions} positions`}
-            detail={`${longCount} long · ${shortCount} short`}
-            compact
-          />
+          {!uiCompact && (
+            <>
+              <DeskMetricTile label="Win rate" value={formatDeskPct(stats.winRate, { decimals: 1 })} compact />
+              <DeskMetricTile
+                label="Profit factor"
+                value={stats.profitFactor > 100 ? "∞" : stats.profitFactor.toFixed(2)}
+                valueClassName={stats.profitFactor >= 1 ? "desk-pnl-positive" : "desk-pnl-negative"}
+                compact
+              />
+              <DeskMetricTile
+                label="Drawdown"
+                value={formatDeskPct(stats.drawdownPct)}
+                detail={stats.isDrawdownLocked ? "Entries locked" : `Base ${formatDeskUsd(baseBalance)}`}
+                compact
+              />
+              <DeskMetricTile
+                label="Open exposure"
+                value={`${stats.openPositions} positions`}
+                detail={`${longCount} long · ${shortCount} short`}
+                compact
+              />
+            </>
+          )}
         </div>
+        {uiCompact && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+            <DeskChip>{unifiedReadinessLabel(stats.unifiedReadiness)}</DeskChip>
+            {stats.deskPnLScorecard?.last50 ? (
+              <DeskChip>
+                E {formatDeskUsd(stats.deskPnLScorecard.last50.expectancy, { signed: true })} ·
+                fee {stats.deskPnLScorecard.last50.feePctOfAbsGross.toFixed(1)}%
+              </DeskChip>
+            ) : null}
+            <DeskChip tone={stats.soakSummary.greenDays >= 7 ? "success" : "warning"}>
+              {stats.soakSummary.greenDays}/7 green
+            </DeskChip>
+            <DeskChip>
+              {stats.openPositions}/{stats.maxPositions} open · {longCount}L {shortCount}S
+            </DeskChip>
+          </div>
+        )}
         {trades.length === 0 ? (
           <div style={{ marginTop: 12 }}>
             <DeskEmptyState title="No exits yet" subtitle="Last closed trade PnL will appear after the first close." />
@@ -573,6 +594,8 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
           deskShadowIntentsEnabled={deskShadowIntentsEnabled}
           deskTestnetOpsEnabled={deskTestnetOpsEnabled}
           advancedTabGated={profitModeCfg.enabled}
+          entryDebug={entryDebug}
+          pauseEntries={pauseEntries}
         />
       ) : (
         <>
@@ -606,6 +629,11 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
       <DeskCard>
         <DeskSectionHeader
           title="Desk profile & session flow"
+          subtitle={
+            uiCompact && !profileOpen
+              ? `Session E ${formatDeskUsd(stats.sessionExpectancyPerTrade, { signed: true })} · fee/gross ${formatDeskPct(stats.sessionFeePctOfAbsGross)} · ${exitChips.length} exit reasons`
+              : undefined
+          }
           actions={
             <>
               <DeskButton variant="outlined" style={{ minHeight: 36 }} onClick={() => setProfileOpen((v) => !v)}>
@@ -624,37 +652,41 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         />
         {profileOpen ? (
           <>
-            <div className="desk-metrics-row" style={{ marginBottom: 12 }}>
-              <DeskChip tone="primary">{FUTURES_STRATEGY_PROFILES[stats.strategyProfile].label}</DeskChip>
-              <DeskChip tone="primary">Regime {stats.deskLastRegimeTag}</DeskChip>
-              <DeskChip>Signal {stats.effectiveSignalThreshold}</DeskChip>
-              {stats.profitModeEnabled ? (
-                <DeskChip tone="success">Profit mode</DeskChip>
-              ) : null}
-              {stats.profitModeExitActive ? (
-                <DeskChip tone="warning">Strict exits</DeskChip>
-              ) : null}
-              {stats.deskVolSizedNotionalEnabled ? <DeskChip>Vol-sized notional</DeskChip> : null}
-            </div>
-            <div className="desk-metrics-row">
-              <DeskMetricTile label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} compact />
-              <DeskMetricTile
-                label="Expectancy"
-                value={formatDeskUsd(stats.sessionExpectancyPerTrade, { signed: true })}
-                valueClassName={pnlToneClass(stats.sessionExpectancyPerTrade)}
-                compact
-              />
-              <DeskMetricTile label="Fee / |gross|" value={formatDeskPct(stats.sessionFeePctOfAbsGross)} compact />
-              <DeskMetricTile label="Hold avg" value={`${stats.sessionAvgHoldMinutes.toFixed(1)}m`} compact />
-              <DeskMetricTile label="Hold median" value={`${stats.sessionMedianHoldMinutes.toFixed(1)}m`} compact />
-              <DeskMetricTile label="Hold P95" value={`${stats.sessionHoldP95Minutes.toFixed(1)}m`} compact />
-              <DeskMetricTile
-                label="Desk RR"
-                value={`${stats.deskTpWidenedStratCount} TP↑`}
-                detail={`LowRR ${stats.deskLowRrSkippedStratCount}`}
-                compact
-              />
-            </div>
+            {!uiCompact && (
+              <>
+                <div className="desk-metrics-row" style={{ marginBottom: 12 }}>
+                  <DeskChip tone="primary">{FUTURES_STRATEGY_PROFILES[stats.strategyProfile].label}</DeskChip>
+                  <DeskChip tone="primary">Regime {stats.deskLastRegimeTag}</DeskChip>
+                  <DeskChip>Signal {stats.effectiveSignalThreshold}</DeskChip>
+                  {stats.profitModeEnabled ? (
+                    <DeskChip tone="success">Profit mode</DeskChip>
+                  ) : null}
+                  {stats.profitModeExitActive ? (
+                    <DeskChip tone="warning">Strict exits</DeskChip>
+                  ) : null}
+                  {stats.deskVolSizedNotionalEnabled ? <DeskChip>Vol-sized notional</DeskChip> : null}
+                </div>
+                <div className="desk-metrics-row">
+                  <DeskMetricTile label="Trades / hr" value={stats.sessionTradesPerHour.toFixed(2)} compact />
+                  <DeskMetricTile
+                    label="Expectancy"
+                    value={formatDeskUsd(stats.sessionExpectancyPerTrade, { signed: true })}
+                    valueClassName={pnlToneClass(stats.sessionExpectancyPerTrade)}
+                    compact
+                  />
+                  <DeskMetricTile label="Fee / |gross|" value={formatDeskPct(stats.sessionFeePctOfAbsGross)} compact />
+                  <DeskMetricTile label="Hold avg" value={`${stats.sessionAvgHoldMinutes.toFixed(1)}m`} compact />
+                  <DeskMetricTile label="Hold median" value={`${stats.sessionMedianHoldMinutes.toFixed(1)}m`} compact />
+                  <DeskMetricTile label="Hold P95" value={`${stats.sessionHoldP95Minutes.toFixed(1)}m`} compact />
+                  <DeskMetricTile
+                    label="Desk RR"
+                    value={`${stats.deskTpWidenedStratCount} TP↑`}
+                    detail={`LowRR ${stats.deskLowRrSkippedStratCount}`}
+                    compact
+                  />
+                </div>
+              </>
+            )}
             {!uiCompact ? (
               <>
                 <DeskHealthBadge health={stats.rollingHealthCheck ?? null} />

@@ -41,6 +41,8 @@ import {
   DEFAULT_COMMAND_CENTER_TAB,
   type DeskCommandCenterTab,
 } from "@/components/deskCommandCenterTabs";
+import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
+import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 
 const READINESS_COLOR: Record<UnifiedReadiness, string> = {
   NOT_READY: "#f85149",
@@ -61,6 +63,9 @@ export type DeskCommandCenterProps = {
   deskTestnetOpsEnabled: boolean;
   /** Compact: Advanced tab hidden until user opts in. */
   advancedTabGated?: boolean;
+  /** Entry debug data forwarded from engine (shown in Advanced tab developer fold). */
+  entryDebug?: DeskEntryPollDebug | null;
+  pauseEntries?: boolean;
 };
 
 function StrategyRotationSummary({
@@ -116,6 +121,8 @@ export function DeskCommandCenter({
   deskShadowIntentsEnabled,
   deskTestnetOpsEnabled,
   advancedTabGated = false,
+  entryDebug,
+  pauseEntries = false,
 }: DeskCommandCenterProps) {
   const [cardExpanded, setCardExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<DeskCommandCenterTab>(DEFAULT_COMMAND_CENTER_TAB);
@@ -580,6 +587,37 @@ export function DeskCommandCenter({
                   signedIn={Boolean(cloudAccountKey)}
                 />
                 {deskTestnetOpsEnabled ? <TestnetOpsPanel /> : null}
+                <details style={{ marginTop: 8 }}>
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontSize: 11,
+                      color: "var(--desk-readiness-collect-data, #8b949e)",
+                      padding: "6px 0",
+                      listStyle: "none",
+                    }}
+                  >
+                    Developer — entry poll debug
+                  </summary>
+                  <div style={{ marginTop: 8 }}>
+                    <EntryDebugPanel
+                      forceVisible
+                      profitModeEnabled={profitModeCfg.enabled}
+                      entryDebug={entryDebug ?? null}
+                      pauseEntries={pauseEntries}
+                      drawdownLocked={stats.isDrawdownLocked}
+                      sessionSkips={{
+                        minMove: stats.deskSkippedMinExpectedMove,
+                        regime: stats.deskSkippedByRegime,
+                        spread: stats.deskSkippedSpread,
+                        session: stats.deskSkippedOutsideSession,
+                        category: stats.deskSkippedCategoryCap,
+                        lowPriority: stats.deskSkippedLowPriorityEntry,
+                        regimeBreakdown: stats.deskSkippedByRegimeBreakdown,
+                      }}
+                    />
+                  </div>
+                </details>
               </div>
             ) : null}
           </div>

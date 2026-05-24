@@ -16,6 +16,7 @@ import {
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { DeskBanner } from "@/components/desk/ui";
+import { LiveDeskStatusBar } from "@/components/LiveDeskStatusBar";
 import {
   isResearchModeEnabled,
   isWinnersOnlyModeEnabled,
@@ -325,21 +326,12 @@ export function BTCFutureTradingScalper({
         generatedCount={poolGeneratedCount()}
       />
 
-      {profitMode.enabled && !EFFECTIVE_RESEARCH_MODE && (
-        <DeskBanner variant="success" title="Profit mode ON — trade less, trade better">
-          Quality ≥{profitMode.minQualityScore} · MTF ≥{profitMode.minMtfConfluence} · chop same-side max{" "}
-          {profitMode.maxSameSideChop} · max {profitMode.maxOpenPositions} open · {profitMode.dailyStratCap}
-          /day/strat · fee_aware profile · threshold {threshold} · relaxed confirm OFF. Paper only.
-        </DeskBanner>
-      )}
+      <LiveDeskStatusBar
+        profitModeEnabled={profitMode.enabled}
+        isSignedIn={!!auth.user}
+      />
 
-      {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
-        <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
-          CORE winner roster · threshold {threshold} · scalp TP ~0.45% · wide SL · 8m SL grace ·
-          profit-bias exits ON. Keep tab open. Paper only — not guaranteed wins on live BTC.
-        </DeskBanner>
-      )}
-
+      {/* Priority 1: Firehose warning (always shown when active) */}
       {process.env.NEXT_PUBLIC_BTC_FT_FIREHOSE === "1" && (
         <DeskBanner variant="warning" title="⚠ Firehose mode active — research only, NOT for live trading">
           MAX_OPEN_POSITIONS raised to 60. Per-side cap loosened to 30. Per-template cap loosened to 10.
@@ -348,7 +340,29 @@ export function BTCFutureTradingScalper({
         </DeskBanner>
       )}
 
-      {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
+      {/* Priority 2: Profit mode + Winners merged into one banner when both apply */}
+      {profitMode.enabled && WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && rosterInfo.ids.length > 0 && (
+        <DeskBanner variant="success" title={`Profit mode ON · Winners desk — ${rosterInfo.ids.length} strategies · threshold ${threshold}`}>
+          CORE winner roster · quality ≥{profitMode.minQualityScore} · MTF ≥{profitMode.minMtfConfluence} ·
+          max {profitMode.maxOpenPositions} open · fee_aware profile · relaxed confirm OFF. Paper only.
+        </DeskBanner>
+      )}
+      {profitMode.enabled && !WINNERS_ONLY_MODE && !EFFECTIVE_RESEARCH_MODE && (
+        <DeskBanner variant="success" title="Profit mode ON — trade less, trade better">
+          Quality ≥{profitMode.minQualityScore} · MTF ≥{profitMode.minMtfConfluence} · chop same-side max{" "}
+          {profitMode.maxSameSideChop} · max {profitMode.maxOpenPositions} open · {profitMode.dailyStratCap}
+          /day/strat · fee_aware profile · threshold {threshold} · relaxed confirm OFF. Paper only.
+        </DeskBanner>
+      )}
+      {!profitMode.enabled && WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
+        <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
+          CORE winner roster · threshold {threshold} · scalp TP ~0.45% · wide SL · 8m SL grace ·
+          profit-bias exits ON. Keep tab open. Paper only — not guaranteed wins on live BTC.
+        </DeskBanner>
+      )}
+
+      {/* Large-roster info banner — hidden when profit mode is already explaining the setup */}
+      {!profitMode.enabled && !EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
           {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 90s
           with zero trades. Keep this browser tab open — polling runs every ~4s only while the page is active.
