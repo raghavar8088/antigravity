@@ -734,9 +734,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const allow = strategyIds && strategyIds.length > 0 ? new Set(strategyIds) : null;
     let raw = !allow ? [...STRAT_DEFS] : STRAT_DEFS.filter((s) => allow.has(s.id));
     if (raw.length === 0) raw = [...STRAT_DEFS];
-    // Apply winners gate when ranked mode is on and we have winner data
+    // Apply winners gate ONLY when no explicit allowlist was provided. When a
+    // caller (e.g. BTCFutureTradingScalper) explicitly passes strategyIds, it
+    // has already decided which strategies should be live — the MongoDB-ranked
+    // winners gate must not further shrink that set, otherwise the research
+    // pool can never reach AVAILABLE status in the leaderboard.
     const gated =
-      btcFtUseRankedEnabled() && rankedWinnerIds.size > 0
+      btcFtUseRankedEnabled() && rankedWinnerIds.size > 0 && !allow
         ? applyWinnersOnlyGate(raw, rankedWinnerIds)
         : raw;
     const base = gated.length > 0 ? gated : raw;
