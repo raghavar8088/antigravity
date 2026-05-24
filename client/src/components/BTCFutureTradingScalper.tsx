@@ -13,6 +13,7 @@ import {
   btcFtSignalThresholdFromEnv,
 } from "@/lib/futuresDeskPolicy";
 import { FUTURES_WATCHLIST } from "@/lib/futuresMarketData";
+import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
 import { DeskBanner } from "@/components/desk/ui";
 import {
   isResearchModeEnabled,
@@ -185,13 +186,10 @@ export function BTCFutureTradingScalper({
       return { ids: r.ids, source: r.source, isLargeRoster: r.isLargeRoster, batchIndex: null, totalBatches: null, poolSize: null };
     }
     if (!EFFECTIVE_RESEARCH_MODE) {
-      const r = resolveBtcFtActiveStrategyIds({ storageNamespace: effectiveStorageNs });
-      // PR 10 — when a category is selected via dropdown/env, filter to that
-      // category's IDs only. "all" keeps the CORE+premium + full research pool
-      // merge so every strategy shows AVAILABLE in the leaderboard.
+      // "all" uses every defined strategy so the leaderboard shows AVAILABLE for each.
       const merged =
         selectedCategory === "all"
-          ? [...new Set([...r.ids, ...BTC_FT_RESEARCH_CATEGORY_IDS])]
+          ? FUTURES_STRAT_DEFS.map((d) => d.id)
           : [...CATEGORY_STRATEGY_IDS[selectedCategory]];
       return {
         ids: merged,
@@ -216,7 +214,8 @@ export function BTCFutureTradingScalper({
 
   // ── Derived engine options ─────────────────────────────────────────────────
   const threshold = useMemo(() => {
-    if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(26);
+    // Paper desk (incl. winners-only): default 20 so signals fire; env can raise for live gates.
+    if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(20);
     if (EFFECTIVE_RESEARCH_MODE) return researchSignalThreshold();
     return btcFtSignalThresholdFromEnv(20);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
@@ -227,13 +226,17 @@ export function BTCFutureTradingScalper({
   }, [EFFECTIVE_RESEARCH_MODE]);
 
   const minMoveKMul = useMemo(() => {
-    if (WINNERS_ONLY_MODE) return btcFtMinMoveKMulFromEnv(1.0);
+    if (WINNERS_ONLY_MODE) return btcFtMinMoveKMulFromEnv(0.55);
     if (EFFECTIVE_RESEARCH_MODE) return researchMinMoveKMul();
     return btcFtMinMoveKMulFromEnv(0.45);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
 
+  /** Paper discovery: threshold decay + bootstrap probe (all non-research modes, incl. winners). */
   const paperEnsureTrades =
-    !EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && btcFtPaperEnsureTradesFromEnv();
+    !EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv();
+  const paperBootstrapProbe =
+    (!EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv()) ||
+    (EFFECTIVE_RESEARCH_MODE && researchEnsureTradesEnabled());
 
   const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;
 
@@ -310,9 +313,9 @@ export function BTCFutureTradingScalper({
       />
 
       {WINNERS_ONLY_MODE && rosterInfo.ids.length > 0 && (
-        <DeskBanner variant="info" title={`Production winners mode - ${rosterInfo.ids.length} strategies`}>
-          Running only promoted BTC FT winners with production gates: threshold 26, relax-confirm OFF,
-          cooldown 1x, min-move K 1x, and auto-kill ON. No Delta mainnet orders are enabled by this mode.
+        <DeskBanner variant="info" title={`Winners paper desk - ${rosterInfo.ids.length} strategies`}>
+          CORE winner roster · threshold {threshold} · relax-confirm {relaxConfirm ? "ON" : "OFF"} · min-move K{" "}
+          {minMoveKMul} · bootstrap probe after 3m with zero trades. Paper only — no Delta mainnet orders.
         </DeskBanner>
       )}
 
@@ -326,7 +329,7 @@ export function BTCFutureTradingScalper({
 
       {!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && rosterInfo.isLargeRoster && (
         <DeskBanner variant="info" title="Paper desk entry mode">
-          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 5m
+          {rosterInfo.ids.length} strategies · threshold {threshold} · relax-confirm ON · bootstrap probe after 3m
           with zero trades. Check Entry debug below for dominantBlocker. Build{" "}
           {BTC_FT_DESK_BUILD} is the Vercel client — AWS engine is separate.
         </DeskBanner>
@@ -347,7 +350,7 @@ export function BTCFutureTradingScalper({
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
           researchEnsureTrades={EFFECTIVE_RESEARCH_MODE ? researchEnsureTradesEnabled() : false}
           paperEnsureTrades={paperEnsureTrades}
-          paperBootstrapProbe={paperEnsureTrades || EFFECTIVE_RESEARCH_MODE}
+          paperBootstrapProbe={paperBootstrapProbe}
           entryDebugEnabled={entryDebugEnabled}
           entryUtcSessionOverride={EFFECTIVE_RESEARCH_MODE ? researchEntryUtcSession() : undefined}
           researchMode={EFFECTIVE_RESEARCH_MODE}
@@ -368,6 +371,7 @@ export function BTCFutureTradingScalper({
           storageNamespace={effectiveStorageNs}
           baseBalance={1000}
           moduleKey="btc_future_trading"
+          allStrategiesAvailable
         />
       )}
     </>

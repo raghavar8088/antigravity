@@ -591,6 +591,8 @@ export type BTCFuturesEngineOptions = {
    * they earn it.
    */
   promotedStrategyIds?: ReadonlySet<number> | readonly number[];
+  /** When true: clear manual/auto disables and show every roster strategy as AVAILABLE (unless OPEN/COOLING). */
+  allStrategiesAvailable?: boolean;
 };
 
 /** Progressive threshold reduction so quiet strats get samples on chop. */
@@ -699,7 +701,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     Number.isFinite(options.slippageBpsOverride) && (options.slippageBpsOverride ?? -1) >= 0
       ? Math.min(50, Math.max(0, options.slippageBpsOverride as number))
       : null;
-  const disableAutoKill = options.disableAutoKill === true;
+  const disableAutoKill = options.disableAutoKill === true || options.allStrategiesAvailable === true;
+  const allStrategiesAvailable = options.allStrategiesAvailable === true;
   const researchEnsureTrades = options.researchEnsureTrades === true;
   const paperEnsureTrades = options.paperEnsureTrades === true;
   const entryUtcSessionOverride = options.entryUtcSessionOverride;
@@ -1118,7 +1121,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               );
             }
             if (typeof s.pause_entries === "boolean") setPauseEntries(s.pause_entries);
-            if (Array.isArray(s.disabled_strategies)) {
+            if (!allStrategiesAvailable && Array.isArray(s.disabled_strategies)) {
               setDisabledStrategies((s.disabled_strategies as number[]).filter((id) => activeStrategyIdSet.has(id)));
             }
             if (typeof s.last_trade_at === "number") setLastTradeAt(s.last_trade_at);
@@ -1140,7 +1143,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     })();
 
     return () => { cancelled = true; };
-  }, [activeStrategyIdSet, cloudAccountKey, stateStorageKey]);
+  }, [activeStrategyIdSet, allStrategiesAvailable, cloudAccountKey, stateStorageKey]);
+
+  useEffect(() => {
+    if (!allStrategiesAvailable) return;
+    setDisabledStrategies([]);
+    setAutoDisabledStratIds([]);
+  }, [allStrategiesAvailable]);
 
   // Ranked winners gate — fetch strategy rankings when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
   useEffect(() => {
@@ -1512,28 +1521,30 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   // ========== STRATEGY STATUSES ==========
   const strategyStatuses = useMemo((): BTCFuturesStrategyStatus[] => {
     const now = Date.now();
-    return activeStratDefs.map(strat => {
-      const openCount = positions.filter(p => p.strategyId === strat.id).length;
-      const stratTrades = trades.filter(t => t.strategyId === strat.id);
+    const buildStatus = (strat: Pick<FuturesStratDef, "id" | "name" | "category">): BTCFuturesStrategyStatus => {
+      const openCount = positions.filter((p) => p.strategyId === strat.id).length;
+      const stratTrades = trades.filter((t) => t.strategyId === strat.id);
       const lastTrade = stratTrades[stratTrades.length - 1];
       const inCooldown = Object.entries(stratCooldownsRef.current).some(
         ([key, until]) => key.endsWith(`:${strat.id}`) && (until ?? 0) > now,
       );
-      const wins = stratTrades.filter(t => t.netPnl > 0).length;
-      const losses = stratTrades.filter(t => t.netPnl <= 0).length;
+      const wins = stratTrades.filter((t) => t.netPnl > 0).length;
+      const losses = stratTrades.filter((t) => t.netPnl <= 0).length;
       const totalPnl = stratTrades.reduce((s, t) => s + t.netPnl, 0);
       const winRate = stratTrades.length > 0 ? (wins / stratTrades.length) * 100 : 0;
-      // Score: weighted combination of win rate and total PnL
-      const score = stratTrades.length > 0
-        ? Math.min(100, winRate * 0.7 + Math.min(30, Math.abs(totalPnl) / 100) * 0.3)
-        : 0;
+      const score =
+        stratTrades.length > 0
+          ? Math.min(100, winRate * 0.7 + Math.min(30, Math.abs(totalPnl) / 100) * 0.3)
+          : 0;
 
       return {
         id: strat.id,
         name: strat.name,
         category: strat.category,
         status: openCount > 0 ? "OPEN" : inCooldown ? "COOLING" : "AVAILABLE",
-        disabled: disabledStrategies.includes(strat.id) || autoDisabledStratIds.includes(strat.id),
+        disabled: allStrategiesAvailable
+          ? false
+          : disabledStrategies.includes(strat.id) || autoDisabledStratIds.includes(strat.id),
         openCount,
         lastTradeAt: lastTrade ? new Date(lastTrade.closedAt).getTime() : null,
         score,
@@ -1543,8 +1554,33 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         totalPnl,
         winRate,
       };
-    });
-  }, [positions, trades, disabledStrategies, autoDisabledStratIds, activeStratDefs]);
+    };
+
+    const rows = activeStratDefs.map(buildStatus);
+    const seen = new Set(rows.map((r) => r.id));
+    const rosterIds = strategyIds && strategyIds.length > 0 ? strategyIds : STRAT_DEFS.map((d) => d.id);
+    const extraIds = new Set<number>([
+      ...deskStrategiesResult.lowRrSkippedStratIds,
+      ...rosterIds.filter((id) => !seen.has(id)),
+    ]);
+    for (const id of extraIds) {
+      if (seen.has(id)) continue;
+      const def = STRAT_DEFS.find((d) => d.id === id);
+      if (!def) continue;
+      rows.push(buildStatus(def));
+      seen.add(id);
+    }
+    return rows;
+  }, [
+    positions,
+    trades,
+    disabledStrategies,
+    autoDisabledStratIds,
+    activeStratDefs,
+    allStrategiesAvailable,
+    strategyIds,
+    deskStrategiesResult.lowRrSkippedStratIds,
+  ]);
 
   // ========== POSITION MANAGEMENT ==========
   type PaperOpenGateCtx = {
@@ -1705,6 +1741,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       );
       const actualNotional = calculateNotional(contracts);
 
+      const isBootstrapProbeStrat =
+        strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
       const moveGate = paperMinExpectedMoveVsFees(
         markPrice,
         gate.atr14,
@@ -1717,7 +1755,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           minMoveKMultiplier *
           (relaxEntryGatesRef.current ? 0.45 : 1),
       );
-      if (!moveGate.ok) {
+      if (!moveGate.ok && !isBootstrapProbeStrat) {
         deskSkippedMinExpectedMoveRef.current += 1;
         if (entryDebugLiveRef.current) entryDebugLiveRef.current.failMinMove += 1;
         return null;
@@ -2209,7 +2247,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         const bootstrapProbeDue =
           paperBootstrapProbe &&
           sessionTradeCount === 0 &&
-          now - researchMountedAtRef.current >= 5 * 60 * 1000;
+          now - researchMountedAtRef.current >= 3 * 60 * 1000;
         const shouldRunProbe =
           (forceProbeOpen || bootstrapProbeDue) &&
           hasMarketData &&

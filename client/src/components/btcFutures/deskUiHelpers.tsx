@@ -37,6 +37,6 @@ export function StrategyStatusChip({
   const label = status.replace(/_/g, " ");
   if (status === "IN_POSITION") return <DeskChip tone="primary">{label}</DeskChip>;
   if (status === "COOLING") return <DeskChip tone="warning">{label}</DeskChip>;
-  if (status === "READY") return <DeskChip tone="success">{label}</DeskChip>;
+  if (status === "READY" || status === "AVAILABLE") return <DeskChip tone="success">{label}</DeskChip>;
   return <DeskChip>{label}</DeskChip>;
 }

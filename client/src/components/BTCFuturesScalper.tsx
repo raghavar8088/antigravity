@@ -81,6 +81,8 @@ type BTCFuturesScalperProps = {
   promotedStrategyIds?: BTCFuturesEngineOptions["promotedStrategyIds"];
   /** Short status pills for the app bar (e.g. "20 strategies", "Paper", "BUILD abc"). */
   statusChips?: string[];
+  /** Show every roster strategy as AVAILABLE and keep Active toggles on. */
+  allStrategiesAvailable?: boolean;
 };
 
 const PAPER_EXPORT_WINDOW_DAYS = 30;
@@ -123,6 +125,7 @@ export function BTCFuturesScalper({
   moduleKey = "btc_futures_scalper",
   promotedStrategyIds,
   statusChips,
+  allStrategiesAvailable = false,
 }: BTCFuturesScalperProps = {}) {
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
@@ -184,6 +187,7 @@ export function BTCFuturesScalper({
     supabaseUserId: authUser?.id ?? null,
     moduleKey,
     promotedStrategyIds,
+    allStrategiesAvailable,
   });
 
   const [showAllStrategies, setShowAllStrategies] = useState(false);
@@ -240,7 +244,7 @@ export function BTCFuturesScalper({
     totalUnrealized: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
   }), [positions]);
 
-  // POOL overlay only in research mode. Production / winners-only shows active roster only.
+  // Include roster strategies not wired into the live engine (e.g. research batch waitlist).
   const augmentedStrategyStatuses = useMemo<BTCFuturesStrategyStatus[]>(() => {
     const activeIds = new Set(strategyStatuses.map((s) => s.id));
     const poolOverlayIds = researchPoolIds && researchPoolIds.length > 0
@@ -248,16 +252,16 @@ export function BTCFuturesScalper({
       : strategyIds && strategyIds.length > 0
         ? strategyIds
         : [];
-    const poolOnly: BTCFuturesStrategyStatus[] = [];
+    const waiting: BTCFuturesStrategyStatus[] = [];
     for (const id of poolOverlayIds) {
       if (activeIds.has(id)) continue;
       const def = FUTURES_STRAT_DEFS.find((d) => d.id === id);
       if (!def) continue;
-      poolOnly.push({
+      waiting.push({
         id: def.id,
         name: def.name,
         category: def.category,
-        status: "POOL",
+        status: "AVAILABLE",
         disabled: false,
         openCount: 0,
         lastTradeAt: null,
@@ -269,18 +273,11 @@ export function BTCFuturesScalper({
         winRate: 0,
       });
     }
-    return [...strategyStatuses, ...poolOnly];
-  }, [strategyStatuses, researchPoolIds]);
+    return [...strategyStatuses, ...waiting];
+  }, [strategyStatuses, researchPoolIds, strategyIds]);
 
   const sortedStrategies = useMemo(
-    () =>
-      [...augmentedStrategyStatuses].sort((a, b) => {
-        // Active roster entries first (POOL last), then by score descending
-        const aPool = a.status === "POOL" ? 1 : 0;
-        const bPool = b.status === "POOL" ? 1 : 0;
-        if (aPool !== bPool) return aPool - bPool;
-        return b.score - a.score;
-      }),
+    () => [...augmentedStrategyStatuses].sort((a, b) => b.score - a.score),
     [augmentedStrategyStatuses],
   );
   const visibleStrategies = useMemo(
