@@ -148,6 +148,7 @@ import {
   type FuturesSignalInputs,
 } from "@/lib/futuresSignals";
 import {
+  computeSessionEquityFromProduction,
   computeSessionExitReasonAnalytics,
   computeSessionTradingMetrics,
   formatExitReasonSessionSummary,
@@ -636,6 +637,8 @@ export interface BTCFuturesEngineStats {
   unifiedReadinessBlockers: string[];
   unifiedReadinessNextStep: string;
   replaySignFlipRate: number | null;
+  /** |raw balance − production-expected balance|. > $1 means probes or corruption inflated balance. */
+  balanceDriftUsd: number;
 }
 
 /** Strategy Status */
@@ -1304,6 +1307,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
       // ── Fetch account state from MongoDB ─────────────────────────────────────
       let resolvedClearedAt = 0;
+      let storedBalance: number | undefined;
+      let loadedPositionCount = 0;
       try {
         const res = await fetch(`/api/paper-state?account_key=${encodeURIComponent(cloudAccountKey ?? "")}`, {
           cache: "no-store",
@@ -1315,7 +1320,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const s = data.state;
             resolvedClearedAt = s.cleared_at ?? 0;
             setClearedAt(resolvedClearedAt);
-            if (typeof s.balance === "number") setBalance(s.balance);
+            if (typeof s.balance === "number") storedBalance = s.balance;
+            loadedPositionCount = Array.isArray(s.positions) ? s.positions.length : 0;
             if (Array.isArray(s.positions)) {
               const now = Date.now();
               const slMul = btcFtPaperSlPctMulFromEnv();
@@ -1369,7 +1375,27 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const merged = await pullAndMergePaperTrades(cloudAccountKey, []);
       const afterClear = (t: BTCFuturesTrade) =>
         resolvedClearedAt === 0 || new Date(t.closedAt).getTime() > resolvedClearedAt;
-      if (!cancelled) setTrades(merged.filter(afterClear));
+      const tradesAfterClear = merged.filter(afterClear);
+      if (!cancelled) {
+        setTrades(tradesAfterClear);
+        // Reconcile stored balance against production trade sum to detect probe corruption.
+        const productionClosed = tradesAfterClear.filter(
+          (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+        );
+        const expectedBalance = INITIAL_BALANCE + productionClosed.reduce((s, t) => s + t.netPnl, 0);
+        const raw = storedBalance ?? INITIAL_BALANCE;
+        const driftThreshold = Math.max(1, 0.01 * INITIAL_BALANCE);
+        if (productionClosed.length === 0 && loadedPositionCount === 0 && raw !== INITIAL_BALANCE) {
+          // Corruption guard: 0 production trades + 0 positions but balance ≠ initial → force reset.
+          console.warn(`[paper-load] Corruption guard: 0 trades + 0 positions, balance=${raw.toFixed(2)} → forcing ${INITIAL_BALANCE}`);
+          setBalance(INITIAL_BALANCE);
+        } else if (Math.abs(raw - expectedBalance) > driftThreshold) {
+          console.warn(`[paper-load] Balance drift detected: stored=${raw.toFixed(2)} expected=${expectedBalance.toFixed(2)} → using expected`);
+          setBalance(expectedBalance);
+        } else {
+          if (storedBalance !== undefined) setBalance(storedBalance);
+        }
+      }
     })();
 
     return () => { cancelled = true; };
@@ -1487,17 +1513,24 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setPauseEntries(p => !p);
   }, []);
 
-  const resetPaperAccount = useCallback(() => {
+  // Shared balance reset — called by both resetPaperAccount and clearTradeHistory.
+  const resetPaperBalances = useCallback(() => {
     setBalance(INITIAL_BALANCE);
+    setDayStartBalance(INITIAL_BALANCE);
+    dailyStartEquityRef.current = INITIAL_BALANCE;
+    peakEquityForDrawdownRef.current = INITIAL_BALANCE;
+    drawdownEntryPausedRef.current = false;
+    forceProbeOpenedRef.current = false;
+  }, [INITIAL_BALANCE]);
+
+  const resetPaperAccount = useCallback(() => {
+    resetPaperBalances();
     setPositions([]);
     setTrades([]);
     setPauseEntries(false);
     setLastTradeAt(0);
-    setDayStartBalance(INITIAL_BALANCE);
     setDayStartDate(new Date().getDate());
     stratCooldownsRef.current = {};
-    peakEquityForDrawdownRef.current = INITIAL_BALANCE;
-    drawdownEntryPausedRef.current = false;
     deskProfileAdjustedHoldCountRef.current = 0;
     deskSkippedMinExpectedMoveRef.current = 0;
     deskSkippedSameDirCapRef.current = 0;
@@ -1533,18 +1566,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     gateEvaluationCountRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
-    forceProbeOpenedRef.current = false;
     saveToMongo({ balance: INITIAL_BALANCE, pauseEntries: false, disabledStrategies: [] });
-  }, [saveToMongo]);
+  }, [resetPaperBalances, saveToMongo]);
 
   const clearTradeHistory = useCallback(() => {
     const clearedAtMs = Date.now();
     setClearedAt(clearedAtMs);
     setTrades([]);
+    setPositions([]);
     setLastTradeAt(0);
     stratCooldownsRef.current = {};
-    saveToMongo({ clearedAt: clearedAtMs });
-  }, [saveToMongo]);
+    resetPaperBalances();
+    saveToMongo({ clearedAt: clearedAtMs, balance: INITIAL_BALANCE });
+  }, [resetPaperBalances, saveToMongo, INITIAL_BALANCE]);
 
   const setDisabledStrategiesHandler = useCallback((ids: number[]) => {
     setDisabledStrategies(ids.filter((id) => activeStrategyIdSet.has(id)));
@@ -1941,6 +1975,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       profitModeExitActive: profitModeCfg.enabled && Boolean(profitModeExitConfig(profitModeCfg)),
       entryRotationAllowedCount: entryRotationAllowedCountRef.current,
       entryRotationBlockedCount: entryRotationBlockedCountRef.current,
+      balanceDriftUsd: Math.abs(balance - INITIAL_BALANCE - realizedPnl),
       deskPnLScorecard,
       scorecardAction,
       soakHistory,
@@ -2390,9 +2425,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       signalContributions: position.signalContributions,
     };
 
+    // Safety cap: probe PnL beyond 10× initial balance is a corruption indicator — clamp to 0.
+    let safeNetPnl = netPnl;
+    if (isProbeOrBootstrapTrade({ strategyName: position.strategyName }) && Math.abs(netPnl) > 10 * INITIAL_BALANCE) {
+      console.error(`[paper-close] Probe safety cap triggered: |netPnl|=${Math.abs(netPnl).toFixed(2)} > ${(10 * INITIAL_BALANCE).toFixed(0)}, clamping to 0`);
+      safeNetPnl = 0;
+    }
     setTrades(prev => [...prev.slice(-MAX_TRADES + 1), trade]);
     setPositions(prev => prev.filter(p => p.id !== position.id));
-    setBalance(prev => prev + position.marginUsed + netPnl);
+    setBalance(prev => prev + position.marginUsed + safeNetPnl);
     if (process.env.NODE_ENV === "development") {
       console.log("[paper-close]", {
         clientTradeId,

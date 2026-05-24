@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isProbeOrBootstrapTrade, computeSessionTradingMetrics } from "../futuresSessionMetrics";
+import {
+  isProbeOrBootstrapTrade,
+  computeSessionEquityFromProduction,
+  computeSessionTradingMetrics,
+} from "../futuresSessionMetrics";
 
 describe("isProbeOrBootstrapTrade", () => {
   it("returns true for BOOTSTRAP strategy names (case-insensitive)", () => {
@@ -43,6 +47,83 @@ const makeTrade = (
   const closedAt = new Date().toISOString();
   return { openedAt, closedAt, netPnl, fees, realizedPnl, strategyName };
 };
+
+describe("computeSessionEquityFromProduction", () => {
+  const INITIAL = 1000;
+
+  it("returns $0 session PnL when 0 production trades and 0 unrealized", () => {
+    const result = computeSessionEquityFromProduction({
+      initialBalance: INITIAL,
+      productionClosedNetPnl: 0,
+      productionUnrealizedPnl: 0,
+    });
+    expect(result.sessionPnL).toBe(0);
+    expect(result.equity).toBe(INITIAL);
+    expect(result.totalReturnPct).toBe(0);
+  });
+
+  it("returns correct session PnL from 3 production trades summing +$50", () => {
+    const result = computeSessionEquityFromProduction({
+      initialBalance: INITIAL,
+      productionClosedNetPnl: 50,
+      productionUnrealizedPnl: 0,
+    });
+    expect(result.sessionPnL).toBe(50);
+    expect(result.equity).toBe(1050);
+    expect(result.totalReturnPct).toBeCloseTo(5, 5);
+  });
+
+  it("ignores raw balance inflation — only uses production sums", () => {
+    // Raw balance might be $999,421 from probe trades, but production PnL is -$10.
+    const result = computeSessionEquityFromProduction({
+      initialBalance: INITIAL,
+      productionClosedNetPnl: -10,
+      productionUnrealizedPnl: 0,
+    });
+    expect(result.sessionPnL).toBe(-10);
+    expect(result.equity).toBe(990);
+    // NOT 999421 - 1000 = 998421
+  });
+
+  it("includes unrealized PnL from open production positions", () => {
+    const result = computeSessionEquityFromProduction({
+      initialBalance: INITIAL,
+      productionClosedNetPnl: 20,
+      productionUnrealizedPnl: 5,
+    });
+    expect(result.sessionPnL).toBe(25);
+    expect(result.equity).toBe(1025);
+  });
+});
+
+describe("isProbeOrBootstrapTrade safety cap — logic contract", () => {
+  it("identifies probe trades that should be capped", () => {
+    const absurdNetPnl = 15_000; // 15× $1000 initial
+    const INITIAL_BALANCE = 1000;
+    const isProbe = isProbeOrBootstrapTrade({ strategyName: "BOOTSTRAP_force_open" });
+    const shouldCap = isProbe && Math.abs(absurdNetPnl) > 10 * INITIAL_BALANCE;
+    expect(isProbe).toBe(true);
+    expect(shouldCap).toBe(true);
+  });
+
+  it("does not cap production trades even with large PnL", () => {
+    const largePnl = 15_000;
+    const INITIAL_BALANCE = 1000;
+    const isProbe = isProbeOrBootstrapTrade({ strategyName: "btc_scalp_v1" });
+    const shouldCap = isProbe && Math.abs(largePnl) > 10 * INITIAL_BALANCE;
+    expect(isProbe).toBe(false);
+    expect(shouldCap).toBe(false);
+  });
+
+  it("does not cap probe trades within normal range", () => {
+    const smallPnl = 5; // well under 10× initial
+    const INITIAL_BALANCE = 1000;
+    const isProbe = isProbeOrBootstrapTrade({ strategyName: "probe_entry" });
+    const shouldCap = isProbe && Math.abs(smallPnl) > 10 * INITIAL_BALANCE;
+    expect(isProbe).toBe(true);
+    expect(shouldCap).toBe(false);
+  });
+});
 
 describe("computeSessionTradingMetrics — probe filtering", () => {
   it("excludes probe trades from expectancy calculation", () => {

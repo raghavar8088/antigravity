@@ -116,6 +116,22 @@ export function computeSessionTradingMetrics(
   };
 }
 
+/**
+ * Production-aligned session equity — excludes probe/bootstrap balance mutations.
+ * Use this instead of `equity - baseBalance` when probe trades may have corrupted balance.
+ */
+export function computeSessionEquityFromProduction(params: {
+  initialBalance: number;
+  productionClosedNetPnl: number;
+  productionUnrealizedPnl: number;
+}): { sessionPnL: number; equity: number; totalReturnPct: number } {
+  const { initialBalance, productionClosedNetPnl, productionUnrealizedPnl } = params;
+  const sessionPnL = productionClosedNetPnl + productionUnrealizedPnl;
+  const equity = initialBalance + sessionPnL;
+  const totalReturnPct = initialBalance > 0 ? (sessionPnL / initialBalance) * 100 : 0;
+  return { sessionPnL, equity, totalReturnPct };
+}
+
 export type FuturesStrategyProfile = "baseline" | "scalp_aggro_v1" | "fee_aware_v1";
 
 /**

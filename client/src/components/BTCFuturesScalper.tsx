@@ -11,7 +11,7 @@ import {
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_WATCHLIST, type FuturesWatchItem } from "@/lib/futuresMarketData";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
-import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
+import { computeSessionEquityFromProduction, FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
 import { PaperDeskAuthBar } from "@/components/PaperDeskAuthBar";
 import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPanels";
@@ -244,9 +244,16 @@ export function BTCFuturesScalper({
     }
   }, [cloudAccountKey]);
 
-  const sessionPnL = equity - baseBalance;
+  // Production-aligned PnL excludes probe/bootstrap balance mutations.
+  const productionPnl = computeSessionEquityFromProduction({
+    initialBalance: baseBalance,
+    productionClosedNetPnl: stats.realizedPnl,
+    productionUnrealizedPnl: stats.unrealizedPnl,
+  });
+  const sessionPnL = stats.totalTrades === 0 && stats.openPositions === 0 ? 0 : productionPnl.sessionPnL;
   const pnlPositive = sessionPnL >= 0;
-  const totalReturn = ((equity - baseBalance) / baseBalance) * 100;
+  const totalReturn = stats.totalTrades === 0 && stats.openPositions === 0 ? 0 : productionPnl.totalReturnPct;
+  const balanceDriftUsd = stats.balanceDriftUsd ?? 0;
 
   const { longCount, shortCount, totalUnrealized } = useMemo(() => ({
     longCount: positions.filter((p) => p.side === "LONG").length,
@@ -415,7 +422,7 @@ export function BTCFuturesScalper({
         <DeskHeroStrip
           metrics={[
             {
-              label: "Session PnL",
+              label: `Session PnL${deskMounted && stats.totalTrades > 0 ? ` (${stats.totalTrades} trades)` : ""}`,
               value: deskMounted ? formatDeskUsd(sessionPnL, { signed: true }) : "—",
               detail: deskMounted ? `${formatDeskPct(totalReturn, { signed: true })} return` : undefined,
               valueClassName: deskMounted ? pnlToneClass(sessionPnL) : undefined,
@@ -456,6 +463,12 @@ export function BTCFuturesScalper({
           </DeskButton>
         </div>
       </div>
+
+      {deskMounted && balanceDriftUsd > 1 && (
+        <DeskBanner variant="warning" title="Balance drift detected">
+          Raw balance diverges from production trade sum by {formatDeskUsd(balanceDriftUsd)}. This usually means probe or bootstrap trades inflated the balance. PnL shown above is recomputed from closed production trades only.
+        </DeskBanner>
+      )}
 
       {pauseEntries || stats.isDrawdownLocked ? (
         <DeskBanner variant="warning" title="Paper entries paused">
