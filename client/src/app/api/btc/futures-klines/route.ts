@@ -13,6 +13,30 @@ function sanitizeSymbol(raw: string | null): string {
   return s;
 }
 
+/**
+ * Supported bar intervals + corresponding Delta Exchange resolution strings
+ * and minute-counts (used to size the start/end fetch window for ~400 bars).
+ *
+ * PR 10 (multi-bar-interval engine routing) — research strategies declare a
+ * `primaryBarInterval` from this set; the engine fetches each TF separately
+ * and routes signal eval per-strategy to the correct cache.
+ */
+const INTERVAL_TABLE = {
+  "1m":  { resolution: "1m",  minutes: 1 },
+  "5m":  { resolution: "5m",  minutes: 5 },
+  "15m": { resolution: "15m", minutes: 15 },
+  "4h":  { resolution: "4h",  minutes: 240 },
+  "1d":  { resolution: "1d",  minutes: 1440 },
+} as const;
+
+type BarInterval = keyof typeof INTERVAL_TABLE;
+
+function sanitizeInterval(raw: string | null): BarInterval {
+  const v = raw?.trim().toLowerCase();
+  if (v && v in INTERVAL_TABLE) return v as BarInterval;
+  return "1m";
+}
+
 const JSON_HEADERS = {
   Accept: "application/json",
   "User-Agent": "RAIG-Trading/1.0",
@@ -74,9 +98,19 @@ type DeltaTickerResponse = {
   };
 };
 
-/** 1m candles for perpetual futures (query: ?symbol=ETHUSD) with mark price and funding rate */
+/**
+ * OHLCV candles for perpetual futures with mark price and funding rate.
+ *
+ * Query params:
+ *   symbol    — Delta Exchange symbol (default BTCUSD)
+ *   interval  — bar interval: 1m (default) | 5m | 15m | 4h | 1d. Used by PR 10
+ *               multi-TF engine routing. Backwards-compatible: omitting it
+ *               returns the same 1m payload as before.
+ */
 export async function GET(request: NextRequest): Promise<Response> {
   const symbol = sanitizeSymbol(request.nextUrl.searchParams.get("symbol"));
+  const interval = sanitizeInterval(request.nextUrl.searchParams.get("interval"));
+  const { resolution, minutes } = INTERVAL_TABLE[interval];
 
   if (
     process.env.NODE_ENV === "development" &&
@@ -102,13 +136,14 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const endSec = Math.floor(Date.now() / 1000);
-  const startSec = endSec - 400 * 60;
+  /** Fetch ~400 bars worth of history at the requested resolution. */
+  const startSec = endSec - 400 * minutes * 60;
 
   try {
     // Fetch candles, ticker (for mark price), and funding rate
     const [candlesRes, tickerRes] = await Promise.all([
       fetchWithRetry(
-        `${DELTA_REST_BASE}/v2/history/candles?resolution=1m&symbol=${encodeURIComponent(symbol)}&start=${startSec}&end=${endSec}`,
+        `${DELTA_REST_BASE}/v2/history/candles?resolution=${resolution}&symbol=${encodeURIComponent(symbol)}&start=${startSec}&end=${endSec}`,
       ),
       fetchWithRetry(`${DELTA_REST_BASE}/v2/tickers/${encodeURIComponent(symbol)}`),
     ]);
@@ -187,8 +222,9 @@ export async function GET(request: NextRequest): Promise<Response> {
       fundingRate,
       nextFunding,
       symbol,
+      interval,
       fetchedAt: new Date().toISOString(),
-      source: "delta-exchange-futures-1m",
+      source: `delta-exchange-futures-${interval}`,
       deltaBase: DELTA_REST_BASE,
     });
   } catch (error) {
@@ -205,6 +241,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         fundingRate: 0,
         nextFunding: 0,
         symbol: DEFAULT_SYMBOL,
+        interval,
         fetchedAt: new Date().toISOString(),
         deltaBase: DELTA_REST_BASE,
       },

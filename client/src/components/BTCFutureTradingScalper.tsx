@@ -34,7 +34,13 @@ import {
   saveRetiredToStorage,
   saveWinnersToStorage,
 } from "@/lib/btcFtResearch";
-import { BTC_FT_RESEARCH_CATEGORY_IDS } from "@/lib/btcFtRoster";
+import {
+  BTC_FT_RESEARCH_CATEGORY_IDS,
+  CATEGORY_STRATEGY_IDS,
+  btcFtActiveCategoryFromEnv,
+} from "@/lib/btcFtRoster";
+import { CATEGORY_REGISTRY } from "@/lib/futuresCategoryRegistry";
+import type { TradingCategoryId } from "@/lib/futuresStratTypes";
 import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -78,14 +84,28 @@ export function BTCFutureTradingScalper({
   const auth = usePaperDeskAuth();
   const { RESEARCH_MODE, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE } = useResolvedModes();
 
+  // PR 10 — runtime category filter. Initialized from NEXT_PUBLIC_BTC_FT_CATEGORY
+  // env (one-shot read; users can override via the in-page dropdown afterwards).
+  // "all" = no filter (CORE+premium + full research pool).
+  const [selectedCategory, setSelectedCategory] = useState<TradingCategoryId | "all">(
+    () => btcFtActiveCategoryFromEnv(),
+  );
+
+  /** Per-category storageNamespace so a swing trade's PnL doesn't pollute the
+   *  scalping ledger and vice versa. "all" keeps the legacy namespace.        */
+  const effectiveStorageNs = useMemo(
+    () => (selectedCategory === "all" ? STORAGE_NS : `${STORAGE_NS}_${selectedCategory}`),
+    [selectedCategory],
+  );
+
   // Resolve the same account key the engine will use so research state is co-located
   const accountKey = useMemo(
     () =>
       resolveCloudPaperTradesAccountKey({
         supabaseUserId: auth.user?.id,
-        storageNamespace: STORAGE_NS,
+        storageNamespace: effectiveStorageNs,
       }) ?? getOrCreateAnonAccountKey() ?? "",
-    [auth.user?.id],
+    [auth.user?.id, effectiveStorageNs],
   );
 
   // State — default empty; loaded from MongoDB in useEffect
@@ -161,12 +181,26 @@ export function BTCFutureTradingScalper({
   // ── Roster resolution ──────────────────────────────────────────────────────
   const rosterInfo = useMemo((): RosterInfo => {
     if (WINNERS_ONLY_MODE) {
-      const r = resolveBtcFtActiveStrategyIds({ storageNamespace: STORAGE_NS, winnerIds: winners });
+      const r = resolveBtcFtActiveStrategyIds({ storageNamespace: effectiveStorageNs, winnerIds: winners });
       return { ids: r.ids, source: r.source, isLargeRoster: r.isLargeRoster, batchIndex: null, totalBatches: null, poolSize: null };
     }
     if (!EFFECTIVE_RESEARCH_MODE) {
-      const r = resolveBtcFtActiveStrategyIds({ storageNamespace: STORAGE_NS });
-      return { ids: r.ids, source: r.source, isLargeRoster: r.isLargeRoster, batchIndex: null, totalBatches: null, poolSize: null };
+      const r = resolveBtcFtActiveStrategyIds({ storageNamespace: effectiveStorageNs });
+      // PR 10 — when a category is selected via dropdown/env, filter to that
+      // category's IDs only. "all" keeps the CORE+premium + full research pool
+      // merge so every strategy shows AVAILABLE in the leaderboard.
+      const merged =
+        selectedCategory === "all"
+          ? [...new Set([...r.ids, ...BTC_FT_RESEARCH_CATEGORY_IDS])]
+          : [...CATEGORY_STRATEGY_IDS[selectedCategory]];
+      return {
+        ids: merged,
+        source: selectedCategory === "all" ? ("full" as const) : selectedCategory,
+        isLargeRoster: merged.length > 30,
+        batchIndex: null,
+        totalBatches: null,
+        poolSize: null,
+      };
     }
     const pool = resolveResearchPool();
     const batch = resolveResearchActiveIds({ pool, retiredIds, batchSize: 30, rotateEveryHours: 24 });
@@ -178,7 +212,7 @@ export function BTCFutureTradingScalper({
       totalBatches: batch.totalBatches,
       poolSize: batch.poolSize,
     };
-  }, [retiredIds, winners, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
+  }, [retiredIds, winners, WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, selectedCategory, effectiveStorageNs]);
 
   // ── Derived engine options ─────────────────────────────────────────────────
   const threshold = useMemo(() => {
@@ -260,6 +294,12 @@ export function BTCFutureTradingScalper({
 
   return (
     <>
+      <CategoryFilterBar
+        selected={selectedCategory}
+        onChange={setSelectedCategory}
+        activeRosterCount={rosterInfo.ids.length}
+      />
+
       <ResearchBanners
         researchMode={EFFECTIVE_RESEARCH_MODE}
         rosterInfo={rosterInfo}
@@ -325,7 +365,7 @@ export function BTCFutureTradingScalper({
           strategyProfile={strategyProfile}
           promotedStrategyIds={winners}
           watchlist={BTC_ONLY_WATCHLIST}
-          storageNamespace={STORAGE_NS}
+          storageNamespace={effectiveStorageNs}
           baseBalance={1000}
           moduleKey="btc_future_trading"
         />
@@ -371,5 +411,66 @@ function ResearchBanners({
         </DeskBanner>
       )}
     </>
+  );
+}
+
+// ── Sub-component: Category filter dropdown ─────────────────────────────────
+// PR 10 — runtime category filter. Switching narrows the active roster to one
+// category's strategies and uses a category-specific storageNamespace so PnL
+// stays isolated from the other categories.
+const CATEGORY_OPTIONS: Array<{ value: TradingCategoryId | "all"; label: string }> = [
+  { value: "all", label: "All categories" },
+  { value: "scalping", label: CATEGORY_REGISTRY.scalping.label },
+  { value: "day_trading", label: CATEGORY_REGISTRY.day_trading.label },
+  { value: "swing_trading", label: CATEGORY_REGISTRY.swing_trading.label },
+  { value: "position_trading", label: CATEGORY_REGISTRY.position_trading.label },
+  { value: "trend_trading", label: CATEGORY_REGISTRY.trend_trading.label },
+  { value: "range_trading", label: CATEGORY_REGISTRY.range_trading.label },
+  { value: "breakout_trading", label: CATEGORY_REGISTRY.breakout_trading.label },
+  { value: "momentum_trading", label: CATEGORY_REGISTRY.momentum_trading.label },
+];
+
+function CategoryFilterBar({
+  selected,
+  onChange,
+  activeRosterCount,
+}: {
+  selected: TradingCategoryId | "all";
+  onChange: (next: TradingCategoryId | "all") => void;
+  activeRosterCount: number;
+}) {
+  const profile = selected === "all" ? null : CATEGORY_REGISTRY[selected];
+  const detail = profile
+    ? `${profile.primaryBarInterval} bars · ${profile.defaultLeverage}× lev · hold ${profile.holdMinutesMin}–${profile.holdMinutesMax}m · SL ${profile.slPctMin}-${profile.slPctMax}%`
+    : "CORE 20 + premium + full 60-strategy research pool";
+  return (
+    <DeskBanner variant="info" title={`Category filter — ${activeRosterCount} strategies`}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginTop: 4 }}>
+        <label htmlFor="btc-ft-category-select" className="desk-label-md">
+          Category:
+        </label>
+        <select
+          id="btc-ft-category-select"
+          value={selected}
+          onChange={(e) => onChange(e.target.value as TradingCategoryId | "all")}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 6,
+            border: "1px solid var(--desk-outline)",
+            background: "var(--desk-surface)",
+            color: "var(--desk-on-surface)",
+            fontSize: "0.875rem",
+            minWidth: 180,
+          }}
+        >
+          {CATEGORY_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <span className="desk-label-md" style={{ fontWeight: 400 }}>{detail}</span>
+      </div>
+    </DeskBanner>
   );
 }

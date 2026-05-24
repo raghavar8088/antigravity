@@ -239,6 +239,22 @@ const POLL_MS = 4_000;
 const SYMBOL_FETCH_CHUNK = 5;
 const MAX_TRADES = 2_000;
 
+/**
+ * PR 10 — multi-bar-interval engine routing.
+ *
+ * Bar intervals supported by the engine. Each research-pool strategy declares
+ * a `primaryBarInterval`; the polling loop fetches every interval needed by
+ * the active roster, and signal eval routes each strategy to its TF cache.
+ *
+ * "1m" is always fetched — needed for regime classification, mark price, exit
+ * pipeline, and probe/bootstrap entries.
+ */
+type BarInterval = "1m" | "5m" | "15m" | "4h" | "1d";
+const BAR_INTERVALS_SUPPORTED: readonly BarInterval[] = ["1m", "5m", "15m", "4h", "1d"];
+function isBarInterval(v: unknown): v is BarInterval {
+  return typeof v === "string" && (BAR_INTERVALS_SUPPORTED as readonly string[]).includes(v);
+}
+
 // Exit management
 const MIN_ABS_NET_PNL_USD = 2;
 const MOMENTUM_HOLD_EXTEND = 1.25;
@@ -734,6 +750,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const cleaned = symbols.map((s) => s.trim().toUpperCase()).filter(Boolean);
     return cleaned.length > 0 ? cleaned : [...TRADING_SYMBOLS];
   }, [symbols]);
+
+  /**
+   * PR 10 — bar intervals required by the active strategy roster.
+   *
+   * Always includes "1m" (regime, mark, exits, probe). For each strategy adds
+   * its `primaryBarInterval` and `confirmBarInterval` when present. Unknown
+   * intervals are dropped — the engine silently falls back to "1m" for those
+   * strategies (safe default).
+   */
+  const requiredBarIntervals = useMemo<BarInterval[]>(() => {
+    const set = new Set<BarInterval>(["1m"]);
+    for (const def of activeStratDefs) {
+      if (isBarInterval(def.primaryBarInterval)) set.add(def.primaryBarInterval);
+      if (isBarInterval(def.confirmBarInterval)) set.add(def.confirmBarInterval);
+    }
+    return BAR_INTERVALS_SUPPORTED.filter((i) => set.has(i));
+  }, [activeStratDefs]);
 
   // State
   // Resolve env-tunable initial balance once per hook instance (stable across renders).
@@ -1826,8 +1859,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const poll = async () => {
       const debug502 = process.env.NEXT_PUBLIC_SIMULATE_FUTURES_502 === "1";
-      const klineQuery = (sym: string) =>
-        `/api/btc/futures-klines?symbol=${encodeURIComponent(sym)}${debug502 ? "&debugFutures502=1" : ""}`;
+      const klineQuery = (sym: string, tf: BarInterval = "1m") =>
+        `/api/btc/futures-klines?symbol=${encodeURIComponent(sym)}&interval=${tf}${debug502 ? "&debugFutures502=1" : ""}`;
+
+      /** PR 10 — multi-TF cache. Always populated for "1m"; other TFs only when
+       *  the active roster declares strategies needing them. Signal eval routes
+       *  each strategy to its primaryBarInterval payload via this map.        */
+      const payloadsByInterval = new Map<BarInterval, Map<string, KlinePayload>>();
 
       try {
         void flushTradeSyncQueue(cloudAccountKey);
@@ -1838,7 +1876,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           const results = await Promise.all(
             batch.map(async (sym): Promise<{ sym: string; payload: KlinePayload | null; issue: FuturesDataHealthSymbolIssue | null }> => {
               try {
-                const res = await fetch(klineQuery(sym), { cache: "no-store" });
+                const res = await fetch(klineQuery(sym, "1m"), { cache: "no-store" });
                 if (!res.ok) {
                   return {
                     sym,
@@ -1909,6 +1947,38 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             if (r.issue) symbolIssues.push(r.issue);
             if (r.payload) payloads.set(r.sym, r.payload);
           }
+        }
+
+        // Always populate "1m" first — it powers regime/mark/exits/probe.
+        payloadsByInterval.set("1m", payloads);
+
+        // PR 10 — additionally fetch every non-1m TF the active roster needs.
+        // Failures on these are soft: signal eval falls back to the strategy's
+        // 1m payload if its declared TF didn't return enough bars.
+        const extraIntervals = requiredBarIntervals.filter((tf) => tf !== "1m");
+        for (const tf of extraIntervals) {
+          const tfMap = new Map<string, KlinePayload>();
+          for (const batch of chunkArray(activeSymbols, SYMBOL_FETCH_CHUNK)) {
+            const results = await Promise.all(
+              batch.map(async (sym): Promise<{ sym: string; payload: KlinePayload | null }> => {
+                try {
+                  const res = await fetch(klineQuery(sym, tf), { cache: "no-store" });
+                  if (!res.ok) return { sym, payload: null };
+                  const j = (await res.json()) as KlinePayload;
+                  if (!j || j.ok !== true || !Array.isArray(j.candles) || j.candles.length < MIN_BARS) {
+                    return { sym, payload: null };
+                  }
+                  return { sym, payload: j };
+                } catch {
+                  return { sym, payload: null };
+                }
+              }),
+            );
+            for (const r of results) {
+              if (r.payload) tfMap.set(r.sym, r.payload);
+            }
+          }
+          payloadsByInterval.set(tf, tfMap);
         }
 
         if (!mounted) return;
@@ -2165,6 +2235,29 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             const lastBarMs = d.candles[d.candles.length - 1]?.time;
             const input = buildSignalInputs(opens, closes, highs, lows, volumes, d.markPrice, lastBarMs);
             const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes);
+
+            /** PR 10 — cache per-TF signal inputs for this symbol so we only call
+             *  buildSignalInputs once per (symbol, TF) per poll instead of per
+             *  strategy. The 1m input is already built above; other TFs are
+             *  built lazily on first lookup.                                  */
+            const inputByTf = new Map<BarInterval, FuturesSignalInputs>();
+            inputByTf.set("1m", input);
+            const getInputForTf = (tf: BarInterval): FuturesSignalInputs | null => {
+              if (tf === "1m") return input;
+              const cached = inputByTf.get(tf);
+              if (cached) return cached;
+              const tfPayload = payloadsByInterval.get(tf)?.get(symbol);
+              if (!tfPayload || tfPayload.candles.length < MIN_BARS) return null;
+              const tCloses = tfPayload.candles.map((c) => c.close);
+              const tOpens = tfPayload.candles.map((c) => c.open);
+              const tHighs = tfPayload.candles.map((c) => c.high);
+              const tLows = tfPayload.candles.map((c) => c.low);
+              const tVols = tfPayload.candles.map((c) => c.volume);
+              const tLastBar = tfPayload.candles[tfPayload.candles.length - 1]?.time;
+              const tInput = buildSignalInputs(tOpens, tCloses, tHighs, tLows, tVols, tfPayload.markPrice, tLastBar);
+              inputByTf.set(tf, tInput);
+              return tInput;
+            };
             if (symbol === PRIMARY_QUOTE_SYMBOL) {
               deskLastRegimeTagRef.current = regime;
               if (deskHoldTuningAnalysisModeEnabled()) {
@@ -2199,6 +2292,21 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               }
               if ((stratCooldownsRef.current[slotKey] ?? 0) > Date.now()) {
                 if (pollDebug) pollDebug.failCooldown += 1;
+                continue;
+              }
+
+              /** PR 10 — pick the right signal-inputs cache for this strategy's
+               *  primaryBarInterval. Strategies without a declared TF (legacy
+               *  CORE 20, premium) keep using 1m. If the strategy's TF payload
+               *  didn't arrive (network failure, insufficient bars), we skip
+               *  the strategy this poll rather than silently scoring on 1m,
+               *  which would defeat the whole TF-routing purpose.            */
+              const stratTf: BarInterval = isBarInterval(strat.primaryBarInterval)
+                ? strat.primaryBarInterval
+                : "1m";
+              const stratInput = getInputForTf(stratTf);
+              if (!stratInput) {
+                if (pollDebug) pollDebug.failDisabled += 1;
                 continue;
               }
 
@@ -2237,7 +2345,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 }
               }
 
-              const signal = evalMinuteSignal(input, strat);
+              const signal = evalMinuteSignal(stratInput, strat);
               const stratTradeCount = tradesRef.current.filter((t) => t.strategyId === strat.id).length;
               const ensureDataThresholdDrop = researchEnsureTrades &&
                 now - researchMountedAtRef.current >= 2 * 60 * 60 * 1000 &&
@@ -2253,8 +2361,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
               const effectiveThresholdForStrat = Math.max(18, stratBaseThreshold - ensureDataThresholdDrop);
               const confirmPasses =
-                passesEntryConfirmation(input, strat) ||
-                (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(input, strat));
+                passesEntryConfirmation(stratInput, strat) ||
+                (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
               if (signal.score >= effectiveThresholdForStrat && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
                 const regimeMatch = strat.regimes?.includes(regime) ?? false;
@@ -2264,7 +2372,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   symbol,
                   lastPrice: d.lastPrice,
                   markPrice: d.markPrice,
-                  atr14: input.atr14,
+                  atr14: stratInput.atr14,
                   regime,
                   priority: paperEntryPriorityScore({
                     signalScore: signal.score,
@@ -2441,7 +2549,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       mounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [openPosition, closePosition, activeStratDefs, activeSymbols, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, paperBootstrapProbe, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
+  }, [openPosition, closePosition, activeStratDefs, activeSymbols, requiredBarIntervals, activeSignalThreshold, strategyProfile, regimeHistogramLsKey, cloudAccountKey, relaxEntryConfirmation, forceProbeOpen, paperBootstrapProbe, researchEnsureTrades, paperEnsureTrades, entryUtcSessionOverride]);
 
   // ========== ENGINE REF ==========
   useEffect(() => {
