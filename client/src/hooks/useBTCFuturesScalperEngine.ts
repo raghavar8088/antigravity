@@ -170,6 +170,12 @@ import {
   isStrategyInProvenSession,
 } from "@/lib/strategySessionStats";
 import { setCanonicalMark } from "@/lib/canonicalMarkPrice";
+import {
+  computeStrategyDiagnosticsFromEngineTrades,
+  computeRollingHealthCheckFromEngineTrades,
+  type DiagnosticSummary,
+  type HealthCheckResult,
+} from "@/lib/futuresStrategyDiagnostics";
 
 export type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
@@ -531,6 +537,10 @@ export interface BTCFuturesEngineStats {
   deskSkippedCorrelatedCap: number;
   /** Last-60s skip reason frequency (PR-6 entry quality diagnostics). */
   skipReasonSummary: Array<{ reason: string; count: number }>;
+  /** Per-strategy aggregated performance (PR-7 edge diagnostics). */
+  strategyDiagnostics: DiagnosticSummary;
+  /** Rolling 20-trade health check with grade A/B/C/F (PR-7). */
+  rollingHealthCheck: HealthCheckResult;
 }
 
 /** Strategy Status */
@@ -1492,6 +1502,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const sm = computeSessionTradingMetrics(productionTrades);
     const exitAn = computeSessionExitReasonAnalytics(productionTrades);
+    const strategyDiagnostics = computeStrategyDiagnosticsFromEngineTrades(productionTrades);
+    const rollingHealthCheck = computeRollingHealthCheckFromEngineTrades(productionTrades);
 
     const stratDeskW = new Map(activeStratDefs.map((s) => [s.id, s.deskTpWidened === true]));
     const stratCat = new Map(activeStratDefs.map((s) => [s.id, s.category]));
@@ -1590,6 +1602,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       deskOppositeSideBlockedCount: deskOppositeSideBlockedRef.current,
       deskSkippedCorrelatedCap: deskSkippedCorrelatedCapRef.current,
       skipReasonSummary: getSkipReasonSummary(),
+      strategyDiagnostics,
+      rollingHealthCheck,
     };
   }, [
     trades,
