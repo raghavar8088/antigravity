@@ -9,7 +9,21 @@ export type SessionTradeLike = {
   netPnl: number;
   fees: number;
   realizedPnl: number;
+  /** Optional strategy name — used to exclude probe/bootstrap trades from metrics. */
+  strategyName?: string;
 };
+
+/**
+ * Returns true for synthetic probe/bootstrap trades that must be excluded from
+ * session metrics (they have no signal edge and distort expectancy + fee ratios).
+ * Handles both camelCase (BTCFuturesTrade) and snake_case (PaperTradeDbRow) fields.
+ */
+export function isProbeOrBootstrapTrade(
+  t: { strategy_name?: string | null; strategyName?: string | null },
+): boolean {
+  const name = (t.strategy_name ?? t.strategyName ?? "").toUpperCase();
+  return name.includes("BOOTSTRAP") || name.includes("PROBE") || name.includes("DEV_FORCE");
+}
 
 export type SessionTradingMetrics = {
   /** Closed trades / elapsed session hours (from earliest open to now). */
@@ -33,7 +47,13 @@ export function computeSessionTradingMetrics(
   trades: ReadonlyArray<SessionTradeLike>,
   nowMs: number = Date.now(),
 ): SessionTradingMetrics {
-  if (!trades.length) {
+  // Exclude synthetic probe/bootstrap trades — they have no signal edge and
+  // inflate/deflate expectancy, fee-ratio, and hold-time metrics.
+  const productionTrades = trades.filter(
+    (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+  );
+
+  if (!productionTrades.length) {
     return {
       tradesPerHour: 0,
       expectancyPerTrade: 0,
@@ -50,7 +70,7 @@ export function computeSessionTradingMetrics(
   let sumAbsGross = 0;
   let earliest = Infinity;
 
-  for (const t of trades) {
+  for (const t of productionTrades) {
     const o = new Date(t.openedAt).getTime();
     const c = new Date(t.closedAt).getTime();
     if (Number.isFinite(o)) earliest = Math.min(earliest, o);
@@ -64,8 +84,8 @@ export function computeSessionTradingMetrics(
 
   if (!Number.isFinite(earliest)) earliest = nowMs;
   const sessionHours = Math.max(1 / 60, (nowMs - earliest) / 3_600_000);
-  const tradesPerHour = trades.length / sessionHours;
-  const expectancyPerTrade = sumNet / trades.length;
+  const tradesPerHour = productionTrades.length / sessionHours;
+  const expectancyPerTrade = sumNet / productionTrades.length;
 
   const feePctOfAbsGross = sumAbsGross > 1e-12 ? (sumFees / sumAbsGross) * 100 : 0;
 

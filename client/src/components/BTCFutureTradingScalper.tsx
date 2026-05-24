@@ -232,12 +232,12 @@ export function BTCFutureTradingScalper({
     return btcFtMinMoveKMulFromEnv(0.45);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE]);
 
-  /** Paper discovery: always on for BTC FT desk unless explicitly disabled via env. */
+  /** Paper discovery: always on for BTC FT desk unless explicitly disabled via env or WINNERS_ONLY (which must only trade on merit). */
   const paperEnsureTrades =
-    !EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv();
+    !EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && btcFtPaperEnsureTradesFromEnv();
   const paperDeskActive = paperEnsureTrades;
   const paperBootstrapProbe =
-    (!EFFECTIVE_RESEARCH_MODE && btcFtPaperEnsureTradesFromEnv()) ||
+    (!EFFECTIVE_RESEARCH_MODE && !WINNERS_ONLY_MODE && btcFtPaperEnsureTradesFromEnv()) ||
     (EFFECTIVE_RESEARCH_MODE && researchEnsureTradesEnabled());
 
   const entryDebugEnabled = btcFtEntryDebugEnabledFromEnv() || rosterInfo.isLargeRoster;

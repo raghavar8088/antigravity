@@ -252,10 +252,11 @@ export function deskMaxSameDirNotionalFracFromEnv(): number {
 
 /**
  * Default \(K\) in `paperMinExpectedMoveVsFees` (ATR$ move ≥ K × round-trip fees).
- * Tightened 2026-05-21 from 1.0 → 1.1 to require a 10% safety margin over fees;
- * stops entries where a single-ATR move barely covers the round-trip cost.
+ * Raised 2026-05-24 from 1.1 → 3.0: at 1.1 fee drag exceeded 200% because ATR
+ * covered only marginally more than the round-trip cost; 3.0 requires the expected
+ * move to be ≥3× fees, providing meaningful headroom on a 0.10% taker desk.
  */
-export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 1.1;
+export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 3.0;
 
 export function deskMinExpectedMoveSafetyKFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K;

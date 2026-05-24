@@ -100,6 +100,7 @@ import {
   formatExitReasonSessionSummary,
   FUTURES_STRATEGY_PROFILES,
   effectiveMinExpectedMoveSafetyK,
+  isProbeOrBootstrapTrade,
   resolveStrategyProfile,
   type FuturesStrategyProfile,
 } from "@/lib/futuresSessionMetrics";
@@ -164,6 +165,7 @@ import {
   computeStrategyHourlyStats,
   isStrategyInProvenSession,
 } from "@/lib/strategySessionStats";
+import { setCanonicalMark } from "@/lib/canonicalMarkPrice";
 
 export type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 export type { FuturesStrategyProfile } from "@/lib/futuresSessionMetrics";
@@ -1425,22 +1427,31 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   // ========== STATS ==========
   const calculateStats = useCallback((): BTCFuturesEngineStats => {
-    const wins = trades.filter(t => t.netPnl > 0);
-    const losses = trades.filter(t => t.netPnl <= 0);
+    // Exclude synthetic probe/bootstrap trades from all session metrics so they
+    // don't inflate win-rate, expectancy, or fee-ratio numbers.
+    const productionTrades = trades.filter(
+      (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+    );
+    const productionPositions = positions.filter(
+      (p) => !isProbeOrBootstrapTrade({ strategyName: p.strategyName }),
+    );
+
+    const wins = productionTrades.filter(t => t.netPnl > 0);
+    const losses = productionTrades.filter(t => t.netPnl <= 0);
     const winCount = wins.length;
     const lossCount = losses.length;
-    const totalTrades = trades.length;
+    const totalTrades = productionTrades.length;
     const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
     const avgWin = winCount > 0 ? wins.reduce((s, t) => s + t.netPnl, 0) / winCount : 0;
     const avgLoss = lossCount > 0 ? losses.reduce((s, t) => s + t.netPnl, 0) / lossCount : 0;
     const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
-    const realizedPnl = trades.reduce((s, t) => s + t.netPnl, 0);
-    const unrealizedPnl = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
-    const totalFees = trades.reduce((s, t) => s + t.fees, 0);
-    const totalFunding = trades.reduce((s, t) => s + t.fundingCosts, 0) + positions.reduce((s, p) => s + p.fundingCosts, 0);
+    const realizedPnl = productionTrades.reduce((s, t) => s + t.netPnl, 0);
+    const unrealizedPnl = productionPositions.reduce((s, p) => s + p.unrealizedPnl, 0);
+    const totalFees = productionTrades.reduce((s, t) => s + t.fees, 0);
+    const totalFunding = productionTrades.reduce((s, t) => s + t.fundingCosts, 0) + productionPositions.reduce((s, p) => s + p.fundingCosts, 0);
     const netPnl = realizedPnl + unrealizedPnl;
 
-    const peak = Math.max(INITIAL_BALANCE, ...trades.map((_, i) => INITIAL_BALANCE + trades.slice(0, i + 1).reduce((s, t) => s + t.netPnl, 0)));
+    const peak = Math.max(INITIAL_BALANCE, ...productionTrades.map((_, i) => INITIAL_BALANCE + productionTrades.slice(0, i + 1).reduce((s, t) => s + t.netPnl, 0)));
     const currentEquity = balance + unrealizedPnl;
     const drawdown = peak > 0 ? ((peak - currentEquity) / peak) * 100 : 0;
 
@@ -1468,12 +1479,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const avgLeverage = positions.length > 0 ? positions.reduce((s, p) => s + p.leverage, 0) / positions.length : 0;
 
-    const sm = computeSessionTradingMetrics(trades);
-    const exitAn = computeSessionExitReasonAnalytics(trades);
+    const sm = computeSessionTradingMetrics(productionTrades);
+    const exitAn = computeSessionExitReasonAnalytics(productionTrades);
 
     const stratDeskW = new Map(activeStratDefs.map((s) => [s.id, s.deskTpWidened === true]));
     const stratCat = new Map(activeStratDefs.map((s) => [s.id, s.category]));
-    const tuningRows = trades.map((t) => ({
+    const tuningRows = productionTrades.map((t) => ({
       strategyId: t.strategyId,
       strategyName: t.strategyName,
       category: stratCat.get(t.strategyId) ?? "?",
@@ -2214,6 +2225,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             nextFunding: primary.nextFunding,
             timestamp: new Date(primary.fetchedAt).getTime(),
           });
+          setCanonicalMark(primary.markPrice, "engine-poll");
           setWarmingPct(Math.min(100, Math.round((primary.candles.length / MIN_BARS) * 100)));
         }
 
@@ -2279,10 +2291,17 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               : {}),
           });
           const merged: BTCFuturesPosition = { ...pos, ...patched };
+          // Sync slPrice with adaptiveSl so SL checks use the most protective stop.
+          const syncedSl =
+            merged.side === "LONG"
+              ? Math.max(merged.adaptiveSl, merged.slPrice)
+              : Math.min(merged.adaptiveSl, merged.slPrice);
+          const finalMerged =
+            syncedSl !== merged.slPrice ? { ...merged, slPrice: syncedSl } : merged;
           if (close.shouldClose && close.reason) {
-            exitJobs.push({ pos: merged, exitPrice: close.exitPrice, reason: close.reason });
+            exitJobs.push({ pos: finalMerged, exitPrice: close.exitPrice, reason: close.reason });
           }
-          return merged;
+          return finalMerged;
         });
 
         const exitingIds = new Set(exitJobs.map((j) => j.pos.id));
@@ -2665,6 +2684,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             if (paperLastMarkSpreadPct(c.lastPrice, c.markPrice) > maxSpreadPct) {
               deskSkippedSpreadRef.current += 1;
               if (pollDebug) pollDebug.failSpread += 1;
+              return false;
+            }
+            // ATR% pre-filter: skip when market is too thin to cover fees (atr/price < 0.06%).
+            if (c.markPrice > 0 && c.atr14 / c.markPrice < 0.0006) {
+              deskSkippedMinExpectedMoveRef.current += 1;
+              if (pollDebug) pollDebug.failMinMove += 1;
               return false;
             }
             if (!entryUtcSessionOpen) {

@@ -81,6 +81,7 @@ function CloudLeaderboardPanel({
     setError(null);
     try {
       const params = new URLSearchParams({
+        account_key: cloudAccountKey ?? "",
         window_days: String(LEADERBOARD_WINDOW_DAYS),
         limit: String(LEADERBOARD_TABLE_LIMIT),
       });
