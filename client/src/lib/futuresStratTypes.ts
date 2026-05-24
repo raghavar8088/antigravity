@@ -62,7 +62,13 @@ export type BtcFtTemplateId =
   | "PRM_VWAP_SCALP"
   | "PRM_FUNDING_FADE"
   | "PRM_BREAKOUT_RETEST"
-  | "PRM_BB_MEAN_REVERT";
+  | "PRM_BB_MEAN_REVERT"
+  // Chart pattern strategies (IDs 514–523)
+  | "PRM_ASC_TRIANGLE"
+  | "PRM_BULL_FLAG"
+  | "PRM_SR_RETEST_CLASSIC"
+  | "PRM_DOUBLE_PATTERN"
+  | "PRM_RANGE_BREAK_CLASSIC";
 
 export interface FuturesStratDef {
   id: number;

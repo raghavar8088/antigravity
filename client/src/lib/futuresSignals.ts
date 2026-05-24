@@ -1064,6 +1064,114 @@ export function evalBtcFtTemplateSignal(
       if (s.momentum3 > 0) add(8, "mom recovering");
       if (s.price < s.mean20) add(6, "below mean (revert target clear)");
     }
+  } else if (tpl === "PRM_ASC_TRIANGLE") {
+    // PREMIUM: Ascending triangle (LONG) / descending triangle (SHORT).
+    // Ascending: flat resistance (donchianHigh) + higher lows (HTF uptrend) → bullish breakout.
+    // Descending: flat support (donchianLow) + lower highs (HTF downtrend) → bearish breakdown.
+    if (short) {
+      if (s.price <= s.donchianLow * 1.001) add(22, "breaking Donchian support (desc triangle)");
+      if (s.htf5_trend < 0) add(14, "HTF5 downtrend (lower highs)");
+      if (s.htf15_trend < 0) add(10, "HTF15 trend-");
+      if (s.fast < s.slow) add(10, "1m EMA bear");
+      if (s.volRatio > 1.3) add(12, "vol surge on breakdown");
+      if (s.momentum3 < 0) add(8, "mom-");
+      if (s.rsi14 < 55 && s.rsi14 > 20) add(6, "RSI bear range");
+    } else {
+      if (s.price >= s.donchianHigh * 0.999) add(22, "breaking Donchian resistance (asc triangle)");
+      if (s.htf5_trend > 0) add(14, "HTF5 uptrend (higher lows)");
+      if (s.htf15_trend > 0) add(10, "HTF15 trend+");
+      if (s.fast > s.slow) add(10, "1m EMA bull");
+      if (s.volRatio > 1.3) add(12, "vol surge on breakout");
+      if (s.momentum3 > 0) add(8, "mom+");
+      if (s.rsi14 > 45 && s.rsi14 < 80) add(6, "RSI bull range");
+    }
+  } else if (tpl === "PRM_BULL_FLAG") {
+    // PREMIUM: Bull flag (LONG) / bear flag (SHORT).
+    // Impulse established on HTF, controlled consolidation on 1m, then continuation.
+    // Key: HTF impulse confirmed BEFORE the 1m continuation signal.
+    if (short) {
+      if (s.htf15_fast < s.htf15_slow) add(18, "HTF15 impulse bear");
+      if (s.htf5_fast < s.htf5_slow) add(14, "HTF5 flag on bear");
+      if (s.price < s.mean20) add(12, "below mean (flag formed)");
+      if (s.momentum3 < 0 && s.momentum6 < 0) add(12, "continuation mom-");
+      if (s.volRatio > 1.3) add(10, "vol on flag break");
+      if (s.rsi14 < 52 && s.rsi14 > 20) add(8, "RSI bear range");
+      if (s.fast < s.slow) add(8, "1m EMA bear");
+    } else {
+      if (s.htf15_fast > s.htf15_slow) add(18, "HTF15 impulse bull");
+      if (s.htf5_fast > s.htf5_slow) add(14, "HTF5 flag on bull");
+      if (s.price > s.mean20) add(12, "above mean (flag formed)");
+      if (s.momentum3 > 0 && s.momentum6 > 0) add(12, "continuation mom+");
+      if (s.volRatio > 1.3) add(10, "vol on flag break");
+      if (s.rsi14 > 48 && s.rsi14 < 80) add(8, "RSI bull range");
+      if (s.fast > s.slow) add(8, "1m EMA bull");
+    }
+  } else if (tpl === "PRM_SR_RETEST_CLASSIC") {
+    // PREMIUM: Support & resistance retest using mean20 as the dynamic S/R level.
+    // LONG: Old resistance became support; price pulls back to mean20 and bounces.
+    // SHORT: Old support became resistance; price bounces up to mean20 and rejects.
+    const atMean = s.mean20 > 0
+      ? s.price >= s.mean20 * 0.997 && s.price <= s.mean20 * 1.003
+      : false;
+    if (short) {
+      if (atMean) add(22, "price at mean20 S/R (rejection)");
+      if (s.fast < s.slow) add(12, "EMA confirm resistance");
+      if (s.htf5_trend <= 0) add(10, "HTF5 bear context");
+      if (s.volRatio > 1.1) add(10, "vol on retest");
+      if (s.rsi14 > 48 && s.rsi14 < 72) add(8, "RSI at resistance zone");
+      if (s.momentum3 < 0) add(8, "mom- on touch");
+      if (s.obvSlope < 0) add(6, "OBV confirms sellers");
+    } else {
+      if (atMean) add(22, "price at mean20 S/R (bounce)");
+      if (s.fast > s.slow) add(12, "EMA confirm support");
+      if (s.htf5_trend >= 0) add(10, "HTF5 bull context");
+      if (s.volRatio > 1.1) add(10, "vol on retest");
+      if (s.rsi14 > 38 && s.rsi14 < 62) add(8, "RSI at support zone");
+      if (s.momentum3 > 0) add(8, "mom+ on touch");
+      if (s.obvSlope > 0) add(6, "OBV confirms buyers");
+    }
+  } else if (tpl === "PRM_DOUBLE_PATTERN") {
+    // PREMIUM: Double bottom (LONG) / double top (SHORT).
+    // Double bottom: two touches of the 20-bar low with rising OBV (smart money accumulating).
+    // Double top: two touches of the 20-bar high with falling OBV (smart money distributing).
+    if (short) {
+      if (s.price >= s.high20 * 0.998) add(22, "at 20-bar high (double top zone)");
+      if (s.obvSlope < 0) add(16, "OBV falling (distribution)");
+      if (s.rsi14 > 65) add(14, "RSI overbought");
+      if (s.stochK < s.stochD && s.stochK > 70) add(12, "stoch bearish cross OB");
+      if (s.volRatio < 1.3) add(10, "thin vol at top (no conviction)");
+      if (s.momentum3 < 0) add(8, "mom turning-");
+    } else {
+      if (s.price <= s.low20 * 1.002) add(22, "at 20-bar low (double bottom zone)");
+      if (s.obvSlope > 0) add(16, "OBV rising (accumulation)");
+      if (s.rsi14 < 35) add(14, "RSI oversold");
+      if (s.stochK > s.stochD && s.stochK < 30) add(12, "stoch bullish cross OS");
+      if (s.volRatio < 1.3) add(10, "thin vol at bottom (no conviction)");
+      if (s.momentum3 > 0) add(8, "mom turning+");
+    }
+  } else if (tpl === "PRM_RANGE_BREAK_CLASSIC") {
+    // PREMIUM: Range breakout after BB compression.
+    // Thesis: Volatility compression (narrow BB) builds energy; the subsequent explosive
+    // move has a higher probability of follow-through than breakouts from wide ranges.
+    const bbWidth = s.bbUpper > s.bbLower && s.mean20 > 0
+      ? (s.bbUpper - s.bbLower) / s.mean20
+      : 1;
+    const compressed = bbWidth < 0.025;
+    if (short) {
+      if (s.price <= s.donchianLow * 1.001) add(22, "breaking range low");
+      if (compressed) add(16, "BB compressed (coiled)");
+      if (s.volRatio > 1.5) add(14, "strong vol on break");
+      if (s.rsi14 < 50) add(10, "RSI confirms bear break");
+      if (s.momentum3 < 0 && s.momentum6 < 0) add(10, "dual-tf mom-");
+      if (s.macdHist < 0) add(8, "MACD- agrees");
+    } else {
+      if (s.price >= s.donchianHigh * 0.999) add(22, "breaking range high");
+      if (compressed) add(16, "BB compressed (coiled)");
+      if (s.volRatio > 1.5) add(14, "strong vol on break");
+      if (s.rsi14 > 50) add(10, "RSI confirms bull break");
+      if (s.momentum3 > 0 && s.momentum6 > 0) add(10, "dual-tf mom+");
+      if (s.macdHist > 0) add(8, "MACD+ agrees");
+    }
   }
 
   score += Math.max(0, 3 - v) * 2;
@@ -1333,6 +1441,93 @@ export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: F
       Number.isFinite(s.rsi14) &&
       s.rsi14 < 35 &&
       s.volRatio < 1.4
+    );
+  }
+
+  if (tpl === "PRM_ASC_TRIANGLE") {
+    // Hard gate: price must be at/breaking the channel boundary, HTF trend must agree.
+    if (short) {
+      return (
+        s.price <= s.donchianLow * 1.002 &&
+        s.volRatio > 1.2 &&
+        s.htf5_trend <= 0
+      );
+    }
+    return (
+      s.price >= s.donchianHigh * 0.998 &&
+      s.volRatio > 1.2 &&
+      s.htf5_trend >= 0
+    );
+  }
+
+  if (tpl === "PRM_BULL_FLAG") {
+    // Hard gate: HTF impulse must be confirmed on both HTF15 and HTF5, with 1m momentum.
+    if (short) {
+      return (
+        s.htf15_fast < s.htf15_slow &&
+        s.htf5_fast < s.htf5_slow &&
+        s.momentum3 < 0 &&
+        s.volRatio > 1.1
+      );
+    }
+    return (
+      s.htf15_fast > s.htf15_slow &&
+      s.htf5_fast > s.htf5_slow &&
+      s.momentum3 > 0 &&
+      s.volRatio > 1.1
+    );
+  }
+
+  if (tpl === "PRM_SR_RETEST_CLASSIC") {
+    // Hard gate: price must be within the mean20 retest band, EMA must agree.
+    if (!Number.isFinite(s.mean20) || s.mean20 <= 0) return false;
+    if (short) {
+      return (
+        s.price >= s.mean20 * 0.997 &&
+        s.price <= s.mean20 * 1.005 &&
+        s.fast < s.slow
+      );
+    }
+    return (
+      s.price >= s.mean20 * 0.995 &&
+      s.price <= s.mean20 * 1.003 &&
+      s.fast > s.slow
+    );
+  }
+
+  if (tpl === "PRM_DOUBLE_PATTERN") {
+    // Hard gate: must be at the 20-bar extreme with OBV divergence — the core thesis.
+    if (short) {
+      return (
+        s.price >= s.high20 * 0.997 &&
+        s.obvSlope < 0 &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 > 62
+      );
+    }
+    return (
+      s.price <= s.low20 * 1.003 &&
+      s.obvSlope > 0 &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 < 38
+    );
+  }
+
+  if (tpl === "PRM_RANGE_BREAK_CLASSIC") {
+    // Hard gate: must be breaking the Donchian boundary with volume and RSI on-side.
+    if (short) {
+      return (
+        s.price <= s.donchianLow * 1.002 &&
+        s.volRatio > 1.3 &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 < 52
+      );
+    }
+    return (
+      s.price >= s.donchianHigh * 0.998 &&
+      s.volRatio > 1.3 &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 > 48
     );
   }
 
