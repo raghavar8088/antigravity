@@ -362,6 +362,24 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
       cell: (s) => <span className="desk-mono">{s.score.toFixed(1)}</span>,
     },
     {
+      id: "stratPnl",
+      header: "PnL",
+      align: "right",
+      cell: (s) => {
+        const unrealized = positions
+          .filter((p) => p.strategyId === s.id)
+          .reduce((sum, p) => sum + p.unrealizedPnl, 0);
+        const pnl = s.totalPnl + unrealized;
+        return (
+          <span className={`desk-mono ${pnlToneClass(pnl)}`}>
+            {s.totalTrades === 0 && unrealized === 0
+              ? "—"
+              : formatDeskUsd(pnl, { signed: true })}
+          </span>
+        );
+      },
+    },
+    {
       id: "live",
       header: "Live",
       align: "right",
