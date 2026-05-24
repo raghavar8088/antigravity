@@ -4,8 +4,9 @@
  * Aggregates closed trade history into per-strategy performance rows.
  */
 
-import type { PaperTradeDbRow } from "./paperTradesTypes";
 import type { BTCFuturesTrade } from "./btcFuturesTrade.types";
+import { isProbeOrBootstrapTrade } from "./futuresSessionMetrics";
+import type { PaperTradeDbRow } from "./paperTradesTypes";
 
 // ─── Core types ───────────────────────────────────────────────────────────────
 
@@ -67,13 +68,6 @@ export interface HealthCheckResult {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const PROBE_NAMES = ["BOOTSTRAP", "PROBE", "DEV_FORCE"] as const;
-
-function isProbe(name: string): boolean {
-  const u = name.toUpperCase();
-  return PROBE_NAMES.some((p) => u.includes(p));
-}
-
 function holdMinutesFromRow(trade: PaperTradeDbRow): number {
   if (!trade.closed_at || !trade.opened_at) return 0;
   return (
@@ -99,7 +93,7 @@ export function computeStrategyDiagnostics(
   for (const [strategyId, stratTrades] of groups) {
     const name   = stratTrades[0]?.strategy_name ?? `strategy_${strategyId}`;
     const family = stratTrades[0]?.template_family ?? "unknown";
-    const probe  = isProbe(name);
+    const probe  = isProbeOrBootstrapTrade({ strategy_name: name });
 
     const exitReasonCounts: Record<string, number> = {};
     for (const t of stratTrades) {
@@ -178,7 +172,7 @@ export function computeRollingHealthCheck(
   windowN = 20,
 ): HealthCheckResult {
   const prod = trades
-    .filter((t) => !isProbe(t.strategy_name ?? "") && t.closed_at)
+    .filter((t) => !isProbeOrBootstrapTrade({ strategy_name: t.strategy_name }) && t.closed_at)
     .sort(
       (a, b) =>
         new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime(),

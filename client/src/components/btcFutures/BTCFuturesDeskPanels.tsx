@@ -10,6 +10,7 @@ import type {
 } from "@/hooks/useBTCFuturesScalperEngine";
 import { FUTURES_STRATEGY_PROFILES } from "@/lib/futuresSessionMetrics";
 import { paperPriceMovePctOnNotional } from "@/lib/futuresPaperMath";
+import { DeskHealthBadge } from "@/components/DeskHealthBadge";
 import { ShadowIntentLogPanel } from "@/components/ShadowIntentLogPanel";
 import { TestnetOpsPanel } from "@/components/TestnetOpsPanel";
 import { StrategyResearchPanel } from "@/components/btcFutures/StrategyResearchPanel";
@@ -577,6 +578,7 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
                 compact
               />
             </div>
+            <DeskHealthBadge health={stats.rollingHealthCheck ?? null} />
             <div className="desk-metrics-row" style={{ marginTop: 8 }}>
               <DeskMetricTile label="Skip ATR/fees" value={String(stats.deskSkippedMinExpectedMove)} compact />
               <DeskMetricTile label="Skip same-dir" value={String(stats.deskSkippedSameDirCap)} compact />

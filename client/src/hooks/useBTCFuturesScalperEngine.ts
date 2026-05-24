@@ -63,7 +63,11 @@ import {
   ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
   ENTRY_OPPOSITE_SIDE_WINDOW_MS,
   entryBurstMaxPerSymbolFromEnv,
-  computeChopAwareThreshold,
+  computeAdaptiveThreshold,
+  computeWinRateAdaptiveThreshold,
+  clearRuntimeBlocklist,
+  getRuntimeBlocklist,
+  isStrategyRuntimeBlocked,
   isSameSideCapped,
   MAX_SAME_SIDE_POSITIONS,
   type EntryBurstContext,
@@ -158,7 +162,6 @@ import { persistShadowTradeIntent } from "@/lib/shadowTradeIntentSync";
 import { btcFtTemplateFamilyKey, deskMinAbsNetWinUsd, researchDailyStratCap } from "@/lib/btcFtResearch";
 import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremiumStrategies";
 import { btcFtUseRankedEnabled, winnerIdsFromRankings, type BtcFtStrategyRankingRow } from "@/lib/btcFtRoster";
-import { computeAdaptiveThreshold } from "@/lib/futuresDeskPolicy";
 import {
   atrPctFromAtr,
   computeAdaptiveTpPct,
@@ -543,6 +546,8 @@ export interface BTCFuturesEngineStats {
   strategyDiagnostics: DiagnosticSummary | null;
   /** Rolling 20-trade health check with grade A/B/C/F (PR-7). Null until >= 5 production trades. */
   rollingHealthCheck: HealthCheckResult | null;
+  /** PR-8: monitor-driven runtime blocks (session-only, not persisted). */
+  runtimeBlocklistIds: number[];
 }
 
 /** Strategy Status */
@@ -805,7 +810,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     const withThresholds = base.map((s) => {
       const row = rankingById.get(s.id);
       if (!row) return s;
-      const adaptive = computeAdaptiveThreshold(
+      const adaptive = computeWinRateAdaptiveThreshold(
         baseThreshold,
         row.winRate ?? null,
         row.trades,
@@ -1371,6 +1376,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     deskOppositeSideBlockedRef.current = 0;
     deskSkippedCorrelatedCapRef.current = 0;
     resetSkipReasonLog();
+    clearRuntimeBlocklist();
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
     forceProbeOpenedRef.current = false;
@@ -1621,6 +1627,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       skipReasonSummary: getSkipReasonSummary(),
       strategyDiagnostics,
       rollingHealthCheck,
+      runtimeBlocklistIds: getRuntimeBlocklist(),
     };
   }, [
     trades,
@@ -1664,8 +1671,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         category: strat.category,
         status: openCount > 0 ? "OPEN" : inCooldown ? "COOLING" : "AVAILABLE",
         disabled: allStrategiesAvailable
-          ? false
-          : disabledStrategies.includes(strat.id) || autoDisabledStratIds.includes(strat.id),
+          ? isStrategyRuntimeBlocked(strat.id)
+          : disabledStrategies.includes(strat.id) ||
+            autoDisabledStratIds.includes(strat.id) ||
+            isStrategyRuntimeBlocked(strat.id),
         openCount,
         lastTradeAt: lastTrade ? new Date(lastTrade.closedAt).getTime() : null,
         score,
@@ -2484,6 +2493,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         }
 
         if (hasMarketData && !pauseRef.current && !drawdownEntryPausedRef.current && !intradayDdPausedRef.current) {
+          const productionTradesForHealth = tradesRef.current.filter(
+            (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+          );
+          const rollingHealthForEntry =
+            productionTradesForHealth.length >= 5
+              ? computeRollingHealthCheckFromEngineTrades(productionTradesForHealth)
+              : null;
+
           const equityForEntry = balanceRef.current + survivors.reduce((s, p) => s + p.unrealizedPnl, 0);
           const replaceWeakest = deskEntryReplaceWeakestFromEnv();
           type EntryCandidate = {
@@ -2557,9 +2574,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               if (pollDebug) pollDebug.evalPairs += 1;
               if (
                 disabledRef.current.includes(strat.id) ||
-                autoDisabledRef.current.has(strat.id)
+                autoDisabledRef.current.has(strat.id) ||
+                isStrategyRuntimeBlocked(strat.id)
               ) {
                 if (pollDebug) pollDebug.failDisabled += 1;
+                if (isStrategyRuntimeBlocked(strat.id)) {
+                  logSkipReason(strat.id, "DISABLED", { reason: "RUNTIME_BLOCKLIST" });
+                }
                 continue;
               }
               const slotKey = `${symbol}:${strat.id}`;
@@ -2634,14 +2655,18 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     researchMountedAtRef.current,
                     stratTradeCount,
                   );
-              // P1.1.2: use per-strategy dynamic threshold when available, else fall back to global
-              // PR-6: apply chop-regime boost (CHOP_THRESHOLD_BOOST) before comparing score.
+              // P1.1.2: per-strategy dynamic threshold; PR-8: regime + health adaptive boost.
               const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
               const thresholdFloor = paperEnsureTrades ? 16 : 18;
-              const chopAwareBase = computeChopAwareThreshold(stratBaseThreshold, regime);
+              const adaptiveBase = computeAdaptiveThreshold(
+                stratBaseThreshold,
+                regime,
+                rollingHealthForEntry?.grade ?? null,
+                rollingHealthForEntry?.feePctOfAbsGross ?? null,
+              );
               const effectiveThresholdForStrat = Math.max(
                 thresholdFloor,
-                chopAwareBase - ensureDataThresholdDrop - quietEntryBoost,
+                adaptiveBase - ensureDataThresholdDrop - quietEntryBoost,
               );
               // PR-6 Change 4: block strategies with an explicit regimes[] list when
               // the current regime isn't in it — catch this early before candidate push.
@@ -2695,6 +2720,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     score: signal.score,
                     required: effectiveThresholdForStrat,
                     regime,
+                    grade: rollingHealthForEntry?.grade ?? null,
                   });
                 } else {
                   pollDebug.failConfirm += 1;

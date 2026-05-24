@@ -278,6 +278,80 @@ export function computeChopAwareThreshold(
   return regime === "chop" ? baseThreshold + CHOP_THRESHOLD_BOOST : baseThreshold;
 }
 
+export type HealthGrade = "A" | "B" | "C" | "F";
+
+const ADAPTIVE_THRESHOLD_MAX_BOOST = 12;
+
+/**
+ * Adjusts base threshold based on:
+ * 1. Regime (chop +6, trendLow +2, trendHigh +0)
+ * 2. Recent health (grade F → +4, grade C → +2)
+ * 3. Fee ratio too high → +3 when fee/|gross| > 0.5
+ *
+ * Maximum allowed boost: +12 pts total.
+ * Never returns below baseThreshold.
+ */
+export function computeAdaptiveThreshold(
+  baseThreshold: number,
+  regime: import("./futuresStrategies").RegimeTag | string,
+  healthGrade?: HealthGrade | null,
+  feePctOfAbsGross?: number | null,
+): number {
+  let boost = 0;
+
+  if (regime === "chop") boost += 6;
+  else if (regime === "trendLow") boost += 2;
+
+  if (healthGrade === "F") boost += 4;
+  else if (healthGrade === "C") boost += 2;
+
+  if (feePctOfAbsGross != null && feePctOfAbsGross > 0.5) boost += 3;
+
+  const cappedBoost = Math.min(boost, ADAPTIVE_THRESHOLD_MAX_BOOST);
+  const result = baseThreshold + cappedBoost;
+
+  if (process.env.NODE_ENV === "development") {
+    console.debug(
+      `[Threshold] base=${baseThreshold} regime=${regime} ` +
+        `grade=${healthGrade ?? "N/A"} fee=${feePctOfAbsGross?.toFixed(2) ?? "N/A"} ` +
+        `boost=${cappedBoost} → effective=${result}`,
+    );
+  }
+
+  return result;
+}
+
+// ── Runtime strategy blocklist (PR-8) ─────────────────────────────────────────
+
+/**
+ * Runtime strategy blocklist.
+ * Populated by monitor when a strategy has confirmed negative edge.
+ * Cleared on engine restart.
+ * Never persisted to DB — recommendations only.
+ */
+const _runtimeBlocklist = new Set<number>();
+
+export function blockStrategyRuntime(strategyId: number): void {
+  _runtimeBlocklist.add(strategyId);
+  console.warn(`[Policy] Strategy ${strategyId} added to runtime blocklist`);
+}
+
+export function unblockStrategyRuntime(strategyId: number): void {
+  _runtimeBlocklist.delete(strategyId);
+}
+
+export function isStrategyRuntimeBlocked(strategyId: number): boolean {
+  return _runtimeBlocklist.has(strategyId);
+}
+
+export function getRuntimeBlocklist(): number[] {
+  return Array.from(_runtimeBlocklist);
+}
+
+export function clearRuntimeBlocklist(): void {
+  _runtimeBlocklist.clear();
+}
+
 // ── Correlated position cap ───────────────────────────────────────────────────
 
 /** Maximum concurrent same-side positions (PR-6 correlated-exposure gate). */
@@ -746,7 +820,7 @@ export const DESK_MAX_OPEN_PER_CLUSTER = 3;
  *
  * Returns `null` when `minTrades` is not yet met (caller should use global threshold).
  */
-export function computeAdaptiveThreshold(
+export function computeWinRateAdaptiveThreshold(
   baseThreshold: number,
   winRate: number | null,
   trades: number,
