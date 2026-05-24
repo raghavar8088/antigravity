@@ -352,7 +352,6 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         </div>
       ),
     },
-    { id: "cat", header: "Category", cell: (s) => s.category },
     {
       id: "status",
       header: "Status",

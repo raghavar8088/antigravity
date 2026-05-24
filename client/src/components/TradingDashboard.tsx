@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
@@ -9,52 +9,8 @@ import { DeskChip } from "@/components/desk/ui";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
-const SOUND_STORAGE_KEY = "raig.sound.enabled";
-
-function readStoredSound(): boolean {
-  if (typeof window === "undefined") return true;
-  const stored = window.localStorage.getItem(SOUND_STORAGE_KEY);
-  return stored === null ? true : stored === "true";
-}
-
 export default function TradingDashboard() {
   const [actionsEnabled, setActionsEnabled] = useState(false);
-  const [isSoundOn, setIsSoundOn] = useState(() => readStoredSound());
-  const [combatMode, setCombatMode] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SOUND_STORAGE_KEY, String(isSoundOn));
-    }
-  }, [isSoundOn]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (combatMode) {
-      document.body.classList.add("combat-mode");
-      root.setAttribute("data-theme", "dark");
-    } else {
-      document.body.classList.remove("combat-mode");
-      root.setAttribute("data-theme", "light");
-    }
-    return () => {
-      document.body.classList.remove("combat-mode");
-      root.setAttribute("data-theme", "light");
-    };
-  }, [combatMode]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === " ") {
-        e.preventDefault();
-        setCombatMode((p) => !p);
-      }
-      if (e.key === "m" || e.key === "M") setIsSoundOn((p) => !p);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   const actionToggleTitle = actionsEnabled
     ? "Dangerous controls (reset, clear, kill, close-all) are enabled."

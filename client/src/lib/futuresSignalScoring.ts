@@ -521,8 +521,241 @@ export function scoreDay(s: FuturesSignalInputs, strat: FuturesStratDef): Scorin
   return { score, reason: parts.join(",") || "no_signal" };
 }
 
-export function scoreSwing(_s: FuturesSignalInputs, _strat: FuturesStratDef): ScoringResult {
-  return NO_SIGNAL;
+// ─── Swing Trading (640–659) ──────────────────────────────────────────────────
+// Primary TF: 4h | Hold: 1–14 days | Confluence min: 6
+// Same 0–100 scale as scalp/day. Threshold delta is +3 (registry).
+// Multi-day positions: heavier weight on persistent trend + structural levels.
+
+export function scoreSwing(s: FuturesSignalInputs, strat: FuturesStratDef): ScoringResult {
+  let score = 0;
+  const parts: string[] = [];
+  const add = (pts: number, label: string) => { score += pts; parts.push(label); };
+  const isShort = strat.signalKey.endsWith("_SHORT");
+
+  switch (strat.signalKey) {
+    // ── Trend Ride (640/641): persistent HTF-aligned trend continuation ─────
+    case "SWG_TREND_RIDE_LONG":
+    case "SWG_TREND_RIDE_SHORT": {
+      if (isShort) {
+        if (s.fast < s.slow && s.prevFast < s.prevSlow) add(14, "persistent_ema_dn");
+        else if (s.fast < s.slow) add(7, "ema_dn");
+        if (s.htf15_fast < s.htf15_slow) add(8, "htf_dn");
+        if (s.adxProxy > 22) add(7, "adx_strong");
+        if (s.momentum6 < 0 && s.momentum3 < 0) add(6, "mom_aligned_dn");
+        if (s.macdHist < 0) add(4, "macd_neg");
+        if (s.rsi14 < 50) add(3, "rsi_dn");
+      } else {
+        if (s.fast > s.slow && s.prevFast > s.prevSlow) add(14, "persistent_ema_up");
+        else if (s.fast > s.slow) add(7, "ema_up");
+        if (s.htf15_fast > s.htf15_slow) add(8, "htf_up");
+        if (s.adxProxy > 22) add(7, "adx_strong");
+        if (s.momentum6 > 0 && s.momentum3 > 0) add(6, "mom_aligned_up");
+        if (s.macdHist > 0) add(4, "macd_pos");
+        if (s.rsi14 > 50) add(3, "rsi_up");
+      }
+      break;
+    }
+
+    // ── MACD Cross (642/643): MACD signal-line cross + HTF alignment ────────
+    case "SWG_MACD_CROSS_LONG":
+    case "SWG_MACD_CROSS_SHORT": {
+      if (isShort) {
+        if (s.macdLine < s.macdSignal && s.prevMacdLine >= s.prevMacdSignal) add(16, "macd_sigcross_dn");
+        else if (s.macdLine < s.macdSignal) add(8, "macd_below_sig");
+        if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(8, "hist_expand_dn");
+        if (s.htf15_macdHist < 0) add(6, "htf_macd_neg");
+        if (s.fast < s.slow) add(4, "ema_align_dn");
+        if (s.rsi14 < 50) add(3, "rsi_dn");
+      } else {
+        if (s.macdLine > s.macdSignal && s.prevMacdLine <= s.prevMacdSignal) add(16, "macd_sigcross_up");
+        else if (s.macdLine > s.macdSignal) add(8, "macd_above_sig");
+        if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(8, "hist_expand_up");
+        if (s.htf15_macdHist > 0) add(6, "htf_macd_pos");
+        if (s.fast > s.slow) add(4, "ema_align_up");
+        if (s.rsi14 > 50) add(3, "rsi_up");
+      }
+      break;
+    }
+
+    // ── Breakout 4h (644/645): 20-bar high/low break on 4h with volume ──────
+    case "SWG_BREAKOUT_4H_LONG":
+    case "SWG_BREAKOUT_4H_SHORT": {
+      if (isShort) {
+        if (s.price < s.low20) add(15, "4h_low_break");
+        else if (s.price < s.donchianLow * 1.002) add(8, "near_low");
+        if (s.volRatio > 1.3) add(7, "vol_confirm");
+        if (s.momentum6 < -s.atr14 * 0.5) add(6, "thrust_dn");
+        if (s.adxProxy > 20) add(5, "adx_active");
+        if (s.fast < s.slow) add(4, "ema_dn");
+      } else {
+        if (s.price > s.high20) add(15, "4h_high_break");
+        else if (s.price > s.donchianHigh * 0.998) add(8, "near_high");
+        if (s.volRatio > 1.3) add(7, "vol_confirm");
+        if (s.momentum6 > s.atr14 * 0.5) add(6, "thrust_up");
+        if (s.adxProxy > 20) add(5, "adx_active");
+        if (s.fast > s.slow) add(4, "ema_up");
+      }
+      break;
+    }
+
+    // ── Pivot Bounce (646/647): bounce off mean20 (4h SMA proxy) + HTF ──────
+    case "SWG_PIVOT_BOUNCE_LONG":
+    case "SWG_PIVOT_BOUNCE_SHORT": {
+      const distToMean = s.mean20 > 0 ? (s.price - s.mean20) / s.mean20 : 0;
+      if (isShort) {
+        if (distToMean > 0 && distToMean < 0.008) add(12, "near_pivot_resist");
+        if (s.htf15_fast < s.htf15_slow) add(10, "htf_dn_bias");
+        if (s.rsi14 > 55 && s.rsi14 < 70) add(7, "rsi_at_resist");
+        if (s.momentum3 < 0) add(5, "rejection_dn");
+        if (s.fast < s.slow) add(4, "ema_dn");
+        if (s.macdHist < s.prevMacdHist) add(3, "macd_topping");
+      } else {
+        if (distToMean < 0 && distToMean > -0.008) add(12, "near_pivot_sup");
+        if (s.htf15_fast > s.htf15_slow) add(10, "htf_up_bias");
+        if (s.rsi14 > 30 && s.rsi14 < 45) add(7, "rsi_at_sup");
+        if (s.momentum3 > 0) add(5, "rejection_up");
+        if (s.fast > s.slow) add(4, "ema_up");
+        if (s.macdHist > s.prevMacdHist) add(3, "macd_bottoming");
+      }
+      break;
+    }
+
+    // ── Donchian 4h (648/649): Donchian channel break (entry on 4h) ─────────
+    case "SWG_DONCHIAN_4H_LONG":
+    case "SWG_DONCHIAN_4H_SHORT": {
+      if (isShort) {
+        if (s.price < s.donchianLow) add(15, "donchian_low_break");
+        else if (s.price < s.donchianLow * 1.003) add(7, "near_donchian_lo");
+        if (s.momentum6 < 0) add(7, "mom_dn");
+        if (s.volRatio > 1.2) add(6, "vol_ok");
+        if (s.adxProxy > 18) add(5, "trend_active");
+        if (s.fast < s.slow) add(4, "ema_dn");
+      } else {
+        if (s.price > s.donchianHigh) add(15, "donchian_high_break");
+        else if (s.price > s.donchianHigh * 0.997) add(7, "near_donchian_hi");
+        if (s.momentum6 > 0) add(7, "mom_up");
+        if (s.volRatio > 1.2) add(6, "vol_ok");
+        if (s.adxProxy > 18) add(5, "trend_active");
+        if (s.fast > s.slow) add(4, "ema_up");
+      }
+      break;
+    }
+
+    // ── RSI Divergence (650/651): RSI extreme + HTF trend resumption ────────
+    case "SWG_RSI_DIVERGE_LONG":
+    case "SWG_RSI_DIVERGE_SHORT": {
+      if (isShort) {
+        if (s.rsi14 > 72) add(14, "rsi_overbought");
+        else if (s.rsi14 > 64) add(8, "rsi_high");
+        if (s.htf15_fast < s.htf15_slow) add(8, "htf_dn_resume");
+        if (s.macdHist < s.prevMacdHist && s.macdHist > 0) add(6, "macd_topping");
+        if (s.momentum3 < 0) add(5, "mom_turning");
+        if (s.stochK > 78) add(4, "stoch_ob");
+      } else {
+        if (s.rsi14 < 28) add(14, "rsi_oversold");
+        else if (s.rsi14 < 36) add(8, "rsi_low");
+        if (s.htf15_fast > s.htf15_slow) add(8, "htf_up_resume");
+        if (s.macdHist > s.prevMacdHist && s.macdHist < 0) add(6, "macd_bottoming");
+        if (s.momentum3 > 0) add(5, "mom_turning");
+        if (s.stochK < 22) add(4, "stoch_os");
+      }
+      break;
+    }
+
+    // ── EMA Pullback (652/653): HTF trend + 4h pullback to fast EMA ─────────
+    case "SWG_EMA_PULLBACK_LONG":
+    case "SWG_EMA_PULLBACK_SHORT": {
+      if (isShort) {
+        if (s.htf15_fast < s.htf15_slow) add(10, "htf_dn");
+        const pullbackZone = s.price > s.fast && s.price < s.slow;
+        if (pullbackZone) add(12, "pullback_zone");
+        else if (s.price > s.fast * 0.997) add(5, "near_fast");
+        if (s.momentum3 < 0) add(6, "rejection_dn");
+        if (s.rsi14 > 42 && s.rsi14 < 58) add(5, "rsi_mid");
+        if (s.fast < s.slow) add(4, "ltf_aligned");
+      } else {
+        if (s.htf15_fast > s.htf15_slow) add(10, "htf_up");
+        const pullbackZone = s.price < s.fast && s.price > s.slow;
+        if (pullbackZone) add(12, "pullback_zone");
+        else if (s.price < s.fast * 1.003) add(5, "near_fast");
+        if (s.momentum3 > 0) add(6, "rejection_up");
+        if (s.rsi14 > 42 && s.rsi14 < 58) add(5, "rsi_mid");
+        if (s.fast > s.slow) add(4, "ltf_aligned");
+      }
+      break;
+    }
+
+    // ── Structural Break (654/655): HH+HL (long) / LL+LH (short) on 4h ──────
+    case "SWG_STRUCT_HH_LONG":
+    case "SWG_STRUCT_LL_SHORT": {
+      if (isShort) {
+        if (s.price < s.low20 * 1.005) add(13, "structural_ll");
+        if (s.price < s.mean20) add(6, "below_mean");
+        if (s.htf15_fast < s.htf15_slow) add(8, "htf_struct_dn");
+        if (s.fast < s.slow && s.prevFast < s.prevSlow) add(6, "persistent_bear");
+        if (s.momentum6 < 0) add(5, "mom_aligned");
+        if (s.adxProxy > 20) add(3, "adx_active");
+      } else {
+        if (s.price > s.high20 * 0.995) add(13, "structural_hh");
+        if (s.price > s.mean20) add(6, "above_mean");
+        if (s.htf15_fast > s.htf15_slow) add(8, "htf_struct_up");
+        if (s.fast > s.slow && s.prevFast > s.prevSlow) add(6, "persistent_bull");
+        if (s.momentum6 > 0) add(5, "mom_aligned");
+        if (s.adxProxy > 20) add(3, "adx_active");
+      }
+      break;
+    }
+
+    // ── BB Mean Reversion (656/657): 4h BB extreme + ADX low (range) ────────
+    case "SWG_BB_MEANREV_LONG":
+    case "SWG_BB_MEANREV_SHORT": {
+      // Mean reversion plays — only valid when NOT trending (low ADX)
+      const lowAdx = s.adxProxy < 22;
+      if (isShort) {
+        if (s.price > s.bbUpper) add(14, "above_bb_revert");
+        else if (s.price > s.bbUpper * 0.998) add(7, "near_bb_upper");
+        if (lowAdx) add(8, "low_adx_range");
+        if (s.rsi14 > 65) add(6, "rsi_extended_up");
+        if (s.momentum3 < 0) add(5, "fade_starting");
+        if (s.bbWidth > 0.02) add(3, "wide_bbs");
+      } else {
+        if (s.price < s.bbLower) add(14, "below_bb_revert");
+        else if (s.price < s.bbLower * 1.002) add(7, "near_bb_lower");
+        if (lowAdx) add(8, "low_adx_range");
+        if (s.rsi14 < 35) add(6, "rsi_extended_dn");
+        if (s.momentum3 > 0) add(5, "fade_starting");
+        if (s.bbWidth > 0.02) add(3, "wide_bbs");
+      }
+      break;
+    }
+
+    // ── ATR Volatility (658/659): vol expansion + directional thrust ────────
+    case "SWG_ATR_VOL_LONG":
+    case "SWG_ATR_VOL_SHORT": {
+      const expanding = s.atr14Avg30 > 0 && s.atr14 > s.atr14Avg30 * 1.15;
+      if (isShort) {
+        if (expanding && s.momentum6 < -s.atr14 * 0.4) add(14, "atr_expand_dn");
+        else if (expanding) add(7, "atr_expanding");
+        if (s.fast < s.slow) add(7, "ema_dn");
+        if (s.volZ30 > 1.0) add(6, "vol_z_high");
+        if (s.macdHist < 0 && s.macdHist < s.prevMacdHist) add(5, "macd_accel_dn");
+        if (s.adxProxy > 20) add(4, "adx_active");
+      } else {
+        if (expanding && s.momentum6 > s.atr14 * 0.4) add(14, "atr_expand_up");
+        else if (expanding) add(7, "atr_expanding");
+        if (s.fast > s.slow) add(7, "ema_up");
+        if (s.volZ30 > 1.0) add(6, "vol_z_high");
+        if (s.macdHist > 0 && s.macdHist > s.prevMacdHist) add(5, "macd_accel_up");
+        if (s.adxProxy > 20) add(4, "adx_active");
+      }
+      break;
+    }
+
+    default:
+      return NO_SIGNAL;
+  }
+
+  return { score, reason: parts.join(",") || "no_signal" };
 }
 
 export function scorePosition(_s: FuturesSignalInputs, _strat: FuturesStratDef): ScoringResult {
