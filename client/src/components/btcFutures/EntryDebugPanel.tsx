@@ -75,6 +75,8 @@ function blockerHint(blocker: string): string {
       return "Last-mark spread too wide. Lower NEXT_PUBLIC_DESK_MAX_LAST_MARK_SPREAD_PCT or wait.";
     case "CATEGORY":
       return "Category cap reached. Raise NEXT_PUBLIC_DESK_MAX_OPEN_PER_CATEGORY or wait for closes.";
+    case "INTRADAY_DD":
+      return "Daily −2% soft lock tripped — paper desk disables this; redeploy latest BTC FT build or wait until UTC midnight.";
     case "PAUSED":
     case "DRAWDOWN":
       return "Resume entries via the button above or wait for equity recovery.";

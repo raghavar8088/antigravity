@@ -729,6 +729,15 @@ export function btcFtEntryDebugEnabledFromEnv(): boolean {
   );
 }
 
+/** Paper desk cooldown multiplier (default 0.25 → 8m strat cooldown ≈ 2m). */
+export function btcFtPaperCooldownMultiplierFromEnv(fallback = 0.25): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_COOLDOWN_MUL;
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(2, Math.max(0.05, n));
+}
+
 /** After ~45m, lower threshold for strats with few trades (paper discovery on chop). */
 export function btcFtPaperEnsureTradesFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_PAPER_ENSURE_TRADES !== "0";

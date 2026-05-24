@@ -8,6 +8,8 @@ export type DeskEntryPollDebug = {
   pollAt: number;
   pauseEntries: boolean;
   drawdownLocked: boolean;
+  /** P2.3.4 intraday −2% soft lock — pauses entries until UTC midnight when tripped. */
+  intradayDdLocked: boolean;
   hasMarketData: boolean;
   payloadsReady: number;
   symbolsRequested: number;
@@ -75,6 +77,7 @@ const DEBUG_BLOCKER_LABELS: ReadonlyArray<{ key: DebugCountKey; label: string }>
 
 export function dominantEntryBlocker(debug: DeskEntryPollDebug): string {
   if (debug.pauseEntries) return "PAUSE";
+  if (debug.intradayDdLocked) return "INTRADAY_DD";
   if (debug.drawdownLocked) return "DRAWDOWN";
   if (!debug.hasMarketData) return "DATA";
   if (debug.activeStratCount <= 0) return "NO_STRATEGIES";
@@ -99,6 +102,7 @@ export function createEmptyEntryPollDebug(effectiveThreshold: number): DeskEntry
     pollAt: 0,
     pauseEntries: false,
     drawdownLocked: false,
+    intradayDdLocked: false,
     hasMarketData: false,
     payloadsReady: 0,
     symbolsRequested: 0,

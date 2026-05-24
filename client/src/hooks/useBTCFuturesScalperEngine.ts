@@ -602,12 +602,15 @@ export function paperEnsureThresholdDrop(
   mountedAtMs: number,
   stratTradeCount: number,
 ): number {
-  if (!enabled || stratTradeCount >= 1) return 0;
+  if (!enabled || stratTradeCount >= 5) return 0;
   const mins = (nowMs - mountedAtMs) / 60_000;
-  if (mins >= 10) return 12;
-  if (mins >= 5) return 10;
-  if (mins >= 2) return 6;
-  return 0;
+  let drop = 0;
+  if (mins >= 10) drop = 12;
+  else if (mins >= 5) drop = 10;
+  else if (mins >= 2) drop = 6;
+  // Strats that already fired once still get half the drop so the roster keeps rotating.
+  if (stratTradeCount > 0) drop = Math.floor(drop / 2);
+  return drop;
 }
 
 // Signal inputs type imported from @/lib/futuresSignals
@@ -705,6 +708,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const allStrategiesAvailable = options.allStrategiesAvailable === true;
   const researchEnsureTrades = options.researchEnsureTrades === true;
   const paperEnsureTrades = options.paperEnsureTrades === true;
+  const disableIntradayDdLock =
+    paperEnsureTrades || options.allStrategiesAvailable === true;
   const entryUtcSessionOverride = options.entryUtcSessionOverride;
   const moduleKey = options.moduleKey;
   const promotedIdsSet = useMemo((): ReadonlySet<number> => {
@@ -1831,14 +1836,17 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       setBalance(balanceRef.current);
       stratCooldownsRef.current[`${symbol}:${strat.id}`] =
         Date.now() +
-        Math.max(30_000, Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current * cooldownMultiplier));
+        Math.max(
+          paperEnsureTrades ? 15_000 : 30_000,
+          Math.round(strat.cooldownMin * 60_000 * profileCooldownMulRef.current * cooldownMultiplier),
+        );
       setLastTradeAt(Date.now());
       if (isDeskShadowLogOpenEnabled()) {
         persistShadowTradeIntent(cloudAccountKey, shadowIntentFromPaperOpen(position));
       }
       return position;
     },
-    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet],
+    [strategyProfile, cloudAccountKey, cooldownMultiplier, minMoveKMultiplier, slippageBpsOverride, promotedIdsSet, paperEnsureTrades],
   );
 
   const closePosition = useCallback((position: BTCFuturesPosition, exitPrice: number, exitReason: BTCFuturesPosition["exitReason"]) => {
@@ -2201,7 +2209,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           dailyStartEquityRef.current > 0
             ? ((dailyStartEquityRef.current - equityForDrawdown) / dailyStartEquityRef.current) * 100
             : 0;
-        if (dailyDdPct >= INTRADAY_SOFT_DD_LOCK_PCT) intradayDdPausedRef.current = true;
+        if (!disableIntradayDdLock && dailyDdPct >= INTRADAY_SOFT_DD_LOCK_PCT) {
+          intradayDdPausedRef.current = true;
+        }
 
         setPositions(survivors);
 
@@ -2227,6 +2237,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               pollAt: now,
               pauseEntries: pauseRef.current,
               drawdownLocked: drawdownEntryPausedRef.current,
+              intradayDdLocked: intradayDdPausedRef.current,
               hasMarketData,
               payloadsReady: payloads.size,
               symbolsRequested: activeSymbols.length,
@@ -2496,9 +2507,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           let categoryOpenCounts = countOpenByCategory(workingPositions, categoryByStrategyId);
 
           const burstOpts = {
-            maxPerSymbolPerPoll: entryBurstMaxPerSymbolFromEnv(),
-            maxPerFamilyPerPoll: ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
-            oppositeSideWindowMs: ENTRY_OPPOSITE_SIDE_WINDOW_MS,
+            maxPerSymbolPerPoll: paperEnsureTrades
+              ? Math.max(4, entryBurstMaxPerSymbolFromEnv())
+              : entryBurstMaxPerSymbolFromEnv(),
+            maxPerFamilyPerPoll: paperEnsureTrades ? 2 : ENTRY_BURST_MAX_PER_FAMILY_DEFAULT,
+            oppositeSideWindowMs: paperEnsureTrades ? 60_000 : ENTRY_OPPOSITE_SIDE_WINDOW_MS,
             nowMs: now,
           };
 

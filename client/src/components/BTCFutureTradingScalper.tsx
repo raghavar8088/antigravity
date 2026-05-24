@@ -9,6 +9,7 @@ import { getOrCreateAnonAccountKey } from "@/lib/anonAccountKey";
 import {
   btcFtEntryDebugEnabledFromEnv,
   btcFtMinMoveKMulFromEnv,
+  btcFtPaperCooldownMultiplierFromEnv,
   btcFtPaperEnsureTradesFromEnv,
   btcFtSignalThresholdFromEnv,
 } from "@/lib/futuresDeskPolicy";
@@ -344,7 +345,13 @@ export function BTCFutureTradingScalper({
           symbols={BTC_ONLY_SYMBOLS}
           signalThreshold={threshold}
           relaxEntryConfirmation={relaxConfirm}
-          cooldownMultiplier={EFFECTIVE_RESEARCH_MODE ? researchCooldownMul() : 1}
+          cooldownMultiplier={
+            EFFECTIVE_RESEARCH_MODE
+              ? researchCooldownMul()
+              : paperEnsureTrades
+                ? btcFtPaperCooldownMultiplierFromEnv()
+                : 1
+          }
           minMoveKMultiplier={minMoveKMul}
           slippageBpsOverride={EFFECTIVE_RESEARCH_MODE ? researchSlippageBps() : undefined}
           disableAutoKill={EFFECTIVE_RESEARCH_MODE ? researchDisableAutoKill() : false}
