@@ -623,6 +623,10 @@ export interface BTCFuturesEngineStats {
   profitModeEnabled: boolean;
   profitModeSkipCount: number;
   profitModeExitActive: boolean;
+  /** Count of strategies allowed by the rotation gate this session (profit mode ON). */
+  entryRotationAllowedCount: number;
+  /** Count of strategies blocked by the rotation gate this session (profit mode ON). */
+  entryRotationBlockedCount: number;
   deskPnLScorecard: DeskRollingPnLScorecard | null;
   scorecardAction: ScorecardAction | null;
   /** PR-19: last 7–14 UTC daily soak snapshots (localStorage). */
@@ -1039,6 +1043,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const qualitySkipCountRef = useRef(0);
   const mtfSkipCountRef = useRef(0);
   const profitModeSkipCountRef = useRef(0);
+  const entryRotationAllowedCountRef = useRef(0);
+  const entryRotationBlockedCountRef = useRef(0);
   const replaySignFlipRateRef = useRef<number | null>(null);
   const lastSoakLogDateRef = useRef<string | null>(null);
   const soakHistoryRef = useRef<SoakDaySnapshot[]>([]);
@@ -1522,6 +1528,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     qualitySkipCountRef.current = 0;
     mtfSkipCountRef.current = 0;
     profitModeSkipCountRef.current = 0;
+    entryRotationAllowedCountRef.current = 0;
+    entryRotationBlockedCountRef.current = 0;
     gateEvaluationCountRef.current = 0;
     deskLastRegimeTagRef.current = "chop";
     deskRegimePollHistoryRef.current = [];
@@ -1931,6 +1939,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       profitModeEnabled: profitModeCfg.enabled,
       profitModeSkipCount: profitModeSkipCountRef.current,
       profitModeExitActive: profitModeCfg.enabled && Boolean(profitModeExitConfig(profitModeCfg)),
+      entryRotationAllowedCount: entryRotationAllowedCountRef.current,
+      entryRotationBlockedCount: entryRotationBlockedCountRef.current,
       deskPnLScorecard,
       scorecardAction,
       soakHistory,
@@ -2958,11 +2968,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 )
               ) {
                 profitModeSkipCountRef.current += 1;
+                entryRotationBlockedCountRef.current += 1;
                 logSkipReason(strat.id, "PROFIT_MODE_ROTATION", {
                   only: "ACTIVE|PROMOTED",
                 });
                 if (pollDebug) pollDebug.failDisabled += 1;
                 continue;
+              } else if (profitModeCfg.enabled) {
+                entryRotationAllowedCountRef.current += 1;
               }
 
               /** PR 10 — pick the right signal-inputs cache for this strategy's
@@ -3337,9 +3350,30 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         if (pollDebug) {
           entryDebugLiveRef.current = null;
           const finalizedDebug = finalizeEntryPollDebug(pollDebug);
-          if (process.env.NODE_ENV === "development" && !entryDebugLoggedOnceRef.current) {
-            entryDebugLoggedOnceRef.current = true;
-            console.info("[btc-futures-paper] entry funnel poll", finalizedDebug);
+          if (entryDebugEnabled) {
+            const report = rotationReportRef.current;
+            const rosterSize = activeStratDefs.length;
+            const rotAllowed = entryRotationAllowedCountRef.current;
+            const rotBlocked = entryRotationBlockedCountRef.current;
+            const suspendedCount = suspendedStrategiesRef.current.size;
+            const activeAndPromoted = report
+              ? report.active.length + report.promoted.length
+              : null;
+            console.info(
+              "[entry-debug] poll",
+              `evalPairs=${finalizedDebug.evalPairs}`,
+              `candidates=${finalizedDebug.candidatesBuilt}`,
+              `opened=${finalizedDebug.openedThisPoll}`,
+              `blocker=${finalizedDebug.dominantBlocker}`,
+              `profitModeSkipΔ=${finalizedDebug.failDisabled}`,
+              `roster=${rosterSize}`,
+              `rotAllowed=${rotAllowed}`,
+              `rotBlocked=${rotBlocked}`,
+              `suspended=${suspendedCount}`,
+              activeAndPromoted !== null
+                ? `active+promoted=${activeAndPromoted}`
+                : "rotation=no-report",
+            );
           }
           setEntryDebug(finalizedDebug);
         }

@@ -500,6 +500,27 @@ export function DeskCommandCenter({
                       : undefined
                   }
                 />
+                {profitModeCfg.enabled && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                    <DeskChip
+                      tone={
+                        (stats.entryRotationBlockedCount ?? 0) > 0 &&
+                        (stats.entryRotationAllowedCount ?? 0) === 0
+                          ? "warning"
+                          : "default"
+                      }
+                      title="Strategies allowed through rotation gate this session"
+                    >
+                      Rotation allowed: {stats.entryRotationAllowedCount ?? 0}
+                    </DeskChip>
+                    <DeskChip
+                      tone={(stats.entryRotationBlockedCount ?? 0) > 0 ? "warning" : "default"}
+                      title="Strategies blocked by rotation gate (PROBATION/SUSPENDED, not INSUFFICIENT)"
+                    >
+                      Rotation blocked: {stats.entryRotationBlockedCount ?? 0}
+                    </DeskChip>
+                  </div>
+                )}
               </div>
             ) : null}
 

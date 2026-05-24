@@ -206,13 +206,25 @@ export function profitModeAllowsRotationStrategy(
   report: RotationReport | null,
   config: ProfitModeConfig,
 ): boolean {
+  // Disabled or non-strict → never block on rotation status
   if (!config.enabled || !config.onlyPromotedOrActive) return true;
+  // No report yet → allow (diagnostics poll hasn't fired)
   if (!report) return true;
-  const allowed = new Set([
-    ...report.active.map((s) => s.strategyId),
-    ...report.promoted.map((s) => s.strategyId),
-  ]);
-  return allowed.has(strategyId);
+  // Fallback: if active+promoted is empty the rotation engine has no qualified strats.
+  // Rather than zero out the desk, allow all non-suspended roster IDs so entries
+  // can continue while the monitor collects enough data to form an opinion.
+  if (report.active.length === 0 && report.promoted.length === 0) return true;
+  // Find this strategy's entry across all scored buckets
+  const entry = report.scores.find((s) => s.strategyId === strategyId);
+  // Not in report at all → allow (insufficient data, can't judge)
+  if (!entry) return true;
+  // INSUFFICIENT → always allow (< 5 trades, rotation has no signal yet)
+  if (entry.status === "INSUFFICIENT") return true;
+  // ACTIVE or PROMOTED → allow
+  if (entry.status === "ACTIVE" || entry.status === "PROMOTED") return true;
+  // PROBATION or SUSPENDED → block in strict mode (onlyPromotedOrActive=true).
+  // SUSPENDED is also blocked independently via suspendedStrategiesRef in the engine.
+  return false;
 }
 
 /** Stricter paper exits when profit mode is on; null → use legacy paper overrides. */

@@ -111,14 +111,99 @@ describe("profitModeAllowsStrategyInChop", () => {
 });
 
 describe("profitModeAllowsRotationStrategy", () => {
-  it("blocks ids not in active or promoted", () => {
-    const report = {
+  function makeReport(
+    overrides: Partial<{
+      active: { strategyId: number }[];
+      promoted: { strategyId: number }[];
+      probation: { strategyId: number }[];
+      suspended: { strategyId: number }[];
+      insufficient: { strategyId: number }[];
+      scores: { strategyId: number; status: string }[];
+    }>,
+  ) {
+    const active = overrides.active ?? [];
+    const promoted = overrides.promoted ?? [];
+    const probation = overrides.probation ?? [];
+    const suspended = overrides.suspended ?? [];
+    const insufficient = overrides.insufficient ?? [];
+    const scores = overrides.scores ?? [
+      ...active.map((s) => ({ ...s, status: "ACTIVE" })),
+      ...promoted.map((s) => ({ ...s, status: "PROMOTED" })),
+      ...probation.map((s) => ({ ...s, status: "PROBATION" })),
+      ...suspended.map((s) => ({ ...s, status: "SUSPENDED" })),
+      ...insufficient.map((s) => ({ ...s, status: "INSUFFICIENT" })),
+    ];
+    return { active, promoted, probation, suspended, insufficient, scores } as never;
+  }
+
+  it("allows ACTIVE strategy", () => {
+    const report = makeReport({ active: [{ strategyId: 1 }], promoted: [{ strategyId: 2 }] });
+    expect(profitModeAllowsRotationStrategy(1, report, cfg())).toBe(true);
+    expect(profitModeAllowsRotationStrategy(2, report, cfg())).toBe(true);
+  });
+
+  it("allows INSUFFICIENT strategy (< 5 trades, not enough data to block)", () => {
+    const report = makeReport({
+      active: [{ strategyId: 99 }],
+      promoted: [],
+      insufficient: [{ strategyId: 42 }],
+    });
+    expect(profitModeAllowsRotationStrategy(42, report, cfg())).toBe(true);
+  });
+
+  it("allows strategy not present in report at all (no data)", () => {
+    const report = makeReport({
+      active: [{ strategyId: 99 }],
+      promoted: [],
+    });
+    // strategy 77 is not in the report at all
+    expect(profitModeAllowsRotationStrategy(77, report, cfg())).toBe(true);
+  });
+
+  it("blocks PROBATION strategy in strict mode (default)", () => {
+    const report = makeReport({
+      active: [{ strategyId: 99 }],
+      promoted: [],
+      probation: [{ strategyId: 3 }],
+    });
+    expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(false);
+  });
+
+  it("allows PROBATION when onlyPromotedOrActive=false (STRICT=0)", () => {
+    const report = makeReport({
+      active: [{ strategyId: 99 }],
+      promoted: [],
+      probation: [{ strategyId: 3 }],
+    });
+    expect(profitModeAllowsRotationStrategy(3, report, cfg({ onlyPromotedOrActive: false }))).toBe(true);
+  });
+
+  it("blocks PROBATION and SUSPENDED in strict mode", () => {
+    const report = makeReport({
       active: [{ strategyId: 1 }],
       promoted: [{ strategyId: 2 }],
       probation: [{ strategyId: 3 }],
-      suspended: [],
-    } as never;
-    expect(profitModeAllowsRotationStrategy(1, report, cfg())).toBe(true);
+      suspended: [{ strategyId: 4 }],
+    });
     expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(false);
+    expect(profitModeAllowsRotationStrategy(4, report, cfg())).toBe(false);
+  });
+
+  it("falls back to allow all when active+promoted is empty (zero-roster guard)", () => {
+    // All strategies are INSUFFICIENT — desk must not be zeroed out
+    const report = makeReport({
+      active: [],
+      promoted: [],
+      insufficient: [{ strategyId: 10 }, { strategyId: 11 }],
+    });
+    expect(profitModeAllowsRotationStrategy(10, report, cfg())).toBe(true);
+    expect(profitModeAllowsRotationStrategy(11, report, cfg())).toBe(true);
+    // A completely new strategy also passes the fallback
+    expect(profitModeAllowsRotationStrategy(99, report, cfg())).toBe(true);
+  });
+
+  it("no-op when profit mode disabled", () => {
+    const report = makeReport({ active: [], promoted: [], suspended: [{ strategyId: 5 }] });
+    expect(profitModeAllowsRotationStrategy(5, report, cfg({ enabled: false }))).toBe(true);
   });
 });

@@ -370,6 +370,15 @@ export function BTCFutureTradingScalper({
         </DeskBanner>
       )}
 
+      {WINNERS_ONLY_MODE && rosterInfo.ids.length === 0 && (
+        <DeskBanner variant="warning" title="No winner strategies loaded">
+          Winners desk is active but the roster is empty. Set{" "}
+          <code>NEXT_PUBLIC_BTC_FT_STRATEGY_IDS</code> to a comma-separated list of strategy IDs,
+          or promote winners via the leaderboard in research mode. Engine will not open positions
+          until at least one strategy ID is available.
+        </DeskBanner>
+      )}
+
       {shouldRenderEngine && (
         <BTCFuturesScalper
           title={EFFECTIVE_RESEARCH_MODE ? "BTC Future Trading - Research" : "BTC Future Trading"}
