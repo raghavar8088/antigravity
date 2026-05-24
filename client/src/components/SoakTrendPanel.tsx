@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { SoakDaySnapshot } from "@/lib/futuresSoakTracker";
 import type { UnifiedReadiness } from "@/lib/futuresUnifiedReadiness";
 import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
-import { deskReplayGateEnabled } from "@/lib/futuresReplayCompare";
+import { deskReplayGateEnabled } from "@/lib/futuresReplayGate";
 
 const STATE_COLOR: Record<UnifiedReadiness, string> = {
   NOT_READY: "#f85149",

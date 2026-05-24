@@ -22,7 +22,7 @@ import {
   type RotationReport,
 } from "@/lib/futuresStrategyRotation";
 import { computeGoLiveGates, type GoLiveGateReport } from "@/lib/futuresGoLiveGates";
-import { deskReplayGateEnabled } from "@/lib/futuresReplayCompare";
+import { deskReplayGateEnabled } from "@/lib/futuresReplayGate";
 import { utcDateString } from "@/lib/futuresSoakTracker";
 
 export type { TuneRecommendation, RotationReport };

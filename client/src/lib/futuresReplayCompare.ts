@@ -30,9 +30,8 @@ export type ReplayCompareDayResult = {
   date: string;
 };
 
-export function deskReplayGateEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_DESK_REPLAY_GATE === "1";
-}
+// Re-exported from the thin gate module so server-side callers keep working.
+export { deskReplayGateEnabled } from "@/lib/futuresReplayGate";
 
 export type CompareStatsRow = {
   label: string;
