@@ -54,10 +54,15 @@ export type BtcFtTemplateId =
   | "SESSION_RANGE_BREAK"
   | "WYCKOFF_SPRING"
   | "SMART_MONEY_FVG"
-  // Premium hypothesis-driven strategies (IDs 500–503). Each has a documented
+  // Premium hypothesis-driven strategies (IDs 500–513). Each has a documented
   // microstructure thesis, not pattern-matching. Tier "premium" treatment in hook.
   | "PRM_VWAP_REJECT"
-  | "PRM_VOL_DIVERGENCE";
+  | "PRM_VOL_DIVERGENCE"
+  | "PRM_EMA_TREND_FOLLOW"
+  | "PRM_VWAP_SCALP"
+  | "PRM_FUNDING_FADE"
+  | "PRM_BREAKOUT_RETEST"
+  | "PRM_BB_MEAN_REVERT";
 
 export interface FuturesStratDef {
   id: number;

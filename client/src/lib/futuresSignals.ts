@@ -964,6 +964,106 @@ export function evalBtcFtTemplateSignal(
       if (s.rsi14 < 35) add(8, "RSI extended");
       if (s.momentum3 > 0) add(8, "mom turning+");
     }
+  } else if (tpl === "PRM_EMA_TREND_FOLLOW") {
+    // PREMIUM: Multi-TF EMA stack trend following.
+    // When HTF15, HTF5, and 1m EMAs all align in the same direction,
+    // the trend is established across timeframes and continuation probability is high.
+    if (short) {
+      if (s.htf15_fast < s.htf15_slow) add(20, "HTF15 EMA stack bear");
+      if (s.htf5_fast < s.htf5_slow) add(16, "HTF5 EMA align bear");
+      if (s.fast < s.slow) add(12, "1m EMA bear");
+      if (s.momentum3 < 0 && s.momentum6 < 0) add(10, "dual-tf mom-");
+      if (s.htf5_trend < 0) add(8, "HTF5 trend-");
+      if (s.adxProxy > 25) add(6, "ADX strong");
+      if (s.rsi14 < 50 && s.rsi14 > 20) add(6, "RSI mid bear");
+    } else {
+      if (s.htf15_fast > s.htf15_slow) add(20, "HTF15 EMA stack bull");
+      if (s.htf5_fast > s.htf5_slow) add(16, "HTF5 EMA align bull");
+      if (s.fast > s.slow) add(12, "1m EMA bull");
+      if (s.momentum3 > 0 && s.momentum6 > 0) add(10, "dual-tf mom+");
+      if (s.htf5_trend > 0) add(8, "HTF5 trend+");
+      if (s.adxProxy > 25) add(6, "ADX strong");
+      if (s.rsi14 > 50 && s.rsi14 < 80) add(6, "RSI mid bull");
+    }
+  } else if (tpl === "PRM_VWAP_SCALP") {
+    // PREMIUM: VWAP deviation scalp.
+    // Price deviating >0.3% from VWAP proxy (mean20) in range conditions attracts
+    // mean-reversion order flow from institutional VWAP algos.
+    const meanDistPct = s.mean20 > 0 ? ((s.price - s.mean20) / s.mean20) * 100 : 0;
+    if (short) {
+      if (meanDistPct > 0.3) add(20, "above VWAP proxy +0.3%");
+      if (meanDistPct > 0.5) add(10, "above VWAP proxy +0.5%");
+      if (s.rsi14 > 62) add(12, "RSI stretched+");
+      if (s.momentum3 < 0) add(10, "mom turning-");
+      if (s.volRatio < 1.5) add(8, "low vol (no breakout)");
+      if (s.cci20 > 80) add(8, "CCI extreme+");
+    } else {
+      if (meanDistPct < -0.3) add(20, "below VWAP proxy -0.3%");
+      if (meanDistPct < -0.5) add(10, "below VWAP proxy -0.5%");
+      if (s.rsi14 < 38) add(12, "RSI stretched-");
+      if (s.momentum3 > 0) add(10, "mom turning+");
+      if (s.volRatio < 1.5) add(8, "low vol (no breakout)");
+      if (s.cci20 < -80) add(8, "CCI extreme-");
+    }
+  } else if (tpl === "PRM_FUNDING_FADE") {
+    // PREMIUM: Overcrowded positioning exhaustion fade.
+    // Extreme RSI + high volume Z-score signals one-sided crowded positioning.
+    // Trapped traders forced to unwind fuel the reversal move.
+    if (short) {
+      if (s.rsi14 > 75) add(22, "RSI extreme OB (crowd long)");
+      if (s.rsi14 > 85) add(8, "RSI deeply OB");
+      if (s.volZ30 > 1.8) add(14, "vol Z extreme (crowd)");
+      if (s.momentum3 < 0) add(10, "mom fading");
+      if (s.obvSlope < 0) add(8, "OBV diverging-");
+      if (s.cci20 > 150) add(8, "CCI extreme crowd");
+    } else {
+      if (s.rsi14 < 25) add(22, "RSI extreme OS (crowd short)");
+      if (s.rsi14 < 15) add(8, "RSI deeply OS");
+      if (s.volZ30 > 1.8) add(14, "vol Z extreme (crowd)");
+      if (s.momentum3 > 0) add(10, "mom recovering");
+      if (s.obvSlope > 0) add(8, "OBV diverging+");
+      if (s.cci20 < -150) add(8, "CCI extreme crowd");
+    }
+  } else if (tpl === "PRM_BREAKOUT_RETEST") {
+    // PREMIUM: Donchian breakout + retest entry.
+    // After a genuine channel break, price retests the broken level (former
+    // resistance → support). HTF trend confirms direction.
+    if (short) {
+      const nearLow = s.price >= s.donchianLow * 0.998 && s.price <= s.donchianLow * 1.003;
+      if (nearLow) add(22, "retest Donchian low (now resistance)");
+      if (s.htf5_trend < 0) add(14, "HTF5 trend bear");
+      if (s.htf5_fast < s.htf5_slow) add(10, "HTF5 EMA bear");
+      if (s.volRatio > 1.2 && s.volRatio < 2.0) add(8, "moderate vol on retest");
+      if (s.momentum3 < 0) add(8, "mom-");
+      if (s.rsi14 < 55) add(6, "RSI agree bear");
+    } else {
+      const nearHigh = s.price <= s.donchianHigh * 1.002 && s.price >= s.donchianHigh * 0.997;
+      if (nearHigh) add(22, "retest Donchian high (now support)");
+      if (s.htf5_trend > 0) add(14, "HTF5 trend bull");
+      if (s.htf5_fast > s.htf5_slow) add(10, "HTF5 EMA bull");
+      if (s.volRatio > 1.2 && s.volRatio < 2.0) add(8, "moderate vol on retest");
+      if (s.momentum3 > 0) add(8, "mom+");
+      if (s.rsi14 > 45) add(6, "RSI agree bull");
+    }
+  } else if (tpl === "PRM_BB_MEAN_REVERT") {
+    // PREMIUM: Bollinger Band extreme + RSI + thin volume mean reversion.
+    // Price at BB extreme with RSI extreme AND low volume = exhaustion, not breakout.
+    // No defenders at the extreme → mean reverts to BB middle.
+    if (short) {
+      if (s.price >= s.bbUpper * 0.999) add(22, "at BB upper");
+      if (s.rsi14 > 68) add(14, "RSI OB");
+      if (s.rsi14 > 78) add(6, "RSI deeply OB");
+      if (s.volRatio < 1.2) add(12, "thin vol (exhaustion not breakout)");
+      if (s.momentum3 < 0) add(8, "mom fading");
+      if (s.price > s.mean20) add(6, "above mean (revert target clear)");
+    } else {
+      if (s.price <= s.bbLower * 1.001) add(22, "at BB lower");
+      if (s.rsi14 < 32) add(14, "RSI OS");
+      if (s.rsi14 < 22) add(6, "RSI deeply OS");
+      if (s.volRatio < 1.2) add(12, "thin vol (exhaustion not breakout)");
+      if (s.momentum3 > 0) add(8, "mom recovering");
+      if (s.price < s.mean20) add(6, "below mean (revert target clear)");
+    }
   }
 
   score += Math.max(0, 3 - v) * 2;
@@ -1161,6 +1261,78 @@ export function passesBtcFtTemplateConfirmation(s: FuturesSignalInputs, strat: F
       s.volRatio < 1.3 &&
       Number.isFinite(s.rsi14) &&
       s.rsi14 < 40
+    );
+  }
+
+  if (tpl === "PRM_EMA_TREND_FOLLOW") {
+    // Hard gate: all three TF EMAs must agree — if any diverges, the trend is not clean.
+    if (short) {
+      return (
+        s.htf15_fast < s.htf15_slow &&
+        s.htf5_fast < s.htf5_slow &&
+        s.fast < s.slow &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 < 75
+      );
+    }
+    return (
+      s.htf15_fast > s.htf15_slow &&
+      s.htf5_fast > s.htf5_slow &&
+      s.fast > s.slow &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 > 25
+    );
+  }
+
+  if (tpl === "PRM_VWAP_SCALP") {
+    // Hard gate: must be deviating from VWAP proxy with RSI confirming; low vol rules out breakout.
+    if (!Number.isFinite(s.mean20) || s.mean20 <= 0) return false;
+    const meanDistPct = ((s.price - s.mean20) / s.mean20) * 100;
+    if (short) {
+      return meanDistPct > 0.3 && Number.isFinite(s.rsi14) && s.rsi14 > 58 && s.volRatio < 2.0;
+    }
+    return meanDistPct < -0.3 && Number.isFinite(s.rsi14) && s.rsi14 < 42 && s.volRatio < 2.0;
+  }
+
+  if (tpl === "PRM_FUNDING_FADE") {
+    // Hard gate: must have extreme RSI + elevated volZ; these are the core thesis inputs.
+    if (short) {
+      return Number.isFinite(s.rsi14) && s.rsi14 > 72 && s.volZ30 > 1.5;
+    }
+    return Number.isFinite(s.rsi14) && s.rsi14 < 28 && s.volZ30 > 1.5;
+  }
+
+  if (tpl === "PRM_BREAKOUT_RETEST") {
+    // Hard gate: price must be in the retest zone near the Donchian level, HTF must confirm.
+    if (short) {
+      return (
+        s.price >= s.donchianLow * 0.997 &&
+        s.price <= s.donchianLow * 1.004 &&
+        s.htf5_trend <= 0
+      );
+    }
+    return (
+      s.price <= s.donchianHigh * 1.003 &&
+      s.price >= s.donchianHigh * 0.996 &&
+      s.htf5_trend >= 0
+    );
+  }
+
+  if (tpl === "PRM_BB_MEAN_REVERT") {
+    // Hard gate: must be at BB extreme + RSI extreme + thin volume (exhaustion not breakout).
+    if (short) {
+      return (
+        s.price >= s.bbUpper * 0.998 &&
+        Number.isFinite(s.rsi14) &&
+        s.rsi14 > 65 &&
+        s.volRatio < 1.4
+      );
+    }
+    return (
+      s.price <= s.bbLower * 1.002 &&
+      Number.isFinite(s.rsi14) &&
+      s.rsi14 < 35 &&
+      s.volRatio < 1.4
     );
   }
 
