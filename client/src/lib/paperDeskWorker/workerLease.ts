@@ -27,9 +27,3 @@ export function workerHeartbeatAgeSeconds(
   return Math.floor((Date.now() - workerLastPollAt) / 1000);
 }
 
-// Async MongoDB helpers (for the worker script)
-export {
-  acquireWorkerLease,
-  workerHeartbeat,
-  releaseWorkerLease,
-} from "@/lib/mongoTradesClient";
