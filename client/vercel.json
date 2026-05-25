@@ -3,6 +3,10 @@
     {
       "path": "/api/trade-history/daily-run",
       "schedule": "5 1 * * *"
+    },
+    {
+      "path": "/api/cron/paper-desk-tick",
+      "schedule": "* * * * *"
     }
   ]
 }

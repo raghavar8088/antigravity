@@ -209,6 +209,10 @@ export type PaperStateDoc = {
   day_start_date: number;
   cleared_at: number;
   updated_at: string;
+  /** Worker lease fields — set by the VPS headless worker; optional for browser clients. */
+  worker_id?: string | null;
+  worker_last_poll_at?: number | null;
+  worker_owner?: "browser" | "vps" | null;
 };
 
 export type PaperResearchDoc = {
@@ -245,6 +249,93 @@ export async function upsertAccountState(doc: PaperStateDoc): Promise<void> {
   } catch {
     // non-fatal — periodic save; next interval will retry
   }
+}
+
+/**
+ * Atomic worker lease acquire.
+ * Grants the lease when:
+ *   (a) no current worker_id is set, OR
+ *   (b) existing worker's last heartbeat is older than ttlMs (stale), OR
+ *   (c) workerId already owns the lease (idempotent re-acquire).
+ *
+ * Returns true when the lease is held by this workerId after the call.
+ * Never throws — returns false on any Mongo error so the worker degrades gracefully.
+ */
+export async function acquireWorkerLease(
+  accountKey: string,
+  workerId: string,
+  ttlMs = 45_000,
+): Promise<boolean> {
+  if (accountKeyMissing(accountKey)) return false;
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    const now = Date.now();
+    const staleThreshold = now - ttlMs;
+    // Atomic: set worker fields only if no live owner exists or we already own it.
+    const result = await col.findOneAndUpdate(
+      {
+        account_key: accountKey,
+        $or: [
+          { worker_id: null },
+          { worker_id: { $exists: false } },
+          { worker_last_poll_at: { $lt: staleThreshold } },
+          { worker_id: workerId }, // idempotent re-acquire
+        ],
+      },
+      {
+        $set: {
+          worker_id: workerId,
+          worker_last_poll_at: now,
+          worker_owner: "vps",
+          updated_at: new Date().toISOString(),
+        },
+        $setOnInsert: {
+          account_key: accountKey,
+          balance: 1000,
+          positions: [],
+          pause_entries: false,
+          disabled_strategies: [],
+          last_trade_at: 0,
+          day_start_balance: 1000,
+          day_start_date: 0,
+          cleared_at: 0,
+        },
+      },
+      { upsert: true, returnDocument: "after" },
+    );
+    // findOneAndUpdate returns the document (or null if no match on non-upsert).
+    // On upsert it always returns the new doc. Lease is held if worker_id matches.
+    return result?.worker_id === workerId;
+  } catch {
+    return false;
+  }
+}
+
+/** Heartbeat — update worker_last_poll_at without contention check (caller already holds lease). */
+export async function workerHeartbeat(accountKey: string, workerId: string): Promise<void> {
+  if (accountKeyMissing(accountKey)) return;
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    await col.updateOne(
+      { account_key: accountKey, worker_id: workerId },
+      { $set: { worker_last_poll_at: Date.now(), updated_at: new Date().toISOString() } },
+    );
+  } catch { /* non-fatal */ }
+}
+
+/** Release lease — clears worker fields so browser or another worker can take over. */
+export async function releaseWorkerLease(accountKey: string, workerId: string): Promise<void> {
+  if (accountKeyMissing(accountKey)) return;
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    await col.updateOne(
+      { account_key: accountKey, worker_id: workerId },
+      { $set: { worker_id: null, worker_owner: null, updated_at: new Date().toISOString() } },
+    );
+  } catch { /* non-fatal */ }
 }
 
 export async function getResearchState(accountKey: string, namespace: string): Promise<PaperResearchDoc | null> {

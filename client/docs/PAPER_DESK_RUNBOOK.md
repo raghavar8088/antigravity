@@ -456,6 +456,123 @@ warning banner and the position count climbing past 12.
 
 ---
 
+## 24/7 operation — VPS worker + cron safety net
+
+Run the paper desk continuously without depending on an open browser tab. Architecture:
+
+```
+VPS worker (4 s poll) ──► MongoDB Atlas ◄── Browser (optional, monitor mode)
+                              ▲
+              Vercel cron (60 s) ─── fires only when VPS stale
+```
+
+### Primary: VPS worker via pm2
+
+**Requirements:**
+- Node 18+, `tsx` available (`npm install -g tsx` or use `npx tsx`)
+- MongoDB Atlas connection (same URI as browser)
+- Deployed Vercel URL (worker fetches klines from there)
+
+**Env vars to set on VPS** (copy from `.env.local`, add the worker-specific ones):
+
+```bash
+DESK_WORKER_ACCOUNT_KEY=your-uuid    # same UUID as the browser desk user
+MONGODB_URI=mongodb+srv://...
+MONGODB_DB=loop_trades
+NEXT_PUBLIC_VERCEL_URL=your-app.vercel.app
+# Optional:
+DESK_WORKER_STORAGE_NAMESPACE=btc_future_trading_v4
+POLL_MS=4000
+```
+
+**Start (one-off):**
+
+```bash
+cd client
+npx tsx scripts/btc-ft-paper-worker.ts
+```
+
+**Start (pm2, recommended for 24/7):**
+
+```bash
+cd client
+pm2 start ecosystem.worker.config.cjs --name btc-ft-worker
+pm2 save          # persist across reboots
+pm2 startup       # install systemd hook
+pm2 logs btc-ft-worker --lines 100
+```
+
+Worker logs one line per tick:
+```
+[worker] tick#42  211ms open=2 closed=1 opened=0 bal=$1003.42 regime=TREND blocker=none drift=$0.00
+```
+
+**Graceful shutdown:** `pm2 stop btc-ft-worker` or `Ctrl-C` — worker releases its MongoDB lease and flushes final state before exit.
+
+### Backup: Vercel cron
+
+`/api/cron/paper-desk-tick` fires every 60 s (configured in `vercel.json`). It:
+1. Checks whether the VPS worker heartbeat is fresh (<45 s old).
+2. If fresh → skips (returns `{ skippedReason: "worker_active" }`).
+3. If stale → runs one full poll tick (fetch klines → exits → entries → persist).
+
+This means if the VPS goes down, Vercel cron picks up within 60 s. Cadence drops from 4 s to 60 s but trades continue.
+
+**Required env var (Vercel dashboard):**
+
+```bash
+CRON_SECRET=<64-char-hex>   # generate: openssl rand -hex 32
+```
+
+Set the same `CRON_SECRET` on the VPS if you trigger the cron manually during testing.
+
+### Browser monitor mode
+
+When `NEXT_PUBLIC_DESK_WORKER_ENABLED=1`:
+- Browser polls `/api/paper-state` every 4 s to hydrate balance + positions.
+- If the VPS heartbeat is fresh, the browser enters **monitor mode** — it skips all entry/exit writes and just displays live state.
+- `DeskRunModePanel` shows: "24/7 worker ACTIVE — last tick Xs ago" (green) or "Browser-only — keep tab visible" (yellow).
+- You can safely close the browser tab — trades continue on the VPS.
+
+When `NEXT_PUBLIC_DESK_WORKER_ENABLED` is unset, the browser behaves identically to pre-PR-24/7 (no regression).
+
+### Screen wake lock
+
+Set `NEXT_PUBLIC_DESK_WAKE_LOCK=1` on the browser-side to request a screen wake lock while the desk is live. This prevents the OS from sleeping the tab (useful when running browser-only without a VPS worker).
+
+### Worker lease mechanism
+
+The worker uses an atomic MongoDB lease (`paper_state.worker_id` + `worker_last_poll_at`) to prevent dual writes:
+- Lease TTL: 45 s. A worker that crashes without releasing its lease naturally expires after 45 s.
+- Only one worker ID can hold the lease at a time. If a second worker tries to acquire it while a fresh one is active, it waits and retries.
+- pm2 `autorestart: true` means a crashed worker gets a new process ID (new UUID), which clears the stale lease automatically.
+
+### Observability
+
+```bash
+# Live log tail (pm2)
+pm2 logs btc-ft-worker --lines 200
+
+# Check lease status in MongoDB
+db.paper_state.findOne({ account_key: "<your-key>" }, { worker_id:1, worker_owner:1, worker_last_poll_at:1 })
+
+# Cron health check
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-app.vercel.app/api/cron/paper-desk-tick
+```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Worker prints "lease denied" and waits | Another worker process still holds a fresh lease | Stop the other process or wait 45 s for the lease to expire |
+| Browser shows "Browser-only" even with worker running | `NEXT_PUBLIC_DESK_WORKER_ENABLED` not set in Vercel env | Add env var and redeploy |
+| Cron always skips ("worker_active") | VPS worker is actually running and heartbeating — this is correct | No action needed |
+| Cron fires but returns 401 | `CRON_SECRET` mismatch | Ensure Vercel and local env have the same secret |
+| Worker prints "FATAL: DESK_WORKER_ACCOUNT_KEY is required" | Env var not set on VPS | Add `DESK_WORKER_ACCOUNT_KEY` to `.env.local` on VPS |
+| Trades continue in browser despite VPS worker running | Worker lease TTL expired — heartbeat too slow | Check VPS network; reduce `POLL_MS` if >10 s |
+
+---
+
 ## Per-module trade persistence (v3 schema: `module_key`)
 
 Each closed paper trade now carries an optional `module_key` column that

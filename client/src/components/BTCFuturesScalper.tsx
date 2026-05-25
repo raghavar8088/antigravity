@@ -41,6 +41,7 @@ import { profitModeFromEnv } from "@/lib/futuresProfitMode";
 import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
 import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
 import { ProfitModeChecklist } from "@/components/ProfitModeChecklist";
+import { DeskRunModePanel } from "@/components/DeskRunModePanel";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
@@ -467,6 +468,29 @@ export function BTCFuturesScalper({
       {deskMounted && balanceDriftUsd > 1 && (
         <DeskBanner variant="warning" title="Balance drift detected">
           Raw balance diverges from production trade sum by {formatDeskUsd(balanceDriftUsd)}. This usually means probe or bootstrap trades inflated the balance. PnL shown above is recomputed from closed production trades only.
+        </DeskBanner>
+      )}
+
+      {process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1" && deskMounted && (
+        <DeskRunModePanel
+          workerLastPollAt={stats.workerLastPollAt}
+          workerOwner={stats.workerOwner}
+          workerMonitorMode={stats.workerMonitorMode}
+        />
+      )}
+
+      {deskMounted && stats.workerMonitorMode && (
+        <DeskBanner variant="info" title="24/7 worker active — browser in monitor mode">
+          The VPS worker owns entry and exit execution. Last tick {
+            stats.workerLastPollAt ? `${Math.round((Date.now() - stats.workerLastPollAt) / 1000)}s ago` : "unknown"
+          }. Close this tab safely — trades continue on the VPS.
+        </DeskBanner>
+      )}
+
+      {process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1" && deskMounted && !stats.workerMonitorMode && (
+        <DeskBanner variant="warning" title="Browser-only execution — keep tab visible">
+          No active 24/7 worker detected. Desk pauses when this tab is hidden or the PC sleeps.
+          Start the worker: <code>cd client {"&&"} npx tsx scripts/btc-ft-paper-worker.ts</code>
         </DeskBanner>
       )}
 

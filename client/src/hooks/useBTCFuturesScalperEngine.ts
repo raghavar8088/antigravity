@@ -639,6 +639,12 @@ export interface BTCFuturesEngineStats {
   replaySignFlipRate: number | null;
   /** |raw balance − production-expected balance|. > $1 means probes or corruption inflated balance. */
   balanceDriftUsd: number;
+  /** Epoch ms of the last VPS worker poll (null = no worker or never polled). */
+  workerLastPollAt: number | null;
+  /** Who currently owns execution: "vps" = headless worker, "browser" = this tab, null = unknown. */
+  workerOwner: "browser" | "vps" | null;
+  /** True when worker heartbeat is fresh and this browser is in read-only monitor mode. */
+  workerMonitorMode: boolean;
 }
 
 /** Strategy Status */
@@ -994,6 +1000,19 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const entryDebugEnabled =
     options.entryDebugEnabled === true || deskEntryDebugEnabledFromEnv();
   const [entryDebug, setEntryDebug] = useState<DeskEntryPollDebug | null>(null);
+  // ── Worker monitor mode ──────────────────────────────────────────────────
+  // When NEXT_PUBLIC_DESK_WORKER_ENABLED=1 and the VPS worker heartbeat is fresh,
+  // the browser skips local poll WRITES and hydrates from Mongo only (read-only mode).
+  const workerEnabled = process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1";
+  const [workerLastPollAt, setWorkerLastPollAt] = useState<number | null>(null);
+  const [workerOwner, setWorkerOwner] = useState<"browser" | "vps" | null>(null);
+  const workerMonitorMode =
+    workerEnabled &&
+    workerLastPollAt !== null &&
+    Date.now() - workerLastPollAt < 45_000;
+
+  // Expose worker status for UI — both fields available via engine stats
+  // (see calculateStats return below).
   const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
   const forceProbeOpenedRef = useRef(false);
   const pollInFlightRef = useRef(false);
@@ -1413,6 +1432,96 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     setDisabledStrategies([]);
     setAutoDisabledStratIds([]);
   }, [allStrategiesAvailable]);
+
+  // ── Worker heartbeat poll (monitor mode) ─────────────────────────────────
+  // When NEXT_PUBLIC_DESK_WORKER_ENABLED=1 the browser reads worker_* fields
+  // from the paper-state endpoint on every poll so the UI can show "last tick Xs ago".
+  // When the worker is fresh (<45s) we skip local poll WRITES (entries/exits)
+  // and hydrate state from Mongo instead. When the worker goes stale the
+  // browser transparently takes over (legacy behavior).
+  useEffect(() => {
+    if (!workerEnabled || !cloudAccountKey) return;
+    let cancelled = false;
+    const fetchWorkerState = async () => {
+      try {
+        const res = await fetch(
+          `/api/paper-state?account_key=${encodeURIComponent(cloudAccountKey)}`,
+          { cache: "no-store" },
+        );
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as {
+          ok?: boolean;
+          state?: {
+            worker_last_poll_at?: number | null;
+            worker_owner?: "browser" | "vps" | null;
+            balance?: number;
+            positions?: unknown[];
+          };
+        };
+        if (!data.ok || !data.state) return;
+        const s = data.state;
+        if (cancelled) return;
+        setWorkerLastPollAt(s.worker_last_poll_at ?? null);
+        setWorkerOwner(s.worker_owner ?? null);
+        // In monitor mode hydrate balance + positions from worker-written state
+        const isMonitorMode =
+          s.worker_last_poll_at !== null &&
+          s.worker_last_poll_at !== undefined &&
+          Date.now() - s.worker_last_poll_at < 45_000;
+        if (isMonitorMode) {
+          if (typeof s.balance === "number") setBalance(s.balance);
+          if (Array.isArray(s.positions)) {
+            setPositions(s.positions as BTCFuturesPosition[]);
+          }
+        }
+      } catch { /* non-fatal */ }
+    };
+    void fetchWorkerState();
+    const id = setInterval(() => void fetchWorkerState(), 4_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [workerEnabled, cloudAccountKey]);
+
+  // ── Screen wake lock (optional) ───────────────────────────────────────────
+  // Keeps the browser screen on when the desk is live and the user opted in
+  // (NEXT_PUBLIC_DESK_WAKE_LOCK=1). Released on unmount / visibility loss.
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_DESK_WAKE_LOCK !== "1") return;
+    if (typeof window === "undefined" || !("wakeLock" in navigator)) return;
+    let wakeLock: WakeLockSentinel | null = null;
+    const acquire = async () => {
+      try {
+        wakeLock = await (navigator as Navigator & { wakeLock: { request: (t: string) => Promise<WakeLockSentinel> } }).wakeLock.request("screen");
+      } catch { /* permission denied or not supported */ }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void acquire();
+    };
+    void acquire();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      wakeLock?.release().catch(() => {});
+    };
+  }, []);
+
+  // ── Catch-up polls on tab focus ───────────────────────────────────────────
+  // When the browser re-gains focus and owns execution (no fresh worker),
+  // run 3 rapid catch-up polls so positions aren't stale from tab throttling.
+  const catchUpPollsRef = useRef(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && !workerMonitorMode) {
+        catchUpPollsRef.current = 3; // processed by the poll loop below
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Ranked winners gate — fetch strategy rankings when NEXT_PUBLIC_BTC_FT_USE_RANKED=1
   useEffect(() => {
@@ -1976,6 +2085,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       entryRotationAllowedCount: entryRotationAllowedCountRef.current,
       entryRotationBlockedCount: entryRotationBlockedCountRef.current,
       balanceDriftUsd: Math.abs(balance - INITIAL_BALANCE - realizedPnl),
+      workerLastPollAt,
+      workerOwner,
+      workerMonitorMode,
       deskPnLScorecard,
       scorecardAction,
       soakHistory,
@@ -2461,6 +2573,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
     const poll = async () => {
       if (pollInFlightRef.current) return;
+      // In worker monitor mode: hydration handled by the worker heartbeat effect above.
+      // Only run the local poll for quotes/data-health; skip entry/exit writes.
+      if (workerMonitorMode) {
+        // Still update data health so the UI has a live quote
+        pollInFlightRef.current = false;
+        return;
+      }
+      // Consume catch-up poll budget (set by visibilitychange handler)
+      if (catchUpPollsRef.current > 0) catchUpPollsRef.current--;
       pollInFlightRef.current = true;
       const debug502 = process.env.NEXT_PUBLIC_SIMULATE_FUTURES_502 === "1";
       const klineQuery = (sym: string, tf: BarInterval = "1m") =>

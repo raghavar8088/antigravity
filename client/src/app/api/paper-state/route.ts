@@ -40,6 +40,10 @@ export async function POST(req: Request) {
     day_start_date: typeof b.dayStartDate === "number" ? b.dayStartDate : 0,
     cleared_at: typeof b.clearedAt === "number" ? b.clearedAt : 0,
     updated_at: new Date().toISOString(),
+    // Worker lease fields (written by VPS worker; browser passes null / omits)
+    worker_id: typeof b.workerId === "string" ? b.workerId : null,
+    worker_last_poll_at: typeof b.workerLastPollAt === "number" ? b.workerLastPollAt : null,
+    worker_owner: b.workerOwner === "vps" || b.workerOwner === "browser" ? b.workerOwner : null,
   });
   return NextResponse.json({ ok: true });
 }
