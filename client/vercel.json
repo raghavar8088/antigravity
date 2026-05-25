@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/paper-desk-tick",
-      "schedule": "* * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }
