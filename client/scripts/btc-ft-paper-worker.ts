@@ -129,7 +129,7 @@ function mapRawTrade(t: Awaited<ReturnType<typeof listTradesMongo>>[number]): BT
  * in-process tracking so the next tick starts from the operator's chosen state.
  */
 async function applyRemoteReset(liveState: PaperStateDoc, newClearedAt: number): Promise<void> {
-  console.log(`[worker] remote ledger reset detected (cleared_at=${newClearedAt})`);
+  console.log(`[worker] repair/clear detected; local state reset to paper_state (cleared_at=${newClearedAt})`);
   lastClearedAt = newClearedAt;
   lastPositions = (liveState.positions ?? []) as WorkerPosition[];
   lastBalance = liveState.balance ?? INITIAL_BALANCE;

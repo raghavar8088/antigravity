@@ -36,5 +36,6 @@ export async function GET() {
     owner: state?.worker_id ?? null,
     stale,
     source: "paper_state",
+    buildSha: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
   });
 }

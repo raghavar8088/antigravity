@@ -18,7 +18,7 @@ import { BTCFuturesDeskPanels } from "@/components/btcFutures/BTCFuturesDeskPane
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import { DeskHeroStrip } from "@/components/desk/DeskHeroStrip";
 import { DeskThemeToggle } from "@/components/desk/DeskThemeToggle";
-import { BTC_FT_DESK_BUILD } from "@/lib/btcFtDeskBuild";
+import { BTC_FT_DESK_BUILD, isDeploymentStale } from "@/lib/btcFtDeskBuild";
 import {
   DeskAppBar,
   DeskBanner,
@@ -206,6 +206,10 @@ export function BTCFuturesScalper({
   const [watchSearch, setWatchSearch] = useState("");
   const [exportingCsv, setExportingCsv] = useState(false);
   const exportInFlightRef = useRef(false);
+  const [repairingState, setRepairingState] = useState(false);
+  const [repairMessage, setRepairMessage] = useState<string | null>(null);
+  const [serverBuildSha, setServerBuildSha] = useState<string | null>(null);
+  const deploymentStale = isDeploymentStale(serverBuildSha);
 
   const downloadPaperTradesCsv = useCallback(async () => {
     if (!cloudAccountKey || exportInFlightRef.current) return;
@@ -245,6 +249,42 @@ export function BTCFuturesScalper({
     }
   }, [cloudAccountKey]);
 
+  // Fetch server-side build SHA once to detect stale Vercel deployments.
+  useEffect(() => {
+    fetch("/api/health/desk-worker", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { buildSha?: string }) => {
+        if (data.buildSha) setServerBuildSha(data.buildSha);
+      })
+      .catch(() => {});
+  }, []);
+
+  const repairPaperState = useCallback(async () => {
+    if (!cloudAccountKey || repairingState) return;
+    setRepairingState(true);
+    setRepairMessage(null);
+    try {
+      const res = await fetch("/api/paper-state/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountKey: cloudAccountKey, initialBalance: baseBalance }),
+        credentials: "include",
+      });
+      const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
+      if (!res.ok || !data.ok) {
+        window.alert(data.error ?? "Repair failed");
+        return;
+      }
+      setRepairMessage(data.message ?? "Paper state repaired.");
+      // Let the engine re-hydrate from the new cleared_at
+      clearTradeHistory();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Repair failed");
+    } finally {
+      setRepairingState(false);
+    }
+  }, [cloudAccountKey, repairingState, baseBalance, clearTradeHistory]);
+
   // Production-aligned PnL excludes probe/bootstrap balance mutations.
   const productionPnl = computeSessionEquityFromProduction({
     initialBalance: baseBalance,
@@ -255,6 +295,28 @@ export function BTCFuturesScalper({
   const pnlPositive = sessionPnL >= 0;
   const totalReturn = stats.totalTrades === 0 && stats.openPositions === 0 ? 0 : productionPnl.totalReturnPct;
   const balanceDriftUsd = stats.balanceDriftUsd ?? 0;
+
+  // Probe-dominant: the last 5 closed trades are all probe/bootstrap trades.
+  const probeDominant = useMemo(() => {
+    if (trades.length === 0) return false;
+    const recent = trades.slice(-5);
+    return recent.every(
+      (t) =>
+        /BOOTSTRAP|PROBE|DEV_FORCE/i.test(t.strategyName ?? ""),
+    );
+  }, [trades]);
+
+  // "Why no trades?" — show when engine is live, no open positions for >30 min, last trade >30 min ago.
+  const whyNoTradesVisible = useMemo(() => {
+    if (!deskMounted || !isReady || pauseEntries || stats.isDrawdownLocked) return false;
+    const thirtyMin = 30 * 60 * 1000;
+    const noOpenPositions = stats.openPositions === 0;
+    const lastClosedAt = trades.length > 0
+      ? new Date(trades[trades.length - 1].closedAt).getTime()
+      : 0;
+    const lastTradeStale = !lastClosedAt || Date.now() - lastClosedAt > thirtyMin;
+    return noOpenPositions && lastTradeStale;
+  }, [deskMounted, isReady, pauseEntries, stats.isDrawdownLocked, stats.openPositions, trades]);
 
   const { longCount, shortCount, totalUnrealized } = useMemo(() => ({
     longCount: positions.filter((p) => p.side === "LONG").length,
@@ -462,12 +524,35 @@ export function BTCFuturesScalper({
           <DeskButton variant="outlined" onClick={clearTradeHistory}>
             Clear trades
           </DeskButton>
+          {cloudAccountKey && (
+            <DeskButton
+              variant="outlined"
+              onClick={() => void repairPaperState()}
+              disabled={repairingState}
+            >
+              {repairingState ? "Repairing…" : "Repair state"}
+            </DeskButton>
+          )}
         </div>
       </div>
 
+      {deskMounted && deploymentStale && (
+        <DeskBanner variant="warning" title="Stale deployment detected">
+          The browser is running build <code>{BTC_FT_DESK_BUILD}</code> but the server reports{" "}
+          <code>{serverBuildSha?.slice(0, 7)}</code>. Redeploy on Vercel and restart the VPS worker
+          (<code>pm2 restart btc-ft-worker</code>) to pick up the latest code.
+        </DeskBanner>
+      )}
+
+      {deskMounted && repairMessage && (
+        <DeskBanner variant="info" title="Paper state repaired">
+          {repairMessage}
+        </DeskBanner>
+      )}
+
       {deskMounted && balanceDriftUsd > 1 && (
         <DeskBanner variant="warning" title="Balance drift detected">
-          Raw balance diverges from production trade sum by {formatDeskUsd(balanceDriftUsd)}. This usually means probe or bootstrap trades inflated the balance. PnL shown above is recomputed from closed production trades only.
+          Raw balance diverges from production trade sum by {formatDeskUsd(balanceDriftUsd)}. This usually means probe or bootstrap trades inflated the balance. Use <strong>Repair state</strong> to reset to clean accounting. PnL shown above is recomputed from closed production trades only.
         </DeskBanner>
       )}
 
@@ -503,6 +588,31 @@ export function BTCFuturesScalper({
           This desk is paper-only; Testnet Ops does not auto-open these strategy slots.
         </DeskBanner>
       ) : null}
+
+      {deskMounted && probeDominant && (
+        <DeskBanner variant="warning" title="Probe trades dominating history">
+          The last 5 closed trades are all probe or bootstrap entries. These are excluded from PnL and win-rate metrics but inflate the raw balance. Use <strong>Repair state</strong> to reset balance/positions to a clean baseline (historical trade records are kept).
+        </DeskBanner>
+      )}
+
+      {whyNoTradesVisible && (
+        <DeskBanner variant="info" title="Why no trades?">
+          <strong>Regime blocked:</strong> {stats.deskSkippedByRegime ?? 0} skips ·{" "}
+          <strong>ATR/fee gate:</strong> {stats.deskSkippedMinExpectedMove ?? 0} skips ·{" "}
+          <strong>Regime:</strong> {stats.deskLastRegimeTag ?? "unknown"} ·{" "}
+          {stats.rotationReport
+            ? <>
+                <strong>Rotation:</strong>{" "}
+                {stats.rotationReport.active.length} active ·{" "}
+                {stats.rotationReport.promoted.length} promoted ·{" "}
+                {stats.rotationReport.scores.filter((s) => s.status === "INSUFFICIENT").length} insufficient (allowed) ·{" "}
+                {stats.rotationReport.scores.filter((s) => s.status === "SUSPENDED").length} suspended (blocked)
+              </>
+            : <strong>Rotation report not yet available.</strong>
+          }{" "}
+          — Thresholds and fee gates are intentional; do not lower them to force trades.
+        </DeskBanner>
+      )}
 
       {/* In compact mode entry debug moves to Command Center Advanced tab */}
       {!uiCompact && (
