@@ -1,16 +1,17 @@
 /**
  * GET /api/health/desk-worker
  *
- * Returns the current state of the 24/7 headless paper desk worker for the
- * DeskRunModePanel UI component.
+ * Returns the liveness state of the 24/7 headless paper desk worker.
+ * Source of truth: `paper_state.worker_last_poll_at` — the same field the VPS
+ * worker writes on every tick and the browser UI reads in monitor mode.
  *
- * Response shape:
- *   { workerLastPollAt: number | null, owner: string | null, stale: boolean }
+ * Previously read from `desk_worker_lease` (a separate collection) which the
+ * production worker never writes to, causing false-stale reports.
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { getLeaseDoc, LEASE_STALE_MS } from "@/lib/deskWorkerLease";
+import { isMongoConfigured, getAccountState } from "@/lib/mongoTradesClient";
+import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 
 export const dynamic = "force-dynamic";
 
@@ -22,27 +23,18 @@ export async function GET() {
       workerLastPollAt: null,
       owner: null,
       stale: true,
+      source: "paper_state",
     });
   }
 
-  const lease = await getLeaseDoc(accountKey);
-
-  if (!lease?.heartbeatAt) {
-    return NextResponse.json({
-      workerLastPollAt: null,
-      owner: null,
-      stale: true,
-    });
-  }
-
-  const heartbeatMs = new Date(lease.heartbeatAt).getTime();
-  const stale = Date.now() - heartbeatMs > LEASE_STALE_MS;
+  const state = await getAccountState(accountKey);
+  const workerLastPollAt = state?.worker_last_poll_at ?? null;
+  const stale = !isWorkerHeartbeatFresh(workerLastPollAt);
 
   return NextResponse.json({
-    workerLastPollAt: heartbeatMs,
-    owner: lease.owner ?? null,
+    workerLastPollAt,
+    owner: state?.worker_id ?? null,
     stale,
-    pollCount: lease.pollCount ?? 0,
-    symbol: lease.symbol ?? null,
+    source: "paper_state",
   });
 }

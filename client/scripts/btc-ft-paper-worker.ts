@@ -12,10 +12,10 @@
  *   DESK_WORKER_ACCOUNT_KEY   — same UUID the signed-in browser uses
  *   MONGODB_URI               — Atlas connection string
  *   MONGODB_DB                — database name (default: loop_trades)
- *   NEXT_PUBLIC_VERCEL_URL    — deployed app URL for kline fetch
+ *   NEXT_PUBLIC_VERCEL_URL    — deployed app URL (with or without https://)
  *   (+ any NEXT_PUBLIC_DESK_* policy vars you use in the browser)
  *
- * See .env.local.example for the full list.
+ * See ecosystem.worker.config.cjs for the full env var list.
  */
 
 import * as crypto from "crypto";
@@ -31,6 +31,7 @@ import {
   acquireWorkerLease,
   workerHeartbeat,
   releaseWorkerLease,
+  type PaperStateDoc,
 } from "../src/lib/mongoTradesClient";
 import {
   runPaperDeskPollTick,
@@ -38,6 +39,7 @@ import {
   type WorkerPosition,
 } from "../src/lib/paperDeskWorker/runPaperDeskPollTick";
 import { isWorkerHeartbeatFresh, WORKER_LEASE_TTL_MS } from "../src/lib/paperDeskWorker/workerLease";
+import { normalizeBaseUrl } from "../src/lib/paperDeskWorker/workerHelpers";
 import { profitModeFromEnv } from "../src/lib/futuresProfitMode";
 import type { BTCFuturesTrade } from "../src/lib/btcFuturesTrade.types";
 
@@ -55,13 +57,12 @@ const STRATEGY_IDS: number[] = (process.env.DESK_WORKER_STRATEGY_IDS ?? "")
   .map((s) => parseInt(s.trim(), 10))
   .filter((n) => Number.isFinite(n) && n > 0);
 
-const BASE_URL = process.env.NEXT_PUBLIC_VERCEL_URL
-  ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-  : process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+// Handles both `app.vercel.app` and `https://app.vercel.app` without double-protocol
+const BASE_URL = normalizeBaseUrl(
+  process.env.NEXT_PUBLIC_VERCEL_URL ?? process.env.VERCEL_URL,
+);
 
-// Stable worker ID for this process (survives re-polls, restarted by pm2 = new ID → clears stale lease)
+// Stable worker ID for this process (survives re-polls; restarted by pm2 = new ID → clears stale lease)
 const WORKER_ID = `vps-${crypto.randomUUID().slice(0, 8)}`;
 
 // ── Runtime state ──────────────────────────────────────────────────────────────
@@ -76,6 +77,82 @@ let peakEquity = INITIAL_BALANCE;
 let forceProbeOpened = false;
 const mountedAt = Date.now();
 
+/** The `cleared_at` epoch we last saw — used to detect remote ledger resets. */
+let lastClearedAt = 0;
+/** Browser-managed disabled strategies; preserved across saves so resets don't clear them. */
+let lastKnownDisabledStrategies: number[] = [];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m${Math.floor((ms % 60_000) / 1000)}s`;
+}
+
+function mapRawTrade(t: Awaited<ReturnType<typeof listTradesMongo>>[number]): BTCFuturesTrade {
+  return {
+    clientTradeId: t.client_trade_id ?? "",
+    id: t.client_trade_id ?? "",
+    symbol: t.symbol ?? "BTCUSD",
+    strategyId: Number(t.strategy_id ?? 0),
+    strategyName: t.strategy_name ?? "",
+    side: (t.side ?? "LONG") as "LONG" | "SHORT",
+    entryPrice: Number(t.entry_price ?? 0),
+    exitPrice: Number(t.exit_price ?? 0),
+    contracts: Number(t.contracts ?? 0),
+    notional: Number(t.notional ?? 0),
+    marginUsed: Number(t.margin_used ?? 0),
+    realizedPnl: Number(t.gross_pnl ?? 0),
+    fees: Number(t.fees ?? 0),
+    netPnl: Number(t.net_pnl ?? 0),
+    netPnlPct: 0,
+    priceMovePct: 0,
+    fundingCosts: Number(t.funding_costs ?? 0),
+    lastFundingAppliedAt: 0,
+    openedAt: t.opened_at ?? new Date().toISOString(),
+    closedAt: t.closed_at ?? new Date().toISOString(),
+    exitReason: (t.exit_reason ?? "TIME") as BTCFuturesTrade["exitReason"],
+    liquidationPrice: 0,
+    liquidationDistancePct: 0,
+    signalContributions: [],
+    fundingSinceOpenMs: undefined,
+  } as BTCFuturesTrade;
+}
+
+/**
+ * Apply a remote ledger reset: reload balance, positions, trades, and clear
+ * in-process tracking so the next tick starts from the operator's chosen state.
+ */
+async function applyRemoteReset(liveState: PaperStateDoc, newClearedAt: number): Promise<void> {
+  console.log(`[worker] remote ledger reset detected (cleared_at=${newClearedAt})`);
+  lastClearedAt = newClearedAt;
+  lastPositions = (liveState.positions ?? []) as WorkerPosition[];
+  lastBalance = liveState.balance ?? INITIAL_BALANCE;
+  stratCooldowns = {};
+  peakEquity = lastBalance;
+  forceProbeOpened = false;
+
+  // Reload trades — only keep those closed after the clear point
+  try {
+    const rawTrades = await listTradesMongo({ accountKey: ACCOUNT_KEY, limit: 500 });
+    lastTrades = rawTrades
+      .filter((t) => {
+        const closedMs = t.closed_at ? new Date(t.closed_at).getTime() : 0;
+        return closedMs >= newClearedAt;
+      })
+      .map(mapRawTrade);
+    console.log(`[worker] reset: balance=$${lastBalance.toFixed(2)} open=${lastPositions.length} trades=${lastTrades.length}`);
+  } catch (err) {
+    console.error("[worker] reset trade reload failed:", err);
+    lastTrades = [];
+  }
+}
+
 // ── Graceful shutdown ─────────────────────────────────────────────────────────
 
 async function shutdown(signal: string) {
@@ -88,11 +165,11 @@ async function shutdown(signal: string) {
       balance: lastBalance,
       positions: lastPositions,
       pause_entries: false,
-      disabled_strategies: [],
+      disabled_strategies: lastKnownDisabledStrategies,
       last_trade_at: 0,
       day_start_balance: INITIAL_BALANCE,
       day_start_date: 0,
-      cleared_at: 0,
+      cleared_at: lastClearedAt,
       updated_at: new Date().toISOString(),
       worker_id: null,
       worker_owner: null,
@@ -107,18 +184,6 @@ async function shutdown(signal: string) {
 
 process.on("SIGINT", () => void shutdown("SIGINT"));
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m${Math.floor((ms % 60_000) / 1000)}s`;
-}
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
@@ -146,43 +211,40 @@ async function main() {
   if (initState) {
     lastBalance = initState.balance ?? INITIAL_BALANCE;
     lastPositions = (initState.positions ?? []) as WorkerPosition[];
+    lastClearedAt = initState.cleared_at ?? 0;
+    lastKnownDisabledStrategies = initState.disabled_strategies ?? [];
     stratCooldowns = {}; // cooldowns don't survive across restarts
   }
 
   const rawTrades = await listTradesMongo({ accountKey: ACCOUNT_KEY, limit: 500 });
-  lastTrades = rawTrades.map((t) => ({
-    clientTradeId: t.client_trade_id ?? "",
-    id: t.client_trade_id ?? "",
-    symbol: t.symbol ?? "BTCUSD",
-    strategyId: Number(t.strategy_id ?? 0),
-    strategyName: t.strategy_name ?? "",
-    side: (t.side ?? "LONG") as "LONG" | "SHORT",
-    entryPrice: Number(t.entry_price ?? 0),
-    exitPrice: Number(t.exit_price ?? 0),
-    contracts: Number(t.contracts ?? 0),
-    notional: Number(t.notional ?? 0),
-    marginUsed: Number(t.margin_used ?? 0),
-    realizedPnl: Number(t.gross_pnl ?? 0),
-    fees: Number(t.fees ?? 0),
-    netPnl: Number(t.net_pnl ?? 0),
-    netPnlPct: 0,
-    priceMovePct: 0,
-    fundingCosts: Number(t.funding_costs ?? 0),
-    lastFundingAppliedAt: 0,
-    openedAt: t.opened_at ?? new Date().toISOString(),
-    closedAt: t.closed_at ?? new Date().toISOString(),
-    exitReason: (t.exit_reason ?? "TIME") as BTCFuturesTrade["exitReason"],
-    liquidationPrice: 0,
-    liquidationDistancePct: 0,
-    signalContributions: [],
-    fundingSinceOpenMs: undefined,
-  })) as BTCFuturesTrade[];
+  lastTrades = rawTrades.map(mapRawTrade);
 
   console.log(`[worker] Hydrated: balance=$${lastBalance.toFixed(2)} open=${lastPositions.length} trades=${lastTrades.length}`);
 
   while (running) {
     const tickStart = Date.now();
     tickCount++;
+
+    // ── Read fresh operator state at the start of every tick ─────────────────
+    // This lets the worker respect pause/clear/disable changes made in the browser
+    // without requiring a restart.
+    let liveState: PaperStateDoc | null = null;
+    try {
+      liveState = await getAccountState(ACCOUNT_KEY);
+    } catch (err) {
+      console.error(`[worker] tick#${tickCount} state read failed:`, err);
+    }
+
+    // Sync disabled strategies so we never overwrite browser-managed blocklist
+    if (liveState?.disabled_strategies) {
+      lastKnownDisabledStrategies = liveState.disabled_strategies;
+    }
+
+    // Detect remote ledger reset (operator clicked "Clear trades" in the UI)
+    const remClearedAt = liveState?.cleared_at ?? 0;
+    if (remClearedAt > lastClearedAt) {
+      await applyRemoteReset(liveState!, remClearedAt);
+    }
 
     // Acquire or renew lease
     const leaseGranted = await acquireWorkerLease(ACCOUNT_KEY, WORKER_ID, WORKER_LEASE_TTL_MS);
@@ -201,8 +263,9 @@ async function main() {
       balance: lastBalance,
       positions: [...lastPositions],
       trades: [...lastTrades],
-      pauseEntries: initState?.pause_entries ?? false,
-      clearedAt: initState?.cleared_at ?? 0,
+      // Always use the live value so a browser pause/resume takes effect immediately
+      pauseEntries: liveState?.pause_entries ?? false,
+      clearedAt: lastClearedAt,
       peakEquity,
       forceProbeOpened,
       mountedAt,
@@ -261,7 +324,6 @@ async function main() {
             liquidationDistancePct: trade.liquidationDistancePct ?? 0,
           },
           exchange: "delta",
-          template_family: undefined,
         });
       } catch (err) {
         console.error("[worker] trade persist failed:", err);
@@ -269,17 +331,18 @@ async function main() {
     }
 
     // Persist account state + heartbeat
+    // Preserve operator-managed fields (disabled_strategies, day_start_*) from liveState.
     try {
       await upsertAccountState({
         account_key: ACCOUNT_KEY,
         balance: lastBalance,
         positions: lastPositions,
-        pause_entries: false,
-        disabled_strategies: [],
-        last_trade_at: result.closedTrades.length > 0 ? Date.now() : (initState?.last_trade_at ?? 0),
-        day_start_balance: initState?.day_start_balance ?? INITIAL_BALANCE,
-        day_start_date: initState?.day_start_date ?? 0,
-        cleared_at: initState?.cleared_at ?? 0,
+        pause_entries: liveState?.pause_entries ?? false,
+        disabled_strategies: lastKnownDisabledStrategies,
+        last_trade_at: result.closedTrades.length > 0 ? Date.now() : (liveState?.last_trade_at ?? 0),
+        day_start_balance: liveState?.day_start_balance ?? INITIAL_BALANCE,
+        day_start_date: liveState?.day_start_date ?? 0,
+        cleared_at: lastClearedAt,
         updated_at: new Date().toISOString(),
         worker_id: WORKER_ID,
         worker_last_poll_at: Date.now(),
@@ -292,13 +355,19 @@ async function main() {
     }
 
     const tickMs = Date.now() - tickStart;
-    const balanceDrift = Math.abs(lastBalance - INITIAL_BALANCE - lastTrades.filter(t => !t.strategyName?.toUpperCase().includes("BOOTSTRAP") && !t.strategyName?.toUpperCase().includes("PROBE")).reduce((s, t) => s + t.netPnl, 0));
+    const balanceDrift = Math.abs(
+      lastBalance -
+      INITIAL_BALANCE -
+      lastTrades
+        .filter((t) => !t.strategyName?.toUpperCase().includes("BOOTSTRAP") && !t.strategyName?.toUpperCase().includes("PROBE"))
+        .reduce((s, t) => s + t.netPnl, 0),
+    );
 
-    // One-line tick summary
     console.log(
       `[worker] tick#${tickCount} ${formatDuration(tickMs).padStart(5)} ` +
       `open=${result.positions.length} closed=${result.closedTrades.length} opened=${result.openedPositions.length} ` +
-      `bal=$${lastBalance.toFixed(2)} regime=${result.regime} blocker=${result.error ?? "none"} drift=$${balanceDrift.toFixed(2)}`,
+      `bal=$${lastBalance.toFixed(2)} regime=${result.regime} blocker=${result.error ?? "none"} drift=$${balanceDrift.toFixed(2)}` +
+      (liveState?.pause_entries ? " [PAUSED]" : ""),
     );
 
     if (result.error && result.error !== "none") {
