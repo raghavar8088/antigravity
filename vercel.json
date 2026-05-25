@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/policy-snapshot",
       "schedule": "5 0 * * *"
-    },
-    {
-      "path": "/api/cron/paper-desk-tick",
-      "schedule": "0 * * * *"
     }
   ]
 }
