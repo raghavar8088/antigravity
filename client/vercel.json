@@ -1,9 +1,1 @@
-{
-  "_note": "Vercel reads the root vercel.json, not this file. Crons are defined there. Upgrade to Pro to add paper-desk-tick hourly cron.",
-  "crons_pro_only": [
-    {
-      "path": "/api/cron/paper-desk-tick",
-      "schedule": "* * * * *"
-    }
-  ]
-}
+{}
