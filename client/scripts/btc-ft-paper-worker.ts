@@ -31,6 +31,7 @@ import {
   acquireWorkerLease,
   workerHeartbeat,
   releaseWorkerLease,
+  insertWorkerEvent,
   type PaperStateDoc,
 } from "../src/lib/mongoTradesClient";
 import {
@@ -130,6 +131,13 @@ function mapRawTrade(t: Awaited<ReturnType<typeof listTradesMongo>>[number]): BT
  */
 async function applyRemoteReset(liveState: PaperStateDoc, newClearedAt: number): Promise<void> {
   console.log(`[worker] repair/clear detected; local state reset to paper_state (cleared_at=${newClearedAt})`);
+  void insertWorkerEvent({
+    account_key: ACCOUNT_KEY,
+    type: "repair_detected",
+    severity: "info",
+    message: `Repair/clear detected; local state reset (cleared_at=${newClearedAt})`,
+    payload: { newClearedAt, workerId: WORKER_ID },
+  });
   lastClearedAt = newClearedAt;
   lastPositions = (liveState.positions ?? []) as WorkerPosition[];
   lastBalance = liveState.balance ?? INITIAL_BALANCE;
@@ -221,6 +229,15 @@ async function main() {
 
   console.log(`[worker] Hydrated: balance=$${lastBalance.toFixed(2)} open=${lastPositions.length} trades=${lastTrades.length}`);
 
+  // Emit worker_start event (non-fatal)
+  void insertWorkerEvent({
+    account_key: ACCOUNT_KEY,
+    type: "worker_start",
+    severity: "info",
+    message: `Worker ${WORKER_ID} started. balance=$${lastBalance.toFixed(2)} open=${lastPositions.length} trades=${lastTrades.length}`,
+    payload: { workerId: WORKER_ID, balance: lastBalance, openPositions: lastPositions.length },
+  });
+
   while (running) {
     const tickStart = Date.now();
     tickCount++;
@@ -250,6 +267,13 @@ async function main() {
     const leaseGranted = await acquireWorkerLease(ACCOUNT_KEY, WORKER_ID, WORKER_LEASE_TTL_MS);
     if (!leaseGranted) {
       console.warn(`[worker] tick#${tickCount} lease denied — another worker may be active. Waiting…`);
+      void insertWorkerEvent({
+        account_key: ACCOUNT_KEY,
+        type: "lease_denied",
+        severity: "warning",
+        message: `Tick #${tickCount}: lease denied — another worker may be active`,
+        payload: { tickCount, workerId: WORKER_ID },
+      });
       await sleep(POLL_MS);
       continue;
     }
@@ -282,6 +306,13 @@ async function main() {
       result = await runPaperDeskPollTick(ctx);
     } catch (err) {
       console.error(`[worker] tick#${tickCount} poll error:`, err);
+      void insertWorkerEvent({
+        account_key: ACCOUNT_KEY,
+        type: "worker_tick_error",
+        severity: "error",
+        message: `Tick #${tickCount} poll error: ${err instanceof Error ? err.message : String(err)}`,
+        payload: { tickCount, workerId: WORKER_ID },
+      });
       await sleep(POLL_MS);
       continue;
     }

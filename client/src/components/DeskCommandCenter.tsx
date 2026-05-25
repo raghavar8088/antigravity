@@ -43,6 +43,13 @@ import {
 } from "@/components/deskCommandCenterTabs";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
+import {
+  computeDeskOperatorHealth,
+  OPERATOR_HEALTH_SEVERITY_COLOR,
+} from "@/lib/deskOperatorHealth";
+import { computeStrategySafety, formatDisableListAsEnv } from "@/lib/deskStrategySafety";
+import { BTC_FT_DESK_BUILD, isDeploymentStale } from "@/lib/btcFtDeskBuild";
+import type { WorkerEventDoc } from "@/lib/mongoTradesClient";
 
 const READINESS_COLOR: Record<UnifiedReadiness, string> = {
   NOT_READY: "#f85149",
@@ -66,6 +73,18 @@ export type DeskCommandCenterProps = {
   /** Entry debug data forwarded from engine (shown in Advanced tab developer fold). */
   entryDebug?: DeskEntryPollDebug | null;
   pauseEntries?: boolean;
+  /** Probe-dominant flag from BTCFuturesScalper (last 5 trades all probe/bootstrap). */
+  probeDominant?: boolean;
+  /** Worker enabled flag from env. */
+  workerEnabled?: boolean;
+  /** Worker is stale (heartbeat expired). */
+  workerStale?: boolean;
+  /** Base balance for initial balance reference. */
+  baseBalance?: number;
+  /** Server build SHA (from /api/health/desk-worker) for stale-deploy detection. */
+  serverBuildSha?: string | null;
+  /** Currently enabled strategy IDs (for safety suggestions env line). */
+  enabledStrategyIds?: readonly number[];
 };
 
 function StrategyRotationSummary({
@@ -123,11 +142,32 @@ export function DeskCommandCenter({
   advancedTabGated = false,
   entryDebug,
   pauseEntries = false,
+  probeDominant = false,
+  workerEnabled = false,
+  workerStale = false,
+  baseBalance = 1000,
+  serverBuildSha = null,
+  enabledStrategyIds = [],
 }: DeskCommandCenterProps) {
   const [cardExpanded, setCardExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<DeskCommandCenterTab>(DEFAULT_COMMAND_CENTER_TAB);
   const [showAdvancedTab, setShowAdvancedTab] = useState(!advancedTabGated);
   const [blockersExpanded, setBlockersExpanded] = useState(false);
+  const [workerEvents, setWorkerEvents] = useState<WorkerEventDoc[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const deploymentStale = isDeploymentStale(serverBuildSha);
+
+  // Lazy-load worker events when Advanced tab is opened
+  useEffect(() => {
+    if (activeTab !== "advanced" || eventsLoaded) return;
+    setEventsLoaded(true);
+    fetch("/api/desk-worker-events?limit=50", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { ok?: boolean; events?: WorkerEventDoc[] }) => {
+        if (data.ok && Array.isArray(data.events)) setWorkerEvents(data.events);
+      })
+      .catch(() => {});
+  }, [activeTab, eventsLoaded]);
 
   const monitor = useDeskPerformanceMonitor(
     cloudAccountKey,
@@ -223,6 +263,52 @@ export function DeskCommandCenter({
     });
   };
 
+  // ── Operator health score ──────────────────────────────────────────────────
+  const activeRotationReport = rotationReport ?? stats.rotationReport;
+  const operatorHealth = useMemo(() => {
+    const sc = stats.deskPnLScorecard;
+    return computeDeskOperatorHealth({
+      workerEnabled,
+      workerLastPollAt: stats.workerLastPollAt,
+      workerStale,
+      balanceDriftUsd: stats.balanceDriftUsd ?? 0,
+      totalTrades: stats.totalTrades,
+      openPositions: stats.openPositions,
+      closedTrades48h: sc?.closes48h ?? 0,
+      regime: stats.deskLastRegimeTag ?? "unknown",
+      skipRegime: stats.deskSkippedByRegime ?? 0,
+      skipAtrFees: stats.deskSkippedMinExpectedMove ?? 0,
+      rotationSuspended: activeRotationReport?.suspended.length ?? 0,
+      rotationPending: activeRotationReport?.insufficient.length ?? 0,
+      rotationActive: activeRotationReport?.active.length ?? 0,
+      rotationPromoted: activeRotationReport?.promoted.length ?? 0,
+      pauseEntries: pauseEntries ?? false,
+      drawdownLocked: stats.isDrawdownLocked,
+      probeDominant,
+      scorecardState: sc?.paperReadyHint,
+    });
+  }, [
+    workerEnabled, stats.workerLastPollAt, workerStale, stats.balanceDriftUsd,
+    stats.totalTrades, stats.openPositions, stats.deskPnLScorecard,
+    stats.deskLastRegimeTag, stats.deskSkippedByRegime, stats.deskSkippedMinExpectedMove,
+    activeRotationReport, pauseEntries, stats.isDrawdownLocked, probeDominant,
+  ]);
+
+  // ── Strategy safety suggestions ───────────────────────────────────────────
+  const strategySafety = useMemo(() => {
+    if (!activeRotationReport && !stats.strategyDiagnostics) return null;
+    return computeStrategySafety({
+      rotationReport: activeRotationReport ?? null,
+      diagnostics: stats.strategyDiagnostics ?? null,
+      enabledStrategyIds,
+    });
+  }, [activeRotationReport, stats.strategyDiagnostics, enabledStrategyIds]);
+
+  const disableListEnv = useMemo(() => {
+    if (!strategySafety || strategySafety.autoDisableCandidates.length === 0) return null;
+    return formatDisableListAsEnv(enabledStrategyIds, strategySafety.autoDisableCandidates);
+  }, [strategySafety, enabledStrategyIds]);
+
   const scorecard = stats.deskPnLScorecard;
   const action = stats.scorecardAction;
   const last50 = scorecard?.last50;
@@ -256,8 +342,50 @@ export function DeskCommandCenter({
   const blockerPreview = blockers.slice(0, 2);
   const blockerRest = blockers.length > 2 ? blockers.slice(2) : [];
 
+  const healthColor = OPERATOR_HEALTH_SEVERITY_COLOR[operatorHealth.severity];
+
   return (
     <DeskCard className="desk-command-center" padding="md">
+      {/* ── Run Status card ── */}
+      <div
+        style={{
+          borderLeft: `3px solid ${healthColor}`,
+          paddingLeft: 10,
+          marginBottom: 12,
+          background: "#0d1117",
+          borderRadius: "0 6px 6px 0",
+          padding: "8px 10px",
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 12, color: healthColor }}>
+            {operatorHealth.status}
+          </span>
+          <DeskChip tone={workerEnabled && !workerStale ? "success" : workerEnabled ? "warning" : "default"}>
+            Worker: {workerEnabled ? (workerStale ? "STALE" : "ACTIVE") : "BROWSER"}
+          </DeskChip>
+          <DeskChip tone={(stats.balanceDriftUsd ?? 0) > 1 ? "warning" : probeDominant ? "warning" : "default"}>
+            State: {(stats.balanceDriftUsd ?? 0) > 1 ? "DRIFT" : probeDominant ? "PROBE-DOM" : "CLEAN"}
+          </DeskChip>
+          <DeskChip tone={(stats.deskLastRegimeTag ?? "").includes("chop") ? "warning" : "success"}>
+            Market: {(stats.deskLastRegimeTag ?? "unknown").toUpperCase()}
+          </DeskChip>
+          {activeRotationReport && (
+            <DeskChip>
+              Rot: {activeRotationReport.active.length}A / {activeRotationReport.promoted.length}P / {activeRotationReport.suspended.length}S / {activeRotationReport.insufficient.length}⏳
+            </DeskChip>
+          )}
+        </div>
+        <p style={{ fontSize: 11, color: "#c9d1d9", margin: 0, lineHeight: 1.4 }}>
+          {operatorHealth.nextAction}
+        </p>
+        {operatorHealth.blockers.length > 0 && (
+          <ul style={{ margin: "4px 0 0", paddingLeft: 16, fontSize: 10, color: "#f85149" }}>
+            {operatorHealth.blockers.map((b) => <li key={b}>{b}</li>)}
+          </ul>
+        )}
+      </div>
+
       <div style={{ borderLeft: `3px solid ${readinessColor}`, paddingLeft: 12 }}>
       <div
         onClick={() => setCardExpanded((v) => !v)}
@@ -603,6 +731,154 @@ export function DeskCommandCenter({
                     </DeskButton>
                   </div>
                 ) : null}
+                {/* ── Strategy Safety Suggestions ── */}
+                {strategySafety && (
+                  <div
+                    style={{
+                      border: "1px solid #21262d",
+                      borderRadius: 8,
+                      padding: "8px 12px",
+                      fontSize: 11,
+                      background: "#161b22",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 4, color: "#d29922" }}>
+                      Suggested safety actions (read-only)
+                    </div>
+                    <p style={{ fontSize: 10, color: "#8b949e", marginBottom: 6 }}>
+                      Disable candidates have ≥5 production closes with negative expectancy AND fee/gross &gt;100%, or rotation SUSPENDED. Never auto-applied.
+                    </p>
+                    {strategySafety.autoDisableCandidates.length === 0 ? (
+                      <p style={{ fontSize: 10, color: "#3fb950" }}>No disable candidates — all strategies look safe.</p>
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 10, color: "#f85149", marginBottom: 4 }}>
+                          Consider disabling: {strategySafety.autoDisableCandidates.join(", ")}
+                        </p>
+                        <ul style={{ paddingLeft: 16, margin: "0 0 6px", fontSize: 10, color: "#c9d1d9" }}>
+                          {strategySafety.autoDisableCandidates.map((id) => (
+                            <li key={id}>#{id}: {strategySafety.reasonByStrategyId[id] ?? "see rotation report"}</li>
+                          ))}
+                        </ul>
+                        {disableListEnv && (
+                          <>
+                            <pre
+                              style={{
+                                fontSize: 9,
+                                fontFamily: "var(--desk-font-mono, monospace)",
+                                background: "#0d1117",
+                                padding: 6,
+                                borderRadius: 4,
+                                color: "#8b949e",
+                                overflow: "auto",
+                                maxWidth: "100%",
+                              }}
+                            >
+                              {disableListEnv}
+                            </pre>
+                            <DeskButton
+                              variant="outlined"
+                              style={{ minHeight: 28, marginTop: 4, fontSize: "0.7rem" }}
+                              onClick={() => {
+                                void navigator.clipboard.writeText(disableListEnv);
+                              }}
+                            >
+                              Copy disable env
+                            </DeskButton>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Deployment Sanity ── */}
+                <div
+                  style={{
+                    border: `1px solid ${deploymentStale ? "#d29922" : "#21262d"}`,
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontSize: 11,
+                    background: "#161b22",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 6, color: deploymentStale ? "#d29922" : "#58a6ff" }}>
+                    Deployment Sanity
+                  </div>
+                  <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+                    <tbody>
+                      {[
+                        ["UI build SHA", BTC_FT_DESK_BUILD],
+                        ["API build SHA", serverBuildSha?.slice(0, 7) ?? "unknown"],
+                        ["SHA match", deploymentStale ? "MISMATCH ⚠️" : "OK"],
+                        ["Worker owner", stats.workerOwner ?? "none"],
+                        ["Worker last tick", stats.workerLastPollAt ? `${Math.round((Date.now() - stats.workerLastPollAt) / 1000)}s ago` : "never"],
+                        ["MongoDB", cloudAccountKey ? "configured" : "not configured"],
+                        ["Profit mode", profitModeCfg.enabled ? "ON" : "OFF"],
+                        ["Workers enabled", workerEnabled ? "YES" : "NO"],
+                        ["Account key", cloudAccountKey ? `…${cloudAccountKey.slice(-4)}` : "not set"],
+                      ].map(([label, value]) => (
+                        <tr key={label} style={{ borderTop: "1px solid #21262d" }}>
+                          <td style={{ color: "#8b949e", paddingRight: 8, paddingTop: 3, paddingBottom: 3 }}>{label}</td>
+                          <td style={{ color: "#c9d1d9", fontFamily: "var(--desk-font-mono, monospace)" }}>{value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {deploymentStale && (
+                    <p style={{ fontSize: 10, color: "#d29922", marginTop: 6 }}>
+                      UI/API SHA mismatch: redeploy Vercel and run <code>pm2 restart btc-ft-worker</code> before debugging strategy behavior.
+                    </p>
+                  )}
+                </div>
+
+                {/* ── Worker Events ── */}
+                <details style={{ marginTop: 4 }}>
+                  <summary
+                    style={{
+                      cursor: "pointer",
+                      fontSize: 11,
+                      color: "#58a6ff",
+                      padding: "6px 0",
+                      listStyle: "none",
+                    }}
+                  >
+                    Worker Events (last 50)
+                  </summary>
+                  <div style={{ marginTop: 6 }}>
+                    {workerEvents.length === 0 ? (
+                      <p style={{ fontSize: 10, color: "#8b949e" }}>No events loaded yet (open this panel to fetch).</p>
+                    ) : (
+                      <table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
+                        <thead>
+                          <tr style={{ color: "#8b949e" }}>
+                            <th style={{ textAlign: "left", paddingBottom: 4 }}>Time</th>
+                            <th style={{ textAlign: "left", paddingBottom: 4 }}>Type</th>
+                            <th style={{ textAlign: "left", paddingBottom: 4 }}>Message</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workerEvents.map((ev, i) => (
+                            <tr
+                              key={i}
+                              style={{
+                                borderTop: "1px solid #21262d",
+                                color: ev.severity === "error" ? "#f85149" : ev.severity === "warning" ? "#d29922" : "#c9d1d9",
+                              }}
+                            >
+                              <td style={{ paddingRight: 8, whiteSpace: "nowrap", paddingTop: 2, paddingBottom: 2 }}>
+                                {new Date(ev.created_at).toLocaleTimeString()}
+                              </td>
+                              <td style={{ paddingRight: 8, whiteSpace: "nowrap" }}>{ev.type}</td>
+                              <td style={{ wordBreak: "break-word", maxWidth: 240 }}>{ev.message}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </details>
+
                 <ShadowIntentLogPanel
                   enabled={deskShadowIntentsEnabled}
                   signedIn={Boolean(cloudAccountKey)}

@@ -596,21 +596,83 @@ export function BTCFuturesScalper({
       )}
 
       {whyNoTradesVisible && (
-        <DeskBanner variant="info" title="Why no trades?">
-          <strong>Regime blocked:</strong> {stats.deskSkippedByRegime ?? 0} skips ·{" "}
-          <strong>ATR/fee gate:</strong> {stats.deskSkippedMinExpectedMove ?? 0} skips ·{" "}
-          <strong>Regime:</strong> {stats.deskLastRegimeTag ?? "unknown"} ·{" "}
-          {stats.rotationReport
-            ? <>
-                <strong>Rotation:</strong>{" "}
-                {stats.rotationReport.active.length} active ·{" "}
-                {stats.rotationReport.promoted.length} promoted ·{" "}
-                {stats.rotationReport.scores.filter((s) => s.status === "INSUFFICIENT").length} insufficient (allowed) ·{" "}
-                {stats.rotationReport.scores.filter((s) => s.status === "SUSPENDED").length} suspended (blocked)
-              </>
-            : <strong>Rotation report not yet available.</strong>
-          }{" "}
-          — Thresholds and fee gates are intentional; do not lower them to force trades.
+        <DeskBanner variant="info" title="Why no trades? — ordered by impact">
+          {(() => {
+            type NoTradeBlocker = { label: string; count: number; explanation: string; action: string };
+            const blockers: NoTradeBlocker[] = [];
+
+            if (balanceDriftUsd > 1 || probeDominant) {
+              blockers.push({
+                label: "Balance / probe repair issue",
+                count: 1,
+                explanation: `Raw balance diverges by $${balanceDriftUsd.toFixed(2)} or probe trades dominate — PnL stats are untrustworthy.`,
+                action: "Click Repair state to reset to clean accounting.",
+              });
+            }
+            if (process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1" && !stats.workerMonitorMode) {
+              blockers.push({
+                label: "Worker stale",
+                count: 1,
+                explanation: "VPS worker has not heartbeated recently — execution may be paused.",
+                action: "SSH to VPS and run: pm2 restart btc-ft-worker",
+              });
+            }
+            if (stats.deskSkippedByRegime > 0) {
+              blockers.push({
+                label: "Regime mismatch",
+                count: stats.deskSkippedByRegime,
+                explanation: `${stats.deskSkippedByRegime} entries blocked by regime filter. Current regime: ${stats.deskLastRegimeTag ?? "unknown"}.`,
+                action: "Wait for trend regime, or run a mean-reversion-only roster. Do NOT lower signal threshold.",
+              });
+            }
+            if (stats.deskSkippedMinExpectedMove > 0) {
+              blockers.push({
+                label: "ATR/fee hurdle",
+                count: stats.deskSkippedMinExpectedMove,
+                explanation: `${stats.deskSkippedMinExpectedMove} entries blocked: expected price move too small to cover round-trip fees.`,
+                action: "This is a correct block. Wait for higher-volatility setups.",
+              });
+            }
+            if (stats.rotationReport && stats.rotationReport.suspended.length > 0) {
+              blockers.push({
+                label: "Rotation suspended",
+                count: stats.rotationReport.suspended.length,
+                explanation: `${stats.rotationReport.suspended.length} strategies suspended (rotation score < 25). ${stats.rotationReport.insufficient.length} insufficient data.`,
+                action: "Collect more trades, or manually restore a strategy via the rotation panel.",
+              });
+            }
+            if (stats.deskSkippedOutsideSession > 0) {
+              blockers.push({
+                label: "Session window",
+                count: stats.deskSkippedOutsideSession,
+                explanation: `${stats.deskSkippedOutsideSession} entries skipped — outside UTC entry session window.`,
+                action: "No action needed — waits for the configured UTC session hours.",
+              });
+            }
+            if (stats.deskSkippedSpread > 0) {
+              blockers.push({
+                label: "Spread",
+                count: stats.deskSkippedSpread,
+                explanation: `${stats.deskSkippedSpread} entries blocked by last/mark spread cap.`,
+                action: "Market is wide. No action needed.",
+              });
+            }
+
+            const sorted = [...blockers].sort((a, b) => b.count - a.count);
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
+                {sorted.map((b) => (
+                  <div key={b.label} style={{ borderLeft: "2px solid #58a6ff", paddingLeft: 8 }}>
+                    <strong>{b.label}</strong>{b.count > 1 ? ` (${b.count}×)` : ""}: {b.explanation}{" "}
+                    <em style={{ color: "#8b949e" }}>{b.action}</em>
+                  </div>
+                ))}
+                {sorted.length === 0 && (
+                  <span>No clear blocker identified — check signal threshold and MTF confluence in Command Center → Gates.</span>
+                )}
+              </div>
+            );
+          })()}
         </DeskBanner>
       )}
 
@@ -739,6 +801,11 @@ export function BTCFuturesScalper({
         setReplaySignFlipRate={setReplaySignFlipRate}
         entryDebug={entryDebug}
         pauseEntries={pauseEntries}
+        probeDominant={probeDominant}
+        workerEnabled={process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1"}
+        workerStale={stats.workerLastPollAt == null || !stats.workerMonitorMode}
+        serverBuildSha={serverBuildSha}
+        enabledStrategyIds={strategyIds ?? []}
       />
 
     </DeskShell>

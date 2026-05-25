@@ -271,6 +271,12 @@ export type BTCFuturesDeskPanelsProps = {
   /** Forwarded to DeskCommandCenter Advanced tab entry debug fold (compact mode). */
   entryDebug?: DeskEntryPollDebug | null;
   pauseEntries?: boolean;
+  /** Forwarded to DeskCommandCenter for Run Status card. */
+  probeDominant?: boolean;
+  workerEnabled?: boolean;
+  workerStale?: boolean;
+  serverBuildSha?: string | null;
+  enabledStrategyIds?: readonly number[];
 };
 
 export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
@@ -596,6 +602,11 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
           advancedTabGated={profitModeCfg.enabled}
           entryDebug={entryDebug}
           pauseEntries={pauseEntries}
+          probeDominant={props.probeDominant}
+          workerEnabled={props.workerEnabled}
+          workerStale={props.workerStale}
+          serverBuildSha={props.serverBuildSha}
+          enabledStrategyIds={props.enabledStrategyIds}
         />
       ) : (
         <>

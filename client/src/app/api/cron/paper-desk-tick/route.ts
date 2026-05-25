@@ -23,6 +23,7 @@ import {
   upsertAccountState,
   upsertTradeMongo,
   listTradesMongo,
+  insertWorkerEvent,
 } from "@/lib/mongoTradesClient";
 import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 import { runPaperDeskPollTick, type WorkerPosition } from "@/lib/paperDeskWorker/runPaperDeskPollTick";
@@ -56,6 +57,13 @@ export async function GET(req: Request) {
 
   // Skip when VPS worker is actively heartbeating.
   if (isWorkerHeartbeatFresh(state?.worker_last_poll_at)) {
+    void insertWorkerEvent({
+      account_key: accountKey,
+      type: "cron_skipped_worker_fresh",
+      severity: "info",
+      message: `Cron skipped — VPS worker fresh (last_poll_at=${state?.worker_last_poll_at})`,
+      payload: { workerLastPollAt: state?.worker_last_poll_at },
+    });
     return NextResponse.json({
       ok: true,
       tick: false,
@@ -128,10 +136,24 @@ export async function GET(req: Request) {
     relaxConfirm: process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1",
   };
 
+  void insertWorkerEvent({
+    account_key: accountKey,
+    type: "cron_backup_tick",
+    severity: "info",
+    message: "Cron backup tick fired — VPS worker was stale",
+    payload: { workerLastPollAt: state?.worker_last_poll_at },
+  });
+
   let result;
   try {
     result = await runPaperDeskPollTick(ctx);
   } catch (err) {
+    void insertWorkerEvent({
+      account_key: accountKey,
+      type: "worker_tick_error",
+      severity: "error",
+      message: `Cron tick error: ${err instanceof Error ? err.message : String(err)}`,
+    });
     return NextResponse.json({
       ok: false,
       error: err instanceof Error ? err.message : "poll_tick_failed",
