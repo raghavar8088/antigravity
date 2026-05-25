@@ -24,6 +24,7 @@ import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
 
 const TRADES_COLLECTION = "paper_trades";
 const DEFAULT_DB_NAME = "loop_trades";
+const EVENTS_COLLECTION = "desk_worker_events";
 
 type CachedClient = {
   client: MongoClient;
@@ -363,6 +364,76 @@ export async function upsertResearchState(doc: PaperResearchDoc): Promise<void> 
     );
   } catch {
     // non-fatal
+  }
+}
+
+// ── desk_worker_events collection ─────────────────────────────────────────────
+
+export type WorkerEventType =
+  | "worker_start"
+  | "worker_tick_error"
+  | "worker_stale_recovered"
+  | "repair_detected"
+  | "trade_opened"
+  | "trade_closed"
+  | "lease_denied"
+  | "cron_backup_tick"
+  | "cron_skipped_worker_fresh"
+  | "paper_state_repaired";
+
+export type WorkerEventSeverity = "info" | "warning" | "error";
+
+export type WorkerEventDoc = {
+  account_key: string;
+  type: WorkerEventType;
+  severity: WorkerEventSeverity;
+  message: string;
+  payload?: Record<string, unknown>;
+  created_at: string;
+};
+
+export async function insertWorkerEvent(
+  doc: Omit<WorkerEventDoc, "created_at">,
+): Promise<void> {
+  if (accountKeyMissing(doc.account_key)) return;
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<WorkerEventDoc>(EVENTS_COLLECTION);
+    // TTL index: auto-delete events older than 30 days
+    await col
+      .createIndex(
+        { created_at: 1 },
+        { expireAfterSeconds: 30 * 24 * 3600, name: "ttl_worker_events_30d" },
+      )
+      .catch(() => {});
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (col as any).insertOne({
+      ...doc,
+      created_at: new Date().toISOString(),
+    });
+  } catch {
+    // non-fatal — event logging must never crash the caller
+  }
+}
+
+export async function listWorkerEvents(
+  accountKey: string,
+  limit = 50,
+): Promise<WorkerEventDoc[]> {
+  if (accountKeyMissing(accountKey)) return [];
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<WorkerEventDoc>(EVENTS_COLLECTION);
+    return await col
+      .find({ account_key: accountKey })
+      .sort({ created_at: -1 })
+      .limit(Math.min(limit, 200))
+      .toArray()
+      .then((docs) =>
+        docs.map(({ _id: _ignored, ...rest }) => rest as WorkerEventDoc),
+      );
+  } catch {
+    return [];
   }
 }
 
