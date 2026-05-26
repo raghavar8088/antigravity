@@ -127,7 +127,7 @@ export function EdgeCandidatesPanel({
       <DeskEmptyState
         icon="📊"
         title="No diagnostic data yet"
-        description="Close at least 5 production trades to see edge candidates."
+        subtitle="Close at least 5 production trades to see edge candidates."
       />
     );
   }
@@ -333,7 +333,7 @@ function CandidateRow({ row }: { row: EdgeCandidateRow }) {
                   : row.rotationStatus === "ACTIVE"
                     ? "primary"
                     : row.rotationStatus === "SUSPENDED"
-                      ? "danger"
+                      ? "error"
                       : "warning"
               }
             >
