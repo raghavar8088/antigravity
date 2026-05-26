@@ -24,6 +24,7 @@
 // On VPS: env vars already set in pm2 ecosystem config.
 import { join } from "path";
 import { readFileSync } from "fs";
+import type { AiAppTrackerSnapshot } from "../src/lib/aiAppTracker/types";
 
 // Dynamic import so the script works even without a compiled build
 async function main() {
@@ -106,6 +107,24 @@ async function main() {
         if (recs.length > 1) {
           console.log("\n[Additional Recommendations]");
           recs.slice(1).forEach((rec, i) => console.log(`  ${i + 2}. ${rec}`));
+        }
+      }
+
+      // Self-healing actions derived from the snapshot
+      const snapshot = r.snapshot as AiAppTrackerSnapshot | undefined;
+      if (snapshot) {
+        const { recommendHealingActions } = await import("../src/lib/deskSelfHealing");
+        const healing = recommendHealingActions(snapshot);
+        const actionable = healing.filter((a) => a.type !== "NO_ACTION");
+        if (actionable.length > 0) {
+          console.log(`\n[Self-Healing Actions (${actionable.length})]`);
+          actionable.slice(0, 4).forEach((a, i) => {
+            const tag = a.safeToAutomate ? " [safe-to-automate]" : "";
+            console.log(`  ${i + 1}. [${a.severity.toUpperCase()}] [${a.type}]${tag} ${a.title}`);
+            console.log(`     reason : ${a.reason}`);
+            console.log(`     action : ${a.operatorAction}`);
+            if (a.copyableCommand) console.log(`     cmd    : ${a.copyableCommand}`);
+          });
         }
       }
     } else {

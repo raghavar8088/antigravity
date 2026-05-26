@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeskButton, DeskChip } from "@/components/desk/ui";
 import type { AiAppTrackerReport } from "@/lib/aiAppTracker/types";
+import { recommendHealingActions, type DeskHealingAction } from "@/lib/deskSelfHealing";
 
 type Props = {
   workerStatus: string;
@@ -64,6 +65,20 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
     }
   }, [fetchLatest]);
 
+  const snap = report?.snapshot;
+  const healingActions: DeskHealingAction[] = useMemo(
+    () => (snap ? recommendHealingActions(snap) : []),
+    [snap],
+  );
+
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const copyCmd = useCallback((cmd: string) => {
+    void navigator.clipboard.writeText(cmd).then(() => {
+      setCopiedCmd(cmd);
+      setTimeout(() => setCopiedCmd((v) => (v === cmd ? null : v)), 1500);
+    });
+  }, []);
+
   const copyAiContext = useCallback(() => {
     const lines: string[] = [
       `[BTC Paper Desk AI Context — ${new Date().toISOString()}]`,
@@ -73,6 +88,10 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
     if (report) {
       lines.push(`Last report (${report.severity.toUpperCase()}): ${report.summary}`);
       if (report.recommendations[0]) lines.push(`Action: ${report.recommendations[0]}`);
+      const topHeal = healingActions[0];
+      if (topHeal && topHeal.type !== "NO_ACTION") {
+        lines.push(`Healing: [${topHeal.type}] ${topHeal.title} → ${topHeal.operatorAction}`);
+      }
       lines.push(`Warnings: ${report.snapshot.warnings.length > 0 ? report.snapshot.warnings.join(" | ") : "none"}`);
     } else {
       lines.push("No tracker report yet.");
@@ -85,13 +104,11 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [report, workerStatus, dominantBlocker]);
+  }, [report, workerStatus, dominantBlocker, healingActions]);
 
   const reportAgeMin = report
     ? Math.floor((Date.now() - new Date(report.created_at).getTime()) / 60_000)
     : null;
-
-  const snap = report?.snapshot;
 
   return (
     <div
@@ -181,6 +198,91 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
                 {report.recommendations.slice(0, 3).map((rec, i) => (
                   <li key={i} style={{ fontSize: 9, color: "#c9d1d9", marginBottom: 2 }}>
                     {rec}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Self-healing actions */}
+          {healingActions.length > 0 && healingActions[0].type !== "NO_ACTION" && (
+            <div>
+              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>
+                Self-healing actions ({healingActions.length}):
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+                {healingActions.slice(0, 4).map((act, i) => (
+                  <li
+                    key={i}
+                    style={{
+                      borderLeft: `3px solid ${SEVERITY_COLOR[act.severity] ?? "#30363d"}`,
+                      paddingLeft: 6,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: "#c9d1d9" }}>
+                        {act.title}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 8,
+                          fontFamily: "var(--desk-font-mono, monospace)",
+                          color: "#8b949e",
+                          border: "1px solid #30363d",
+                          borderRadius: 3,
+                          padding: "0 4px",
+                        }}
+                      >
+                        {act.type}
+                      </span>
+                      {act.safeToAutomate && (
+                        <span style={{ fontSize: 8, color: "#3fb950" }}>safe-to-automate</span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 9, color: "#8b949e", margin: "2px 0 0", lineHeight: 1.4 }}>
+                      {act.reason}
+                    </p>
+                    <p style={{ fontSize: 9, color: "#c9d1d9", margin: "1px 0 0", lineHeight: 1.4 }}>
+                      → {act.operatorAction}
+                    </p>
+                    {act.copyableCommand && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                        <code
+                          style={{
+                            fontSize: 8,
+                            fontFamily: "var(--desk-font-mono, monospace)",
+                            background: "#0d1117",
+                            border: "1px solid #30363d",
+                            borderRadius: 3,
+                            padding: "1px 4px",
+                            color: "#79c0ff",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            maxWidth: 320,
+                          }}
+                          title={act.copyableCommand}
+                        >
+                          {act.copyableCommand}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => copyCmd(act.copyableCommand!)}
+                          style={{
+                            fontSize: 8,
+                            background: "transparent",
+                            color: "#58a6ff",
+                            border: "1px solid #30363d",
+                            borderRadius: 3,
+                            padding: "0 4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {copiedCmd === act.copyableCommand ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
