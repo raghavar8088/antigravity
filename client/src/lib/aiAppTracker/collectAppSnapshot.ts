@@ -1,184 +1,257 @@
 /**
- * Collect a live AiTrackerSnapshot from MongoDB paper_state + trade counts.
+ * Collect a live AiAppTrackerSnapshot from MongoDB paper_state.
  * Server-side only — imports MongoDB helpers.
  *
- * Security: never stores the full account key. Only the last 4 chars are kept.
+ * Security: never stores the full account key. Only the last 4 chars.
+ *
+ * Two entry points:
+ *   collectAppSnapshot({ accountKey?, nowMs? })   — async, fetches MongoDB
+ *   buildSnapshotFromRaw(raw, nowMs?)              — pure, for unit tests
  */
 
-import type { AiTrackerSnapshot, AiTrackerWarning, AiTrackerRotationSummary } from "./types";
+import type { AiAppTrackerSnapshot } from "./types";
 import {
   STALE_WORKER_THRESHOLD_MS,
-  NO_TRADE_WINDOW_MS,
   BALANCE_DRIFT_WARN_USD,
   STALE_FUNNEL_THRESHOLD_MS,
+  TRACKER_MODULE,
 } from "./trackerConstants";
 import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
 
-export type CollectSnapshotInput = {
-  accountKey: string;
-  buildSha: string | null;
-  balance: number | null;
-  dayStartBalance: number | null;
-  workerLastPollAt: number | null;
-  workerOwner: "browser" | "vps" | null;
-  openPositionsCount: number;
-  closedTradesCount: number;
-  lastTradeAt: number | null;
-  funnelSnapshot: EntryFunnelSnapshot | null;
-  rotationReport: unknown | null;
-  probeDominant: boolean;
-};
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function safeKeySuffix(key: string): string {
   if (!key || key.length < 4) return "****";
   return "…" + key.slice(-4);
 }
 
-function buildRotationSummary(report: unknown): AiTrackerRotationSummary | null {
-  if (!report || typeof report !== "object") return null;
-  const r = report as Record<string, unknown>;
-  const scores = Array.isArray(r.scores) ? r.scores as Array<Record<string, unknown>> : [];
-  const suspended = Array.isArray(r.suspended) ? (r.suspended as unknown[]).length : 0;
-  const promoted = Array.isArray(r.promoted) ? (r.promoted as unknown[]).length : 0;
-  const active = scores.filter(
-    (s) => s.status !== "SUSPENDED" && s.status !== "INSUFFICIENT_DATA",
-  ).length;
-  const top = scores.sort((a, b) => ((b.score as number) ?? 0) - ((a.score as number) ?? 0))[0];
-  return {
-    active,
-    suspended,
-    promoted,
-    topStrategyId: top ? ((top.strategyId as number) ?? null) : null,
-  };
-}
+// ── raw input shape (for the pure builder) ────────────────────────────────────
 
-export function collectAppSnapshot(input: CollectSnapshotInput): AiTrackerSnapshot {
-  const now = Date.now();
-  const capturedAt = new Date().toISOString();
+export type SnapshotRawInput = {
+  accountKey: string | null;
+  nowMs: number;
+  buildSha: string | null;
+  workerEnabled: boolean;
+  workerLastPollAt: number | null;
+  workerOwner: string | null;
+  funnelSnapshot: EntryFunnelSnapshot | null;
+  balance: number | null;
+  dayStartBalance: number | null;
+  openPositionsCount: number;
+  pauseEntries: boolean;
+  clearedAt: number | null;
+  hasPaperState: boolean;
+};
 
-  const accountKeySuffix = input.accountKey ? safeKeySuffix(input.accountKey) : null;
+/**
+ * Pure builder — no I/O. Used directly by unit tests and called internally
+ * by the async collectAppSnapshot after data is fetched.
+ */
+export function buildSnapshotFromRaw(raw: SnapshotRawInput): AiAppTrackerSnapshot {
+  const {
+    accountKey, nowMs, buildSha,
+    workerEnabled, workerLastPollAt, workerOwner,
+    funnelSnapshot,
+    balance, dayStartBalance, openPositionsCount, pauseEntries, clearedAt,
+    hasPaperState,
+  } = raw;
 
-  // Worker age
-  const workerLastPollAgeSeconds =
-    input.workerLastPollAt != null
-      ? Math.floor((now - input.workerLastPollAt) / 1000)
-      : null;
+  const warnings: string[] = [];
 
-  // Funnel
-  const snap = input.funnelSnapshot;
-  const funnelTickAt = snap?.tickAt ?? null;
-  const funnelTickAgeSeconds =
-    funnelTickAt != null ? Math.floor((now - funnelTickAt) / 1000) : null;
+  // Missing account key
+  if (!accountKey) {
+    warnings.push(
+      "DESK_WORKER_ACCOUNT_KEY is not set — cannot read desk state. Set the env var or sign in.",
+    );
+  }
 
-  const dominantBlocker = snap?.dominantBlocker ?? "unknown";
-  const recommendation = snap?.recommendation ?? "";
-  const activeStrategies = snap?.activeStrategies ?? 0;
-  const evaluatedStrategies = snap?.evaluatedStrategies ?? 0;
-  const signalPassed = snap?.signalPassed ?? 0;
-  const opened = snap?.opened ?? 0;
+  // No paper state
+  if (accountKey && !hasPaperState) {
+    warnings.push(
+      "No paper_state found in MongoDB for this account. Worker has not run yet or the account key is wrong.",
+    );
+  }
+
+  // Worker stale
+  const workerAgeMs =
+    workerLastPollAt != null ? nowMs - workerLastPollAt : null;
+  const workerAgeSeconds =
+    workerAgeMs != null ? Math.floor(workerAgeMs / 1000) : null;
+  const workerStale =
+    workerAgeMs != null && workerAgeMs > STALE_WORKER_THRESHOLD_MS;
+
+  if (workerAgeMs != null && workerStale) {
+    warnings.push(
+      `Worker heartbeat is stale (${workerAgeSeconds}s old, threshold ${STALE_WORKER_THRESHOLD_MS / 1000}s). Restart: pm2 restart btc-ft-paper-worker on VPS.`,
+    );
+  }
+
+  // Entry funnel stale
+  const funnelTickAt = funnelSnapshot?.tickAt ?? null;
+  const funnelAgeMs =
+    funnelTickAt != null ? nowMs - funnelTickAt : null;
+  const funnelAgeSeconds =
+    funnelAgeMs != null ? Math.floor(funnelAgeMs / 1000) : null;
+
+  if (funnelAgeMs != null && funnelAgeMs > STALE_FUNNEL_THRESHOLD_MS) {
+    warnings.push(
+      `Entry funnel snapshot is stale (${funnelAgeSeconds}s old). Worker or browser may have stopped polling.`,
+    );
+  }
 
   // Balance drift
   const balanceDriftUsd =
-    input.balance != null && input.dayStartBalance != null
-      ? input.balance - input.dayStartBalance
+    balance != null && dayStartBalance != null
+      ? balance - dayStartBalance
       : null;
-
-  // Last trade date
-  const lastTradeAt =
-    input.lastTradeAt && input.lastTradeAt > 0
-      ? new Date(input.lastTradeAt).toISOString()
-      : null;
-
-  // Rotation
-  const rotationSummary = buildRotationSummary(input.rotationReport);
-
-  // Env flags
-  const envFlags = {
-    profitMode: process.env.NEXT_PUBLIC_BTC_FT_PROFIT_MODE === "1",
-    winnersOnly: process.env.NEXT_PUBLIC_BTC_FT_WINNERS_ONLY === "1",
-    workerEnabled: process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1",
-    researchMode: process.env.NEXT_PUBLIC_RESEARCH_MODE === "1",
-    entryCanary: process.env.NEXT_PUBLIC_DESK_ENTRY_CANARY === "1",
-  };
-
-  // Warnings
-  const warnings: AiTrackerWarning[] = [];
-
-  if (
-    workerLastPollAgeSeconds != null &&
-    workerLastPollAgeSeconds * 1000 > STALE_WORKER_THRESHOLD_MS
-  ) {
-    warnings.push({
-      code: "stale_worker",
-      message: `Worker heartbeat is ${workerLastPollAgeSeconds}s old (threshold ${STALE_WORKER_THRESHOLD_MS / 1000}s).`,
-    });
-  }
-
-  if (funnelTickAgeSeconds != null && funnelTickAgeSeconds * 1000 > STALE_FUNNEL_THRESHOLD_MS) {
-    warnings.push({
-      code: "data_gap",
-      message: `Funnel snapshot is ${funnelTickAgeSeconds}s old — worker or browser may not be polling.`,
-    });
-  }
-
-  const noTradeForLong =
-    input.lastTradeAt != null
-      ? now - input.lastTradeAt > NO_TRADE_WINDOW_MS
-      : false;
-  if (noTradeForLong) {
-    const minAgo = Math.floor((now - (input.lastTradeAt ?? 0)) / 60_000);
-    warnings.push({
-      code: "no_trades_30min",
-      message: `No new trade in ${minAgo} minutes. Dominant blocker: ${dominantBlocker}.`,
-    });
-  }
 
   if (balanceDriftUsd != null && Math.abs(balanceDriftUsd) >= BALANCE_DRIFT_WARN_USD) {
-    warnings.push({
-      code: "balance_drift",
-      message: `Balance drifted ${balanceDriftUsd >= 0 ? "+" : ""}$${balanceDriftUsd.toFixed(2)} from day-start.`,
-    });
+    warnings.push(
+      `Balance drifted ${balanceDriftUsd >= 0 ? "+" : ""}$${balanceDriftUsd.toFixed(2)} from day start. Run computeSessionEquityFromProduction() to verify.`,
+    );
   }
 
-  if (input.probeDominant) {
-    warnings.push({
-      code: "probe_dominant",
-      message: "Last 5+ closed trades are probe/bootstrap — production signal edge not visible yet.",
-    });
+  // Pause entries flag
+  if (pauseEntries) {
+    warnings.push("Entries are paused (pauseEntries=true in paper_state). No new positions will open.");
   }
 
-  if (
-    rotationSummary != null &&
-    rotationSummary.active === 0 &&
-    rotationSummary.suspended > 0
-  ) {
-    warnings.push({
-      code: "no_strategy_candidates",
-      message: `All ${rotationSummary.suspended} strategies suspended by rotation. No candidates available.`,
-    });
+  // No candidates / no opened this tick
+  const candidates = funnelSnapshot?.candidateCount ?? null;
+  const opened = funnelSnapshot?.opened ?? null;
+  if (hasPaperState && candidates === 0 && opened === 0 && !workerStale) {
+    warnings.push(
+      `No entry candidates or trades opened last tick. Dominant blocker: ${funnelSnapshot?.dominantBlocker ?? "unknown"}.`,
+    );
   }
+
+  // Env flags
+  const env = {
+    profitMode: process.env.NEXT_PUBLIC_BTC_FT_PROFIT_MODE === "1",
+    winnersOnly: process.env.NEXT_PUBLIC_BTC_FT_WINNERS_ONLY === "1",
+    researchMode: process.env.NEXT_PUBLIC_RESEARCH_MODE === "1",
+    workerEnabled,
+  };
 
   return {
-    capturedAt,
-    buildSha: input.buildSha,
-    accountKeySuffix,
-    workerLastPollAgeSeconds,
-    workerOwner: input.workerOwner,
-    funnelTickAt,
-    funnelTickAgeSeconds,
-    dominantBlocker,
-    recommendation,
-    activeStrategies,
-    evaluatedStrategies,
-    signalPassed,
-    opened,
-    balance: input.balance,
-    balanceDriftUsd,
-    openPositionsCount: input.openPositionsCount,
-    closedTradesCount: input.closedTradesCount,
-    lastTradeAt,
-    rotationSummary,
-    envFlags,
+    createdAt: new Date(nowMs).toISOString(),
+    appBuildSha: buildSha,
+    module: TRACKER_MODULE,
+    accountKeySuffix: accountKey ? safeKeySuffix(accountKey) : null,
+
+    worker: {
+      enabled: workerEnabled,
+      stale: workerStale,
+      lastPollAt: workerLastPollAt,
+      ageSeconds: workerAgeSeconds,
+      owner: workerOwner,
+    },
+
+    entryFunnel: {
+      ageSeconds: funnelAgeSeconds,
+      dominantBlocker: funnelSnapshot?.dominantBlocker ?? null,
+      recommendation: funnelSnapshot?.recommendation ?? null,
+      activeStrategies: funnelSnapshot?.activeStrategies ?? null,
+      evaluatedStrategies: funnelSnapshot?.evaluatedStrategies ?? null,
+      candidates,
+      opened,
+    },
+
+    paperState: {
+      balance,
+      openPositions: openPositionsCount,
+      workerLastPollAt,
+      balanceDriftUsd,
+      pauseEntries,
+      clearedAt,
+    },
+
+    env,
     warnings,
   };
+}
+
+// ── async entry point (server-side) ──────────────────────────────────────────
+
+export async function collectAppSnapshot(opts: {
+  accountKey?: string;
+  nowMs?: number;
+}): Promise<AiAppTrackerSnapshot> {
+  const nowMs = opts.nowMs ?? Date.now();
+  const accountKey = opts.accountKey?.trim() || null;
+
+  const buildSha =
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+    process.env.NEXT_PUBLIC_BTC_FT_DESK_BUILD?.trim() ||
+    null;
+
+  const workerEnabled = process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1";
+
+  // No account key — can't query MongoDB. Build a minimal warning snapshot.
+  if (!accountKey) {
+    return buildSnapshotFromRaw({
+      accountKey: null,
+      nowMs,
+      buildSha,
+      workerEnabled,
+      workerLastPollAt: null,
+      workerOwner: null,
+      funnelSnapshot: null,
+      balance: null,
+      dayStartBalance: null,
+      openPositionsCount: 0,
+      pauseEntries: false,
+      clearedAt: null,
+      hasPaperState: false,
+    });
+  }
+
+  // Dynamic import keeps this server-side only (mongoTradesClient uses Node.js APIs)
+  const { isMongoConfigured, getAccountState } = await import("@/lib/mongoTradesClient");
+
+  if (!isMongoConfigured()) {
+    const snap = buildSnapshotFromRaw({
+      accountKey,
+      nowMs,
+      buildSha,
+      workerEnabled,
+      workerLastPollAt: null,
+      workerOwner: null,
+      funnelSnapshot: null,
+      balance: null,
+      dayStartBalance: null,
+      openPositionsCount: 0,
+      pauseEntries: false,
+      clearedAt: null,
+      hasPaperState: false,
+    });
+    snap.warnings.unshift("MongoDB is not configured (MONGODB_URI missing or invalid).");
+    return snap;
+  }
+
+  const state = await getAccountState(accountKey);
+  const hasPaperState = state != null;
+
+  const funnelSnapshot =
+    (state?.entry_funnel_snapshot as EntryFunnelSnapshot | null) ?? null;
+
+  const openPositions = Array.isArray(state?.positions)
+    ? (state!.positions as unknown[]).length
+    : 0;
+
+  return buildSnapshotFromRaw({
+    accountKey,
+    nowMs,
+    buildSha,
+    workerEnabled,
+    workerLastPollAt: state?.worker_last_poll_at ?? null,
+    workerOwner: state?.worker_owner ?? null,
+    funnelSnapshot,
+    balance: state?.balance ?? null,
+    dayStartBalance: state?.day_start_balance ?? null,
+    openPositionsCount: openPositions,
+    pauseEntries: state?.pause_entries ?? false,
+    clearedAt: state?.cleared_at ?? null,
+    hasPaperState,
+  });
 }

@@ -3,84 +3,61 @@
  * Pure types only. No I/O, no MongoDB imports.
  */
 
-export type AiTrackerModule = "btc_future_trading";
-
 export type AiTrackerSeverity = "info" | "warning" | "danger";
 
-/** Warning codes — each maps to a recommendation in summarizeTrackerReport. */
-export type AiTrackerWarningCode =
-  | "stale_worker"
-  | "stale_deployment"
-  | "no_trades_30min"
-  | "balance_drift"
-  | "probe_dominant"
-  | "high_fee_gross"
-  | "no_strategy_candidates"
-  | "no_open_positions_long"
-  | "data_gap";
-
-export type AiTrackerWarning = {
-  code: AiTrackerWarningCode;
-  message: string;
-};
-
-/** Key env mode flags captured at snapshot time. */
-export type AiTrackerEnvFlags = {
-  profitMode: boolean;
-  winnersOnly: boolean;
-  workerEnabled: boolean;
-  researchMode: boolean;
-  entryCanary: boolean;
-};
-
-/** Rotation summary — nullable when not yet computed. */
-export type AiTrackerRotationSummary = {
-  active: number;
-  suspended: number;
-  promoted: number;
-  topStrategyId: number | null;
-};
-
-/** Per-capture snapshot of the live desk state. */
-export type AiTrackerSnapshot = {
-  capturedAt: string;
-  buildSha: string | null;
-  /** Last 4 chars of account key only. Never store the full key. */
+export interface AiAppTrackerSnapshot {
+  createdAt: string;
+  appBuildSha: string | null;
+  module: "btc_future_trading";
+  /** Last 4 chars of account key only — never the full key. */
   accountKeySuffix: string | null;
 
-  workerLastPollAgeSeconds: number | null;
-  workerOwner: "browser" | "vps" | null;
+  worker: {
+    enabled: boolean;
+    stale: boolean;
+    lastPollAt: number | null;
+    ageSeconds: number | null;
+    owner: string | null;
+  };
 
-  funnelTickAt: number | null;
-  funnelTickAgeSeconds: number | null;
-  dominantBlocker: string;
-  recommendation: string;
-  activeStrategies: number;
-  evaluatedStrategies: number;
-  signalPassed: number;
-  opened: number;
+  entryFunnel: {
+    ageSeconds: number | null;
+    dominantBlocker: string | null;
+    recommendation: string | null;
+    activeStrategies: number | null;
+    evaluatedStrategies: number | null;
+    candidates: number | null;
+    opened: number | null;
+  };
 
-  balance: number | null;
-  balanceDriftUsd: number | null;
-  openPositionsCount: number;
-  closedTradesCount: number;
-  lastTradeAt: string | null;
+  paperState: {
+    balance: number | null;
+    openPositions: number;
+    workerLastPollAt: number | null;
+    balanceDriftUsd: number | null;
+    pauseEntries: boolean;
+    clearedAt: number | null;
+  };
 
-  rotationSummary: AiTrackerRotationSummary | null;
+  env: {
+    profitMode: boolean;
+    winnersOnly: boolean;
+    researchMode: boolean;
+    workerEnabled: boolean;
+  };
 
-  envFlags: AiTrackerEnvFlags;
-  warnings: AiTrackerWarning[];
-};
+  /** Human-readable warning strings. No secrets, no full keys. */
+  warnings: string[];
+}
 
-/** The full document stored in ai_app_tracker_reports. */
-export type AiTrackerReport = {
+export interface AiAppTrackerReport {
   report_id: string;
   created_at: string;
   app_build_sha: string | null;
   account_key_suffix: string | null;
-  module: AiTrackerModule;
+  module: "btc_future_trading";
   severity: AiTrackerSeverity;
   summary: string;
-  snapshot: AiTrackerSnapshot;
+  snapshot: AiAppTrackerSnapshot;
   recommendations: string[];
-};
+}

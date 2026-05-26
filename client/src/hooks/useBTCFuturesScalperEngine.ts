@@ -760,6 +760,19 @@ export function paperQuietEntryBoost(
   return 0;
 }
 
+export function paperEnsureEffectiveThresholdDrop(
+  profitModeEnabled: boolean,
+  ensureDataThresholdDrop: number,
+  productionTradeCount: number,
+): number {
+  if (!profitModeEnabled) return ensureDataThresholdDrop;
+  // Profit mode needs a small amount of production evidence before strict
+  // scorecard gates can judge it. Keep discovery capped so it cannot become
+  // firehose behavior.
+  if (productionTradeCount < 10) return Math.min(ensureDataThresholdDrop, 8);
+  return 0;
+}
+
 // Signal inputs type imported from @/lib/futuresSignals
 type SignalInputs = FuturesSignalInputs;
 
@@ -2918,10 +2931,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           (max, t) => Math.max(max, new Date(t.closedAt).getTime()),
           0,
         );
+        // Fresh sessions with zero closes still need an idle clock; otherwise
+        // paperEnsureTrades never nudges entries until after a trade has closed.
+        const lastEntryActivityMs = lastClosedMs > 0 ? lastClosedMs : researchMountedAtRef.current;
         const quietEntryBoost = paperQuietEntryBoost(
           paperEnsureTrades,
           now,
-          lastClosedMs,
+          lastEntryActivityMs,
           survivors.length,
         );
         const occupied = new Set(survivors.map((p) => `${p.symbol}:${p.strategyId}`));
@@ -3223,7 +3239,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 regime,
                 profitModeCfg,
               );
-              const thresholdDrop = profitModeCfg.enabled ? 0 : ensureDataThresholdDrop;
+              // Profit mode should harden entries, not deadlock a brand-new
+              // paper desk. Until we have enough production closes for a real
+              // scorecard, allow a capped paper-discovery drop; quality + MTF
+              // gates still remain active below.
+              const thresholdDrop = paperEnsureEffectiveThresholdDrop(
+                profitModeCfg.enabled,
+                ensureDataThresholdDrop,
+                productionTradesForHealth.length,
+              );
               const effectiveThresholdForStrat = Math.max(
                 thresholdFloor,
                 profitAwareBase - thresholdDrop - quietEntryBoost,

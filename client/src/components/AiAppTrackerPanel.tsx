@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DeskButton, DeskChip } from "@/components/desk/ui";
-import type { AiTrackerReport } from "@/lib/aiAppTracker/types";
+import type { AiAppTrackerReport } from "@/lib/aiAppTracker/types";
 
-type AiAppTrackerPanelProps = {
-  /** Pass down from DeskCommandCenter so we don't need a fresh fetch. */
+type Props = {
   workerStatus: string;
   dominantBlocker: string;
 };
@@ -22,8 +21,8 @@ const SEVERITY_TONE: Record<string, "success" | "warning" | "error" | "default">
   danger: "error",
 };
 
-export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTrackerPanelProps) {
-  const [report, setReport] = useState<AiTrackerReport | null>(null);
+export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
+  const [report, setReport] = useState<AiAppTrackerReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -35,8 +34,8 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
     try {
       const res = await fetch("/api/ai-app-tracker/latest");
       if (res.ok) {
-        const data = await res.json() as { ok: boolean; report?: AiTrackerReport };
-        if (data.ok && data.report) setReport(data.report);
+        const data = await res.json() as { ok: boolean; report?: AiAppTrackerReport | null };
+        if (data.ok) setReport(data.report ?? null);
         else setReport(null);
       } else if (res.status !== 404) {
         setError("Failed to load report");
@@ -48,9 +47,7 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
     }
   }, []);
 
-  useEffect(() => {
-    void fetchLatest();
-  }, [fetchLatest]);
+  useEffect(() => { void fetchLatest(); }, [fetchLatest]);
 
   const captureNow = useCallback(async () => {
     setCapturing(true);
@@ -58,11 +55,8 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
     try {
       const res = await fetch("/api/ai-app-tracker/capture", { method: "POST" });
       const data = await res.json() as { ok: boolean; error?: string };
-      if (data.ok) {
-        await fetchLatest();
-      } else {
-        setError(data.error ?? "Capture failed");
-      }
+      if (data.ok) await fetchLatest();
+      else setError(data.error ?? "Capture failed");
     } catch {
       setError("Network error during capture");
     } finally {
@@ -78,14 +72,13 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
     ];
     if (report) {
       lines.push(`Last report (${report.severity.toUpperCase()}): ${report.summary}`);
-      if (report.recommendations[0]) {
-        lines.push(`Action: ${report.recommendations[0]}`);
-      }
+      if (report.recommendations[0]) lines.push(`Action: ${report.recommendations[0]}`);
+      lines.push(`Warnings: ${report.snapshot.warnings.length > 0 ? report.snapshot.warnings.join(" | ") : "none"}`);
     } else {
       lines.push("No tracker report yet.");
     }
-    lines.push("Read first: client/AI_README.md");
     lines.push("Mind map: client/docs/AI_APPLICATION_MINDMAP.md");
+    lines.push("JSON twin: client/docs/ai-application-mindmap.json");
     lines.push("Key files: client/src/lib/deskEntryFunnelSnapshot.ts | client/src/lib/futuresDeskPolicy.ts | client/src/hooks/useBTCFuturesScalperEngine.ts");
 
     void navigator.clipboard.writeText(lines.join("\n")).then(() => {
@@ -97,6 +90,8 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
   const reportAgeMin = report
     ? Math.floor((Date.now() - new Date(report.created_at).getTime()) / 60_000)
     : null;
+
+  const snap = report?.snapshot;
 
   return (
     <div
@@ -133,12 +128,9 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <p style={{ fontSize: 10, color: "#f85149", margin: 0 }}>{error}</p>
-      )}
+      {error && <p style={{ fontSize: 10, color: "#f85149", margin: 0 }}>{error}</p>}
 
-      {/* Status row */}
+      {/* Worker / blocker row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "#8b949e" }}>Worker:</span>
         <span style={{ fontSize: 10, color: "#c9d1d9" }}>{workerStatus}</span>
@@ -154,11 +146,12 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
       )}
       {!loading && !report && !error && (
         <p style={{ fontSize: 10, color: "#8b949e", margin: 0 }}>
-          No tracker report yet. Click "Capture report now" to create one.
+          No tracker report yet. Click &quot;Capture report now&quot; to create one.
         </p>
       )}
-      {report && (
+      {report && snap && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Severity + age */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <DeskChip tone={SEVERITY_TONE[report.severity] ?? "default"}>
               {report.severity.toUpperCase()}
@@ -168,6 +161,7 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
             </span>
           </div>
 
+          {/* Summary */}
           <p
             style={{
               fontSize: 10,
@@ -179,6 +173,7 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
             {report.summary}
           </p>
 
+          {/* Recommendations */}
           {report.recommendations.length > 0 && (
             <div>
               <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>Recommendations:</p>
@@ -192,7 +187,19 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
             </div>
           )}
 
-          {/* Snapshot quick-stats */}
+          {/* Warnings */}
+          {snap.warnings.length > 0 && (
+            <div>
+              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 2px" }}>Active warnings:</p>
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {snap.warnings.slice(0, 3).map((w, i) => (
+                  <li key={i} style={{ fontSize: 9, color: "#d29922", marginBottom: 2 }}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Snapshot quick-stats using nested fields */}
           <div
             style={{
               display: "grid",
@@ -203,23 +210,25 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
               marginTop: 2,
             }}
           >
-            <span>Open positions: <b style={{ color: "#c9d1d9" }}>{report.snapshot.openPositionsCount}</b></span>
-            <span>Closed trades: <b style={{ color: "#c9d1d9" }}>{report.snapshot.closedTradesCount}</b></span>
-            <span>Active strats: <b style={{ color: "#c9d1d9" }}>{report.snapshot.activeStrategies}</b></span>
-            {report.snapshot.balanceDriftUsd != null && (
+            <span>Open positions: <b style={{ color: "#c9d1d9" }}>{snap.paperState.openPositions}</b></span>
+            <span>Worker: <b style={{ color: snap.worker.stale ? "#f85149" : "#3fb950" }}>
+              {snap.worker.stale ? `STALE (${snap.worker.ageSeconds}s)` : "LIVE"}
+            </b></span>
+            <span>Active strats: <b style={{ color: "#c9d1d9" }}>{snap.entryFunnel.activeStrategies ?? "?"}</b></span>
+            {snap.paperState.balanceDriftUsd != null && (
               <span>
                 Balance drift:{" "}
                 <b
                   style={{
-                    color: report.snapshot.balanceDriftUsd < -20
+                    color: snap.paperState.balanceDriftUsd < -20
                       ? "#f85149"
-                      : report.snapshot.balanceDriftUsd > 20
+                      : snap.paperState.balanceDriftUsd > 20
                         ? "#3fb950"
                         : "#c9d1d9",
                   }}
                 >
-                  {report.snapshot.balanceDriftUsd >= 0 ? "+" : ""}
-                  ${report.snapshot.balanceDriftUsd.toFixed(2)}
+                  {snap.paperState.balanceDriftUsd >= 0 ? "+" : ""}
+                  ${snap.paperState.balanceDriftUsd.toFixed(2)}
                 </b>
               </span>
             )}
@@ -227,7 +236,7 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
 
           {/* Env flags */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {Object.entries(report.snapshot.envFlags).map(([k, v]) =>
+            {Object.entries(snap.env).map(([k, v]) =>
               v ? (
                 <span
                   key={k}
@@ -250,9 +259,13 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: AiAppTracke
 
       {/* Pointer to docs */}
       <p style={{ fontSize: 9, color: "#8b949e", margin: 0 }}>
-        Mind map: <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>client/docs/AI_APPLICATION_MINDMAP.md</code>
+        Mind map:{" "}
+        <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>
+          client/docs/AI_APPLICATION_MINDMAP.md
+        </code>
         {" · "}
-        CLI: <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>npm run ai:summary</code>
+        CLI:{" "}
+        <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>npm run ai:summary</code>
       </p>
     </div>
   );

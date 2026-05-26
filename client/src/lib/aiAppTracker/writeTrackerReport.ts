@@ -1,22 +1,20 @@
 /**
- * Build a complete AiTrackerReport from a snapshot.
+ * Build a complete AiAppTrackerReport from a snapshot.
  * Pure function — no I/O. Call insertAiTrackerReport() to persist.
  */
 
 import { randomUUID } from "crypto";
-import type { AiTrackerReport, AiTrackerSnapshot } from "./types";
+import type { AiAppTrackerReport, AiAppTrackerSnapshot } from "./types";
 import { TRACKER_MODULE } from "./trackerConstants";
-import { computeReportSeverity, buildReportSummary, buildRecommendations } from "./summarizeTrackerReport";
+import { summarizeTrackerSnapshot } from "./summarizeTrackerReport";
 
-export function buildTrackerReport(snapshot: AiTrackerSnapshot): AiTrackerReport {
-  const severity = computeReportSeverity(snapshot);
-  const summary = buildReportSummary(snapshot, severity);
-  const recommendations = buildRecommendations(snapshot);
+export function buildTrackerReport(snapshot: AiAppTrackerSnapshot): AiAppTrackerReport {
+  const { severity, summary, recommendations } = summarizeTrackerSnapshot(snapshot);
 
   return {
     report_id: randomUUID(),
-    created_at: snapshot.capturedAt,
-    app_build_sha: snapshot.buildSha,
+    created_at: snapshot.createdAt,
+    app_build_sha: snapshot.appBuildSha,
     account_key_suffix: snapshot.accountKeySuffix,
     module: TRACKER_MODULE,
     severity,

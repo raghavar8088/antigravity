@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { paperEnsureThresholdDrop, paperQuietEntryBoost } from "./useBTCFuturesScalperEngine";
+import {
+  paperEnsureEffectiveThresholdDrop,
+  paperEnsureThresholdDrop,
+  paperQuietEntryBoost,
+} from "./useBTCFuturesScalperEngine";
 
 describe("paperEnsureThresholdDrop", () => {
   const mounted = 1_000_000;
@@ -34,5 +38,25 @@ describe("paperQuietEntryBoost", () => {
     expect(paperQuietEntryBoost(true, now, now - 3 * 60_000, 0)).toBe(3);
     expect(paperQuietEntryBoost(true, now, now - 6 * 60_000, 0)).toBe(4);
     expect(paperQuietEntryBoost(true, now, now - 11 * 60_000, 0)).toBe(6);
+  });
+
+  it("can use mount time as the idle clock before the first close", () => {
+    const mountedAt = now - 6 * 60_000;
+    expect(paperQuietEntryBoost(true, now, mountedAt, 0)).toBe(4);
+  });
+});
+
+describe("paperEnsureEffectiveThresholdDrop", () => {
+  it("keeps paper discovery active before profit mode has seed data", () => {
+    expect(paperEnsureEffectiveThresholdDrop(true, 12, 0)).toBe(8);
+    expect(paperEnsureEffectiveThresholdDrop(true, 6, 9)).toBe(6);
+  });
+
+  it("returns to strict profit mode once seed data exists", () => {
+    expect(paperEnsureEffectiveThresholdDrop(true, 12, 10)).toBe(0);
+  });
+
+  it("leaves non-profit paper ensure behavior unchanged", () => {
+    expect(paperEnsureEffectiveThresholdDrop(false, 12, 100)).toBe(12);
   });
 });
