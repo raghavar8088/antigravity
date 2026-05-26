@@ -214,6 +214,8 @@ export type PaperStateDoc = {
   worker_id?: string | null;
   worker_last_poll_at?: number | null;
   worker_owner?: "browser" | "vps" | null;
+  /** Latest entry funnel snapshot from the worker or browser poll. Opaque to Mongo. */
+  entry_funnel_snapshot?: unknown;
 };
 
 export type PaperResearchDoc = {

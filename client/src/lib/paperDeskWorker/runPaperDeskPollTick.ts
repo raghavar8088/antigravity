@@ -8,6 +8,14 @@
  * Used by:
  *   - scripts/btc-ft-paper-worker.ts  (AWS pm2 long-running process)
  *   - /api/cron/paper-desk-tick       (Vercel 1-min failover cron)
+ *
+ * FIX 5 — Roster validation: DESK_WORKER_STRATEGY_IDS containing IDs not in
+ * FUTURES_STRAT_DEFS is detected and reported as noStrategies blocker.
+ * FIX 6 — Parity: worker now runs the same ATR/fee gate as the browser engine.
+ *   Remaining gaps (quality score, MTF confluence, burst guard, session gate,
+ *   spread check) are documented in workerParityWarning for transparency.
+ * FIX 7 — Canary: when NEXT_PUBLIC_DESK_ENTRY_CANARY=1 and 60 min pass with
+ *   no opens, one tiny PAPER_ENTRY_CANARY trade is opened. OFF by default.
  */
 
 import { randomUUID } from "crypto";
@@ -28,6 +36,11 @@ import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremi
 import type { RegimeTag } from "@/lib/futuresStrategies";
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 import type { ProfitModeConfig } from "@/lib/futuresProfitMode";
+import {
+  buildFunnelSnapshot,
+  emptyBlockerCounts,
+  type EntryFunnelSnapshot,
+} from "@/lib/deskEntryFunnelSnapshot";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -143,6 +156,7 @@ export interface PaperDeskTickResult {
   regime: RegimeTag;
   lastPollAt: number;
   error: string | null;
+  funnelSnapshot: EntryFunnelSnapshot;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -152,15 +166,54 @@ const TAKER_FEE_PCT = 0.001;
 const DELTA_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
 const MIN_BARS = 30;
 
-const ACTIVE_STRATS: FuturesStratDef[] = FUTURES_STRAT_DEFS.filter(
-  (s) => !s.researchOnly && s.id < 600,
-);
+// ── ATR/fee gate (FIX 6: parity with browser openPosition) ───────────────
+// Returns true when the expected move exceeds safetyK × round-trip fees.
+function passesAtrFeeGate(
+  markPrice: number,
+  atr14: number,
+  notional: number,
+  safetyK: number,
+): boolean {
+  if (!Number.isFinite(markPrice) || markPrice <= 0) return false;
+  if (!Number.isFinite(atr14) || atr14 <= 0) return false;
+  if (!Number.isFinite(notional) || notional <= 0) return false;
+  const feesRt = notional * TAKER_FEE_PCT * 2;
+  const expectedMoveUsd = (atr14 / markPrice) * notional;
+  return expectedMoveUsd >= safetyK * feesRt;
+}
 
-// ── Math ───────────────────────────────────────────────────────────────────
-
+/** Liquidation price at 25× leverage with 0.5% maintenance margin. */
 function liqPrice(side: "LONG" | "SHORT", entry: number): number {
   const mm = 0.005;
   return side === "LONG" ? entry * (1 - 1 / LEVERAGE + mm) : entry * (1 + 1 / LEVERAGE - mm);
+}
+
+// ── Canary (FIX 7) ─────────────────────────────────────────────────────────
+const CANARY_ENV = "NEXT_PUBLIC_DESK_ENTRY_CANARY";
+const CANARY_IDLE_MS = 60 * 60 * 1000; // 60 minutes
+
+function canaryEnabled(): boolean {
+  return process.env[CANARY_ENV] === "1";
+}
+
+/** True when canary conditions are met (env ON, data OK, no opens, idle 60m). */
+function shouldFireCanary(opts: {
+  mountedAt: number;
+  lastOpenedAt: number;
+  openCount: number;
+  activeStrategies: number;
+  hasData: boolean;
+  workerFresh: boolean;
+  forceProbeOpened: boolean;
+}): boolean {
+  if (!canaryEnabled()) return false;
+  if (!opts.hasData) return false;
+  if (opts.activeStrategies === 0) return false;
+  if (opts.openCount > 0) return false;
+  if (opts.forceProbeOpened) return false;
+
+  const idleSince = opts.lastOpenedAt > 0 ? opts.lastOpenedAt : opts.mountedAt;
+  return Date.now() - idleSince >= CANARY_IDLE_MS;
 }
 
 // ── Main tick ──────────────────────────────────────────────────────────────
@@ -169,16 +222,100 @@ export async function runPaperDeskPollTick(
   ctx: PaperDeskWorkerContext,
 ): Promise<PaperDeskTickResult> {
   const symbol = ctx.symbol ?? process.env.DELTA_BTC_FUTURES_SYMBOL ?? "BTCUSD";
+  const lastPollAt = Date.now();
 
+  // ── FIX 5: Roster validation ────────────────────────────────────────────
+  // Build the candidate strategy list and warn on unknown IDs.
+  const allActive: FuturesStratDef[] = FUTURES_STRAT_DEFS.filter(
+    (s) => !s.researchOnly && s.id < 600,
+  ) as FuturesStratDef[];
+
+  let activeStrats: FuturesStratDef[];
+  let invalidIdWarning: string | undefined;
+
+  if (ctx.strategyIds && ctx.strategyIds.length > 0) {
+    const knownIds = new Set(FUTURES_STRAT_DEFS.map((s) => s.id));
+    const invalid = ctx.strategyIds.filter((id) => !knownIds.has(id));
+    if (invalid.length > 0) {
+      invalidIdWarning = `DESK_WORKER_STRATEGY_IDS contains unknown IDs: ${invalid.join(",")}`;
+      console.warn(`[worker] ${invalidIdWarning}`);
+    }
+    activeStrats = allActive.filter((s) => ctx.strategyIds!.includes(s.id));
+  } else {
+    activeStrats = allActive;
+  }
+
+  const blockers = emptyBlockerCounts();
+
+  // ── FIX 6 parity warning: gates present in browser but NOT in this worker ──
+  const parityGaps = [
+    "quality-score gate",
+    "MTF-confluence gate",
+    "per-symbol burst guard",
+    "entry-session UTC window",
+    "last/mark spread check",
+  ];
+  const workerParityWarning = `Worker omits these browser gates: ${parityGaps.join(", ")}. These are documented gaps; the funnel snapshot shows what the worker DID check.`;
+
+  // ── noStrategies early exit ─────────────────────────────────────────────
+  if (activeStrats.length === 0) {
+    blockers.noStrategies = 1;
+    if (invalidIdWarning) blockers.noStrategies += 1;
+    const snap = buildFunnelSnapshot({
+      tickAt: lastPollAt,
+      workerMode: "worker",
+      workerFresh: true,
+      symbol,
+      markPrice: 0,
+      bars: 0,
+      activeStrategies: 0,
+      evaluatedStrategies: 0,
+      signalPassed: 0,
+      confirmPassed: 0,
+      candidateCount: 0,
+      openAttempts: 0,
+      opened: 0,
+      blockerCounts: blockers,
+      workerParityWarning,
+    });
+    return {
+      balance: ctx.balance,
+      positions: ctx.positions,
+      closedTrades: [],
+      openedPositions: [],
+      regime: "chop",
+      lastPollAt,
+      error: invalidIdWarning ?? "no active strategies",
+      funnelSnapshot: snap,
+    };
+  }
+
+  // ── Fetch market data ───────────────────────────────────────────────────
   let bars: DeltaBar[];
   let markPrice: number;
   let fundingRate: number;
 
-  const lastPollAt = Date.now();
-
   try {
     ({ bars, markPrice, fundingRate } = await fetchDeltaKlines(symbol));
   } catch (err) {
+    blockers.noData = 1;
+    const snap = buildFunnelSnapshot({
+      tickAt: lastPollAt,
+      workerMode: "worker",
+      workerFresh: true,
+      symbol,
+      markPrice: 0,
+      bars: 0,
+      activeStrategies: activeStrats.length,
+      evaluatedStrategies: 0,
+      signalPassed: 0,
+      confirmPassed: 0,
+      candidateCount: 0,
+      openAttempts: 0,
+      opened: 0,
+      blockerCounts: blockers,
+      workerParityWarning,
+    });
     return {
       balance: ctx.balance,
       positions: ctx.positions,
@@ -187,10 +324,29 @@ export async function runPaperDeskPollTick(
       regime: "chop",
       lastPollAt,
       error: err instanceof Error ? err.message : "klines fetch failed",
+      funnelSnapshot: snap,
     };
   }
 
   if (bars.length < MIN_BARS) {
+    blockers.noData = 1;
+    const snap = buildFunnelSnapshot({
+      tickAt: lastPollAt,
+      workerMode: "worker",
+      workerFresh: true,
+      symbol,
+      markPrice,
+      bars: bars.length,
+      activeStrategies: activeStrats.length,
+      evaluatedStrategies: 0,
+      signalPassed: 0,
+      confirmPassed: 0,
+      candidateCount: 0,
+      openAttempts: 0,
+      opened: 0,
+      blockerCounts: blockers,
+      workerParityWarning,
+    });
     return {
       balance: ctx.balance,
       positions: ctx.positions,
@@ -199,6 +355,7 @@ export async function runPaperDeskPollTick(
       regime: "chop",
       lastPollAt,
       error: `insufficient bars: ${bars.length}`,
+      funnelSnapshot: snap,
     };
   }
 
@@ -292,31 +449,87 @@ export async function runPaperDeskPollTick(
   const openPositions = [...remainingPositions];
   const openedPositions: WorkerPosition[] = [];
 
+  // ── Funnel counters ────────────────────────────────────────────────────────
+  let evalCount = 0;
+  let signalPassed = 0;
+  let confirmPassed = 0;
+  let candidateCount = 0;
+  let openAttempts = 0;
+
   // ── Process entries ───────────────────────────────────────────────────────
-  if (!ctx.pauseEntries && openPositions.filter((p) => p.symbol === symbol).length < maxOpen) {
-    for (const strat of ACTIVE_STRATS) {
-      if (openPositions.filter((p) => p.symbol === symbol).length >= maxOpen) break;
+  const currentOpenCount = openPositions.filter((p) => p.symbol === symbol).length;
+
+  if (ctx.pauseEntries) {
+    blockers.maxOpen += 1; // pause treated as a hard cap
+  } else if (currentOpenCount >= maxOpen) {
+    blockers.maxOpen = Math.max(1, blockers.maxOpen);
+  }
+
+  if (!ctx.pauseEntries && currentOpenCount < maxOpen) {
+    const baseNotional = Number(process.env.DESK_WORKER_NOTIONAL) || 300;
+    // ATR/fee safety K: use relaxed (0.45) when relaxConfirm, full (1.0) otherwise.
+    const atrFeeK = useRelaxed ? 0.45 : 1.0;
+
+    for (const strat of activeStrats) {
+      if (openPositions.filter((p) => p.symbol === symbol).length >= maxOpen) {
+        blockers.maxOpen = Math.max(1, blockers.maxOpen);
+        break;
+      }
       if (stratFilter && !stratFilter.has(strat.id)) continue;
-      if (openPositions.some((p) => p.strategyId === strat.id && p.symbol === symbol)) continue;
+      if (openPositions.some((p) => p.strategyId === strat.id && p.symbol === symbol)) {
+        blockers.cooldown += 1; // occupied = effectively cooldown
+        continue;
+      }
 
       const cooldownKey = `${strat.id}:${symbol}`;
       const cooldownExpiry = ctx.stratCooldowns[cooldownKey] ?? 0;
-      if (now < cooldownExpiry) continue;
+      if (now < cooldownExpiry) {
+        blockers.cooldown += 1;
+        continue;
+      }
 
-      if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(regime)) continue;
+      if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(regime)) {
+        blockers.regime += 1;
+        continue;
+      }
 
+      evalCount += 1;
       const { score } = evalMinuteSignal(signals, strat);
-      if (!Number.isFinite(score) || score < threshold) continue;
+
+      if (!Number.isFinite(score) || score < threshold) {
+        blockers.signal += 1;
+        continue;
+      }
+      signalPassed += 1;
 
       const passes = useRelaxed
         ? passesRelaxedDeskEntryConfirmation(signals, strat)
         : passesEntryConfirmation(signals, strat);
-      if (!passes) continue;
+      if (!passes) {
+        blockers.confirm += 1;
+        continue;
+      }
+      confirmPassed += 1;
+      candidateCount += 1;
+
+      // ── FIX 6: ATR/fee gate (parity with browser) ──────────────────────
+      const notional = isPremiumStrategy(strat)
+        ? baseNotional * PREMIUM_NOTIONAL_MULTIPLIER
+        : baseNotional;
+      if (!passesAtrFeeGate(markPrice, signals.atr14, notional, atrFeeK)) {
+        blockers.atrFees += 1;
+        continue;
+      }
+
+      openAttempts += 1;
+
+      const marginUsed = notional / LEVERAGE;
+      if (balance < marginUsed) {
+        blockers.margin += 1;
+        continue;
+      }
 
       const side: "LONG" | "SHORT" = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
-      const baseNotional = Number(process.env.DESK_WORKER_NOTIONAL) || 300;
-      const notional = isPremiumStrategy(strat) ? baseNotional * PREMIUM_NOTIONAL_MULTIPLIER : baseNotional;
-      const marginUsed = notional / LEVERAGE;
       const contracts = Math.max(1, Math.round(notional / markPrice));
 
       const slPrice = side === "LONG"
@@ -348,9 +561,78 @@ export async function runPaperDeskPollTick(
 
       openPositions.push(pos);
       openedPositions.push(pos);
+      balance -= marginUsed;
       ctx.stratCooldowns[cooldownKey] = now + strat.cooldownMin * 60 * 1000;
     }
   }
+
+  // ── FIX 7: Canary trade (env-gated, excluded from metrics) ────────────────
+  const lastOpenedAt = ctx.trades.reduce((max, t) => {
+    const ms = t.openedAt ? new Date(t.openedAt).getTime() : 0;
+    return Math.max(max, ms);
+  }, 0);
+
+  if (
+    openedPositions.length === 0 &&
+    shouldFireCanary({
+      mountedAt: ctx.mountedAt,
+      lastOpenedAt,
+      openCount: openPositions.length,
+      activeStrategies: activeStrats.length,
+      hasData: bars.length >= MIN_BARS,
+      workerFresh: true,
+      forceProbeOpened: ctx.forceProbeOpened,
+    })
+  ) {
+    const canaryNotional = 50; // tiny — diagnostic only
+    const canaryMargin = canaryNotional / LEVERAGE;
+    if (balance >= canaryMargin) {
+      const canarySide: "LONG" = "LONG";
+      const canaryPos: WorkerPosition = {
+        id: randomUUID(),
+        symbol,
+        strategyId: 0,
+        strategyName: "PAPER_ENTRY_CANARY",
+        templateFamily: "CANARY",
+        side: canarySide,
+        entryPrice: markPrice,
+        contracts: 1,
+        notional: canaryNotional,
+        marginUsed: canaryMargin,
+        slPrice: markPrice * 0.99,
+        tpPrice: markPrice * 1.01,
+        holdDeadlineMs: now + 5 * 60 * 1000,
+        openedAt: new Date().toISOString(),
+        liquidationPrice: liqPrice(canarySide, markPrice),
+        fundingCosts: 0,
+        lastFundingAppliedAt: now,
+      };
+      openPositions.push(canaryPos);
+      openedPositions.push(canaryPos);
+      balance -= canaryMargin;
+      ctx.forceProbeOpened = true;
+      console.warn(`[worker] PAPER_ENTRY_CANARY opened — diagnostics only, not strategy edge. mark=${markPrice.toFixed(2)}`);
+    }
+  }
+
+  // ── Build funnel snapshot ──────────────────────────────────────────────────
+  const funnelSnapshot = buildFunnelSnapshot({
+    tickAt: lastPollAt,
+    workerMode: "worker",
+    workerFresh: true,
+    symbol,
+    markPrice,
+    bars: bars.length,
+    activeStrategies: activeStrats.length,
+    evaluatedStrategies: evalCount,
+    signalPassed,
+    confirmPassed,
+    candidateCount,
+    openAttempts,
+    opened: openedPositions.filter((p) => p.strategyName !== "PAPER_ENTRY_CANARY").length,
+    blockerCounts: blockers,
+    workerParityWarning,
+  });
 
   return {
     balance,
@@ -360,5 +642,6 @@ export async function runPaperDeskPollTick(
     regime,
     lastPollAt,
     error: null,
+    funnelSnapshot,
   };
 }

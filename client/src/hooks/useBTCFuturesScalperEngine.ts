@@ -130,6 +130,8 @@ import {
   finalizeEntryPollDebug,
   type DeskEntryPollDebug,
 } from "@/lib/futuresEntryDebug";
+import { funnelSnapshotFromBrowserDebug } from "@/lib/deskEntryFunnelSnapshot";
+import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 import {
   buildDeskHoldTuningDumpPayload,
   rankWorstTimeOffenders,
@@ -3512,6 +3514,23 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         if (pollDebug) {
           entryDebugLiveRef.current = null;
           const finalizedDebug = finalizeEntryPollDebug(pollDebug);
+
+          // Build funnel snapshot and persist to MongoDB so /api/desk-entry-funnel
+          // reflects the browser-side view when no VPS worker is running.
+          if (cloudAccountKey) {
+            const funnelSnap = funnelSnapshotFromBrowserDebug(finalizedDebug, {
+              workerFresh: isWorkerHeartbeatFresh(workerLastPollAt),
+              symbol: PRIMARY_QUOTE_SYMBOL,
+              markPrice: primary?.markPrice ?? 0,
+              bars: primary?.candles?.length ?? 0,
+            });
+            void fetch("/api/desk-entry-funnel", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accountKey: cloudAccountKey, snapshot: funnelSnap }),
+            }).catch(() => { /* non-fatal */ });
+          }
+
           if (entryDebugEnabled) {
             const report = rotationReportRef.current;
             const rosterSize = activeStratDefs.length;

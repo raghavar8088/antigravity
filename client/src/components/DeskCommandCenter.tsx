@@ -42,6 +42,7 @@ import {
   type DeskCommandCenterTab,
 } from "@/components/deskCommandCenterTabs";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
+import { EdgeCandidatesPanel } from "@/components/btcFutures/EdgeCandidatesPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,

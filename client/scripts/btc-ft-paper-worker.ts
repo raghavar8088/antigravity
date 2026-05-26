@@ -78,6 +78,10 @@ let peakEquity = INITIAL_BALANCE;
 let forceProbeOpened = false;
 const mountedAt = Date.now();
 
+/** Consecutive ticks where opened===0 (resets on any open). */
+let consecutiveZeroOpenTicks = 0;
+const NO_OPEN_WATCH_THRESHOLD = 30;
+
 /** The `cleared_at` epoch we last saw — used to detect remote ledger resets. */
 let lastClearedAt = 0;
 /** Browser-managed disabled strategies; preserved across saves so resets don't clear them. */
@@ -378,11 +382,20 @@ async function main() {
         worker_id: WORKER_ID,
         worker_last_poll_at: Date.now(),
         worker_owner: "vps",
+        entry_funnel_snapshot: result.funnelSnapshot ?? undefined,
       });
     } catch (err) {
       console.error("[worker] state save failed:", err);
       // Try heartbeat-only as fallback
       await workerHeartbeat(ACCOUNT_KEY, WORKER_ID).catch(() => {});
+    }
+
+    // ── Funnel snapshot: track no-open-watch counter ─────────────────────────
+    const funnel = result.funnelSnapshot;
+    if (result.openedPositions.length > 0) {
+      consecutiveZeroOpenTicks = 0;
+    } else {
+      consecutiveZeroOpenTicks++;
     }
 
     const tickMs = Date.now() - tickStart;
@@ -394,12 +407,39 @@ async function main() {
         .reduce((s, t) => s + t.netPnl, 0),
     );
 
+    // ── Funnel log line (every tick) ─────────────────────────────────────────
+    const funnelLine = funnel
+      ? ` funnel=[strats=${funnel.activeStrategies} sig=${funnel.signalPassed} cand=${funnel.candidateCount} open=${funnel.opened} blocker=${funnel.dominantBlocker}]`
+      : "";
+
     console.log(
       `[worker] tick#${tickCount} ${formatDuration(tickMs).padStart(5)} ` +
       `open=${result.positions.length} closed=${result.closedTrades.length} opened=${result.openedPositions.length} ` +
       `bal=$${lastBalance.toFixed(2)} regime=${result.regime} blocker=${result.error ?? "none"} drift=$${balanceDrift.toFixed(2)}` +
+      funnelLine +
       (liveState?.pause_entries ? " [PAUSED]" : ""),
     );
+
+    // ── No-open-watch alert ───────────────────────────────────────────────────
+    if (consecutiveZeroOpenTicks === NO_OPEN_WATCH_THRESHOLD) {
+      const watchMsg = `[worker] NO-OPEN-WATCH: ${consecutiveZeroOpenTicks} consecutive ticks with 0 opens. ` +
+        `dominantBlocker=${funnel?.dominantBlocker ?? "unknown"} ` +
+        `recommendation="${funnel?.recommendation ?? "run with NEXT_PUBLIC_DESK_ENTRY_DEBUG=1 to diagnose"}"`;
+      console.warn(watchMsg);
+      void insertWorkerEvent({
+        account_key: ACCOUNT_KEY,
+        type: "worker_tick_error",
+        severity: "warning",
+        message: watchMsg,
+        payload: {
+          consecutiveZeroOpenTicks,
+          dominantBlocker: funnel?.dominantBlocker,
+          activeStrategies: funnel?.activeStrategies,
+          regime: result.regime,
+          tickCount,
+        },
+      });
+    }
 
     if (result.error && result.error !== "none") {
       console.warn(`[worker] poll error: ${result.error}`);

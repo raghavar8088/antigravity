@@ -42,6 +42,8 @@ import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
 import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
 import { ProfitModeChecklist } from "@/components/ProfitModeChecklist";
 import { DeskRunModePanel } from "@/components/DeskRunModePanel";
+import { funnelSnapshotFromBrowserDebug, funnelRecommendation } from "@/lib/deskEntryFunnelSnapshot";
+import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
@@ -596,8 +598,29 @@ export function BTCFuturesScalper({
       )}
 
       {whyNoTradesVisible && (
-        <DeskBanner variant="info" title="Why no trades? — ordered by impact">
+        <DeskBanner variant="info" title="Why no BTC trades?">
           {(() => {
+            // Funnel top-line from entryDebug (always shown when available)
+            const funnelPanel = entryDebug ? (() => {
+              const snap = funnelSnapshotFromBrowserDebug(entryDebug, {
+                workerFresh: isWorkerHeartbeatFresh(stats.workerLastPollAt),
+                symbol: "BTCUSD",
+                markPrice: quote?.markPrice ?? 0,
+                bars: 0,
+              });
+              return (
+                <div style={{ marginBottom: 10, padding: "8px 10px", background: "var(--desk-surface-alt, rgba(88,166,255,0.08))", borderRadius: 6, borderLeft: "3px solid #58a6ff" }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+                    Dominant gate: <span style={{ color: "#58a6ff" }}>{snap.dominantBlocker}</span>
+                    {" "}<span style={{ fontWeight: 400, color: "#8b949e", fontSize: 12 }}>
+                      (strats={snap.activeStrategies} eval={snap.evaluatedStrategies} sig={snap.signalPassed} open={snap.opened})
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#e6edf3" }}>{funnelRecommendation(snap.dominantBlocker)}</div>
+                </div>
+              );
+            })() : null;
+
             type NoTradeBlocker = { label: string; count: number; explanation: string; action: string };
             const blockers: NoTradeBlocker[] = [];
 
@@ -661,6 +684,7 @@ export function BTCFuturesScalper({
             const sorted = [...blockers].sort((a, b) => b.count - a.count);
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
+                {funnelPanel}
                 {sorted.map((b) => (
                   <div key={b.label} style={{ borderLeft: "2px solid #58a6ff", paddingLeft: 8 }}>
                     <strong>{b.label}</strong>{b.count > 1 ? ` (${b.count}×)` : ""}: {b.explanation}{" "}
