@@ -7,6 +7,7 @@ import {
   funnelSnapshotFromBrowserDebug,
   type EntryFunnelBlockerCounts,
 } from "../deskEntryFunnelSnapshot";
+import { isProbeOrBootstrapTrade } from "../futuresSessionMetrics";
 
 // ── emptyBlockerCounts ────────────────────────────────────────────────────────
 
@@ -227,4 +228,69 @@ describe("funnelSnapshotFromBrowserDebug", () => {
     );
     expect(snap.dominantBlocker).toBe("none");
   });
+});
+
+// ── isProbeOrBootstrapTrade — CANARY exclusion ────────────────────────────────
+
+describe("isProbeOrBootstrapTrade — canary exclusion", () => {
+  it("returns true for PAPER_ENTRY_CANARY (strategyName)", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "PAPER_ENTRY_CANARY" })).toBe(true);
+  });
+
+  it("returns true for PAPER_ENTRY_CANARY (strategy_name snake_case)", () => {
+    expect(isProbeOrBootstrapTrade({ strategy_name: "PAPER_ENTRY_CANARY" })).toBe(true);
+  });
+
+  it("returns true for lowercase canary name", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "paper_entry_canary" })).toBe(true);
+  });
+
+  it("returns true for PAPER_BOOTSTRAP_PROBE (original behaviour preserved)", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "PAPER_BOOTSTRAP_PROBE" })).toBe(true);
+  });
+
+  it("returns true for DEV_FORCE_PROBE_OPEN (original behaviour preserved)", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "DEV_FORCE_PROBE_OPEN" })).toBe(true);
+  });
+
+  it("returns false for a real production strategy name", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "PRM_LONG_MOMENTUM_91" })).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: "" })).toBe(false);
+  });
+
+  it("returns false for null strategy name", () => {
+    expect(isProbeOrBootstrapTrade({ strategyName: null })).toBe(false);
+  });
+});
+
+// ── Canary default-off ────────────────────────────────────────────────────────
+
+describe("canary — disabled by default", () => {
+  it("NEXT_PUBLIC_DESK_ENTRY_CANARY is not set to '1' in test env", () => {
+    // The canary must be OFF by default — operator must explicitly opt in.
+    expect(process.env.NEXT_PUBLIC_DESK_ENTRY_CANARY).not.toBe("1");
+  });
+});
+
+// ── Recommendations never suggest lowering threshold ─────────────────────────
+
+describe("recommendations never suggest lowering threshold", () => {
+  const allKeys = [
+    "noData", "noStrategies", "signal", "confirm", "regime", "atrFees",
+    "rotation", "suspended", "spread", "session", "category", "sameSide",
+    "margin", "maxOpen", "cooldown", "none",
+  ] as const;
+
+  for (const key of allKeys) {
+    it(`recommendation for '${key}' does not suggest lowering threshold`, () => {
+      const rec = funnelRecommendation(key).toLowerCase();
+      expect(rec).not.toContain("lower threshold");
+      expect(rec).not.toContain("lower the threshold");
+      expect(rec).not.toContain("reduce threshold");
+      expect(rec).not.toContain("decrease threshold");
+    });
+  }
 });

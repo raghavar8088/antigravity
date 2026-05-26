@@ -42,7 +42,7 @@ import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
 import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
 import { ProfitModeChecklist } from "@/components/ProfitModeChecklist";
 import { DeskRunModePanel } from "@/components/DeskRunModePanel";
-import { funnelSnapshotFromBrowserDebug, funnelRecommendation } from "@/lib/deskEntryFunnelSnapshot";
+import { funnelSnapshotFromBrowserDebug } from "@/lib/deskEntryFunnelSnapshot";
 import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
@@ -308,17 +308,7 @@ export function BTCFuturesScalper({
     );
   }, [trades]);
 
-  // "Why no trades?" — show when engine is live, no open positions for >30 min, last trade >30 min ago.
-  const whyNoTradesVisible = useMemo(() => {
-    if (!deskMounted || !isReady || pauseEntries || stats.isDrawdownLocked) return false;
-    const thirtyMin = 30 * 60 * 1000;
-    const noOpenPositions = stats.openPositions === 0;
-    const lastClosedAt = trades.length > 0
-      ? new Date(trades[trades.length - 1].closedAt).getTime()
-      : 0;
-    const lastTradeStale = !lastClosedAt || Date.now() - lastClosedAt > thirtyMin;
-    return noOpenPositions && lastTradeStale;
-  }, [deskMounted, isReady, pauseEntries, stats.isDrawdownLocked, stats.openPositions, trades]);
+  // (whyNoTradesVisible removed — replaced by always-visible EntryFunnelCard)
 
   const { longCount, shortCount, totalUnrealized } = useMemo(() => ({
     longCount: positions.filter((p) => p.side === "LONG").length,
@@ -597,107 +587,27 @@ export function BTCFuturesScalper({
         </DeskBanner>
       )}
 
-      {whyNoTradesVisible && (
-        <DeskBanner variant="info" title="Why no BTC trades?">
-          {(() => {
-            // Funnel top-line from entryDebug (always shown when available)
-            const funnelPanel = entryDebug ? (() => {
-              const snap = funnelSnapshotFromBrowserDebug(entryDebug, {
-                workerFresh: isWorkerHeartbeatFresh(stats.workerLastPollAt),
-                symbol: "BTCUSD",
-                markPrice: quote?.markPrice ?? 0,
-                bars: 0,
-              });
-              return (
-                <div style={{ marginBottom: 10, padding: "8px 10px", background: "var(--desk-surface-alt, rgba(88,166,255,0.08))", borderRadius: 6, borderLeft: "3px solid #58a6ff" }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
-                    Dominant gate: <span style={{ color: "#58a6ff" }}>{snap.dominantBlocker}</span>
-                    {" "}<span style={{ fontWeight: 400, color: "#8b949e", fontSize: 12 }}>
-                      (strats={snap.activeStrategies} eval={snap.evaluatedStrategies} sig={snap.signalPassed} open={snap.opened})
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#e6edf3" }}>{funnelRecommendation(snap.dominantBlocker)}</div>
-                </div>
-              );
-            })() : null;
-
-            type NoTradeBlocker = { label: string; count: number; explanation: string; action: string };
-            const blockers: NoTradeBlocker[] = [];
-
-            if (balanceDriftUsd > 1 || probeDominant) {
-              blockers.push({
-                label: "Balance / probe repair issue",
-                count: 1,
-                explanation: `Raw balance diverges by $${balanceDriftUsd.toFixed(2)} or probe trades dominate — PnL stats are untrustworthy.`,
-                action: "Click Repair state to reset to clean accounting.",
-              });
-            }
-            if (process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1" && !stats.workerMonitorMode) {
-              blockers.push({
-                label: "Worker stale",
-                count: 1,
-                explanation: "VPS worker has not heartbeated recently — execution may be paused.",
-                action: "SSH to VPS and run: pm2 restart btc-ft-worker",
-              });
-            }
-            if (stats.deskSkippedByRegime > 0) {
-              blockers.push({
-                label: "Regime mismatch",
-                count: stats.deskSkippedByRegime,
-                explanation: `${stats.deskSkippedByRegime} entries blocked by regime filter. Current regime: ${stats.deskLastRegimeTag ?? "unknown"}.`,
-                action: "Wait for trend regime, or run a mean-reversion-only roster. Do NOT lower signal threshold.",
-              });
-            }
-            if (stats.deskSkippedMinExpectedMove > 0) {
-              blockers.push({
-                label: "ATR/fee hurdle",
-                count: stats.deskSkippedMinExpectedMove,
-                explanation: `${stats.deskSkippedMinExpectedMove} entries blocked: expected price move too small to cover round-trip fees.`,
-                action: "This is a correct block. Wait for higher-volatility setups.",
-              });
-            }
-            if (stats.rotationReport && stats.rotationReport.suspended.length > 0) {
-              blockers.push({
-                label: "Rotation suspended",
-                count: stats.rotationReport.suspended.length,
-                explanation: `${stats.rotationReport.suspended.length} strategies suspended (rotation score < 25). ${stats.rotationReport.insufficient.length} insufficient data.`,
-                action: "Collect more trades, or manually restore a strategy via the rotation panel.",
-              });
-            }
-            if (stats.deskSkippedOutsideSession > 0) {
-              blockers.push({
-                label: "Session window",
-                count: stats.deskSkippedOutsideSession,
-                explanation: `${stats.deskSkippedOutsideSession} entries skipped — outside UTC entry session window.`,
-                action: "No action needed — waits for the configured UTC session hours.",
-              });
-            }
-            if (stats.deskSkippedSpread > 0) {
-              blockers.push({
-                label: "Spread",
-                count: stats.deskSkippedSpread,
-                explanation: `${stats.deskSkippedSpread} entries blocked by last/mark spread cap.`,
-                action: "Market is wide. No action needed.",
-              });
-            }
-
-            const sorted = [...blockers].sort((a, b) => b.count - a.count);
-            return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
-                {funnelPanel}
-                {sorted.map((b) => (
-                  <div key={b.label} style={{ borderLeft: "2px solid #58a6ff", paddingLeft: 8 }}>
-                    <strong>{b.label}</strong>{b.count > 1 ? ` (${b.count}×)` : ""}: {b.explanation}{" "}
-                    <em style={{ color: "#8b949e" }}>{b.action}</em>
-                  </div>
-                ))}
-                {sorted.length === 0 && (
-                  <span>No clear blocker identified — check signal threshold and MTF confluence in Command Center → Gates.</span>
-                )}
-              </div>
-            );
-          })()}
-        </DeskBanner>
+      {/* ── Entry Funnel Diagnostic Card ─────────────────────────────────────
+           Always visible when engine is live. Shows all 10 fields so the
+           operator never has to guess why trades are or are not opening.
+           Recommendations are action-oriented; none suggest lowering threshold.
+      ─────────────────────────────────────────────────────────────────────── */}
+      {deskMounted && isReady && (
+        <EntryFunnelCard
+          entryDebug={entryDebug}
+          workerLastPollAt={stats.workerLastPollAt}
+          workerEnabled={process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1"}
+          workerMonitorMode={stats.workerMonitorMode}
+          markPrice={quote?.markPrice ?? 0}
+          balanceDriftUsd={balanceDriftUsd}
+          probeDominant={probeDominant}
+          deskSkippedByRegime={stats.deskSkippedByRegime}
+          deskLastRegimeTag={stats.deskLastRegimeTag ?? null}
+          deskSkippedMinExpectedMove={stats.deskSkippedMinExpectedMove}
+          rotationSuspendedCount={stats.rotationReport?.suspended?.length ?? 0}
+          deskSkippedOutsideSession={stats.deskSkippedOutsideSession}
+          deskSkippedSpread={stats.deskSkippedSpread}
+        />
       )}
 
       {/* In compact mode entry debug moves to Command Center Advanced tab */}
@@ -833,5 +743,155 @@ export function BTCFuturesScalper({
       />
 
     </DeskShell>
+  );
+}
+
+// ── EntryFunnelCard ──────────────────────────────────────────────────────────
+// Always-visible root-cause panel. Shows all 10 fields from the entry funnel
+// so the operator knows exactly why trades are or are not opening each tick.
+// Recommendations are explicit and action-oriented; none suggest lowering the
+// signal threshold.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FUNNEL_BLOCKER_ACTIONS: Record<string, string> = {
+  noData: "Delta candle/mark feed unavailable — check DELTA_API_BASE_URL env or Delta Exchange status.",
+  noStrategies: "Roster/env strategy IDs invalid — check DESK_WORKER_STRATEGY_IDS matches FUTURES_STRAT_DEFS.",
+  signal: "No strategy crossed signal threshold this tick. Wait for a stronger market setup.",
+  confirm: "Signal fired but entry confirmation failed. Wait for all confirmation factors to align.",
+  regime: "Current regime blocks this roster. Wait for a trend/chop-compatible setup.",
+  atrFees: "Expected move too small vs fees — correct no-trade. Wait for higher-volatility setups.",
+  rotation: "Rotation gate is blocking PROBATION/SUSPENDED strategies. Inspect Edge Candidates panel.",
+  suspended: "Rotation has suspended most strategies. Wait for performance recovery.",
+  spread: "Last/mark spread too wide for safe entry. Wait for tighter market conditions.",
+  session: "Outside UTC entry session window. Entries resume when the configured session opens.",
+  category: "Per-category concurrent position cap is full. Wait for existing positions to close.",
+  sameSide: "Same-side correlation cap reached. Wait for directional balance.",
+  margin: "Insufficient margin. Repair paper state or wait for existing positions to close.",
+  maxOpen: "Maximum concurrent positions reached. Wait for exits before new entries.",
+  cooldown: "All qualifying strategies are in cooldown. Wait for cooldown expiry.",
+  none: "Conditions look favorable. Monitor for signal qualification on the next poll.",
+};
+
+function FunnelRow({ label, value, highlight }: { label: string; value: string | number; highlight?: boolean }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", borderBottom: "1px solid var(--desk-outline, rgba(255,255,255,0.07))" }}>
+      <span style={{ color: "#8b949e", fontSize: 11, minWidth: 140 }}>{label}</span>
+      <span style={{ fontWeight: highlight ? 700 : 400, fontSize: 12, color: highlight ? "#e6edf3" : "#c9d1d9", textAlign: "right" }}>{value}</span>
+    </div>
+  );
+}
+
+function EntryFunnelCard({
+  entryDebug,
+  workerLastPollAt,
+  workerEnabled,
+  workerMonitorMode,
+  markPrice,
+  balanceDriftUsd,
+  probeDominant,
+  deskSkippedByRegime,
+  deskLastRegimeTag,
+  deskSkippedMinExpectedMove,
+  rotationSuspendedCount,
+  deskSkippedOutsideSession,
+  deskSkippedSpread,
+}: {
+  entryDebug: import("@/lib/futuresEntryDebug").DeskEntryPollDebug | null;
+  workerLastPollAt: number | null;
+  workerEnabled: boolean;
+  workerMonitorMode: boolean;
+  markPrice: number;
+  balanceDriftUsd: number;
+  probeDominant: boolean;
+  deskSkippedByRegime: number;
+  deskLastRegimeTag: string | null;
+  deskSkippedMinExpectedMove: number;
+  rotationSuspendedCount: number;
+  deskSkippedOutsideSession: number;
+  deskSkippedSpread: number;
+}) {
+  const workerFresh = isWorkerHeartbeatFresh(workerLastPollAt);
+
+  // Derive funnel snapshot from browser debug when available.
+  const snap = entryDebug
+    ? funnelSnapshotFromBrowserDebug(entryDebug, {
+        workerFresh,
+        symbol: "BTCUSD",
+        markPrice,
+        bars: 0,
+      })
+    : null;
+
+  // Compute signal/confirm passed from raw debug counts (cleaner than snap).
+  const signalPassed = entryDebug
+    ? Math.max(0, (entryDebug.candidatesBuilt ?? 0) + (entryDebug.failConfirm ?? 0))
+    : null;
+  const confirmPassed = entryDebug ? (entryDebug.candidatesBuilt ?? 0) : null;
+
+  // Display blocker — string (not EntryFunnelBlockerKey) so we can inject
+  // structural overrides (workerStale, repairRequired) that trump the pipeline.
+  let displayBlocker: string = snap?.dominantBlocker ?? "none";
+  let recommendation: string = FUNNEL_BLOCKER_ACTIONS[displayBlocker] ?? FUNNEL_BLOCKER_ACTIONS.none;
+
+  if (workerEnabled && !workerFresh) {
+    displayBlocker = "workerStale";
+    recommendation = "Restart AWS pm2 worker: ssh vps → pm2 restart btc-ft-worker";
+  } else if (balanceDriftUsd > 1 || probeDominant) {
+    displayBlocker = "repairRequired";
+    recommendation = "Repair paper state required before judging entries. Historical trades are kept.";
+  }
+
+  const blockerColor =
+    displayBlocker === "none" ? "#3fb950" :
+    displayBlocker === "workerStale" || displayBlocker === "repairRequired" ? "#f85149" :
+    displayBlocker === "signal" || displayBlocker === "regime" || displayBlocker === "atrFees" ? "#d29922" :
+    "#58a6ff";
+
+  return (
+    <DeskBanner variant="info" title="Why no BTC trades? — entry funnel">
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+        {/* Left column: funnel field table */}
+        <div style={{ flex: "1 1 260px", minWidth: 220 }}>
+          <FunnelRow
+            label="Worker status"
+            value={
+              !workerEnabled ? "browser-only" :
+              workerFresh ? `fresh (${workerLastPollAt ? Math.round((Date.now() - workerLastPollAt) / 1000) : "?"}s ago)` :
+              "STALE — restart pm2"
+            }
+            highlight={workerEnabled && !workerFresh}
+          />
+          <FunnelRow label="Active strategies" value={snap?.activeStrategies ?? (entryDebug?.activeStratCount ?? "—")} />
+          <FunnelRow label="Evaluated strategies" value={snap?.evaluatedStrategies ?? (entryDebug?.evalPairs ?? "—")} />
+          <FunnelRow label="Signal passed" value={signalPassed ?? "—"} />
+          <FunnelRow label="Confirm passed" value={confirmPassed ?? "—"} />
+          <FunnelRow label="Candidates" value={entryDebug?.candidatesBuilt ?? "—"} />
+          <FunnelRow label="Open attempts" value={entryDebug?.openAttempts ?? "—"} />
+          <FunnelRow label="Opened last tick" value={entryDebug?.openedThisPoll ?? "—"} />
+          {deskSkippedByRegime > 0 && <FunnelRow label={`Regime blocks (${deskLastRegimeTag ?? "?"})`} value={deskSkippedByRegime} />}
+          {deskSkippedMinExpectedMove > 0 && <FunnelRow label="ATR/fee blocks" value={deskSkippedMinExpectedMove} />}
+          {rotationSuspendedCount > 0 && <FunnelRow label="Rotation suspended" value={rotationSuspendedCount} />}
+          {deskSkippedOutsideSession > 0 && <FunnelRow label="Session gate blocks" value={deskSkippedOutsideSession} />}
+          {deskSkippedSpread > 0 && <FunnelRow label="Spread blocks" value={deskSkippedSpread} />}
+        </div>
+
+        {/* Right column: dominant blocker + recommendation */}
+        <div style={{ flex: "1 1 240px", minWidth: 200 }}>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 10, color: "#8b949e", textTransform: "uppercase", letterSpacing: 1 }}>Dominant gate</span>
+            <div style={{ fontSize: 18, fontWeight: 700, color: blockerColor, marginTop: 2 }}>{displayBlocker}</div>
+          </div>
+          <div style={{ fontSize: 12, color: "#e6edf3", lineHeight: 1.5, background: "rgba(0,0,0,0.15)", borderRadius: 6, padding: "8px 10px" }}>
+            {recommendation}
+          </div>
+          {snap && (
+            <div style={{ marginTop: 8, fontSize: 10, color: "#8b949e" }}>
+              Last tick: {snap.tickAt ? new Date(snap.tickAt).toLocaleTimeString() : "—"}
+              {" · "}{snap.workerMode} mode
+            </div>
+          )}
+        </div>
+      </div>
+    </DeskBanner>
   );
 }

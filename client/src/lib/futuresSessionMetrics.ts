@@ -22,7 +22,12 @@ export function isProbeOrBootstrapTrade(
   t: { strategy_name?: string | null; strategyName?: string | null },
 ): boolean {
   const name = (t.strategy_name ?? t.strategyName ?? "").toUpperCase();
-  return name.includes("BOOTSTRAP") || name.includes("PROBE") || name.includes("DEV_FORCE");
+  return (
+    name.includes("BOOTSTRAP") ||
+    name.includes("PROBE") ||
+    name.includes("DEV_FORCE") ||
+    name.includes("CANARY") // PAPER_ENTRY_CANARY — diagnostic only, must never affect metrics
+  );
 }
 
 export type SessionTradingMetrics = {
