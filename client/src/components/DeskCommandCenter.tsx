@@ -43,6 +43,7 @@ import {
 } from "@/components/deskCommandCenterTabs";
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import { EdgeCandidatesPanel } from "@/components/btcFutures/EdgeCandidatesPanel";
+import { AiAppTrackerPanel } from "@/components/AiAppTrackerPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -792,6 +793,20 @@ export function DeskCommandCenter({
                     )}
                   </div>
                 )}
+
+                {/* ── AI App Tracker ── */}
+                <AiAppTrackerPanel
+                  workerStatus={
+                    workerEnabled
+                      ? workerStale
+                        ? `STALE (${stats.workerLastPollAt ? Math.round((Date.now() - stats.workerLastPollAt) / 1000) : "?"}s ago)`
+                        : "LIVE"
+                      : "BROWSER"
+                  }
+                  dominantBlocker={
+                    (entryDebug?.dominantBlocker ?? "unknown").toLowerCase()
+                  }
+                />
 
                 {/* ── Deployment Sanity ── */}
                 <div

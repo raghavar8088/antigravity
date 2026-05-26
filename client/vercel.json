@@ -1,1 +1,12 @@
-{}
+{
+  "crons": [
+    {
+      "path": "/api/cron/paper-desk-tick",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/ai-app-tracker/capture",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

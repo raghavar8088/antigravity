@@ -14,7 +14,9 @@
     "rank:btc-ft": "npx tsx scripts/rank-btc-ft-strategies.ts",
     "research:rank-btc-ft": "npx tsx scripts/research-rank-btc-ft.ts",
     "calibrate:weights": "npx tsx scripts/calibrate-signal-weights.ts",
-    "test:mongo": "node --env-file=.env.local scripts/test-mongo.mjs"
+    "test:mongo": "node --env-file=.env.local scripts/test-mongo.mjs",
+    "ai:summary": "tsx --env-file=.env.local scripts/ai-app-summary.ts",
+    "ai:mindmap": "tsx scripts/update-ai-mindmap.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
