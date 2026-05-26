@@ -18,7 +18,7 @@ describe("btcFtRoster — resolveBtcFtActiveStrategyIds", () => {
     expect(result.isLargeRoster).toBe(false);
   });
 
-  it("env comma list filters to CORE IDs and caps at 24", () => {
+  it("env comma list filters to CORE IDs (unknown IDs excluded)", () => {
     const ids = [...CORE_BTC_FT_STRATEGY_IDS, 999, 1000].join(",");
     vi.stubEnv("NEXT_PUBLIC_BTC_FT_STRATEGY_IDS", ids);
     const result = resolveBtcFtActiveStrategyIds();

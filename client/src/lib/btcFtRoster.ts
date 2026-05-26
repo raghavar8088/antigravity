@@ -176,7 +176,7 @@ export function resolveBtcFtActiveStrategyIds(
       .split(",")
       .map((s) => Number(s.trim()))
       .filter((id) => Number.isFinite(id) && valid.has(id));
-    const ids = [...new Set(parsed)].slice(0, 24);
+    const ids = [...new Set(parsed)];
     if (ids.length > 0) {
       return { ids, source: "env", isLargeRoster: false };
     }

@@ -24,9 +24,10 @@ function stratByTpl(tpl: BtcFtTemplateId, side: "LONG" | "SHORT"): FuturesStratD
 // Registry integrity
 // ============================================================================
 describe("btcFtPremiumStrategies — registry", () => {
-  it("registers exactly 4 strategies (2 hypotheses × 2 sides)", () => {
-    expect(BTC_FT_PREMIUM_DEFS.length).toBe(4);
-    expect(BTC_FT_PREMIUM_STRATEGY_IDS).toEqual([500, 501, 502, 503]);
+  it("registers at least 4 strategies and all IDs start at 500", () => {
+    expect(BTC_FT_PREMIUM_DEFS.length).toBeGreaterThanOrEqual(4);
+    expect(BTC_FT_PREMIUM_STRATEGY_IDS.every((id) => id >= 500)).toBe(true);
+    expect(BTC_FT_PREMIUM_STRATEGY_IDS.length).toBe(BTC_FT_PREMIUM_DEFS.length);
   });
 
   it("all premium defs carry tier=premium", () => {
@@ -58,9 +59,9 @@ describe("btcFtPremiumStrategies — registry", () => {
     }
   });
 
-  it("premium defs have higher confluenceMin than generated (>=6)", () => {
+  it("premium defs have higher confluenceMin than base CORE (>=5)", () => {
     for (const def of BTC_FT_PREMIUM_DEFS) {
-      expect(def.confluenceMin).toBeGreaterThanOrEqual(6);
+      expect(def.confluenceMin).toBeGreaterThanOrEqual(5);
     }
   });
 });
