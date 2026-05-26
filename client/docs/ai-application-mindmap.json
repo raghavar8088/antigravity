@@ -1,0 +1,252 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-05-26",
+  "appName": "BTC Paper Futures Desk",
+  "modules": [
+    {
+      "name": "Browser Engine Hook",
+      "purpose": "Drives the main poll cycle in the browser: fetches klines, evaluates strategies, applies entry gates, opens/closes paper positions, and posts funnel diagnostics to MongoDB when in browser-write mode.",
+      "keyFiles": [
+        "client/src/hooks/useBTCFuturesScalperEngine.ts",
+        "client/src/lib/futuresDeskPolicy.ts",
+        "client/src/lib/deskEntryFunnelSnapshot.ts"
+      ],
+      "runtime": "browser",
+      "risks": [
+        "Browser can race with VPS worker if heartbeat check fails — both write to paper_state",
+        "Monitor mode (NEXT_PUBLIC_DESK_WORKER_ENABLED=1) skips writes; switching modes mid-session can leave a stale snapshot",
+        "localStorage fallback (btc_future_trading_v4) used in degraded mode — may be stale after page reload"
+      ]
+    },
+    {
+      "name": "VPS Worker",
+      "purpose": "24/7 background process on VPS running under pm2. Acquires a MongoDB worker lease (TTL=45s), polls every 4s, evaluates strategies, opens/closes paper trades, logs funnel diagnostics, and persists funnel snapshot to paper_state.",
+      "keyFiles": [
+        "client/scripts/btc-ft-paper-worker.ts",
+        "client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts",
+        "client/src/lib/paperDeskWorker/workerLease.ts"
+      ],
+      "runtime": "worker",
+      "risks": [
+        "Worker crash leaves heartbeat stale — browser falls back to write mode after 45s TTL expires",
+        "DESK_WORKER_STRATEGY_IDS with invalid IDs causes noStrategies blocker — all entries halted",
+        "No-open-watch: after 30 consecutive zero-open ticks, a worker_tick_error event is logged to MongoDB"
+      ]
+    },
+    {
+      "name": "Vercel Cron Fallback",
+      "purpose": "Fires every 60s via Vercel cron. Skips tick if VPS worker heartbeat is fresh. Acts as disaster recovery when pm2 worker is down. Vercel Hobby plan limits: max 2 crons, min 60s interval.",
+      "keyFiles": [
+        "client/src/app/api/cron/paper-desk-tick/route.ts"
+      ],
+      "runtime": "server",
+      "risks": [
+        "Vercel Hobby: only 2 cron slots total — do not add more",
+        "60s gap during VPS outage means up to 60s delay before cron takes over",
+        "Cron runs in Vercel Node.js runtime — has access to MONGODB_URI but not VPS file system"
+      ]
+    },
+    {
+      "name": "Entry Funnel Diagnostics",
+      "purpose": "Pure-function library (no I/O, no React, no MongoDB) that computes the dominant entry gate blocker and a recommendation for every tick. Used by both browser and worker. Results stored in paper_state.entry_funnel_snapshot and served via /api/desk-entry-funnel.",
+      "keyFiles": [
+        "client/src/lib/deskEntryFunnelSnapshot.ts",
+        "client/src/app/api/desk-entry-funnel/route.ts",
+        "client/src/lib/tests/deskEntryFunnel.test.ts"
+      ],
+      "runtime": "shared",
+      "risks": [
+        "funnelRecommendation() must never suggest lowering the signal threshold — this is a hard invariant tested in 16 per-key assertions",
+        "Browser and worker may post snapshots with different timestamps — GET endpoint returns whichever is newer"
+      ]
+    },
+    {
+      "name": "Strategy Definitions and Rotation",
+      "purpose": "FUTURES_STRAT_DEFS defines the full strategy universe (CORE IDs 91-152, premium 500-503, research 600-759). Rotation system scores each strategy on recent performance and may suspend underperformers. Edge candidates panel surfaces promote/disable recommendations.",
+      "keyFiles": [
+        "client/src/lib/futuresStrategyDefs.ts",
+        "client/src/lib/futuresStrategyRotation.ts",
+        "client/src/lib/futuresEdgeCandidates.ts",
+        "client/src/components/btcFutures/EdgeCandidatesPanel.tsx"
+      ],
+      "runtime": "shared",
+      "risks": [
+        "researchOnly: true strategies (IDs 600-759) must not appear in worker active roster",
+        "Rotation suspension of all strategies causes noStrategies blocker — check rotation_report in Mongo",
+        "computeEdgeCandidates() requires at least 5 closed production trades — shows empty state otherwise"
+      ]
+    },
+    {
+      "name": "Session Metrics and Probe Exclusion",
+      "purpose": "Computes per-session PnL, expectancy, fee drag, hold time, and exit reason analytics. Excludes synthetic probe/bootstrap/canary trades from all metrics via isProbeOrBootstrapTrade().",
+      "keyFiles": [
+        "client/src/lib/futuresSessionMetrics.ts"
+      ],
+      "runtime": "shared",
+      "risks": [
+        "isProbeOrBootstrapTrade() must match: BOOTSTRAP, PROBE, DEV_FORCE, CANARY — any new synthetic trade type must be added here",
+        "computeSessionEquityFromProduction() must be used for equity display (not raw balance - baseBalance) to avoid probe-corrupted balance"
+      ]
+    },
+    {
+      "name": "MongoDB Client",
+      "purpose": "Server-side only module. All MongoDB operations for paper_trades, paper_state, desk_worker_events collections. Never imported in browser-side code.",
+      "keyFiles": [
+        "client/src/lib/mongoTradesClient.ts",
+        "client/src/lib/paperDeskWorker/workerLease.ts"
+      ],
+      "runtime": "server",
+      "risks": [
+        "workerLease.ts must never be re-exported from a shared/browser module — causes Node.js built-ins (child_process, dns, fs, net, tls) to be bundled into browser",
+        "MongoDB Atlas M0 has connection limits — worker and API routes share the same URI"
+      ]
+    },
+    {
+      "name": "Browser UI",
+      "purpose": "React components for the BTC futures paper desk. BTCFuturesScalper.tsx is the root component. EntryFunnelCard is always visible when the desk is mounted and shows the current dominant gate blocker and recommendation.",
+      "keyFiles": [
+        "client/src/components/BTCFuturesScalper.tsx",
+        "client/src/components/btcFutures/EdgeCandidatesPanel.tsx",
+        "client/src/components/desk/ui.tsx"
+      ],
+      "runtime": "browser",
+      "risks": [
+        "EntryFunnelCard uses displayBlocker: string (not EntryFunnelBlockerKey union) for workerStale/repairRequired overrides — do not widen the union type",
+        "DeskChip tone must be one of: success, primary, error, warning — not danger",
+        "DeskEmptyState uses subtitle not description prop"
+      ]
+    },
+    {
+      "name": "Paper Entry Canary",
+      "purpose": "Diagnostic tool gated behind NEXT_PUBLIC_DESK_ENTRY_CANARY=1. After 5 minutes of no trades, fires a synthetic PAPER_ENTRY_CANARY trade with notional=$50 and strategyId=0 to prove open/close plumbing works without depending on signal quality.",
+      "keyFiles": [
+        "client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts",
+        "client/src/lib/futuresSessionMetrics.ts",
+        "client/src/lib/tests/deskEntryFunnel.test.ts"
+      ],
+      "runtime": "worker",
+      "risks": [
+        "Canary MUST be OFF by default (env var not set to '1') — tested in deskEntryFunnel.test.ts",
+        "Canary trades must be excluded from ALL production metrics — isProbeOrBootstrapTrade() checks CANARY substring",
+        "Canary count must not increment funnel opened counter — excluded in: opened: openedPositions.filter(p => p.strategyName !== 'PAPER_ENTRY_CANARY').length"
+      ]
+    }
+  ],
+  "dataStores": [
+    {
+      "name": "MongoDB Atlas M0",
+      "collections": [
+        "paper_trades",
+        "paper_state",
+        "desk_worker_events",
+        "paper_research"
+      ],
+      "purpose": "Primary persistent store for all paper trading state. paper_trades holds open and closed trade documents. paper_state holds account balance, equity, worker heartbeat, rotation report, and entry funnel snapshot. desk_worker_events is the worker event log. paper_research holds firehose research trades (research mode only)."
+    },
+    {
+      "name": "localStorage",
+      "purpose": "Browser-side fallback when MongoDB is unavailable. Namespace: btc_future_trading_v4. Stale after page reload if worker has written newer state to Mongo."
+    },
+    {
+      "name": "Delta Exchange India REST API",
+      "purpose": "Read-only kline data source. GET /v2/history/candles returns OHLCV bars. No order placement — all trades are synthetic paper trades in MongoDB."
+    }
+  ],
+  "criticalFlows": [
+    {
+      "name": "VPS Worker Poll Cycle",
+      "steps": [
+        "1. Acquire MongoDB worker lease (atomic findOneAndUpdate, TTL=45s)",
+        "2. Fetch 200 1-min klines from Delta Exchange kline API",
+        "3. Validate DESK_WORKER_STRATEGY_IDS against FUTURES_STRAT_DEFS; exit with noStrategies if empty",
+        "4. For each active strategy: compute signal score; apply entry gates (signal, regime, confirm, atrFees, cooldown, rotation, spread, category, sameSide)",
+        "5. If all gates pass: insert new paper_trade doc with synthetic fill price",
+        "6. Check open positions for TP/SL/time exits; update paper_trade docs with closedAt, netPnl, exitReason",
+        "7. Build EntryFunnelSnapshot from per-tick counters",
+        "8. If no opens for 30 consecutive ticks: log NO-OPEN-WATCH warning, insert worker_tick_error event",
+        "9. upsertAccountState() to paper_state with new balance, equity, funnel snapshot, heartbeat timestamp"
+      ],
+      "files": [
+        "client/scripts/btc-ft-paper-worker.ts",
+        "client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts",
+        "client/src/lib/paperDeskWorker/workerLease.ts",
+        "client/src/lib/mongoTradesClient.ts"
+      ]
+    },
+    {
+      "name": "Browser Monitor Mode",
+      "steps": [
+        "1. useBTCFuturesScalperEngine polls: check isWorkerHeartbeatFresh(workerLastPollAt)",
+        "2. If fresh: enter monitor-only mode — fetch market data, evaluate for display, skip all writes",
+        "3. If stale: enter write mode — full evaluation + MongoDB writes (browser becomes primary writer)",
+        "4. After each poll, build funnelSnapshotFromBrowserDebug() from DeskEntryPollDebug",
+        "5. POST /api/desk-entry-funnel with snapshot (fire-and-forget, non-fatal on error)",
+        "6. BTCFuturesScalper.tsx renders EntryFunnelCard with current snapshot"
+      ],
+      "files": [
+        "client/src/hooks/useBTCFuturesScalperEngine.ts",
+        "client/src/lib/deskEntryFunnelSnapshot.ts",
+        "client/src/app/api/desk-entry-funnel/route.ts",
+        "client/src/components/BTCFuturesScalper.tsx"
+      ]
+    },
+    {
+      "name": "Canary Probe Flow",
+      "steps": [
+        "1. shouldFireCanary() checks: NEXT_PUBLIC_DESK_ENTRY_CANARY=1 AND no opens for 5+ minutes",
+        "2. Insert synthetic paper_trade with strategyName=PAPER_ENTRY_CANARY, strategyId=0, notional=50",
+        "3. Canary does NOT increment funnel opened counter",
+        "4. isProbeOrBootstrapTrade() returns true for PAPER_ENTRY_CANARY in all subsequent metric computations",
+        "5. computeSessionTradingMetrics(), computeSessionEquityFromProduction() both exclude canary trades"
+      ],
+      "files": [
+        "client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts",
+        "client/src/lib/futuresSessionMetrics.ts"
+      ]
+    },
+    {
+      "name": "Rotation and Edge Candidates",
+      "steps": [
+        "1. After each session window, computeStrategyRotation() scores all strategies on recent closed trades",
+        "2. Strategies below rotation threshold are marked SUSPENDED; rotation_report persisted to paper_state",
+        "3. Worker reads rotation_report each tick; suspended strategy IDs skip the rotation gate",
+        "4. EdgeCandidatesPanel reads diagnosticRows and rotationReport; calls computeEdgeCandidates()",
+        "5. computeNarrowRoster() produces envLine (copy-pasteable DESK_WORKER_STRATEGY_IDS value)"
+      ],
+      "files": [
+        "client/src/lib/futuresStrategyRotation.ts",
+        "client/src/lib/futuresEdgeCandidates.ts",
+        "client/src/lib/futuresStrategyDiagnostics.ts",
+        "client/src/components/btcFutures/EdgeCandidatesPanel.tsx"
+      ]
+    }
+  ],
+  "constraints": [
+    "Paper only — no real order placement on Delta Exchange or any exchange. All trades are synthetic MongoDB documents.",
+    "Never lower the signal threshold to force trades. Minimum effective threshold is 26 (production baseline).",
+    "Never bypass entry gates: fee/ATR, regime, MTF, quality, rotation, session, spread gates are all mandatory.",
+    "Never delete historical trades. paper_trades documents are append-only; close by setting status=closed.",
+    "Canary must be OFF by default. NEXT_PUBLIC_DESK_ENTRY_CANARY must not equal '1' in production without explicit operator opt-in.",
+    "MongoDB credentials (MONGODB_URI) must remain server-side only. Never expose in NEXT_PUBLIC_* variables.",
+    "workerLease.ts must not be imported in browser-side code — it uses Node.js built-ins that cannot be bundled.",
+    "isProbeOrBootstrapTrade() must exclude all synthetic trade types: BOOTSTRAP, PROBE, DEV_FORCE, CANARY.",
+    "Vercel Hobby plan: max 2 cron routes, minimum 60s interval. Do not add more crons.",
+    "Go engine on AWS Lightsail :8080 handles live trading path. Do not modify engine/ without explicit user approval.",
+    "funnelRecommendation() must never suggest lowering the signal threshold — invariant tested in 16 assertions.",
+    "researchOnly: true strategies (IDs 600-759) must never appear in the VPS worker active roster."
+  ],
+  "debugChecklist": [
+    "Check EntryFunnelCard in browser UI — always visible; shows dominantBlocker and recommendation",
+    "GET /api/desk-entry-funnel — check ageSeconds and healthy fields; healthy=false means snapshot >30s old",
+    "Check VPS worker logs for: funnel=[strats=N sig=N cand=N open=N blocker=X] line every 4s",
+    "Check MongoDB paper_state for worker_last_poll_at age — stale if >45s",
+    "Check MongoDB desk_worker_events for worker_tick_error docs (appear after 30 consecutive zero-open ticks)",
+    "Verify DESK_WORKER_STRATEGY_IDS env var contains valid IDs from FUTURES_STRAT_DEFS (not researchOnly)",
+    "Check rotation_report in paper_state — all strategies suspended causes noStrategies blocker",
+    "Enable NEXT_PUBLIC_DESK_ENTRY_DEBUG=1 locally for full DeskEntryPollDebug visibility",
+    "Run: cd client && npx tsc --noEmit — must pass zero errors",
+    "Run: cd client && npx vitest run src/lib/tests/ — 46+ tests in deskEntryFunnel.test.ts must all pass",
+    "If canary trades appear in metrics: verify isProbeOrBootstrapTrade() includes CANARY check",
+    "If balance drifting: verify computeSessionEquityFromProduction() is used (not raw balance - baseBalance)"
+  ]
+}
