@@ -226,7 +226,7 @@ export function BTCFutureTradingScalper({
     if (profitMode.enabled && !EFFECTIVE_RESEARCH_MODE) {
       return btcFtSignalThresholdFromEnv(28);
     }
-    if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(20);
+    if (WINNERS_ONLY_MODE) return btcFtSignalThresholdFromEnv(26);
     if (EFFECTIVE_RESEARCH_MODE) return researchSignalThreshold();
     return btcFtSignalThresholdFromEnv(20);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, profitMode.enabled]);
@@ -239,7 +239,7 @@ export function BTCFutureTradingScalper({
 
   const minMoveKMul = useMemo(() => {
     if (profitMode.enabled && !EFFECTIVE_RESEARCH_MODE) return 1;
-    if (WINNERS_ONLY_MODE) return btcFtMinMoveKMulFromEnv(0.55);
+    if (WINNERS_ONLY_MODE) return btcFtMinMoveKMulFromEnv(1.0);
     if (EFFECTIVE_RESEARCH_MODE) return researchMinMoveKMul();
     return btcFtMinMoveKMulFromEnv(0.45);
   }, [WINNERS_ONLY_MODE, EFFECTIVE_RESEARCH_MODE, profitMode.enabled]);
