@@ -216,6 +216,8 @@ export type PaperStateDoc = {
   worker_owner?: "browser" | "vps" | null;
   /** Latest entry funnel snapshot from the worker or browser poll. Opaque to Mongo. */
   entry_funnel_snapshot?: unknown;
+  /** Latest signal trace snapshot (one per tick, overwritten each tick). No secrets. */
+  signal_trace_latest?: unknown;
 };
 
 export type PaperResearchDoc = {
@@ -251,6 +253,25 @@ export async function upsertAccountState(doc: PaperStateDoc): Promise<void> {
     );
   } catch {
     // non-fatal — periodic save; next interval will retry
+  }
+}
+
+/** Partial update — write only signal_trace_latest to paper_state. Non-fatal. */
+export async function upsertSignalTrace(
+  accountKey: string,
+  trace: Record<string, unknown>,
+): Promise<void> {
+  if (accountKeyMissing(accountKey)) return;
+  try {
+    const entry = await connect();
+    const col = entry.db.collection<PaperStateDoc>(STATE_COLLECTION);
+    await col.updateOne(
+      { account_key: accountKey },
+      { $set: { signal_trace_latest: trace, updated_at: new Date().toISOString() } },
+      { upsert: true },
+    );
+  } catch {
+    // non-fatal
   }
 }
 

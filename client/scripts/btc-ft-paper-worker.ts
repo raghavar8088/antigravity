@@ -383,6 +383,13 @@ async function main() {
         worker_last_poll_at: Date.now(),
         worker_owner: "vps",
         entry_funnel_snapshot: result.funnelSnapshot ?? undefined,
+        signal_trace_latest: result.signalTraceRows.length > 0 ? {
+          tickAt: result.lastPollAt,
+          mode: "worker",
+          symbol: result.funnelSnapshot.symbol ?? "BTCUSD",
+          summary: result.signalTraceSummary,
+          rows: result.signalTraceRows,
+        } : undefined,
       });
     } catch (err) {
       console.error("[worker] state save failed:", err);
@@ -412,11 +419,16 @@ async function main() {
       ? ` funnel=[strats=${funnel.activeStrategies} sig=${funnel.signalPassed} cand=${funnel.candidateCount} open=${funnel.opened} blocker=${funnel.dominantBlocker}]`
       : "";
 
+    // ── Signal trace log line (every tick) ───────────────────────────────────
+    const ts = result.signalTraceSummary;
+    const traceLine = ` trace evaluated=${ts.totalEvaluated} fired=${ts.fired} candidates=${ts.candidates} opened=${ts.opened} topReject=${ts.topRejectedGate ?? "none"}`;
+
     console.log(
       `[worker] tick#${tickCount} ${formatDuration(tickMs).padStart(5)} ` +
       `open=${result.positions.length} closed=${result.closedTrades.length} opened=${result.openedPositions.length} ` +
       `bal=$${lastBalance.toFixed(2)} regime=${result.regime} blocker=${result.error ?? "none"} drift=$${balanceDrift.toFixed(2)}` +
       funnelLine +
+      traceLine +
       (liveState?.pause_entries ? " [PAUSED]" : ""),
     );
 

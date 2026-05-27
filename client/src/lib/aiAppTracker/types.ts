@@ -48,6 +48,17 @@ export interface AiAppTrackerSnapshot {
 
   /** Human-readable warning strings. No secrets, no full keys. */
   warnings: string[];
+
+  /** Latest signal trace summary from the most recent tick (worker or browser). */
+  signalTrace?: {
+    totalEvaluated: number;
+    fired: number;
+    candidates: number;
+    opened: number;
+    topRejectedGate: string | null;
+    ageSeconds: number | null;
+    mode: string | null;
+  } | null;
 }
 
 export interface AiAppTrackerReport {

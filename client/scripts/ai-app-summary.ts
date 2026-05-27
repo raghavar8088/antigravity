@@ -90,6 +90,15 @@ async function main() {
     console.log(`  Active strategies: ${funnel?.activeStrategies ?? "?"}`);
     console.log(`  Opened last tick : ${funnel?.opened ?? 0}`);
 
+    // Signal trace
+    const traceRaw = state?.signal_trace_latest as Record<string, unknown> | null ?? null;
+    const traceSummary = traceRaw?.summary as Record<string, unknown> | null ?? null;
+    if (traceSummary) {
+      const traceAgeS = traceRaw?.tickAt ? Math.floor((Date.now() - Number(traceRaw.tickAt)) / 1000) : null;
+      console.log("\n[Signal Trace (last tick)]");
+      console.log(`  Signal trace: evaluated=${traceSummary.totalEvaluated} fired=${traceSummary.fired} candidates=${traceSummary.candidates} opened=${traceSummary.opened} topReject=${traceSummary.topRejectedGate ?? "none"}${traceAgeS != null ? ` (${traceAgeS}s ago, ${traceRaw?.mode ?? "?"})` : ""}`);
+    }
+
     if (latestReport) {
       const r = latestReport;
       const ageMin = Math.floor(

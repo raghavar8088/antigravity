@@ -41,6 +41,7 @@ export type SnapshotRawInput = {
   pauseEntries: boolean;
   clearedAt: number | null;
   hasPaperState: boolean;
+  signalTraceRaw?: Record<string, unknown> | null;
 };
 
 /**
@@ -53,7 +54,7 @@ export function buildSnapshotFromRaw(raw: SnapshotRawInput): AiAppTrackerSnapsho
     workerEnabled, workerLastPollAt, workerOwner,
     funnelSnapshot,
     balance, dayStartBalance, openPositionsCount, pauseEntries, clearedAt,
-    hasPaperState,
+    hasPaperState, signalTraceRaw,
   } = raw;
 
   const warnings: string[] = [];
@@ -168,6 +169,17 @@ export function buildSnapshotFromRaw(raw: SnapshotRawInput): AiAppTrackerSnapsho
 
     env,
     warnings,
+    signalTrace: signalTraceRaw
+      ? {
+          totalEvaluated: Number(signalTraceRaw.summary && (signalTraceRaw.summary as Record<string, unknown>).totalEvaluated) || 0,
+          fired: Number(signalTraceRaw.summary && (signalTraceRaw.summary as Record<string, unknown>).fired) || 0,
+          candidates: Number(signalTraceRaw.summary && (signalTraceRaw.summary as Record<string, unknown>).candidates) || 0,
+          opened: Number(signalTraceRaw.summary && (signalTraceRaw.summary as Record<string, unknown>).opened) || 0,
+          topRejectedGate: typeof ((signalTraceRaw.summary as Record<string, unknown> | null)?.topRejectedGate) === "string" ? (signalTraceRaw.summary as Record<string, unknown>).topRejectedGate as string : null,
+          ageSeconds: signalTraceRaw.tickAt ? Math.floor((nowMs - Number(signalTraceRaw.tickAt)) / 1000) : null,
+          mode: typeof signalTraceRaw.mode === "string" ? signalTraceRaw.mode : null,
+        }
+      : null,
   };
 }
 
@@ -239,6 +251,9 @@ export async function collectAppSnapshot(opts: {
     ? (state!.positions as unknown[]).length
     : 0;
 
+  const signalTraceRaw =
+    (state?.signal_trace_latest as Record<string, unknown> | null) ?? null;
+
   return buildSnapshotFromRaw({
     accountKey,
     nowMs,
@@ -253,5 +268,6 @@ export async function collectAppSnapshot(opts: {
     pauseEntries: state?.pause_entries ?? false,
     clearedAt: state?.cleared_at ?? null,
     hasPaperState,
+    signalTraceRaw,
   });
 }

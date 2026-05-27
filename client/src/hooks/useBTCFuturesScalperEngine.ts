@@ -79,6 +79,7 @@ import {
   serializeDeskRegimePersistLsPayload,
 } from "@/lib/futuresDeskPolicy";
 import { logSkipReason, getSkipReasonSummary, resetSkipReasonLog } from "@/lib/entrySkipReason";
+import { createTraceRow, capTraceRows, summarizeSignalTrace, type StrategySignalTraceRow, type SignalTraceSummary } from "@/lib/strategySignalTrace";
 import { scoreSignalQuality, type SignalQualityScore } from "@/lib/futuresSignalQuality";
 import {
   buildTFSnapshotsFromInputMap,
@@ -1077,6 +1078,8 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   const rotationOverrideRef = useRef<Set<number>>(new Set());
   const lastSignalQualityRef = useRef<SignalQualityScore | null>(null);
   const lastMtfConfluenceRef = useRef<MTFConfluenceResult | null>(null);
+  const tickSignalTraceRef = useRef<StrategySignalTraceRow[]>([]);
+  const latestSignalTraceSummaryRef = useRef<SignalTraceSummary | null>(null);
   const qualitySkipCountRef = useRef(0);
   const mtfSkipCountRef = useRef(0);
   const profitModeSkipCountRef = useRef(0);
@@ -3055,6 +3058,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
             signalContributions?: Array<{ reason: string; pts: number }>;
           };
           const entryCandidates: EntryCandidate[] = [];
+          tickSignalTraceRef.current = [];
 
           for (const symbol of activeSymbols) {
             const d = payloads.get(symbol);
@@ -3256,6 +3260,14 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               // the current regime isn't in it — catch this early before candidate push.
               const regimeMatch = strat.regimes?.includes(regime) ?? true;
               if (strat.regimes && strat.regimes.length > 0 && !regimeMatch) {
+                tickSignalTraceRef.current.push(createTraceRow({
+                  tickAt: now, mode: "browser", symbol,
+                  strategyId: strat.id, strategyName: strat.name, category: strat.category,
+                  status: "REJECTED", gate: "REGIME",
+                  reason: `Regime ${String(regime)} not in [${strat.regimes?.join(",")}]`,
+                  signalScore: 0, requiredThreshold: effectiveThresholdForStrat,
+                  confirmPassed: false, regime: String(regime), regimeAllowed: false,
+                }));
                 logSkipReason(strat.id, "REGIME_BLOCKED", { regime, stratRegimes: strat.regimes });
                 if (pollDebug) pollDebug.failOpenRegime += 1;
                 deskSkippedByRegimeRef.current[regime] += 1;
@@ -3287,6 +3299,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
               if (signal.score >= effectiveThresholdForStrat && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+                tickSignalTraceRef.current.push(createTraceRow({
+                  tickAt: now, mode: "browser", symbol,
+                  strategyId: strat.id, strategyName: strat.name, category: strat.category, side,
+                  status: "CANDIDATE", gate: "SIGNAL",
+                  reason: `Score ${signal.score.toFixed(1)} >= ${effectiveThresholdForStrat} + confirm pass`,
+                  signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
+                  confirmPassed: true, regime: String(regime), regimeAllowed: true,
+                  contributions: signal.contributions,
+                }));
                 if (paperDeskMode) {
                   const momentumAligned =
                     side === "LONG"
@@ -3321,17 +3342,38 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   signalContributions: signal.contributions,
                 });
                 if (pollDebug) pollDebug.candidatesBuilt += 1;
-              } else if (pollDebug) {
+              } else {
+                const _side = strat.signalKey.includes("SHORT") ? "SHORT" as const : "LONG" as const;
                 if (signal.score < effectiveThresholdForStrat) {
-                  pollDebug.failSignal += 1;
-                  logSkipReason(strat.id, "THRESHOLD_NOT_MET", {
-                    score: signal.score,
-                    required: effectiveThresholdForStrat,
-                    regime,
-                    grade: rollingHealthForEntry?.grade ?? null,
-                  });
+                  tickSignalTraceRef.current.push(createTraceRow({
+                    tickAt: now, mode: "browser", symbol,
+                    strategyId: strat.id, strategyName: strat.name, category: strat.category, side: _side,
+                    status: "EVALUATED", gate: "SIGNAL",
+                    reason: `Score ${signal.score.toFixed(1)} below ${effectiveThresholdForStrat}`,
+                    signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
+                    confirmPassed: false, regime: String(regime), regimeAllowed: true,
+                    contributions: signal.contributions,
+                  }));
+                  if (pollDebug) {
+                    pollDebug.failSignal += 1;
+                    logSkipReason(strat.id, "THRESHOLD_NOT_MET", {
+                      score: signal.score,
+                      required: effectiveThresholdForStrat,
+                      regime,
+                      grade: rollingHealthForEntry?.grade ?? null,
+                    });
+                  }
                 } else {
-                  pollDebug.failConfirm += 1;
+                  tickSignalTraceRef.current.push(createTraceRow({
+                    tickAt: now, mode: "browser", symbol,
+                    strategyId: strat.id, strategyName: strat.name, category: strat.category, side: _side,
+                    status: "FIRED", gate: "CONFIRM",
+                    reason: "Confirmation check failed",
+                    signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
+                    confirmPassed: false, regime: String(regime), regimeAllowed: true,
+                    contributions: signal.contributions,
+                  }));
+                  if (pollDebug) pollDebug.failConfirm += 1;
                 }
               }
             }
@@ -3531,7 +3573,54 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
           for (const c of entryCandidates) {
             if (occupied.has(c.slotKey)) continue;
-            tryOpenCandidate(c);
+            const opened = tryOpenCandidate(c);
+            const traceIdx = tickSignalTraceRef.current.findIndex(
+              (r) => r.strategyId === c.strat.id && r.symbol === c.symbol && r.status === "CANDIDATE",
+            );
+            if (traceIdx >= 0) {
+              if (opened) {
+                tickSignalTraceRef.current[traceIdx] = {
+                  ...tickSignalTraceRef.current[traceIdx],
+                  status: "OPENED",
+                  gate: "OPENED",
+                  reason: "opened",
+                  openAttempted: true,
+                };
+              } else {
+                tickSignalTraceRef.current[traceIdx] = {
+                  ...tickSignalTraceRef.current[traceIdx],
+                  status: "REJECTED",
+                  gate: "QUALITY",
+                  reason: "Rejected in post-candidate gate (quality/MTF/spread/session/category/same-side)",
+                  openAttempted: true,
+                };
+              }
+            }
+          }
+
+          // Finalize and store tick trace
+          {
+            const capped = capTraceRows(tickSignalTraceRef.current);
+            const summary = summarizeSignalTrace(capped);
+            latestSignalTraceSummaryRef.current = summary;
+            tickSignalTraceRef.current = [];
+
+            if (cloudAccountKey && capped.length > 0) {
+              void fetch("/api/strategy-signal-trace", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  accountKey: cloudAccountKey,
+                  trace: {
+                    tickAt: now,
+                    mode: "browser",
+                    symbol: PRIMARY_QUOTE_SYMBOL,
+                    summary,
+                    rows: capped,
+                  },
+                }),
+              }).catch(() => { /* non-fatal */ });
+            }
           }
         }
 

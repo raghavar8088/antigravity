@@ -41,6 +41,13 @@ import {
   emptyBlockerCounts,
   type EntryFunnelSnapshot,
 } from "@/lib/deskEntryFunnelSnapshot";
+import {
+  createTraceRow,
+  capTraceRows,
+  summarizeSignalTrace,
+  type StrategySignalTraceRow,
+  type SignalTraceSummary,
+} from "@/lib/strategySignalTrace";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -157,6 +164,8 @@ export interface PaperDeskTickResult {
   lastPollAt: number;
   error: string | null;
   funnelSnapshot: EntryFunnelSnapshot;
+  signalTraceRows: StrategySignalTraceRow[];
+  signalTraceSummary: SignalTraceSummary;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -287,6 +296,8 @@ export async function runPaperDeskPollTick(
       lastPollAt,
       error: invalidIdWarning ?? "no active strategies",
       funnelSnapshot: snap,
+      signalTraceRows: [],
+      signalTraceSummary: summarizeSignalTrace([]),
     };
   }
 
@@ -325,6 +336,8 @@ export async function runPaperDeskPollTick(
       lastPollAt,
       error: err instanceof Error ? err.message : "klines fetch failed",
       funnelSnapshot: snap,
+      signalTraceRows: [],
+      signalTraceSummary: summarizeSignalTrace([]),
     };
   }
 
@@ -356,6 +369,8 @@ export async function runPaperDeskPollTick(
       lastPollAt,
       error: `insufficient bars: ${bars.length}`,
       funnelSnapshot: snap,
+      signalTraceRows: [],
+      signalTraceSummary: summarizeSignalTrace([]),
     };
   }
 
@@ -456,6 +471,9 @@ export async function runPaperDeskPollTick(
   let candidateCount = 0;
   let openAttempts = 0;
 
+  // ── Signal trace ───────────────────────────────────────────────────────────
+  const traceRows: StrategySignalTraceRow[] = [];
+
   // ── Process entries ───────────────────────────────────────────────────────
   const currentOpenCount = openPositions.filter((p) => p.symbol === symbol).length;
 
@@ -469,6 +487,19 @@ export async function runPaperDeskPollTick(
     const baseNotional = Number(process.env.DESK_WORKER_NOTIONAL) || 300;
     // ATR/fee safety K: use relaxed (0.45) when relaxConfirm, full (1.0) otherwise.
     const atrFeeK = useRelaxed ? 0.45 : 1.0;
+    const atrPct = markPrice > 0 ? signals.atr14 / markPrice : 0;
+
+    const traceBase = {
+      tickAt: lastPollAt,
+      mode: "worker" as const,
+      symbol,
+      regime: regime as string,
+      regimeAllowed: true,
+      confirmPassed: false,
+      signalScore: 0,
+      requiredThreshold: threshold,
+      atrPct,
+    };
 
     for (const strat of activeStrats) {
       if (openPositions.filter((p) => p.symbol === symbol).length >= maxOpen) {
@@ -477,7 +508,8 @@ export async function runPaperDeskPollTick(
       }
       if (stratFilter && !stratFilter.has(strat.id)) continue;
       if (openPositions.some((p) => p.strategyId === strat.id && p.symbol === symbol)) {
-        blockers.cooldown += 1; // occupied = effectively cooldown
+        blockers.cooldown += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, status: "REJECTED", gate: "OCCUPIED", reason: "Strategy already has an open position" }));
         continue;
       }
 
@@ -485,19 +517,24 @@ export async function runPaperDeskPollTick(
       const cooldownExpiry = ctx.stratCooldowns[cooldownKey] ?? 0;
       if (now < cooldownExpiry) {
         blockers.cooldown += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, status: "REJECTED", gate: "COOLDOWN", reason: `Cooldown active for ${Math.round((cooldownExpiry - now) / 1000)}s` }));
         continue;
       }
 
-      if (strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(regime)) {
+      const regimeAllowed = !(strat.regimes && strat.regimes.length > 0 && !strat.regimes.includes(regime));
+      if (!regimeAllowed) {
         blockers.regime += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, status: "REJECTED", gate: "REGIME", reason: `Regime ${regime} not in [${strat.regimes?.join(",")}]`, regimeAllowed: false }));
         continue;
       }
 
       evalCount += 1;
-      const { score } = evalMinuteSignal(signals, strat);
+      const { score, contributions } = evalMinuteSignal(signals, strat);
+      const side: "LONG" | "SHORT" = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
 
       if (!Number.isFinite(score) || score < threshold) {
         blockers.signal += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "EVALUATED", gate: "SIGNAL", reason: `Score ${score.toFixed(1)} below threshold ${threshold}`, signalScore: score, contributions }));
         continue;
       }
       signalPassed += 1;
@@ -507,6 +544,7 @@ export async function runPaperDeskPollTick(
         : passesEntryConfirmation(signals, strat);
       if (!passes) {
         blockers.confirm += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: "Entry confirmation failed", signalScore: score, confirmPassed: false, contributions }));
         continue;
       }
       confirmPassed += 1;
@@ -518,6 +556,7 @@ export async function runPaperDeskPollTick(
         : baseNotional;
       if (!passesAtrFeeGate(markPrice, signals.atr14, notional, atrFeeK)) {
         blockers.atrFees += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "ATR_FEES", reason: `ATR/fee hurdle failed (atrPct=${atrPct.toFixed(4)})`, signalScore: score, confirmPassed: true, feeHurdlePassed: false, contributions }));
         continue;
       }
 
@@ -526,10 +565,10 @@ export async function runPaperDeskPollTick(
       const marginUsed = notional / LEVERAGE;
       if (balance < marginUsed) {
         blockers.margin += 1;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "MARGIN", reason: `Insufficient balance $${balance.toFixed(2)} < margin $${marginUsed.toFixed(2)}`, signalScore: score, confirmPassed: true, feeHurdlePassed: true, contributions }));
         continue;
       }
 
-      const side: "LONG" | "SHORT" = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
       const contracts = Math.max(1, Math.round(notional / markPrice));
 
       const slPrice = side === "LONG"
@@ -558,6 +597,8 @@ export async function runPaperDeskPollTick(
         fundingCosts: 0,
         lastFundingAppliedAt: now,
       };
+
+      traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "OPENED", gate: "OPENED", reason: "opened", signalScore: score, confirmPassed: true, feeHurdlePassed: true, openedPositionId: pos.id, openAttempted: true, contributions }));
 
       openPositions.push(pos);
       openedPositions.push(pos);
@@ -634,6 +675,9 @@ export async function runPaperDeskPollTick(
     workerParityWarning,
   });
 
+  const signalTraceRows = capTraceRows(traceRows);
+  const signalTraceSummary = summarizeSignalTrace(signalTraceRows);
+
   return {
     balance,
     positions: openPositions,
@@ -643,5 +687,7 @@ export async function runPaperDeskPollTick(
     lastPollAt,
     error: null,
     funnelSnapshot,
+    signalTraceRows,
+    signalTraceSummary,
   };
 }

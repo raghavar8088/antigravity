@@ -44,6 +44,7 @@ import {
 import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import { EdgeCandidatesPanel } from "@/components/btcFutures/EdgeCandidatesPanel";
 import { AiAppTrackerPanel } from "@/components/AiAppTrackerPanel";
+import { SignalTracePanel } from "@/components/SignalTracePanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -334,6 +335,7 @@ export function DeskCommandCenter({
             : commandCenterTabLabel("health"),
       },
       { key: "gates", label: commandCenterTabLabel("gates") },
+      { key: "signals", label: commandCenterTabLabel("signals") },
     ];
     if (showAdvancedTab) {
       base.push({ key: "advanced", label: commandCenterTabLabel("advanced") });
@@ -652,6 +654,10 @@ export function DeskCommandCenter({
                   </div>
                 )}
               </div>
+            ) : null}
+
+            {activeTab === "signals" ? (
+              <SignalTracePanel accountKey={cloudAccountKey} />
             ) : null}
 
             {activeTab === "advanced" && showAdvancedTab ? (
