@@ -381,7 +381,9 @@ export type WorkerEventType =
   | "lease_denied"
   | "cron_backup_tick"
   | "cron_skipped_worker_fresh"
-  | "paper_state_repaired";
+  | "paper_state_repaired"
+  | "auto_heal_repair_state"
+  | "auto_heal_failed";
 
 export type WorkerEventSeverity = "info" | "warning" | "error";
 

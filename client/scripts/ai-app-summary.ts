@@ -127,6 +127,23 @@ async function main() {
           });
         }
       }
+
+      // Auto-heal log from the stored report (server-side executor results)
+      const healingExecuted = (r.healingExecuted as Array<{
+        actionType: string; title: string; status: string;
+        reason?: string; durationMs?: number;
+      }> | undefined) ?? [];
+      if (healingExecuted.length > 0) {
+        const executedCount = healingExecuted.filter((h) => h.status === "executed").length;
+        console.log(
+          `\n[Auto-Heal Log] (${executedCount}/${healingExecuted.length} executed; env DESK_SELF_HEAL_AUTO=${process.env.DESK_SELF_HEAL_AUTO ?? "0"})`,
+        );
+        healingExecuted.slice(0, 4).forEach((h, i) => {
+          const ms = h.durationMs != null ? ` ${h.durationMs}ms` : "";
+          console.log(`  ${i + 1}. [${h.status.toUpperCase()}${ms}] ${h.actionType} — ${h.title}`);
+          if (h.reason) console.log(`     reason: ${h.reason}`);
+        });
+      }
     } else {
       console.log("\n[Tracker Report]");
       console.log("  No reports yet. Run: curl -X POST http://localhost:3000/api/ai-app-tracker/capture");

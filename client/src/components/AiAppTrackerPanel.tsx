@@ -204,6 +204,62 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
             </div>
           )}
 
+          {/* Self-healing executed (from server-side executor) */}
+          {report.healingExecuted && report.healingExecuted.length > 0 && (
+            <div>
+              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>
+                Auto-heal log ({report.healingExecuted.filter((h) => h.status === "executed").length}/
+                {report.healingExecuted.length} executed):
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+                {report.healingExecuted.slice(0, 4).map((h, i) => {
+                  const color =
+                    h.status === "executed"
+                      ? "#3fb950"
+                      : h.status === "failed"
+                        ? "#f85149"
+                        : "#8b949e";
+                  return (
+                    <li
+                      key={i}
+                      style={{
+                        borderLeft: `3px solid ${color}`,
+                        paddingLeft: 6,
+                        marginBottom: 3,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: "#c9d1d9" }}>
+                          [{h.actionType}] {h.title}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 8,
+                            fontFamily: "var(--desk-font-mono, monospace)",
+                            color,
+                            border: `1px solid ${color}`,
+                            borderRadius: 3,
+                            padding: "0 4px",
+                          }}
+                        >
+                          {h.status}
+                        </span>
+                        {h.durationMs != null && (
+                          <span style={{ fontSize: 8, color: "#8b949e" }}>{h.durationMs}ms</span>
+                        )}
+                      </div>
+                      {h.reason && (
+                        <p style={{ fontSize: 9, color: "#8b949e", margin: "1px 0 0", lineHeight: 1.4 }}>
+                          {h.reason}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           {/* Self-healing actions */}
           {healingActions.length > 0 && healingActions[0].type !== "NO_ACTION" && (
             <div>

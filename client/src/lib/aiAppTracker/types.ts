@@ -60,4 +60,30 @@ export interface AiAppTrackerReport {
   summary: string;
   snapshot: AiAppTrackerSnapshot;
   recommendations: string[];
+  /**
+   * Optional. Populated only when the env-gated self-healing executor ran
+   * during this capture (DESK_SELF_HEAL_AUTO=1). Each entry records whether
+   * an action was executed, skipped, or failed — used for audit and UI display.
+   */
+  healingExecuted?: AiAppTrackerHealingResult[];
+}
+
+/**
+ * Lightweight snapshot of a single healing-action execution attempt.
+ * Mirrors HealingExecutionResult from deskSelfHealingExecutor but is
+ * declared here so the report type has no runtime-code dependency.
+ */
+export interface AiAppTrackerHealingResult {
+  actionType: string;
+  title: string;
+  status:
+    | "executed"
+    | "skipped_disabled"
+    | "skipped_unsafe"
+    | "skipped_unsupported"
+    | "skipped_no_op"
+    | "failed";
+  reason?: string;
+  durationMs?: number;
+  detail?: Record<string, unknown>;
 }
