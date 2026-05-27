@@ -45,6 +45,7 @@ import { EntryDebugPanel } from "@/components/btcFutures/EntryDebugPanel";
 import { EdgeCandidatesPanel } from "@/components/btcFutures/EdgeCandidatesPanel";
 import { AiAppTrackerPanel } from "@/components/AiAppTrackerPanel";
 import { SignalTracePanel } from "@/components/SignalTracePanel";
+import { VerificationTrackPanel } from "@/components/VerificationTrackPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -657,7 +658,12 @@ export function DeskCommandCenter({
             ) : null}
 
             {activeTab === "signals" ? (
-              <SignalTracePanel accountKey={cloudAccountKey} />
+              <>
+                <SignalTracePanel accountKey={cloudAccountKey} />
+                <div style={{ marginTop: 16 }}>
+                  <VerificationTrackPanel accountKey={cloudAccountKey} />
+                </div>
+              </>
             ) : null}
 
             {activeTab === "advanced" && showAdvancedTab ? (

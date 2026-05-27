@@ -67,6 +67,29 @@ function tradePriceMovePct(t: BTCFuturesTrade): number {
     : paperPriceMovePctOnNotional(t.entryPrice, t.exitPrice, t.side);
 }
 
+function tradeClosedMs(t: BTCFuturesTrade): number | null {
+  const ms = new Date(t.closedAt || t.openedAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function formatTradeGap(newer: BTCFuturesTrade, older: BTCFuturesTrade | undefined): string {
+  if (!older) return "—";
+  const newerMs = tradeClosedMs(newer);
+  const olderMs = tradeClosedMs(older);
+  if (newerMs === null || olderMs === null) return "—";
+  const totalMinutes = Math.floor(Math.abs(newerMs - olderMs) / 60_000);
+  if (totalMinutes < 1) return "<1m";
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+  }
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  return `${minutes}m`;
+}
+
 function tradeDurationMins(t: BTCFuturesTrade): string {
   const mins = Math.floor((new Date(t.closedAt).getTime() - new Date(t.openedAt).getTime()) / 60000);
   return mins > 0 ? `${mins}m` : "<1m";
@@ -453,6 +476,15 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
           <span className="desk-mono">{formatShortTime(t.closedAt)}</span>
           <p className="desk-label-md">{formatShortDate(t.closedAt)}</p>
         </div>
+      ),
+    },
+    {
+      id: "gap",
+      header: "Gap",
+      cell: (t, index) => (
+        <span className="desk-mono" title="Time from this close to the next older closed trade">
+          {formatTradeGap(t, visibleTrades[index + 1])}
+        </span>
       ),
     },
     { id: "sym", header: "Symbol", cell: (t) => t.symbol },
@@ -883,14 +915,14 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
         <DeskCard>
           <DeskSectionHeader
             title="Closed trades"
-            subtitle={`${stats.totalTrades} total · ${stats.winCount}W / ${stats.lossCount}L`}
+            subtitle={`${stats.totalTrades} total · ${stats.winCount}W / ${stats.lossCount}L · newest first`}
             actions={
               <DeskButton variant="outlined" style={{ minHeight: 36 }} onClick={() => setShowAllTrades(!showAllTrades)}>
                 {showAllTrades ? "Recent 10" : `All ${trades.length}`}
               </DeskButton>
             }
           />
-          <DeskDataTable columns={tradeColumns} rows={visibleTrades} getRowKey={(t) => t.id} minWidth={640} />
+          <DeskDataTable columns={tradeColumns} rows={visibleTrades} getRowKey={(t) => t.id} minWidth={720} />
         </DeskCard>
       ) : null}
 

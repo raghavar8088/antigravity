@@ -415,7 +415,15 @@ export function BTCFuturesScalper({
     [showAllStrategies, sortedStrategies],
   );
 
-  const sortedTrades = useMemo(() => [...trades].reverse(), [trades]);
+  const sortedTrades = useMemo(
+    () =>
+      [...trades].sort((a, b) => {
+        const bTime = new Date(b.closedAt || b.openedAt).getTime();
+        const aTime = new Date(a.closedAt || a.openedAt).getTime();
+        return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+      }),
+    [trades],
+  );
   const visibleTrades = useMemo(
     () => (showAllTrades ? sortedTrades : sortedTrades.slice(0, 10)),
     [showAllTrades, sortedTrades],

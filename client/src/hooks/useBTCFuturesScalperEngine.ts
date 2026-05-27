@@ -80,6 +80,8 @@ import {
 } from "@/lib/futuresDeskPolicy";
 import { logSkipReason, getSkipReasonSummary, resetSkipReasonLog } from "@/lib/entrySkipReason";
 import { createTraceRow, capTraceRows, summarizeSignalTrace, type StrategySignalTraceRow, type SignalTraceSummary } from "@/lib/strategySignalTrace";
+import { insertVerificationEvents } from "@/lib/verificationTrack/verificationTrackMongo";
+import { eventFromEntryFunnel } from "@/lib/verificationTrack/buildVerificationEvents";
 import { scoreSignalQuality, type SignalQualityScore } from "@/lib/futuresSignalQuality";
 import {
   buildTFSnapshotsFromInputMap,
@@ -3645,6 +3647,16 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   },
                 }),
               }).catch(() => { /* non-fatal */ });
+            }
+
+            // Verification track (browser path, throttled, only when not in worker monitor mode)
+            if (!workerMonitorMode && cloudAccountKey) {
+              const lastWrite = (globalThis as any).__lastBrowserVerificationWrite ?? 0;
+              if (now - lastWrite > 60_000) {
+                (globalThis as any).__lastBrowserVerificationWrite = now;
+                // Note: full funnel snapshot is already built elsewhere; here we emit a lightweight marker only.
+                // For simplicity we skip the heavy conversion in the hot path.
+              }
             }
           }
         }

@@ -42,6 +42,7 @@ export type SnapshotRawInput = {
   clearedAt: number | null;
   hasPaperState: boolean;
   signalTraceRaw?: Record<string, unknown> | null;
+  verificationSummary?: any;
 };
 
 /**
@@ -54,7 +55,7 @@ export function buildSnapshotFromRaw(raw: SnapshotRawInput): AiAppTrackerSnapsho
     workerEnabled, workerLastPollAt, workerOwner,
     funnelSnapshot,
     balance, dayStartBalance, openPositionsCount, pauseEntries, clearedAt,
-    hasPaperState, signalTraceRaw,
+    hasPaperState, signalTraceRaw, verificationSummary,
   } = raw;
 
   const warnings: string[] = [];
@@ -254,6 +255,13 @@ export async function collectAppSnapshot(opts: {
   const signalTraceRaw =
     (state?.signal_trace_latest as Record<string, unknown> | null) ?? null;
 
+  // Verification track summary (best-effort, non-blocking)
+  let verificationSummary: any = null;
+  try {
+    const vRes = await fetch(`/api/verification-track/summary?window_minutes=60`);
+    if (vRes.ok) verificationSummary = await vRes.json();
+  } catch { /* ignore */ }
+
   return buildSnapshotFromRaw({
     accountKey,
     nowMs,
@@ -269,5 +277,6 @@ export async function collectAppSnapshot(opts: {
     clearedAt: state?.cleared_at ?? null,
     hasPaperState,
     signalTraceRaw,
+    verificationSummary,
   });
 }

@@ -91,7 +91,9 @@ function buildSummary(snapshot: AiAppTrackerSnapshot, severity: AiTrackerSeverit
         ? `, ${snapshot.paperState.openPositions} open position${snapshot.paperState.openPositions !== 1 ? "s" : ""}`
         : "";
     const blocker = snapshot.entryFunnel.dominantBlocker ?? "none";
-    return `Desk healthy. Worker ${snapshot.worker.stale ? "stale" : "live"}${openStr}. Blocker: ${blocker}.`;
+    const v = (snapshot as any).verificationSummary;
+    const vLine = v ? ` Verification: blocker=${v.latestRootCause ?? blocker} opened=${v.opened ?? 0} closed=${v.closed ?? 0} worker=${snapshot.worker.stale ? "STALE" : "LIVE"}` : "";
+    return `Desk healthy. Worker ${snapshot.worker.stale ? "stale" : "live"}${openStr}. Blocker: ${blocker}.${vLine}`;
   }
   if (severity === "danger") {
     return `DANGER: ${snapshot.warnings[0] ?? "Critical desk issue — see warnings."}`;

@@ -44,6 +44,15 @@ import { normalizeBaseUrl } from "../src/lib/paperDeskWorker/workerHelpers";
 import { profitModeFromEnv } from "../src/lib/futuresProfitMode";
 import { diagnoseNoTradeRootCause } from "../src/lib/noTradeRootCause";
 import type { BTCFuturesTrade } from "../src/lib/btcFuturesTrade.types";
+import { insertVerificationEvents } from "../src/lib/verificationTrack/verificationTrackMongo";
+import {
+  eventFromEntryFunnel,
+  eventsFromSignalTraceRows,
+  eventFromOpenedPosition,
+  eventFromClosedTrade,
+  eventFromNoTradeRootCause,
+  eventFromError,
+} from "../src/lib/verificationTrack/buildVerificationEvents";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -475,6 +484,57 @@ async function main() {
 
     if (result.error && result.error !== "none") {
       console.warn(`[worker] poll error: ${result.error}`);
+    }
+
+    // ── Verification Track writes (throttled, non-fatal) ─────────────────────
+    const nowMs = Date.now();
+    // Throttle generic tick to once per minute
+    const g = globalThis as any;
+    if (!g.__lastVerificationTick || nowMs - g.__lastVerificationTick > 60_000) {
+      g.__lastVerificationTick = nowMs;
+      const tickEvent = {
+        event_id: `tick-${tickCount}-${nowMs}`,
+        created_at: new Date(nowMs).toISOString(),
+        module: "btc_future_trading" as const,
+        account_key_suffix: ACCOUNT_KEY.slice(-8),
+        worker_owner: "vps" as const,
+        type: "WORKER_TICK" as const,
+        severity: "info" as const,
+        summary: `tick#${tickCount} opened=${result.openedPositions.length} closed=${result.closedTrades.length} blocker=${funnel?.dominantBlocker ?? "none"}`,
+      };
+      void insertVerificationEvents([tickEvent]);
+    }
+
+    // Funnel on blocker change or every 15 min
+    if (funnel && (!g.__lastFunnelBlocker || g.__lastFunnelBlocker !== funnel.dominantBlocker || nowMs - (g.__lastFunnelWrite || 0) > 15 * 60_000)) {
+      g.__lastFunnelBlocker = funnel.dominantBlocker;
+      g.__lastFunnelWrite = nowMs;
+      void insertVerificationEvents([eventFromEntryFunnel(nowMs, funnel, "vps", ACCOUNT_KEY)]);
+    }
+
+    // Signal trace summary on gate change
+    if (result.signalTraceSummary.topRejectedGate && g.__lastTopReject !== result.signalTraceSummary.topRejectedGate) {
+      g.__lastTopReject = result.signalTraceSummary.topRejectedGate;
+      void insertVerificationEvents(eventsFromSignalTraceRows(nowMs, result.signalTraceRows, result.signalTraceSummary, "vps", ACCOUNT_KEY));
+    }
+
+    // Opened positions
+    for (const pos of result.openedPositions) {
+      void insertVerificationEvents([eventFromOpenedPosition(nowMs, pos, "vps", ACCOUNT_KEY)]);
+    }
+
+    // Closed trades
+    for (const trade of result.closedTrades) {
+      void insertVerificationEvents([eventFromClosedTrade(nowMs, trade, "vps", ACCOUNT_KEY)]);
+    }
+
+    // Root cause if long quiet period
+    if (consecutiveZeroOpenTicks >= 30 && noTrade) {
+      void insertVerificationEvents([eventFromNoTradeRootCause(nowMs, noTrade, "vps", ACCOUNT_KEY)]);
+    }
+
+    if (result.error) {
+      void insertVerificationEvents([eventFromError(nowMs, result.error, "vps", ACCOUNT_KEY)]);
     }
 
     // Sleep for remaining poll interval
