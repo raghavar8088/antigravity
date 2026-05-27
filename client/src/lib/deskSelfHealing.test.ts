@@ -308,6 +308,102 @@ describe("recommendHealingActions — blocker mapping", () => {
   });
 });
 
+// ── signalTrace integration ──────────────────────────────────────────────────
+
+describe("recommendHealingActions — signalTrace", () => {
+  it("fired>0, opened=0, gate=rotation → WAIT_FOR_MARKET info", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 20, fired: 3, candidates: 3, opened: 0,
+        topRejectedGate: "rotation", ageSeconds: 2, mode: "worker",
+      },
+    });
+    const types = actionTypes(recommendHealingActions(snap));
+    expect(types).toContain("WAIT_FOR_MARKET");
+    const wait = recommendHealingActions(snap).find(
+      (a) => a.type === "WAIT_FOR_MARKET" && a.title.toLowerCase().includes("rotation"),
+    );
+    expect(wait).toBeDefined();
+    expect(wait!.severity).toBe("info");
+    expect(wait!.safeToAutomate).toBe(true);
+  });
+
+  it("fired>0, opened=0, gate=margin → WAIT_FOR_MARKET (position-cap)", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 10, fired: 2, candidates: 2, opened: 0,
+        topRejectedGate: "margin", ageSeconds: 1, mode: "worker",
+      },
+    });
+    const wait = recommendHealingActions(snap).find(
+      (a) => a.type === "WAIT_FOR_MARKET" && a.title.toLowerCase().includes("margin"),
+    );
+    expect(wait).toBeDefined();
+    expect(wait!.safeToAutomate).toBe(true);
+  });
+
+  it("fired>0, opened=0, gate=spread → WAIT_FOR_MARKET (market gate)", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 10, fired: 1, candidates: 1, opened: 0,
+        topRejectedGate: "spread", ageSeconds: 1, mode: "worker",
+      },
+    });
+    const found = recommendHealingActions(snap).find(
+      (a) => a.type === "WAIT_FOR_MARKET" && a.title.toLowerCase().includes("spread"),
+    );
+    expect(found).toBeDefined();
+  });
+
+  it("fired>0, opened=0, unknown gate → COLLECT_DATA warning", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 10, fired: 5, candidates: 5, opened: 0,
+        topRejectedGate: "newGateName", ageSeconds: 1, mode: "worker",
+      },
+    });
+    const collect = recommendHealingActions(snap).find((a) => a.type === "COLLECT_DATA");
+    expect(collect).toBeDefined();
+    expect(collect!.severity).toBe("warning");
+    expect(collect!.safeToAutomate).toBe(false);
+  });
+
+  it("fired=0 → no signalTrace action (handled by other rules)", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 10, fired: 0, candidates: 0, opened: 0,
+        topRejectedGate: "signal", ageSeconds: 1, mode: "worker",
+      },
+    });
+    const actions = recommendHealingActions(snap);
+    const fromTrace = actions.filter((a) => a.title.includes("signal(s) fired"));
+    expect(fromTrace).toHaveLength(0);
+  });
+
+  it("opened>0 → no signalTrace action (trades are flowing)", () => {
+    const snap = healthySnap({
+      signalTrace: {
+        totalEvaluated: 10, fired: 3, candidates: 3, opened: 2,
+        topRejectedGate: "rotation", ageSeconds: 1, mode: "worker",
+      },
+      entryFunnel: {
+        ageSeconds: 3, dominantBlocker: "rotation", recommendation: "",
+        activeStrategies: 20, evaluatedStrategies: 20, candidates: 2, opened: 2,
+      },
+    });
+    const actions = recommendHealingActions(snap);
+    const fromTrace = actions.filter((a) => a.title.includes("signal(s) fired"));
+    expect(fromTrace).toHaveLength(0);
+  });
+
+  it("snapshot without signalTrace → no signalTrace action (no regression)", () => {
+    const snap = healthySnap();
+    const actions = recommendHealingActions(snap);
+    const fromTrace = actions.filter((a) => a.title.includes("signal(s) fired"));
+    expect(fromTrace).toHaveLength(0);
+  });
+});
+
 // ── Severity ordering ─────────────────────────────────────────────────────────
 
 describe("recommendHealingActions — severity ordering", () => {

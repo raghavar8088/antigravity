@@ -215,6 +215,78 @@ function checkRoster(snap: AiAppTrackerSnapshot): DeskHealingAction | null {
   };
 }
 
+/**
+ * signalTrace, when available, gives us numbers the entryFunnel summary doesn't.
+ * Specifically, it tells us when strategies FIRED (passed signal) but never
+ * resulted in opens — a different failure mode from "no candidates at all".
+ *
+ * checkBlocker handles the no-candidates case; checkSignalTrace fills the
+ * "candidates but no opens" gap with specific guidance based on the gate name.
+ */
+function checkSignalTrace(snap: AiAppTrackerSnapshot): DeskHealingAction | null {
+  const trace = snap.signalTrace;
+  if (!trace) return null;
+  if (trace.fired <= 0 || trace.opened > 0) return null;
+
+  const gate = trace.topRejectedGate;
+  const lower = (gate ?? "").toLowerCase();
+
+  if (
+    lower === "rotation" ||
+    lower === "cooldown" ||
+    lower === "burst" ||
+    lower === "suspended"
+  ) {
+    return {
+      type: "WAIT_FOR_MARKET",
+      severity: "info",
+      title: `${trace.fired} signal(s) fired but blocked by '${gate}'`,
+      reason:
+        "Signals passed but rotation/cooldown/burst gate is suppressing trade opens. This is protective behavior after losses or to prevent rapid-fire entries.",
+      operatorAction: "No action. Gate clears automatically.",
+      safeToAutomate: true,
+      relatedFiles: ["client/src/lib/futuresStrategyRotation.ts"],
+    };
+  }
+  if (lower === "margin" || lower === "maxopen" || lower === "sameside") {
+    return {
+      type: "WAIT_FOR_MARKET",
+      severity: "info",
+      title: `${trace.fired} signal(s) fired but blocked by position-cap '${gate}'`,
+      reason:
+        "Signals passed but slot/margin budget is saturated. Gate clears when an existing position closes.",
+      operatorAction: "No action — wait for open positions to close.",
+      safeToAutomate: true,
+    };
+  }
+  if (lower === "spread" || lower === "session" || lower === "regime") {
+    return {
+      type: "WAIT_FOR_MARKET",
+      severity: "info",
+      title: `${trace.fired} signal(s) fired but blocked by market gate '${gate}'`,
+      reason:
+        "Signals passed but market-condition gate (spread/session/regime) is filtering. Gate is doing its job.",
+      operatorAction: "No action. The gate is protecting capital.",
+      safeToAutomate: true,
+      relatedFiles: ["client/src/lib/deskEntryFunnelSnapshot.ts"],
+    };
+  }
+  // Unknown or null gate name but we know signals fired with no opens — worth surfacing.
+  return {
+    type: "COLLECT_DATA",
+    severity: "warning",
+    title: `${trace.fired} signal(s) fired but no trades opened (top gate: ${gate ?? "unknown"})`,
+    reason:
+      "Signal-pass strategies are being rejected downstream. Investigate which gate is consuming them.",
+    operatorAction: `Inspect signal_trace_latest in MongoDB. Map gate '${gate ?? "unknown"}' to its source in futuresDeskPolicy.ts.`,
+    safeToAutomate: false,
+    relatedFiles: [
+      "client/src/lib/futuresDeskPolicy.ts",
+      "client/src/lib/deskEntryFunnelSnapshot.ts",
+    ],
+  };
+}
+
 function checkBlocker(snap: AiAppTrackerSnapshot): DeskHealingAction | null {
   const { dominantBlocker, candidates, opened } = snap.entryFunnel;
   if (dominantBlocker == null || candidates == null || opened == null) return null;
@@ -308,6 +380,7 @@ export function recommendHealingActions(
     checkPauseEntries,
     checkRoster,
     checkBlocker,
+    checkSignalTrace,
   ];
 
   const actions: DeskHealingAction[] = [];
