@@ -252,11 +252,12 @@ export function deskMaxSameDirNotionalFracFromEnv(): number {
 
 /**
  * Default \(K\) in `paperMinExpectedMoveVsFees` (ATR$ move ≥ K × round-trip fees).
- * Raised 2026-05-24 from 1.1 → 3.0: at 1.1 fee drag exceeded 200% because ATR
- * covered only marginally more than the round-trip cost; 3.0 requires the expected
- * move to be ≥3× fees, providing meaningful headroom on a 0.10% taker desk.
+ * Set to 1.5: requires ATR to cover 1.5× round-trip fees — enough headroom to
+ * avoid fee-bleeding entries without deadlocking the desk when ATR is in the
+ * normal $50–$250 range on 1-minute BTC bars. K=3.0 required ATR≥$390 which
+ * blocks virtually everything in normal market conditions.
  */
-export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 3.0;
+export const DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT = 1.5;
 
 // ── Regime-aware threshold ────────────────────────────────────────────────────
 
@@ -689,47 +690,47 @@ export function deskAutoDisableStratsEnabled(): boolean {
 }
 
 /**
- * Minimum trades before kill-switch can fire. Tightened 2026-05-21 from 5 → 8
- * for better statistical confidence before retiring a strategy.
+ * Minimum trades before kill-switch can fire. Default 5 — paper desk needs
+ * at least 5 closes per strategy to have a statistically meaningful signal.
  */
 export function deskKillMinTradesFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MIN_TRADES;
-  if (raw === undefined || raw === "") return 8;
+  if (raw === undefined || raw === "") return 5;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 8;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
 }
 
 /**
- * Max per-trade expectancy USD before kill. Tightened 2026-05-21 from -$0.05 → -$0.02
- * for profitability hardening: kill earlier on persistent fee-bleeders.
+ * Max per-trade expectancy USD before kill. Default -$0.05 — kill strategies
+ * that persistently lose more than 5 cents per trade on average.
  */
 export function deskKillMaxExpectancyUsdFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_EXPECTANCY_USD;
-  if (raw === undefined || raw === "") return -0.02;
+  if (raw === undefined || raw === "") return -0.05;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : -0.02;
+  return Number.isFinite(n) ? n : -0.05;
 }
 
 /**
- * Max cumulative net USD before kill. Tightened 2026-05-21 from -$1 → -$0.50
- * for profitability hardening: shorter rope.
+ * Max cumulative net USD before kill. Default -$1.00 — strategies need a full
+ * dollar of cumulative loss before the kill switch fires.
  */
 export function deskKillMaxSumNetUsdFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_MAX_SUM_NET_USD;
-  if (raw === undefined || raw === "") return -0.5;
+  if (raw === undefined || raw === "") return -1.0;
   const n = Number(raw);
-  return Number.isFinite(n) ? n : -0.5;
+  return Number.isFinite(n) ? n : -1.0;
 }
 
 /**
- * Rolling kill window (days). Tightened 2026-05-21 from 14 → 7 for faster
- * turnover — losing strategies retired within a week of the bleed.
+ * Rolling kill window (days). Default 14 — gives strategies two weeks to
+ * show edge before retiring them.
  */
 export function deskKillWindowDaysFromEnv(): number {
   const raw = process.env.NEXT_PUBLIC_DESK_KILL_WINDOW_DAYS;
-  if (raw === undefined || raw === "") return 7;
+  if (raw === undefined || raw === "") return 14;
   const n = Number(raw);
-  if (!Number.isFinite(n)) return 7;
+  if (!Number.isFinite(n)) return 14;
   return Math.min(90, Math.max(1, Math.floor(n)));
 }
 
@@ -756,13 +757,12 @@ export function deskEntryReplaceWeakestFromEnv(): boolean {
 
 /**
  * Module-only signal threshold for BTC Future Trading route.
- * Env: `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD`, default 28, clamp [18, 32].
- * Tightened 2026-05-21 production baseline from 26 → 28 for profitability
- * hardening (higher conviction per fire, fewer marginal entries paying fees).
- * Research mode lowers via env (commit ec0e18a set 20 for research probes).
+ * Env: `NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD`, default 26, clamp [18, 32].
+ * Production baseline 26 — balanced conviction vs trade frequency.
+ * Research mode lowers via env (e.g. 20 for research probes).
  * Lower values (e.g. 24 or 22) allow more candidates on chop — only change via env, never globally.
  */
-export function btcFtSignalThresholdFromEnv(fallback = 28): number {
+export function btcFtSignalThresholdFromEnv(fallback = 26): number {
   const raw = process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD;
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -776,7 +776,7 @@ export function btcFtSignalThresholdFromEnv(fallback = 28): number {
  * Named separately so call-sites in the hook stay explicit about which module they serve.
  */
 export function deskBtcFtSignalThresholdFromEnv(): number {
-  return btcFtSignalThresholdFromEnv(28);
+  return btcFtSignalThresholdFromEnv(26);
 }
 
 /** Paper desk only — relaxes HTF/confluence confirm for BTC FT module when env is set. */
