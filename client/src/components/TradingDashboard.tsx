@@ -5,7 +5,8 @@ import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
-import { DeskChip } from "@/components/desk/ui";
+import { SignalTracePanel } from "@/components/SignalTracePanel";
+import { DeskCard, DeskChip } from "@/components/desk/ui";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
@@ -44,6 +45,16 @@ export default function TradingDashboard() {
             moduleDescription={workspaceModuleDescription("btcFutureTrading")}
           />
         </div>
+
+        <DeskCard padding="md">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#58a6ff" }}>Signal Trace</span>
+            <span style={{ fontSize: 10, color: "#8b949e" }}>
+              Why didn&apos;t this signal become a trade? — per-strategy gate breakdown
+            </span>
+          </div>
+          <SignalTracePanel accountKey={null} />
+        </DeskCard>
 
         <BTCFutureTradingScalper />
 
