@@ -5,7 +5,9 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  closestSignalRows,
   createTraceRow,
+  signalTraceRatio,
   summarizeSignalTrace,
   capTraceRows,
   type StrategySignalTraceRow,
@@ -159,6 +161,24 @@ describe("capTraceRows", () => {
     const capped = capTraceRows(rows, 5);
     const scores = capped.map((r) => r.signalScore);
     expect(Math.min(...scores)).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe("closestSignalRows", () => {
+  it("keeps evaluated count visible when roster rows exist", () => {
+    const summary = summarizeSignalTrace([makeRow({ strategyId: 1 })]);
+    expect(summary.totalEvaluated).toBe(1);
+  });
+
+  it("sorts closest signals by score/threshold ratio", () => {
+    const rows = [
+      makeRow({ strategyId: 1, signalScore: 12, requiredThreshold: 24 }),
+      makeRow({ strategyId: 2, signalScore: 20, requiredThreshold: 25 }),
+      makeRow({ strategyId: 3, signalScore: 10, requiredThreshold: 10 }),
+    ];
+    const closest = closestSignalRows(rows, 3);
+    expect(closest.map((r) => r.strategyId)).toEqual([3, 2, 1]);
+    expect(signalTraceRatio(closest[0])).toBe(1);
   });
 });
 

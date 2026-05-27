@@ -144,6 +144,7 @@ import {
 import {
   buildSignalInputs,
   classifyRegimeTagFrom1mOhlcv,
+  describeEntryConfirmationFailure,
   effectiveSignalThreshold as computeEffectiveThreshold,
   evalMinuteSignal,
   passesEntryConfirmation,
@@ -766,11 +767,9 @@ export function paperEnsureEffectiveThresholdDrop(
   ensureDataThresholdDrop: number,
   productionTradeCount: number,
 ): number {
-  if (!profitModeEnabled) return ensureDataThresholdDrop;
-  // Profit mode needs a small amount of production evidence before strict
-  // scorecard gates can judge it. Keep discovery capped so it cannot become
-  // firehose behavior.
-  if (productionTradeCount < 10) return Math.min(ensureDataThresholdDrop, 8);
+  void profitModeEnabled;
+  void ensureDataThresholdDrop;
+  void productionTradeCount;
   return 0;
 }
 
@@ -780,14 +779,11 @@ export function paperEnsureAllowsRelaxedSignalConfirm(
   productionTradeCount: number,
   ensureDataThresholdDrop: number,
 ): boolean {
-  // Only the cold-start evidence window gets this. Once profit mode has enough
-  // closes to judge edge, strict confirmation owns the path again.
-  return (
-    paperEnsureEnabled &&
-    profitModeEnabled &&
-    productionTradeCount < 10 &&
-    ensureDataThresholdDrop > 0
-  );
+  void paperEnsureEnabled;
+  void profitModeEnabled;
+  void productionTradeCount;
+  void ensureDataThresholdDrop;
+  return false;
 }
 
 export function paperDeskRequiresMomentumAlignment(
@@ -1060,13 +1056,15 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   // ── Worker monitor mode ──────────────────────────────────────────────────
   // When NEXT_PUBLIC_DESK_WORKER_ENABLED=1 and the VPS worker heartbeat is fresh,
   // the browser skips local poll WRITES and hydrates from Mongo only (read-only mode).
+  // Fallback writes are allowed only after >60s stale so the browser does not
+  // silently compete with a slow but alive VPS worker.
   const workerEnabled = process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1";
   const [workerLastPollAt, setWorkerLastPollAt] = useState<number | null>(null);
   const [workerOwner, setWorkerOwner] = useState<"browser" | "vps" | null>(null);
   const workerMonitorMode =
     workerEnabled &&
     workerLastPollAt !== null &&
-    Date.now() - workerLastPollAt < 45_000;
+    Date.now() - workerLastPollAt < 60_000;
 
   // Expose worker status for UI — both fields available via engine stats
   // (see calculateStats return below).
@@ -2971,19 +2969,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         }
 
         let openCount = survivors.length;
-        const lastClosedMs = tradesRef.current.reduce(
-          (max, t) => Math.max(max, new Date(t.closedAt).getTime()),
-          0,
-        );
-        // Fresh sessions with zero closes still need an idle clock; otherwise
-        // paperEnsureTrades never nudges entries until after a trade has closed.
-        const lastEntryActivityMs = lastClosedMs > 0 ? lastClosedMs : researchMountedAtRef.current;
-        const quietEntryBoost = paperQuietEntryBoost(
-          paperEnsureTrades,
-          now,
-          lastEntryActivityMs,
-          survivors.length,
-        );
         const occupied = new Set(survivors.map((p) => `${p.symbol}:${p.strategyId}`));
         const utcSession = entryUtcSessionOverride ?? deskEntryUtcSessionFromEnv();
         const utcHour = new Date(now).getUTCHours();
@@ -3259,17 +3244,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               }
 
               const signal = evalMinuteSignal(stratInput, strat);
-              const stratTradeCount = tradesRef.current.filter((t) => t.strategyId === strat.id).length;
-              const ensureDataThresholdDrop = researchEnsureTrades &&
-                now - researchMountedAtRef.current >= 2 * 60 * 60 * 1000 &&
-                stratTradeCount < 3
-                ? 4
-                : paperEnsureThresholdDrop(
-                    paperEnsureTrades,
-                    now,
-                    researchMountedAtRef.current,
-                    stratTradeCount,
-                  );
               // P1.1.2: per-strategy dynamic threshold; PR-8: regime + health adaptive boost.
               const stratBaseThreshold = strat.dynamicThreshold ?? activeSignalThreshold;
               const thresholdFloor = paperEnsureTrades ? 16 : 18;
@@ -3284,18 +3258,12 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 regime,
                 profitModeCfg,
               );
-              // Profit mode should harden entries, not deadlock a brand-new
-              // paper desk. Until we have enough production closes for a real
-              // scorecard, allow a capped paper-discovery drop; quality + MTF
-              // gates still remain active below.
-              const thresholdDrop = paperEnsureEffectiveThresholdDrop(
-                profitModeCfg.enabled,
-                ensureDataThresholdDrop,
-                productionTradesForHealth.length,
-              );
+              // Production paper path: never lower threshold to force trades.
+              // Discovery mode can reduce notional only; signal/fee/regime gates remain intact.
+              const thresholdDrop = 0;
               const effectiveThresholdForStrat = Math.max(
-                thresholdFloor,
-                profitAwareBase - thresholdDrop - quietEntryBoost,
+                Math.max(thresholdFloor, activeSignalThreshold),
+                profitAwareBase - thresholdDrop,
               );
               // PR-6 Change 4: block strategies with an explicit regimes[] list when
               // the current regime isn't in it — catch this early before candidate push.
@@ -3339,7 +3307,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 paperEnsureTrades,
                 profitModeCfg.enabled,
                 productionTradesForHealth.length,
-                ensureDataThresholdDrop,
+                0,
               );
               const confirmPasses =
                 passesEntryConfirmation(stratInput, strat) ||
@@ -3357,7 +3325,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                       tickAt: now, mode: "browser", symbol,
                       strategyId: strat.id, strategyName: strat.name, category: strat.category, side,
                       status: "FIRED", gate: "CONFIRM",
-                      reason: "Momentum alignment failed for trend/momentum strategy",
+                      reason: "Confirmation failed: momentum",
                       signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
                       confirmPassed: false, regime: String(regime), regimeAllowed: true,
                       contributions: signal.contributions,
@@ -3425,7 +3393,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                     tickAt: now, mode: "browser", symbol,
                     strategyId: strat.id, strategyName: strat.name, category: strat.category, side: _side,
                     status: "FIRED", gate: "CONFIRM",
-                    reason: "Confirmation check failed",
+                    reason: describeEntryConfirmationFailure(stratInput, strat),
                     signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
                     confirmPassed: false, regime: String(regime), regimeAllowed: true,
                     contributions: signal.contributions,

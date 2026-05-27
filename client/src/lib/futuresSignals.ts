@@ -2292,6 +2292,19 @@ export function passesEntryConfirmation(s: FuturesSignalInputs, strat: FuturesSt
   return confluence >= requiredHits;
 }
 
+export function describeEntryConfirmationFailure(s: FuturesSignalInputs, strat: FuturesStratDef): string {
+  const short = strat.signalKey.includes("SHORT");
+  const momentumOk = short ? s.momentum3 < 0 || s.momentum6 < 0 : s.momentum3 > 0 || s.momentum6 > 0;
+  const trendOk = short ? s.fast < s.slow : s.fast > s.slow;
+  const htfOk = short ? s.htf5_trend <= 0 && s.htf15_trend <= 0 : s.htf5_trend >= 0 && s.htf15_trend >= 0;
+  const volumeOk = s.volRatio >= 1.05;
+  if (!momentumOk) return "Confirmation failed: momentum";
+  if (!htfOk && strat.requiresHtf) return "Confirmation failed: HTF";
+  if (!volumeOk && /BREAK|ORDER|SESSION|VOLUME/i.test(strat.signalKey)) return "Confirmation failed: volume";
+  if (!trendOk && /TREND|EMA|MACD|ADX|BREAK/i.test(strat.signalKey)) return "Confirmation failed: trend alignment";
+  return "Confirmation failed: strategy-specific condition";
+}
+
 // ========== THRESHOLD ==========
 
 export function effectiveSignalThreshold(

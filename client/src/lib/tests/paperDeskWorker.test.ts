@@ -6,9 +6,11 @@ import {
 } from "../paperDeskWorker/workerLease";
 import { normalizeBaseUrl } from "../paperDeskWorker/workerHelpers";
 import {
+  resolveWorkerStrategyRoster,
   workerPaperAllowsRelaxedConfirm,
   workerPaperEffectiveSignalThreshold,
 } from "../paperDeskWorker/runPaperDeskPollTick";
+import { FUTURES_STRAT_DEFS } from "../futuresStrategies";
 
 describe("isWorkerHeartbeatFresh", () => {
   it("returns false for null", () => {
@@ -177,7 +179,7 @@ describe("health endpoint freshness gate (via isWorkerHeartbeatFresh)", () => {
 describe("worker paper signal seed gates", () => {
   const mountedAt = 1_000_000;
 
-  it("lowers worker signal threshold during cold-start profit-mode seed window", () => {
+  it("does not lower worker signal threshold during cold-start seed window", () => {
     expect(
       workerPaperEffectiveSignalThreshold({
         baseThreshold: 26,
@@ -187,7 +189,7 @@ describe("worker paper signal seed gates", () => {
         productionTradeCount: 0,
         profitModeEnabled: true,
       }),
-    ).toBe(18);
+    ).toBe(26);
   });
 
   it("returns to strict worker threshold after seed production closes exist", () => {
@@ -203,7 +205,7 @@ describe("worker paper signal seed gates", () => {
     ).toBe(26);
   });
 
-  it("allows relaxed confirmation only when the seed threshold actually dropped", () => {
+  it("does not relax confirmation for seed threshold drops", () => {
     expect(
       workerPaperAllowsRelaxedConfirm({
         baseThreshold: 26,
@@ -211,7 +213,7 @@ describe("worker paper signal seed gates", () => {
         productionTradeCount: 0,
         profitModeEnabled: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       workerPaperAllowsRelaxedConfirm({
         baseThreshold: 26,
@@ -220,5 +222,31 @@ describe("worker paper signal seed gates", () => {
         profitModeEnabled: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("worker roster fallback", () => {
+  it("falls back to CORE when explicit IDs are invalid and fallback is enabled", () => {
+    const r = resolveWorkerStrategyRoster({
+      allStrategies: FUTURES_STRAT_DEFS,
+      strategyIds: [999001, 999002],
+      explicit: true,
+      fallbackMode: "core",
+    });
+    expect(r.invalidIds).toEqual([999001, 999002]);
+    expect(r.fallbackApplied).toBe(true);
+    expect(r.active.length).toBeGreaterThan(0);
+  });
+
+  it("reports no strategies when explicit IDs are invalid and fallback is disabled", () => {
+    const r = resolveWorkerStrategyRoster({
+      allStrategies: FUTURES_STRAT_DEFS,
+      strategyIds: [999001],
+      explicit: true,
+      fallbackMode: "off",
+    });
+    expect(r.invalidIds).toEqual([999001]);
+    expect(r.fallbackApplied).toBe(false);
+    expect(r.active).toEqual([]);
   });
 });

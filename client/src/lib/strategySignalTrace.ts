@@ -6,6 +6,7 @@
 /** Every gate in the entry pipeline, in evaluation order. */
 export type SignalTraceGate =
   | "DATA"
+  | "NO_STRATEGIES"
   | "DISABLED"
   | "SUSPENDED"
   | "ROTATION"
@@ -125,4 +126,20 @@ export function capTraceRows(rows: StrategySignalTraceRow[], max = 500): Strateg
   const priority = (r: StrategySignalTraceRow) =>
     r.status === "OPENED" ? 100_000 : r.status === "CANDIDATE" ? 10_000 : r.signalScore;
   return [...rows].sort((a, b) => priority(b) - priority(a)).slice(0, max);
+}
+
+export function signalTraceRatio(row: Pick<StrategySignalTraceRow, "signalScore" | "requiredThreshold">): number {
+  const threshold = Number(row.requiredThreshold);
+  if (!Number.isFinite(threshold) || threshold <= 0) return 0;
+  const score = Number(row.signalScore);
+  return Number.isFinite(score) ? score / threshold : 0;
+}
+
+export function closestSignalRows(
+  rows: readonly StrategySignalTraceRow[],
+  limit = 10,
+): StrategySignalTraceRow[] {
+  return [...rows]
+    .sort((a, b) => signalTraceRatio(b) - signalTraceRatio(a))
+    .slice(0, Math.max(0, limit));
 }

@@ -23,15 +23,18 @@ import {
   buildSignalInputs,
   classifyRegimeTagFrom1mOhlcv,
   evalMinuteSignal,
+  describeEntryConfirmationFailure,
   passesEntryConfirmation,
   passesRelaxedDeskEntryConfirmation,
 } from "@/lib/futuresSignals";
 import { FUTURES_STRAT_DEFS, type FuturesStratDef } from "@/lib/futuresStrategies";
 import {
   btcFtSignalThresholdFromEnv,
+  deskDiscoveryNotionalUsdFromEnv,
   deskFirehoseModeEnabled,
   deskMaxOpenPositionsEffective,
 } from "@/lib/futuresDeskPolicy";
+import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/btcFtRoster";
 import { PREMIUM_NOTIONAL_MULTIPLIER, isPremiumStrategy } from "@/lib/btcFtPremiumStrategies";
 import type { RegimeTag } from "@/lib/futuresStrategies";
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
@@ -48,7 +51,6 @@ import {
   type StrategySignalTraceRow,
   type SignalTraceSummary,
 } from "@/lib/strategySignalTrace";
-import { isProbeOrBootstrapTrade } from "@/lib/futuresSessionMetrics";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -138,6 +140,7 @@ export interface PaperDeskWorkerContext {
   accountKey: string;
   storageNamespace: string;
   strategyIds?: number[];
+  strategyIdsExplicit?: boolean;
   baseUrl: string;
   balance: number;
   positions: WorkerPosition[];
@@ -226,21 +229,6 @@ function shouldFireCanary(opts: {
   return Date.now() - idleSince >= CANARY_IDLE_MS;
 }
 
-function workerPaperEnsureThresholdDrop(
-  nowMs: number,
-  mountedAtMs: number,
-  stratTradeCount: number,
-): number {
-  if (stratTradeCount >= 5) return 0;
-  const mins = (nowMs - mountedAtMs) / 60_000;
-  let drop = 0;
-  if (mins >= 10) drop = 12;
-  else if (mins >= 5) drop = 10;
-  else if (mins >= 2) drop = 6;
-  if (stratTradeCount > 0) drop = Math.floor(drop / 2);
-  return drop;
-}
-
 export function workerPaperEffectiveSignalThreshold(params: {
   baseThreshold: number;
   nowMs: number;
@@ -249,17 +237,12 @@ export function workerPaperEffectiveSignalThreshold(params: {
   productionTradeCount: number;
   profitModeEnabled: boolean;
 }): number {
-  const rawDrop = workerPaperEnsureThresholdDrop(
-    params.nowMs,
-    params.mountedAtMs,
-    params.stratTradeCount,
-  );
-  const drop = params.profitModeEnabled
-    ? params.productionTradeCount < 10
-      ? Math.min(rawDrop, 8)
-      : 0
-    : rawDrop;
-  return Math.max(16, params.baseThreshold - drop);
+  void params.nowMs;
+  void params.mountedAtMs;
+  void params.stratTradeCount;
+  void params.productionTradeCount;
+  void params.profitModeEnabled;
+  return params.baseThreshold;
 }
 
 export function workerPaperAllowsRelaxedConfirm(params: {
@@ -268,11 +251,52 @@ export function workerPaperAllowsRelaxedConfirm(params: {
   productionTradeCount: number;
   profitModeEnabled: boolean;
 }): boolean {
-  return (
-    params.profitModeEnabled &&
-    params.productionTradeCount < 10 &&
-    params.effectiveThreshold < params.baseThreshold
+  void params;
+  return false;
+}
+
+export type WorkerRosterFallbackMode = "core" | "off";
+
+export function workerRosterFallbackModeFromEnv(): WorkerRosterFallbackMode {
+  const raw = (process.env.DESK_WORKER_ROSTER_FALLBACK ?? "core").trim().toLowerCase();
+  return raw === "0" || raw === "off" || raw === "none" ? "off" : "core";
+}
+
+export function resolveWorkerStrategyRoster(params: {
+  allStrategies: readonly FuturesStratDef[];
+  strategyIds?: readonly number[];
+  explicit?: boolean;
+  fallbackMode?: WorkerRosterFallbackMode;
+}): {
+  active: FuturesStratDef[];
+  invalidIds: number[];
+  fallbackApplied: boolean;
+  fallbackIds: number[];
+} {
+  const allActive = params.allStrategies.filter((s) => !s.researchOnly && s.id < 600);
+  const explicit = params.explicit === true;
+  const ids = params.strategyIds ?? [];
+  const knownIds = new Set(params.allStrategies.map((s) => s.id));
+  const invalidIds = explicit ? ids.filter((id) => !knownIds.has(id)) : [];
+  const filtered = explicit ? allActive.filter((s) => ids.includes(s.id)) : allActive;
+  if (filtered.length > 0 || !explicit) {
+    return { active: filtered, invalidIds, fallbackApplied: false, fallbackIds: [] };
+  }
+
+  const fallbackMode = params.fallbackMode ?? workerRosterFallbackModeFromEnv();
+  if (fallbackMode !== "core") {
+    return { active: [], invalidIds, fallbackApplied: false, fallbackIds: [] };
+  }
+
+  const fallbackIds = CORE_BTC_FT_STRATEGY_IDS.filter((id) =>
+    allActive.some((s) => s.id === id),
   );
+  return {
+    active: allActive.filter((s) => fallbackIds.includes(s.id)),
+    invalidIds,
+    fallbackApplied: true,
+    fallbackIds,
+  };
 }
 
 // ── Main tick ──────────────────────────────────────────────────────────────
@@ -283,25 +307,19 @@ export async function runPaperDeskPollTick(
   const symbol = ctx.symbol ?? process.env.DELTA_BTC_FUTURES_SYMBOL ?? "BTCUSD";
   const lastPollAt = Date.now();
 
-  // ── FIX 5: Roster validation ────────────────────────────────────────────
-  // Build the candidate strategy list and warn on unknown IDs.
-  const allActive: FuturesStratDef[] = FUTURES_STRAT_DEFS.filter(
-    (s) => !s.researchOnly && s.id < 600,
-  ) as FuturesStratDef[];
-
-  let activeStrats: FuturesStratDef[];
+  const roster = resolveWorkerStrategyRoster({
+    allStrategies: FUTURES_STRAT_DEFS,
+    strategyIds: ctx.strategyIds,
+    explicit: ctx.strategyIdsExplicit === true,
+  });
+  const activeStrats = roster.active;
   let invalidIdWarning: string | undefined;
-
-  if (ctx.strategyIds && ctx.strategyIds.length > 0) {
-    const knownIds = new Set(FUTURES_STRAT_DEFS.map((s) => s.id));
-    const invalid = ctx.strategyIds.filter((id) => !knownIds.has(id));
-    if (invalid.length > 0) {
-      invalidIdWarning = `DESK_WORKER_STRATEGY_IDS contains unknown IDs: ${invalid.join(",")}`;
-      console.warn(`[worker] ${invalidIdWarning}`);
-    }
-    activeStrats = allActive.filter((s) => ctx.strategyIds!.includes(s.id));
-  } else {
-    activeStrats = allActive;
+  if (roster.invalidIds.length > 0) {
+    invalidIdWarning = `DESK_WORKER_STRATEGY_IDS contains unknown IDs: ${roster.invalidIds.join(",")}`;
+    console.warn(`[worker] ${invalidIdWarning}`);
+  }
+  if (roster.fallbackApplied) {
+    console.warn(`[worker] invalid explicit roster; DESK_WORKER_ROSTER_FALLBACK=core applied ids=${roster.fallbackIds.join(",")}`);
   }
 
   const blockers = emptyBlockerCounts();
@@ -320,6 +338,23 @@ export async function runPaperDeskPollTick(
   if (activeStrats.length === 0) {
     blockers.noStrategies = 1;
     if (invalidIdWarning) blockers.noStrategies += 1;
+    const traceRows = [
+      createTraceRow({
+        tickAt: lastPollAt,
+        mode: "worker",
+        symbol,
+        strategyId: 0,
+        strategyName: "NO_STRATEGIES",
+        status: "REJECTED",
+        gate: "NO_STRATEGIES",
+        reason: invalidIdWarning ?? "No worker strategies resolved",
+        signalScore: 0,
+        requiredThreshold: ctx.signalThreshold ?? btcFtSignalThresholdFromEnv(),
+        confirmPassed: false,
+        regime: "unknown",
+        regimeAllowed: false,
+      }),
+    ];
     const snap = buildFunnelSnapshot({
       tickAt: lastPollAt,
       workerMode: "worker",
@@ -346,8 +381,8 @@ export async function runPaperDeskPollTick(
       lastPollAt,
       error: invalidIdWarning ?? "no active strategies",
       funnelSnapshot: snap,
-      signalTraceRows: [],
-      signalTraceSummary: summarizeSignalTrace([]),
+      signalTraceRows: traceRows,
+      signalTraceSummary: summarizeSignalTrace(traceRows),
     };
   }
 
@@ -438,11 +473,6 @@ export async function runPaperDeskPollTick(
   const maxOpen = deskMaxOpenPositionsEffective();
   const operatorRelaxed = ctx.relaxConfirm || deskFirehoseModeEnabled();
   const now = Date.now();
-  const profitModeEnabled = ctx.profitModeCfg?.enabled === true;
-  const productionTradeCount = ctx.trades.filter(
-    (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
-  ).length;
-
   const stratFilter = ctx.strategyIds && ctx.strategyIds.length > 0
     ? new Set(ctx.strategyIds)
     : null;
@@ -538,7 +568,8 @@ export async function runPaperDeskPollTick(
   }
 
   if (!ctx.pauseEntries && currentOpenCount < maxOpen) {
-    const baseNotional = Number(process.env.DESK_WORKER_NOTIONAL) || 300;
+    const discoveryNotional = deskDiscoveryNotionalUsdFromEnv();
+    const baseNotional = discoveryNotional ?? (Number(process.env.DESK_WORKER_NOTIONAL) || 300);
     // ATR/fee safety K: use relaxed (0.45) when relaxConfirm, full (1.0) otherwise.
     const atrFeeK = operatorRelaxed ? 0.45 : 1.0;
     const atrPct = markPrice > 0 ? signals.atr14 / markPrice : 0;
@@ -556,6 +587,7 @@ export async function runPaperDeskPollTick(
     };
 
     for (const strat of activeStrats) {
+      evalCount += 1;
       if (openPositions.filter((p) => p.symbol === symbol).length >= maxOpen) {
         blockers.maxOpen = Math.max(1, blockers.maxOpen);
         break;
@@ -582,18 +614,9 @@ export async function runPaperDeskPollTick(
         continue;
       }
 
-      evalCount += 1;
       const { score, contributions } = evalMinuteSignal(signals, strat);
       const side: "LONG" | "SHORT" = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
-      const stratTradeCount = ctx.trades.filter((t) => t.strategyId === strat.id).length;
-      const threshold = workerPaperEffectiveSignalThreshold({
-        baseThreshold,
-        nowMs: now,
-        mountedAtMs: ctx.mountedAt,
-        stratTradeCount,
-        productionTradeCount,
-        profitModeEnabled,
-      });
+      const threshold = baseThreshold;
 
       if (!Number.isFinite(score) || score < threshold) {
         blockers.signal += 1;
@@ -602,18 +625,12 @@ export async function runPaperDeskPollTick(
       }
       signalPassed += 1;
 
-      const seedRelaxed = workerPaperAllowsRelaxedConfirm({
-        baseThreshold,
-        effectiveThreshold: threshold,
-        productionTradeCount,
-        profitModeEnabled,
-      });
-      const passes = operatorRelaxed || seedRelaxed
+      const passes = operatorRelaxed
         ? passesRelaxedDeskEntryConfirmation(signals, strat)
         : passesEntryConfirmation(signals, strat);
       if (!passes) {
         blockers.confirm += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: "Entry confirmation failed", signalScore: score, requiredThreshold: threshold, confirmPassed: false, contributions }));
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: describeEntryConfirmationFailure(signals, strat), signalScore: score, requiredThreshold: threshold, confirmPassed: false, contributions }));
         continue;
       }
       confirmPassed += 1;

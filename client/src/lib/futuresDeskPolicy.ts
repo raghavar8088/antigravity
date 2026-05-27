@@ -29,7 +29,7 @@
  * `NEXT_PUBLIC_DESK_FORCE_PROBE_OPEN=1` — dev-only one tiny paper open after first ready BTC FT poll.
  */
 
-import type { FuturesStratDef, RegimeTag } from "./futuresStrategies";
+import { FUTURES_STRAT_DEFS, type FuturesStratDef, type RegimeTag } from "./futuresStrategies";
 import type { FuturesStrategyProfile } from "./futuresSessionMetrics";
 import { paperWidenTpToMinSlRatio } from "./futuresPaperMath";
 
@@ -218,6 +218,34 @@ export function mergeDeskRegimeExtras(
   return REGIME_TAGS_ORDER.filter((r) => set.has(r));
 }
 
+export function buildChopCompatiblePaperRoster(
+  strategies: readonly FuturesStratDef[] = FUTURES_STRAT_DEFS,
+): number[] {
+  return strategies
+    .filter((s) => !s.researchOnly && s.id < 600)
+    .filter((s) => {
+      if (s.regimes?.includes("chop")) return true;
+      const hay = [
+        s.category,
+        s.name,
+        s.templateFamily,
+        s.btcFtTemplate,
+        ...(s.playbooks ?? []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const trendOnly = ["trend", "breakout", "momentum", "ema", "adx", "drive"].some((k) =>
+        hay.includes(k),
+      );
+      const chopNative = ["mean", "revert", "range", "wyckoff", "vwap", "rsi", "bb", "squeeze"].some((k) =>
+        hay.includes(k),
+      );
+      return chopNative && !trendOnly;
+    })
+    .map((s) => s.id);
+}
+
 /**
  * Per-strategy **extra** regime tokens merged onto category defaults when defs omit `regimes`.
  * Narrow tuning: add missing buckets (e.g. `trendHigh`) for MR-style desks that starve vs live classifier mix.
@@ -375,6 +403,14 @@ export function deskMinExpectedMoveSafetyKFromEnv(): number {
   if (raw === undefined || raw === "") return DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : DESK_MIN_EXPECTED_MOVE_SAFETY_K_DEFAULT;
+}
+
+export function deskDiscoveryNotionalUsdFromEnv(): number | null {
+  const raw = process.env.NEXT_PUBLIC_DESK_DISCOVERY_NOTIONAL_USD;
+  if (raw === undefined || raw.trim() === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.max(10, Math.min(500, n));
 }
 
 /**

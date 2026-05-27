@@ -49,24 +49,18 @@ describe("paperQuietEntryBoost", () => {
 });
 
 describe("paperEnsureEffectiveThresholdDrop", () => {
-  it("keeps paper discovery active before profit mode has seed data", () => {
-    expect(paperEnsureEffectiveThresholdDrop(true, 12, 0)).toBe(8);
-    expect(paperEnsureEffectiveThresholdDrop(true, 6, 9)).toBe(6);
-  });
-
-  it("returns to strict profit mode once seed data exists", () => {
+  it("never lowers production paper thresholds", () => {
+    expect(paperEnsureEffectiveThresholdDrop(true, 12, 0)).toBe(0);
+    expect(paperEnsureEffectiveThresholdDrop(true, 6, 9)).toBe(0);
     expect(paperEnsureEffectiveThresholdDrop(true, 12, 10)).toBe(0);
-  });
-
-  it("leaves non-profit paper ensure behavior unchanged", () => {
-    expect(paperEnsureEffectiveThresholdDrop(false, 12, 100)).toBe(12);
+    expect(paperEnsureEffectiveThresholdDrop(false, 12, 100)).toBe(0);
   });
 });
 
 describe("paperEnsureAllowsRelaxedSignalConfirm", () => {
-  it("allows relaxed confirm only during profit-mode seed data collection", () => {
-    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 0, 6)).toBe(true);
-    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 9, 10)).toBe(true);
+  it("never relaxes confirmation for production paper seed data collection", () => {
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 0, 6)).toBe(false);
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 9, 10)).toBe(false);
     expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 10, 10)).toBe(false);
   });
 

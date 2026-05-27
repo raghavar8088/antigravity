@@ -42,8 +42,10 @@ import { deskUiCompactFromEnv } from "@/lib/deskUiCompact";
 import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
 import { ProfitModeChecklist } from "@/components/ProfitModeChecklist";
 import { DeskRunModePanel } from "@/components/DeskRunModePanel";
+import { buildChopCompatiblePaperRoster } from "@/lib/futuresDeskPolicy";
 import { funnelSnapshotFromBrowserDebug } from "@/lib/deskEntryFunnelSnapshot";
 import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
+import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
@@ -211,7 +213,12 @@ export function BTCFuturesScalper({
   const [repairingState, setRepairingState] = useState(false);
   const [repairMessage, setRepairMessage] = useState<string | null>(null);
   const [serverBuildSha, setServerBuildSha] = useState<string | null>(null);
+  const [noTradeRootCause, setNoTradeRootCause] = useState<NoTradeRootCauseResult | null>(null);
   const deploymentStale = isDeploymentStale(serverBuildSha);
+  const chopCompatibleEnv = useMemo(
+    () => `DESK_WORKER_STRATEGY_IDS=${buildChopCompatiblePaperRoster().join(",")}`,
+    [],
+  );
 
   const downloadPaperTradesCsv = useCallback(async () => {
     if (!cloudAccountKey || exportInFlightRef.current) return;
@@ -307,6 +314,57 @@ export function BTCFuturesScalper({
         /BOOTSTRAP|PROBE|DEV_FORCE/i.test(t.strategyName ?? ""),
     );
   }, [trades]);
+
+  useEffect(() => {
+    if (!cloudAccountKey) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const q = `account_key=${encodeURIComponent(cloudAccountKey)}`;
+        const [funnelRes, traceRes, healthRes, stateRes] = await Promise.all([
+          fetch(`/api/desk-entry-funnel?${q}`, { cache: "no-store" }),
+          fetch(`/api/strategy-signal-trace?${q}&limit=500`, { cache: "no-store" }),
+          fetch("/api/health/desk-worker", { cache: "no-store" }),
+          fetch(`/api/paper-state?${q}`, { cache: "no-store" }),
+        ]);
+        const [funnelJson, traceJson, healthJson, stateJson] = await Promise.all([
+          funnelRes.json().catch(() => null),
+          traceRes.json().catch(() => null),
+          healthRes.json().catch(() => null),
+          stateRes.json().catch(() => null),
+        ]);
+        if (cancelled) return;
+        setNoTradeRootCause(
+          diagnoseNoTradeRootCause({
+            funnel: funnelJson?.snapshot ?? null,
+            signalTrace: {
+              summary: traceJson?.summary ?? null,
+              rows: traceJson?.rows ?? [],
+              ageSeconds: traceJson?.ageSeconds ?? null,
+            },
+            workerHealth: {
+              stale: healthJson?.stale,
+              workerLastPollAt: healthJson?.workerLastPollAt ?? null,
+            },
+            paperState: {
+              ...(stateJson?.state ?? {}),
+              balanceDriftUsd,
+              probeDominant,
+            },
+            rotationReport: stats.rotationReport ?? null,
+          }),
+        );
+      } catch {
+        if (!cancelled) setNoTradeRootCause(null);
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [cloudAccountKey, balanceDriftUsd, probeDominant, stats.rotationReport]);
 
   // (whyNoTradesVisible removed — replaced by always-visible EntryFunnelCard)
 
@@ -564,6 +622,21 @@ export function BTCFuturesScalper({
         </DeskBanner>
       )}
 
+      {deskMounted && noTradeRootCause && stats.openPositions === 0 && (
+        <DeskBanner
+          variant={noTradeRootCause.canOpenIfSignalQualifies ? "info" : "warning"}
+          title={`No-trade root cause: ${noTradeRootCause.rootCause}`}
+        >
+          {noTradeRootCause.safeFix}
+          {noTradeRootCause.evidence.length > 0 ? (
+            <span> Evidence: {noTradeRootCause.evidence.slice(0, 3).join(" · ")}</span>
+          ) : null}
+          {noTradeRootCause.rootCause === "REGIME_BLOCKING" ? (
+            <span> Suggested paper roster: <code>{chopCompatibleEnv}</code></span>
+          ) : null}
+        </DeskBanner>
+      )}
+
       {process.env.NEXT_PUBLIC_DESK_WORKER_ENABLED === "1" && deskMounted && !stats.workerMonitorMode && (
         <DeskBanner variant="warning" title="Browser-only execution — keep tab visible">
           No active 24/7 worker detected. Desk pauses when this tab is hidden or the PC sleeps.
@@ -607,6 +680,20 @@ export function BTCFuturesScalper({
           rotationSuspendedCount={stats.rotationReport?.suspended?.length ?? 0}
           deskSkippedOutsideSession={stats.deskSkippedOutsideSession}
           deskSkippedSpread={stats.deskSkippedSpread}
+        />
+      )}
+
+      {deskMounted && (
+        <TradePlacementVerificationPanel
+          workerFresh={isWorkerHeartbeatFresh(stats.workerLastPollAt)}
+          mongoConnected={Boolean(cloudAccountKey)}
+          rosterNonEmpty={(strategyIds?.length ?? strategyStatuses.length) > 0}
+          dataReady={isReady && (quote?.markPrice ?? 0) > 0}
+          evaluatedStrategies={entryDebug?.evalPairs ?? 0}
+          signalTraceFresh={noTradeRootCause?.evidence.some((x) => x.includes("trace evaluated=")) ?? false}
+          stateClean={balanceDriftUsd <= 1 && !probeDominant}
+          capClear={stats.openPositions < stats.maxPositions}
+          smokeTestEnabled={process.env.NEXT_PUBLIC_DESK_SMOKE_TEST === "1"}
         />
       )}
 
@@ -778,6 +865,56 @@ function FunnelRow({ label, value, highlight }: { label: string; value: string |
       <span style={{ color: "#8b949e", fontSize: 11, minWidth: 140 }}>{label}</span>
       <span style={{ fontWeight: highlight ? 700 : 400, fontSize: 12, color: highlight ? "#e6edf3" : "#c9d1d9", textAlign: "right" }}>{value}</span>
     </div>
+  );
+}
+
+function TradePlacementVerificationPanel({
+  workerFresh,
+  mongoConnected,
+  rosterNonEmpty,
+  dataReady,
+  evaluatedStrategies,
+  signalTraceFresh,
+  stateClean,
+  capClear,
+  smokeTestEnabled,
+}: {
+  workerFresh: boolean;
+  mongoConnected: boolean;
+  rosterNonEmpty: boolean;
+  dataReady: boolean;
+  evaluatedStrategies: number;
+  signalTraceFresh: boolean;
+  stateClean: boolean;
+  capClear: boolean;
+  smokeTestEnabled: boolean;
+}) {
+  const items = [
+    ["Worker fresh", workerFresh],
+    ["Mongo connected", mongoConnected],
+    ["Roster non-empty", rosterNonEmpty],
+    ["Data bars >= minimum", dataReady],
+    ["Evaluated strategies > 0", evaluatedStrategies > 0],
+    ["Signal trace fresh", signalTraceFresh],
+    ["State clean", stateClean],
+    ["No open-position cap", capClear],
+    [`Smoke test ${smokeTestEnabled ? "available" : "off"}`, !smokeTestEnabled],
+  ] as const;
+
+  return (
+    <DeskCard>
+      <DeskSectionHeader
+        title="Trade Placement Verification"
+        subtitle="Paper-only checks that prove whether execution plumbing or gates are blocking entries."
+      />
+      <div className="desk-metrics-row">
+        {items.map(([label, ok]) => (
+          <DeskChip key={label} tone={ok ? "success" : "error"}>
+            {ok ? "OK" : "CHECK"} {label}
+          </DeskChip>
+        ))}
+      </div>
+    </DeskCard>
   );
 }
 

@@ -35,7 +35,7 @@ export interface ProfitModeConfig {
   requireHighQualityInChop: boolean;
   /** Block LONG when MTF bias is bearish / SHORT when bullish. */
   blockCounterTrend: boolean;
-  /** Skip strategies in rotation PROBATION or SUSPENDED (only ACTIVE + PROMOTED). */
+  /** Strict rotation mode; only SUSPENDED blocks entries, insufficient/missing/probation stay allowed. */
   onlyPromotedOrActive: boolean;
 }
 
@@ -220,11 +220,9 @@ export function profitModeAllowsRotationStrategy(
   if (!entry) return true;
   // INSUFFICIENT → always allow (< 5 trades, rotation has no signal yet)
   if (entry.status === "INSUFFICIENT") return true;
-  // ACTIVE or PROMOTED → allow
-  if (entry.status === "ACTIVE" || entry.status === "PROMOTED") return true;
-  // PROBATION or SUSPENDED → block in strict mode (onlyPromotedOrActive=true).
-  // SUSPENDED is also blocked independently via suspendedStrategiesRef in the engine.
-  return false;
+  // Only SUSPENDED blocks execution. PROBATION remains tradable while the desk
+  // collects more paper evidence; otherwise rotation can zero the whole desk.
+  return entry.status !== "SUSPENDED";
 }
 
 /** Stricter paper exits when profit mode is on; null → use legacy paper overrides. */

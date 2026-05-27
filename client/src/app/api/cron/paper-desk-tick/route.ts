@@ -73,6 +73,7 @@ export async function GET(req: Request) {
 
   // Load strategy IDs from env
   const strategyIdsRaw = process.env.DESK_WORKER_STRATEGY_IDS ?? "";
+  const strategyIdsExplicit = strategyIdsRaw.trim() !== "";
   const strategyIds = strategyIdsRaw
     .split(",")
     .map((s) => parseInt(s.trim(), 10))
@@ -118,7 +119,8 @@ export async function GET(req: Request) {
   const ctx = {
     accountKey,
     storageNamespace: process.env.DESK_WORKER_STORAGE_NAMESPACE ?? "btc_future_trading_v4",
-    strategyIds,
+    strategyIds: strategyIdsExplicit ? strategyIds : undefined,
+    strategyIdsExplicit,
     baseUrl: "",
     balance: state?.balance ?? initialBalance,
     positions: (state?.positions ?? []) as WorkerPosition[],
@@ -207,6 +209,14 @@ export async function GET(req: Request) {
     worker_id: CRON_WORKER_ID,
     worker_last_poll_at: Date.now(),
     worker_owner: "vps",
+    entry_funnel_snapshot: result.funnelSnapshot,
+    signal_trace_latest: {
+      tickAt: result.lastPollAt,
+      mode: "cron",
+      symbol: result.funnelSnapshot.symbol ?? "BTCUSD",
+      summary: result.signalTraceSummary,
+      rows: result.signalTraceRows,
+    },
   });
 
   return NextResponse.json({

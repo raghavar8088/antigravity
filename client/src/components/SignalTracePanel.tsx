@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DeskButton, DeskChip } from "@/components/desk/ui";
+import { DeskButton, DeskChip, DeskBanner, DeskCard, DeskSectionHeader } from "@/components/desk/ui";
 import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
+import { closestSignalRows, signalTraceRatio } from "@/lib/strategySignalTrace";
+import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
+import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
 
 type TraceApiResponse = {
   ok: boolean;
@@ -13,6 +16,22 @@ type TraceApiResponse = {
   rows?: StrategySignalTraceRow[];
   message?: string;
   error?: string;
+};
+
+type FunnelApiResponse = {
+  ok: boolean;
+  snapshot?: EntryFunnelSnapshot | null;
+  ageSeconds?: number | null;
+  healthy?: boolean;
+  error?: string;
+};
+
+type WorkerHealthResponse = {
+  workerLastPollAt?: number | null;
+  owner?: string | null;
+  stale?: boolean;
+  source?: string;
+  buildSha?: string | null;
 };
 
 const STATUS_COLOR: Record<string, string> = {
@@ -27,6 +46,8 @@ const POLL_INTERVAL_MS = 5_000;
 
 export function SignalTracePanel({ accountKey }: { accountKey?: string | null }) {
   const [data, setData] = useState<TraceApiResponse | null>(null);
+  const [funnelData, setFunnelData] = useState<FunnelApiResponse | null>(null);
+  const [healthData, setHealthData] = useState<WorkerHealthResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +68,20 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
       if (gateFilter) params.set("gate", gateFilter);
       if (statusFilter) params.set("status", statusFilter);
       params.set("limit", "500");
-      const res = await fetch(`/api/strategy-signal-trace?${params.toString()}`);
-      const json = await res.json() as TraceApiResponse;
-      setData(json);
+
+      const [traceRes, funnelRes, healthRes] = await Promise.all([
+        fetch(`/api/strategy-signal-trace?${params.toString()}`),
+        fetch(`/api/desk-entry-funnel${accountKey ? `?account_key=${encodeURIComponent(accountKey)}` : ""}`),
+        fetch(`/api/health/desk-worker`),
+      ]);
+
+      const traceJson = await traceRes.json() as TraceApiResponse;
+      const funnelJson = await funnelRes.json() as FunnelApiResponse;
+      const healthJson = await healthRes.json() as WorkerHealthResponse;
+
+      setData(traceJson);
+      setFunnelData(funnelJson.ok ? funnelJson : null);
+      setHealthData(healthJson);
     } catch {
       setError("Network error fetching signal trace");
     } finally {
@@ -86,22 +118,72 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
     return ["", ...Array.from(gates).sort()];
   }, [allRows]);
 
+  const closestSignals = useMemo(() => closestSignalRows(allRows, 10), [allRows]);
+
+  // ── Derived diagnostic state (PART 2 / PART 8) ─────────────────────────────
+  const funnel = funnelData?.snapshot ?? null;
+  const workerStale = healthData?.stale ?? true;
+  const traceAge = data?.ageSeconds ?? null;
+  const traceEmpty = !data?.rows || data.rows.length === 0;
+
+  const rootCauseResult: NoTradeRootCauseResult | null = useMemo(() => {
+    if (!funnel && !data?.summary && workerStale) return null;
+    return diagnoseNoTradeRootCause({
+      funnel,
+      signalTrace: { summary: data?.summary ?? null, rows: data?.rows ?? null, ageSeconds: traceAge },
+      workerHealth: { stale: workerStale, workerLastPollAt: healthData?.workerLastPollAt ?? null, ageSeconds: healthData?.workerLastPollAt ? Math.floor((Date.now() - healthData.workerLastPollAt) / 1000) : null },
+    });
+  }, [funnel, data?.summary, data?.rows, traceAge, workerStale, healthData]);
+
+  const workerStatus = workerStale ? "STALE" : "ACTIVE";
+  const traceStatus = traceEmpty ? (workerStale ? "EMPTY (worker stale)" : "EMPTY") : (traceAge != null && traceAge > 30 ? "STALE" : "FRESH");
+
+  const copyDebugContext = useCallback(() => {
+    const ctx = [
+      "Signal Trace Debug",
+      `Worker: ${workerStatus}`,
+      `Trace age: ${traceAge != null ? traceAge + "s" : "unknown"}`,
+      `Funnel blocker: ${funnel?.dominantBlocker ?? "none"}`,
+      `Root cause: ${rootCauseResult?.rootCause ?? "unknown"}`,
+      `Evaluated: ${data?.summary?.totalEvaluated ?? 0}`,
+      `Fired: ${data?.summary?.fired ?? 0}`,
+      `Candidates: ${data?.summary?.candidates ?? 0}`,
+      `Opened: ${data?.summary?.opened ?? 0}`,
+      `Top gate: ${data?.summary?.topRejectedGate ?? "none"}`,
+      `Closest: ${closestSignals.length > 0 ? `${closestSignals[0].strategyName} ${(signalTraceRatio(closestSignals[0]) * 100).toFixed(0)}%` : "none"}`,
+      `Recommended: ${rootCauseResult?.safeFix ?? "Check worker logs"}`,
+      "Relevant files: runPaperDeskPollTick.ts, strategySignalTrace.ts, SignalTracePanel.tsx",
+    ].join("\n");
+    void navigator.clipboard.writeText(ctx);
+  }, [workerStatus, traceAge, funnel, rootCauseResult, data, closestSignals]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 11 }}>
-      {/* Summary chips */}
-      {summary && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-          <DeskChip tone="default">Evaluated: {summary.totalEvaluated}</DeskChip>
-          <DeskChip tone={summary.fired > 0 ? "warning" : "default"}>Fired: {summary.fired}</DeskChip>
-          <DeskChip tone={summary.candidates > 0 ? "primary" : "default"}>Candidates: {summary.candidates}</DeskChip>
-          <DeskChip tone={summary.opened > 0 ? "success" : "default"}>Opened: {summary.opened}</DeskChip>
-          {summary.topRejectedGate && (
-            <DeskChip tone="error">Top reject: {summary.topRejectedGate}</DeskChip>
-          )}
-          {data?.ageSeconds != null && (
-            <span style={{ fontSize: 9, color: "#8b949e" }}>
-              {data.ageSeconds}s ago · {data.mode ?? "?"} · {data.symbol ?? ""}
-            </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 11 }}>
+      {/* PART 1: Title / Subtitle / Helper */}
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#c9d1d9" }}>Signal Trade Lab</div>
+        <div style={{ fontSize: 10, color: "#8b949e" }}>
+          End-to-end strategy evaluation: signal → confirmation → gates → candidate → paper open
+        </div>
+        <div style={{ fontSize: 9, color: "#8b949e", marginTop: 2 }}>
+          This panel explains why a signal did or did not become a paper position. It does not force trades.
+        </div>
+      </div>
+
+      {/* PART 2: Always-visible Diagnostic Header */}
+      <DeskCard>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: "2px 4px" }}>
+          <DeskChip tone={workerStale ? "error" : "success"}>Worker: {workerStatus}</DeskChip>
+          <DeskChip tone={traceStatus.includes("STALE") || traceStatus.includes("EMPTY") ? "warning" : "success"}>Trace: {traceStatus}</DeskChip>
+          {traceAge != null && <DeskChip tone="default">{traceAge}s ago</DeskChip>}
+          {funnel && (
+            <>
+              <DeskChip tone="default">Active: {funnel.activeStrategies}</DeskChip>
+              <DeskChip tone="default">Evaluated: {funnel.evaluatedStrategies}</DeskChip>
+              <DeskChip tone="default">Candidates: {funnel.candidateCount}</DeskChip>
+              <DeskChip tone="default">Opened: {funnel.opened}</DeskChip>
+              <DeskChip tone={funnel.dominantBlocker === "none" ? "success" : "warning"}>Blocker: {funnel.dominantBlocker}</DeskChip>
+            </>
           )}
           <DeskButton
             variant="outlined"
@@ -111,15 +193,58 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
           >
             {loading ? "…" : "Refresh"}
           </DeskButton>
+          <DeskButton variant="outlined" onClick={copyDebugContext} style={{ minHeight: 24, fontSize: "0.65rem", padding: "0 8px" }}>
+            Copy Debug
+          </DeskButton>
         </div>
-      )}
+      </DeskCard>
 
       {error && <p style={{ fontSize: 10, color: "#f85149", margin: 0 }}>{error}</p>}
 
-      {!summary && !loading && (
-        <p style={{ fontSize: 10, color: "#8b949e", margin: 0 }}>
-          {data?.message ?? "No signal trace yet. Keep worker running or wait for next poll tick."}
-        </p>
+      {/* PART 8 + 9: Root Cause Banner + Freshness Warning */}
+      {rootCauseResult && (
+        <DeskBanner
+          variant={rootCauseResult.rootCause === "WORKER_STALE" || rootCauseResult.rootCause === "STATE_DIRTY" ? "error" : rootCauseResult.rootCause.includes("BLOCKING") ? "warning" : "info"}
+          title={`Current root cause: ${rootCauseResult.rootCause}`}
+        >
+          <div style={{ fontSize: 10 }}>
+            {rootCauseResult.evidence.join(" · ")}
+            <div style={{ marginTop: 4, color: "#8b949e" }}>{rootCauseResult.safeFix}</div>
+          </div>
+        </DeskBanner>
+      )}
+
+      {healthData && !healthData.stale && traceAge != null && traceAge > 30 && (
+        <DeskBanner variant="warning" title="Worker Trace Freshness Warning">
+          Worker heartbeat is fresh, but signal trace is {traceAge}s old. The worker may not be persisting `signal_trace_latest`.
+        </DeskBanner>
+      )}
+
+      {/* PART 3: Professional Empty State when no trace */}
+      {!data?.summary && !loading && traceEmpty && (
+        <DeskCard padding="md">
+          <DeskSectionHeader title="No signal trace captured yet" />
+          <div style={{ fontSize: 10, color: "#8b949e", marginBottom: 8 }}>
+            Likely causes:
+          </div>
+          <ul style={{ fontSize: 10, margin: "0 0 12px 16px", color: "#c9d1d9" }}>
+            <li>Worker heartbeat stale (VPS pm2 down or lease lost)</li>
+            <li>Entry funnel missing (worker never completed a tick)</li>
+            <li>Worker not writing `signal_trace_latest` to paper_state</li>
+            <li>Browser in monitor mode but trace not yet synced</li>
+            <li>Roster empty / invalid DESK_WORKER_STRATEGY_IDS</li>
+            <li>Market data unavailable (Delta API issue)</li>
+          </ul>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <DeskButton variant="outlined" onClick={() => void fetchTrace()}>Refresh</DeskButton>
+            <DeskButton variant="outlined" onClick={copyDebugContext}>Copy Signal Debug Context</DeskButton>
+            <a href="/api/health/desk-worker" target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#58a6ff" }}>Open health JSON</a>
+            <a href="/api/desk-entry-funnel" target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#58a6ff" }}>Open entry funnel JSON</a>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 9, color: "#8b949e" }}>
+            Restart command: <code>pm2 restart btc-ft-worker && pm2 logs btc-ft-worker --lines 50</code>
+          </div>
+        </DeskCard>
       )}
 
       {/* Filters */}
@@ -153,6 +278,46 @@ export function SignalTracePanel({ accountKey }: { accountKey?: string | null })
             Fired/candidates only
           </label>
           <span style={{ fontSize: 9, color: "#8b949e", marginLeft: "auto" }}>{rows.length} rows</span>
+        </div>
+      )}
+
+      {closestSignals.length > 0 && (
+        <div style={{ overflowX: "auto", border: "1px solid #30363d", borderRadius: 6 }}>
+          <div style={{ padding: "5px 6px", color: "#c9d1d9", fontWeight: 700 }}>
+            Closest signals
+          </div>
+          <table style={{ width: "100%", fontSize: 9, borderCollapse: "collapse", fontFamily: "var(--desk-font-mono, monospace)" }}>
+            <thead>
+              <tr style={{ color: "#8b949e", textAlign: "left", borderTop: "1px solid #21262d", borderBottom: "1px solid #21262d" }}>
+                <th style={{ padding: "3px 6px" }}>Strategy</th>
+                <th style={{ padding: "3px 6px" }}>Score</th>
+                <th style={{ padding: "3px 6px" }}>Threshold</th>
+                <th style={{ padding: "3px 6px" }}>Ratio</th>
+                <th style={{ padding: "3px 6px" }}>Confirm</th>
+                <th style={{ padding: "3px 6px" }}>Regime</th>
+                <th style={{ padding: "3px 6px" }}>Gate</th>
+                <th style={{ padding: "3px 6px" }}>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {closestSignals.map((row) => (
+                <tr key={`closest-${row.traceId}`} style={{ borderTop: "1px solid #21262d" }}>
+                  <td style={{ padding: "3px 6px", color: "#c9d1d9" }}>#{row.strategyId} {row.strategyName}</td>
+                  <td style={{ padding: "3px 6px", color: "#c9d1d9" }}>{row.signalScore.toFixed(1)}</td>
+                  <td style={{ padding: "3px 6px", color: "#c9d1d9" }}>{row.requiredThreshold}</td>
+                  <td style={{ padding: "3px 6px", color: signalTraceRatio(row) >= 1 ? "#3fb950" : "#d29922" }}>
+                    {signalTraceRatio(row).toFixed(2)}
+                  </td>
+                  <td style={{ padding: "3px 6px", color: row.confirmPassed ? "#3fb950" : "#f85149" }}>
+                    {row.confirmPassed ? "pass" : "fail"}
+                  </td>
+                  <td style={{ padding: "3px 6px", color: row.regimeAllowed ? "#3fb950" : "#f85149" }}>{row.regime}</td>
+                  <td style={{ padding: "3px 6px", color: "#c9d1d9" }}>{row.gate}</td>
+                  <td style={{ padding: "3px 6px", color: "#8b949e" }}>{row.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

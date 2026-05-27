@@ -42,6 +42,7 @@ import {
 import { isWorkerHeartbeatFresh, WORKER_LEASE_TTL_MS } from "../src/lib/paperDeskWorker/workerLease";
 import { normalizeBaseUrl } from "../src/lib/paperDeskWorker/workerHelpers";
 import { profitModeFromEnv } from "../src/lib/futuresProfitMode";
+import { diagnoseNoTradeRootCause } from "../src/lib/noTradeRootCause";
 import type { BTCFuturesTrade } from "../src/lib/btcFuturesTrade.types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -53,7 +54,9 @@ const INITIAL_BALANCE = Math.max(100, Number(process.env.NEXT_PUBLIC_DESK_INITIA
 const SIGNAL_THRESHOLD = Math.max(18, Number(process.env.NEXT_PUBLIC_BTC_FT_SIGNAL_THRESHOLD ?? 26) || 26);
 const RELAX_CONFIRM = process.env.NEXT_PUBLIC_BTC_FT_RELAX_CONFIRM === "1";
 
-const STRATEGY_IDS: number[] = (process.env.DESK_WORKER_STRATEGY_IDS ?? "")
+const STRATEGY_IDS_RAW = process.env.DESK_WORKER_STRATEGY_IDS ?? "";
+const STRATEGY_IDS_EXPLICIT = STRATEGY_IDS_RAW.trim() !== "";
+const STRATEGY_IDS: number[] = STRATEGY_IDS_RAW
   .split(",")
   .map((s) => parseInt(s.trim(), 10))
   .filter((n) => Number.isFinite(n) && n > 0);
@@ -205,7 +208,7 @@ async function main() {
   console.log(`[worker] worker_id=${WORKER_ID}`);
   console.log(`[worker] base_url=${BASE_URL}`);
   console.log(`[worker] poll_ms=${POLL_MS}`);
-  console.log(`[worker] strategy_ids=${STRATEGY_IDS.length > 0 ? STRATEGY_IDS.join(",") : "(all)"}`);
+  console.log(`[worker] strategy_ids=${STRATEGY_IDS_EXPLICIT ? STRATEGY_IDS.join(",") || "(none parsed)" : "(all)"}`);
 
   if (!ACCOUNT_KEY) {
     console.error("[worker] FATAL: DESK_WORKER_ACCOUNT_KEY is required");
@@ -286,7 +289,8 @@ async function main() {
     const ctx: PaperDeskWorkerContext = {
       accountKey: ACCOUNT_KEY,
       storageNamespace: STORAGE_NAMESPACE,
-      strategyIds: STRATEGY_IDS,
+      strategyIds: STRATEGY_IDS_EXPLICIT ? STRATEGY_IDS : undefined,
+      strategyIdsExplicit: STRATEGY_IDS_EXPLICIT,
       baseUrl: BASE_URL,
       balance: lastBalance,
       positions: [...lastPositions],
@@ -383,13 +387,13 @@ async function main() {
         worker_last_poll_at: Date.now(),
         worker_owner: "vps",
         entry_funnel_snapshot: result.funnelSnapshot ?? undefined,
-        signal_trace_latest: result.signalTraceRows.length > 0 ? {
+        signal_trace_latest: {
           tickAt: result.lastPollAt,
           mode: "worker",
           symbol: result.funnelSnapshot.symbol ?? "BTCUSD",
           summary: result.signalTraceSummary,
           rows: result.signalTraceRows,
-        } : undefined,
+        },
       });
     } catch (err) {
       console.error("[worker] state save failed:", err);
@@ -422,6 +426,21 @@ async function main() {
     // ── Signal trace log line (every tick) ───────────────────────────────────
     const ts = result.signalTraceSummary;
     const traceLine = ` trace evaluated=${ts.totalEvaluated} fired=${ts.fired} candidates=${ts.candidates} opened=${ts.opened} topReject=${ts.topRejectedGate ?? "none"}`;
+    const noTrade = result.openedPositions.length === 0
+      ? diagnoseNoTradeRootCause({
+          funnel: result.funnelSnapshot,
+          signalTrace: { summary: result.signalTraceSummary, rows: result.signalTraceRows },
+          workerHealth: { stale: false, workerLastPollAt: Date.now(), ageSeconds: 0 },
+          paperState: {
+            balance: lastBalance,
+            positions: lastPositions,
+            pause_entries: liveState?.pause_entries ?? false,
+          },
+        })
+      : null;
+    const rootCauseLine = noTrade
+      ? ` rootCause=${noTrade.rootCause} evidence="${noTrade.evidence.slice(0, 2).join("; ")}"`
+      : "";
 
     console.log(
       `[worker] tick#${tickCount} ${formatDuration(tickMs).padStart(5)} ` +
@@ -429,6 +448,7 @@ async function main() {
       `bal=$${lastBalance.toFixed(2)} regime=${result.regime} blocker=${result.error ?? "none"} drift=$${balanceDrift.toFixed(2)}` +
       funnelLine +
       traceLine +
+      rootCauseLine +
       (liveState?.pause_entries ? " [PAUSED]" : ""),
     );
 

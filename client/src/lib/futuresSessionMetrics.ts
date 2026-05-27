@@ -26,7 +26,8 @@ export function isProbeOrBootstrapTrade(
     name.includes("BOOTSTRAP") ||
     name.includes("PROBE") ||
     name.includes("DEV_FORCE") ||
-    name.includes("CANARY") // PAPER_ENTRY_CANARY — diagnostic only, must never affect metrics
+    name.includes("CANARY") ||
+    name.includes("SMOKE_TEST") // PAPER_EXECUTION_SMOKE_TEST — diagnostic only, must never affect metrics
   );
 }
 

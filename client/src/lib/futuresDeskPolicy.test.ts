@@ -369,7 +369,7 @@ describe("deskAutoDisableStratsEnabled / deskKillMinTradesFromEnv", () => {
 
   it("auto-disable ON by default (hardening 2026-05-21); disable with =0", () => {
     expect(deskAutoDisableStratsEnabled()).toBe(true);
-    expect(deskKillMinTradesFromEnv()).toBe(8);
+    expect(deskKillMinTradesFromEnv()).toBe(5);
     vi.stubEnv("NEXT_PUBLIC_DESK_AUTO_DISABLE_STRATS", "0");
     expect(deskAutoDisableStratsEnabled()).toBe(false);
   });

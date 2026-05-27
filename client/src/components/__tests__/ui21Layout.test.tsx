@@ -6,7 +6,7 @@ import { renderToString } from "react-dom/server";
 
 /** Render component to HTML string and return it. */
 function html(node: React.ReactNode): string {
-  return renderToString(node as React.ReactElement);
+  return renderToString(node as React.ReactElement).replace(/<!--.*?-->/g, "");
 }
 
 // ── LiveDeskStatusBar ─────────────────────────────────────────────────────────

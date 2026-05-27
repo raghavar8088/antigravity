@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
   const state = await getAccountState(accountKey);
   const raw = state?.signal_trace_latest as LatestTrace | undefined | null;
 
-  if (!raw || !raw.rows || raw.rows.length === 0) {
+  if (!raw || !raw.rows) {
     return NextResponse.json({
       ok: true,
       summary: null,

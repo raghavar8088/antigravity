@@ -160,13 +160,13 @@ describe("profitModeAllowsRotationStrategy", () => {
     expect(profitModeAllowsRotationStrategy(77, report, cfg())).toBe(true);
   });
 
-  it("blocks PROBATION strategy in strict mode (default)", () => {
+  it("allows PROBATION strategy in strict mode while evidence accumulates", () => {
     const report = makeReport({
       active: [{ strategyId: 99 }],
       promoted: [],
       probation: [{ strategyId: 3 }],
     });
-    expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(false);
+    expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(true);
   });
 
   it("allows PROBATION when onlyPromotedOrActive=false (STRICT=0)", () => {
@@ -178,14 +178,14 @@ describe("profitModeAllowsRotationStrategy", () => {
     expect(profitModeAllowsRotationStrategy(3, report, cfg({ onlyPromotedOrActive: false }))).toBe(true);
   });
 
-  it("blocks PROBATION and SUSPENDED in strict mode", () => {
+  it("allows PROBATION but blocks SUSPENDED in strict mode", () => {
     const report = makeReport({
       active: [{ strategyId: 1 }],
       promoted: [{ strategyId: 2 }],
       probation: [{ strategyId: 3 }],
       suspended: [{ strategyId: 4 }],
     });
-    expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(false);
+    expect(profitModeAllowsRotationStrategy(3, report, cfg())).toBe(true);
     expect(profitModeAllowsRotationStrategy(4, report, cfg())).toBe(false);
   });
 
