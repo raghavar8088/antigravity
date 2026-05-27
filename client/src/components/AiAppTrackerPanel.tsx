@@ -10,12 +10,6 @@ type Props = {
   dominantBlocker: string;
 };
 
-const SEVERITY_COLOR: Record<string, string> = {
-  info: "#3fb950",
-  warning: "#d29922",
-  danger: "#f85149",
-};
-
 const SEVERITY_TONE: Record<string, "success" | "warning" | "error" | "default"> = {
   info: "success",
   warning: "warning",
@@ -35,7 +29,7 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
     try {
       const res = await fetch("/api/ai-app-tracker/latest");
       if (res.ok) {
-        const data = await res.json() as { ok: boolean; report?: AiAppTrackerReport | null };
+        const data = (await res.json()) as { ok: boolean; report?: AiAppTrackerReport | null };
         if (data.ok) setReport(data.report ?? null);
         else setReport(null);
       } else if (res.status !== 404) {
@@ -48,14 +42,16 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
     }
   }, []);
 
-  useEffect(() => { void fetchLatest(); }, [fetchLatest]);
+  useEffect(() => {
+    void fetchLatest();
+  }, [fetchLatest]);
 
   const captureNow = useCallback(async () => {
     setCapturing(true);
     setError(null);
     try {
       const res = await fetch("/api/ai-app-tracker/capture", { method: "POST" });
-      const data = await res.json() as { ok: boolean; error?: string };
+      const data = (await res.json()) as { ok: boolean; error?: string };
       if (data.ok) await fetchLatest();
       else setError(data.error ?? "Capture failed");
     } catch {
@@ -92,339 +88,344 @@ export function AiAppTrackerPanel({ workerStatus, dominantBlocker }: Props) {
       if (topHeal && topHeal.type !== "NO_ACTION") {
         lines.push(`Healing: [${topHeal.type}] ${topHeal.title} → ${topHeal.operatorAction}`);
       }
-      lines.push(`Warnings: ${report.snapshot.warnings.length > 0 ? report.snapshot.warnings.join(" | ") : "none"}`);
+      lines.push(
+        `Warnings: ${report.snapshot.warnings.length > 0 ? report.snapshot.warnings.join(" | ") : "none"}`,
+      );
     } else {
       lines.push("No tracker report yet.");
     }
     lines.push("Mind map: client/docs/AI_APPLICATION_MINDMAP.md");
     lines.push("JSON twin: client/docs/ai-application-mindmap.json");
-    lines.push("Key files: client/src/lib/deskEntryFunnelSnapshot.ts | client/src/lib/futuresDeskPolicy.ts | client/src/hooks/useBTCFuturesScalperEngine.ts");
-
+    lines.push(
+      "Key files: client/src/lib/deskEntryFunnelSnapshot.ts | client/src/lib/futuresDeskPolicy.ts | client/src/hooks/useBTCFuturesScalperEngine.ts",
+    );
     void navigator.clipboard.writeText(lines.join("\n")).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   }, [report, workerStatus, dominantBlocker, healingActions]);
 
-  const reportAgeMin = report
-    ? Math.floor((Date.now() - new Date(report.created_at).getTime()) / 60_000)
-    : null;
+  const reportAgeMin =
+    report ? Math.floor((Date.now() - new Date(report.created_at).getTime()) / 60_000) : null;
+
+  const severity = report?.severity ?? "info";
+  const activeHealActions = healingActions.filter((a) => a.type !== "NO_ACTION");
 
   return (
-    <div
-      style={{
-        border: "1px solid #21262d",
-        borderRadius: 8,
-        padding: "10px 12px",
-        background: "#161b22",
-        fontSize: 11,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span style={{ fontWeight: 600, color: "#58a6ff" }}>AI App Tracker</span>
-        <div style={{ display: "flex", gap: 6 }}>
-          <DeskButton
-            variant="outlined"
-            style={{ minHeight: 26, fontSize: "0.65rem", padding: "0 8px" }}
-            onClick={() => void captureNow()}
-            disabled={capturing}
-          >
-            {capturing ? "Capturing…" : "Capture report now"}
-          </DeskButton>
-          <DeskButton
-            variant="outlined"
-            style={{ minHeight: 26, fontSize: "0.65rem", padding: "0 8px" }}
-            onClick={copyAiContext}
-          >
-            {copied ? "Copied!" : "Copy AI context"}
-          </DeskButton>
-        </div>
-      </div>
+    <div className="ai-tracker-panel">
+      {/* Severity strip */}
+      <div className={`ai-tracker-severity-strip ai-tracker-severity-strip--${severity}`} />
 
-      {error && <p style={{ fontSize: 10, color: "#f85149", margin: 0 }}>{error}</p>}
-
-      {/* Worker / blocker row */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "#8b949e" }}>Worker:</span>
-        <span style={{ fontSize: 10, color: "#c9d1d9" }}>{workerStatus}</span>
-        <span style={{ fontSize: 10, color: "#8b949e", marginLeft: 8 }}>Blocker:</span>
-        <code style={{ fontSize: 10, color: "#d29922", fontFamily: "var(--desk-font-mono, monospace)" }}>
-          {dominantBlocker}
-        </code>
-      </div>
-
-      {/* Latest report */}
-      {loading && (
-        <p style={{ fontSize: 10, color: "#8b949e", margin: 0 }}>Loading latest report…</p>
-      )}
-      {!loading && !report && !error && (
-        <p style={{ fontSize: 10, color: "#8b949e", margin: 0 }}>
-          No tracker report yet. Click &quot;Capture report now&quot; to create one.
-        </p>
-      )}
-      {report && snap && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {/* Severity + age */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <DeskChip tone={SEVERITY_TONE[report.severity] ?? "default"}>
-              {report.severity.toUpperCase()}
-            </DeskChip>
-            <span style={{ fontSize: 9, color: "#8b949e" }}>
-              {reportAgeMin != null ? `${reportAgeMin}m ago` : ""} · {report.report_id.slice(0, 8)}
-            </span>
+      <div className="ai-tracker-body">
+        {/* ── Header ── */}
+        <div className="ai-tracker-header">
+          <div className="ai-tracker-header__left">
+            <span className="ai-tracker-header__title">AI App Tracker</span>
+            {report && (
+              <DeskChip tone={SEVERITY_TONE[severity] ?? "default"}>
+                {severity.toUpperCase()}
+              </DeskChip>
+            )}
+            {reportAgeMin != null && (
+              <span className="ai-tracker-header__age">{reportAgeMin}m ago</span>
+            )}
           </div>
+          <div className="ai-tracker-header__actions">
+            <DeskButton
+              variant="outlined"
+              style={{ minHeight: 30, fontSize: "0.6875rem", padding: "0 10px" }}
+              onClick={() => void captureNow()}
+              disabled={capturing}
+            >
+              {capturing ? "Capturing…" : "Capture now"}
+            </DeskButton>
+            <DeskButton
+              variant="outlined"
+              style={{ minHeight: 30, fontSize: "0.6875rem", padding: "0 10px" }}
+              onClick={copyAiContext}
+            >
+              {copied ? "Copied!" : "Copy AI context"}
+            </DeskButton>
+          </div>
+        </div>
 
-          {/* Summary */}
-          <p
+        {/* ── Worker / blocker status bar ── */}
+        <div className="ai-tracker-status-bar">
+          <span className="ai-tracker-status-bar__label">Worker</span>
+          <span className="ai-tracker-status-bar__value">{workerStatus}</span>
+          <span className="ai-tracker-status-bar__sep">·</span>
+          <span className="ai-tracker-status-bar__label">Blocker</span>
+          <code
             style={{
-              fontSize: 10,
-              color: SEVERITY_COLOR[report.severity] ?? "#c9d1d9",
-              margin: 0,
-              lineHeight: 1.5,
+              fontFamily: "var(--desk-font-mono)",
+              fontSize: "0.6875rem",
+              color: "var(--desk-warning)",
+              fontWeight: 500,
             }}
           >
-            {report.summary}
-          </p>
-
-          {/* Recommendations */}
-          {report.recommendations.length > 0 && (
-            <div>
-              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>Recommendations:</p>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {report.recommendations.slice(0, 3).map((rec, i) => (
-                  <li key={i} style={{ fontSize: 9, color: "#c9d1d9", marginBottom: 2 }}>
-                    {rec}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {dominantBlocker}
+          </code>
+          {snap && (
+            <>
+              <span className="ai-tracker-status-bar__sep">·</span>
+              <span className="ai-tracker-status-bar__label">VPS</span>
+              <span
+                className={`ai-tracker-status-bar__value ai-tracker-status-bar__value--${snap.worker.stale ? "stale" : "live"}`}
+              >
+                {snap.worker.stale ? `STALE (${snap.worker.ageSeconds ?? "?"}s)` : "LIVE"}
+              </span>
+            </>
           )}
+        </div>
 
-          {/* Self-healing executed (from server-side executor) */}
-          {report.healingExecuted && report.healingExecuted.length > 0 && (
-            <div>
-              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>
-                Auto-heal log ({report.healingExecuted.filter((h) => h.status === "executed").length}/
-                {report.healingExecuted.length} executed):
-              </p>
-              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
-                {report.healingExecuted.slice(0, 4).map((h, i) => {
-                  const color =
-                    h.status === "executed"
-                      ? "#3fb950"
-                      : h.status === "failed"
-                        ? "#f85149"
-                        : "#8b949e";
-                  return (
+        {/* ── Errors / loading ── */}
+        {error && (
+          <p style={{ fontSize: "0.75rem", color: "var(--desk-error)", margin: 0 }}>{error}</p>
+        )}
+        {loading && (
+          <p style={{ fontSize: "0.6875rem", color: "var(--desk-on-surface-variant)", margin: 0 }}>
+            Loading…
+          </p>
+        )}
+        {!loading && !report && !error && (
+          <p style={{ fontSize: "0.6875rem", color: "var(--desk-on-surface-variant)", margin: 0 }}>
+            No tracker report yet — click Capture now to create one.
+          </p>
+        )}
+
+        {/* ── Report body ── */}
+        {report && snap && (
+          <>
+            {/* Summary */}
+            <p className={`ai-tracker-summary ai-tracker-summary--${severity}`}>
+              {report.summary}
+            </p>
+
+            {/* Recommendations */}
+            {report.recommendations.length > 0 && (
+              <div>
+                <p className="ai-tracker-section-label">Recommendations</p>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  {report.recommendations.slice(0, 3).map((rec, i) => (
                     <li
                       key={i}
                       style={{
-                        borderLeft: `3px solid ${color}`,
-                        paddingLeft: 6,
+                        fontSize: "0.6875rem",
+                        color: "var(--desk-on-surface)",
                         marginBottom: 3,
+                        lineHeight: 1.45,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: "#c9d1d9" }}>
+                      {rec}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Self-healing actions */}
+            {activeHealActions.length > 0 && (
+              <div>
+                <p className="ai-tracker-section-label">
+                  Self-healing actions ({activeHealActions.length})
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {activeHealActions.slice(0, 3).map((act, i) => (
+                    <div
+                      key={i}
+                      className={`ai-tracker-heal-card ai-tracker-heal-card--${act.severity}`}
+                    >
+                      <div className="ai-tracker-heal-card__title-row">
+                        <span className="ai-tracker-heal-card__title">{act.title}</span>
+                        <span className="ai-tracker-heal-card__type">{act.type}</span>
+                        {act.safeToAutomate && (
+                          <span className="ai-tracker-heal-card__safe-badge">
+                            safe-to-automate
+                          </span>
+                        )}
+                      </div>
+                      <p className="ai-tracker-heal-card__reason">{act.reason}</p>
+                      <p className="ai-tracker-heal-card__action">→ {act.operatorAction}</p>
+                      {act.copyableCommand && (
+                        <div className="ai-tracker-cmd-block">
+                          <code
+                            className="ai-tracker-cmd-block__code"
+                            title={act.copyableCommand}
+                          >
+                            {act.copyableCommand}
+                          </code>
+                          <DeskButton
+                            variant="outlined"
+                            style={{ minHeight: 24, fontSize: "0.625rem", padding: "0 8px", flexShrink: 0 }}
+                            onClick={() => copyCmd(act.copyableCommand!)}
+                          >
+                            {copiedCmd === act.copyableCommand ? "Copied" : "Copy"}
+                          </DeskButton>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Auto-heal execution log */}
+            {report.healingExecuted && report.healingExecuted.length > 0 && (
+              <div>
+                <p className="ai-tracker-section-label">
+                  Auto-heal log (
+                  {report.healingExecuted.filter((h) => h.status === "executed").length}/
+                  {report.healingExecuted.length} executed)
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {report.healingExecuted.slice(0, 4).map((h, i) => (
+                    <div
+                      key={i}
+                      className={`ai-tracker-heal-log-item ai-tracker-heal-log-item--${h.status}`}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.6875rem",
+                            fontWeight: 600,
+                            color: "var(--desk-on-surface)",
+                          }}
+                        >
                           [{h.actionType}] {h.title}
                         </span>
                         <span
                           style={{
-                            fontSize: 8,
-                            fontFamily: "var(--desk-font-mono, monospace)",
-                            color,
-                            border: `1px solid ${color}`,
+                            fontSize: "0.625rem",
+                            fontFamily: "var(--desk-font-mono)",
+                            border: "1px solid var(--desk-outline)",
                             borderRadius: 3,
-                            padding: "0 4px",
+                            padding: "0 5px",
+                            color:
+                              h.status === "executed"
+                                ? "var(--desk-success)"
+                                : h.status === "failed"
+                                  ? "var(--desk-error)"
+                                  : "var(--desk-on-surface-variant)",
                           }}
                         >
                           {h.status}
                         </span>
                         {h.durationMs != null && (
-                          <span style={{ fontSize: 8, color: "#8b949e" }}>{h.durationMs}ms</span>
+                          <span
+                            style={{
+                              fontSize: "0.625rem",
+                              color: "var(--desk-on-surface-variant)",
+                            }}
+                          >
+                            {h.durationMs}ms
+                          </span>
                         )}
                       </div>
                       {h.reason && (
-                        <p style={{ fontSize: 9, color: "#8b949e", margin: "1px 0 0", lineHeight: 1.4 }}>
+                        <p
+                          style={{
+                            fontSize: "0.625rem",
+                            color: "var(--desk-on-surface-variant)",
+                            margin: 0,
+                            lineHeight: 1.4,
+                          }}
+                        >
                           {h.reason}
                         </p>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {/* Self-healing actions */}
-          {healingActions.length > 0 && healingActions[0].type !== "NO_ACTION" && (
-            <div>
-              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 4px" }}>
-                Self-healing actions ({healingActions.length}):
-              </p>
-              <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
-                {healingActions.slice(0, 4).map((act, i) => (
-                  <li
-                    key={i}
+            {/* Active warnings */}
+            {snap.warnings.length > 0 && (
+              <div>
+                <p className="ai-tracker-section-label">Active warnings</p>
+                <ul style={{ margin: 0, paddingLeft: 16 }}>
+                  {snap.warnings.slice(0, 3).map((w, i) => (
+                    <li
+                      key={i}
+                      style={{
+                        fontSize: "0.6875rem",
+                        color: "var(--desk-warning)",
+                        marginBottom: 3,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Quick-stats grid */}
+            <div className="ai-tracker-stats-grid">
+              <span>
+                Open positions: <b>{snap.paperState.openPositions}</b>
+              </span>
+              <span>
+                Active strats: <b>{snap.entryFunnel.activeStrategies ?? "?"}</b>
+              </span>
+              {snap.paperState.balanceDriftUsd != null && (
+                <span>
+                  Balance drift:{" "}
+                  <b
                     style={{
-                      borderLeft: `3px solid ${SEVERITY_COLOR[act.severity] ?? "#30363d"}`,
-                      paddingLeft: 6,
-                      marginBottom: 4,
+                      color:
+                        snap.paperState.balanceDriftUsd < -20
+                          ? "var(--desk-error)"
+                          : snap.paperState.balanceDriftUsd > 20
+                            ? "var(--desk-success)"
+                            : "var(--desk-on-surface)",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 9, fontWeight: 600, color: "#c9d1d9" }}>
-                        {act.title}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontFamily: "var(--desk-font-mono, monospace)",
-                          color: "#8b949e",
-                          border: "1px solid #30363d",
-                          borderRadius: 3,
-                          padding: "0 4px",
-                        }}
-                      >
-                        {act.type}
-                      </span>
-                      {act.safeToAutomate && (
-                        <span style={{ fontSize: 8, color: "#3fb950" }}>safe-to-automate</span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 9, color: "#8b949e", margin: "2px 0 0", lineHeight: 1.4 }}>
-                      {act.reason}
-                    </p>
-                    <p style={{ fontSize: 9, color: "#c9d1d9", margin: "1px 0 0", lineHeight: 1.4 }}>
-                      → {act.operatorAction}
-                    </p>
-                    {act.copyableCommand && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                        <code
-                          style={{
-                            fontSize: 8,
-                            fontFamily: "var(--desk-font-mono, monospace)",
-                            background: "#0d1117",
-                            border: "1px solid #30363d",
-                            borderRadius: 3,
-                            padding: "1px 4px",
-                            color: "#79c0ff",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                            maxWidth: 320,
-                          }}
-                          title={act.copyableCommand}
-                        >
-                          {act.copyableCommand}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => copyCmd(act.copyableCommand!)}
-                          style={{
-                            fontSize: 8,
-                            background: "transparent",
-                            color: "#58a6ff",
-                            border: "1px solid #30363d",
-                            borderRadius: 3,
-                            padding: "0 4px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          {copiedCmd === act.copyableCommand ? "Copied" : "Copy"}
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Warnings */}
-          {snap.warnings.length > 0 && (
-            <div>
-              <p style={{ fontSize: 9, color: "#8b949e", margin: "0 0 2px" }}>Active warnings:</p>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {snap.warnings.slice(0, 3).map((w, i) => (
-                  <li key={i} style={{ fontSize: 9, color: "#d29922", marginBottom: 2 }}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Snapshot quick-stats using nested fields */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "2px 12px",
-              fontSize: 9,
-              color: "#8b949e",
-              marginTop: 2,
-            }}
-          >
-            <span>Open positions: <b style={{ color: "#c9d1d9" }}>{snap.paperState.openPositions}</b></span>
-            <span>Worker: <b style={{ color: snap.worker.stale ? "#f85149" : "#3fb950" }}>
-              {snap.worker.stale ? `STALE (${snap.worker.ageSeconds}s)` : "LIVE"}
-            </b></span>
-            <span>Active strats: <b style={{ color: "#c9d1d9" }}>{snap.entryFunnel.activeStrategies ?? "?"}</b></span>
-            {snap.paperState.balanceDriftUsd != null && (
-              <span>
-                Balance drift:{" "}
-                <b
-                  style={{
-                    color: snap.paperState.balanceDriftUsd < -20
-                      ? "#f85149"
-                      : snap.paperState.balanceDriftUsd > 20
-                        ? "#3fb950"
-                        : "#c9d1d9",
-                  }}
-                >
-                  {snap.paperState.balanceDriftUsd >= 0 ? "+" : ""}
-                  ${snap.paperState.balanceDriftUsd.toFixed(2)}
-                </b>
-              </span>
-            )}
-          </div>
-
-          {/* Env flags */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {Object.entries(snap.env).map(([k, v]) =>
-              v ? (
-                <span
-                  key={k}
-                  style={{
-                    fontSize: 8,
-                    border: "1px solid #30363d",
-                    borderRadius: 4,
-                    padding: "1px 5px",
-                    color: "#58a6ff",
-                    fontFamily: "var(--desk-font-mono, monospace)",
-                  }}
-                >
-                  {k}
+                    {snap.paperState.balanceDriftUsd >= 0 ? "+" : ""}$
+                    {snap.paperState.balanceDriftUsd.toFixed(2)}
+                  </b>
                 </span>
-              ) : null,
-            )}
-          </div>
-        </div>
-      )}
+              )}
+              {snap.paperState.pauseEntries && (
+                <span style={{ color: "var(--desk-warning)" }}>
+                  Entries: <b>PAUSED</b>
+                </span>
+              )}
+            </div>
 
-      {/* Pointer to docs */}
-      <p style={{ fontSize: 9, color: "#8b949e", margin: 0 }}>
-        Mind map:{" "}
-        <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>
-          client/docs/AI_APPLICATION_MINDMAP.md
-        </code>
-        {" · "}
-        CLI:{" "}
-        <code style={{ fontFamily: "var(--desk-font-mono, monospace)" }}>npm run ai:summary</code>
-      </p>
+            {/* Env flags */}
+            {Object.values(snap.env).some(Boolean) && (
+              <div className="ai-tracker-env-chips">
+                {Object.entries(snap.env).map(([k, v]) =>
+                  v ? (
+                    <span key={k} className="ai-tracker-env-chip">
+                      {k}
+                    </span>
+                  ) : null,
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Footer / docs ── */}
+        <p className="ai-tracker-footer">
+          Mind map:{" "}
+          <code style={{ fontFamily: "var(--desk-font-mono)" }}>
+            client/docs/AI_APPLICATION_MINDMAP.md
+          </code>
+          {" · "}CLI:{" "}
+          <code style={{ fontFamily: "var(--desk-font-mono)" }}>npm run ai:summary</code>
+        </p>
+      </div>
     </div>
   );
 }

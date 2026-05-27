@@ -103,28 +103,28 @@ function StrategyRotationSummary({
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
   return (
-    <div style={{ fontSize: 11, color: "#e6edf3" }}>
+    <div style={{ fontSize: "0.6875rem", color: "var(--desk-on-surface)" }}>
       <p className="desk-label-md" style={{ marginBottom: 8 }}>
         Suspended: {report.suspended.length} · Promoted: {report.promoted.length} · Active:{" "}
         {report.active.length}
       </p>
       {top.length > 0 ? (
-        <table style={{ width: "100%", fontSize: 10, borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", fontSize: "0.6875rem", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ color: "#8b949e", textAlign: "left" }}>
-              <th>Strategy</th>
-              <th>Status</th>
-              <th>Score</th>
+            <tr style={{ color: "var(--desk-on-surface-variant)", textAlign: "left" }}>
+              <th style={{ paddingBottom: 4 }}>Strategy</th>
+              <th style={{ paddingBottom: 4 }}>Status</th>
+              <th style={{ paddingBottom: 4 }}>Score</th>
             </tr>
           </thead>
           <tbody>
             {top.map((row) => (
-              <tr key={row.strategyId} style={{ borderTop: "1px solid #21262d" }}>
-                <td>
+              <tr key={row.strategyId} style={{ borderTop: "1px solid var(--desk-outline-variant)" }}>
+                <td style={{ padding: "3px 0", color: "var(--desk-on-surface)" }}>
                   #{row.strategyId} {row.strategyName}
                 </td>
-                <td>{row.status}</td>
-                <td>{row.score.toFixed(0)}</td>
+                <td style={{ padding: "3px 0", color: "var(--desk-on-surface-variant)" }}>{row.status}</td>
+                <td style={{ padding: "3px 0", color: "var(--desk-on-surface)" }}>{row.score.toFixed(0)}</td>
               </tr>
             ))}
           </tbody>
