@@ -48,6 +48,7 @@ import {
   type StrategySignalTraceRow,
   type SignalTraceSummary,
 } from "@/lib/strategySignalTrace";
+import { isProbeOrBootstrapTrade } from "@/lib/futuresSessionMetrics";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -225,6 +226,55 @@ function shouldFireCanary(opts: {
   return Date.now() - idleSince >= CANARY_IDLE_MS;
 }
 
+function workerPaperEnsureThresholdDrop(
+  nowMs: number,
+  mountedAtMs: number,
+  stratTradeCount: number,
+): number {
+  if (stratTradeCount >= 5) return 0;
+  const mins = (nowMs - mountedAtMs) / 60_000;
+  let drop = 0;
+  if (mins >= 10) drop = 12;
+  else if (mins >= 5) drop = 10;
+  else if (mins >= 2) drop = 6;
+  if (stratTradeCount > 0) drop = Math.floor(drop / 2);
+  return drop;
+}
+
+export function workerPaperEffectiveSignalThreshold(params: {
+  baseThreshold: number;
+  nowMs: number;
+  mountedAtMs: number;
+  stratTradeCount: number;
+  productionTradeCount: number;
+  profitModeEnabled: boolean;
+}): number {
+  const rawDrop = workerPaperEnsureThresholdDrop(
+    params.nowMs,
+    params.mountedAtMs,
+    params.stratTradeCount,
+  );
+  const drop = params.profitModeEnabled
+    ? params.productionTradeCount < 10
+      ? Math.min(rawDrop, 8)
+      : 0
+    : rawDrop;
+  return Math.max(16, params.baseThreshold - drop);
+}
+
+export function workerPaperAllowsRelaxedConfirm(params: {
+  baseThreshold: number;
+  effectiveThreshold: number;
+  productionTradeCount: number;
+  profitModeEnabled: boolean;
+}): boolean {
+  return (
+    params.profitModeEnabled &&
+    params.productionTradeCount < 10 &&
+    params.effectiveThreshold < params.baseThreshold
+  );
+}
+
 // ── Main tick ──────────────────────────────────────────────────────────────
 
 export async function runPaperDeskPollTick(
@@ -384,10 +434,14 @@ export async function runPaperDeskPollTick(
   const signals = buildSignalInputs(opens, closes, highs, lows, volumes, markPrice, lastBarTimeMs);
   const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes) as RegimeTag;
 
-  const threshold = ctx.signalThreshold ?? btcFtSignalThresholdFromEnv();
+  const baseThreshold = ctx.signalThreshold ?? btcFtSignalThresholdFromEnv();
   const maxOpen = deskMaxOpenPositionsEffective();
-  const useRelaxed = ctx.relaxConfirm || deskFirehoseModeEnabled();
+  const operatorRelaxed = ctx.relaxConfirm || deskFirehoseModeEnabled();
   const now = Date.now();
+  const profitModeEnabled = ctx.profitModeCfg?.enabled === true;
+  const productionTradeCount = ctx.trades.filter(
+    (t) => !isProbeOrBootstrapTrade({ strategyName: t.strategyName }),
+  ).length;
 
   const stratFilter = ctx.strategyIds && ctx.strategyIds.length > 0
     ? new Set(ctx.strategyIds)
@@ -486,7 +540,7 @@ export async function runPaperDeskPollTick(
   if (!ctx.pauseEntries && currentOpenCount < maxOpen) {
     const baseNotional = Number(process.env.DESK_WORKER_NOTIONAL) || 300;
     // ATR/fee safety K: use relaxed (0.45) when relaxConfirm, full (1.0) otherwise.
-    const atrFeeK = useRelaxed ? 0.45 : 1.0;
+    const atrFeeK = operatorRelaxed ? 0.45 : 1.0;
     const atrPct = markPrice > 0 ? signals.atr14 / markPrice : 0;
 
     const traceBase = {
@@ -497,7 +551,7 @@ export async function runPaperDeskPollTick(
       regimeAllowed: true,
       confirmPassed: false,
       signalScore: 0,
-      requiredThreshold: threshold,
+      requiredThreshold: baseThreshold,
       atrPct,
     };
 
@@ -531,20 +585,35 @@ export async function runPaperDeskPollTick(
       evalCount += 1;
       const { score, contributions } = evalMinuteSignal(signals, strat);
       const side: "LONG" | "SHORT" = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+      const stratTradeCount = ctx.trades.filter((t) => t.strategyId === strat.id).length;
+      const threshold = workerPaperEffectiveSignalThreshold({
+        baseThreshold,
+        nowMs: now,
+        mountedAtMs: ctx.mountedAt,
+        stratTradeCount,
+        productionTradeCount,
+        profitModeEnabled,
+      });
 
       if (!Number.isFinite(score) || score < threshold) {
         blockers.signal += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "EVALUATED", gate: "SIGNAL", reason: `Score ${score.toFixed(1)} below threshold ${threshold}`, signalScore: score, contributions }));
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "EVALUATED", gate: "SIGNAL", reason: `Score ${score.toFixed(1)} below threshold ${threshold}`, signalScore: score, requiredThreshold: threshold, contributions }));
         continue;
       }
       signalPassed += 1;
 
-      const passes = useRelaxed
+      const seedRelaxed = workerPaperAllowsRelaxedConfirm({
+        baseThreshold,
+        effectiveThreshold: threshold,
+        productionTradeCount,
+        profitModeEnabled,
+      });
+      const passes = operatorRelaxed || seedRelaxed
         ? passesRelaxedDeskEntryConfirmation(signals, strat)
         : passesEntryConfirmation(signals, strat);
       if (!passes) {
         blockers.confirm += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: "Entry confirmation failed", signalScore: score, confirmPassed: false, contributions }));
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: "Entry confirmation failed", signalScore: score, requiredThreshold: threshold, confirmPassed: false, contributions }));
         continue;
       }
       confirmPassed += 1;
@@ -556,7 +625,7 @@ export async function runPaperDeskPollTick(
         : baseNotional;
       if (!passesAtrFeeGate(markPrice, signals.atr14, notional, atrFeeK)) {
         blockers.atrFees += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "ATR_FEES", reason: `ATR/fee hurdle failed (atrPct=${atrPct.toFixed(4)})`, signalScore: score, confirmPassed: true, feeHurdlePassed: false, contributions }));
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "ATR_FEES", reason: `ATR/fee hurdle failed (atrPct=${atrPct.toFixed(4)})`, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: false, contributions }));
         continue;
       }
 
@@ -565,7 +634,7 @@ export async function runPaperDeskPollTick(
       const marginUsed = notional / LEVERAGE;
       if (balance < marginUsed) {
         blockers.margin += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "MARGIN", reason: `Insufficient balance $${balance.toFixed(2)} < margin $${marginUsed.toFixed(2)}`, signalScore: score, confirmPassed: true, feeHurdlePassed: true, contributions }));
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "MARGIN", reason: `Insufficient balance $${balance.toFixed(2)} < margin $${marginUsed.toFixed(2)}`, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: true, contributions }));
         continue;
       }
 
@@ -598,7 +667,7 @@ export async function runPaperDeskPollTick(
         lastFundingAppliedAt: now,
       };
 
-      traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "OPENED", gate: "OPENED", reason: "opened", signalScore: score, confirmPassed: true, feeHurdlePassed: true, openedPositionId: pos.id, openAttempted: true, contributions }));
+      traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "OPENED", gate: "OPENED", reason: "opened", signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: true, openedPositionId: pos.id, openAttempted: true, contributions }));
 
       openPositions.push(pos);
       openedPositions.push(pos);

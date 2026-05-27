@@ -5,6 +5,10 @@ import {
   WORKER_LEASE_TTL_MS,
 } from "../paperDeskWorker/workerLease";
 import { normalizeBaseUrl } from "../paperDeskWorker/workerHelpers";
+import {
+  workerPaperAllowsRelaxedConfirm,
+  workerPaperEffectiveSignalThreshold,
+} from "../paperDeskWorker/runPaperDeskPollTick";
 
 describe("isWorkerHeartbeatFresh", () => {
   it("returns false for null", () => {
@@ -167,5 +171,54 @@ describe("health endpoint freshness gate (via isWorkerHeartbeatFresh)", () => {
   it("reports stale when worker_last_poll_at is 0 (epoch)", () => {
     // 0 is more than 45 s ago, so stale
     expect(isWorkerHeartbeatFresh(0)).toBe(false);
+  });
+});
+
+describe("worker paper signal seed gates", () => {
+  const mountedAt = 1_000_000;
+
+  it("lowers worker signal threshold during cold-start profit-mode seed window", () => {
+    expect(
+      workerPaperEffectiveSignalThreshold({
+        baseThreshold: 26,
+        nowMs: mountedAt + 6 * 60_000,
+        mountedAtMs: mountedAt,
+        stratTradeCount: 0,
+        productionTradeCount: 0,
+        profitModeEnabled: true,
+      }),
+    ).toBe(18);
+  });
+
+  it("returns to strict worker threshold after seed production closes exist", () => {
+    expect(
+      workerPaperEffectiveSignalThreshold({
+        baseThreshold: 26,
+        nowMs: mountedAt + 11 * 60_000,
+        mountedAtMs: mountedAt,
+        stratTradeCount: 0,
+        productionTradeCount: 10,
+        profitModeEnabled: true,
+      }),
+    ).toBe(26);
+  });
+
+  it("allows relaxed confirmation only when the seed threshold actually dropped", () => {
+    expect(
+      workerPaperAllowsRelaxedConfirm({
+        baseThreshold: 26,
+        effectiveThreshold: 18,
+        productionTradeCount: 0,
+        profitModeEnabled: true,
+      }),
+    ).toBe(true);
+    expect(
+      workerPaperAllowsRelaxedConfirm({
+        baseThreshold: 26,
+        effectiveThreshold: 26,
+        productionTradeCount: 0,
+        profitModeEnabled: true,
+      }),
+    ).toBe(false);
   });
 });

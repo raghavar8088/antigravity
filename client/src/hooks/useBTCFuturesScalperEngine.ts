@@ -774,6 +774,47 @@ export function paperEnsureEffectiveThresholdDrop(
   return 0;
 }
 
+export function paperEnsureAllowsRelaxedSignalConfirm(
+  paperEnsureEnabled: boolean,
+  profitModeEnabled: boolean,
+  productionTradeCount: number,
+  ensureDataThresholdDrop: number,
+): boolean {
+  // Only the cold-start evidence window gets this. Once profit mode has enough
+  // closes to judge edge, strict confirmation owns the path again.
+  return (
+    paperEnsureEnabled &&
+    profitModeEnabled &&
+    productionTradeCount < 10 &&
+    ensureDataThresholdDrop > 0
+  );
+}
+
+export function paperDeskRequiresMomentumAlignment(
+  strat: Pick<FuturesStratDef, "category" | "name" | "playbooks" | "templateFamily">,
+): boolean {
+  const hay = [
+    strat.category,
+    strat.name,
+    strat.templateFamily,
+    ...(strat.playbooks ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (
+    ["range", "wyckoff", "mean", "revert", "vwap", "rsi", "squeeze"].some((k) =>
+      hay.includes(k),
+    )
+  ) {
+    return false;
+  }
+  return ["trend", "break", "breakout", "momentum", "macd", "adx", "drive"].some((k) =>
+    hay.includes(k),
+  );
+}
+
 // Signal inputs type imported from @/lib/futuresSignals
 type SignalInputs = FuturesSignalInputs;
 
@@ -3294,11 +3335,37 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 continue;
               }
 
+              const seedRelaxedConfirm = paperEnsureAllowsRelaxedSignalConfirm(
+                paperEnsureTrades,
+                profitModeCfg.enabled,
+                productionTradesForHealth.length,
+                ensureDataThresholdDrop,
+              );
               const confirmPasses =
                 passesEntryConfirmation(stratInput, strat) ||
-                (relaxEntryConfirmation && passesRelaxedDeskEntryConfirmation(stratInput, strat));
+                ((relaxEntryConfirmation || seedRelaxedConfirm) &&
+                  passesRelaxedDeskEntryConfirmation(stratInput, strat));
               if (signal.score >= effectiveThresholdForStrat && confirmPasses) {
                 const side = strat.signalKey.includes("SHORT") ? "SHORT" : "LONG";
+                if (paperDeskMode && paperDeskRequiresMomentumAlignment(strat)) {
+                  const momentumAligned =
+                    side === "LONG"
+                      ? stratInput.momentum3 > 0 && stratInput.momentum6 >= 0
+                      : stratInput.momentum3 < 0 && stratInput.momentum6 <= 0;
+                  if (!momentumAligned) {
+                    tickSignalTraceRef.current.push(createTraceRow({
+                      tickAt: now, mode: "browser", symbol,
+                      strategyId: strat.id, strategyName: strat.name, category: strat.category, side,
+                      status: "FIRED", gate: "CONFIRM",
+                      reason: "Momentum alignment failed for trend/momentum strategy",
+                      signalScore: signal.score, requiredThreshold: effectiveThresholdForStrat,
+                      confirmPassed: false, regime: String(regime), regimeAllowed: true,
+                      contributions: signal.contributions,
+                    }));
+                    if (pollDebug) pollDebug.failConfirm += 1;
+                    continue;
+                  }
+                }
                 tickSignalTraceRef.current.push(createTraceRow({
                   tickAt: now, mode: "browser", symbol,
                   strategyId: strat.id, strategyName: strat.name, category: strat.category, side,
@@ -3308,16 +3375,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   confirmPassed: true, regime: String(regime), regimeAllowed: true,
                   contributions: signal.contributions,
                 }));
-                if (paperDeskMode) {
-                  const momentumAligned =
-                    side === "LONG"
-                      ? stratInput.momentum3 > 0 && stratInput.momentum6 >= 0
-                      : stratInput.momentum3 < 0 && stratInput.momentum6 <= 0;
-                  if (!momentumAligned) {
-                    if (pollDebug) pollDebug.failConfirm += 1;
-                    continue;
-                  }
-                }
                 entryCandidates.push({
                   strat,
                   side,

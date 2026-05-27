@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  paperDeskRequiresMomentumAlignment,
+  paperEnsureAllowsRelaxedSignalConfirm,
   paperEnsureEffectiveThresholdDrop,
   paperEnsureThresholdDrop,
   paperQuietEntryBoost,
@@ -58,5 +60,59 @@ describe("paperEnsureEffectiveThresholdDrop", () => {
 
   it("leaves non-profit paper ensure behavior unchanged", () => {
     expect(paperEnsureEffectiveThresholdDrop(false, 12, 100)).toBe(12);
+  });
+});
+
+describe("paperEnsureAllowsRelaxedSignalConfirm", () => {
+  it("allows relaxed confirm only during profit-mode seed data collection", () => {
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 0, 6)).toBe(true);
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 9, 10)).toBe(true);
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 10, 10)).toBe(false);
+  });
+
+  it("does not alter non-profit or disabled paper ensure paths", () => {
+    expect(paperEnsureAllowsRelaxedSignalConfirm(false, true, 0, 6)).toBe(false);
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, false, 0, 6)).toBe(false);
+    expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 0, 0)).toBe(false);
+  });
+});
+
+describe("paperDeskRequiresMomentumAlignment", () => {
+  it("requires momentum alignment for trend and breakout strategies", () => {
+    expect(
+      paperDeskRequiresMomentumAlignment({
+        category: "Trend",
+        name: "Trend_Continuation_Long",
+        templateFamily: "TREND_CONT",
+        playbooks: ["trend"],
+      }),
+    ).toBe(true);
+    expect(
+      paperDeskRequiresMomentumAlignment({
+        category: "Breakout",
+        name: "Breakout_Long",
+        templateFamily: "BREAKOUT",
+        playbooks: ["breakout"],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not block mean-reversion/range signals on opposite short-term momentum", () => {
+    expect(
+      paperDeskRequiresMomentumAlignment({
+        category: "Wyckoff",
+        name: "Wyckoff_Spring_Long",
+        templateFamily: "WYCKOFF",
+        playbooks: ["range"],
+      }),
+    ).toBe(false);
+    expect(
+      paperDeskRequiresMomentumAlignment({
+        category: "Mean Reversion",
+        name: "VWAP_Revert_Long",
+        templateFamily: "VWAP_REVERT",
+        playbooks: ["range"],
+      }),
+    ).toBe(false);
   });
 });
