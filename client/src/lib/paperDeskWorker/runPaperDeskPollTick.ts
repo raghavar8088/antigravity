@@ -51,6 +51,15 @@ import {
   type StrategySignalTraceRow,
   type SignalTraceSummary,
 } from "@/lib/strategySignalTrace";
+import {
+  createPaperOmsOrder,
+  markRiskChecked,
+  markRejected,
+  markAccepted,
+  markSimulatedFill,
+  markPositionOpened,
+  type PaperOmsOrder,
+} from "@/lib/paperOms";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -134,6 +143,8 @@ export interface WorkerPosition {
   liquidationPrice: number;
   fundingCosts: number;
   lastFundingAppliedAt: number;
+  /** Links this position to the OMS order that opened it. Optional — absent on pre-OMS positions. */
+  omsOrderId?: string;
 }
 
 export interface PaperDeskWorkerContext {
@@ -159,6 +170,13 @@ export interface PaperDeskWorkerContext {
   symbol?: string;
 }
 
+/** Emitted when a position with a linked OMS order is closed this tick. */
+export interface OmsCloseEvent {
+  orderId: string;
+  tradeId: string;
+  exitReason: string;
+}
+
 export interface PaperDeskTickResult {
   balance: number;
   positions: WorkerPosition[];
@@ -170,6 +188,10 @@ export interface PaperDeskTickResult {
   funnelSnapshot: EntryFunnelSnapshot;
   signalTraceRows: StrategySignalTraceRow[];
   signalTraceSummary: SignalTraceSummary;
+  /** New OMS orders created this tick (signal-fired + gate decisions). Persist after tick. */
+  omsOrders: PaperOmsOrder[];
+  /** Positions that closed this tick with a linked OMS order — update status in Mongo. */
+  omsPositionsClosed: OmsCloseEvent[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -383,6 +405,8 @@ export async function runPaperDeskPollTick(
       funnelSnapshot: snap,
       signalTraceRows: traceRows,
       signalTraceSummary: summarizeSignalTrace(traceRows),
+      omsOrders: [],
+      omsPositionsClosed: [],
     };
   }
 
@@ -423,6 +447,8 @@ export async function runPaperDeskPollTick(
       funnelSnapshot: snap,
       signalTraceRows: [],
       signalTraceSummary: summarizeSignalTrace([]),
+      omsOrders: [],
+      omsPositionsClosed: [],
     };
   }
 
@@ -456,6 +482,8 @@ export async function runPaperDeskPollTick(
       funnelSnapshot: snap,
       signalTraceRows: [],
       signalTraceSummary: summarizeSignalTrace([]),
+      omsOrders: [],
+      omsPositionsClosed: [],
     };
   }
 
@@ -480,6 +508,8 @@ export async function runPaperDeskPollTick(
   let balance = ctx.balance;
   const closedTrades: BTCFuturesTrade[] = [];
   const remainingPositions: WorkerPosition[] = [];
+  const omsOrders: PaperOmsOrder[] = [];
+  const omsPositionsClosed: OmsCloseEvent[] = [];
 
   // ── Process exits ─────────────────────────────────────────────────────────
   for (const pos of ctx.positions) {
@@ -503,6 +533,11 @@ export async function runPaperDeskPollTick(
     }
 
     if (!exitReason) { remainingPositions.push(updatedPos); continue; }
+
+    // Record OMS close event for positions linked to an OMS order.
+    if (pos.omsOrderId) {
+      omsPositionsClosed.push({ orderId: pos.omsOrderId, tradeId: pos.id, exitReason });
+    }
 
     const pct = pos.side === "LONG"
       ? (exitPrice - pos.entryPrice) / pos.entryPrice
@@ -625,12 +660,25 @@ export async function runPaperDeskPollTick(
       }
       signalPassed += 1;
 
+      // ── OMS: signal fired — create order at NEW, advance to RISK_CHECKED ─
+      const omsOrderBase = createPaperOmsOrder({
+        symbol,
+        strategyId: strat.id,
+        strategyName: strat.name,
+        side,
+        signalScore: score,
+        requiredThreshold: threshold,
+        notional: baseNotional, // refined below if premium
+      });
+
       const passes = operatorRelaxed
         ? passesRelaxedDeskEntryConfirmation(signals, strat)
         : passesEntryConfirmation(signals, strat);
       if (!passes) {
         blockers.confirm += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: describeEntryConfirmationFailure(signals, strat), signalScore: score, requiredThreshold: threshold, confirmPassed: false, contributions }));
+        const confirmReason = describeEntryConfirmationFailure(signals, strat);
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "FIRED", gate: "CONFIRM", reason: confirmReason, signalScore: score, requiredThreshold: threshold, confirmPassed: false, contributions }));
+        omsOrders.push(markRejected(omsOrderBase, "CONFIRM", confirmReason));
         continue;
       }
       confirmPassed += 1;
@@ -640,9 +688,14 @@ export async function runPaperDeskPollTick(
       const notional = isPremiumStrategy(strat)
         ? baseNotional * PREMIUM_NOTIONAL_MULTIPLIER
         : baseNotional;
+      const omsWithNotional: PaperOmsOrder = { ...omsOrderBase, notional };
+      const riskCheckedOrder = markRiskChecked(omsWithNotional);
+
       if (!passesAtrFeeGate(markPrice, signals.atr14, notional, atrFeeK)) {
         blockers.atrFees += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "ATR_FEES", reason: `ATR/fee hurdle failed (atrPct=${atrPct.toFixed(4)})`, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: false, contributions }));
+        const atrReason = `ATR/fee hurdle failed (atrPct=${atrPct.toFixed(4)})`;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "ATR_FEES", reason: atrReason, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: false, contributions }));
+        omsOrders.push(markRejected(riskCheckedOrder, "ATR_FEES", atrReason));
         continue;
       }
 
@@ -651,11 +704,17 @@ export async function runPaperDeskPollTick(
       const marginUsed = notional / LEVERAGE;
       if (balance < marginUsed) {
         blockers.margin += 1;
-        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "MARGIN", reason: `Insufficient balance $${balance.toFixed(2)} < margin $${marginUsed.toFixed(2)}`, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: true, contributions }));
+        const marginReason = `Insufficient balance $${balance.toFixed(2)} < margin $${marginUsed.toFixed(2)}`;
+        traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "REJECTED", gate: "MARGIN", reason: marginReason, signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: true, contributions }));
+        omsOrders.push(markRejected(riskCheckedOrder, "MARGIN", marginReason));
         continue;
       }
 
       const contracts = Math.max(1, Math.round(notional / markPrice));
+
+      // ── OMS: all gates passed → ACCEPTED → SIMULATED_FILL → POSITION_OPENED ─
+      const acceptedOrder = markAccepted(riskCheckedOrder);
+      const filledOrder = markSimulatedFill(acceptedOrder, markPrice, contracts);
 
       const slPrice = side === "LONG"
         ? markPrice * (1 - strat.slPct / 100)
@@ -664,8 +723,12 @@ export async function runPaperDeskPollTick(
         ? markPrice * (1 + strat.tpPct / 100)
         : markPrice * (1 - strat.tpPct / 100);
 
+      const posId = randomUUID();
+      const openedOmsOrder = markPositionOpened(filledOrder, posId, markPrice);
+      omsOrders.push(openedOmsOrder);
+
       const pos: WorkerPosition = {
-        id: randomUUID(),
+        id: posId,
         symbol,
         strategyId: strat.id,
         strategyName: strat.name,
@@ -682,6 +745,7 @@ export async function runPaperDeskPollTick(
         liquidationPrice: liqPrice(side, markPrice),
         fundingCosts: 0,
         lastFundingAppliedAt: now,
+        omsOrderId: openedOmsOrder.orderId,
       };
 
       traceRows.push(createTraceRow({ ...traceBase, strategyId: strat.id, strategyName: strat.name, category: strat.category, side, status: "OPENED", gate: "OPENED", reason: "opened", signalScore: score, requiredThreshold: threshold, confirmPassed: true, feeHurdlePassed: true, openedPositionId: pos.id, openAttempted: true, contributions }));
@@ -775,5 +839,7 @@ export async function runPaperDeskPollTick(
     funnelSnapshot,
     signalTraceRows,
     signalTraceSummary,
+    omsOrders,
+    omsPositionsClosed,
   };
 }

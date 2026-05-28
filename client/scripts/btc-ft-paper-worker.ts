@@ -52,7 +52,9 @@ import {
   eventFromClosedTrade,
   eventFromNoTradeRootCause,
   eventFromError,
+  eventsFromOmsTick,
 } from "../src/lib/verificationTrack/buildVerificationEvents";
+import { insertPaperOmsOrders, updatePaperOmsOrderStatus } from "../src/lib/paperOmsMongo";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -535,6 +537,16 @@ async function main() {
 
     if (result.error) {
       void insertVerificationEvents([eventFromError(nowMs, result.error, "vps", ACCOUNT_KEY)]);
+    }
+
+    // ── OMS persistence (best-effort, non-fatal) ─────────────────────────────
+    if (result.omsOrders.length > 0) {
+      void insertPaperOmsOrders(result.omsOrders);
+      // Emit OMS verification summary event
+      void insertVerificationEvents(eventsFromOmsTick(nowMs, result.omsOrders, "vps", ACCOUNT_KEY));
+    }
+    for (const ev of result.omsPositionsClosed) {
+      void updatePaperOmsOrderStatus(ev.orderId, "POSITION_CLOSED", { tradeId: ev.tradeId });
     }
 
     // Sleep for remaining poll interval

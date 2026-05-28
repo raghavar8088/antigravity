@@ -30,6 +30,11 @@ export type VerificationTrackEventType =
   | "REPAIR_STATE"
   | "WORKER_HEALTH"
   | "CRON_BACKUP"
+  | "OMS_ORDER_NEW"
+  | "OMS_ORDER_REJECTED"
+  | "OMS_ORDER_FILLED"
+  | "OMS_POSITION_OPENED"
+  | "OMS_POSITION_CLOSED"
   | "ERROR";
 
 export type VerificationSeverity = "info" | "warning" | "danger";

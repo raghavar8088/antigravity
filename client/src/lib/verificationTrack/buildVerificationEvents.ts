@@ -8,6 +8,8 @@ import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
 import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
 import type { NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
+import type { PaperOmsOrder } from "@/lib/paperOms";
+import { summarizeOmsOrders } from "@/lib/paperOms";
 
 function makeId(tickAt: number, type: VerificationTrackEventType, extra = ""): string {
   return `${tickAt}-${type}${extra ? "-" + extra : ""}-${Math.random().toString(36).slice(2, 9)}`;
@@ -192,6 +194,87 @@ export function eventFromWorkerHealth(
     summary: `Worker ${owner ?? "unknown"} ${stale ? "STALE" : "LIVE"}`,
     snapshot: { stale, owner },
   };
+}
+
+/**
+ * OMS summary events for a tick — one summary per OMS_ORDER_NEW, OMS_ORDER_REJECTED,
+ * OMS_ORDER_FILLED, OMS_POSITION_OPENED batches. Emitted once per tick rather than
+ * once per order to avoid flooding the event collection.
+ */
+export function eventsFromOmsTick(
+  tickAt: number,
+  orders: PaperOmsOrder[],
+  workerOwner: "browser" | "vps" | "cron" | null,
+  accountKey?: string | null,
+): VerificationTrackEvent[] {
+  if (orders.length === 0) return [];
+  const summary = summarizeOmsOrders(orders);
+  const events: VerificationTrackEvent[] = [];
+
+  const base = {
+    created_at: new Date(tickAt).toISOString(),
+    module: "btc_future_trading" as const,
+    account_key_suffix: suffix(accountKey),
+    worker_owner: workerOwner,
+  };
+
+  // Overall OMS summary for this tick
+  events.push({
+    event_id: makeId(tickAt, "OMS_ORDER_NEW"),
+    ...base,
+    type: "OMS_ORDER_NEW" as const,
+    severity: "info" as const,
+    summary: `OMS tick: new=${summary.total} rejected=${summary.countsByStatus.REJECTED} filled=${summary.countsByStatus.SIMULATED_FILL + summary.countsByStatus.POSITION_OPENED} closed=${summary.countsByStatus.POSITION_CLOSED} topReject=${summary.topRejectGate ?? "none"}`,
+    snapshot: { countsByStatus: summary.countsByStatus, topRejectGate: summary.topRejectGate, fillRate: summary.fillRate },
+  });
+
+  if (summary.countsByStatus.REJECTED > 0) {
+    events.push({
+      event_id: makeId(tickAt, "OMS_ORDER_REJECTED"),
+      ...base,
+      type: "OMS_ORDER_REJECTED" as const,
+      severity: "warning" as const,
+      summary: `OMS rejected=${summary.countsByStatus.REJECTED} topGate=${summary.topRejectGate ?? "none"}`,
+      gate: summary.topRejectGate ?? undefined,
+      snapshot: { rejected: summary.countsByStatus.REJECTED, topRejectGate: summary.topRejectGate },
+    });
+  }
+
+  const filledCount = summary.countsByStatus.SIMULATED_FILL + summary.countsByStatus.POSITION_OPENED;
+  if (filledCount > 0) {
+    events.push({
+      event_id: makeId(tickAt, "OMS_ORDER_FILLED"),
+      ...base,
+      type: "OMS_ORDER_FILLED" as const,
+      severity: "info" as const,
+      summary: `OMS filled=${filledCount} positions`,
+      snapshot: { filled: filledCount },
+    });
+  }
+
+  if (summary.countsByStatus.POSITION_OPENED > 0) {
+    events.push({
+      event_id: makeId(tickAt, "OMS_POSITION_OPENED"),
+      ...base,
+      type: "OMS_POSITION_OPENED" as const,
+      severity: "info" as const,
+      summary: `OMS positions opened=${summary.countsByStatus.POSITION_OPENED}`,
+      snapshot: { opened: summary.countsByStatus.POSITION_OPENED },
+    });
+  }
+
+  if (summary.countsByStatus.POSITION_CLOSED > 0) {
+    events.push({
+      event_id: makeId(tickAt, "OMS_POSITION_CLOSED"),
+      ...base,
+      type: "OMS_POSITION_CLOSED" as const,
+      severity: "info" as const,
+      summary: `OMS positions closed=${summary.countsByStatus.POSITION_CLOSED}`,
+      snapshot: { closed: summary.countsByStatus.POSITION_CLOSED },
+    });
+  }
+
+  return events;
 }
 
 /** Generic error event. */

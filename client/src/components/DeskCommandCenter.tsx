@@ -47,6 +47,7 @@ import { AiAppTrackerPanel } from "@/components/AiAppTrackerPanel";
 import { SignalTracePanel } from "@/components/SignalTracePanel";
 import { VerificationTrackPanel } from "@/components/VerificationTrackPanel";
 import { EdgeLabPanel } from "@/components/EdgeLabPanel";
+import { PaperOmsPanel } from "@/components/PaperOmsPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -669,6 +670,10 @@ export function DeskCommandCenter({
 
             {activeTab === "edge" ? (
               <EdgeLabPanel />
+            ) : null}
+
+            {activeTab === "oms" ? (
+              <PaperOmsPanel />
             ) : null}
 
             {activeTab === "advanced" && showAdvancedTab ? (
