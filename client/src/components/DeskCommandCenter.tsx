@@ -48,6 +48,7 @@ import { SignalTracePanel } from "@/components/SignalTracePanel";
 import { VerificationTrackPanel } from "@/components/VerificationTrackPanel";
 import { EdgeLabPanel } from "@/components/EdgeLabPanel";
 import { PaperOmsPanel } from "@/components/PaperOmsPanel";
+import { ReplayWalkForwardLab } from "@/components/ReplayWalkForwardLab";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -674,6 +675,10 @@ export function DeskCommandCenter({
 
             {activeTab === "oms" ? (
               <PaperOmsPanel />
+            ) : null}
+
+            {activeTab === "replay" ? (
+              <ReplayWalkForwardLab />
             ) : null}
 
             {activeTab === "advanced" && showAdvancedTab ? (

@@ -35,6 +35,7 @@ export type VerificationTrackEventType =
   | "OMS_ORDER_FILLED"
   | "OMS_POSITION_OPENED"
   | "OMS_POSITION_CLOSED"
+  | "REPLAY_WALKFORWARD_RUN"
   | "ERROR";
 
 export type VerificationSeverity = "info" | "warning" | "danger";

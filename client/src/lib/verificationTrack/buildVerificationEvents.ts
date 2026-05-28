@@ -277,6 +277,35 @@ export function eventsFromOmsTick(
   return events;
 }
 
+/** REPLAY_WALKFORWARD_RUN summary event — emitted by the CLI or API after a replay+rank run. */
+export function eventFromReplayWalkForwardRun(
+  runAt: number,
+  params: {
+    days: number;
+    barsProcessed: number;
+    totalTrades: number;
+    promoted: number;
+    accountKey?: string | null;
+  },
+): VerificationTrackEvent {
+  return {
+    event_id: makeId(runAt, "REPLAY_WALKFORWARD_RUN"),
+    created_at: new Date(runAt).toISOString(),
+    module: "btc_future_trading",
+    account_key_suffix: suffix(params.accountKey),
+    worker_owner: null,
+    type: "REPLAY_WALKFORWARD_RUN",
+    severity: "info",
+    summary: `Replay+WF run: days=${params.days} bars=${params.barsProcessed} trades=${params.totalTrades} promoted=${params.promoted}`,
+    snapshot: {
+      days: params.days,
+      barsProcessed: params.barsProcessed,
+      totalTrades: params.totalTrades,
+      promoted: params.promoted,
+    },
+  };
+}
+
 /** Generic error event. */
 export function eventFromError(
   tickAt: number,
