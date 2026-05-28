@@ -46,6 +46,7 @@ import { EdgeCandidatesPanel } from "@/components/btcFutures/EdgeCandidatesPanel
 import { AiAppTrackerPanel } from "@/components/AiAppTrackerPanel";
 import { SignalTracePanel } from "@/components/SignalTracePanel";
 import { VerificationTrackPanel } from "@/components/VerificationTrackPanel";
+import { EdgeLabPanel } from "@/components/EdgeLabPanel";
 import type { DeskEntryPollDebug } from "@/lib/futuresEntryDebug";
 import {
   computeDeskOperatorHealth,
@@ -664,6 +665,10 @@ export function DeskCommandCenter({
                   <VerificationTrackPanel accountKey={cloudAccountKey} />
                 </div>
               </>
+            ) : null}
+
+            {activeTab === "edge" ? (
+              <EdgeLabPanel />
             ) : null}
 
             {activeTab === "advanced" && showAdvancedTab ? (

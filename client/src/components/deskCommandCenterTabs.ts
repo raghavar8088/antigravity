@@ -4,6 +4,7 @@ export const DESK_COMMAND_CENTER_TABS = [
   "health",
   "gates",
   "signals",
+  "edge",
   "advanced",
 ] as const;
 
@@ -21,6 +22,8 @@ export function commandCenterTabLabel(tab: DeskCommandCenterTab): string {
       return "Gates";
     case "signals":
       return "Signal Trace";
+    case "edge":
+      return "Edge Lab";
     case "advanced":
       return "Advanced";
     default:
