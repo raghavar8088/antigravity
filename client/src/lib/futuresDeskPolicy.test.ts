@@ -58,6 +58,9 @@ import {
   deskPaperMakerFillProbabilityFromEnv,
   deskDisableChopForMrEnabled,
   DESK_CHOP_DISABLED_MR_CATEGORIES,
+  btcFtPaperMinOpensPer10mFromEnv,
+  BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT,
+  BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
   paperDeskEffectiveStops,
 } from "./futuresDeskPolicy";
 
@@ -359,6 +362,29 @@ describe("deskMaxSameDirNotionalFracFromEnv / deskMinExpectedMoveSafetyKFromEnv"
     vi.stubEnv("NEXT_PUBLIC_DESK_MIN_EXPECTED_MOVE_SAFETY_K", "1.5");
     expect(deskMaxSameDirNotionalFracFromEnv()).toBe(0.5);
     expect(deskMinExpectedMoveSafetyKFromEnv()).toBe(1.5);
+  });
+});
+
+describe("btcFtPaperMinOpensPer10mFromEnv", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to 10 opens per 10-minute paper window", () => {
+    expect(BTC_FT_PAPER_THROUGHPUT_WINDOW_MS).toBe(10 * 60_000);
+    expect(btcFtPaperMinOpensPer10mFromEnv()).toBe(BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT);
+    expect(BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT).toBe(10);
+  });
+
+  it("parses env override and clamps to safe range", () => {
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_PAPER_MIN_OPENS_PER_10M", "15");
+    expect(btcFtPaperMinOpensPer10mFromEnv()).toBe(15);
+
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_PAPER_MIN_OPENS_PER_10M", "200");
+    expect(btcFtPaperMinOpensPer10mFromEnv()).toBe(60);
+
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_PAPER_MIN_OPENS_PER_10M", "-1");
+    expect(btcFtPaperMinOpensPer10mFromEnv()).toBe(BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT);
   });
 });
 

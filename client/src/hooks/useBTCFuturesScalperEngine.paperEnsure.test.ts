@@ -5,6 +5,8 @@ import {
   paperEnsureEffectiveThresholdDrop,
   paperEnsureThresholdDrop,
   paperQuietEntryBoost,
+  paperThroughputRecentOpenCount,
+  paperThroughputTopUpDue,
 } from "./useBTCFuturesScalperEngine";
 
 describe("paperEnsureThresholdDrop", () => {
@@ -68,6 +70,36 @@ describe("paperEnsureAllowsRelaxedSignalConfirm", () => {
     expect(paperEnsureAllowsRelaxedSignalConfirm(false, true, 0, 6)).toBe(false);
     expect(paperEnsureAllowsRelaxedSignalConfirm(true, false, 0, 6)).toBe(false);
     expect(paperEnsureAllowsRelaxedSignalConfirm(true, true, 0, 0)).toBe(false);
+  });
+});
+
+describe("paper throughput floor helpers", () => {
+  const now = 1_000_000;
+  const windowMs = 10 * 60_000;
+
+  it("counts opens inside the rolling window", () => {
+    expect(
+      paperThroughputRecentOpenCount(now, [
+        now - 30_000,
+        now - 9 * 60_000,
+        now - 11 * 60_000,
+        now + 1_000,
+      ]),
+    ).toBe(2);
+  });
+
+  it("paces top-ups to one slot per target interval", () => {
+    const due = paperThroughputTopUpDue(true, now, [now - 2 * 60_000], now - 61_000, 10, windowMs);
+    expect(due).toMatchObject({ due: true, recentOpenCount: 1, deficit: 9, minIntervalMs: 60_000 });
+
+    const tooSoon = paperThroughputTopUpDue(true, now, [now - 2 * 60_000], now - 30_000, 10, windowMs);
+    expect(tooSoon.due).toBe(false);
+  });
+
+  it("does not top up when disabled or already at target", () => {
+    expect(paperThroughputTopUpDue(false, now, [], 0, 10, windowMs).due).toBe(false);
+    const tenOpens = Array.from({ length: 10 }, (_, i) => now - i * 30_000);
+    expect(paperThroughputTopUpDue(true, now, tenOpens, now - 60_000, 10, windowMs).due).toBe(false);
   });
 });
 

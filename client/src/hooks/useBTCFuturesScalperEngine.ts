@@ -51,8 +51,10 @@ import {
   deskPaperMakerFeePctFromEnv,
   deskPaperMakerFillProbabilityFromEnv,
   btcFtPaperMinHoldBeforeSlMinFromEnv,
+  btcFtPaperMinOpensPer10mFromEnv,
   btcFtPaperQuickTpMinNetUsdFromEnv,
   btcFtPaperSlPctMulFromEnv,
+  BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
   isBtcFtPaperDeskMode,
   paperDeskEffectiveStops,
   paperDeskWidenPositionStops,
@@ -788,6 +790,40 @@ export function paperEnsureAllowsRelaxedSignalConfirm(
   return false;
 }
 
+export function paperThroughputRecentOpenCount(
+  nowMs: number,
+  openedAtMs: readonly number[],
+  windowMs: number = BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
+): number {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(windowMs) || windowMs <= 0) return 0;
+  const cutoff = nowMs - windowMs;
+  return openedAtMs.filter((t) => Number.isFinite(t) && t >= cutoff && t <= nowMs).length;
+}
+
+export function paperThroughputTopUpDue(
+  enabled: boolean,
+  nowMs: number,
+  openedAtMs: readonly number[],
+  lastTopUpAtMs: number,
+  targetOpens: number,
+  windowMs: number = BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
+): { due: boolean; recentOpenCount: number; deficit: number; minIntervalMs: number } {
+  const target = Math.max(0, Math.floor(Number.isFinite(targetOpens) ? targetOpens : 0));
+  const recentOpenCount = paperThroughputRecentOpenCount(nowMs, openedAtMs, windowMs);
+  const deficit = Math.max(0, target - recentOpenCount);
+  const minIntervalMs = target > 0 ? Math.max(1, Math.floor(windowMs / target)) : windowMs;
+  if (!enabled || target <= 0 || deficit <= 0) {
+    return { due: false, recentOpenCount, deficit, minIntervalMs };
+  }
+  const last = Number.isFinite(lastTopUpAtMs) ? lastTopUpAtMs : 0;
+  return {
+    due: last <= 0 || nowMs - last >= minIntervalMs,
+    recentOpenCount,
+    deficit,
+    minIntervalMs,
+  };
+}
+
 export function paperDeskRequiresMomentumAlignment(
   strat: Pick<FuturesStratDef, "category" | "name" | "playbooks" | "templateFamily">,
 ): boolean {
@@ -1072,6 +1108,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
   // (see calculateStats return below).
   const entryDebugLiveRef = useRef<DeskEntryPollDebug | null>(null);
   const forceProbeOpenedRef = useRef(false);
+  const paperThroughputTopUpAtRef = useRef(0);
   const pollInFlightRef = useRef(false);
   const entryDebugLoggedOnceRef = useRef(false);
   const researchMountedAtRef = useRef(Date.now());
@@ -1689,6 +1726,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     peakEquityForDrawdownRef.current = INITIAL_BALANCE;
     drawdownEntryPausedRef.current = false;
     forceProbeOpenedRef.current = false;
+    paperThroughputTopUpAtRef.current = 0;
   }, [INITIAL_BALANCE]);
 
   const resetPaperAccount = useCallback(() => {
@@ -2286,8 +2324,13 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         return null;
       }
 
+      const isBootstrapProbeStrat =
+        strat.name === "PAPER_BOOTSTRAP_PROBE" ||
+        strat.name === "DEV_FORCE_PROBE_OPEN" ||
+        strat.name.startsWith("PAPER_THROUGHPUT_PROBE");
+
       // ---- #4 session gate: only if explicitly enabled AND enough sample exists ----
-      if (profitModeSessionGateEnabled(profitModeCfg)) {
+      if (profitModeSessionGateEnabled(profitModeCfg) && !isBootstrapProbeStrat) {
         const sessionStats = computeStrategyHourlyStats(
           strat.id,
           tradesRef.current.map((t) => ({
@@ -2307,8 +2350,6 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
       const bal = balanceRef.current;
       const slipBps = slippageBpsOverride ?? deskSlippageBpsFromEnv();
       const entryPrice = paperApplyEntrySlippage(side, price, slipBps);
-      const isBootstrapProbeStrat =
-        strat.name === "PAPER_BOOTSTRAP_PROBE" || strat.name === "DEV_FORCE_PROBE_OPEN";
       const paperSlMul = paperDeskMode ? btcFtPaperSlPctMulFromEnv() : 1;
       const paperStops =
         paperDeskMode && !isBootstrapProbeStrat
@@ -3621,6 +3662,86 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                   reason: "Rejected in post-candidate gate (quality/MTF/spread/session/category/same-side)",
                   openAttempted: true,
                 };
+              }
+            }
+          }
+
+          const openedAtMs = [
+            ...tradesRef.current.map((t) => new Date(t.openedAt).getTime()),
+            ...workingPositions.map((p) => new Date(p.openedAt).getTime()),
+          ];
+          const throughputTarget = paperEnsureTrades ? btcFtPaperMinOpensPer10mFromEnv() : 0;
+          const throughputTopUp = paperThroughputTopUpDue(
+            paperEnsureTrades,
+            now,
+            openedAtMs,
+            paperThroughputTopUpAtRef.current,
+            throughputTarget,
+          );
+          const primaryPayload = payloads.get(PRIMARY_QUOTE_SYMBOL) ?? primary;
+          if (
+            throughputTopUp.due &&
+            primaryPayload &&
+            primaryPayload.candles.length >= MIN_BARS &&
+            workingPositions.length < MAX_OPEN_POSITIONS
+          ) {
+            const closes = primaryPayload.candles.map((c) => c.close);
+            const opens = primaryPayload.candles.map((c) => c.open);
+            const highs = primaryPayload.candles.map((c) => c.high);
+            const lows = primaryPayload.candles.map((c) => c.low);
+            const volumes = primaryPayload.candles.map((c) => c.volume);
+            const lastBarMs = primaryPayload.candles[primaryPayload.candles.length - 1]?.time;
+            const input = buildSignalInputs(
+              opens,
+              closes,
+              highs,
+              lows,
+              volumes,
+              primaryPayload.markPrice,
+              lastBarMs,
+            );
+            const probeIndex = throughputTopUp.recentOpenCount + 1;
+            const throughputProbe: StratDef = {
+              id: 990_000 + (probeIndex % 10),
+              name: `PAPER_THROUGHPUT_PROBE_${probeIndex}`,
+              category: "Probe",
+              signalKey: "PAPER_THROUGHPUT_PROBE_LONG",
+              slPct: 1.0,
+              tpPct: 0.5,
+              cooldownMin: 0.05,
+              holdMinutes: 0.75,
+              confluenceMin: 1,
+            };
+            const entryBook = [
+              ...workingPositions.map((p) => ({ side: p.side, notional: p.notional })),
+              ...intraBook,
+            ];
+            const opened = openPositionRef.current(
+              throughputProbe,
+              "LONG",
+              primaryPayload.lastPrice,
+              primaryPayload.markPrice,
+              PRIMARY_QUOTE_SYMBOL,
+              {
+                atr14: Math.max(input.atr14, primaryPayload.markPrice * 0.003),
+                regime: "chop",
+                entryBook,
+                equityUsd: balanceRef.current + workingPositions.reduce((s, p) => s + p.unrealizedPnl, 0),
+                entryPriorityScore: 998,
+              },
+            );
+            if (opened) {
+              paperThroughputTopUpAtRef.current = now;
+              workingPositions.push(opened);
+              intraBook.push({ side: opened.side, notional: opened.notional });
+              openCount += 1;
+              if (pollDebug) pollDebug.openedThisPoll += 1;
+              if (process.env.NODE_ENV === "development") {
+                console.info("[btc-futures-paper] throughput probe open", {
+                  recentOpenCount: throughputTopUp.recentOpenCount,
+                  target: throughputTarget,
+                  positionId: opened.id,
+                });
               }
             }
           }

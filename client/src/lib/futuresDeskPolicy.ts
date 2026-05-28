@@ -936,6 +936,18 @@ export function btcFtPaperEnsureTradesFromEnv(): boolean {
   return process.env.NEXT_PUBLIC_BTC_FT_PAPER_ENSURE_TRADES !== "0";
 }
 
+/** Paper-only throughput target: minimum opens per 10-minute window while BTC FT paper ensure is on. */
+export const BTC_FT_PAPER_THROUGHPUT_WINDOW_MS = 10 * 60_000;
+export const BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT = 10;
+
+export function btcFtPaperMinOpensPer10mFromEnv(): number {
+  const raw = process.env.NEXT_PUBLIC_BTC_FT_PAPER_MIN_OPENS_PER_10M;
+  if (raw === undefined || raw === "") return BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 0) return BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT;
+  return Math.min(60, n);
+}
+
 /** True when BTC FT / paper desk exit+entry relaxations should apply. */
 export function isBtcFtPaperDeskMode(opts: {
   paperEnsureTrades?: boolean;

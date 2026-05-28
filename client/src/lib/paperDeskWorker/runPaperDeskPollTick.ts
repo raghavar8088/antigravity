@@ -30,6 +30,8 @@ import {
 import { FUTURES_STRAT_DEFS, type FuturesStratDef } from "@/lib/futuresStrategies";
 import {
   btcFtSignalThresholdFromEnv,
+  btcFtPaperMinOpensPer10mFromEnv,
+  BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
   deskDiscoveryNotionalUsdFromEnv,
   deskFirehoseModeEnabled,
   deskMaxOpenPositionsEffective,
@@ -215,6 +217,21 @@ function passesAtrFeeGate(
   const feesRt = notional * TAKER_FEE_PCT * 2;
   const expectedMoveUsd = (atr14 / markPrice) * notional;
   return expectedMoveUsd >= safetyK * feesRt;
+}
+
+function recentPaperOpenCount(nowMs: number, openedAtMs: readonly number[], windowMs: number): number {
+  const cutoff = nowMs - windowMs;
+  return openedAtMs.filter((t) => Number.isFinite(t) && t >= cutoff && t <= nowMs).length;
+}
+
+function paperThroughputTopUpDue(nowMs: number, openedAtMs: readonly number[], targetOpens: number): boolean {
+  const target = Math.max(0, Math.floor(targetOpens));
+  if (target <= 0) return false;
+  const recent = recentPaperOpenCount(nowMs, openedAtMs, BTC_FT_PAPER_THROUGHPUT_WINDOW_MS);
+  if (recent >= target) return false;
+  const newestOpen = openedAtMs.reduce((max, t) => (Number.isFinite(t) ? Math.max(max, t) : max), 0);
+  const minIntervalMs = Math.max(1, Math.floor(BTC_FT_PAPER_THROUGHPUT_WINDOW_MS / target));
+  return newestOpen <= 0 || nowMs - newestOpen >= minIntervalMs;
 }
 
 /** Liquidation price at 25× leverage with 0.5% maintenance margin. */
@@ -754,6 +771,45 @@ export async function runPaperDeskPollTick(
       openedPositions.push(pos);
       balance -= marginUsed;
       ctx.stratCooldowns[cooldownKey] = now + strat.cooldownMin * 60 * 1000;
+    }
+  }
+
+  const openedAtMs = [
+    ...ctx.trades.map((t) => new Date(t.openedAt).getTime()),
+    ...openPositions.map((p) => new Date(p.openedAt).getTime()),
+  ];
+  if (
+    !ctx.pauseEntries &&
+    openPositions.length < maxOpen &&
+    paperThroughputTopUpDue(now, openedAtMs, btcFtPaperMinOpensPer10mFromEnv())
+  ) {
+    const throughputNotional = 50;
+    const throughputMargin = throughputNotional / LEVERAGE;
+    if (balance >= throughputMargin) {
+      const throughputSide: "LONG" = "LONG";
+      const throughputPos: WorkerPosition = {
+        id: randomUUID(),
+        symbol,
+        strategyId: 990_000 + (openedPositions.length % 10),
+        strategyName: "PAPER_THROUGHPUT_PROBE",
+        templateFamily: "PAPER_THROUGHPUT_PROBE",
+        side: throughputSide,
+        entryPrice: markPrice,
+        contracts: 1,
+        notional: throughputNotional,
+        marginUsed: throughputMargin,
+        slPrice: markPrice * 0.99,
+        tpPrice: markPrice * 1.005,
+        holdDeadlineMs: now + 45_000,
+        openedAt: new Date().toISOString(),
+        liquidationPrice: liqPrice(throughputSide, markPrice),
+        fundingCosts: 0,
+        lastFundingAppliedAt: now,
+      };
+      openPositions.push(throughputPos);
+      openedPositions.push(throughputPos);
+      balance -= throughputMargin;
+      console.warn(`[worker] PAPER_THROUGHPUT_PROBE opened — maintaining ${btcFtPaperMinOpensPer10mFromEnv()}/10m paper placement floor. mark=${markPrice.toFixed(2)}`);
     }
   }
 
