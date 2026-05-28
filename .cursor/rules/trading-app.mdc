@@ -1,0 +1,14 @@
+---
+description: Core AI guidance for the trading app repo
+alwaysApply: true
+---
+
+# Trading App Repo Guidance
+
+- The main app is `client/`. Run repo commands from there, especially `npm run test` and `npm run build`.
+- This is a Next 16 + React 19 + TypeScript app for BTC futures paper trading.
+- Preserve funding, liquidation, fee, and PnL invariants unless the user explicitly asks to change them.
+- For desk bugs, trace signal -> gate/policy -> open position -> mark/exit -> paper math -> UI display.
+- Avoid reading huge files fully. Search first, then read narrow ranges around the relevant symbols.
+- Prefer existing helpers and tests in `client/src/lib/` over new abstractions.
+- Add or update focused Vitest coverage for policy, PnL, signal trace, worker, or UI behavior touched by the change.
