@@ -128,7 +128,6 @@ describe("MockTradingDashboard trade table", () => {
       "Current PnL",
       "TP Profit $",
       "SL Loss $",
-      "Risk/Reward",
       "Exit Reason",
     ]);
     expect(MOCK_TRADE_TABLE_REQUIRED_HEADERS).not.toContain("TP Price");
@@ -164,6 +163,16 @@ describe("MockTradingDashboard trade table", () => {
     expect(container.textContent).toContain("SL Loss $");
     expect(container.textContent).not.toContain("TP Price");
     expect(container.textContent).not.toContain("SL Price");
+    const tradeHeaders = [...container.querySelectorAll("table")[0].querySelectorAll("th")]
+      .map((header) => header.textContent);
+    expect(tradeHeaders).not.toContain("Family");
+    expect(tradeHeaders).not.toContain("Conf");
+    expect(tradeHeaders).not.toContain("Risk/Reward");
+    expect(tradeHeaders).not.toContain("Qty");
+    expect(tradeHeaders).not.toContain("Notional");
+    expect(tradeHeaders).not.toContain("Margin");
+    expect(tradeHeaders).not.toContain("Lev");
+    expect(tradeHeaders).not.toContain("Mark");
     expect(container.textContent).toContain(fmtUsd(closed.realizedPnl));
     expect(container.textContent).toContain("TAKE_PROFIT");
     await act(async () => {

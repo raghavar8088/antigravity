@@ -108,7 +108,6 @@ export const MOCK_TRADE_TABLE_REQUIRED_HEADERS = [
   "Current PnL",
   "TP Profit $",
   "SL Loss $",
-  "Risk/Reward",
   "Exit Reason",
 ] as const;
 
@@ -214,7 +213,6 @@ export default function MockTradingDashboard() {
     () => [
       { id: "ts", header: "Opened", cell: (t) => new Date(t.openedAt).toLocaleTimeString() },
       { id: "strategy", header: "Strategy", cell: (t) => `#${t.strategyId} ${t.strategyName}` },
-      { id: "family", header: "Family", cell: (t) => t.strategyFamily ?? "—" },
       {
         id: "side",
         header: "Side",
@@ -225,12 +223,6 @@ export default function MockTradingDashboard() {
         ),
       },
       { id: "entry", header: "Entry", align: "right", cell: (t) => fmtPrice(t.entryPrice) },
-      {
-        id: "conf",
-        header: "Conf",
-        align: "right",
-        cell: (t) => t.confidenceScore == null ? "—" : t.confidenceScore.toFixed(1),
-      },
       {
         id: "tpUsd",
         header: "TP Profit $",
@@ -247,17 +239,6 @@ export default function MockTradingDashboard() {
           <span style={{ color: "var(--desk-error)" }}>{fmtUsd(-t.stopLossUsd)}</span>
         ),
       },
-      {
-        id: "rr",
-        header: "Risk/Reward",
-        align: "right",
-        cell: (t) => Number.isFinite(t.riskRewardRatio) ? t.riskRewardRatio.toFixed(2) : "—",
-      },
-      { id: "qty", header: "Qty", align: "right", cell: (t) => t.quantity.toFixed(5) },
-      { id: "notional", header: "Notional", align: "right", cell: (t) => fmtUsdK(t.notional) },
-      { id: "margin", header: "Margin", align: "right", cell: (t) => fmtUsdK(t.marginUsed) },
-      { id: "lev", header: "Lev", align: "right", cell: (t) => `${t.leverage}×` },
-      { id: "mark", header: "Mark", align: "right", cell: (t) => fmtPrice(t.currentPrice) },
       {
         id: "pnl",
         header: "Current PnL",
