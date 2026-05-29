@@ -17,16 +17,20 @@ import { createTraceRow, type SignalTraceGate, type StrategySignalTraceRow } fro
 import {
   applyPriceTickToTrade,
   buildMockTradeFromTrace,
+  buildMockTradeFromResearchSignal,
+  canOpenAdditionalMockTrade,
   closeMockTrade,
   computeAccountState,
   computeAnalytics,
   computeMockNotional,
   computeMockPnl,
+  countOpenMockTrades,
   DEFAULT_MOCK_TRADING_CONFIG,
   filterMockTrades,
   isStrategySignalRaised,
   isValidMockConfig,
   isValidMockTrade,
+  maxOpenMockTradesFromConfig,
   MOCK_IGNORED_GATES,
   MOCK_PERSIST_VERSION,
   MOCK_TRADE_SORT_OPTIONS,
@@ -40,6 +44,11 @@ const T0 = 1_700_000_000_000;
 const ENTRY = 60_000;
 
 const baseConfig: MockTradingConfig = { ...DEFAULT_MOCK_TRADING_CONFIG };
+const wideExitConfig: MockTradingConfig = {
+  ...DEFAULT_MOCK_TRADING_CONFIG,
+  takeProfitUsd: 10_000,
+  stopLossUsd: 10_000,
+};
 
 function traceRow(
   overrides: Partial<StrategySignalTraceRow> = {},
@@ -96,6 +105,14 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
   it("applies a non-zero taker fee + slippage", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takerFeePct).toBeGreaterThan(0);
     expect(DEFAULT_MOCK_TRADING_CONFIG.slippageBpsPerSide).toBeGreaterThan(0);
+  });
+  it("uses fixed-dollar TP/SL defaults", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.takeProfitUsd).toBe(10);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossUsd).toBe(5);
+  });
+  it("allows 5,000 simultaneous open mock trades by default", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).toBe(5_000);
+    expect(maxOpenMockTradesFromConfig(DEFAULT_MOCK_TRADING_CONFIG)).toBe(5_000);
   });
 });
 
@@ -214,27 +231,60 @@ describe("many mock trades can remain open simultaneously", () => {
     expect(acct.exposure).toBeGreaterThan(400_000);
     expect(acct.exposure).toBeLessThan(600_000);
   });
+
+  it("allows the 5,000th open mock trade and blocks the 5,001st", () => {
+    const seed = build({ row: traceRow({ gate: "MAX_OPEN", reason: "production max-open cap" }) });
+    const trades: MockTrade[] = Array.from({ length: 4_999 }, (_, i) => ({
+      ...seed,
+      id: `mock-limit-${i}`,
+      traceId: `limit-${i}`,
+      openedAt: T0 + i,
+    }));
+
+    expect(canOpenAdditionalMockTrade({ trades, config: baseConfig })).toBe(true);
+    const fiveThousand = [
+      ...trades,
+      { ...seed, id: "mock-limit-4999", traceId: "limit-4999", openedAt: T0 + 4_999 },
+    ];
+    expect(countOpenMockTrades(fiveThousand)).toBe(5_000);
+    expect(computeAccountState(fiveThousand, baseConfig).openCount).toBe(5_000);
+    expect(canOpenAdditionalMockTrade({ trades: fiveThousand, config: baseConfig })).toBe(false);
+  });
+
+  it("does not treat the production MAX_OPEN blocker as the mock trade cap", () => {
+    const trade = build({
+      row: traceRow({
+        traceId: "max-open-production-blocker",
+        gate: "MAX_OPEN",
+        reason: "production desk max-open cap",
+      }),
+      config: { ...baseConfig, maxOpenMockTrades: 5_000 },
+    });
+
+    expect(trade.blockers.some((blocker) => blocker.gate === "MAX_OPEN")).toBe(true);
+    expect(canOpenAdditionalMockTrade({ trades: [trade], config: baseConfig })).toBe(true);
+  });
 });
 
 // ── Live price movement → equity and unrealized PnL ──────────────────────────
 describe("PnL updates when BTC price changes", () => {
   it("long unrealized PnL rises when price rises", () => {
-    const trade = build();
+    const trade = build({ config: wideExitConfig });
     const tick = applyPriceTickToTrade({
       trade,
       price: ENTRY * 1.005,
-      config: baseConfig,
+      config: wideExitConfig,
       now: T0 + 60_000,
     });
     expect(tick.status).toBe("OPEN");
     expect(tick.unrealizedPnl).toBeGreaterThan(0);
   });
   it("short unrealized PnL rises when price drops", () => {
-    const trade = build({ row: traceRow({ side: "SHORT" }) });
+    const trade = build({ row: traceRow({ side: "SHORT" }), config: wideExitConfig });
     const tick = applyPriceTickToTrade({
       trade,
       price: ENTRY * 0.995,
-      config: baseConfig,
+      config: wideExitConfig,
       now: T0 + 60_000,
     });
     expect(tick.unrealizedPnl).toBeGreaterThan(0);
@@ -293,29 +343,58 @@ describe("close lifecycle", () => {
   });
 });
 
-// ── Exit logic still fires TP / SL / MaxHold ─────────────────────────────────
+// ── Exit logic still fires fixed-dollar TP / SL / MaxHold ────────────────────
 describe("exit reasons", () => {
-  it("TP triggers when mark crosses tp threshold", () => {
+  it("BUY closes at TP with about +$10", () => {
     const trade = build();
-    const tpPrice = trade.entryPrice * (1 + baseConfig.takeProfitPct / 100) + 1;
-    const tick = applyPriceTickToTrade({ trade, price: tpPrice, config: baseConfig, now: T0 + 60_000 });
+    const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("TAKE_PROFIT");
+    expect(tick.realizedPnl).toBeCloseTo(10, 6);
   });
-  it("SL triggers when mark crosses sl threshold", () => {
+
+  it("BUY closes at SL with about -$5", () => {
     const trade = build();
-    const slPrice = trade.entryPrice * (1 - baseConfig.stopLossPct / 100) - 1;
-    const tick = applyPriceTickToTrade({ trade, price: slPrice, config: baseConfig, now: T0 + 60_000 });
+    const tick = applyPriceTickToTrade({ trade, price: trade.stopLossPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("STOP_LOSS");
+    expect(tick.realizedPnl).toBeCloseTo(-5, 6);
   });
+
+  it("SELL closes at TP with about +$10", () => {
+    const trade = build({ row: traceRow({ side: "SHORT" }) });
+    const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: baseConfig, now: T0 + 60_000 });
+    expect(tick.status).toBe("CLOSED");
+    expect(tick.exitReason).toBe("TAKE_PROFIT");
+    expect(tick.realizedPnl).toBeCloseTo(10, 6);
+  });
+
+  it("SELL closes at SL with about -$5", () => {
+    const trade = build({ row: traceRow({ side: "SHORT" }) });
+    const tick = applyPriceTickToTrade({ trade, price: trade.stopLossPrice, config: baseConfig, now: T0 + 60_000 });
+    expect(tick.status).toBe("CLOSED");
+    expect(tick.exitReason).toBe("STOP_LOSS");
+    expect(tick.realizedPnl).toBeCloseTo(-5, 6);
+  });
+
+  it("uses configurable fixed-dollar TP/SL values for new trades", () => {
+    const cfg = { ...baseConfig, takeProfitUsd: 25, stopLossUsd: 7.5 };
+    const trade = build({ config: cfg });
+    expect(trade.takeProfitUsd).toBe(25);
+    expect(trade.stopLossUsd).toBe(7.5);
+    expect(trade.riskRewardRatio).toBeCloseTo(25 / 7.5, 6);
+
+    const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: cfg, now: T0 + 60_000 });
+    expect(tick.realizedPnl).toBeCloseTo(25, 6);
+  });
+
   it("MAX_HOLD triggers when age >= maxHoldMinutes", () => {
-    const trade = build();
+    const trade = build({ config: wideExitConfig });
     const tick = applyPriceTickToTrade({
       trade,
       price: trade.entryPrice + 1,
-      config: baseConfig,
-      now: T0 + baseConfig.maxHoldMinutes * 60_000 + 1_000,
+      config: wideExitConfig,
+      now: T0 + wideExitConfig.maxHoldMinutes * 60_000 + 1_000,
     });
     expect(tick.exitReason).toBe("MAX_HOLD");
   });
@@ -371,6 +450,32 @@ describe("per-strategy analytics", () => {
   });
 });
 
+describe("fixed-dollar exit analytics", () => {
+  it("counts TP wins, SL losses, hit rates, and average realized PnL", () => {
+    const tpTrade = build({ row: traceRow({ traceId: "tp" }) });
+    const tp = applyPriceTickToTrade({
+      trade: tpTrade,
+      price: tpTrade.takeProfitPrice,
+      config: baseConfig,
+      now: T0 + 1_000,
+    });
+    const slTrade = build({ row: traceRow({ traceId: "sl" }) });
+    const sl = applyPriceTickToTrade({
+      trade: slTrade,
+      price: slTrade.stopLossPrice,
+      config: baseConfig,
+      now: T0 + 2_000,
+    });
+    const analytics = computeAnalytics([tp, sl]);
+
+    expect(analytics.takeProfitWins).toBe(1);
+    expect(analytics.stopLossLosses).toBe(1);
+    expect(analytics.takeProfitHitRate).toBeCloseTo(0.5, 6);
+    expect(analytics.stopLossHitRate).toBeCloseTo(0.5, 6);
+    expect(analytics.averageRealizedPnl).toBeCloseTo(2.5, 6);
+  });
+});
+
 // ── Filters ──────────────────────────────────────────────────────────────────
 describe("filterMockTrades", () => {
   it("filters by status, side, blocker, profitability", () => {
@@ -386,6 +491,68 @@ describe("filterMockTrades", () => {
     expect(filterMockTrades(all, { blockerGate: "ATR_FEES" }).map((t) => t.id)).toEqual([loss.id]);
     expect(filterMockTrades(all, { profitability: "profit" }).map((t) => t.id)).toEqual([win.id]);
     expect(filterMockTrades(all, { profitability: "loss" }).map((t) => t.id)).toEqual([loss.id]);
+  });
+
+  it("filters research-pack trades by family", () => {
+    const rsi = buildMockTradeFromResearchSignal({
+      signal: {
+        strategyId: 1090,
+        strategyName: "RSI Research Long",
+        strategyFamily: "RsiMeanReversion",
+        side: "BUY",
+        confidenceScore: 72,
+        params: { period: 14, oversold: 30 },
+        evaluatedAt: T0,
+      },
+      currentPrice: ENTRY,
+      config: baseConfig,
+      now: T0,
+    });
+    const vwap = buildMockTradeFromResearchSignal({
+      signal: {
+        strategyId: 1060,
+        strategyName: "VWAP Research Long",
+        strategyFamily: "VwapStrategies",
+        side: "BUY",
+        confidenceScore: 66,
+        params: { rsi_period: 14 },
+        evaluatedAt: T0,
+      },
+      currentPrice: ENTRY,
+      config: baseConfig,
+      now: T0,
+    });
+    if (!rsi || !vwap) throw new Error("expected research trades");
+
+    expect(filterMockTrades([rsi, vwap], { researchOnly: true }).map((t) => t.id)).toEqual([rsi.id, vwap.id]);
+    expect(filterMockTrades([rsi, vwap], { strategyFamily: "RsiMeanReversion" }).map((t) => t.id)).toEqual([rsi.id]);
+  });
+});
+
+describe("buildMockTradeFromResearchSignal", () => {
+  it("creates a mock-only trade with research metadata and no blockers", () => {
+    const trade = buildMockTradeFromResearchSignal({
+      signal: {
+        strategyId: 1000,
+        strategyName: "Research Trend Long",
+        strategyFamily: "TrendFollowing",
+        side: "BUY",
+        confidenceScore: 81,
+        params: { fast: 5, slow: 20 },
+        evaluatedAt: T0,
+      },
+      currentPrice: ENTRY,
+      config: baseConfig,
+      now: T0,
+    });
+
+    expect(trade).not.toBeNull();
+    expect(trade?.researchPack).toBe(true);
+    expect(trade?.strategyFamily).toBe("TrendFollowing");
+    expect(trade?.confidenceScore).toBe(81);
+    expect(trade?.strategyParams).toEqual({ fast: 5, slow: 20 });
+    expect(trade?.blockers).toEqual([]);
+    expect(trade?.side).toBe("BUY");
   });
 });
 
@@ -431,6 +598,9 @@ describe("isValidMockConfig", () => {
   });
   it("rejects a non-positive starting balance", () => {
     expect(isValidMockConfig({ ...DEFAULT_MOCK_TRADING_CONFIG, startingBalanceUsd: 0 })).toBe(false);
+  });
+  it("rejects a non-positive mock open trade limit", () => {
+    expect(isValidMockConfig({ ...DEFAULT_MOCK_TRADING_CONFIG, maxOpenMockTrades: 0 })).toBe(false);
   });
 });
 

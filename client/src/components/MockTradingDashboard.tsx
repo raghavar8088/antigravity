@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
+import { useMockCandleBuilder } from "@/hooks/useMockCandleBuilder";
+import { useMockResearchRunner } from "@/hooks/useMockResearchRunner";
 import { useMockTradingEngine } from "@/hooks/useMockTradingEngine";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
 import {
@@ -31,6 +33,7 @@ import {
   type MockTradeStatus,
   type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
+import { ALL_RESEARCH_FAMILIES, type ResearchFamily } from "@/lib/mockResearchStrategies";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 
 function fmtUsd(value: number, digits = 2): string {
@@ -75,21 +78,99 @@ function fmtAge(openedAt: number, ref: number = Date.now()): string {
   return `${hrs}h ${mins % 60}m`;
 }
 
+function safeRatio(value: number, max: number): number {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return 0;
+  return value / max;
+}
+
+function logColor(event: string): string {
+  if (event === "MOCK_TRADE_CREATED") return "var(--desk-success)";
+  if (event === "MOCK_TRADE_TP_HIT") return "var(--desk-success)";
+  if (event === "MOCK_TRADE_SL_HIT") return "var(--desk-error)";
+  if (event === "MOCK_TRADE_LIMIT_REACHED") return "var(--desk-warning)";
+  return "var(--desk-primary)";
+}
+
+export const MOCK_TRADE_TABLE_REQUIRED_HEADERS = [
+  "TP Price",
+  "SL Price",
+  "TP $",
+  "SL $",
+  "Risk/Reward",
+  "Exit Reason",
+] as const;
+
+function exitReasonBadge(reason: MockTrade["exitReason"]) {
+  if (!reason) return <span style={{ color: "var(--desk-on-surface-variant)" }}>—</span>;
+  const tone =
+    reason === "TAKE_PROFIT"
+      ? "success"
+      : reason === "STOP_LOSS"
+        ? "error"
+        : reason === "MAX_HOLD"
+          ? "warning"
+          : "default";
+  return <DeskChip tone={tone}>{reason}</DeskChip>;
+}
+
 export default function MockTradingDashboard() {
   const router = useRouter();
   const live = useLiveBTCPrice();
   const engine = useMockTradingEngine({ price: live.price });
+  const candles = useMockCandleBuilder(live.price);
+  const research = useMockResearchRunner({
+    candles: candles.snapshot,
+    newCandleReady: candles.newCandleReady,
+    ingestResearchSignals: engine.ingestResearchSignals,
+    price: live.price,
+  });
 
   const [filter, setFilter] = useState<MockTradeFilter>({});
   const [showOpenOnly, setShowOpenOnly] = useState(false);
   const [sortKey, setSortKey] = useState<MockTradeSortKey>("most_profitable");
+  const [strategySearch, setStrategySearch] = useState("");
+  const [displayPage, setDisplayPage] = useState(1);
+  const [displayPageSize, setDisplayPageSize] = useState(100);
+
+  const tableSourceTrades =
+    engine.persistence.status === "mongo" || engine.historyTrades.length > 0
+      ? engine.historyTrades
+      : engine.trades;
 
   const trades = useMemo(() => {
     const combined: MockTradeFilter = { ...filter };
     if (showOpenOnly) combined.status = "OPEN";
-    const filtered = filterMockTrades(engine.trades, combined);
-    return sortMockTrades(filtered, sortKey);
-  }, [engine.trades, filter, showOpenOnly, sortKey]);
+    const filtered = filterMockTrades(tableSourceTrades, combined);
+    const search = strategySearch.trim().toLowerCase();
+    const searched = search
+      ? filtered.filter((t) =>
+          String(t.strategyId).includes(search) ||
+          t.strategyName.toLowerCase().includes(search) ||
+          (t.strategyFamily ?? "").toLowerCase().includes(search)
+        )
+      : filtered;
+    return sortMockTrades(searched, sortKey);
+  }, [tableSourceTrades, filter, showOpenOnly, sortKey, strategySearch]);
+
+  const maxOpenMockTrades = Math.max(1, Math.floor(engine.config.maxOpenMockTrades));
+  const openUsage = Math.min(1, safeRatio(engine.account.openCount, maxOpenMockTrades));
+  const openUsagePct = openUsage * 100;
+  const openUsageWarning = engine.account.openCount >= maxOpenMockTrades * 0.8;
+  const displayTotalPages = Math.max(1, Math.ceil(trades.length / displayPageSize));
+  const displayStart = trades.length === 0 ? 0 : (displayPage - 1) * displayPageSize + 1;
+  const displayEnd = Math.min(trades.length, displayPage * displayPageSize);
+  const displayedTrades = useMemo(
+    () => trades.slice((displayPage - 1) * displayPageSize, displayPage * displayPageSize),
+    [displayPage, displayPageSize, trades],
+  );
+
+  useEffect(() => {
+    setDisplayPage(1);
+  }, [filter, showOpenOnly, sortKey, strategySearch, displayPageSize]);
+
+  useEffect(() => {
+    setDisplayPage((page) => Math.min(page, displayTotalPages));
+  }, [displayTotalPages]);
 
   const strategyOptions = useMemo(() => {
     const seen = new Map<number, string>();
@@ -105,10 +186,17 @@ export default function MockTradingDashboard() {
     return [...set].sort();
   }, [engine.trades]);
 
+  const familyOptions = useMemo(() => {
+    const set = new Set<string>(ALL_RESEARCH_FAMILIES);
+    for (const t of engine.trades) if (t.strategyFamily) set.add(t.strategyFamily);
+    return [...set].sort();
+  }, [engine.trades]);
+
   const columns = useMemo<DeskColumn<MockTrade>[]>(
     () => [
       { id: "ts", header: "Opened", cell: (t) => new Date(t.openedAt).toLocaleTimeString() },
       { id: "strategy", header: "Strategy", cell: (t) => `#${t.strategyId} ${t.strategyName}` },
+      { id: "family", header: "Family", cell: (t) => t.strategyFamily ?? "—" },
       {
         id: "side",
         header: "Side",
@@ -119,6 +207,50 @@ export default function MockTradingDashboard() {
         ),
       },
       { id: "entry", header: "Entry", align: "right", cell: (t) => fmtPrice(t.entryPrice) },
+      {
+        id: "conf",
+        header: "Conf",
+        align: "right",
+        cell: (t) => t.confidenceScore == null ? "—" : t.confidenceScore.toFixed(1),
+      },
+      {
+        id: "tpPrice",
+        header: "TP Price",
+        align: "right",
+        cell: (t) => (
+          <span style={{ color: "var(--desk-success)" }}>{fmtPrice(t.takeProfitPrice)}</span>
+        ),
+      },
+      {
+        id: "slPrice",
+        header: "SL Price",
+        align: "right",
+        cell: (t) => (
+          <span style={{ color: "var(--desk-error)" }}>{fmtPrice(t.stopLossPrice)}</span>
+        ),
+      },
+      {
+        id: "tpUsd",
+        header: "TP $",
+        align: "right",
+        cell: (t) => (
+          <span style={{ color: "var(--desk-success)" }}>{fmtUsd(t.takeProfitUsd)}</span>
+        ),
+      },
+      {
+        id: "slUsd",
+        header: "SL $",
+        align: "right",
+        cell: (t) => (
+          <span style={{ color: "var(--desk-error)" }}>{fmtUsd(-t.stopLossUsd)}</span>
+        ),
+      },
+      {
+        id: "rr",
+        header: "Risk/Reward",
+        align: "right",
+        cell: (t) => Number.isFinite(t.riskRewardRatio) ? t.riskRewardRatio.toFixed(2) : "—",
+      },
       { id: "qty", header: "Qty", align: "right", cell: (t) => t.quantity.toFixed(5) },
       { id: "notional", header: "Notional", align: "right", cell: (t) => fmtUsdK(t.notional) },
       { id: "margin", header: "Margin", align: "right", cell: (t) => fmtUsdK(t.marginUsed) },
@@ -139,6 +271,11 @@ export default function MockTradingDashboard() {
         cell: (t) => (
           <DeskChip tone={t.status === "OPEN" ? "primary" : "default"}>{t.status}</DeskChip>
         ),
+      },
+      {
+        id: "exitReason",
+        header: "Exit Reason",
+        cell: (t) => exitReasonBadge(t.exitReason),
       },
       {
         id: "blockers",
@@ -170,9 +307,7 @@ export default function MockTradingDashboard() {
               Close
             </DeskButton>
           ) : (
-            <span style={{ color: "var(--desk-on-surface-variant)", fontSize: 11 }}>
-              {t.exitReason}
-            </span>
+            <span style={{ color: "var(--desk-on-surface-variant)", fontSize: 11 }}>—</span>
           ),
       },
     ],
@@ -204,7 +339,24 @@ export default function MockTradingDashboard() {
             <DeskChip tone={live.connected ? "success" : "error"}>
               {live.connected ? "Live feed" : "Disconnected"}
             </DeskChip>
-            <DeskChip tone="default">{acct.openCount} open</DeskChip>
+            <DeskChip
+              tone={
+                engine.persistence.status === "mongo"
+                  ? "success"
+                  : engine.persistence.status === "hydrating"
+                    ? "primary"
+                    : "warning"
+              }
+            >
+              {engine.persistence.status === "mongo"
+                ? "Mongo persisted"
+                : engine.persistence.status === "hydrating"
+                  ? "Hydrating Mongo"
+                  : "local cache fallback"}
+            </DeskChip>
+            <DeskChip tone={openUsageWarning ? "warning" : "default"}>
+              {acct.openCount.toLocaleString("en-US")} / {maxOpenMockTrades.toLocaleString("en-US")} open
+            </DeskChip>
           </div>
         </header>
 
@@ -232,7 +384,28 @@ export default function MockTradingDashboard() {
           PnL is comparable.
         </DeskBanner>
 
-        <AccountSummaryCard account={acct} />
+        {engine.persistence.error && (
+          <DeskBanner variant="warning" title="Mock Trading persistence is degraded">
+            {engine.persistence.error}. The dashboard will keep using localStorage as a cache until
+            MongoDB writes recover.
+          </DeskBanner>
+        )}
+
+        {openUsageWarning && (
+          <DeskBanner
+            variant="warning"
+            title={`Open mock trades are at ${openUsagePct.toFixed(1)}% of the configured limit`}
+          >
+            Mock Trading remains simulation-only and will reject new mock entries after{" "}
+            {maxOpenMockTrades.toLocaleString("en-US")} OPEN mock trades.
+          </DeskBanner>
+        )}
+
+        <AccountSummaryCard
+          account={acct}
+          maxOpenMockTrades={maxOpenMockTrades}
+          openUsagePct={openUsagePct}
+        />
 
         <DeskCard padding="md">
           <DeskSectionHeader title="Live ticker" subtitle={`BTCUSD · ${live.connected ? "Binance stream" : "reconnecting"}`} />
@@ -253,8 +426,13 @@ export default function MockTradingDashboard() {
               value={engine.traceAgeSeconds == null ? "—" : `${engine.traceAgeSeconds}s`}
               compact
             />
+            <DeskMetricTile label="Closed candles" value={candles.closedCount} compact />
+            <DeskMetricTile label="Research eval" value={research.lastEvalCount} compact />
+            <DeskMetricTile label="Research signals" value={research.lastSignalCount} compact />
           </div>
         </DeskCard>
+
+        <ResearchControlsCard research={research} closedCandles={candles.closedCount} />
 
         <DeskCard padding="md">
           <DeskSectionHeader title="Trade analytics" subtitle="Realized PnL is net of round-trip fees and slippage; unrealized PnL marks every OPEN trade to the live BTC mark and subtracts the round-trip fee debt that would crystallize on close." />
@@ -266,13 +444,26 @@ export default function MockTradingDashboard() {
             }}
           >
             <DeskMetricTile label="Total trades" value={engine.analytics.totalTrades} compact />
-            <DeskMetricTile label="Open" value={engine.analytics.openTrades} compact />
+            <DeskMetricTile
+              label="Open / Max"
+              value={`${engine.analytics.openTrades.toLocaleString("en-US")} / ${maxOpenMockTrades.toLocaleString("en-US")}`}
+              compact
+            />
             <DeskMetricTile label="Closed" value={engine.analytics.closedTrades} compact />
+            <DeskMetricTile
+              label="Mock limit rejects"
+              value={engine.mockLimitRejectedSignals.toLocaleString("en-US")}
+              compact
+            />
             <DeskMetricTile label="Win rate" value={fmtPct(engine.analytics.winRate, 1)} compact />
             <DeskMetricTile label="Total PnL" value={fmtUsd(engine.analytics.totalPnl)} valueClassName={totalPnlClass} compact />
             <DeskMetricTile label="Realized" value={fmtUsd(engine.analytics.realizedPnl)} valueClassName={realizedClass} compact />
             <DeskMetricTile label="Unrealized" value={fmtUsd(engine.analytics.unrealizedPnl)} valueClassName={unrealizedClass} compact />
-            <DeskMetricTile label="Avg PnL" value={fmtUsd(engine.analytics.averagePnl)} compact />
+            <DeskMetricTile label="Avg realized PnL" value={fmtUsd(engine.analytics.averageRealizedPnl)} compact />
+            <DeskMetricTile label="TP wins" value={engine.analytics.takeProfitWins} compact />
+            <DeskMetricTile label="SL losses" value={engine.analytics.stopLossLosses} compact />
+            <DeskMetricTile label="TP hit rate" value={fmtPct(engine.analytics.takeProfitHitRate, 1)} compact />
+            <DeskMetricTile label="SL hit rate" value={fmtPct(engine.analytics.stopLossHitRate, 1)} compact />
             <DeskMetricTile
               label="Profit factor"
               value={engine.analytics.profitFactor == null ? "—" : engine.analytics.profitFactor.toFixed(2)}
@@ -286,7 +477,7 @@ export default function MockTradingDashboard() {
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Mock trades"
-            subtitle={`${trades.length} matching · ${engine.trades.length} total`}
+            subtitle={`${displayStart}-${displayEnd} of ${trades.length} matching displayed · ${engine.history.total || engine.trades.length} persisted total`}
           />
           <div
             style={{
@@ -351,6 +542,19 @@ export default function MockTradingDashboard() {
             </select>
 
             <select
+              value={filter.strategyFamily ?? ""}
+              onChange={(e) => setFilter((f) => ({ ...f, strategyFamily: e.target.value || null }))}
+              style={selectStyle}
+            >
+              <option value="">All families</option>
+              {familyOptions.map((family) => (
+                <option key={family} value={family}>
+                  {research.familyLabels[family as ResearchFamily] ?? family}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={filter.profitability ?? ""}
               onChange={(e) =>
                 setFilter((f) => ({
@@ -379,6 +583,28 @@ export default function MockTradingDashboard() {
               ))}
             </select>
 
+            <select
+              value={displayPageSize}
+              onChange={(e) => setDisplayPageSize(Number(e.target.value))}
+              style={selectStyle}
+              aria-label="Rows per page"
+              title="Rows per page"
+            >
+              {[50, 100, 250, 500, 1_000].map((size) => (
+                <option key={size} value={size}>
+                  {size.toLocaleString("en-US")} rows
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="search"
+              value={strategySearch}
+              onChange={(e) => setStrategySearch(e.target.value)}
+              placeholder="Search strategy/family"
+              style={{ ...selectStyle, minWidth: 190 }}
+            />
+
             <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
               <input
                 type="checkbox"
@@ -388,19 +614,87 @@ export default function MockTradingDashboard() {
               Open only
             </label>
 
+            <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(filter.researchOnly)}
+                onChange={(e) => setFilter((f) => ({ ...f, researchOnly: e.target.checked ? true : null }))}
+              />
+              Research pack only
+            </label>
+
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <DeskButton variant="outlined" onClick={() => setFilter({})}>
+              <DeskButton
+                variant="outlined"
+                onClick={() => {
+                  setFilter({});
+                  setStrategySearch("");
+                }}
+              >
                 Clear filters
               </DeskButton>
               <DeskButton variant="danger-tonal" onClick={engine.reset}>
-                Reset mock state
+                Reset persisted state
               </DeskButton>
             </div>
           </div>
 
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              alignItems: "center",
+              marginBottom: 12,
+              color: "var(--desk-on-surface-variant)",
+              fontSize: 12,
+            }}
+          >
+            <span>
+              Mongo history page {engine.history.page} / {engine.history.totalPages}
+              {engine.history.loading ? " · loading" : ""}
+            </span>
+            <span>
+              Display page {displayPage} / {displayTotalPages}
+            </span>
+            <DeskButton
+              variant="outlined"
+              onClick={() => engine.history.setPage(Math.max(1, engine.history.page - 1))}
+              disabled={engine.history.page <= 1 || engine.history.loading}
+              style={{ minHeight: 28, fontSize: "0.75rem", padding: "0 10px" }}
+            >
+              Prev
+            </DeskButton>
+            <DeskButton
+              variant="outlined"
+              onClick={() => engine.history.setPage(Math.min(engine.history.totalPages, engine.history.page + 1))}
+              disabled={engine.history.page >= engine.history.totalPages || engine.history.loading}
+              style={{ minHeight: 28, fontSize: "0.75rem", padding: "0 10px" }}
+            >
+              Next
+            </DeskButton>
+            <DeskButton
+              variant="outlined"
+              onClick={() => setDisplayPage(Math.max(1, displayPage - 1))}
+              disabled={displayPage <= 1}
+              style={{ minHeight: 28, fontSize: "0.75rem", padding: "0 10px" }}
+            >
+              Display Prev
+            </DeskButton>
+            <DeskButton
+              variant="outlined"
+              onClick={() => setDisplayPage(Math.min(displayTotalPages, displayPage + 1))}
+              disabled={displayPage >= displayTotalPages}
+              style={{ minHeight: 28, fontSize: "0.75rem", padding: "0 10px" }}
+            >
+              Display Next
+            </DeskButton>
+            {engine.history.error && <span style={{ color: "var(--desk-error)" }}>{engine.history.error}</span>}
+          </div>
+
           <DeskDataTable
             columns={columns}
-            rows={trades}
+            rows={displayedTrades}
             getRowKey={(t) => t.id}
             empty={
               <DeskEmptyState
@@ -408,15 +702,18 @@ export default function MockTradingDashboard() {
                 subtitle={
                   engine.error
                     ? `Trace fetch error: ${engine.error}`
+                    : engine.persistence.loading
+                      ? "Hydrating persisted Mock Trading state from MongoDB."
                     : "Waiting for the next strategy signal trace tick. The live BTC feed is connected; mock trades will appear as soon as any strategy raises a signal."
                 }
               />
             }
-            minWidth={1080}
+            minWidth={1540}
           />
         </DeskCard>
 
         <PerStrategyCard analytics={engine.analytics} startingBalance={acct.startingBalance} />
+        <ResearchAnalyticsCards analytics={engine.analytics} startingBalance={acct.startingBalance} />
         <PerBlockerCard analytics={engine.analytics} />
 
         <DeskCard padding="md">
@@ -424,7 +721,7 @@ export default function MockTradingDashboard() {
           {engine.logs.length === 0 ? (
             <DeskEmptyState
               title="No log events"
-              subtitle="MOCK_TRADE_CREATED and MOCK_TRADE_CLOSED events will appear here as signals arrive."
+              subtitle="MOCK_TRADE_CREATED, MOCK_TRADE_TP_HIT, MOCK_TRADE_SL_HIT, and MOCK_TRADE_CLOSED events will appear here as signals arrive."
             />
           ) : (
             <div
@@ -444,15 +741,16 @@ export default function MockTradingDashboard() {
                   <span style={{ color: "var(--desk-on-surface-variant)" }}>
                     {new Date(log.ts).toLocaleTimeString()}
                   </span>{" "}
-                  <span
-                    style={{
-                      color: log.event === "MOCK_TRADE_CREATED" ? "var(--desk-success)" : "var(--desk-primary)",
-                    }}
-                  >
+                  <span style={{ color: logColor(log.event) }}>
                     {log.event}
                   </span>{" "}
+                  {log.tradeId ? `id=${log.tradeId} ` : ""}
                   strategy=#{log.strategyId} {log.strategyName} side={log.side} price=
                   {fmtPrice(log.price)}
+                  {log.message ? ` ${log.message}` : ""}
+                  {log.entryPrice != null ? ` entry=${fmtPrice(log.entryPrice)}` : ""}
+                  {log.exitPrice != null ? ` exit=${fmtPrice(log.exitPrice)}` : ""}
+                  {log.exitReason ? ` reason=${log.exitReason}` : ""}
                   {log.notional != null ? ` notional=${fmtUsdK(log.notional)}` : ""}
                   {log.pnl != null ? ` pnl=${fmtUsd(log.pnl)}` : ""}
                   {log.ignoredBlockers.length > 0
@@ -482,7 +780,15 @@ const selectStyle: React.CSSProperties = {
   minWidth: 130,
 };
 
-function AccountSummaryCard({ account }: { account: MockAccountState }) {
+function AccountSummaryCard({
+  account,
+  maxOpenMockTrades,
+  openUsagePct,
+}: {
+  account: MockAccountState;
+  maxOpenMockTrades: number;
+  openUsagePct: number;
+}) {
   const equityClass = pnlClass(account.equity - account.startingBalance);
   const realizedClass = pnlClass(account.realizedPnl);
   const unrealClass = pnlClass(account.unrealizedPnl);
@@ -508,10 +814,45 @@ function AccountSummaryCard({ account }: { account: MockAccountState }) {
         <DeskMetricTile label="Exposure" value={fmtUsd(account.exposure, 0)} compact />
         <DeskMetricTile label="Margin Used" value={fmtUsd(account.marginUsed, 0)} compact />
         <DeskMetricTile label="Available" value={fmtUsd(account.availableBalance, 0)} compact />
-        <DeskMetricTile label="Open Trades" value={account.openCount} compact />
+        <DeskMetricTile
+          label="Open Mock Trades / Max"
+          value={`${account.openCount.toLocaleString("en-US")} / ${maxOpenMockTrades.toLocaleString("en-US")}`}
+          compact
+        />
+        <DeskMetricTile label="Limit Used" value={`${openUsagePct.toFixed(1)}%`} compact />
         <DeskMetricTile label="Return %" value={fmtPct(account.returnPct, 2)} valueClassName={returnClass} compact />
         <DeskMetricTile label="Max Drawdown" value={fmtPct(account.maxDrawdownPct, 2)} compact />
         <DeskMetricTile label="Peak Equity" value={fmtUsd(account.peakEquity, 0)} compact />
+      </div>
+      <div style={{ marginTop: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 12,
+            color: "var(--desk-on-surface-variant)",
+            marginBottom: 6,
+          }}
+        >
+          <span>Open mock trade usage</span>
+          <span>{openUsagePct.toFixed(1)}%</span>
+        </div>
+        <div
+          style={{
+            height: 8,
+            borderRadius: 999,
+            overflow: "hidden",
+            background: "var(--desk-surface-container-highest)",
+          }}
+        >
+          <div
+            style={{
+              width: `${Math.min(100, openUsagePct)}%`,
+              height: "100%",
+              background: openUsagePct >= 80 ? "var(--desk-warning)" : "var(--desk-primary)",
+            }}
+          />
+        </div>
       </div>
     </DeskCard>
   );
@@ -528,7 +869,7 @@ function MockConfigCard({
     <DeskCard padding="md">
       <DeskSectionHeader
         title="Mock account & sizing"
-        subtitle="Per-strategy SL/TP/hold from the production roster override these defaults when known. Changes persist in localStorage."
+        subtitle="New mock trades use fixed-dollar TP/SL outcomes. Changes persist to MongoDB when configured, with localStorage as a cache."
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <ConfigNumber
@@ -536,6 +877,12 @@ function MockConfigCard({
           value={config.startingBalanceUsd}
           step={10_000}
           onChange={(v) => onChange({ ...config, startingBalanceUsd: v })}
+        />
+        <ConfigNumber
+          label="Max open mock trades"
+          value={config.maxOpenMockTrades}
+          step={100}
+          onChange={(v) => onChange({ ...config, maxOpenMockTrades: Math.max(1, Math.floor(v)) })}
         />
         <ConfigSelect
           label="Sizing mode"
@@ -578,16 +925,16 @@ function MockConfigCard({
           onChange={(v) => onChange({ ...config, leverage: Math.max(1, Math.min(125, Math.floor(v))) })}
         />
         <ConfigNumber
-          label="Take profit %"
-          value={config.takeProfitPct}
-          step={0.1}
-          onChange={(v) => onChange({ ...config, takeProfitPct: v })}
+          label="TP profit ($)"
+          value={config.takeProfitUsd}
+          step={1}
+          onChange={(v) => onChange({ ...config, takeProfitUsd: Math.max(0.01, v) })}
         />
         <ConfigNumber
-          label="Stop loss %"
-          value={config.stopLossPct}
-          step={0.1}
-          onChange={(v) => onChange({ ...config, stopLossPct: v })}
+          label="SL loss ($)"
+          value={config.stopLossUsd}
+          step={1}
+          onChange={(v) => onChange({ ...config, stopLossUsd: Math.max(0.01, v) })}
         />
         <ConfigNumber
           label="Max hold (min)"
@@ -607,6 +954,108 @@ function MockConfigCard({
           step={1}
           onChange={(v) => onChange({ ...config, slippageBpsPerSide: Math.max(0, v) })}
         />
+      </div>
+    </DeskCard>
+  );
+}
+
+function ResearchControlsCard({
+  research,
+  closedCandles,
+}: {
+  research: ReturnType<typeof useMockResearchRunner>;
+  closedCandles: number;
+}) {
+  const updateFamily = (family: ResearchFamily, enabled: boolean) => {
+    const next = new Set(research.config.enabledFamilies);
+    if (enabled) next.add(family);
+    else next.delete(family);
+    research.setConfig({ ...research.config, enabledFamilies: next });
+  };
+
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="500-strategy research runner"
+        subtitle="Mock-only: evaluates BTC strategy variants on each closed 1-minute candle and sends capped BUY/SELL signals only into the Mock Trading engine."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={research.config.enabled}
+            onChange={(e) => research.setConfig({ ...research.config, enabled: e.target.checked })}
+          />
+          Enable research strategies
+        </label>
+        <ConfigNumber
+          label="Max signals / minute"
+          value={research.config.maxSignalsPerMinute}
+          step={1}
+          onChange={(v) =>
+            research.setConfig({
+              ...research.config,
+              maxSignalsPerMinute: Math.max(1, Math.min(500, Math.floor(v))),
+            })
+          }
+        />
+        <ConfigNumber
+          label="Minimum confidence"
+          value={research.config.minConfidence}
+          step={1}
+          onChange={(v) =>
+            research.setConfig({
+              ...research.config,
+              minConfidence: Math.max(0, Math.min(100, v)),
+            })
+          }
+        />
+        <DeskMetricTile label="Registry" value={`${research.strategies.length} strategies`} compact />
+        <DeskMetricTile label="Closed candles" value={closedCandles} compact />
+        <DeskMetricTile label="Last signals" value={research.lastSignalCount} compact />
+      </div>
+
+      <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <DeskButton
+          variant="outlined"
+          onClick={() => research.setConfig({ ...research.config, enabledFamilies: new Set(ALL_RESEARCH_FAMILIES) })}
+        >
+          Enable all families
+        </DeskButton>
+        <DeskButton
+          variant="outlined"
+          onClick={() => research.setConfig({ ...research.config, enabledFamilies: new Set<ResearchFamily>() })}
+        >
+          Disable all families
+        </DeskButton>
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 8,
+          maxHeight: 170,
+          overflowY: "auto",
+        }}
+      >
+        {ALL_RESEARCH_FAMILIES.map((family) => (
+          <label key={family} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={research.config.enabledFamilies.has(family)}
+              onChange={(e) => updateFamily(family, e.target.checked)}
+            />
+            {research.familyLabels[family]}
+          </label>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 12, color: "var(--desk-on-surface-variant)" }}>
+        Last evaluation:{" "}
+        {research.lastEvalAt == null ? "waiting for a closed candle" : new Date(research.lastEvalAt).toLocaleTimeString()}
+        {research.hasRun ? ` · evaluated ${research.lastEvalCount} strategies` : ""}
       </div>
     </DeskCard>
   );
@@ -739,6 +1188,124 @@ function PerStrategyCard({
         />
       )}
     </DeskCard>
+  );
+}
+
+function ResearchAnalyticsCards({
+  analytics,
+  startingBalance,
+}: {
+  analytics: ReturnType<typeof computeAnalytics>;
+  startingBalance: number;
+}) {
+  const top = analytics.perStrategy.filter((r) => r.total > 0).slice(0, 20);
+  const worst = analytics.perStrategy
+    .filter((r) => r.total > 0)
+    .slice()
+    .sort((a, b) => a.totalPnl - b.totalPnl)
+    .slice(0, 20);
+  const families = analytics.perFamily.slice(0, 30);
+
+  return (
+    <>
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Top profitable strategies"
+          subtitle="Best strategy rows by total net PnL, including trade count and win rate."
+        />
+        {top.length === 0 ? (
+          <DeskEmptyState title="No research results yet" subtitle="Top strategies populate after mock research trades close or mark to profit." />
+        ) : (
+          <StrategyRankTable rows={top} startingBalance={startingBalance} />
+        )}
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Worst strategies"
+          subtitle="Lowest strategy rows by total net PnL, capped to keep rendering light."
+        />
+        {worst.length === 0 ? (
+          <DeskEmptyState title="No research results yet" subtitle="Worst-strategy rows populate after mock research trades are created." />
+        ) : (
+          <StrategyRankTable rows={worst} startingBalance={startingBalance} />
+        )}
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="PnL by strategy family"
+          subtitle="Family-level PnL, trade count, and win rate for the research pack."
+        />
+        {families.length === 0 ? (
+          <DeskEmptyState title="No family data yet" subtitle="Family roll-up appears once research-pack trades are generated." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "family", header: "Family", cell: (r) => r.family },
+              { id: "count", header: "Trades", align: "right", cell: (r) => r.tradeCount },
+              { id: "open", header: "Open", align: "right", cell: (r) => r.open },
+              { id: "closed", header: "Closed", align: "right", cell: (r) => r.closed },
+              { id: "win", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate, 1) },
+              {
+                id: "pnl",
+                header: "Total PnL",
+                align: "right",
+                cell: (r) => <span className={pnlClass(r.totalPnl)}>{fmtUsd(r.totalPnl)}</span>,
+              },
+              {
+                id: "realized",
+                header: "Realized",
+                align: "right",
+                cell: (r) => <span className={pnlClass(r.realizedPnl)}>{fmtUsd(r.realizedPnl)}</span>,
+              },
+            ]}
+            rows={families}
+            getRowKey={(r) => r.family}
+            minWidth={700}
+          />
+        )}
+      </DeskCard>
+    </>
+  );
+}
+
+function StrategyRankTable({
+  rows,
+  startingBalance,
+}: {
+  rows: ReturnType<typeof computeAnalytics>["perStrategy"];
+  startingBalance: number;
+}) {
+  return (
+    <DeskDataTable
+      columns={[
+        { id: "id", header: "Strategy", cell: (r) => `#${r.strategyId} ${r.strategyName}` },
+        { id: "count", header: "Trades", align: "right", cell: (r) => r.total },
+        { id: "open", header: "Open", align: "right", cell: (r) => r.open },
+        { id: "closed", header: "Closed", align: "right", cell: (r) => r.closed },
+        { id: "win", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate, 1) },
+        {
+          id: "pnl",
+          header: "Total PnL",
+          align: "right",
+          cell: (r) => <span className={pnlClass(r.totalPnl)}>{fmtUsd(r.totalPnl)}</span>,
+        },
+        {
+          id: "ret",
+          header: "Return %",
+          align: "right",
+          cell: (r) => (
+            <span className={pnlClass(r.totalPnl)}>
+              {fmtPct(startingBalance > 0 ? r.totalPnl / startingBalance : 0, 2)}
+            </span>
+          ),
+        },
+      ]}
+      rows={rows}
+      getRowKey={(r) => String(r.strategyId)}
+      minWidth={720}
+    />
   );
 }
 

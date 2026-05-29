@@ -53,7 +53,7 @@ async function connect(): Promise<CachedClient> {
   if (!uri || uri.trim().length === 0) {
     throw new Error("MONGODB_URI not set");
   }
-  const dbName = process.env.MONGODB_DB?.trim() || DEFAULT_DB_NAME;
+  const dbName = process.env.MONGODB_DB_NAME?.trim() || process.env.MONGODB_DB?.trim() || DEFAULT_DB_NAME;
 
   connectPromise = (async () => {
     const client = new MongoClient(uri, {

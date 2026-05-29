@@ -1,0 +1,105 @@
+import { describe, expect, it } from "vitest";
+import {
+  DEFAULT_MOCK_TRADING_CONFIG,
+  computeAccountState,
+  type MockTrade,
+} from "@/lib/mockTradingEngine";
+import {
+  mergeHydratedMockTrades,
+  mockAccountStateSchema,
+  mockTradeListQuerySchema,
+  mockTradeSchema,
+  mockTradingConfigSchema,
+  strategyFamilyForTrade,
+} from "@/lib/mockTradingPersistenceTypes";
+import { mockTradeToDoc } from "@/lib/mockTradingMongo";
+
+const trade: MockTrade = {
+  id: "mock-trace-1",
+  traceId: "trace-1",
+  strategyId: 91,
+  strategyName: "Trend_Continuation_Long",
+  symbol: "BTCUSD",
+  side: "BUY",
+  notional: 10_000,
+  quantity: 0.166,
+  leverage: 25,
+  marginUsed: 400,
+  signalPrice: 60_000,
+  entryPrice: 60_030,
+  takeProfitPrice: 60_600,
+  stopLossPrice: 59_700,
+  takeProfitUsd: 10,
+  stopLossUsd: 5,
+  riskRewardRatio: 2,
+  signalScore: 28,
+  requiredThreshold: 20,
+  blockers: [{ gate: "REGIME", reason: "regime blocked" }],
+  status: "OPEN",
+  openedAt: 1_700_000_000_000,
+  closedAt: null,
+  currentPrice: 60_050,
+  unrealizedPnl: 3.2,
+  realizedPnl: 0,
+  fees: 0,
+  exitReason: null,
+  exitPrice: null,
+};
+
+describe("Mock Trading persistence schemas", () => {
+  it("accepts a valid raw mock trade and rejects malformed close state", () => {
+    expect(mockTradeSchema.safeParse(trade).success).toBe(true);
+    expect(mockTradeSchema.safeParse({ ...trade, status: "CLOSED" }).success).toBe(false);
+  });
+
+  it("accepts computed account snapshots", () => {
+    const account = computeAccountState([trade], DEFAULT_MOCK_TRADING_CONFIG);
+    expect(mockAccountStateSchema.safeParse(account).success).toBe(true);
+  });
+
+  it("defaults mock config to 5,000 max open mock trades", () => {
+    const parsed = mockTradingConfigSchema.parse({
+      ...DEFAULT_MOCK_TRADING_CONFIG,
+      maxOpenMockTrades: undefined,
+    });
+    expect(parsed.maxOpenMockTrades).toBe(5_000);
+  });
+
+  it("sanitizes pagination, filters, and sorting", () => {
+    const parsed = mockTradeListQuerySchema.parse({
+      page: "2",
+      limit: "25",
+      status: "OPEN",
+      side: "BUY",
+      strategy_id: "91",
+      blocker_gate: "REGIME",
+      profitability: "profit",
+      sort: "most_profitable",
+    });
+    expect(parsed.page).toBe(2);
+    expect(parsed.limit).toBe(25);
+    expect(parsed.strategy_id).toBe(91);
+    expect(parsed.sort).toBe("most_profitable");
+  });
+
+  it("allows mock trade hydration pages large enough for 5,000 open trades", () => {
+    const parsed = mockTradeListQuerySchema.parse({ limit: "5000", status: "OPEN" });
+    expect(parsed.limit).toBe(5_000);
+  });
+
+  it("maps raw trades to Mongo documents with required searchable fields", () => {
+    const doc = mockTradeToDoc("mock_trading_default", trade, DEFAULT_MOCK_TRADING_CONFIG);
+    expect(doc.trade_id).toBe(trade.id);
+    expect(doc.strategy_family).toBe(strategyFamilyForTrade(trade));
+    expect(doc.blockers_ignored).toEqual(["REGIME"]);
+    expect(doc.parameters_used.leverage).toBe(DEFAULT_MOCK_TRADING_CONFIG.leverage);
+    expect(doc.raw_trade).toEqual(trade);
+  });
+
+  it("merges Mongo hydration over local cache by trade id", () => {
+    const remote = { ...trade, currentPrice: 61_000, unrealizedPnl: 120 };
+    const merged = mergeHydratedMockTrades([trade], [remote]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].currentPrice).toBe(61_000);
+  });
+});
