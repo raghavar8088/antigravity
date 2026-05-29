@@ -9,12 +9,14 @@
  *   - No forced trades, no threshold lowering, no gate bypassing.
  *   - Recommendations only — operator decides whether to apply.
  *   - Max 90 days of candles (129,600 bars at 1-minute resolution).
+ *   - Refuses to run if candle coverage is < 80% of the requested window.
  */
 
 import { NextResponse } from "next/server";
 import {
-  loadReplayFixture,
-  replayFixturePath,
+  computeCoverageDays,
+  hasSufficientCoverage,
+  loadReplayFixtureForDays,
 } from "@/lib/futuresReplayFixtures";
 import { runPaperDeskReplay, summarizeReplayTrades } from "@/lib/futuresReplayEngine";
 import { rankReplayStrategies } from "@/lib/replayWalkForwardRanker";
@@ -22,13 +24,11 @@ import { rankReplayStrategies } from "@/lib/replayWalkForwardRanker";
 export const dynamic = "force-dynamic";
 
 const MAX_DAYS = 90;
-const BARS_PER_DAY = 1440; // 1-minute bars
 
 export async function GET(req: Request): Promise<NextResponse> {
   try {
     const url = new URL(req.url);
     const days = Math.min(MAX_DAYS, Math.max(1, Number(url.searchParams.get("days") ?? "30")));
-    const maxBars = days * BARS_PER_DAY;
     const strategyIdsParam = url.searchParams.get("strategy_ids") ?? "";
     const strategyIds = strategyIdsParam
       ? strategyIdsParam
@@ -37,34 +37,48 @@ export async function GET(req: Request): Promise<NextResponse> {
           .filter((n) => Number.isFinite(n) && n > 0)
       : undefined;
 
-    // Load candles — prefer live fixture, fall back to sample
+    // Load candles — prefer btcusd_1m_{N}d.json, fall back to live
     let candleFile;
-    let fixtureKind: "live" | "sample" = "live";
+    let usedFixturePath = "";
     try {
-      candleFile = loadReplayFixture("live", { maxBars });
-    } catch {
-      try {
-        candleFile = loadReplayFixture("sample", { maxBars });
-        fixtureKind = "sample";
-      } catch {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "No replay fixture found. Run `npm run replay:fetch` first.",
-            fixturePaths: {
-              live: replayFixturePath("live"),
-              sample: replayFixturePath("sample"),
-            },
-          },
-          { status: 422 },
-        );
-      }
+      const loaded = loadReplayFixtureForDays(days);
+      candleFile = loaded.file;
+      usedFixturePath = loaded.fixturePath;
+    } catch (e) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `No replay fixture found for ${days}d. Run: npm run replay:fetch -- --days=${days}`,
+          fetchCommand: `npm run replay:fetch -- --days=${days}`,
+        },
+        { status: 422 },
+      );
     }
 
     const candles = candleFile.candles;
-    if (candles.length < 100) {
+    const candlesLoaded = candles.length;
+    const coverageDays = computeCoverageDays(candlesLoaded);
+    const sufficient = hasSufficientCoverage(candlesLoaded, days);
+
+    if (!sufficient) {
       return NextResponse.json(
-        { ok: false, error: `Too few candles (${candles.length}). Run replay:fetch first.` },
+        {
+          ok: false,
+          error:
+            `Insufficient replay data: ${candlesLoaded} candles = ${coverageDays.toFixed(1)} days ` +
+            `(need ≥80% of ${days}d). Run: npm run replay:fetch -- --days=${days}`,
+          candlesLoaded,
+          coverageDays,
+          requestedDays: days,
+          fetchCommand: `npm run replay:fetch -- --days=${days}`,
+        },
+        { status: 422 },
+      );
+    }
+
+    if (candlesLoaded < 100) {
+      return NextResponse.json(
+        { ok: false, error: `Too few candles (${candlesLoaded}). Run: npm run replay:fetch -- --days=${days}` },
         { status: 422 },
       );
     }
@@ -94,8 +108,11 @@ export async function GET(req: Request): Promise<NextResponse> {
       ok: true,
       days,
       barsProcessed: result.barsProcessed,
+      candlesLoaded,
+      coverageDays,
+      requestedDays: days,
       generatedAt: new Date().toISOString(),
-      fixtureKind,
+      fixturePath: usedFixturePath,
       summary: {
         totalTrades: summary.count,
         sumNet: summary.sumNet,

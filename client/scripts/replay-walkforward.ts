@@ -14,23 +14,21 @@
  *   - Paper/research only. No live Delta order placement.
  *   - No threshold lowering below 26 by default.
  *   - Recommendations only — operator decides whether to apply.
+ *   - Refuses to run if candle coverage is < 80% of the requested window.
  */
 
-import { loadEnvLocal, loadReplayCandles, parseArg } from "./replayCliShared";
+import { loadEnvLocal, loadReplayCandlesForDays, parseArg } from "./replayCliShared";
 import { runPaperDeskReplay, summarizeReplayTrades } from "../src/lib/futuresReplayEngine";
 import { rankReplayStrategies } from "../src/lib/replayWalkForwardRanker";
 import { eventFromReplayWalkForwardRun } from "../src/lib/verificationTrack/buildVerificationEvents";
 import { insertVerificationEvents } from "../src/lib/verificationTrack/verificationTrackMongo";
 import { isMongoConfigured } from "../src/lib/mongoTradesClient";
-import type { ReplayFixtureKind } from "../src/lib/futuresReplayFixtures";
 
 loadEnvLocal();
 
 // ─── Parse args ───────────────────────────────────────────────────────────────
 
 const days = Math.min(90, Math.max(1, Number(parseArg("days", "30"))));
-const maxBars = days * 1440;
-
 const idsArg = parseArg("ids", "");
 const strategyIds: number[] | undefined = idsArg
   ? idsArg.split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0)
@@ -38,19 +36,39 @@ const strategyIds: number[] | undefined = idsArg
 
 const threshold = Number(parseArg("threshold", "26"));
 const slippageBps = Number(parseArg("slip", "5"));
-const fixtureName = (parseArg("fixture", "live") as ReplayFixtureKind) || "live";
 
 console.log(
-  `[replay:walkforward] days=${days}  bars=${maxBars}  threshold=${threshold}  slip=${slippageBps}bps  ids=${strategyIds?.join(",") ?? "all"}`,
+  `[replay:walkforward] days=${days}  threshold=${threshold}  slip=${slippageBps}bps  ids=${strategyIds?.join(",") ?? "all"}`,
 );
 
-// ─── Load candles ─────────────────────────────────────────────────────────────
+// ─── Load candles (with coverage guard) ──────────────────────────────────────
 
-const { candles, fundingRate, fixturePath } = loadReplayCandles({ fixture: fixtureName, bars: maxBars });
-console.log(`[replay:walkforward] Loaded ${candles.length} candles from ${fixturePath}`);
+const { candles, fundingRate, fixturePath, coverageDays, sufficient, fetchCommand } =
+  loadReplayCandlesForDays(days);
+
+console.log(
+  `[replay:walkforward] Loaded ${candles.length.toLocaleString()} candles from ${fixturePath || "(none)"}`,
+);
+console.log(
+  `[replay:walkforward] Coverage: ${coverageDays.toFixed(2)} days of ${days} requested`,
+);
+
+if (!sufficient) {
+  console.error(
+    `\n[replay:walkforward] ✗ Insufficient replay data: ${candles.length} candles = ` +
+    `${coverageDays.toFixed(1)}d coverage (need ≥80% of ${days}d = ${Math.ceil(days * 1440 * 0.8).toLocaleString()} candles).`,
+  );
+  console.error(
+    `[replay:walkforward] Run first: ${fetchCommand}`,
+  );
+  console.error(
+    `[replay:walkforward] Refusing to produce fake ${days}d rankings from ${coverageDays.toFixed(1)}d of data.`,
+  );
+  process.exit(1);
+}
 
 if (candles.length < 100) {
-  console.error(`[replay:walkforward] Too few candles (${candles.length}). Run npm run replay:fetch first.`);
+  console.error(`[replay:walkforward] Too few candles (${candles.length}). Run: ${fetchCommand}`);
   process.exit(1);
 }
 
@@ -73,7 +91,9 @@ const result = runPaperDeskReplay(candles, {
 
 const summary = summarizeReplayTrades(result.trades);
 console.log(
-  `[replay:walkforward] Replay done: ${summary.count} trades  sumNet=$${summary.sumNet.toFixed(2)}  expectancy=$${summary.expectancy.toFixed(2)}/trade  finalBalance=$${result.finalBalance.toFixed(2)}`,
+  `[replay:walkforward] Replay done: ${summary.count} trades  ` +
+  `sumNet=$${summary.sumNet.toFixed(2)}  expectancy=$${summary.expectancy.toFixed(2)}/trade  ` +
+  `finalBalance=$${result.finalBalance.toFixed(2)}`,
 );
 
 // ─── Rank strategies ──────────────────────────────────────────────────────────
@@ -126,6 +146,8 @@ if (isMongoConfigured()) {
     barsProcessed: result.barsProcessed,
     totalTrades: summary.count,
     promoted: promoted.length,
+    candlesLoaded: candles.length,
+    coverageDays,
   });
   void insertVerificationEvents([event]).catch(() => {
     // Non-fatal

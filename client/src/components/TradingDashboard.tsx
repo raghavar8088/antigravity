@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
@@ -12,6 +13,7 @@ import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 
 export default function TradingDashboard() {
   const [actionsEnabled, setActionsEnabled] = useState(false);
+  const router = useRouter();
 
   const actionToggleTitle = actionsEnabled
     ? "Dangerous controls (reset, clear, kill, close-all) are enabled."
@@ -38,7 +40,9 @@ export default function TradingDashboard() {
         <div className="workspace-nav--slim">
           <WorkspaceNavPanel
             activeModule="btcFutureTrading"
-            onModuleChange={() => {}}
+            onModuleChange={(next) => {
+              if (next === "mockTrading") router.push("/mock-trading");
+            }}
             actionsEnabled={actionsEnabled}
             onActionsEnabledChange={setActionsEnabled}
             actionToggleTitle={actionToggleTitle}

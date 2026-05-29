@@ -1,7 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  computeCoverageDays,
+  hasSufficientCoverage,
   loadReplayFixture,
+  loadReplayFixtureForDays,
   makeSyntheticBtcusd1mCandles,
   replayFixturePath,
   type ReplayCandle,
@@ -61,6 +64,48 @@ export function loadReplayCandles(opts: {
     const candles = makeSyntheticBtcusd1mCandles(Math.max(opts.bars, 500));
     return { candles: candles.slice(0, opts.bars), fundingRate: 0, fixturePath };
   }
+}
+
+/**
+ * Load candles for a specific days window.
+ * Prefers btcusd_1m_{N}d.json; falls back to btcusd_1m_live.json.
+ * Returns coverage info so callers can decide whether to proceed.
+ */
+export function loadReplayCandlesForDays(days: number): {
+  candles: ReplayCandle[];
+  fundingRate: number;
+  fixturePath: string;
+  coverageDays: number;
+  sufficient: boolean;
+  fetchCommand: string;
+} {
+  const fetchCommand = `npm run replay:fetch -- --days=${days}`;
+
+  let file: ReturnType<typeof loadReplayFixtureForDays>;
+  try {
+    file = loadReplayFixtureForDays(days);
+  } catch {
+    return {
+      candles: [],
+      fundingRate: 0,
+      fixturePath: "",
+      coverageDays: 0,
+      sufficient: false,
+      fetchCommand,
+    };
+  }
+
+  const coverageDays = computeCoverageDays(file.file.candles.length);
+  const sufficient = hasSufficientCoverage(file.file.candles.length, days);
+
+  return {
+    candles: file.file.candles,
+    fundingRate: file.file.fundingRate ?? 0,
+    fixturePath: file.fixturePath,
+    coverageDays,
+    sufficient,
+    fetchCommand,
+  };
 }
 
 export function buildReplayConfigFromCli(): PaperReplayConfig {

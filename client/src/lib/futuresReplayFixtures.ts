@@ -31,6 +31,64 @@ export function replayFixturePath(kind: ReplayFixtureKind): string {
     : join(REPLAY_FIXTURE_DIR, "btcusd_1m_sample.json");
 }
 
+/** Path for a multi-day fixture file, e.g. btcusd_1m_30d.json */
+export function replayFixturePathForDays(days: number): string {
+  return join(REPLAY_FIXTURE_DIR, `btcusd_1m_${days}d.json`);
+}
+
+// ─── Coverage helpers ─────────────────────────────────────────────────────────
+
+const BARS_PER_DAY = 1440; // 1-minute bars per day
+/** 80% of the requested bars must be present to be considered sufficient. */
+const MIN_COVERAGE_RATIO = 0.80;
+
+/** How many calendar days does `candleCount` 1-minute bars cover? */
+export function computeCoverageDays(candleCount: number): number {
+  return candleCount / BARS_PER_DAY;
+}
+
+/** True if the candle count is ≥80% of the bars needed for `requestedDays`. */
+export function hasSufficientCoverage(candleCount: number, requestedDays: number): boolean {
+  return candleCount >= requestedDays * BARS_PER_DAY * MIN_COVERAGE_RATIO;
+}
+
+/**
+ * Load a named fixture for `days` if it exists; fall back to the live fixture.
+ * Returns the file + the path it was loaded from.
+ * Throws if neither file exists.
+ */
+export function loadReplayFixtureForDays(
+  days: number,
+  maxBars?: number,
+): { file: ReplayFixtureFile; fixturePath: string } {
+  const daysPath = replayFixturePathForDays(days);
+  const livePath = replayFixturePath("live");
+
+  const tryLoad = (p: string): ReplayFixtureFile | null => {
+    if (!existsSync(p)) return null;
+    try {
+      return loadReplayFixtureFromFile(p);
+    } catch {
+      return null;
+    }
+  };
+
+  const raw = tryLoad(daysPath) ?? tryLoad(livePath);
+  if (!raw) {
+    throw new Error(
+      `No replay fixture found for ${days}d. Run: npm run replay:fetch -- --days=${days}`,
+    );
+  }
+
+  const usedPath = existsSync(daysPath) ? daysPath : livePath;
+  const file =
+    maxBars && raw.candles.length > maxBars
+      ? { ...raw, candles: raw.candles.slice(-maxBars) }
+      : raw;
+
+  return { file, fixturePath: usedPath };
+}
+
 /** Parse fixture JSON from API fetch or hand-authored file. */
 export function parseReplayFixtureFile(raw: unknown): ReplayFixtureFile {
   if (!raw || typeof raw !== "object") {

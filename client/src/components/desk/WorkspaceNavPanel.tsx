@@ -8,17 +8,23 @@ import { DeskTabs, type DeskTabItem } from "@/components/desk/ui/DeskTabs";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/client";
 
-export type DashboardModule = "btcFutureTrading";
+export type DashboardModule = "btcFutureTrading" | "mockTrading";
 
 type ModuleTab = Omit<DeskTabItem<DashboardModule>, "trailing">;
 
 const MODULES: ModuleTab[] = [
   { key: "btcFutureTrading", label: "BTC Future Trading" },
+  { key: "mockTrading", label: "Mock Trading" },
 ];
 
-export function moduleDeepLinkUrl(): string {
+const MODULE_PATHS: Record<DashboardModule, string> = {
+  btcFutureTrading: "/btc-future-trading",
+  mockTrading: "/mock-trading",
+};
+
+export function moduleDeepLinkUrl(module: DashboardModule = "btcFutureTrading"): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  return `${origin}/btc-future-trading`;
+  return `${origin}${MODULE_PATHS[module]}`;
 }
 
 function moduleItemsWithCopy(items: ModuleTab[]): DeskTabItem<DashboardModule>[] {
@@ -26,7 +32,7 @@ function moduleItemsWithCopy(items: ModuleTab[]): DeskTabItem<DashboardModule>[]
     ...item,
     trailing: (
       <DeskCopyButton
-        text={moduleDeepLinkUrl()}
+        text={moduleDeepLinkUrl(item.key)}
         ariaLabel={`Copy link to ${item.label}`}
       />
     ),

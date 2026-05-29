@@ -285,9 +285,16 @@ export function eventFromReplayWalkForwardRun(
     barsProcessed: number;
     totalTrades: number;
     promoted: number;
+    candlesLoaded?: number;
+    coverageDays?: number;
     accountKey?: string | null;
   },
 ): VerificationTrackEvent {
+  const coveragePct =
+    params.candlesLoaded != null && params.days > 0
+      ? ((params.candlesLoaded / (params.days * 1440)) * 100).toFixed(1)
+      : null;
+
   return {
     event_id: makeId(runAt, "REPLAY_WALKFORWARD_RUN"),
     created_at: new Date(runAt).toISOString(),
@@ -296,10 +303,17 @@ export function eventFromReplayWalkForwardRun(
     worker_owner: null,
     type: "REPLAY_WALKFORWARD_RUN",
     severity: "info",
-    summary: `Replay+WF run: days=${params.days} bars=${params.barsProcessed} trades=${params.totalTrades} promoted=${params.promoted}`,
+    summary:
+      `Replay+WF run: days=${params.days} bars=${params.barsProcessed} ` +
+      `candles=${params.candlesLoaded ?? params.barsProcessed} ` +
+      `coverage=${params.coverageDays?.toFixed(1) ?? "?"}d (${coveragePct ?? "?"}%) ` +
+      `trades=${params.totalTrades} promoted=${params.promoted}`,
     snapshot: {
       days: params.days,
       barsProcessed: params.barsProcessed,
+      candlesLoaded: params.candlesLoaded ?? params.barsProcessed,
+      coverageDays: params.coverageDays,
+      coveragePct: coveragePct != null ? Number(coveragePct) : null,
       totalTrades: params.totalTrades,
       promoted: params.promoted,
     },

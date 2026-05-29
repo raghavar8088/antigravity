@@ -29,14 +29,17 @@ type ReplayLabResponse = {
   ok: boolean;
   days?: number;
   barsProcessed?: number;
+  candlesLoaded?: number;
+  coverageDays?: number;
+  requestedDays?: number;
   generatedAt?: string;
-  fixtureKind?: "live" | "sample";
+  fixturePath?: string;
   summary?: ReplaySummary;
   rankings?: ReplayWalkForwardRank[];
   promoted?: number[];
   canvasNote?: string;
   error?: string;
-  fixturePaths?: { live: string; sample: string };
+  fetchCommand?: string;
 };
 
 // ─── Recommendation colour mapping ───────────────────────────────────────────
@@ -123,6 +126,12 @@ export function ReplayWalkForwardLab() {
 
   const rankings = result?.rankings ?? [];
 
+  // Coverage check
+  const coverageDays = result?.coverageDays;
+  const requestedDays = result?.requestedDays ?? days;
+  const coveragePct = coverageDays != null ? (coverageDays / requestedDays) * 100 : null;
+  const coverageLow = coveragePct != null && coveragePct < 80;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
@@ -201,6 +210,7 @@ export function ReplayWalkForwardLab() {
         )}
       </div>
 
+      {/* Error / insufficient coverage */}
       {error && (
         <div
           style={{
@@ -213,16 +223,40 @@ export function ReplayWalkForwardLab() {
           }}
         >
           {error}
-          {result?.fixturePaths && (
-            <div style={{ marginTop: 4, color: "var(--desk-on-surface-muted)" }}>
-              Run <code>npm run replay:fetch</code> to download live candles first.
+          {result?.fetchCommand && (
+            <div style={{ marginTop: 6, color: "var(--desk-on-surface-muted)" }}>
+              <strong>Fix: </strong>
+              <code style={{ userSelect: "all" }}>{result.fetchCommand}</code>
             </div>
           )}
         </div>
       )}
 
+      {/* Coverage warning (when run succeeded but coverage was marginal) */}
+      {!error && coverageLow && coverageDays != null && (
+        <div
+          style={{
+            padding: "10px 14px",
+            border: "1px solid var(--desk-warning)",
+            borderRadius: "var(--desk-radius-card)",
+            background: "var(--desk-surface)",
+            fontSize: "0.6875rem",
+            color: "var(--desk-warning)",
+          }}
+        >
+          <strong>Replay data is too short.</strong>{" "}
+          {`Loaded ${coverageDays.toFixed(1)} days of data (${coveragePct?.toFixed(0)}% of ${requestedDays}d requested).`}
+          {" "}Fetch more data before trusting rankings:
+          <div style={{ marginTop: 4 }}>
+            <code style={{ userSelect: "all" }}>
+              {result?.fetchCommand ?? `npm run replay:fetch -- --days=${requestedDays}`}
+            </code>
+          </div>
+        </div>
+      )}
+
       {/* Summary cards */}
-      {result?.summary && (
+      {result?.ok && result.summary && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <MetricCard label="Trades" value={result.summary.totalTrades} />
           <MetricCard
@@ -239,7 +273,16 @@ export function ReplayWalkForwardLab() {
             label="Final balance"
             value={`$${result.summary.finalBalance.toFixed(0)}`}
           />
-          <MetricCard label="Bars" value={result.barsProcessed ?? 0} />
+          <MetricCard
+            label="Candles"
+            value={(result.candlesLoaded ?? result.barsProcessed ?? 0).toLocaleString()}
+            color={coverageLow ? "var(--desk-warning)" : undefined}
+          />
+          <MetricCard
+            label="Coverage"
+            value={coverageDays != null ? `${coverageDays.toFixed(1)}d` : `${result.barsProcessed ?? 0} bars`}
+            color={coverageLow ? "var(--desk-warning)" : "var(--desk-success)"}
+          />
           <MetricCard label="Promoted" value={result.promoted?.length ?? 0} color="var(--desk-success)" />
         </div>
       )}
@@ -278,6 +321,10 @@ export function ReplayWalkForwardLab() {
           }}
         >
           Select window and press Run Replay to test strategies on historical candles.
+          <div style={{ marginTop: 6 }}>
+            Need data first?{" "}
+            <code style={{ userSelect: "all" }}>npm run replay:fetch -- --days={days}</code>
+          </div>
         </div>
       )}
 
@@ -285,7 +332,12 @@ export function ReplayWalkForwardLab() {
       {rankings.length > 0 && (
         <div>
           <p style={{ margin: "0 0 6px", fontSize: "0.6875rem", fontWeight: 600, color: "var(--desk-on-surface)" }}>
-            Strategy Rankings ({result?.fixtureKind === "sample" ? "sample fixture" : `${result?.days}d live candles`})
+            Strategy Rankings
+            {coverageDays != null && (
+              <span style={{ fontWeight: 400, color: coverageLow ? "var(--desk-warning)" : "var(--desk-on-surface-muted)", marginLeft: 8 }}>
+                ({coverageDays.toFixed(1)}d coverage{coverageLow ? " ⚠" : ""})
+              </span>
+            )}
           </p>
           <div style={{ overflowX: "auto" }}>
             <table

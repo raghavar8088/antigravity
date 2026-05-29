@@ -68,7 +68,10 @@ export type BtcFtTemplateId =
   | "PRM_BULL_FLAG"
   | "PRM_SR_RETEST_CLASSIC"
   | "PRM_DOUBLE_PATTERN"
-  | "PRM_RANGE_BREAK_CLASSIC";
+  | "PRM_RANGE_BREAK_CLASSIC"
+  // 1m high-probability paper scalps: selective, mean-reversion-biased.
+  | "PRM_MICRO_VWAP_RECLAIM"
+  | "PRM_LIQUIDITY_SWEEP_SCALP";
 
 export interface FuturesStratDef {
   id: number;
