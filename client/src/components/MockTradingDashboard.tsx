@@ -17,13 +17,16 @@ import {
   type DeskColumn,
 } from "@/components/desk/ui";
 import {
-  DEFAULT_MOCK_EXIT,
+  computeAnalytics,
   filterMockTrades,
   MOCK_IGNORED_GATES,
+  type MockAccountState,
   type MockSide,
+  type MockSizingMode,
   type MockTrade,
   type MockTradeFilter,
   type MockTradeStatus,
+  type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 
@@ -34,6 +37,14 @@ function fmtUsd(value: number, digits = 2): string {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })}`;
+}
+
+function fmtUsdK(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${value < 0 ? "-" : ""}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 10_000) return `${value < 0 ? "-" : ""}$${(abs / 1_000).toFixed(1)}K`;
+  return fmtUsd(value, 0);
 }
 
 function fmtPrice(value: number): string {
@@ -47,7 +58,7 @@ function pnlClass(value: number): string {
   return "";
 }
 
-function fmtPct(value: number, digits = 1): string {
+function fmtPct(value: number, digits = 2): string {
   if (!Number.isFinite(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;
 }
@@ -103,13 +114,14 @@ export default function MockTradingDashboard() {
         ),
       },
       { id: "entry", header: "Entry", align: "right", cell: (t) => fmtPrice(t.entryPrice) },
-      { id: "signal", header: "Signal", align: "right", cell: (t) => fmtPrice(t.signalPrice) },
       { id: "qty", header: "Qty", align: "right", cell: (t) => t.quantity.toFixed(5) },
-      { id: "notional", header: "Notional", align: "right", cell: (t) => fmtUsd(t.notional) },
+      { id: "notional", header: "Notional", align: "right", cell: (t) => fmtUsdK(t.notional) },
+      { id: "margin", header: "Margin", align: "right", cell: (t) => fmtUsdK(t.marginUsed) },
+      { id: "lev", header: "Lev", align: "right", cell: (t) => `${t.leverage}×` },
       { id: "mark", header: "Mark", align: "right", cell: (t) => fmtPrice(t.currentPrice) },
       {
         id: "pnl",
-        header: "PnL",
+        header: "PnL (net)",
         align: "right",
         cell: (t) => {
           const pnl = t.status === "OPEN" ? t.unrealizedPnl : t.realizedPnl;
@@ -162,6 +174,7 @@ export default function MockTradingDashboard() {
     [engine],
   );
 
+  const acct = engine.account;
   const totalPnlClass = pnlClass(engine.analytics.totalPnl);
   const realizedClass = pnlClass(engine.analytics.realizedPnl);
   const unrealizedClass = pnlClass(engine.analytics.unrealizedPnl);
@@ -173,18 +186,20 @@ export default function MockTradingDashboard() {
           <div>
             <h1 className="trading-landing-header__title">Mock Trading</h1>
             <p className="trading-landing-header__desc">
-              Analysis-only twin of the BTC FT desk — every raised strategy signal becomes a mock
-              trade, blockers are recorded but not enforced. Use the closed-PnL roll-up to identify
-              strategies that would be profitable if the production gates were relaxed.
+              Simulated ${acct.startingBalance.toLocaleString("en-US")} paper account — every raised
+              strategy signal becomes a mock trade with full sizing, fees and slippage applied, and
+              the same TP/SL/MaxHold lifecycle as the production paper desk. Blockers are recorded
+              for analysis but never prevent a trade.
             </p>
           </div>
           <div className="trading-landing-header__chips">
             <DeskChip tone="warning">Mock</DeskChip>
-            <DeskChip tone="default">BTCUSD</DeskChip>
+            <DeskChip tone="default">${(acct.startingBalance / 1_000_000).toFixed(1)}M paper</DeskChip>
+            <DeskChip tone="default">{engine.config.leverage}× leverage</DeskChip>
             <DeskChip tone={live.connected ? "success" : "error"}>
               {live.connected ? "Live feed" : "Disconnected"}
             </DeskChip>
-            <DeskChip tone="default">{engine.analytics.openTrades} open</DeskChip>
+            <DeskChip tone="default">{acct.openCount} open</DeskChip>
           </div>
         </header>
 
@@ -201,13 +216,18 @@ export default function MockTradingDashboard() {
           />
         </div>
 
-        <DeskBanner variant="warning" title="Mock Trading: strategy signals are simulated and blockers are ignored.">
-          No real broker orders are placed. The production safety pipeline is untouched — this
-          module subscribes to the same BTC price feed and the same strategy signal trace, then
-          creates a mock trade for every raised signal regardless of REGIME_BLOCKING, SIGNAL,
-          ATR_FEES, confluence, cooldown, max-open, or trend/regime filters. Blocker reasons are
-          recorded on each trade for analysis.
+        <DeskBanner
+          variant="warning"
+          title={`Mock Trading uses simulated $${acct.startingBalance.toLocaleString("en-US")} paper balance. No real orders are placed.`}
+        >
+          The production safety pipeline is untouched. This module subscribes to the same BTC price
+          feed and the same strategy signal trace, then opens a mock trade for every raised signal
+          regardless of REGIME_BLOCKING, SIGNAL, ATR_FEES, confluence, cooldown, max-open, or
+          trend/regime filters. Sizing, leverage, fees and slippage mirror the main paper desk so
+          PnL is comparable.
         </DeskBanner>
+
+        <AccountSummaryCard account={acct} />
 
         <DeskCard padding="md">
           <DeskSectionHeader title="Live ticker" subtitle={`BTCUSD · ${live.connected ? "Binance stream" : "reconnecting"}`} />
@@ -232,7 +252,7 @@ export default function MockTradingDashboard() {
         </DeskCard>
 
         <DeskCard padding="md">
-          <DeskSectionHeader title="Mock analytics" subtitle="Realized PnL is from CLOSED trades; unrealized PnL marks every OPEN trade to the live BTC price." />
+          <DeskSectionHeader title="Trade analytics" subtitle="Realized PnL is net of round-trip fees and slippage; unrealized PnL marks every OPEN trade to the live BTC mark and subtracts the round-trip fee debt that would crystallize on close." />
           <div
             style={{
               display: "grid",
@@ -243,7 +263,7 @@ export default function MockTradingDashboard() {
             <DeskMetricTile label="Total trades" value={engine.analytics.totalTrades} compact />
             <DeskMetricTile label="Open" value={engine.analytics.openTrades} compact />
             <DeskMetricTile label="Closed" value={engine.analytics.closedTrades} compact />
-            <DeskMetricTile label="Win rate" value={fmtPct(engine.analytics.winRate)} compact />
+            <DeskMetricTile label="Win rate" value={fmtPct(engine.analytics.winRate, 1)} compact />
             <DeskMetricTile label="Total PnL" value={fmtUsd(engine.analytics.totalPnl)} valueClassName={totalPnlClass} compact />
             <DeskMetricTile label="Realized" value={fmtUsd(engine.analytics.realizedPnl)} valueClassName={realizedClass} compact />
             <DeskMetricTile label="Unrealized" value={fmtUsd(engine.analytics.unrealizedPnl)} valueClassName={unrealizedClass} compact />
@@ -256,10 +276,7 @@ export default function MockTradingDashboard() {
           </div>
         </DeskCard>
 
-        <ExitConfigCard
-          config={engine.config}
-          onChange={engine.setConfig}
-        />
+        <MockConfigCard config={engine.config} onChange={engine.setConfig} />
 
         <DeskCard padding="md">
           <DeskSectionHeader
@@ -376,11 +393,11 @@ export default function MockTradingDashboard() {
                 }
               />
             }
-            minWidth={960}
+            minWidth={1080}
           />
         </DeskCard>
 
-        <PerStrategyCard analytics={engine.analytics} />
+        <PerStrategyCard analytics={engine.analytics} startingBalance={acct.startingBalance} />
         <PerBlockerCard analytics={engine.analytics} />
 
         <DeskCard padding="md">
@@ -417,6 +434,7 @@ export default function MockTradingDashboard() {
                   </span>{" "}
                   strategy=#{log.strategyId} {log.strategyName} side={log.side} price=
                   {fmtPrice(log.price)}
+                  {log.notional != null ? ` notional=${fmtUsdK(log.notional)}` : ""}
                   {log.pnl != null ? ` pnl=${fmtUsd(log.pnl)}` : ""}
                   {log.ignoredBlockers.length > 0
                     ? ` ignoredBlockers=[${log.ignoredBlockers.join(",")}]`
@@ -445,50 +463,137 @@ const selectStyle: React.CSSProperties = {
   minWidth: 130,
 };
 
-function ExitConfigCard({
+function AccountSummaryCard({ account }: { account: MockAccountState }) {
+  const equityClass = pnlClass(account.equity - account.startingBalance);
+  const realizedClass = pnlClass(account.realizedPnl);
+  const unrealClass = pnlClass(account.unrealizedPnl);
+  const returnClass = pnlClass(account.returnPct);
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Account summary"
+        subtitle="Mirrors the main paper desk: starting balance, equity = balance + realized + unrealized; margin = notional / leverage; available = equity − margin."
+      />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+          gap: 12,
+        }}
+      >
+        <DeskMetricTile label="Starting Balance" value={fmtUsd(account.startingBalance, 0)} compact />
+        <DeskMetricTile label="Cash Balance" value={fmtUsd(account.cashBalance, 0)} compact />
+        <DeskMetricTile label="Equity" value={fmtUsd(account.equity, 0)} valueClassName={equityClass} compact />
+        <DeskMetricTile label="Realized PnL" value={fmtUsd(account.realizedPnl, 2)} valueClassName={realizedClass} compact />
+        <DeskMetricTile label="Unrealized PnL" value={fmtUsd(account.unrealizedPnl, 2)} valueClassName={unrealClass} compact />
+        <DeskMetricTile label="Exposure" value={fmtUsd(account.exposure, 0)} compact />
+        <DeskMetricTile label="Margin Used" value={fmtUsd(account.marginUsed, 0)} compact />
+        <DeskMetricTile label="Available" value={fmtUsd(account.availableBalance, 0)} compact />
+        <DeskMetricTile label="Open Trades" value={account.openCount} compact />
+        <DeskMetricTile label="Return %" value={fmtPct(account.returnPct, 2)} valueClassName={returnClass} compact />
+        <DeskMetricTile label="Max Drawdown" value={fmtPct(account.maxDrawdownPct, 2)} compact />
+        <DeskMetricTile label="Peak Equity" value={fmtUsd(account.peakEquity, 0)} compact />
+      </div>
+    </DeskCard>
+  );
+}
+
+function MockConfigCard({
   config,
   onChange,
 }: {
-  config: typeof DEFAULT_MOCK_EXIT;
-  onChange: (next: typeof DEFAULT_MOCK_EXIT) => void;
+  config: MockTradingConfig;
+  onChange: (next: MockTradingConfig) => void;
 }) {
   return (
     <DeskCard padding="md">
       <DeskSectionHeader
-        title="Mock exit settings"
-        subtitle="Per-strategy SL/TP/hold from the production roster override these defaults when known."
+        title="Mock account & sizing"
+        subtitle="Per-strategy SL/TP/hold from the production roster override these defaults when known. Changes persist in localStorage."
       />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        <ConfigField
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+        <ConfigNumber
+          label="Starting balance ($)"
+          value={config.startingBalanceUsd}
+          step={10_000}
+          onChange={(v) => onChange({ ...config, startingBalanceUsd: v })}
+        />
+        <ConfigSelect
+          label="Sizing mode"
+          value={config.sizingMode}
+          options={[
+            { value: "fixed_pct_equity", label: "Fixed % of equity" },
+            { value: "fixed_notional", label: "Fixed notional ($)" },
+            { value: "risk_pct_equity", label: "% risk per trade" },
+          ]}
+          onChange={(v) => onChange({ ...config, sizingMode: v as MockSizingMode })}
+        />
+        {config.sizingMode === "fixed_pct_equity" && (
+          <ConfigNumber
+            label="Fixed % of equity"
+            value={config.fixedPctOfEquity}
+            step={0.1}
+            onChange={(v) => onChange({ ...config, fixedPctOfEquity: v })}
+          />
+        )}
+        {config.sizingMode === "fixed_notional" && (
+          <ConfigNumber
+            label="Fixed notional ($)"
+            value={config.fixedNotionalUsd}
+            step={100}
+            onChange={(v) => onChange({ ...config, fixedNotionalUsd: v })}
+          />
+        )}
+        {config.sizingMode === "risk_pct_equity" && (
+          <ConfigNumber
+            label="Risk % per trade"
+            value={config.riskPctOfEquity}
+            step={0.1}
+            onChange={(v) => onChange({ ...config, riskPctOfEquity: v })}
+          />
+        )}
+        <ConfigNumber
+          label="Leverage (×)"
+          value={config.leverage}
+          step={1}
+          onChange={(v) => onChange({ ...config, leverage: Math.max(1, Math.min(125, Math.floor(v))) })}
+        />
+        <ConfigNumber
           label="Take profit %"
           value={config.takeProfitPct}
           step={0.1}
           onChange={(v) => onChange({ ...config, takeProfitPct: v })}
         />
-        <ConfigField
+        <ConfigNumber
           label="Stop loss %"
           value={config.stopLossPct}
           step={0.1}
           onChange={(v) => onChange({ ...config, stopLossPct: v })}
         />
-        <ConfigField
+        <ConfigNumber
           label="Max hold (min)"
           value={config.maxHoldMinutes}
           step={1}
           onChange={(v) => onChange({ ...config, maxHoldMinutes: v })}
         />
-        <ConfigField
-          label="Notional ($)"
-          value={config.notionalUsd}
-          step={10}
-          onChange={(v) => onChange({ ...config, notionalUsd: v })}
+        <ConfigNumber
+          label="Taker fee per side (%)"
+          value={config.takerFeePct * 100}
+          step={0.01}
+          onChange={(v) => onChange({ ...config, takerFeePct: Math.max(0, v / 100) })}
+        />
+        <ConfigNumber
+          label="Slippage per side (bps)"
+          value={config.slippageBpsPerSide}
+          step={1}
+          onChange={(v) => onChange({ ...config, slippageBpsPerSide: Math.max(0, v) })}
         />
       </div>
     </DeskCard>
   );
 }
 
-function ConfigField({
+function ConfigNumber({
   label,
   value,
   step,
@@ -525,12 +630,54 @@ function ConfigField({
   );
 }
 
-function PerStrategyCard({ analytics }: { analytics: ReturnType<typeof import("@/lib/mockTradingEngine").computeAnalytics> }) {
+function ConfigSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span className="desk-label-md">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          padding: "6px 10px",
+          borderRadius: 6,
+          border: "1px solid var(--desk-outline)",
+          background: "var(--desk-surface)",
+          color: "var(--desk-on-surface)",
+          fontSize: "0.875rem",
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function PerStrategyCard({
+  analytics,
+  startingBalance,
+}: {
+  analytics: ReturnType<typeof computeAnalytics>;
+  startingBalance: number;
+}) {
   return (
     <DeskCard padding="md">
       <DeskSectionHeader
         title="Per-strategy roll-up"
-        subtitle="Sorted by total PnL (realized + unrealized). Use this to find which strategies are profitable when blockers are removed."
+        subtitle="Sorted by total PnL. Return % is PnL / starting balance, so strategies are comparable in account-level terms. Exposure is summed across this strategy's currently OPEN positions."
       />
       {analytics.perStrategy.length === 0 ? (
         <DeskEmptyState title="No data yet" subtitle="Per-strategy roll-up populates as mock trades are created." />
@@ -542,12 +689,23 @@ function PerStrategyCard({ analytics }: { analytics: ReturnType<typeof import("@
             { id: "open", header: "Open", align: "right", cell: (r) => r.open },
             { id: "closed", header: "Closed", align: "right", cell: (r) => r.closed },
             { id: "wins", header: "W/L", align: "right", cell: (r) => `${r.wins}/${r.losses}` },
-            { id: "win", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate) },
+            { id: "win", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate, 1) },
+            { id: "exp", header: "Exposure", align: "right", cell: (r) => fmtUsdK(r.exposure) },
             {
               id: "pnl",
               header: "Total PnL",
               align: "right",
               cell: (r) => <span className={pnlClass(r.totalPnl)}>{fmtUsd(r.totalPnl)}</span>,
+            },
+            {
+              id: "ret",
+              header: "Return %",
+              align: "right",
+              cell: (r) => (
+                <span className={pnlClass(r.totalPnl)}>
+                  {fmtPct(startingBalance > 0 ? r.totalPnl / startingBalance : 0, 2)}
+                </span>
+              ),
             },
             {
               id: "realized",
@@ -558,19 +716,19 @@ function PerStrategyCard({ analytics }: { analytics: ReturnType<typeof import("@
           ]}
           rows={analytics.perStrategy}
           getRowKey={(r) => String(r.strategyId)}
-          minWidth={640}
+          minWidth={760}
         />
       )}
     </DeskCard>
   );
 }
 
-function PerBlockerCard({ analytics }: { analytics: ReturnType<typeof import("@/lib/mockTradingEngine").computeAnalytics> }) {
+function PerBlockerCard({ analytics }: { analytics: ReturnType<typeof computeAnalytics> }) {
   return (
     <DeskCard padding="md">
       <DeskSectionHeader
         title="Blockers by frequency"
-        subtitle="How often each production gate would have stopped these mock trades, and whether the trades that hit each gate would have been profitable."
+        subtitle="How often each production gate would have stopped these mock trades, and whether the trades that hit each gate would have been profitable on this $1M paper account."
       />
       {analytics.perBlocker.length === 0 ? (
         <DeskEmptyState
@@ -583,7 +741,7 @@ function PerBlockerCard({ analytics }: { analytics: ReturnType<typeof import("@/
             { id: "gate", header: "Blocker gate", cell: (r) => <DeskChip tone="warning">{r.gate}</DeskChip> },
             { id: "total", header: "Mock trades", align: "right", cell: (r) => r.total },
             { id: "wl", header: "W/L", align: "right", cell: (r) => `${r.wins}/${r.losses}` },
-            { id: "wr", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate) },
+            { id: "wr", header: "Win %", align: "right", cell: (r) => fmtPct(r.winRate, 1) },
             {
               id: "pnl",
               header: "Total PnL",
@@ -593,7 +751,7 @@ function PerBlockerCard({ analytics }: { analytics: ReturnType<typeof import("@/
           ]}
           rows={analytics.perBlocker}
           getRowKey={(r) => r.gate}
-          minWidth={520}
+          minWidth={560}
         />
       )}
     </DeskCard>

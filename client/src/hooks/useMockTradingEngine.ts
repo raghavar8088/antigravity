@@ -5,15 +5,20 @@ import {
   applyPriceTickToTrade,
   buildMockTradeFromTrace,
   closeMockTrade,
+  computeAccountState,
   computeAnalytics,
-  DEFAULT_MOCK_EXIT,
+  DEFAULT_MOCK_TRADING_CONFIG,
   isStrategySignalRaised,
+  isValidMockConfig,
+  isValidMockTrade,
   logForMockTradeCreated,
   logForMockTradeClosed,
-  type MockExitConfig,
+  MOCK_PERSIST_VERSION,
+  type MockAccountState,
   type MockTrade,
   type MockTradeAnalytics,
   type MockTradeLog,
+  type MockTradingConfig,
   type StrategyExitOverride,
 } from "@/lib/mockTradingEngine";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
@@ -22,10 +27,8 @@ import type { StrategySignalTraceRow } from "@/lib/strategySignalTrace";
 const TRACE_POLL_MS = 5_000;
 const LOG_RING_CAP = 200;
 const TRADE_RING_CAP = 1_000;
-const STORAGE_KEY = "mock_trading_v1";
+const STORAGE_KEY = "mock_trading_v2";
 
-// Map every production strategy ID → its SL/TP/hold preset so mock exits
-// mirror the real strategy when available.
 const STRATEGY_EXIT_OVERRIDES = new Map<number, StrategyExitOverride>(
   FUTURES_STRAT_DEFS.map((d) => [
     d.id,
@@ -39,27 +42,35 @@ const STRATEGY_EXIT_OVERRIDES = new Map<number, StrategyExitOverride>(
 );
 
 interface PersistShape {
+  version: number;
   trades: MockTrade[];
-  config: MockExitConfig;
+  config: MockTradingConfig;
 }
 
-function loadFromStorage(): PersistShape | null {
+function loadFromStorage(): { trades: MockTrade[]; config: MockTradingConfig } | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistShape;
-    if (!Array.isArray(parsed.trades)) return null;
-    return parsed;
+    const parsed = JSON.parse(raw) as Partial<PersistShape>;
+    if (parsed.version !== MOCK_PERSIST_VERSION) return null;
+    const cfg = isValidMockConfig(parsed.config) ? parsed.config : DEFAULT_MOCK_TRADING_CONFIG;
+    const rawTrades = Array.isArray(parsed.trades) ? parsed.trades : [];
+    const trades: MockTrade[] = [];
+    for (const t of rawTrades) {
+      if (isValidMockTrade(t)) trades.push(t);
+    }
+    return { trades, config: cfg };
   } catch {
     return null;
   }
 }
 
-function saveToStorage(state: PersistShape): void {
+function saveToStorage(state: { trades: MockTrade[]; config: MockTradingConfig }): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const payload: PersistShape = { version: MOCK_PERSIST_VERSION, ...state };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
     // quota / serialization errors are non-fatal for analysis tooling
   }
@@ -77,20 +88,18 @@ export interface UseMockTradingEngineOptions {
 export interface UseMockTradingEngineResult {
   trades: MockTrade[];
   analytics: MockTradeAnalytics;
+  account: MockAccountState;
   logs: MockTradeLog[];
-  config: MockExitConfig;
-  setConfig: (next: MockExitConfig) => void;
+  config: MockTradingConfig;
+  setConfig: (next: MockTradingConfig) => void;
   /** Manually ingest trace rows — used by tests; production calls happen via the poll. */
   ingestTraceRows: (rows: StrategySignalTraceRow[], priceOverride?: number) => void;
   /** Manually close an open trade. */
   closeTrade: (tradeId: string) => void;
   /** Clear every trade and log (for analysis resets). */
   reset: () => void;
-  /** True while a trace fetch is in flight. */
   loading: boolean;
-  /** Last trace fetch error or null. */
   error: string | null;
-  /** Seconds since the most recent successful trace fetch. */
   traceAgeSeconds: number | null;
 }
 
@@ -101,8 +110,8 @@ export function useMockTradingEngine(
 
   const initial = useRef(loadFromStorage());
   const [trades, setTrades] = useState<MockTrade[]>(initial.current?.trades ?? []);
-  const [config, setConfigState] = useState<MockExitConfig>(
-    initial.current?.config ?? DEFAULT_MOCK_EXIT,
+  const [config, setConfigState] = useState<MockTradingConfig>(
+    initial.current?.config ?? DEFAULT_MOCK_TRADING_CONFIG,
   );
   const [logs, setLogs] = useState<MockTradeLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,6 +144,8 @@ export function useMockTradingEngine(
       const newTrades: MockTrade[] = [];
       const newLogs: MockTradeLog[] = [];
       const now = Date.now();
+      // Equity for percent-of-equity sizing is based on current state.
+      const equity = computeAccountState(tradesRef.current, configRef.current).equity;
       for (const row of rows) {
         if (!isStrategySignalRaised(row)) continue;
         if (seenTraceIdsRef.current.has(row.traceId)) continue;
@@ -144,6 +155,7 @@ export function useMockTradingEngine(
           currentPrice: livePrice,
           config: configRef.current,
           now,
+          equity,
           override,
         });
         if (!trade) continue;
@@ -155,6 +167,8 @@ export function useMockTradingEngine(
           `strategy=${trade.strategyName}#${trade.strategyId}`,
           `side=${trade.side}`,
           `price=${trade.entryPrice.toFixed(2)}`,
+          `notional=$${trade.notional.toFixed(0)}`,
+          `margin=$${trade.marginUsed.toFixed(0)}`,
           `ignoredBlockers=[${trade.blockers.map((b) => b.gate).join(",")}]`,
         );
       }
@@ -234,6 +248,7 @@ export function useMockTradingEngine(
           `exit=${updated.exitPrice?.toFixed(2)}`,
           `reason=${updated.exitReason}`,
           `pnl=${updated.realizedPnl.toFixed(2)}`,
+          `fees=${updated.fees.toFixed(2)}`,
         );
       }
       return updated;
@@ -254,7 +269,7 @@ export function useMockTradingEngine(
   }, []);
 
   // ── Manual controls ───────────────────────────────────────────────────────
-  const setConfig = useCallback((next: MockExitConfig) => setConfigState(next), []);
+  const setConfig = useCallback((next: MockTradingConfig) => setConfigState(next), []);
 
   const closeTrade = useCallback((tradeId: string) => {
     const now = Date.now();
@@ -264,7 +279,7 @@ export function useMockTradingEngine(
     setTrades((prev) =>
       prev.map((t) => {
         if (t.id !== tradeId || t.status !== "OPEN") return t;
-        const next = closeMockTrade(t, current, now);
+        const next = closeMockTrade(t, current, now, configRef.current);
         closed = next;
         return next;
       }),
@@ -285,11 +300,13 @@ export function useMockTradingEngine(
   }, []);
 
   const analytics = useMemo(() => computeAnalytics(trades), [trades]);
+  const account = useMemo(() => computeAccountState(trades, config), [trades, config]);
   const traceAgeSeconds = lastFetchAt != null ? Math.floor((Date.now() - lastFetchAt) / 1000) : null;
 
   return {
     trades,
     analytics,
+    account,
     logs,
     config,
     setConfig,

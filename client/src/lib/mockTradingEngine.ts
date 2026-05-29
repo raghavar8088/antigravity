@@ -1,19 +1,31 @@
 /**
- * Mock Trading Engine — analysis-only twin of the live BTC FT pipeline.
+ * Mock Trading Engine — analysis-only $1,000,000 paper account that mirrors
+ * the production BTC FT desk's sizing, fees, slippage, and PnL math but
+ * deliberately removes every strategy gate so we can answer "which strategies
+ * would be profitable if blockers were removed?".
  *
- * Purpose: turn EVERY raised strategy signal into a "what if" mock trade,
- * ignoring the gates that normally block entries in the production paper desk
- * (REGIME, SIGNAL, ATR_FEES, CONFIRM/QUALITY/MTF/COOLDOWN/SAME_SIDE/MAX_OPEN, …).
- * The blocker reason that *would* have stopped the trade is recorded on the
- * mock trade so we can later identify which strategies are profitable when
- * those filters are removed.
+ * Mirrored from `futuresPaperMath`:
+ *   - Linear gross PnL (paperLinearGrossPnl)
+ *   - Round-trip taker fees (paperRoundTripTakerFees)
+ *   - Entry / exit slippage in bps (paperApply{Entry,Exit}Slippage)
+ *   - Margin required = notional / leverage (paperMarginRequired)
+ *   - Fixed-%-of-equity sizing (deskFixedNotionalPctOfEquity)
+ *   - Vol-aware risk sizing (paperNotionalForTargetRisk)
  *
- * This module is intentionally isolated from the real entry pipeline — it
- * never opens broker orders and never mutates the production paper desk.
+ * NEVER imports paperOms, broker, Delta, or Angel One code paths — this is a
+ * pure simulation. All inputs are observability data (signal trace rows + a
+ * live Binance mark). All outputs stay in-memory + localStorage.
  *
  * Pure functions; no React, no I/O. Tested in mockTradingEngine.test.ts.
  */
 
+import {
+  paperApplyEntrySlippage,
+  paperApplyExitSlippage,
+  paperLinearGrossPnl,
+  paperMarginRequired,
+  paperRoundTripTakerFees,
+} from "@/lib/futuresPaperMath";
 import type { StrategySignalTraceRow } from "@/lib/strategySignalTrace";
 
 // ── Blocker gates that mock trading explicitly ignores ───────────────────────
@@ -43,12 +55,72 @@ export type MockIgnoredGate = (typeof MOCK_IGNORED_GATES)[number];
 export type MockTradeStatus = "OPEN" | "CLOSED";
 export type MockSide = "BUY" | "SELL";
 export type MockExitReason = "TAKE_PROFIT" | "STOP_LOSS" | "MAX_HOLD" | "MANUAL";
+export type MockSizingMode = "fixed_pct_equity" | "fixed_notional" | "risk_pct_equity";
 
 export interface MockTradeBlocker {
   /** Gate the strategy hit (e.g. "REGIME"). */
   gate: string;
   /** Human-readable reason captured by the trace. */
   reason: string;
+}
+
+/**
+ * Mock Trading account + sizing + execution-cost config.
+ *
+ * Production-default values mirror the live BTC FT desk:
+ *   - 1% of equity per trade (deskFixedNotionalPctOfEquity, when set)
+ *   - 25x leverage (BTC FT)
+ *   - 0.05% per-leg taker fee (Delta India futures)
+ *   - 5 bps per-leg slippage (DESK_SLIPPAGE_BPS_DEFAULT)
+ */
+export interface MockTradingConfig {
+  /** Simulated starting balance in USD. Default $1,000,000. */
+  startingBalanceUsd: number;
+  /** Sizing strategy. */
+  sizingMode: MockSizingMode;
+  /** % of current equity for "fixed_pct_equity" mode (1 = 1%). */
+  fixedPctOfEquity: number;
+  /** USD notional for "fixed_notional" mode. */
+  fixedNotionalUsd: number;
+  /** % of equity to risk per trade for "risk_pct_equity" mode (1 = 1%). */
+  riskPctOfEquity: number;
+  /** Position leverage. Used for margin sizing. Defaults to 25x (BTC FT). */
+  leverage: number;
+  /** Take profit percent of entry price. */
+  takeProfitPct: number;
+  /** Stop loss percent of entry price. */
+  stopLossPct: number;
+  /** Max hold time in minutes before forced close. */
+  maxHoldMinutes: number;
+  /** Per-leg taker fee fraction (0.0005 = 0.05%). */
+  takerFeePct: number;
+  /** Per-leg slippage in bps (5 = 0.05%). */
+  slippageBpsPerSide: number;
+}
+
+export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
+  startingBalanceUsd: 1_000_000,
+  sizingMode: "fixed_pct_equity",
+  fixedPctOfEquity: 1,
+  fixedNotionalUsd: 10_000,
+  riskPctOfEquity: 1,
+  leverage: 25,
+  takeProfitPct: 1.5,
+  stopLossPct: 0.6,
+  maxHoldMinutes: 45,
+  takerFeePct: 0.0005,
+  slippageBpsPerSide: 5,
+};
+
+/**
+ * Per-strategy override of TP/SL (mirrors the production strategy def's
+ * slPct/tpPct/holdMinutes when known).
+ */
+export interface StrategyExitOverride {
+  strategyId: number;
+  takeProfitPct?: number;
+  stopLossPct?: number;
+  maxHoldMinutes?: number;
 }
 
 export interface MockTrade {
@@ -60,60 +132,36 @@ export interface MockTrade {
   strategyName: string;
   symbol: string;
   side: MockSide;
-  /** Notional in quote currency (USD) at entry. */
+  /** Notional in USD at entry. */
   notional: number;
-  /** Effective quantity in base currency at entry. */
+  /** Effective quantity in base currency at entry (notional / entryPrice). */
   quantity: number;
-  /** Price the live ticker showed when the mock trade was created. */
-  entryPrice: number;
-  /** Price recorded in the trace row (signalScore tick). */
+  /** Leverage at open. Margin = notional / leverage. */
+  leverage: number;
+  /** Initial margin reserved at open. */
+  marginUsed: number;
+  /** Mark price used for sizing — pre-slippage. */
   signalPrice: number;
+  /** Fill price after entry slippage. */
+  entryPrice: number;
   signalScore: number;
   requiredThreshold: number;
   /** Blocker(s) that would have stopped the real entry. */
   blockers: MockTradeBlocker[];
-  /** Status of the mock trade. */
   status: MockTradeStatus;
-  /** Open / close timestamps, ms epoch. */
   openedAt: number;
   closedAt: number | null;
-  /** Live mark used to compute unrealized PnL. Updated on each price tick. */
+  /** Live mark — updated on each price tick. */
   currentPrice: number;
-  /** Unrealized PnL in USD for OPEN trades, 0 once CLOSED. */
+  /** Net unrealized PnL (gross − accrued fee debt) in USD for OPEN trades. */
   unrealizedPnl: number;
-  /** Realized PnL in USD once CLOSED. */
+  /** Net realized PnL in USD once CLOSED. */
   realizedPnl: number;
-  /** Exit reason once CLOSED. */
+  /** Round-trip fees in USD once CLOSED. */
+  fees: number;
   exitReason: MockExitReason | null;
-  /** Exit price once CLOSED. */
+  /** Fill price after exit slippage. */
   exitPrice: number | null;
-}
-
-/** Configurable mock exit settings. */
-export interface MockExitConfig {
-  /** Take-profit percent of entry price (positive number, e.g. 1.5 = 1.5%). */
-  takeProfitPct: number;
-  /** Stop-loss percent of entry price (positive number, e.g. 1.0 = 1.0%). */
-  stopLossPct: number;
-  /** Max hold time in minutes before forced close. */
-  maxHoldMinutes: number;
-  /** Notional size per mock trade in USD. */
-  notionalUsd: number;
-}
-
-export const DEFAULT_MOCK_EXIT: MockExitConfig = {
-  takeProfitPct: 1.5,
-  stopLossPct: 0.6,
-  maxHoldMinutes: 45,
-  notionalUsd: 100,
-};
-
-/** Pre-strategy override of TP/SL (e.g. mirror the production strategy def). */
-export interface StrategyExitOverride {
-  strategyId: number;
-  takeProfitPct?: number;
-  stopLossPct?: number;
-  maxHoldMinutes?: number;
 }
 
 // ── Trace → mock trade ───────────────────────────────────────────────────────
@@ -128,18 +176,17 @@ export interface StrategyExitOverride {
 export function isStrategySignalRaised(row: StrategySignalTraceRow): boolean {
   if (!row.side) return false;
   if (!Number.isFinite(row.signalScore) || row.signalScore <= 0) return false;
-  if (row.status === "EVALUATED") {
-    // EVALUATED rows reached scoring but did not fire — only treat as a raised
-    // signal if the score is non-trivial (> 0). The user's explicit ask is that
-    // ANY raised signal is mocked, including those blocked by SIGNAL threshold.
-    return true;
-  }
   return true;
 }
 
 /** Map LONG/SHORT trace side → BUY/SELL order side. */
 export function traceSideToOrderSide(side: "LONG" | "SHORT"): MockSide {
   return side === "LONG" ? "BUY" : "SELL";
+}
+
+/** Mock-side ↔ paper-math side. */
+function toPaperSide(side: MockSide): "LONG" | "SHORT" {
+  return side === "BUY" ? "LONG" : "SHORT";
 }
 
 /**
@@ -153,35 +200,94 @@ export function blockersFromTraceRow(row: StrategySignalTraceRow): MockTradeBloc
 }
 
 function resolveExit(
-  config: MockExitConfig,
+  config: MockTradingConfig,
   override: StrategyExitOverride | undefined,
-): MockExitConfig {
-  if (!override) return config;
+): { takeProfitPct: number; stopLossPct: number; maxHoldMinutes: number } {
+  if (!override) {
+    return {
+      takeProfitPct: config.takeProfitPct,
+      stopLossPct: config.stopLossPct,
+      maxHoldMinutes: config.maxHoldMinutes,
+    };
+  }
   return {
     takeProfitPct: override.takeProfitPct ?? config.takeProfitPct,
     stopLossPct: override.stopLossPct ?? config.stopLossPct,
     maxHoldMinutes: override.maxHoldMinutes ?? config.maxHoldMinutes,
-    notionalUsd: config.notionalUsd,
   };
+}
+
+// ── Sizing ───────────────────────────────────────────────────────────────────
+
+/**
+ * Compute the notional in USD for a new mock trade given the current equity
+ * and config. Mirrors the production sizing helpers in `futuresPaperMath`.
+ *
+ * "fixed_pct_equity": `equity * fixedPctOfEquity / 100`
+ * "fixed_notional":   `fixedNotionalUsd`
+ * "risk_pct_equity":  budget = `equity * riskPctOfEquity / 100`,
+ *                     notional = budget / (slPct/100 + 2 * takerFeePct)
+ *                     so that maximum loss at SL is roughly the budget.
+ */
+export function computeMockNotional(args: {
+  config: MockTradingConfig;
+  equity: number;
+  slPct?: number;
+}): number {
+  const { config, equity } = args;
+  const eq = Number.isFinite(equity) && equity > 0 ? equity : config.startingBalanceUsd;
+  const minNotional = 50;
+  const maxNotional = Math.max(minNotional, eq * 10); // cap at 10× equity for sanity
+  let raw = 0;
+  switch (config.sizingMode) {
+    case "fixed_pct_equity":
+      raw = eq * (config.fixedPctOfEquity / 100);
+      break;
+    case "fixed_notional":
+      raw = config.fixedNotionalUsd;
+      break;
+    case "risk_pct_equity": {
+      const sl = Number.isFinite(args.slPct) && (args.slPct ?? 0) > 0 ? (args.slPct as number) : config.stopLossPct;
+      const lossPerDollar = sl / 100 + 2 * config.takerFeePct;
+      const budget = eq * (config.riskPctOfEquity / 100);
+      raw = lossPerDollar > 0 ? budget / lossPerDollar : 0;
+      break;
+    }
+  }
+  if (!Number.isFinite(raw) || raw <= 0) return minNotional;
+  return Math.min(maxNotional, Math.max(minNotional, raw));
 }
 
 /**
  * Build a MockTrade from a raised signal trace row + a live price quote.
  * Returns null when the row did not raise a signal (no side or zero score).
+ *
+ * `equity` is used for percent-of-equity sizing; defaults to startingBalance.
  */
 export function buildMockTradeFromTrace(args: {
   row: StrategySignalTraceRow;
   currentPrice: number;
-  config: MockExitConfig;
+  config: MockTradingConfig;
   now: number;
+  equity?: number;
   override?: StrategyExitOverride;
 }): MockTrade | null {
-  const { row, currentPrice, config, now } = args;
+  const { row, currentPrice, config, now, override } = args;
   if (!isStrategySignalRaised(row)) return null;
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+  const equity = args.equity ?? config.startingBalanceUsd;
   const side = traceSideToOrderSide(row.side as "LONG" | "SHORT");
-  const exit = resolveExit(config, args.override);
-  const quantity = exit.notionalUsd / currentPrice;
+  const paperSide = toPaperSide(side);
+  const exit = resolveExit(config, override);
+  const notional = computeMockNotional({
+    config,
+    equity,
+    slPct: exit.stopLossPct,
+  });
+  const lev = Math.max(1, Math.min(125, Math.floor(config.leverage)));
+  const marginUsed = paperMarginRequired(notional, lev);
+  const fillPrice = paperApplyEntrySlippage(paperSide, currentPrice, config.slippageBpsPerSide);
+  const quantity = fillPrice > 0 ? notional / fillPrice : 0;
   return {
     id: `mock-${row.traceId}`,
     traceId: row.traceId,
@@ -189,19 +295,22 @@ export function buildMockTradeFromTrace(args: {
     strategyName: row.strategyName,
     symbol: row.symbol,
     side,
-    notional: exit.notionalUsd,
+    notional,
     quantity,
-    entryPrice: currentPrice,
+    leverage: lev,
+    marginUsed,
     signalPrice: currentPrice,
+    entryPrice: fillPrice,
     signalScore: row.signalScore,
     requiredThreshold: row.requiredThreshold,
     blockers: blockersFromTraceRow(row),
     status: "OPEN",
     openedAt: now,
     closedAt: null,
-    currentPrice,
+    currentPrice: fillPrice,
     unrealizedPnl: 0,
     realizedPnl: 0,
+    fees: 0,
     exitReason: null,
     exitPrice: null,
   };
@@ -209,7 +318,10 @@ export function buildMockTradeFromTrace(args: {
 
 // ── PnL maths ────────────────────────────────────────────────────────────────
 
-/** Compute PnL in USD for a long/short position vs current price. */
+/**
+ * Compute linear gross PnL in USD using the production paper-math helper.
+ * Sign convention: positive = trade is in profit at the given exit price.
+ */
 export function computeMockPnl(
   side: MockSide,
   entryPrice: number,
@@ -218,19 +330,23 @@ export function computeMockPnl(
 ): number {
   if (!Number.isFinite(entryPrice) || !Number.isFinite(exitPrice)) return 0;
   if (!Number.isFinite(quantity) || quantity <= 0) return 0;
-  const delta = side === "BUY" ? exitPrice - entryPrice : entryPrice - exitPrice;
-  return delta * quantity;
+  // Quantity × entry = notional (BUY) — use paperLinearGrossPnl with notional.
+  const notional = quantity * entryPrice;
+  return paperLinearGrossPnl(entryPrice, exitPrice, notional, toPaperSide(side));
 }
 
 /**
  * Apply a price tick to a single trade and (optionally) exit it if TP/SL/maxHold
  * conditions are met. Returns a new trade object — caller should replace the
  * old one in their store. Idempotent for CLOSED trades.
+ *
+ * Unrealized PnL is gross only (no fees deducted); realized PnL on close
+ * deducts the full round-trip fee at the current config's `takerFeePct`.
  */
 export function applyPriceTickToTrade(args: {
   trade: MockTrade;
   price: number;
-  config: MockExitConfig;
+  config: MockTradingConfig;
   override?: StrategyExitOverride;
   now: number;
 }): MockTrade {
@@ -256,36 +372,170 @@ export function applyPriceTickToTrade(args: {
   if (!exitReason && ageMin >= exit.maxHoldMinutes) exitReason = "MAX_HOLD";
 
   if (exitReason) {
-    const realized = computeMockPnl(trade.side, trade.entryPrice, price, trade.quantity);
-    return {
-      ...trade,
-      status: "CLOSED",
-      closedAt: now,
-      currentPrice: price,
-      unrealizedPnl: 0,
-      realizedPnl: realized,
-      exitReason,
-      exitPrice: price,
-    };
+    return finalizeClose({ trade, fillBeforeSlippage: price, exitReason, now, config });
   }
 
-  const unrealized = computeMockPnl(trade.side, trade.entryPrice, price, trade.quantity);
-  return { ...trade, currentPrice: price, unrealizedPnl: unrealized };
+  // Unrealized PnL: gross + estimated round-trip fees not yet realized.
+  // We surface NET unrealized so the equity card matches realized math.
+  const gross = computeMockPnl(trade.side, trade.entryPrice, price, trade.quantity);
+  const feesIfClosed = paperRoundTripTakerFees(trade.notional, config.takerFeePct);
+  return { ...trade, currentPrice: price, unrealizedPnl: gross - feesIfClosed };
 }
 
-/** Manually close an open trade at the given price. */
-export function closeMockTrade(trade: MockTrade, price: number, now: number): MockTrade {
+/** Manually close an open trade at the given mark. */
+export function closeMockTrade(
+  trade: MockTrade,
+  price: number,
+  now: number,
+  config: MockTradingConfig = DEFAULT_MOCK_TRADING_CONFIG,
+): MockTrade {
   if (trade.status === "CLOSED") return trade;
-  const realized = computeMockPnl(trade.side, trade.entryPrice, price, trade.quantity);
+  return finalizeClose({ trade, fillBeforeSlippage: price, exitReason: "MANUAL", now, config });
+}
+
+function finalizeClose(args: {
+  trade: MockTrade;
+  fillBeforeSlippage: number;
+  exitReason: MockExitReason;
+  now: number;
+  config: MockTradingConfig;
+}): MockTrade {
+  const { trade, fillBeforeSlippage, exitReason, now, config } = args;
+  const fillPrice = paperApplyExitSlippage(
+    toPaperSide(trade.side),
+    fillBeforeSlippage,
+    config.slippageBpsPerSide,
+  );
+  const gross = computeMockPnl(trade.side, trade.entryPrice, fillPrice, trade.quantity);
+  const fees = paperRoundTripTakerFees(trade.notional, config.takerFeePct);
+  const net = gross - fees;
   return {
     ...trade,
     status: "CLOSED",
     closedAt: now,
-    currentPrice: price,
+    currentPrice: fillPrice,
     unrealizedPnl: 0,
-    realizedPnl: realized,
-    exitReason: "MANUAL",
-    exitPrice: price,
+    realizedPnl: net,
+    fees,
+    exitReason,
+    exitPrice: fillPrice,
+  };
+}
+
+// ── Account state ────────────────────────────────────────────────────────────
+
+/**
+ * Aggregate $1,000,000 paper account state — mirrors the main paper desk's
+ * equity / margin / exposure model.
+ */
+export interface MockAccountState {
+  /** Configured starting balance. */
+  startingBalance: number;
+  /** Cash available after reserving margin for open positions:
+   *  startingBalance + realizedPnl − sum(marginUsed of OPEN positions). */
+  cashBalance: number;
+  /** Equity = startingBalance + realizedPnl + unrealizedPnl. */
+  equity: number;
+  /** Net realized PnL across all CLOSED trades (after fees + slippage). */
+  realizedPnl: number;
+  /** Net unrealized PnL across all OPEN trades (after estimated round-trip fees). */
+  unrealizedPnl: number;
+  /** Sum of notional on OPEN trades. */
+  exposure: number;
+  /** Sum of marginUsed on OPEN trades (isolated). */
+  marginUsed: number;
+  /** equity − marginUsed. Can be negative if exposure exceeds equity. */
+  availableBalance: number;
+  /** (equity − startingBalance) / startingBalance, expressed as a fraction. */
+  returnPct: number;
+  /** Running peak realized equity for drawdown computation. */
+  peakEquity: number;
+  /** Worst observed (peakEquity − point)/peakEquity, expressed as a fraction. */
+  maxDrawdownPct: number;
+  openCount: number;
+  closedCount: number;
+}
+
+/**
+ * Compute the full account snapshot from the trade list.
+ *
+ * Drawdown is computed by walking the realized close events ordered by
+ * `closedAt`. `peakEquity` is the maximum realized-equity high-water mark,
+ * including the starting balance. `maxDrawdownPct` is the worst trough from
+ * that running peak. Current unrealized PnL is added on top of the latest
+ * realized equity for the live mark.
+ */
+export function computeAccountState(
+  trades: readonly MockTrade[],
+  config: MockTradingConfig,
+): MockAccountState {
+  const startingBalance = Number.isFinite(config.startingBalanceUsd) && config.startingBalanceUsd > 0
+    ? config.startingBalanceUsd
+    : DEFAULT_MOCK_TRADING_CONFIG.startingBalanceUsd;
+
+  let realizedPnl = 0;
+  let unrealizedPnl = 0;
+  let exposure = 0;
+  let marginUsed = 0;
+  let openCount = 0;
+  let closedCount = 0;
+
+  const closes: { ts: number; pnl: number }[] = [];
+
+  for (const t of trades) {
+    if (t.status === "OPEN") {
+      openCount++;
+      unrealizedPnl += t.unrealizedPnl;
+      exposure += t.notional;
+      marginUsed += t.marginUsed;
+    } else {
+      closedCount++;
+      realizedPnl += t.realizedPnl;
+      if (t.closedAt != null) closes.push({ ts: t.closedAt, pnl: t.realizedPnl });
+    }
+  }
+
+  // Equity high-water mark over realized history.
+  closes.sort((a, b) => a.ts - b.ts);
+  let runningEquity = startingBalance;
+  let peakEquity = startingBalance;
+  let maxDrawdownPct = 0;
+  for (const c of closes) {
+    runningEquity += c.pnl;
+    if (runningEquity > peakEquity) peakEquity = runningEquity;
+    if (peakEquity > 0) {
+      const dd = (peakEquity - runningEquity) / peakEquity;
+      if (dd > maxDrawdownPct) maxDrawdownPct = dd;
+    }
+  }
+
+  const equity = startingBalance + realizedPnl + unrealizedPnl;
+  // Include the live unrealized leg in current drawdown comparison.
+  if (peakEquity > 0 && equity < peakEquity) {
+    const dd = (peakEquity - equity) / peakEquity;
+    if (dd > maxDrawdownPct) maxDrawdownPct = dd;
+  }
+  // Open-position equity also resets the peak when in profit.
+  if (equity > peakEquity) peakEquity = equity;
+
+  const cashBalance = startingBalance + realizedPnl - marginUsed;
+  const availableBalance = equity - marginUsed;
+  const returnPct = startingBalance > 0 ? (equity - startingBalance) / startingBalance : 0;
+
+  return {
+    startingBalance,
+    cashBalance,
+    equity,
+    realizedPnl,
+    unrealizedPnl,
+    exposure,
+    marginUsed,
+    availableBalance,
+    returnPct,
+    peakEquity,
+    maxDrawdownPct,
+    openCount,
+    closedCount,
   };
 }
 
@@ -294,12 +544,12 @@ export interface MockTradeAnalytics {
   totalTrades: number;
   openTrades: number;
   closedTrades: number;
-  winRate: number;          // 0..1, over CLOSED trades only
-  totalPnl: number;         // realized + unrealized
+  winRate: number;
+  totalPnl: number;
   realizedPnl: number;
   unrealizedPnl: number;
-  averagePnl: number;       // realized PnL / closed count
-  profitFactor: number | null; // sum(wins) / sum(losses). null if no losers.
+  averagePnl: number;
+  profitFactor: number | null;
   perStrategy: MockStrategyAggregate[];
   perBlocker: MockBlockerAggregate[];
 }
@@ -316,6 +566,8 @@ export interface MockStrategyAggregate {
   totalPnl: number;
   realizedPnl: number;
   unrealizedPnl: number;
+  /** Sum of notional on OPEN positions for this strategy. */
+  exposure: number;
 }
 
 export interface MockBlockerAggregate {
@@ -370,6 +622,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
         totalPnl: 0,
         realizedPnl: 0,
         unrealizedPnl: 0,
+        exposure: 0,
       };
       stratMap.set(t.strategyId, strat);
     }
@@ -377,6 +630,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     if (t.status === "OPEN") {
       strat.open++;
       strat.unrealizedPnl += t.unrealizedPnl;
+      strat.exposure += t.notional;
     } else {
       strat.closed++;
       strat.realizedPnl += t.realizedPnl;
@@ -425,7 +679,6 @@ export interface MockTradeFilter {
   side?: MockSide | null;
   status?: MockTradeStatus | null;
   blockerGate?: string | null;
-  /** "profit" → realizedPnl + unrealizedPnl > 0, "loss" → < 0. */
   profitability?: "profit" | "loss" | null;
 }
 
@@ -447,6 +700,83 @@ export function filterMockTrades(
   });
 }
 
+// ── Persistence validators ──────────────────────────────────────────────────
+/** Current persisted shape version. Bump when MockTrade fields change. */
+export const MOCK_PERSIST_VERSION = 2;
+
+const REQUIRED_TRADE_NUMERIC_FIELDS: (keyof MockTrade)[] = [
+  "notional",
+  "quantity",
+  "leverage",
+  "marginUsed",
+  "entryPrice",
+  "signalPrice",
+  "currentPrice",
+  "signalScore",
+  "requiredThreshold",
+  "openedAt",
+  "unrealizedPnl",
+  "realizedPnl",
+  "fees",
+];
+
+/** Strict shape guard for a persisted trade — rejects anything missing or non-numeric. */
+export function isValidMockTrade(value: unknown): value is MockTrade {
+  if (!value || typeof value !== "object") return false;
+  const t = value as Record<string, unknown>;
+  if (typeof t.id !== "string") return false;
+  if (typeof t.traceId !== "string") return false;
+  if (typeof t.strategyId !== "number") return false;
+  if (typeof t.strategyName !== "string") return false;
+  if (typeof t.symbol !== "string") return false;
+  if (t.side !== "BUY" && t.side !== "SELL") return false;
+  if (t.status !== "OPEN" && t.status !== "CLOSED") return false;
+  for (const k of REQUIRED_TRADE_NUMERIC_FIELDS) {
+    const v = t[k];
+    if (typeof v !== "number" || !Number.isFinite(v)) return false;
+  }
+  if (!Array.isArray(t.blockers)) return false;
+  for (const b of t.blockers as unknown[]) {
+    if (!b || typeof b !== "object") return false;
+    const br = b as Record<string, unknown>;
+    if (typeof br.gate !== "string") return false;
+    if (typeof br.reason !== "string") return false;
+  }
+  // closedAt / exitPrice / exitReason can be null when status === "OPEN".
+  if (t.status === "CLOSED") {
+    if (typeof t.closedAt !== "number" || !Number.isFinite(t.closedAt)) return false;
+    if (typeof t.exitPrice !== "number" || !Number.isFinite(t.exitPrice)) return false;
+    if (
+      t.exitReason !== "TAKE_PROFIT" &&
+      t.exitReason !== "STOP_LOSS" &&
+      t.exitReason !== "MAX_HOLD" &&
+      t.exitReason !== "MANUAL"
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function isValidMockConfig(value: unknown): value is MockTradingConfig {
+  if (!value || typeof value !== "object") return false;
+  const c = value as Record<string, unknown>;
+  const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
+  if (!num(c.startingBalanceUsd) || (c.startingBalanceUsd as number) <= 0) return false;
+  if (c.sizingMode !== "fixed_pct_equity" && c.sizingMode !== "fixed_notional" && c.sizingMode !== "risk_pct_equity") return false;
+  return (
+    num(c.fixedPctOfEquity) &&
+    num(c.fixedNotionalUsd) &&
+    num(c.riskPctOfEquity) &&
+    num(c.leverage) &&
+    num(c.takeProfitPct) &&
+    num(c.stopLossPct) &&
+    num(c.maxHoldMinutes) &&
+    num(c.takerFeePct) &&
+    num(c.slippageBpsPerSide)
+  );
+}
+
 // ── Logging helper ───────────────────────────────────────────────────────────
 export interface MockTradeLog {
   ts: number;
@@ -457,6 +787,7 @@ export interface MockTradeLog {
   price: number;
   ignoredBlockers: string[];
   pnl?: number;
+  notional?: number;
 }
 
 export function logForMockTradeCreated(trade: MockTrade): MockTradeLog {
@@ -468,6 +799,7 @@ export function logForMockTradeCreated(trade: MockTrade): MockTradeLog {
     side: trade.side,
     price: trade.entryPrice,
     ignoredBlockers: trade.blockers.map((b) => b.gate),
+    notional: trade.notional,
   };
 }
 
@@ -481,5 +813,6 @@ export function logForMockTradeClosed(trade: MockTrade): MockTradeLog {
     price: trade.exitPrice ?? trade.currentPrice,
     ignoredBlockers: trade.blockers.map((b) => b.gate),
     pnl: trade.realizedPnl,
+    notional: trade.notional,
   };
 }
