@@ -20,11 +20,14 @@ import {
   computeAnalytics,
   filterMockTrades,
   MOCK_IGNORED_GATES,
+  MOCK_TRADE_SORT_OPTIONS,
+  sortMockTrades,
   type MockAccountState,
   type MockSide,
   type MockSizingMode,
   type MockTrade,
   type MockTradeFilter,
+  type MockTradeSortKey,
   type MockTradeStatus,
   type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
@@ -79,12 +82,14 @@ export default function MockTradingDashboard() {
 
   const [filter, setFilter] = useState<MockTradeFilter>({});
   const [showOpenOnly, setShowOpenOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<MockTradeSortKey>("most_profitable");
 
   const trades = useMemo(() => {
     const combined: MockTradeFilter = { ...filter };
     if (showOpenOnly) combined.status = "OPEN";
-    return filterMockTrades(engine.trades, combined);
-  }, [engine.trades, filter, showOpenOnly]);
+    const filtered = filterMockTrades(engine.trades, combined);
+    return sortMockTrades(filtered, sortKey);
+  }, [engine.trades, filter, showOpenOnly, sortKey]);
 
   const strategyOptions = useMemo(() => {
     const seen = new Map<number, string>();
@@ -358,6 +363,20 @@ export default function MockTradingDashboard() {
               <option value="">Profit & loss</option>
               <option value="profit">Profitable</option>
               <option value="loss">Unprofitable</option>
+            </select>
+
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as MockTradeSortKey)}
+              style={selectStyle}
+              aria-label="Sort trades"
+              title="Sort order"
+            >
+              {MOCK_TRADE_SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
 
             <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>

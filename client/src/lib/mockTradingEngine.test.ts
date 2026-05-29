@@ -29,6 +29,9 @@ import {
   isValidMockTrade,
   MOCK_IGNORED_GATES,
   MOCK_PERSIST_VERSION,
+  MOCK_TRADE_SORT_OPTIONS,
+  mockTradePnl,
+  sortMockTrades,
   type MockTrade,
   type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
@@ -434,5 +437,103 @@ describe("isValidMockConfig", () => {
 describe("MOCK_PERSIST_VERSION", () => {
   it("is the current schema version (bump when MockTrade shape changes)", () => {
     expect(MOCK_PERSIST_VERSION).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ── Sorting ──────────────────────────────────────────────────────────────────
+describe("mockTradePnl", () => {
+  it("returns unrealizedPnl for OPEN trades", () => {
+    const open: MockTrade = { ...build(), unrealizedPnl: 42, realizedPnl: 999 };
+    expect(mockTradePnl(open)).toBe(42);
+  });
+  it("returns realizedPnl for CLOSED trades", () => {
+    const closed = closeMockTrade(build(), ENTRY * 1.02, T0 + 60_000, baseConfig);
+    expect(mockTradePnl(closed)).toBe(closed.realizedPnl);
+  });
+});
+
+describe("sortMockTrades", () => {
+  function tradeWithPnl(id: string, pnl: number, openedAt: number, status: "OPEN" | "CLOSED" = "OPEN"): MockTrade {
+    const base = build({ row: traceRow({ traceId: id }) });
+    return {
+      ...base,
+      id: `mock-${id}`,
+      openedAt,
+      status,
+      unrealizedPnl: status === "OPEN" ? pnl : 0,
+      realizedPnl: status === "CLOSED" ? pnl : 0,
+      closedAt: status === "CLOSED" ? openedAt + 1_000 : null,
+      exitReason: status === "CLOSED" ? "MANUAL" : null,
+      exitPrice: status === "CLOSED" ? ENTRY : null,
+    };
+  }
+
+  it("default option is 'most_profitable'", () => {
+    expect(MOCK_TRADE_SORT_OPTIONS[0].value).toBe("most_profitable");
+  });
+
+  it("'most_profitable' orders highest net PnL first", () => {
+    const a = tradeWithPnl("a", -5, T0);
+    const b = tradeWithPnl("b", 10, T0);
+    const c = tradeWithPnl("c", 0, T0);
+    const sorted = sortMockTrades([a, b, c], "most_profitable");
+    expect(sorted.map((t) => t.id)).toEqual([b.id, c.id, a.id]);
+  });
+
+  it("'least_profitable' orders lowest net PnL first", () => {
+    const a = tradeWithPnl("a", -5, T0);
+    const b = tradeWithPnl("b", 10, T0);
+    const c = tradeWithPnl("c", 0, T0);
+    const sorted = sortMockTrades([a, b, c], "least_profitable");
+    expect(sorted.map((t) => t.id)).toEqual([a.id, c.id, b.id]);
+  });
+
+  it("'newest' orders by openedAt desc", () => {
+    const a = tradeWithPnl("a", 0, T0);
+    const b = tradeWithPnl("b", 0, T0 + 1_000);
+    const c = tradeWithPnl("c", 0, T0 + 500);
+    const sorted = sortMockTrades([a, b, c], "newest");
+    expect(sorted.map((t) => t.id)).toEqual([b.id, c.id, a.id]);
+  });
+
+  it("'oldest' orders by openedAt asc", () => {
+    const a = tradeWithPnl("a", 0, T0);
+    const b = tradeWithPnl("b", 0, T0 + 1_000);
+    const c = tradeWithPnl("c", 0, T0 + 500);
+    const sorted = sortMockTrades([a, b, c], "oldest");
+    expect(sorted.map((t) => t.id)).toEqual([a.id, c.id, b.id]);
+  });
+
+  it("uses unrealizedPnl for OPEN trades and realizedPnl for CLOSED trades", () => {
+    const openWinner = tradeWithPnl("ow", 7, T0, "OPEN");
+    const closedLoser = tradeWithPnl("cl", -3, T0 + 100, "CLOSED");
+    const closedWinner = tradeWithPnl("cw", 12, T0 + 200, "CLOSED");
+    const openLoser = tradeWithPnl("ol", -8, T0 + 300, "OPEN");
+    const sorted = sortMockTrades([openWinner, closedLoser, closedWinner, openLoser], "most_profitable");
+    expect(sorted.map((t) => t.id)).toEqual([closedWinner.id, openWinner.id, closedLoser.id, openLoser.id]);
+  });
+
+  it("breaks ties deterministically (newer openedAt wins)", () => {
+    const a = tradeWithPnl("a", 5, T0);
+    const b = tradeWithPnl("b", 5, T0 + 1_000);
+    const sorted = sortMockTrades([a, b], "most_profitable");
+    expect(sorted.map((t) => t.id)).toEqual([b.id, a.id]);
+  });
+
+  it("does not mutate the input array", () => {
+    const original = [tradeWithPnl("a", -5, T0), tradeWithPnl("b", 10, T0)];
+    const before = original.map((t) => t.id);
+    sortMockTrades(original, "most_profitable");
+    expect(original.map((t) => t.id)).toEqual(before);
+  });
+
+  it("composes with filterMockTrades — sort runs after the filter", () => {
+    const open1 = tradeWithPnl("o1", 5, T0, "OPEN");
+    const open2 = tradeWithPnl("o2", -10, T0 + 100, "OPEN");
+    const closed1 = tradeWithPnl("c1", 20, T0 + 200, "CLOSED");
+    const all = [open1, open2, closed1];
+    const filtered = filterMockTrades(all, { status: "OPEN" });
+    const sorted = sortMockTrades(filtered, "most_profitable");
+    expect(sorted.map((t) => t.id)).toEqual([open1.id, open2.id]);
   });
 });

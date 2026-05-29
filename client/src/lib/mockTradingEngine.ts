@@ -700,6 +700,59 @@ export function filterMockTrades(
   });
 }
 
+// ── Sorting ──────────────────────────────────────────────────────────────────
+export type MockTradeSortKey =
+  | "most_profitable"
+  | "least_profitable"
+  | "newest"
+  | "oldest";
+
+export const MOCK_TRADE_SORT_OPTIONS: { value: MockTradeSortKey; label: string }[] = [
+  { value: "most_profitable", label: "Most profitable first" },
+  { value: "least_profitable", label: "Least profitable first" },
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+];
+
+/**
+ * The PnL used for sorting and the profitability filter.
+ *
+ * OPEN trades use the live unrealized PnL (already net of the round-trip fee
+ * debt that will crystallize on close — see applyPriceTickToTrade). CLOSED
+ * trades use realized PnL (net of fees + slippage). This is the single
+ * authoritative "what is this trade worth right now?" number.
+ */
+export function mockTradePnl(trade: MockTrade): number {
+  return trade.status === "OPEN" ? trade.unrealizedPnl : trade.realizedPnl;
+}
+
+/**
+ * Return a new array of trades ordered by the given sort key. Pure — input is
+ * not mutated. Ties are broken deterministically by `openedAt` (newer first)
+ * so the order is stable across re-renders.
+ */
+export function sortMockTrades(
+  trades: readonly MockTrade[],
+  sortKey: MockTradeSortKey,
+): MockTrade[] {
+  const next = trades.slice();
+  switch (sortKey) {
+    case "most_profitable":
+      next.sort((a, b) => mockTradePnl(b) - mockTradePnl(a) || b.openedAt - a.openedAt);
+      break;
+    case "least_profitable":
+      next.sort((a, b) => mockTradePnl(a) - mockTradePnl(b) || b.openedAt - a.openedAt);
+      break;
+    case "newest":
+      next.sort((a, b) => b.openedAt - a.openedAt);
+      break;
+    case "oldest":
+      next.sort((a, b) => a.openedAt - b.openedAt);
+      break;
+  }
+  return next;
+}
+
 // ── Persistence validators ──────────────────────────────────────────────────
 /** Current persisted shape version. Bump when MockTrade fields change. */
 export const MOCK_PERSIST_VERSION = 2;
