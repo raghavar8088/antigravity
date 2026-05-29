@@ -48,7 +48,7 @@
   --desk-font-mono: var(--font-desk-mono, "Roboto Mono", ui-monospace, monospace);
 
   --desk-header-height: 64px;
-  --desk-page-max: 1400px;
+  --desk-page-max: 1800px;
 }
 
 [data-theme="dark"],

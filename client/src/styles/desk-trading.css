@@ -17,7 +17,9 @@ body.combat-mode .trading-shell {
 }
 
 .trading-shell__inner {
-  max-width: var(--desk-page-max);
+  box-sizing: border-box;
+  width: min(calc(100vw - (var(--desk-space-4) * 2)), var(--desk-page-max));
+  max-width: none;
   margin: 0 auto;
   padding: var(--desk-space-4) var(--desk-space-5) var(--desk-space-6);
   display: flex;
