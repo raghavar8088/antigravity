@@ -22,6 +22,7 @@ import {
   closeMockTrade,
   computeAccountState,
   computeAnalytics,
+  computeMockNetPnlAtExitMark,
   computeMockNotional,
   computeMockPnl,
   countOpenMockTrades,
@@ -46,8 +47,8 @@ const ENTRY = 60_000;
 const baseConfig: MockTradingConfig = { ...DEFAULT_MOCK_TRADING_CONFIG };
 const wideExitConfig: MockTradingConfig = {
   ...DEFAULT_MOCK_TRADING_CONFIG,
-  takeProfitUsd: 10_000,
-  stopLossUsd: 10_000,
+  takeProfitPct: 100,
+  stopLossPct: 100,
 };
 
 function traceRow(
@@ -106,9 +107,9 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takerFeePct).toBeGreaterThan(0);
     expect(DEFAULT_MOCK_TRADING_CONFIG.slippageBpsPerSide).toBeGreaterThan(0);
   });
-  it("uses fixed-dollar TP/SL defaults", () => {
-    expect(DEFAULT_MOCK_TRADING_CONFIG.takeProfitUsd).toBe(10);
-    expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossUsd).toBe(5);
+  it("uses percentage-distance TP/SL defaults", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.takeProfitPct).toBe(1.5);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossPct).toBe(0.6);
   });
   it("allows 5,000 simultaneous open mock trades by default", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).toBe(5_000);
@@ -343,49 +344,89 @@ describe("close lifecycle", () => {
   });
 });
 
-// ── Exit logic still fires fixed-dollar TP / SL / MaxHold ────────────────────
+// ── Exit logic uses setup-derived TP / SL / MaxHold ──────────────────────────
 describe("exit reasons", () => {
-  it("BUY closes at TP with about +$10", () => {
+  it("BUY closes at TP with setup-derived profit", () => {
     const trade = build();
+    const expected = computeMockNetPnlAtExitMark({
+      side: trade.side,
+      entryPrice: trade.entryPrice,
+      exitMarkPrice: trade.takeProfitPrice,
+      quantity: trade.quantity,
+      notional: trade.notional,
+      config: baseConfig,
+    });
     const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("TAKE_PROFIT");
-    expect(tick.realizedPnl).toBeCloseTo(10, 6);
+    expect(trade.takeProfitUsd).toBeCloseTo(expected, 6);
+    expect(tick.realizedPnl).toBeCloseTo(expected, 6);
+    expect(tick.realizedPnl).not.toBeCloseTo(10, 2);
   });
 
-  it("BUY closes at SL with about -$5", () => {
+  it("BUY closes at SL with setup-derived loss", () => {
     const trade = build();
+    const expected = computeMockNetPnlAtExitMark({
+      side: trade.side,
+      entryPrice: trade.entryPrice,
+      exitMarkPrice: trade.stopLossPrice,
+      quantity: trade.quantity,
+      notional: trade.notional,
+      config: baseConfig,
+    });
     const tick = applyPriceTickToTrade({ trade, price: trade.stopLossPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("STOP_LOSS");
-    expect(tick.realizedPnl).toBeCloseTo(-5, 6);
+    expect(trade.stopLossUsd).toBeCloseTo(Math.abs(expected), 6);
+    expect(tick.realizedPnl).toBeCloseTo(expected, 6);
+    expect(tick.realizedPnl).not.toBeCloseTo(-5, 2);
   });
 
-  it("SELL closes at TP with about +$10", () => {
+  it("SELL closes at TP with setup-derived profit", () => {
     const trade = build({ row: traceRow({ side: "SHORT" }) });
+    const expected = computeMockNetPnlAtExitMark({
+      side: trade.side,
+      entryPrice: trade.entryPrice,
+      exitMarkPrice: trade.takeProfitPrice,
+      quantity: trade.quantity,
+      notional: trade.notional,
+      config: baseConfig,
+    });
     const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("TAKE_PROFIT");
-    expect(tick.realizedPnl).toBeCloseTo(10, 6);
+    expect(tick.realizedPnl).toBeCloseTo(expected, 6);
+    expect(tick.realizedPnl).not.toBeCloseTo(10, 2);
   });
 
-  it("SELL closes at SL with about -$5", () => {
+  it("SELL closes at SL with setup-derived loss", () => {
     const trade = build({ row: traceRow({ side: "SHORT" }) });
+    const expected = computeMockNetPnlAtExitMark({
+      side: trade.side,
+      entryPrice: trade.entryPrice,
+      exitMarkPrice: trade.stopLossPrice,
+      quantity: trade.quantity,
+      notional: trade.notional,
+      config: baseConfig,
+    });
     const tick = applyPriceTickToTrade({ trade, price: trade.stopLossPrice, config: baseConfig, now: T0 + 60_000 });
     expect(tick.status).toBe("CLOSED");
     expect(tick.exitReason).toBe("STOP_LOSS");
-    expect(tick.realizedPnl).toBeCloseTo(-5, 6);
+    expect(tick.realizedPnl).toBeCloseTo(expected, 6);
+    expect(tick.realizedPnl).not.toBeCloseTo(-5, 2);
   });
 
-  it("uses configurable fixed-dollar TP/SL values for new trades", () => {
-    const cfg = { ...baseConfig, takeProfitUsd: 25, stopLossUsd: 7.5 };
+  it("uses configurable TP/SL percentages for new trades", () => {
+    const cfg = { ...baseConfig, takeProfitPct: 2, stopLossPct: 1 };
     const trade = build({ config: cfg });
-    expect(trade.takeProfitUsd).toBe(25);
-    expect(trade.stopLossUsd).toBe(7.5);
-    expect(trade.riskRewardRatio).toBeCloseTo(25 / 7.5, 6);
+    expect(trade.takeProfitPrice).toBeCloseTo(trade.entryPrice * 1.02, 6);
+    expect(trade.stopLossPrice).toBeCloseTo(trade.entryPrice * 0.99, 6);
+    expect(trade.takeProfitUsd).toBeGreaterThan(0);
+    expect(trade.stopLossUsd).toBeGreaterThan(0);
+    expect(trade.riskRewardRatio).toBeCloseTo(trade.takeProfitUsd / trade.stopLossUsd, 6);
 
     const tick = applyPriceTickToTrade({ trade, price: trade.takeProfitPrice, config: cfg, now: T0 + 60_000 });
-    expect(tick.realizedPnl).toBeCloseTo(25, 6);
+    expect(tick.realizedPnl).toBeCloseTo(trade.takeProfitUsd, 6);
   });
 
   it("MAX_HOLD triggers when age >= maxHoldMinutes", () => {
@@ -450,8 +491,8 @@ describe("per-strategy analytics", () => {
   });
 });
 
-describe("fixed-dollar exit analytics", () => {
-  it("counts TP wins, SL losses, hit rates, and average realized PnL", () => {
+describe("setup-derived exit analytics", () => {
+  it("counts TP wins, SL losses, hit rates, average win, average loss, and average realized PnL", () => {
     const tpTrade = build({ row: traceRow({ traceId: "tp" }) });
     const tp = applyPriceTickToTrade({
       trade: tpTrade,
@@ -472,7 +513,9 @@ describe("fixed-dollar exit analytics", () => {
     expect(analytics.stopLossLosses).toBe(1);
     expect(analytics.takeProfitHitRate).toBeCloseTo(0.5, 6);
     expect(analytics.stopLossHitRate).toBeCloseTo(0.5, 6);
-    expect(analytics.averageRealizedPnl).toBeCloseTo(2.5, 6);
+    expect(analytics.averageWin).toBeCloseTo(tp.realizedPnl, 6);
+    expect(analytics.averageLoss).toBeCloseTo(sl.realizedPnl, 6);
+    expect(analytics.averageRealizedPnl).toBeCloseTo((tp.realizedPnl + sl.realizedPnl) / 2, 6);
   });
 });
 
@@ -491,6 +534,41 @@ describe("filterMockTrades", () => {
     expect(filterMockTrades(all, { blockerGate: "ATR_FEES" }).map((t) => t.id)).toEqual([loss.id]);
     expect(filterMockTrades(all, { profitability: "profit" }).map((t) => t.id)).toEqual([win.id]);
     expect(filterMockTrades(all, { profitability: "loss" }).map((t) => t.id)).toEqual([loss.id]);
+  });
+
+  it("filters trades younger than the selected age in minutes", () => {
+    const now = T0 + 30 * 60_000;
+    const young = { ...build({ row: traceRow({ traceId: "young" }) }), openedAt: now - 5 * 60_000 };
+    const old = { ...build({ row: traceRow({ traceId: "old" }) }), openedAt: now - 45 * 60_000 };
+
+    expect(filterMockTrades([young, old], { ageMode: "less", ageMaxMinutes: 10 }, now).map((t) => t.id))
+      .toEqual([young.id]);
+  });
+
+  it("filters trades older than the selected age in minutes", () => {
+    const now = T0 + 60 * 60_000;
+    const young = { ...build({ row: traceRow({ traceId: "young-more" }) }), openedAt: now - 10 * 60_000 };
+    const old = { ...build({ row: traceRow({ traceId: "old-more" }) }), openedAt: now - 90 * 60_000 };
+
+    expect(filterMockTrades([young, old], { ageMode: "more", ageMinMinutes: 30 }, now).map((t) => t.id))
+      .toEqual([old.id]);
+  });
+
+  it("uses closedAt rather than current time for CLOSED trade age", () => {
+    const now = T0 + 120 * 60_000;
+    const closed = {
+      ...build({ row: traceRow({ traceId: "closed-age" }) }),
+      status: "CLOSED" as const,
+      openedAt: T0,
+      closedAt: T0 + 5 * 60_000,
+      unrealizedPnl: 0,
+      realizedPnl: 4,
+      exitReason: "MANUAL" as const,
+      exitPrice: ENTRY,
+    };
+
+    expect(filterMockTrades([closed], { ageMode: "less", ageMaxMinutes: 10 }, now).map((t) => t.id))
+      .toEqual([closed.id]);
   });
 
   it("filters research-pack trades by family", () => {
@@ -705,5 +783,21 @@ describe("sortMockTrades", () => {
     const filtered = filterMockTrades(all, { status: "OPEN" });
     const sorted = sortMockTrades(filtered, "most_profitable");
     expect(sorted.map((t) => t.id)).toEqual([open1.id, open2.id]);
+  });
+
+  it("keeps profitable-first sorting after age filtering", () => {
+    const now = T0 + 60 * 60_000;
+    const youngWinner = { ...tradeWithPnl("young-win", 20, now - 5 * 60_000), openedAt: now - 5 * 60_000 };
+    const youngLoser = { ...tradeWithPnl("young-loss", -2, now - 8 * 60_000), openedAt: now - 8 * 60_000 };
+    const oldWinner = { ...tradeWithPnl("old-win", 100, now - 50 * 60_000), openedAt: now - 50 * 60_000 };
+
+    const filtered = filterMockTrades(
+      [youngLoser, oldWinner, youngWinner],
+      { ageMode: "less", ageMaxMinutes: 10 },
+      now,
+    );
+    const sorted = sortMockTrades(filtered, "most_profitable");
+
+    expect(sorted.map((t) => t.id)).toEqual([youngWinner.id, youngLoser.id]);
   });
 });

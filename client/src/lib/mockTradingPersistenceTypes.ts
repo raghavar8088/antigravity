@@ -38,8 +38,8 @@ export const mockTradingConfigSchema = z
     fixedNotionalUsd: nonNegativeNumber,
     riskPctOfEquity: nonNegativeNumber,
     leverage: finiteNumber.min(1).max(125),
-    takeProfitUsd: finiteNumber.positive(),
-    stopLossUsd: finiteNumber.positive(),
+    takeProfitUsd: nonNegativeNumber,
+    stopLossUsd: nonNegativeNumber,
     takeProfitPct: nonNegativeNumber,
     stopLossPct: nonNegativeNumber,
     maxHoldMinutes: nonNegativeNumber,
@@ -65,8 +65,8 @@ export const mockTradeSchema = z
     entryPrice: finiteNumber.positive(),
     takeProfitPrice: finiteNumber.positive(),
     stopLossPrice: finiteNumber.positive(),
-    takeProfitUsd: finiteNumber.positive(),
-    stopLossUsd: finiteNumber.positive(),
+    takeProfitUsd: nonNegativeNumber,
+    stopLossUsd: nonNegativeNumber,
     riskRewardRatio: nonNegativeNumber,
     signalScore: finiteNumber,
     requiredThreshold: finiteNumber,
@@ -162,6 +162,8 @@ export const mockTradeLogSchema = z
   .strict();
 
 export const mockTradeSortSchema = z.enum(["most_profitable", "least_profitable", "newest", "oldest"]);
+export const mockTradeAgeModeSchema = z.enum(["less", "more", "between"]);
+const ageMinutesQuerySchema = z.coerce.number().finite().min(0).max(10_000_000);
 
 export const mockTradeListQuerySchema = z
   .object({
@@ -174,9 +176,35 @@ export const mockTradeListQuerySchema = z
     strategy_family: z.string().trim().min(1).max(120).optional(),
     blocker_gate: z.string().trim().min(1).max(64).optional(),
     profitability: z.enum(["profit", "loss"]).optional(),
+    age_mode: mockTradeAgeModeSchema.optional(),
+    age_min_minutes: ageMinutesQuerySchema.optional(),
+    age_max_minutes: ageMinutesQuerySchema.optional(),
     sort: mockTradeSortSchema.default("newest"),
   })
-  .strict();
+  .strict()
+  .superRefine((query, ctx) => {
+    if (query.age_mode === "less" && query.age_max_minutes == null) {
+      ctx.addIssue({ code: "custom", path: ["age_max_minutes"], message: "Less-than age filter requires age_max_minutes" });
+    }
+    if (query.age_mode === "more" && query.age_min_minutes == null) {
+      ctx.addIssue({ code: "custom", path: ["age_min_minutes"], message: "More-than age filter requires age_min_minutes" });
+    }
+    if (query.age_mode === "between") {
+      if (query.age_min_minutes == null) {
+        ctx.addIssue({ code: "custom", path: ["age_min_minutes"], message: "Between age filter requires age_min_minutes" });
+      }
+      if (query.age_max_minutes == null) {
+        ctx.addIssue({ code: "custom", path: ["age_max_minutes"], message: "Between age filter requires age_max_minutes" });
+      }
+      if (
+        query.age_min_minutes != null &&
+        query.age_max_minutes != null &&
+        query.age_min_minutes > query.age_max_minutes
+      ) {
+        ctx.addIssue({ code: "custom", path: ["age_max_minutes"], message: "age_max_minutes must be greater than or equal to age_min_minutes" });
+      }
+    }
+  });
 
 export const mockLogListQuerySchema = z
   .object({

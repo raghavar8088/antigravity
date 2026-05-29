@@ -29,6 +29,9 @@ export async function GET(req: Request) {
     strategy_family: url.searchParams.get("strategy_family") ?? undefined,
     blocker_gate: url.searchParams.get("blocker_gate") ?? undefined,
     profitability: url.searchParams.get("profitability") ?? undefined,
+    age_mode: url.searchParams.get("age_mode") ?? undefined,
+    age_min_minutes: url.searchParams.get("age_min_minutes") ?? undefined,
+    age_max_minutes: url.searchParams.get("age_max_minutes") ?? undefined,
     sort: url.searchParams.get("sort") ?? undefined,
   });
   if (!parsed.success) {

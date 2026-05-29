@@ -21,10 +21,12 @@ import {
 import {
   computeAnalytics,
   filterMockTrades,
+  mockTradeAgeMinutes,
   MOCK_IGNORED_GATES,
   MOCK_TRADE_SORT_OPTIONS,
   sortMockTrades,
   type MockAccountState,
+  type MockTradeAgeFilterMode,
   type MockSide,
   type MockSizingMode,
   type MockTrade,
@@ -78,6 +80,17 @@ function fmtAge(openedAt: number, ref: number = Date.now()): string {
   return `${hrs}h ${mins % 60}m`;
 }
 
+function fmtTradeAge(trade: MockTrade, ref: number = Date.now()): string {
+  const ageMs = mockTradeAgeMinutes(trade, ref) * 60_000;
+  return fmtAge(0, ageMs);
+}
+
+function parseMinuteInput(value: string): number | null {
+  if (value.trim() === "") return null;
+  const next = Number(value);
+  return Number.isFinite(next) && next >= 0 ? next : null;
+}
+
 function safeRatio(value: number, max: number): number {
   if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return 0;
   return value / max;
@@ -92,10 +105,9 @@ function logColor(event: string): string {
 }
 
 export const MOCK_TRADE_TABLE_REQUIRED_HEADERS = [
-  "TP Price",
-  "SL Price",
-  "TP $",
-  "SL $",
+  "Current PnL",
+  "TP Profit $",
+  "SL Loss $",
   "Risk/Reward",
   "Exit Reason",
 ] as const;
@@ -131,6 +143,7 @@ export default function MockTradingDashboard() {
   const [strategySearch, setStrategySearch] = useState("");
   const [displayPage, setDisplayPage] = useState(1);
   const [displayPageSize, setDisplayPageSize] = useState(100);
+  const [ageFilterNow, setAgeFilterNow] = useState(() => Date.now());
 
   const tableSourceTrades =
     engine.persistence.status === "mongo" || engine.historyTrades.length > 0
@@ -140,7 +153,7 @@ export default function MockTradingDashboard() {
   const trades = useMemo(() => {
     const combined: MockTradeFilter = { ...filter };
     if (showOpenOnly) combined.status = "OPEN";
-    const filtered = filterMockTrades(tableSourceTrades, combined);
+    const filtered = filterMockTrades(tableSourceTrades, combined, ageFilterNow);
     const search = strategySearch.trim().toLowerCase();
     const searched = search
       ? filtered.filter((t) =>
@@ -150,7 +163,7 @@ export default function MockTradingDashboard() {
         )
       : filtered;
     return sortMockTrades(searched, sortKey);
-  }, [tableSourceTrades, filter, showOpenOnly, sortKey, strategySearch]);
+  }, [tableSourceTrades, filter, showOpenOnly, sortKey, strategySearch, ageFilterNow]);
 
   const maxOpenMockTrades = Math.max(1, Math.floor(engine.config.maxOpenMockTrades));
   const openUsage = Math.min(1, safeRatio(engine.account.openCount, maxOpenMockTrades));
@@ -171,6 +184,11 @@ export default function MockTradingDashboard() {
   useEffect(() => {
     setDisplayPage((page) => Math.min(page, displayTotalPages));
   }, [displayTotalPages]);
+
+  useEffect(() => {
+    const id = setInterval(() => setAgeFilterNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const strategyOptions = useMemo(() => {
     const seen = new Map<number, string>();
@@ -214,24 +232,8 @@ export default function MockTradingDashboard() {
         cell: (t) => t.confidenceScore == null ? "—" : t.confidenceScore.toFixed(1),
       },
       {
-        id: "tpPrice",
-        header: "TP Price",
-        align: "right",
-        cell: (t) => (
-          <span style={{ color: "var(--desk-success)" }}>{fmtPrice(t.takeProfitPrice)}</span>
-        ),
-      },
-      {
-        id: "slPrice",
-        header: "SL Price",
-        align: "right",
-        cell: (t) => (
-          <span style={{ color: "var(--desk-error)" }}>{fmtPrice(t.stopLossPrice)}</span>
-        ),
-      },
-      {
         id: "tpUsd",
-        header: "TP $",
+        header: "TP Profit $",
         align: "right",
         cell: (t) => (
           <span style={{ color: "var(--desk-success)" }}>{fmtUsd(t.takeProfitUsd)}</span>
@@ -239,7 +241,7 @@ export default function MockTradingDashboard() {
       },
       {
         id: "slUsd",
-        header: "SL $",
+        header: "SL Loss $",
         align: "right",
         cell: (t) => (
           <span style={{ color: "var(--desk-error)" }}>{fmtUsd(-t.stopLossUsd)}</span>
@@ -258,7 +260,7 @@ export default function MockTradingDashboard() {
       { id: "mark", header: "Mark", align: "right", cell: (t) => fmtPrice(t.currentPrice) },
       {
         id: "pnl",
-        header: "PnL (net)",
+        header: "Current PnL",
         align: "right",
         cell: (t) => {
           const pnl = t.status === "OPEN" ? t.unrealizedPnl : t.realizedPnl;
@@ -293,7 +295,7 @@ export default function MockTradingDashboard() {
             </div>
           ),
       },
-      { id: "age", header: "Age", align: "right", cell: (t) => fmtAge(t.openedAt) },
+      { id: "age", header: "Age", align: "right", cell: (t) => fmtTradeAge(t, ageFilterNow) },
       {
         id: "actions",
         header: "",
@@ -311,7 +313,7 @@ export default function MockTradingDashboard() {
           ),
       },
     ],
-    [engine],
+    [engine, ageFilterNow],
   );
 
   const acct = engine.account;
@@ -460,6 +462,8 @@ export default function MockTradingDashboard() {
             <DeskMetricTile label="Realized" value={fmtUsd(engine.analytics.realizedPnl)} valueClassName={realizedClass} compact />
             <DeskMetricTile label="Unrealized" value={fmtUsd(engine.analytics.unrealizedPnl)} valueClassName={unrealizedClass} compact />
             <DeskMetricTile label="Avg realized PnL" value={fmtUsd(engine.analytics.averageRealizedPnl)} compact />
+            <DeskMetricTile label="Avg win" value={fmtUsd(engine.analytics.averageWin)} valueClassName={pnlClass(engine.analytics.averageWin)} compact />
+            <DeskMetricTile label="Avg loss" value={fmtUsd(engine.analytics.averageLoss)} valueClassName={pnlClass(engine.analytics.averageLoss)} compact />
             <DeskMetricTile label="TP wins" value={engine.analytics.takeProfitWins} compact />
             <DeskMetricTile label="SL losses" value={engine.analytics.stopLossLosses} compact />
             <DeskMetricTile label="TP hit rate" value={fmtPct(engine.analytics.takeProfitHitRate, 1)} compact />
@@ -568,6 +572,86 @@ export default function MockTradingDashboard() {
               <option value="profit">Profitable</option>
               <option value="loss">Unprofitable</option>
             </select>
+
+            <select
+              value={filter.ageMode ?? ""}
+              onChange={(e) => {
+                const ageMode = (e.target.value || null) as MockTradeAgeFilterMode | null;
+                setFilter((f) => ({
+                  ...f,
+                  ageMode,
+                  ageMinMinutes: ageMode === "less" ? null : f.ageMinMinutes ?? null,
+                  ageMaxMinutes: ageMode === "more" ? null : f.ageMaxMinutes ?? null,
+                }));
+              }}
+              style={selectStyle}
+              aria-label="Age filter"
+              title="Age filter"
+            >
+              <option value="">All ages</option>
+              <option value="less">Less than</option>
+              <option value="more">More than</option>
+              <option value="between">Between</option>
+            </select>
+
+            {filter.ageMode === "less" && (
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={filter.ageMaxMinutes ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, ageMaxMinutes: parseMinuteInput(e.target.value) }))
+                }
+                placeholder="Minutes"
+                aria-label="Age less than minutes"
+                style={minuteInputStyle}
+              />
+            )}
+
+            {filter.ageMode === "more" && (
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={filter.ageMinMinutes ?? ""}
+                onChange={(e) =>
+                  setFilter((f) => ({ ...f, ageMinMinutes: parseMinuteInput(e.target.value) }))
+                }
+                placeholder="Minutes"
+                aria-label="Age more than minutes"
+                style={minuteInputStyle}
+              />
+            )}
+
+            {filter.ageMode === "between" && (
+              <>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={filter.ageMinMinutes ?? ""}
+                  onChange={(e) =>
+                    setFilter((f) => ({ ...f, ageMinMinutes: parseMinuteInput(e.target.value) }))
+                  }
+                  placeholder="Min"
+                  aria-label="Minimum age minutes"
+                  style={minuteInputStyle}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={filter.ageMaxMinutes ?? ""}
+                  onChange={(e) =>
+                    setFilter((f) => ({ ...f, ageMaxMinutes: parseMinuteInput(e.target.value) }))
+                  }
+                  placeholder="Max"
+                  aria-label="Maximum age minutes"
+                  style={minuteInputStyle}
+                />
+              </>
+            )}
 
             <select
               value={sortKey}
@@ -780,6 +864,12 @@ const selectStyle: React.CSSProperties = {
   minWidth: 130,
 };
 
+const minuteInputStyle: React.CSSProperties = {
+  ...selectStyle,
+  minWidth: 82,
+  width: 92,
+};
+
 function AccountSummaryCard({
   account,
   maxOpenMockTrades,
@@ -869,7 +959,7 @@ function MockConfigCard({
     <DeskCard padding="md">
       <DeskSectionHeader
         title="Mock account & sizing"
-        subtitle="New mock trades use fixed-dollar TP/SL outcomes. Changes persist to MongoDB when configured, with localStorage as a cache."
+        subtitle="New mock trades use TP/SL distance percentages; dollar outcomes are estimated from entry, side, quantity, fees, and slippage."
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <ConfigNumber
@@ -925,16 +1015,16 @@ function MockConfigCard({
           onChange={(v) => onChange({ ...config, leverage: Math.max(1, Math.min(125, Math.floor(v))) })}
         />
         <ConfigNumber
-          label="TP profit ($)"
-          value={config.takeProfitUsd}
-          step={1}
-          onChange={(v) => onChange({ ...config, takeProfitUsd: Math.max(0.01, v) })}
+          label="Take profit %"
+          value={config.takeProfitPct}
+          step={0.1}
+          onChange={(v) => onChange({ ...config, takeProfitPct: Math.max(0.01, v) })}
         />
         <ConfigNumber
-          label="SL loss ($)"
-          value={config.stopLossUsd}
-          step={1}
-          onChange={(v) => onChange({ ...config, stopLossUsd: Math.max(0.01, v) })}
+          label="Stop loss %"
+          value={config.stopLossPct}
+          step={0.1}
+          onChange={(v) => onChange({ ...config, stopLossPct: Math.max(0.01, v) })}
         />
         <ConfigNumber
           label="Max hold (min)"

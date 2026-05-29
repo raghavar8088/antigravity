@@ -6,7 +6,7 @@ import {
   closeMockTrade,
   logForMockTradeClosed,
   normalizeMockTradingConfig,
-  withMockFixedDollarExitFields,
+  withMockExitFields,
   type MockAccountState,
   type MockTrade,
   type MockTradeAnalytics,
@@ -223,7 +223,7 @@ export function mockTradeToDoc(
 }
 
 export function mockTradeFromDoc(doc: MockTradeDoc): MockTrade {
-  return withMockFixedDollarExitFields(doc.raw_trade, normalizeMockTradingConfig(doc.parameters_used));
+  return withMockExitFields(doc.raw_trade, normalizeMockTradingConfig(doc.parameters_used));
 }
 
 type PersistableMockLog = {
@@ -353,7 +353,52 @@ function sortForQuery(sort: MockTradeListQuery["sort"]): Sort {
   }
 }
 
-function filterForQuery(query: MockTradeListQuery): Filter<MockTradeDoc> {
+function addMongoAndCondition(filter: Filter<MockTradeDoc>, condition: Filter<MockTradeDoc>): void {
+  filter.$and = [...(filter.$and ?? []), condition];
+}
+
+function mockTradeAgeDurationMsExpression(nowMs: number): Record<string, unknown> {
+  return {
+    $subtract: [
+      {
+        $cond: [
+          { $eq: ["$status", "OPEN"] },
+          nowMs,
+          { $ifNull: ["$closed_at", nowMs] },
+        ],
+      },
+      "$opened_at",
+    ],
+  };
+}
+
+function mockTradeAgeConditionForQuery(query: MockTradeListQuery, nowMs: number): Filter<MockTradeDoc> | null {
+  if (!query.age_mode) return null;
+
+  const ageMs = mockTradeAgeDurationMsExpression(nowMs);
+  if (query.age_mode === "less" && query.age_max_minutes != null) {
+    return { $expr: { $lt: [ageMs, query.age_max_minutes * 60_000] } } as Filter<MockTradeDoc>;
+  }
+  if (query.age_mode === "more" && query.age_min_minutes != null) {
+    return { $expr: { $gt: [ageMs, query.age_min_minutes * 60_000] } } as Filter<MockTradeDoc>;
+  }
+  if (query.age_mode === "between" && query.age_min_minutes != null && query.age_max_minutes != null) {
+    return {
+      $expr: {
+        $and: [
+          { $gte: [ageMs, query.age_min_minutes * 60_000] },
+          { $lte: [ageMs, query.age_max_minutes * 60_000] },
+        ],
+      },
+    } as Filter<MockTradeDoc>;
+  }
+  return null;
+}
+
+export function mockTradeMongoFilterForQuery(
+  query: MockTradeListQuery,
+  nowMs: number = Date.now(),
+): Filter<MockTradeDoc> {
   const filter: Filter<MockTradeDoc> = { account_key: query.account_key };
   if (query.status) filter.status = query.status;
   if (query.side) filter.side = query.side;
@@ -362,6 +407,8 @@ function filterForQuery(query: MockTradeListQuery): Filter<MockTradeDoc> {
   if (query.blocker_gate) filter.blockers_ignored = query.blocker_gate;
   if (query.profitability === "profit") filter.pnl_value = { $gt: 0 };
   if (query.profitability === "loss") filter.pnl_value = { $lt: 0 };
+  const ageCondition = mockTradeAgeConditionForQuery(query, nowMs);
+  if (ageCondition) addMongoAndCondition(filter, ageCondition);
   return filter;
 }
 
@@ -373,7 +420,7 @@ export async function listMockTrades(query: MockTradeListQuery): Promise<{
   totalPages: number;
 }> {
   const { trades } = await collections();
-  const filter = filterForQuery(query);
+  const filter = mockTradeMongoFilterForQuery(query);
   const skip = (query.page - 1) * query.limit;
   const [docs, total] = await Promise.all([
     trades.find(filter).sort(sortForQuery(query.sort)).skip(skip).limit(query.limit).toArray(),

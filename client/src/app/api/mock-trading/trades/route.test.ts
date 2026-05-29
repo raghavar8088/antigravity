@@ -82,6 +82,7 @@ function request(url: string, body?: unknown, method = "POST") {
 
 describe("Mock Trading trade API routes", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(mongoClient.isMongoConfigured).mockReturnValue(true);
     vi.mocked(mockMongo.listMockTrades).mockResolvedValue({
       trades: [openTrade],
@@ -130,7 +131,7 @@ describe("Mock Trading trade API routes", () => {
 
   it("passes sanitized pagination, filters, and sorting to Mongo", async () => {
     const res = await GET(new Request(
-      "http://localhost/api/mock-trading/trades?page=2&limit=25&status=OPEN&side=BUY&strategy_id=91&blocker_gate=REGIME&sort=most_profitable",
+      "http://localhost/api/mock-trading/trades?page=2&limit=25&status=OPEN&side=BUY&strategy_id=91&blocker_gate=REGIME&age_mode=between&age_min_minutes=5&age_max_minutes=30&sort=most_profitable",
     ));
     expect(res.status).toBe(200);
     expect(mockMongo.listMockTrades).toHaveBeenCalledWith(expect.objectContaining({
@@ -140,8 +141,21 @@ describe("Mock Trading trade API routes", () => {
       side: "BUY",
       strategy_id: 91,
       blocker_gate: "REGIME",
+      age_mode: "between",
+      age_min_minutes: 5,
+      age_max_minutes: 30,
       sort: "most_profitable",
     }));
+  });
+
+  it("rejects invalid age filter numbers", async () => {
+    const res = await GET(new Request(
+      "http://localhost/api/mock-trading/trades?age_mode=less&age_max_minutes=not-a-number",
+    ));
+    expect(res.status).toBe(400);
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("VALIDATION_FAILED");
+    expect(mockMongo.listMockTrades).not.toHaveBeenCalled();
   });
 
   it("reads one mock trade by id", async () => {

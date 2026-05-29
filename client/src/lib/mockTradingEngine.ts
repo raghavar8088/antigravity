@@ -87,9 +87,9 @@ export interface MockTradingConfig {
   riskPctOfEquity: number;
   /** Position leverage. Used for margin sizing. Defaults to 25x (BTC FT). */
   leverage: number;
-  /** Fixed net profit target per mock trade in USD. */
+  /** Legacy persisted field; new TP dollar outcomes are derived from takeProfitPct. */
   takeProfitUsd: number;
-  /** Fixed net loss target per mock trade in USD. */
+  /** Legacy persisted field; new SL dollar outcomes are derived from stopLossPct. */
   stopLossUsd: number;
   /** Take profit percent of entry price. */
   takeProfitPct: number;
@@ -154,15 +154,15 @@ export interface MockTrade {
   signalPrice: number;
   /** Fill price after entry slippage. */
   entryPrice: number;
-  /** Live mark price that realizes the fixed TP amount after exit slippage and fees. */
+  /** Live mark price that triggers take-profit. */
   takeProfitPrice: number;
-  /** Live mark price that realizes the fixed SL amount after exit slippage and fees. */
+  /** Live mark price that triggers stop-loss. */
   stopLossPrice: number;
-  /** Fixed net profit target in USD captured at entry. */
+  /** Estimated net profit at TP, after exit slippage and round-trip fees. */
   takeProfitUsd: number;
-  /** Fixed net loss target in USD captured at entry. */
+  /** Estimated net loss magnitude at SL, after exit slippage and round-trip fees. */
   stopLossUsd: number;
-  /** Reward divided by risk, based on the fixed dollar TP/SL amounts. */
+  /** Estimated TP profit divided by estimated SL loss. */
   riskRewardRatio: number;
   signalScore: number;
   requiredThreshold: number;
@@ -230,27 +230,26 @@ export function blockersFromTraceRow(row: StrategySignalTraceRow): MockTradeBloc
 function resolveExit(
   config: MockTradingConfig,
   override: StrategyExitOverride | undefined,
-): { takeProfitUsd: number; stopLossUsd: number; stopLossPct: number; maxHoldMinutes: number } {
-  const takeProfitUsd = Number.isFinite(config.takeProfitUsd) && config.takeProfitUsd > 0
-    ? config.takeProfitUsd
-    : DEFAULT_MOCK_TRADING_CONFIG.takeProfitUsd;
-  const stopLossUsd = Number.isFinite(config.stopLossUsd) && config.stopLossUsd > 0
-    ? config.stopLossUsd
-    : DEFAULT_MOCK_TRADING_CONFIG.stopLossUsd;
-  const stopLossPct = Number.isFinite(config.stopLossPct) && config.stopLossPct > 0
-    ? config.stopLossPct
+): { takeProfitPct: number; stopLossPct: number; maxHoldMinutes: number } {
+  const takeProfitPct = Number.isFinite(override?.takeProfitPct) && (override?.takeProfitPct ?? 0) > 0
+    ? override?.takeProfitPct as number
+    : Number.isFinite(config.takeProfitPct) && config.takeProfitPct > 0
+      ? config.takeProfitPct
+      : DEFAULT_MOCK_TRADING_CONFIG.takeProfitPct;
+  const stopLossPct = Number.isFinite(override?.stopLossPct) && (override?.stopLossPct ?? 0) > 0
+    ? override?.stopLossPct as number
+    : Number.isFinite(config.stopLossPct) && config.stopLossPct > 0
+      ? config.stopLossPct
     : DEFAULT_MOCK_TRADING_CONFIG.stopLossPct;
   if (!override) {
     return {
-      takeProfitUsd,
-      stopLossUsd,
+      takeProfitPct,
       stopLossPct,
       maxHoldMinutes: config.maxHoldMinutes,
     };
   }
   return {
-    takeProfitUsd,
-    stopLossUsd,
+    takeProfitPct,
     stopLossPct,
     maxHoldMinutes: override.maxHoldMinutes ?? config.maxHoldMinutes,
   };
@@ -350,14 +349,14 @@ export function buildMockTradeFromTrace(args: {
   const marginUsed = paperMarginRequired(notional, lev);
   const fillPrice = paperApplyEntrySlippage(paperSide, currentPrice, config.slippageBpsPerSide);
   const quantity = fillPrice > 0 ? notional / fillPrice : 0;
-  const fixedDollarExits = computeMockFixedDollarExitLevels({
+  const exitLevels = computeMockExitLevels({
     side,
     entryPrice: fillPrice,
     quantity,
     notional,
     config,
-    takeProfitUsd: exit.takeProfitUsd,
-    stopLossUsd: exit.stopLossUsd,
+    takeProfitPct: exit.takeProfitPct,
+    stopLossPct: exit.stopLossPct,
   });
   return {
     id: `mock-${row.traceId}`,
@@ -372,7 +371,7 @@ export function buildMockTradeFromTrace(args: {
     marginUsed,
     signalPrice: currentPrice,
     entryPrice: fillPrice,
-    ...fixedDollarExits,
+    ...exitLevels,
     signalScore: row.signalScore,
     requiredThreshold: row.requiredThreshold,
     blockers: blockersFromTraceRow(row),
@@ -429,14 +428,14 @@ export function buildMockTradeFromResearchSignal(args: {
   const marginUsed = paperMarginRequired(notional, lev);
   const fillPrice = paperApplyEntrySlippage(paperSide, currentPrice, config.slippageBpsPerSide);
   const quantity = fillPrice > 0 ? notional / fillPrice : 0;
-  const fixedDollarExits = computeMockFixedDollarExitLevels({
+  const exitLevels = computeMockExitLevels({
     side: signal.side,
     entryPrice: fillPrice,
     quantity,
     notional,
     config,
-    takeProfitUsd: exit.takeProfitUsd,
-    stopLossUsd: exit.stopLossUsd,
+    takeProfitPct: exit.takeProfitPct,
+    stopLossPct: exit.stopLossPct,
   });
   const safeConfidence = Math.max(0, Math.min(100, signal.confidenceScore));
   const traceId = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
@@ -454,7 +453,7 @@ export function buildMockTradeFromResearchSignal(args: {
     marginUsed,
     signalPrice: currentPrice,
     entryPrice: fillPrice,
-    ...fixedDollarExits,
+    ...exitLevels,
     signalScore: safeConfidence,
     requiredThreshold: 0,
     blockers: [],
@@ -493,45 +492,30 @@ export function computeMockPnl(
   return paperLinearGrossPnl(entryPrice, exitPrice, notional, toPaperSide(side));
 }
 
-export function computeMockExitMarkForNetPnl(args: {
+export function computeMockNetPnlAtExitMark(args: {
   side: MockSide;
   entryPrice: number;
+  exitMarkPrice: number;
   quantity: number;
   notional: number;
-  targetNetPnl: number;
   config: MockTradingConfig;
 }): number {
-  const { side, entryPrice, quantity, notional, targetNetPnl, config } = args;
-  if (!Number.isFinite(entryPrice) || entryPrice <= 0) return 0;
-  if (!Number.isFinite(quantity) || quantity <= 0) return 0;
-  if (!Number.isFinite(notional) || notional <= 0) return 0;
-  if (!Number.isFinite(targetNetPnl)) return 0;
-
+  const { side, entryPrice, exitMarkPrice, quantity, notional, config } = args;
+  if (!Number.isFinite(exitMarkPrice) || exitMarkPrice <= 0) return 0;
+  const fillPrice = paperApplyExitSlippage(toPaperSide(side), exitMarkPrice, config.slippageBpsPerSide);
+  const gross = computeMockPnl(side, entryPrice, fillPrice, quantity);
   const fees = paperRoundTripTakerFees(notional, config.takerFeePct);
-  const grossTarget = targetNetPnl + fees;
-  const slippage = Number.isFinite(config.slippageBpsPerSide) && config.slippageBpsPerSide > 0
-    ? config.slippageBpsPerSide / 10_000
-    : 0;
-
-  if (side === "BUY") {
-    const exitFill = entryPrice + grossTarget / quantity;
-    const mark = slippage < 1 ? exitFill / (1 - slippage) : exitFill;
-    return Number.isFinite(mark) && mark > 0 ? mark : 0;
-  }
-
-  const exitFill = entryPrice - grossTarget / quantity;
-  const mark = exitFill / (1 + slippage);
-  return Number.isFinite(mark) && mark > 0 ? mark : 0;
+  return gross - fees;
 }
 
-export function computeMockFixedDollarExitLevels(args: {
+export function computeMockExitLevels(args: {
   side: MockSide;
   entryPrice: number;
   quantity: number;
   notional: number;
   config: MockTradingConfig;
-  takeProfitUsd: number;
-  stopLossUsd: number;
+  takeProfitPct: number;
+  stopLossPct: number;
 }): {
   takeProfitPrice: number;
   stopLossPrice: number;
@@ -539,77 +523,72 @@ export function computeMockFixedDollarExitLevels(args: {
   stopLossUsd: number;
   riskRewardRatio: number;
 } {
-  const takeProfitUsd = Number.isFinite(args.takeProfitUsd) && args.takeProfitUsd > 0
-    ? args.takeProfitUsd
-    : DEFAULT_MOCK_TRADING_CONFIG.takeProfitUsd;
-  const stopLossUsd = Number.isFinite(args.stopLossUsd) && args.stopLossUsd > 0
-    ? args.stopLossUsd
-    : DEFAULT_MOCK_TRADING_CONFIG.stopLossUsd;
+  const takeProfitPct = Number.isFinite(args.takeProfitPct) && args.takeProfitPct > 0
+    ? args.takeProfitPct
+    : DEFAULT_MOCK_TRADING_CONFIG.takeProfitPct;
+  const stopLossPct = Number.isFinite(args.stopLossPct) && args.stopLossPct > 0
+    ? args.stopLossPct
+    : DEFAULT_MOCK_TRADING_CONFIG.stopLossPct;
+  const takeProfitPrice = args.side === "BUY"
+    ? args.entryPrice * (1 + takeProfitPct / 100)
+    : Math.max(0.01, args.entryPrice * (1 - takeProfitPct / 100));
+  const stopLossPrice = args.side === "BUY"
+    ? Math.max(0.01, args.entryPrice * (1 - stopLossPct / 100))
+    : args.entryPrice * (1 + stopLossPct / 100);
+  const tpNet = computeMockNetPnlAtExitMark({
+    side: args.side,
+    entryPrice: args.entryPrice,
+    exitMarkPrice: takeProfitPrice,
+    quantity: args.quantity,
+    notional: args.notional,
+    config: args.config,
+  });
+  const slNet = computeMockNetPnlAtExitMark({
+    side: args.side,
+    entryPrice: args.entryPrice,
+    exitMarkPrice: stopLossPrice,
+    quantity: args.quantity,
+    notional: args.notional,
+    config: args.config,
+  });
+  const takeProfitUsd = Math.max(0, tpNet);
+  const stopLossUsd = Math.max(0, -slNet);
 
   return {
-    takeProfitPrice: computeMockExitMarkForNetPnl({
-      side: args.side,
-      entryPrice: args.entryPrice,
-      quantity: args.quantity,
-      notional: args.notional,
-      targetNetPnl: takeProfitUsd,
-      config: args.config,
-    }),
-    stopLossPrice: computeMockExitMarkForNetPnl({
-      side: args.side,
-      entryPrice: args.entryPrice,
-      quantity: args.quantity,
-      notional: args.notional,
-      targetNetPnl: -stopLossUsd,
-      config: args.config,
-    }),
+    takeProfitPrice,
+    stopLossPrice,
     takeProfitUsd,
     stopLossUsd,
     riskRewardRatio: stopLossUsd > 0 ? takeProfitUsd / stopLossUsd : 0,
   };
 }
 
-export function withMockFixedDollarExitFields(
+export function withMockExitFields(
   trade: MockTrade,
   config: MockTradingConfig,
+  override?: StrategyExitOverride,
 ): MockTrade {
-  const existing = trade as MockTrade & Partial<Pick<
-    MockTrade,
-    "takeProfitPrice" | "stopLossPrice" | "takeProfitUsd" | "stopLossUsd" | "riskRewardRatio"
-  >>;
-  if (
-    Number.isFinite(existing.takeProfitPrice) &&
-    Number.isFinite(existing.stopLossPrice) &&
-    Number.isFinite(existing.takeProfitUsd) &&
-    Number.isFinite(existing.stopLossUsd) &&
-    Number.isFinite(existing.riskRewardRatio)
-  ) {
-    return trade;
-  }
-  const exits = computeMockFixedDollarExitLevels({
+  const exit = resolveExit(config, override);
+  const exits = computeMockExitLevels({
     side: trade.side,
     entryPrice: trade.entryPrice,
     quantity: trade.quantity,
     notional: trade.notional,
     config,
-    takeProfitUsd: existing.takeProfitUsd ?? config.takeProfitUsd,
-    stopLossUsd: existing.stopLossUsd ?? config.stopLossUsd,
+    takeProfitPct: exit.takeProfitPct,
+    stopLossPct: exit.stopLossPct,
   });
   return { ...trade, ...exits };
 }
 
-function reachedFixedDollarTarget(args: {
+function reachedExitTarget(args: {
   trade: MockTrade;
   price: number;
   targetPrice: number;
-  targetNetPnl: number;
 }): boolean {
-  const { trade, price, targetPrice, targetNetPnl } = args;
+  const { trade, price, targetPrice } = args;
   if (!Number.isFinite(targetPrice) || targetPrice <= 0) return false;
-  if (targetNetPnl >= 0) {
-    return trade.side === "BUY" ? price >= targetPrice : price <= targetPrice;
-  }
-  return trade.side === "BUY" ? price <= targetPrice : price >= targetPrice;
+  return targetPrice >= trade.entryPrice ? price >= targetPrice : price <= targetPrice;
 }
 
 /**
@@ -617,8 +596,7 @@ function reachedFixedDollarTarget(args: {
  * conditions are met. Returns a new trade object — caller should replace the
  * old one in their store. Idempotent for CLOSED trades.
  *
- * Unrealized PnL is gross only (no fees deducted); realized PnL on close
- * deducts the full round-trip fee at the current config's `takerFeePct`.
+ * Unrealized and realized PnL are net of the estimated/full round-trip fee.
  */
 export function applyPriceTickToTrade(args: {
   trade: MockTrade;
@@ -632,27 +610,25 @@ export function applyPriceTickToTrade(args: {
   if (!Number.isFinite(price) || price <= 0) return trade;
 
   const exit = resolveExit(config, override);
-  const activeTrade = withMockFixedDollarExitFields(trade, config);
+  const activeTrade = withMockExitFields(trade, config, override);
   const ageMin = (now - trade.openedAt) / 60_000;
 
   let exitReason: MockExitReason | null = null;
   let exitPrice = price;
   if (
-    reachedFixedDollarTarget({
+    reachedExitTarget({
       trade: activeTrade,
       price,
       targetPrice: activeTrade.takeProfitPrice,
-      targetNetPnl: activeTrade.takeProfitUsd,
     })
   ) {
     exitReason = "TAKE_PROFIT";
     exitPrice = activeTrade.takeProfitPrice;
   } else if (
-    reachedFixedDollarTarget({
+    reachedExitTarget({
       trade: activeTrade,
       price,
       targetPrice: activeTrade.stopLossPrice,
-      targetNetPnl: -activeTrade.stopLossUsd,
     })
   ) {
     exitReason = "STOP_LOSS";
@@ -664,8 +640,7 @@ export function applyPriceTickToTrade(args: {
     return finalizeClose({ trade: activeTrade, fillBeforeSlippage: exitPrice, exitReason, now, config });
   }
 
-  // Unrealized PnL: gross + estimated round-trip fees not yet realized.
-  // We surface NET unrealized so the equity card matches realized math.
+  // Surface NET unrealized so the equity card matches realized math.
   const gross = computeMockPnl(activeTrade.side, activeTrade.entryPrice, price, activeTrade.quantity);
   const feesIfClosed = paperRoundTripTakerFees(activeTrade.notional, config.takerFeePct);
   return { ...activeTrade, currentPrice: price, unrealizedPnl: gross - feesIfClosed };
@@ -680,7 +655,7 @@ export function closeMockTrade(
 ): MockTrade {
   if (trade.status === "CLOSED") return trade;
   return finalizeClose({
-    trade: withMockFixedDollarExitFields(trade, config),
+    trade: withMockExitFields(trade, config),
     fillBeforeSlippage: price,
     exitReason: "MANUAL",
     now,
@@ -845,6 +820,8 @@ export interface MockTradeAnalytics {
   unrealizedPnl: number;
   averagePnl: number;
   averageRealizedPnl: number;
+  averageWin: number;
+  averageLoss: number;
   takeProfitWins: number;
   stopLossLosses: number;
   takeProfitHitRate: number;
@@ -1013,6 +990,8 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     unrealizedPnl: unrealized,
     averagePnl: closed > 0 ? realized / closed : 0,
     averageRealizedPnl: closed > 0 ? realized / closed : 0,
+    averageWin: wins > 0 ? grossWins / wins : 0,
+    averageLoss: losses > 0 ? -grossLosses / losses : 0,
     takeProfitWins,
     stopLossLosses,
     takeProfitHitRate: closed > 0 ? takeProfitWins / closed : 0,
@@ -1032,13 +1011,42 @@ export interface MockTradeFilter {
   blockerGate?: string | null;
   profitability?: "profit" | "loss" | null;
   strategyFamily?: string | null;
+  ageMode?: MockTradeAgeFilterMode | null;
+  ageMinMinutes?: number | null;
+  ageMaxMinutes?: number | null;
   /** When true, only show trades from the research pack (IDs 1000–1499). */
   researchOnly?: boolean | null;
+}
+
+export type MockTradeAgeFilterMode = "less" | "more" | "between";
+
+function finiteNonNegative(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export function mockTradeAgeMinutes(trade: MockTrade, nowMs: number = Date.now()): number {
+  const end = trade.status === "CLOSED" && trade.closedAt != null ? trade.closedAt : nowMs;
+  return Math.max(0, (end - trade.openedAt) / 60_000);
+}
+
+function passesMockTradeAgeFilter(trade: MockTrade, filter: MockTradeFilter, nowMs: number): boolean {
+  if (!filter.ageMode) return true;
+
+  const age = mockTradeAgeMinutes(trade, nowMs);
+  const min = finiteNonNegative(filter.ageMinMinutes);
+  const max = finiteNonNegative(filter.ageMaxMinutes);
+
+  if (filter.ageMode === "less") return max == null || age < max;
+  if (filter.ageMode === "more") return min == null || age > min;
+  if (min != null && age < min) return false;
+  if (max != null && age > max) return false;
+  return true;
 }
 
 export function filterMockTrades(
   trades: readonly MockTrade[],
   filter: MockTradeFilter,
+  nowMs: number = Date.now(),
 ): MockTrade[] {
   return trades.filter((t) => {
     if (filter.strategyId != null && t.strategyId !== filter.strategyId) return false;
@@ -1052,6 +1060,7 @@ export function filterMockTrades(
       if (filter.profitability === "profit" && pnl <= 0) return false;
       if (filter.profitability === "loss" && pnl >= 0) return false;
     }
+    if (!passesMockTradeAgeFilter(t, filter, nowMs)) return false;
     return true;
   });
 }
@@ -1185,8 +1194,8 @@ export function isValidMockConfig(value: unknown): value is MockTradingConfig {
     num(c.leverage) &&
     num(c.takeProfitUsd) &&
     num(c.stopLossUsd) &&
-    (c.takeProfitUsd as number) > 0 &&
-    (c.stopLossUsd as number) > 0 &&
+    (c.takeProfitUsd as number) >= 0 &&
+    (c.stopLossUsd as number) >= 0 &&
     num(c.takeProfitPct) &&
     num(c.stopLossPct) &&
     num(c.maxHoldMinutes) &&
