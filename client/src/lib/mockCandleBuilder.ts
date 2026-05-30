@@ -11,7 +11,7 @@ import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
 export type { OHLCVCandle };
 
 /** Maximum number of closed candles to keep in the sliding window. */
-export const CANDLE_WINDOW_SIZE = 120; // 2 hours of 1-min bars
+export const CANDLE_WINDOW_SIZE = 250; // ~4 hours of 1-min bars, enough for EMA200 research strategies
 
 /** State for the in-progress candle bar. */
 export interface OpenCandle {

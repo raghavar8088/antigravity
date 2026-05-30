@@ -1,4 +1,5 @@
 import type { Collection, Db, Filter, Sort } from "mongodb";
+import type { RegimeSnapshot } from "@/lib/marketRegimeClassifier";
 import { getDb } from "@/lib/mongoTradesClient";
 import {
   computeAccountState,
@@ -20,12 +21,19 @@ import {
   type MockTradeListQuery,
   type MockTradeLogEvent,
 } from "@/lib/mockTradingPersistenceTypes";
+import type { StrategyScore } from "@/lib/strategyScoringEngine";
 
 export const MOCK_TRADES_COLLECTION = "mock_trades";
 export const MOCK_ACCOUNT_SNAPSHOTS_COLLECTION = "mock_account_snapshots";
 export const MOCK_STRATEGY_ANALYTICS_COLLECTION = "mock_strategy_analytics";
 export const MOCK_TRADE_LOGS_COLLECTION = "mock_trade_logs";
 export const MOCK_ENGINE_CONFIG_COLLECTION = "mock_engine_config";
+export const MOCK_STRATEGY_SIGNALS_COLLECTION = "strategy_signals";
+export const MOCK_REGIME_SNAPSHOTS_COLLECTION = "regime_snapshots";
+export const MOCK_STRATEGY_SCORES_COLLECTION = "strategy_scores";
+export const MOCK_STRATEGY_SCORE_HISTORY_COLLECTION = "strategy_score_history";
+export const MOCK_EQUITY_CURVE_COLLECTION = "equity_curve";
+export const MOCK_DAILY_PNL_HISTORY_COLLECTION = "daily_pnl_history";
 
 export type MockTradeDoc = {
   account_key: string;
@@ -55,6 +63,7 @@ export type MockTradeDoc = {
   take_profit_usd: number;
   stop_loss_usd: number;
   risk_reward_ratio: number;
+  regime_at_entry?: string;
   blockers_ignored: string[];
   blocker_details: MockTrade["blockers"];
   confidence_score: number;
@@ -66,6 +75,102 @@ export type MockTradeDoc = {
   created_at: string;
   updated_at: string;
 };
+
+export type MockStrategySignalDoc = {
+  account_key: string;
+  strategy_id: number;
+  strategy_name: string;
+  strategy_family: string;
+  symbol: string;
+  side: "BUY" | "SELL" | "NO_SIGNAL";
+  timeframe: string;
+  entry_price: number;
+  confidence_score: number;
+  market_regime?: string;
+  indicator_snapshot: Record<string, unknown>;
+  take_profit?: number;
+  stop_loss?: number;
+  expected_profit_usd?: number;
+  expected_loss_usd?: number;
+  risk_reward?: number;
+  entry_reason: string;
+  timestamp: number;
+  created_at: string;
+};
+
+export type MockRegimeSnapshotDoc = RegimeSnapshot & {
+  account_key: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MockStrategyScoreDoc = {
+  account_key: string;
+  strategy_id: number;
+  strategy_name: string;
+  strategy_family?: string;
+  overall_score: number;
+  current_regime_score: number;
+  confidence_rating: StrategyScore["confidenceRating"];
+  rank: number;
+  regime_rank: number;
+  metrics: StrategyScore["metrics"];
+  scored_at: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MockStrategyScoreHistoryDoc = MockStrategyScoreDoc & {
+  history_id: string;
+};
+
+export type MockEquityCurvePointDoc = {
+  account_key: string;
+  timestamp: number;
+  equity: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  drawdown_pct: number;
+  daily_pnl?: number;
+  regime?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MockDailyPnlHistoryDoc = {
+  account_key: string;
+  day: number;
+  pnl: number;
+  trade_count: number;
+  regime?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export interface RecentSignalQuery {
+  strategy_id?: number;
+  family?: string;
+  regime?: string;
+  since?: number;
+  limit?: number;
+}
+
+export interface EquityCurvePoint {
+  timestamp: number;
+  equity: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  drawdownPct: number;
+  dailyPnl?: number;
+  regime?: string;
+}
+
+export interface DailyPnlPoint {
+  day: number;
+  pnl: number;
+  tradeCount: number;
+  regime?: string;
+}
 
 export type MockAccountSnapshotDoc = {
   account_key: string;
@@ -130,6 +235,12 @@ async function ensureMockIndexes(db: Db): Promise<void> {
   const analytics = db.collection<MockStrategyAnalyticsDoc>(MOCK_STRATEGY_ANALYTICS_COLLECTION);
   const logs = db.collection<MockTradeLogDoc>(MOCK_TRADE_LOGS_COLLECTION);
   const config = db.collection<MockEngineConfigDoc>(MOCK_ENGINE_CONFIG_COLLECTION);
+  const signals = db.collection<MockStrategySignalDoc>(MOCK_STRATEGY_SIGNALS_COLLECTION);
+  const regimes = db.collection<MockRegimeSnapshotDoc>(MOCK_REGIME_SNAPSHOTS_COLLECTION);
+  const scores = db.collection<MockStrategyScoreDoc>(MOCK_STRATEGY_SCORES_COLLECTION);
+  const scoreHistory = db.collection<MockStrategyScoreHistoryDoc>(MOCK_STRATEGY_SCORE_HISTORY_COLLECTION);
+  const equity = db.collection<MockEquityCurvePointDoc>(MOCK_EQUITY_CURVE_COLLECTION);
+  const dailyPnl = db.collection<MockDailyPnlHistoryDoc>(MOCK_DAILY_PNL_HISTORY_COLLECTION);
 
   await Promise.all([
     trades.createIndex({ trade_id: 1 }, { unique: true, name: "uniq_mock_trade_id" }),
@@ -145,6 +256,22 @@ async function ensureMockIndexes(db: Db): Promise<void> {
     logs.createIndex({ account_key: 1, ts: -1 }, { name: "by_account_log_time" }),
     logs.createIndex({ account_key: 1, event: 1, ts: -1 }, { name: "by_account_log_event" }),
     config.createIndex({ account_key: 1 }, { unique: true, name: "uniq_mock_config_account" }),
+    signals.createIndex({ account_key: 1, timestamp: -1 }, { name: "by_account_signal_time" }),
+    signals.createIndex({ account_key: 1, strategy_id: 1, timestamp: -1 }, { name: "by_account_signal_strategy" }),
+    signals.createIndex({ account_key: 1, strategy_family: 1, timestamp: -1 }, { name: "by_account_signal_family" }),
+    signals.createIndex({ account_key: 1, market_regime: 1, timestamp: -1 }, { name: "by_account_signal_regime" }),
+    regimes.createIndex({ account_key: 1, timestamp: -1 }, { unique: true, name: "uniq_account_regime_time" }),
+    regimes.createIndex({ account_key: 1, regime: 1, timestamp: -1 }, { name: "by_account_regime" }),
+    scores.createIndex({ account_key: 1, strategy_id: 1 }, { unique: true, name: "uniq_account_strategy_score" }),
+    scores.createIndex({ account_key: 1, rank: 1 }, { name: "by_account_score_rank" }),
+    scores.createIndex({ account_key: 1, current_regime_score: -1 }, { name: "by_account_regime_score" }),
+    scoreHistory.createIndex({ history_id: 1 }, { unique: true, name: "uniq_score_history_id" }),
+    scoreHistory.createIndex({ account_key: 1, strategy_id: 1, scored_at: -1 }, { name: "by_account_strategy_score_history" }),
+    scoreHistory.createIndex({ account_key: 1, rank: 1, scored_at: -1 }, { name: "by_account_ranking_history" }),
+    equity.createIndex({ account_key: 1, timestamp: -1 }, { unique: true, name: "uniq_account_equity_time" }),
+    equity.createIndex({ account_key: 1, regime: 1, timestamp: -1 }, { name: "by_account_equity_regime" }),
+    dailyPnl.createIndex({ account_key: 1, day: -1 }, { unique: true, name: "uniq_account_daily_pnl" }),
+    dailyPnl.createIndex({ account_key: 1, regime: 1, day: -1 }, { name: "by_account_daily_pnl_regime" }),
   ]);
   indexesEnsured = true;
 }
@@ -155,6 +282,12 @@ async function collections(): Promise<{
   analytics: Collection<MockStrategyAnalyticsDoc>;
   logs: Collection<MockTradeLogDoc>;
   config: Collection<MockEngineConfigDoc>;
+  signals: Collection<MockStrategySignalDoc>;
+  regimes: Collection<MockRegimeSnapshotDoc>;
+  scores: Collection<MockStrategyScoreDoc>;
+  scoreHistory: Collection<MockStrategyScoreHistoryDoc>;
+  equity: Collection<MockEquityCurvePointDoc>;
+  dailyPnl: Collection<MockDailyPnlHistoryDoc>;
 }> {
   const db = await getDb();
   await ensureMockIndexes(db);
@@ -164,6 +297,12 @@ async function collections(): Promise<{
     analytics: db.collection<MockStrategyAnalyticsDoc>(MOCK_STRATEGY_ANALYTICS_COLLECTION),
     logs: db.collection<MockTradeLogDoc>(MOCK_TRADE_LOGS_COLLECTION),
     config: db.collection<MockEngineConfigDoc>(MOCK_ENGINE_CONFIG_COLLECTION),
+    signals: db.collection<MockStrategySignalDoc>(MOCK_STRATEGY_SIGNALS_COLLECTION),
+    regimes: db.collection<MockRegimeSnapshotDoc>(MOCK_REGIME_SNAPSHOTS_COLLECTION),
+    scores: db.collection<MockStrategyScoreDoc>(MOCK_STRATEGY_SCORES_COLLECTION),
+    scoreHistory: db.collection<MockStrategyScoreHistoryDoc>(MOCK_STRATEGY_SCORE_HISTORY_COLLECTION),
+    equity: db.collection<MockEquityCurvePointDoc>(MOCK_EQUITY_CURVE_COLLECTION),
+    dailyPnl: db.collection<MockDailyPnlHistoryDoc>(MOCK_DAILY_PNL_HISTORY_COLLECTION),
   };
 }
 
@@ -209,6 +348,7 @@ export function mockTradeToDoc(
     take_profit_usd: trade.takeProfitUsd,
     stop_loss_usd: trade.stopLossUsd,
     risk_reward_ratio: trade.riskRewardRatio,
+    regime_at_entry: trade.regimeAtEntry,
     blockers_ignored: trade.blockers.map((blocker) => blocker.gate),
     blocker_details: trade.blockers,
     confidence_score: trade.signalScore,
@@ -565,19 +705,240 @@ export async function listMockLogs(query: MockLogListQuery): Promise<{
   };
 }
 
+export async function insertStrategySignals(
+  accountKey: string,
+  signalDocs: Array<Omit<MockStrategySignalDoc, "account_key" | "created_at">>,
+): Promise<number> {
+  if (signalDocs.length === 0) return 0;
+  const { signals } = await collections();
+  const createdAt = nowIso();
+  const docs = signalDocs.map((doc) => ({
+    ...doc,
+    account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY,
+    created_at: createdAt,
+  }));
+  const result = await signals.insertMany(docs, { ordered: false });
+  return result.insertedCount;
+}
+
+export async function listRecentSignals(
+  accountKey: string,
+  query: RecentSignalQuery = {},
+): Promise<MockStrategySignalDoc[]> {
+  const { signals } = await collections();
+  const filter: Filter<MockStrategySignalDoc> = { account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY };
+  if (query.strategy_id != null) filter.strategy_id = query.strategy_id;
+  if (query.family) filter.strategy_family = query.family;
+  if (query.regime) filter.market_regime = query.regime;
+  if (query.since != null) filter.timestamp = { $gte: query.since };
+  return signals
+    .find(filter)
+    .sort({ timestamp: -1 })
+    .limit(Math.max(1, Math.min(1_000, query.limit ?? 200)))
+    .toArray();
+}
+
+export async function upsertRegimeSnapshot(
+  accountKey: string,
+  snapshot: RegimeSnapshot,
+): Promise<MockRegimeSnapshotDoc> {
+  const { regimes } = await collections();
+  const now = nowIso();
+  const doc: MockRegimeSnapshotDoc = {
+    ...snapshot,
+    account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY,
+    created_at: now,
+    updated_at: now,
+  };
+  await regimes.updateOne(
+    { account_key: doc.account_key, timestamp: doc.timestamp },
+    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { upsert: true },
+  );
+  return doc;
+}
+
+export async function getLatestRegimeSnapshot(accountKey: string): Promise<MockRegimeSnapshotDoc | null> {
+  const { regimes } = await collections();
+  return regimes
+    .find({ account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY })
+    .sort({ timestamp: -1 })
+    .limit(1)
+    .next();
+}
+
+export async function batchUpsertStrategyScores(
+  accountKey: string,
+  scoresInput: readonly StrategyScore[],
+): Promise<number> {
+  if (scoresInput.length === 0) return 0;
+  const { scores, scoreHistory } = await collections();
+  const now = nowIso();
+  const scoredAt = Date.now();
+  const normalizedAccountKey = accountKey || DEFAULT_MOCK_ACCOUNT_KEY;
+  const result = await scores.bulkWrite(
+    scoresInput.map((score) => ({
+      updateOne: {
+        filter: { account_key: normalizedAccountKey, strategy_id: score.strategyId },
+        update: {
+          $set: {
+            account_key: normalizedAccountKey,
+            strategy_id: score.strategyId,
+            strategy_name: score.strategyName,
+            overall_score: score.overallScore,
+            current_regime_score: score.currentRegimeScore,
+            confidence_rating: score.confidenceRating,
+            rank: score.rank,
+            regime_rank: score.regimeRank,
+            metrics: score.metrics,
+            scored_at: scoredAt,
+            updated_at: now,
+          },
+          $setOnInsert: { created_at: now },
+        },
+        upsert: true,
+      },
+    })),
+  );
+  await scoreHistory.insertMany(
+    scoresInput.map((score) => ({
+      history_id: `${normalizedAccountKey}-${score.strategyId}-${scoredAt}`,
+      account_key: normalizedAccountKey,
+      strategy_id: score.strategyId,
+      strategy_name: score.strategyName,
+      overall_score: score.overallScore,
+      current_regime_score: score.currentRegimeScore,
+      confidence_rating: score.confidenceRating,
+      rank: score.rank,
+      regime_rank: score.regimeRank,
+      metrics: score.metrics,
+      scored_at: scoredAt,
+      created_at: now,
+      updated_at: now,
+    })),
+    { ordered: false },
+  ).catch(() => {
+    // History is append-only and best-effort; latest score upsert above is authoritative.
+  });
+  return (result.upsertedCount ?? 0) + (result.modifiedCount ?? 0);
+}
+
+export async function listStrategyScores(
+  accountKey: string,
+  limit = 500,
+): Promise<MockStrategyScoreDoc[]> {
+  const { scores } = await collections();
+  return scores
+    .find({ account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY })
+    .sort({ rank: 1 })
+    .limit(Math.max(1, Math.min(2_000, limit)))
+    .toArray();
+}
+
+export async function listStrategyScoreHistory(
+  accountKey: string,
+  limit = 2_000,
+): Promise<MockStrategyScoreHistoryDoc[]> {
+  const { scoreHistory } = await collections();
+  return scoreHistory
+    .find({ account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY })
+    .sort({ scored_at: -1, rank: 1 })
+    .limit(Math.max(1, Math.min(20_000, limit)))
+    .toArray();
+}
+
+export async function appendEquityCurvePoint(
+  accountKey: string,
+  point: EquityCurvePoint,
+): Promise<MockEquityCurvePointDoc> {
+  const { equity } = await collections();
+  const now = nowIso();
+  const doc: MockEquityCurvePointDoc = {
+    account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY,
+    timestamp: point.timestamp,
+    equity: point.equity,
+    realized_pnl: point.realizedPnl,
+    unrealized_pnl: point.unrealizedPnl,
+    drawdown_pct: point.drawdownPct,
+    daily_pnl: point.dailyPnl,
+    regime: point.regime,
+    created_at: now,
+    updated_at: now,
+  };
+  await equity.updateOne(
+    { account_key: doc.account_key, timestamp: doc.timestamp },
+    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { upsert: true },
+  );
+  return doc;
+}
+
+export async function listEquityCurvePoints(
+  accountKey: string,
+  limit = 500,
+): Promise<MockEquityCurvePointDoc[]> {
+  const { equity } = await collections();
+  return equity
+    .find({ account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY })
+    .sort({ timestamp: 1 })
+    .limit(Math.max(1, Math.min(5_000, limit)))
+    .toArray();
+}
+
+export async function upsertDailyPnlPoint(
+  accountKey: string,
+  point: DailyPnlPoint,
+): Promise<MockDailyPnlHistoryDoc> {
+  const { dailyPnl } = await collections();
+  const now = nowIso();
+  const doc: MockDailyPnlHistoryDoc = {
+    account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY,
+    day: point.day,
+    pnl: point.pnl,
+    trade_count: point.tradeCount,
+    regime: point.regime,
+    created_at: now,
+    updated_at: now,
+  };
+  await dailyPnl.updateOne(
+    { account_key: doc.account_key, day: doc.day },
+    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { upsert: true },
+  );
+  return doc;
+}
+
+export async function listDailyPnlHistory(
+  accountKey: string,
+  limit = 500,
+): Promise<MockDailyPnlHistoryDoc[]> {
+  const { dailyPnl } = await collections();
+  return dailyPnl
+    .find({ account_key: accountKey || DEFAULT_MOCK_ACCOUNT_KEY })
+    .sort({ day: 1 })
+    .limit(Math.max(1, Math.min(5_000, limit)))
+    .toArray();
+}
+
 export async function resetMockTradingState(accountKey: string): Promise<{
   tradesDeleted: number;
   snapshotsDeleted: number;
   analyticsDeleted: number;
   logsDeleted: number;
 }> {
-  const { trades, snapshots, analytics, logs, config } = await collections();
+  const { trades, snapshots, analytics, logs, config, signals, regimes, scores, scoreHistory, equity, dailyPnl } = await collections();
   const [tradeRes, snapshotRes, analyticsRes, logRes] = await Promise.all([
     trades.deleteMany({ account_key: accountKey }),
     snapshots.deleteMany({ account_key: accountKey }),
     analytics.deleteMany({ account_key: accountKey }),
     logs.deleteMany({ account_key: accountKey }),
     config.deleteOne({ account_key: accountKey }),
+    signals.deleteMany({ account_key: accountKey }),
+    regimes.deleteMany({ account_key: accountKey }),
+    scores.deleteMany({ account_key: accountKey }),
+    scoreHistory.deleteMany({ account_key: accountKey }),
+    equity.deleteMany({ account_key: accountKey }),
+    dailyPnl.deleteMany({ account_key: accountKey }),
   ]);
   await logs.insertOne({
     account_key: accountKey,

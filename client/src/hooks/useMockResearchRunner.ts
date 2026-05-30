@@ -11,6 +11,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ALL_BTC_RESEARCH_FAMILIES,
+  BTC_RESEARCH_FAMILY_LABELS,
+  BTC_RESEARCH_STRATEGIES,
+  type BtcResearchFamily,
+  type BtcResearchStrategy,
+} from "@/lib/btcResearchStrategyRegistry";
+import {
   ALL_RESEARCH_FAMILIES,
   RESEARCH_FAMILY_LABELS,
   RESEARCH_STRATEGIES,
@@ -19,9 +26,14 @@ import {
 } from "@/lib/mockResearchStrategies";
 import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
 import type { MockResearchSignalInput } from "@/lib/mockTradingEngine";
+import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 
 const MAX_SIGNALS_PER_MINUTE_DEFAULT = 50;
 const MIN_CONFIDENCE_DEFAULT = 30; // permissive by default per spec
+
+export type ResearchSelectionMode = "RESEARCH_MODE" | "PROFIT_MODE" | "REGIME_MODE";
+type AnyResearchFamily = ResearchFamily | BtcResearchFamily;
+type AnyResearchStrategy = ResearchStrategy | BtcResearchStrategy;
 
 export interface ResearchRunnerConfig {
   /** Master enable/disable for all 500 research strategies. */
@@ -32,6 +44,14 @@ export interface ResearchRunnerConfig {
   maxSignalsPerMinute: number;
   /** Minimum confidence score (0–100) required to emit a signal. */
   minConfidence: number;
+  /** Research accepts all; Profit/Regime modes are restricted to research-backed strategy IDs. */
+  selectionMode: ResearchSelectionMode;
+  /** Number of ranked strategies allowed in Profit/Regime mode. */
+  topN: number;
+  /** Ranked strategy IDs approved by the scoring hook for Profit/Regime mode. */
+  approvedStrategyIds: ReadonlySet<number>;
+  /** Enabled BTC research-backed families. Empty means no BTC families are enabled. */
+  enabledBtcFamilies: Set<BtcResearchFamily>;
 }
 
 export const DEFAULT_RESEARCH_RUNNER_CONFIG: ResearchRunnerConfig = {
@@ -39,13 +59,17 @@ export const DEFAULT_RESEARCH_RUNNER_CONFIG: ResearchRunnerConfig = {
   enabledFamilies: new Set(ALL_RESEARCH_FAMILIES),
   maxSignalsPerMinute: MAX_SIGNALS_PER_MINUTE_DEFAULT,
   minConfidence: MIN_CONFIDENCE_DEFAULT,
+  selectionMode: "RESEARCH_MODE",
+  topN: 10,
+  approvedStrategyIds: new Set<number>(),
+  enabledBtcFamilies: new Set(ALL_BTC_RESEARCH_FAMILIES),
 };
 
 export interface ResearchSignalSummary extends MockResearchSignalInput {
   strategyId: number;
   strategyName: string;
-  family: ResearchFamily;
-  strategyFamily: ResearchFamily;
+  family: AnyResearchFamily;
+  strategyFamily: AnyResearchFamily;
   side: "BUY" | "SELL";
   confidence: number;
   confidenceScore: number;
@@ -67,9 +91,9 @@ export interface UseResearchRunnerResult {
   /** Most recent signals (ring buffer, newest first, max 200). */
   recentSignals: ResearchSignalSummary[];
   /** List of all 500 strategy definitions (for UI display). */
-  strategies: readonly ResearchStrategy[];
+  strategies: readonly AnyResearchStrategy[];
   /** Family display labels. */
-  familyLabels: typeof RESEARCH_FAMILY_LABELS;
+  familyLabels: Record<string, string>;
 }
 
 const SIGNAL_RING_CAP = 200;
@@ -82,12 +106,24 @@ export interface ResearchEvaluationResult {
 export function evaluateMockResearchStrategies(
   candles: readonly OHLCVCandle[],
   config: ResearchRunnerConfig,
-  now = Date.now(),
+  currentRegimeOrNow: MarketRegime | null | number = null,
+  nowArg?: number,
 ): ResearchEvaluationResult {
   if (!config.enabled || candles.length < 5) return { evaluatedCount: 0, signals: [] };
+  const currentRegime = typeof currentRegimeOrNow === "number" ? null : currentRegimeOrNow;
+  const now = typeof currentRegimeOrNow === "number" ? currentRegimeOrNow : (nowArg ?? Date.now());
 
   const isFamilyEnabled = (fam: ResearchFamily): boolean => {
     return config.enabledFamilies.has(fam);
+  };
+  const isBtcFamilyEnabled = (fam: BtcResearchFamily): boolean => {
+    return config.enabledBtcFamilies.has(fam);
+  };
+  const passesSelectionMode = (strategyId: number): boolean => {
+    if (config.selectionMode === "RESEARCH_MODE") return true;
+    if (strategyId < 2000 || strategyId > 2059) return false;
+    if (config.approvedStrategyIds.size === 0) return false;
+    return config.approvedStrategyIds.has(strategyId);
   };
 
   const snap = candles.slice();
@@ -103,6 +139,7 @@ export function evaluateMockResearchStrategies(
       const result = strat.signal(snap);
       if (result.side === "NO_SIGNAL") continue;
       if (result.confidence < config.minConfidence) continue;
+      if (!passesSelectionMode(strat.id)) continue;
       signals.push({
         strategyId: strat.id,
         strategyName: strat.name,
@@ -113,6 +150,35 @@ export function evaluateMockResearchStrategies(
         confidenceScore: result.confidence,
         params: strat.params,
         evaluatedAt: now,
+        regimeAtEntry: currentRegime ?? undefined,
+      });
+    } catch {
+      // Suppress individual strategy errors so one bad signal doesn't block others.
+    }
+  }
+
+  for (const strat of BTC_RESEARCH_STRATEGIES) {
+    if (!strat.enabled) continue;
+    if (strat.dataFeedRequired) continue;
+    if (!isBtcFamilyEnabled(strat.family)) continue;
+    if (snap.length < strat.minCandles) continue;
+    evaluatedCount++;
+    try {
+      const result = strat.signal(snap);
+      if (result.side === "NO_SIGNAL") continue;
+      if (result.confidence < config.minConfidence) continue;
+      if (!passesSelectionMode(strat.id)) continue;
+      signals.push({
+        strategyId: strat.id,
+        strategyName: strat.name,
+        family: strat.family,
+        strategyFamily: strat.family,
+        side: result.side,
+        confidence: result.confidence,
+        confidenceScore: result.confidence,
+        params: strat.params,
+        evaluatedAt: now,
+        regimeAtEntry: currentRegime ?? undefined,
       });
     } catch {
       // Suppress individual strategy errors so one bad signal doesn't block others.
@@ -136,10 +202,12 @@ export interface ResearchRunnerDeps {
   ingestResearchSignals: (signals: ResearchSignalSummary[], price: number) => void;
   /** Live BTC price — used as entry price for mock trades. */
   price: number;
+  /** Current live regime snapshot label, recorded onto mock trades. */
+  currentRegime?: MarketRegime | null;
 }
 
 export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunnerResult {
-  const { candles, newCandleReady, ingestResearchSignals, price } = deps;
+  const { candles, newCandleReady, ingestResearchSignals, price, currentRegime = null } = deps;
 
   const [config, setConfigState] = useState<ResearchRunnerConfig>(DEFAULT_RESEARCH_RUNNER_CONFIG);
   const [lastEvalCount, setLastEvalCount] = useState(0);
@@ -151,10 +219,12 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
   const configRef = useRef(config);
   const candlesRef = useRef(candles);
   const priceRef = useRef(price);
+  const regimeRef = useRef<MarketRegime | null>(currentRegime);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { candlesRef.current = candles; }, [candles]);
   useEffect(() => { priceRef.current = price; }, [price]);
+  useEffect(() => { regimeRef.current = currentRegime; }, [currentRegime]);
 
   const runEvaluation = useCallback(() => {
     const cfg = configRef.current;
@@ -165,7 +235,7 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
     if (!Number.isFinite(livePrice) || livePrice <= 0) return;
 
     const now = Date.now();
-    const { evaluatedCount, signals: capped } = evaluateMockResearchStrategies(snap, cfg, now);
+    const { evaluatedCount, signals: capped } = evaluateMockResearchStrategies(snap, cfg, regimeRef.current, now);
 
     setLastEvalCount(evaluatedCount);
     setLastSignalCount(capped.length);
@@ -178,6 +248,30 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
         return combined.length > SIGNAL_RING_CAP ? combined.slice(0, SIGNAL_RING_CAP) : combined;
       });
       ingestResearchSignals(capped, livePrice);
+      if (typeof fetch === "function") {
+        void fetch("/api/mock-trading/signals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signals: capped.map((signal) => ({
+              strategy_id: signal.strategyId,
+              strategy_name: signal.strategyName,
+              strategy_family: signal.strategyFamily,
+              symbol: "BTCUSD",
+              side: signal.side,
+              timeframe: "1m",
+              entry_price: livePrice,
+              confidence_score: signal.confidenceScore,
+              market_regime: signal.regimeAtEntry,
+              indicator_snapshot: {},
+              entry_reason: `${signal.strategyName} emitted ${signal.side}`,
+              timestamp: signal.evaluatedAt,
+            })),
+          }),
+        }).catch(() => {
+          // Signal persistence is best-effort; mock trade simulation continues locally.
+        });
+      }
     }
   }, [ingestResearchSignals]);
 
@@ -200,7 +294,7 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
     hasRun,
     lastEvalAt,
     recentSignals,
-    strategies: RESEARCH_STRATEGIES,
-    familyLabels: RESEARCH_FAMILY_LABELS,
+    strategies: [...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES],
+    familyLabels: { ...RESEARCH_FAMILY_LABELS, ...BTC_RESEARCH_FAMILY_LABELS },
   };
 }

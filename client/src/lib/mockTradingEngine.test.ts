@@ -109,7 +109,7 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
   });
   it("uses percentage-distance TP/SL defaults", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takeProfitPct).toBe(1.5);
-    expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossPct).toBe(0.6);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossPct).toBe(0.4);
   });
   it("allows 5,000 simultaneous open mock trades by default", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).toBe(5_000);

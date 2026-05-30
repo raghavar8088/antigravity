@@ -163,7 +163,11 @@ describe("MockTradingDashboard trade table", () => {
     expect(container.textContent).toContain("SL Loss $");
     expect(container.textContent).not.toContain("TP Price");
     expect(container.textContent).not.toContain("SL Price");
-    const tradeHeaders = [...container.querySelectorAll("table")[0].querySelectorAll("th")]
+    const tradeTable = [...container.querySelectorAll("table")].find((table) =>
+      [...table.querySelectorAll("th")].some((header) => header.textContent === "Opened"),
+    );
+    expect(tradeTable).toBeDefined();
+    const tradeHeaders = [...tradeTable!.querySelectorAll("th")]
       .map((header) => header.textContent);
     expect(tradeHeaders).not.toContain("Family");
     expect(tradeHeaders).not.toContain("Conf");

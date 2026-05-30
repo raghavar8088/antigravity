@@ -188,7 +188,9 @@ export interface MockTrade {
   confidenceScore?: number;
   /** Strategy parameters used to create the signal — set only for research pack trades. */
   strategyParams?: Record<string, number | string>;
-  /** True for trades produced by the mock research runner (IDs 1000–1499). */
+  /** Market regime observed when the research signal was converted into a mock trade. */
+  regimeAtEntry?: string;
+  /** True for trades produced by the mock research runner. */
   researchPack?: boolean;
 }
 
@@ -395,6 +397,7 @@ export interface MockResearchSignalInput {
   confidenceScore: number;
   params: Record<string, number | string>;
   evaluatedAt: number;
+  regimeAtEntry?: string;
 }
 
 /**
@@ -469,6 +472,7 @@ export function buildMockTradeFromResearchSignal(args: {
     strategyFamily: signal.strategyFamily,
     confidenceScore: safeConfidence,
     strategyParams: signal.params,
+    regimeAtEntry: signal.regimeAtEntry,
     researchPack: true,
   };
 }

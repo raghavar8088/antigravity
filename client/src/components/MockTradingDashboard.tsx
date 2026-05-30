@@ -6,6 +6,9 @@ import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import { useMockCandleBuilder } from "@/hooks/useMockCandleBuilder";
 import { useMockResearchRunner } from "@/hooks/useMockResearchRunner";
 import { useMockTradingEngine } from "@/hooks/useMockTradingEngine";
+import { useMarketRegime } from "@/hooks/useMarketRegime";
+import { useStrategyScoring } from "@/hooks/useStrategyScoring";
+import { MockResearchChartsPanel } from "@/components/MockResearchChartsPanel";
 import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
 import {
   DeskBanner,
@@ -36,6 +39,16 @@ import {
   type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
 import { ALL_RESEARCH_FAMILIES, type ResearchFamily } from "@/lib/mockResearchStrategies";
+import {
+  computeAdvancedResearchAnalytics,
+  computeDailyPnlPoints,
+  createEquitySnapshot,
+  type AdvancedResearchAnalytics,
+} from "@/lib/mockResearchAnalytics";
+import { computeMockWalkForwardRows, type MockWalkForwardRow } from "@/lib/mockResearchWalkForward";
+import { computePortfolioAllocation, type PortfolioAllocationResult } from "@/lib/mockResearchPortfolioAllocation";
+import { computeStrategyHealth, type StrategyHealthRow } from "@/lib/strategyHealthEngine";
+import type { StrategyScore } from "@/lib/strategyScoringEngine";
 import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
 
 function fmtUsd(value: number, digits = 2): string {
@@ -129,11 +142,19 @@ export default function MockTradingDashboard() {
   const live = useLiveBTCPrice();
   const engine = useMockTradingEngine({ price: live.price });
   const candles = useMockCandleBuilder(live.price);
+  const regime = useMarketRegime({ candles: candles.snapshot, newCandleReady: candles.newCandleReady });
   const research = useMockResearchRunner({
     candles: candles.snapshot,
     newCandleReady: candles.newCandleReady,
     ingestResearchSignals: engine.ingestResearchSignals,
     price: live.price,
+    currentRegime: regime.regime,
+  });
+  const scoring = useStrategyScoring({
+    trades: engine.trades,
+    currentRegime: regime.regime,
+    newCandleReady: candles.newCandleReady,
+    topNCount: research.config.topN,
   });
 
   const [filter, setFilter] = useState<MockTradeFilter>({});
@@ -179,6 +200,81 @@ export default function MockTradingDashboard() {
   useEffect(() => {
     setDisplayPage(1);
   }, [filter, showOpenOnly, sortKey, strategySearch, displayPageSize]);
+
+  useEffect(() => {
+    const nextApproved =
+      research.config.selectionMode === "REGIME_MODE"
+        ? scoring.approvedRegimeIds
+        : scoring.approvedProfitIds;
+    if (research.config.approvedStrategyIds === nextApproved) return;
+    research.setConfig({ ...research.config, approvedStrategyIds: nextApproved });
+  }, [research.config, research.setConfig, scoring.approvedProfitIds, scoring.approvedRegimeIds]);
+
+  useEffect(() => {
+    if (!regime.snapshot || typeof fetch !== "function") return;
+    void fetch("/api/mock-trading/regime", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ snapshot: regime.snapshot }),
+    }).catch(() => {
+      // Regime persistence is best-effort; dashboard state remains local.
+    });
+  }, [regime.snapshot]);
+
+  useEffect(() => {
+    if (!candles.newCandleReady || typeof fetch !== "function") return;
+    const snapshot = createEquitySnapshot({ account: engine.account, trades: engine.trades, regime: regime.regime });
+    void fetch("/api/mock-trading/equity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        point: {
+          timestamp: snapshot.timestamp,
+          equity: snapshot.equity,
+          realizedPnl: snapshot.realizedPnl,
+          unrealizedPnl: snapshot.unrealizedPnl,
+          drawdownPct: snapshot.drawdownPct,
+          dailyPnl: snapshot.dailyPnl,
+          regime: snapshot.regime ?? undefined,
+        },
+      }),
+    }).catch(() => {
+      // Equity persistence is best-effort; local chart state continues updating.
+    });
+
+    const latestDaily = computeDailyPnlPoints(engine.trades).at(-1);
+    if (latestDaily) {
+      const dayStart = Math.floor(latestDaily.timestamp / 86_400_000) * 86_400_000;
+      const tradeCount = engine.trades.filter(
+        (trade) => trade.status === "CLOSED" && trade.closedAt != null && trade.closedAt >= dayStart,
+      ).length;
+      void fetch("/api/mock-trading/daily-pnl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          point: {
+            day: dayStart,
+            pnl: latestDaily.value,
+            tradeCount,
+            regime: regime.regime ?? undefined,
+          },
+        }),
+      }).catch(() => {
+        // Daily PnL history is best-effort.
+      });
+    }
+  }, [candles.newCandleReady, engine.account, engine.trades, regime.regime]);
+
+  useEffect(() => {
+    if (scoring.scores.length === 0 || typeof fetch !== "function") return;
+    void fetch("/api/mock-trading/scores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scores: scoring.scores }),
+    }).catch(() => {
+      // Latest ranking and ranking-history persistence is best-effort.
+    });
+  }, [scoring.lastScoredAt, scoring.scores]);
 
   useEffect(() => {
     setDisplayPage((page) => Math.min(page, displayTotalPages));
@@ -301,6 +397,35 @@ export default function MockTradingDashboard() {
   const totalPnlClass = pnlClass(engine.analytics.totalPnl);
   const realizedClass = pnlClass(engine.analytics.realizedPnl);
   const unrealizedClass = pnlClass(engine.analytics.unrealizedPnl);
+  const advancedResearch = useMemo(
+    () => computeAdvancedResearchAnalytics({ trades: engine.trades, scores: scoring.scores, account: acct }),
+    [acct, engine.trades, scoring.scores],
+  );
+  const strategyHealth = useMemo(
+    () => computeStrategyHealth(scoring.scores, engine.trades),
+    [engine.trades, scoring.scores],
+  );
+  const walkForwardRows = useMemo(
+    () => computeMockWalkForwardRows(engine.trades),
+    [engine.trades],
+  );
+  const strategyFamilyById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const trade of engine.trades) {
+      if (trade.strategyFamily) map.set(trade.strategyId, trade.strategyFamily);
+    }
+    return map;
+  }, [engine.trades]);
+  const portfolioAllocation = useMemo(
+    () =>
+      computePortfolioAllocation({
+        scores: scoring.scores,
+        healthRows: strategyHealth,
+        equity: acct.equity,
+        strategyFamilyById,
+      }),
+    [acct.equity, scoring.scores, strategyFamilyById, strategyHealth],
+  );
 
   return (
     <main className="trading-shell">
@@ -416,6 +541,19 @@ export default function MockTradingDashboard() {
         </DeskCard>
 
         <ResearchControlsCard research={research} closedCandles={candles.closedCount} />
+
+        <ResearchLabOverview
+          snapshot={regime.snapshot}
+          scoring={scoring}
+          research={research}
+          healthRows={strategyHealth}
+          walkForwardRows={walkForwardRows}
+          allocation={portfolioAllocation}
+        />
+
+        <MockResearchChartsPanel trades={engine.trades} account={acct} regime={regime.regime} />
+
+        <AdvancedResearchAnalyticsPanel analytics={advancedResearch} scores={scoring.scores} />
 
         <DeskCard padding="md">
           <DeskSectionHeader title="Trade analytics" subtitle="Realized PnL is net of round-trip fees and slippage; unrealized PnL marks every OPEN trade to the live BTC mark and subtracts the round-trip fee debt that would crystallize on close." />
@@ -1202,6 +1340,507 @@ function ConfigSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function regimeTone(regime: string | null | undefined): "success" | "warning" | "error" | "primary" | "default" {
+  if (regime === "TRENDING") return "success";
+  if (regime === "HIGH_VOLATILITY_BREAKOUT") return "warning";
+  if (regime === "LOW_VOLATILITY_CHOP") return "default";
+  if (regime === "RANGING") return "primary";
+  return "default";
+}
+
+function ResearchLabOverview({
+  snapshot,
+  scoring,
+  research,
+  healthRows,
+  walkForwardRows,
+  allocation,
+}: {
+  snapshot: ReturnType<typeof useMarketRegime>["snapshot"];
+  scoring: ReturnType<typeof useStrategyScoring>;
+  research: ReturnType<typeof useMockResearchRunner>;
+  healthRows: StrategyHealthRow[];
+  walkForwardRows: MockWalkForwardRow[];
+  allocation: PortfolioAllocationResult;
+}) {
+  return (
+    <>
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="BTC Research Lab"
+          subtitle="Research/Profit/Regime modes remain fully mock-only. Profit and Regime modes only allow ranked research-backed strategy IDs."
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="desk-label-md">Selection mode</span>
+            <select
+              value={research.config.selectionMode}
+              onChange={(event) =>
+                research.setConfig({
+                  ...research.config,
+                  selectionMode: event.target.value as typeof research.config.selectionMode,
+                })
+              }
+              style={{
+                padding: "6px 10px",
+                borderRadius: 6,
+                border: "1px solid var(--desk-outline)",
+                background: "var(--desk-surface)",
+                color: "var(--desk-on-surface)",
+                fontSize: "0.875rem",
+              }}
+            >
+              <option value="RESEARCH_MODE">Research Mode — collect all valid signals</option>
+              <option value="PROFIT_MODE">Profit Mode — ranked BTC research strategies only</option>
+              <option value="REGIME_MODE">Regime Mode — ranked BTC research strategies only</option>
+            </select>
+          </label>
+          <ConfigNumber
+            label="Top ranked strategies"
+            value={research.config.topN}
+            step={1}
+            onChange={(value) =>
+              research.setConfig({
+                ...research.config,
+                topN: Math.max(1, Math.min(50, Math.floor(value))),
+              })
+            }
+          />
+          <DeskMetricTile label="Ranked strategies" value={scoring.scores.length} compact />
+          <DeskMetricTile
+            label="Approved IDs"
+            value={
+              research.config.selectionMode === "REGIME_MODE"
+                ? scoring.approvedRegimeIds.size
+                : scoring.approvedProfitIds.size
+            }
+            compact
+          />
+          <DeskMetricTile
+            label="Last scored"
+            value={scoring.lastScoredAt == null ? "waiting" : new Date(scoring.lastScoredAt).toLocaleTimeString()}
+            compact
+          />
+        </div>
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader title="Current market regime" subtitle="Classified from closed BTC OHLCV candles using ADX, ATR%, Bollinger width, realized volatility, and EMA slope." />
+        {snapshot == null ? (
+          <DeskEmptyState title="Waiting for candle history" subtitle="Regime classification starts after enough closed 1-minute candles are available." />
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <DeskChip tone={regimeTone(snapshot.regime)}>{snapshot.regime}</DeskChip>
+              <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--desk-surface-variant)", overflow: "hidden" }}>
+                <div
+                  style={{
+                    width: `${Math.max(0, Math.min(100, snapshot.confidence))}%`,
+                    height: "100%",
+                    background: "var(--desk-primary)",
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: 12, color: "var(--desk-on-surface-variant)" }}>
+                {snapshot.confidence.toFixed(0)}% confidence
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+              <DeskMetricTile label="ADX" value={snapshot.adx.toFixed(1)} compact />
+              <DeskMetricTile label="ATR %" value={`${snapshot.atrPct.toFixed(3)}%`} compact />
+              <DeskMetricTile label="BB width %" value={`${snapshot.bbWidthPct.toFixed(3)}%`} compact />
+              <DeskMetricTile label="BB percentile" value={`${(snapshot.bbWidthPercentile * 100).toFixed(0)}%`} compact />
+              <DeskMetricTile label="EMA slope" value={`${(snapshot.emaSlope * 100).toFixed(3)}%`} compact />
+              <DeskMetricTile label="Realized vol" value={`${snapshot.realizedVol.toFixed(1)}%`} compact />
+            </div>
+          </>
+        )}
+      </DeskCard>
+
+      <BestWorstResearchPanel scores={scoring.scores} />
+      <StrategyScoringCard scores={scoring.scores} healthRows={healthRows} />
+      <StrategyHealthCard rows={healthRows} />
+      <WalkForwardValidationCard rows={walkForwardRows} />
+      <PortfolioAllocationCard allocation={allocation} />
+    </>
+  );
+}
+
+function BestWorstResearchPanel({ scores }: { scores: StrategyScore[] }) {
+  const best = scores.slice(0, 5);
+  const worst = [...scores]
+    .filter((score) => score.metrics.sampleSizeConfidence >= 40)
+    .sort((a, b) => a.overallScore - b.overallScore)
+    .slice(0, 5);
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+      <DeskCard padding="md">
+        <DeskSectionHeader title="Best ranked strategies" subtitle="Weighted score: PnL, profit factor, win rate, drawdown quality, Sharpe, recency, and sample size." />
+        {best.length === 0 ? (
+          <DeskEmptyState title="No ranked strategies yet" subtitle="Scores populate after mock research trades are created and evaluated." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "rank", header: "Rank", align: "right", cell: (score) => score.rank },
+              { id: "name", header: "Strategy", cell: (score) => `#${score.strategyId} ${score.strategyName}` },
+              { id: "score", header: "Score", align: "right", cell: (score) => score.overallScore.toFixed(1) },
+              { id: "pnl", header: "PnL", align: "right", cell: (score) => <span className={pnlClass(score.metrics.netPnl)}>{fmtUsd(score.metrics.netPnl)}</span> },
+            ]}
+            rows={best}
+            getRowKey={(score) => String(score.strategyId)}
+            minWidth={520}
+          />
+        )}
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader title="Worst ranked strategies" subtitle="Requires a minimum sample size before a strategy is shown as underperforming." />
+        {worst.length === 0 ? (
+          <DeskEmptyState title="No underperformers yet" subtitle="Worst-strategy ranking appears after enough closed trades exist." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "rank", header: "Rank", align: "right", cell: (score) => score.rank },
+              { id: "name", header: "Strategy", cell: (score) => `#${score.strategyId} ${score.strategyName}` },
+              { id: "score", header: "Score", align: "right", cell: (score) => score.overallScore.toFixed(1) },
+              { id: "pnl", header: "PnL", align: "right", cell: (score) => <span className={pnlClass(score.metrics.netPnl)}>{fmtUsd(score.metrics.netPnl)}</span> },
+            ]}
+            rows={worst}
+            getRowKey={(score) => String(score.strategyId)}
+            minWidth={520}
+          />
+        )}
+      </DeskCard>
+    </div>
+  );
+}
+
+function StrategyScoringCard({
+  scores,
+  healthRows,
+}: {
+  scores: StrategyScore[];
+  healthRows: StrategyHealthRow[];
+}) {
+  const healthById = new Map(healthRows.map((row) => [row.strategyId, row]));
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Strategy scoring table"
+        subtitle="Objective ranking of strategies after realistic mock costs. Default sorting is most profitable/highest scoring first."
+      />
+      {scores.length === 0 ? (
+        <DeskEmptyState title="No strategy scores yet" subtitle="The scoring engine updates from closed and open mock trade history." />
+      ) : (
+        <DeskDataTable
+          columns={[
+            { id: "rank", header: "Rank", align: "right", cell: (score) => score.rank },
+            { id: "strategy", header: "Strategy", cell: (score) => `#${score.strategyId} ${score.strategyName}` },
+            {
+              id: "health",
+              header: "Health",
+              cell: (score) => {
+                const health = healthById.get(score.strategyId);
+                const tone =
+                  health?.state === "ACTIVE"
+                    ? "success"
+                    : health?.state === "DISABLED"
+                      ? "error"
+                      : "warning";
+                return <DeskChip tone={tone}>{health?.state ?? "WATCHLIST"}</DeskChip>;
+              },
+            },
+            { id: "overall", header: "Overall", align: "right", cell: (score) => score.overallScore.toFixed(1) },
+            { id: "regime", header: "Regime", align: "right", cell: (score) => score.currentRegimeScore.toFixed(1) },
+            { id: "pnl", header: "Net PnL", align: "right", cell: (score) => <span className={pnlClass(score.metrics.netPnl)}>{fmtUsd(score.metrics.netPnl)}</span> },
+            { id: "win", header: "Win %", align: "right", cell: (score) => fmtPct(score.metrics.winRate, 1) },
+            { id: "pf", header: "PF", align: "right", cell: (score) => score.metrics.profitFactor.toFixed(2) },
+            { id: "sharpe", header: "Sharpe", align: "right", cell: (score) => score.metrics.sharpeRatio.toFixed(2) },
+            { id: "dd", header: "Max DD", align: "right", cell: (score) => fmtUsd(score.metrics.maxDrawdown) },
+            { id: "conf", header: "Confidence", cell: (score) => <DeskChip tone={score.confidenceRating === "HIGH" ? "success" : score.confidenceRating === "MEDIUM" ? "primary" : "warning"}>{score.confidenceRating}</DeskChip> },
+            { id: "trades", header: "Trades", align: "right", cell: (score) => score.metrics.closedTrades },
+          ]}
+          rows={scores.slice(0, 100)}
+          getRowKey={(score) => String(score.strategyId)}
+          minWidth={1120}
+        />
+      )}
+    </DeskCard>
+  );
+}
+
+function StrategyHealthCard({ rows }: { rows: StrategyHealthRow[] }) {
+  const active = rows.filter((row) => row.state === "ACTIVE").length;
+  const watchlist = rows.filter((row) => row.state === "WATCHLIST").length;
+  const disabled = rows.filter((row) => row.state === "DISABLED").length;
+
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Strategy health engine"
+        subtitle="Auto-classifies strategies from sample size, expectancy, profit factor, drawdown, and persistent losing streaks."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 12 }}>
+        <DeskMetricTile label="Active" value={active} compact />
+        <DeskMetricTile label="Watchlist" value={watchlist} compact />
+        <DeskMetricTile label="Disabled" value={disabled} compact />
+      </div>
+      {rows.length === 0 ? (
+        <DeskEmptyState title="No health data yet" subtitle="Health states populate after strategy scores are available." />
+      ) : (
+        <DeskDataTable
+          columns={[
+            { id: "strategy", header: "Strategy", cell: (row) => `#${row.strategyId} ${row.strategyName}` },
+            {
+              id: "state",
+              header: "State",
+              cell: (row) => (
+                <DeskChip tone={row.state === "ACTIVE" ? "success" : row.state === "DISABLED" ? "error" : "warning"}>
+                  {row.state}
+                </DeskChip>
+              ),
+            },
+            { id: "trust", header: "Trust", align: "right", cell: (row) => `${row.trustScore.toFixed(0)}%` },
+            { id: "trades", header: "Closed", align: "right", cell: (row) => row.closedTrades },
+            { id: "expectancy", header: "Expectancy", align: "right", cell: (row) => <span className={pnlClass(row.expectancy)}>{fmtUsd(row.expectancy)}</span> },
+            { id: "pf", header: "PF", align: "right", cell: (row) => row.profitFactor.toFixed(2) },
+            { id: "losses", header: "Loss streak", align: "right", cell: (row) => row.consecutiveLosses },
+            { id: "reason", header: "Reason", cell: (row) => row.reasons.join("; ") },
+          ]}
+          rows={rows.slice(0, 60)}
+          getRowKey={(row) => String(row.strategyId)}
+          minWidth={980}
+        />
+      )}
+    </DeskCard>
+  );
+}
+
+function WalkForwardValidationCard({ rows }: { rows: MockWalkForwardRow[] }) {
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Walk-forward validation"
+        subtitle="Rolling in-sample training and out-of-sample validation windows. Strategies need OOS replication, not just in-sample profit."
+      />
+      {rows.length === 0 ? (
+        <DeskEmptyState title="Collecting walk-forward data" subtitle="Requires enough closed trade history across training and validation windows." />
+      ) : (
+        <DeskDataTable
+          columns={[
+            { id: "strategy", header: "Strategy", cell: (row) => `#${row.strategyId} ${row.strategyName}` },
+            {
+              id: "status",
+              header: "Status",
+              cell: (row) => (
+                <DeskChip tone={row.status === "PASS" ? "success" : row.status === "FAIL" ? "error" : "warning"}>
+                  {row.status}
+                </DeskChip>
+              ),
+            },
+            { id: "windows", header: "Windows", align: "right", cell: (row) => row.windows },
+            { id: "train", header: "Train exp", align: "right", cell: (row) => <span className={pnlClass(row.inSampleExpectancy)}>{fmtUsd(row.inSampleExpectancy)}</span> },
+            { id: "oos", header: "OOS exp", align: "right", cell: (row) => <span className={pnlClass(row.outOfSampleExpectancy)}>{fmtUsd(row.outOfSampleExpectancy)}</span> },
+            { id: "oosPnl", header: "OOS PnL", align: "right", cell: (row) => <span className={pnlClass(row.outOfSampleNetPnl)}>{fmtUsd(row.outOfSampleNetPnl)}</span> },
+            { id: "score", header: "WF score", align: "right", cell: (row) => `${row.walkForwardScore.toFixed(0)}%` },
+          ]}
+          rows={rows.slice(0, 40)}
+          getRowKey={(row) => String(row.strategyId)}
+          minWidth={920}
+        />
+      )}
+    </DeskCard>
+  );
+}
+
+function PortfolioAllocationCard({ allocation }: { allocation: PortfolioAllocationResult }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 12 }}>
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Strategy allocation weights"
+          subtitle="Score-weighted capital allocation for ACTIVE strategies only. Disabled/watchlist strategies receive no allocation."
+        />
+        {allocation.strategyRows.length === 0 ? (
+          <DeskEmptyState title="No active allocation yet" subtitle="Allocations appear after strategies have enough healthy scored history." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "strategy", header: "Strategy", cell: (row) => `#${row.strategyId} ${row.strategyName}` },
+              { id: "weight", header: "Weight", align: "right", cell: (row) => fmtPct(row.allocationPct, 1) },
+              { id: "capital", header: "Capital", align: "right", cell: (row) => fmtUsd(row.capitalUsd) },
+              { id: "trust", header: "Trust", align: "right", cell: (row) => `${row.trustScore.toFixed(0)}%` },
+            ]}
+            rows={allocation.strategyRows.slice(0, 30)}
+            getRowKey={(row) => String(row.strategyId)}
+            minWidth={760}
+          />
+        )}
+      </DeskCard>
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Family allocation weights"
+          subtitle={`Unallocated capital: ${fmtPct(allocation.unallocatedPct, 1)}. Family weights roll up active strategy allocations.`}
+        />
+        {allocation.familyRows.length === 0 ? (
+          <DeskEmptyState title="No family allocation yet" subtitle="Family allocation appears when active strategy weights exist." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "family", header: "Family", cell: (row) => row.family },
+              { id: "strategies", header: "Strategies", align: "right", cell: (row) => row.strategyCount },
+              { id: "weight", header: "Weight", align: "right", cell: (row) => fmtPct(row.allocationPct, 1) },
+              { id: "capital", header: "Capital", align: "right", cell: (row) => fmtUsd(row.capitalUsd) },
+            ]}
+            rows={allocation.familyRows}
+            getRowKey={(row) => row.family}
+            minWidth={620}
+          />
+        )}
+      </DeskCard>
+    </div>
+  );
+}
+
+function AdvancedResearchAnalyticsPanel({
+  analytics,
+  scores,
+}: {
+  analytics: AdvancedResearchAnalytics;
+  scores: StrategyScore[];
+}) {
+  const confidenceRows = scores.slice(0, 20);
+
+  return (
+    <>
+      {analytics.warnings.length > 0 && (
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Risk and quality warnings"
+            subtitle="Warnings highlight sample-size, drawdown, exposure, and correlation risks in the mock research lab."
+          />
+          <div style={{ display: "grid", gap: 8 }}>
+            {analytics.warnings.map((warning) => (
+              <DeskBanner
+                key={warning.code}
+                variant={warning.severity === "CRITICAL" ? "error" : warning.severity === "WARNING" ? "warning" : "info"}
+                title={warning.code}
+              >
+                {warning.message}
+              </DeskBanner>
+            ))}
+          </div>
+        </DeskCard>
+      )}
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Exposure and side bias"
+          subtitle="Open exposure, family concentration, and long/short realized bias for mock-only positions."
+        />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+          <DeskMetricTile label="Open exposure" value={fmtUsdK(analytics.exposure.totalExposure)} compact />
+          <DeskMetricTile label="Long exposure" value={fmtUsdK(analytics.exposure.longExposure)} compact />
+          <DeskMetricTile label="Short exposure" value={fmtUsdK(analytics.exposure.shortExposure)} compact />
+          <DeskMetricTile label="Long concentration" value={fmtPct(analytics.exposure.longConcentrationPct, 1)} compact />
+          <DeskMetricTile label="Short concentration" value={fmtPct(analytics.exposure.shortConcentrationPct, 1)} compact />
+          <DeskMetricTile label="Open trades" value={analytics.exposure.openTrades} compact />
+          <DeskMetricTile label="Long win rate" value={fmtPct(analytics.bias.longWinRate, 1)} compact />
+          <DeskMetricTile label="Short win rate" value={fmtPct(analytics.bias.shortWinRate, 1)} compact />
+          <DeskMetricTile label="Long PnL" value={fmtUsd(analytics.bias.longPnl)} valueClassName={pnlClass(analytics.bias.longPnl)} compact />
+          <DeskMetricTile label="Short PnL" value={fmtUsd(analytics.bias.shortPnl)} valueClassName={pnlClass(analytics.bias.shortPnl)} compact />
+        </div>
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="PnL by strategy family"
+          subtitle="Family profitability, regime fit, profit factor, exposure, and long/short mix."
+        />
+        {analytics.familyRows.length === 0 ? (
+          <DeskEmptyState title="No family analytics yet" subtitle="Family analytics populate as mock strategy trades are generated." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "family", header: "Family", cell: (row) => row.family },
+              { id: "trades", header: "Trades", align: "right", cell: (row) => row.trades },
+              { id: "win", header: "Win %", align: "right", cell: (row) => fmtPct(row.winRate, 1) },
+              { id: "pf", header: "PF", align: "right", cell: (row) => row.profitFactor.toFixed(2) },
+              { id: "pnl", header: "Net PnL", align: "right", cell: (row) => <span className={pnlClass(row.netPnl)}>{fmtUsd(row.netPnl)}</span> },
+              { id: "exp", header: "Exposure", align: "right", cell: (row) => fmtUsdK(row.exposure) },
+              { id: "bias", header: "L/S", align: "right", cell: (row) => `${row.longTrades}/${row.shortTrades}` },
+              { id: "best", header: "Best regime", cell: (row) => row.bestRegime },
+              { id: "worst", header: "Worst regime", cell: (row) => row.worstRegime },
+            ]}
+            rows={analytics.familyRows.slice(0, 40)}
+            getRowKey={(row) => row.family}
+            minWidth={980}
+          />
+        )}
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Strategy correlation matrix"
+          subtitle="Pearson correlation of top strategy cumulative PnL curves. High positive values can indicate stacking risk."
+        />
+        {analytics.correlationRows.length < 2 ? (
+          <DeskEmptyState title="No correlation matrix yet" subtitle="At least two strategies with closed trades are required." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "strategy", header: "Strategy", cell: (row) => `#${row.strategyId}` },
+              ...analytics.correlationRows.map((col) => ({
+                id: String(col.strategyId),
+                header: `#${col.strategyId}`,
+                align: "right" as const,
+                cell: (row: (typeof analytics.correlationRows)[number]) => {
+                  const value = row.correlations[col.strategyId] ?? 0;
+                  const color =
+                    value > 0.8
+                      ? "var(--desk-warning)"
+                      : value < -0.5
+                        ? "var(--desk-error)"
+                        : "var(--desk-on-surface)";
+                  return <span style={{ color }}>{value.toFixed(2)}</span>;
+                },
+              })),
+            ]}
+            rows={analytics.correlationRows}
+            getRowKey={(row) => String(row.strategyId)}
+            minWidth={760}
+          />
+        )}
+      </DeskCard>
+
+      <DeskCard padding="md">
+        <DeskSectionHeader
+          title="Strategy confidence dashboard"
+          subtitle="Trust score comes from sample-size confidence and ranking confidence, not from any claim of future profits."
+        />
+        {confidenceRows.length === 0 ? (
+          <DeskEmptyState title="No confidence data yet" subtitle="Strategy confidence appears once scores are computed." />
+        ) : (
+          <DeskDataTable
+            columns={[
+              { id: "strategy", header: "Strategy", cell: (score) => `#${score.strategyId} ${score.strategyName}` },
+              { id: "rating", header: "Rating", cell: (score) => <DeskChip tone={score.confidenceRating === "HIGH" ? "success" : score.confidenceRating === "MEDIUM" ? "primary" : "warning"}>{score.confidenceRating}</DeskChip> },
+              { id: "sample", header: "Sample trust", align: "right", cell: (score) => `${score.metrics.sampleSizeConfidence.toFixed(0)}%` },
+              { id: "trades", header: "Closed trades", align: "right", cell: (score) => score.metrics.closedTrades },
+              { id: "overall", header: "Overall score", align: "right", cell: (score) => score.overallScore.toFixed(1) },
+              { id: "regime", header: "Regime score", align: "right", cell: (score) => score.currentRegimeScore.toFixed(1) },
+            ]}
+            rows={confidenceRows}
+            getRowKey={(score) => String(score.strategyId)}
+            minWidth={860}
+          />
+        )}
+      </DeskCard>
+    </>
   );
 }
 

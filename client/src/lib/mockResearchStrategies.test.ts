@@ -16,6 +16,7 @@ import {
   buildMockTradeFromResearchSignal,
   DEFAULT_MOCK_TRADING_CONFIG,
 } from "@/lib/mockTradingEngine";
+import { BTC_RESEARCH_STRATEGIES, type BtcResearchFamily } from "@/lib/btcResearchStrategyRegistry";
 
 const T0 = 1_700_000_000_000;
 
@@ -38,10 +39,34 @@ function downtrendCandles(count = 150): OHLCVCandle[] {
   return candles;
 }
 
+function sweepCandles(): OHLCVCandle[] {
+  const candles: OHLCVCandle[] = [];
+  for (let i = 0; i < 30; i++) {
+    candles.push({
+      time: T0 + i * 60_000,
+      open: 60_000,
+      high: 60_050,
+      low: 59_950,
+      close: 60_000,
+      volume: 1_000,
+    });
+  }
+  candles.push({
+    time: T0 + 31 * 60_000,
+    open: 60_000,
+    high: 60_020,
+    low: 59_800,
+    close: 59_980,
+    volume: 1_500,
+  });
+  return candles;
+}
+
 function runnerConfig(families: ResearchFamily[], overrides: Partial<ResearchRunnerConfig> = {}): ResearchRunnerConfig {
   return {
     ...DEFAULT_RESEARCH_RUNNER_CONFIG,
     enabledFamilies: new Set(families),
+    enabledBtcFamilies: new Set() as ResearchRunnerConfig["enabledBtcFamilies"],
     maxSignalsPerMinute: 500,
     minConfidence: 0,
     ...overrides,
@@ -112,6 +137,51 @@ describe("evaluateMockResearchStrategies", () => {
 
     expect(result.signals.length).toBeLessThanOrEqual(2);
     expect(result.signals[0]?.confidence ?? 0).toBeGreaterThanOrEqual(result.signals[1]?.confidence ?? 0);
+  });
+
+  it("profit mode only emits approved top-ranked BTC research strategies", () => {
+    const stopHuntLong = BTC_RESEARCH_STRATEGIES.find(
+      (strategy) => strategy.family === "StopHuntSfp" && strategy.side === "LONG",
+    );
+    expect(stopHuntLong).toBeDefined();
+
+    const baseConfig = runnerConfig([], {
+      enabledBtcFamilies: new Set<BtcResearchFamily>(["StopHuntSfp"]),
+      selectionMode: "PROFIT_MODE",
+      minConfidence: 0,
+    });
+
+    const blocked = evaluateMockResearchStrategies(sweepCandles(), {
+      ...baseConfig,
+      approvedStrategyIds: new Set<number>(),
+    }, T0);
+    expect(blocked.signals).toHaveLength(0);
+
+    const approved = evaluateMockResearchStrategies(sweepCandles(), {
+      ...baseConfig,
+      approvedStrategyIds: new Set<number>([stopHuntLong!.id]),
+    }, T0);
+    expect(approved.signals.every((signal) => signal.strategyId === stopHuntLong!.id)).toBe(true);
+    expect(approved.signals.length).toBeGreaterThan(0);
+  });
+
+  it("regime mode requires an approved historically successful regime strategy", () => {
+    const stopHuntLong = BTC_RESEARCH_STRATEGIES.find(
+      (strategy) => strategy.family === "StopHuntSfp" && strategy.side === "LONG",
+    );
+    expect(stopHuntLong).toBeDefined();
+
+    const config = runnerConfig([], {
+      enabledBtcFamilies: new Set<BtcResearchFamily>(["StopHuntSfp"]),
+      selectionMode: "REGIME_MODE",
+      minConfidence: 0,
+      approvedStrategyIds: new Set<number>([stopHuntLong!.id]),
+    });
+
+    const result = evaluateMockResearchStrategies(sweepCandles(), config, "RANGING", T0);
+    expect(result.signals.length).toBeGreaterThan(0);
+    expect(result.signals.every((signal) => signal.regimeAtEntry === "RANGING")).toBe(true);
+    expect(result.signals.every((signal) => signal.strategyId === stopHuntLong!.id)).toBe(true);
   });
 });
 

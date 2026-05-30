@@ -499,6 +499,16 @@ export function useMockTradingEngine(
       for (const signal of signals) {
         const dedupeKey = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
         if (seenTraceIdsRef.current.has(dedupeKey)) continue;
+        const duplicateOpen = [...tradesRef.current, ...newTrades].some(
+          (trade) =>
+            trade.status === "OPEN" &&
+            trade.strategyId === signal.strategyId &&
+            trade.side === signal.side,
+        );
+        if (duplicateOpen) {
+          seenTraceIdsRef.current.add(dedupeKey);
+          continue;
+        }
         if (currentOpenCount + newTrades.length >= limit) {
           seenTraceIdsRef.current.add(dedupeKey);
           limitRejected++;

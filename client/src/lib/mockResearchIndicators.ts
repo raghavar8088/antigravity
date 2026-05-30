@@ -321,6 +321,38 @@ export function isEveningStar(candles: OHLCVCandle[]): boolean {
   );
 }
 
+// ── Keltner Channels ──────────────────────────────────────────────────────────
+export function calcKeltner(
+  candles: OHLCVCandle[],
+  emaPeriod = 20,
+  atrMultiplier = 2,
+): { upper: number; middle: number; lower: number } {
+  const closes = candles.map((c) => c.close);
+  const middle = calcEma(closes, emaPeriod);
+  const atr = calcAtr(candles, emaPeriod);
+  return { upper: middle + atrMultiplier * atr, middle, lower: middle - atrMultiplier * atr };
+}
+
+// ── Z-Score ───────────────────────────────────────────────────────────────────
+export function calcZScore(values: number[], period = 20): number {
+  if (values.length < period) return 0;
+  const slice = values.slice(-period);
+  const mean = slice.reduce((s, v) => s + v, 0) / period;
+  const variance = slice.reduce((s, v) => s + (v - mean) ** 2, 0) / period;
+  const std = Math.sqrt(variance);
+  if (std === 0) return 0;
+  return (values[values.length - 1] - mean) / std;
+}
+
+// ── EMA Slope ─────────────────────────────────────────────────────────────────
+export function calcEmaSlope(values: number[], emaPeriod = 50, slopeBars = 10): number {
+  if (values.length < emaPeriod + slopeBars) return 0;
+  const emaNow = calcEma(values, emaPeriod);
+  const emaPrev = calcEma(values.slice(0, -slopeBars), emaPeriod);
+  if (emaPrev === 0) return 0;
+  return (emaNow - emaPrev) / emaPrev;
+}
+
 // ── Confidence helper ─────────────────────────────────────────────────────────
 /** Clamp a raw score to a confidence in [minConf, 100]. */
 export function clampConf(raw: number, minConf = 40): number {
