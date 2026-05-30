@@ -6,7 +6,7 @@
  * real Delta API calls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { PaperDeskWorkerContext } from "./runPaperDeskPollTick";
+import type { PaperDeskWorkerContext, WorkerPosition } from "./runPaperDeskPollTick";
 
 // ── Mock fetch (Delta Exchange calls) ─────────────────────────────────────────
 
@@ -64,11 +64,36 @@ function makeCtx(overrides: Partial<PaperDeskWorkerContext> = {}): PaperDeskWork
   };
 }
 
+function makePosition(overrides: Partial<WorkerPosition> = {}): WorkerPosition {
+  return {
+    id: "test-pos",
+    symbol: "BTCUSD",
+    strategyId: 91,
+    strategyName: "test-strat",
+    templateFamily: "test",
+    side: "LONG",
+    entryPrice: 60000,
+    contracts: 5,
+    notional: 300,
+    marginUsed: 12,
+    slPrice: 59000,
+    tpPrice: 61000,
+    holdDeadlineMs: Date.now() + 99999,
+    openedAt: new Date().toISOString(),
+    liquidationPrice: 57600,
+    fundingCosts: 0,
+    lastFundingAppliedAt: Date.now(),
+    ...overrides,
+  };
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("runPaperDeskPollTick — OMS order generation", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.stubEnv("NEXT_PUBLIC_BTC_FT_PAPER_MIN_OPENS_PER_10M", "0");
   });
 
   it("returns empty omsOrders when no strategies pass signal threshold", async () => {
@@ -102,26 +127,11 @@ describe("runPaperDeskPollTick — OMS order generation", () => {
 
     // Simulate a position that is already beyond TP price → will close this tick
     const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
-    const closingPos = {
+    const closingPos = makePosition({
       id: "pos-to-close",
-      symbol: "BTCUSD",
-      strategyId: 91,
-      strategyName: "test-strat",
-      templateFamily: "test",
-      side: "LONG" as const,
-      entryPrice: 60000,
-      contracts: 5,
-      notional: 300,
-      marginUsed: 12,
-      slPrice: 59000,
       tpPrice: 61000, // mark price is 65000 → above TP → closes
-      holdDeadlineMs: Date.now() + 99999,
-      openedAt: new Date().toISOString(),
-      liquidationPrice: 57600,
-      fundingCosts: 0,
-      lastFundingAppliedAt: Date.now(),
       omsOrderId: "oms-order-abc", // linked OMS order
-    };
+    });
 
     const result = await runPaperDeskPollTick(
       makeCtx({ positions: [closingPos], signalThreshold: 999 }),
@@ -137,26 +147,11 @@ describe("runPaperDeskPollTick — OMS order generation", () => {
     mockSuccessfulFetch({ fundingRate: 0 });
 
     const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
-    const legacyPos = {
+    const legacyPos = makePosition({
       id: "legacy-pos",
-      symbol: "BTCUSD",
-      strategyId: 91,
-      strategyName: "test-strat",
-      templateFamily: "test",
-      side: "LONG" as const,
-      entryPrice: 60000,
-      contracts: 5,
-      notional: 300,
-      marginUsed: 12,
-      slPrice: 59000,
       tpPrice: 61000, // closes at 65000 mark
-      holdDeadlineMs: Date.now() + 99999,
-      openedAt: new Date().toISOString(),
-      liquidationPrice: 57600,
-      fundingCosts: 0,
-      lastFundingAppliedAt: Date.now(),
       // No omsOrderId — legacy position
-    };
+    });
 
     const result = await runPaperDeskPollTick(
       makeCtx({ positions: [legacyPos], signalThreshold: 999 }),
@@ -165,6 +160,88 @@ describe("runPaperDeskPollTick — OMS order generation", () => {
     // Position closes but no OMS close event
     expect(result.closedTrades).toHaveLength(1);
     expect(result.omsPositionsClosed).toHaveLength(0);
+  });
+
+  it("releases reserved margin when a worker position closes", async () => {
+    mockSuccessfulFetch({ fundingRate: 0 });
+
+    const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
+    const closingPos = makePosition({
+      id: "margin-release-pos",
+      tpPrice: 61000,
+    });
+
+    const result = await runPaperDeskPollTick(
+      makeCtx({ balance: 9988, positions: [closingPos], signalThreshold: 999 }),
+    );
+
+    const closed = result.closedTrades[0];
+    expect(closed).toBeDefined();
+    expect(result.balance).toBeCloseTo(9988 + closingPos.marginUsed + closed.netPnl, 9);
+  });
+
+  it("credits positive funding to shorts instead of charging both sides", async () => {
+    mockSuccessfulFetch({ fundingRate: 0.0001 });
+
+    const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
+    const openShort = makePosition({
+      id: "short-funding-pos",
+      side: "SHORT",
+      slPrice: 70000,
+      tpPrice: 50000,
+      liquidationPrice: 80000,
+      lastFundingAppliedAt: Date.now() - 8 * 60 * 60 * 1000,
+    });
+
+    const result = await runPaperDeskPollTick(
+      makeCtx({ positions: [openShort], signalThreshold: 999 }),
+    );
+
+    expect(result.closedTrades).toHaveLength(0);
+    expect(result.positions[0].fundingCosts).toBeLessThan(0);
+    expect(result.positions[0].fundingCosts).toBeCloseTo(-openShort.notional * 0.0001, 6);
+  });
+
+  it("uses liquidation before SL for worker hard exits", async () => {
+    mockSuccessfulFetch({ fundingRate: 0 });
+
+    const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
+    const shortAtLiquidation = makePosition({
+      id: "short-liq-pos",
+      side: "SHORT",
+      slPrice: 61000,
+      tpPrice: 50000,
+      liquidationPrice: 64000,
+    });
+
+    const result = await runPaperDeskPollTick(
+      makeCtx({ positions: [shortAtLiquidation], signalThreshold: 999 }),
+    );
+
+    expect(result.closedTrades).toHaveLength(1);
+    expect(result.closedTrades[0].exitReason).toBe("LIQUIDATION_RISK");
+    expect(result.closedTrades[0].exitPrice).toBe(shortAtLiquidation.liquidationPrice);
+  });
+
+  it("does not create new TIME exits after hold deadline", async () => {
+    mockSuccessfulFetch({ fundingRate: 0 });
+
+    const { runPaperDeskPollTick } = await import("./runPaperDeskPollTick");
+    const expiredButSafe = makePosition({
+      id: "expired-safe-pos",
+      slPrice: 50000,
+      tpPrice: 80000,
+      liquidationPrice: 45000,
+      holdDeadlineMs: Date.now() - 60_000,
+    });
+
+    const result = await runPaperDeskPollTick(
+      makeCtx({ positions: [expiredButSafe], signalThreshold: 999 }),
+    );
+
+    expect(result.closedTrades).toHaveLength(0);
+    expect(result.positions).toHaveLength(1);
+    expect(result.positions[0].id).toBe(expiredButSafe.id);
   });
 });
 

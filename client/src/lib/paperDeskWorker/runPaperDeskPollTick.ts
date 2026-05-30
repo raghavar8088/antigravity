@@ -62,6 +62,10 @@ import {
   markPositionOpened,
   type PaperOmsOrder,
 } from "@/lib/paperOms";
+import {
+  applyFundingAccrual,
+  paperResolveHardExit,
+} from "@/lib/futuresPaperMath";
 
 // ── Delta Exchange fetch ───────────────────────────────────────────────────
 
@@ -533,23 +537,38 @@ export async function runPaperDeskPollTick(
     if (pos.symbol !== symbol) { remainingPositions.push(pos); continue; }
 
     const msSince = now - pos.lastFundingAppliedAt;
-    const fundingCharge = pos.notional * Math.abs(fundingRate) * (msSince / DELTA_FUNDING_INTERVAL_MS);
+    const fundingCharge = applyFundingAccrual({
+      side: pos.side,
+      notional: pos.notional,
+      fundingRate,
+      elapsedMs: msSince,
+      fundingIntervalMs: DELTA_FUNDING_INTERVAL_MS,
+    });
     const updatedPos: WorkerPosition = { ...pos, fundingCosts: pos.fundingCosts + fundingCharge, lastFundingAppliedAt: now };
 
-    let exitReason: BTCFuturesTrade["exitReason"] | null = null;
-    let exitPrice = markPrice;
+    const openedAtMs = new Date(pos.openedAt).getTime();
+    const holdMinutes =
+      Number.isFinite(openedAtMs) && Number.isFinite(pos.holdDeadlineMs)
+        ? Math.max(0, (pos.holdDeadlineMs - openedAtMs) / 60_000)
+        : 0;
+    const hardExit = paperResolveHardExit({
+      side: pos.side,
+      markPrice,
+      liquidationPrice: pos.liquidationPrice,
+      adaptiveSl: pos.slPrice,
+      tpPrice: pos.tpPrice,
+      entryPrice: pos.entryPrice,
+      openedAtMs,
+      nowMs: now,
+      holdMinutes,
+      mtfHoldBonus: 1,
+      holdTimeMul: 1,
+    });
 
-    if (pos.side === "LONG") {
-      if (markPrice <= pos.slPrice) { exitReason = "SL"; exitPrice = pos.slPrice; }
-      else if (markPrice >= pos.tpPrice) { exitReason = "TP"; exitPrice = pos.tpPrice; }
-      else if (now >= pos.holdDeadlineMs) { exitReason = "TIME"; }
-    } else {
-      if (markPrice >= pos.slPrice) { exitReason = "SL"; exitPrice = pos.slPrice; }
-      else if (markPrice <= pos.tpPrice) { exitReason = "TP"; exitPrice = pos.tpPrice; }
-      else if (now >= pos.holdDeadlineMs) { exitReason = "TIME"; }
-    }
+    if (!hardExit.shouldClose) { remainingPositions.push(updatedPos); continue; }
 
-    if (!exitReason) { remainingPositions.push(updatedPos); continue; }
+    const exitReason = hardExit.reason as BTCFuturesTrade["exitReason"];
+    const exitPrice = hardExit.exitPrice;
 
     // Record OMS close event for positions linked to an OMS order.
     if (pos.omsOrderId) {
@@ -568,7 +587,7 @@ export async function runPaperDeskPollTick(
         ? ((exitPrice - pos.entryPrice) / pos.entryPrice) * 100
         : ((pos.entryPrice - exitPrice) / pos.entryPrice) * 100;
 
-    balance += netPnl;
+    balance += pos.marginUsed + netPnl;
 
     closedTrades.push({
       clientTradeId: pos.id,

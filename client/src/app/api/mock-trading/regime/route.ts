@@ -21,6 +21,8 @@ const snapshotSchema = z.object({
   bbWidthPercentile: z.number().min(0).max(1),
   emaSlope: z.number(),
   realizedVol: z.number(),
+  volRatio: z.number().default(1),
+  roc5: z.number().default(0),
   timestamp: z.number().int(),
 });
 

@@ -554,8 +554,8 @@ export function BTCFuturesDeskPanels(props: BTCFuturesDeskPanelsProps) {
           />
           <DeskMetricTile
             label="Closed PnL"
-            value={formatDeskUsd(stats.netPnl, { signed: true })}
-            valueClassName={pnlToneClass(stats.netPnl)}
+            value={formatDeskUsd(stats.realizedPnl, { signed: true })}
+            valueClassName={pnlToneClass(stats.realizedPnl)}
             detail={`${stats.totalTrades} trades`}
             compact={uiCompact}
           />
