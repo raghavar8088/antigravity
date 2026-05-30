@@ -114,7 +114,7 @@ export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
   leverage: 25,
   takeProfitUsd: 10,
   stopLossUsd: 5,
-  takeProfitPct: 0.9,
+  takeProfitPct: 1.5,
   stopLossPct: 0.4,
   maxHoldMinutes: 120,
   takerFeePct: 0.0005,
