@@ -380,6 +380,10 @@ type PersistableMockLog = {
   exitPrice?: number;
   exitReason?: MockTrade["exitReason"];
   ignoredBlockers?: string[];
+  rejectionCategory?: MockTradeLog["rejectionCategory"];
+  signalScore?: number;
+  confidenceScore?: number;
+  riskRewardRatio?: number;
   pnl?: number;
   notional?: number;
   message?: string;
@@ -402,6 +406,12 @@ function mockLogToDoc(
     exit_price: log.exitPrice,
     exit_reason: log.exitReason,
     ignored_blockers: log.ignoredBlockers ?? [],
+    payload: {
+      rejection_category: log.rejectionCategory,
+      signal_score: log.signalScore,
+      confidence_score: log.confidenceScore,
+      risk_reward_ratio: log.riskRewardRatio,
+    },
     pnl: log.pnl,
     notional: log.notional,
     message: log.message,
@@ -430,6 +440,10 @@ function mockLogFromDoc(doc: MockTradeLogDoc): MockTradeLog {
     exitPrice: doc.exit_price,
     exitReason: doc.exit_reason,
     ignoredBlockers: doc.ignored_blockers,
+    rejectionCategory: typeof doc.payload?.rejection_category === "string" ? doc.payload.rejection_category as MockTradeLog["rejectionCategory"] : undefined,
+    signalScore: typeof doc.payload?.signal_score === "number" ? doc.payload.signal_score : undefined,
+    confidenceScore: typeof doc.payload?.confidence_score === "number" ? doc.payload.confidence_score : undefined,
+    riskRewardRatio: typeof doc.payload?.risk_reward_ratio === "number" ? doc.payload.risk_reward_ratio : undefined,
     pnl: doc.pnl,
     notional: doc.notional,
   };

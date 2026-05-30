@@ -10,6 +10,9 @@ import {
   computeAnalytics,
   DEFAULT_MAX_OPEN_MOCK_TRADES,
   DEFAULT_MOCK_TRADING_CONFIG,
+  emptyMockDiagnosticFunnel,
+  emptyMockRejectionCounts,
+  emptyMockTradingDiagnostics,
   evaluateMockTradeOpenRisk,
   isStrategySignalRaised,
   isValidMockTrade,
@@ -20,14 +23,21 @@ import {
   maxSignalsPerBatchFromConfig,
   MOCK_PERSIST_VERSION,
   normalizeMockTradingConfig,
+  rejectionCategoryFromRiskCode,
+  rejectionCategoryFromTraceGate,
   scoreMockResearchSignal,
   scoreMockTraceRow,
+  type MockDiagnosticFunnel,
+  type MockRejectionCategory,
+  type MockRejectionCounts,
+  type MockRejectionEvent,
   type MockAccountState,
   type MockTrade,
   type MockTradeAnalytics,
   type MockTradeLog,
   type MockTradingConfig,
   type MockResearchSignalInput,
+  type MockTradingDiagnostics,
   type StrategyExitOverride,
 } from "@/lib/mockTradingEngine";
 import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
@@ -107,6 +117,80 @@ function trimTradeCache(trades: MockTrade[], config: MockTradingConfig): MockTra
   return [...retainedClosed, ...open].sort((a, b) => a.openedAt - b.openedAt);
 }
 
+function diagnosticsDelta(): {
+  funnel: MockDiagnosticFunnel;
+  rejectionCounts: MockRejectionCounts;
+  recentRejections: MockRejectionEvent[];
+} {
+  return {
+    funnel: emptyMockDiagnosticFunnel(),
+    rejectionCounts: emptyMockRejectionCounts(),
+    recentRejections: [],
+  };
+}
+
+function addDiagnosticsRejection(
+  delta: ReturnType<typeof diagnosticsDelta>,
+  event: MockRejectionEvent,
+): void {
+  delta.rejectionCounts[event.category] += 1;
+  delta.recentRejections.unshift(event);
+}
+
+function applyDiagnosticsDelta(
+  current: MockTradingDiagnostics,
+  delta: ReturnType<typeof diagnosticsDelta>,
+  now: number,
+): MockTradingDiagnostics {
+  const next: MockTradingDiagnostics = {
+    funnel: { ...current.funnel },
+    rejectionCounts: { ...current.rejectionCounts },
+    recentRejections: [...delta.recentRejections, ...current.recentRejections].slice(0, 75),
+    lastUpdatedAt: now,
+  };
+  for (const key of Object.keys(delta.funnel) as Array<keyof MockDiagnosticFunnel>) {
+    next.funnel[key] += delta.funnel[key];
+  }
+  for (const key of Object.keys(delta.rejectionCounts) as Array<keyof MockRejectionCounts>) {
+    next.rejectionCounts[key] += delta.rejectionCounts[key];
+  }
+  return next;
+}
+
+function incrementFunnelForDecision(
+  funnel: MockDiagnosticFunnel,
+  category: MockRejectionCategory | null,
+  created: boolean,
+): void {
+  if (category !== "LOW_SIGNAL_SCORE") funnel.scorePassed++;
+  if (category !== "LOW_SIGNAL_SCORE" && category !== "RR_TOO_LOW") funnel.riskRewardPassed++;
+  if (
+    category !== "LOW_SIGNAL_SCORE" &&
+    category !== "RR_TOO_LOW" &&
+    category !== "DAILY_LOSS_LIMIT" &&
+    category !== "WEEKLY_LOSS_LIMIT" &&
+    category !== "MAX_DRAWDOWN" &&
+    category !== "MARGIN_CHECK"
+  ) {
+    funnel.riskPassed++;
+  }
+  if (category !== "COOLDOWN" && category !== "LOW_SIGNAL_SCORE" && category !== "RR_TOO_LOW") funnel.cooldownPassed++;
+  if (category !== "FAMILY_CONFLICT" && category !== "COOLDOWN" && category !== "LOW_SIGNAL_SCORE" && category !== "RR_TOO_LOW") {
+    funnel.familyConflictPassed++;
+  }
+  if (
+    category !== "EXPOSURE_LIMIT" &&
+    category !== "MARGIN_CHECK" &&
+    category !== "FAMILY_CONFLICT" &&
+    category !== "COOLDOWN" &&
+    category !== "LOW_SIGNAL_SCORE" &&
+    category !== "RR_TOO_LOW"
+  ) {
+    funnel.exposurePassed++;
+  }
+  if (created) funnel.tradesCreated++;
+}
+
 export interface UseMockTradingEngineOptions {
   /** Live BTC price (USD). 0 means not yet connected. */
   price: number;
@@ -138,6 +222,7 @@ export interface UseMockTradingEngineResult {
   error: string | null;
   traceAgeSeconds: number | null;
   mockLimitRejectedSignals: number;
+  diagnostics: MockTradingDiagnostics;
   persistence: {
     status: "hydrating" | "mongo" | "fallback" | "error";
     loading: boolean;
@@ -188,6 +273,7 @@ export function useMockTradingEngine(
     error: null as string | null,
   });
   const [mockLimitRejectedSignals, setMockLimitRejectedSignals] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<MockTradingDiagnostics>(emptyMockTradingDiagnostics);
   const [, setTickRefresh] = useState(0);
 
   const seenTraceIdsRef = useRef<Set<string>>(
@@ -404,12 +490,26 @@ export function useMockTradingEngine(
       let limitRejected = 0;
       // Equity for percent-of-equity sizing is based on current state.
       const equity = computeAccountState(tradesRef.current, configRef.current).equity;
-      const rankedRows = rows
-        .filter((row) => isStrategySignalRaised(row) && !seenTraceIdsRef.current.has(row.traceId))
-        .sort((a, b) => scoreMockTraceRow(b) - scoreMockTraceRow(a))
-        .slice(0, maxSignalsPerBatchFromConfig(configRef.current));
+      const delta = diagnosticsDelta();
+      const raisedRows = rows.filter((row) => isStrategySignalRaised(row) && !seenTraceIdsRef.current.has(row.traceId));
+      delta.funnel.signalsGenerated += raisedRows.length;
+      delta.funnel.confidencePassed += raisedRows.length;
+      const rankedRows = raisedRows
+        .sort((a, b) => scoreMockTraceRow(b) - scoreMockTraceRow(a));
+      const selectedRows = rankedRows.slice(0, maxSignalsPerBatchFromConfig(configRef.current));
+      for (const row of rankedRows.slice(selectedRows.length)) {
+        addDiagnosticsRejection(delta, {
+          ts: now,
+          category: "OTHER",
+          strategyId: row.strategyId,
+          strategyName: row.strategyName,
+          side: row.side === "SHORT" ? "SELL" : "BUY",
+          signalScore: row.signalScore,
+          message: "signal was outside maxSignalsPerBatch top-ranked selection",
+        });
+      }
 
-      for (const row of rankedRows) {
+      for (const row of selectedRows) {
         const side = row.side === "SHORT" ? "SELL" : "BUY";
         const override = STRATEGY_EXIT_OVERRIDES.get(row.strategyId);
         const trade = buildMockTradeFromTrace({
@@ -424,6 +524,20 @@ export function useMockTradingEngine(
           seenTraceIdsRef.current.add(row.traceId);
           limitRejected++;
           const code = row.status === "REJECTED" || row.status === "FIRED" ? "BLOCKER" : "SIGNAL_SCORE";
+          const category = row.status === "REJECTED" || row.status === "FIRED"
+            ? rejectionCategoryFromTraceGate(row.gate)
+            : "LOW_SIGNAL_SCORE";
+          addDiagnosticsRejection(delta, {
+            ts: now,
+            category,
+            strategyId: row.strategyId,
+            strategyName: row.strategyName,
+            side,
+            signalScore: row.signalScore,
+            message: row.status === "REJECTED" || row.status === "FIRED"
+              ? `${row.gate}: ${row.reason}`
+              : "signal failed score or trade quality threshold",
+          });
           newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: row.strategyId,
@@ -431,16 +545,24 @@ export function useMockTradingEngine(
             side,
             price: livePrice,
             code,
+            category,
+            signalScore: row.signalScore,
             message: row.status === "REJECTED" || row.status === "FIRED"
               ? `${row.gate}: ${row.reason}`
               : "signal failed score or trade quality threshold",
           }));
           console.info(
             "[MOCK_TRADE_REJECTED]",
-            `strategy=${row.strategyName}#${row.strategyId}`,
-            `side=${side}`,
-            `gate=${row.gate}`,
-            `reason=${row.reason}`,
+            {
+              ts: now,
+              strategyId: row.strategyId,
+              strategyName: row.strategyName,
+              side,
+              signalScore: row.signalScore,
+              rejectionReason: category,
+              gate: row.gate,
+              message: row.reason,
+            },
           );
           continue;
         }
@@ -454,6 +576,18 @@ export function useMockTradingEngine(
         if (!decision.allowed) {
           seenTraceIdsRef.current.add(row.traceId);
           limitRejected++;
+          const category = rejectionCategoryFromRiskCode(decision.code);
+          incrementFunnelForDecision(delta.funnel, category, false);
+          addDiagnosticsRejection(delta, {
+            ts: now,
+            category,
+            strategyId: row.strategyId,
+            strategyName: row.strategyName,
+            side,
+            signalScore: trade.signalScore,
+            riskRewardRatio: trade.riskRewardRatio,
+            message: decision.message ?? "risk engine rejected trade",
+          });
           newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: row.strategyId,
@@ -461,17 +595,28 @@ export function useMockTradingEngine(
             side,
             price: livePrice,
             code: decision.code ?? "MAX_OPEN",
+            category,
+            signalScore: trade.signalScore,
+            riskRewardRatio: trade.riskRewardRatio,
             message: decision.message ?? "risk engine rejected trade",
           }));
           console.info(
             "[MOCK_TRADE_REJECTED]",
-            `strategy=${row.strategyName}#${row.strategyId}`,
-            `side=${side}`,
-            `code=${decision.code ?? "UNKNOWN"}`,
-            `message=${decision.message ?? ""}`,
+            {
+              ts: now,
+              strategyId: row.strategyId,
+              strategyName: row.strategyName,
+              side,
+              signalScore: trade.signalScore,
+              riskRewardRatio: trade.riskRewardRatio,
+              rejectionReason: category,
+              code: decision.code ?? "UNKNOWN",
+              message: decision.message ?? "",
+            },
           );
           continue;
         }
+        incrementFunnelForDecision(delta.funnel, null, true);
         seenTraceIdsRef.current.add(row.traceId);
         newTrades.push(trade);
         newLogs.push(logForMockTradeCreated(trade));
@@ -489,6 +634,9 @@ export function useMockTradingEngine(
         );
       }
       if (limitRejected > 0) setMockLimitRejectedSignals((count) => count + limitRejected);
+      if (delta.funnel.signalsGenerated > 0 || delta.recentRejections.length > 0 || delta.funnel.tradesCreated > 0) {
+        setDiagnostics((prev) => applyDiagnosticsDelta(prev, delta, now));
+      }
       if (newLogs.length > 0) {
         setLogs((prev) => {
           const combined = [...newLogs, ...prev];
@@ -524,12 +672,25 @@ export function useMockTradingEngine(
       const now = Date.now();
       let limitRejected = 0;
       const equity = computeAccountState(tradesRef.current, configRef.current).equity;
-      const rankedSignals = signals
-        .filter((signal) => !seenTraceIdsRef.current.has(`mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`))
-        .sort((a, b) => scoreMockResearchSignal(b) - scoreMockResearchSignal(a))
-        .slice(0, maxSignalsPerBatchFromConfig(configRef.current));
+      const delta = diagnosticsDelta();
+      const freshSignals = signals.filter((signal) => !seenTraceIdsRef.current.has(`mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`));
+      delta.funnel.signalsGenerated += freshSignals.length;
+      delta.funnel.confidencePassed += freshSignals.length;
+      const rankedSignals = freshSignals.sort((a, b) => scoreMockResearchSignal(b) - scoreMockResearchSignal(a));
+      const selectedSignals = rankedSignals.slice(0, maxSignalsPerBatchFromConfig(configRef.current));
+      for (const signal of rankedSignals.slice(selectedSignals.length)) {
+        addDiagnosticsRejection(delta, {
+          ts: now,
+          category: "OTHER",
+          strategyId: signal.strategyId,
+          strategyName: signal.strategyName,
+          side: signal.side,
+          confidenceScore: signal.confidenceScore,
+          message: "signal was outside maxSignalsPerBatch top-ranked selection",
+        });
+      }
 
-      for (const signal of rankedSignals) {
+      for (const signal of selectedSignals) {
         const dedupeKey = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
         const duplicateOpen = [...tradesRef.current, ...newTrades].some(
           (trade) =>
@@ -540,6 +701,15 @@ export function useMockTradingEngine(
         if (duplicateOpen) {
           seenTraceIdsRef.current.add(dedupeKey);
           limitRejected++;
+          addDiagnosticsRejection(delta, {
+            ts: now,
+            category: "DUPLICATE_POSITION",
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            side: signal.side,
+            confidenceScore: signal.confidenceScore,
+            message: "strategy already has an open same-side position",
+          });
           newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: signal.strategyId,
@@ -547,6 +717,8 @@ export function useMockTradingEngine(
             side: signal.side,
             price: livePrice,
             code: "COOLDOWN",
+            category: "DUPLICATE_POSITION",
+            confidenceScore: signal.confidenceScore,
             message: "strategy already has an open same-side position",
           }));
           continue;
@@ -561,6 +733,15 @@ export function useMockTradingEngine(
         if (!trade) {
           seenTraceIdsRef.current.add(dedupeKey);
           limitRejected++;
+          addDiagnosticsRejection(delta, {
+            ts: now,
+            category: "LOW_SIGNAL_SCORE",
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            side: signal.side,
+            confidenceScore: signal.confidenceScore,
+            message: "research signal failed score or trade quality threshold",
+          });
           newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: signal.strategyId,
@@ -568,6 +749,8 @@ export function useMockTradingEngine(
             side: signal.side,
             price: livePrice,
             code: "SIGNAL_SCORE",
+            category: "LOW_SIGNAL_SCORE",
+            confidenceScore: signal.confidenceScore,
             message: "research signal failed score or trade quality threshold",
           }));
           continue;
@@ -582,6 +765,19 @@ export function useMockTradingEngine(
         if (!decision.allowed) {
           seenTraceIdsRef.current.add(dedupeKey);
           limitRejected++;
+          const category = rejectionCategoryFromRiskCode(decision.code);
+          incrementFunnelForDecision(delta.funnel, category, false);
+          addDiagnosticsRejection(delta, {
+            ts: now,
+            category,
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            side: signal.side,
+            signalScore: trade.signalScore,
+            confidenceScore: signal.confidenceScore,
+            riskRewardRatio: trade.riskRewardRatio,
+            message: decision.message ?? "risk engine rejected trade",
+          });
           newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: signal.strategyId,
@@ -589,17 +785,30 @@ export function useMockTradingEngine(
             side: signal.side,
             price: livePrice,
             code: decision.code ?? "MAX_OPEN",
+            category,
+            signalScore: trade.signalScore,
+            confidenceScore: signal.confidenceScore,
+            riskRewardRatio: trade.riskRewardRatio,
             message: decision.message ?? "risk engine rejected trade",
           }));
           console.info(
             "[MOCK_TRADE_REJECTED]",
-            `strategy=${signal.strategyName}#${signal.strategyId}`,
-            `side=${signal.side}`,
-            `code=${decision.code ?? "UNKNOWN"}`,
-            "source=research",
+            {
+              ts: now,
+              strategyId: signal.strategyId,
+              strategyName: signal.strategyName,
+              side: signal.side,
+              signalScore: trade.signalScore,
+              confidenceScore: signal.confidenceScore,
+              riskRewardRatio: trade.riskRewardRatio,
+              rejectionReason: category,
+              code: decision.code ?? "UNKNOWN",
+              source: "research",
+            },
           );
           continue;
         }
+        incrementFunnelForDecision(delta.funnel, null, true);
         seenTraceIdsRef.current.add(trade.traceId);
         newTrades.push(trade);
         newLogs.push(logForMockTradeCreated(trade));
@@ -614,6 +823,9 @@ export function useMockTradingEngine(
       }
 
       if (limitRejected > 0) setMockLimitRejectedSignals((count) => count + limitRejected);
+      if (delta.funnel.signalsGenerated > 0 || delta.recentRejections.length > 0 || delta.funnel.tradesCreated > 0) {
+        setDiagnostics((prev) => applyDiagnosticsDelta(prev, delta, now));
+      }
       if (newLogs.length > 0) {
         setLogs((prev) => {
           const combined = [...newLogs, ...prev];
@@ -781,6 +993,7 @@ export function useMockTradingEngine(
     setHistoryTrades([]);
     setLogs([]);
     setMockLimitRejectedSignals(0);
+    setDiagnostics(emptyMockTradingDiagnostics());
     setHistoryMeta({ total: 0, totalPages: 1, loading: false, error: null });
     seenTraceIdsRef.current = new Set();
     if (!persistenceDisabled) {
@@ -826,6 +1039,7 @@ export function useMockTradingEngine(
     error,
     traceAgeSeconds,
     mockLimitRejectedSignals,
+    diagnostics,
     persistence,
     history: {
       page: historyPage,

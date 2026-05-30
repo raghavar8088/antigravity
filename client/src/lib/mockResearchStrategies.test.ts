@@ -102,6 +102,8 @@ describe("evaluateMockResearchStrategies", () => {
 
     expect(result.evaluatedCount).toBeGreaterThan(0);
     expect(result.signals.length).toBeGreaterThan(0);
+    expect(result.diagnostics.funnel.signalsGenerated).toBeGreaterThanOrEqual(result.signals.length);
+    expect(result.diagnostics.funnel.confidencePassed).toBeGreaterThanOrEqual(result.signals.length);
     expect(result.signals.every((signal) => signal.family === "RsiMeanReversion")).toBe(true);
   });
 
@@ -156,6 +158,7 @@ describe("evaluateMockResearchStrategies", () => {
       approvedStrategyIds: new Set<number>(),
     }, T0);
     expect(blocked.signals).toHaveLength(0);
+    expect(blocked.diagnostics.rejectionCounts.NO_APPROVED_STRATEGY).toBeGreaterThan(0);
 
     const approved = evaluateMockResearchStrategies(sweepCandles(), {
       ...baseConfig,
@@ -163,6 +166,19 @@ describe("evaluateMockResearchStrategies", () => {
     }, T0);
     expect(approved.signals.every((signal) => signal.strategyId === stopHuntLong!.id)).toBe(true);
     expect(approved.signals.length).toBeGreaterThan(0);
+  });
+
+  it("records low-confidence diagnostic rejections before signals reach the engine", () => {
+    const result = evaluateMockResearchStrategies(
+      downtrendCandles(),
+      runnerConfig(["RsiMeanReversion"], { minConfidence: 101 }),
+      T0,
+    );
+
+    expect(result.signals).toHaveLength(0);
+    expect(result.diagnostics.funnel.signalsGenerated).toBeGreaterThan(0);
+    expect(result.diagnostics.funnel.confidencePassed).toBe(0);
+    expect(result.diagnostics.rejectionCounts.LOW_CONFIDENCE).toBeGreaterThan(0);
   });
 
   it("regime mode requires an approved historically successful regime strategy", () => {

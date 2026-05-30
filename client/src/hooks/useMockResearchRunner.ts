@@ -25,7 +25,14 @@ import {
   type ResearchStrategy,
 } from "@/lib/mockResearchStrategies";
 import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
-import type { MockResearchSignalInput } from "@/lib/mockTradingEngine";
+import {
+  emptyMockDiagnosticFunnel,
+  emptyMockRejectionCounts,
+  type MockDiagnosticFunnel,
+  type MockRejectionCounts,
+  type MockRejectionEvent,
+  type MockResearchSignalInput,
+} from "@/lib/mockTradingEngine";
 import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 
 const MAX_SIGNALS_PER_MINUTE_DEFAULT = 10;
@@ -90,6 +97,8 @@ export interface UseResearchRunnerResult {
   lastEvalAt: number | null;
   /** Most recent signals (ring buffer, newest first, max 200). */
   recentSignals: ResearchSignalSummary[];
+  diagnostics: ResearchRunnerDiagnostics;
+  readiness: ResearchReadinessSummary;
   /** List of all 500 strategy definitions (for UI display). */
   strategies: readonly AnyResearchStrategy[];
   /** Family display labels. */
@@ -101,6 +110,113 @@ const SIGNAL_RING_CAP = 200;
 export interface ResearchEvaluationResult {
   evaluatedCount: number;
   signals: ResearchSignalSummary[];
+  diagnostics: ResearchEvaluationDiagnostics;
+  readiness: ResearchReadinessSummary;
+}
+
+export interface StrategyReadinessRow {
+  strategyId: number;
+  strategyName: string;
+  family: string;
+  requiredCandles: number;
+  availableCandles: number;
+  ready: boolean;
+  enabled: boolean;
+  dataFeedRequired: boolean;
+}
+
+export interface ResearchReadinessSummary {
+  totalStrategies: number;
+  strategiesReady: number;
+  strategiesWaitingForHistory: number;
+  minCandlesAvailable: number;
+  maxCandlesAvailable: number;
+  rows: StrategyReadinessRow[];
+}
+
+export interface ResearchEvaluationDiagnostics {
+  funnel: MockDiagnosticFunnel;
+  rejectionCounts: MockRejectionCounts;
+  recentRejections: MockRejectionEvent[];
+}
+
+export interface ResearchRunnerDiagnostics {
+  latest: ResearchEvaluationDiagnostics;
+  totals: ResearchEvaluationDiagnostics;
+}
+
+function emptyResearchEvaluationDiagnostics(): ResearchEvaluationDiagnostics {
+  return {
+    funnel: emptyMockDiagnosticFunnel(),
+    rejectionCounts: emptyMockRejectionCounts(),
+    recentRejections: [],
+  };
+}
+
+function buildReadinessSummary(
+  strategies: readonly AnyResearchStrategy[],
+  availableCandles: number,
+): ResearchReadinessSummary {
+  const rows = strategies.map((strategy) => {
+    const dataFeedRequired = "dataFeedRequired" in strategy ? strategy.dataFeedRequired : false;
+    const enabled = strategy.enabled === true;
+    return {
+      strategyId: strategy.id,
+      strategyName: strategy.name,
+      family: strategy.family,
+      requiredCandles: strategy.minCandles,
+      availableCandles,
+      ready: enabled && !dataFeedRequired && availableCandles >= strategy.minCandles,
+      enabled,
+      dataFeedRequired,
+    };
+  });
+  return {
+    totalStrategies: rows.length,
+    strategiesReady: rows.filter((row) => row.ready).length,
+    strategiesWaitingForHistory: rows.filter((row) => row.enabled && !row.dataFeedRequired && row.availableCandles < row.requiredCandles).length,
+    minCandlesAvailable: rows.length > 0 ? availableCandles : 0,
+    maxCandlesAvailable: rows.length > 0 ? availableCandles : 0,
+    rows,
+  };
+}
+
+function emptyReadinessSummary(): ResearchReadinessSummary {
+  return buildReadinessSummary([], 0);
+}
+
+function emptyResearchRunnerDiagnostics(): ResearchRunnerDiagnostics {
+  return {
+    latest: emptyResearchEvaluationDiagnostics(),
+    totals: emptyResearchEvaluationDiagnostics(),
+  };
+}
+
+function addResearchRejection(
+  diagnostics: ResearchEvaluationDiagnostics,
+  event: MockRejectionEvent,
+): void {
+  diagnostics.rejectionCounts[event.category] += 1;
+  diagnostics.recentRejections.unshift(event);
+  if (diagnostics.recentRejections.length > 25) diagnostics.recentRejections.length = 25;
+}
+
+function mergeResearchDiagnostics(
+  previous: ResearchRunnerDiagnostics,
+  latest: ResearchEvaluationDiagnostics,
+): ResearchRunnerDiagnostics {
+  const totals: ResearchEvaluationDiagnostics = {
+    funnel: { ...previous.totals.funnel },
+    rejectionCounts: { ...previous.totals.rejectionCounts },
+    recentRejections: [...latest.recentRejections, ...previous.totals.recentRejections].slice(0, 50),
+  };
+  for (const key of Object.keys(latest.funnel) as Array<keyof MockDiagnosticFunnel>) {
+    totals.funnel[key] += latest.funnel[key];
+  }
+  for (const key of Object.keys(latest.rejectionCounts) as Array<keyof MockRejectionCounts>) {
+    totals.rejectionCounts[key] += latest.rejectionCounts[key];
+  }
+  return { latest, totals };
 }
 
 export function evaluateMockResearchStrategies(
@@ -109,7 +225,14 @@ export function evaluateMockResearchStrategies(
   currentRegimeOrNow: MarketRegime | null | number = null,
   nowArg?: number,
 ): ResearchEvaluationResult {
-  if (!config.enabled || candles.length < 5) return { evaluatedCount: 0, signals: [] };
+  if (!config.enabled || candles.length < 5) {
+    return {
+      evaluatedCount: 0,
+      signals: [],
+      diagnostics: emptyResearchEvaluationDiagnostics(),
+      readiness: buildReadinessSummary([...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES], candles.length),
+    };
+  }
   const currentRegime = typeof currentRegimeOrNow === "number" ? null : currentRegimeOrNow;
   const now = typeof currentRegimeOrNow === "number" ? currentRegimeOrNow : (nowArg ?? Date.now());
 
@@ -127,7 +250,9 @@ export function evaluateMockResearchStrategies(
   };
 
   const snap = candles.slice();
+  const readiness = buildReadinessSummary([...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES], snap.length);
   const signals: ResearchSignalSummary[] = [];
+  const diagnostics = emptyResearchEvaluationDiagnostics();
   let evaluatedCount = 0;
 
   for (const strat of RESEARCH_STRATEGIES) {
@@ -138,8 +263,38 @@ export function evaluateMockResearchStrategies(
     try {
       const result = strat.signal(snap);
       if (result.side === "NO_SIGNAL") continue;
-      if (result.confidence < config.minConfidence) continue;
-      if (!passesSelectionMode(strat.id)) continue;
+      diagnostics.funnel.signalsGenerated++;
+      if (result.confidence < config.minConfidence) {
+        addResearchRejection(diagnostics, {
+          ts: now,
+          category: "LOW_CONFIDENCE",
+          strategyId: strat.id,
+          strategyName: strat.name,
+          side: result.side,
+          confidenceScore: result.confidence,
+          message: `confidence ${result.confidence.toFixed(1)} below ${config.minConfidence.toFixed(1)}`,
+        });
+        continue;
+      }
+      diagnostics.funnel.confidencePassed++;
+      if (!passesSelectionMode(strat.id)) {
+        addResearchRejection(diagnostics, {
+          ts: now,
+          category: "NO_APPROVED_STRATEGY",
+          strategyId: strat.id,
+          strategyName: strat.name,
+          side: result.side,
+          confidenceScore: result.confidence,
+          message: "strategy is not in the approved Profit/Regime mode set",
+        });
+        continue;
+      }
+      diagnostics.funnel.scorePassed++;
+      diagnostics.funnel.riskRewardPassed++;
+      diagnostics.funnel.riskPassed++;
+      diagnostics.funnel.cooldownPassed++;
+      diagnostics.funnel.familyConflictPassed++;
+      diagnostics.funnel.exposurePassed++;
       signals.push({
         strategyId: strat.id,
         strategyName: strat.name,
@@ -166,8 +321,40 @@ export function evaluateMockResearchStrategies(
     try {
       const result = strat.signal(snap);
       if (result.side === "NO_SIGNAL") continue;
-      if (result.confidence < config.minConfidence) continue;
-      if (!passesSelectionMode(strat.id)) continue;
+      diagnostics.funnel.signalsGenerated++;
+      if (result.confidence < config.minConfidence) {
+        addResearchRejection(diagnostics, {
+          ts: now,
+          category: "LOW_CONFIDENCE",
+          strategyId: strat.id,
+          strategyName: strat.name,
+          side: result.side,
+          confidenceScore: result.confidence,
+          message: `confidence ${result.confidence.toFixed(1)} below ${config.minConfidence.toFixed(1)}`,
+        });
+        continue;
+      }
+      diagnostics.funnel.confidencePassed++;
+      if (!passesSelectionMode(strat.id)) {
+        addResearchRejection(diagnostics, {
+          ts: now,
+          category: "NO_APPROVED_STRATEGY",
+          strategyId: strat.id,
+          strategyName: strat.name,
+          side: result.side,
+          confidenceScore: result.confidence,
+          message: config.selectionMode === "RESEARCH_MODE"
+            ? "strategy not selected"
+            : "strategy is not in the approved Profit/Regime mode set",
+        });
+        continue;
+      }
+      diagnostics.funnel.scorePassed++;
+      diagnostics.funnel.riskRewardPassed++;
+      diagnostics.funnel.riskPassed++;
+      diagnostics.funnel.cooldownPassed++;
+      diagnostics.funnel.familyConflictPassed++;
+      diagnostics.funnel.exposurePassed++;
       signals.push({
         strategyId: strat.id,
         strategyName: strat.name,
@@ -190,7 +377,11 @@ export function evaluateMockResearchStrategies(
       ? signals
       : [...signals].sort((a, b) => b.confidence - a.confidence).slice(0, config.maxSignalsPerMinute);
 
-  return { evaluatedCount, signals: capped };
+  if (signals.length > capped.length) {
+    const dropped = signals.length - capped.length;
+    diagnostics.rejectionCounts.OTHER += dropped;
+  }
+  return { evaluatedCount, signals: capped, diagnostics, readiness };
 }
 
 export interface ResearchRunnerDeps {
@@ -215,6 +406,8 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
   const [hasRun, setHasRun] = useState(false);
   const [lastEvalAt, setLastEvalAt] = useState<number | null>(null);
   const [recentSignals, setRecentSignals] = useState<ResearchSignalSummary[]>([]);
+  const [diagnostics, setDiagnostics] = useState<ResearchRunnerDiagnostics>(emptyResearchRunnerDiagnostics);
+  const [readiness, setReadiness] = useState<ResearchReadinessSummary>(() => emptyReadinessSummary());
 
   const configRef = useRef(config);
   const candlesRef = useRef(candles);
@@ -235,12 +428,31 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
     if (!Number.isFinite(livePrice) || livePrice <= 0) return;
 
     const now = Date.now();
-    const { evaluatedCount, signals: capped } = evaluateMockResearchStrategies(snap, cfg, regimeRef.current, now);
+    const {
+      evaluatedCount,
+      signals: capped,
+      diagnostics: latestDiagnostics,
+      readiness: latestReadiness,
+    } = evaluateMockResearchStrategies(snap, cfg, regimeRef.current, now);
 
     setLastEvalCount(evaluatedCount);
     setLastSignalCount(capped.length);
     setHasRun(true);
     setLastEvalAt(now);
+    setDiagnostics((prev) => mergeResearchDiagnostics(prev, latestDiagnostics));
+    setReadiness(latestReadiness);
+
+    for (const row of latestReadiness.rows) {
+      if (row.enabled && !row.dataFeedRequired && row.availableCandles < row.requiredCandles) {
+        console.info("[CANDLE_HISTORY_INSUFFICIENT]", {
+          ts: now,
+          strategyId: row.strategyId,
+          strategyName: row.strategyName,
+          requiredCandles: row.requiredCandles,
+          availableCandles: row.availableCandles,
+        });
+      }
+    }
 
     if (capped.length > 0) {
       setRecentSignals((prev) => {
@@ -294,6 +506,8 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
     hasRun,
     lastEvalAt,
     recentSignals,
+    diagnostics,
+    readiness,
     strategies: [...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES],
     familyLabels: { ...RESEARCH_FAMILY_LABELS, ...BTC_RESEARCH_FAMILY_LABELS },
   };

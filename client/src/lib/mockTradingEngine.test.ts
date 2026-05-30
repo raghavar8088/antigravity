@@ -28,6 +28,7 @@ import {
   countOpenMockTrades,
   countOpenMockTradesBySide,
   DEFAULT_MOCK_TRADING_CONFIG,
+  emptyMockTradingDiagnostics,
   evaluateMockTradeOpenRisk,
   filterMockTrades,
   isStrategySignalRaised,
@@ -35,6 +36,8 @@ import {
   isValidMockTrade,
   maxOpenMockTradesFromConfig,
   MOCK_PERSIST_VERSION,
+  rejectionCategoryFromRiskCode,
+  rejectionCategoryFromTraceGate,
   MOCK_TRADE_SORT_OPTIONS,
   mockTradePnl,
   sortMockTrades,
@@ -161,6 +164,26 @@ describe("blockers prevent mock trade creation", () => {
       expect(trade).toBeNull();
     });
   }
+});
+
+describe("mock rejection diagnostics", () => {
+  it("maps blocker gates and risk decisions into dashboard categories", () => {
+    expect(rejectionCategoryFromTraceGate("SIGNAL")).toBe("SIGNAL");
+    expect(rejectionCategoryFromTraceGate("CONFIRM")).toBe("CONFIRM");
+    expect(rejectionCategoryFromTraceGate("ATR_FEES")).toBe("ATR_FEES");
+    expect(rejectionCategoryFromTraceGate("REGIME")).toBe("REGIME");
+    expect(rejectionCategoryFromRiskCode("SIGNAL_SCORE")).toBe("LOW_SIGNAL_SCORE");
+    expect(rejectionCategoryFromRiskCode("RISK_REWARD")).toBe("RR_TOO_LOW");
+    expect(rejectionCategoryFromRiskCode("COOLDOWN")).toBe("COOLDOWN");
+    expect(rejectionCategoryFromRiskCode("MAX_OPEN")).toBe("EXPOSURE_LIMIT");
+  });
+
+  it("initializes every rejection bucket to zero", () => {
+    const diagnostics = emptyMockTradingDiagnostics();
+    expect(diagnostics.funnel.tradesCreated).toBe(0);
+    expect(diagnostics.rejectionCounts.SIGNAL).toBe(0);
+    expect(diagnostics.rejectionCounts.NO_APPROVED_STRATEGY).toBe(0);
+  });
 });
 
 // ── Signal raising detection ─────────────────────────────────────────────────

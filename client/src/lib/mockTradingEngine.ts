@@ -49,6 +49,98 @@ export interface MockTradeBlocker {
   reason: string;
 }
 
+export const MOCK_REJECTION_CATEGORIES = [
+  "SIGNAL",
+  "CONFIRM",
+  "ATR_FEES",
+  "REGIME",
+  "LOW_CONFIDENCE",
+  "LOW_SIGNAL_SCORE",
+  "RR_TOO_LOW",
+  "COOLDOWN",
+  "FAMILY_CONFLICT",
+  "EXPOSURE_LIMIT",
+  "DAILY_LOSS_LIMIT",
+  "WEEKLY_LOSS_LIMIT",
+  "MAX_DRAWDOWN",
+  "MARGIN_CHECK",
+  "DUPLICATE_POSITION",
+  "NO_APPROVED_STRATEGY",
+  "OTHER",
+] as const;
+
+export type MockRejectionCategory = (typeof MOCK_REJECTION_CATEGORIES)[number];
+export type MockRejectionCounts = Record<MockRejectionCategory, number>;
+
+export interface MockDiagnosticFunnel {
+  signalsGenerated: number;
+  confidencePassed: number;
+  scorePassed: number;
+  riskRewardPassed: number;
+  riskPassed: number;
+  cooldownPassed: number;
+  familyConflictPassed: number;
+  exposurePassed: number;
+  tradesCreated: number;
+}
+
+export interface MockRejectionEvent {
+  ts: number;
+  category: MockRejectionCategory;
+  strategyId: number;
+  strategyName: string;
+  side?: MockSide;
+  signalScore?: number;
+  confidenceScore?: number;
+  riskRewardRatio?: number;
+  message: string;
+}
+
+export interface MockTradingDiagnostics {
+  funnel: MockDiagnosticFunnel;
+  rejectionCounts: MockRejectionCounts;
+  recentRejections: MockRejectionEvent[];
+  lastUpdatedAt: number | null;
+}
+
+export function emptyMockRejectionCounts(): MockRejectionCounts {
+  return MOCK_REJECTION_CATEGORIES.reduce((acc, category) => {
+    acc[category] = 0;
+    return acc;
+  }, {} as MockRejectionCounts);
+}
+
+export function emptyMockDiagnosticFunnel(): MockDiagnosticFunnel {
+  return {
+    signalsGenerated: 0,
+    confidencePassed: 0,
+    scorePassed: 0,
+    riskRewardPassed: 0,
+    riskPassed: 0,
+    cooldownPassed: 0,
+    familyConflictPassed: 0,
+    exposurePassed: 0,
+    tradesCreated: 0,
+  };
+}
+
+export function emptyMockTradingDiagnostics(): MockTradingDiagnostics {
+  return {
+    funnel: emptyMockDiagnosticFunnel(),
+    rejectionCounts: emptyMockRejectionCounts(),
+    recentRejections: [],
+    lastUpdatedAt: null,
+  };
+}
+
+export function rejectionCategoryFromTraceGate(gate: string): MockRejectionCategory {
+  if (gate === "SIGNAL") return "SIGNAL";
+  if (gate === "CONFIRM") return "CONFIRM";
+  if (gate === "ATR_FEES") return "ATR_FEES";
+  if (gate === "REGIME") return "REGIME";
+  return "OTHER";
+}
+
 /**
  * Mock Trading account + sizing + execution-cost config.
  *
@@ -450,6 +542,34 @@ export interface MockTradeRiskDecision {
   message?: string;
 }
 
+export function rejectionCategoryFromRiskCode(code: MockTradeRejectionCode | undefined): MockRejectionCategory {
+  switch (code) {
+    case "SIGNAL_SCORE":
+      return "LOW_SIGNAL_SCORE";
+    case "MISSING_EXIT":
+    case "RISK_REWARD":
+      return "RR_TOO_LOW";
+    case "COOLDOWN":
+      return "COOLDOWN";
+    case "FAMILY_CONFLICT":
+      return "FAMILY_CONFLICT";
+    case "MAX_OPEN":
+    case "MAX_SIDE":
+      return "EXPOSURE_LIMIT";
+    case "MARGIN":
+      return "MARGIN_CHECK";
+    case "DAILY_LOSS":
+      return "DAILY_LOSS_LIMIT";
+    case "WEEKLY_LOSS":
+      return "WEEKLY_LOSS_LIMIT";
+    case "MAX_DRAWDOWN":
+      return "MAX_DRAWDOWN";
+    case "BLOCKER":
+    default:
+      return "OTHER";
+  }
+}
+
 export function evaluateMockTradeOpenRisk(args: {
   trade: MockTrade;
   existingTrades: readonly MockTrade[];
@@ -559,7 +679,6 @@ export function buildMockTradeFromTrace(args: {
   const { row, currentPrice, config, now, override } = args;
   if (!isExecutableTraceRow(row)) return null;
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
-  if (row.signalScore < config.minSignalScore) return null;
   const equity = args.equity ?? config.startingBalanceUsd;
   const side = traceSideToOrderSide(row.side as "LONG" | "SHORT");
   const paperSide = toPaperSide(side);
@@ -582,8 +701,6 @@ export function buildMockTradeFromTrace(args: {
     takeProfitPct: exit.takeProfitPct,
     stopLossPct: exit.stopLossPct,
   });
-  if (exitLevels.takeProfitUsd <= 0 || exitLevels.stopLossUsd <= 0) return null;
-  if (exitLevels.riskRewardRatio < config.minRiskRewardRatio) return null;
   return {
     id: `mock-${row.traceId}`,
     traceId: row.traceId,
@@ -644,7 +761,6 @@ export function buildMockTradeFromResearchSignal(args: {
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
   if (signal.side !== "BUY" && signal.side !== "SELL") return null;
   if (!Number.isFinite(signal.confidenceScore) || signal.confidenceScore <= 0) return null;
-  if (signal.confidenceScore < config.minSignalScore) return null;
 
   const equity = args.equity ?? config.startingBalanceUsd;
   const paperSide = toPaperSide(signal.side);
@@ -667,8 +783,6 @@ export function buildMockTradeFromResearchSignal(args: {
     takeProfitPct: exit.takeProfitPct,
     stopLossPct: exit.stopLossPct,
   });
-  if (exitLevels.takeProfitUsd <= 0 || exitLevels.stopLossUsd <= 0) return null;
-  if (exitLevels.riskRewardRatio < config.minRiskRewardRatio) return null;
   const safeConfidence = Math.max(0, Math.min(100, signal.confidenceScore));
   const traceId = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
 
@@ -1571,6 +1685,10 @@ export interface MockTradeLog {
   exitPrice?: number;
   exitReason?: MockExitReason | null;
   ignoredBlockers: string[];
+  rejectionCategory?: MockRejectionCategory;
+  signalScore?: number;
+  confidenceScore?: number;
+  riskRewardRatio?: number;
   pnl?: number;
   notional?: number;
   message?: string;
@@ -1620,6 +1738,10 @@ export function logForMockTradeRejected(args: {
   price: number;
   code: MockTradeRejectionCode;
   message: string;
+  category?: MockRejectionCategory;
+  signalScore?: number;
+  confidenceScore?: number;
+  riskRewardRatio?: number;
 }): MockTradeLog {
   return {
     ts: args.ts,
@@ -1629,6 +1751,10 @@ export function logForMockTradeRejected(args: {
     side: args.side,
     price: args.price,
     ignoredBlockers: [],
+    rejectionCategory: args.category ?? rejectionCategoryFromRiskCode(args.code),
+    signalScore: args.signalScore,
+    confidenceScore: args.confidenceScore,
+    riskRewardRatio: args.riskRewardRatio,
     message: `${args.code}: ${args.message}`,
   };
 }

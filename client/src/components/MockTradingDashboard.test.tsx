@@ -8,12 +8,21 @@ import {
   computeAccountState,
   computeAnalytics,
   DEFAULT_MOCK_TRADING_CONFIG,
+  emptyMockDiagnosticFunnel,
+  emptyMockRejectionCounts,
+  emptyMockTradingDiagnostics,
   type MockTrade,
 } from "@/lib/mockTradingEngine";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const mockUseMockTradingEngine = vi.hoisted(() => vi.fn());
+
+const emptyResearchDiagnostics = () => ({
+  funnel: emptyMockDiagnosticFunnel(),
+  rejectionCounts: emptyMockRejectionCounts(),
+  recentRejections: [],
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -53,6 +62,18 @@ vi.mock("@/hooks/useMockResearchRunner", () => ({
     lastSignalCount: 0,
     lastEvalAt: null,
     hasRun: false,
+    diagnostics: {
+      latest: emptyResearchDiagnostics(),
+      totals: emptyResearchDiagnostics(),
+    },
+    readiness: {
+      totalStrategies: 0,
+      strategiesReady: 0,
+      strategiesWaitingForHistory: 0,
+      minCandlesAvailable: 0,
+      maxCandlesAvailable: 0,
+      rows: [],
+    },
   }),
 }));
 
@@ -92,6 +113,7 @@ function mockEngine(trades: MockTrade[] = []) {
     error: null,
     traceAgeSeconds: null,
     mockLimitRejectedSignals: 0,
+    diagnostics: emptyMockTradingDiagnostics(),
     persistence: {
       status: "fallback",
       loading: false,

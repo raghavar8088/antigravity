@@ -23,8 +23,11 @@ import {
 } from "@/components/desk/ui";
 import {
   computeAnalytics,
+  emptyMockDiagnosticFunnel,
+  emptyMockRejectionCounts,
   filterMockTrades,
   mockTradeAgeMinutes,
+  MOCK_REJECTION_CATEGORIES,
   MOCK_TRADE_SORT_OPTIONS,
   sortMockTrades,
   type MockAccountState,
@@ -36,6 +39,9 @@ import {
   type MockTradeSortKey,
   type MockTradeStatus,
   type MockTradingConfig,
+  type MockDiagnosticFunnel,
+  type MockRejectionCounts,
+  type MockTradingDiagnostics,
 } from "@/lib/mockTradingEngine";
 import { ALL_RESEARCH_FAMILIES, type ResearchFamily } from "@/lib/mockResearchStrategies";
 import {
@@ -81,6 +87,36 @@ function pnlClass(value: number): string {
 function fmtPct(value: number, digits = 2): string {
   if (!Number.isFinite(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;
+}
+
+function addCounts(a: MockRejectionCounts, b: MockRejectionCounts): MockRejectionCounts {
+  const next = emptyMockRejectionCounts();
+  for (const key of MOCK_REJECTION_CATEGORIES) {
+    next[key] = a[key] + b[key];
+  }
+  return next;
+}
+
+function dominantRejection(counts: MockRejectionCounts): { reason: string; count: number } | null {
+  const [reason, count] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] ?? [];
+  return reason && count > 0 ? { reason, count } : null;
+}
+
+function combineDiagnostics(
+  researchFunnel: MockDiagnosticFunnel,
+  engineFunnel: MockDiagnosticFunnel,
+): MockDiagnosticFunnel {
+  return {
+    signalsGenerated: researchFunnel.signalsGenerated > 0 ? researchFunnel.signalsGenerated : engineFunnel.signalsGenerated,
+    confidencePassed: researchFunnel.confidencePassed > 0 ? researchFunnel.confidencePassed : engineFunnel.confidencePassed,
+    scorePassed: engineFunnel.scorePassed,
+    riskRewardPassed: engineFunnel.riskRewardPassed,
+    riskPassed: engineFunnel.riskPassed,
+    cooldownPassed: engineFunnel.cooldownPassed,
+    familyConflictPassed: engineFunnel.familyConflictPassed,
+    exposurePassed: engineFunnel.exposurePassed,
+    tradesCreated: engineFunnel.tradesCreated,
+  };
 }
 
 function fmtAge(openedAt: number, ref: number = Date.now()): string {
@@ -426,6 +462,15 @@ export default function MockTradingDashboard() {
       }),
     [acct.equity, scoring.scores, strategyFamilyById, strategyHealth],
   );
+  const combinedDiagnostics = useMemo<MockTradingDiagnostics>(() => ({
+    funnel: combineDiagnostics(research.diagnostics.totals.funnel, engine.diagnostics.funnel),
+    rejectionCounts: addCounts(research.diagnostics.totals.rejectionCounts, engine.diagnostics.rejectionCounts),
+    recentRejections: [
+      ...engine.diagnostics.recentRejections,
+      ...research.diagnostics.totals.recentRejections,
+    ].sort((a, b) => b.ts - a.ts).slice(0, 75),
+    lastUpdatedAt: Math.max(research.lastEvalAt ?? 0, engine.diagnostics.lastUpdatedAt ?? 0) || null,
+  }), [engine.diagnostics, research.diagnostics.totals, research.lastEvalAt]);
 
   return (
     <main className="trading-shell">
@@ -539,6 +584,10 @@ export default function MockTradingDashboard() {
         </DeskCard>
 
         <ResearchControlsCard research={research} closedCandles={candles.closedCount} />
+
+        <MockTradingReadinessAuditCard research={research} scoring={scoring} diagnostics={combinedDiagnostics} />
+
+        <MockTradingDiagnosticsCard diagnostics={combinedDiagnostics} latestResearch={research.diagnostics.latest} />
 
         <ResearchLabOverview
           snapshot={regime.snapshot}
@@ -1058,6 +1107,276 @@ function AccountSummaryCard({
             }}
           />
         </div>
+      </div>
+    </DeskCard>
+  );
+}
+
+function MockTradingReadinessAuditCard({
+  research,
+  scoring,
+  diagnostics,
+}: {
+  research: ReturnType<typeof useMockResearchRunner>;
+  scoring: ReturnType<typeof useStrategyScoring>;
+  diagnostics: MockTradingDiagnostics;
+}) {
+  const readiness = research.readiness;
+  const approvedIds =
+    research.config.selectionMode === "REGIME_MODE"
+      ? scoring.approvedRegimeIds
+      : scoring.approvedProfitIds;
+  const modeLabel =
+    research.config.selectionMode === "RESEARCH_MODE"
+      ? "Research"
+      : research.config.selectionMode === "PROFIT_MODE"
+        ? "Profit"
+        : "Regime";
+  const waitingRows = readiness.rows
+    .filter((row) => !row.ready)
+    .sort((a, b) => b.requiredCandles - a.requiredCandles || a.strategyId - b.strategyId);
+  const displayedRows = waitingRows.length > 0 ? waitingRows : readiness.rows;
+  const signalsGenerated = diagnostics.funnel.signalsGenerated;
+  const signalsPassed = diagnostics.funnel.exposurePassed;
+  const signalsFiltered = Math.max(0, signalsGenerated - signalsPassed);
+  const topRejection = dominantRejection(diagnostics.rejectionCounts);
+  const rootCause = firstZeroPipelineStage({
+    readiness,
+    researchHasRun: research.hasRun,
+    selectionMode: research.config.selectionMode,
+    approvedCount: approvedIds.size,
+    funnel: diagnostics.funnel,
+  });
+
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Live Data Readiness Audit"
+        subtitle="Checks whether each strategy has enough closed 1-minute candles before signal evaluation and records approved-strategy state."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <DeskMetricTile label="Total strategies" value={readiness.totalStrategies.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Strategies ready" value={readiness.strategiesReady.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Waiting for history" value={readiness.strategiesWaitingForHistory.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Min candles available" value={readiness.minCandlesAvailable.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Max candles available" value={readiness.maxCandlesAvailable.toLocaleString("en-US")} compact />
+        <DeskMetricTile
+          label="Research cycle"
+          value={research.hasRun ? "Running" : "Waiting"}
+          detail={research.lastEvalAt ? new Date(research.lastEvalAt).toLocaleTimeString() : "No evaluation yet"}
+          compact
+        />
+        <DeskMetricTile label="Mode" value={modeLabel} compact />
+        <DeskMetricTile label="Approved count" value={approvedIds.size.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Signals generated" value={signalsGenerated.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Signals filtered" value={signalsFiltered.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Signals passed" value={signalsPassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Trades created" value={diagnostics.funnel.tradesCreated.toLocaleString("en-US")} compact />
+        <DeskMetricTile
+          label="Top rejection"
+          value={topRejection?.reason ?? "—"}
+          detail={topRejection ? `${topRejection.count.toLocaleString("en-US")} signals` : "No research rejects yet"}
+          compact
+        />
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 11, color: "var(--desk-on-surface-variant)" }}>
+        Approved strategy IDs: {approvedIds.size > 0 ? [...approvedIds].slice(0, 30).join(", ") : "none"}
+        {approvedIds.size > 30 ? `, +${approvedIds.size - 30} more` : ""}
+      </div>
+
+      <div
+        style={{
+          marginTop: 12,
+          padding: 12,
+          borderRadius: 12,
+          border: "1px solid var(--desk-outline-variant)",
+          background: "color-mix(in srgb, var(--desk-surface-container-high) 70%, transparent)",
+          fontSize: 12,
+        }}
+      >
+        <div className="desk-label-md" style={{ marginBottom: 4 }}>Root-Cause Snapshot</div>
+        <div style={{ color: "var(--desk-on-surface-variant)" }}>{rootCause}</div>
+      </div>
+
+      <div style={{ marginTop: 14, maxHeight: 360, overflowY: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ color: "var(--desk-on-surface-variant)", textAlign: "left" }}>
+              <th style={{ padding: "6px 8px" }}>Strategy</th>
+              <th style={{ padding: "6px 8px" }}>Family</th>
+              <th style={{ padding: "6px 8px", textAlign: "right" }}>Required</th>
+              <th style={{ padding: "6px 8px", textAlign: "right" }}>Available</th>
+              <th style={{ padding: "6px 8px" }}>Ready</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedRows.map((row) => (
+              <tr key={row.strategyId} style={{ borderTop: "1px solid var(--desk-outline-variant)" }}>
+                <td style={{ padding: "6px 8px" }}>#{row.strategyId} {row.strategyName}</td>
+                <td style={{ padding: "6px 8px", color: "var(--desk-on-surface-variant)" }}>{row.family}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{row.requiredCandles}</td>
+                <td style={{ padding: "6px 8px", textAlign: "right" }}>{row.availableCandles}</td>
+                <td style={{ padding: "6px 8px" }}>
+                  <DeskChip tone={row.ready ? "success" : row.dataFeedRequired ? "warning" : "default"}>
+                    {row.ready ? "true" : "false"}
+                  </DeskChip>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "var(--desk-on-surface-variant)" }}>
+        Showing all {displayedRows.length.toLocaleString("en-US")} strategy readiness rows, prioritizing strategies waiting for history.
+      </div>
+    </DeskCard>
+  );
+}
+
+function firstZeroPipelineStage({
+  readiness,
+  researchHasRun,
+  selectionMode,
+  approvedCount,
+  funnel,
+}: {
+  readiness: ReturnType<typeof useMockResearchRunner>["readiness"];
+  researchHasRun: boolean;
+  selectionMode: ReturnType<typeof useMockResearchRunner>["config"]["selectionMode"];
+  approvedCount: number;
+  funnel: MockDiagnosticFunnel;
+}): string {
+  if (readiness.totalStrategies > 0 && readiness.strategiesReady === 0) {
+    return "First zero stage: candle readiness. No enabled strategy has enough closed candles yet.";
+  }
+  if (!researchHasRun) {
+    return "First zero stage: research cycle. The runner has not completed an evaluation cycle yet.";
+  }
+  if (selectionMode !== "RESEARCH_MODE" && approvedCount === 0) {
+    return "First zero stage: approved strategy filter. Profit/Regime mode has no approved strategy IDs yet.";
+  }
+  if (funnel.signalsGenerated === 0) {
+    return "First zero stage: signal generation. Strategies evaluated, but no BUY/SELL research signals were emitted.";
+  }
+  if (funnel.confidencePassed === 0) {
+    return "First zero stage: confidence filter. Signals exist, but none pass the configured confidence threshold.";
+  }
+  if (funnel.scorePassed === 0) {
+    return "First zero stage: signal score filter. Signals pass confidence, but none pass the configured score threshold.";
+  }
+  if (funnel.riskRewardPassed === 0) {
+    return "First zero stage: risk/reward. Candidate signals fail the configured minimum R/R gate.";
+  }
+  if (funnel.cooldownPassed === 0) {
+    return "First zero stage: cooldown. Candidate trades are blocked by per-strategy cooldown.";
+  }
+  if (funnel.familyConflictPassed === 0) {
+    return "First zero stage: family conflict. Candidate trades conflict with an open opposite-family position.";
+  }
+  if (funnel.exposurePassed === 0) {
+    return "First zero stage: exposure/risk controls. Candidate trades pass earlier gates but fail portfolio risk limits.";
+  }
+  if (funnel.tradesCreated === 0) {
+    return "First zero stage: final creation. Candidates passed funnel counters but did not create trades; inspect latest rejection log.";
+  }
+  return "No zero stage detected. Signals are reaching trade creation under the current mock-only controls.";
+}
+
+function MockTradingDiagnosticsCard({
+  diagnostics,
+  latestResearch,
+}: {
+  diagnostics: MockTradingDiagnostics;
+  latestResearch: { funnel: MockDiagnosticFunnel; rejectionCounts: MockRejectionCounts };
+}) {
+  const funnel = diagnostics.funnel;
+  const totalRejections = Object.values(diagnostics.rejectionCounts).reduce((sum, count) => sum + count, 0);
+  const dominant = dominantRejection(diagnostics.rejectionCounts);
+  const stageRows: Array<{ label: string; value: number }> = [
+    { label: "Signals Generated", value: funnel.signalsGenerated },
+    { label: "Confidence Passed", value: funnel.confidencePassed },
+    { label: "Score Passed", value: funnel.scorePassed },
+    { label: "Risk Passed", value: funnel.riskPassed },
+    { label: "Cooldown Passed", value: funnel.cooldownPassed },
+    { label: "Exposure Passed", value: funnel.exposurePassed },
+    { label: "Trades Created", value: funnel.tradesCreated },
+  ];
+  const rejectionRows = MOCK_REJECTION_CATEGORIES
+    .map((reason) => ({
+      reason,
+      count: diagnostics.rejectionCounts[reason],
+      pct: totalRejections > 0 ? diagnostics.rejectionCounts[reason] / totalRejections : 0,
+    }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  return (
+    <DeskCard padding="md">
+      <DeskSectionHeader
+        title="Mock Trading Diagnostics"
+        subtitle="Root-cause funnel for why mock signals do or do not become trades. Risk controls are observed, not relaxed."
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <DeskMetricTile label="Total signals generated" value={funnel.signalsGenerated.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Confidence passed" value={funnel.confidencePassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Score passed" value={funnel.scorePassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="R/R passed" value={funnel.riskRewardPassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Cooldown passed" value={funnel.cooldownPassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Family conflict passed" value={funnel.familyConflictPassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Exposure passed" value={funnel.exposurePassed.toLocaleString("en-US")} compact />
+        <DeskMetricTile label="Final trades created" value={funnel.tradesCreated.toLocaleString("en-US")} compact />
+        <DeskMetricTile
+          label="Top rejection"
+          value={dominant ? dominant.reason : "—"}
+          detail={dominant ? `${dominant.count.toLocaleString("en-US")} signals` : "No rejects yet"}
+          compact
+        />
+      </div>
+
+      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+        <div>
+          <div className="desk-label-md" style={{ marginBottom: 8 }}>Funnel View</div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {stageRows.map((stage, idx) => {
+              const previous = idx === 0 ? stage.value : stageRows[idx - 1]?.value ?? 0;
+              const passPct = idx === 0 || previous <= 0 ? 1 : stage.value / previous;
+              return (
+                <div key={stage.label} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, fontSize: 12 }}>
+                  <span style={{ color: "var(--desk-on-surface-variant)" }}>
+                    {idx > 0 ? "→ " : ""}{stage.label}
+                  </span>
+                  <span>
+                    {stage.value.toLocaleString("en-US")} · {fmtPct(passPct, 1)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="desk-label-md" style={{ marginBottom: 8 }}>Rejection Counts</div>
+          {rejectionRows.length === 0 ? (
+            <div style={{ color: "var(--desk-on-surface-variant)", fontSize: 12 }}>No rejection events captured yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 6 }}>
+              {rejectionRows.map((row) => (
+                <div key={row.reason} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, fontSize: 12 }}>
+                  <span style={{ color: "var(--desk-on-surface-variant)" }}>{row.reason}</span>
+                  <span>{row.count.toLocaleString("en-US")} · {fmtPct(row.pct, 1)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, fontSize: 11, color: "var(--desk-on-surface-variant)" }}>
+        Latest research cycle: generated {latestResearch.funnel.signalsGenerated.toLocaleString("en-US")}, confidence passed{" "}
+        {latestResearch.funnel.confidencePassed.toLocaleString("en-US")}, approved/forwarded{" "}
+        {latestResearch.funnel.exposurePassed.toLocaleString("en-US")}.
+        {diagnostics.lastUpdatedAt ? ` Last updated ${new Date(diagnostics.lastUpdatedAt).toLocaleTimeString()}.` : ""}
       </div>
     </DeskCard>
   );
