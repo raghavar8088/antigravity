@@ -42,6 +42,7 @@ const trade: MockTrade = {
   unrealizedPnl: 3.2,
   realizedPnl: 0,
   fees: 0,
+  fundingCosts: 0,
   exitReason: null,
   exitPrice: null,
 };
@@ -57,12 +58,12 @@ describe("Mock Trading persistence schemas", () => {
     expect(mockAccountStateSchema.safeParse(account).success).toBe(true);
   });
 
-  it("defaults mock config to 5,000 max open mock trades", () => {
+  it("defaults mock config to 5 max open mock trades", () => {
     const parsed = mockTradingConfigSchema.parse({
       ...DEFAULT_MOCK_TRADING_CONFIG,
       maxOpenMockTrades: undefined,
     });
-    expect(parsed.maxOpenMockTrades).toBe(5_000);
+    expect(parsed.maxOpenMockTrades).toBe(5);
   });
 
   it("sanitizes pagination, filters, and sorting", () => {
@@ -82,16 +83,16 @@ describe("Mock Trading persistence schemas", () => {
     expect(parsed.sort).toBe("most_profitable");
   });
 
-  it("allows mock trade hydration pages large enough for 5,000 open trades", () => {
-    const parsed = mockTradeListQuerySchema.parse({ limit: "5000", status: "OPEN" });
-    expect(parsed.limit).toBe(5_000);
+  it("allows mock trade hydration pages larger than the open-position cap", () => {
+    const parsed = mockTradeListQuerySchema.parse({ limit: "100", status: "OPEN" });
+    expect(parsed.limit).toBe(100);
   });
 
   it("maps raw trades to Mongo documents with required searchable fields", () => {
     const doc = mockTradeToDoc("mock_trading_default", trade, DEFAULT_MOCK_TRADING_CONFIG);
     expect(doc.trade_id).toBe(trade.id);
     expect(doc.strategy_family).toBe(strategyFamilyForTrade(trade));
-    expect(doc.blockers_ignored).toEqual(["REGIME"]);
+    expect(doc.blockers_rejected).toEqual(["REGIME"]);
     expect(doc.parameters_used.leverage).toBe(DEFAULT_MOCK_TRADING_CONFIG.leverage);
     expect(doc.raw_trade).toEqual(trade);
   });

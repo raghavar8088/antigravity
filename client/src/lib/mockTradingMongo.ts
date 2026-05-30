@@ -59,12 +59,13 @@ export type MockTradeDoc = {
   realized_pnl: number;
   unrealized_pnl: number;
   fees: number;
+  funding_costs: number;
   slippage_bps_per_side: number;
   take_profit_usd: number;
   stop_loss_usd: number;
   risk_reward_ratio: number;
   regime_at_entry?: string;
-  blockers_ignored: string[];
+  blockers_rejected: string[];
   blocker_details: MockTrade["blockers"];
   confidence_score: number;
   required_threshold: number;
@@ -250,7 +251,7 @@ async function ensureMockIndexes(db: Db): Promise<void> {
     trades.createIndex({ account_key: 1, opened_at: -1 }, { name: "by_account_opened" }),
     trades.createIndex({ account_key: 1, closed_at: -1 }, { name: "by_account_closed" }),
     trades.createIndex({ account_key: 1, side: 1, opened_at: -1 }, { name: "by_account_side_opened" }),
-    trades.createIndex({ account_key: 1, blockers_ignored: 1, opened_at: -1 }, { name: "by_account_blocker_opened" }),
+    trades.createIndex({ account_key: 1, blockers_rejected: 1, opened_at: -1 }, { name: "by_account_blocker_opened" }),
     snapshots.createIndex({ account_key: 1, timestamp: -1 }, { name: "by_account_snapshot_time" }),
     analytics.createIndex({ account_key: 1, generated_at: -1 }, { name: "by_account_analytics_time" }),
     logs.createIndex({ account_key: 1, ts: -1 }, { name: "by_account_log_time" }),
@@ -344,12 +345,13 @@ export function mockTradeToDoc(
     realized_pnl: trade.realizedPnl,
     unrealized_pnl: trade.unrealizedPnl,
     fees: trade.fees,
+    funding_costs: trade.fundingCosts ?? 0,
     slippage_bps_per_side: config.slippageBpsPerSide,
     take_profit_usd: trade.takeProfitUsd,
     stop_loss_usd: trade.stopLossUsd,
     risk_reward_ratio: trade.riskRewardRatio,
     regime_at_entry: trade.regimeAtEntry,
-    blockers_ignored: trade.blockers.map((blocker) => blocker.gate),
+    blockers_rejected: trade.blockers.map((blocker) => blocker.gate),
     blocker_details: trade.blockers,
     confidence_score: trade.signalScore,
     required_threshold: trade.requiredThreshold,
@@ -415,7 +417,8 @@ function mockLogFromDoc(doc: MockTradeLogDoc): MockTradeLog {
       doc.event === "MOCK_TRADE_TP_HIT" ||
       doc.event === "MOCK_TRADE_SL_HIT" ||
       doc.event === "MOCK_TRADE_CLOSED" ||
-      doc.event === "MOCK_TRADE_LIMIT_REACHED"
+      doc.event === "MOCK_TRADE_LIMIT_REACHED" ||
+      doc.event === "MOCK_TRADE_REJECTED"
         ? doc.event
         : "MOCK_TRADE_CREATED",
     tradeId: doc.trade_id,
@@ -461,7 +464,7 @@ export async function upsertMockTrade(
         strategyName: trade.strategyName,
         side: trade.side,
         price: trade.currentPrice,
-        ignoredBlockers: trade.blockers.map((blocker) => blocker.gate),
+        ignoredBlockers: [],
         pnl: pnlValue(trade),
         notional: trade.notional,
       };
@@ -544,7 +547,7 @@ export function mockTradeMongoFilterForQuery(
   if (query.side) filter.side = query.side;
   if (query.strategy_id != null) filter.strategy_id = query.strategy_id;
   if (query.strategy_family) filter.strategy_family = query.strategy_family;
-  if (query.blocker_gate) filter.blockers_ignored = query.blocker_gate;
+  if (query.blocker_gate) filter.blockers_rejected = query.blocker_gate;
   if (query.profitability === "profit") filter.pnl_value = { $gt: 0 };
   if (query.profitability === "loss") filter.pnl_value = { $lt: 0 };
   const ageCondition = mockTradeAgeConditionForQuery(query, nowMs);

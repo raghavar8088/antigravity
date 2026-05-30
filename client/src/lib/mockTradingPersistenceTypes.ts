@@ -46,6 +46,17 @@ export const mockTradingConfigSchema = z
     takerFeePct: nonNegativeNumber,
     slippageBpsPerSide: nonNegativeNumber,
     maxOpenMockTrades: z.coerce.number().int().min(1).max(50_000).default(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades),
+    maxOpenLongTrades: z.coerce.number().int().min(1).max(50_000).default(DEFAULT_MOCK_TRADING_CONFIG.maxOpenLongTrades),
+    maxOpenShortTrades: z.coerce.number().int().min(1).max(50_000).default(DEFAULT_MOCK_TRADING_CONFIG.maxOpenShortTrades),
+    tradeCooldownMinutes: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.tradeCooldownMinutes),
+    minSignalScore: finiteNumber.min(0).max(100).default(DEFAULT_MOCK_TRADING_CONFIG.minSignalScore),
+    maxSignalsPerBatch: z.coerce.number().int().min(1).max(500).default(DEFAULT_MOCK_TRADING_CONFIG.maxSignalsPerBatch),
+    minRiskRewardRatio: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.minRiskRewardRatio),
+    dailyLossLimitPct: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.dailyLossLimitPct),
+    weeklyLossLimitPct: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.weeklyLossLimitPct),
+    maxDrawdownPct: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.maxDrawdownPct),
+    fundingRatePctPer8h: finiteNumber.default(DEFAULT_MOCK_TRADING_CONFIG.fundingRatePctPer8h),
+    fundingIntervalHours: finiteNumber.positive().default(DEFAULT_MOCK_TRADING_CONFIG.fundingIntervalHours),
   })
   .strict();
 
@@ -78,6 +89,7 @@ export const mockTradeSchema = z
     unrealizedPnl: finiteNumber,
     realizedPnl: finiteNumber,
     fees: nonNegativeNumber,
+    fundingCosts: finiteNumber.default(0),
     exitReason: z.enum(["TAKE_PROFIT", "STOP_LOSS", "MAX_HOLD", "MANUAL"]).nullable(),
     exitPrice: optionalNullableFinite,
     strategyFamily: z.string().trim().min(1).max(120).optional(),
@@ -139,6 +151,7 @@ export const mockTradeLogEventSchema = z.enum([
   "MOCK_STRATEGY_RUNNER_EVENT",
   "MOCK_STRATEGY_RUNNER_ERROR",
   "MOCK_TRADE_LIMIT_REACHED",
+  "MOCK_TRADE_REJECTED",
   "MOCK_TRADING_RESET",
 ]);
 
@@ -169,7 +182,7 @@ export const mockTradeListQuerySchema = z
   .object({
     account_key: mockAccountKeySchema.default(DEFAULT_MOCK_ACCOUNT_KEY),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
-    limit: z.coerce.number().int().min(1).max(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).default(100),
+    limit: z.coerce.number().int().min(1).max(5_000).default(100),
     status: z.enum(["OPEN", "CLOSED"]).optional(),
     side: z.enum(["BUY", "SELL"]).optional(),
     strategy_id: z.coerce.number().int().nonnegative().optional(),

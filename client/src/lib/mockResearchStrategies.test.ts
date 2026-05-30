@@ -117,7 +117,7 @@ describe("evaluateMockResearchStrategies", () => {
     const trade = buildMockTradeFromResearchSignal({
       signal: signal!,
       currentPrice: 60_000,
-      config: DEFAULT_MOCK_TRADING_CONFIG,
+      config: { ...DEFAULT_MOCK_TRADING_CONFIG, minSignalScore: 0 },
       now: T0,
     });
 

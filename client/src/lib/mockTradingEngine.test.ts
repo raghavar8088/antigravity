@@ -7,7 +7,7 @@
  *   - Opening a mock trade reserves margin + exposure on the account.
  *   - Closing winners adds to cash/equity; closing losers reduces them.
  *   - Live price movement updates equity and unrealized PnL.
- *   - Signals blocked by REGIME / SIGNAL / ATR_FEES still create mock trades.
+ *   - Signals blocked by REGIME / SIGNAL / ATR_FEES do not create mock trades.
  *   - Fees and slippage are applied at entry and exit.
  *   - Persistence validators reject corrupt trade rows.
  */
@@ -26,13 +26,14 @@ import {
   computeMockNotional,
   computeMockPnl,
   countOpenMockTrades,
+  countOpenMockTradesBySide,
   DEFAULT_MOCK_TRADING_CONFIG,
+  evaluateMockTradeOpenRisk,
   filterMockTrades,
   isStrategySignalRaised,
   isValidMockConfig,
   isValidMockTrade,
   maxOpenMockTradesFromConfig,
-  MOCK_IGNORED_GATES,
   MOCK_PERSIST_VERSION,
   MOCK_TRADE_SORT_OPTIONS,
   mockTradePnl,
@@ -48,7 +49,7 @@ const baseConfig: MockTradingConfig = { ...DEFAULT_MOCK_TRADING_CONFIG };
 const wideExitConfig: MockTradingConfig = {
   ...DEFAULT_MOCK_TRADING_CONFIG,
   takeProfitPct: 100,
-  stopLossPct: 100,
+  stopLossPct: 40,
 };
 
 function traceRow(
@@ -61,14 +62,14 @@ function traceRow(
     strategyId: 91,
     strategyName: "Trend_Continuation_Long",
     side: "LONG",
-    status: "REJECTED",
-    gate: "REGIME",
-    reason: "regime chop blocked",
-    signalScore: 28,
+    status: "OPENED",
+    gate: "OPENED",
+    reason: "opened",
+    signalScore: 72,
     requiredThreshold: 20,
     confirmPassed: true,
     regime: "chop",
-    regimeAllowed: false,
+    regimeAllowed: true,
     ...overrides,
   });
 }
@@ -99,9 +100,9 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
   it("uses 25× leverage (matching BTC FT)", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.leverage).toBe(25);
   });
-  it("defaults to fixed-% of equity sizing at 1%", () => {
-    expect(DEFAULT_MOCK_TRADING_CONFIG.sizingMode).toBe("fixed_pct_equity");
-    expect(DEFAULT_MOCK_TRADING_CONFIG.fixedPctOfEquity).toBe(1);
+  it("defaults to risk-% of equity sizing", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.sizingMode).toBe("risk_pct_equity");
+    expect(DEFAULT_MOCK_TRADING_CONFIG.riskPctOfEquity).toBeGreaterThan(0);
   });
   it("applies a non-zero taker fee + slippage", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takerFeePct).toBeGreaterThan(0);
@@ -111,17 +112,22 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takeProfitPct).toBe(1.5);
     expect(DEFAULT_MOCK_TRADING_CONFIG.stopLossPct).toBe(0.4);
   });
-  it("allows 5,000 simultaneous open mock trades by default", () => {
-    expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).toBe(5_000);
-    expect(maxOpenMockTradesFromConfig(DEFAULT_MOCK_TRADING_CONFIG)).toBe(5_000);
+  it("uses professional exposure and signal throttles by default", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades).toBe(5);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenLongTrades).toBe(3);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.maxOpenShortTrades).toBe(3);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.tradeCooldownMinutes).toBe(15);
+    expect(DEFAULT_MOCK_TRADING_CONFIG.maxSignalsPerBatch).toBe(3);
+    expect(maxOpenMockTradesFromConfig(DEFAULT_MOCK_TRADING_CONFIG)).toBe(5);
   });
 });
 
 // ── Sizing reflects $1M account ──────────────────────────────────────────────
 describe("computeMockNotional with $1M account", () => {
-  it("at default 1% of equity yields ~$10,000 notional per trade", () => {
+  it("at default risk-% sizing derives notional from equity and stop distance", () => {
     const n = computeMockNotional({ config: baseConfig, equity: 1_000_000 });
-    expect(n).toBeCloseTo(10_000, 0);
+    expect(n).toBeGreaterThan(100_000);
+    expect(n).toBeLessThan(1_000_000);
   });
   it("respects fixed_notional override", () => {
     const cfg = { ...baseConfig, sizingMode: "fixed_notional" as const, fixedNotionalUsd: 25_000 };
@@ -135,39 +141,26 @@ describe("computeMockNotional with $1M account", () => {
   });
 });
 
-// ── Required: blocked-by-REGIME/SIGNAL/ATR_FEES still create mock trades ─────
-describe("blockers do not prevent mock trade creation", () => {
+// ── Required: blockers prevent mock trade creation ───────────────────────────
+describe("blockers prevent mock trade creation", () => {
   for (const gate of ["REGIME", "SIGNAL", "ATR_FEES", "CONFIRM", "MTF", "COOLDOWN", "MAX_OPEN"] as const) {
-    it(`gate=${gate} still produces a mock trade and records the blocker`, () => {
+    it(`gate=${gate} rejects the mock trade`, () => {
       const trade = buildMockTradeFromTrace({
-        row: traceRow({ gate: gate as SignalTraceGate, reason: `${gate} rejection` }),
+        row: traceRow({
+          status: "REJECTED",
+          gate: gate as SignalTraceGate,
+          reason: `${gate} rejection`,
+          regimeAllowed: gate === "REGIME" ? false : true,
+          confirmPassed: gate === "CONFIRM" ? false : true,
+          feeHurdlePassed: gate === "ATR_FEES" ? false : true,
+        }),
         currentPrice: ENTRY,
         config: baseConfig,
         now: T0,
       });
-      expect(trade).not.toBeNull();
-      expect(trade?.blockers.some((b) => b.gate === gate)).toBe(true);
+      expect(trade).toBeNull();
     });
   }
-});
-
-describe("MOCK_IGNORED_GATES inventory", () => {
-  it("includes every gate the spec says must be ignored", () => {
-    const required = [
-      "REGIME",
-      "SIGNAL",
-      "ATR_FEES",
-      "CONFIRM",
-      "MTF",
-      "COOLDOWN",
-      "MAX_OPEN",
-      "OCCUPIED",
-      "SAME_SIDE",
-      "CATEGORY",
-      "QUALITY",
-    ];
-    for (const gate of required) expect(MOCK_IGNORED_GATES).toContain(gate);
-  });
 });
 
 // ── Signal raising detection ─────────────────────────────────────────────────
@@ -178,7 +171,7 @@ describe("isStrategySignalRaised", () => {
   it("returns false when score is zero", () => {
     expect(isStrategySignalRaised(traceRow({ signalScore: 0 }))).toBe(false);
   });
-  it("returns true for FIRED and REJECTED rows with side+score", () => {
+  it("only reports whether a directional score exists", () => {
     expect(isStrategySignalRaised(traceRow({ status: "FIRED", gate: "CONFIRM" }))).toBe(true);
     expect(isStrategySignalRaised(traceRow({ status: "REJECTED", gate: "REGIME" }))).toBe(true);
   });
@@ -209,17 +202,15 @@ describe("opening a mock trade updates exposure and reserved margin", () => {
   });
 });
 
-// ── Many open trades coexist ─────────────────────────────────────────────────
-describe("many mock trades can remain open simultaneously", () => {
-  it("opens 50 trades and aggregates exposure across them", () => {
+// ── Portfolio risk controls ──────────────────────────────────────────────────
+describe("portfolio risk controls", () => {
+  it("aggregates exposure across open trades", () => {
     const trades: MockTrade[] = [];
     for (let i = 0; i < 50; i++) {
       const row = traceRow({
         traceId: `trace-${i}`,
         strategyId: 91 + (i % 12),
         strategyName: `Strat_${i}`,
-        gate: "MAX_OPEN",
-        reason: "max-open cap",
         side: i % 2 === 0 ? "LONG" : "SHORT",
       });
       trades.push(build({ row }));
@@ -228,42 +219,67 @@ describe("many mock trades can remain open simultaneously", () => {
     const acct = computeAccountState(trades, baseConfig);
     expect(acct.openCount).toBe(50);
     expect(acct.exposure).toBeGreaterThan(0);
-    // 50 trades × ~$10K = ~$500K exposure on $1M (sanity)
-    expect(acct.exposure).toBeGreaterThan(400_000);
-    expect(acct.exposure).toBeLessThan(600_000);
+    expect(acct.exposure).toBeGreaterThan(10_000_000);
   });
 
-  it("allows the 5,000th open mock trade and blocks the 5,001st", () => {
-    const seed = build({ row: traceRow({ gate: "MAX_OPEN", reason: "production max-open cap" }) });
-    const trades: MockTrade[] = Array.from({ length: 4_999 }, (_, i) => ({
+  it("rejects the 6th open position at the default portfolio cap", () => {
+    const seed = build();
+    const trades: MockTrade[] = Array.from({ length: 5 }, (_, i) => ({
       ...seed,
       id: `mock-limit-${i}`,
       traceId: `limit-${i}`,
+      strategyId: 100 + i,
       openedAt: T0 + i,
     }));
 
-    expect(canOpenAdditionalMockTrade({ trades, config: baseConfig })).toBe(true);
-    const fiveThousand = [
-      ...trades,
-      { ...seed, id: "mock-limit-4999", traceId: "limit-4999", openedAt: T0 + 4_999 },
-    ];
-    expect(countOpenMockTrades(fiveThousand)).toBe(5_000);
-    expect(computeAccountState(fiveThousand, baseConfig).openCount).toBe(5_000);
-    expect(canOpenAdditionalMockTrade({ trades: fiveThousand, config: baseConfig })).toBe(false);
+    expect(countOpenMockTrades(trades)).toBe(5);
+    expect(canOpenAdditionalMockTrade({ trades, config: baseConfig })).toBe(false);
+    const next = build({ row: traceRow({ traceId: "limit-6", strategyId: 999 }) });
+    expect(evaluateMockTradeOpenRisk({ trade: next, existingTrades: trades, config: baseConfig, now: T0 + 60_000 }))
+      .toMatchObject({ allowed: false, code: "MAX_OPEN" });
   });
 
-  it("does not treat the production MAX_OPEN blocker as the mock trade cap", () => {
-    const trade = build({
-      row: traceRow({
-        traceId: "max-open-production-blocker",
-        gate: "MAX_OPEN",
-        reason: "production desk max-open cap",
-      }),
-      config: { ...baseConfig, maxOpenMockTrades: 5_000 },
-    });
+  it("enforces long/short side caps", () => {
+    const longs = [0, 1, 2].map((i) => build({
+      row: traceRow({ traceId: `long-${i}`, strategyId: 200 + i, side: "LONG" }),
+    }));
+    const nextLong = build({ row: traceRow({ traceId: "long-next", strategyId: 300, side: "LONG" }) });
+    expect(countOpenMockTradesBySide(longs, "BUY")).toBe(3);
+    expect(evaluateMockTradeOpenRisk({ trade: nextLong, existingTrades: longs, config: baseConfig, now: T0 + 60_000 }))
+      .toMatchObject({ allowed: false, code: "MAX_SIDE" });
+  });
 
-    expect(trade.blockers.some((blocker) => blocker.gate === "MAX_OPEN")).toBe(true);
-    expect(canOpenAdditionalMockTrade({ trades: [trade], config: baseConfig })).toBe(true);
+  it("rejects opposite positions in the same strategy family", () => {
+    const openLong = build({ row: traceRow({ category: "Trend", side: "LONG", strategyId: 501 }) });
+    const shortSameFamily = build({ row: traceRow({ traceId: "short-family", category: "Trend", side: "SHORT", strategyId: 502 }) });
+    expect(evaluateMockTradeOpenRisk({
+      trade: shortSameFamily,
+      existingTrades: [openLong],
+      config: baseConfig,
+      now: T0 + 60_000,
+    })).toMatchObject({ allowed: false, code: "FAMILY_CONFLICT" });
+  });
+
+  it("enforces a minimum 15 minute strategy cooldown", () => {
+    const open = build({ row: traceRow({ strategyId: 777 }) });
+    const repeat = build({ row: traceRow({ traceId: "repeat", strategyId: 777 }) });
+    expect(evaluateMockTradeOpenRisk({
+      trade: repeat,
+      existingTrades: [open],
+      config: { ...baseConfig, tradeCooldownMinutes: 5 },
+      now: T0 + 14 * 60_000,
+    })).toMatchObject({ allowed: false, code: "COOLDOWN" });
+  });
+
+  it("stops new entries after the daily loss limit is breached", () => {
+    const closedLoser = closeMockTrade(build(), ENTRY * 0.9, T0 + 60_000, baseConfig);
+    const next = build({ row: traceRow({ traceId: "after-loss", strategyId: 909 }) });
+    expect(evaluateMockTradeOpenRisk({
+      trade: next,
+      existingTrades: [closedLoser],
+      config: { ...baseConfig, dailyLossLimitPct: 0.01 },
+      now: T0 + 2 * 60_000,
+    })).toMatchObject({ allowed: false, code: "DAILY_LOSS" });
   });
 });
 
@@ -329,6 +345,15 @@ describe("close lifecycle", () => {
     // Realized = gross - fees, so realized < gross
     const grossLong = computeMockPnl("BUY", open.entryPrice, ENTRY * 1.02, open.quantity);
     expect(closed.realizedPnl).toBeLessThan(grossLong);
+  });
+
+  it("funding costs are applied to realized PnL on close", () => {
+    const cfg = { ...baseConfig, fundingRatePctPer8h: 0.08 };
+    const open = build({ config: cfg });
+    const closed = closeMockTrade(open, ENTRY * 1.02, T0 + 8 * 60 * 60 * 1000, cfg);
+    expect(closed.fundingCosts ?? 0).toBeGreaterThan(0);
+    const grossLong = computeMockPnl("BUY", open.entryPrice, closed.exitPrice ?? ENTRY, open.quantity);
+    expect(closed.realizedPnl).toBeCloseTo(grossLong - closed.fees - (closed.fundingCosts ?? 0), 6);
   });
 
   it("slippage is applied at entry — entry price differs from signal price for a buy", () => {
@@ -525,8 +550,11 @@ describe("filterMockTrades", () => {
     const open = build({ row: traceRow({ traceId: "o" }) });
     const winRow = traceRow({ traceId: "w" });
     const win = closeMockTrade(build({ row: winRow }), ENTRY * 1.02, T0 + 1_000, baseConfig);
-    const lossRow = traceRow({ traceId: "l", side: "SHORT", gate: "ATR_FEES" });
-    const loss = closeMockTrade(build({ row: lossRow }), ENTRY * 1.01, T0 + 1_000, baseConfig);
+    const lossRow = traceRow({ traceId: "l", side: "SHORT" });
+    const loss = {
+      ...closeMockTrade(build({ row: lossRow }), ENTRY * 1.01, T0 + 1_000, baseConfig),
+      blockers: [{ gate: "ATR_FEES", reason: "legacy rejected blocker metadata" }],
+    };
 
     const all = [open, win, loss];
     expect(filterMockTrades(all, { status: "OPEN" }).map((t) => t.id)).toEqual([open.id]);

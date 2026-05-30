@@ -28,8 +28,8 @@ import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
 import type { MockResearchSignalInput } from "@/lib/mockTradingEngine";
 import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 
-const MAX_SIGNALS_PER_MINUTE_DEFAULT = 50;
-const MIN_CONFIDENCE_DEFAULT = 30; // permissive by default per spec
+const MAX_SIGNALS_PER_MINUTE_DEFAULT = 10;
+const MIN_CONFIDENCE_DEFAULT = 50;
 
 export type ResearchSelectionMode = "RESEARCH_MODE" | "PROFIT_MODE" | "REGIME_MODE";
 type AnyResearchFamily = ResearchFamily | BtcResearchFamily;

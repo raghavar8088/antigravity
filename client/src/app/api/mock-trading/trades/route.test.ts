@@ -56,6 +56,7 @@ const openTrade: MockTrade = {
   unrealizedPnl: 3.2,
   realizedPnl: 0,
   fees: 0,
+  fundingCosts: 0,
   exitReason: null,
   exitPrice: null,
 };

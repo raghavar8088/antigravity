@@ -8,17 +8,20 @@ import {
   closeMockTrade,
   computeAccountState,
   computeAnalytics,
-  countOpenMockTrades,
   DEFAULT_MAX_OPEN_MOCK_TRADES,
   DEFAULT_MOCK_TRADING_CONFIG,
+  evaluateMockTradeOpenRisk,
   isStrategySignalRaised,
   isValidMockTrade,
-  logForMockTradeLimitReached,
   logForMockTradeCreated,
   logForMockTradeClosed,
+  logForMockTradeRejected,
   maxOpenMockTradesFromConfig,
+  maxSignalsPerBatchFromConfig,
   MOCK_PERSIST_VERSION,
   normalizeMockTradingConfig,
+  scoreMockResearchSignal,
+  scoreMockTraceRow,
   type MockAccountState,
   type MockTrade,
   type MockTradeAnalytics,
@@ -43,7 +46,7 @@ const MARK_PERSIST_THROTTLE_MS = 15_000;
 const ACCOUNT_SNAPSHOT_THROTTLE_MS = 15_000;
 const OPEN_MARK_PERSIST_BATCH_SIZE = 100;
 const LOG_RING_CAP = 200;
-const TRADE_CACHE_MIN_CAP = DEFAULT_MAX_OPEN_MOCK_TRADES;
+const TRADE_CACHE_MIN_CAP = 500;
 const HISTORY_PAGE_SIZE = 100;
 const STORAGE_KEY = "mock_trading_v2";
 
@@ -398,39 +401,16 @@ export function useMockTradingEngine(
       const newTrades: MockTrade[] = [];
       const newLogs: MockTradeLog[] = [];
       const now = Date.now();
-      const limit = maxOpenMockTradesFromConfig(configRef.current);
-      const currentOpenCount = countOpenMockTrades(tradesRef.current);
       let limitRejected = 0;
       // Equity for percent-of-equity sizing is based on current state.
       const equity = computeAccountState(tradesRef.current, configRef.current).equity;
-      for (const row of rows) {
-        if (!isStrategySignalRaised(row)) continue;
-        if (seenTraceIdsRef.current.has(row.traceId)) continue;
-        if (currentOpenCount + newTrades.length >= limit) {
-          seenTraceIdsRef.current.add(row.traceId);
-          limitRejected++;
-          const side = row.side === "SHORT" ? "SELL" : "BUY";
-          const ignoredBlockers = row.status === "OPENED" || row.status === "CANDIDATE" ? [] : [row.gate];
-          newLogs.push(logForMockTradeLimitReached({
-            ts: now,
-            strategyId: row.strategyId,
-            strategyName: row.strategyName,
-            side,
-            price: livePrice,
-            openCount: currentOpenCount + newTrades.length,
-            maxOpenMockTrades: limit,
-            ignoredBlockers,
-          }));
-          console.info(
-            "[MOCK_TRADE_LIMIT_REACHED]",
-            `strategy=${row.strategyName}#${row.strategyId}`,
-            `side=${side}`,
-            `open=${currentOpenCount + newTrades.length}`,
-            `limit=${limit}`,
-            `ignoredBlocker=${row.gate}`,
-          );
-          continue;
-        }
+      const rankedRows = rows
+        .filter((row) => isStrategySignalRaised(row) && !seenTraceIdsRef.current.has(row.traceId))
+        .sort((a, b) => scoreMockTraceRow(b) - scoreMockTraceRow(a))
+        .slice(0, maxSignalsPerBatchFromConfig(configRef.current));
+
+      for (const row of rankedRows) {
+        const side = row.side === "SHORT" ? "SELL" : "BUY";
         const override = STRATEGY_EXIT_OVERRIDES.get(row.strategyId);
         const trade = buildMockTradeFromTrace({
           row,
@@ -440,7 +420,58 @@ export function useMockTradingEngine(
           equity,
           override,
         });
-        if (!trade) continue;
+        if (!trade) {
+          seenTraceIdsRef.current.add(row.traceId);
+          limitRejected++;
+          const code = row.status === "REJECTED" || row.status === "FIRED" ? "BLOCKER" : "SIGNAL_SCORE";
+          newLogs.push(logForMockTradeRejected({
+            ts: now,
+            strategyId: row.strategyId,
+            strategyName: row.strategyName,
+            side,
+            price: livePrice,
+            code,
+            message: row.status === "REJECTED" || row.status === "FIRED"
+              ? `${row.gate}: ${row.reason}`
+              : "signal failed score or trade quality threshold",
+          }));
+          console.info(
+            "[MOCK_TRADE_REJECTED]",
+            `strategy=${row.strategyName}#${row.strategyId}`,
+            `side=${side}`,
+            `gate=${row.gate}`,
+            `reason=${row.reason}`,
+          );
+          continue;
+        }
+        const decision = evaluateMockTradeOpenRisk({
+          trade,
+          existingTrades: tradesRef.current,
+          pendingTrades: newTrades,
+          config: configRef.current,
+          now,
+        });
+        if (!decision.allowed) {
+          seenTraceIdsRef.current.add(row.traceId);
+          limitRejected++;
+          newLogs.push(logForMockTradeRejected({
+            ts: now,
+            strategyId: row.strategyId,
+            strategyName: row.strategyName,
+            side,
+            price: livePrice,
+            code: decision.code ?? "MAX_OPEN",
+            message: decision.message ?? "risk engine rejected trade",
+          }));
+          console.info(
+            "[MOCK_TRADE_REJECTED]",
+            `strategy=${row.strategyName}#${row.strategyId}`,
+            `side=${side}`,
+            `code=${decision.code ?? "UNKNOWN"}`,
+            `message=${decision.message ?? ""}`,
+          );
+          continue;
+        }
         seenTraceIdsRef.current.add(row.traceId);
         newTrades.push(trade);
         newLogs.push(logForMockTradeCreated(trade));
@@ -454,7 +485,7 @@ export function useMockTradingEngine(
           `sl=${trade.stopLossPrice.toFixed(2)}:est-$${trade.stopLossUsd.toFixed(2)}`,
           `notional=$${trade.notional.toFixed(0)}`,
           `margin=$${trade.marginUsed.toFixed(0)}`,
-          `ignoredBlockers=[${trade.blockers.map((b) => b.gate).join(",")}]`,
+          `riskReward=${trade.riskRewardRatio.toFixed(2)}`,
         );
       }
       if (limitRejected > 0) setMockLimitRejectedSignals((count) => count + limitRejected);
@@ -491,14 +522,15 @@ export function useMockTradingEngine(
       const newTrades: MockTrade[] = [];
       const newLogs: MockTradeLog[] = [];
       const now = Date.now();
-      const limit = maxOpenMockTradesFromConfig(configRef.current);
-      const currentOpenCount = countOpenMockTrades(tradesRef.current);
       let limitRejected = 0;
       const equity = computeAccountState(tradesRef.current, configRef.current).equity;
+      const rankedSignals = signals
+        .filter((signal) => !seenTraceIdsRef.current.has(`mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`))
+        .sort((a, b) => scoreMockResearchSignal(b) - scoreMockResearchSignal(a))
+        .slice(0, maxSignalsPerBatchFromConfig(configRef.current));
 
-      for (const signal of signals) {
+      for (const signal of rankedSignals) {
         const dedupeKey = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
-        if (seenTraceIdsRef.current.has(dedupeKey)) continue;
         const duplicateOpen = [...tradesRef.current, ...newTrades].some(
           (trade) =>
             trade.status === "OPEN" &&
@@ -507,28 +539,16 @@ export function useMockTradingEngine(
         );
         if (duplicateOpen) {
           seenTraceIdsRef.current.add(dedupeKey);
-          continue;
-        }
-        if (currentOpenCount + newTrades.length >= limit) {
-          seenTraceIdsRef.current.add(dedupeKey);
           limitRejected++;
-          newLogs.push(logForMockTradeLimitReached({
+          newLogs.push(logForMockTradeRejected({
             ts: now,
             strategyId: signal.strategyId,
             strategyName: signal.strategyName,
             side: signal.side,
             price: livePrice,
-            openCount: currentOpenCount + newTrades.length,
-            maxOpenMockTrades: limit,
+            code: "COOLDOWN",
+            message: "strategy already has an open same-side position",
           }));
-          console.info(
-            "[MOCK_TRADE_LIMIT_REACHED]",
-            `strategy=${signal.strategyName}#${signal.strategyId}`,
-            `side=${signal.side}`,
-            `open=${currentOpenCount + newTrades.length}`,
-            `limit=${limit}`,
-            "source=research",
-          );
           continue;
         }
         const trade = buildMockTradeFromResearchSignal({
@@ -538,7 +558,48 @@ export function useMockTradingEngine(
           now,
           equity,
         });
-        if (!trade) continue;
+        if (!trade) {
+          seenTraceIdsRef.current.add(dedupeKey);
+          limitRejected++;
+          newLogs.push(logForMockTradeRejected({
+            ts: now,
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            side: signal.side,
+            price: livePrice,
+            code: "SIGNAL_SCORE",
+            message: "research signal failed score or trade quality threshold",
+          }));
+          continue;
+        }
+        const decision = evaluateMockTradeOpenRisk({
+          trade,
+          existingTrades: tradesRef.current,
+          pendingTrades: newTrades,
+          config: configRef.current,
+          now,
+        });
+        if (!decision.allowed) {
+          seenTraceIdsRef.current.add(dedupeKey);
+          limitRejected++;
+          newLogs.push(logForMockTradeRejected({
+            ts: now,
+            strategyId: signal.strategyId,
+            strategyName: signal.strategyName,
+            side: signal.side,
+            price: livePrice,
+            code: decision.code ?? "MAX_OPEN",
+            message: decision.message ?? "risk engine rejected trade",
+          }));
+          console.info(
+            "[MOCK_TRADE_REJECTED]",
+            `strategy=${signal.strategyName}#${signal.strategyId}`,
+            `side=${signal.side}`,
+            `code=${decision.code ?? "UNKNOWN"}`,
+            "source=research",
+          );
+          continue;
+        }
         seenTraceIdsRef.current.add(trade.traceId);
         newTrades.push(trade);
         newLogs.push(logForMockTradeCreated(trade));

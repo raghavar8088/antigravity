@@ -1,8 +1,8 @@
 /**
  * Mock Trading Engine — analysis-only $1,000,000 paper account that mirrors
  * the production BTC FT desk's sizing, fees, slippage, and PnL math but
- * deliberately removes every strategy gate so we can answer "which strategies
- * would be profitable if blockers were removed?".
+ * keeps the strategy gate results intact so mock fills are only created for
+ * executable signals that would have survived the desk's blocker pipeline.
  *
  * Mirrored from `futuresPaperMath`:
  *   - Linear gross PnL (paperLinearGrossPnl)
@@ -20,6 +20,8 @@
  */
 
 import {
+  applyFundingAccrual,
+  DELTA_PAPER_FUNDING_INTERVAL_MS,
   paperApplyEntrySlippage,
   paperApplyExitSlippage,
   paperLinearGrossPnl,
@@ -28,35 +30,17 @@ import {
 } from "@/lib/futuresPaperMath";
 import type { StrategySignalTraceRow } from "@/lib/strategySignalTrace";
 
-// ── Blocker gates that mock trading explicitly ignores ───────────────────────
-// These are the production gates that the user wants to bypass for analysis.
-// REJECTED rows whose gate is in this set still produce mock trades; the gate
-// is recorded only as informational metadata on the mock trade.
-export const MOCK_IGNORED_GATES = [
-  "REGIME",        // REGIME_BLOCKING
-  "SIGNAL",        // signal threshold not met
-  "ATR_FEES",      // ATR vs fee hurdle
-  "CONFIRM",       // confluence confirmation
-  "QUALITY",       // signal quality score
-  "MTF",           // multi-timeframe confluence
-  "COOLDOWN",      // per-strategy cooldown
-  "OCCUPIED",      // strategy already in a position
-  "CATEGORY",      // per-category cap
-  "SAME_SIDE",     // same-side cap
-  "MAX_OPEN",      // global open-positions cap
-  "MARGIN",        // margin sufficiency
-  "SPREAD",        // spread filter
-  "SESSION",       // UTC session window
-] as const;
-
-export type MockIgnoredGate = (typeof MOCK_IGNORED_GATES)[number];
-
 // ── Types ────────────────────────────────────────────────────────────────────
 export type MockTradeStatus = "OPEN" | "CLOSED";
 export type MockSide = "BUY" | "SELL";
 export type MockExitReason = "TAKE_PROFIT" | "STOP_LOSS" | "MAX_HOLD" | "MANUAL";
 export type MockSizingMode = "fixed_pct_equity" | "fixed_notional" | "risk_pct_equity";
-export const DEFAULT_MAX_OPEN_MOCK_TRADES = 5_000;
+export const DEFAULT_MAX_OPEN_MOCK_TRADES = 5;
+export const DEFAULT_MAX_OPEN_MOCK_LONG_TRADES = 3;
+export const DEFAULT_MAX_OPEN_MOCK_SHORT_TRADES = 3;
+export const DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES = 15;
+export const DEFAULT_MOCK_MIN_RISK_REWARD_RATIO = 1.5;
+export const DEFAULT_MOCK_MAX_SIGNALS_PER_BATCH = 3;
 
 export interface MockTradeBlocker {
   /** Gate the strategy hit (e.g. "REGIME"). */
@@ -103,14 +87,36 @@ export interface MockTradingConfig {
   slippageBpsPerSide: number;
   /** Mock-only cap for simultaneous OPEN mock trades. */
   maxOpenMockTrades: number;
+  /** Mock-only cap for simultaneous LONG/BUY positions. */
+  maxOpenLongTrades: number;
+  /** Mock-only cap for simultaneous SHORT/SELL positions. */
+  maxOpenShortTrades: number;
+  /** Minimum minutes before the same strategy can enter again. */
+  tradeCooldownMinutes: number;
+  /** Minimum signal score/confidence needed before risk checks. */
+  minSignalScore: number;
+  /** Maximum new entries selected from one signal batch. */
+  maxSignalsPerBatch: number;
+  /** Minimum net TP / net SL ratio required before opening. */
+  minRiskRewardRatio: number;
+  /** Stop new entries after this realized rolling-24h loss percentage of starting equity. */
+  dailyLossLimitPct: number;
+  /** Stop new entries after this realized rolling-7d loss percentage of starting equity. */
+  weeklyLossLimitPct: number;
+  /** Stop new entries after this max drawdown percentage of starting equity. */
+  maxDrawdownPct: number;
+  /** Funding rate percent for one funding interval. Positive means longs pay. */
+  fundingRatePctPer8h: number;
+  /** Funding interval in hours, defaults to the BTC perp 8h convention. */
+  fundingIntervalHours: number;
 }
 
 export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
   startingBalanceUsd: 1_000_000,
-  sizingMode: "fixed_pct_equity",
+  sizingMode: "risk_pct_equity",
   fixedPctOfEquity: 1,
   fixedNotionalUsd: 10_000,
-  riskPctOfEquity: 1,
+  riskPctOfEquity: 0.25,
   leverage: 25,
   takeProfitUsd: 10,
   stopLossUsd: 5,
@@ -120,6 +126,17 @@ export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
   takerFeePct: 0.0005,
   slippageBpsPerSide: 5,
   maxOpenMockTrades: DEFAULT_MAX_OPEN_MOCK_TRADES,
+  maxOpenLongTrades: DEFAULT_MAX_OPEN_MOCK_LONG_TRADES,
+  maxOpenShortTrades: DEFAULT_MAX_OPEN_MOCK_SHORT_TRADES,
+  tradeCooldownMinutes: DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES,
+  minSignalScore: 50,
+  maxSignalsPerBatch: DEFAULT_MOCK_MAX_SIGNALS_PER_BATCH,
+  minRiskRewardRatio: DEFAULT_MOCK_MIN_RISK_REWARD_RATIO,
+  dailyLossLimitPct: 3,
+  weeklyLossLimitPct: 6,
+  maxDrawdownPct: 10,
+  fundingRatePctPer8h: 0,
+  fundingIntervalHours: 8,
 };
 
 /**
@@ -179,6 +196,8 @@ export interface MockTrade {
   realizedPnl: number;
   /** Round-trip fees in USD once CLOSED. */
   fees: number;
+  /** Futures funding paid by the position. Negative means the position received funding. */
+  fundingCosts?: number;
   exitReason: MockExitReason | null;
   /** Fill price after exit slippage. */
   exitPrice: number | null;
@@ -199,14 +218,25 @@ export interface MockTrade {
 /**
  * Did this trace row raise a directional strategy signal?
  *
- * A signal is "raised" when the strategy produced a side (LONG/SHORT) AND a
- * positive signal score — regardless of whether it later passed downstream
- * gates. Mock trading creates a trade for every raised signal.
+ * A signal is "raised" when the strategy produced a side (LONG/SHORT) and a
+ * positive signal score. Raised does not mean executable; rejected blocker rows
+ * are filtered by `isExecutableTraceRow`.
  */
 export function isStrategySignalRaised(row: StrategySignalTraceRow): boolean {
   if (!row.side) return false;
   if (!Number.isFinite(row.signalScore) || row.signalScore <= 0) return false;
   return true;
+}
+
+export function isExecutableTraceRow(row: StrategySignalTraceRow): boolean {
+  if (!isStrategySignalRaised(row)) return false;
+  if (row.status !== "OPENED" && row.status !== "CANDIDATE") return false;
+  if (row.gate !== "OPENED" && row.status !== "CANDIDATE") return false;
+  if (row.confirmPassed === false) return false;
+  if (row.regimeAllowed === false) return false;
+  if (row.feeHurdlePassed === false) return false;
+  if (!Number.isFinite(row.signalScore) || !Number.isFinite(row.requiredThreshold)) return false;
+  return row.requiredThreshold <= 0 || row.signalScore >= row.requiredThreshold;
 }
 
 /** Map LONG/SHORT trace side → BUY/SELL order side. */
@@ -227,6 +257,33 @@ export function blockersFromTraceRow(row: StrategySignalTraceRow): MockTradeBloc
   if (row.status === "OPENED") return [];
   if (row.status === "CANDIDATE") return [];
   return [{ gate: row.gate, reason: row.reason }];
+}
+
+function mockFundingRate(config: MockTradingConfig): number {
+  return Number.isFinite(config.fundingRatePctPer8h) ? config.fundingRatePctPer8h / 100 : 0;
+}
+
+function mockFundingIntervalMs(config: MockTradingConfig): number {
+  if (!Number.isFinite(config.fundingIntervalHours) || config.fundingIntervalHours <= 0) {
+    return DELTA_PAPER_FUNDING_INTERVAL_MS;
+  }
+  return config.fundingIntervalHours * 60 * 60 * 1000;
+}
+
+function computeMockFundingCost(args: {
+  side: MockSide;
+  notional: number;
+  openedAt: number;
+  now: number;
+  config: MockTradingConfig;
+}): number {
+  return applyFundingAccrual({
+    side: toPaperSide(args.side),
+    notional: args.notional,
+    fundingRate: mockFundingRate(args.config),
+    elapsedMs: Math.max(0, args.now - args.openedAt),
+    fundingIntervalMs: mockFundingIntervalMs(args.config),
+  });
 }
 
 function resolveExit(
@@ -312,6 +369,26 @@ export function countOpenMockTrades(trades: readonly MockTrade[]): number {
   return open;
 }
 
+export function countOpenMockTradesBySide(trades: readonly MockTrade[], side: MockSide): number {
+  let open = 0;
+  for (const trade of trades) {
+    if (trade.status === "OPEN" && trade.side === side) open++;
+  }
+  return open;
+}
+
+export function maxOpenLongTradesFromConfig(config: MockTradingConfig): number {
+  const raw = config.maxOpenLongTrades;
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_MAX_OPEN_MOCK_LONG_TRADES;
+  return Math.max(1, Math.floor(raw));
+}
+
+export function maxOpenShortTradesFromConfig(config: MockTradingConfig): number {
+  const raw = config.maxOpenShortTrades;
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_MAX_OPEN_MOCK_SHORT_TRADES;
+  return Math.max(1, Math.floor(raw));
+}
+
 export function canOpenAdditionalMockTrade(args: {
   trades: readonly MockTrade[];
   config: MockTradingConfig;
@@ -319,6 +396,150 @@ export function canOpenAdditionalMockTrade(args: {
 }): boolean {
   const pending = Math.max(0, Math.floor(args.pendingOpenTrades ?? 0));
   return countOpenMockTrades(args.trades) + pending < maxOpenMockTradesFromConfig(args.config);
+}
+
+export function mockTradeFamilyKey(trade: Pick<MockTrade, "strategyId" | "strategyFamily">): string {
+  return trade.strategyFamily?.trim() || `strategy:${trade.strategyId}`;
+}
+
+function candidateFamilyKey(candidate: Pick<MockTrade, "strategyId" | "strategyFamily">): string {
+  return mockTradeFamilyKey(candidate);
+}
+
+function rollingRealizedPnl(trades: readonly MockTrade[], now: number, windowMs: number): number {
+  const since = now - windowMs;
+  let pnl = 0;
+  for (const trade of trades) {
+    if (trade.status !== "CLOSED" || trade.closedAt == null || trade.closedAt < since) continue;
+    pnl += trade.realizedPnl;
+  }
+  return pnl;
+}
+
+function minutesSinceLastStrategyEntry(args: {
+  strategyId: number;
+  trades: readonly MockTrade[];
+  now: number;
+}): number | null {
+  let latest: number | null = null;
+  for (const trade of args.trades) {
+    if (trade.strategyId !== args.strategyId) continue;
+    if (latest == null || trade.openedAt > latest) latest = trade.openedAt;
+  }
+  if (latest == null) return null;
+  return (args.now - latest) / 60_000;
+}
+
+export type MockTradeRejectionCode =
+  | "BLOCKER"
+  | "SIGNAL_SCORE"
+  | "MISSING_EXIT"
+  | "RISK_REWARD"
+  | "MAX_OPEN"
+  | "MAX_SIDE"
+  | "FAMILY_CONFLICT"
+  | "COOLDOWN"
+  | "MARGIN"
+  | "DAILY_LOSS"
+  | "WEEKLY_LOSS"
+  | "MAX_DRAWDOWN";
+
+export interface MockTradeRiskDecision {
+  allowed: boolean;
+  code?: MockTradeRejectionCode;
+  message?: string;
+}
+
+export function evaluateMockTradeOpenRisk(args: {
+  trade: MockTrade;
+  existingTrades: readonly MockTrade[];
+  pendingTrades?: readonly MockTrade[];
+  config: MockTradingConfig;
+  now: number;
+}): MockTradeRiskDecision {
+  const pendingTrades = args.pendingTrades ?? [];
+  const portfolio = [...args.existingTrades, ...pendingTrades];
+  const trade = args.trade;
+  const config = args.config;
+
+  if (trade.blockers.length > 0) {
+    return { allowed: false, code: "BLOCKER", message: `blocked by ${trade.blockers.map((b) => b.gate).join(",")}` };
+  }
+  const minScore = Number.isFinite(config.minSignalScore) ? config.minSignalScore : DEFAULT_MOCK_TRADING_CONFIG.minSignalScore;
+  if (!Number.isFinite(trade.signalScore) || trade.signalScore < minScore) {
+    return { allowed: false, code: "SIGNAL_SCORE", message: `signal score ${trade.signalScore.toFixed(1)} below ${minScore.toFixed(1)}` };
+  }
+  if (trade.takeProfitUsd <= 0 || trade.stopLossUsd <= 0) {
+    return { allowed: false, code: "MISSING_EXIT", message: "mandatory TP/SL estimate missing" };
+  }
+  const minRr = Number.isFinite(config.minRiskRewardRatio) && config.minRiskRewardRatio > 0
+    ? config.minRiskRewardRatio
+    : DEFAULT_MOCK_MIN_RISK_REWARD_RATIO;
+  if (!Number.isFinite(trade.riskRewardRatio) || trade.riskRewardRatio < minRr) {
+    return { allowed: false, code: "RISK_REWARD", message: `risk/reward ${trade.riskRewardRatio.toFixed(2)} below ${minRr.toFixed(2)}` };
+  }
+
+  const account = computeAccountState(args.existingTrades, config);
+  const starting = account.startingBalance;
+  const dailyLimit = Math.max(0, config.dailyLossLimitPct) / 100;
+  if (dailyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 24 * 60 * 60 * 1000) <= -starting * dailyLimit) {
+    return { allowed: false, code: "DAILY_LOSS", message: `rolling daily loss limit ${config.dailyLossLimitPct}% breached` };
+  }
+  const weeklyLimit = Math.max(0, config.weeklyLossLimitPct) / 100;
+  if (weeklyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 7 * 24 * 60 * 60 * 1000) <= -starting * weeklyLimit) {
+    return { allowed: false, code: "WEEKLY_LOSS", message: `rolling weekly loss limit ${config.weeklyLossLimitPct}% breached` };
+  }
+  const maxDrawdown = Math.max(0, config.maxDrawdownPct) / 100;
+  if (maxDrawdown > 0 && account.maxDrawdownPct >= maxDrawdown) {
+    return { allowed: false, code: "MAX_DRAWDOWN", message: `max drawdown ${config.maxDrawdownPct}% breached` };
+  }
+
+  if (countOpenMockTrades(portfolio) >= maxOpenMockTradesFromConfig(config)) {
+    return { allowed: false, code: "MAX_OPEN", message: `max open positions ${maxOpenMockTradesFromConfig(config)} reached` };
+  }
+  const sideLimit = trade.side === "BUY" ? maxOpenLongTradesFromConfig(config) : maxOpenShortTradesFromConfig(config);
+  if (countOpenMockTradesBySide(portfolio, trade.side) >= sideLimit) {
+    return { allowed: false, code: "MAX_SIDE", message: `${trade.side === "BUY" ? "long" : "short"} position cap ${sideLimit} reached` };
+  }
+
+  const family = candidateFamilyKey(trade);
+  const oppositeSide: MockSide = trade.side === "BUY" ? "SELL" : "BUY";
+  const hasOppositeFamilyOpen = portfolio.some(
+    (openTrade) =>
+      openTrade.status === "OPEN" &&
+      openTrade.side === oppositeSide &&
+      mockTradeFamilyKey(openTrade) === family,
+  );
+  if (hasOppositeFamilyOpen) {
+    return { allowed: false, code: "FAMILY_CONFLICT", message: `opposite ${family} position already open` };
+  }
+
+  const cooldown = Math.max(DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES, config.tradeCooldownMinutes);
+  const minutes = minutesSinceLastStrategyEntry({ strategyId: trade.strategyId, trades: portfolio, now: args.now });
+  if (minutes != null && minutes < cooldown) {
+    return { allowed: false, code: "COOLDOWN", message: `strategy cooldown ${cooldown}m active (${minutes.toFixed(1)}m elapsed)` };
+  }
+  if (trade.marginUsed > account.availableBalance) {
+    return { allowed: false, code: "MARGIN", message: "insufficient simulated margin" };
+  }
+  return { allowed: true };
+}
+
+export function scoreMockTraceRow(row: StrategySignalTraceRow): number {
+  const threshold = Number.isFinite(row.requiredThreshold) && row.requiredThreshold > 0 ? row.requiredThreshold : 1;
+  const quality = Number.isFinite(row.qualityScore) ? row.qualityScore ?? 0 : 0;
+  const mtf = Number.isFinite(row.mtfScore) ? row.mtfScore ?? 0 : 0;
+  return row.signalScore + Math.min(50, (row.signalScore / threshold) * 10) + quality * 0.15 + mtf * 0.1;
+}
+
+export function scoreMockResearchSignal(signal: MockResearchSignalInput): number {
+  return Math.max(0, Math.min(100, signal.confidenceScore));
+}
+
+export function maxSignalsPerBatchFromConfig(config: MockTradingConfig): number {
+  const raw = config.maxSignalsPerBatch;
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_MOCK_MAX_SIGNALS_PER_BATCH;
+  return Math.max(1, Math.floor(raw));
 }
 
 /**
@@ -336,8 +557,9 @@ export function buildMockTradeFromTrace(args: {
   override?: StrategyExitOverride;
 }): MockTrade | null {
   const { row, currentPrice, config, now, override } = args;
-  if (!isStrategySignalRaised(row)) return null;
+  if (!isExecutableTraceRow(row)) return null;
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+  if (row.signalScore < config.minSignalScore) return null;
   const equity = args.equity ?? config.startingBalanceUsd;
   const side = traceSideToOrderSide(row.side as "LONG" | "SHORT");
   const paperSide = toPaperSide(side);
@@ -360,6 +582,8 @@ export function buildMockTradeFromTrace(args: {
     takeProfitPct: exit.takeProfitPct,
     stopLossPct: exit.stopLossPct,
   });
+  if (exitLevels.takeProfitUsd <= 0 || exitLevels.stopLossUsd <= 0) return null;
+  if (exitLevels.riskRewardRatio < config.minRiskRewardRatio) return null;
   return {
     id: `mock-${row.traceId}`,
     traceId: row.traceId,
@@ -384,8 +608,10 @@ export function buildMockTradeFromTrace(args: {
     unrealizedPnl: 0,
     realizedPnl: 0,
     fees: 0,
+    fundingCosts: 0,
     exitReason: null,
     exitPrice: null,
+    strategyFamily: row.category,
   };
 }
 
@@ -418,6 +644,7 @@ export function buildMockTradeFromResearchSignal(args: {
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
   if (signal.side !== "BUY" && signal.side !== "SELL") return null;
   if (!Number.isFinite(signal.confidenceScore) || signal.confidenceScore <= 0) return null;
+  if (signal.confidenceScore < config.minSignalScore) return null;
 
   const equity = args.equity ?? config.startingBalanceUsd;
   const paperSide = toPaperSide(signal.side);
@@ -440,6 +667,8 @@ export function buildMockTradeFromResearchSignal(args: {
     takeProfitPct: exit.takeProfitPct,
     stopLossPct: exit.stopLossPct,
   });
+  if (exitLevels.takeProfitUsd <= 0 || exitLevels.stopLossUsd <= 0) return null;
+  if (exitLevels.riskRewardRatio < config.minRiskRewardRatio) return null;
   const safeConfidence = Math.max(0, Math.min(100, signal.confidenceScore));
   const traceId = `mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`;
 
@@ -467,6 +696,7 @@ export function buildMockTradeFromResearchSignal(args: {
     unrealizedPnl: 0,
     realizedPnl: 0,
     fees: 0,
+    fundingCosts: 0,
     exitReason: null,
     exitPrice: null,
     strategyFamily: signal.strategyFamily,
@@ -503,13 +733,14 @@ export function computeMockNetPnlAtExitMark(args: {
   quantity: number;
   notional: number;
   config: MockTradingConfig;
+  fundingCosts?: number;
 }): number {
   const { side, entryPrice, exitMarkPrice, quantity, notional, config } = args;
   if (!Number.isFinite(exitMarkPrice) || exitMarkPrice <= 0) return 0;
   const fillPrice = paperApplyExitSlippage(toPaperSide(side), exitMarkPrice, config.slippageBpsPerSide);
   const gross = computeMockPnl(side, entryPrice, fillPrice, quantity);
   const fees = paperRoundTripTakerFees(notional, config.takerFeePct);
-  return gross - fees;
+  return gross - fees - (args.fundingCosts ?? 0);
 }
 
 export function computeMockExitLevels(args: {
@@ -647,7 +878,14 @@ export function applyPriceTickToTrade(args: {
   // Surface NET unrealized so the equity card matches realized math.
   const gross = computeMockPnl(activeTrade.side, activeTrade.entryPrice, price, activeTrade.quantity);
   const feesIfClosed = paperRoundTripTakerFees(activeTrade.notional, config.takerFeePct);
-  return { ...activeTrade, currentPrice: price, unrealizedPnl: gross - feesIfClosed };
+  const fundingCosts = computeMockFundingCost({
+    side: activeTrade.side,
+    notional: activeTrade.notional,
+    openedAt: activeTrade.openedAt,
+    now,
+    config,
+  });
+  return { ...activeTrade, currentPrice: price, unrealizedPnl: gross - feesIfClosed - fundingCosts, fundingCosts };
 }
 
 /** Manually close an open trade at the given mark. */
@@ -682,7 +920,14 @@ function finalizeClose(args: {
   );
   const gross = computeMockPnl(trade.side, trade.entryPrice, fillPrice, trade.quantity);
   const fees = paperRoundTripTakerFees(trade.notional, config.takerFeePct);
-  const net = gross - fees;
+  const fundingCosts = computeMockFundingCost({
+    side: trade.side,
+    notional: trade.notional,
+    openedAt: trade.openedAt,
+    now,
+    config,
+  });
+  const net = gross - fees - fundingCosts;
   return {
     ...trade,
     status: "CLOSED",
@@ -691,6 +936,7 @@ function finalizeClose(args: {
     unrealizedPnl: 0,
     realizedPnl: net,
     fees,
+    fundingCosts,
     exitReason,
     exitPrice: fillPrice,
   };
@@ -823,6 +1069,7 @@ export interface MockTradeAnalytics {
   realizedPnl: number;
   unrealizedPnl: number;
   averagePnl: number;
+  averageTrade: number;
   averageRealizedPnl: number;
   averageWin: number;
   averageLoss: number;
@@ -831,6 +1078,7 @@ export interface MockTradeAnalytics {
   takeProfitHitRate: number;
   stopLossHitRate: number;
   profitFactor: number | null;
+  sharpeRatio: number | null;
   perStrategy: MockStrategyAggregate[];
   perBlocker: MockBlockerAggregate[];
   perFamily: MockFamilyAggregate[];
@@ -886,6 +1134,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
   let stopLossLosses = 0;
   let grossWins = 0;
   let grossLosses = 0;
+  const closedPnls: number[] = [];
 
   const stratMap = new Map<number, MockStrategyAggregate>();
   const blockerMap = new Map<string, MockBlockerAggregate>();
@@ -897,6 +1146,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     } else {
       closed++;
       realized += t.realizedPnl;
+      closedPnls.push(t.realizedPnl);
       if (t.realizedPnl > 0) {
         wins++;
         grossWins += t.realizedPnl;
@@ -984,6 +1234,12 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
   }
 
   const decided = wins + losses;
+  const averageTrade = closed > 0 ? realized / closed : 0;
+  const variance = closedPnls.length > 1
+    ? closedPnls.reduce((sum, pnl) => sum + (pnl - averageTrade) ** 2, 0) / (closedPnls.length - 1)
+    : 0;
+  const stdev = Math.sqrt(variance);
+  const sharpeRatio = stdev > 0 ? (averageTrade / stdev) * Math.sqrt(closedPnls.length) : null;
   return {
     totalTrades: trades.length,
     openTrades: open,
@@ -992,8 +1248,9 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     totalPnl: realized + unrealized,
     realizedPnl: realized,
     unrealizedPnl: unrealized,
-    averagePnl: closed > 0 ? realized / closed : 0,
-    averageRealizedPnl: closed > 0 ? realized / closed : 0,
+    averagePnl: averageTrade,
+    averageTrade,
+    averageRealizedPnl: averageTrade,
     averageWin: wins > 0 ? grossWins / wins : 0,
     averageLoss: losses > 0 ? -grossLosses / losses : 0,
     takeProfitWins,
@@ -1001,6 +1258,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     takeProfitHitRate: closed > 0 ? takeProfitWins / closed : 0,
     stopLossHitRate: closed > 0 ? stopLossLosses / closed : 0,
     profitFactor: grossLosses > 0 ? grossWins / grossLosses : null,
+    sharpeRatio,
     perStrategy: [...stratMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),
     perBlocker: [...blockerMap.values()].sort((a, b) => b.total - a.total),
     perFamily: [...familyMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),
@@ -1124,7 +1382,7 @@ export function sortMockTrades(
 
 // ── Persistence validators ──────────────────────────────────────────────────
 /** Current persisted shape version. Bump when MockTrade fields change. */
-export const MOCK_PERSIST_VERSION = 3;
+export const MOCK_PERSIST_VERSION = 4;
 
 const REQUIRED_TRADE_NUMERIC_FIELDS: (keyof MockTrade)[] = [
   "notional",
@@ -1206,7 +1464,24 @@ export function isValidMockConfig(value: unknown): value is MockTradingConfig {
     num(c.takerFeePct) &&
     num(c.slippageBpsPerSide) &&
     num(c.maxOpenMockTrades) &&
-    (c.maxOpenMockTrades as number) >= 1
+    (c.maxOpenMockTrades as number) >= 1 &&
+    num(c.maxOpenLongTrades) &&
+    (c.maxOpenLongTrades as number) >= 1 &&
+    num(c.maxOpenShortTrades) &&
+    (c.maxOpenShortTrades as number) >= 1 &&
+    num(c.tradeCooldownMinutes) &&
+    (c.tradeCooldownMinutes as number) >= DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES &&
+    num(c.minSignalScore) &&
+    num(c.maxSignalsPerBatch) &&
+    (c.maxSignalsPerBatch as number) >= 1 &&
+    num(c.minRiskRewardRatio) &&
+    (c.minRiskRewardRatio as number) >= DEFAULT_MOCK_MIN_RISK_REWARD_RATIO &&
+    num(c.dailyLossLimitPct) &&
+    num(c.weeklyLossLimitPct) &&
+    num(c.maxDrawdownPct) &&
+    num(c.fundingRatePctPer8h) &&
+    num(c.fundingIntervalHours) &&
+    (c.fundingIntervalHours as number) > 0
   );
 }
 
@@ -1242,6 +1517,32 @@ export function normalizeMockTradingConfig(value: unknown): MockTradingConfig {
       ...DEFAULT_MOCK_TRADING_CONFIG,
       maxOpenMockTrades: num(source.maxOpenMockTrades, DEFAULT_MOCK_TRADING_CONFIG.maxOpenMockTrades, true),
     }),
+    maxOpenLongTrades: maxOpenLongTradesFromConfig({
+      ...DEFAULT_MOCK_TRADING_CONFIG,
+      maxOpenLongTrades: num(source.maxOpenLongTrades, DEFAULT_MOCK_TRADING_CONFIG.maxOpenLongTrades, true),
+    }),
+    maxOpenShortTrades: maxOpenShortTradesFromConfig({
+      ...DEFAULT_MOCK_TRADING_CONFIG,
+      maxOpenShortTrades: num(source.maxOpenShortTrades, DEFAULT_MOCK_TRADING_CONFIG.maxOpenShortTrades, true),
+    }),
+    tradeCooldownMinutes: Math.max(
+      DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES,
+      num(source.tradeCooldownMinutes, DEFAULT_MOCK_TRADING_CONFIG.tradeCooldownMinutes),
+    ),
+    minSignalScore: Math.max(0, Math.min(100, num(source.minSignalScore, DEFAULT_MOCK_TRADING_CONFIG.minSignalScore))),
+    maxSignalsPerBatch: maxSignalsPerBatchFromConfig({
+      ...DEFAULT_MOCK_TRADING_CONFIG,
+      maxSignalsPerBatch: num(source.maxSignalsPerBatch, DEFAULT_MOCK_TRADING_CONFIG.maxSignalsPerBatch, true),
+    }),
+    minRiskRewardRatio: Math.max(
+      DEFAULT_MOCK_MIN_RISK_REWARD_RATIO,
+      num(source.minRiskRewardRatio, DEFAULT_MOCK_TRADING_CONFIG.minRiskRewardRatio),
+    ),
+    dailyLossLimitPct: Math.max(0, num(source.dailyLossLimitPct, DEFAULT_MOCK_TRADING_CONFIG.dailyLossLimitPct)),
+    weeklyLossLimitPct: Math.max(0, num(source.weeklyLossLimitPct, DEFAULT_MOCK_TRADING_CONFIG.weeklyLossLimitPct)),
+    maxDrawdownPct: Math.max(0, num(source.maxDrawdownPct, DEFAULT_MOCK_TRADING_CONFIG.maxDrawdownPct)),
+    fundingRatePctPer8h: num(source.fundingRatePctPer8h, DEFAULT_MOCK_TRADING_CONFIG.fundingRatePctPer8h),
+    fundingIntervalHours: Math.max(0.01, num(source.fundingIntervalHours, DEFAULT_MOCK_TRADING_CONFIG.fundingIntervalHours, true)),
   };
   return next;
 }
@@ -1256,6 +1557,7 @@ export interface MockTradeLog {
     | "MOCK_TRADE_TP_HIT"
     | "MOCK_TRADE_SL_HIT"
     | "MOCK_TRADE_LIMIT_REACHED"
+    | "MOCK_TRADE_REJECTED"
     | "MOCK_ACCOUNT_UPDATED"
     | "MOCK_STRATEGY_RUNNER_EVENT"
     | "MOCK_STRATEGY_RUNNER_ERROR"
@@ -1283,7 +1585,7 @@ export function logForMockTradeCreated(trade: MockTrade): MockTradeLog {
     strategyName: trade.strategyName,
     side: trade.side,
     price: trade.entryPrice,
-    ignoredBlockers: trade.blockers.map((b) => b.gate),
+    ignoredBlockers: [],
     notional: trade.notional,
   };
 }
@@ -1310,6 +1612,27 @@ export function logForMockTradeLimitReached(args: {
   };
 }
 
+export function logForMockTradeRejected(args: {
+  ts: number;
+  strategyId: number;
+  strategyName: string;
+  side: MockSide;
+  price: number;
+  code: MockTradeRejectionCode;
+  message: string;
+}): MockTradeLog {
+  return {
+    ts: args.ts,
+    event: "MOCK_TRADE_REJECTED",
+    strategyId: args.strategyId,
+    strategyName: args.strategyName,
+    side: args.side,
+    price: args.price,
+    ignoredBlockers: [],
+    message: `${args.code}: ${args.message}`,
+  };
+}
+
 export function logForMockTradeClosed(trade: MockTrade): MockTradeLog {
   const event = trade.exitReason === "TAKE_PROFIT"
     ? "MOCK_TRADE_TP_HIT"
@@ -1327,7 +1650,7 @@ export function logForMockTradeClosed(trade: MockTrade): MockTradeLog {
     entryPrice: trade.entryPrice,
     exitPrice: trade.exitPrice ?? trade.currentPrice,
     exitReason: trade.exitReason,
-    ignoredBlockers: trade.blockers.map((b) => b.gate),
+    ignoredBlockers: [],
     pnl: trade.realizedPnl,
     notional: trade.notional,
   };

@@ -25,7 +25,6 @@ import {
   computeAnalytics,
   filterMockTrades,
   mockTradeAgeMinutes,
-  MOCK_IGNORED_GATES,
   MOCK_TRADE_SORT_OPTIONS,
   sortMockTrades,
   type MockAccountState,
@@ -113,6 +112,7 @@ function logColor(event: string): string {
   if (event === "MOCK_TRADE_CREATED") return "var(--desk-success)";
   if (event === "MOCK_TRADE_TP_HIT") return "var(--desk-success)";
   if (event === "MOCK_TRADE_SL_HIT") return "var(--desk-error)";
+  if (event === "MOCK_TRADE_REJECTED") return "var(--desk-warning)";
   if (event === "MOCK_TRADE_LIMIT_REACHED") return "var(--desk-warning)";
   return "var(--desk-primary)";
 }
@@ -358,7 +358,7 @@ export default function MockTradingDashboard() {
       },
       {
         id: "blockers",
-        header: "Blockers (ignored)",
+        header: "Blockers",
         cell: (t) =>
           t.blockers.length === 0 ? (
             <span style={{ color: "var(--desk-on-surface-variant)" }}>—</span>
@@ -434,10 +434,9 @@ export default function MockTradingDashboard() {
           <div>
             <h1 className="trading-landing-header__title">Mock Trading</h1>
             <p className="trading-landing-header__desc">
-              Simulated ${acct.startingBalance.toLocaleString("en-US")} paper account — every raised
-              strategy signal becomes a mock trade with full sizing, fees and slippage applied, and
-              the same TP/SL/MaxHold lifecycle as the production paper desk. Blockers are recorded
-              for analysis but never prevent a trade.
+              Simulated ${acct.startingBalance.toLocaleString("en-US")} paper account — strategy
+              signals are ranked, passed through blocker/risk/exposure controls, then executed with
+              futures-style sizing, fees, slippage, funding, TP/SL, and max-hold lifecycle rules.
             </p>
           </div>
           <div className="trading-landing-header__chips">
@@ -486,10 +485,9 @@ export default function MockTradingDashboard() {
           title={`Mock Trading uses simulated $${acct.startingBalance.toLocaleString("en-US")} paper balance. No real orders are placed.`}
         >
           The production safety pipeline is untouched. This module subscribes to the same BTC price
-          feed and the same strategy signal trace, then opens a mock trade for every raised signal
-          regardless of REGIME_BLOCKING, SIGNAL, ATR_FEES, confluence, cooldown, max-open, or
-          trend/regime filters. Sizing, leverage, fees and slippage mirror the main paper desk so
-          PnL is comparable.
+          feed and strategy signal trace, then rejects any signal with blockers or failed risk
+          checks. Sizing, leverage, fees, slippage, funding, cooldown, and exposure limits are
+          simulated before a mock position is created.
         </DeskBanner>
 
         {engine.persistence.error && (
@@ -571,16 +569,13 @@ export default function MockTradingDashboard() {
               compact
             />
             <DeskMetricTile label="Closed" value={engine.analytics.closedTrades} compact />
-            <DeskMetricTile
-              label="Mock limit rejects"
-              value={engine.mockLimitRejectedSignals.toLocaleString("en-US")}
-              compact
-            />
+            <DeskMetricTile label="Risk rejects" value={engine.mockLimitRejectedSignals.toLocaleString("en-US")} compact />
             <DeskMetricTile label="Win rate" value={fmtPct(engine.analytics.winRate, 1)} compact />
             <DeskMetricTile label="Total PnL" value={fmtUsd(engine.analytics.totalPnl)} valueClassName={totalPnlClass} compact />
             <DeskMetricTile label="Realized" value={fmtUsd(engine.analytics.realizedPnl)} valueClassName={realizedClass} compact />
             <DeskMetricTile label="Unrealized" value={fmtUsd(engine.analytics.unrealizedPnl)} valueClassName={unrealizedClass} compact />
             <DeskMetricTile label="Avg realized PnL" value={fmtUsd(engine.analytics.averageRealizedPnl)} compact />
+            <DeskMetricTile label="Average trade" value={fmtUsd(engine.analytics.averageTrade)} compact />
             <DeskMetricTile label="Avg win" value={fmtUsd(engine.analytics.averageWin)} valueClassName={pnlClass(engine.analytics.averageWin)} compact />
             <DeskMetricTile label="Avg loss" value={fmtUsd(engine.analytics.averageLoss)} valueClassName={pnlClass(engine.analytics.averageLoss)} compact />
             <DeskMetricTile label="TP wins" value={engine.analytics.takeProfitWins} compact />
@@ -592,6 +587,11 @@ export default function MockTradingDashboard() {
               value={engine.analytics.profitFactor == null ? "—" : engine.analytics.profitFactor.toFixed(2)}
               compact
             />
+            <DeskMetricTile
+              label="Sharpe ratio"
+              value={engine.analytics.sharpeRatio == null ? "—" : engine.analytics.sharpeRatio.toFixed(2)}
+              compact
+            />
           </div>
         </DeskCard>
 
@@ -599,7 +599,7 @@ export default function MockTradingDashboard() {
 
         <DeskCard padding="md">
           <DeskSectionHeader
-            title="Mock trades"
+            title="Open Positions & Trade History"
             subtitle={`${displayStart}-${displayEnd} of ${trades.length} matching displayed · ${engine.history.total || engine.trades.length} persisted total`}
           />
           <div
@@ -956,16 +956,12 @@ export default function MockTradingDashboard() {
                   {log.exitReason ? ` reason=${log.exitReason}` : ""}
                   {log.notional != null ? ` notional=${fmtUsdK(log.notional)}` : ""}
                   {log.pnl != null ? ` pnl=${fmtUsd(log.pnl)}` : ""}
-                  {log.ignoredBlockers.length > 0
-                    ? ` ignoredBlockers=[${log.ignoredBlockers.join(",")}]`
-                    : ""}
                 </div>
               ))}
             </div>
           )}
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--desk-on-surface-variant)" }}>
-            Mock trading ignores these production gates by design:{" "}
-            {MOCK_IGNORED_GATES.join(", ")}.
+            Rejected signals are logged for diagnostics; blockers no longer create mock trades.
           </div>
         </DeskCard>
       </div>
@@ -1078,7 +1074,7 @@ function MockConfigCard({
     <DeskCard padding="md">
       <DeskSectionHeader
         title="Mock account & sizing"
-        subtitle="New mock trades use TP/SL distance percentages; dollar outcomes are estimated from entry, side, quantity, fees, and slippage."
+        subtitle="Signals are ranked, risk-checked, and sized from account equity before mock futures execution costs are applied."
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
         <ConfigNumber
@@ -1090,8 +1086,38 @@ function MockConfigCard({
         <ConfigNumber
           label="Max open mock trades"
           value={config.maxOpenMockTrades}
-          step={100}
+          step={1}
           onChange={(v) => onChange({ ...config, maxOpenMockTrades: Math.max(1, Math.floor(v)) })}
+        />
+        <ConfigNumber
+          label="Max long positions"
+          value={config.maxOpenLongTrades}
+          step={1}
+          onChange={(v) => onChange({ ...config, maxOpenLongTrades: Math.max(1, Math.floor(v)) })}
+        />
+        <ConfigNumber
+          label="Max short positions"
+          value={config.maxOpenShortTrades}
+          step={1}
+          onChange={(v) => onChange({ ...config, maxOpenShortTrades: Math.max(1, Math.floor(v)) })}
+        />
+        <ConfigNumber
+          label="Cooldown (min)"
+          value={config.tradeCooldownMinutes}
+          step={1}
+          onChange={(v) => onChange({ ...config, tradeCooldownMinutes: Math.max(15, v) })}
+        />
+        <ConfigNumber
+          label="Min signal score"
+          value={config.minSignalScore}
+          step={1}
+          onChange={(v) => onChange({ ...config, minSignalScore: Math.max(0, Math.min(100, v)) })}
+        />
+        <ConfigNumber
+          label="Max signals / batch"
+          value={config.maxSignalsPerBatch}
+          step={1}
+          onChange={(v) => onChange({ ...config, maxSignalsPerBatch: Math.max(1, Math.floor(v)) })}
         />
         <ConfigSelect
           label="Sizing mode"
@@ -1162,6 +1188,42 @@ function MockConfigCard({
           value={config.slippageBpsPerSide}
           step={1}
           onChange={(v) => onChange({ ...config, slippageBpsPerSide: Math.max(0, v) })}
+        />
+        <ConfigNumber
+          label="Min risk/reward"
+          value={config.minRiskRewardRatio}
+          step={0.1}
+          onChange={(v) => onChange({ ...config, minRiskRewardRatio: Math.max(1.5, v) })}
+        />
+        <ConfigNumber
+          label="Daily loss limit (%)"
+          value={config.dailyLossLimitPct}
+          step={0.5}
+          onChange={(v) => onChange({ ...config, dailyLossLimitPct: Math.max(0, v) })}
+        />
+        <ConfigNumber
+          label="Weekly loss limit (%)"
+          value={config.weeklyLossLimitPct}
+          step={0.5}
+          onChange={(v) => onChange({ ...config, weeklyLossLimitPct: Math.max(0, v) })}
+        />
+        <ConfigNumber
+          label="Max drawdown stop (%)"
+          value={config.maxDrawdownPct}
+          step={0.5}
+          onChange={(v) => onChange({ ...config, maxDrawdownPct: Math.max(0, v) })}
+        />
+        <ConfigNumber
+          label="Funding rate / 8h (%)"
+          value={config.fundingRatePctPer8h}
+          step={0.001}
+          onChange={(v) => onChange({ ...config, fundingRatePctPer8h: v })}
+        />
+        <ConfigNumber
+          label="Funding interval (h)"
+          value={config.fundingIntervalHours}
+          step={1}
+          onChange={(v) => onChange({ ...config, fundingIntervalHours: Math.max(0.01, v) })}
         />
       </div>
     </DeskCard>
