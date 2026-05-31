@@ -7,6 +7,7 @@ import (
 	"math"
 	"sync"
 
+	riskv2 "antigravity-engine/internal/risk/v2"
 	"antigravity-engine/internal/strategy"
 )
 
@@ -18,8 +19,10 @@ type RiskProfile struct {
 }
 
 type RiskEngine struct {
-	mu      sync.RWMutex
-	profile RiskProfile
+	mu        sync.RWMutex
+	profile   RiskProfile
+	portfolio *PortfolioRiskEngine
+	v2        *riskv2.Engine
 
 	// Trackers
 	currentExposureBTC float64 // Signed net BTC exposure; negative values represent shorts.
@@ -31,8 +34,20 @@ type RiskEngine struct {
 }
 
 func NewRiskEngine(p RiskProfile) *RiskEngine {
+	limits := DefaultRiskLimits(p.MaxCapitalUSD)
+	if p.MaxCapitalUSD > 0 {
+		limits.EquityUSD = p.MaxCapitalUSD
+	}
+	if p.MaxPositionBTC > 0 && p.MaxCapitalUSD > 0 {
+		// Preserve the legacy max capital envelope while the portfolio engine
+		// takes over heat, exposure, concentration, and loss limits.
+		limits.MaxNetExposurePct = 100
+		limits.MaxGrossExposurePct = 200
+	}
 	return &RiskEngine{
 		profile:            p,
+		portfolio:          NewPortfolioRiskEngine(limits),
+		v2:                 riskv2.NewEngine(limits.EquityUSD),
 		currentExposureBTC: 0,
 		currentLossUSD:     0,
 	}
@@ -94,6 +109,46 @@ func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 		}
 	}
 
+	if r.portfolio != nil {
+		order := RiskOrder{
+			Symbol:         sig.Symbol,
+			Strategy:       "UNSPECIFIED",
+			StrategyFamily: "Unknown",
+			Exchange:       "paper",
+			Side:           sideFromAction(sig.Action),
+			EntryPrice:     currentPrice,
+			SizeBTC:        sig.TargetSize,
+			NotionalUSD:    sig.TargetSize * currentPrice,
+			StopLossPrice:  stopLossPriceFromSignal(sig, currentPrice),
+			Leverage:       1,
+			Confidence:     sig.Confidence,
+			Regime:         RegimeUnknown,
+		}
+		decision := r.portfolio.ValidateTrade(order)
+		if !decision.Approved {
+			return fmt.Errorf("RISK_VIOLATION: %s", decision.Reason)
+		}
+	}
+
+	if r.v2 != nil {
+		req := riskv2.TradeRequest{
+			Symbol:            sig.Symbol,
+			Strategy:          "UNSPECIFIED",
+			Family:            riskv2.FamilyReserve,
+			Side:              sideFromActionV2(sig.Action),
+			EntryPrice:        currentPrice,
+			StopLossPrice:     stopLossPriceFromSignal(sig, currentPrice),
+			RequestedSizeBTC:  sig.TargetSize,
+			RequestedLeverage: 1,
+			Confidence:        sig.Confidence,
+			Exchange:          "paper",
+		}
+		decision := r.v2.ValidateTrade(req, riskv2.MarketState{Regime: riskv2.RegimeUnknown}, riskv2.StrategyMetrics{Strategy: "UNSPECIFIED", Family: riskv2.FamilyReserve, WinRate: 0.5, ProfitFactor: 1.2, Sharpe: 1.2, OOSProfitFactor: 1.1, OOSExpectancyUSD: 1, HealthScore: 60, TotalTrades: 30})
+		if !decision.Approved {
+			return decision.Error()
+		}
+	}
+
 	return nil
 }
 
@@ -116,6 +171,9 @@ func (r *RiskEngine) RecordPnL(pnl float64) {
 	r.dailyPnL += pnl
 	if pnl < 0 {
 		r.currentLossUSD += math.Abs(pnl)
+	}
+	if r.portfolio != nil {
+		r.portfolio.RecordPnL(pnl)
 	}
 }
 
@@ -157,5 +215,47 @@ func (r *RiskEngine) Reset() {
 	r.currentLossUSD = 0
 	r.dailyPnL = 0
 	r.lastATR = 0
+	r.portfolio = NewPortfolioRiskEngine(DefaultRiskLimits(r.profile.MaxCapitalUSD))
+	r.v2 = riskv2.NewEngine(r.profile.MaxCapitalUSD)
 	log.Println("[RISK ENGINE] Full state reset")
+}
+
+func (r *RiskEngine) Portfolio() *PortfolioRiskEngine {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.portfolio
+}
+
+func (r *RiskEngine) V2() *riskv2.Engine {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.v2
+}
+
+func sideFromAction(action strategy.Action) Side {
+	if action == strategy.ActionSell {
+		return SideShort
+	}
+	return SideLong
+}
+
+func sideFromActionV2(action strategy.Action) riskv2.Side {
+	if action == strategy.ActionSell {
+		return riskv2.SideShort
+	}
+	return riskv2.SideLong
+}
+
+func stopLossPriceFromSignal(sig strategy.Signal, entry float64) float64 {
+	if entry <= 0 {
+		return 0
+	}
+	slPct := sig.StopLossPct
+	if slPct <= 0 {
+		slPct = 1
+	}
+	if sig.Action == strategy.ActionSell {
+		return entry * (1 + slPct/100)
+	}
+	return entry * (1 - slPct/100)
 }

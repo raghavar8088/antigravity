@@ -4,7 +4,7 @@ import "testing"
 
 func TestAIStrategyLibraryHasExpectedCoverage(t *testing.T) {
 	library := GetAIStrategyLibrary()
-	if got, want := len(library), 60; got != want {
+	if got, want := len(library), 61; got != want {
 		t.Fatalf("expected %d AI strategies, got %d", want, got)
 	}
 

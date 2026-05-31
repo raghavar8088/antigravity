@@ -160,6 +160,17 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 1.40
 	case "Bollinger_RSI_Fade_Scalp":
 		score += 1.30
+	// ── INSTITUTIONAL ALPHA — uncorrelated edge sources ─────────────
+	case "CVDDivergence_Alpha",
+		"DeltaAbsorption_Alpha",
+		"LiquiditySweepReversal_Alpha",
+		"FVGRetest_Alpha",
+		"OrderBlockRetest_Alpha",
+		"MSSContinuation_Alpha",
+		"POCBounce_Alpha",
+		"SessionExpansion_Alpha",
+		"FundingMeanReversion_Alpha":
+		score += 1.45
 	// ── BORDERLINE — small negatives, below threshold ──────────────
 	case "AdaptiveRSI_Dynamic_Scalp":
 		score += 0.80

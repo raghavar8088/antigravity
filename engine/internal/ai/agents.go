@@ -334,6 +334,14 @@ func (o *MultiAgentOrchestrator) AuditSignal(ctx context.Context, market MarketC
 // Free providers are tried first to minimise cost.
 // It returns (approved, reason, confidence, provider).
 func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64, string) {
+	cacheKey := ""
+	if o.cache != nil {
+		cacheKey = o.cache.AuditKey(market, strategyName, action, userNote)
+		if approved, reason, conf, provider, ok := o.cache.GetAudit(cacheKey); ok {
+			return approved, "[cache] " + reason, conf, provider + "-cache"
+		}
+	}
+
 	anyAvailable := o.groq.IsAvailable() || o.gemini.IsAvailable() || o.mistral.IsAvailable() ||
 		o.huggingface.IsAvailable() || o.cloudflare.IsAvailable() || o.openrouter.IsAvailable() || o.openai.IsAvailable()
 	if !anyAvailable {
@@ -341,16 +349,20 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	}
 
 	o.auditMu.Lock()
-	defer func() {
-		time.Sleep(4200 * time.Millisecond) // Throttle to respect free-tier rate limits
-		o.auditMu.Unlock()
-	}()
+	defer o.auditMu.Unlock()
+
+	finish := func(approved bool, reason string, conf float64, provider string) (bool, string, float64, string) {
+		if o.cache != nil && cacheKey != "" {
+			o.cache.SetAudit(cacheKey, market, approved, reason, conf, provider)
+		}
+		return approved, reason, conf, provider
+	}
 
 	// 1. Groq — fastest free tier (Llama 3 70B, 14,400 req/day)
 	if o.groq.IsAvailable() {
 		approved, reason, conf := o.runGroqAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "groq"
+			return finish(approved, reason, conf, "groq")
 		}
 		log.Printf("[AI AUDIT FALLBACK] Groq failed -> trying Gemini...")
 	}
@@ -359,7 +371,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.gemini.IsAvailable() {
 		approved, reason, conf := o.runGeminiAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "gemini"
+			return finish(approved, reason, conf, "gemini")
 		}
 		log.Printf("[AI AUDIT FALLBACK] Gemini failed -> trying Mistral...")
 	}
@@ -368,7 +380,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.mistral.IsAvailable() {
 		approved, reason, conf := o.runMistralAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "mistral"
+			return finish(approved, reason, conf, "mistral")
 		}
 		log.Printf("[AI AUDIT FALLBACK] Mistral failed -> trying OpenRouter...")
 	}
@@ -377,7 +389,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.huggingface.IsAvailable() {
 		approved, reason, conf := o.runHuggingFaceAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "huggingface"
+			return finish(approved, reason, conf, "huggingface")
 		}
 		log.Printf("[AI AUDIT FALLBACK] HuggingFace failed -> trying Cloudflare...")
 	}
@@ -386,7 +398,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.cloudflare.IsAvailable() {
 		approved, reason, conf := o.runCloudflareAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "cloudflare"
+			return finish(approved, reason, conf, "cloudflare")
 		}
 		log.Printf("[AI AUDIT FALLBACK] Cloudflare failed -> trying OpenRouter...")
 	}
@@ -395,7 +407,7 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.openrouter.IsAvailable() {
 		approved, reason, conf := o.runOpenRouterAudit(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "openrouter"
+			return finish(approved, reason, conf, "openrouter")
 		}
 		log.Printf("[AI AUDIT FALLBACK] OpenRouter failed -> trying OpenAI...")
 	}
@@ -404,11 +416,11 @@ func (o *MultiAgentOrchestrator) AuditSignalWithFallback(ctx context.Context, ma
 	if o.openai.IsAvailable() {
 		approved, reason, conf := o.AuditSignal(ctx, market, strategyName, action, userNote)
 		if !isFatalError(reason) {
-			return approved, reason, conf, "openai"
+			return finish(approved, reason, conf, "openai")
 		}
 	}
 
-	return true, "All AI providers exhausted (neutral pass)", 0.5, "NONE"
+	return finish(true, "All AI providers exhausted (neutral pass)", 0.5, "NONE")
 }
 
 func (o *MultiAgentOrchestrator) runOpenRouterAudit(ctx context.Context, market MarketContext, strategyName string, action string, userNote string) (bool, string, float64) {
@@ -881,6 +893,7 @@ type MultiAgentOrchestrator struct {
 	cloudflare  *CloudflareClient
 	insights    *InsightStore
 	store       *persistence.Store
+	cache       *DecisionCache
 	mu          sync.Mutex
 	auditMu     sync.Mutex
 	idSeq       int
@@ -1047,6 +1060,7 @@ func NewMultiAgentOrchestrator(openai *OpenAIClient, gemini *GeminiClient, groq 
 		cloudflare:  cloudflare,
 		store:       store,
 		insights:    NewInsightStore(50),
+		cache:       NewDecisionCache(5*time.Second, 10*time.Second, 4096),
 	}
 }
 
@@ -1060,6 +1074,13 @@ func (o *MultiAgentOrchestrator) GeminiEnabled() bool {
 
 func (o *MultiAgentOrchestrator) GetInsights() *InsightStore {
 	return o.insights
+}
+
+func (o *MultiAgentOrchestrator) CacheStats() CacheStats {
+	if o == nil || o.cache == nil {
+		return CacheStats{}
+	}
+	return o.cache.Stats()
 }
 
 // AddHistoricalAudit populates the in-memory store from database records on startup.
@@ -1084,6 +1105,16 @@ func (o *MultiAgentOrchestrator) AddHistoricalAudit(data map[string]interface{})
 
 func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContext) AIDecision {
 	start := time.Now()
+	cacheKey := ""
+	if o.cache != nil {
+		cacheKey = o.cache.MarketKey(market)
+		if cached, ok := o.cache.GetDecision(cacheKey); ok {
+			cached.Timestamp = time.Now()
+			cached.FinalReasoning = "[cache] " + cached.FinalReasoning
+			o.insights.Add(cached)
+			return cached
+		}
+	}
 
 	agentCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -1141,6 +1172,9 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 			Reasoning:      reasoning,
 		})
 		o.insights.Add(decision)
+		if o.cache != nil && cacheKey != "" {
+			o.cache.SetDecision(cacheKey, market, decision)
+		}
 		return decision
 	}
 
@@ -1152,6 +1186,9 @@ func (o *MultiAgentOrchestrator) Decide(ctx context.Context, market MarketContex
 
 	decision := o.buildDecision(market, bullSig, bearSig, macroSig, riskVerdict)
 	o.insights.Add(decision)
+	if o.cache != nil && cacheKey != "" {
+		o.cache.SetDecision(cacheKey, market, decision)
+	}
 	return decision
 }
 

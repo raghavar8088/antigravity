@@ -1,0 +1,814 @@
+TRADING APPLICATION — COMPLETE SYSTEM AUDIT
+Date: 2026-05-31 | Auditor: Principal Architect / Quant Systems Review | Scope: Full codebase
+
+SECTION 1 — APPLICATION OVERVIEW
+Application Purpose
+A multi-market algorithmic trading platform combining a high-performance Go execution engine, a Python AI strategy service, and a Next.js dashboard. It supports paper trading (mock), live trading (Binance futures, Angel One equities, Delta Exchange options), and a multi-agent AI research tournament for strategy promotion.
+
+Main Features
+Real-time BTC perpetual futures paper & live trading via Binance WebSocket
+120+ registered strategies evaluated on every market tick
+Multi-model AI consensus engine (GPT-4o, GPT-4o-mini, Gemini Flash 2.0, Llama-3-70b)
+Research tournament: strategies earn promotion by hitting statistical thresholds
+Options chain viewer (Delta Exchange — BTC)
+NIFTY 50 equities (Angel One / NSE)
+MCX commodities (crude oil, gold)
+Full analytics: Sharpe, Sortino, Calmar, Monte Carlo, equity curves
+Dual persistence: MongoDB Atlas + local filesystem backup
+Vercel-hosted dashboard, AWS Lightsail / Render Go engine
+Technology Stack
+Layer	Technology	Version
+Trading Engine	Go	1.21+
+Dashboard Frontend	Next.js + React	16.2.1 / 19.2.4
+Strategy/AI Service	Python FastAPI	0.111.1
+Language	TypeScript	5.x
+Styling	Tailwind CSS	4.x
+Time-Series DB	PostgreSQL / TimescaleDB	—
+Document DB	MongoDB Atlas	7.2.0
+Cloud Auth/Sync	Supabase	latest
+Charting	lightweight-charts	5.2.0
+Metrics	Prometheus	—
+Container	Docker / Docker Compose	—
+Reverse Proxy	Nginx	—
+Exchange APIs	Binance, Delta Exchange, Angel One, CCXT	—
+AI Models	GPT-4o, GPT-4o-mini, Gemini Flash 2.0, Llama-3-70b	—
+Folder Structure Summary
+
+c:\Trading application\
+├── engine/                     ← Go trading engine (primary backend)
+│   ├── cmd/
+│   │   ├── antigravity/        ← Main entry point (main.go)
+│   │   └── backtest/           ← Standalone backtester
+│   └── internal/
+│       ├── strategy/           ← 120+ strategies, registry, interface
+│       ├── execution/          ← Paper OMS, Binance live, routing
+│       ├── risk/               ← Risk engine, validation gates
+│       ├── positions/          ← Position manager, close events
+│       ├── marketdata/         ← Binance WebSocket client, candles
+│       ├── ai/                 ← Multi-agent voting (GPT/Gemini/Groq)
+│       ├── options/            ← Delta Exchange options chain
+│       └── niftystocks/        ← NSE equity strategies
+│
+├── client/                     ← Next.js dashboard
+│   └── src/
+│       ├── app/
+│       │   ├── page.tsx        ← Root → TerminalDashboard
+│       │   ├── mock-trading/   ← Paper desk UI
+│       │   ├── btc-future-trading/ ← Live/paper futures desk
+│       │   └── api/            ← Next.js API routes (proxy + data)
+│       ├── components/         ← UI components
+│       ├── lib/                ← Core logic (mockTradingEngine, metrics)
+│       └── types/              ← TypeScript type definitions
+│
+├── infrastructure/
+│   └── ai/strategy_service/    ← Python FastAPI strategy service
+│       ├── api.py              ← REST endpoints
+│       ├── management.py       ← Scoring, Monte Carlo, portfolio
+│       └── backtest.py         ← Historical simulation
+│
+├── bridge/                     ← Node.js (ChatGPT/Claude handoff scripts)
+├── data/                       ← Historical market data (local)
+├── scripts/                    ← Utility scripts (rank, replay)
+└── nginx/                      ← Reverse proxy config
+System Architecture Diagram
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                        EXTERNAL WORLD                               │
+│  Binance WS ──────┐   Angel One API ──┐   Delta Exchange API ──┐   │
+│  (BTC ticks)      │   (NIFTY ticks)   │   (Options chain)      │   │
+└───────────────────┼───────────────────┼────────────────────────┼───┘
+                    ▼                   ▼                         ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   GO ENGINE  (port 8080)                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  Market Data │  │  Strategy    │  │   AI Agent Council       │  │
+│  │  Client      │→ │  Registry    │→ │  Bull / Bear / Macro /   │  │
+│  │  (WS/REST)   │  │  120 strats  │  │  Risk Arbitrator         │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+│          │                 │                       │                │
+│          ▼                 ▼                       ▼                │
+│  ┌──────────────────────────────────────────────────────────┐      │
+│  │              RISK ENGINE (engine.go)                     │      │
+│  │  Symbol / Position / Capital / Drawdown / Confidence     │      │
+│  └──────────────────────────┬───────────────────────────────┘      │
+│                             ▼                                       │
+│  ┌──────────────────────────────────────────────────────────┐      │
+│  │         EXECUTION ROUTER (routing.go)                    │      │
+│  │    PaperClient ←──── mode flag ────→ BinanceLiveClient   │      │
+│  └──────────────────────────┬───────────────────────────────┘      │
+│                             ▼                                       │
+│  ┌──────────────────────────────────────────────────────────┐      │
+│  │              PAPER OMS (paper_oms.go)                    │      │
+│  │   Position tracking, SL/TP/TIME/TRAIL/BREAKEVEN/LIQRISK  │      │
+│  └──────────────────────────┬───────────────────────────────┘      │
+│                             ▼                                       │
+│             ┌──────────────────────────────┐                       │
+│             │     PROMETHEUS METRICS       │                       │
+│             │     /metrics endpoint        │                       │
+│             └──────────────────────────────┘                       │
+└─────────────────────────────┬───────────────────────────────────────┘
+                              │  HTTP REST (JSON)
+             ┌────────────────▼──────────────────────┐
+             │        NEXT.JS CLIENT (port 3000)      │
+             │  ┌──────────────────────────────────┐  │
+             │  │  API Routes  /api/engine/[...path]│  │
+             │  │  Proxy → Go Engine               │  │
+             │  └──────────────────────────────────┘  │
+             │  ┌──────────────────────────────────┐  │
+             │  │  MockTradingEngine (client-side)  │  │
+             │  │  Signals → Risk → Paper fills     │  │
+             │  └──────────────────────────────────┘  │
+             │  ┌──────────────────────────────────┐  │
+             │  │  Dashboard / Charts / Analytics   │  │
+             │  └──────────────────────────────────┘  │
+             └────────────────┬──────────────────────┘
+                              │
+           ┌──────────────────┼──────────────────────┐
+           ▼                  ▼                       ▼
+    MongoDB Atlas        Supabase              Python FastAPI
+    (paper trades,       (auth, cloud          (strategy eval,
+     snapshots)          sync, RLS)             backtest, MC)
+Data Flow Diagram
+
+Binance WebSocket tick
+       │
+       ▼
+marketdata.Client → Tick{Symbol, Price, Qty, Side, TimeMs}
+       │
+       ▼
+Strategy Registry (120 concurrent)
+  ├─ OnTick(tick) → []Signal  (tick-level strategies)
+  └─ OnCandle(candle) → []Signal  (candle-level strategies)
+       │
+       ▼
+Cooldown / Dedup Filter (strategy cooldown period enforced)
+       │
+       ▼
+AI Agent Council (if signal survives)
+  ├─ Bull Agent (GPT-4o-mini)   → APPROVE / REJECT
+  ├─ Bear Agent (GPT-4o-mini)   → APPROVE / REJECT
+  ├─ Macro Analyst (Gemini)     → APPROVE / REJECT
+  └─ Risk Arbitrator (GPT-4o)   → FINAL VETO
+       │
+       ▼
+Risk Engine Validate()
+  ├─ Symbol gate
+  ├─ Position size gate
+  ├─ Capital gate
+  ├─ Daily loss circuit breaker
+  └─ Confidence gate (>60% exposure needs >0.8 confidence)
+       │
+       ▼
+Execution Router → Paper OMS or Binance Live
+       │
+       ▼
+Position Created → SL price, TP price, entry price, leverage
+       │
+       ▼  (on every subsequent tick)
+paper_oms.Tick(price) → check SL / TP / TIME / LIQUIDATION_RISK
+       │
+       ├─ Close Event emitted → Position.CloseReason + PnL
+       │
+       ▼
+State Persistence
+  ├─ MongoDB: paper_trades, account_snapshots
+  ├─ Supabase: real-time sync
+  └─ LocalFS: JSON backup (/data/ directory)
+       │
+       ▼
+Analytics Engine → Win rate, Sharpe, Expectancy, Drawdown
+       │
+       ▼
+Next.js Dashboard → Charts, KPIs, Research, Leaderboard
+SECTION 2 — TRADING SYSTEM AUDIT
+How Signals Are Generated
+Signals are generated in two ways:
+
+1. Go Engine (Strategy Registry)
+Each of the 120+ registered strategies implements the Strategy interface (engine/internal/strategy/interface.go):
+
+OnTick(tick Tick) []Signal — evaluated on every raw WebSocket trade tick
+OnCandle(candle Tick) []Signal — evaluated when a new OHLCV candle closes
+Each Signal carries: Symbol, Action (BUY/SELL/HOLD), Confidence (0–1), TargetSize, StopLossPct, TakeProfitPct, AIDecisionID, AIReasoning.
+
+2. Client-Side Mock Engine (client/src/lib/mockTradingEngine.ts)
+Signals arrive via API from the research tournament. They carry signal_score, confidence_score, quality_score, mtf_score, and regime classification.
+
+How Trades Are Created
+
+Signal produced by strategy
+  → Cooldown filter (15-minute lockout per strategy)
+  → AI agent voting (Bull/Bear/Macro/Risk council — all must approve)
+  → Risk Engine Validate() — 5 gate checks
+  → ExecutionRouter.Route(signal)
+     → PaperOMS.Open(req) OR BinanceLive.PlaceOrder(req)
+  → Position created with: ID, symbol, side, entryPrice, SL, TP, leverage
+  → Fee deducted immediately (0.05% taker)
+  → Entry slippage applied (5 bps adverse)
+How Positions Are Managed
+The PaperOMS (engine/internal/execution/paper_oms.go) maintains a []Position slice (deterministic iteration). On each tick:
+
+Each open position is evaluated: check SL hit, TP hit, max hold (45 min), maintenance margin breach
+Breakeven move triggered at 40% progress to TP
+Trailing stop triggered at 65% progress to TP (gives back 35% of move)
+If margin < 0.5% (maintenance threshold) → LIQUIDATION_RISK close
+How Exits Are Handled
+Seven exit types are defined:
+
+Exit Reason	Trigger Condition
+TP	Price crosses take-profit price
+SL	Price crosses stop-loss price
+TIME	Position age > 45 minutes
+TRAIL	Trailing stop triggered (after 65% to TP)
+BREAKEVEN	Protected by BE trigger (40% to TP)
+LIQUIDATION_RISK	Margin < 0.5% maintenance
+MANUAL	User closes via API
+On exit: exit price is calculated with 5 bps adverse slippage, exit fee (0.05%) deducted, PnL recorded, position removed from slice, CloseEvent emitted to analytics.
+
+How TP/SL Works
+StopLossPct and TakeProfitPct from the strategy Signal are used to compute absolute prices:
+LONG: SL = entryPrice × (1 − slPct), TP = entryPrice × (1 + tpPct)
+SHORT: SL = entryPrice × (1 + slPct), TP = entryPrice × (1 − tpPct)
+Default R:R must be ≥ 1.5 (enforced client-side in mock engine)
+AI agents enforce tight geometry: SL 0.12–0.20%, TP 0.20–0.32%
+How Fees Are Calculated
+Model: Binance Taker fee = 0.05% per leg
+Round-trip: 0.10% (open + close)
+Applied in Paper OMS: fee deducted from virtual cash on both open and close
+Client mock engine: same fee model (0.05% taker) + 5 bps slippage per side
+Fee drag monitoring: fee_pct_of_gross tracked per strategy — DISABLE verdict triggers if fee/gross > 100%
+How Funding Is Calculated
+NOT VERIFIED FROM SOURCE CODE — No funding rate calculation was found in the Go engine or Python service. The mock trading engine tracks fees and slippage but does not explicitly model perpetual funding rates (8-hourly funding). This is a gap for a BTC perp trading system.
+
+How PnL Is Calculated
+Unrealized PnL (LONG): (currentPrice − entryPrice) × positionSizeBTC × leverage − fees
+
+Unrealized PnL (SHORT): (entryPrice − currentPrice) × positionSizeBTC × leverage − fees
+
+Realized PnL: Calculated on close with slippage-adjusted exit price and exit fee deduction.
+
+Account Equity: startingBalance + sum(realizedPnL) + sum(unrealizedPnL)
+
+Expectancy: (winRate × avgWin) − ((1 − winRate) × avgLoss)
+
+Complete Trade Lifecycle
+
+Signal (Strategy.OnTick / OnCandle)
+  ↓
+Cooldown Check (15-min lockout per strategy ID)
+  ↓
+Confirmation Gate (CONFIRM reason if fails)
+  ↓
+ATR/Fee Hurdle (ATR_FEES reason if fails)
+  ↓
+Regime Filter (REGIME reason if fails)
+  ↓
+AI Agent Voting — Bull / Bear / Macro / Risk Arbitrator
+  ↓ (all must approve)
+Risk Engine Validate()
+  ├─ Symbol whitelist: BTCUSDT / BTC-USD / BTC-USDT
+  ├─ Position size ≤ MaxPositionBTC
+  ├─ Notional ≤ MaxCapitalUSD ($25k–$50k)
+  ├─ Daily drawdown < 10%
+  └─ Confidence > 0.8 if exposure > 60% max
+  ↓
+Execution Router → PaperOMS.Open() OR Binance.PlaceOrder()
+  ↓
+Position Created
+  ├─ SL price set
+  ├─ TP price set
+  ├─ Entry fee deducted (0.05%)
+  ├─ Entry slippage applied (5 bps adverse)
+  └─ Max hold = 45 minutes set
+  ↓
+Per-Tick Evaluation Loop
+  ├─ SL crossed?       → close STOP_LOSS
+  ├─ TP crossed?       → close TAKE_PROFIT
+  ├─ 40% to TP?        → move SL to breakeven
+  ├─ 65% to TP?        → activate trailing stop
+  ├─ Age > 45 min?     → close TIME
+  └─ Margin < 0.5%?   → close LIQUIDATION_RISK
+  ↓
+Exit
+  ├─ Exit slippage (5 bps)
+  ├─ Exit fee (0.05%)
+  ├─ PnL computed
+  └─ CloseEvent emitted
+  ↓
+Analytics
+  ├─ Win/Loss recorded
+  ├─ Strategy aggregate updated
+  ├─ Research edge score updated
+  ├─ Equity curve updated
+  └─ Persistence: MongoDB + LocalFS
+SECTION 3 — MOCK TRADING AUDIT
+Trade Creation Path
+Signals arrive via /api/mock-trading/signals or the research tournament API → enter mockTradingEngine.ts → evaluateMockTradeOpenRisk() → if approved → position created in client-side state → persisted to MongoDB via /api/mock-trading/trades.
+
+Trade Rejection Path
+All rejections are captured as MockRejectionEvent with a typed reason field. The funnel is:
+
+All Rejection Reasons (Ranked by Impact)
+Rank	Rejection Reason	What It Means	Impact
+1	EXPOSURE_LIMIT	Max 5 open trades reached, or long/short side cap hit (max 3 each)	CRITICAL — Most common silent blocker
+2	LOW_SIGNAL_SCORE	Signal score below minSignalScore (default: 50)	CRITICAL — High-volume gate
+3	DAILY_LOSS_LIMIT	Rolling 24h loss > 3% of starting equity	HIGH — Entire trading suspended
+4	COOLDOWN	Strategy re-entry lockout active (15 min)	HIGH — Kills frequency strategies
+5	REGIME	Market regime classifier blocked the signal	HIGH — Regime mismatch
+6	LOW_CONFIDENCE	Confidence score below threshold	HIGH — Soft filter
+7	RR_TOO_LOW	Risk/reward ratio < 1.5	MEDIUM — Structural trade quality gate
+8	FAMILY_CONFLICT	Opposite position already open for same strategy family	MEDIUM — Prevents hedge overlap
+9	DUPLICATE_POSITION	Strategy already has an open position	MEDIUM — Per-strategy limit
+10	CONFIRM	Confirmation gate (multi-timeframe alignment) failed	MEDIUM — Signal quality
+11	ATR_FEES	ATR too small to overcome fee hurdle	MEDIUM — Low-volatility filter
+12	WEEKLY_LOSS_LIMIT	Rolling 7-day loss > 6%	MEDIUM — Weekly circuit breaker
+13	NO_APPROVED_STRATEGY	Strategy not in the approved promotion list	MEDIUM — Research gate
+14	MARGIN_CHECK	Insufficient simulated margin	LOW — Account size constraint
+15	MAX_DRAWDOWN	Historical max drawdown > 10%	LOW — Breaches overall risk limit
+16	OTHER	Unmapped gate — catch-all	LOW — Diagnostic
+Exposure Controls
+maxOpenTrades: 5 total
+maxLongPositions: 3
+maxShortPositions: 3
+Checked in evaluateMockTradeOpenRisk() lines 617–622
+Cooldown Controls
+15-minute lockout per strategy ID
+Enforced by tracking last-entry timestamp per strategy
+Resets after 15 minutes from last filled trade (not from last signal)
+Strategy Limits
+Max 1 open position per strategy at any time (DUPLICATE_POSITION)
+Strategies must be in approved list (NO_APPROVED_STRATEGY)
+Family-level conflict prevention (FAMILY_CONFLICT)
+Risk Limits
+Daily loss: 3% of starting equity
+Weekly loss: 6% of starting equity
+Max drawdown: 10%
+Minimum R:R: 1.5
+Minimum signal score: 50
+SECTION 4 — RESEARCH ENGINE AUDIT
+Research Cycle Flow
+
+Daily cron: POST /api/cron/rank-strategies
+  ↓
+Load all closed mock trades from MongoDB (paper_trades collection)
+  ↓
+Group by strategy ID
+  ↓
+Compute per-strategy metrics:
+  ├─ trade count
+  ├─ win rate
+  ├─ expectancy per trade
+  ├─ profit factor
+  └─ fee_pct_of_gross
+  ↓
+Apply verdict logic (researchEdgeScore.ts):
+  ├─ PROMOTE: ≥12 trades, positive expectancy, fee/gross <50%, PF ≥1.1
+  ├─ KEEP: ≥12 trades, positive expectancy but fee/gross ≥50% or PF <1.1
+  ├─ WATCH: 5–11 trades, positive expectancy (gathering data)
+  ├─ DISABLE: ≥5 trades, negative expectancy AND fee/gross >100%
+  └─ INSUFFICIENT: <5 trades (no verdict)
+  ↓
+Update strategy rankings (stored in MongoDB or fixture files)
+  ↓
+Approved strategy list updated → used by mock engine for NO_APPROVED_STRATEGY gate
+Signal Scoring
+From scoreMockTraceRow():
+
+
+finalScore = signal_score
+           + min(50, (signal_score / threshold) * 10)   ← threshold bonus
+           + quality_score * 0.15                        ← quality weight
+           + mtf_score * 0.10                            ← multi-timeframe weight
+From scoreMockResearchSignal():
+
+
+finalScore = clamp(confidenceScore, 0, 100)             ← pure confidence
+Confidence Scoring (Research Edge)
+Trade Count	Confidence Score
+< 5	0%
+5–11	20%
+12–19	40%
+20–29	60%
+30–49	75%
+≥ 50	90%
+Max possible: 90% (statistical humility — never 100% confident)
+
+Strategy Ranking Criteria
+Per computeVerdict() in client/src/lib/researchEdgeScore.ts:
+
+Trade count gate (minimum 5 for any verdict, 12 for promotion)
+Expectancy per trade (must be positive to promote)
+Fee/gross ratio (must be < 50% to promote)
+Profit factor (must be ≥ 1.1 to promote)
+Win rate component (Python service: min 35%, min PF 0.95)
+Strategy Health Calculation
+Python StrategyScoringEngine (management.py):
+
+Minimum 8 trades for any health score
+Minimum win rate: 35%
+Minimum profit factor: 0.95
+Auto-disable if health score falls below threshold
+Probe Trade Exclusion
+Trades tagged with labels BOOTSTRAP, PROBE, DEV_FORCE, CANARY, SMOKE_TEST are excluded from all scoring metrics. This prevents synthetic/test trades from polluting strategy verdicts.
+
+SECTION 5 — STRATEGY INVENTORY
+NOT VERIFIED FROM SOURCE CODE (full 120-strategy list with all fields). Below is what was confirmed from the codebase:
+
+Strategy Name	Family	Timeframe	Entry Logic	Exit Logic	Status
+EMA Cross (5/21)	Trend	1m	EMA5 crosses EMA21	Reverse cross / SL / TP	Active
+Triple EMA	Trend	1m	Fast/Mid/Slow EMA alignment	Trend reversal	Active
+Hull MA	Trend	1m	Hull MA direction change	Reverse signal	Active
+ADX Trend	Trend	1m	ADX > 25, +DI/-DI cross	ADX decay	Active
+Ichimoku Cloud	Trend	5m	Price vs cloud, TK cross	Cloud rejection	Active
+Parabolic SAR	Trend	1m	SAR flip	SAR flip reverse	Active
+RSI Mean Rev	Mean Reversion	1m	RSI < 30 or > 70	RSI crosses 50	Active
+Bollinger Band	Mean Reversion	1m	Price touches outer band	Price returns to mid	Active
+VWAP Bounce	Mean Reversion	1m	Price reverts to VWAP	VWAP re-touch	Active
+Stochastic RSI	Mean Reversion	1m	StochRSI cross in oversold/overbought	StochRSI cross mid	Active
+Williams %R	Mean Reversion	1m	Williams < -80 or > -20	Zone exit	Active
+CCI Mean Rev	Mean Reversion	1m	CCI crosses ±100	CCI returns to 0	Active
+Donchian Breakout	Breakout	5m	Price breaks N-period high/low	Opposite breakout	Active
+Keltner Breakout	Breakout	5m	Price exits Keltner channel	Channel reentry	Active
+ATR Breakout	Breakout	1m	ATR-based expansion	ATR contraction	Active
+Pivot Points	Breakout	1h	Price crosses daily pivot levels	Next pivot level	Active
+Pivot Fibonacci	Breakout	1h	Fib levels from pivot	Fib target	Active
+Opening Range	Breakout	5m	First-N-minute range break	Range midpoint	Active
+MACD Signal	Momentum	1m	MACD/signal cross	Reverse cross	Active
+ROC Momentum	Momentum	1m	Rate of change threshold	ROC reversal	Active
+Volume Spike	Momentum	tick	Volume > N×average	Volume normalization	Active
+OBV Trend	Smart Money	1m	OBV divergence/trend	OBV reversal	Active
+Chaikin MF	Smart Money	1m	CMF above/below zero	CMF cross	Active
+ADLine	Smart Money	1m	Advance/Decline trending	AD divergence	Active
+Aroon	Smart Money	1m	Aroon crossover	Aroon reversal	Active
+Engulfing Pattern	Price Action	1m	Bullish/bearish engulfing candle	Target from pattern	Active
+Heikin Ashi	Price Action	1m	HA candle color change	HA reversal	Active
+ZigZag	Price Action	1m	ZigZag leg break	ZigZag reverse	Active
+Pullback	Price Action	1m	Trend pullback to MA	Trend resumption	Active
+Supertrend	Adaptive	1m	Supertrend direction	Supertrend flip	Active
+KAMA	Adaptive	1m	KAMA trend	KAMA reversal	Active
+MTF RSI	Adaptive	Multi	Multi-timeframe RSI alignment	MTF divergence	Active
+Squeeze Momentum	Volatility	1m	Bollinger inside Keltner	Squeeze release	Active
+Range Compression	Volatility	5m	Range shrinks then expands	Expansion end	Active
+Order Flow	Tick	tick	Buy/sell imbalance	Order flow reversal	Active
+Tick Velocity	Tick	tick	Rapid price tick velocity	Velocity decay	Active
+TestScalper	Dev/Test	tick	Test harness	N/A	Dev only
++ 83 more	Various	Various	NOT VERIFIED FROM SOURCE CODE	—	—
+Nifty Stocks Strategies (IDs 1–50): 50 NSE equity strategies including Trend Pullback, EMA Cross, VWAP Bounce, Opening Range Breakout, Bollinger RSI Confluence, Momentum Scoring — NOT FULLY VERIFIED FROM SOURCE CODE.
+
+SECTION 6 — DATA READINESS AUDIT
+Data Requirements
+Tick strategies: 0 historical candles needed (real-time only)
+1m strategies (EMA 5/21): minimum 21 candles = 21 minutes of 1m data
+5m strategies (Donchian N-period): minimum N candles × 5m
+1h strategies (Pivot): minimum 1 prior daily close
+MTF RSI: requires candle data across multiple timeframes simultaneously
+Data Availability
+Binance WebSocket: Live tick data — always available when connected
+Historical klines: Served via /api/btc/futures-klines — fetches from Binance REST
+Local data directory (data/): Historical JSON files for backtesting
+Candle aggregation: Go engine builds OHLCV from tick stream in-memory (no warm-up buffer management confirmed)
+Strategy Readiness Assessment
+Ready (tick-based, zero warmup):
+
+OrderFlow, TickVelocity, VolumeSpike, TestScalper
+Ready after brief warmup (~21 min of 1m data):
+
+All 1m EMA/Hull/RSI/Bollinger strategies
+Potentially waiting (data dependency not confirmed):
+
+Ichimoku (requires 52+ candles for the cloud)
+Pivot (requires previous day's OHLC)
+MTF RSI (requires multiple timeframe data simultaneously)
+All 5m Donchian/Keltner strategies (need N historical 5m candles)
+NOT VERIFIED FROM SOURCE CODE: Whether the Go engine pre-fetches historical candles on startup or builds them live from the WebSocket stream (cold start gap could cause strategies to produce no signals for the first 52+ minutes after restart).
+
+SECTION 7 — DATABASE AUDIT
+MongoDB Collections
+Database: loop_trades
+
+Collection	Purpose	Est. Growth	Key Indexes	Issues
+paper_trades	All paper/mock executed trades with full position details	~500/day active trading	strategyId, timestamp, status	No TTL — unbounded growth
+account_snapshots	Equity/position state at intervals	~96/day (every 15 min)	timestamp	No compaction strategy
+analytics	Daily and strategy-level aggregated stats	~30/day	date, strategyId	Possible duplication on re-run
+logs	Execution trace events	High-volume — potentially thousands/day	timestamp, level	No TTL index — will bloat
+NOT VERIFIED FROM SOURCE CODE: Exact MongoDB index definitions, TTL configurations, whether compound indexes exist on frequently-queried combinations like (strategyId, timestamp, status).
+
+PostgreSQL / TimescaleDB
+Table	Purpose	Issues
+market_ticks	Raw tick data (time-series)	TimescaleDB hypertable needed; NOT VERIFIED if configured
+engine_state	Snapshots of Go engine state	Single-row overwrite pattern (no history)
+Schema Relationships
+
+paper_trades
+  ├─ strategyId → links to strategy registry
+  ├─ accountId  → links to account_snapshots
+  └─ timestamp  → time-series query axis
+
+account_snapshots
+  └─ timestamp  → snapshot time
+
+analytics
+  ├─ strategyId → links to paper_trades
+  └─ date       → daily rollup
+Potential Database Issues
+No TTL on logs collection — will grow unbounded
+No confirmed TTL on paper_trades — 500/day = 180k/year
+No compound index confirmed on (strategyId, timestamp) — critical for analytics queries
+engine_state table appears to be a single-row overwrite — no audit trail
+No sharding or replication strategy documented for MongoDB Atlas
+SECTION 8 — LOCAL STORAGE AUDIT
+What Is Stored Locally
+Data	Location	Method	Persistence
+Historical BTC klines (JSON)	data/ directory	Flat files	Permanent
+Go engine SQLite state	/app/data/ (Docker volume)	SQLite via SQLITE_PATH env	Survives restart
+Log files	engine_smoke_*.log, engine_conservative_*.log	Plain text	Survives restart
+Strategy rankings fixture	client/src/ (static JSON)	Next.js bundled asset	Deploy-time
+Browser localStorage	Client browser	Web Storage API	Browser session
+Dual Persistence Layer (from commit history)
+The system has a dual persistence layer added:
+
+Primary: MongoDB Atlas (cloud)
+Backup: Local filesystem JSON (/data/ directory)
+Persistence Strategy
+MongoDB: Write-through on every trade close and account snapshot
+LocalFS backup: Secondary write on same events — survives MongoDB outage
+Recovery: Load from LocalFS on MongoDB unavailable — NOT VERIFIED if auto-failover is implemented or manual
+Browser State
+NOT VERIFIED FROM SOURCE CODE: What specific keys are stored in browser localStorage (account state? open positions? config?). This is a risk if positions can survive browser reload.
+
+SECTION 9 — DASHBOARD AUDIT
+Dashboard Widgets (Confirmed)
+TerminalDashboard — root at page.tsx → comprehensive trading terminal
+MockTradingDashboard — paper desk with strategy leaderboard
+BTC Futures desk — live/paper futures trading interface
+Options Chain viewer — Delta Exchange BTC options Greeks
+NIFTY 50 live ticker — Angel One NSE feed
+Equity curve chart — via lightweight-charts
+Strategy leaderboard — ranked by research edge score
+Diagnostics panel — paper desk diagnostics (env NEXT_PUBLIC_DESK_ENTRY_DEBUG=1)
+Rejection event log — MockRejectionEvent[] display
+Per-strategy aggregate table — win rate, PnL, trade count per strategy
+Per-family aggregate — family-level rollup
+Exit reason analysis — frequency + avg PnL per exit type
+KPIs Displayed
+Win rate, profit factor, Sharpe ratio, Sortino ratio, Calmar ratio, expectancy, max drawdown, trades per hour, fee % of gross, recovery factor, TP hit rate, SL hit rate, average hold time, median hold time, P95 hold time.
+
+Missing Institutional-Grade Metrics
+Missing Metric	Why It Matters
+Kelly Criterion per strategy	Optimal position sizing — not present
+VaR / CVaR (daily, 95%/99%)	Risk budget monitoring
+Beta to BTC	Market correlation vs excess alpha
+Alpha (Jensen's)	Risk-adjusted excess returns
+Information Ratio	Consistency of alpha generation
+Turnover rate	How actively capital is deployed
+Max consecutive drawdown duration	Time underwater — not just depth
+Funding rate P&L contribution	Perpetual-specific cost
+Slippage analysis per strategy	Actual vs theoretical fill
+Regime-conditional performance	How each strategy performs in trending vs ranging
+Live vs paper divergence tracker	Key for production deployment decision
+Position correlation matrix	Are 5 open positions actually diversified?
+SECTION 10 — ANALYTICS AUDIT
+Available Metrics
+Metric	Implementation	Location
+Win Rate	wins / (wins + losses)	computeAnalytics()
+Profit Factor	sumWins / sumLosses	computeAnalytics()
+Sharpe Ratio	(avgTrade / stdev) × √n	computeAnalytics()
+Sortino Ratio	(avgTrade / downsideStdev) × √n	computeAnalytics()
+Calmar Ratio	realizedPnL / maxDrawdown	computeAnalytics()
+Expectancy	(winRate × avgWin) − ((1−winRate) × avgLoss)	computeVerdict()
+Max Drawdown	Peak-to-trough equity	MockAccountState
+Recovery Factor	realizedPnL / maxDrawdown	computeAnalytics()
+TP Hit Rate	tpExits / closedTrades	computeAnalytics()
+SL Hit Rate	slExits / closedTrades	computeAnalytics()
+Avg Win / Avg Loss	Per-trade mean	computeAnalytics()
+Fee % of Gross	totalFees / absGross	computeVerdict()
+Trades Per Hour	Count / session hours	futuresSessionMetrics.ts
+Avg Hold Time	Mean minutes	futuresSessionMetrics.ts
+Median Hold Time	P50 hold	futuresSessionMetrics.ts
+P95 Hold Time	P95 hold	futuresSessionMetrics.ts
+Monte Carlo VaR	500-sim reshuffling	management.py
+Per-Strategy Aggregate	Full rollup per ID	MockStrategyAggregate
+Per-Family Aggregate	Family rollup	MockFamilyAggregate
+Per-Blocker Analysis	Rejection count + hypothetical PnL	MockBlockerAggregate
+Equity Curve	Running equity array	MockAccountState
+Missing Analytics
+Missing	Impact
+Annualized Sharpe	The current Sharpe uses √n (trade count), not √(252) — not comparable to industry standard
+Rolling Sharpe (30d/90d)	Performance stability over time
+Drawdown duration	How many days spent in drawdown
+Gain-to-Pain Ratio	Rough proxy for investor experience
+T-stat on alpha	Is the edge statistically significant?
+Benchmark comparison	vs buy-and-hold BTC
+Out-of-sample results	In-sample vs OOS performance split
+Regime-conditional Sharpe	Performance attribution by market regime
+SECTION 11 — PERFORMANCE AUDIT
+Slow / Expensive Components
+Component	Issue	Severity
+AI Agent Council (4 LLM calls per signal)	Each voting round requires 3–4 sequential or parallel API calls to OpenAI/Gemini/Groq — latency 300ms–2000ms per signal	CRITICAL
+120 strategies × every tick	All 120 strategies run on every raw WebSocket tick. Sub-millisecond for pure Go computation, but no batching/prioritization visible	MEDIUM
+Client-side analytics recalculation	computeAnalytics() appears to recompute from full trade array on every render — O(n) per render cycle	MEDIUM
+MongoDB write on every trade	No batch write confirmed — individual insert per trade/snapshot	MEDIUM
+No caching on strategy rankings	/api/strategy-rankings may re-query MongoDB on every page load	MEDIUM
+evaluateMockTradeOpenRisk() checks	Iterates all open positions for conflict detection on every signal	LOW
+React re-renders	No useMemo/useCallback confirmed for heavy analytics components	LOW
+Python strategy evaluation	FastAPI is synchronous per strategy evaluation — 120 strategies would be serial if called one-by-one	LOW
+Performance Score: 5 / 10
+The Go engine itself is fast. The primary bottleneck is the AI council — 4 LLM API calls per signal means real-world signal-to-order latency is 300ms–2s, far below the sub-100ms target stated in the README. Client-side analytics and MongoDB write patterns compound this.
+
+SECTION 12 — SECURITY AUDIT
+Identified Security Risks
+Risk	Severity	Detail
+API keys in .env files	MEDIUM	Standard practice, but .env must never be committed. Git history check needed. password123 visible in DATABASE_URL example — if this is production it is critical
+password123 in DATABASE_URL	CRITICAL	DATABASE_URL=postgres://antigravity:password123@... seen in config — if this is actual credentials, immediate rotation required
+HMAC-SHA256 Binance signing	LOW (good)	Properly signed — not a risk
+No authentication on Go engine endpoints	HIGH	/paper/open, /paper/close, /paper/reset appear to have no auth middleware — anyone with network access to port 8080 can reset the paper account or open positions
+Angel One TOTP secret in .env	HIGH	TOTP secret (ANGELONE_TOTP_SECRET) stored in environment — a leak means live account takeover
+No rate limiting on API routes	MEDIUM	Next.js API routes proxy to Go engine with no visible rate limiting
+Supabase RLS	LOW (good)	Row Level Security mentioned — but not verified to be properly configured
+OpenAI/Groq/Gemini keys in environment	MEDIUM	All AI API keys must be environment variables only — verified this is the case
+localStorage for browser state	LOW	Browser storage is not encrypted — sensitive position data visible to any JS on the page
+No input validation on /paper/open	MEDIUM	If the OpenPositionRequest struct is not validated, malformed requests could cause panics
+IP whitelist for Angel One	LOW (good)	Angel One proxy requires IP whitelisting — reduces surface area
+Security Score: 4 / 10
+The password123 database credential and unauthenticated Go engine endpoints are blockers for any production deployment. Without auth middleware on the engine, the paper account can be arbitrarily manipulated.
+
+SECTION 13 — CODE QUALITY AUDIT
+Strengths
+Go engine is well-structured: Clean separation between strategy, execution, risk, positions, marketdata, ai packages
+TypeScript strict mode: Types are defined (MockRejectionEvent, MockAccountState, signal types)
+Deterministic OMS: Slice-based state with sync.Mutex is correct for single-threaded determinism
+Test coverage on verdict logic: researchEdgeScore.test.ts has 70+ test cases covering edge cases
+Probe trade exclusion: Properly excludes synthetic trades from analytics — shows maturity
+Weaknesses
+Issue	Severity
+Client-side trading logic in mockTradingEngine.ts — 1400+ line single file	HIGH — God object
+Duplicate fee/slippage models — Go OMS and TypeScript mock engine define fees independently	MEDIUM — will drift
+DEFAULT_MOCK_TRADING_CONFIG hardcoded — risk limits are code constants, not config	MEDIUM
+AI agent prompts hardcoded in agents.go — no prompt versioning	MEDIUM
+paper_oms.go state lives in memory only — restart loses all positions (confirmed by SQLite env var but not verified in code)	HIGH
+Fallback chain (OpenAI → Gemini → Groq) is implicit — not documented as architecture decision	LOW
+Python service uses relative imports — fragile for deployment	LOW
+No API versioning — /api/paper-trades would break all clients on schema change	MEDIUM
+Code Quality Score: 6 / 10
+The Go backend is clean. The TypeScript client has a 1400+ line God-object that handles signals, risk, analytics, persistence, and state management in a single file. This is maintainable now but will become a liability as strategies scale.
+
+SECTION 14 — SCALABILITY AUDIT
+Can This Handle Scale?
+Scenario	Current Capability	Bottleneck
+100 strategies	Yes, Go handles 100 concurrent strategy evaluations trivially	None for pure computation
+1,000 strategies	Unlikely as designed	AI voting (4 LLM calls per signal × 1000 strategies = 4000 concurrent API calls)
+100k trades (MongoDB)	Yes, MongoDB Atlas handles this	Query performance degrades without compound indexes
+1M trades	Needs compound indexes + aggregation pipeline	Without TTL/archival, collection scans will be slow
+Multiple symbols	Only BTCUSDT confirmed — strategy registry checks symbol whitelist explicitly	Symbol hardcoding in risk engine
+Multiple users	No multi-tenancy visible — single account state in Go engine	Paper OMS has no user ID concept
+Bottlenecks
+AI Council latency — 4 LLM calls per signal is O(n×LLM_latency), not scalable
+Go engine single-process — no horizontal scaling path visible
+MongoDB without compound indexes — will degrade at 500k+ trades
+Symbol hardcoding — only BTC pairs whitelisted in risk engine
+Client-side mock engine — running in browser JavaScript limits portfolio size
+SECTION 15 — TESTING AUDIT
+Go Tests
+File	What It Tests	Coverage Assessment
+engine/internal/risk/engine_test.go	Risk validation gates	Good — gates confirmed
+engine/internal/execution/paper_test.go	Paper client mechanics	Partial
+engine/internal/execution/paper_oms_test.go	OMS state transitions	Good — determinism tested
+engine/internal/execution/routing_test.go	Order routing	Partial
+engine/internal/marketdata/candle_test.go	OHLCV parsing	Unit level
+engine/internal/positions/manager_test.go	Position tracking	Partial
+engine/internal/strategy/registry_runtime_test.go	Strategy loading	Integration
+TypeScript Tests
+File	What It Tests
+client/src/components/deskCommandCenter.test.tsx	Command center UI
+client/src/components/tests/ui21Layout.test.tsx	Layout rendering
+client/src/api/shadow-trade-intents.test.ts	Intent validation
+client/src/api/paper-trades/route.test.ts	API endpoints
+researchEdgeScore.test.ts	70+ verdict logic tests — strongest coverage
+Critical Missing Tests
+Missing Test	Impact
+End-to-end mock trade execution test	No test confirms signal → risk → fill → close lifecycle
+AI agent voting tests	Agent consensus behavior untested
+Fee calculation accuracy	No test verifies fee math against known values
+SL/TP trigger tests	No test confirms positions close at correct prices
+MongoDB persistence tests	No integration test for write/read round-trip
+Cooldown enforcement tests	Strategy lockout behavior untested
+Rejection reason tests	Only verdict logic tested, not full rejection pipeline
+Python service tests	No test files confirmed in strategy service
+Overall Coverage: ~30–35% (estimated). Critical paths are undertested.
+SECTION 16 — TOP 50 IMPROVEMENTS
+Priority	Improvement	Impact	Difficulty
+1	Rotate password123 database credential immediately	CRITICAL security	Low
+2	Add authentication middleware to Go engine endpoints (/paper/open, /paper/close, /paper/reset)	CRITICAL security	Medium
+3	Implement funding rate calculation for BTC perpetual positions	Critical for accurate PnL	Medium
+4	Add compound MongoDB indexes on (strategyId, timestamp, status) for paper_trades	Query performance at scale	Low
+5	Add TTL index on logs collection (e.g., 30-day expiry)	Prevent unbounded growth	Low
+6	Cache AI agent decisions — same market snapshot should not trigger 4 new LLM calls	10× latency improvement	Medium
+7	Warm up candle history on engine startup — fetch N historical candles per timeframe before accepting signals	Prevents cold-start signal blindness for Ichimoku/Pivot strategies	Medium
+8	Break mockTradingEngine.ts into modules — separate Risk, Analytics, Persistence, SignalProcessor	Maintainability	Medium
+9	Add Kelly Criterion per-strategy position sizing	Institutional-grade risk management	Medium
+10	Add annualized Sharpe (use √252 not √n)	Comparability to industry benchmarks	Low
+11	Persist Paper OMS state to disk on every write (SQLite) — verify this is working	Prevent position loss on restart	Medium
+12	Add regime-conditional Sharpe per strategy	Performance attribution	Medium
+13	Add VaR/CVaR dashboard widget	Institutional risk reporting	Medium
+14	Parallelize AI agent voting — run Bull/Bear/Macro calls concurrently, then pass to Risk Arbitrator	Reduce latency from ~1.5s to ~500ms	Low
+15	Add API versioning (/api/v1/paper-trades)	Schema evolution without breaking clients	Medium
+16	Add benchmark comparison (buy-and-hold BTC) to equity curve chart	Context for strategy performance	Low
+17	Add position correlation matrix — prevent 5 open correlated longs	True risk diversification	Medium
+18	Implement T-statistic on strategy edge — is win rate statistically significant?	Prevent false positive promotions	Medium
+19	Add drawdown duration tracking — days spent underwater	Key institutional metric	Low
+20	Move hardcoded risk limits (DEFAULT_MOCK_TRADING_CONFIG) to environment config	Operational flexibility	Low
+21	Add per-strategy slippage analysis — actual vs theoretical fill	Model accuracy	Medium
+22	Add out-of-sample performance split in research engine	Prevent overfitting promotion	High
+23	Add rolling Sharpe (30d/90d) to strategy leaderboard	Stability detection	Low
+24	AI agent prompt versioning — store prompts in config file, not hardcoded in agents.go	Auditability and iteration	Low
+25	Add multi-tenancy to paper OMS — user ID on every position	Multi-user support	High
+26	Verify TimescaleDB hypertable setup for market_ticks	Time-series query performance	Medium
+27	Add rate limiting on Next.js API routes	Prevent abuse / runaway polling	Low
+28	Add integration test: full trade lifecycle (signal → fill → SL close)	Prevent regression	Medium
+29	Add integration test: fee math against known values	Model accuracy guarantee	Low
+30	Add Python strategy service tests	Missing test layer	Medium
+31	Add WebSocket reconnect logic with exponential backoff for Binance	Production reliability	Medium
+32	Add circuit breaker on AI provider failures — don't block trading if OpenAI is down	Resilience	Medium
+33	Add Gain-to-Pain ratio to analytics	Investor communication metric	Low
+34	Add Information Ratio to leaderboard	Alpha consistency	Low
+35	Add strategy symbol expansion — remove BTC-only whitelist in risk engine	Multi-asset trading	High
+36	Add engine_state history table — current single-row overwrite loses audit trail	Debugging and audit	Low
+37	Add bulk write support for MongoDB trade inserts	Write throughput	Medium
+38	Add Prometheus alerting rules — currently only collecting metrics, not alerting	Operational monitoring	Medium
+39	Add candle warm-up buffer manager — track which strategies are "ready" vs "warming up"	Data readiness visibility	Medium
+40	Verify Supabase RLS policies are correctly scoped	Security hardening	Medium
+41	Add OWASP input validation on /paper/open OpenPositionRequest	Prevent panic/injection	Low
+42	Add useMemo to heavy analytics components	React render performance	Low
+43	Add live vs paper divergence tracker	Production deployment decision signal	High
+44	Add regime-based backtesting — split backtest results by market regime	Strategy characterization	High
+45	Add JSON Schema validation on MongoDB documents at write time	Data integrity	Low
+46	Add deployment health check for Python service (/health endpoint exists — verify CI tests it)	Operational reliability	Low
+47	Remove dev-only strategies (TestScalper) from production registry	Code hygiene	Low
+48	Add turnover rate to analytics	Capital efficiency	Low
+49	Add compressed archival for old paper_trades to cold storage	MongoDB cost at scale	Medium
+50	Add browser localStorage encryption for position data	Privacy security	Low
+SECTION 17 — INSTITUTIONAL READINESS SCORE
+Area	Score	Reasoning
+Architecture	7/10	Clean Go/Python/Next.js separation. Multi-agent pattern is sophisticated. Loses points for missing multi-tenancy, no API versioning, and single-process engine.
+Trading Engine	6/10	Solid OMS with correct fee model and 7 exit types. Critical gaps: no funding rate model, cold-start data gap, AI latency kills sub-100ms target.
+Research Engine	8/10	Best-in-class for a retail system. Verdict thresholds are strict and statistically grounded. Probe exclusion is excellent. Missing OOS split.
+Risk Engine	6/10	Multiple layers (signal, position, account, daily, weekly). Missing: Kelly sizing, position correlation, true VaR. Symbol whitelist is BTC-only.
+Backtesting	5/10	Python service exists but limited. No regime-conditional backtest. No OOS split enforced. No slippage/market impact model beyond flat bps.
+Analytics	7/10	Sharpe, Sortino, Calmar, Expectancy, Monte Carlo — comprehensive. Loses points for non-annualized Sharpe, missing benchmark comparison, no VaR display.
+Dashboard	6/10	Rich feature set. Missing institutional KPIs (VaR, Kelly, benchmark). Diagnostics panel is a strength. No mobile/alerting.
+Database	5/10	MongoDB schema is functional. Missing compound indexes, TTL on logs, TimescaleDB hypertable not verified, no sharding plan.
+Performance	5/10	Go is fast; AI council kills latency. No caching layer. Client-side analytics may cause UI jank at scale.
+Security	3/10	password123 credential visible. No auth on engine endpoints. TOTP secret in env. Functional HMAC signing is the only strong point.
+Testing	4/10	Verdict logic is well-tested (70+ cases). End-to-end lifecycle untested. No Python tests confirmed. No integration tests for fee math or SL/TP triggers.
+Scalability	4/10	Works for 1 user and 120 strategies. Not designed for multi-user, multi-symbol at 1000+ strategies. MongoDB will degrade without indexing work.
+Average: 5.5 / 10
+
+SECTION 18 — FINAL VERDICT
+1. What is the biggest weakness?
+The AI agent council latency destroys the signal-to-order performance target. Making 3–4 sequential or parallel LLM API calls (OpenAI GPT-4o, Gemini, Groq) on every signal means actual execution latency is 300ms–2000ms. The system states a sub-100ms target but structurally cannot achieve it. For a scalping system trading BTC perpetuals with 0.12% stop losses, a 1.5-second delay is the difference between the intended fill price and a materially worse one. This also means at high signal frequency, the system will queue signals faster than the AI council can process them.
+
+2. What is the biggest strength?
+The research tournament + verdict system in researchEdgeScore.ts is genuinely institutional-quality. The combination of: strict promotion thresholds (12 trades, positive expectancy, fee/gross < 50%, PF ≥ 1.1), confidence scaling that never reaches 100%, probe trade exclusion, and per-blocker hypothetical analysis is a sophisticated and correctly designed statistical gatekeeping mechanism. Most retail systems use arbitrary win rate thresholds. This one uses a multi-criteria verdict that correctly models fee drag as a percentage of gross profit — a subtle but critical distinction.
+
+3. Why might mock trading not generate trades?
+In order of likelihood:
+
+NO_APPROVED_STRATEGY — The mock engine's NO_APPROVED_STRATEGY gate requires strategies to be in a promotion list. If the research tournament has not promoted any strategies yet (e.g., because none have reached 12 trades with the required metrics), zero signals will be approved regardless of how many arrive.
+LOW_SIGNAL_SCORE — The minimum signal score gate (default: 50) may be rejecting signals if the scoring inputs (quality score, multi-timeframe score, threshold adjustment) are producing scores below the threshold.
+Cold-start candle gap — Strategies requiring 20+ historical candles (Ichimoku needs 52+, Pivot needs prior-day OHLC) may produce no signals at all for the first hour after engine restart.
+EXPOSURE_LIMIT — If the account is already at max open trades (5) from a prior session and positions were not closed, new signals will be blocked.
+DAILY_LOSS_LIMIT — If the account hit the 3% daily loss threshold, all new trades are blocked until midnight reset.
+REGIME — The regime classifier may be classifying the market as NO_TRADE state, blocking all signals.
+AI Council veto — The Risk Arbitrator (GPT-4o) has strict veto conditions including ADX < 15, >3 open positions, and price > 0.4% from VWAP. In ranging markets, this alone could suppress 80%+ of signals.
+4. What should be improved first?
+Fix the security holes — rotate password123, add authentication to Go engine endpoints. These are day-zero production blockers. Takes 2–4 hours.
+
+5. What should be improved second?
+Parallelize the AI agent voting and add decision caching. Run Bull Agent + Bear Agent + Macro Analyst concurrently (Promise.all / goroutine fan-out), then pass results to Risk Arbitrator. Cache decisions keyed on market snapshot hash (5-second granularity). This brings latency from ~1.5s to ~400ms and enables the system to actually trade at the frequency the strategy signals can generate.
+
+6. What should be improved third?
+Add compound MongoDB indexes and TTL on the logs collection. Without (strategyId, timestamp, status) compound indexes, every analytics query at 100k+ trades becomes a full collection scan. This is 3–4 hours of work that prevents a future performance cliff. The logs TTL prevents MongoDB Atlas costs from scaling linearly with uptime.
+
+7. What would a hedge fund engineer improve immediately?
+"The research promotion criteria are excellent but the live trading risk controls are incomplete."
+
+A hedge fund engineer would immediately:
+
+Add funding rate to the PnL model — a BTC perp position held 45 minutes could pay 2–4 funding periods. This is currently invisible in PnL.
+Replace the password123 database credential.
+Add position correlation monitoring — opening 5 long BTC futures strategies simultaneously is not diversification, it is 5× concentration.
+Implement Kelly Criterion for position sizing — the current fixed TargetSize field in signals means all trades use the same notional regardless of edge quality.
+Add an out-of-sample gate to the research engine — currently strategies could overfit to the paper trading period and still get promoted.
+8. Overall Score: 52 / 100
+Component	Points	Max
+Architecture design	14	20
+Trading correctness	10	20
+Risk management	8	15
+Research & analytics	12	15
+Security	3	10
+Testing	3	10
+Scalability/performance	2	10
+Total	52	100
+Bottom line: This is an impressively architected system for a single-developer build. The research tournament and multi-agent AI consensus are ideas worth keeping. The system is not production-ready today due to the security gaps, AI latency ceiling, missing funding rate model, and incomplete test coverage. With 4–6 weeks of focused hardening on the items in priority 1–10 above, it could reach 70+/100 and be credible for live trading at small scale.
+
+Report generated from live codebase inspection. All findings reference actual files and functions. Items marked "NOT VERIFIED FROM SOURCE CODE" require additional investigation before being treated as confirmed.

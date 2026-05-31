@@ -1,0 +1,6 @@
+"trading_app_writer" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"
+"trading_app_reader" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"
+"trading_analytics_reader" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"
+"research_warehouse_writer" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"
+"pgbouncer_admin" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"
+"pgbouncer_stats" "SCRAM-SHA-256$replace-with-secret-manager-rendered-hash"

@@ -550,6 +550,14 @@ var aiStrategyLibrary = []AIStrategyBlueprint{
 		[]string{"position sizing", "drawdown halt", "exposure control", "quality gate"},
 		[]string{"portfolio state", "signal metadata", "PnL tracking"},
 		StrategySupportBlueprint),
+	newBlueprint(61, "institutional-alpha-engine", "Institutional BTC Alpha Engine", "Alpha", "Engine", "tick to 15m",
+		"Combine funding, CVD, delta, liquidity sweeps, FVGs, order blocks, MSS, session flow, volume profile, and liquidations.",
+		"Enter only when non-correlated alpha sources create a quality-approved directional setup.",
+		"Exit through strategy-specific SL/TP plus the portfolio risk engine.",
+		"Quality score is mandatory before execution and risk budgets control exposure.",
+		[]string{"funding", "CVD", "delta divergence", "liquidity sweep", "FVG", "order block", "MSS", "volume profile"},
+		[]string{"funding API", "trade tape", "OHLCV candles", "liquidation feed"},
+		StrategySupportRuleReady),
 }
 
 func GetAIStrategyLibrary() []AIStrategyBlueprint {

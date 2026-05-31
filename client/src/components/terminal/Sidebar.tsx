@@ -139,6 +139,11 @@ const NAV_SECTIONS: NavSection[] = [
         label: "Mock Trading",
         icon: <IconTrade />,
       },
+      {
+        href: "/terminal",
+        label: "Terminal V2",
+        icon: <IconBTC />,
+      },
     ],
   },
   {

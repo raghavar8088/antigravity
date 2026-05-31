@@ -126,6 +126,17 @@ func BuildAllScalpers() []RegistryEntry {
 		{NewWCOScalper(10, 30), "Price Action Elite", "1m"},
 		{NewAdaptiveRSIScalper(14), "Adaptive Elite", "1m"},
 		{NewIMIScalper(14), "Adaptive Elite", "1m"},
+
+		// ══════════ INSTITUTIONAL ALPHA ENGINE ══════════
+		{NewFundingMeanReversionAlpha(), "Funding", "1m"},
+		{NewCVDDivergenceAlpha(), "Microstructure", "tick"},
+		{NewDeltaAbsorptionAlpha(), "Microstructure", "tick"},
+		{NewLiquiditySweepReversalAlpha(), "Liquidity", "1m"},
+		{NewFVGRetestAlpha(), "Structure", "1m"},
+		{NewOrderBlockRetestAlpha(), "Smart Money", "1m"},
+		{NewMSSContinuationAlpha(), "Structure", "1m"},
+		{NewPOCBounceAlpha(), "Market Profile", "1m"},
+		{NewSessionExpansionAlpha(), "Session", "1m"},
 	}
 }
 
