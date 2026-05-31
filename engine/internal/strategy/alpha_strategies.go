@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"fmt"
 	"time"
 
 	"antigravity-engine/internal/alpha"
@@ -9,6 +10,7 @@ import (
 	"antigravity-engine/internal/alpha/funding"
 	"antigravity-engine/internal/alpha/fvg"
 	"antigravity-engine/internal/alpha/liquidity"
+	"antigravity-engine/internal/alpha/microstructure"
 	"antigravity-engine/internal/alpha/mss"
 	"antigravity-engine/internal/alpha/orderblock"
 	"antigravity-engine/internal/alpha/quality"
@@ -105,6 +107,34 @@ func NewPOCBounceAlpha() *InstitutionalAlphaScalper {
 
 func NewSessionExpansionAlpha() *InstitutionalAlphaScalper {
 	return newInstitutionalAlphaScalper("SessionExpansion_Alpha", alphaSession)
+}
+
+func NewPhase11LiquiditySweepAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11LiquiditySweepReversal_Alpha", microstructure.StrategyLiquiditySweep)
+}
+
+func NewPhase11FundingMeanReversionAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11FundingMeanReversion_Alpha", microstructure.StrategyFundingMeanReversion)
+}
+
+func NewPhase11CVDDivergenceAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11CVDDivergence_Alpha", microstructure.StrategyCVDDivergence)
+}
+
+func NewPhase11LiquidationCascadeAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11LiquidationCascadeReversal_Alpha", microstructure.StrategyLiquidationCascade)
+}
+
+func NewPhase11FVGAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11FairValueGap_Alpha", microstructure.StrategyFVGContinuation)
+}
+
+func NewPhase11OrderBlockAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11OrderBlock_Alpha", microstructure.StrategyOrderBlockRetest)
+}
+
+func NewPhase11MSSAlpha() *Phase11MicrostructureAlpha {
+	return newPhase11MicrostructureAlpha("Phase11MSSCHOCH_Alpha", microstructure.StrategyMSSRetest)
 }
 
 func (s *InstitutionalAlphaScalper) OnTick(t marketdata.Tick) []Signal {
@@ -296,4 +326,85 @@ func absFloat(v float64) float64 {
 		return -v
 	}
 	return v
+}
+
+type Phase11MicrostructureAlpha struct {
+	baseScalper
+	kind   microstructure.StrategyKind
+	engine *microstructure.Engine
+	model  microstructure.Strategy
+}
+
+func newPhase11MicrostructureAlpha(name string, kind microstructure.StrategyKind) *Phase11MicrostructureAlpha {
+	return &Phase11MicrostructureAlpha{
+		baseScalper: baseScalper{name: name, maxBuf: defaultBufSize},
+		kind:        kind,
+		engine:      microstructure.NewEngine(defaultBufSize),
+		model:       microstructure.NewStrategy(kind),
+	}
+}
+
+func (s *Phase11MicrostructureAlpha) OnTick(t marketdata.Tick) []Signal {
+	s.feed(t.Price)
+	row := alpha.Tick{Symbol: t.Symbol, Price: t.Price, Quantity: t.Quantity, Side: t.Side, Timestamp: unixMs(t.TimeMs)}
+	features := s.engine.AddTick(row)
+	return s.evaluatePhase11(features)
+}
+
+func (s *Phase11MicrostructureAlpha) OnCandle(t marketdata.Tick) []Signal {
+	s.feed(t.Price)
+	features := s.engine.AddCandle(s.toCandle(t))
+	return s.evaluatePhase11(features)
+}
+
+func (s *Phase11MicrostructureAlpha) AddOrderBook(ob microstructure.OrderBookSnapshot) {
+	s.engine.AddOrderBook(ob)
+}
+
+func (s *Phase11MicrostructureAlpha) AddFunding(f microstructure.FundingSnapshot) {
+	s.engine.AddFunding(f)
+}
+
+func (s *Phase11MicrostructureAlpha) AddLiquidation(liq microstructure.LiquidationEvent) {
+	s.engine.AddLiquidation(liq)
+}
+
+func (s *Phase11MicrostructureAlpha) evaluatePhase11(features microstructure.FeatureSnapshot) []Signal {
+	raw := s.model.Evaluate(features)
+	enriched := microstructure.EnrichSignal(raw, s.kind, features)
+	enriched = microstructure.FilterCandidate(nil, enriched, nil)
+	if !enriched.Approved {
+		return holdSignal()
+	}
+	reason := enriched.Signal.Reason + " | cvd=" + formatFloat(enriched.CVDConfirmationScore) +
+		" liquidity=" + formatFloat(enriched.LiquidityZoneProximityScore) +
+		" funding=" + formatFloat(enriched.FundingPressureScore) +
+		" structure=" + formatFloat(enriched.MarketStructureAlignmentScore) +
+		" regime=" + string(features.Regime)
+	return []Signal{{
+		Symbol:        enriched.Signal.Symbol,
+		Action:        actionFromAlpha(enriched.Signal.Action),
+		TargetSize:    defaultQty,
+		Confidence:    enriched.FinalConfidence,
+		StopLossPct:   enriched.Signal.StopLossPct,
+		TakeProfitPct: enriched.Signal.TakeProfitPct,
+		AIReasoning:   reason,
+	}}
+}
+
+func (s *Phase11MicrostructureAlpha) toCandle(t marketdata.Tick) alpha.Candle {
+	ts := unixMs(t.TimeMs)
+	open := t.Price
+	if len(s.prices) >= 2 {
+		open = s.prices[len(s.prices)-2]
+	}
+	high, low := open, t.Price
+	if high < low {
+		high, low = low, high
+	}
+	return alpha.Candle{Symbol: t.Symbol, Open: open, High: high, Low: low, Close: t.Price, Volume: t.Quantity, Timestamp: ts}
+}
+
+func formatFloat(v float64) string {
+	return fmt.Sprintf("%.2f", v)
 }

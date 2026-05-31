@@ -137,6 +137,15 @@ func BuildAllScalpers() []RegistryEntry {
 		{NewMSSContinuationAlpha(), "Structure", "1m"},
 		{NewPOCBounceAlpha(), "Market Profile", "1m"},
 		{NewSessionExpansionAlpha(), "Session", "1m"},
+
+		// ══════════ PHASE 11 MICROSTRUCTURE ALPHA ENGINE ══════════
+		{NewPhase11LiquiditySweepAlpha(), "Phase 11 Liquidity", "1m"},
+		{NewPhase11FundingMeanReversionAlpha(), "Phase 11 Derivatives", "1m"},
+		{NewPhase11CVDDivergenceAlpha(), "Phase 11 Order Flow", "tick"},
+		{NewPhase11LiquidationCascadeAlpha(), "Phase 11 Liquidations", "1m"},
+		{NewPhase11FVGAlpha(), "Phase 11 Structure", "1m"},
+		{NewPhase11OrderBlockAlpha(), "Phase 11 Smart Money", "1m"},
+		{NewPhase11MSSAlpha(), "Phase 11 Structure", "1m"},
 	}
 }
 

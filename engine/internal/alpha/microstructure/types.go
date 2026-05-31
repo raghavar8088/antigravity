@@ -51,9 +51,9 @@ type OrderBookSnapshot struct {
 
 type FundingSnapshot struct {
 	Symbol       string
-	Rate        float64
+	Rate         float64
 	OpenInterest float64
-	Timestamp   time.Time
+	Timestamp    time.Time
 }
 
 type LiquidationEvent struct {
@@ -101,44 +101,44 @@ type FeatureSnapshot struct {
 	Symbol    string
 	Timestamp time.Time
 
-	LastPrice    float64
-	ATR          float64
-	ATRPct       float64
-	Regime       Regime
+	LastPrice        float64
+	ATR              float64
+	ATRPct           float64
+	Regime           Regime
 	VolatilityRegime Regime
 
-	AggressorBuyVolume  float64
-	AggressorSellVolume float64
-	PassiveVolume       float64
-	BidAskImbalance     float64
-	RollingCVD          float64
-	CVDMomentum         float64
+	AggressorBuyVolume   float64
+	AggressorSellVolume  float64
+	PassiveVolume        float64
+	BidAskImbalance      float64
+	RollingCVD           float64
+	CVDMomentum          float64
 	CVDConfirmationScore float64
 	BearishCVDDivergence bool
 	BullishCVDDivergence bool
 
-	LiquidityWalls []LiquidityZone
-	LiquidityGaps  []LiquidityZone
+	LiquidityWalls              []LiquidityZone
+	LiquidityGaps               []LiquidityZone
 	LiquidityZoneProximityScore float64
 	LiquidityConfirmation       bool
-	SweepDirection alpha.Action
-	SweepRejection bool
-	VolumeSpike    bool
+	SweepDirection              alpha.Action
+	SweepRejection              bool
+	VolumeSpike                 bool
 
-	FundingRate       float64
-	OpenInterestDelta float64
+	FundingRate          float64
+	OpenInterestDelta    float64
 	FundingPressureScore float64
 
-	LastLiquidationSide string
-	LiquidationNotional float64
-	LiquidationSpike    bool
+	LastLiquidationSide   string
+	LiquidationNotional   float64
+	LiquidationSpike      bool
 	LiquidationExhaustion bool
 
-	SwingHigh float64
-	SwingLow  float64
-	BOSDirection   alpha.Action
-	CHOCHDirection alpha.Action
-	StructureRetest bool
+	SwingHigh                     float64
+	SwingLow                      float64
+	BOSDirection                  alpha.Action
+	CHOCHDirection                alpha.Action
+	StructureRetest               bool
 	MarketStructureAlignmentScore float64
 
 	FairValueGaps []FairValueGap
@@ -147,31 +147,31 @@ type FeatureSnapshot struct {
 }
 
 type EnrichedSignal struct {
-	Signal alpha.Signal
-	Kind   StrategyKind
-	AlphaType AlphaType
+	Signal        alpha.Signal
+	Kind          StrategyKind
+	AlphaType     AlphaType
 	SignalCluster string
 
-	CVDConfirmationScore         float64
-	LiquidityZoneProximityScore  float64
-	FundingPressureScore         float64
+	CVDConfirmationScore          float64
+	LiquidityZoneProximityScore   float64
+	FundingPressureScore          float64
 	MarketStructureAlignmentScore float64
-	VolatilityRegime             Regime
-	RegimePass                   bool
+	VolatilityRegime              Regime
+	RegimePass                    bool
 	LiquidityConfirmation         bool
-	FinalConfidence              float64
-	Approved                     bool
-	RejectReason                 string
+	FinalConfidence               float64
+	Approved                      bool
+	RejectReason                  string
 }
 
 type StrategyScoreInput struct {
-	WinRate              float64
-	ProfitFactor         float64
-	Sharpe               float64
-	CVDConfirmation      float64
-	LiquidityEdgeScore   float64
-	FundingEdgeScore     float64
-	DrawdownPenalty      float64
+	WinRate            float64
+	ProfitFactor       float64
+	Sharpe             float64
+	CVDConfirmation    float64
+	LiquidityEdgeScore float64
+	FundingEdgeScore   float64
+	DrawdownPenalty    float64
 }
 
 type StrategyScore struct {
