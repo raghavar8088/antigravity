@@ -37,6 +37,13 @@ export interface StrategyPerformanceMetrics {
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
 const REGIMES: Array<MarketRegime | "UNKNOWN"> = [
+  "STRONG_TREND",
+  "WEAK_TREND",
+  "RANGE",
+  "HIGH_VOLATILITY",
+  "LOW_VOLATILITY",
+  "BREAKOUT",
+  "REVERSAL",
   "TRENDING",
   "RANGING",
   "HIGH_VOLATILITY_BREAKOUT",
@@ -46,6 +53,13 @@ const REGIMES: Array<MarketRegime | "UNKNOWN"> = [
 
 function emptyRegimeBreakdown(): Record<MarketRegime | "UNKNOWN", RegimeStats> {
   return {
+    STRONG_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    WEAK_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    RANGE: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    HIGH_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    LOW_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+    REVERSAL: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
     TRENDING: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
     RANGING: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
     HIGH_VOLATILITY_BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },

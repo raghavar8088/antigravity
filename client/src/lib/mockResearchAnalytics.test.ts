@@ -55,6 +55,8 @@ const account: MockAccountState = {
   realizedPnl: 100,
   unrealizedPnl: 0,
   exposure: 0,
+  longExposure: 0,
+  shortExposure: 0,
   marginUsed: 0,
   availableBalance: 1_000_100,
   returnPct: 0.01,

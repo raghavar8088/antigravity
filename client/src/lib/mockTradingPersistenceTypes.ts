@@ -136,6 +136,8 @@ export const mockAccountStateSchema = z
     returnPct: finiteNumber,
     peakEquity: finiteNumber,
     maxDrawdownPct: nonNegativeNumber,
+    longExposure: nonNegativeNumber.default(0),
+    shortExposure: nonNegativeNumber.default(0),
     openCount: z.number().int().nonnegative(),
     closedCount: z.number().int().nonnegative(),
   })

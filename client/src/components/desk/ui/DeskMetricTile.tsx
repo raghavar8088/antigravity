@@ -7,6 +7,8 @@ type DeskMetricTileProps = {
   label: string;
   value: ReactNode;
   detail?: ReactNode;
+  sub?: ReactNode;
+  subColor?: "profit" | "loss" | "neutral" | "default";
   valueClassName?: string;
   compact?: boolean;
   highlight?: boolean;
@@ -17,11 +19,23 @@ export function DeskMetricTile({
   label,
   value,
   detail,
+  sub,
+  subColor = "default",
   valueClassName,
   compact = false,
   highlight = false,
   title,
 }: DeskMetricTileProps) {
+  const finalDetail = detail ?? sub;
+  const detailColor =
+    subColor === "profit"
+      ? "var(--desk-success)"
+      : subColor === "loss"
+      ? "var(--desk-error)"
+      : subColor === "neutral"
+      ? "var(--desk-on-surface-variant)"
+      : "var(--desk-on-surface-variant)";
+
   return (
     <div
       title={title}
@@ -49,9 +63,9 @@ export function DeskMetricTile({
       >
         {value}
       </span>
-      {detail ? (
-        <span className="desk-label-md" style={{ fontWeight: 400, minHeight: 16 }}>
-          {detail}
+      {finalDetail ? (
+        <span className="desk-label-md" style={{ fontWeight: 400, minHeight: 16, color: detailColor }}>
+          {finalDetail}
         </span>
       ) : (
         <span aria-hidden style={{ minHeight: 16 }} />

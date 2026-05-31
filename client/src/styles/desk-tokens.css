@@ -1,36 +1,51 @@
-/* Material Design 3 desk tokens — light default, dark via [data-theme="dark"] or body.combat-mode */
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESK TOKENS — Institutional Trading Terminal Design System
+   Dark-first. Matches globals.css terminal palette.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 :root,
-[data-theme="light"] {
+[data-theme="dark"],
+body.combat-mode {
+  /* ── Brand ─────────────────────────────────────────────────────────────── */
   --desk-btc-accent: #f7931a;
-  --desk-primary: #1a73e8;
-  --desk-on-primary: #ffffff;
-  --desk-primary-container: #d3e3fd;
-  --desk-on-primary-container: #041e49;
 
-  --desk-surface: #ffffff;
-  --desk-surface-dim: #f8f9fa;
-  --desk-surface-container: #f1f3f4;
-  --desk-surface-container-high: #e8eaed;
-  --desk-surface-container-highest: #dfe1e5;
-  --desk-on-surface: #202124;
-  --desk-on-surface-variant: #5f6368;
-  --desk-outline: #dadce0;
-  --desk-outline-variant: #e8eaed;
+  /* ── Primary / Accent ──────────────────────────────────────────────────── */
+  --desk-primary:                #4d7cfe;
+  --desk-on-primary:             #ffffff;
+  --desk-primary-container:      rgba(41, 98, 255, 0.15);
+  --desk-on-primary-container:   #93b4fd;
 
-  --desk-error: #d93025;
-  --desk-on-error: #ffffff;
-  --desk-error-container: #fce8e6;
-  --desk-success: #1e8e3e;
-  --desk-success-container: #e6f4ea;
-  --desk-warning: #e37400;
-  --desk-warning-container: #fef7e0;
+  /* ── Surface Layers ────────────────────────────────────────────────────── */
+  --desk-surface:                    #161b22;
+  --desk-surface-dim:                #0d1117;
+  --desk-surface-container:          #1c2128;
+  --desk-surface-container-high:     #21262d;
+  --desk-surface-container-highest:  #2d333b;
 
+  /* ── Text ──────────────────────────────────────────────────────────────── */
+  --desk-on-surface:         #e6edf3;
+  --desk-on-surface-variant: #8b949e;
+
+  /* ── Borders ───────────────────────────────────────────────────────────── */
+  --desk-outline:         #30363d;
+  --desk-outline-variant: #21262d;
+
+  /* ── Semantic Colors ───────────────────────────────────────────────────── */
+  --desk-error:              #ef5350;
+  --desk-on-error:           #ffffff;
+  --desk-error-container:    rgba(239, 83, 80, 0.12);
+  --desk-success:            #26a69a;
+  --desk-success-container:  rgba(38, 166, 154, 0.12);
+  --desk-warning:            #ffb300;
+  --desk-warning-container:  rgba(255, 179, 0, 0.12);
+
+  /* ── Elevation (dark) ──────────────────────────────────────────────────── */
   --desk-elevation-0: none;
-  --desk-elevation-1: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
-  --desk-elevation-2: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
-  --desk-elevation-3: 0 1px 3px 0 rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  --desk-elevation-1: 0 2px 6px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --desk-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --desk-elevation-3: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.4);
 
+  /* ── Spacing ───────────────────────────────────────────────────────────── */
   --desk-space-1: 4px;
   --desk-space-2: 8px;
   --desk-space-3: 12px;
@@ -38,71 +53,82 @@
   --desk-space-5: 24px;
   --desk-space-6: 32px;
 
-  --desk-radius-card: 12px;
-  --desk-radius-chip: 8px;
-  --desk-radius-button: 28px;
-  --desk-radius-input: 8px;
+  /* ── Geometry ──────────────────────────────────────────────────────────── */
+  --desk-radius-card:   8px;
+  --desk-radius-chip:   4px;
+  --desk-radius-button: 6px;
+  --desk-radius-input:  6px;
 
-  --desk-font-display: var(--font-desk-display, "Google Sans", "Roboto", Arial, sans-serif);
-  --desk-font-body: var(--font-desk-body, "Roboto", Arial, sans-serif);
-  --desk-font-mono: var(--font-desk-mono, "Roboto Mono", ui-monospace, monospace);
+  /* ── Typography ────────────────────────────────────────────────────────── */
+  --desk-font-display: var(--font-inter, "Inter", "SF Pro Display", -apple-system, sans-serif);
+  --desk-font-body:    var(--font-inter, "Inter", -apple-system, sans-serif);
+  --desk-font-mono:    var(--font-mono-var, "JetBrains Mono", "Roboto Mono", ui-monospace, monospace);
 
-  --desk-header-height: 64px;
-  --desk-page-max: 1800px;
+  /* ── Layout ────────────────────────────────────────────────────────────── */
+  --desk-header-height: 48px;
+  --desk-page-max:      1800px;
 }
 
-[data-theme="dark"],
-body.combat-mode {
-  --desk-primary: #8ab4f8;
-  --desk-on-primary: #062e6f;
-  --desk-primary-container: #0842a0;
-  --desk-on-primary-container: #d3e3fd;
+/* Light theme override (if ever needed) */
+[data-theme="light"] {
+  --desk-primary:                #2962ff;
+  --desk-on-primary:             #ffffff;
+  --desk-primary-container:      rgba(41, 98, 255, 0.1);
+  --desk-on-primary-container:   #2962ff;
 
-  --desk-surface: #292a2d;
-  --desk-surface-dim: #1f1f1f;
-  --desk-surface-container: #35363a;
-  --desk-surface-container-high: #3c4043;
-  --desk-surface-container-highest: #4d5156;
-  --desk-on-surface: #e8eaed;
-  --desk-on-surface-variant: #9aa0a6;
-  --desk-outline: #3c4043;
-  --desk-outline-variant: #35363a;
+  --desk-surface:                    #ffffff;
+  --desk-surface-dim:                #f6f8fa;
+  --desk-surface-container:          #f0f2f4;
+  --desk-surface-container-high:     #e8eaed;
+  --desk-surface-container-highest:  #dde0e4;
 
-  --desk-error: #f28b82;
-  --desk-error-container: #5c1a18;
-  --desk-success: #81c995;
-  --desk-success-container: #1e3a29;
-  --desk-warning: #fdd663;
-  --desk-warning-container: #4a4000;
+  --desk-on-surface:         #1a1d27;
+  --desk-on-surface-variant: #5a6070;
+
+  --desk-outline:         #d0d6dd;
+  --desk-outline-variant: #e8eaed;
+
+  --desk-error:              #d32f2f;
+  --desk-error-container:    rgba(211, 47, 47, 0.08);
+  --desk-success:            #00897b;
+  --desk-success-container:  rgba(0, 137, 123, 0.08);
+  --desk-warning:            #f57c00;
+  --desk-warning-container:  rgba(245, 124, 0, 0.08);
+
+  --desk-elevation-0: none;
+  --desk-elevation-1: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --desk-elevation-2: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
+  --desk-elevation-3: 0 4px 16px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
 }
 
-/* Typography scale */
+/* ─── Typography Scale ───────────────────────────────────────────────────── */
 .desk-display-lg {
   font-family: var(--desk-font-display);
-  font-size: 1.75rem;
-  font-weight: 500;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--desk-on-surface);
 }
 
 .desk-title-md {
   font-family: var(--desk-font-display);
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 0.9375rem;
+  font-weight: 600;
   line-height: 1.35;
   color: var(--desk-on-surface);
 }
 
 .desk-label-md {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.6875rem;
+  font-weight: 600;
   line-height: 1.35;
+  letter-spacing: 0.04em;
   color: var(--desk-on-surface-variant);
 }
 
 .desk-body-md {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
   color: var(--desk-on-surface);
 }
@@ -113,94 +139,75 @@ body.combat-mode {
   font-feature-settings: "tnum";
 }
 
-.desk-pnl-positive {
-  color: var(--desk-success);
-}
+.desk-pnl-positive { color: var(--desk-success); }
+.desk-pnl-negative { color: var(--desk-error); }
+.desk-pnl-neutral  { color: var(--desk-on-surface-variant); }
 
-.desk-pnl-negative {
-  color: var(--desk-error);
-}
-
-.desk-pnl-neutral {
-  color: var(--desk-on-surface-variant);
-}
-
-/* Page shell */
+/* ─── Page Shell ─────────────────────────────────────────────────────────── */
 .desk-page {
   width: 100%;
   max-width: var(--desk-page-max);
   margin: 0 auto;
-  padding: var(--desk-space-5);
+  padding: var(--desk-space-4) var(--desk-space-5);
   display: flex;
   flex-direction: column;
-  gap: var(--desk-space-5);
+  gap: var(--desk-space-4);
 }
 
 @media (max-width: 640px) {
   .desk-page {
-    padding: var(--desk-space-4);
-    gap: var(--desk-space-4);
+    padding: var(--desk-space-3);
+    gap: var(--desk-space-3);
   }
 }
 
+/* ─── 12-Column Grid ─────────────────────────────────────────────────────── */
 .desk-grid-12 {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--desk-space-5);
+  gap: var(--desk-space-4);
 }
 
-.desk-col-12 {
-  grid-column: span 12;
-}
-
-.desk-col-8 {
-  grid-column: span 8;
-}
-
-.desk-col-6 {
-  grid-column: span 6;
-}
-
-.desk-col-4 {
-  grid-column: span 4;
-}
+.desk-col-12 { grid-column: span 12; }
+.desk-col-8  { grid-column: span 8; }
+.desk-col-6  { grid-column: span 6; }
+.desk-col-4  { grid-column: span 4; }
+.desk-col-3  { grid-column: span 3; }
 
 @media (max-width: 1024px) {
-  .desk-col-8,
-  .desk-col-6,
-  .desk-col-4 {
-    grid-column: span 12;
-  }
+  .desk-col-8, .desk-col-6, .desk-col-4 { grid-column: span 12; }
 }
 
-/* Readiness level color tokens — mirrors READINESS_COLOR in DeskCommandCenter */
+@media (max-width: 768px) {
+  .desk-col-3 { grid-column: span 6; }
+}
+
+/* ─── Readiness level color tokens ──────────────────────────────────────── */
 :root {
-  --desk-readiness-not-ready:         #f85149;
-  --desk-readiness-collect-data:      #8b949e;
-  --desk-readiness-paper-edge-ok:     #d29922;
-  --desk-readiness-paper-ready:       #58a6ff;
-  --desk-readiness-testnet-soak-ready:#3fb950;
+  --desk-readiness-not-ready:          #f85149;
+  --desk-readiness-collect-data:       #6e7681;
+  --desk-readiness-paper-edge-ok:      #d29922;
+  --desk-readiness-paper-ready:        #4d7cfe;
+  --desk-readiness-testnet-soak-ready: #26a69a;
 }
 
+/* ─── Metrics Row ────────────────────────────────────────────────────────── */
 .desk-metrics-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: var(--desk-space-3);
 }
 
 @media (max-width: 640px) {
   .desk-metrics-row {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   }
 }
 
+/* ─── Progress Animation ─────────────────────────────────────────────────── */
 @keyframes desk-indeterminate {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(350%);
-  }
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
 }
 
 .desk-linear-progress-bar {

@@ -1,24 +1,24 @@
 import type { Metadata } from "next";
-import { Roboto, Roboto_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const roboto = Roboto({
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-desk-body",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-inter",
   display: "swap",
 });
 
-const robotoMono = Roboto_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-desk-mono",
+  weight: ["400", "500", "600"],
+  variable: "--font-mono-var",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "in.loop.com",
-  description: "Autonomous trading in Indian and crypto markets.",
+  title: "BTC Terminal — Institutional Research Platform",
+  description: "Professional BTC mock trading and research terminal with live strategy signals, risk management, and analytics.",
   icons: {
     icon: "/branding/in-loop-logo.png",
     apple: "/branding/in-loop-logo.png",
@@ -27,11 +27,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className={`${roboto.variable} ${robotoMono.variable}`}>
+    <html
+      lang="en"
+      data-theme="dark"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+    >
       <head>
-        <meta name="theme-color" content="#f8f9fa" />
+        <meta name="theme-color" content="#0d1117" />
+        <meta name="color-scheme" content="dark" />
       </head>
-      <body className={roboto.className}>{children}</body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

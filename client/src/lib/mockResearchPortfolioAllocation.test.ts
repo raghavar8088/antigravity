@@ -28,6 +28,13 @@ function metrics(id: number): StrategyPerformanceMetrics {
     last7DaysWinRate: 0.7,
     last7DaysTrades: 10,
     regimeBreakdown: {
+      STRONG_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      WEAK_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      RANGE: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      HIGH_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      LOW_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      REVERSAL: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
       TRENDING: { trades: 10, winRate: 0.6, expectancy: 15, netPnl: 150 },
       RANGING: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
       HIGH_VOLATILITY_BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },

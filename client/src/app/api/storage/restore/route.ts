@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import path from "path";
-import { restoreFromBackup, validateBackup, listBackups } from "@/lib/backupManager";
+import { restoreFromBackup, validateBackup, listBackups } from "@/lib/backupManager.server";
 import { getDataRoot, DATA_DIRS } from "@/lib/localStorageService";
 import { dps } from "@/lib/dualPersistenceService";
 

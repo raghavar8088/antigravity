@@ -1,7 +1,7 @@
 "use client";
 
-import TradingDashboard from "@/components/TradingDashboard";
+import TerminalDashboard from "@/components/TerminalDashboard";
 
 export default function Home() {
-  return <TradingDashboard />;
+  return <TerminalDashboard />;
 }

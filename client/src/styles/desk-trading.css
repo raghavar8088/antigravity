@@ -1,39 +1,23 @@
-/* BTC trading desk — visual upgrade layer */
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESK TRADING — Institutional terminal layout + component overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ─── Legacy trading-shell (now inside terminal-content) ────────────────── */
 .trading-shell {
-  min-height: 100vh;
-  background:
-    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(247, 147, 26, 0.08), transparent 50%),
-    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(26, 115, 232, 0.06), transparent 45%),
-    var(--desk-surface-dim);
-}
-
-[data-theme="dark"] .trading-shell,
-body.combat-mode .trading-shell {
-  background:
-    radial-gradient(ellipse 120% 80% at 100% -20%, rgba(247, 147, 26, 0.12), transparent 50%),
-    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(138, 180, 248, 0.08), transparent 45%),
-    var(--desk-surface-dim);
+  min-height: 100%;
+  background: transparent;
 }
 
 .trading-shell__inner {
-  box-sizing: border-box;
-  width: min(calc(100vw - (var(--desk-space-4) * 2)), var(--desk-page-max));
-  max-width: none;
+  width: 100%;
+  max-width: var(--desk-page-max, 1800px);
   margin: 0 auto;
-  padding: var(--desk-space-4) var(--desk-space-5) var(--desk-space-6);
   display: flex;
   flex-direction: column;
   gap: var(--desk-space-4);
 }
 
-@media (max-width: 640px) {
-  .trading-shell__inner {
-    padding: var(--desk-space-3);
-  }
-}
-
-/* Landing header above desk */
+/* ─── Landing header (used in btc-future-trading) ────────────────────────── */
 .trading-landing-header {
   display: flex;
   flex-wrap: wrap;
@@ -49,15 +33,15 @@ body.combat-mode .trading-shell {
 
 .trading-landing-header__title {
   font-family: var(--desk-font-display);
-  font-size: 1.5rem;
-  font-weight: 500;
+  font-size: 1.25rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--desk-on-surface);
   margin: 0 0 4px;
 }
 
 .trading-landing-header__desc {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--desk-on-surface-variant);
   margin: 0;
   max-width: 42rem;
@@ -67,15 +51,16 @@ body.combat-mode .trading-shell {
 .trading-landing-header__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
-/* App bar upgrade */
+/* ─── App bar upgrade ─────────────────────────────────────────────────────── */
 .desk-app-bar--trading {
   background: color-mix(in srgb, var(--desk-surface) 92%, transparent) !important;
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--desk-outline) !important;
+  position: relative;
 }
 
 .desk-app-bar--trading::after {
@@ -88,79 +73,62 @@ body.combat-mode .trading-shell {
   background: linear-gradient(
     90deg,
     var(--desk-btc-accent, #f7931a) 0%,
-    var(--desk-primary) 40%,
+    var(--desk-primary) 45%,
     transparent 100%
   );
-  opacity: 0.85;
-}
-
-.desk-app-bar--trading {
-  position: relative;
+  opacity: 0.75;
 }
 
 .desk-app-bar__subtitle-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 5px;
 }
 
-/* Hero strip under app bar */
+/* ─── Hero strip ──────────────────────────────────────────────────────────── */
 .desk-hero-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--desk-space-3);
   padding: var(--desk-space-4);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--desk-primary-container) 40%, var(--desk-surface)) 0%,
-    var(--desk-surface) 60%
-  );
+  background: var(--desk-surface-container);
   border: 1px solid var(--desk-outline);
   border-radius: var(--desk-radius-card);
   box-shadow: var(--desk-elevation-1);
 }
 
-[data-theme="dark"] .desk-hero-strip,
-body.combat-mode .desk-hero-strip {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--desk-primary-container) 25%, var(--desk-surface)) 0%,
-    var(--desk-surface) 70%
-  );
-}
-
 .desk-hero-strip__highlight {
-  border-left: 3px solid var(--desk-btc-accent, #f7931a);
-  padding-left: calc(var(--desk-space-3) - 3px);
+  border-left: 2px solid var(--desk-btc-accent, #f7931a);
+  padding-left: calc(var(--desk-space-3) - 2px);
 }
 
-/* Metric tiles */
+/* ─── Metric tile variants ────────────────────────────────────────────────── */
 .desk-metric-tile--highlight {
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--desk-btc-accent, #f7931a) 12%, var(--desk-surface-container)) 0%,
+    color-mix(in srgb, var(--desk-btc-accent, #f7931a) 10%, var(--desk-surface-container)) 0%,
     var(--desk-surface-container) 100%
   ) !important;
-  border: 1px solid color-mix(in srgb, var(--desk-btc-accent, #f7931a) 35%, var(--desk-outline));
+  border: 1px solid color-mix(in srgb, var(--desk-btc-accent, #f7931a) 30%, var(--desk-outline));
 }
 
 .desk-metric-tile--pnl-positive {
-  border-color: color-mix(in srgb, var(--desk-success) 40%, var(--desk-outline));
+  border-color: color-mix(in srgb, var(--desk-success) 35%, var(--desk-outline));
 }
 
 .desk-metric-tile--pnl-negative {
-  border-color: color-mix(in srgb, var(--desk-error) 40%, var(--desk-outline));
+  border-color: color-mix(in srgb, var(--desk-error) 35%, var(--desk-outline));
 }
 
-/* Compact toolbar */
+/* ─── Compact toolbar ─────────────────────────────────────────────────────── */
 .desk-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--desk-space-3);
-  padding: var(--desk-space-3) var(--desk-space-4);
+  padding: var(--desk-space-2) var(--desk-space-4);
   background: var(--desk-surface-container);
   border: 1px solid var(--desk-outline-variant);
   border-radius: var(--desk-radius-chip);
@@ -169,30 +137,31 @@ body.combat-mode .desk-hero-strip {
 .desk-toolbar__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
-/* Slim workspace nav */
+/* ─── Slim workspace nav ──────────────────────────────────────────────────── */
 .workspace-nav--slim .desk-card {
-  padding: var(--desk-space-3) var(--desk-space-4) !important;
+  padding: var(--desk-space-2) var(--desk-space-4) !important;
 }
 
-/* Banner spacing */
-.desk-page > .desk-banner:first-child {
-  margin-top: 0;
-}
-
-/* Table polish */
+/* ─── Table polish ────────────────────────────────────────────────────────── */
 .desk-data-table th {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--desk-on-surface-variant);
 }
 
-/* Replay panel collapsed */
+.desk-data-table td {
+  font-size: 0.8125rem;
+}
+
+/* ─── Replay panel ────────────────────────────────────────────────────────── */
 .trading-replay-fold {
-  border: 1px dashed var(--desk-outline);
+  border: 1px solid var(--desk-outline);
   border-radius: var(--desk-radius-card);
   overflow: hidden;
 }
@@ -200,27 +169,24 @@ body.combat-mode .desk-hero-strip {
 .trading-replay-fold summary {
   cursor: pointer;
   padding: var(--desk-space-3) var(--desk-space-4);
-  font-size: 0.8125rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--desk-on-surface-variant);
   background: var(--desk-surface-container);
   list-style: none;
+  letter-spacing: 0.02em;
+  transition: background 0.1s;
 }
 
-.trading-replay-fold summary::-webkit-details-marker {
-  display: none;
-}
-
-.trading-replay-fold[open] summary {
-  border-bottom: 1px solid var(--desk-outline-variant);
-}
+.trading-replay-fold summary::-webkit-details-marker { display: none; }
+.trading-replay-fold summary:hover { background: var(--desk-surface-container-high); }
+.trading-replay-fold[open] summary { border-bottom: 1px solid var(--desk-outline-variant); }
 
 .trading-replay-fold__body {
   padding: var(--desk-space-4);
 }
 
-/* ── AI App Tracker panel ─────────────────────────────────────────────────── */
-
+/* ─── AI App Tracker panel ────────────────────────────────────────────────── */
 .ai-tracker-panel {
   border: 1px solid var(--desk-outline);
   border-radius: var(--desk-radius-card);
@@ -231,9 +197,8 @@ body.combat-mode .desk-hero-strip {
   box-shadow: var(--desk-elevation-1);
 }
 
-/* Coloured severity strip along the top */
 .ai-tracker-severity-strip {
-  height: 3px;
+  height: 2px;
   width: 100%;
   background: var(--desk-outline);
   transition: background 0.4s;
@@ -244,6 +209,7 @@ body.combat-mode .desk-hero-strip {
   background: var(--desk-error);
   animation: ai-tracker-pulse 2s ease-in-out infinite;
 }
+
 @keyframes ai-tracker-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.45; }
@@ -272,8 +238,8 @@ body.combat-mode .desk-hero-strip {
 
 .ai-tracker-header__title {
   font-family: var(--desk-font-display);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 700;
   color: var(--desk-primary);
   margin: 0;
 }
@@ -288,7 +254,6 @@ body.combat-mode .desk-hero-strip {
   gap: 6px;
 }
 
-/* Status bar — worker + blocker + VPS live/stale */
 .ai-tracker-status-bar {
   display: flex;
   align-items: center;
@@ -300,49 +265,29 @@ body.combat-mode .desk-hero-strip {
   font-size: 0.6875rem;
 }
 
-.ai-tracker-status-bar__label {
-  color: var(--desk-on-surface-variant);
-}
+.ai-tracker-status-bar__label  { color: var(--desk-on-surface-variant); }
+.ai-tracker-status-bar__value  { color: var(--desk-on-surface); font-weight: 600; }
+.ai-tracker-status-bar__value--live  { color: var(--desk-success); font-weight: 700; }
+.ai-tracker-status-bar__value--stale { color: var(--desk-error);   font-weight: 700; }
+.ai-tracker-status-bar__sep { color: var(--desk-outline); user-select: none; margin: 0 2px; }
 
-.ai-tracker-status-bar__value {
-  color: var(--desk-on-surface);
-  font-weight: 500;
-}
-
-.ai-tracker-status-bar__value--live  { color: var(--desk-success); font-weight: 600; }
-.ai-tracker-status-bar__value--stale { color: var(--desk-error);   font-weight: 600; }
-
-.ai-tracker-status-bar__sep {
-  color: var(--desk-outline);
-  user-select: none;
-  margin: 0 2px;
-}
-
-/* Report summary text */
-.ai-tracker-summary {
-  font-size: 0.75rem;
-  line-height: 1.55;
-  margin: 0;
-  color: var(--desk-on-surface);
-}
+.ai-tracker-summary { font-size: 0.75rem; line-height: 1.55; margin: 0; color: var(--desk-on-surface); }
 .ai-tracker-summary--info    { color: var(--desk-success); }
 .ai-tracker-summary--warning { color: var(--desk-warning); }
-.ai-tracker-summary--danger  { color: var(--desk-error);   }
+.ai-tracker-summary--danger  { color: var(--desk-error); }
 
-/* Section labels */
 .ai-tracker-section-label {
   font-size: 0.625rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--desk-on-surface-variant);
   margin: 0 0 var(--desk-space-2);
 }
 
-/* Healing action cards */
 .ai-tracker-heal-card {
   border: 1px solid var(--desk-outline);
-  border-left-width: 3px;
+  border-left-width: 2px;
   border-radius: var(--desk-radius-chip);
   padding: var(--desk-space-3);
   display: flex;
@@ -352,22 +297,10 @@ body.combat-mode .desk-hero-strip {
 }
 .ai-tracker-heal-card--info    { border-left-color: var(--desk-success); }
 .ai-tracker-heal-card--warning { border-left-color: var(--desk-warning); }
-.ai-tracker-heal-card--danger  { border-left-color: var(--desk-error);   }
+.ai-tracker-heal-card--danger  { border-left-color: var(--desk-error); }
 
-.ai-tracker-heal-card__title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--desk-space-2);
-  flex-wrap: wrap;
-}
-
-.ai-tracker-heal-card__title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--desk-on-surface);
-  margin: 0;
-}
-
+.ai-tracker-heal-card__title-row { display: flex; align-items: center; gap: var(--desk-space-2); flex-wrap: wrap; }
+.ai-tracker-heal-card__title { font-size: 0.75rem; font-weight: 700; color: var(--desk-on-surface); margin: 0; }
 .ai-tracker-heal-card__type {
   font-family: var(--desk-font-mono);
   font-size: 0.625rem;
@@ -376,35 +309,11 @@ body.combat-mode .desk-hero-strip {
   border-radius: 3px;
   padding: 1px 5px;
 }
+.ai-tracker-heal-card__safe-badge { font-size: 0.625rem; color: var(--desk-success); font-weight: 600; }
+.ai-tracker-heal-card__reason { font-size: 0.6875rem; color: var(--desk-on-surface-variant); line-height: 1.45; margin: 0; }
+.ai-tracker-heal-card__action { font-size: 0.6875rem; color: var(--desk-on-surface); line-height: 1.45; margin: 0; }
 
-.ai-tracker-heal-card__safe-badge {
-  font-size: 0.625rem;
-  color: var(--desk-success);
-  font-weight: 500;
-}
-
-.ai-tracker-heal-card__reason {
-  font-size: 0.6875rem;
-  color: var(--desk-on-surface-variant);
-  line-height: 1.45;
-  margin: 0;
-}
-
-.ai-tracker-heal-card__action {
-  font-size: 0.6875rem;
-  color: var(--desk-on-surface);
-  line-height: 1.45;
-  margin: 0;
-}
-
-/* Copyable command block inside heal card */
-.ai-tracker-cmd-block {
-  display: flex;
-  align-items: center;
-  gap: var(--desk-space-2);
-  margin-top: 2px;
-}
-
+.ai-tracker-cmd-block { display: flex; align-items: center; gap: var(--desk-space-2); margin-top: 2px; }
 .ai-tracker-cmd-block__code {
   font-family: var(--desk-font-mono);
   font-size: 0.625rem;
@@ -420,7 +329,6 @@ body.combat-mode .desk-hero-strip {
   min-width: 0;
 }
 
-/* Snapshot quick-stats 2-column grid */
 .ai-tracker-stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -431,39 +339,29 @@ body.combat-mode .desk-hero-strip {
   background: var(--desk-surface-container);
   border-radius: var(--desk-radius-chip);
 }
-.ai-tracker-stats-grid b {
-  font-weight: 600;
-  color: var(--desk-on-surface);
-}
+.ai-tracker-stats-grid b { font-weight: 700; color: var(--desk-on-surface); }
 
-/* Env flag chips */
-.ai-tracker-env-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
+.ai-tracker-env-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ai-tracker-env-chip {
   font-family: var(--desk-font-mono);
   font-size: 0.625rem;
   border: 1px solid var(--desk-outline);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 1px 6px;
   color: var(--desk-primary);
   background: var(--desk-surface-container);
 }
 
-/* Auto-heal execution log items */
 .ai-tracker-heal-log-item {
-  border-left: 3px solid var(--desk-outline);
+  border-left: 2px solid var(--desk-outline);
   padding-left: var(--desk-space-2);
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .ai-tracker-heal-log-item--executed { border-left-color: var(--desk-success); }
-.ai-tracker-heal-log-item--failed   { border-left-color: var(--desk-error);   }
+.ai-tracker-heal-log-item--failed   { border-left-color: var(--desk-error); }
 
-/* Footer / docs line */
 .ai-tracker-footer {
   font-size: 0.625rem;
   color: var(--desk-on-surface-variant);

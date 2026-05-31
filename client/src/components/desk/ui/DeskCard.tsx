@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 import { cn } from "./cn";
 
 type DeskCardProps = {
@@ -9,6 +9,8 @@ type DeskCardProps = {
   elevation?: 0 | 1 | 2 | 3;
   variant?: "filled" | "outlined";
   padding?: "none" | "md" | "lg";
+  style?: CSSProperties;
+  onClick?: () => void;
 };
 
 const elevationShadow: Record<0 | 1 | 2 | 3, string> = {
@@ -24,6 +26,8 @@ export function DeskCard({
   elevation = 1,
   variant = "filled",
   padding = "lg",
+  style,
+  onClick,
 }: DeskCardProps) {
   const pad =
     padding === "none" ? "0" : padding === "md" ? "var(--desk-space-4)" : "var(--desk-space-5)";
@@ -31,12 +35,14 @@ export function DeskCard({
   return (
     <section
       className={cn("desk-card", className)}
+      onClick={onClick}
       style={{
         background: variant === "outlined" ? "transparent" : "var(--desk-surface)",
         border: `1px solid var(--desk-outline)`,
         borderRadius: "var(--desk-radius-card)",
         boxShadow: elevationShadow[elevation],
         padding: pad,
+        ...style,
       }}
     >
       {children}

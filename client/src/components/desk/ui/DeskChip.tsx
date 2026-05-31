@@ -1,15 +1,18 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 import { cn } from "./cn";
 
-type DeskChipTone = "default" | "primary" | "success" | "error" | "warning";
+type DeskChipTone = "default" | "primary" | "success" | "error" | "warning" | "danger";
 
 type DeskChipProps = {
-  children: ReactNode;
+  children?: ReactNode;
+  label?: ReactNode;
   tone?: DeskChipTone;
+  variant?: DeskChipTone;
   className?: string;
   title?: string;
+  style?: CSSProperties;
 };
 
 const toneStyles: Record<DeskChipTone, { bg: string; color: string; border: string }> = {
@@ -33,6 +36,11 @@ const toneStyles: Record<DeskChipTone, { bg: string; color: string; border: stri
     color: "var(--desk-error)",
     border: "transparent",
   },
+  danger: {
+    bg: "var(--desk-error-container)",
+    color: "var(--desk-error)",
+    border: "transparent",
+  },
   warning: {
     bg: "var(--desk-warning-container)",
     color: "var(--desk-warning)",
@@ -40,8 +48,18 @@ const toneStyles: Record<DeskChipTone, { bg: string; color: string; border: stri
   },
 };
 
-export function DeskChip({ children, tone = "default", className, title }: DeskChipProps) {
-  const t = toneStyles[tone];
+export function DeskChip({
+  children,
+  label,
+  tone = "default",
+  variant,
+  className,
+  title,
+  style,
+}: DeskChipProps) {
+  const finalTone = variant ?? tone;
+  const finalChildren = children ?? label;
+  const t = toneStyles[finalTone];
   return (
     <span
       title={title}
@@ -59,9 +77,10 @@ export function DeskChip({ children, tone = "default", className, title }: DeskC
         fontSize: "0.75rem",
         fontWeight: 500,
         lineHeight: 1.2,
+        ...style,
       }}
     >
-      {children}
+      {finalChildren}
     </span>
   );
 }

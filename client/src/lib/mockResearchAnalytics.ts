@@ -373,6 +373,46 @@ export function buildResearchWarnings(args: {
   return warnings;
 }
 
+export function computeWeeklyPnl(trades: readonly MockTrade[]): number {
+  const now = Date.now();
+  const weekStart = now - (7 * DAY_MS);
+  return closedTrades(trades)
+    .filter((trade) => (trade.closedAt ?? 0) >= weekStart)
+    .reduce((sum, trade) => sum + trade.realizedPnl, 0);
+}
+
+export interface MonthlyHeatmapRow {
+  year: number;
+  months: Record<number, number>; // 0-11 -> PnL
+  total: number;
+}
+
+export function computeMonthlyHeatmap(trades: readonly MockTrade[]): MonthlyHeatmapRow[] {
+  const closed = closedTrades(trades);
+  const heatmap: Record<number, Record<number, number>> = {};
+
+  for (const trade of closed) {
+    const date = new Date(trade.closedAt!);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth();
+
+    if (!heatmap[year]) heatmap[year] = {};
+    heatmap[year][month] = (heatmap[year][month] ?? 0) + trade.realizedPnl;
+  }
+
+  return Object.entries(heatmap)
+    .map(([year, months]) => {
+      const yearNum = parseInt(year);
+      const monthValues = Object.values(months);
+      return {
+        year: yearNum,
+        months,
+        total: monthValues.reduce((sum, v) => sum + v, 0),
+      };
+    })
+    .sort((a, b) => b.year - a.year);
+}
+
 export function computeAdvancedResearchAnalytics(args: {
   trades: readonly MockTrade[];
   scores: readonly StrategyScore[];

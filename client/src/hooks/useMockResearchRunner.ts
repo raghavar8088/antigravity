@@ -18,6 +18,11 @@ import {
   type BtcResearchStrategy,
 } from "@/lib/btcResearchStrategyRegistry";
 import {
+  INSTITUTIONAL_STRATEGIES,
+  INSTITUTIONAL_FAMILY_LABELS,
+  type InstitutionalStrategy,
+} from "@/lib/btcInstitutionalStrategies";
+import {
   ALL_RESEARCH_FAMILIES,
   RESEARCH_FAMILY_LABELS,
   RESEARCH_STRATEGIES,
@@ -39,8 +44,8 @@ const MAX_SIGNALS_PER_MINUTE_DEFAULT = 10;
 const MIN_CONFIDENCE_DEFAULT = 50;
 
 export type ResearchSelectionMode = "RESEARCH_MODE" | "PROFIT_MODE" | "REGIME_MODE";
-type AnyResearchFamily = ResearchFamily | BtcResearchFamily;
-type AnyResearchStrategy = ResearchStrategy | BtcResearchStrategy;
+type AnyResearchFamily = ResearchFamily | BtcResearchFamily | string;
+type AnyResearchStrategy = ResearchStrategy | BtcResearchStrategy | InstitutionalStrategy;
 
 export interface ResearchRunnerConfig {
   /** Master enable/disable for all 500 research strategies. */
@@ -244,13 +249,18 @@ export function evaluateMockResearchStrategies(
   };
   const passesSelectionMode = (strategyId: number): boolean => {
     if (config.selectionMode === "RESEARCH_MODE") return true;
+    // Institutional strategies (2100–2119) always pass in any mode
+    if (strategyId >= 2100 && strategyId <= 2119) return true;
     if (strategyId < 2000 || strategyId > 2059) return false;
     if (config.approvedStrategyIds.size === 0) return false;
     return config.approvedStrategyIds.has(strategyId);
   };
 
   const snap = candles.slice();
-  const readiness = buildReadinessSummary([...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES], snap.length);
+  const readiness = buildReadinessSummary(
+    [...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES, ...INSTITUTIONAL_STRATEGIES],
+    snap.length,
+  );
   const signals: ResearchSignalSummary[] = [];
   const diagnostics = emptyResearchEvaluationDiagnostics();
   let evaluatedCount = 0;
@@ -369,6 +379,51 @@ export function evaluateMockResearchStrategies(
       });
     } catch {
       // Suppress individual strategy errors so one bad signal doesn't block others.
+    }
+  }
+
+  // ── Institutional strategies (IDs 2100–2119) — always evaluated in RESEARCH_MODE ──
+  for (const strat of INSTITUTIONAL_STRATEGIES) {
+    if (!strat.enabled) continue;
+    if (snap.length < strat.minCandles) continue;
+    evaluatedCount++;
+    try {
+      const result = strat.signal(snap);
+      if (result.side === "NO_SIGNAL") continue;
+      diagnostics.funnel.signalsGenerated++;
+      if (result.confidence < config.minConfidence) {
+        addResearchRejection(diagnostics, {
+          ts: now,
+          category: "LOW_CONFIDENCE",
+          strategyId: strat.id,
+          strategyName: strat.name,
+          side: result.side,
+          confidenceScore: result.confidence,
+          message: `confidence ${result.confidence.toFixed(1)} below ${config.minConfidence.toFixed(1)}`,
+        });
+        continue;
+      }
+      diagnostics.funnel.confidencePassed++;
+      diagnostics.funnel.scorePassed++;
+      diagnostics.funnel.riskRewardPassed++;
+      diagnostics.funnel.riskPassed++;
+      diagnostics.funnel.cooldownPassed++;
+      diagnostics.funnel.familyConflictPassed++;
+      diagnostics.funnel.exposurePassed++;
+      signals.push({
+        strategyId: strat.id,
+        strategyName: strat.name,
+        family: strat.family,
+        strategyFamily: strat.family,
+        side: result.side,
+        confidence: result.confidence,
+        confidenceScore: result.confidence,
+        params: strat.params,
+        evaluatedAt: now,
+        regimeAtEntry: currentRegime ?? undefined,
+      });
+    } catch {
+      // Suppress individual strategy errors — one bad signal must not block others.
     }
   }
 
@@ -508,7 +563,7 @@ export function useMockResearchRunner(deps: ResearchRunnerDeps): UseResearchRunn
     recentSignals,
     diagnostics,
     readiness,
-    strategies: [...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES],
-    familyLabels: { ...RESEARCH_FAMILY_LABELS, ...BTC_RESEARCH_FAMILY_LABELS },
+    strategies: [...RESEARCH_STRATEGIES, ...BTC_RESEARCH_STRATEGIES, ...INSTITUTIONAL_STRATEGIES],
+    familyLabels: { ...RESEARCH_FAMILY_LABELS, ...BTC_RESEARCH_FAMILY_LABELS, ...INSTITUTIONAL_FAMILY_LABELS },
   };
 }

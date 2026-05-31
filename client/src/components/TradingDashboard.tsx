@@ -5,56 +5,89 @@ import { useRouter } from "next/navigation";
 import { BTCFutureTradingScalper } from "@/components/BTCFutureTradingScalper";
 import ReplayBacktestPanel from "@/components/ReplayBacktestPanel";
 import WorkspaceSettingsCard from "@/components/desk/WorkspaceSettingsCard";
-import { WorkspaceNavPanel } from "@/components/desk/WorkspaceNavPanel";
 import { SignalTracePanel } from "@/components/SignalTracePanel";
-import { DeskCard, DeskChip } from "@/components/desk/ui";
-import { workspaceModuleDescription } from "@/lib/workspaceModuleDescription";
+import { DeskCard } from "@/components/desk/ui";
 import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
+import { AppShell } from "@/components/terminal";
 
 export default function TradingDashboard() {
   const [actionsEnabled, setActionsEnabled] = useState(false);
   const router = useRouter();
 
-  const actionToggleTitle = actionsEnabled
-    ? "Dangerous controls (reset, clear, kill, close-all) are enabled."
-    : "Locked: reset/clear/kill/close-all hidden. Server-side paper engines still run.";
-
   return (
-    <main className="trading-shell">
-      <div className="trading-shell__inner">
-        <header className="trading-landing-header">
+    <AppShell pageTitle="BTC Futures">
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+        {/* Page header */}
+        <div style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          padding: "14px 18px",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-card)",
+        }}>
           <div>
-            <h1 className="trading-landing-header__title">BTC Future Trading</h1>
-            <p className="trading-landing-header__desc">
-              Paper perpetual futures desk — curated strategy basket, live BTC marks, and Mongo-backed trade history.
+            <h1 style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 15,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              margin: "0 0 4px",
+              letterSpacing: "-0.2px",
+            }}>
+              BTC Future Trading
+            </h1>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>
+              Paper perpetual futures desk — {BTC_FUTURE_TRADING_STRATEGY_IDS.length} strategies, live BTC marks, Mongo-backed trade history.
             </p>
           </div>
-          <div className="trading-landing-header__chips">
-            <DeskChip tone="primary">Paper</DeskChip>
-            <DeskChip tone="default">25× leverage</DeskChip>
-            <DeskChip tone="default">{BTC_FUTURE_TRADING_STRATEGY_IDS.length} strategies</DeskChip>
-            <DeskChip tone="default">BTCUSD</DeskChip>
-          </div>
-        </header>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="pill-blue">Paper</span>
+            <span className="pill-blue">25× leverage</span>
+            <span className="pill-blue">{BTC_FUTURE_TRADING_STRATEGY_IDS.length} strategies</span>
 
-        <div className="workspace-nav--slim">
-          <WorkspaceNavPanel
-            activeModule="btcFutureTrading"
-            onModuleChange={(next) => {
-              if (next === "mockTrading") router.push("/mock-trading");
-            }}
-            actionsEnabled={actionsEnabled}
-            onActionsEnabledChange={setActionsEnabled}
-            actionToggleTitle={actionToggleTitle}
-            moduleDescription={workspaceModuleDescription("btcFutureTrading")}
-          />
+            {/* Actions lock toggle */}
+            <button
+              type="button"
+              onClick={() => setActionsEnabled((v) => !v)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 10px",
+                borderRadius: 4,
+                border: `1px solid ${actionsEnabled ? "rgba(239,83,80,0.3)" : "var(--border)"}`,
+                background: actionsEnabled ? "var(--red-dim)" : "var(--surface-2)",
+                color: actionsEnabled ? "var(--red)" : "var(--text-secondary)",
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.03em",
+              }}
+              title={actionsEnabled ? "Controls active — reset/kill/close-all enabled" : "Controls locked"}
+            >
+              {actionsEnabled ? "⚠ ACTIONS ENABLED" : "🔒 LOCKED"}
+            </button>
+          </div>
         </div>
 
+        {/* Signal Trace */}
         <DeskCard padding="md">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#58a6ff" }}>Signal Trace</span>
-            <span style={{ fontSize: 10, color: "#8b949e" }}>
-              Why didn&apos;t this signal become a trade? — per-strategy gate breakdown
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--accent-strong)",
+              letterSpacing: "-0.1px",
+              fontFamily: "var(--font-display)",
+            }}>
+              Signal Trace
+            </span>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              Per-strategy gate breakdown — why a signal did or did not become a trade
             </span>
           </div>
           <SignalTracePanel accountKey={null} />
@@ -90,6 +123,6 @@ export default function TradingDashboard() {
           strategyItems={[]}
         />
       </div>
-    </main>
+    </AppShell>
   );
 }

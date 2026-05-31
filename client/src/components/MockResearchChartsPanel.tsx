@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  createChart,
+  ColorType,
+  LineStyle,
+  LineSeries,
   AreaSeries,
   HistogramSeries,
-  LineSeries,
-  LineStyle,
-  createChart,
+  type Time,
+  type LineData,
   type AreaData,
   type HistogramData,
-  type LineData,
-  type Time,
 } from "lightweight-charts";
-import { DeskCard, DeskEmptyState, DeskSectionHeader } from "@/components/desk/ui";
+import { TerminalPanel } from "@/components/terminal";
+import { DeskEmptyState } from "@/components/desk/ui";
 import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 import type { MockAccountState, MockTrade } from "@/lib/mockTradingEngine";
 import {
@@ -64,7 +66,7 @@ function histogramData(points: readonly ResearchChartPoint[]): HistogramData<Tim
   return uniqueLineData(points).map((point) => ({
     time: point.time,
     value: point.value,
-    color: point.value >= 0 ? "rgba(52, 211, 153, 0.85)" : "rgba(248, 113, 113, 0.85)",
+    color: point.value >= 0 ? "rgba(38, 166, 154, 0.85)" : "rgba(239, 83, 80, 0.85)",
   }));
 }
 
@@ -84,7 +86,7 @@ function ResearchSingleChart({
   kind,
   points,
   color,
-  height = 280,
+  height = 220,
 }: {
   title: string;
   subtitle: string;
@@ -101,25 +103,25 @@ function ResearchSingleChart({
 
     const chart = createChart(container, {
       layout: {
-        background: { color: "#0d1117" },
-        textColor: "#c9d1d9",
-        fontFamily: "Inter, system-ui, sans-serif",
-        fontSize: 11,
+        background: { type: ColorType.Solid, color: "#0d1117" },
+        textColor: "#8b949e",
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 10,
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.10)", style: LineStyle.Solid },
-        horzLines: { color: "rgba(148, 163, 184, 0.10)", style: LineStyle.Solid },
+        vertLines: { color: "rgba(48, 54, 61, 0.3)", style: LineStyle.Solid },
+        horzLines: { color: "rgba(48, 54, 61, 0.3)", style: LineStyle.Solid },
       },
       crosshair: {
-        vertLine: { color: "#64748b", width: 1, style: LineStyle.Dashed, labelBackgroundColor: "#1f2937" },
-        horzLine: { color: "#64748b", width: 1, style: LineStyle.Dashed, labelBackgroundColor: "#1f2937" },
+        vertLine: { color: "#4d7cfe", width: 1, style: LineStyle.Dashed, labelBackgroundColor: "#1f2937" },
+        horzLine: { color: "#4d7cfe", width: 1, style: LineStyle.Dashed, labelBackgroundColor: "#1f2937" },
       },
       rightPriceScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
-        scaleMargins: { top: 0.1, bottom: 0.12 },
+        borderColor: "#30363d",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
+        borderColor: "#30363d",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -135,8 +137,8 @@ function ResearchSingleChart({
     } else if (kind === "area") {
       const series = chart.addSeries(AreaSeries, {
         lineColor: color,
-        topColor: "rgba(96, 165, 250, 0.35)",
-        bottomColor: "rgba(96, 165, 250, 0.03)",
+        topColor: `${color}33`,
+        bottomColor: `${color}05`,
         lineWidth: 2,
       });
       series.setData(uniqueAreaData(points));
@@ -150,14 +152,13 @@ function ResearchSingleChart({
   }, [color, height, kind, points]);
 
   return (
-    <DeskCard padding="md">
-      <DeskSectionHeader title={title} subtitle={subtitle} />
+    <TerminalPanel title={title} subtitle={subtitle} padding="none">
       {points.length < 2 ? (
-        <DeskEmptyState title="Waiting for data" subtitle="This chart updates as mock equity/trade history accumulates." />
+        <DeskEmptyState title="Waiting for data" subtitle="Updates as mock history accumulates." />
       ) : (
-        <div ref={containerRef} style={{ width: "100%", height, minHeight: height, borderRadius: 10, overflow: "hidden" }} />
+        <div ref={containerRef} style={{ width: "100%", height, minHeight: height }} />
       )}
-    </DeskCard>
+    </TerminalPanel>
   );
 }
 
@@ -165,7 +166,7 @@ function ResearchMultiLineChart({
   title,
   subtitle,
   series,
-  height = 320,
+  height = 280,
 }: {
   title: string;
   subtitle: string;
@@ -180,21 +181,21 @@ function ResearchMultiLineChart({
 
     const chart = createChart(container, {
       layout: {
-        background: { color: "#0d1117" },
-        textColor: "#c9d1d9",
-        fontFamily: "Inter, system-ui, sans-serif",
-        fontSize: 11,
+        background: { type: ColorType.Solid, color: "#0d1117" },
+        textColor: "#8b949e",
+        fontFamily: "JetBrains Mono, monospace",
+        fontSize: 10,
       },
       grid: {
-        vertLines: { color: "rgba(148, 163, 184, 0.10)" },
-        horzLines: { color: "rgba(148, 163, 184, 0.10)" },
+        vertLines: { color: "rgba(48, 54, 61, 0.3)" },
+        horzLines: { color: "rgba(48, 54, 61, 0.3)" },
       },
       rightPriceScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
-        scaleMargins: { top: 0.1, bottom: 0.12 },
+        borderColor: "#30363d",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
-        borderColor: "rgba(148, 163, 184, 0.25)",
+        borderColor: "#30363d",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -208,7 +209,7 @@ function ResearchMultiLineChart({
       const line = chart.addSeries(LineSeries, {
         color: item.color,
         lineWidth: 2,
-        title: item.name.length > 26 ? item.name.slice(0, 26) : item.name,
+        title: item.name.length > 20 ? item.name.slice(0, 20) : item.name,
       });
       line.setData(uniqueLineData(item.points));
     }
@@ -218,24 +219,23 @@ function ResearchMultiLineChart({
   }, [height, series]);
 
   return (
-    <DeskCard padding="md">
-      <DeskSectionHeader title={title} subtitle={subtitle} />
+    <TerminalPanel title={title} subtitle={subtitle} padding="none">
       {series.length === 0 || series.every((item) => item.points.length < 2) ? (
-        <DeskEmptyState title="Waiting for data" subtitle="Comparison charts populate after multiple strategy/family trades close." />
+        <DeskEmptyState title="Waiting for data" subtitle="Comparison charts populate after trades close." />
       ) : (
         <>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
             {series.map((item) => (
-              <span key={item.name} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 999, background: item.color }} />
+              <span key={item.name} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--text-secondary)" }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: item.color }} />
                 {item.name}
               </span>
             ))}
           </div>
-          <div ref={containerRef} style={{ width: "100%", height, minHeight: height, borderRadius: 10, overflow: "hidden" }} />
+          <div ref={containerRef} style={{ width: "100%", height, minHeight: height }} />
         </>
       )}
-    </DeskCard>
+    </TerminalPanel>
   );
 }
 
@@ -297,7 +297,7 @@ export function MockResearchChartsPanel({ trades, account, regime }: MockResearc
   const dailyPnl = computeDailyPnlPoints(trades);
   const cumulativeNetPnl = computeCumulativeNetPnlPoints(trades);
   const strategySeries = computeStrategyComparisonSeries(trades, 5).map((item, index) => ({
-    name: `#${item.id} ${item.name}`,
+    name: `#${item.id}`,
     color: PALETTE[index % PALETTE.length],
     points: item.points,
   }));
@@ -309,46 +309,56 @@ export function MockResearchChartsPanel({ trades, account, regime }: MockResearc
 
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 12 }}>
-        <ResearchSingleChart
-          title="Equity Curve"
-          subtitle="Live mock account equity, hydrated from persisted snapshots when MongoDB is available."
-          kind="area"
-          points={equityCurve}
-          color="#60a5fa"
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+        <div style={{ gridColumn: "span 1" }}>
+          <ResearchSingleChart
+            title="Equity Curve"
+            subtitle="Live mock account equity"
+            kind="area"
+            points={equityCurve}
+            color="#4d7cfe"
+          />
+        </div>
+        <div style={{ gridColumn: "span 1" }}>
+          <ResearchSingleChart
+            title="Drawdown"
+            subtitle="Peak-to-trough %"
+            kind="line"
+            points={drawdownCurve}
+            color="#ef5350"
+          />
+        </div>
+        <div style={{ gridColumn: "span 1" }}>
+          <ResearchSingleChart
+            title="Daily PnL"
+            subtitle="Closed-trade net PnL"
+            kind="histogram"
+            points={dailyPnl}
+            color="#26a69a"
+          />
+        </div>
+        <div style={{ gridColumn: "span 1" }}>
+          <ResearchSingleChart
+            title="Cumulative PnL"
+            subtitle="Realized net total"
+            kind="line"
+            points={cumulativeNetPnl}
+            color="#26a69a"
+          />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <ResearchMultiLineChart
+          title="Strategy Comparison"
+          subtitle="Top strategy curves"
+          series={strategySeries}
         />
-        <ResearchSingleChart
-          title="Drawdown Curve"
-          subtitle="Peak-to-trough drawdown shown as a negative percentage curve."
-          kind="line"
-          points={drawdownCurve}
-          color="#f87171"
-        />
-        <ResearchSingleChart
-          title="Daily PnL"
-          subtitle="Closed-trade net PnL by UTC day after simulated fees and slippage."
-          kind="histogram"
-          points={dailyPnl}
-          color="#34d399"
-        />
-        <ResearchSingleChart
-          title="Cumulative Net PnL"
-          subtitle="Closed-trade cumulative realized PnL after realistic mock execution costs."
-          kind="line"
-          points={cumulativeNetPnl}
-          color="#34d399"
+        <ResearchMultiLineChart
+          title="Family Comparison"
+          subtitle="PnL by strategy family"
+          series={familySeries}
         />
       </div>
-      <ResearchMultiLineChart
-        title="Strategy Comparison"
-        subtitle="Top absolute-PnL strategy curves, useful for identifying leaders, laggards, and correlated behavior."
-        series={strategySeries}
-      />
-      <ResearchMultiLineChart
-        title="Family Comparison"
-        subtitle="Cumulative net PnL by strategy family for regime/family research."
-        series={familySeries}
-      />
     </>
   );
 }

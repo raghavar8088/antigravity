@@ -181,6 +181,8 @@ export type MockAccountSnapshotDoc = {
   realized_pnl: number;
   unrealized_pnl: number;
   total_exposure: number;
+  long_exposure?: number;
+  short_exposure?: number;
   margin_used: number;
   available_balance: number;
   return_pct: number;
@@ -668,6 +670,8 @@ export async function getLatestMockAccountSnapshot(accountKey: string): Promise<
       realizedPnl: doc.realized_pnl,
       unrealizedPnl: doc.unrealized_pnl,
       exposure: doc.total_exposure,
+      longExposure: doc.long_exposure ?? 0,
+      shortExposure: doc.short_exposure ?? 0,
       marginUsed: doc.margin_used,
       availableBalance: doc.available_balance,
       returnPct: doc.return_pct,

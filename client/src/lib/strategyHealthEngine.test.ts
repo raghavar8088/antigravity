@@ -30,6 +30,13 @@ function metrics(overrides: Partial<StrategyPerformanceMetrics>): StrategyPerfor
     last7DaysWinRate: 0.6,
     last7DaysTrades: 5,
     regimeBreakdown: {
+      STRONG_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      WEAK_TREND: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      RANGE: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      HIGH_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      LOW_VOLATILITY: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
+      REVERSAL: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
       TRENDING: { trades: 5, winRate: 0.6, expectancy: 4, netPnl: 20 },
       RANGING: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },
       HIGH_VOLATILITY_BREAKOUT: { trades: 0, winRate: 0, expectancy: 0, netPnl: 0 },

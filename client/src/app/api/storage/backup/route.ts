@@ -15,7 +15,7 @@ import {
   validateBackup,
   determinePeriod,
   type BackupPeriod,
-} from "@/lib/backupManager";
+} from "@/lib/backupManager.server";
 import { generateDailyReport, generateWeeklyReport, generateMonthlyReport } from "@/lib/analyticsReporter";
 import { dps } from "@/lib/dualPersistenceService";
 

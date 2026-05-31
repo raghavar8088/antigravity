@@ -1076,6 +1076,10 @@ export interface MockAccountState {
   unrealizedPnl: number;
   /** Sum of notional on OPEN trades. */
   exposure: number;
+  /** Sum of notional on OPEN LONG trades. */
+  longExposure: number;
+  /** Sum of notional on OPEN SHORT trades. */
+  shortExposure: number;
   /** Sum of marginUsed on OPEN trades (isolated). */
   marginUsed: number;
   /** equity − marginUsed. Can be negative if exposure exceeds equity. */
@@ -1110,6 +1114,8 @@ export function computeAccountState(
   let realizedPnl = 0;
   let unrealizedPnl = 0;
   let exposure = 0;
+  let longExposure = 0;
+  let shortExposure = 0;
   let marginUsed = 0;
   let openCount = 0;
   let closedCount = 0;
@@ -1121,6 +1127,8 @@ export function computeAccountState(
       openCount++;
       unrealizedPnl += t.unrealizedPnl;
       exposure += t.notional;
+      if (t.side === "BUY") longExposure += t.notional;
+      else shortExposure += t.notional;
       marginUsed += t.marginUsed;
     } else {
       closedCount++;
@@ -1163,6 +1171,8 @@ export function computeAccountState(
     realizedPnl,
     unrealizedPnl,
     exposure,
+    longExposure,
+    shortExposure,
     marginUsed,
     availableBalance,
     returnPct,
@@ -1193,6 +1203,11 @@ export interface MockTradeAnalytics {
   stopLossHitRate: number;
   profitFactor: number | null;
   sharpeRatio: number | null;
+  sortinoRatio: number | null;
+  calmarRatio: number | null;
+  maxDrawdown: number;
+  expectancy: number | null;
+  recoveryFactor: number | null;
   perStrategy: MockStrategyAggregate[];
   perBlocker: MockBlockerAggregate[];
   perFamily: MockFamilyAggregate[];
@@ -1354,25 +1369,47 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     : 0;
   const stdev = Math.sqrt(variance);
   const sharpeRatio = stdev > 0 ? (averageTrade / stdev) * Math.sqrt(closedPnls.length) : null;
+
+  const downPnls = closedPnls.filter(p => p < 0);
+  const downStdev = downPnls.length > 1
+    ? Math.sqrt(downPnls.reduce((sum, pnl) => sum + (pnl - averageTrade) ** 2, 0) / (downPnls.length - 1))
+    : 0;
+  const sortinoRatio = downStdev > 0 ? (averageTrade / downStdev) * Math.sqrt(closedPnls.length) : null;
+
+  const account = computeAccountState(trades, DEFAULT_MOCK_TRADING_CONFIG);
+  const maxDrawdown = account.maxDrawdownPct * account.startingBalance;
+  const calmarRatio = maxDrawdown > 0 ? realized / maxDrawdown : null;
+  const recoveryFactor = maxDrawdown > 0 ? realized / maxDrawdown : null;
+
+  const winRate = decided > 0 ? wins / decided : 0;
+  const avgWin = wins > 0 ? grossWins / wins : 0;
+  const avgLoss = losses > 0 ? grossLosses / losses : 0;
+  const expectancy = decided > 0 ? (winRate * avgWin) - ((1 - winRate) * avgLoss) : null;
+
   return {
     totalTrades: trades.length,
     openTrades: open,
     closedTrades: closed,
-    winRate: decided > 0 ? wins / decided : 0,
+    winRate,
     totalPnl: realized + unrealized,
     realizedPnl: realized,
     unrealizedPnl: unrealized,
     averagePnl: averageTrade,
     averageTrade,
     averageRealizedPnl: averageTrade,
-    averageWin: wins > 0 ? grossWins / wins : 0,
-    averageLoss: losses > 0 ? -grossLosses / losses : 0,
+    averageWin: avgWin,
+    averageLoss: -avgLoss,
     takeProfitWins,
     stopLossLosses,
     takeProfitHitRate: closed > 0 ? takeProfitWins / closed : 0,
     stopLossHitRate: closed > 0 ? stopLossLosses / closed : 0,
     profitFactor: grossLosses > 0 ? grossWins / grossLosses : null,
     sharpeRatio,
+    sortinoRatio,
+    calmarRatio,
+    maxDrawdown,
+    expectancy,
+    recoveryFactor,
     perStrategy: [...stratMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),
     perBlocker: [...blockerMap.values()].sort((a, b) => b.total - a.total),
     perFamily: [...familyMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),
