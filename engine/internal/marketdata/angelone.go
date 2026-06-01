@@ -231,7 +231,7 @@ func (c *AngelOneClient) FetchNiftyQuote(ctx context.Context) (AngelOneQuote, er
 		if message == "" {
 			message = "Angel One LTP request was not successful"
 		}
-		return AngelOneQuote{}, fmt.Errorf(message)
+		return AngelOneQuote{}, fmt.Errorf("%s", message)
 	}
 
 	ltp, err := parseFlexibleFloat(payload.Data.LTP)
@@ -341,7 +341,7 @@ func (c *AngelOneClient) ensureJWTToken(ctx context.Context) (string, error) {
 		if message == "" {
 			message = "Angel One login failed"
 		}
-		return "", fmt.Errorf(message)
+		return "", fmt.Errorf("%s", message)
 	}
 
 	c.session = angelOneSession{

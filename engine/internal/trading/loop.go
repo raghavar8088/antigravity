@@ -11,9 +11,13 @@ import (
 
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/omsv3"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
+	riskgate "antigravity-engine/internal/risk/gate"
+	riskv2 "antigravity-engine/internal/risk/v2"
 	"antigravity-engine/internal/strategy"
 )
 
@@ -23,6 +27,11 @@ const (
 	futuresInitialCapitalUSD  = 1000000.0
 	futuresPositionCapitalPct = 0.01 // 1% of paper capital per futures entry (BTC Equity)
 	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
+
+	// btcPaperAccountID is the canonical account identifier written into every
+	// OMS v3 ledger event so all order and position events for the BTC paper
+	// account can be replayed together via ledger.Store.ReplayAccount.
+	btcPaperAccountID = "btc-paper-1"
 
 	minExecutableConfidence     = 0.82 // Require higher-quality signals in live execution
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
@@ -45,16 +54,17 @@ const (
 // It correctly separates tick-based strategies from candle-based strategies,
 // ensuring each strategy type receives the data it was designed for.
 type Orchestrator struct {
-	client     marketdata.MarketDataClient
-	strategies []strategy.RegistryEntry
-	groups     strategy.StrategyGroups
-	risk       *risk.RiskEngine
-	exec       *execution.PaperClient
-	aggregator *SignalAggregator
-	posMgr     *positions.Manager
-	tracker    *risk.StrategyTracker
-	journal    *execution.TradeJournal
-	candleAgg  *marketdata.CandleAggregator
+	client      marketdata.MarketDataClient
+	strategies  []strategy.RegistryEntry
+	groups      strategy.StrategyGroups
+	risk        *risk.RiskEngine
+	exec        *execution.PaperClient
+	aggregator  *SignalAggregator
+	posMgr      *positions.Manager
+	tracker     *risk.StrategyTracker
+	journal     *execution.TradeJournal
+	candleAgg   *marketdata.CandleAggregator
+	eventLedger ledger.Store
 
 	// AI multi-agent layer (nil when ANTHROPIC_API_KEY not set)
 	aiAgent    *ai.MultiAgentOrchestrator
@@ -89,6 +99,12 @@ type Orchestrator struct {
 	lastBridgeError   string
 	lastBridgeErrorAt time.Time
 	bridgeStateMu     sync.RWMutex
+
+	// positionToOrderID links a positions.Manager position ID to the OMS v3
+	// ClientOrderID so that EventPositionOpened / EventPositionClosed can be
+	// correlated with the originating order aggregate in the ledger.
+	positionToOrderID map[string]string
+	positionToOrderMu sync.RWMutex
 
 	mu sync.RWMutex
 }
@@ -151,13 +167,275 @@ func NewOrchestrator(
 		tracker:                tracker,
 		journal:                journal,
 		candleAgg:              candleAgg,
+		eventLedger:            ledger.NewMemoryStore(),
 		priceWindow:            make([]float64, 0, marketHistoryMaxSamples),
 		volumeWindow:           make([]float64, 0, marketHistoryMaxSamples),
 		pendingSignals:         make(map[string]PendingSignal),
 		processedBridgeSignals: make(map[string]time.Time),
+		positionToOrderID:      make(map[string]string),
 		// Zero until the browser bridge explicitly heartbeats — avoids treating
 		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
 		lastBridgeHeartbeat: time.Time{},
+	}
+}
+
+func (o *Orchestrator) SetEventLedger(store ledger.Store) {
+	if store == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.eventLedger = store
+}
+
+func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
+	clientOrderID := fmt.Sprintf("AG-PAPER-%s-%d", strings.ReplaceAll(sig.Symbol, "-", ""), time.Now().UTC().UnixNano())
+	store := o.eventLedger
+	if store == nil {
+		store = ledger.NewMemoryStore()
+		o.eventLedger = store
+	}
+
+	appendOrderEvent := func(eventType ledger.EventType, payload ledger.OrderPayload) (ledger.Event, error) {
+		event, err := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType:  ledger.AggregateOrder,
+			AggregateID:    clientOrderID,
+			EventType:      eventType,
+			StrategyID:     strategyName,
+			Symbol:         sig.Symbol,
+			IdempotencyKey: idempotencyKeyForOrder(clientOrderID, eventType),
+			Payload:        payload,
+			Source:         "trading-orchestrator",
+		})
+		if err != nil {
+			return ledger.Event{}, err
+		}
+		return store.Append(ctx, event)
+	}
+	orderPayload := ledger.OrderPayload{
+		ClientOrderID: clientOrderID,
+		Symbol:        sig.Symbol,
+		Side:          string(sig.Action),
+		Quantity:      sig.TargetSize,
+	}
+	if _, err := appendOrderEvent(ledger.EventOrderCreated, orderPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+	events, err := store.Replay(ctx, ledger.AggregateOrder, clientOrderID)
+	if err != nil {
+		return execution.FillResult{}, err
+	}
+	if _, err := omsv3.Replay(events); err != nil {
+		return execution.FillResult{}, err
+	}
+	if _, err := appendOrderEvent(ledger.EventOrderValidated, orderPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+
+	pipeline := riskgate.NewPreTradeRiskPipeline(o.risk.V2(), nil)
+	riskDecision := pipeline.Check(ctx, riskgate.Input{
+		Request: riskv2.TradeRequest{
+			Symbol:            sig.Symbol,
+			Strategy:          strategyName,
+			Family:            riskv2.FamilyReserve,
+			Side:              riskSideFromAction(sig.Action),
+			EntryPrice:        currentPrice,
+			StopLossPrice:     stopLossFromSignal(sig, currentPrice),
+			RequestedSizeBTC:  sig.TargetSize,
+			RequestedLeverage: 1,
+			Confidence:        sig.Confidence,
+			Exchange:          "paper",
+		},
+		Market: riskv2.MarketState{Regime: riskv2.RegimeUnknown, LiquidityScore: 0.65},
+		Metrics: riskv2.StrategyMetrics{
+			Strategy:         strategyName,
+			Family:           riskv2.FamilyReserve,
+			WinRate:          0.5,
+			ProfitFactor:     1.2,
+			Sharpe:           1.2,
+			OOSProfitFactor:  1.1,
+			OOSExpectancyUSD: 1,
+			HealthScore:      70,
+			TotalTrades:      30,
+		},
+	})
+	if riskDecision.Status == riskgate.DecisionBlocked {
+		event, newEventErr := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType: ledger.AggregateOrder,
+			AggregateID:   clientOrderID,
+			EventType:     ledger.EventRiskBlocked,
+			StrategyID:    strategyName,
+			Symbol:        sig.Symbol,
+			Payload:       map[string]string{"reason": riskDecision.Reason},
+			Source:        "pre-trade-risk-pipeline",
+		})
+		if newEventErr == nil {
+			_, _ = store.Append(ctx, event)
+		}
+		return execution.FillResult{}, riskDecision.Error()
+	}
+	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+	if _, err := appendOrderEvent(ledger.EventOrderSubmitted, orderPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+	ackPayload := orderPayload
+	ackPayload.ExchangeOrderID = "paper-" + clientOrderID
+	if _, err := appendOrderEvent(ledger.EventOrderAcked, ackPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+
+	fill, err := o.exec.ExecuteSignal(sig, mode)
+	if err != nil {
+		rejectEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType: ledger.AggregateOrder,
+			AggregateID:   clientOrderID,
+			EventType:     ledger.EventOrderRejected,
+			StrategyID:    strategyName,
+			Symbol:        sig.Symbol,
+			Payload:       map[string]string{"reason": err.Error()},
+			Source:        "paper-execution",
+		})
+		if newEventErr == nil {
+			_, _ = store.Append(ctx, rejectEvent)
+		}
+		return execution.FillResult{}, err
+	}
+	fillPayload := ackPayload
+	fillPayload.FillQuantity = sig.TargetSize
+	fillPayload.FillPrice = fill.ExecPrice
+	if _, err := appendOrderEvent(ledger.EventOrderFilled, fillPayload); err != nil {
+		return execution.FillResult{}, err
+	}
+	// Attach the ClientOrderID so callers can correlate the fill with the OMS v3
+	// order aggregate and emit EventPositionOpened in the ledger.
+	fill.ClientOrderID = clientOrderID
+	return fill, nil
+}
+
+func idempotencyKeyForOrder(clientOrderID string, eventType ledger.EventType) string {
+	return clientOrderID + ":" + string(eventType)
+}
+
+func riskSideFromAction(action strategy.Action) riskv2.Side {
+	if action == strategy.ActionSell {
+		return riskv2.SideShort
+	}
+	return riskv2.SideLong
+}
+
+func stopLossFromSignal(sig strategy.Signal, entry float64) float64 {
+	if entry <= 0 {
+		return 0
+	}
+	stopPct := sig.StopLossPct
+	if stopPct <= 0 {
+		stopPct = defaultSignalStopLossPct
+	}
+	if sig.Action == strategy.ActionSell {
+		return entry * (1 + stopPct/100)
+	}
+	return entry * (1 - stopPct/100)
+}
+
+// ── OMS v3 position event helpers ─────────────────────────────────────────────
+
+// openAndTrackPosition opens a position in the positions.Manager, registers the
+// positionID → clientOrderID mapping, and asynchronously emits EventPositionOpened
+// to the OMS v3 ledger. This is the single call-site for all position opens so
+// the mapping is never missed regardless of execution path (strategy, AI, bridge).
+func (o *Orchestrator) openAndTrackPosition(ctx context.Context, sig strategy.Signal, fill execution.FillResult, stratName string) {
+	pos := o.posMgr.OpenPosition(sig, fill.ExecPrice, stratName)
+	if pos == nil || fill.ClientOrderID == "" {
+		return
+	}
+	o.positionToOrderMu.Lock()
+	o.positionToOrderID[pos.ID] = fill.ClientOrderID
+	o.positionToOrderMu.Unlock()
+
+	go o.emitPositionOpened(ctx, pos, fill, sig)
+}
+
+// emitPositionOpened appends an EventPositionOpened event to the OMS v3 ledger.
+// Runs asynchronously so it never blocks the execution hot-path.
+func (o *Orchestrator) emitPositionOpened(ctx context.Context, pos *positions.Position, fill execution.FillResult, sig strategy.Signal) {
+	notional := sig.TargetSize * fill.ExecPrice
+	payload := omsv3.PositionOpenedPayload{
+		ClientOrderID: fill.ClientOrderID,
+		PositionID:    pos.ID,
+		Symbol:        pos.Symbol,
+		Side:          string(pos.Side),
+		EntryPrice:    fill.ExecPrice,
+		Quantity:      sig.TargetSize,
+		NotionalUSD:   notional,
+		StopLoss:      pos.StopLoss,
+		TakeProfit:    pos.TakeProfit,
+		StopLossPct:   pos.StopLossPct,
+		TakeProfitPct: pos.TakeProfitPct,
+		StrategyName:  pos.StrategyName,
+	}
+	event, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregatePosition,
+		AggregateID:   pos.ID,
+		EventType:     ledger.EventPositionOpened,
+		AccountID:     btcPaperAccountID,
+		StrategyID:    pos.StrategyName,
+		Symbol:        pos.Symbol,
+		CorrelationID: fill.ClientOrderID,
+		Payload:       payload,
+		Source:        "trading-orchestrator",
+	})
+	if err != nil {
+		log.Printf("[OMS V3] emitPositionOpened: build event: %v", err)
+		return
+	}
+	if _, err := o.eventLedger.Append(ctx, event); err != nil {
+		log.Printf("[OMS V3] emitPositionOpened: append event: %v", err)
+	}
+}
+
+// emitPositionClosed appends an EventPositionClosed event to the OMS v3 ledger.
+// Called from processCloseEvents after the close is recorded in the trade journal.
+func (o *Orchestrator) emitPositionClosed(ctx context.Context, closeEvt positions.CloseEvent, clientOrderID string, netPnL float64) {
+	pos := closeEvt.Position
+	notional := pos.Size * pos.EntryPrice
+	holdMin := time.Since(pos.OpenedAt).Minutes()
+	feesUSD := notional * execution.BinanceFuturesTakerFeePct * 2
+
+	payload := omsv3.PositionClosedPayload{
+		ClientOrderID: clientOrderID,
+		PositionID:    pos.ID,
+		Symbol:        pos.Symbol,
+		Side:          string(pos.Side),
+		EntryPrice:    pos.EntryPrice,
+		ExitPrice:     closeEvt.ExitPrice,
+		Quantity:      pos.Size,
+		NotionalUSD:   notional,
+		GrossPnLUSD:   closeEvt.PnL,
+		NetPnLUSD:     netPnL,
+		FeesUSD:       feesUSD,
+		ExitReason:    string(closeEvt.Reason),
+		StrategyName:  pos.StrategyName,
+		HoldMinutes:   holdMin,
+	}
+	event, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregatePosition,
+		AggregateID:   pos.ID,
+		EventType:     ledger.EventPositionClosed,
+		AccountID:     btcPaperAccountID,
+		StrategyID:    pos.StrategyName,
+		Symbol:        pos.Symbol,
+		CorrelationID: clientOrderID,
+		Payload:       payload,
+		Source:        "trading-orchestrator",
+	})
+	if err != nil {
+		log.Printf("[OMS V3] emitPositionClosed: build event: %v", err)
+		return
+	}
+	if _, err := o.eventLedger.Append(ctx, event); err != nil {
+		log.Printf("[OMS V3] emitPositionClosed: append event: %v", err)
 	}
 }
 
@@ -284,7 +562,7 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	if len(o.groups.Tick) == 0 {
 		return
 	}
-	o.processStrategyGroup(o.groups.Tick, t)
+	o.processStrategyGroup(ctx, o.groups.Tick, t)
 }
 
 // process1mCandles listens for closed 1-minute candles and runs all 1m strategies.
@@ -297,7 +575,7 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
-			o.processStrategyGroup(o.groups.M1, tick)
+			o.processStrategyGroup(ctx, o.groups.M1, tick)
 		}
 	}
 }
@@ -312,14 +590,14 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
-			o.processStrategyGroup(o.groups.M5, tick)
+			o.processStrategyGroup(ctx, o.groups.M5, tick)
 
 			// Simulate 15m candle: run 15m strategies every 3rd 5m candle.
 			o.m15Counter++
 			if o.m15Counter >= 3 {
 				o.m15Counter = 0
 				log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
-				o.processStrategyGroup(o.groups.M15, tick)
+				o.processStrategyGroup(ctx, o.groups.M15, tick)
 			}
 
 			// Simulate 1h candle: run 1h strategies every 12th 5m candle
@@ -327,7 +605,7 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			if o.h1Counter >= 12 {
 				o.h1Counter = 0
 				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
-				o.processStrategyGroup(o.groups.H1, tick)
+				o.processStrategyGroup(ctx, o.groups.H1, tick)
 			}
 
 			// Record candle in history for AI context
@@ -495,21 +773,19 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 		return
 	}
 
-	fill, err := o.exec.ExecuteSignal(sig, execution.OrderModeIOC)
+	fill, err := o.executeThroughInstitutionalPath(ctx, sig, "AI_"+decision.ID, price, execution.OrderModeIOC)
 	if err != nil {
 		log.Printf("[AI] Execution failed: %v", err)
 		return
 	}
 
 	o.risk.NotifyFill(sig)
-	pos := o.posMgr.OpenPosition(sig, fill.ExecPrice, fmt.Sprintf("AI_%s", decision.ID))
+	o.openAndTrackPosition(ctx, sig, fill, fmt.Sprintf("AI_%s", decision.ID))
 
 	// Mark this decision as executed
 	decision.Executed = true
 	o.aiAgent.GetInsights().Add(decision)
 
-	// Store AI reasoning in a special trade journal entry so it appears in history
-	_ = pos
 	log.Printf("[AI] ✅ %s EXECUTED %s %.4f BTC @ $%.2f | Bull: %s",
 		decision.ID, decision.FinalAction, sig.TargetSize, fill.ExecPrice,
 		truncate(decision.BullSignal.Thesis, 80))
@@ -572,7 +848,7 @@ func truncate(s string, n int) string {
 
 // processStrategyGroup runs a group of strategies against a tick/candle and
 // processes any resulting signals through aggregation, risk, and execution.
-func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t marketdata.Tick) {
+func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strategy.RegistryEntry, t marketdata.Tick) {
 	var wg sync.WaitGroup
 	var sigMu sync.Mutex
 	var rawSignals []AggregatedSignal
@@ -763,7 +1039,7 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		// ══════════════════════════════════════════════════════════════════════
 		// 13. EXECUTION — Fill via Coinbase Advanced Trad (Live/Paper)
 		// ══════════════════════════════════════════════════════════════════════
-		fill, err := o.exec.ExecuteSignal(sig, orderMode)
+		fill, err := o.executeThroughInstitutionalPath(ctx, sig, aggSig.StrategyName, currentPrice, orderMode)
 		if err != nil {
 			log.Printf("[EXECUTION FAILED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			continue
@@ -773,8 +1049,8 @@ func (o *Orchestrator) processStrategyGroup(entries []strategy.RegistryEntry, t 
 		// Notify risk engine
 		o.risk.NotifyFill(sig)
 
-		// Open tracked position with SL/TP
-		o.posMgr.OpenPosition(sig, execPrice, aggSig.StrategyName)
+		// Open tracked position with SL/TP and emit OMS v3 EventPositionOpened
+		o.openAndTrackPosition(ctx, sig, fill, aggSig.StrategyName)
 
 		log.Printf("[EXECUTION ROUTE] %s used %s in %s regime", aggSig.StrategyName, fill.OrderMode, regime)
 
@@ -832,6 +1108,18 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 				closeSig.Action = strategy.ActionBuy
 			}
 			o.risk.NotifyFill(closeSig)
+
+			// Emit OMS v3 EventPositionClosed so the ledger becomes the
+			// authoritative history of every closed position.
+			o.positionToOrderMu.RLock()
+			clientOrderID := o.positionToOrderID[event.Position.ID]
+			o.positionToOrderMu.RUnlock()
+			if clientOrderID != "" {
+				go o.emitPositionClosed(ctx, event, clientOrderID, netPnL)
+				o.positionToOrderMu.Lock()
+				delete(o.positionToOrderID, event.Position.ID)
+				o.positionToOrderMu.Unlock()
+			}
 
 			log.Printf("[✅ TRADE CLOSED] %s | %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f | Reason: %s",
 				event.Position.StrategyName, event.Position.Side,
@@ -1020,14 +1308,14 @@ func (o *Orchestrator) ConfirmSignal(ctx context.Context, pendingID, userPrompt 
 		p.Signal.TargetSize = normalizedSize
 	}
 
-	fill, err := o.exec.ExecuteSignal(p.Signal, execution.OrderModeIOC)
+	fill, err := o.executeThroughInstitutionalPath(ctx, p.Signal, p.StrategyName, p.Context.Price, execution.OrderModeIOC)
 	if err != nil {
 		return fmt.Errorf("execution failed: %w", err)
 	}
 
 	// 3. Notify sub-systems
 	o.risk.NotifyFill(p.Signal)
-	o.posMgr.OpenPosition(p.Signal, fill.ExecPrice, p.StrategyName)
+	o.openAndTrackPosition(ctx, p.Signal, fill, p.StrategyName)
 
 	log.Printf("[✅ TRADE EXECUTED] %s %s APPROVED via Command Center!", p.StrategyName, p.Signal.Action)
 	return nil
@@ -1092,13 +1380,13 @@ func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID st
 	p.Signal.AIDecisionID = "browser-bridge"
 	p.Signal.AIReasoning = strings.TrimSpace(fmt.Sprintf("[Browser Bridge] %s", decision.Reason))
 
-	fill, err := o.exec.ExecuteSignal(p.Signal, execution.OrderModeIOC)
+	fill, err := o.executeThroughInstitutionalPath(ctx, p.Signal, p.StrategyName, p.Context.Price, execution.OrderModeIOC)
 	if err != nil {
 		return fmt.Errorf("execution failed: %w", err)
 	}
 
 	o.risk.NotifyFill(p.Signal)
-	o.posMgr.OpenPosition(p.Signal, fill.ExecPrice, p.StrategyName)
+	o.openAndTrackPosition(ctx, p.Signal, fill, p.StrategyName)
 
 	log.Printf("[✅ TRADE EXECUTED] %s %s APPROVED via Browser Bridge | conf=%.2f | reason=%s",
 		p.StrategyName, p.Signal.Action, p.Signal.Confidence, truncate(decision.Reason, 120))

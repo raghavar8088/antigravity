@@ -10,9 +10,12 @@ const (
 )
 
 // FillResult records the simulated execution outcome.
+// ClientOrderID links this fill back to the OMS v3 order aggregate so
+// position open/close events can be correlated to the originating order.
 type FillResult struct {
-	ExecPrice float64
-	OrderMode OrderMode
+	ExecPrice     float64
+	OrderMode     OrderMode
+	ClientOrderID string // set by executeThroughInstitutionalPath
 }
 
 // RouteModeForCategory picks a low-latency execution intent from the current

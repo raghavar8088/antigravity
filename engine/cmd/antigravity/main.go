@@ -28,6 +28,7 @@ import (
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
+	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/trading"
 )
@@ -1043,6 +1044,12 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
 
+	// ── Phase 15G: Zero Trust Security Gate ──────────────────────────────────
+	secPolicy := security.LoadPolicy()
+	secGate := security.NewGate(secPolicy, nil)
+	log.Printf("[SECURITY] Zero Trust Gate active — enforce_auth=%v source=%s",
+		secPolicy.EnforceAuth, "env")
+
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
 
@@ -1255,6 +1262,21 @@ func main() {
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)
 	http.HandleFunc("/api/admin/reset", killswitch.HandleReset)
 	http.HandleFunc("/api/admin/clear-history", killswitch.HandleClearHistory)
+
+	// Security status endpoint — SUPER_ADMIN only (gate enforces RBAC).
+	http.HandleFunc("/api/security/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		snap := secGate.Projection().Snapshot()
+		json.NewEncoder(w).Encode(snap) //nolint:errcheck
+	})
+	http.HandleFunc("/api/security/audit", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(secGate.AuditLog(200)) //nolint:errcheck
+	})
+	http.HandleFunc("/api/security/incidents", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(secGate.Monitor().OpenIncidents()) //nolint:errcheck
+	})
 
 	// Health check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -1536,7 +1558,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + httpPort,
-		Handler:           nil,
+		Handler:           secGate.Wrap(http.DefaultServeMux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

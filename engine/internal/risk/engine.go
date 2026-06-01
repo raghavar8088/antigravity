@@ -1,12 +1,14 @@
 package risk
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"sync"
 
+	"antigravity-engine/internal/ledger"
 	riskv2 "antigravity-engine/internal/risk/v2"
 	"antigravity-engine/internal/strategy"
 )
@@ -31,6 +33,60 @@ type RiskEngine struct {
 
 	// Dynamic sizing
 	lastATR float64 // Updated from market data
+
+	// Ledger event sourcing (optional — nil disables event emission).
+	ledger    ledger.Store
+	accountID string
+}
+
+// WithLedger attaches an event store to the risk engine. After this call every
+// Validate() call emits either RISK_APPROVED or RISK_BLOCKED to the ledger,
+// creating a permanent, replayable audit trail of every risk decision.
+func (r *RiskEngine) WithLedger(store ledger.Store, accountID string) *RiskEngine {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ledger = store
+	r.accountID = accountID
+	return r
+}
+
+// emitRiskEvent appends one risk event to the ledger.
+// Must NOT be called while r.mu is held (uses its own context + ledger lock).
+func (r *RiskEngine) emitRiskEvent(eventType ledger.EventType, sig strategy.Signal, currentPrice float64, violationReason string) {
+	if r.ledger == nil {
+		return
+	}
+	side := "BUY"
+	if sig.Action == strategy.ActionSell {
+		side = "SELL"
+	}
+	proposed := r.currentExposureBTC + signedDelta(sig.Action, sig.TargetSize)
+	payload := ledger.RiskCheckPayload{
+		Symbol:              sig.Symbol,
+		Side:                side,
+		RequestedSizeBTC:    sig.TargetSize,
+		CurrentExposureBTC:  r.currentExposureBTC,
+		ProposedExposureBTC: proposed,
+		CurrentPriceUSD:     currentPrice,
+		ProposedNotionalUSD: math.Abs(proposed) * currentPrice,
+		DailyPnLUSD:         r.dailyPnL,
+		Confidence:          sig.Confidence,
+		ViolationReason:     violationReason,
+	}
+	ev, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateRisk,
+		AggregateID:   sig.Symbol,
+		AccountID:     r.accountID,
+		StrategyID:    "risk-engine",
+		Symbol:        sig.Symbol,
+		EventType:     eventType,
+		Payload:       payload,
+		Source:        "risk-engine",
+	})
+	if err != nil {
+		return
+	}
+	_, _ = r.ledger.Append(context.Background(), ev)
 }
 
 func NewRiskEngine(p RiskProfile) *RiskEngine {
@@ -65,9 +121,26 @@ func signedDelta(action strategy.Action, size float64) float64 {
 }
 
 // Validate safely checks if an algorithmic signal is allowed to hit the exchange.
+// Emits EventRiskApproved or EventRiskBlocked to the ledger after every check,
+// creating a permanent audit trail of every risk decision.
 func (r *RiskEngine) Validate(sig strategy.Signal, currentPrice float64) error {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	validationErr := r.validateLocked(sig, currentPrice)
+	r.mu.RUnlock()
+
+	// Emit event outside the read lock to avoid holding both risk + ledger locks.
+	if validationErr != nil {
+		r.emitRiskEvent(ledger.EventRiskBlocked, sig, currentPrice, validationErr.Error())
+	} else {
+		r.emitRiskEvent(ledger.EventRiskApproved, sig, currentPrice, "")
+	}
+	return validationErr
+}
+
+// validateLocked performs the actual risk checks. Must be called with r.mu
+// held for read. Extracted so Validate() can release the lock before emitting
+// the ledger event, preventing any lock-ordering contention.
+func (r *RiskEngine) validateLocked(sig strategy.Signal, currentPrice float64) error {
 
 	// 1. Symbol Check (Bitcoin pairs - supports both Binance and Coinbase formats)
 	if sig.Symbol != "BTCUSDT" && sig.Symbol != "BTC-USD" && sig.Symbol != "BTC-USDT" {

@@ -13,10 +13,13 @@ package execution
 //     index) so exit sequencing is fully deterministic across runs.
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
 	"time"
+
+	"antigravity-engine/internal/ledger"
 )
 
 // ---- position side constants ------------------------------------------------
@@ -150,6 +153,10 @@ type OMSStateSnapshot struct {
 // Concurrency: all exported methods lock mu before touching any field.
 // The tick-evaluation core (evalPosition) is called only while mu is held,
 // ensuring no two goroutines can modify position state simultaneously.
+//
+// Event sourcing: when a non-nil ledger.Store is wired via WithLedger(), every
+// state mutation emits a corresponding ledger event so the full lifecycle of
+// every order and position is permanently recorded and replayable.
 type PaperOMS struct {
 	mu           sync.Mutex
 	initialUSD   float64
@@ -169,6 +176,10 @@ type PaperOMS struct {
 	trailActivationProgress  float64 // progress-to-TP before trailing fires (default 0.65)
 	trailGivebackShare       float64 // fraction of move to give back (default 0.35)
 	minNetWinUSD             float64 // floor tiny wins (default 0.05)
+
+	// Ledger event sourcing (optional — nil disables event emission).
+	ledger    ledger.Store
+	accountID string
 }
 
 // NewPaperOMS creates an OMS with the given starting balance.
@@ -183,6 +194,35 @@ func NewPaperOMS(startingUSD float64) *PaperOMS {
 		trailGivebackShare:       0.35,
 		minNetWinUSD:             0.05,
 	}
+}
+
+// WithLedger attaches an event store to the OMS. After this call every
+// OpenPosition, Tick-close, and SL mutation emits an immutable ledger event.
+// accountID is embedded in every event for per-account replay.
+func (o *PaperOMS) WithLedger(store ledger.Store, accountID string) *PaperOMS {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.ledger = store
+	o.accountID = accountID
+	return o
+}
+
+// emitEvent constructs and appends one event to the ledger.
+// Must be called while o.mu is held. Errors are silently swallowed — paper
+// trading must never halt because the audit log is temporarily unavailable.
+func (o *PaperOMS) emitEvent(input ledger.NewEventInput) {
+	if o.ledger == nil {
+		return
+	}
+	input.AccountID = o.accountID
+	if input.Source == "" {
+		input.Source = "paper-oms"
+	}
+	ev, err := ledger.NewEvent(input)
+	if err != nil {
+		return
+	}
+	_, _ = o.ledger.Append(context.Background(), ev)
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -333,6 +373,72 @@ func (o *PaperOMS) OpenPosition(req OpenPositionRequest, now time.Time) (string,
 		ModuleKey:      req.ModuleKey,
 	}
 	o.openPositions = append(o.openPositions, pos)
+
+	// ── Ledger events: ORDER_CREATED → ORDER_FILLED → POSITION_OPENED ────────
+	// Paper mode fills immediately, so we collapse the full order lifecycle into
+	// three events recorded atomically within the same mutex scope.
+	slPct := req.SLPct
+	tpPct := req.TPPct
+	o.emitEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   id,
+		EventType:     ledger.EventOrderCreated,
+		StrategyID:    req.StrategyName,
+		Symbol:        req.Symbol,
+		Payload: map[string]any{
+			"client_order_id": id,
+			"symbol":          req.Symbol,
+			"side":            req.Side,
+			"quantity":        contracts,
+			"notional_usd":    req.Notional,
+			"leverage":        req.Leverage,
+			"order_type":      "MARKET",
+			"strategy_name":   req.StrategyName,
+			"stop_loss_pct":   slPct,
+			"take_profit_pct": tpPct,
+		},
+	})
+	o.emitEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   id,
+		EventType:     ledger.EventOrderFilled,
+		StrategyID:    req.StrategyName,
+		Symbol:        req.Symbol,
+		Payload: map[string]any{
+			"client_order_id": id,
+			"fill_price":      fillPrice,
+			"fill_quantity":   contracts,
+			"fee_usd":         entryFee,
+			"slippage_bps":    slipBps,
+		},
+	})
+	o.emitEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregatePosition,
+		AggregateID:   id,
+		EventType:     ledger.EventPositionOpened,
+		StrategyID:    req.StrategyName,
+		Symbol:        req.Symbol,
+		Payload: ledger.PositionOpenedPayload{
+			ClientOrderID: id,
+			PositionID:    id,
+			Symbol:        req.Symbol,
+			Side:          req.Side,
+			EntryPrice:    fillPrice,
+			Quantity:      contracts,
+			NotionalUSD:   req.Notional,
+			MarginUsed:    margin,
+			Leverage:      req.Leverage,
+			StopLoss:      slPrice,
+			TakeProfit:    tpPrice,
+			StopLossPct:   slPct,
+			TakeProfitPct: tpPct,
+			LiqPrice:      liqPrice,
+			StrategyName:  req.StrategyName,
+			EntryFeeUSD:   entryFee,
+			SlippageBps:   slipBps,
+		},
+	})
+
 	return id, nil
 }
 
@@ -351,7 +457,7 @@ func (o *PaperOMS) ClosePosition(id string, now time.Time) (PaperClosedTrade, er
 		if mark <= 0 {
 			mark = pos.EntryPrice // fallback: close at entry (zero P&L)
 		}
-		trade := o.closePosition(pos, mark, ExitReasonManual, now)
+		trade := o.closePositionWithEvent(pos, mark, ExitReasonManual, now)
 		o.openPositions = append(o.openPositions[:i], o.openPositions[i+1:]...)
 		o.closedTrades = append(o.closedTrades, trade)
 		return trade, nil
@@ -392,7 +498,7 @@ func (o *PaperOMS) Tick(tick OMSTick) []PaperClosedTrade {
 
 		// ── 1. Hard liquidation check (highest priority) ───────────────
 		if o.liquidationCrossed(pos, mark) {
-			trade := o.closePosition(pos, pos.LiqPrice, ExitReasonLiquidation, tick.NowUTC)
+			trade := o.closePositionWithEvent(pos, pos.LiqPrice, ExitReasonLiquidation, tick.NowUTC)
 			closed = append(closed, trade)
 			o.closedTrades = append(o.closedTrades, trade)
 			continue
@@ -404,7 +510,7 @@ func (o *PaperOMS) Tick(tick OMSTick) []PaperClosedTrade {
 		// ── 3. Hard SL check ─────────────────────────────────────────
 		if o.slCrossed(pos, mark) {
 			exitPrice := applyExitSlippage(pos.Side, pos.CurrentSL, DefaultSlippageBps)
-			trade := o.closePosition(pos, exitPrice, ExitReasonSL, tick.NowUTC)
+			trade := o.closePositionWithEvent(pos, exitPrice, ExitReasonSL, tick.NowUTC)
 			closed = append(closed, trade)
 			o.closedTrades = append(o.closedTrades, trade)
 			continue
@@ -422,7 +528,7 @@ func (o *PaperOMS) Tick(tick OMSTick) []PaperClosedTrade {
 				remaining = append(remaining, pos)
 				continue
 			}
-			trade := o.closePosition(pos, exitPrice, reason, tick.NowUTC)
+			trade := o.closePositionWithEvent(pos, exitPrice, reason, tick.NowUTC)
 			closed = append(closed, trade)
 			o.closedTrades = append(o.closedTrades, trade)
 			continue
@@ -432,7 +538,7 @@ func (o *PaperOMS) Tick(tick OMSTick) []PaperClosedTrade {
 		ageMin := tick.NowUTC.Sub(pos.OpenedAt).Minutes()
 		if pos.HoldMinutes > 0 && ageMin >= pos.HoldMinutes {
 			exitPrice := applyExitSlippage(pos.Side, mark, DefaultSlippageBps)
-			trade := o.closePosition(pos, exitPrice, ExitReasonTime, tick.NowUTC)
+			trade := o.closePositionWithEvent(pos, exitPrice, ExitReasonTime, tick.NowUTC)
 			closed = append(closed, trade)
 			o.closedTrades = append(o.closedTrades, trade)
 			continue
@@ -527,6 +633,9 @@ func (o *PaperOMS) tpCrossed(pos *PaperPosition, mark float64) bool {
 }
 
 // applyExitPatches updates adaptive SL (breakeven + trailing) in place.
+// Emits POSITION_BREAKEVEN_ACTIVATED and POSITION_SL_MOVED events to the
+// ledger whenever the stop-loss level changes, so the full SL history is
+// permanently auditable.
 func (o *PaperOMS) applyExitPatches(pos *PaperPosition, mark float64) {
 	progress := progressTowardTP(pos.Side, mark, pos.EntryPrice, pos.TPPrice)
 
@@ -538,30 +647,108 @@ func (o *PaperOMS) applyExitPatches(pos *PaperPosition, mark float64) {
 
 	// Breakeven: move SL to entry once we reach breakevenTriggerProgress
 	if !pos.BreakevenMoved && progress >= o.breakevenTriggerProgress {
+		prevSL := pos.CurrentSL
+		moved := false
 		if pos.Side == SideLong && pos.EntryPrice > pos.CurrentSL {
 			pos.CurrentSL = pos.EntryPrice
+			moved = true
 		} else if pos.Side == SideShort && pos.EntryPrice < pos.CurrentSL {
 			pos.CurrentSL = pos.EntryPrice
+			moved = true
 		}
 		pos.BreakevenMoved = true
+		if moved {
+			o.emitEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregatePosition,
+				AggregateID:   pos.ID,
+				EventType:     ledger.EventPositionBreakevenActivated,
+				StrategyID:    pos.StrategyName,
+				Symbol:        pos.Symbol,
+				Payload: ledger.PositionSLMovedPayload{
+					PositionID: pos.ID,
+					Symbol:     pos.Symbol,
+					PreviousSL: prevSL,
+					NewSL:      pos.CurrentSL,
+					MarkPrice:  mark,
+					Reason:     "BREAKEVEN",
+				},
+			})
+		}
 	}
 
 	// Trailing stop: tighten SL once we pass trailActivationProgress
 	if progress >= o.trailActivationProgress {
 		var newSL float64
 		give := o.trailGivebackShare
+		prevSL := pos.CurrentSL
+		tightened := false
 		if pos.Side == SideLong {
 			newSL = pos.EntryPrice + (mark-pos.EntryPrice)*(1-give)
 			if newSL > pos.CurrentSL {
 				pos.CurrentSL = newSL
+				tightened = true
 			}
 		} else {
 			newSL = pos.EntryPrice - (pos.EntryPrice-mark)*(1-give)
 			if newSL < pos.CurrentSL {
 				pos.CurrentSL = newSL
+				tightened = true
 			}
 		}
+		if tightened {
+			o.emitEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregatePosition,
+				AggregateID:   pos.ID,
+				EventType:     ledger.EventPositionSLMoved,
+				StrategyID:    pos.StrategyName,
+				Symbol:        pos.Symbol,
+				Payload: ledger.PositionSLMovedPayload{
+					PositionID: pos.ID,
+					Symbol:     pos.Symbol,
+					PreviousSL: prevSL,
+					NewSL:      pos.CurrentSL,
+					MarkPrice:  mark,
+					Reason:     "TRAILING",
+				},
+			})
+		}
 	}
+}
+
+// closePositionWithEvent is a thin wrapper over closePosition that also emits
+// the appropriate ledger event (POSITION_CLOSED or POSITION_LIQUIDATED).
+// Must be called while o.mu is held.
+func (o *PaperOMS) closePositionWithEvent(pos *PaperPosition, exitPrice float64, reason string, closedAt time.Time) PaperClosedTrade {
+	trade := o.closePosition(pos, exitPrice, reason, closedAt)
+
+	eventType := ledger.EventPositionClosed
+	if reason == ExitReasonLiquidation {
+		eventType = ledger.EventPositionLiquidated
+	}
+	o.emitEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregatePosition,
+		AggregateID:   pos.ID,
+		EventType:     eventType,
+		StrategyID:    pos.StrategyName,
+		Symbol:        pos.Symbol,
+		Payload: ledger.PositionClosedPayload{
+			ClientOrderID: pos.ID,
+			PositionID:    pos.ID,
+			Symbol:        pos.Symbol,
+			Side:          pos.Side,
+			EntryPrice:    pos.EntryPrice,
+			ExitPrice:     trade.ExitPrice,
+			Quantity:      pos.Contracts,
+			NotionalUSD:   pos.Notional,
+			GrossPnLUSD:   trade.GrossPnl,
+			NetPnLUSD:     trade.NetPnl,
+			FeesUSD:       trade.Fees,
+			ExitReason:    reason,
+			StrategyName:  pos.StrategyName,
+			HoldMinutes:   trade.HoldMinutes,
+		},
+	})
+	return trade
 }
 
 // closePosition calculates P&L, releases margin back to balance, and returns a PaperClosedTrade.
