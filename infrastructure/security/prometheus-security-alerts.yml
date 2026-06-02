@@ -1,0 +1,219 @@
+groups:
+  - name: security.authentication
+    interval: 30s
+    rules:
+      # ── Brute force detection ─────────────────────────────────────────────
+      - alert: AuthBruteForceDetected
+        expr: |
+          rate(http_requests_total{endpoint=~"/api/auth.*", status="401"}[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Brute force attack detected on auth endpoint"
+          description: "More than 6 failed auth attempts/min from IP {{ $labels.ip }}. Possible credential stuffing."
+          runbook: "EXCHANGE_FAILOVER_RUNBOOK.md"
+
+      # ── Mass unauthorized access attempts ─────────────────────────────────
+      - alert: UnauthorizedAccessSpike
+        expr: |
+          rate(http_requests_total{status="401"}[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Spike in unauthorized access attempts"
+          description: "{{ $value | humanize }} unauthorized requests/sec — possible scanning or token abuse."
+
+      # ── RBAC violations ────────────────────────────────────────────────────
+      - alert: RBACViolationsElevated
+        expr: |
+          rate(http_requests_total{status="403"}[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Elevated RBAC violations — possible privilege escalation attempt"
+          description: "{{ $value | humanize }} permission denied/sec. Review audit log at /api/security/audit."
+
+  - name: security.rate_limiting
+    interval: 30s
+    rules:
+      # ── Rate limit exhaustion ──────────────────────────────────────────────
+      - alert: RateLimitExhaustion
+        expr: |
+          rate(http_requests_total{status="429"}[5m]) > 0.3
+        for: 1m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Rate limit exhaustion — possible DoS attack"
+          description: "{{ $value | humanize }} 429 responses/sec. Check for IP-based flooding."
+
+      # ── Trading endpoint flood ─────────────────────────────────────────────
+      - alert: TradingEndpointFlood
+        expr: |
+          rate(http_requests_total{endpoint=~"/api/delta-live.*|/api/admin.*"}[1m]) > 5
+        for: 30s
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Trading/admin endpoint flood detected"
+          description: "{{ $value | humanize }} req/sec on {{ $labels.endpoint }}. Kill switch may be targeted."
+
+  - name: security.secrets
+    interval: 60s
+    rules:
+      # ── Secret rotation overdue ────────────────────────────────────────────
+      - alert: SecretRotationOverdue
+        expr: |
+          (time() - secret_last_rotated_unix) > (7 * 24 * 3600)
+        for: 1h
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Secret rotation overdue for {{ $labels.key }}"
+          description: "Secret {{ $labels.key }} has not been rotated in {{ $value | humanizeDuration }}. Schedule is 7 days."
+
+      # ── Vault unreachable (falling back to env vars) ───────────────────────
+      - alert: VaultProviderDegraded
+        expr: |
+          vault_provider_fallback_active == 1
+        for: 5m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Vault unreachable — using environment variable fallback"
+          description: "Engine cannot reach HashiCorp Vault. Secrets are being served from environment variables. Deploy Vault or investigate network connectivity."
+
+  - name: security.admin_operations
+    interval: 15s
+    rules:
+      # ── Kill switch triggered ──────────────────────────────────────────────
+      - alert: KillSwitchTriggered
+        expr: |
+          increase(kill_switch_triggers_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: trading
+          team2: security
+          pagerduty: "true"
+        annotations:
+          summary: "KILL SWITCH TRIGGERED — all positions being closed"
+          description: "Kill switch activated at {{ $value }} times in the last 5 minutes. Immediate investigation required."
+          runbook: "PHASE14_RECOVERY_RUNBOOK.md"
+
+      # ── Unauthorized kill switch attempt ──────────────────────────────────
+      - alert: KillSwitchUnauthorizedAttempt
+        expr: |
+          rate(http_requests_total{endpoint="/api/admin/kill", status=~"401|403"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          pagerduty: "true"
+        annotations:
+          summary: "Unauthorized kill switch access attempt"
+          description: "Someone attempted to trigger the kill switch without authorization. Investigate immediately."
+
+      # ── Admin endpoint access outside business hours ───────────────────────
+      - alert: AdminAccessOffHours
+        expr: |
+          rate(http_requests_total{endpoint=~"/api/admin.*", status="200"}[5m]) > 0
+          AND (hour() < 6 OR hour() > 22)
+        for: 1m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Admin endpoint accessed outside business hours"
+          description: "Admin action on {{ $labels.endpoint }} at {{ $labels.hour }}:00 UTC. Verify this is authorized."
+
+  - name: security.jwt
+    interval: 30s
+    rules:
+      # ── High JWT failure rate ──────────────────────────────────────────────
+      - alert: JWTFailureSpike
+        expr: |
+          rate(security_jwt_failures_total[5m]) > 0.2
+        for: 2m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "JWT validation failure spike"
+          description: "{{ $value | humanize }} JWT failures/sec. Possible token abuse or secret rotation issue."
+
+      # ── JWT secret appears unchanged for too long ──────────────────────────
+      - alert: JWTSecretRotationOverdue
+        expr: |
+          (time() - jwt_secret_last_rotated_unix) > (8 * 24 * 3600)
+        for: 1h
+        labels:
+          severity: medium
+          team: security
+        annotations:
+          summary: "JWT signing secret overdue for rotation"
+          description: "JWT secret last rotated {{ $value | humanizeDuration }} ago. Schedule is 7 days."
+
+  - name: security.infrastructure
+    interval: 60s
+    rules:
+      # ── Container running as root ──────────────────────────────────────────
+      - alert: ContainerRunningAsRoot
+        expr: |
+          container_spec_security_context_run_as_user == 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Container running as root: {{ $labels.container }}"
+          description: "Container {{ $labels.container }} is running as UID 0 (root). This is a container escape risk. Verify Dockerfile USER directive."
+
+      # ── Unusual outbound connections from engine ────────────────────────────
+      - alert: UnexpectedOutboundConnections
+        expr: |
+          rate(engine_outbound_connections_total{destination!~"api.binance.com|delta.exchange|apiconnect.angelone.in|api.coinbase.com"}[5m]) > 0
+        for: 2m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Engine connecting to unexpected external host"
+          description: "Outbound connection to {{ $labels.destination }} — not in approved exchange list. Possible data exfiltration."
+
+  - name: security.audit_integrity
+    interval: 60s
+    rules:
+      # ── Audit log write failures ───────────────────────────────────────────
+      - alert: AuditLogWriteFailures
+        expr: |
+          rate(security_audit_write_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Audit log write failures — compliance risk"
+          description: "{{ $value | humanize }} audit log write failures/sec. Audit trail may be incomplete. Check AuditStore connectivity."
+
+      # ── Audit log buffer approaching capacity ─────────────────────────────
+      - alert: AuditLogBufferFull
+        expr: |
+          security_audit_buffer_size / security_audit_buffer_max > 0.8
+        for: 5m
+        labels:
+          severity: high
+          team: security
+        annotations:
+          summary: "Audit log in-memory buffer at {{ $value | humanizePercentage }} capacity"
+          description: "Audit buffer is nearly full. Old events will be evicted. Ensure AuditStore is persisting events."

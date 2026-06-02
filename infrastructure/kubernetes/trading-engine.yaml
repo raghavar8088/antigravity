@@ -1,0 +1,270 @@
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading
+  labels:
+    app.kubernetes.io/part-of: trading-platform
+    environment: production
+
+---
+# ConfigMap for non-secret configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: engine-config
+  namespace: trading
+data:
+  ENGINE_PORT: "8080"
+  SQLITE_PATH: "/data/engine.db"
+  ENGINE_DATA_DIR: "/data"
+  LOG_LEVEL: "info"
+  HA_ENABLED: "true"
+  BACKUP_DIR: "/data/backups"
+  BACKUP_LEDGER_INTERVAL: "1m"
+  BACKUP_DB_INTERVAL: "1h"
+
+---
+# Secret (values injected from Vault / CI secrets)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: engine-secrets
+  namespace: trading
+type: Opaque
+data:
+  # Base64-encoded values — replace with real values via Vault Agent Injector
+  DATABASE_URL: ""
+  REDIS_URL: ""
+  MONGODB_URI: ""
+  BINANCE_API_KEY: ""
+  BINANCE_API_SECRET: ""
+  DELTA_API_KEY: ""
+  DELTA_API_SECRET: ""
+  ANGELONE_API_KEY: ""
+  CRON_SECRET: ""
+  AUTH_JWT_SECRET: ""
+
+---
+# PersistentVolumeClaim for engine state
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: engine-data
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: fast-ssd  # Replace with your storage class
+
+---
+# StatefulSet for the trading engine (HA: 3 replicas, active-standby)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: trading-engine
+  namespace: trading
+  labels:
+    app: trading-engine
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: trading-engine
+  serviceName: trading-engine-headless
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: trading-engine
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Anti-affinity: spread pods across nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - trading-engine
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - trading-engine
+                topologyKey: topology.kubernetes.io/zone
+
+      # Tolerate node taints for dedicated trading nodes
+      tolerations:
+        - key: "trading-workload"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+
+      terminationGracePeriodSeconds: 60
+
+      initContainers:
+        - name: db-migrate
+          image: trading-engine:latest
+          command: ["/app/engine", "migrate"]
+          envFrom:
+            - configMapRef:
+                name: engine-config
+            - secretRef:
+                name: engine-secrets
+
+      containers:
+        - name: engine
+          image: trading-engine:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: engine-config
+            - secretRef:
+                name: engine-secrets
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: engine-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12  # 60s startup window
+
+      volumes:
+        - name: engine-data
+          persistentVolumeClaim:
+            claimName: engine-data
+
+---
+# Headless Service for StatefulSet pod discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-engine-headless
+  namespace: trading
+spec:
+  clusterIP: None
+  selector:
+    app: trading-engine
+  ports:
+    - port: 8080
+      name: http
+
+---
+# ClusterIP Service for load-balanced access
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-engine
+  namespace: trading
+  labels:
+    app: trading-engine
+spec:
+  type: ClusterIP
+  selector:
+    app: trading-engine
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+
+---
+# PodDisruptionBudget: always keep at least 2 pods running
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trading-engine-pdb
+  namespace: trading
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: trading-engine
+
+---
+# HorizontalPodAutoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: trading-engine-hpa
+  namespace: trading
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: trading-engine
+  minReplicas: 3
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

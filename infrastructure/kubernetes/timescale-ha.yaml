@@ -1,0 +1,288 @@
+---
+# TimescaleDB High Availability StatefulSet
+# Primary + 1 streaming replica, automatic promotion via pg-rewind
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: timescale-config
+  namespace: trading
+data:
+  postgresql.conf: |
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 768MB
+    maintenance_work_mem = 64MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 1310kB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+    wal_level = replica
+    max_wal_senders = 3
+    wal_keep_size = 1GB
+    hot_standby = on
+    synchronous_commit = on
+    archive_mode = on
+    archive_command = 'test ! -f /archive/%f && cp %p /archive/%f'
+  pg_hba.conf: |
+    host    all             all             0.0.0.0/0               md5
+    host    replication     replicator      0.0.0.0/0               md5
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: timescale-secrets
+  namespace: trading
+type: Opaque
+data:
+  POSTGRES_PASSWORD: ""       # base64 encoded
+  REPLICATOR_PASSWORD: ""     # base64 encoded
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: timescale-primary-data
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: timescale-replica-data
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescale-primary
+  namespace: trading
+  labels:
+    app: timescale
+    role: primary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescale
+      role: primary
+  serviceName: timescale-primary
+  template:
+    metadata:
+      labels:
+        app: timescale
+        role: primary
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [timescale]
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: timescale
+          image: timescale/timescaledb:latest-pg15
+          env:
+            - name: POSTGRES_DB
+              value: trading
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: config
+              mountPath: /etc/postgresql/postgresql.conf
+              subPath: postgresql.conf
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "4000m"
+              memory: "4Gi"
+          livenessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, trading]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, trading]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: timescale-primary-data
+        - name: config
+          configMap:
+            name: timescale-config
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescale-replica
+  namespace: trading
+  labels:
+    app: timescale
+    role: replica
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescale
+      role: replica
+  serviceName: timescale-replica
+  template:
+    metadata:
+      labels:
+        app: timescale
+        role: replica
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [timescale]
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: init-replica
+          image: timescale/timescaledb:latest-pg15
+          command:
+            - bash
+            - -c
+            - |
+              until pg_isready -h timescale-primary -U postgres; do sleep 1; done
+              pg_basebackup -h timescale-primary -U replicator -D $PGDATA -Fp -Xs -P -R
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secrets
+                  key: REPLICATOR_PASSWORD
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      containers:
+        - name: timescale
+          image: timescale/timescaledb:latest-pg15
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescale-secrets
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, postgres, -d, trading]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: timescale-replica-data
+
+---
+# Primary service
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescale-primary
+  namespace: trading
+  labels:
+    app: timescale
+    role: primary
+spec:
+  clusterIP: None
+  selector:
+    app: timescale
+    role: primary
+  ports:
+    - port: 5432
+      name: postgres
+
+---
+# Replica service (read queries)
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescale-replica
+  namespace: trading
+  labels:
+    app: timescale
+    role: replica
+spec:
+  clusterIP: None
+  selector:
+    app: timescale
+    role: replica
+  ports:
+    - port: 5432
+      name: postgres
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: timescale-pdb
+  namespace: trading
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: timescale

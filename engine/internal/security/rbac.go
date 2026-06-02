@@ -80,38 +80,68 @@ func RoleFromString(s string) Role {
 // endpointPermissions maps path prefixes to the minimum required permission.
 // Checked in order; first match wins. Paths NOT listed here are public (health checks).
 var endpointPermissions = []endpointPolicy{
-	// Admin — most restrictive first.
+	// ── Admin (system-shutdown / system-reset) ─────────────────────────────────
 	{prefix: "/api/admin/kill", method: "POST", perm: PermSystemShutdown},
 	{prefix: "/api/admin/close-all", method: "POST", perm: PermSystemShutdown},
 	{prefix: "/api/admin/reset", method: "POST", perm: PermSystemReset},
 	{prefix: "/api/admin/clear-history", method: "POST", perm: PermSystemReset},
-	// Risk.
+
+	// ── Security telemetry — ADMIN only (audit.view) ───────────────────────────
+	// These were previously unauthenticated, exposing security state to any caller.
+	{prefix: "/api/security/status", method: "GET", perm: PermAuditView},
+	{prefix: "/api/security/audit", method: "GET", perm: PermAuditView},
+	{prefix: "/api/security/incidents", method: "GET", perm: PermAuditView},
+
+	// ── Probe / connectivity tests — restrict to TRADER+ (information disclosure) ─
+	{prefix: "/api/probe/delta-btc", method: "GET", perm: PermTradeView},
+	{prefix: "/api/probe/angelone-nifty", method: "GET", perm: PermTradeView},
+
+	// ── Angel One proxy — requires trade execution permission ──────────────────
+	{prefix: "/api/angel-proxy", method: "", perm: PermTradeExecute},
+
+	// ── Risk ───────────────────────────────────────────────────────────────────
 	{prefix: "/api/risk", method: "", perm: PermRiskView},
-	// Trade data.
+
+	// ── Trade data ─────────────────────────────────────────────────────────────
 	{prefix: "/api/trades", method: "GET", perm: PermTradeView},
 	{prefix: "/api/positions", method: "GET", perm: PermTradeView},
 	{prefix: "/api/stats", method: "GET", perm: PermTradeView},
-	// Strategy data.
+
+	// ── Strategy data ──────────────────────────────────────────────────────────
 	{prefix: "/api/strategies", method: "GET", perm: PermStrategyView},
-	// AI + signals.
+
+	// ── AI + signals ───────────────────────────────────────────────────────────
 	{prefix: "/api/ai", method: "", perm: PermTradeView},
-	// Reconciliation.
+
+	// ── Reconciliation ─────────────────────────────────────────────────────────
 	{prefix: "/api/reconciliation", method: "", perm: PermReconView},
-	// Delta live (trade execution).
+
+	// ── Delta live (trade execution) ───────────────────────────────────────────
 	{prefix: "/api/delta-live/order", method: "POST", perm: PermTradeExecute},
 	{prefix: "/api/delta-live/enable", method: "POST", perm: PermStrategyEnable},
 	{prefix: "/api/delta-live", method: "GET", perm: PermTradeView},
-	// Options engines.
-	{prefix: "/api/options", method: "GET", perm: PermTradeView},
+
+	// ── Options engines ────────────────────────────────────────────────────────
 	{prefix: "/api/options/reset", method: "POST", perm: PermSystemReset},
-	{prefix: "/api/nifty-options", method: "GET", perm: PermTradeView},
+	{prefix: "/api/options", method: "GET", perm: PermTradeView},
+	{prefix: "/api/option-chain", method: "GET", perm: PermTradeView},
 	{prefix: "/api/nifty-options/reset", method: "POST", perm: PermSystemReset},
+	{prefix: "/api/nifty-options", method: "GET", perm: PermTradeView},
 	{prefix: "/api/nifty-stocks", method: "GET", perm: PermTradeView},
-	// Paper OMS.
+
+	// ── NIFTY market data ──────────────────────────────────────────────────────
+	{prefix: "/api/nifty", method: "GET", perm: PermTradeView},
+
+	// ── Regime classification ──────────────────────────────────────────────────
+	{prefix: "/api/regime", method: "GET", perm: PermTradeView},
+
+	// ── Paper OMS ──────────────────────────────────────────────────────────────
 	{prefix: "/paper/", method: "", perm: PermTradeView},
-	// Logs — analyst+ only.
+
+	// ── Logs — analyst+ only ───────────────────────────────────────────────────
 	{prefix: "/api/logs", method: "GET", perm: PermAuditView},
-	// Metrics — any authenticated viewer.
+
+	// ── Metrics — any authenticated viewer ─────────────────────────────────────
 	{prefix: "/metrics", method: "GET", perm: PermMetricsView},
 }
 

@@ -21,6 +21,7 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/gateway"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/options"
@@ -29,6 +30,7 @@ import (
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
 	"antigravity-engine/internal/security"
+	"antigravity-engine/internal/security/vault"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/trading"
 )
@@ -1044,11 +1046,23 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
 
+	// ── Phase 15J: Vault Secret Provider ─────────────────────────────────────
+	// Loads from HashiCorp Vault when VAULT_ADDR+VAULT_TOKEN are set;
+	// falls back to environment variables for local development.
+	secretProvider := vault.LoadFromEnv()
+	log.Printf("[VAULT] Secret provider: %s", secretProvider.Source())
+
+	// Start secret rotation engine — zero-downtime rotation via cache invalidation.
+	rotationEngine := vault.NewRotationEngine(secretProvider, vault.DefaultRotationPolicies())
+	rotationEngine.Start(ctx)
+	defer rotationEngine.Stop()
+	log.Printf("[VAULT] Rotation engine started — %d policies registered", len(vault.DefaultRotationPolicies()))
+
 	// ── Phase 15G: Zero Trust Security Gate ──────────────────────────────────
 	secPolicy := security.LoadPolicy()
 	secGate := security.NewGate(secPolicy, nil)
 	log.Printf("[SECURITY] Zero Trust Gate active — enforce_auth=%v source=%s",
-		secPolicy.EnforceAuth, "env")
+		secPolicy.EnforceAuth, secretProvider.Source())
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
@@ -1556,9 +1570,17 @@ func main() {
 		httpPort = "8080"
 	}
 
+	// ── Phase 15J: API Gateway wraps the security gate ───────────────────────
+	// Traffic flow: Gateway (tracing + access log + panic recovery)
+	//               → Security Gate (authn + RBAC + rate limit + audit)
+	//               → Handler
+	apiGateway := gateway.New(secGate.Wrap(http.DefaultServeMux), gateway.Config{
+		ServiceName: "raig-engine-v3",
+	})
+
 	server := &http.Server{
 		Addr:              ":" + httpPort,
-		Handler:           secGate.Wrap(http.DefaultServeMux),
+		Handler:           apiGateway,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,

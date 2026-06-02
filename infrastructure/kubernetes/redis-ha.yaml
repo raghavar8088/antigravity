@@ -1,0 +1,285 @@
+---
+# Redis High Availability with Primary + Replica + Sentinel
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: trading
+data:
+  redis.conf: |
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    save 60 1000
+    save 300 100
+    save 900 1
+    appendonly yes
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    tcp-keepalive 300
+    timeout 0
+    bind 0.0.0.0
+  sentinel.conf: |
+    port 26379
+    sentinel monitor trading-redis redis-primary 6379 2
+    sentinel down-after-milliseconds trading-redis 5000
+    sentinel failover-timeout trading-redis 10000
+    sentinel parallel-syncs trading-redis 1
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-primary
+  namespace: trading
+  labels:
+    app: redis
+    role: primary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: primary
+  serviceName: redis-primary
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: primary
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [redis]
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: [redis-server, /etc/redis/redis.conf]
+          ports:
+            - containerPort: 6379
+              name: redis
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis/redis.conf
+              subPath: redis.conf
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+          livenessProbe:
+            exec:
+              command: [redis-cli, ping]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command: [redis-cli, ping]
+            initialDelaySeconds: 5
+            periodSeconds: 3
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-replica
+  namespace: trading
+  labels:
+    app: redis
+    role: replica
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+      role: replica
+  serviceName: redis-replica
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: replica
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [redis]
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: wait-for-primary
+          image: redis:7-alpine
+          command: [sh, -c, until redis-cli -h redis-primary ping; do sleep 1; done]
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - /etc/redis/redis.conf
+            - --replicaof
+            - redis-primary
+            - "6379"
+          ports:
+            - containerPort: 6379
+              name: redis
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis/redis.conf
+              subPath: redis.conf
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+          readinessProbe:
+            exec:
+              command: [redis-cli, ping]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+
+---
+# Sentinel Deployment (3 replicas for quorum)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-sentinel
+  namespace: trading
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-sentinel
+  template:
+    metadata:
+      labels:
+        app: redis-sentinel
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [redis-sentinel]
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: sentinel
+          image: redis:7-alpine
+          command: [redis-sentinel, /etc/redis/sentinel.conf]
+          ports:
+            - containerPort: 26379
+              name: sentinel
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis/sentinel.conf
+              subPath: sentinel.conf
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-primary
+  namespace: trading
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+    role: primary
+  ports:
+    - port: 6379
+      name: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-replica
+  namespace: trading
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+    role: replica
+  ports:
+    - port: 6379
+      name: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  namespace: trading
+spec:
+  selector:
+    app: redis-sentinel
+  ports:
+    - port: 26379
+      name: sentinel
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-sentinel-pdb
+  namespace: trading
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis-sentinel

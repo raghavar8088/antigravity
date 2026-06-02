@@ -7,7 +7,7 @@
 import crypto from "node:crypto";
 
 export const SESSION_COOKIE = "raig_session";
-const EXPIRY_SECS = 30 * 24 * 60 * 60; // 30 days
+const EXPIRY_SECS = 24 * 60 * 60; // 24h — institutional requirement; reduces breach window from 30d
 
 export type SessionPayload = { userId: string; email: string };
 
