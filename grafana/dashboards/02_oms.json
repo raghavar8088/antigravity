@@ -1,0 +1,108 @@
+{
+  "description": "OMS v3: Orders, Fills, Rejects, Latency, Fill Quality",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Orders / min",
+      "type": "stat",
+      "targets": [{ "expr": "rate(trading_oms_orders_submitted_total[1m]) * 60", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":0.05},{"color":"red","value":0.15}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Reject Rate",
+      "type": "stat",
+      "targets": [{ "expr": "avg(trading_oms_reject_rate)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":50},{"color":"red","value":150}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Fill Latency P99 (ms)",
+      "type": "stat",
+      "targets": [{ "expr": "histogram_quantile(0.99, rate(trading_oms_fill_latency_ms_bucket[5m]))", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "id": 4, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Open Orders",
+      "type": "stat",
+      "targets": [{ "expr": "sum(trading_oms_open_orders)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Order Rate by Exchange",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_oms_orders_submitted_total[2m])", "refId": "A", "legendFormat": "{{ exchange }} {{ side }}" },
+        { "expr": "rate(trading_oms_orders_accepted_total[2m])", "refId": "B", "legendFormat": "accepted {{ exchange }}" },
+        { "expr": "rate(trading_oms_orders_rejected_total[2m])", "refId": "C", "legendFormat": "rejected {{ exchange }} ({{ reason }})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "Fill Latency Percentiles",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(trading_oms_fill_latency_ms_bucket[5m]))", "refId": "A", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, rate(trading_oms_fill_latency_ms_bucket[5m]))", "refId": "B", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, rate(trading_oms_fill_latency_ms_bucket[5m]))", "refId": "C", "legendFormat": "P99" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "title": "Pipeline Stage Latency (P99)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, rate(trading_latency_pipeline_stage_ms_bucket[5m]))", "refId": "A", "legendFormat": "{{ stage }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":100},{"color":"red","value":150}]},
+        "custom": { "lineWidth": 2 }
+      }},
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "title": "End-to-End Execution Latency (Tick→Fill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(trading_latency_e2e_ms_bucket[5m]))", "refId": "A", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, rate(trading_latency_e2e_ms_bucket[5m]))", "refId": "B", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, rate(trading_latency_e2e_ms_bucket[5m]))", "refId": "C", "legendFormat": "P99 (SLO: <150ms)" }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["trading", "oms"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "UTC",
+  "title": "02 — OMS Dashboard",
+  "uid": "trading-oms",
+  "version": 1
+}

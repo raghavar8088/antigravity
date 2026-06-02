@@ -1,0 +1,402 @@
+---
+# Phase 15H — Institutional Alert Rules
+# AlertManager + Prometheus rules for the trading engine.
+# Grouped by severity: CRITICAL → HIGH → MEDIUM → LOW
+# Notification routing: CRITICAL = PagerDuty+Slack, HIGH = Slack, MEDIUM = Slack, LOW = log only
+
+groups:
+
+  # ═══════════════════════════════════════════
+  # CRITICAL — Immediate capital risk. PagerDuty.
+  # ═══════════════════════════════════════════
+
+  - name: trading.critical
+    interval: 15s
+    rules:
+
+      - alert: KillSwitchTriggered
+        expr: trading_execution_kill_switch_active == 1
+        for: 0s
+        labels:
+          severity: critical
+          category: execution
+          team: trading
+        annotations:
+          summary: "KILL SWITCH ACTIVE — all trading halted"
+          description: "The kill switch has been activated. All order submission is blocked. Immediate human review required."
+          runbook: "https://wiki/runbooks/kill-switch"
+
+      - alert: ExchangeDisconnected
+        expr: trading_marketdata_exchange_connected == 0
+        for: 10s
+        labels:
+          severity: critical
+          category: market_data
+          team: trading
+        annotations:
+          summary: "Exchange {{ $labels.exchange }} WebSocket disconnected"
+          description: "Exchange {{ $labels.exchange }} has been disconnected for >10 seconds. Orders may be rejected. Fallback chain should activate."
+          runbook: "https://wiki/runbooks/exchange-disconnect"
+
+      - alert: GhostPositionDetected
+        expr: recon_v2_position_drift_count{type="ghost"} > 0
+        for: 0s
+        labels:
+          severity: critical
+          category: reconciliation
+          team: trading
+        annotations:
+          summary: "Ghost position detected on {{ $labels.account }} @ {{ $labels.exchange }}"
+          description: "{{ $value }} ghost position(s) detected — positions exist on the exchange but not in the OMS. Immediate reconciliation required."
+          runbook: "https://wiki/runbooks/ghost-position"
+
+      - alert: MissingFillDetected
+        expr: recon_v2_fill_drift_count{type="missing"} > 0
+        for: 0s
+        labels:
+          severity: critical
+          category: reconciliation
+          team: trading
+        annotations:
+          summary: "Missing fill detected on {{ $labels.account }} @ {{ $labels.exchange }}"
+          description: "{{ $value }} fill(s) exist on the exchange but are absent from the OMS ledger. PnL tracking may be incorrect."
+          runbook: "https://wiki/runbooks/missing-fill"
+
+      - alert: LedgerWriteFailure
+        expr: increase(trading_ledger_write_errors_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          category: ledger
+          team: trading
+        annotations:
+          summary: "Event ledger write failure — event sourcing integrity at risk"
+          description: "{{ $value }} ledger write errors in the last 5 minutes. Event sourcing integrity is compromised. Recovery replay may be needed."
+          runbook: "https://wiki/runbooks/ledger-failure"
+
+      - alert: ReplayFailure
+        expr: increase(trading_ledger_snapshot_failures_total[10m]) > 2
+        for: 0s
+        labels:
+          severity: critical
+          category: ledger
+          team: trading
+        annotations:
+          summary: "Event replay / snapshot failure — DR capability degraded"
+          description: "{{ $value }} snapshot failures in 10 minutes. RPO target at risk."
+          runbook: "https://wiki/runbooks/replay-failure"
+
+      - alert: RiskEngineFailure
+        expr: trading_health_component_score{component="risk"} == 0
+        for: 10s
+        labels:
+          severity: critical
+          category: risk
+          team: trading
+        annotations:
+          summary: "Risk engine health check failed"
+          description: "The risk engine is reporting RED health. No new orders can be safely approved."
+          runbook: "https://wiki/runbooks/risk-engine-failure"
+
+      - alert: ReconciliationFailure
+        expr: trading_health_component_score{component="reconciliation"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: reconciliation
+          team: trading
+        annotations:
+          summary: "Reconciliation authority health check failed"
+          description: "Exchange reconciliation is not running. Ghost positions and missing fills may accumulate undetected."
+          runbook: "https://wiki/runbooks/reconciliation-failure"
+
+      - alert: DatabaseUnavailable
+        expr: trading_db_available == 0
+        for: 10s
+        labels:
+          severity: critical
+          category: infrastructure
+          team: devops
+        annotations:
+          summary: "Database {{ $labels.db }} unavailable"
+          description: "Database {{ $labels.db }} health check has been failing for >10 seconds. Engine may be operating on stale or cached state."
+          runbook: "https://wiki/runbooks/database-down"
+
+      - alert: SecurityIncident
+        expr: increase(trading_security_incidents_total{severity="CRITICAL"}[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          category: security
+          team: security
+        annotations:
+          summary: "CRITICAL security incident detected"
+          description: "{{ $value }} critical security events in the last 5 minutes. Possible intrusion or credential compromise."
+          runbook: "https://wiki/runbooks/security-incident"
+
+      - alert: DailyLossLimitExceeded
+        expr: riskv3_daily_loss_pct > 2.5
+        for: 0s
+        labels:
+          severity: critical
+          category: risk
+          team: trading
+        annotations:
+          summary: "Daily loss limit exceeded for account {{ $labels.account_id }}"
+          description: "Daily loss is {{ $value | humanizePercentage }} — exceeds 2.5% hard limit. Kill switch should activate automatically."
+          runbook: "https://wiki/runbooks/daily-loss-limit"
+
+      - alert: DrawdownLimitExceeded
+        expr: riskv3_drawdown_pct > 8.0
+        for: 0s
+        labels:
+          severity: critical
+          category: risk
+          team: trading
+        annotations:
+          summary: "Drawdown limit exceeded for account {{ $labels.account_id }}"
+          description: "Current drawdown is {{ $value | humanizePercentage }} — exceeds 8% hard limit."
+          runbook: "https://wiki/runbooks/drawdown-limit"
+
+      - alert: DRSnapshotStale
+        expr: trading_dr_snapshot_age_seconds > 600
+        for: 60s
+        labels:
+          severity: critical
+          category: dr
+          team: devops
+        annotations:
+          summary: "Event store snapshot is stale for {{ $labels.aggregate_type }}"
+          description: "No snapshot in {{ $value | humanizeDuration }}. RPO target (300s) breached. Data loss window expanding."
+          runbook: "https://wiki/runbooks/stale-snapshot"
+
+  # ═══════════════════════════════════════════
+  # HIGH — Significant operational impact. Slack #trading-alerts.
+  # ═══════════════════════════════════════════
+
+  - name: trading.high
+    interval: 30s
+    rules:
+
+      - alert: ExecutionLatencySLOBreach
+        expr: histogram_quantile(0.99, rate(trading_latency_e2e_ms_bucket[5m])) > 150
+        for: 2m
+        labels:
+          severity: high
+          category: execution
+          team: trading
+        annotations:
+          summary: "Execution latency P99 > 150ms SLO breach on {{ $labels.exchange }}"
+          description: "Signal-to-fill P99 latency is {{ $value }}ms — exceeds 150ms SLO target. Investigate strategy evaluation or exchange round-trip time."
+          runbook: "https://wiki/runbooks/latency-slo"
+
+      - alert: OrderRejectRateHigh
+        expr: trading_oms_reject_rate > 0.15
+        for: 5m
+        labels:
+          severity: high
+          category: execution
+          team: trading
+        annotations:
+          summary: "High order reject rate on {{ $labels.exchange }}/{{ $labels.symbol }}"
+          description: "Order reject rate is {{ $value | humanizePercentage }} — exceeds 15% threshold. Check risk gate configuration or exchange connectivity."
+          runbook: "https://wiki/runbooks/high-reject-rate"
+
+      - alert: SlippageSpike
+        expr: histogram_quantile(0.95, rate(trading_execution_slippage_bps_bucket[10m])) > 20
+        for: 5m
+        labels:
+          severity: high
+          category: execution
+          team: trading
+        annotations:
+          summary: "Slippage spike detected on {{ $labels.exchange }}/{{ $labels.symbol }}"
+          description: "P95 slippage is {{ $value }}bps — exceeds 20bps threshold. Possible liquidity problem or market stress."
+          runbook: "https://wiki/runbooks/slippage-spike"
+
+      - alert: MarketDataStale
+        expr: trading_marketdata_staleness_seconds > 5
+        for: 15s
+        labels:
+          severity: high
+          category: market_data
+          team: trading
+        annotations:
+          summary: "Market data stale for {{ $labels.exchange }}/{{ $labels.symbol }}"
+          description: "No tick received for {{ $value }}s from {{ $labels.exchange }}/{{ $labels.symbol }}. Strategies may be operating on stale prices."
+          runbook: "https://wiki/runbooks/stale-market-data"
+
+      - alert: ExcessiveRiskBlocks
+        expr: rate(riskv3_risk_checks_total{status="blocked"}[5m]) / rate(riskv3_risk_checks_total[5m]) > 0.3
+        for: 3m
+        labels:
+          severity: high
+          category: risk
+          team: trading
+        annotations:
+          summary: "Risk gate blocking >30% of orders for account {{ $labels.account_id }}"
+          description: "Risk block rate is {{ $value | humanizePercentage }}. Risk engine may be over-tuned or portfolio is approaching limits."
+          runbook: "https://wiki/runbooks/excessive-risk-blocks"
+
+      - alert: RedisUnavailable
+        expr: trading_redis_available == 0
+        for: 30s
+        labels:
+          severity: high
+          category: infrastructure
+          team: devops
+        annotations:
+          summary: "Redis unavailable"
+          description: "Redis health check has been failing for >30s. Indicator cache and performance data unavailable. Engine may degrade."
+          runbook: "https://wiki/runbooks/redis-down"
+
+      - alert: HighConcentrationRisk
+        expr: riskv3_concentration_score > 70
+        for: 5m
+        labels:
+          severity: high
+          category: risk
+          team: trading
+        annotations:
+          summary: "High portfolio concentration for account {{ $labels.account_id }}"
+          description: "Concentration score is {{ $value }}/100. Portfolio may be over-exposed to a single strategy or asset."
+          runbook: "https://wiki/runbooks/concentration-risk"
+
+      - alert: VaRBreached
+        expr: riskv3_var_95_pct > 3.0
+        for: 1m
+        labels:
+          severity: high
+          category: risk
+          team: trading
+        annotations:
+          summary: "VaR95 elevated for account {{ $labels.account_id }}"
+          description: "95th percentile VaR is {{ $value }}% of equity. Consider reducing position sizes."
+          runbook: "https://wiki/runbooks/var-breach"
+
+      - alert: ActiveIncidents
+        expr: trading_incident_active_count{severity=~"CRITICAL|HIGH"} > 0
+        for: 0s
+        labels:
+          severity: high
+          category: operations
+          team: trading
+        annotations:
+          summary: "{{ $value }} active {{ $labels.severity }} incident(s)"
+          description: "There are active high-severity incidents requiring attention."
+          runbook: "https://wiki/runbooks/incident-response"
+
+  # ═══════════════════════════════════════════
+  # MEDIUM — Degraded performance. Slack #trading-ops.
+  # ═══════════════════════════════════════════
+
+  - name: trading.medium
+    interval: 60s
+    rules:
+
+      - alert: StrategyDisabled
+        expr: decrease(trading_strategy_active_count[10m]) > 5
+        for: 0s
+        labels:
+          severity: medium
+          category: strategy
+          team: trading
+        annotations:
+          summary: "{{ $value }} strategies disabled in the last 10 minutes"
+          description: "Strategy count dropped by {{ $value }}. WINNERS_ONLY gate may have disabled under-performing strategies or an error occurred."
+
+      - alert: SnapshotFailure
+        expr: increase(trading_dr_snapshot_failures_total[30m]) > 1
+        for: 0s
+        labels:
+          severity: medium
+          category: dr
+          team: devops
+        annotations:
+          summary: "Event store snapshot failure for {{ $labels.aggregate_type }}"
+          description: "{{ $value }} snapshot failures in 30 minutes. RPO target may be degrading."
+
+      - alert: APIErrorRateIncrease
+        expr: rate(trading_api_http_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: medium
+          category: api
+          team: trading
+        annotations:
+          summary: "Elevated API error rate on {{ $labels.path }}"
+          description: "{{ $value }} errors/sec on {{ $labels.method }} {{ $labels.path }}."
+
+      - alert: WorkerHeartbeatMissed
+        expr: time() - trading_worker_last_heartbeat_unix > 120
+        for: 0s
+        labels:
+          severity: medium
+          category: infrastructure
+          team: devops
+        annotations:
+          summary: "Background worker {{ $labels.worker }} heartbeat missed"
+          description: "Worker {{ $labels.worker }} has not reported a heartbeat in >2 minutes. It may have crashed silently."
+
+      - alert: LowSharpeRatio
+        expr: trading_strategy_perf_sharpe_ratio < 0.5
+        for: 30m
+        labels:
+          severity: medium
+          category: performance
+          team: trading
+        annotations:
+          summary: "Low Sharpe ratio for account {{ $labels.account }}"
+          description: "Rolling Sharpe ratio is {{ $value }} (target >1.5). Risk-adjusted returns are degrading."
+
+      - alert: HighSlippageCosts
+        expr: rate(trading_costs_slippage_usd_total[1h]) * 3600 > 100
+        for: 15m
+        labels:
+          severity: medium
+          category: execution
+          team: trading
+        annotations:
+          summary: "High slippage costs on {{ $labels.exchange }}"
+          description: "Slippage costs running at ${{ $value | humanize }}/hr on {{ $labels.exchange }}. Review execution quality."
+
+  # ═══════════════════════════════════════════
+  # LOW — Informational. Log only.
+  # ═══════════════════════════════════════════
+
+  - name: trading.low
+    interval: 300s
+    rules:
+
+      - alert: SnapshotCreated
+        expr: increase(trading_dr_snapshot_success_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: low
+          category: dr
+          team: devops
+        annotations:
+          summary: "Snapshot created for {{ $labels.aggregate_type }}"
+          description: "Event store snapshot created successfully."
+
+      - alert: ReconciliationSuccess
+        expr: increase(recon_v2_cycles_total[10m]) > 0
+        for: 0s
+        labels:
+          severity: low
+          category: reconciliation
+          team: trading
+        annotations:
+          summary: "Reconciliation cycle completed for {{ $labels.exchange }}/{{ $labels.domain }}"
+          description: "Reconciliation cycle completed. Drift score: see dashboard."
+
+      - alert: DRReadinessDegraded
+        expr: trading_dr_readiness_score < 1.0
+        for: 10m
+        labels:
+          severity: low
+          category: dr
+          team: devops
+        annotations:
+          summary: "DR readiness score degraded to {{ $value }}"
+          description: "Not all DR checks are passing. Review backup and snapshot health."

@@ -1,0 +1,131 @@
+global:
+  resolve_timeout: 5m
+  # Slack webhook — set SLACK_WEBHOOK_URL env var
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+
+# Notification templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# ─────────────────────────────────────────────
+# Routing tree
+# CRITICAL → PagerDuty + Slack #trading-critical
+# HIGH     → Slack #trading-alerts
+# MEDIUM   → Slack #trading-ops
+# LOW      → silence (recorded in logs only)
+# ─────────────────────────────────────────────
+route:
+  receiver: default
+  group_by: ['alertname', 'severity', 'exchange']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+
+  routes:
+    # CRITICAL: immediate PagerDuty + Slack
+    - matchers:
+        - severity = critical
+      receiver: critical
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 15m
+      continue: false
+
+    # HIGH: Slack only, shorter repeat
+    - matchers:
+        - severity = high
+      receiver: high
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 30m
+      continue: false
+
+    # MEDIUM: Slack ops channel
+    - matchers:
+        - severity = medium
+      receiver: medium
+      group_wait: 2m
+      group_interval: 10m
+      repeat_interval: 2h
+      continue: false
+
+    # LOW: suppress (logged only)
+    - matchers:
+        - severity = low
+      receiver: silence
+      continue: false
+
+# ─────────────────────────────────────────────
+# Inhibition rules — suppress downstream alerts when root cause fires
+# ─────────────────────────────────────────────
+inhibit_rules:
+  # If kill switch is active, suppress all execution alerts (they're expected)
+  - source_matchers:
+      - alertname = KillSwitchTriggered
+    target_matchers:
+      - category = execution
+    equal: []
+
+  # If exchange disconnected, suppress market data staleness alert
+  - source_matchers:
+      - alertname = ExchangeDisconnected
+    target_matchers:
+      - alertname = MarketDataStale
+    equal: [exchange]
+
+  # If database down, suppress reconciliation alerts (it needs the DB)
+  - source_matchers:
+      - alertname = DatabaseUnavailable
+    target_matchers:
+      - category = reconciliation
+    equal: []
+
+# ─────────────────────────────────────────────
+# Receivers
+# ─────────────────────────────────────────────
+receivers:
+  - name: default
+    slack_configs:
+      - channel: '#trading-alerts'
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        send_resolved: true
+
+  - name: critical
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_INTEGRATION_KEY}"
+        severity: critical
+        description: '{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        details:
+          env: production
+          system: trading-engine
+    slack_configs:
+      - channel: '#trading-critical'
+        title: '🚨 CRITICAL: {{ .CommonLabels.alertname }}'
+        text: |
+          *Alert:* {{ .CommonLabels.alertname }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          *Runbook:* {{ .CommonAnnotations.runbook }}
+        send_resolved: true
+        color: 'danger'
+
+  - name: high
+    slack_configs:
+      - channel: '#trading-alerts'
+        title: '⚠️ HIGH: {{ .CommonLabels.alertname }}'
+        text: |
+          *Alert:* {{ .CommonLabels.alertname }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+        send_resolved: true
+        color: 'warning'
+
+  - name: medium
+    slack_configs:
+      - channel: '#trading-ops'
+        title: '⚡ MEDIUM: {{ .CommonLabels.alertname }}'
+        text: '{{ .CommonAnnotations.summary }}'
+        send_resolved: false
+
+  - name: silence

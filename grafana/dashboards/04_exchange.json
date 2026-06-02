@@ -1,0 +1,114 @@
+{
+  "description": "Exchange Dashboard: Binance, Delta, AngelOne — connectivity, latency, throughput, funding",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "mappings": [
+        {"options":{"0":{"color":"red","index":0,"text":"DISCONNECTED"},"1":{"color":"green","index":1,"text":"CONNECTED"}},"type":"value"}
+      ], "color": {"mode":"thresholds"}, "thresholds": {"steps":[{"color":"red","value":null},{"color":"green","value":1}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Delta Exchange",
+      "type": "stat",
+      "targets": [{ "expr": "trading_marketdata_exchange_connected{exchange='delta'}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "mappings": [
+        {"options":{"0":{"color":"red","index":0,"text":"DISCONNECTED"},"1":{"color":"green","index":1,"text":"CONNECTED"}},"type":"value"}
+      ], "color": {"mode":"thresholds"}, "thresholds": {"steps":[{"color":"red","value":null},{"color":"green","value":1}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Binance",
+      "type": "stat",
+      "targets": [{ "expr": "trading_marketdata_exchange_connected{exchange='binance'}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "mappings": [
+        {"options":{"0":{"color":"red","index":0,"text":"DISCONNECTED"},"1":{"color":"green","index":1,"text":"CONNECTED"}},"type":"value"}
+      ], "color": {"mode":"thresholds"}, "thresholds": {"steps":[{"color":"red","value":null},{"color":"green","value":1}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "AngelOne",
+      "type": "stat",
+      "targets": [{ "expr": "trading_marketdata_exchange_connected{exchange='angelone'}", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 4, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Ticks/sec",
+      "type": "stat",
+      "targets": [{ "expr": "sum(trading_marketdata_throughput_tps) by (exchange)", "refId": "A", "legendFormat": "{{ exchange }}" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Tick Processing Latency P95 by Exchange",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(trading_marketdata_tick_processing_latency_ms_bucket[5m]))", "refId": "A", "legendFormat": "{{ exchange }} {{ symbol }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "Dropped Ticks by Exchange",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_marketdata_ticks_dropped_total[5m])", "refId": "A", "legendFormat": "{{ exchange }} {{ reason }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 7,
+      "title": "Reconnect Events",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "increase(trading_marketdata_reconnects_total[5m])", "refId": "A", "legendFormat": "{{ exchange }} {{ result }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 8,
+      "title": "Daily Funding Costs (USD)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "trading_costs_funding_usd_daily", "refId": "A", "legendFormat": "{{ exchange }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bps", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "id": 9,
+      "title": "Execution Slippage (bps) — P50 / P95 / P99",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(trading_execution_slippage_bps_bucket[5m]))", "refId": "A", "legendFormat": "P50 {{ exchange }}" },
+        { "expr": "histogram_quantile(0.95, rate(trading_execution_slippage_bps_bucket[5m]))", "refId": "B", "legendFormat": "P95 {{ exchange }}" },
+        { "expr": "histogram_quantile(0.99, rate(trading_execution_slippage_bps_bucket[5m]))", "refId": "C", "legendFormat": "P99 {{ exchange }}" }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["trading", "exchange"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "UTC",
+  "title": "04 — Exchange Dashboard",
+  "uid": "trading-exchange",
+  "version": 1
+}

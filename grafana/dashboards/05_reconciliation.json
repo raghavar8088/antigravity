@@ -1,0 +1,121 @@
+{
+  "description": "Reconciliation Authority: drift, repairs, ghost positions, missing fills, authority status",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":20},{"color":"red","value":50}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Drift Score (all exchanges)",
+      "type": "stat",
+      "targets": [{ "expr": "max(recon_v2_drift_score)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"red","value":1}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Ghost Positions",
+      "type": "stat",
+      "targets": [{ "expr": "sum(recon_v2_position_drift_count{type='ghost'})", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"red","value":1}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Missing Fills",
+      "type": "stat",
+      "targets": [{ "expr": "sum(recon_v2_fill_drift_count{type='missing'})", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"red","value":null},{"color":"green","value":1}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Exchange Authority Status",
+      "type": "stat",
+      "targets": [{ "expr": "min(recon_v2_exchange_healthy)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Drift Score Over Time",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "recon_v2_drift_score", "refId": "A", "legendFormat": "{{ exchange }} {{ domain }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "Mismatches by Severity",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "recon_v2_mismatch_count", "refId": "A", "legendFormat": "{{ exchange }} {{ domain }} {{ severity }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 7,
+      "title": "Automatic Repairs",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(recon_v2_repairs_total[10m])", "refId": "A", "legendFormat": "{{ exchange }} {{ repair_type }} ({{ success }})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 8,
+      "title": "Reconciliation Cycle Duration",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(recon_v2_cycle_duration_ms_bucket[10m]))", "refId": "A", "legendFormat": "P95 {{ exchange }} {{ domain }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "id": 9,
+      "title": "Balance Drift %",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "recon_v2_balance_drift_pct", "refId": "A", "legendFormat": "{{ exchange }} {{ metric }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "id": 10,
+      "title": "Escalations to Manual Intervention",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(recon_v2_escalations_total[10m])", "refId": "A", "legendFormat": "{{ exchange }} {{ severity }}" }
+      ]
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 38,
+  "tags": ["trading", "reconciliation"],
+  "time": { "from": "now-3h", "to": "now" },
+  "timezone": "UTC",
+  "title": "05 — Reconciliation Dashboard",
+  "uid": "trading-reconciliation",
+  "version": 1
+}

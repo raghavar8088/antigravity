@@ -1,0 +1,110 @@
+{
+  "description": "Security Dashboard: auth failures, JWT errors, RBAC violations, rate limits, security incidents",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":20}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Auth Failures / 5m",
+      "type": "stat",
+      "targets": [{ "expr": "increase(trading_security_auth_attempts_total{result='failure'}[5m])", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":3},{"color":"red","value":10}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "JWT Errors / 5m",
+      "type": "stat",
+      "targets": [{ "expr": "increase(trading_security_jwt_errors_total[5m])", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":1},{"color":"red","value":5}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "RBAC Denials / 5m",
+      "type": "stat",
+      "targets": [{ "expr": "increase(trading_security_rbac_denials_total[5m])", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"red","value":1}]} }},
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Critical Security Incidents",
+      "type": "stat",
+      "targets": [{ "expr": "increase(trading_security_incidents_total{severity='CRITICAL'}[1h])", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "title": "Auth Attempts: Success vs Failure",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_security_auth_attempts_total[5m])", "refId": "A", "legendFormat": "{{ method }} {{ result }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "title": "JWT Errors by Type",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_security_jwt_errors_total[5m])", "refId": "A", "legendFormat": "{{ error_type }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 7,
+      "title": "RBAC Denials by Resource & Role",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_security_rbac_denials_total[5m])", "refId": "A", "legendFormat": "{{ resource }} ({{ role }})" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 8,
+      "title": "Rate Limit Hits by Endpoint",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_security_rate_limit_hits_total[5m])", "refId": "A", "legendFormat": "{{ endpoint }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "id": 9,
+      "title": "Security Incidents by Severity",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(trading_security_incidents_total[10m])", "refId": "A", "legendFormat": "{{ severity }} {{ incident_type }}" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["trading", "security"],
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "UTC",
+  "title": "07 — Security Dashboard",
+  "uid": "trading-security",
+  "version": 1
+}

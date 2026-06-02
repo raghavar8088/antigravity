@@ -1,0 +1,73 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: production
+    system: trading-engine
+
+# Alert rules
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+  - /etc/prometheus/db_alerts.yml
+
+# AlertManager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+      timeout: 5s
+
+# Scrape targets
+scrape_configs:
+
+  # ─────────────────────────────────────────────
+  # Trading Engine (Go) — primary metrics source
+  # Port 8080 (local) or 10000 (Render)
+  # ─────────────────────────────────────────────
+  - job_name: trading_engine
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          service: trading-engine
+          env: local
+    metrics_path: /metrics
+    scrape_interval: 5s
+
+  # Render production endpoint
+  - job_name: trading_engine_render
+    static_configs:
+      - targets: ["host.docker.internal:10000"]
+        labels:
+          service: trading-engine
+          env: render
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  # ─────────────────────────────────────────────
+  # Prometheus self-monitoring
+  # ─────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ─────────────────────────────────────────────
+  # AlertManager self-monitoring
+  # ─────────────────────────────────────────────
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  # ─────────────────────────────────────────────
+  # Grafana
+  # ─────────────────────────────────────────────
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+
+  # ─────────────────────────────────────────────
+  # Loki
+  # ─────────────────────────────────────────────
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+    metrics_path: /metrics

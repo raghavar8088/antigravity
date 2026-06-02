@@ -1,0 +1,133 @@
+version: "3.9"
+
+# Phase 15H — Institutional Observability Stack
+# Services: Prometheus, AlertManager, Grafana, Loki, Promtail
+#
+# Usage:
+#   docker-compose up -d
+#   Grafana: http://localhost:3001  (admin / $GRAFANA_ADMIN_PASSWORD)
+#   Prometheus: http://localhost:9090
+#   AlertManager: http://localhost:9093
+#   Loki: http://localhost:3100
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+  loki_data:
+
+services:
+
+  # ─────────────────────────────────────────────
+  # Prometheus — Metrics collection
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: trading_prometheus
+    restart: unless-stopped
+    networks: [observability]
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../engine/alerts/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ../infrastructure/database/monitoring/prometheus-database-alerts.yml:/etc/prometheus/db_alerts.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.enable-admin-api'
+      - '--web.enable-lifecycle'
+      - '--query.max-concurrency=20'
+    labels:
+      com.trading.scrape: "true"
+      com.trading.service: "prometheus"
+
+  # ─────────────────────────────────────────────
+  # AlertManager — Alert routing and notifications
+  # ─────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: trading_alertmanager
+    restart: unless-stopped
+    networks: [observability]
+    ports:
+      - "9093:9093"
+    volumes:
+      - alertmanager_data:/alertmanager
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--cluster.advertise-address=0.0.0.0:9093'
+    labels:
+      com.trading.scrape: "true"
+      com.trading.service: "alertmanager"
+
+  # ─────────────────────────────────────────────
+  # Grafana — Dashboards
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: trading_grafana
+    restart: unless-stopped
+    networks: [observability]
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/etc/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ALERTING_ENABLED: "true"
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_LOG_LEVEL: warn
+      GF_FEATURE_TOGGLES_ENABLE: "publicDashboards"
+    depends_on: [prometheus, loki]
+    labels:
+      com.trading.scrape: "true"
+      com.trading.service: "grafana"
+
+  # ─────────────────────────────────────────────
+  # Loki — Log aggregation
+  # ─────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: trading_loki
+    restart: unless-stopped
+    networks: [observability]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ../infrastructure/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+    labels:
+      com.trading.scrape: "true"
+      com.trading.service: "loki"
+
+  # ─────────────────────────────────────────────
+  # Promtail — Log shipper
+  # ─────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: trading_promtail
+    restart: unless-stopped
+    networks: [observability]
+    volumes:
+      - ../infrastructure/loki/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on: [loki]

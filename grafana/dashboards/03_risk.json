@@ -1,0 +1,122 @@
+{
+  "description": "Risk Dashboard: VaR, CVaR, Exposure, Concentration, Correlation, Risk Violations",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":1.5},{"color":"red","value":2.5}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "VaR 95 (%)",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_var_95_pct)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":2},{"color":"red","value":3}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "VaR 99 (%)",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_var_99_pct)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":3},{"color":"red","value":8}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Drawdown %",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_drawdown_pct)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":1.5},{"color":"red","value":2.5}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "id": 4, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Daily Loss %",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_daily_loss_pct)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":50},{"color":"red","value":70}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "id": 5, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Concentration Score",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_concentration_score)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": {"steps":[{"color":"green","value":null},{"color":"yellow","value":0.6},{"color":"red","value":0.8}]} }},
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "id": 6, "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "title": "Max Correlation",
+      "type": "stat",
+      "targets": [{ "expr": "max(riskv3_max_pairwise_correlation)", "refId": "A" }]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "id": 7,
+      "title": "VaR & CVaR Over Time",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "riskv3_var_95_pct", "refId": "A", "legendFormat": "VaR95 {{ account_id }}" },
+        { "expr": "riskv3_var_99_pct", "refId": "B", "legendFormat": "VaR99 {{ account_id }}" },
+        { "expr": "riskv3_cvar_95_pct", "refId": "C", "legendFormat": "CVaR95 {{ account_id }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "id": 8,
+      "title": "Risk Checks: Approved vs Blocked",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(riskv3_risk_checks_total{status='approved'}[5m])", "refId": "A", "legendFormat": "Approved" },
+        { "expr": "rate(riskv3_risk_checks_total{status='blocked'}[5m])", "refId": "B", "legendFormat": "Blocked" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "id": 9,
+      "title": "Risk Violations by Type",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "rate(riskv3_violations_total[10m])", "refId": "A", "legendFormat": "{{ violation_type }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "id": 10,
+      "title": "Risk Utilisation %",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "trading_strategy_perf_risk_utilisation_pct", "refId": "A", "legendFormat": "{{ account }}" }
+      ]
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 38,
+  "tags": ["trading", "risk"],
+  "time": { "from": "now-3h", "to": "now" },
+  "timezone": "UTC",
+  "title": "03 — Risk Dashboard",
+  "uid": "trading-risk",
+  "version": 1
+}

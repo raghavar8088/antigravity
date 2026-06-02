@@ -1,0 +1,171 @@
+give me single promt for the ai agent ,
+ you have to ask my ai agent about the application ,
+  so it will give the answer , i will paste back 
+  here , so you will undarstand about my application 
+  and the articulture and the code base 
+  functionality end to end so we can upgrade
+   my application
+
+
+
+   -----------------------------------
+
+   reframed promt
+   -----------
+
+   I want you to act as the Lead Architect, Senior Developer, DevOps Engineer, Quant Engineer, Security Auditor, and Product Owner for this application.
+
+Perform a complete end-to-end audit of the entire project and provide a detailed report covering everything needed for another AI system to fully understand the application.
+
+Generate a comprehensive document containing:
+
+1. Executive Summary
+
+   * What the application does
+   * Main purpose and business objectives
+   * Target users
+   * Current development status
+
+2. System Architecture
+
+   * High-level architecture diagram (text format)
+   * Frontend architecture
+   * Backend architecture
+   * Database architecture
+   * Infrastructure architecture
+   * Data flow between all components
+
+3. Technology Stack
+
+   * Frontend technologies
+   * Backend technologies
+   * Databases
+   * Messaging systems
+   * AI/ML components
+   * Cloud services
+   * DevOps tools
+   * Monitoring tools
+   * Security tools
+
+4. Project Structure
+
+   * Complete folder structure
+   * Purpose of each major directory
+   * Purpose of each major file
+   * Critical entry points
+
+5. Core Features
+
+   * List all implemented features
+   * Explain how each feature works
+   * Dependencies between features
+   * Feature maturity level
+
+6. Trading/Business Logic
+
+   * Strategies implemented
+   * Signal generation flow
+   * Order management flow
+   * Risk management flow
+   * Portfolio management flow
+   * Position sizing logic
+   * AI components and responsibilities
+
+7. Database Analysis
+
+   * All tables
+   * Schemas
+   * Relationships
+   * Indexes
+   * Data retention policies
+   * Migration system
+
+8. APIs
+
+   * Internal APIs
+   * External APIs
+   * WebSocket services
+   * Authentication methods
+   * Request/response examples
+
+9. Security Assessment
+
+   * Authentication
+   * Authorization
+   * Secrets management
+   * Encryption
+   * Vulnerabilities found
+   * Security maturity score (1-10)
+
+10. Infrastructure & Deployment
+
+    * Deployment architecture
+    * CI/CD pipelines
+    * Containers
+    * Kubernetes usage
+    * Environment management
+    * Scaling strategy
+    * Disaster recovery
+
+11. Observability
+
+    * Logging system
+    * Metrics collection
+    * Monitoring
+    * Alerting
+    * Dashboards
+
+12. Performance Analysis
+
+    * Bottlenecks
+    * Latency-sensitive components
+    * Scalability limits
+    * Optimization opportunities
+
+13. Code Quality Assessment
+
+    * Design patterns used
+    * Technical debt
+    * Code smells
+    * Refactoring opportunities
+    * Test coverage
+
+14. Current Development Roadmap
+
+    * Completed phases
+    * Partially completed phases
+    * Missing components
+    * Known limitations
+
+15. Upgrade Recommendations
+
+    * Highest priority improvements
+    * Medium priority improvements
+    * Low priority improvements
+    * Estimated implementation complexity
+
+16. Readiness Scores (1-10)
+
+    * Architecture
+    * Security
+    * Scalability
+    * Reliability
+    * Risk Management
+    * Observability
+    * Performance
+    * Maintainability
+    * Production Readiness
+
+17. AI Handover Report
+    Create a complete technical briefing that would allow another AI system to immediately understand:
+
+    * The application
+    * The architecture
+    * The codebase
+    * The business logic
+    * The trading engine
+    * The risk engine
+    * The deployment model
+    * The upgrade path
+
+Output the report in a highly detailed, structured format with code examples, diagrams, tables, and implementation details wherever applicable. Assume the report will be used by another AI architect to design and implement future upgrades.
