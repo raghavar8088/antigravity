@@ -5,8 +5,7 @@ import (
 	"strings"
 )
 
-// buildExpansionPack adds 301 unique strategies so the curated runtime pack
-// reaches a clean total of 600 strategies.
+// buildExpansionPack adds 301 unique strategies to the curated runtime pack.
 func buildExpansionPack() []RegistryEntry {
 	entries := make([]RegistryEntry, 0, 301)
 	appendEntry := func(s Strategy, category, timeframe string) {

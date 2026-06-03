@@ -33,7 +33,7 @@ const (
 	// account can be replayed together via ledger.Store.ReplayAccount.
 	btcPaperAccountID = "btc-paper-1"
 
-	minExecutableConfidence     = 0.82 // Require higher-quality signals in live execution
+	minExecutableConfidence     = 0.74 // Phase 22A: avoid starving cold-start alpha before risk review
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
 	minRewardToRiskRatio        = 2.40 // Stronger edge requirement for scalping signals
 	minSignalTakeProfitPct      = 0.50 // Wider TP — avoid noise-driven exits
@@ -914,6 +914,8 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		// Position limit check: prevent stacking too many positions per strategy
 		if !o.posMgr.CanOpenPosition(aggSig.StrategyName) {
 			log.Printf("[POSITION LIMIT] %s already at max positions — skipping", aggSig.StrategyName)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "position_limit", aggSig.Category)
 			continue
 		}
 
@@ -925,8 +927,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		if !isCategoryAlignedWithRegime(aggSig.Category, regime) {
 			log.Printf("[REGIME FILTER] %s skipped in %s regime (%s category)",
 				aggSig.StrategyName, regime, aggSig.Category)
+			o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageRegimeFilter, "category_not_aligned_with_regime", aggSig.Category)
 			continue
 		}
+		o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 1)
 
 		// Enforce a fixed 1% capital budget per trade for the futures engine.
 		originalSize := sig.TargetSize
@@ -938,14 +943,19 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		if executionWeight < minExecutionWeightToTrade {
 			log.Printf("[QUALITY FILTER] %s skipped due to weak execution weight %.2f",
 				aggSig.StrategyName, executionWeight)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecutionWeightFilter, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecutionWeightFilter, "execution_weight_below_floor", aggSig.Category)
 			continue
 		}
+		o.aggregator.RecordSignalFlowStage(SignalStageExecutionWeightFilter, 1, 1)
 		sig.TargetSize = baseSize
 		sig.Confidence = adjustConfidenceByExecutionWeight(sig.Confidence, executionWeight)
 
 		if sig.TargetSize < minExecutionSizeBTC {
 			log.Printf("[SIZE ENGINE] %s size too small after scaling (%.6f BTC) — skipping",
 				aggSig.StrategyName, sig.TargetSize)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "size_below_minimum", aggSig.Category)
 			continue
 		}
 
@@ -960,8 +970,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		if !allowed {
 			log.Printf("[PROFIT FILTER] %s dropped: %s",
 				aggSig.StrategyName, sanitizeReason)
+			o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageConfidenceFilter, sanitizeReason, aggSig.Category)
 			continue
 		}
+		o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 1)
 		sig = sanitizedSig
 		if sig.StopLossPct != baseStopLossPct || sig.TakeProfitPct != baseTakeProfitPct {
 			log.Printf("[PROFIT FILTER] %s adjusted SL/TP %.2f%%/%.2f%% -> %.2f%%/%.2f%%",
@@ -971,8 +984,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
+			o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageRiskFilter, err.Error(), aggSig.Category)
 			continue
 		}
+		o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 1)
 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
 
@@ -1027,6 +1043,8 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 			log.Printf("[COMMAND CENTER] 🛰️  Signal Parked: %s %s [%s] -> Bridge online, waiting for UI",
 				aggSig.StrategyName, sig.Action, pendingID)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "parked_for_command_center_bridge", aggSig.Category)
 			continue
 		}
 
@@ -1042,8 +1060,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		fill, err := o.executeThroughInstitutionalPath(ctx, sig, aggSig.StrategyName, currentPrice, orderMode)
 		if err != nil {
 			log.Printf("[EXECUTION FAILED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, err.Error(), aggSig.Category)
 			continue
 		}
+		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
 		execPrice := fill.ExecPrice
 
 		// Notify risk engine

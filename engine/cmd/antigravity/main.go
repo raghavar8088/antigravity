@@ -409,14 +409,15 @@ func main() {
 	}()
 
 	// ═══════════════════════════════════════════════════
-	// 2. Build curated strategies (BTC Equity roster capped at 30)
+	// 2. Build curated strategies (full BTC Equity roster; no silent truncation)
 	// ═══════════════════════════════════════════════════
-	const btcEquityStrategyCount = 30
+	const btcEquityStrategyCapacity = 600
 	allStrategies := strategy.BuildCuratedScalpers()
-	if len(allStrategies) > btcEquityStrategyCount {
-		allStrategies = allStrategies[:btcEquityStrategyCount]
+	if len(allStrategies) > btcEquityStrategyCapacity {
+		log.Printf("[INIT] Loaded %d curated live strategies (capacity %d exceeded; no truncation applied)", len(allStrategies), btcEquityStrategyCapacity)
+	} else {
+		log.Printf("[INIT] Loaded %d curated live strategies (capacity %d; no truncation applied)", len(allStrategies), btcEquityStrategyCapacity)
 	}
-	log.Printf("[INIT] Loaded %d curated live strategies (cap %d)", len(allStrategies), btcEquityStrategyCount)
 
 	// Extract names, categories, timeframes for tracker
 	names := make([]string, len(allStrategies))

@@ -1,6 +1,6 @@
 package strategy
 
-// BuildCuratedScalpers returns the full 600-strategy live pack across scalping and intraday.
+// BuildCuratedScalpers returns the full curated live pack across scalping and intraday.
 // The signal aggregator's selective filter and priority scoring determine which
 // signals are ultimately forwarded for execution each cycle.
 func BuildCuratedScalpers() []RegistryEntry {

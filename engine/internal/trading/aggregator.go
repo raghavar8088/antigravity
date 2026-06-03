@@ -32,12 +32,14 @@ type SignalAggregator struct {
 	// Stats tracking for logging
 	totalSignals    int64
 	filteredSignals int64
+	flowMetrics     *SignalFlowMetrics
 }
 
 func NewSignalAggregator(cooldownSeconds int) *SignalAggregator {
 	return &SignalAggregator{
 		cooldownSec: cooldownSeconds,
 		lastSignal:  make(map[string]time.Time),
+		flowMetrics: NewSignalFlowMetrics(),
 	}
 }
 
@@ -86,4 +88,25 @@ func (a *SignalAggregator) GetStats() (total int64, filtered int64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.totalSignals, a.filteredSignals
+}
+
+func (a *SignalAggregator) RecordSignalFlowStage(stage string, input, output int) {
+	if a == nil || a.flowMetrics == nil {
+		return
+	}
+	a.flowMetrics.RecordStage(stage, input, output)
+}
+
+func (a *SignalAggregator) RecordSignalFlowRejection(stage, reason, category string) {
+	if a == nil || a.flowMetrics == nil {
+		return
+	}
+	a.flowMetrics.RecordRejection(stage, reason, category)
+}
+
+func (a *SignalAggregator) GetSignalFlowSnapshot() SignalFlowSnapshot {
+	if a == nil || a.flowMetrics == nil {
+		return SignalFlowSnapshot{}
+	}
+	return a.flowMetrics.Snapshot()
 }

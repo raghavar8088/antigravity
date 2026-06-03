@@ -21,6 +21,18 @@ func TestSanitizeSignalForProfitRejectsLowConfidence(t *testing.T) {
 	}
 }
 
+func TestSanitizeSignalForProfitAllowsPhase22AConfidenceFloor(t *testing.T) {
+	_, _, allowed := sanitizeSignalForProfit(strategy.Signal{
+		Confidence:    minExecutableConfidence,
+		StopLossPct:   0.30,
+		TakeProfitPct: 0.80,
+	})
+
+	if !allowed {
+		t.Fatal("expected Phase 22A confidence floor to be executable")
+	}
+}
+
 func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
 	sanitized, _, allowed := sanitizeSignalForProfit(strategy.Signal{
 		Confidence: 1.0,

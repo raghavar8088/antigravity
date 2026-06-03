@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	// Tuned for a safer live portfolio: bias toward strong consensus and reduce
-	// fast, noisy scalping entries that rarely achieve durable edge.
-	minSelectiveScore  = 1.30 // Higher bar for batch approval
-	minDominanceRatio  = 1.25 // Require clearer directional dominance in the signal pool
-	minDominanceLead   = 0.18
-	maxApprovedSignals = 2 // Only execute the top 2 setups each batch
+	// Phase 22A keeps consensus and ranking, but removes the starvation settings
+	// that blocked cold-start curated/expansion strategies before risk review.
+	minSelectiveScore      = 1.10
+	minDominanceRatio      = 1.10
+	minDominanceLead       = 0.18
+	maxApprovedSignals     = 8
+	maxApprovedPerCategory = 2
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and
@@ -24,6 +25,8 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 	defer a.mu.Unlock()
 
 	now := time.Now()
+	a.RecordSignalFlowStage(SignalStageGenerated, len(rawSignals), len(rawSignals))
+
 	eligible := make([]AggregatedSignal, 0, len(rawSignals))
 	sideScore := map[strategy.Action]float64{
 		strategy.ActionBuy:  0,
@@ -33,6 +36,7 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 	for _, sig := range rawSignals {
 		a.totalSignals++
 		if sig.Signal.Action == strategy.ActionHold {
+			a.RecordSignalFlowRejection(SignalStageGenerated, "hold_signal", sig.Category)
 			continue
 		}
 
@@ -40,6 +44,7 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 			elapsed := now.Sub(lastFired)
 			if elapsed < time.Duration(a.cooldownSec)*time.Second {
 				a.filteredSignals++
+				a.RecordSignalFlowRejection(SignalStageCooldownFilter, "strategy_cooldown", sig.Category)
 				continue
 			}
 		}
@@ -48,8 +53,10 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 		sideScore[sig.Signal.Action] += score
 		eligible = append(eligible, sig)
 	}
+	a.RecordSignalFlowStage(SignalStageCooldownFilter, len(rawSignals), len(eligible))
 
 	if len(eligible) == 0 {
+		a.RecordSignalFlowStage(SignalStageAggregator, len(rawSignals), 0)
 		return nil
 	}
 
@@ -64,6 +71,11 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 
 	if opposingScore > 0 && (dominantScore < opposingScore*minDominanceRatio || dominantScore-opposingScore < minDominanceLead) {
 		a.filteredSignals += int64(len(eligible))
+		a.RecordSignalFlowStage(SignalStageDominanceFilter, len(eligible), 0)
+		for _, sig := range eligible {
+			a.RecordSignalFlowRejection(SignalStageDominanceFilter, "weak_directional_consensus", sig.Category)
+		}
+		a.RecordSignalFlowStage(SignalStageAggregator, len(rawSignals), 0)
 		log.Printf("[AGGREGATOR] SKIPPED batch: weak consensus | buyScore=%.2f sellScore=%.2f", sideScore[strategy.ActionBuy], sideScore[strategy.ActionSell])
 		return nil
 	}
@@ -73,34 +85,56 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 	})
 
 	var approved []AggregatedSignal
-	usedCategories := make(map[string]struct{})
+	categoryCounts := make(map[string]int)
+	dominanceOut := 0
+	scoreIn := 0
+	scoreOut := 0
+	categoryIn := 0
+	categoryOut := 0
+	throughputIn := 0
 	for _, sig := range eligible {
 		score := strategyPriority(sig)
 		if sig.Signal.Action != dominantAction {
 			a.filteredSignals++
+			a.RecordSignalFlowRejection(SignalStageDominanceFilter, "non_dominant_side", sig.Category)
 			continue
 		}
+		dominanceOut++
+		scoreIn++
 		if score < minSelectiveScore {
 			a.filteredSignals++
+			a.RecordSignalFlowRejection(SignalStageScoreFilter, "score_below_selective_floor", sig.Category)
 			continue
 		}
-		if _, exists := usedCategories[sig.Category]; exists {
+		scoreOut++
+		categoryIn++
+		if categoryCounts[sig.Category] >= maxApprovedPerCategory {
 			a.filteredSignals++
+			a.RecordSignalFlowRejection(SignalStageCategoryDeduplication, "category_batch_cap", sig.Category)
 			continue
 		}
+		categoryOut++
+		throughputIn++
 		if len(approved) >= maxApprovedSignals {
 			a.filteredSignals++
+			a.RecordSignalFlowRejection(SignalStageThroughputCap, "batch_approval_cap", sig.Category)
 			continue
 		}
 
 		sig.FiredAt = now
 		a.lastSignal[sig.StrategyName] = now
-		usedCategories[sig.Category] = struct{}{}
+		categoryCounts[sig.Category]++
 		approved = append(approved, sig)
 
 		log.Printf("[AGGREGATOR] APPROVED: %s -> %s %.4f %s | score=%.2f",
 			sig.StrategyName, sig.Signal.Action, sig.Signal.TargetSize, sig.Signal.Symbol, score)
 	}
+
+	a.RecordSignalFlowStage(SignalStageDominanceFilter, len(eligible), dominanceOut)
+	a.RecordSignalFlowStage(SignalStageScoreFilter, scoreIn, scoreOut)
+	a.RecordSignalFlowStage(SignalStageCategoryDeduplication, categoryIn, categoryOut)
+	a.RecordSignalFlowStage(SignalStageThroughputCap, throughputIn, len(approved))
+	a.RecordSignalFlowStage(SignalStageAggregator, len(rawSignals), len(approved))
 
 	return approved
 }
