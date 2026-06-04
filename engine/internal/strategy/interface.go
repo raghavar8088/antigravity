@@ -1,6 +1,10 @@
 package strategy
 
-import "antigravity-engine/internal/marketdata"
+import (
+	"time"
+
+	"antigravity-engine/internal/marketdata"
+)
 
 // Action represents the signal output by our analytical models.
 type Action string
@@ -19,10 +23,15 @@ type Signal struct {
 	Confidence    float64 `json:"confidence"`
 	StopLossPct   float64 `json:"stopLossPct"`
 	TakeProfitPct float64 `json:"takeProfitPct"`
-	
+
+	// Execution provenance — stamped by the trading orchestrator at signal collection time.
+	// Used for timeframe-aware expiry and latency attribution.
+	CreatedAt time.Time `json:"createdAt"`
+	Timeframe string    `json:"timeframe"` // "tick" | "1m" | "5m" | "15m" | "1h"
+
 	// AI Attribution fields — populated by the Supreme Court
-	AIDecisionID string `json:"aiDecisionId"` // Which AI approved this? (openai, groq, etc)
-	AIReasoning  string `json:"aiReasoning"`  // Short snippet of the AI's reason
+	AIDecisionID string `json:"aiDecisionId"`
+	AIReasoning  string `json:"aiReasoning"`
 }
 
 // Strategy represents the absolute core of RAIG intelligence.

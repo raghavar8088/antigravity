@@ -1,4 +1,4 @@
-package trading
+﻿package trading
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/omsv3"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
@@ -49,6 +50,26 @@ const (
 	marketRegimeVolatile = "VOLATILE"
 	marketRegimeMixed    = "MIXED"
 )
+
+// signalMaxAge returns the maximum age a signal may reach before execution is
+// skipped.  Signals older than their timeframe's expiry window are stale — the
+// market has moved and the entry thesis no longer applies.
+func signalMaxAge(timeframe string) time.Duration {
+	switch timeframe {
+	case "1m":
+		return 90 * time.Second
+	case "3m":
+		return 4 * time.Minute
+	case "5m":
+		return 7 * time.Minute
+	case "15m":
+		return 20 * time.Minute
+	case "1h":
+		return 75 * time.Minute
+	default: // "tick" or unset
+		return 500 * time.Millisecond
+	}
+}
 
 // Orchestrator is the multi-strategy parallel trading engine.
 // It correctly separates tick-based strategies from candle-based strategies,
@@ -246,18 +267,8 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 			Confidence:        sig.Confidence,
 			Exchange:          "paper",
 		},
-		Market: riskv2.MarketState{Regime: riskv2.RegimeUnknown, LiquidityScore: 0.65},
-		Metrics: riskv2.StrategyMetrics{
-			Strategy:         strategyName,
-			Family:           riskv2.FamilyReserve,
-			WinRate:          0.5,
-			ProfitFactor:     1.2,
-			Sharpe:           1.2,
-			OOSProfitFactor:  1.1,
-			OOSExpectancyUSD: 1,
-			HealthScore:      70,
-			TotalTrades:      30,
-		},
+		Market:  riskv2.MarketState{Regime: riskv2.RegimeUnknown, LiquidityScore: 0.65},
+		Metrics: o.tracker.BuildRiskMetrics(strategyName),
 	})
 	if riskDecision.Status == riskgate.DecisionBlocked {
 		event, newEventErr := ledger.NewEvent(ledger.NewEventInput{
@@ -273,6 +284,13 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 			_, _ = store.Append(ctx, event)
 		}
 		return execution.FillResult{}, riskDecision.Error()
+	}
+	// Apply the risk engine's Kelly + dynamic-sizing recommended size.
+	// This is the critical wire that connects real performance metrics →
+	// Kelly fraction → actual trade size. Winners get more capital; losers get less.
+	if rec := riskDecision.RiskDecision.RecommendedSizeBTC; rec >= minExecutionSizeBTC {
+		sig.TargetSize = rec
+		orderPayload.Quantity = rec
 	}
 	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
 		return execution.FillResult{}, err
@@ -562,7 +580,7 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	if len(o.groups.Tick) == 0 {
 		return
 	}
-	o.processStrategyGroup(ctx, o.groups.Tick, t)
+	o.processStrategyGroup(ctx, o.groups.Tick, t, "tick")
 }
 
 // process1mCandles listens for closed 1-minute candles and runs all 1m strategies.
@@ -575,7 +593,7 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
-			o.processStrategyGroup(ctx, o.groups.M1, tick)
+			o.processStrategyGroup(ctx, o.groups.M1, tick, "1m")
 		}
 	}
 }
@@ -590,14 +608,14 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
-			o.processStrategyGroup(ctx, o.groups.M5, tick)
+			o.processStrategyGroup(ctx, o.groups.M5, tick, "5m")
 
 			// Simulate 15m candle: run 15m strategies every 3rd 5m candle.
 			o.m15Counter++
 			if o.m15Counter >= 3 {
 				o.m15Counter = 0
 				log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
-				o.processStrategyGroup(ctx, o.groups.M15, tick)
+				o.processStrategyGroup(ctx, o.groups.M15, tick, "15m")
 			}
 
 			// Simulate 1h candle: run 1h strategies every 12th 5m candle
@@ -605,7 +623,7 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			if o.h1Counter >= 12 {
 				o.h1Counter = 0
 				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
-				o.processStrategyGroup(ctx, o.groups.H1, tick)
+				o.processStrategyGroup(ctx, o.groups.H1, tick, "1h")
 			}
 
 			// Record candle in history for AI context
@@ -848,7 +866,16 @@ func truncate(s string, n int) string {
 
 // processStrategyGroup runs a group of strategies against a tick/candle and
 // processes any resulting signals through aggregation, risk, and execution.
-func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strategy.RegistryEntry, t marketdata.Tick) {
+func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strategy.RegistryEntry, t marketdata.Tick, timeframe string) {
+	// Anchor pipeline timer at tick arrival; use exchange timestamp when available.
+	tickAt := time.Now()
+	if t.TimeMs > 0 {
+		tickAt = time.UnixMilli(t.TimeMs)
+	}
+	pt := observability.NewPipelineTimerAt("paper", t.Symbol, tickAt)
+	ctx = observability.WithPipelineTimer(ctx, pt)
+	stageStart := tickAt
+
 	var wg sync.WaitGroup
 	var sigMu sync.Mutex
 	var rawSignals []AggregatedSignal
@@ -877,10 +904,14 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				}
 			}
 
+			now := time.Now()
 			for _, sig := range signals {
 				if sig.Action == strategy.ActionHold {
 					continue
 				}
+				// Stamp provenance for expiry gating and latency attribution.
+				sig.CreatedAt = now
+				sig.Timeframe = timeframe
 				sigMu.Lock()
 				rawSignals = append(rawSignals, AggregatedSignal{
 					Signal:          sig,
@@ -897,6 +928,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 	}
 	wg.Wait()
 
+	// Stage 1: Tick → Strategy evaluation complete.
+	stageStart = observability.RecordPipelineStage(ctx, observability.StageTickToStrategy, stageStart)
+
 	// Aggregate and filter signals
 	if len(rawSignals) == 0 {
 		return
@@ -908,8 +942,25 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 	for _, aggSig := range approved {
 		sig := aggSig.Signal
 
+		// Stage 2: Strategy → Risk gate entry.
+		stageStart = observability.RecordPipelineStage(ctx, observability.StageStrategyToRisk, stageStart)
+
 		// Record signal in tracker
 		o.tracker.RecordSignal(aggSig.StrategyName)
+
+		// ── Stale signal guard ─────────────────────────────────────────────
+		// Reject signals whose entry thesis expired before reaching execution.
+		signalAge := time.Since(sig.CreatedAt)
+		if sig.CreatedAt.IsZero() {
+			sig.CreatedAt = time.Now()
+		}
+		if maxAge := signalMaxAge(sig.Timeframe); signalAge > maxAge {
+			log.Printf("[STALE SIGNAL] %s dropped: age %v > %s max %v",
+				aggSig.StrategyName, signalAge.Round(time.Millisecond), sig.Timeframe, maxAge)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "stale_signal_expired", aggSig.Category)
+			continue
+		}
 
 		// Position limit check: prevent stacking too many positions per strategy
 		if !o.posMgr.CanOpenPosition(aggSig.StrategyName) {
@@ -977,8 +1028,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 1)
 		sig = sanitizedSig
 		if sig.StopLossPct != baseStopLossPct || sig.TakeProfitPct != baseTakeProfitPct {
-			log.Printf("[PROFIT FILTER] %s adjusted SL/TP %.2f%%/%.2f%% -> %.2f%%/%.2f%%",
-				aggSig.StrategyName, baseStopLossPct, baseTakeProfitPct, sig.StopLossPct, sig.TakeProfitPct)
+			log.Printf("[GEOMETRY] %s SL/TP %.2f%%/%.2f%% -> %.2f%%/%.2f%% (R:R %.2f)",
+				aggSig.StrategyName, baseStopLossPct, baseTakeProfitPct,
+				sig.StopLossPct, sig.TakeProfitPct, sig.TakeProfitPct/sig.StopLossPct)
 		}
 
 		err := o.risk.Validate(sig, currentPrice)
@@ -989,6 +1041,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 1)
+
+		// Stage 3: Risk approved → OMS submission.
+		stageStart = observability.RecordPipelineStage(ctx, observability.StageRiskToOMS, stageStart)
 
 		orderMode := execution.RouteModeForCategory(aggSig.Category, regime)
 
@@ -1067,6 +1122,19 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
 		execPrice := fill.ExecPrice
 
+		// Stage 4-6: OMS dispatch → Exchange ack → Fill → Ledger write.
+		stageStart = observability.RecordPipelineStage(ctx, observability.StageOMSToExchange, stageStart)
+		stageStart = observability.RecordPipelineStage(ctx, observability.StageExchangeToFill, stageStart)
+		_ = observability.RecordPipelineStage(ctx, observability.StageFillToLedger, stageStart)
+		pt.Finalise()
+
+		// Measure entry slippage (expected entry = currentPrice; actual = execPrice).
+		if currentPrice > 0 && execPrice > 0 {
+			slippageBps := math.Abs(execPrice-currentPrice) / currentPrice * 10000
+			log.Printf("[SLIPPAGE] %s %s entry slippage %.2f bps (expected $%.2f, filled $%.2f)",
+				aggSig.StrategyName, sig.Timeframe, slippageBps, currentPrice, execPrice)
+		}
+
 		// Notify risk engine
 		o.risk.NotifyFill(sig)
 
@@ -1075,8 +1143,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 		log.Printf("[EXECUTION ROUTE] %s used %s in %s regime", aggSig.StrategyName, fill.OrderMode, regime)
 
-		log.Printf("[✅ TRADE EXECUTED] %s | %s %.4f BTC @ $%.2f | Strategy: %s",
-			sig.Action, sig.Symbol, sig.TargetSize, execPrice, aggSig.StrategyName)
+		log.Printf("[✅ TRADE EXECUTED] %s | %s %.4f BTC @ $%.2f | Strategy: %s | Age: %v",
+			sig.Action, sig.Symbol, sig.TargetSize, execPrice, aggSig.StrategyName,
+			time.Since(sig.CreatedAt).Round(time.Millisecond))
 	}
 }
 
@@ -1529,16 +1598,27 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool
 		adjusted.StopLossPct = maxSignalStopLossPct
 	}
 
-	if adjusted.TakeProfitPct <= 0 {
+	// Whether the strategy explicitly provided a TP. When TP is explicitly set
+	// we honour the strategy's trade geometry and skip R:R inflation — the
+	// strategy's own edge calculation already bakes in the expected return.
+	tpExplicit := adjusted.TakeProfitPct > 0
+
+	if !tpExplicit {
+		// No strategy-defined TP: apply the minimum floor so we always have a
+		// viable exit and a usable R:R baseline.
 		adjusted.TakeProfitPct = minSignalTakeProfitPct
+
+		minTakeProfitByRR := adjusted.StopLossPct * minRewardToRiskRatio
+		if adjusted.TakeProfitPct < minTakeProfitByRR {
+			adjusted.TakeProfitPct = minTakeProfitByRR
+		}
 	}
 
-	minTakeProfitByRR := adjusted.StopLossPct * minRewardToRiskRatio
-	if adjusted.TakeProfitPct < minTakeProfitByRR {
-		adjusted.TakeProfitPct = minTakeProfitByRR
-	}
-	if adjusted.TakeProfitPct < minSignalTakeProfitPct {
-		adjusted.TakeProfitPct = minSignalTakeProfitPct
+	// Always enforce an absolute floor — even on explicit TPs — to avoid
+	// exits so tight that fees erase the entire gain.
+	const absoluteTPFloor = 0.10
+	if adjusted.TakeProfitPct < absoluteTPFloor {
+		adjusted.TakeProfitPct = absoluteTPFloor
 	}
 
 	return adjusted, "", true
@@ -1639,35 +1719,41 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 		// Blocking 100% during warmup was causing zero trades after every restart.
 		return true
 	case marketRegimeMixed:
-		// Mixed is the most common BTC state. Allow the broad set of strategies
-		// that have positive expected value in ambiguous conditions. Previously
-		// this only allowed 4 categories, blocking ~70% of all signals.
+		// Mixed is the most common BTC state. Allow all proven strategy categories
+		// including institutional alpha — all 16 alpha modules are valid in mixed conditions.
 		switch category {
 		case "Multi-Signal", "Trend", "Trend Elite", "Breakout", "Breakout Elite",
 			"Momentum", "Momentum Elite", "Mean Reversion", "Mean Rev Elite", "Statistical",
 			"Volatility", "Volatility Elite", "Time-of-Day", "Price Action",
-			"Price Action Elite", "Adaptive Elite", "Microstructure", "Intraday":
+			"Price Action Elite", "Adaptive Elite", "Microstructure", "Intraday",
+			"Funding", "Liquidity", "Structure", "Smart Money", "Market Profile", "Session",
+			"Phase 11 Liquidity", "Phase 11 Derivatives", "Phase 11 Order Flow",
+			"Phase 11 Liquidations", "Phase 11 Structure", "Phase 11 Smart Money":
 			return true
 		}
 		return false
 	case marketRegimeTrend:
 		switch category {
 		case "Trend", "Trend Elite", "Breakout", "Breakout Elite", "Momentum", "Momentum Elite",
-			"Time-of-Day", "Microstructure", "Multi-Signal", "Price Action", "Price Action Elite", "Intraday":
+			"Time-of-Day", "Microstructure", "Multi-Signal", "Price Action", "Price Action Elite", "Intraday",
+			"Structure", "Smart Money", "Phase 11 Structure", "Phase 11 Smart Money":
 			return true
 		}
 		return false
 	case marketRegimeRange:
 		switch category {
 		case "Mean Reversion", "Mean Rev Elite", "Statistical", "Adaptive", "Adaptive Elite",
-			"Oscillator Elite", "Price Action", "Price Action Elite", "Multi-Signal", "Intraday":
+			"Oscillator Elite", "Price Action", "Price Action Elite", "Multi-Signal", "Intraday",
+			"Liquidity", "Funding", "Market Profile", "Session",
+			"Phase 11 Liquidity", "Phase 11 Derivatives":
 			return true
 		}
 		return false
 	case marketRegimeVolatile:
 		switch category {
 		case "Volatility", "Volatility Elite", "Breakout", "Breakout Elite", "Microstructure",
-			"Time-of-Day", "Multi-Signal", "Momentum Elite", "Intraday":
+			"Time-of-Day", "Multi-Signal", "Momentum Elite", "Intraday",
+			"Liquidity", "Funding", "Phase 11 Liquidations", "Phase 11 Derivatives", "Phase 11 Liquidity":
 			return true
 		}
 		return false

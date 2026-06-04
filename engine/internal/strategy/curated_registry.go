@@ -375,5 +375,35 @@ func BuildCuratedScalpers() []RegistryEntry {
 		{NewID_CCITrend50_5m(), "Intraday", "15m"},
 	}
 
+
+	// ── INSTITUTIONAL ALPHA ENGINE (9 modules) ──────────────────────────────────
+	// These strategies provide uncorrelated institutional-grade alpha. Each is a
+	// single-source signal that passes the internal quality gate (score >= 70) and
+	// the selective aggregator priority boost (+1.45) before execution.
+	entries = append(entries,
+		RegistryEntry{NewFundingMeanReversionAlpha(), "Funding", "1m"},
+		RegistryEntry{NewCVDDivergenceAlpha(), "Microstructure", "tick"},
+		RegistryEntry{NewDeltaAbsorptionAlpha(), "Microstructure", "tick"},
+		RegistryEntry{NewLiquiditySweepReversalAlpha(), "Liquidity", "1m"},
+		RegistryEntry{NewFVGRetestAlpha(), "Structure", "1m"},
+		RegistryEntry{NewOrderBlockRetestAlpha(), "Smart Money", "1m"},
+		RegistryEntry{NewMSSContinuationAlpha(), "Structure", "1m"},
+		RegistryEntry{NewPOCBounceAlpha(), "Market Profile", "1m"},
+		RegistryEntry{NewSessionExpansionAlpha(), "Session", "1m"},
+	)
+
+	// ── PHASE 11 MICROSTRUCTURE ALPHA ENGINE (7 modules) ────────────────────────
+	// All-in-one feature engine: blends CVD, liquidity zones, funding pressure,
+	// market structure, and volatility regime into a single enriched signal.
+	entries = append(entries,
+		RegistryEntry{NewPhase11LiquiditySweepAlpha(), "Phase 11 Liquidity", "1m"},
+		RegistryEntry{NewPhase11FundingMeanReversionAlpha(), "Phase 11 Derivatives", "1m"},
+		RegistryEntry{NewPhase11CVDDivergenceAlpha(), "Phase 11 Order Flow", "tick"},
+		RegistryEntry{NewPhase11LiquidationCascadeAlpha(), "Phase 11 Liquidations", "1m"},
+		RegistryEntry{NewPhase11FVGAlpha(), "Phase 11 Structure", "1m"},
+		RegistryEntry{NewPhase11OrderBlockAlpha(), "Phase 11 Smart Money", "1m"},
+		RegistryEntry{NewPhase11MSSAlpha(), "Phase 11 Structure", "1m"},
+	)
+
 	return append(entries, buildExpansionPack()...)
 }

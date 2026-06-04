@@ -5,6 +5,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	riskv2 "antigravity-engine/internal/risk/v2"
 )
 
 const (
@@ -43,6 +45,11 @@ type StrategyStats struct {
 	ConsecutiveLosses int       `json:"consecutiveLosses"`
 	DailyPnL          float64   `json:"dailyPnl"`
 	TotalPnL          float64   `json:"totalPnl"`
+	GrossWinUSD       float64   `json:"grossWinUsd"`
+	GrossLossUSD      float64   `json:"grossLossUsd"`  // stored as positive value
+	PeakTotalPnL      float64   `json:"peakTotalPnl"`
+	MaxDrawdownPct    float64   `json:"maxDrawdownPct"`
+	recentReturns     []float64 // last 252 trade PnL values; unexported, not serialised
 	Disabled          bool      `json:"disabled"`
 	DisabledUntil     time.Time `json:"disabledUntil"`
 	Allocation        float64   `json:"allocation"`
@@ -215,9 +222,29 @@ func (t *StrategyTracker) RecordTradeResult(strategyName string, pnl float64) {
 	if pnl >= 0 {
 		s.Wins++
 		s.ConsecutiveLosses = 0
+		s.GrossWinUSD += pnl
 	} else {
 		s.Losses++
 		s.ConsecutiveLosses++
+		s.GrossLossUSD += -pnl // store as positive
+	}
+
+	// Track drawdown from equity peak
+	if s.TotalPnL > s.PeakTotalPnL {
+		s.PeakTotalPnL = s.TotalPnL
+	}
+	denom := s.Allocation
+	if denom <= 0 {
+		denom = 1000
+	}
+	if dd := (s.PeakTotalPnL - s.TotalPnL) / denom * 100; dd > s.MaxDrawdownPct {
+		s.MaxDrawdownPct = dd
+	}
+
+	// Rolling window of per-trade PnL for Sharpe calculation
+	s.recentReturns = append(s.recentReturns, pnl)
+	if len(s.recentReturns) > 252 {
+		s.recentReturns = s.recentReturns[len(s.recentReturns)-252:]
 	}
 
 	if s.ConsecutiveLosses >= t.maxConsecutiveLosses {
@@ -392,6 +419,11 @@ func (t *StrategyTracker) Reset() {
 		s.ConsecutiveLosses = 0
 		s.DailyPnL = 0
 		s.TotalPnL = 0
+		s.GrossWinUSD = 0
+		s.GrossLossUSD = 0
+		s.PeakTotalPnL = 0
+		s.MaxDrawdownPct = 0
+		s.recentReturns = s.recentReturns[:0]
 		s.Disabled = false
 		s.DisabledUntil = time.Time{}
 		s.SignalCount = 0
@@ -400,4 +432,146 @@ func (t *StrategyTracker) Reset() {
 	}
 
 	log.Println("[STRATEGY TRACKER] Full state reset")
+}
+
+// BuildRiskMetrics converts a strategy's live StrategyStats into a riskv2.StrategyMetrics
+// populated with real measured performance values. This is the bridge that connects the
+// StrategyTracker (real performance data) to Risk V2 (Kelly sizing, dynamic sizing,
+// allocation decisions). No hardcoded placeholders; cold-start strategies receive neutral
+// values that the Kelly engine treats conservatively via its sample-size stability factor.
+func (t *StrategyTracker) BuildRiskMetrics(name string) riskv2.StrategyMetrics {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	s, ok := t.stats[name]
+	if !ok {
+		return riskv2.StrategyMetrics{
+			Strategy: name,
+			Family:   riskv2.FamilyReserve,
+		}
+	}
+
+	winRate := 0.5
+	if s.TotalTrades > 0 {
+		winRate = float64(s.Wins) / float64(s.TotalTrades)
+	}
+
+	profitFactor := 1.0
+	switch {
+	case s.GrossLossUSD > 0:
+		profitFactor = s.GrossWinUSD / s.GrossLossUSD
+	case s.GrossWinUSD > 0:
+		profitFactor = 3.0 // all wins so far; Kelly will down-weight due to low TotalTrades
+	}
+
+	avgWin := 0.0
+	if s.Wins > 0 {
+		avgWin = s.GrossWinUSD / float64(s.Wins)
+	}
+	avgLoss := 0.0
+	if s.Losses > 0 {
+		avgLoss = s.GrossLossUSD / float64(s.Losses)
+	}
+
+	expectancy := winRate*avgWin - (1-winRate)*avgLoss
+
+	return riskv2.StrategyMetrics{
+		Strategy:       name,
+		Family:         trackerFamilyFromCategory(s.Category),
+		WinRate:        winRate,
+		ProfitFactor:   profitFactor,
+		Sharpe:         trackerAnnualizedSharpe(s.recentReturns),
+		ExpectancyUSD:  expectancy,
+		AverageWinUSD:  avgWin,
+		AverageLossUSD: -avgLoss, // riskv2 expects negative for losses
+		MaxDrawdownPct: s.MaxDrawdownPct,
+		HealthScore:    trackerHealthScore(s),
+		TotalTrades:    s.TotalTrades,
+	}
+}
+
+// trackerAnnualizedSharpe computes an annualised Sharpe ratio from a slice of per-trade
+// USD PnL values. Returns 0 when the sample is too small to be meaningful (< 5 trades).
+func trackerAnnualizedSharpe(returns []float64) float64 {
+	n := len(returns)
+	if n < 5 {
+		return 0
+	}
+	sum := 0.0
+	for _, r := range returns {
+		sum += r
+	}
+	m := sum / float64(n)
+	var variance float64
+	for _, r := range returns {
+		d := r - m
+		variance += d * d
+	}
+	variance /= float64(n - 1)
+	if variance == 0 {
+		return 0
+	}
+	// Annualise treating each trade as an independent period; sqrt(252) is the
+	// standard daily-to-annual scaler and keeps our values on the same scale that
+	// riskv2 thresholds (e.g. DynamicSize Sharpe < 1.0) were designed for.
+	return m / math.Sqrt(variance) * math.Sqrt(252)
+}
+
+// trackerHealthScore derives a 0–100 health score from live performance statistics.
+// A score ≥ 85 = ELITE, 70 = HEALTHY, 55 = WATCHLIST, 40 = RESTRICTED, < 40 = DISABLED.
+func trackerHealthScore(s *StrategyStats) float64 {
+	if s.TotalTrades == 0 {
+		return 50.0 // neutral cold start — not penalised, not privileged
+	}
+	winRate := float64(s.Wins) / float64(s.TotalTrades)
+
+	// Win-rate component: linear from 0 (0% WR) to 100 (100% WR)
+	score := winRate * 100
+
+	// Profit-factor bonus: PF 2.0 → +10, PF 3.0 → +20 (capped)
+	if s.GrossLossUSD > 0 {
+		pf := s.GrossWinUSD / s.GrossLossUSD
+		score += math.Min(20, (pf-1)*10)
+	} else if s.GrossWinUSD > 0 {
+		score += 20 // all wins so far
+	}
+
+	// Drawdown penalty: 10% DD → -20 pts (capped at -30)
+	score -= math.Min(30, s.MaxDrawdownPct*2)
+
+	// Consecutive-loss stress penalty
+	score -= math.Min(15, float64(s.ConsecutiveLosses)*3)
+
+	// Small sample size reduces confidence
+	switch {
+	case s.TotalTrades < 10:
+		score -= 10
+	case s.TotalTrades < 30:
+		score -= 5
+	}
+
+	return math.Max(0, math.Min(100, score))
+}
+
+// trackerFamilyFromCategory maps a strategy's textual category to the riskv2 family
+// enum used for family-level risk budget and correlation grouping.
+func trackerFamilyFromCategory(cat string) riskv2.StrategyFamily {
+	switch cat {
+	case "Trend", "Trend Elite", "Momentum", "Momentum Elite", "Intraday":
+		return riskv2.FamilyTrend
+	case "Mean Reversion", "Mean Rev Elite", "Oscillator Elite", "Statistical":
+		return riskv2.FamilyMeanReversion
+	case "Breakout", "Breakout Elite":
+		return riskv2.FamilyBreakout
+	case "Microstructure", "Velocity":
+		return riskv2.FamilyOrderFlow
+	case "Smart Money", "Price Action", "Price Action Elite":
+		return riskv2.FamilySmartMoney
+	case "Volume Elite":
+		return riskv2.FamilyVolumeProfile
+	case "Adaptive", "Adaptive Elite", "Multi-Signal":
+		return riskv2.FamilyMSS
+	default:
+		return riskv2.FamilyReserve
+	}
 }
