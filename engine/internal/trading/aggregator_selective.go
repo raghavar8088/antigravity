@@ -9,13 +9,28 @@ import (
 )
 
 const (
-	// Phase 22A keeps consensus and ranking, but removes the starvation settings
-	// that blocked cold-start curated/expansion strategies before risk review.
-	minSelectiveScore      = 1.10
+	// Phase 22A signal-unlock pass: starvation constants replaced with
+	// evidence-based values derived from observed confidence distributions.
+	//
+	// minSelectiveScore 1.10 → 0.80: strategies with confidence 0.74–0.95 and
+	// no hardcoded name boost scored 0.74–1.02, making them unreachable.
+	// 0.80 allows all cold-start curated/expansion strategies with confidence
+	// ≥ 0.74 in bonus categories, and ≥ 0.80 in non-bonus categories.
+	//
+	// minDominanceLead 0.18 → 0.10: with 677 strategies the aggregate score
+	// differential can be small even when directional consensus is genuine.
+	// 0.10 still blocks true 50/50 splits but unlocks near-consensus batches.
+	//
+	// maxApprovedSignals 8 → 25: <1.2% signal throughput with 677 strategies.
+	// 25 allows meaningful participation while keeping batch size manageable.
+	//
+	// maxApprovedPerCategory 2 → 5: allows genuine category breadth without
+	// letting a single well-boosted category monopolise the approved batch.
+	minSelectiveScore      = 0.80
 	minDominanceRatio      = 1.10
-	minDominanceLead       = 0.18
-	maxApprovedSignals     = 8
-	maxApprovedPerCategory = 2
+	minDominanceLead       = 0.10
+	maxApprovedSignals     = 25
+	maxApprovedPerCategory = 5
 )
 
 // FilterSignalsSelective chooses the dominant side for the current batch and
@@ -125,6 +140,7 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 		a.lastSignal[sig.StrategyName] = now
 		categoryCounts[sig.Category]++
 		approved = append(approved, sig)
+		a.flowMetrics.RecordStrategyApproval(sig.StrategyName, sig.Category)
 
 		log.Printf("[AGGREGATOR] APPROVED: %s -> %s %.4f %s | score=%.2f",
 			sig.StrategyName, sig.Signal.Action, sig.Signal.TargetSize, sig.Signal.Symbol, score)
@@ -235,12 +251,20 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		score += 0.20
 	}
 
+	// Category bonuses: tier-1 categories are well-represented in live winners;
+	// tier-2 covers expansion-pack families (Momentum, Breakout, Intraday, etc.)
+	// that previously had no bonus and scored below the 0.80 floor with typical
+	// confidence values of 0.74–0.85.
 	switch sig.Category {
 	case "Multi-Signal", "Breakout Elite", "Volatility", "Trend", "Time-of-Day",
 		"Statistical", "Microstructure", "Mean Reversion":
-		score += 0.2
+		score += 0.20
 	case "Trend Elite", "Momentum Elite", "Mean Rev Elite", "Volatility Elite":
 		score += 0.15
+	case "Momentum", "Breakout", "Order Flow", "Alpha", "Intraday",
+		"Liquidity", "Funding", "Session", "Price Action", "Structure",
+		"Smart Money", "Adaptive", "Market Profile":
+		score += 0.10
 	}
 
 	return score

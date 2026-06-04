@@ -475,18 +475,32 @@ func (t *StrategyTracker) BuildRiskMetrics(name string) riskv2.StrategyMetrics {
 
 	expectancy := winRate*avgWin - (1-winRate)*avgLoss
 
+	// Live performance is the best available estimate of OOS performance while the
+	// strategy is still accumulating history. Setting OOSProfitFactor and
+	// OOSExpectancyUSD to the live values ensures Kelly confidence and allocation
+	// oosScore are non-zero for strategies that have real trade data. For cold-start
+	// strategies (TotalTrades==0) both remain 0, keeping Kelly conservative.
+	oosPF := 0.0
+	oosExp := 0.0
+	if s.TotalTrades > 0 {
+		oosPF = profitFactor
+		oosExp = expectancy
+	}
+
 	return riskv2.StrategyMetrics{
-		Strategy:       name,
-		Family:         trackerFamilyFromCategory(s.Category),
-		WinRate:        winRate,
-		ProfitFactor:   profitFactor,
-		Sharpe:         trackerAnnualizedSharpe(s.recentReturns),
-		ExpectancyUSD:  expectancy,
-		AverageWinUSD:  avgWin,
-		AverageLossUSD: -avgLoss, // riskv2 expects negative for losses
-		MaxDrawdownPct: s.MaxDrawdownPct,
-		HealthScore:    trackerHealthScore(s),
-		TotalTrades:    s.TotalTrades,
+		Strategy:         name,
+		Family:           trackerFamilyFromCategory(s.Category),
+		WinRate:          winRate,
+		ProfitFactor:     profitFactor,
+		Sharpe:           trackerAnnualizedSharpe(s.recentReturns),
+		ExpectancyUSD:    expectancy,
+		AverageWinUSD:    avgWin,
+		AverageLossUSD:   -avgLoss, // riskv2 expects negative for losses
+		MaxDrawdownPct:   s.MaxDrawdownPct,
+		OOSProfitFactor:  oosPF,
+		OOSExpectancyUSD: oosExp,
+		HealthScore:      trackerHealthScore(s),
+		TotalTrades:      s.TotalTrades,
 	}
 }
 

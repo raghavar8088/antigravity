@@ -110,3 +110,26 @@ func (a *SignalAggregator) GetSignalFlowSnapshot() SignalFlowSnapshot {
 	}
 	return a.flowMetrics.Snapshot()
 }
+
+func (a *SignalAggregator) RecordStrategyApproval(strategyName, category string) {
+	if a == nil || a.flowMetrics == nil {
+		return
+	}
+	a.flowMetrics.RecordStrategyApproval(strategyName, category)
+}
+
+func (a *SignalAggregator) RecordStrategyExecution(strategyName string) {
+	if a == nil || a.flowMetrics == nil {
+		return
+	}
+	a.flowMetrics.RecordStrategyExecution(strategyName)
+}
+
+// GetSignalFlowDiagnostics returns the full Phase 22A diagnostics snapshot
+// including per-strategy approval/execution counts and top bottleneck ranking.
+func (a *SignalAggregator) GetSignalFlowDiagnostics() SignalFlowDiagnostics {
+	if a == nil || a.flowMetrics == nil {
+		return SignalFlowDiagnostics{}
+	}
+	return a.flowMetrics.Diagnostics()
+}

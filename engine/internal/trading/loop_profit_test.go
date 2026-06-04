@@ -10,8 +10,11 @@ import (
 const signalTolerance = 1e-9
 
 func TestSanitizeSignalForProfitRejectsLowConfidence(t *testing.T) {
+	// 0.65 sits below the Phase 22A floor of 0.68 and must be rejected.
+	// (Previously tested 0.70 against the old floor of 0.74; updated to keep
+	// a value that is genuinely below the current threshold.)
 	_, _, allowed := sanitizeSignalForProfit(strategy.Signal{
-		Confidence:    0.70,
+		Confidence:    0.65,
 		StopLossPct:   0.30,
 		TakeProfitPct: 0.80,
 	})

@@ -52,8 +52,10 @@ func KellySize(req TradeRequest, metrics StrategyMetrics, equityUSD, maxRiskPct 
 	stability := clamp(float64(metrics.TotalTrades)/100, 0, 1) * clamp(metrics.ProfitFactor/1.5, 0, 1)
 	confidence := clamp((metrics.Sharpe/2+metrics.OOSProfitFactor/2)/2, 0, 1)
 	ddRisk := clamp(metrics.MaxDrawdownPct/10, 0, 1)
+	selectedMode := KellyHalf
 	selected := half
 	if stability < 0.45 || ddRisk > 0.6 {
+		selectedMode = KellyQuarter
 		selected = quarter
 	}
 	riskUSD := min(equityUSD*selected, equityUSD*maxRiskPct/100)
@@ -69,7 +71,7 @@ func KellySize(req TradeRequest, metrics StrategyMetrics, equityUSD, maxRiskPct 
 		FullKellyFraction:    full,
 		HalfKellyFraction:    half,
 		QuarterKellyFraction: quarter,
-		SelectedMode:         KellyHalf,
+		SelectedMode:         selectedMode,
 		SelectedFraction:     selected,
 		KellyConfidence:      confidence,
 		KellyStability:       stability,

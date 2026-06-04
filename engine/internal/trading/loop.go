@@ -34,7 +34,7 @@ const (
 	// account can be replayed together via ledger.Store.ReplayAccount.
 	btcPaperAccountID = "btc-paper-1"
 
-	minExecutableConfidence     = 0.74 // Phase 22A: avoid starving cold-start alpha before risk review
+	minExecutableConfidence     = 0.68 // Phase 22A unlock: 0.74→0.68; aligns with ScoringConfig.MinConfidence=0.65 while keeping a safety buffer
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
 	minRewardToRiskRatio        = 2.40 // Stronger edge requirement for scalping signals
 	minSignalTakeProfitPct      = 0.50 // Wider TP — avoid noise-driven exits
@@ -1120,6 +1120,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
+		o.aggregator.RecordStrategyExecution(aggSig.StrategyName)
 		execPrice := fill.ExecPrice
 
 		// Stage 4-6: OMS dispatch → Exchange ack → Fill → Ledger write.

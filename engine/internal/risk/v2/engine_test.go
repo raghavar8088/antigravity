@@ -42,6 +42,112 @@ func TestTailRiskHaltBlocksApproval(t *testing.T) {
 	}
 }
 
+// ── DynamicSize bug-fix tests ────────────────────────────────────────────────
+
+func TestDynamicSize_ZeroPFGetsReduction(t *testing.T) {
+	// Bug fix: PF=0 (all losses) previously escaped the < 1.2 check because of
+	// the "> 0" guard. Now uses TotalTrades > 0 guard.
+	req := TradeRequest{EntryPrice: 100_000, StopLossPrice: 99_820, RequestedSizeBTC: 0.1, Side: SideLong}
+	metrics := StrategyMetrics{
+		TotalTrades:  10,
+		WinRate:      0,
+		ProfitFactor: 0, // all losses
+		HealthScore:  0, // catastrophic — previously escaped reduction too
+		Sharpe:       -2.0,
+	}
+	market := MarketState{Regime: RegimeUnknown, LiquidityScore: 0.65}
+	heat := HeatSnapshot{SizeMultiplier: 1}
+	dd := DrawdownDecision{SizeMultiplier: 1}
+	corr := CorrelationReport{}
+	tail := TailRiskDecision{Action: TailActionNormal}
+
+	result := DynamicSize(req, metrics, market, heat, dd, corr, tail)
+
+	if result.RecommendedSizeBTC >= 0.1 {
+		t.Fatalf("expected reduction for PF=0/Health=0 strategy, got %.4f BTC (no reduction)", result.RecommendedSizeBTC)
+	}
+	if result.Multiplier >= 1.0 {
+		t.Fatalf("expected combined multiplier < 1.0 for all-losses strategy, got %.3f", result.Multiplier)
+	}
+}
+
+func TestDynamicSize_NegativeSharpeGetsReduction(t *testing.T) {
+	// Bug fix: negative Sharpe previously escaped the reduction because of "> 0" guard.
+	req := TradeRequest{EntryPrice: 100_000, StopLossPrice: 99_820, RequestedSizeBTC: 0.1, Side: SideLong}
+	metrics := StrategyMetrics{
+		TotalTrades:  20,
+		ProfitFactor: 1.5, // good PF but consistent loser
+		HealthScore:  60,
+		Sharpe:       -1.5, // negative — persistent losing pattern
+	}
+	market := MarketState{Regime: RegimeUnknown, LiquidityScore: 0.65}
+	heat := HeatSnapshot{SizeMultiplier: 1}
+	dd := DrawdownDecision{SizeMultiplier: 1}
+	corr := CorrelationReport{}
+	tail := TailRiskDecision{Action: TailActionNormal}
+
+	result := DynamicSize(req, metrics, market, heat, dd, corr, tail)
+
+	if result.RecommendedSizeBTC >= 0.1 {
+		t.Fatalf("expected Sharpe reduction for Sharpe=-1.5, got no reduction (%.4f BTC)", result.RecommendedSizeBTC)
+	}
+}
+
+func TestDynamicSize_ColdStartNoReductionForHealth(t *testing.T) {
+	// Cold-start strategies (TotalTrades=0) must NOT receive health/PF/Sharpe reductions.
+	req := TradeRequest{EntryPrice: 100_000, StopLossPrice: 99_820, RequestedSizeBTC: 0.1, Side: SideLong}
+	metrics := StrategyMetrics{
+		TotalTrades:  0,
+		ProfitFactor: 1.0,
+		HealthScore:  50,
+		Sharpe:       0,
+	}
+	market := MarketState{Regime: RegimeUnknown, LiquidityScore: 0.65}
+	heat := HeatSnapshot{SizeMultiplier: 1}
+	dd := DrawdownDecision{SizeMultiplier: 1}
+	corr := CorrelationReport{}
+	tail := TailRiskDecision{Action: TailActionNormal}
+
+	result := DynamicSize(req, metrics, market, heat, dd, corr, tail)
+
+	if result.RecommendedSizeBTC != 0.1 {
+		t.Fatalf("cold-start strategy should not be penalised by DynamicSize, got %.4f BTC", result.RecommendedSizeBTC)
+	}
+}
+
+func TestKellySize_SelectedModeMatchesFraction(t *testing.T) {
+	// Bug fix: SelectedMode was always KellyHalf even when quarter was selected.
+	req := TradeRequest{EntryPrice: 100_000, StopLossPrice: 99_820, RequestedSizeBTC: 10, Side: SideLong}
+
+	// Low TotalTrades → stability < 0.45 → should select quarter
+	lowStability := StrategyMetrics{
+		WinRate: 0.55, AverageWinUSD: 150, AverageLossUSD: -100,
+		ProfitFactor: 1.4, Sharpe: 1.2, OOSProfitFactor: 1.2,
+		TotalTrades: 20, // 20/100=0.20; 0.20×(1.4/1.5)=0.187 < 0.45
+	}
+	d := KellySize(req, lowStability, 1_000_000, 2)
+	if d.SelectedMode != KellyQuarter {
+		t.Fatalf("expected KellyQuarter for low-stability strategy, got %s (stability check failed)", d.SelectedMode)
+	}
+	if d.SelectedFraction != d.QuarterKellyFraction {
+		t.Fatalf("SelectedFraction %.4f != QuarterKellyFraction %.4f", d.SelectedFraction, d.QuarterKellyFraction)
+	}
+
+	// High TotalTrades, good PF → stability ≥ 0.45 → should select half
+	highStability := StrategyMetrics{
+		WinRate: 0.55, AverageWinUSD: 150, AverageLossUSD: -100,
+		ProfitFactor: 1.8, Sharpe: 1.5, OOSProfitFactor: 1.5,
+		TotalTrades: 100, // 1.0 × (1.8/1.5)=1.0 → 1.0 ≥ 0.45
+	}
+	d2 := KellySize(req, highStability, 1_000_000, 2)
+	if d2.SelectedMode != KellyHalf {
+		t.Fatalf("expected KellyHalf for high-stability strategy, got %s", d2.SelectedMode)
+	}
+	if d2.SelectedFraction != d2.HalfKellyFraction {
+		t.Fatalf("SelectedFraction %.4f != HalfKellyFraction %.4f", d2.SelectedFraction, d2.HalfKellyFraction)
+	}
+}
+
 func TestRiskPromotionRequiresOOSAndRiskScore(t *testing.T) {
 	decision := RiskDecision{RiskScore: 80}
 	metrics := StrategyMetrics{OOSProfitFactor: 1.3, OOSExpectancyUSD: 10, Sharpe: 1.4, MaxDrawdownPct: 5}
