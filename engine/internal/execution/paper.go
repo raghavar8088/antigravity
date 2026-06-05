@@ -125,6 +125,7 @@ func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode Ord
 }
 
 func (p *PaperClient) ExecuteSignal(sig strategy.Signal, mode OrderMode) (FillResult, error) {
+	requestedPrice := p.lastKnownPrice
 	execPrice := p.executionPrice(mode, sig.Action)
 	if execPrice <= 0 {
 		return FillResult{}, fmt.Errorf("no market price available for execution")
@@ -133,9 +134,25 @@ func (p *PaperClient) ExecuteSignal(sig strategy.Signal, mode OrderMode) (FillRe
 		return FillResult{}, err
 	}
 	return FillResult{
-		ExecPrice: execPrice,
-		OrderMode: mode,
+		ExecPrice:      execPrice,
+		OrderMode:      mode,
+		RequestedPrice: requestedPrice,
+		SlippageBps:    signedSlippageBps(requestedPrice, execPrice, sig.Action),
 	}, nil
+}
+
+// signedSlippageBps returns the directional slippage of a fill in basis points.
+// Positive = adverse (worse price for the trade's direction).
+func signedSlippageBps(requested, filled float64, action strategy.Action) float64 {
+	if requested <= 0 || filled <= 0 {
+		return 0
+	}
+	raw := (filled - requested) / requested * 10000
+	if action == strategy.ActionSell {
+		// A SELL filled below the reference is adverse → report adverse as positive.
+		return -raw
+	}
+	return raw
 }
 
 func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {

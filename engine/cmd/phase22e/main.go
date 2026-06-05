@@ -1,6 +1,6 @@
 // phase22e is the CLI runner for Phase 22E Profitability Validation.
 // It loads trade records from the ledger and runs the full validation
-// pipeline, writing 11 certification reports to the output directory.
+// pipeline, writing certification reports to the output directory.
 //
 // Usage:
 //
@@ -13,6 +13,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 
 	"antigravity-engine/internal/validation/phase22e"
@@ -40,6 +41,7 @@ func main() {
 
 	fmt.Printf("Loaded %d trade records. Running Phase 22E validation...\n", len(trades))
 
+	// ── Phase 1–12: Core validation pipeline ─────────────────────────────────
 	v := phase22e.NewValidator(*capital)
 	result := v.Run(trades)
 
@@ -53,13 +55,68 @@ func main() {
 	fmt.Printf("  Strategies:      %d total\n", len(result.Strategies))
 	fmt.Printf("\n  CERTIFICATION:   %s\n\n", result.Status)
 
-	fmt.Println("Writing reports to:", *outDir)
+	// ── Phase 5: Monte Carlo ──────────────────────────────────────────────────
+	fmt.Println("Running Monte Carlo simulations (1000 × portfolio, 500 × strategy)...")
+	portfolioMC := phase22e.RunMonteCarlo(trades, *capital, 1000)
+	stratMC := make(map[string]phase22e.MonteCarloResult)
+	stratTrades := groupTradesByStrategy(trades)
+	perStratNAV := *capital / float64(max1(1, len(stratTrades)))
+	for stratID, sts := range stratTrades {
+		stratMC[stratID] = phase22e.RunMonteCarlo(sts, perStratNAV, 500)
+	}
+	fmt.Printf("  Portfolio MC: P(grow)=%.0f%% P(ruin)=%.1f%% Stability=%s\n",
+		portfolioMC.ProbabilityGrow*100, portfolioMC.ProbabilityRuin*100, portfolioMC.Stability)
+
+	// ── Phase 7: Alpha engine certification ───────────────────────────────────
+	fmt.Println("Certifying alpha engines...")
+	alphas := phase22e.CertifyAlphaEngines(trades, *capital)
+	fmt.Printf("  Alpha engines evaluated: %d\n", len(alphas))
+
+	// ── Phase 8: Correlation analysis ────────────────────────────────────────
+	fmt.Println("Computing correlation matrix...")
+	corrMatrix := phase22e.ComputeCorrelation(trades)
+	fmt.Printf("  Diversification score: %.1f/100 | Clusters: %d\n",
+		corrMatrix.DiversScore, len(corrMatrix.Clusters))
+
+	// ── Phase 9: Retirement engine ────────────────────────────────────────────
+	fmt.Println("Identifying retirement candidates...")
+	retirementCandidates := phase22e.IdentifyRetirementCandidates(result.Strategies, stratMC)
+	fmt.Printf("  Retirement candidates: %d\n", len(retirementCandidates))
+
+	// ── Phase 11: Deployment tier classification ──────────────────────────────
+	fmt.Println("Classifying deployment tiers...")
+	deployments := phase22e.ClassifyAllStrategies(result.Strategies)
+	tierCounts := phase22e.TierCounts(deployments)
+	fmt.Printf("  Institutional: %d | Full: %d | Limited: %d | Pilot: %d | Paper: %d | Not certified: %d\n",
+		tierCounts[phase22e.TierInstitutional],
+		tierCounts[phase22e.TierFullDeployment],
+		tierCounts[phase22e.TierLimitedCapital],
+		tierCounts[phase22e.TierPilotCapital],
+		tierCounts[phase22e.TierPaperOnly],
+		tierCounts[phase22e.TierNotCertified])
+
+	// ── Phase 13–15: Write all reports ────────────────────────────────────────
+	fmt.Println("\nWriting reports to:", *outDir)
+
 	if err := phase22e.WriteAllReports(result, *capital, *outDir); err != nil {
-		log.Fatalf("write reports: %v", err)
+		log.Fatalf("write core reports: %v", err)
 	}
 
-	fmt.Println("Done. Reports generated:")
-	reports := []string{
+	extraReports := map[string]string{
+		"MONTE_CARLO_REPORT.md":           phase22e.MonteCarloReport(stratMC, portfolioMC, result.Strategies),
+		"ALPHA_CERTIFICATION_REPORT.md":   phase22e.AlphaCertificationReport(alphas),
+		"PORTFOLIO_CORRELATION_REPORT.md": phase22e.CorrelationReport(corrMatrix),
+		"RETIREMENT_CANDIDATES_REPORT.md": phase22e.RetirementReport(retirementCandidates, len(result.Strategies)),
+		"LIVE_DEPLOYMENT_CERTIFICATION.md": phase22e.DeploymentTierReport(deployments),
+	}
+	for filename, content := range extraReports {
+		path := filepath.Join(*outDir, filename)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			log.Fatalf("write %s: %v", filename, err)
+		}
+	}
+
+	allReports := []string{
 		"TRADE_VALIDATION_REPORT.md",
 		"PROFIT_FACTOR_CERTIFICATION.md",
 		"WIN_RATE_CERTIFICATION.md",
@@ -71,10 +128,33 @@ func main() {
 		"LIVE_VS_BACKTEST_CERTIFICATION.md",
 		"GO_LIVE_READINESS_REPORT.md",
 		"PHASE_22E_IMPLEMENTATION_REPORT.md",
+		"MONTE_CARLO_REPORT.md",
+		"ALPHA_CERTIFICATION_REPORT.md",
+		"PORTFOLIO_CORRELATION_REPORT.md",
+		"RETIREMENT_CANDIDATES_REPORT.md",
+		"LIVE_DEPLOYMENT_CERTIFICATION.md",
 	}
-	for _, r := range reports {
+	fmt.Println("\nDone. Reports generated:")
+	for _, r := range allReports {
 		fmt.Printf("  ✅ %s/%s\n", *outDir, r)
 	}
+	fmt.Printf("\nFinal certification: %s\n", result.Status)
+}
+
+// groupTradesByStrategy is a local convenience — mirrors the internal one.
+func groupTradesByStrategy(trades []phase22e.TradeRecord) map[string][]phase22e.TradeRecord {
+	m := make(map[string][]phase22e.TradeRecord)
+	for _, t := range trades {
+		m[t.StrategyID] = append(m[t.StrategyID], t)
+	}
+	return m
+}
+
+func max1(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // generateDemoTrades builds a realistic synthetic dataset of 1,250 trades
@@ -104,7 +184,7 @@ func generateDemoTrades() []phase22e.TradeRecord {
 		{"s09", "Delta Absorption", "Microstructure", 0.49, 160, 140, 80, false},
 		{"s10", "Liquidity Sweep", "Microstructure", 0.53, 120, 98, 70, false},
 		{"s11", "MSS Continuation", "Price Action", 0.57, 135, 88, 60, false},
-		{"s12", "Volume Profile VWAP", "Volume", 0.48, 90, 85, 60, false}, // marginal — may fail
+		{"s12", "Volume Profile VWAP", "Volume", 0.48, 90, 85, 60, false},
 	}
 
 	var trades []phase22e.TradeRecord

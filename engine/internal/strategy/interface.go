@@ -40,10 +40,16 @@ type Signal struct {
 type Strategy interface {
 	// Name defines the human-readable identifier of this strategy version.
 	Name() string
-	
+
 	// OnTick accepts real-time high-speed market updates. Highly effective for market-making algorithms.
 	OnTick(tick marketdata.Tick) []Signal
 
 	// OnCandle accepts closed period updates (e.g., 1m, 1h, 1d) for trend-following or structural models.
 	OnCandle(candle marketdata.Tick) []Signal // Note: In reality, we'd use a dedicated Candle struct representing OHLCV
+}
+
+// LiquidationFeeder is implemented by strategies that consume liquidation event streams.
+// The trading loop type-asserts for this interface and dispatches events when available.
+type LiquidationFeeder interface {
+	AddLiquidationEvent(symbol string, side string, price, notional float64)
 }

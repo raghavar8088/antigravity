@@ -16,6 +16,14 @@ type FillResult struct {
 	ExecPrice     float64
 	OrderMode     OrderMode
 	ClientOrderID string // set by executeThroughInstitutionalPath
+
+	// RequestedPrice is the decision-time reference price (mark price at order
+	// submission). SlippageBps is the signed slippage of ExecPrice versus
+	// RequestedPrice expressed in basis points (positive = adverse). Both are
+	// populated by ExecuteSignal so the Phase 22D execution-intelligence layer
+	// can attribute real slippage rather than re-deriving it downstream.
+	RequestedPrice float64
+	SlippageBps    float64
 }
 
 // RouteModeForCategory picks a low-latency execution intent from the current

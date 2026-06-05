@@ -33,6 +33,7 @@ import (
 	"antigravity-engine/internal/security/vault"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/trading"
+	"antigravity-engine/internal/validation/phase22e"
 )
 
 // RingLogger stores the last N log lines in memory
@@ -1562,6 +1563,95 @@ func main() {
 	http.HandleFunc("/api/ai/bridge-status", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
 		json.NewEncoder(w).Encode(orchestrator.GetBridgeStatus())
+	})
+
+	// GET /api/execution/intelligence — Phase 22D execution-intelligence report:
+	// trade conversion, missed entries, latency percentiles, slippage, TP-override
+	// impact, bottleneck ranking, and the composite execution quality score.
+	http.HandleFunc("/api/execution/intelligence", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(orchestrator.ExecIntelSnapshot()); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+
+	// GET /api/phase22e/certification — Phase 22E profitability validation.
+	// Runs the full certification pipeline on the in-memory paper trade journal
+	// and returns the ValidationResult plus Monte Carlo, Alpha, Correlation,
+	// Retirement, and Deployment tier data as JSON.
+	http.HandleFunc("/api/phase22e/certification", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		w.Header().Set("Content-Type", "application/json")
+
+		// collect closed trades from the paper trade journal
+		var trades []phase22e.TradeRecord
+		for _, entry := range journal.GetAllTrades() {
+			if entry.ExitTime.IsZero() {
+				continue
+			}
+			trades = append(trades, phase22e.TradeRecord{
+				TradeID:      entry.ID,
+				StrategyID:   entry.StrategyName,
+				StrategyName: entry.StrategyName,
+				Family:       entry.Category,
+				Symbol:       "BTC-USD",
+				Side:         entry.Side,
+				EntryPrice:   entry.EntryPrice,
+				ExitPrice:    entry.ExitPrice,
+				Quantity:     entry.Size,
+				GrossPnLUSD:  entry.GrossPnL,
+				NetPnLUSD:    entry.NetPnL,
+				FeesUSD:      entry.Fees,
+				HoldMinutes:  entry.Duration.Minutes(),
+				EntryTime:    entry.EntryTime,
+				ExitTime:     entry.ExitTime,
+				IsLive:       false,
+			})
+		}
+
+		const totalCapital = 1_000_000.0
+		v := phase22e.NewValidator(totalCapital)
+		result := v.Run(trades)
+
+		portfolioMC := phase22e.RunMonteCarlo(trades, totalCapital, 500)
+
+		stratTrades := make(map[string][]phase22e.TradeRecord)
+		for _, t := range trades {
+			stratTrades[t.StrategyID] = append(stratTrades[t.StrategyID], t)
+		}
+		nStrats := len(stratTrades)
+		if nStrats == 0 {
+			nStrats = 1
+		}
+		perStratNAV := totalCapital / float64(nStrats)
+		stratMC := make(map[string]phase22e.MonteCarloResult)
+		for sid, sts := range stratTrades {
+			stratMC[sid] = phase22e.RunMonteCarlo(sts, perStratNAV, 200)
+		}
+
+		alphas := phase22e.CertifyAlphaEngines(trades, totalCapital)
+		corrMatrix := phase22e.ComputeCorrelation(trades)
+		retirementCandidates := phase22e.IdentifyRetirementCandidates(result.Strategies, stratMC)
+		deployments := phase22e.ClassifyAllStrategies(result.Strategies)
+
+		resp := map[string]interface{}{
+			"certification":         result,
+			"monte_carlo_portfolio": portfolioMC,
+			"alpha_engines":         alphas,
+			"correlation": map[string]interface{}{
+				"diversification_score": corrMatrix.DiversScore,
+				"cluster_count":         len(corrMatrix.Clusters),
+				"clusters":              corrMatrix.Clusters,
+			},
+			"retirement_candidates": retirementCandidates,
+			"deployment_tiers":      deployments,
+			"tier_counts":           phase22e.TierCounts(deployments),
+			"generated_at":          result.GeneratedAt,
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	})
 
 	// Use PORT env var so the server and keepAlive both bind to the same port.

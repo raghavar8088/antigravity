@@ -4,9 +4,102 @@
 
 
 22B → Real Risk Intelligence
-22C → Activate Alpha Engines
-22D → Execution Optimization
-22E → 1000 Trade Validation
+
+deployment
+
+
+
+22C → Activate Alpha Engines----------------------------
+22D → Execution Optimization----------------
+22F → 1000 Trade Validation-----------------
+
+
+------------------------------------------
+What I Would Do Next (Phase 23)
+Phase 23A — Massive Historical Validation
+
+Run:
+
+Top 20 strategies
+12–24 months BTC futures
+Tick/1m data
+Walk-forward validation
+Monte Carlo
+Regime analysis
+
+Output:
+
+Win Rate
+Profit Factor
+Sharpe
+Sortino
+Expectancy
+Max DD
+Risk of Ruin
+
+Goal:
+
+Identify the true top 5–10 strategies.
+---------------------------------------------------
+Phase 23B — Alpha Engine Shootout
+
+Validate separately:
+
+Funding Mean Reversion
+Liquidation Cascade
+Liquidity Sweep
+MSS
+FVG
+Order Block
+Session Expansion
+CVD / Delta
+POC
+Statistical Mean Reversion
+
+Rank them by:
+
+PF
+Sharpe
+Expectancy
+Stability
+
+Remove losers.
+
+Phase 23C — Strategy Registry Cleanup
+
+Your audit already showed:
+
+~606 registered strategies
+~40 real concepts
+~500 overfit variants
+
+Reduce registry to:
+
+Top 25–50 strategies only
+
+Benefits:
+
+Faster signal generation
+Better capital concentration
+Less noise
+Easier validation
+Phase 23D — Persistent Trade Database
+
+This is critical.
+
+Your earlier audit found:
+
+Confirmed completed trades on disk: 0
+
+Before anything else, ensure:
+
+Every fill → database
+
+Every closed trade → database
+
+Every strategy metric → database
+
+No in-memory-only trade history.
 
 THEN
 
@@ -16,3 +109,15 @@ Phase 24 → Scale Capital
 ONLY AFTER THAT
 
 Phase 25 → Research New Alpha
+
+
+
+
+
+Phase 23  — Automated Research Pipeline
+
+Phase 24  — Portfolio Optimizer
+
+Phase 25  — Multi-Exchange Deployment
+
+Phase 26  — Live Capital Scaling

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/execintel"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
@@ -87,6 +88,11 @@ type Orchestrator struct {
 	candleAgg   *marketdata.CandleAggregator
 	eventLedger ledger.Store
 
+	// execIntel is the Phase 22D execution-intelligence layer: per-signal
+	// lifecycle tracking, latency percentiles, slippage, missed-entry
+	// classification, TP-override audit, trade conversion, and quality score.
+	execIntel *execintel.Tracker
+
 	// AI multi-agent layer (nil when ANTHROPIC_API_KEY not set)
 	aiAgent    *ai.MultiAgentOrchestrator
 	aiCandleCh chan marketdata.Candle
@@ -126,6 +132,12 @@ type Orchestrator struct {
 	// correlated with the originating order aggregate in the ledger.
 	positionToOrderID map[string]string
 	positionToOrderMu sync.RWMutex
+
+	// signalIDByOrder links an OMS v3 ClientOrderID to the execintel lifecycle id
+	// so the close-event handler can finalize the lifecycle (PositionClosed +
+	// TP/SL outcome + realized PnL) for the originating signal.
+	signalIDByOrder map[string]string
+	signalIDMu      sync.Mutex
 
 	mu sync.RWMutex
 }
@@ -189,11 +201,13 @@ func NewOrchestrator(
 		journal:                journal,
 		candleAgg:              candleAgg,
 		eventLedger:            ledger.NewMemoryStore(),
+		execIntel:              execintel.New(),
 		priceWindow:            make([]float64, 0, marketHistoryMaxSamples),
 		volumeWindow:           make([]float64, 0, marketHistoryMaxSamples),
 		pendingSignals:         make(map[string]PendingSignal),
 		processedBridgeSignals: make(map[string]time.Time),
 		positionToOrderID:      make(map[string]string),
+		signalIDByOrder:        make(map[string]string),
 		// Zero until the browser bridge explicitly heartbeats — avoids treating
 		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
 		lastBridgeHeartbeat: time.Time{},
@@ -334,6 +348,61 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 
 func idempotencyKeyForOrder(clientOrderID string, eventType ledger.EventType) string {
 	return clientOrderID + ":" + string(eventType)
+}
+
+// rememberSignalForPosition links a ClientOrderID to its execintel lifecycle id.
+func (o *Orchestrator) rememberSignalForPosition(clientOrderID, signalID string) {
+	if clientOrderID == "" || signalID == "" {
+		return
+	}
+	o.signalIDMu.Lock()
+	o.signalIDByOrder[clientOrderID] = signalID
+	o.signalIDMu.Unlock()
+}
+
+// takeSignalForPosition retrieves and removes the execintel lifecycle id for a
+// ClientOrderID. Returns "" when none is mapped.
+func (o *Orchestrator) takeSignalForPosition(clientOrderID string) string {
+	if clientOrderID == "" {
+		return ""
+	}
+	o.signalIDMu.Lock()
+	defer o.signalIDMu.Unlock()
+	id := o.signalIDByOrder[clientOrderID]
+	delete(o.signalIDByOrder, clientOrderID)
+	return id
+}
+
+// ExecIntelSnapshot returns the current Phase 22D execution-intelligence report.
+func (o *Orchestrator) ExecIntelSnapshot() execintel.Snapshot {
+	return o.execIntel.Snapshot()
+}
+
+// finalizeExecIntelClose records the terminal lifecycle states and realized
+// outcome for a closed position into the execution-intelligence layer.
+func (o *Orchestrator) finalizeExecIntelClose(event positions.CloseEvent, netPnL float64) {
+	o.positionToOrderMu.RLock()
+	clientOrderID := o.positionToOrderID[event.Position.ID]
+	o.positionToOrderMu.RUnlock()
+
+	exitReason := string(event.Reason)
+	// Always record the realized PnL (conversion stats) and TP-override outcome,
+	// keyed by strategy, even if no lifecycle id is mapped (e.g. AI/bridge trades).
+	o.execIntel.RecordTradeResult(netPnL)
+	o.execIntel.RecordTPOutcome(event.Position.StrategyName, netPnL, exitReason)
+
+	sigID := o.takeSignalForPosition(clientOrderID)
+	if sigID == "" {
+		return
+	}
+	switch event.Reason {
+	case positions.ReasonTakeProfit:
+		o.execIntel.Record(sigID, execintel.StateTPTriggered, exitReason)
+	case positions.ReasonStopLoss:
+		o.execIntel.Record(sigID, execintel.StateSLTriggered, exitReason)
+	}
+	o.execIntel.Record(sigID, execintel.StatePositionClosed,
+		fmt.Sprintf("pnl=%.4f reason=%s", netPnL, exitReason))
 }
 
 func riskSideFromAction(action strategy.Action) riskv2.Side {
@@ -534,6 +603,9 @@ func (o *Orchestrator) Run(ctx context.Context) {
 
 	// Background: Auto-fallback monitor for bridge failover
 	go o.autoFallbackMonitor(ctx)
+
+	// Background: publish Phase 22D execution-intelligence metrics to Prometheus.
+	go o.publishExecIntel(ctx)
 
 	for {
 		select {
@@ -942,6 +1014,25 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 	for _, aggSig := range approved {
 		sig := aggSig.Signal
 
+		// Phase 22D: open an execution-intelligence lifecycle for this approved
+		// signal. The signal has cleared aggregation, so it begins life as both
+		// Generated and Approved; every downstream rejection or fill is recorded
+		// against this id.
+		sigID := fmt.Sprintf("%s-%d", aggSig.StrategyName, time.Now().UnixNano())
+		o.execIntel.Begin(execintel.Meta{
+			SignalID:    sigID,
+			Strategy:    aggSig.StrategyName,
+			Category:    aggSig.Category,
+			AlphaSource: aggSig.StrategyName,
+			Symbol:      sig.Symbol,
+			Direction:   string(sig.Action),
+			Price:       o.lastPrice,
+			Size:        sig.TargetSize,
+			Regime:      regime,
+			Timeframe:   sig.Timeframe,
+		})
+		o.execIntel.Record(sigID, execintel.StateSignalApproved, "passed selective aggregator")
+
 		// Stage 2: Strategy → Risk gate entry.
 		stageStart = observability.RecordPipelineStage(ctx, observability.StageStrategyToRisk, stageStart)
 
@@ -950,15 +1041,20 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 		// ── Stale signal guard ─────────────────────────────────────────────
 		// Reject signals whose entry thesis expired before reaching execution.
-		signalAge := time.Since(sig.CreatedAt)
+		// Two ceilings apply, and an expired signal MUST never execute:
+		//   1. signalMaxAge — the strict operational guard (fires first).
+		//   2. execintel.HardExpiry — the Phase 22D hard ceiling (outer bound).
 		if sig.CreatedAt.IsZero() {
 			sig.CreatedAt = time.Now()
 		}
-		if maxAge := signalMaxAge(sig.Timeframe); signalAge > maxAge {
-			log.Printf("[STALE SIGNAL] %s dropped: age %v > %s max %v",
-				aggSig.StrategyName, signalAge.Round(time.Millisecond), sig.Timeframe, maxAge)
+		signalAge := time.Since(sig.CreatedAt)
+		if maxAge := signalMaxAge(sig.Timeframe); signalAge > maxAge || execintel.IsExpired(sig.Timeframe, signalAge) {
+			log.Printf("[STALE SIGNAL] %s dropped: age %v > %s max %v (hard ceiling %v)",
+				aggSig.StrategyName, signalAge.Round(time.Millisecond), sig.Timeframe, maxAge,
+				execintel.HardExpiry(sig.Timeframe))
 			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "stale_signal_expired", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "stale_signal_expired")
 			continue
 		}
 
@@ -967,6 +1063,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			log.Printf("[POSITION LIMIT] %s already at max positions — skipping", aggSig.StrategyName)
 			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "position_limit", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "position_limit")
 			continue
 		}
 
@@ -980,6 +1077,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, regime, aggSig.Category)
 			o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageRegimeFilter, "category_not_aligned_with_regime", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "category_not_aligned_with_regime")
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 1)
@@ -996,6 +1094,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, executionWeight)
 			o.aggregator.RecordSignalFlowStage(SignalStageExecutionWeightFilter, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecutionWeightFilter, "execution_weight_below_floor", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "execution_weight_below_floor")
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageExecutionWeightFilter, 1, 1)
@@ -1007,6 +1106,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, sig.TargetSize)
 			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "size_below_minimum", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "size_below_minimum")
 			continue
 		}
 
@@ -1023,6 +1123,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, sanitizeReason)
 			o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageConfidenceFilter, sanitizeReason, aggSig.Category)
+			o.execIntel.RecordRejection(sigID, sanitizeReason)
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 1)
@@ -1032,15 +1133,27 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, baseStopLossPct, baseTakeProfitPct,
 				sig.StopLossPct, sig.TakeProfitPct, sig.TakeProfitPct/sig.StopLossPct)
 		}
+		// Phase 22D: record the TP-override applied by the profit sanitizer so its
+		// realized impact can be audited once the trade closes.
+		if sig.TakeProfitPct != baseTakeProfitPct {
+			o.execIntel.RecordTPOverride(execintel.TPOverrideSample{
+				Strategy:   aggSig.StrategyName,
+				Source:     "sanitize",
+				OriginalTP: baseTakeProfitPct,
+				AdjustedTP: sig.TakeProfitPct,
+			})
+		}
 
 		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageRiskFilter, err.Error(), aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "risk: "+err.Error())
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 1)
+		o.execIntel.Record(sigID, execintel.StateRiskApproved, "pre-trade risk validated")
 
 		// Stage 3: Risk approved → OMS submission.
 		stageStart = observability.RecordPipelineStage(ctx, observability.StageRiskToOMS, stageStart)
@@ -1100,6 +1213,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				aggSig.StrategyName, sig.Action, pendingID)
 			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "parked_for_command_center_bridge", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "parked_for_command_center_bridge")
 			continue
 		}
 
@@ -1112,16 +1226,22 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		// ══════════════════════════════════════════════════════════════════════
 		// 13. EXECUTION — Fill via Coinbase Advanced Trad (Live/Paper)
 		// ══════════════════════════════════════════════════════════════════════
+		o.execIntel.Record(sigID, execintel.StateOrderSubmitted, string(orderMode))
 		fill, err := o.executeThroughInstitutionalPath(ctx, sig, aggSig.StrategyName, currentPrice, orderMode)
 		if err != nil {
 			log.Printf("[EXECUTION FAILED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, err.Error(), aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "oms: "+err.Error())
 			continue
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
 		o.aggregator.RecordStrategyExecution(aggSig.StrategyName)
 		execPrice := fill.ExecPrice
+
+		// Phase 22D lifecycle: order acknowledged + filled.
+		o.execIntel.Record(sigID, execintel.StateOrderAcknowledged, fill.ClientOrderID)
+		o.execIntel.Record(sigID, execintel.StateOrderFilled, fmt.Sprintf("%.2f", execPrice))
 
 		// Stage 4-6: OMS dispatch → Exchange ack → Fill → Ledger write.
 		stageStart = observability.RecordPipelineStage(ctx, observability.StageOMSToExchange, stageStart)
@@ -1129,11 +1249,26 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		_ = observability.RecordPipelineStage(ctx, observability.StageFillToLedger, stageStart)
 		pt.Finalise()
 
-		// Measure entry slippage (expected entry = currentPrice; actual = execPrice).
-		if currentPrice > 0 && execPrice > 0 {
-			slippageBps := math.Abs(execPrice-currentPrice) / currentPrice * 10000
+		// Phase 22D: record real slippage from the fill (decision price → fill price),
+		// attributed by strategy, alpha source, session, regime, and direction.
+		refPrice := fill.RequestedPrice
+		if refPrice <= 0 {
+			refPrice = currentPrice
+		}
+		if refPrice > 0 && execPrice > 0 {
+			o.execIntel.RecordSlippage(execintel.SlippageSample{
+				Strategy:    aggSig.StrategyName,
+				AlphaSource: aggSig.StrategyName,
+				Category:    aggSig.Category,
+				Session:     execintel.SessionForUTC(time.Now().UTC().Hour()),
+				Regime:      regime,
+				Direction:   string(sig.Action),
+				SignalPrice: refPrice,
+				FilledPrice: execPrice,
+				Size:        sig.TargetSize,
+			})
 			log.Printf("[SLIPPAGE] %s %s entry slippage %.2f bps (expected $%.2f, filled $%.2f)",
-				aggSig.StrategyName, sig.Timeframe, slippageBps, currentPrice, execPrice)
+				aggSig.StrategyName, sig.Timeframe, fill.SlippageBps, refPrice, execPrice)
 		}
 
 		// Notify risk engine
@@ -1141,6 +1276,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 		// Open tracked position with SL/TP and emit OMS v3 EventPositionOpened
 		o.openAndTrackPosition(ctx, sig, fill, aggSig.StrategyName)
+		o.execIntel.Record(sigID, execintel.StatePositionOpened, aggSig.StrategyName)
+		// Remember the lifecycle id so the close-event handler can finalize it.
+		o.rememberSignalForPosition(fill.ClientOrderID, sigID)
 
 		log.Printf("[EXECUTION ROUTE] %s used %s in %s regime", aggSig.StrategyName, fill.OrderMode, regime)
 
@@ -1186,6 +1324,11 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 			// Update strategy tracker
 			o.tracker.RecordTradeResult(event.Position.StrategyName, netPnL)
 
+			// Phase 22D: finalize the execution-intelligence lifecycle for this
+			// position — record the terminal TP/SL state, realized PnL for
+			// conversion stats, and attribute the TP-override outcome.
+			o.finalizeExecIntelClose(event, netPnL)
+
 			// Update risk engine daily PnL tracker
 			o.risk.RecordPnL(netPnL)
 
@@ -1215,6 +1358,22 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 			log.Printf("[✅ TRADE CLOSED] %s | %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f | Reason: %s",
 				event.Position.StrategyName, event.Position.Side,
 				event.Position.EntryPrice, event.ExitPrice, event.PnL, event.Reason)
+		}
+	}
+}
+
+// publishExecIntel mirrors the execution-intelligence snapshot into Prometheus
+// gauges every 15 seconds so dashboards and alerts can track conversion,
+// latency, slippage, and quality without scraping the JSON endpoint.
+func (o *Orchestrator) publishExecIntel(ctx context.Context) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			execintel.PublishPrometheus(o.execIntel.Snapshot())
 		}
 	}
 }
@@ -1727,7 +1886,7 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 			"Momentum", "Momentum Elite", "Mean Reversion", "Mean Rev Elite", "Statistical",
 			"Volatility", "Volatility Elite", "Time-of-Day", "Price Action",
 			"Price Action Elite", "Adaptive Elite", "Microstructure", "Intraday",
-			"Funding", "Liquidity", "Structure", "Smart Money", "Market Profile", "Session",
+			"Funding", "Liquidity", "Liquidations", "Structure", "Smart Money", "Market Profile", "Session",
 			"Phase 11 Liquidity", "Phase 11 Derivatives", "Phase 11 Order Flow",
 			"Phase 11 Liquidations", "Phase 11 Structure", "Phase 11 Smart Money":
 			return true
@@ -1754,7 +1913,7 @@ func isCategoryAlignedWithRegime(category, regime string) bool {
 		switch category {
 		case "Volatility", "Volatility Elite", "Breakout", "Breakout Elite", "Microstructure",
 			"Time-of-Day", "Multi-Signal", "Momentum Elite", "Intraday",
-			"Liquidity", "Funding", "Phase 11 Liquidations", "Phase 11 Derivatives", "Phase 11 Liquidity":
+			"Liquidity", "Liquidations", "Funding", "Phase 11 Liquidations", "Phase 11 Derivatives", "Phase 11 Liquidity":
 			return true
 		}
 		return false

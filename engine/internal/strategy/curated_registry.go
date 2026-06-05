@@ -390,6 +390,7 @@ func BuildCuratedScalpers() []RegistryEntry {
 		RegistryEntry{NewMSSContinuationAlpha(), "Structure", "1m"},
 		RegistryEntry{NewPOCBounceAlpha(), "Market Profile", "1m"},
 		RegistryEntry{NewSessionExpansionAlpha(), "Session", "1m"},
+		RegistryEntry{NewLiquidationCascadeAlpha(), "Liquidations", "1m"},
 	)
 
 	// ── PHASE 11 MICROSTRUCTURE ALPHA ENGINE (7 modules) ────────────────────────

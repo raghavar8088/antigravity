@@ -219,7 +219,8 @@ func strategyPriority(sig AggregatedSignal) float64 {
 		"MSSContinuation_Alpha",
 		"POCBounce_Alpha",
 		"SessionExpansion_Alpha",
-		"FundingMeanReversion_Alpha":
+		"FundingMeanReversion_Alpha",
+		"LiquidationCascade_Alpha":
 		score += 1.45
 	// ── PHASE 11 MICROSTRUCTURE ALPHA — multi-dimensional feature engine ──
 	case "Phase11LiquiditySweepReversal_Alpha",

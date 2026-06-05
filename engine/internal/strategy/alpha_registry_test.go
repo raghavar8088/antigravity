@@ -14,6 +14,7 @@ func TestBuildAllScalpersIncludesInstitutionalAlphaStrategies(t *testing.T) {
 		"MSSContinuation_Alpha":                   false,
 		"POCBounce_Alpha":                         false,
 		"SessionExpansion_Alpha":                  false,
+		"LiquidationCascade_Alpha":                false, // Phase 22C activation
 		"Phase11LiquiditySweepReversal_Alpha":     false,
 		"Phase11FundingMeanReversion_Alpha":       false,
 		"Phase11CVDDivergence_Alpha":              false,

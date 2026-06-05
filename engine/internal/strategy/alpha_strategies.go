@@ -10,6 +10,7 @@ import (
 	"antigravity-engine/internal/alpha/funding"
 	"antigravity-engine/internal/alpha/fvg"
 	"antigravity-engine/internal/alpha/liquidity"
+	"antigravity-engine/internal/alpha/liquidations"
 	"antigravity-engine/internal/alpha/microstructure"
 	"antigravity-engine/internal/alpha/mss"
 	"antigravity-engine/internal/alpha/orderblock"
@@ -22,54 +23,57 @@ import (
 type alphaModule string
 
 const (
-	alphaCVD        alphaModule = "CVD"
-	alphaDelta      alphaModule = "DELTA"
-	alphaLiquidity  alphaModule = "LIQUIDITY"
-	alphaFVG        alphaModule = "FVG"
-	alphaOrderBlock alphaModule = "ORDER_BLOCK"
-	alphaMSS        alphaModule = "MSS"
-	alphaPOC        alphaModule = "POC"
-	alphaSession    alphaModule = "SESSION"
-	alphaConfluence alphaModule = "CONFLUENCE"
+	alphaCVD          alphaModule = "CVD"
+	alphaDelta        alphaModule = "DELTA"
+	alphaLiquidity    alphaModule = "LIQUIDITY"
+	alphaFVG          alphaModule = "FVG"
+	alphaOrderBlock   alphaModule = "ORDER_BLOCK"
+	alphaMSS          alphaModule = "MSS"
+	alphaPOC          alphaModule = "POC"
+	alphaSession      alphaModule = "SESSION"
+	alphaConfluence   alphaModule = "CONFLUENCE"
+	alphaLiquidation  alphaModule = "LIQUIDATION"
 )
 
 type InstitutionalAlphaScalper struct {
 	baseScalper
 	module alphaModule
 
-	candles         []alpha.Candle
-	cvdEngine       *cvd.Engine
-	cvdCache        *cvd.Cache
-	deltaEngine     *alphadelta.Engine
-	liquidityEngine *liquidity.Engine
-	fvgStrategy     *fvg.Strategy
-	orderBlocks     *orderblock.Engine
-	mssEngine       *mss.Engine
-	sessionEngine   *session.Engine
-	profileStrategy *volumeprofile.Strategy
-	fundingCache    *funding.Cache
-	fundingEngine   *funding.Engine
-	fundingStrategy *funding.Strategy
+	candles            []alpha.Candle
+	cvdEngine          *cvd.Engine
+	cvdCache           *cvd.Cache
+	deltaEngine        *alphadelta.Engine
+	liquidityEngine    *liquidity.Engine
+	fvgStrategy        *fvg.Strategy
+	orderBlocks        *orderblock.Engine
+	mssEngine          *mss.Engine
+	sessionEngine      *session.Engine
+	profileStrategy    *volumeprofile.Strategy
+	fundingCache       *funding.Cache
+	fundingEngine      *funding.Engine
+	fundingStrategy    *funding.Strategy
+	liquidationEngine  *liquidations.Engine
 }
 
 func newInstitutionalAlphaScalper(name string, module alphaModule) *InstitutionalAlphaScalper {
 	fundingCache, _ := funding.NewCache("data/alpha/funding.ndjson")
 	fundingEngine := funding.NewEngine(fundingCache, nil)
 	return &InstitutionalAlphaScalper{
-		baseScalper:     baseScalper{name: name, maxBuf: defaultBufSize},
-		module:          module,
-		cvdEngine:       cvd.NewEngine(),
-		cvdCache:        cvd.NewCache(2000),
-		deltaEngine:     alphadelta.NewEngine(1000),
-		liquidityEngine: liquidity.NewEngine(200),
-		fvgStrategy:     fvg.NewStrategy(),
-		orderBlocks:     orderblock.NewEngine(),
-		mssEngine:       mss.NewEngine(),
-		sessionEngine:   session.NewEngine(),
-		profileStrategy: volumeprofile.NewStrategy(),
-		fundingCache:    fundingCache,
-		fundingEngine:   fundingEngine,
-		fundingStrategy: funding.NewStrategy(fundingEngine),
+		baseScalper:       baseScalper{name: name, maxBuf: defaultBufSize},
+		module:            module,
+		cvdEngine:         cvd.NewEngine(),
+		cvdCache:          cvd.NewCache(2000),
+		deltaEngine:       alphadelta.NewEngine(1000),
+		liquidityEngine:   liquidity.NewEngine(200),
+		fvgStrategy:       fvg.NewStrategy(),
+		orderBlocks:       orderblock.NewEngine(),
+		mssEngine:         mss.NewEngine(),
+		sessionEngine:     session.NewEngine(),
+		profileStrategy:   volumeprofile.NewStrategy(),
+		fundingCache:      fundingCache,
+		fundingEngine:     fundingEngine,
+		fundingStrategy:   funding.NewStrategy(fundingEngine),
+		liquidationEngine: liquidations.NewEngine(5000),
 	}
 }
 
@@ -109,6 +113,10 @@ func NewSessionExpansionAlpha() *InstitutionalAlphaScalper {
 	return newInstitutionalAlphaScalper("SessionExpansion_Alpha", alphaSession)
 }
 
+func NewLiquidationCascadeAlpha() *InstitutionalAlphaScalper {
+	return newInstitutionalAlphaScalper("LiquidationCascade_Alpha", alphaLiquidation)
+}
+
 func NewPhase11LiquiditySweepAlpha() *Phase11MicrostructureAlpha {
 	return newPhase11MicrostructureAlpha("Phase11LiquiditySweepReversal_Alpha", microstructure.StrategyLiquiditySweep)
 }
@@ -137,16 +145,49 @@ func NewPhase11MSSAlpha() *Phase11MicrostructureAlpha {
 	return newPhase11MicrostructureAlpha("Phase11MSSCHOCH_Alpha", microstructure.StrategyMSSRetest)
 }
 
+// AddLiquidationEvent feeds a liquidation event into the liquidation engine.
+// Satisfies strategy.LiquidationFeeder so the trading loop can dispatch events
+// via type assertion without coupling the Strategy interface to exchange data types.
+func (s *InstitutionalAlphaScalper) AddLiquidationEvent(symbol string, side string, price, notional float64) {
+	action := alpha.ActionBuy
+	if side == "SELL" || side == "SHORT" {
+		action = alpha.ActionSell
+	}
+	s.liquidationEngine.Add(liquidations.Event{
+		Symbol:   symbol,
+		Side:     action,
+		Price:    price,
+		Notional: notional,
+	})
+}
+
 func (s *InstitutionalAlphaScalper) OnTick(t marketdata.Tick) []Signal {
 	row := alpha.Tick{Symbol: t.Symbol, Price: t.Price, Quantity: t.Quantity, Side: t.Side, Timestamp: unixMs(t.TimeMs)}
 	td := s.cvdEngine.AddTick(row)
 	s.cvdCache.Add(td)
 	s.deltaEngine.Add(t.Price, td.Delta)
+
+	// Liquidation cascade: absorb large-volume ticks as proxy liquidation events.
+	// Abnormally large single-tick notional (>= 3× recent average) indicates forced
+	// position unwinds. This heuristic bridges the gap until a dedicated liquidation
+	// WebSocket feed (e.g., Binance /ws/!forceOrder@arr) is connected.
+	if s.module == alphaLiquidation && t.Quantity > 0 {
+		notional := t.Price * t.Quantity
+		if notional >= 50000 { // USD 50k minimum to qualify as institutional liquidation
+			s.liquidationEngine.Add(liquidations.Event{
+				Symbol:   t.Symbol,
+				Side:     alpha.Action(t.Side),
+				Price:    t.Price,
+				Notional: notional,
+			})
+		}
+	}
+
 	// Tick-rate modules evaluate on every tick.
 	if s.module == alphaCVD || s.module == alphaDelta || s.module == alphaConfluence {
 		return s.evaluate(t.Symbol)
 	}
-	// Candle-based modules (FVG, MSS, OrderBlock, Liquidity, POC, Session):
+	// Candle-based modules (FVG, MSS, OrderBlock, Liquidity, POC, Session, Liquidation):
 	// the trading loop calls OnTick with candle-converted ticks for 1m strategies,
 	// so we delegate to OnCandle to accumulate candle buffers and evaluate.
 	return s.OnCandle(t)
@@ -190,6 +231,8 @@ func (s *InstitutionalAlphaScalper) evaluate(symbol string) []Signal {
 		if snap.Expansion && snap.Bias != alpha.ActionHold {
 			sig = alpha.Signal{Source: "SessionExpansion", Symbol: symbol, Action: snap.Bias, Confidence: alpha.Clamp(0.62+absFloat(snap.Momentum)/4, 0.62, 0.88), Reason: string(snap.Name) + " expansion bias", StopLossPct: 0.35, TakeProfitPct: 0.75, Timestamp: time.Now().UTC()}
 		}
+	case alphaLiquidation:
+		sig = s.liquidationEngine.Signal(symbol)
 	case alphaConfluence:
 		sig = s.confluence(symbol)
 	}
@@ -287,6 +330,8 @@ func (s *InstitutionalAlphaScalper) qualityFor(sig alpha.Signal) quality.Result 
 		return quality.Score(quality.Inputs{OrderBlock: source, Liquidity: 0.70, FVG: 0.70, MSS: 0.80, CVD: 0.70, Delta: 0.65, VolumeProfile: 0.65, Session: 0.65, Funding: 0.60})
 	case "MSSContinuation":
 		return quality.Score(quality.Inputs{MSS: source, CVD: 0.75, Delta: 0.65, Session: 0.70, VolumeProfile: 0.70, Liquidity: 0.70, FVG: 0.65, OrderBlock: 0.65, Funding: 0.60})
+	case "LiquidationCascade":
+		return quality.Score(quality.Inputs{Liquidity: source, CVD: 0.75, Delta: 0.75, MSS: 0.70, VolumeProfile: 0.65, Session: 0.65, FVG: 0.60, OrderBlock: 0.60, Funding: 0.60})
 	default:
 		return quality.Score(quality.Inputs{Funding: 0.80, CVD: 0.80, Delta: 0.70, Liquidity: 0.75, OrderBlock: 0.65, FVG: 0.65, MSS: 0.80, VolumeProfile: 0.70, Session: 0.70})
 	}

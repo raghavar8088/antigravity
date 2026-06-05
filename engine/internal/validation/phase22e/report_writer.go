@@ -706,3 +706,277 @@ func min10(n int) int {
 	}
 	return n
 }
+
+// ── Phase 22E extended reports ────────────────────────────────────────────────
+
+// MonteCarloReport generates the MONTE_CARLO_REPORT.md content.
+func MonteCarloReport(stratMC map[string]MonteCarloResult, portfolioMC MonteCarloResult, strategies []StrategyMetrics) string {
+	b := &strings.Builder{}
+	header(b, "MONTE CARLO VALIDATION REPORT — Phase 22E")
+	b.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+
+	section(b, "Methodology")
+	b.WriteString("Each strategy's historical trade returns are shuffled 1,000 times (Fisher-Yates).\n")
+	b.WriteString("For each permutation, terminal P&L and maximum drawdown are recorded.\n")
+	b.WriteString("Percentiles (p5/p50/p95) and ruin probability (terminal loss > 50% of NAV) are computed.\n\n")
+
+	section(b, "Portfolio-Level Monte Carlo")
+	b.WriteString(fmt.Sprintf("| Metric                    | Value        |\n"))
+	b.WriteString(fmt.Sprintf("|:--------------------------|:------------:|\n"))
+	b.WriteString(fmt.Sprintf("| Simulations               | %d           |\n", portfolioMC.Simulations))
+	b.WriteString(fmt.Sprintf("| Expected Return (p50)     | $%.2f    |\n", portfolioMC.ExpectedReturn))
+	b.WriteString(fmt.Sprintf("| Best Case Return (p95)    | $%.2f    |\n", portfolioMC.BestReturn))
+	b.WriteString(fmt.Sprintf("| Worst Case Return (p5)    | $%.2f    |\n", portfolioMC.WorstReturn))
+	b.WriteString(fmt.Sprintf("| Expected Drawdown (p50)   | %.1f%%         |\n", portfolioMC.ExpectedDD))
+	b.WriteString(fmt.Sprintf("| Worst Drawdown (p95)      | %.1f%%         |\n", portfolioMC.WorstDD))
+	b.WriteString(fmt.Sprintf("| Probability of Ruin       | %.1f%%         |\n", portfolioMC.ProbabilityRuin*100))
+	b.WriteString(fmt.Sprintf("| Probability of Growth     | %.1f%%         |\n", portfolioMC.ProbabilityGrow*100))
+	b.WriteString(fmt.Sprintf("| Stability Classification  | **%s**     |\n\n", portfolioMC.Stability))
+
+	section(b, "Per-Strategy Monte Carlo Results")
+	b.WriteString("| Strategy | Sims | E[Return] | Worst Return | E[DD] | Worst DD | P(Ruin) | Stability |\n")
+	b.WriteString("|:---------|:----:|----------:|-------------:|:-----:|:--------:|:-------:|:---------:|\n")
+	for _, s := range sortedByRank(strategies) {
+		mc, ok := stratMC[s.StrategyID]
+		if !ok {
+			b.WriteString(fmt.Sprintf("| %s | — | — | — | — | — | — | — |\n", truncate(s.StrategyName, 25)))
+			continue
+		}
+		b.WriteString(fmt.Sprintf("| %s | %d | $%.0f | $%.0f | %.1f%% | %.1f%% | %.1f%% | %s |\n",
+			truncate(s.StrategyName, 25), mc.Simulations,
+			mc.ExpectedReturn, mc.WorstReturn,
+			mc.ExpectedDD, mc.WorstDD,
+			mc.ProbabilityRuin*100, mc.Stability))
+	}
+	b.WriteString("\n")
+
+	section(b, "Stability Classification Summary")
+	stableCnt, marginalCnt, unstableCnt, untradableCnt := 0, 0, 0, 0
+	for _, mc := range stratMC {
+		switch mc.Stability {
+		case MCStable:
+			stableCnt++
+		case MCMarginal:
+			marginalCnt++
+		case MCUnstable:
+			unstableCnt++
+		case MCUntradable:
+			untradableCnt++
+		}
+	}
+	b.WriteString(fmt.Sprintf("- **STABLE**: %d strategies\n", stableCnt))
+	b.WriteString(fmt.Sprintf("- **MARGINAL**: %d strategies\n", marginalCnt))
+	b.WriteString(fmt.Sprintf("- **UNSTABLE**: %d strategies — reduce position size or paper-only\n", unstableCnt))
+	b.WriteString(fmt.Sprintf("- **UNTRADABLE**: %d strategies — immediate retirement recommended\n", untradableCnt))
+	return b.String()
+}
+
+// AlphaCertificationReport generates the ALPHA_CERTIFICATION_REPORT.md content.
+func AlphaCertificationReport(alphas []AlphaMetrics) string {
+	b := &strings.Builder{}
+	header(b, "ALPHA ENGINE CERTIFICATION REPORT — Phase 22E")
+	b.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+
+	section(b, "Alpha Engine Universe")
+	b.WriteString("Each alpha engine groups all strategies sharing the same signal origin.\n")
+	b.WriteString("Certification requires: PF ≥ 1.30, Sharpe ≥ 1.50, positive expectancy.\n\n")
+
+	section(b, "Alpha Engine Rankings")
+	b.WriteString("| Rank | Alpha Engine | Trades | Win Rate | PF | Sharpe | Expectancy | MaxDD | MC Stability |\n")
+	b.WriteString("|:----:|:-------------|:------:|:--------:|:--:|:------:|:----------:|:-----:|:------------:|\n")
+	for _, a := range alphas {
+		certified := a.ProfitFactor >= MinProfitFactor && a.Sharpe >= MinSharpe
+		b.WriteString(fmt.Sprintf("| %d | %s | %d | %.1f%% | %.2f %s | %.2f | $%.2f | %.1f%% | %s |\n",
+			a.Rank, a.AlphaEngine, a.Trades, a.WinRate*100,
+			a.ProfitFactor, badge(certified),
+			a.Sharpe, a.Expectancy, a.MaxDrawdown, a.MonteCarlo.Stability))
+	}
+
+	section(b, "Alpha Edge Summary")
+	certified := 0
+	for _, a := range alphas {
+		if a.ProfitFactor >= MinProfitFactor {
+			certified++
+		}
+	}
+	b.WriteString(fmt.Sprintf("- Alpha engines evaluated: **%d**\n", len(alphas)))
+	b.WriteString(fmt.Sprintf("- Alpha engines with positive edge (PF ≥ 1.30): **%d**\n", certified))
+	b.WriteString(fmt.Sprintf("- Alpha engines failing: **%d**\n", len(alphas)-certified))
+	return b.String()
+}
+
+// CorrelationReport generates the PORTFOLIO_CORRELATION_REPORT.md content.
+func CorrelationReport(cm CorrelationMatrix) string {
+	b := &strings.Builder{}
+	header(b, "PORTFOLIO CORRELATION REPORT — Phase 22E")
+	b.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+
+	section(b, "Methodology")
+	b.WriteString("Pearson correlation is computed on per-strategy cumulative equity curves.\n")
+	b.WriteString("Low correlation (< 0.30) indicates genuine diversification.\n")
+	b.WriteString("High correlation (> 0.70) indicates redundant alpha sources.\n\n")
+
+	b.WriteString(fmt.Sprintf("**Portfolio Diversification Score: %.1f / 100**\n\n", cm.DiversScore))
+
+	if len(cm.Clusters) > 0 {
+		section(b, "High-Correlation Clusters (|r| > 0.70)")
+		b.WriteString("Strategies within a cluster should not all receive full capital simultaneously.\n\n")
+		for i, cl := range cm.Clusters {
+			b.WriteString(fmt.Sprintf("**Cluster %d** (avg r=%.2f): %s\n", i+1, cl.AvgCorr, strings.Join(cl.StrategyIDs, ", ")))
+		}
+		b.WriteString("\n")
+	} else {
+		section(b, "Cluster Analysis")
+		b.WriteString("No high-correlation clusters detected. Portfolio is well diversified.\n\n")
+	}
+
+	if len(cm.FamilyMatrix) > 0 {
+		section(b, "Family-Level Correlation Matrix")
+		families := make([]string, 0, len(cm.FamilyMatrix))
+		for f := range cm.FamilyMatrix {
+			families = append(families, f)
+		}
+		// header row
+		b.WriteString("| Family |")
+		for _, f := range families {
+			b.WriteString(fmt.Sprintf(" %s |", truncate(f, 12)))
+		}
+		b.WriteString("\n|:-------|")
+		for range families {
+			b.WriteString(":------:|")
+		}
+		b.WriteString("\n")
+		for _, f1 := range families {
+			b.WriteString(fmt.Sprintf("| %s |", truncate(f1, 12)))
+			for _, f2 := range families {
+				r := cm.FamilyMatrix[f1][f2]
+				b.WriteString(fmt.Sprintf(" %.2f |", r))
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	section(b, "Diversification Conclusion")
+	switch {
+	case cm.DiversScore >= 80:
+		b.WriteString("**EXCELLENT**: Portfolio strategies are highly uncorrelated. Capital can be deployed across all approved strategies simultaneously.\n")
+	case cm.DiversScore >= 60:
+		b.WriteString("**GOOD**: Portfolio has adequate diversification. Monitor cluster groups to avoid concentration.\n")
+	case cm.DiversScore >= 40:
+		b.WriteString("**MODERATE**: Some correlation present. Consider reducing position size in highly correlated clusters.\n")
+	default:
+		b.WriteString("**POOR**: Strategies are highly correlated. Portfolio behaves like a single strategy — concentrated risk.\n")
+	}
+	return b.String()
+}
+
+// RetirementReport generates the RETIREMENT_CANDIDATES_REPORT.md content.
+func RetirementReport(candidates []RetirementCandidate, totalStrategies int) string {
+	b := &strings.Builder{}
+	header(b, "RETIREMENT CANDIDATES REPORT — Phase 22E")
+	b.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+
+	section(b, "Retirement Criteria")
+	b.WriteString("A strategy is flagged for retirement if it meets one or more of:\n\n")
+	b.WriteString("| Criterion | Threshold | Severity |\n")
+	b.WriteString("|:----------|:----------|:--------:|\n")
+	b.WriteString("| Profit Factor < 1.00 | Losing money absolutely | IMMEDIATE |\n")
+	b.WriteString("| Negative expectancy | E[trade] < $0 | IMMEDIATE |\n")
+	b.WriteString("| Sharpe < 0.50 | Insufficient risk-adjusted return | RECOMMENDED |\n")
+	b.WriteString("| Max Drawdown > 15% | Persistent capital impairment | RECOMMENDED |\n")
+	b.WriteString("| Monte Carlo UNTRADABLE | Ruin probability > 20% | IMMEDIATE |\n")
+	b.WriteString("| Monte Carlo UNSTABLE | Ruin probability > 10% | RECOMMENDED |\n")
+	b.WriteString("| No statistical edge | n ≥ 50 but significance not confirmed | RECOMMENDED |\n\n")
+
+	immediate := 0
+	recommended := 0
+	conditional := 0
+	for _, c := range candidates {
+		switch c.Severity {
+		case SeverityImmediate:
+			immediate++
+		case SeverityRecommended:
+			recommended++
+		case SeverityConditional:
+			conditional++
+		}
+	}
+
+	b.WriteString(fmt.Sprintf("**Total strategies evaluated: %d** | **Retirement candidates: %d** (%.0f%%)\n\n",
+		totalStrategies, len(candidates), float64(len(candidates))/float64(max1(1, totalStrategies))*100))
+	b.WriteString(fmt.Sprintf("- IMMEDIATE retirement: **%d** strategies\n", immediate))
+	b.WriteString(fmt.Sprintf("- RECOMMENDED retirement: **%d** strategies\n", recommended))
+	b.WriteString(fmt.Sprintf("- CONDITIONAL retirement: **%d** strategies\n\n", conditional))
+
+	if len(candidates) == 0 {
+		b.WriteString("**No retirement candidates identified.** All strategies meet minimum performance standards.\n")
+		return b.String()
+	}
+
+	section(b, "Retirement Candidates — Ordered by Severity")
+	b.WriteString("| Severity | Strategy | Family | Trades | PF | Sharpe | MaxDD | Reasons |\n")
+	b.WriteString("|:--------:|:---------|:-------|:------:|:--:|:------:|:-----:|:--------|\n")
+	for _, c := range candidates {
+		reasonStr := ""
+		if len(c.Reasons) > 0 {
+			reasonStr = c.Reasons[0]
+			if len(c.Reasons) > 1 {
+				reasonStr += fmt.Sprintf(" (+%d more)", len(c.Reasons)-1)
+			}
+		}
+		b.WriteString(fmt.Sprintf("| **%s** | %s | %s | %d | %.2f | %.2f | %.1f%% | %s |\n",
+			c.Severity, truncate(c.StrategyName, 28), c.Family,
+			c.TotalTrades, c.ProfitFactor, c.Sharpe, c.MaxDrawdown,
+			truncate(reasonStr, 60)))
+	}
+	b.WriteString("\n")
+
+	if immediate > 0 {
+		section(b, "Immediate Retirement Action Required")
+		for _, c := range candidates {
+			if c.Severity != SeverityImmediate {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("**%s** — %s\n", c.StrategyName, c.Family))
+			for _, r := range c.Reasons {
+				b.WriteString(fmt.Sprintf("  - %s\n", r))
+			}
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+// DeploymentTierReport generates the LIVE_DEPLOYMENT_CERTIFICATION.md content.
+func DeploymentTierReport(classifications []DeploymentClassification) string {
+	b := &strings.Builder{}
+	header(b, "LIVE DEPLOYMENT CERTIFICATION — Phase 22E")
+	b.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339)))
+
+	section(b, "Deployment Tier Definitions")
+	b.WriteString("| Tier | PF Requirement | Sharpe | Trades | Max DD | Max Capital% |\n")
+	b.WriteString("|:-----|:--------------:|:------:|:------:|:------:|:------------:|\n")
+	b.WriteString("| NOT CERTIFIED | < 1.10 | — | — | — | 0% |\n")
+	b.WriteString("| PAPER ONLY | ≥ 1.10 | — | — | — | 0% |\n")
+	b.WriteString("| PILOT CAPITAL | ≥ 1.20 | ≥ 1.00 | — | — | 5% |\n")
+	b.WriteString("| LIMITED CAPITAL | ≥ 1.30 | ≥ 1.25 | — | — | 10% |\n")
+	b.WriteString("| FULL DEPLOYMENT | ≥ 1.40 | ≥ 1.50 | — | — | 15% |\n")
+	b.WriteString("| INSTITUTIONAL GRADE | ≥ 1.50 | ≥ 2.00 | ≥ 1000 | < 10% | 20% |\n\n")
+
+	counts := TierCounts(classifications)
+	section(b, "Tier Distribution")
+	for _, tier := range []DeploymentTier{TierInstitutional, TierFullDeployment, TierLimitedCapital, TierPilotCapital, TierPaperOnly, TierNotCertified} {
+		b.WriteString(fmt.Sprintf("- **%s**: %d strategies\n", tier, counts[tier]))
+	}
+	b.WriteString("\n")
+
+	section(b, "Full Strategy Classification")
+	b.WriteString("| Strategy | Family | PF | Sharpe | Tier | Max Capital% |\n")
+	b.WriteString("|:---------|:-------|:--:|:------:|:-----|:------------:|\n")
+	for _, dc := range classifications {
+		b.WriteString(fmt.Sprintf("| %s | %s | — | — | **%s** | %.0f%% |\n",
+			truncate(dc.StrategyName, 28), dc.Family, dc.Tier, dc.MaxCapitalPct))
+	}
+	return b.String()
+}
