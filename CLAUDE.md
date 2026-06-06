@@ -13,7 +13,7 @@ Institutional-grade algorithmic trading platform for Indian markets (NSE/BSE via
 | AI/Strategy Brain | Python | `brain/` |
 | Broker Bridge | TS/Go | `bridge/` |
 | Databases | MongoDB Atlas, PostgreSQL (Neon), Redis, SQLite | `infrastructure/` |
-| Deploy | Vercel (client), Render/AWS Lightsail (engine) | — |
+| Deploy | Vercel (client), AWS Lightsail (engine) | — |
 
 ---
 
@@ -180,6 +180,13 @@ cd engine && go run ./cmd/antigravity/main.go
 # Backtest
 cd engine && go run ./cmd/backtest/main.go
 ```
+
+---
+
+## Deployment (ALWAYS remember)
+- **Frontend** → **Vercel** (Next.js, `client/`)
+- **Go Engine** → **AWS Lightsail** (NOT Render — never reference Render)
+- **Databases** → MongoDB Atlas, PostgreSQL Neon, Redis (all cloud-managed, not on AWS Lightsail)
 
 ---
 
