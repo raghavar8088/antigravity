@@ -21,7 +21,6 @@ import {
   logForMockTradeRejected,
   maxOpenMockTradesFromConfig,
   maxSignalsPerBatchFromConfig,
-  MOCK_PERSIST_VERSION,
   normalizeMockTradingConfig,
   rejectionCategoryFromRiskCode,
   rejectionCategoryFromTraceGate,
@@ -58,7 +57,6 @@ const OPEN_MARK_PERSIST_BATCH_SIZE = 100;
 const LOG_RING_CAP = 200;
 const TRADE_CACHE_MIN_CAP = 500;
 const HISTORY_PAGE_SIZE = 100;
-const STORAGE_KEY = "mock_trading_v2";
 
 const STRATEGY_EXIT_OVERRIDES = new Map<number, StrategyExitOverride>(
   FUTURES_STRAT_DEFS.map((d) => [
@@ -71,41 +69,6 @@ const STRATEGY_EXIT_OVERRIDES = new Map<number, StrategyExitOverride>(
     },
   ]),
 );
-
-interface PersistShape {
-  version: number;
-  trades: MockTrade[];
-  config: MockTradingConfig;
-}
-
-function loadFromStorage(): { trades: MockTrade[]; config: MockTradingConfig } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<PersistShape>;
-    if (parsed.version !== MOCK_PERSIST_VERSION) return null;
-    const cfg = normalizeMockTradingConfig(parsed.config);
-    const rawTrades = Array.isArray(parsed.trades) ? parsed.trades : [];
-    const trades: MockTrade[] = [];
-    for (const t of rawTrades) {
-      if (isValidMockTrade(t)) trades.push(t);
-    }
-    return { trades, config: cfg };
-  } catch {
-    return null;
-  }
-}
-
-function saveToStorage(state: { trades: MockTrade[]; config: MockTradingConfig }): void {
-  if (typeof window === "undefined") return;
-  try {
-    const payload: PersistShape = { version: MOCK_PERSIST_VERSION, ...state };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // quota / serialization errors are non-fatal for analysis tooling
-  }
-}
 
 function trimTradeCache(trades: MockTrade[], config: MockTradingConfig): MockTrade[] {
   const cap = Math.max(TRADE_CACHE_MIN_CAP, maxOpenMockTradesFromConfig(config));
@@ -248,12 +211,9 @@ export function useMockTradingEngine(
   const persistenceDisabled = disablePersistence === true || disablePolling === true;
   const mockAccountKey = accountKey?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
 
-  const initial = useRef(loadFromStorage());
-  const [trades, setTrades] = useState<MockTrade[]>(initial.current?.trades ?? []);
-  const [historyTrades, setHistoryTrades] = useState<MockTrade[]>(initial.current?.trades ?? []);
-  const [config, setConfigState] = useState<MockTradingConfig>(
-    initial.current?.config ?? DEFAULT_MOCK_TRADING_CONFIG,
-  );
+  const [trades, setTrades] = useState<MockTrade[]>([]);
+  const [historyTrades, setHistoryTrades] = useState<MockTrade[]>([]);
+  const [config, setConfigState] = useState<MockTradingConfig>(DEFAULT_MOCK_TRADING_CONFIG);
   const [logs, setLogs] = useState<MockTradeLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -267,7 +227,7 @@ export function useMockTradingEngine(
   });
   const [historyPage, setHistoryPage] = useState(1);
   const [historyMeta, setHistoryMeta] = useState({
-    total: initial.current?.trades.length ?? 0,
+    total: 0,
     totalPages: 1,
     loading: false,
     error: null as string | null,
@@ -276,9 +236,7 @@ export function useMockTradingEngine(
   const [diagnostics, setDiagnostics] = useState<MockTradingDiagnostics>(emptyMockTradingDiagnostics);
   const [, setTickRefresh] = useState(0);
 
-  const seenTraceIdsRef = useRef<Set<string>>(
-    new Set((initial.current?.trades ?? []).map((t) => t.traceId)),
-  );
+  const seenTraceIdsRef = useRef<Set<string>>(new Set());
   const configRef = useRef(config);
   const priceRef = useRef(price);
   const tradesRef = useRef(trades);
@@ -290,11 +248,6 @@ export function useMockTradingEngine(
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { priceRef.current = price; }, [price]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
-
-  // ── Persist trades + config ────────────────────────────────────────────────
-  useEffect(() => {
-    saveToStorage({ trades, config });
-  }, [trades, config]);
 
   const markPersistenceOk = useCallback(() => {
     setPersistence((prev) => ({
@@ -405,7 +358,7 @@ export function useMockTradingEngine(
     [markPersistenceError, mockAccountKey, persistenceDisabled],
   );
 
-  // Hydrate durable state from Mongo. localStorage remains a fast cache/fallback.
+  // Hydrate all state from MongoDB on mount. No localStorage fallback.
   useEffect(() => {
     if (persistenceDisabled) return;
     let cancelled = false;
