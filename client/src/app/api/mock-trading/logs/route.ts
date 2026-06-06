@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { listMockLogs } from "@/lib/mockTradingMongo";
 import { mockLogListQuerySchema } from "@/lib/mockTradingPersistenceTypes";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   const url = new URL(req.url);
   const parsed = mockLogListQuerySchema.safeParse({
-    account_key: url.searchParams.get("account_key") ?? undefined,
+    account_key: accountKey,
     page: url.searchParams.get("page") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
     event: url.searchParams.get("event") ?? undefined,

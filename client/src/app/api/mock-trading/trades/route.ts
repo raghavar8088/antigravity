@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { listMockTrades, upsertMockTrade } from "@/lib/mockTradingMongo";
 import { mockTradeListQuerySchema, mockTradeWriteBodySchema } from "@/lib/mockTradingPersistenceTypes";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,13 @@ function mongoNotConfigured() {
 }
 
 export async function GET(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   const url = new URL(req.url);
   const parsed = mockTradeListQuerySchema.safeParse({
-    account_key: url.searchParams.get("account_key") ?? undefined,
+    account_key: accountKey,
     page: url.searchParams.get("page") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
@@ -59,6 +64,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -66,7 +75,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = mockTradeWriteBodySchema.safeParse(body);
+  const b = body as Record<string, unknown>;
+  const parsed = mockTradeWriteBodySchema.safeParse({ ...b, accountKey });
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
@@ -77,7 +87,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await upsertMockTrade(
-      parsed.data.accountKey,
+      accountKey,
       parsed.data.trade,
       parsed.data.config,
       "MOCK_TRADE_CREATED",

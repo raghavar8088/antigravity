@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { closeMockTradeInMongo, upsertMockTrade } from "@/lib/mockTradingMongo";
 import { mockTradeCloseBodySchema } from "@/lib/mockTradingPersistenceTypes";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   const { id } = await params;
   let body: unknown;
   try {
@@ -17,7 +22,8 @@ export async function POST(
     return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = mockTradeCloseBodySchema.safeParse(body);
+  const b = body as Record<string, unknown>;
+  const parsed = mockTradeCloseBodySchema.safeParse({ ...b, accountKey });
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
@@ -43,7 +49,7 @@ export async function POST(
         );
       }
       const result = await upsertMockTrade(
-        parsed.data.accountKey,
+        accountKey,
         parsed.data.trade,
         parsed.data.config,
         "MOCK_TRADE_CLOSED",
@@ -58,7 +64,7 @@ export async function POST(
       );
     }
     const trade = await closeMockTradeInMongo({
-      accountKey: parsed.data.accountKey,
+      accountKey,
       tradeId: id,
       price: parsed.data.price,
       closedAt: parsed.data.closedAt ?? Date.now(),

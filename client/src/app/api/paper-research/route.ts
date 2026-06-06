@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured, getResearchState, upsertResearchState } from "@/lib/mongoTradesClient";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   const url = new URL(req.url);
-  const accountKey = url.searchParams.get("account_key")?.trim();
   const namespace = url.searchParams.get("namespace")?.trim();
-  if (!accountKey || !namespace) {
-    return NextResponse.json({ ok: false, error: "account_key and namespace required" }, { status: 400 });
+  if (!namespace) {
+    return NextResponse.json({ ok: false, error: "namespace required" }, { status: 400 });
   }
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
@@ -22,15 +26,18 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   let body: unknown;
   try { body = await req.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
   const b = body as Record<string, unknown>;
-  const accountKey = typeof b.accountKey === "string" ? b.accountKey.trim() : null;
   const namespace = typeof b.namespace === "string" ? b.namespace.trim() : null;
-  if (!accountKey || !namespace) {
-    return NextResponse.json({ ok: false, error: "accountKey and namespace required" }, { status: 400 });
+  if (!namespace) {
+    return NextResponse.json({ ok: false, error: "namespace required" }, { status: 400 });
   }
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });

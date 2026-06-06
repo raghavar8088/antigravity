@@ -2,15 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getLatestRegimeSnapshot, upsertRegimeSnapshot } from "@/lib/mockTradingMongo";
-import { DEFAULT_MOCK_ACCOUNT_KEY } from "@/lib/mockTradingPersistenceTypes";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
 const regimeSchema = z.enum(["TRENDING", "RANGING", "HIGH_VOLATILITY_BREAKOUT", "LOW_VOLATILITY_CHOP"]);
-
-const querySchema = z.object({
-  account_key: z.string().min(1).default(DEFAULT_MOCK_ACCOUNT_KEY),
-});
 
 const snapshotSchema = z.object({
   regime: regimeSchema,
@@ -27,7 +23,6 @@ const snapshotSchema = z.object({
 });
 
 const writeSchema = z.object({
-  accountKey: z.string().min(1).default(DEFAULT_MOCK_ACCOUNT_KEY),
   snapshot: snapshotSchema,
 });
 
@@ -43,21 +38,15 @@ function mongoNotConfigured() {
   );
 }
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const parsed = querySchema.safeParse({
-    account_key: url.searchParams.get("account_key") ?? undefined,
-  });
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, code: "VALIDATION_FAILED", error: "Invalid query", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
+export async function GET() {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   if (!isMongoConfigured()) return mongoNotConfigured();
 
   try {
-    const snapshot = await getLatestRegimeSnapshot(parsed.data.account_key);
+    const snapshot = await getLatestRegimeSnapshot(accountKey);
     return NextResponse.json({ ok: true, storage: "mongo", snapshot });
   } catch (err) {
     return NextResponse.json(
@@ -73,6 +62,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -90,7 +83,7 @@ export async function POST(req: Request) {
   if (!isMongoConfigured()) return mongoNotConfigured();
 
   try {
-    const snapshot = await upsertRegimeSnapshot(parsed.data.accountKey, parsed.data.snapshot);
+    const snapshot = await upsertRegimeSnapshot(accountKey, parsed.data.snapshot);
     return NextResponse.json({ ok: true, storage: "mongo", snapshot });
   } catch (err) {
     return NextResponse.json(

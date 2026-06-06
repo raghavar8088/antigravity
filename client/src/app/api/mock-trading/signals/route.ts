@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { insertStrategySignals, listRecentSignals } from "@/lib/mockTradingMongo";
-import { DEFAULT_MOCK_ACCOUNT_KEY } from "@/lib/mockTradingPersistenceTypes";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
 const signalQuerySchema = z.object({
-  account_key: z.string().min(1).default(DEFAULT_MOCK_ACCOUNT_KEY),
   strategy_id: z.coerce.number().int().optional(),
   family: z.string().optional(),
   regime: z.string().optional(),
@@ -36,7 +35,6 @@ const signalDocSchema = z.object({
 });
 
 const signalWriteSchema = z.object({
-  accountKey: z.string().min(1).default(DEFAULT_MOCK_ACCOUNT_KEY),
   signals: z.array(signalDocSchema).max(1_000),
 });
 
@@ -53,9 +51,12 @@ function mongoNotConfigured() {
 }
 
 export async function GET(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   const url = new URL(req.url);
   const parsed = signalQuerySchema.safeParse({
-    account_key: url.searchParams.get("account_key") ?? undefined,
     strategy_id: url.searchParams.get("strategy_id") ?? undefined,
     family: url.searchParams.get("family") ?? undefined,
     regime: url.searchParams.get("regime") ?? undefined,
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
   if (!isMongoConfigured()) return mongoNotConfigured();
 
   try {
-    const signals = await listRecentSignals(parsed.data.account_key, parsed.data);
+    const signals = await listRecentSignals(accountKey, parsed.data);
     return NextResponse.json({ ok: true, storage: "mongo", signals });
   } catch (err) {
     return NextResponse.json(
@@ -87,6 +88,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -104,7 +109,7 @@ export async function POST(req: Request) {
   if (!isMongoConfigured()) return mongoNotConfigured();
 
   try {
-    const insertedCount = await insertStrategySignals(parsed.data.accountKey, parsed.data.signals);
+    const insertedCount = await insertStrategySignals(accountKey, parsed.data.signals);
     return NextResponse.json({ ok: true, storage: "mongo", insertedCount });
   } catch (err) {
     return NextResponse.json(

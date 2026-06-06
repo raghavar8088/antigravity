@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured, getAccountState, upsertAccountState } from "@/lib/mongoTradesClient";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const accountKey = url.searchParams.get("account_key")?.trim();
-  if (!accountKey) {
-    return NextResponse.json({ ok: false, error: "account_key required" }, { status: 400 });
-  }
+export async function GET() {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
   }
@@ -17,15 +17,16 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+  const accountKey = auth.ctx.userId;
+
   let body: unknown;
   try { body = await req.json(); } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
   const b = body as Record<string, unknown>;
-  const accountKey = typeof b.accountKey === "string" ? b.accountKey.trim() : null;
-  if (!accountKey) {
-    return NextResponse.json({ ok: false, error: "accountKey required" }, { status: 400 });
-  }
+
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
   }
@@ -40,7 +41,6 @@ export async function POST(req: Request) {
     day_start_date: typeof b.dayStartDate === "number" ? b.dayStartDate : 0,
     cleared_at: typeof b.clearedAt === "number" ? b.clearedAt : 0,
     updated_at: new Date().toISOString(),
-    // Worker lease fields (written by VPS worker; browser passes null / omits)
     worker_id: typeof b.workerId === "string" ? b.workerId : null,
     worker_last_poll_at: typeof b.workerLastPollAt === "number" ? b.workerLastPollAt : null,
     worker_owner: b.workerOwner === "vps" || b.workerOwner === "browser" ? b.workerOwner : null,
