@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
+import { useOwnerAuth } from "@/hooks/useOwnerAuth";
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 
 export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
-  const { user, loading, message, signInWithEmail, signOut } = usePaperDeskAuth();
-  const [email, setEmail] = useState("");
+  const { user, loading, message } = usePaperDeskAuth();
+  const { signIn, signOut } = useOwnerAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
 
   if (loading) {
@@ -25,7 +28,7 @@ export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
         </DeskButton>
         {!compact ? (
           <span className="desk-label-md" style={{ fontWeight: 400 }}>
-            Trades sync to your account across devices.
+            All devices share the same account.
           </span>
         ) : null}
       </div>
@@ -34,23 +37,25 @@ export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {!compact ? <span className="desk-label-md">Sign in to sync paper trades across devices.</span> : null}
+      {!compact ? <span className="desk-label-md">Sign in to sync paper trades across all devices.</span> : null}
       <form
         style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}
         onSubmit={(e) => {
           e.preventDefault();
           setPending(true);
-          void signInWithEmail(email).finally(() => setPending(false));
+          void signIn(username, password).finally(() => setPending(false));
         }}
       >
         <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          autoComplete="email"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Username"
+          autoComplete="username"
+          autoCorrect="off"
+          autoCapitalize="none"
           style={{
-            flex: "1 1 180px",
+            flex: "1 1 140px",
             minHeight: 44,
             padding: "0 12px",
             borderRadius: "var(--desk-radius-input)",
@@ -58,11 +63,26 @@ export function PaperDeskAuthBar({ compact = false }: { compact?: boolean }) {
             background: "var(--desk-surface)",
           }}
         />
-        <DeskButton type="submit" disabled={pending} style={{ minHeight: 44 }}>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          autoComplete="current-password"
+          style={{
+            flex: "1 1 140px",
+            minHeight: 44,
+            padding: "0 12px",
+            borderRadius: "var(--desk-radius-input)",
+            border: "1px solid var(--desk-outline)",
+            background: "var(--desk-surface)",
+          }}
+        />
+        <DeskButton type="submit" disabled={pending || !username || !password} style={{ minHeight: 44 }}>
           {pending ? "Signing in…" : "Sign in"}
         </DeskButton>
-        <a href="/sign-in" className="desk-label-md" style={{ color: "var(--desk-primary)" }}>
-          Sign-in page
+        <a href="/login" className="desk-label-md" style={{ color: "var(--desk-primary)" }}>
+          Full login page
         </a>
       </form>
       {message ? <p className="desk-label-md">{message}</p> : null}

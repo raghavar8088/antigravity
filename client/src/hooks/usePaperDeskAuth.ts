@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+/**
+ * Thin wrapper around useOwnerAuth that preserves the original hook API so
+ * existing call sites (BTCFutureTradingScalper, PaperDeskAuthBar, etc.) don't
+ * need to be updated. Internally delegates to the new username+password auth.
+ */
+
+import { useOwnerAuth } from "@/hooks/useOwnerAuth";
 
 export type PaperDeskAuthUser = {
   id: string;
@@ -8,82 +14,16 @@ export type PaperDeskAuthUser = {
 };
 
 export function usePaperDeskAuth() {
-  const [user, setUser] = useState<PaperDeskAuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth/session", { cache: "no-store", credentials: "include" });
-      const body = (await res.json()) as {
-        ok?: boolean;
-        user?: { id: string; email: string | null } | null;
-      };
-      if (body.ok && body.user?.id) {
-        setUser({ id: body.user.id, email: body.user.email ?? null });
-      } else {
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const signInWithEmail = useCallback(
-    async (email: string) => {
-      setMessage(null);
-      const trimmed = email.trim();
-      if (!trimmed) {
-        setMessage("Enter your email");
-        return false;
-      }
-      try {
-        const res = await fetch("/api/auth/signin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: trimmed }),
-          credentials: "include",
-        });
-        const body = (await res.json()) as { ok?: boolean; error?: string; user?: { id: string; email: string } };
-        if (!res.ok || !body.ok) {
-          setMessage(body.error ?? "Sign-in failed");
-          return false;
-        }
-        if (body.user) {
-          setUser({ id: body.user.id, email: body.user.email });
-        }
-        await refresh();
-        return true;
-      } catch {
-        setMessage("Sign-in failed — please try again");
-        return false;
-      }
-    },
-    [refresh],
-  );
-
-  const signOut = useCallback(async () => {
-    try {
-      await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
-    } catch {
-      // ignore
-    }
-    setUser(null);
-    setMessage(null);
-  }, []);
+  const { user, loading, error, signIn, signOut, refresh } = useOwnerAuth();
 
   return {
     configured: true,
-    user,
+    user: user ? ({ id: user.id, email: user.username } as PaperDeskAuthUser) : null,
     loading,
-    message,
-    signInWithEmail,
+    message: error,
+    /** @deprecated — use signIn(username, password) via useOwnerAuth directly */
+    signInWithEmail: async (_email: string) => false,
+    signIn,
     signOut,
     refresh,
   };

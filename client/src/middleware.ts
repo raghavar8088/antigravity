@@ -95,7 +95,9 @@ function applySecurityHeaders(res: NextResponse): void {
 }
 
 // ── Protected page paths (browser nav guard) ──────────────────────────────────
-const PROTECTED_PAGES = ["/dashboard", "/trading", "/admin", "/settings", "/audit"];
+// /login is intentionally excluded — it must remain public so unauthenticated
+// users can reach it. All other app pages require a valid raig_session cookie.
+const PROTECTED_PAGES = ["/dashboard", "/trading", "/admin", "/settings", "/audit", "/sign-in"];
 
 function isProtectedPage(pathname: string): boolean {
   return PROTECTED_PAGES.some((p) => pathname.startsWith(p));
@@ -130,7 +132,7 @@ export function middleware(request: NextRequest): NextResponse {
   // ── Page auth guard ──────────────────────────────────────────────────────
   if (isProtectedPage(pathname) && !hasSessionCookie(request)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/signin";
+    url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }

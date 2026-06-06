@@ -5,7 +5,6 @@ import { BTCFuturesScalper } from "@/components/BTCFuturesScalper";
 import type { BTCFuturesEngineOptions } from "@/hooks/useBTCFuturesScalperEngine";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 import { resolveCloudPaperTradesAccountKey } from "@/lib/paperTradesAuth";
-import { getOrCreateAnonAccountKey } from "@/lib/anonAccountKey";
 import {
   btcFtEntryDebugEnabledFromEnv,
   btcFtMinMoveKMulFromEnv,
@@ -114,7 +113,7 @@ export function BTCFutureTradingScalper({
       resolveCloudPaperTradesAccountKey({
         supabaseUserId: auth.user?.id,
         storageNamespace: effectiveStorageNs,
-      }) ?? getOrCreateAnonAccountKey() ?? "",
+      }) ?? "",
     [auth.user?.id, effectiveStorageNs],
   );
 
