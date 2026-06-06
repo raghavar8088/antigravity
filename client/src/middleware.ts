@@ -95,12 +95,12 @@ function applySecurityHeaders(res: NextResponse): void {
 }
 
 // ── Protected page paths (browser nav guard) ──────────────────────────────────
-// /login is intentionally excluded — it must remain public so unauthenticated
-// users can reach it. All other app pages require a valid raig_session cookie.
-const PROTECTED_PAGES = ["/dashboard", "/trading", "/admin", "/settings", "/audit", "/sign-in"];
+// /login is the only public route. Every other page requires a valid raig_session.
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/session", "/api/health"];
 
 function isProtectedPage(pathname: string): boolean {
-  return PROTECTED_PAGES.some((p) => pathname.startsWith(p));
+  // Static assets, Next.js internals, and explicitly public paths are allowed.
+  return !PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
 function hasSessionCookie(req: NextRequest): boolean {
