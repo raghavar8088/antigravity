@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });

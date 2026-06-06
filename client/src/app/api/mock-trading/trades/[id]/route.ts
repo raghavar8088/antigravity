@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getMockTrade, upsertMockTrade } from "@/lib/mockTradingMongo";
 import { mockTradePatchBodySchema } from "@/lib/mockTradingPersistenceTypes";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +14,7 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   const { id } = await params;
   if (!isMongoConfigured()) return mongoNotConfigured();
@@ -32,9 +30,7 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   const { id } = await params;
   let body: unknown;

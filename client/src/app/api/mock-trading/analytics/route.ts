@@ -3,14 +3,12 @@ import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getMockAnalyticsSummary, getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
 import { mockTradingConfigSchema } from "@/lib/mockTradingPersistenceTypes";
 import { DEFAULT_MOCK_TRADING_CONFIG } from "@/lib/mockTradingEngine";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });

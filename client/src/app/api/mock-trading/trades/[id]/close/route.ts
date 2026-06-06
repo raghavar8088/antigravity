@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { closeMockTradeInMongo, upsertMockTrade } from "@/lib/mockTradingMongo";
 import { mockTradeCloseBodySchema } from "@/lib/mockTradingPersistenceTypes";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   const { id } = await params;
   let body: unknown;

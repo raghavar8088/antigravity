@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { listDailyPnlHistory, upsertDailyPnlPoint } from "@/lib/mockTradingMongo";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +32,7 @@ function mongoNotConfigured() {
 }
 
 export async function GET(req: Request) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({
@@ -60,9 +58,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-  const accountKey = auth.ctx.userId;
+  const accountKey = OWNER_ACCOUNT_KEY;
 
   let body: unknown;
   try {
