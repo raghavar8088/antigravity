@@ -19,6 +19,7 @@ import (
 
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/gateway"
@@ -1065,6 +1066,16 @@ func main() {
 	secGate := security.NewGate(secPolicy, nil)
 	log.Printf("[SECURITY] Zero Trust Gate active — enforce_auth=%v source=%s",
 		secPolicy.EnforceAuth, secretProvider.Source())
+
+	// ═══════════════════════════════════════════════════
+	// Phase 30 — MongoDB Persistence Layer
+	// ═══════════════════════════════════════════════════
+	mongoPhase30 := mongopersist.StartAndRestore(ctx)
+	if mongoPhase30 != nil {
+		defer mongoPhase30.Close(context.Background())
+		http.Handle("/phase30/", http.StripPrefix("/phase30", mongopersist.NewHandler(mongoPhase30)))
+		log.Println("[PHASE30] ✅ MongoDB persistence layer active — /phase30/* endpoints registered")
+	}
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
