@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 
 const scryptAsync = promisify<BinaryLike, BinaryLike, number, Buffer>(crypto.scrypt);
 
-export const OWNER_ACCOUNT_KEY = "owner_admin";
+export const OWNER_ACCOUNT_KEY = "mock_trading_default";
 
 // ── Hashing ──────────────────────────────────────────────────────────────────
 
