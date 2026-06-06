@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useOwnerAuth } from "@/hooks/useOwnerAuth";
 
-export default function LoginPage() {
+function LoginForm() {
   const { user, loading, error, signIn } = useOwnerAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [pending, setPending] = useState(false);
   const usernameRef = useRef<HTMLInputElement>(null);
 
-  // Redirect if already logged in
   useEffect(() => {
     if (!loading && user) {
       const next = searchParams.get("next") ?? "/";
@@ -47,7 +46,6 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-sm space-y-6">
-        {/* Header */}
         <div className="space-y-1 text-center">
           <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">
             Trading Platform
@@ -55,7 +53,6 @@ export default function LoginPage() {
           <p className="text-sm text-zinc-500">Owner access — all devices share one account</p>
         </div>
 
-        {/* Form card */}
         <div
           style={{
             background: "rgba(255,255,255,0.04)",
@@ -170,5 +167,19 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-zinc-950">
+          <p className="text-zinc-400 text-sm">Loading…</p>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
