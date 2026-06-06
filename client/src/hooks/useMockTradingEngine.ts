@@ -812,7 +812,7 @@ export function useMockTradingEngine(
       setError(null);
       try {
         const params = new URLSearchParams();
-        if (accountKey) params.set("account_key", accountKey);
+        params.set("account_key", mockAccountKey);
         params.set("limit", "500");
         const res = await fetch(`/api/strategy-signal-trace?${params.toString()}`);
         const json = (await res.json()) as { rows?: StrategySignalTraceRow[]; error?: string };
@@ -836,7 +836,7 @@ export function useMockTradingEngine(
       cancelled = true;
       clearInterval(id);
     };
-  }, [accountKey, disablePolling, ingestTraceRows]);
+  }, [mockAccountKey, disablePolling, ingestTraceRows]);
 
   // ── Apply price ticks → unrealized PnL and TP/SL ──────────────────────────
   useEffect(() => {

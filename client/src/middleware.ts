@@ -96,7 +96,7 @@ function applySecurityHeaders(res: NextResponse): void {
 
 // ── Protected page paths (browser nav guard) ──────────────────────────────────
 // /login is the only public route. Every other page requires a valid raig_session.
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/session", "/api/health", "/mock-trading", "/api/mock-trading"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/session", "/api/health", "/mock-trading", "/api/mock-trading", "/api/strategy-signal-trace"];
 
 function isProtectedPage(pathname: string): boolean {
   // Static assets, Next.js internals, and explicitly public paths are allowed.
