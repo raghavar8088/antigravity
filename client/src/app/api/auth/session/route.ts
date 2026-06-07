@@ -1,12 +1,21 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { verifySession, SESSION_COOKIE, isMongoAuthConfigured } from "@/lib/jwtSession";
+import { verifySession, SESSION_COOKIE } from "@/lib/jwtSession";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isMongoAuthConfigured()) {
-    return NextResponse.json({ ok: false, error: "Auth not configured" }, { status: 503 });
+  // Session verification only requires AUTH_JWT_SECRET — not MONGODB_URI.
+  // isMongoAuthConfigured() was incorrectly gating this endpoint on MongoDB.
+  if (!process.env.AUTH_JWT_SECRET?.trim()) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "AUTH_UNCONFIGURED",
+        error: "Auth not configured — AUTH_JWT_SECRET is missing",
+      },
+      { status: 503 },
+    );
   }
 
   const cookieStore = await cookies();
@@ -15,7 +24,13 @@ export async function GET() {
     return NextResponse.json({ ok: true, user: null });
   }
 
-  const session = verifySession(token);
+  let session: ReturnType<typeof verifySession>;
+  try {
+    session = verifySession(token);
+  } catch {
+    session = null;
+  }
+
   if (!session) {
     return NextResponse.json({ ok: true, user: null });
   }

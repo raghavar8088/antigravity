@@ -19,6 +19,17 @@ type AuthOk = { ok: true; ctx: SessionPayload };
 type AuthFail = { ok: false; response: NextResponse };
 
 export async function getAuthenticatedApiSession(): Promise<AuthOk | AuthFail> {
+  // If AUTH_JWT_SECRET is not configured the server cannot validate any session.
+  if (!process.env.AUTH_JWT_SECRET?.trim()) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { ok: false, code: "UNCONFIGURED", error: "Auth not configured — set AUTH_JWT_SECRET" },
+        { status: 503 },
+      ),
+    };
+  }
+
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
 
@@ -32,7 +43,13 @@ export async function getAuthenticatedApiSession(): Promise<AuthOk | AuthFail> {
     };
   }
 
-  const session = verifySession(token);
+  let session: ReturnType<typeof verifySession>;
+  try {
+    session = verifySession(token);
+  } catch {
+    session = null;
+  }
+
   if (!session) {
     return {
       ok: false,

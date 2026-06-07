@@ -568,10 +568,22 @@ func main() {
 	// MongoManager is the single shared handle for all paperpersist writers.
 	// If MongoDB is unavailable the engine degrades gracefully (PostgreSQL only).
 	// ═══════════════════════════════════════════════════
+
+	// Environment validation — logs a clear report before attempting connection.
+	// If MONGODB_URI is missing or malformed the engine continues in SQLite-only
+	// mode rather than fatally exiting, but the report makes the issue obvious.
+	envReport := paperpersist.LogEnvReport()
+	if !envReport.MongoReady {
+		log.Printf("[Phase31B] ⛔  MongoDB env not ready — skipping MongoDB persistence. Paper Desk will show empty data until MONGODB_URI is configured and engine is restarted.")
+	}
+
 	var ppBundle *trading.PaperPersistBundle
 	mongoMgr, mongoErr := paperpersist.NewMongoManager(ctx)
 	if mongoErr != nil {
-		log.Printf("[Phase31B] MongoDB unavailable — running without MongoDB persistence: %v", mongoErr)
+		log.Printf("[Phase31B] ❌  MongoDB connect failed — running without MongoDB persistence: %v", mongoErr)
+		log.Printf("[Phase31B]     Account key : %s", envReport.AccountKey)
+		log.Printf("[Phase31B]     Database    : %s", envReport.DatabaseName)
+		log.Printf("[Phase31B]     Check Atlas IP whitelist and credentials.")
 	} else {
 		if idxErr := mongoMgr.EnsureIndexes(ctx); idxErr != nil {
 			log.Printf("[Phase31B] index creation warning: %v", idxErr)

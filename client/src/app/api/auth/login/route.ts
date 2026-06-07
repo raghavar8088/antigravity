@@ -34,10 +34,30 @@ function clearRateLimit(ip: string): void {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Verify both the credential store AND the JWT secret are ready before
+  // accepting any request — prevents a half-configured state where credentials
+  // are present but signSession() would throw because AUTH_JWT_SECRET is missing.
   const creds = getAdminCredentials();
   if (!creds) {
     return NextResponse.json(
-      { ok: false, error: "Auth not configured — set ADMIN_USERNAME + ADMIN_PASSWORD_HASH" },
+      {
+        ok: false,
+        code: "AUTH_UNCONFIGURED",
+        error: "Auth not configured — set ADMIN_USERNAME + ADMIN_PASSWORD_HASH",
+        hint: "Run: node client/scripts/generate-password-hash.mjs <password> and add the three auth env vars to .env.local and Vercel.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (!process.env.AUTH_JWT_SECRET?.trim()) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "AUTH_UNCONFIGURED",
+        error: "Auth not configured — AUTH_JWT_SECRET is missing",
+        hint: "Generate: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\" and set AUTH_JWT_SECRET in .env.local and Vercel.",
+      },
       { status: 503 },
     );
   }

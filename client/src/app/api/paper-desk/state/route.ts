@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getPaperState } from "@/lib/paperDeskClient";
+import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,19 @@ export async function GET() {
   if (!auth.ok) return auth.response;
   const accountKey = auth.ctx.userId;
 
-  if (!isMongoConfigured()) {
-    return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
+  if (!isMongoConfigured()) return mongoUnconfigured();
+
+  let state;
+  try {
+    state = await getPaperState(accountKey);
+  } catch (err) {
+    return mongoUnavailable(err instanceof Error ? err.message : "unknown");
   }
 
-  const state = await getPaperState(accountKey);
-  return NextResponse.json({ ok: true, state, accountKey });
+  return NextResponse.json({
+    ok: true,
+    account_key: accountKey,
+    state,
+    engine_writing: state !== null,
+  });
 }

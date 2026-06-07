@@ -63,11 +63,26 @@ export function verifySession(token: string): SessionPayload | null {
   }
 }
 
+/**
+ * Returns true when the JWT secret is present — the only thing needed to
+ * sign and verify sessions.  Does NOT require MONGODB_URI.
+ */
+export function isAuthConfigured(): boolean {
+  return (
+    typeof process.env.AUTH_JWT_SECRET === "string" &&
+    process.env.AUTH_JWT_SECRET.trim().length > 0
+  );
+}
+
+/**
+ * @deprecated Use isAuthConfigured() for session checks.
+ * This legacy export coupled session auth to MongoDB presence — kept for
+ * backward compatibility with callers that haven't been updated yet.
+ */
 export function isMongoAuthConfigured(): boolean {
   return (
     typeof process.env.MONGODB_URI === "string" &&
     process.env.MONGODB_URI.trim().length > 0 &&
-    typeof process.env.AUTH_JWT_SECRET === "string" &&
-    process.env.AUTH_JWT_SECRET.trim().length > 0
+    isAuthConfigured()
   );
 }

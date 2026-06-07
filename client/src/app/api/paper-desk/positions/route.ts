@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { listPositions } from "@/lib/paperDeskClient";
+import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,7 @@ export async function GET(req: Request) {
   if (!auth.ok) return auth.response;
   const accountKey = auth.ctx.userId;
 
-  if (!isMongoConfigured()) {
-    return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
-  }
+  if (!isMongoConfigured()) return mongoUnconfigured();
 
   const { searchParams } = new URL(req.url);
   const rawStatus = searchParams.get("status");
@@ -20,6 +19,12 @@ export async function GET(req: Request) {
     rawStatus === "OPEN" || rawStatus === "CLOSED" ? rawStatus : undefined;
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "100", 10) || 100, 500);
 
-  const positions = await listPositions(accountKey, status, limit);
-  return NextResponse.json({ ok: true, positions, count: positions.length });
+  let positions;
+  try {
+    positions = await listPositions(accountKey, status, limit);
+  } catch (err) {
+    return mongoUnavailable(err instanceof Error ? err.message : "unknown");
+  }
+
+  return NextResponse.json({ ok: true, account_key: accountKey, positions, count: positions.length });
 }

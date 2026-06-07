@@ -7,6 +7,7 @@ import {
   listPaperTrades,
   getStrategyHealthSummary,
 } from "@/lib/paperDeskClient";
+import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
 
@@ -21,23 +22,27 @@ export async function GET() {
   if (!auth.ok) return auth.response;
   const accountKey = auth.ctx.userId;
 
-  if (!isMongoConfigured()) {
-    return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
-  }
+  if (!isMongoConfigured()) return mongoUnconfigured();
 
-  const [state, openPositions, recentTrades, healthSummary] = await Promise.all([
-    getPaperState(accountKey),
-    listOpenPositions(accountKey),
-    listPaperTrades({ accountKey, limit: 20 }),
-    getStrategyHealthSummary(accountKey),
-  ]);
+  let state, openPositions, recentTrades, healthSummary;
+  try {
+    [state, openPositions, recentTrades, healthSummary] = await Promise.all([
+      getPaperState(accountKey),
+      listOpenPositions(accountKey),
+      listPaperTrades({ accountKey, limit: 20 }),
+      getStrategyHealthSummary(accountKey),
+    ]);
+  } catch (err) {
+    return mongoUnavailable(err instanceof Error ? err.message : "unknown");
+  }
 
   return NextResponse.json({
     ok: true,
     server_time: new Date().toISOString(),
+    account_key: accountKey,
     state,
-    open_positions: openPositions,
-    recent_trades: recentTrades,
+    open_positions: openPositions ?? [],
+    recent_trades: recentTrades ?? [],
     health_summary: healthSummary,
   });
 }
