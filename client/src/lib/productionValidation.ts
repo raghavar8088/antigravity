@@ -145,7 +145,7 @@ export async function runProductionValidation(
     }
 
     try {
-      const trades = await listPaperTrades(accountKey, { limit: 1 });
+      const trades = await listPaperTrades({ accountKey, limit: 1 });
       checks.push({
         id: "paper_trades",
         status: "PASS",
@@ -160,7 +160,7 @@ export async function runProductionValidation(
     }
 
     try {
-      await listPaperOrders(accountKey, { limit: 1 });
+      await listPaperOrders({ accountKey, limit: 1 });
       checks.push({
         id: "paper_orders",
         status: "PASS",
