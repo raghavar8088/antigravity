@@ -95,11 +95,20 @@ export async function POST(req: Request) {
 
       let updated = 0;
       if (!dryRun && matched > 0) {
-        const result = await col.updateMany(
-          { account_key: { $in: anonKeys } },
-          { $set: { account_key: OWNER_ACCOUNT_KEY } },
-        );
-        updated = result.modifiedCount;
+        // Check if a document with the target account_key already exists (unique-index collections).
+        // If so, delete the anon duplicate instead of updating to avoid E11000.
+        const ownerExists = await col.findOne({ account_key: OWNER_ACCOUNT_KEY });
+        if (ownerExists) {
+          // Singleton collection (e.g. paper_state) — drop the stale anon doc, owner doc wins.
+          const del = await col.deleteMany({ account_key: { $in: anonKeys } });
+          updated = del.deletedCount;
+        } else {
+          const result = await col.updateMany(
+            { account_key: { $in: anonKeys } },
+            { $set: { account_key: OWNER_ACCOUNT_KEY } },
+          );
+          updated = result.modifiedCount;
+        }
       } else {
         updated = matched; // in dry-run, report what would be updated
       }
