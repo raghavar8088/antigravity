@@ -53,6 +53,22 @@ func (o *Orchestrator) SetPaperPersist(b *PaperPersistBundle) {
 	log.Printf("[paperpersist] bundle attached — trade/order/position persistence active")
 }
 
+// RegisterRecoveredPositions wires recovered position IDs into the
+// positionToOrderID map so that processCloseEvents can emit correct OMS
+// transitions when a recovered position hits SL/TP after restart.
+// Must be called after NewOrchestrator() and before Run().
+func (o *Orchestrator) RegisterRecoveredPositions(recovered []paperpersist.RecoveredPosition) {
+	o.positionToOrderMu.Lock()
+	defer o.positionToOrderMu.Unlock()
+	for _, rp := range recovered {
+		if rp.PositionID == "" {
+			continue
+		}
+		o.positionToOrderID[rp.PositionID] = rp.OrderID
+	}
+	log.Printf("[paperpersist] registered %d recovered position→order mappings", len(recovered))
+}
+
 // pp returns the bundle under read lock, or nil if not wired.
 func (o *Orchestrator) pp() *PaperPersistBundle {
 	o.mu.RLock()

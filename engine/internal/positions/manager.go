@@ -108,7 +108,11 @@ func (m *Manager) CanOpenPosition(strategyName string) bool {
 }
 
 // OpenPosition creates a new tracked position with calculated SL/TP price levels.
-func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratName string) *Position {
+func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratName string) (*Position, error) {
+	if err := ValidateOpenSignal(sig); err != nil {
+		return nil, fmt.Errorf("open position rejected for %s: %w", stratName, err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -165,7 +169,7 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 		stopLoss, stopLossPct,
 		takeProfit, takeProfitPct, stratName)
 
-	return pos
+	return pos, nil
 }
 
 // CheckStopLossAndTakeProfit evaluates all open positions against the current live price.
@@ -353,6 +357,10 @@ func (m *Manager) RestorePositions(restored []Position) {
 	for i := range restored {
 		pos := restored[i]
 		if pos.Status != "OPEN" {
+			continue
+		}
+		if err := EnsurePositionProtection(&pos); err != nil {
+			log.Printf("[POSITION MANAGER] skip restore %s: %v", pos.ID, err)
 			continue
 		}
 		m.positions[pos.ID] = &pos

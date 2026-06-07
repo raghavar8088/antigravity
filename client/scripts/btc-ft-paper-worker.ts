@@ -9,7 +9,7 @@
  *   pm2 start ecosystem.worker.config.cjs --name btc-ft-worker
  *
  * Required env (copy from .env.local and add to VPS):
- *   DESK_WORKER_ACCOUNT_KEY   — same UUID the signed-in browser uses
+ *   OWNER_ACCOUNT_KEY         — must be mock_trading_default (matches JWT session)
  *   MONGODB_URI               — Atlas connection string
  *   MONGODB_DB                — database name (default: loop_trades)
  *   NEXT_PUBLIC_VERCEL_URL    — deployed app URL (with or without https://)
@@ -54,11 +54,16 @@ import {
   eventFromError,
   eventsFromOmsTick,
 } from "../src/lib/verificationTrack/buildVerificationEvents";
+import {
+  resolveAuthoritativeAccountKey,
+  validateAccountKeyAlignment,
+} from "../src/lib/authoritativeAccountKey";
+import { isEngineExecutionAuthority, ENGINE_AUTHORITY_SKIP_REASON } from "../src/lib/engineAuthority";
 import { insertPaperOmsOrders, updatePaperOmsOrderStatus } from "../src/lib/paperOmsMongo";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const ACCOUNT_KEY = process.env.DESK_WORKER_ACCOUNT_KEY?.trim() ?? "";
+const ACCOUNT_KEY = resolveAuthoritativeAccountKey();
 const STORAGE_NAMESPACE = process.env.DESK_WORKER_STORAGE_NAMESPACE ?? "btc_future_trading_v4";
 const POLL_MS = Math.max(2000, Number(process.env.POLL_MS ?? 4000) || 4000);
 const INITIAL_BALANCE = Math.max(100, Number(process.env.NEXT_PUBLIC_DESK_INITIAL_BALANCE_USD ?? 1000) || 1000);
@@ -215,14 +220,29 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 async function main() {
   console.log("[worker] BTC futures paper worker starting");
-  console.log(`[worker] account_key=${ACCOUNT_KEY || "(missing)"}`);
+
+  if (isEngineExecutionAuthority()) {
+    console.error(`[worker] FATAL: ${ENGINE_AUTHORITY_SKIP_REASON}`);
+    console.error("[worker] The Go engine on AWS Lightsail is the sole execution authority.");
+    console.error("[worker] Set ENGINE_EXECUTION_AUTHORITY=0 only for local legacy debugging.");
+    process.exit(1);
+  }
+
+  const keyCheck = validateAccountKeyAlignment();
+  for (const w of keyCheck.warnings) console.warn(`[worker] ${w}`);
+  if (!keyCheck.ok) {
+    console.error(`[worker] FATAL account key: ${keyCheck.errors.join("; ")}`);
+    process.exit(1);
+  }
+
+  console.log(`[worker] account_key=${ACCOUNT_KEY}`);
   console.log(`[worker] worker_id=${WORKER_ID}`);
   console.log(`[worker] base_url=${BASE_URL}`);
   console.log(`[worker] poll_ms=${POLL_MS}`);
   console.log(`[worker] strategy_ids=${STRATEGY_IDS_EXPLICIT ? STRATEGY_IDS.join(",") || "(none parsed)" : "(all)"}`);
 
   if (!ACCOUNT_KEY) {
-    console.error("[worker] FATAL: DESK_WORKER_ACCOUNT_KEY is required");
+    console.error("[worker] FATAL: authoritative account key missing");
     process.exit(1);
   }
 

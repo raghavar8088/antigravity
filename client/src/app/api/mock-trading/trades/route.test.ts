@@ -101,33 +101,11 @@ describe("Mock Trading trade API routes", () => {
     vi.mocked(mockMongo.closeMockTradeInMongo).mockResolvedValue(closedTrade);
   });
 
-  it("creates a valid mock trade in MongoDB", async () => {
-    const res = await POST(request("http://localhost/api/mock-trading/trades", {
-      accountKey: "mock_trading_default",
-      trade: openTrade,
-      config: DEFAULT_MOCK_TRADING_CONFIG,
-    }));
-    expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; storage: string; tradeId: string };
-    expect(body.ok).toBe(true);
-    expect(body.storage).toBe("mongo");
-    expect(body.tradeId).toBe(openTrade.id);
-    expect(mockMongo.upsertMockTrade).toHaveBeenCalledWith(
-      "mock_trading_default",
-      openTrade,
-      DEFAULT_MOCK_TRADING_CONFIG,
-      "MOCK_TRADE_CREATED",
-    );
-  });
-
-  it("rejects malformed trade records", async () => {
-    const res = await POST(request("http://localhost/api/mock-trading/trades", {
-      accountKey: "mock_trading_default",
-      trade: { ...openTrade, entryPrice: -1 },
-    }));
-    expect(res.status).toBe(400);
+  it("POST is deprecated — returns 410", async () => {
+    const res = await POST();
+    expect(res.status).toBe(410);
     const body = await res.json() as { code: string };
-    expect(body.code).toBe("VALIDATION_FAILED");
+    expect(body.code).toBe("DEPRECATED");
   });
 
   it("passes sanitized pagination, filters, and sorting to Mongo", async () => {
@@ -169,39 +147,18 @@ describe("Mock Trading trade API routes", () => {
     expect(body.trade.id).toBe(openTrade.id);
   });
 
-  it("updates a mock trade by id", async () => {
-    const res = await PATCH(
-      request(`http://localhost/api/mock-trading/trades/${openTrade.id}`, {
-        accountKey: "mock_trading_default",
-        trade: { ...openTrade, currentPrice: 60_100, unrealizedPnl: 12 },
-      }, "PATCH"),
-      { params: Promise.resolve({ id: openTrade.id }) },
-    );
-    expect(res.status).toBe(200);
-    expect(mockMongo.upsertMockTrade).toHaveBeenCalledWith(
-      "mock_trading_default",
-      expect.objectContaining({ currentPrice: 60_100 }),
-      DEFAULT_MOCK_TRADING_CONFIG,
-      "MOCK_TRADE_UPDATED",
-    );
+  it("PATCH is deprecated — returns 410", async () => {
+    const res = await PATCH();
+    expect(res.status).toBe(410);
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("DEPRECATED");
   });
 
-  it("closes a mock trade by id with price input", async () => {
-    const res = await CLOSE(
-      request(`http://localhost/api/mock-trading/trades/${openTrade.id}/close`, {
-        accountKey: "mock_trading_default",
-        price: 61_000,
-      }),
-      { params: Promise.resolve({ id: openTrade.id }) },
-    );
-    expect(res.status).toBe(200);
-    const body = await res.json() as { trade: MockTrade };
-    expect(body.trade.status).toBe("CLOSED");
-    expect(mockMongo.closeMockTradeInMongo).toHaveBeenCalledWith(expect.objectContaining({
-      accountKey: "mock_trading_default",
-      tradeId: openTrade.id,
-      price: 61_000,
-    }));
+  it("CLOSE is deprecated — returns 410", async () => {
+    const res = await CLOSE();
+    expect(res.status).toBe(410);
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("DEPRECATED");
   });
 
   it("returns 503 when MongoDB is not configured", async () => {

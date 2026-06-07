@@ -26,49 +26,11 @@ export async function GET(
   return NextResponse.json({ ok: true, trade, source: "mongo", storage: "mongo" });
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const accountKey = OWNER_ACCOUNT_KEY;
-
-  const { id } = await params;
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const b = body as Record<string, unknown>;
-  const parsed = mockTradePatchBodySchema.safeParse({ ...b, accountKey });
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
-  if (parsed.data.trade.id !== id) {
-    return NextResponse.json(
-      { ok: false, code: "TRADE_ID_MISMATCH", error: "Route id must match trade.id" },
-      { status: 400 },
-    );
-  }
-  if (!isMongoConfigured()) return mongoNotConfigured();
-
-  try {
-    const event = parsed.data.trade.status === "CLOSED" ? "MOCK_TRADE_CLOSED" : "MOCK_TRADE_UPDATED";
-    const result = await upsertMockTrade(accountKey, parsed.data.trade, parsed.data.config, event);
-    return NextResponse.json({ ok: true, storage: "mongo", tradeId: id, ...result });
-  } catch (err) {
-    return NextResponse.json(
-      {
-        ok: false,
-        code: "MONGO_WRITE_FAILED",
-        error: "Mongo write failed",
-        detail: err instanceof Error ? err.message : "unknown",
-      },
-      { status: 500 },
-    );
-  }
+// PATCH is disabled — position mark-to-market is now owned by the Go engine.
+// Positions are tracked in paper_positions and read via /api/paper-desk/positions.
+export async function PATCH() {
+  return NextResponse.json(
+    { ok: false, code: "DEPRECATED", error: "Browser trade updates are disabled. The Go engine owns position mark-to-market. Read positions from /api/paper-desk/positions." },
+    { status: 410 },
+  );
 }

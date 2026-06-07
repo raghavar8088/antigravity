@@ -520,7 +520,11 @@ func stopLossFromSignal(sig strategy.Signal, entry float64) float64 {
 // to the OMS v3 ledger. This is the single call-site for all position opens so
 // the mapping is never missed regardless of execution path (strategy, AI, bridge).
 func (o *Orchestrator) openAndTrackPosition(ctx context.Context, sig strategy.Signal, fill execution.FillResult, stratName string) {
-	pos := o.posMgr.OpenPosition(sig, fill.ExecPrice, stratName)
+	pos, err := o.posMgr.OpenPosition(sig, fill.ExecPrice, stratName)
+	if err != nil {
+		log.Printf("[POSITION OPEN REJECTED] %s: %v", stratName, err)
+		return
+	}
 	if pos == nil || fill.ClientOrderID == "" {
 		return
 	}

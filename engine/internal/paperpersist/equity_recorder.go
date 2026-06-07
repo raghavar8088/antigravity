@@ -99,7 +99,7 @@ func (r *EquityRecorder) Run(ctx context.Context) {
 	defer midnightTicker.Stop()
 
 	log.Printf("[paperpersist/equity] started snap=%s account_key=%s",
-		r.snapInterval, ownerAccountKey)
+		r.snapInterval, AccountKey())
 
 	for {
 		select {
@@ -200,7 +200,7 @@ func (r *EquityRecorder) sealDay(ctx context.Context, date string) error {
 	doc["checksum"] = checksum(daily)
 
 	// Unique on (account_key, date): prevents double-sealing on re-runs.
-	filter := bson.M{"account_key": ownerAccountKey, "date": date}
+	filter := bson.M{"account_key": AccountKey(), "date": date}
 	if err := upsertOne(ctx, col, filter, doc); err != nil {
 		return fmt.Errorf("daily PnL seal %s: %w", date, err)
 	}

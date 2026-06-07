@@ -89,7 +89,7 @@ func (s *StateSnapshotter) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.snapshotInterval)
 	defer ticker.Stop()
 	log.Printf("[paperpersist/snapshotter] started interval=%s account_key=%s",
-		s.snapshotInterval, ownerAccountKey)
+		s.snapshotInterval, AccountKey())
 	for {
 		select {
 		case <-ctx.Done():
@@ -122,6 +122,10 @@ func (s *StateSnapshotter) snap(ctx context.Context) error {
 
 	snap := s.provider.GetAccountSnapshot()
 	snap.SnappedAt = time.Now()
+	if snap.Balance < 0 {
+		log.Printf("[paperpersist/snapshotter] negative balance %.4f clamped to 0 before persist", snap.Balance)
+		snap.Balance = 0
+	}
 
 	now := snap.SnappedAt
 	doc := baseDoc(now)
@@ -154,7 +158,7 @@ func (s *StateSnapshotter) snap(ctx context.Context) error {
 	doc["checksum"] = checksum(snap)
 
 	// paper_state is a singleton per account. Filter on account_key only.
-	filter := bson.M{"account_key": ownerAccountKey}
+	filter := bson.M{"account_key": AccountKey()}
 	if err := upsertOne(ctx, col, filter, doc); err != nil {
 		return err
 	}

@@ -10,6 +10,15 @@ import (
 
 const floatTolerance = 1e-9
 
+func mustOpen(t *testing.T, mgr *Manager, sig strategy.Signal, entry float64, name string) *Position {
+	t.Helper()
+	pos, err := mgr.OpenPosition(sig, entry, name)
+	if err != nil {
+		t.Fatalf("OpenPosition: %v", err)
+	}
+	return pos
+}
+
 func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	mgr := NewManager()
 	sig := strategy.Signal{
@@ -20,7 +29,7 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 		TakeProfitPct: 1,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "Test")
+	pos := mustOpen(t, mgr,sig, 100, "Test")
 	mgr.CheckStopLossAndTakeProfit(101)
 
 	select {
@@ -54,7 +63,7 @@ func TestLongPositionKeepsFixedStopLossAfterProfitMove(t *testing.T) {
 		TakeProfitPct: 1,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "NoBreakEven")
+	pos := mustOpen(t, mgr,sig, 100, "NoBreakEven")
 	originalStop := pos.StopLoss
 
 	mgr.CheckStopLossAndTakeProfit(100.31)
@@ -85,7 +94,7 @@ func TestOpenPositionReversesLongStopLossAndTakeProfit(t *testing.T) {
 		TakeProfitPct: 1.5,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "ReverseLong")
+	pos := mustOpen(t, mgr,sig, 100, "ReverseLong")
 
 	if pos.StopLossPct != 1.5 {
 		t.Fatalf("expected reversed stop loss pct 1.5, got %.2f", pos.StopLossPct)
@@ -112,7 +121,7 @@ func TestOpenPositionReversesShortStopLossAndTakeProfit(t *testing.T) {
 		TakeProfitPct: 1.2,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "ReverseShort")
+	pos := mustOpen(t, mgr,sig, 100, "ReverseShort")
 
 	if pos.StopLossPct != 1.2 {
 		t.Fatalf("expected reversed stop loss pct 1.2, got %.2f", pos.StopLossPct)
@@ -139,7 +148,7 @@ func TestOpenPositionAppliesTakeProfitFloor(t *testing.T) {
 		TakeProfitPct: 1.00,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "TakeProfitFloor")
+	pos := mustOpen(t, mgr,sig, 100, "TakeProfitFloor")
 
 	if math.Abs(pos.StopLossPct-1.0) > floatTolerance {
 		t.Fatalf("expected reversed stop loss pct 1.0, got %.4f", pos.StopLossPct)
@@ -162,7 +171,7 @@ func TestOpenPositionUsesNormalTargetsByDefault(t *testing.T) {
 		TakeProfitPct: 1.1,
 	}
 
-	pos := mgr.OpenPosition(sig, 100, "DefaultTargets")
+	pos := mustOpen(t, mgr,sig, 100, "DefaultTargets")
 
 	if math.Abs(pos.StopLossPct-0.4) > floatTolerance {
 		t.Fatalf("expected stop loss pct 0.4, got %.4f", pos.StopLossPct)
@@ -189,7 +198,7 @@ func TestCheckExpiredPositionsClosesStalePosition(t *testing.T) {
 		StopLossPct:   1,
 		TakeProfitPct: 2,
 	}
-	mgr.OpenPosition(sig, 100, "ExpiryTest")
+	mustOpen(t, mgr,sig, 100, "ExpiryTest")
 
 	// Position should still be alive immediately after opening.
 	if len(mgr.GetOpenPositions()) != 1 {
@@ -225,7 +234,7 @@ func TestCheckExpiredPositionsSkipsYoungPosition(t *testing.T) {
 		StopLossPct:   1,
 		TakeProfitPct: 2,
 	}
-	mgr.OpenPosition(sig, 100, "YoungPosition")
+	mustOpen(t, mgr,sig, 100, "YoungPosition")
 	mgr.CheckExpiredPositions(100)
 
 	if len(mgr.GetOpenPositions()) != 1 {
@@ -245,7 +254,7 @@ func TestCheckExpiredPositionsDisabledWhenZero(t *testing.T) {
 		TakeProfitPct: 2,
 	}
 	// Manually backdate position to simulate old age.
-	pos := mgr.OpenPosition(sig, 100, "OldButDisabled")
+	pos := mustOpen(t, mgr,sig, 100, "OldButDisabled")
 	mgr.mu.Lock()
 	mgr.positions[pos.ID].OpenedAt = time.Now().Add(-120 * time.Minute)
 	mgr.mu.Unlock()

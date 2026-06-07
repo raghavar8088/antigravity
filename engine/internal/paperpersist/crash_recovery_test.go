@@ -214,7 +214,7 @@ func TestRecoveryRestoresBalance(t *testing.T) {
 	doc["short_exposure_btc"] = 0.0
 	doc["winning_trades"] = 26
 	doc["losing_trades"] = 16
-	if err := upsertOne(ctx, col, map[string]interface{}{"account_key": ownerAccountKey}, doc); err != nil {
+	if err := upsertOne(ctx, col, map[string]interface{}{"account_key": AccountKey()}, doc); err != nil {
 		t.Fatalf("seed paper_state: %v", err)
 	}
 
@@ -356,20 +356,20 @@ func TestStateSnapshotterIdempotent(t *testing.T) {
 		doc["balance"] = 1000000.0 + float64(i) // each write updates the value
 		doc["equity"] = 1000000.0 + float64(i)
 		doc["snapped_at"] = now.Add(time.Duration(i) * time.Second)
-		if err := upsertOne(ctx, col, map[string]interface{}{"account_key": ownerAccountKey}, doc); err != nil {
+		if err := upsertOne(ctx, col, map[string]interface{}{"account_key": AccountKey()}, doc); err != nil {
 			t.Fatalf("upsert[%d]: %v", i, err)
 		}
 	}
 
 	// Verify still only 1 document for this account_key.
-	count, _ := col.CountDocuments(ctx, map[string]interface{}{"account_key": ownerAccountKey})
+	count, _ := col.CountDocuments(ctx, map[string]interface{}{"account_key": AccountKey()})
 	if count != 1 {
 		t.Errorf("expected 1 paper_state doc (singleton), got %d", count)
 	}
 
 	// Verify balance was updated to the latest value (2).
 	var doc map[string]interface{}
-	_ = col.FindOne(ctx, map[string]interface{}{"account_key": ownerAccountKey}).Decode(&doc)
+	_ = col.FindOne(ctx, map[string]interface{}{"account_key": AccountKey()}).Decode(&doc)
 	if b, ok := doc["balance"].(float64); ok {
 		if b != 1000002.0 {
 			t.Errorf("expected balance=1000002, got %.1f", b)

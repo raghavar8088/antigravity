@@ -101,34 +101,47 @@ func CheckEnv() EnvReport {
 		})
 	}
 
-	// OWNER_ACCOUNT_KEY
-	ak := os.Getenv("OWNER_ACCOUNT_KEY")
-	effectiveKey := ak
-	if effectiveKey == "" {
-		effectiveKey = "mock_trading_default"
-	}
-	switch {
-	case ak == "" :
+	// OWNER_ACCOUNT_KEY — must match client/src/lib/ownerAuth.ts exactly.
+	effectiveKey := EffectiveOwnerAccountKey()
+	switch err := ValidateAccountKeyAlignment(); {
+	case err != nil:
+		checks = append(checks, EnvCheckResult{
+			Key:       "OWNER_ACCOUNT_KEY",
+			Status:    EnvFail,
+			ValueHint: fmt.Sprintf("%q", effectiveKey),
+			Message:   err.Error(),
+			Fix:       fmt.Sprintf("Set OWNER_ACCOUNT_KEY=%q on Lightsail/Vercel and remove any DESK_WORKER_ACCOUNT_KEY=anon_* values.", FrontendAccountKey),
+		})
+	case os.Getenv("OWNER_ACCOUNT_KEY") == "":
 		checks = append(checks, EnvCheckResult{
 			Key:       "OWNER_ACCOUNT_KEY",
 			Status:    EnvPass,
 			ValueHint: fmt.Sprintf("not set (effective: %q)", effectiveKey),
-			Message:   "Using default \"mock_trading_default\" — matches frontend constant.",
-		})
-	case ak != "mock_trading_default":
-		checks = append(checks, EnvCheckResult{
-			Key:       "OWNER_ACCOUNT_KEY",
-			Status:    EnvWarning,
-			ValueHint: fmt.Sprintf("%q", ak),
-			Message:   fmt.Sprintf("Custom key %q set. Frontend OWNER_ACCOUNT_KEY constant in ownerAuth.ts is hardcoded to \"mock_trading_default\". They MUST match or Paper Desk shows empty data.", ak),
-			Fix:       "Either remove OWNER_ACCOUNT_KEY env var or update client/src/lib/ownerAuth.ts line 20 to match.",
+			Message:   fmt.Sprintf("Using default %q — matches frontend constant.", FrontendAccountKey),
 		})
 	default:
 		checks = append(checks, EnvCheckResult{
 			Key:       "OWNER_ACCOUNT_KEY",
 			Status:    EnvPass,
-			ValueHint: fmt.Sprintf("%q", ak),
+			ValueHint: fmt.Sprintf("%q", effectiveKey),
 			Message:   "Explicitly set and matches frontend constant.",
+		})
+	}
+
+	// Legacy worker key — warn when still set to a different value.
+	if legacy := os.Getenv("DESK_WORKER_ACCOUNT_KEY"); legacy != "" && legacy != effectiveKey {
+		status := EnvWarning
+		msg := fmt.Sprintf("DESK_WORKER_ACCOUNT_KEY=%q is deprecated — all paths use %q", legacy, effectiveKey)
+		if strings.HasPrefix(legacy, "anon_") {
+			status = EnvFail
+			msg = fmt.Sprintf("DESK_WORKER_ACCOUNT_KEY=%q is a retired anonymous key", legacy)
+		}
+		checks = append(checks, EnvCheckResult{
+			Key:       "DESK_WORKER_ACCOUNT_KEY",
+			Status:    status,
+			ValueHint: fmt.Sprintf("%q", legacy),
+			Message:   msg,
+			Fix:       fmt.Sprintf("Unset DESK_WORKER_ACCOUNT_KEY or set it to %q. Remove anon_* keys from VPS/Vercel env.", FrontendAccountKey),
 		})
 	}
 

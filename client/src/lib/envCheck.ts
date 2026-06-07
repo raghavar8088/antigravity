@@ -1,3 +1,6 @@
+import { validateAccountKeyAlignment } from "./authoritativeAccountKey";
+import { OWNER_ACCOUNT_KEY } from "./ownerAuth";
+
 /**
  * envCheck.ts — Single-source startup environment validator.
  *
@@ -175,16 +178,59 @@ function checkMongoDb(): EnvCheckResult {
   };
 }
 
+function checkDeskWorkerAccountKey(): EnvCheckResult {
+  const legacy = process.env.DESK_WORKER_ACCOUNT_KEY?.trim() ?? "";
+  const validation = validateAccountKeyAlignment();
+
+  if (legacy.startsWith("anon_")) {
+    return {
+      key: "DESK_WORKER_ACCOUNT_KEY",
+      status: "FAIL",
+      value_hint: `"${legacy}"`,
+      message: `Retired anonymous key "${legacy}" — remove from Vercel/VPS env.`,
+      fix: `Unset DESK_WORKER_ACCOUNT_KEY or set OWNER_ACCOUNT_KEY=mock_trading_default everywhere.`,
+    };
+  }
+
+  if (!validation.ok) {
+    return {
+      key: "ACCOUNT_KEY_ALIGNMENT",
+      status: "FAIL",
+      value_hint: legacy || "(unset)",
+      message: validation.errors.join("; "),
+      fix: "Align OWNER_ACCOUNT_KEY and remove anon_* keys. See authoritativeAccountKey.ts.",
+    };
+  }
+
+  if (legacy && legacy !== validation.accountKey) {
+    return {
+      key: "DESK_WORKER_ACCOUNT_KEY",
+      status: "WARNING",
+      value_hint: `"${legacy}" (ignored)`,
+      message: `Deprecated env var set — all paths use "${validation.accountKey}".`,
+      fix: "Remove DESK_WORKER_ACCOUNT_KEY from Vercel and VPS .env.",
+    };
+  }
+
+  return {
+    key: "ACCOUNT_KEY_ALIGNMENT",
+    status: "PASS",
+    value_hint: validation.accountKey,
+    message: `All subsystems use authoritative account key "${validation.accountKey}".`,
+    fix: "",
+  };
+}
+
 function checkOwnerAccountKey(): EnvCheckResult {
   const v = process.env.OWNER_ACCOUNT_KEY?.trim() ?? "";
-  const effective = v || "mock_trading_default";
-  if (v && v !== "mock_trading_default") {
+  const effective = v || OWNER_ACCOUNT_KEY;
+  if (v && v !== OWNER_ACCOUNT_KEY) {
     return {
       key: "OWNER_ACCOUNT_KEY",
-      status: "WARNING",
+      status: "FAIL",
       value_hint: `"${effective}"`,
-      message: `Custom account key "${effective}" set. Frontend constant OWNER_ACCOUNT_KEY in ownerAuth.ts is still "mock_trading_default". They must match or Paper Desk shows empty data.`,
-      fix: 'Either remove OWNER_ACCOUNT_KEY env var (use the hardcoded default) or update ownerAuth.ts line 20 to match.',
+      message: `Custom account key "${effective}" must match frontend constant "${OWNER_ACCOUNT_KEY}".`,
+      fix: `Remove OWNER_ACCOUNT_KEY env var or set it to "${OWNER_ACCOUNT_KEY}".`,
     };
   }
   return {
@@ -193,7 +239,7 @@ function checkOwnerAccountKey(): EnvCheckResult {
     value_hint: `effective: "${effective}"`,
     message: v
       ? `Explicitly set to "${effective}" — matches frontend constant.`
-      : `Not set — using default "mock_trading_default" which matches frontend constant.`,
+      : `Not set — using default "${OWNER_ACCOUNT_KEY}" which matches frontend constant.`,
     fix: "",
   };
 }
@@ -232,6 +278,7 @@ export function runEnvChecks(): EnvReport {
     checkMongoUri(),
     checkMongoDb(),
     checkOwnerAccountKey(),
+    checkDeskWorkerAccountKey(),
     checkInternalApiUrl(),
   ];
 
@@ -249,9 +296,7 @@ export function runEnvChecks(): EnvReport {
   const engineCheck = checks.find((c) => c.key === "INTERNAL_API_URL");
   const ready_for_engine = engineCheck?.status === "PASS";
 
-  const ownerCheck = checks.find((c) => c.key === "OWNER_ACCOUNT_KEY");
-  const account_key =
-    process.env.OWNER_ACCOUNT_KEY?.trim() || "mock_trading_default";
+  const account_key = validateAccountKeyAlignment().accountKey;
 
   return {
     ok,

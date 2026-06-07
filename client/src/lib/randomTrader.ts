@@ -100,12 +100,13 @@ export function isLiveTradingEnabled(): boolean {
   return process.env.LIVE_TRADING_ENABLED === "true";
 }
 
-/** Account key for MongoDB storage. Falls back to DESK_WORKER_ACCOUNT_KEY. */
+import { resolveAuthoritativeAccountKey } from "./authoritativeAccountKey";
+
+/** Account key for MongoDB storage — always the authoritative owner key. */
 export function randomTraderAccountKey(): string {
   return (
     process.env.RANDOM_TRADER_ACCOUNT_KEY?.trim() ||
-    process.env.DESK_WORKER_ACCOUNT_KEY?.trim() ||
-    ""
+    resolveAuthoritativeAccountKey()
   );
 }
 

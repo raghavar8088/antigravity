@@ -119,7 +119,7 @@ func (m *StrategyHealthMonitor) Run(ctx context.Context) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 	log.Printf("[paperpersist/health] started interval=%s account_key=%s",
-		m.interval, ownerAccountKey)
+		m.interval, AccountKey())
 
 	// Run once immediately on start.
 	m.computeAndPersistAll(ctx)
@@ -142,6 +142,7 @@ func (m *StrategyHealthMonitor) ComputeNow(ctx context.Context) {
 func (m *StrategyHealthMonitor) computeAndPersistAll(ctx context.Context) {
 	ids := m.source.GetActiveStrategyIDs()
 	if len(ids) == 0 {
+		log.Printf("[paperpersist/health] no active strategies in journal — waiting for trades (bootstrap from paper_trades runs at engine boot)")
 		return
 	}
 
@@ -318,7 +319,7 @@ func (m *StrategyHealthMonitor) persistScore(ctx context.Context, s StrategyScor
 
 	// source is included in the filter to match the compound unique index
 	// (account_key, strategy_id, source) and prevent engine/browser collisions.
-	filter := bson.M{"account_key": ownerAccountKey, "strategy_id": s.StrategyID, "source": "paperpersist-phase31a"}
+	filter := bson.M{"account_key": AccountKey(), "strategy_id": s.StrategyID, "source": "paperpersist-phase31a"}
 	return upsertOne(ctx, col, filter, doc)
 }
 
@@ -337,7 +338,7 @@ func (m *StrategyHealthMonitor) persistHealth(ctx context.Context, h StrategyHea
 	doc["computed_at"] = h.ComputedAt
 	doc["checksum"] = checksum(h)
 
-	filter := bson.M{"account_key": ownerAccountKey, "strategy_id": h.StrategyID, "source": "paperpersist-phase31a"}
+	filter := bson.M{"account_key": AccountKey(), "strategy_id": h.StrategyID, "source": "paperpersist-phase31a"}
 	return upsertOne(ctx, col, filter, doc)
 }
 

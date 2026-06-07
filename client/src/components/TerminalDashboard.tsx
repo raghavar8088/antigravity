@@ -213,7 +213,7 @@ function StrategyRow({ rank, name, pnl, winRate, sharpe }: {
 
 export default function TerminalDashboard() {
   const live = useLiveBTCPrice();
-  const engine = useMockTradingEngine({ price: live.price });
+  const engine = useMockTradingEngine({ price: live.price, disablePolling: true });
   const candles = useMockCandleBuilder(live.price);
   const regime = useMarketRegime({ candles: candles.snapshot, newCandleReady: candles.newCandleReady });
   const scoring = useStrategyScoring({

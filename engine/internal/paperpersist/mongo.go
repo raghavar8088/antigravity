@@ -45,22 +45,11 @@ import (
 
 // ── Security: account key is ALWAYS server-sourced ───────────────────────────
 
-// ownerAccountKey is loaded once at package init from the server environment.
-// It is NEVER derived from client input (query params, request bodies, WS messages).
-// Fallback "mock_trading_default" matches the frontend OWNER_ACCOUNT_KEY constant in
-// client/src/lib/ownerAuth.ts so dashboards and engine share the same document set
-// without requiring env configuration in local dev.
-// Set OWNER_ACCOUNT_KEY in production env to override.
-var ownerAccountKey = func() string {
-	if v := os.Getenv("OWNER_ACCOUNT_KEY"); v != "" {
-		return v
-	}
-	return "mock_trading_default"
-}()
-
 // AccountKey returns the server-hardcoded account key. It is the only
 // authorised way to obtain the key inside this package.
-func AccountKey() string { return ownerAccountKey }
+func AccountKey() string {
+	return EffectiveOwnerAccountKey()
+}
 
 // ── Schema version ────────────────────────────────────────────────────────────
 
@@ -180,7 +169,7 @@ func (m *MongoManager) connect(ctx context.Context) error {
 	m.connected = true
 	m.mu.Unlock()
 
-	log.Printf("[paperpersist] connected db=%s account_key=%s", m.dbName, ownerAccountKey)
+	log.Printf("[paperpersist] connected db=%s account_key=%s", m.dbName, AccountKey())
 	return nil
 }
 
@@ -379,7 +368,7 @@ type MetricsSnapshot struct {
 // structured health report. Safe to call from an HTTP handler.
 func (m *MongoManager) Diagnostics(ctx context.Context) DiagnosticsReport {
 	r := DiagnosticsReport{
-		AccountKey:   ownerAccountKey,
+		AccountKey:   AccountKey(),
 		DatabaseName: m.dbName,
 		URI:          maskURI(m.uri),
 		CheckedAt:    time.Now().UTC(),
@@ -516,7 +505,7 @@ func insertOne(ctx context.Context, col *mongo.Collection, doc bson.M) error {
 func baseDoc(now time.Time) bson.M {
 	return bson.M{
 		"schema_version": schemaVersion,
-		"account_key":    ownerAccountKey, // ← server constant, never client input
+		"account_key":    AccountKey(), // ← server constant, never client input
 		"updated_at":     now,
 		"source":         "paperpersist-phase31a",
 	}

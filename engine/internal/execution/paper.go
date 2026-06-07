@@ -46,6 +46,15 @@ func clampNearZero(value float64) float64 {
 	return value
 }
 
+// clampBalance enforces the invariant: paper cash balance cannot go below zero.
+func (p *PaperClient) clampBalance(context string) {
+	if p.balanceUSD >= 0 {
+		return
+	}
+	log.Printf("[PAPER BALANCE INVARIANT] %s: balance %.4f clamped to 0", context, p.balanceUSD)
+	p.balanceUSD = 0
+}
+
 // UpdateMarketState allows the master loop to constantly feed the latest tick.
 func (p *PaperClient) UpdateMarketState(price float64) {
 	p.lastKnownPrice = price
@@ -121,6 +130,7 @@ func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode Ord
 			mode, sig.TargetSize, execPrice, fee, p.balanceUSD)
 	}
 
+	p.clampBalance("applyFill")
 	return nil
 }
 
@@ -209,17 +219,42 @@ func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float
 	} else {
 		// Closing a SHORT position: buy BTC back at exit price
 		cost := size * exitPrice
-		p.balanceUSD -= cost
+		if cost > p.balanceUSD {
+			log.Printf("[PAPER SETTLE] INSUFFICIENT FUNDS for short cover: needs $%.2f, has $%.2f — clamping balance to 0",
+				cost, p.balanceUSD)
+			p.balanceUSD = 0
+		} else {
+			p.balanceUSD -= cost
+		}
 		p.positionBTC += size
 		p.positionBTC = clampNearZero(p.positionBTC)
 		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Balance: $%.2f",
 			size, exitPrice, p.balanceUSD)
 	}
+	p.clampBalance("SettlePosition")
 }
 
 // RestoreBalance restores balance and accumulated fees from database on restart.
 func (p *PaperClient) RestoreBalance(balance, fees float64) {
+	if balance < 0 {
+		log.Printf("[PAPER EXEC] Restored balance %.4f is negative — clamping to 0", balance)
+		balance = 0
+	}
 	p.balanceUSD = balance
 	p.totalFeesUSD = fees
 	log.Printf("[PAPER EXEC] Restored balance: $%.2f | Cumulative fees: $%.4f", balance, fees)
+}
+
+// RestoreOpenPosition adds a recovered open position's BTC size back into the
+// paper client's signed position so that mark-to-market equity and SettlePosition
+// are correct after a restart. Call once per recovered open position before Run().
+func (p *PaperClient) RestoreOpenPosition(side strategy.Action, sizeBTC float64) {
+	if side == strategy.ActionBuy {
+		p.positionBTC += sizeBTC
+	} else {
+		p.positionBTC -= sizeBTC
+	}
+	p.positionBTC = clampNearZero(p.positionBTC)
+	log.Printf("[PAPER EXEC] Restored open position: side=%s size=%.4f BTC | net positionBTC=%.4f",
+		side, sizeBTC, p.positionBTC)
 }

@@ -839,7 +839,9 @@ export function useMockTradingEngine(
   }, [mockAccountKey, disablePolling, ingestTraceRows]);
 
   // ── Apply price ticks → unrealized PnL and TP/SL ──────────────────────────
+  // Disabled when polling is off — the Go engine owns SL/TP execution.
   useEffect(() => {
+    if (disablePolling) return;
     if (!Number.isFinite(price) || price <= 0) return;
     const now = Date.now();
     let mutated = false;
@@ -966,7 +968,9 @@ export function useMockTradingEngine(
   const traceAgeSeconds = lastFetchAt != null ? Math.floor((Date.now() - lastFetchAt) / 1000) : null;
 
   useEffect(() => {
-    if (persistenceDisabled) return;
+    // Account snapshots are written by the Go engine to paper_state.
+    // Browser snapshots to mock_account_snapshots are disabled.
+    if (persistenceDisabled || disablePolling) return;
     const now = Date.now();
     const configKey = JSON.stringify(config);
     const configChanged = lastPersistedConfigRef.current !== configKey;
@@ -974,7 +978,7 @@ export function useMockTradingEngine(
     lastAccountSnapshotAtRef.current = now;
     lastPersistedConfigRef.current = configKey;
     void persistAccountSnapshot(account);
-  }, [account, config, persistAccountSnapshot, persistenceDisabled]);
+  }, [account, config, disablePolling, persistAccountSnapshot, persistenceDisabled]);
 
   return {
     trades,

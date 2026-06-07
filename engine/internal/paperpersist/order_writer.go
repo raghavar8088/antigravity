@@ -161,6 +161,12 @@ func (ow *OrderWriter) RecordBatch(ctx context.Context, transitions []OrderTrans
 // PositionDoc persists an open position to paper_positions.
 // Called when the OMS transitions to POSITION_OPENED.
 func (ow *OrderWriter) PersistOpenPosition(ctx context.Context, p OpenPosition) error {
+	if p.StopLoss <= 0 || p.TakeProfit <= 0 {
+		return fmt.Errorf("paperpersist/order_writer: position %s missing stop_loss/take_profit", p.PositionID)
+	}
+	if p.EntryPrice <= 0 || p.Size <= 0 {
+		return fmt.Errorf("paperpersist/order_writer: position %s invalid entry/size", p.PositionID)
+	}
 	col := ow.mgr.Col(ColPaperPositions)
 	if col == nil {
 		return fmt.Errorf("paperpersist/order_writer: not connected")
@@ -204,7 +210,7 @@ func (ow *OrderWriter) ClosePosition(ctx context.Context, positionID string, exi
 			"closed_at":  closedAt,
 			"exit_reason": reason,
 			"updated_at": now,
-			"account_key": ownerAccountKey, // paranoia: enforce on update too
+			"account_key": AccountKey(), // paranoia: enforce on update too
 		},
 	}
 	if col == nil {

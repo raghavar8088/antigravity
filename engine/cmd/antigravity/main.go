@@ -573,11 +573,13 @@ func main() {
 	// If MONGODB_URI is missing or malformed the engine continues in SQLite-only
 	// mode rather than fatally exiting, but the report makes the issue obvious.
 	envReport := paperpersist.LogEnvReport()
+	paperpersist.LogAccountKeyAlignment(true)
 	if !envReport.MongoReady {
 		log.Printf("[Phase31B] ⛔  MongoDB env not ready — skipping MongoDB persistence. Paper Desk will show empty data until MONGODB_URI is configured and engine is restarted.")
 	}
 
 	var ppBundle *trading.PaperPersistBundle
+	var recoveryReport paperpersist.RecoveryReport
 	mongoMgr, mongoErr := paperpersist.NewMongoManager(ctx)
 	if mongoErr != nil {
 		log.Printf("[Phase31B] ❌  MongoDB connect failed — running without MongoDB persistence: %v", mongoErr)
@@ -593,14 +595,26 @@ func main() {
 
 		// Crash recovery: restore balance + open positions from MongoDB Atlas.
 		// This is authoritative when PostgreSQL is stale or unavailable.
-		recoveryReport := paperpersist.Recover(ctx, mongoMgr)
+		recoveryReport = paperpersist.Recover(ctx, mongoMgr)
 		if recoveryReport.AccountRestored {
 			restoredBalance := recoveryReport.AccountState.Balance
-			if restoredBalance > 0 && restoredBalance != initialPaperBalanceUSD {
+			if restoredBalance < 0 {
+				log.Printf("[Phase31B] ⚠️  MongoDB recovery: negative balance %.4f clamped to 0", restoredBalance)
+				restoredBalance = 0
+			}
+			if restoredBalance != initialPaperBalanceUSD {
 				log.Printf("[Phase31B] ♻️  MongoDB recovery: balance=%.2f age=%s — overriding PostgreSQL state",
 					restoredBalance, recoveryReport.AccountDataAge.Round(time.Second))
 				paperExecute.RestoreBalance(restoredBalance, recoveryReport.AccountState.TotalFees)
 			}
+		}
+
+		// Bootstrap in-memory journal from MongoDB paper_trades so strategy health
+		// has trade history immediately after restart (not only after new closes).
+		if booted, bootErr := paperpersist.BootstrapJournalFromMongo(ctx, mongoMgr, journal); bootErr != nil {
+			log.Printf("[Phase31B] journal bootstrap warning: %v", bootErr)
+		} else if booted > 0 {
+			log.Printf("[Phase31B] bootstrapped %d trades from paper_trades into journal", booted)
 		}
 		// Restore open positions from MongoDB if PostgreSQL didn't restore any.
 		if len(recoveryReport.OpenPositions) > 0 && posMgr.GetPositionCount() == 0 {
@@ -623,6 +637,9 @@ func main() {
 					OpenedAt:     rp.OpenedAt,
 					Status:       "OPEN",
 				})
+				// Sync PaperClient's signed BTC position so mark-to-market equity
+				// and SettlePosition are accurate for positions open at restart.
+				paperExecute.RestoreOpenPosition(side, rp.Size)
 			}
 			posMgr.RestorePositions(mongoPositions)
 		}
@@ -655,6 +672,12 @@ func main() {
 		journal,
 		candleAgg,
 	)
+
+	// Phase 31B: register recovered position→order mappings so processCloseEvents
+	// can emit correct OMS transitions when recovered positions hit SL/TP.
+	if len(recoveryReport.OpenPositions) > 0 {
+		orchestrator.RegisterRecoveredPositions(recoveryReport.OpenPositions)
+	}
 
 	// Phase 31B: attach MongoDB persistence bundle + start state snapshotter.
 	if ppBundle != nil {

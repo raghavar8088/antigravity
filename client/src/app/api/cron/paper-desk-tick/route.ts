@@ -29,6 +29,8 @@ import { isWorkerHeartbeatFresh } from "@/lib/paperDeskWorker/workerLease";
 import { runPaperDeskPollTick, type WorkerPosition } from "@/lib/paperDeskWorker/runPaperDeskPollTick";
 import { profitModeFromEnv } from "@/lib/futuresProfitMode";
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
+import { resolveAuthoritativeAccountKey, validateAccountKeyAlignment } from "@/lib/authoritativeAccountKey";
+import { isEngineExecutionAuthority, ENGINE_AUTHORITY_SKIP_REASON } from "@/lib/engineAuthority";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 25;
@@ -47,10 +49,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
   }
 
-  const accountKey = process.env.DESK_WORKER_ACCOUNT_KEY?.trim();
-  if (!accountKey) {
-    return NextResponse.json({ ok: false, skippedReason: "DESK_WORKER_ACCOUNT_KEY not set" });
+  if (isEngineExecutionAuthority()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      skippedReason: ENGINE_AUTHORITY_SKIP_REASON,
+    });
   }
+
+  const keyCheck = validateAccountKeyAlignment();
+  if (!keyCheck.ok) {
+    return NextResponse.json(
+      { ok: false, error: keyCheck.errors.join("; ") },
+      { status: 503 },
+    );
+  }
+
+  const accountKey = resolveAuthoritativeAccountKey();
 
   // Load state first so we can check the stored heartbeat timestamp synchronously.
   const state = await getAccountState(accountKey);

@@ -90,7 +90,7 @@ type RecoveryReport struct {
 func Recover(ctx context.Context, mgr *MongoManager) RecoveryReport {
 	report := RecoveryReport{
 		RecoveredAt: time.Now(),
-		AccountKey:  ownerAccountKey, // sourced from server env, never client
+		AccountKey:  AccountKey(), // sourced from server env, never client
 	}
 
 	if !mgr.IsConnected() {
@@ -163,19 +163,23 @@ func recoverAccountState(ctx context.Context, mgr *MongoManager) (RecoveredAccou
 		return RecoveredAccountState{}, fmt.Errorf("collection unavailable")
 	}
 
-	filter := bson.M{"account_key": ownerAccountKey}
+	filter := bson.M{"account_key": AccountKey()}
 	opts := options.FindOne().SetSort(bson.D{{Key: "snapped_at", Value: -1}})
 
 	var raw bson.M
 	if err := col.FindOne(ctx, filter, opts).Decode(&raw); err != nil {
 		if err == mongo.ErrNoDocuments {
-			return RecoveredAccountState{}, fmt.Errorf("no paper_state document for account_key=%s", ownerAccountKey)
+			return RecoveredAccountState{}, fmt.Errorf("no paper_state document for account_key=%s", AccountKey())
 		}
 		return RecoveredAccountState{}, fmt.Errorf("FindOne paper_state: %w", err)
 	}
 
 	acct := RecoveredAccountState{}
 	acct.Balance = getFloat(raw, "balance")
+	if acct.Balance < 0 {
+		log.Printf("[paperpersist/recovery] negative balance %.4f clamped to 0", acct.Balance)
+		acct.Balance = 0
+	}
 	acct.Equity = getFloat(raw, "equity")
 	acct.UnrealizedPnL = getFloat(raw, "unrealized_pnl")
 	acct.RealizedPnL = getFloat(raw, "realized_pnl")
@@ -200,7 +204,7 @@ func recoverOpenPositions(ctx context.Context, mgr *MongoManager) ([]RecoveredPo
 	}
 
 	filter := bson.M{
-		"account_key": ownerAccountKey,
+		"account_key": AccountKey(),
 		"status":      "OPEN",
 	}
 	opts := options.Find().SetSort(bson.D{{Key: "opened_at", Value: 1}})
@@ -235,6 +239,7 @@ func recoverOpenPositions(ctx context.Context, mgr *MongoManager) ([]RecoveredPo
 		if p.PositionID == "" {
 			continue // skip corrupted documents
 		}
+		applyRecoveredProtection(&p)
 		out = append(out, p)
 	}
 	if err := cursor.Err(); err != nil {
@@ -315,3 +320,38 @@ func getString(m bson.M, key string) string {
 	}
 	return ""
 }
+
+// applyRecoveredProtection fills missing SL/TP on recovered MongoDB positions.
+func applyRecoveredProtection(p *RecoveredPosition) {
+	if p == nil || p.EntryPrice <= 0 {
+		return
+	}
+	slPct := defaultRecoveredStopLossPct
+	tpPct := defaultRecoveredTakeProfitPct
+	isLong := p.Side == "LONG" || p.Side == "BUY"
+
+	validSL := p.StopLoss > 0 && ((isLong && p.StopLoss < p.EntryPrice) || (!isLong && p.StopLoss > p.EntryPrice))
+	validTP := p.TakeProfit > 0 && ((isLong && p.TakeProfit > p.EntryPrice) || (!isLong && p.TakeProfit < p.EntryPrice))
+
+	if !validSL {
+		if isLong {
+			p.StopLoss = p.EntryPrice * (1 - slPct/100)
+		} else {
+			p.StopLoss = p.EntryPrice * (1 + slPct/100)
+		}
+		log.Printf("[paperpersist/recovery] position %s missing SL — defaulted to %.2f", p.PositionID, p.StopLoss)
+	}
+	if !validTP {
+		if isLong {
+			p.TakeProfit = p.EntryPrice * (1 + tpPct/100)
+		} else {
+			p.TakeProfit = p.EntryPrice * (1 - tpPct/100)
+		}
+		log.Printf("[paperpersist/recovery] position %s missing TP — defaulted to %.2f", p.PositionID, p.TakeProfit)
+	}
+}
+
+const (
+	defaultRecoveredStopLossPct   = 1.0
+	defaultRecoveredTakeProfitPct = 0.30
+)
