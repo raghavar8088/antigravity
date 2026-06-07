@@ -461,9 +461,10 @@ export async function upsertMockTrade(
   const existing = await trades.findOne({ trade_id: trade.id });
   const doc = mockTradeToDoc(accountKey, trade, config, existing?.created_at ?? nowIso());
   doc.updated_at = nowIso();
+  const { created_at, ...docWithoutCreatedAt } = doc;
   const result = await trades.updateOne(
     { trade_id: trade.id },
-    { $set: doc, $setOnInsert: { created_at: doc.created_at } },
+    { $set: docWithoutCreatedAt, $setOnInsert: { created_at } },
     { upsert: true },
   );
   await configCol.updateOne(
@@ -771,9 +772,10 @@ export async function upsertRegimeSnapshot(
     created_at: now,
     updated_at: now,
   };
+  const { created_at: _rca, ...regimeWithoutCreatedAt } = doc;
   await regimes.updateOne(
     { account_key: doc.account_key, timestamp: doc.timestamp },
-    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { $set: { ...regimeWithoutCreatedAt, updated_at: now }, $setOnInsert: { created_at: _rca } },
     { upsert: true },
   );
   return doc;
@@ -886,9 +888,10 @@ export async function appendEquityCurvePoint(
     created_at: now,
     updated_at: now,
   };
+  const { created_at: _eca, ...equityWithoutCreatedAt } = doc;
   await equity.updateOne(
     { account_key: doc.account_key, timestamp: doc.timestamp },
-    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { $set: { ...equityWithoutCreatedAt, updated_at: now }, $setOnInsert: { created_at: _eca } },
     { upsert: true },
   );
   return doc;
@@ -921,9 +924,10 @@ export async function upsertDailyPnlPoint(
     created_at: now,
     updated_at: now,
   };
+  const { created_at: _dca, ...dailyWithoutCreatedAt } = doc;
   await dailyPnl.updateOne(
     { account_key: doc.account_key, day: doc.day },
-    { $set: { ...doc, updated_at: now }, $setOnInsert: { created_at: now } },
+    { $set: { ...dailyWithoutCreatedAt, updated_at: now }, $setOnInsert: { created_at: _dca } },
     { upsert: true },
   );
   return doc;
