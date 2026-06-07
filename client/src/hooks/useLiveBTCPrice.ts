@@ -13,6 +13,8 @@ interface LivePriceState {
   recentPrices: { time: number; price: number }[];
 }
 
+const POLL_INTERVAL_MS = 3_000;
+
 export default function useLiveBTCPrice(): LivePriceState {
   const [state, setState] = useState<LivePriceState>({
     price: 0,
@@ -27,70 +29,58 @@ export default function useLiveBTCPrice(): LivePriceState {
   });
 
   const tickCounter = useRef(0);
-  const wsRef = useRef<WebSocket | null>(null);
+  const prevPriceRef = useRef(0);
 
   useEffect(() => {
-    // 1. Fetch 24h stats from Binance REST API for change%, high, low, volume
-    fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
-      .then((res) => res.json())
-      .then((data) => {
-        const initialPrice = parseFloat(data.lastPrice);
-        setState((prev) => ({
-          ...prev,
-          price: initialPrice,
-          prevPrice: initialPrice,
-          change24h: parseFloat(data.priceChangePercent),
-          high24h: parseFloat(data.highPrice),
-          low24h: parseFloat(data.lowPrice),
-          volume24h: parseFloat(data.volume),
-          recentPrices: [{ time: Date.now(), price: initialPrice }],
-        }));
-      })
-      .catch(console.error);
+    let cancelled = false;
 
-    // 2. Connect to Binance Live WebSocket for real-time trade stream
-    const ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade");
-    wsRef.current = ws;
+    async function poll() {
+      try {
+        const res = await fetch("/api/btc/price", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as {
+          ok: boolean;
+          price?: number;
+          change24h?: number;
+          high24h?: number;
+          low24h?: number;
+          volume24h?: number;
+        };
+        if (!data.ok || !data.price || !Number.isFinite(data.price) || data.price <= 0) return;
+        tickCounter.current++;
+        const newPrice = data.price;
+        setState((prev) => {
+          prevPriceRef.current = prev.price || newPrice;
+          return {
+            price: newPrice,
+            prevPrice: prevPriceRef.current,
+            change24h: data.change24h ?? prev.change24h,
+            high24h: data.high24h ?? prev.high24h,
+            low24h: data.low24h ?? prev.low24h,
+            volume24h: data.volume24h ?? prev.volume24h,
+            ticksPerSecond: prev.ticksPerSecond,
+            connected: true,
+            recentPrices: [...prev.recentPrices, { time: Date.now(), price: newPrice }].slice(-240),
+          };
+        });
+      } catch {
+        if (!cancelled) setState((prev) => ({ ...prev, connected: false }));
+      }
+    }
 
-    ws.onopen = () => {
-      console.log("[ANTIGRAVITY] ✅ Connected to Binance Live BTC Stream");
-      setState((prev) => ({ ...prev, connected: true }));
-    };
+    // Immediate first fetch, then poll every POLL_INTERVAL_MS
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      const newPrice = parseFloat(data.p);
-      tickCounter.current++;
-
-      setState((prev) => ({
-        ...prev,
-        prevPrice: prev.price,
-        price: newPrice,
-        recentPrices: [...prev.recentPrices, { time: Date.now(), price: newPrice }].slice(-240),
-      }));
-    };
-
-    ws.onerror = () => {
-      console.error("[ANTIGRAVITY] ❌ WebSocket connection error");
-      setState((prev) => ({ ...prev, connected: false }));
-    };
-
-    ws.onclose = () => {
-      console.log("[ANTIGRAVITY] WebSocket disconnected");
-      setState((prev) => ({ ...prev, connected: false }));
-    };
-
-    // 3. Track ticks-per-second for the throughput indicator
+    // ticks-per-second counter
     const tpsInterval = setInterval(() => {
-      setState((prev) => ({
-        ...prev,
-        ticksPerSecond: tickCounter.current,
-      }));
+      setState((prev) => ({ ...prev, ticksPerSecond: tickCounter.current }));
       tickCounter.current = 0;
     }, 1000);
 
     return () => {
-      ws.close();
+      cancelled = true;
+      clearInterval(interval);
       clearInterval(tpsInterval);
     };
   }, []);
