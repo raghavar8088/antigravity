@@ -275,7 +275,7 @@ async function ensureMockIndexes(db: Db): Promise<void> {
     equity.createIndex({ account_key: 1, regime: 1, timestamp: -1 }, { name: "by_account_equity_regime" }),
     dailyPnl.createIndex({ account_key: 1, day: -1 }, { unique: true, name: "uniq_account_daily_pnl" }),
     dailyPnl.createIndex({ account_key: 1, regime: 1, day: -1 }, { name: "by_account_daily_pnl_regime" }),
-  ]);
+  ].map((p) => p.catch(() => {})));
   indexesEnsured = true;
 }
 
