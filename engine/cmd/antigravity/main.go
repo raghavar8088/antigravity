@@ -27,6 +27,7 @@ import (
 	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
+	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
@@ -562,6 +563,73 @@ func main() {
 	}
 
 	// ═══════════════════════════════════════════════════
+	// 9c. PHASE 31B — MongoDB Atlas paper-trading persistence
+	//
+	// MongoManager is the single shared handle for all paperpersist writers.
+	// If MongoDB is unavailable the engine degrades gracefully (PostgreSQL only).
+	// ═══════════════════════════════════════════════════
+	var ppBundle *trading.PaperPersistBundle
+	mongoMgr, mongoErr := paperpersist.NewMongoManager(ctx)
+	if mongoErr != nil {
+		log.Printf("[Phase31B] MongoDB unavailable — running without MongoDB persistence: %v", mongoErr)
+	} else {
+		if idxErr := mongoMgr.EnsureIndexes(ctx); idxErr != nil {
+			log.Printf("[Phase31B] index creation warning: %v", idxErr)
+		}
+		// Startup diagnostics: logs connectivity, account_key, URI, and collection presence.
+		mongoMgr.StartupReport(ctx)
+
+		// Crash recovery: restore balance + open positions from MongoDB Atlas.
+		// This is authoritative when PostgreSQL is stale or unavailable.
+		recoveryReport := paperpersist.Recover(ctx, mongoMgr)
+		if recoveryReport.AccountRestored {
+			restoredBalance := recoveryReport.AccountState.Balance
+			if restoredBalance > 0 && restoredBalance != initialPaperBalanceUSD {
+				log.Printf("[Phase31B] ♻️  MongoDB recovery: balance=%.2f age=%s — overriding PostgreSQL state",
+					restoredBalance, recoveryReport.AccountDataAge.Round(time.Second))
+				paperExecute.RestoreBalance(restoredBalance, recoveryReport.AccountState.TotalFees)
+			}
+		}
+		// Restore open positions from MongoDB if PostgreSQL didn't restore any.
+		if len(recoveryReport.OpenPositions) > 0 && posMgr.GetPositionCount() == 0 {
+			log.Printf("[Phase31B] restoring %d open positions from MongoDB", len(recoveryReport.OpenPositions))
+			var mongoPositions []positions.Position
+			for _, rp := range recoveryReport.OpenPositions {
+				side := strategy.ActionBuy
+				if rp.Side == "SHORT" || rp.Side == "SELL" {
+					side = strategy.ActionSell
+				}
+				mongoPositions = append(mongoPositions, positions.Position{
+					ID:           rp.PositionID,
+					Symbol:       rp.Symbol,
+					Side:         side,
+					EntryPrice:   rp.EntryPrice,
+					Size:         rp.Size,
+					StopLoss:     rp.StopLoss,
+					TakeProfit:   rp.TakeProfit,
+					StrategyName: rp.StrategyID,
+					OpenedAt:     rp.OpenedAt,
+					Status:       "OPEN",
+				})
+			}
+			posMgr.RestorePositions(mongoPositions)
+		}
+
+		log.Printf("[Phase31B] recovery complete — success=%v positions=%d inconsistencies=%d",
+			recoveryReport.Success, recoveryReport.PositionsRestored, len(recoveryReport.Inconsistencies))
+
+		// Wire writers.
+		tradeWriter := paperpersist.NewTradeWriter(mongoMgr)
+		orderWriter := paperpersist.NewOrderWriter(mongoMgr)
+		ppBundle = trading.NewPaperPersistBundle(mongoMgr, tradeWriter, orderWriter)
+
+		// Ping monitor: reconnects MongoDB on transient failures.
+		go mongoMgr.RunPingMonitor(ctx, 30*time.Second)
+
+		log.Printf("[Phase31B] MongoDB persistence active — account_key=%s", paperpersist.AccountKey())
+	}
+
+	// ═══════════════════════════════════════════════════
 	// 10. Multi-Strategy Orchestrator
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
@@ -575,6 +643,24 @@ func main() {
 		journal,
 		candleAgg,
 	)
+
+	// Phase 31B: attach MongoDB persistence bundle + start state snapshotter.
+	if ppBundle != nil {
+		orchestrator.SetPaperPersist(ppBundle)
+		snapshotter := paperpersist.NewStateSnapshotter(ppBundle.Mgr(), orchestrator, 10*time.Second)
+		go snapshotter.Run(ctx)
+		log.Printf("[Phase31B] StateSnapshotter started (10s interval)")
+
+		// Phase 31D: EquityRecorder — 5-minute equity curve snapshots + daily PnL seal.
+		equityRecorder := paperpersist.NewEquityRecorder(ppBundle.Mgr(), orchestrator, orchestrator, 5*time.Minute)
+		go safeGo("EquityRecorder", func() { equityRecorder.Run(ctx) })
+		log.Printf("[Phase31D] EquityRecorder started (5m interval)")
+
+		// Phase 31D: StrategyHealthMonitor — compute + persist health every 15 min.
+		healthMonitor := paperpersist.NewStrategyHealthMonitor(ppBundle.Mgr(), orchestrator, 15*time.Minute)
+		go safeGo("StrategyHealthMonitor", func() { healthMonitor.Run(ctx) })
+		log.Printf("[Phase31D] StrategyHealthMonitor started (15m interval)")
+	}
 
 	// ═══════════════════════════════════════════════════
 	// 10b. AI MULTI-AGENT SYSTEM — Claude-powered trading
@@ -1076,6 +1162,27 @@ func main() {
 		http.Handle("/phase30/", http.StripPrefix("/phase30", mongopersist.NewHandler(mongoPhase30)))
 		log.Println("[PHASE30] ✅ MongoDB persistence layer active — /phase30/* endpoints registered")
 	}
+
+	// ── Phase 31D: diagnostics ────────────────────────────────────────────────────
+	// GET /api/paper-desk/diagnostics — live MongoDB health, collection presence,
+	// write metrics, account_key, and persistence lag. No auth required (read-only).
+	http.HandleFunc("/api/paper-desk/diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if mongoMgr == nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"connected":   false,
+				"error":       "MongoDB not initialised",
+				"account_key": paperpersist.AccountKey(),
+			})
+			return
+		}
+		report := mongoMgr.Diagnostics(r.Context())
+		json.NewEncoder(w).Encode(report)
+	})
 
 	// Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
@@ -1727,6 +1834,14 @@ func main() {
 	coinbaseClient.Close()
 	if dbStore != nil {
 		dbStore.Close()
+	}
+	// Phase 31B: flush retry queue + disconnect MongoDB.
+	if ppBundle != nil {
+		ppBundle.TradeWriter().Stop()
+		if err := ppBundle.Mgr().Shutdown(shutdownCtx); err != nil {
+			log.Printf("[Phase31B] MongoDB shutdown warning: %v", err)
+		}
+		log.Printf("[Phase31B] MongoDB persistence shut down cleanly")
 	}
 	time.Sleep(2 * time.Second) // Allow state saver final flush
 	log.Println("Systems offline.")

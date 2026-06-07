@@ -2,7 +2,6 @@ package certification
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -12,198 +11,162 @@ import (
 
 // ─── Phase 8: Reconciliation Certification ──────────────────────────────────
 
-// inMemoryOMSReader implements reconciliationv2.OMSStateReader backed by an
-// in-memory map for deterministic reconciliation testing.
+// inMemoryOMSReader implements reconciliationv2.OMSStateReader.
 type inMemoryOMSReader struct {
-	balances  map[string]float64
-	positions map[string]float64
-	orders    map[string]reconciliationv2.OrderState
+	equityUSD float64
+	positions []reconciliationv2.OMSPosition
 }
 
-func newOMSReader() *inMemoryOMSReader {
-	return &inMemoryOMSReader{
-		balances:  make(map[string]float64),
-		positions: make(map[string]float64),
-		orders:    make(map[string]reconciliationv2.OrderState),
-	}
+func (r *inMemoryOMSReader) GetOMSSnapshot(_ context.Context, accountID string) (reconciliationv2.OMSSnapshot, error) {
+	return reconciliationv2.OMSSnapshot{
+		AccountID: accountID,
+		Balance: reconciliationv2.OMSBalanceSnapshot{
+			EquityUSD:    r.equityUSD,
+			AvailableUSD: r.equityUSD,
+		},
+		Positions: r.positions,
+	}, nil
 }
 
-func (r *inMemoryOMSReader) GetBalance(ctx context.Context, asset string) (float64, error) {
-	return r.balances[asset], nil
-}
-func (r *inMemoryOMSReader) GetPosition(ctx context.Context, symbol string) (float64, error) {
-	return r.positions[symbol], nil
-}
-func (r *inMemoryOMSReader) GetOrder(ctx context.Context, orderID string) (reconciliationv2.OrderState, error) {
-	os, ok := r.orders[orderID]
-	if !ok {
-		return reconciliationv2.OrderState{}, fmt.Errorf("order %s not found", orderID)
-	}
-	return os, nil
-}
-
-// inMemoryExchangeAdapter implements reconciliationv2.ReconciliationAdapter for
-// deterministic exchange state simulation.
+// inMemoryExchangeAdapter implements reconciliationv2.ReconciliationAdapter.
 type inMemoryExchangeAdapter struct {
 	name      string
-	balances  map[string]float64
-	positions map[string]float64
-	orders    map[string]reconciliationv2.OrderState
-}
-
-func newExchangeAdapter(name string) *inMemoryExchangeAdapter {
-	return &inMemoryExchangeAdapter{
-		name:      name,
-		balances:  make(map[string]float64),
-		positions: make(map[string]float64),
-		orders:    make(map[string]reconciliationv2.OrderState),
-	}
+	equityUSD float64
+	positions []reconciliationv2.ExchangePosition
 }
 
 func (a *inMemoryExchangeAdapter) Name() string { return a.name }
-func (a *inMemoryExchangeAdapter) FetchBalance(ctx context.Context, asset string) (float64, error) {
-	return a.balances[asset], nil
-}
-func (a *inMemoryExchangeAdapter) FetchPosition(ctx context.Context, symbol string) (float64, error) {
-	return a.positions[symbol], nil
-}
-func (a *inMemoryExchangeAdapter) FetchOrder(ctx context.Context, orderID string) (reconciliationv2.OrderState, error) {
-	os, ok := a.orders[orderID]
-	if !ok {
-		return reconciliationv2.OrderState{}, fmt.Errorf("order %s not found on exchange", orderID)
-	}
-	return os, nil
-}
-func (a *inMemoryExchangeAdapter) FetchOpenOrders(ctx context.Context) ([]reconciliationv2.OrderState, error) {
-	orders := make([]reconciliationv2.OrderState, 0, len(a.orders))
-	for _, o := range a.orders {
-		orders = append(orders, o)
-	}
-	return orders, nil
+
+func (a *inMemoryExchangeAdapter) GetAccountState(ctx context.Context) (reconciliationv2.AccountState, error) {
+	balances, _ := a.GetBalances(ctx)
+	positions, _ := a.GetPositions(ctx)
+	return reconciliationv2.AccountState{
+		Exchange:    a.name,
+		Balances:    balances,
+		Positions:   positions,
+		RetrievedAt: time.Now().UTC(),
+	}, nil
 }
 
-// noopRepairTarget implements reconciliationv2.RepairTarget for testing without
-// side effects.
+func (a *inMemoryExchangeAdapter) GetBalances(_ context.Context) ([]reconciliationv2.AssetBalance, error) {
+	return []reconciliationv2.AssetBalance{
+		{Asset: "USDT", WalletBalance: a.equityUSD, Available: a.equityUSD, EquityUSD: a.equityUSD},
+	}, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetPositions(_ context.Context) ([]reconciliationv2.ExchangePosition, error) {
+	return a.positions, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetOrders(_ context.Context, _ string, _ time.Time) ([]reconciliationv2.ExchangeOrder, error) {
+	return nil, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetOpenOrders(_ context.Context, _ string) ([]reconciliationv2.ExchangeOrder, error) {
+	return nil, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetFills(_ context.Context, _ string, _ time.Time) ([]reconciliationv2.ExchangeFill, error) {
+	return nil, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetTrades(_ context.Context, _ string, _ time.Time) ([]reconciliationv2.ExchangeTrade, error) {
+	return nil, nil
+}
+
+func (a *inMemoryExchangeAdapter) GetFunding(_ context.Context, _ string, _ time.Time) ([]reconciliationv2.FundingPayment, error) {
+	return nil, nil
+}
+
+func (a *inMemoryExchangeAdapter) HealthCheck(_ context.Context) error {
+	return nil
+}
+
+// noopRepairTarget implements reconciliationv2.RepairTarget.
 type noopRepairTarget struct {
-	cancelCalls int
-	fixCalls    int
+	rebuildCalls int
 }
 
-func (n *noopRepairTarget) CancelOrder(ctx context.Context, orderID string) error {
-	n.cancelCalls++
-	return nil
-}
-func (n *noopRepairTarget) ForceClosePosition(ctx context.Context, symbol string, qty float64) error {
-	n.fixCalls++
-	return nil
-}
-func (n *noopRepairTarget) AdjustBalance(ctx context.Context, asset string, delta float64) error {
-	n.fixCalls++
+func (n *noopRepairTarget) RebuildProjections(_ context.Context, _ string) error {
+	n.rebuildCalls++
 	return nil
 }
 
-// TestReconciliation_NoBalanceDrift verifies that when OMS and exchange agree,
-// the reconciliation engine finds zero drift.
-func TestReconciliation_NoBalanceDrift(t *testing.T) {
+func (n *noopRepairTarget) RebuildAggregate(_ context.Context, _, _ string) error {
+	n.rebuildCalls++
+	return nil
+}
+
+func newEngine(
+	exchEquity float64,
+	omsEquity float64,
+	exchPositions []reconciliationv2.ExchangePosition,
+	omsPositions []reconciliationv2.OMSPosition,
+	accountID string,
+) (*reconciliationv2.ReconciliationEngine, *noopRepairTarget) {
 	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
+	metrics := reconciliationv2.NewMetrics("test")
 	repair := &noopRepairTarget{}
-	accountID := "RECON_CERT_001"
+	adapter := &inMemoryExchangeAdapter{name: "binance-paper", equityUSD: exchEquity, positions: exchPositions}
+	omsReader := &inMemoryOMSReader{equityUSD: omsEquity, positions: omsPositions}
+	return reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID), repair
+}
 
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.balances["USDT"] = 1_000_000.0
-
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
-
+// TestReconciliation_NoBalanceDrift verifies zero drift when OMS and exchange agree.
+func TestReconciliation_NoBalanceDrift(t *testing.T) {
+	engine, _ := newEngine(1_000_000, 1_000_000, nil, nil, "RECON_CERT_001")
 	result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance)
 	if err != nil {
 		t.Fatalf("RunDomain: %v", err)
 	}
-	if result.DriftDetected {
-		t.Errorf("FAIL: balance drift reported when OMS and exchange agree (drift=%.4f)", result.DriftAmount)
+	if (result.MismatchCount > 0) {
+		t.Errorf("FAIL: balance drift reported when OMS and exchange agree (drift=%.4f)", result.DriftScore)
 	}
 	t.Logf("balance reconciliation: no drift — PASS")
 }
 
-// TestReconciliation_DetectsBalanceDrift verifies the engine correctly identifies
-// and reports drift when exchange balance diverges from OMS state.
+// TestReconciliation_DetectsBalanceDrift verifies drift is detected when exchange diverges.
 func TestReconciliation_DetectsBalanceDrift(t *testing.T) {
-	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
-	repair := &noopRepairTarget{}
-	accountID := "RECON_CERT_002"
-
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.balances["USDT"] = 999_000.0 // exchange shows 1000 less
-
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
-
+	engine, _ := newEngine(999_000, 1_000_000, nil, nil, "RECON_CERT_002")
 	result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance)
 	if err != nil {
 		t.Fatalf("RunDomain: %v", err)
 	}
-	if !result.DriftDetected {
+	if !(result.MismatchCount > 0) {
 		t.Error("FAIL: balance drift not detected — reconciliation authority compromised")
 	}
-	t.Logf("balance drift detected: %.2f USDT — PASS", result.DriftAmount)
+	t.Logf("balance drift detected: %.2f USDT — PASS", result.DriftScore)
 }
 
-// TestReconciliation_PositionDrift verifies position drift detection when the
-// exchange reports a different quantity than the OMS.
+// TestReconciliation_PositionDrift verifies position drift detection.
 func TestReconciliation_PositionDrift(t *testing.T) {
-	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
-	repair := &noopRepairTarget{}
-	accountID := "RECON_CERT_003"
-
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.positions["BTC-USDT"] = 0.5 // exchange: 0.5 BTC
-
-	omsReader := newOMSReader()
-	omsReader.positions["BTC-USDT"] = 0.75 // OMS: 0.75 BTC — drift of 0.25
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
-
+	exchPositions := []reconciliationv2.ExchangePosition{
+		{Symbol: "BTC-USDT", Side: "LONG", Quantity: 0.5},
+	}
+	omsPositions := []reconciliationv2.OMSPosition{
+		{Symbol: "BTC-USDT", Side: "LONG", Quantity: 0.75, State: "OPEN"},
+	}
+	engine, _ := newEngine(1_000_000, 1_000_000, exchPositions, omsPositions, "RECON_CERT_003")
 	result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainPosition)
 	if err != nil {
 		t.Fatalf("RunDomain: %v", err)
 	}
-	if !result.DriftDetected {
+	if !(result.MismatchCount > 0) {
 		t.Error("FAIL: position drift not detected")
 	}
-	t.Logf("position drift detected: %.4f BTC — PASS", result.DriftAmount)
+	t.Logf("position drift detected: %.4f BTC — PASS", result.DriftScore)
 }
 
-// TestReconciliation_AuditEventsPersistedToLedger verifies that every
-// reconciliation run (pass or fail) emits an audit event to the ledger.
+// TestReconciliation_AuditEventsPersistedToLedger verifies every run emits an audit event.
 func TestReconciliation_AuditEventsPersistedToLedger(t *testing.T) {
 	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
+	metrics := reconciliationv2.NewMetrics("test")
 	repair := &noopRepairTarget{}
 	accountID := "RECON_CERT_004"
+	adapter := &inMemoryExchangeAdapter{name: "binance-paper", equityUSD: 1_000_000}
+	omsReader := &inMemoryOMSReader{equityUSD: 1_000_000}
+	engine := reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID)
 
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.balances["USDT"] = 1_000_000.0
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
-
-	// Run 3 reconciliation cycles.
 	for i := 0; i < 3; i++ {
 		if _, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance); err != nil {
 			t.Fatalf("RunDomain cycle %d: %v", i, err)
@@ -215,56 +178,39 @@ func TestReconciliation_AuditEventsPersistedToLedger(t *testing.T) {
 		t.Fatalf("Replay: %v", err)
 	}
 	if len(events) < 3 {
-		t.Errorf("FAIL: expected ≥3 reconciliation audit events, got %d — audit trail incomplete",
-			len(events))
+		t.Errorf("FAIL: expected ≥3 reconciliation audit events, got %d — audit trail incomplete", len(events))
 	}
 }
 
-// TestReconciliation_RepairTriggeredOnDrift verifies the repair engine is
-// invoked when drift is detected, proving auto-repair is wired.
+// TestReconciliation_RepairTriggeredOnDrift verifies repair is invoked when drift detected.
 func TestReconciliation_RepairTriggeredOnDrift(t *testing.T) {
-	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
-	repair := &noopRepairTarget{}
-	accountID := "RECON_CERT_005"
-
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.balances["USDT"] = 990_000.0 // 10K drift
-
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
-
+	engine, repair := newEngine(990_000, 1_000_000, nil, nil, "RECON_CERT_005")
 	result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance)
 	if err != nil {
 		t.Fatalf("RunDomain: %v", err)
 	}
-	if !result.DriftDetected {
+	if !(result.MismatchCount > 0) {
 		t.Fatal("FAIL: drift not detected")
 	}
-	if repair.fixCalls == 0 {
+	if repair.rebuildCalls == 0 {
 		t.Error("FAIL: repair not invoked after drift detection — auto-repair broken")
 	}
-	t.Logf("auto-repair invoked %d times for %.2f USDT drift", repair.fixCalls, result.DriftAmount)
+	t.Logf("auto-repair invoked %d times for %.2f USDT drift", repair.rebuildCalls, result.DriftScore)
 }
 
-// TestReconciliation_MultipleExchanges verifies that independent reconciliation
-// engines for different exchanges produce independent results without cross-contamination.
+// TestReconciliation_MultipleExchanges verifies independent engines produce independent results.
 func TestReconciliation_MultipleExchanges(t *testing.T) {
 	accountID := "RECON_CERT_006"
-	metrics := reconciliationv2.NewMetrics()
+	metrics := reconciliationv2.NewMetrics("test")
 
 	exchanges := []struct {
-		name    string
-		exchBal float64
-		omsBal  float64
-		wantErr bool
+		name      string
+		exchBal   float64
+		omsBal    float64
+		wantDrift bool
 	}{
 		{"binance", 1_000_000, 1_000_000, false},
-		{"delta", 500_000, 499_000, true},  // 1000 drift
+		{"delta", 499_000, 500_000, true},
 		{"paper", 250_000, 250_000, false},
 	}
 
@@ -273,52 +219,36 @@ func TestReconciliation_MultipleExchanges(t *testing.T) {
 		t.Run(ex.name, func(t *testing.T) {
 			store := ledger.NewMemoryStore()
 			repair := &noopRepairTarget{}
-
-			exchAdapter := newExchangeAdapter(ex.name)
-			exchAdapter.balances["USDT"] = ex.exchBal
-			omsReader := newOMSReader()
-			omsReader.balances["USDT"] = ex.omsBal
-
-			engine := reconciliationv2.NewReconciliationEngine(
-				exchAdapter, omsReader, store, repair, metrics, accountID,
-			)
-
+			adapter := &inMemoryExchangeAdapter{name: ex.name, equityUSD: ex.exchBal}
+			omsReader := &inMemoryOMSReader{equityUSD: ex.omsBal}
+			engine := reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID)
 			result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance)
 			if err != nil {
 				t.Fatalf("RunDomain: %v", err)
 			}
-			if result.DriftDetected != ex.wantErr {
-				t.Errorf("exchange %s: drift=%v (want %v)", ex.name, result.DriftDetected, ex.wantErr)
+			if (result.MismatchCount > 0) != ex.wantDrift {
+				t.Errorf("exchange %s: drift=%v (want %v)", ex.name, (result.MismatchCount > 0), ex.wantDrift)
 			}
 		})
 	}
 }
 
-// TestReconciliation_DeterministicAfterReplay proves that replaying the same
-// ledger produces identical reconciliation audit events — determinism guarantee.
+// TestReconciliation_DeterministicAfterReplay proves replay produces identical events.
 func TestReconciliation_DeterministicAfterReplay(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	accountID := "RECON_CERT_007"
-	metrics := reconciliationv2.NewMetrics()
-
-	exchAdapter := newExchangeAdapter("binance-paper")
-	exchAdapter.balances["USDT"] = 1_000_000.0
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
+	metrics := reconciliationv2.NewMetrics("test")
+	adapter := &inMemoryExchangeAdapter{name: "binance-paper", equityUSD: 1_000_000}
+	omsReader := &inMemoryOMSReader{equityUSD: 1_000_000}
 	repair := &noopRepairTarget{}
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
+	engine := reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID)
 
-	// Run 5 cycles.
 	for i := 0; i < 5; i++ {
 		if _, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance); err != nil {
 			t.Fatalf("cycle %d: %v", i, err)
 		}
 	}
 
-	// Replay and count events twice.
 	replay := func() int {
 		r, err := ledger.ReplayEverything(context.Background(), store, accountID)
 		if err != nil {
@@ -329,29 +259,21 @@ func TestReconciliation_DeterministicAfterReplay(t *testing.T) {
 
 	c1 := replay()
 	c2 := replay()
-
 	if c1 != c2 {
 		t.Errorf("non-determinism: replay1=%d, replay2=%d reconciliation events", c1, c2)
 	}
 	t.Logf("reconciliation determinism: %d events consistent across replays", c1)
 }
 
-// TestReconciliation_HighFrequency verifies reconciliation performance stays
-// viable under high-frequency trading conditions (1000 cycles/test).
+// TestReconciliation_HighFrequency verifies reconciliation stays viable at 1000 cycles.
 func TestReconciliation_HighFrequency(t *testing.T) {
 	store := ledger.NewMemoryStore()
-	metrics := reconciliationv2.NewMetrics()
+	metrics := reconciliationv2.NewMetrics("test")
 	repair := &noopRepairTarget{}
 	accountID := "RECON_CERT_HF_001"
-
-	exchAdapter := newExchangeAdapter("binance-hf")
-	exchAdapter.balances["USDT"] = 1_000_000.0
-	omsReader := newOMSReader()
-	omsReader.balances["USDT"] = 1_000_000.0
-
-	engine := reconciliationv2.NewReconciliationEngine(
-		exchAdapter, omsReader, store, repair, metrics, accountID,
-	)
+	adapter := &inMemoryExchangeAdapter{name: "binance-hf", equityUSD: 1_000_000}
+	omsReader := &inMemoryOMSReader{equityUSD: 1_000_000}
+	engine := reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID)
 
 	const cycles = 1000
 	start := time.Now()
@@ -362,8 +284,7 @@ func TestReconciliation_HighFrequency(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 	cyclesPerSec := float64(cycles) / elapsed.Seconds()
-	t.Logf("reconciliation throughput: %d cycles in %v (%.0f cycles/sec)",
-		cycles, elapsed, cyclesPerSec)
+	t.Logf("reconciliation throughput: %d cycles in %v (%.0f cycles/sec)", cycles, elapsed, cyclesPerSec)
 	if cyclesPerSec < 100 {
 		t.Errorf("FAIL: reconciliation too slow (%.0f cycles/sec, need ≥100)", cyclesPerSec)
 	}

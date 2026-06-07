@@ -62,8 +62,12 @@ func TestChaos_LedgerTransientFailure(t *testing.T) {
 	written := 0
 	for i := 0; i < total; i++ {
 		oid := fmt.Sprintf("CHAOS_ORD_%04d", i)
-		ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-		ev.AccountID = accountID
+		ev, _ := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregateOrder,
+				AggregateID:   oid,
+				EventType:     ledger.EventOrderCreated,
+				AccountID:     accountID,
+			})
 		_, err := store.Append(context.Background(), ev)
 		if err == nil {
 			written++
@@ -103,8 +107,12 @@ func TestChaos_ConcurrentWritesNoRace(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < eventsPerGoroutine; i++ {
 				oid := fmt.Sprintf("G%03d_ORD_%04d", g, i)
-				ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-				ev.AccountID = accountID
+				ev, _ := ledger.NewEvent(ledger.NewEventInput{
+						AggregateType: ledger.AggregateOrder,
+						AggregateID:   oid,
+						EventType:     ledger.EventOrderCreated,
+						AccountID:     accountID,
+					})
 				_, err := store.Append(ctx, ev)
 				if err != nil {
 					failed.Add(1)
@@ -162,8 +170,12 @@ func TestChaos_OMSv3_ConcurrentOrderProcessing(t *testing.T) {
 			}
 
 			for _, step := range lifecycle {
-				ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-				ev.AccountID = accountID
+				ev, _ := ledger.NewEvent(ledger.NewEventInput{
+						AggregateType: ledger.AggregateOrder,
+						AggregateID:   orderID,
+						EventType:     step.et,
+						AccountID:     accountID,
+					})
 				persisted, err := store.Append(ctx, ev)
 				if err != nil {
 					errCh <- fmt.Errorf("order %s append %s: %w", orderID, step.et, err)
@@ -251,8 +263,12 @@ func TestChaos_LedgerDiskExhaustion(t *testing.T) {
 	var lastErr error
 	for i := 0; i < 20; i++ {
 		oid := fmt.Sprintf("DISK_ORD_%04d", i)
-		ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-		ev.AccountID = accountID
+		ev, _ := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType: ledger.AggregateOrder,
+			AggregateID:   oid,
+			EventType:     ledger.EventOrderCreated,
+			AccountID:     accountID,
+		})
 		_, err := store.Append(context.Background(), ev)
 		if err != nil {
 			lastErr = err
@@ -270,8 +286,12 @@ func TestChaos_LedgerDiskExhaustion(t *testing.T) {
 func TestChaos_EventHashTampering(t *testing.T) {
 	store := ledger.NewMemoryStore()
 
-	ev := ledger.NewEvent(ledger.AggregateOrder, "TAMPER_ORD_001", ledger.EventOrderCreated, nil)
-	ev.AccountID = "CHAOS_TAMPER_001"
+	ev, _ := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   "TAMPER_ORD_001",
+		EventType:     ledger.EventOrderCreated,
+		AccountID:     "CHAOS_TAMPER_001",
+	})
 
 	// Tamper with the hash.
 	ev.PayloadHash = "0000000000000000000000000000000000000000000000000000000000000000"

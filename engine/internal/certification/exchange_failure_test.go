@@ -60,9 +60,8 @@ func TestExchangeFailure_OutagePreventsDualExecution(t *testing.T) {
 		{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 	} {
-		ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-		ev.AccountID = accountID
-		persisted := mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, orderID, step.et)
+		persisted := mustAppend(t, store, ev)
 		if err := agg.ApplyEvent(persisted); err != nil {
 			t.Fatalf("ApplyEvent %s: %v", step.et, err)
 		}
@@ -111,9 +110,8 @@ func TestExchangeFailure_TimeoutNoOrphan(t *testing.T) {
 		{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 	} {
-		ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-		ev.AccountID = accountID
-		persisted := mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, orderID, step.et)
+		persisted := mustAppend(t, store, ev)
 		if err := agg.ApplyEvent(persisted); err != nil {
 			t.Fatalf("ApplyEvent: %v", err)
 		}
@@ -129,9 +127,8 @@ func TestExchangeFailure_TimeoutNoOrphan(t *testing.T) {
 	if err := agg.ValidateTransition(omsv3.StateCancelled); err != nil {
 		t.Fatalf("FAIL: cannot cancel timed-out order: %v — orphan risk", err)
 	}
-	cancelEv := ledger.NewEvent(ledger.AggregateOrder, orderID, ledger.EventOrderCancelled, nil)
-	cancelEv.AccountID = accountID
-	persisted := mustEvent(t, store, cancelEv)
+	cancelEv := newOrderEvent(t, accountID, orderID, ledger.EventOrderCancelled)
+	persisted := mustAppend(t, store, cancelEv)
 	if err := agg.ApplyEvent(persisted); err != nil {
 		t.Fatalf("ApplyEvent cancel: %v", err)
 	}
@@ -166,9 +163,8 @@ func TestExchangeFailure_RejectStorm(t *testing.T) {
 			{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
 			{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-			ev.AccountID = accountID
-			persisted := mustEvent(t, store, ev)
+			ev := newOrderEvent(t, accountID, orderID, step.et)
+			persisted := mustAppend(t, store, ev)
 			if err := agg.ApplyEvent(persisted); err != nil {
 				t.Fatalf("ApplyEvent: %v", err)
 			}
@@ -178,9 +174,8 @@ func TestExchangeFailure_RejectStorm(t *testing.T) {
 		_, err := exchange.PlaceOrder(context.Background(), orderID)
 		if err != nil {
 			// Exchange rejected: record rejection in ledger.
-			rejEv := ledger.NewEvent(ledger.AggregateOrder, orderID, ledger.EventOrderRejected, nil)
-			rejEv.AccountID = accountID
-			persisted := mustEvent(t, store, rejEv)
+			rejEv := newOrderEvent(t, accountID, orderID, ledger.EventOrderRejected)
+			persisted := mustAppend(t, store, rejEv)
 			if err := agg.ApplyEvent(persisted); err != nil {
 				t.Errorf("order %s: cannot apply REJECTED event: %v", orderID, err)
 			}
@@ -218,19 +213,25 @@ func TestExchangeFailure_DuplicateExchangeMessage(t *testing.T) {
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 		{ledger.EventOrderAcked, omsv3.StateAcknowledged},
 	} {
-		ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-		ev.AccountID = accountID
-		persisted := mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, orderID, step.et)
+		persisted := mustAppend(t, store, ev)
 		if err := agg.ApplyEvent(persisted); err != nil {
 			t.Fatalf("ApplyEvent: %v", err)
 		}
 	}
 
 	// First fill — legitimate.
-	fillEv := ledger.NewEvent(ledger.AggregateOrder, orderID, ledger.EventOrderFilled, nil)
-	fillEv.AccountID = accountID
-	fillEv.IdempotencyKey = "exch_fill_12345678"
-	persisted := mustEvent(t, store, fillEv)
+	fillEv, _ := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType:  ledger.AggregateOrder,
+		AggregateID:    orderID,
+		EventType:      ledger.EventOrderFilled,
+		AccountID:      accountID,
+		Symbol:         "BTC-USD",
+		Payload:        ledger.OrderPayload{ClientOrderID: orderID},
+		IdempotencyKey: "exch_fill_12345678",
+		Source:         "certification",
+	})
+	persisted := mustAppend(t, store, fillEv)
 	if err := agg.ApplyEvent(persisted); err != nil {
 		t.Fatalf("first fill: %v", err)
 	}
@@ -281,9 +282,8 @@ func TestExchangeFailure_WebsocketReconnectNoGhostPosition(t *testing.T) {
 			{ledger.EventOrderAcked, omsv3.StateAcknowledged},
 			{ledger.EventOrderFilled, omsv3.StateFilled},
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, orderID, step.et, nil)
-			ev.AccountID = accountID
-			persisted := mustEvent(t, store, ev)
+			ev := newOrderEvent(t, accountID, orderID, step.et)
+			persisted := mustAppend(t, store, ev)
 			if err := agg.ApplyEvent(persisted); err != nil {
 				t.Fatalf("ApplyEvent: %v", err)
 			}

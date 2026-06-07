@@ -99,9 +99,8 @@ func TestDR_SnapshotAndFullRecovery(t *testing.T) {
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderFilled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, oid, et, nil)
-			ev.AccountID = accountID
-			mustEvent(t, primaryStore, ev)
+			ev := newOrderEvent(t, accountID, oid, et)
+			mustAppend(t, primaryStore, ev)
 		}
 	}
 
@@ -158,9 +157,8 @@ func TestDR_LedgerReplayAfterCrash(t *testing.T) {
 	const phase1 = 200
 	for i := 0; i < phase1; i++ {
 		oid := fmt.Sprintf("CRASH_ORD_%05d", i)
-		ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-		ev.AccountID = accountID
-		mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, oid, ledger.EventOrderCreated)
+		mustAppend(t, store, ev)
 	}
 
 	// Phase 2: simulate crash mid-write (no events written).
@@ -240,9 +238,8 @@ func TestDR_ProjectionRebuildAfterRestart(t *testing.T) {
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderValidated, finalET,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, oid, et, nil)
-			ev.AccountID = accountID
-			mustEvent(t, store, ev)
+			ev := newOrderEvent(t, accountID, oid, et)
+			mustAppend(t, store, ev)
 		}
 		expectations = append(expectations, orderExpect{id: oid, state: finalState})
 	}
@@ -290,9 +287,8 @@ func TestDR_RPO_MeasureEventLoss(t *testing.T) {
 	const totalPreFailure = 1000
 	for i := 0; i < totalPreFailure; i++ {
 		oid := fmt.Sprintf("RPO_ORD_%05d", i)
-		ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-		ev.AccountID = accountID
-		mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, oid, ledger.EventOrderCreated)
+		mustAppend(t, store, ev)
 	}
 
 	// Take snapshot at T=0.
@@ -305,9 +301,8 @@ func TestDR_RPO_MeasureEventLoss(t *testing.T) {
 	const postSnapshotEvents = 50
 	for i := 0; i < postSnapshotEvents; i++ {
 		oid := fmt.Sprintf("RPO_POST_%05d", i)
-		ev := ledger.NewEvent(ledger.AggregateOrder, oid, ledger.EventOrderCreated, nil)
-		ev.AccountID = accountID
-		mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, oid, ledger.EventOrderCreated)
+		mustAppend(t, store, ev)
 	}
 
 	// Failure occurs here — recover only from snapshot.

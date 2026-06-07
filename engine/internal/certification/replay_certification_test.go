@@ -15,7 +15,6 @@ import (
 // triples (CREATED → VALIDATED → FILLED) for the given accountID.
 func seedAccount(t *testing.T, store ledger.Store, accountID string, n int) {
 	t.Helper()
-	ctx := context.Background()
 	for i := 0; i < n; i++ {
 		orderID := fmt.Sprintf("%s_ORD_%07d", accountID, i)
 		for _, et := range []ledger.EventType{
@@ -23,11 +22,8 @@ func seedAccount(t *testing.T, store ledger.Store, accountID string, n int) {
 			ledger.EventOrderValidated,
 			ledger.EventOrderFilled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, orderID, et, nil)
-			ev.AccountID = accountID
-			if _, err := store.Append(ctx, ev); err != nil {
-				t.Fatalf("seedAccount[%d][%s]: %v", i, et, err)
-			}
+			ev := newOrderEvent(t, accountID, orderID, et)
+			mustAppend(t, store, ev)
 		}
 	}
 }
@@ -45,19 +41,21 @@ func seedMixedAccount(t *testing.T, store ledger.Store, accountID string, n int)
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderFilled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, orderID, et, nil)
-			ev.AccountID = accountID
-			if _, err := store.Append(ctx, ev); err != nil {
-				t.Fatalf("seedMixed order[%d][%s]: %v", i, et, err)
-			}
+			ev := newOrderEvent(t, accountID, orderID, et)
+			mustAppend(t, store, ev)
 		}
 
 		// Position events
 		for _, et := range []ledger.EventType{
 			ledger.EventPositionOpened, ledger.EventPositionClosed,
 		} {
-			ev := ledger.NewEvent(ledger.AggregatePosition, posID, et, nil)
-			ev.AccountID = accountID
+			ev, _ := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregatePosition,
+				AggregateID:   posID,
+				EventType:     et,
+				AccountID:     accountID,
+				Source:        "certification",
+			})
 			if _, err := store.Append(ctx, ev); err != nil {
 				t.Fatalf("seedMixed position[%d][%s]: %v", i, et, err)
 			}
@@ -65,8 +63,13 @@ func seedMixedAccount(t *testing.T, store ledger.Store, accountID string, n int)
 
 		// Risk events
 		riskID := fmt.Sprintf("%s_RISK_%07d", accountID, i)
-		ev := ledger.NewEvent(ledger.AggregateRisk, riskID, ledger.EventRiskApproved, nil)
-		ev.AccountID = accountID
+		ev, _ := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType: ledger.AggregateRisk,
+			AggregateID:   riskID,
+			EventType:     ledger.EventRiskApproved,
+			AccountID:     accountID,
+			Source:        "certification",
+		})
 		if _, err := store.Append(ctx, ev); err != nil {
 			t.Fatalf("seedMixed risk[%d]: %v", i, err)
 		}
@@ -164,7 +167,6 @@ func TestReplay_MixedAggregates(t *testing.T) {
 		t.Fatalf("ReplayEverything: %v", err)
 	}
 
-	// Expect 2 order events + 2 position events + 1 risk event per iteration.
 	wantOrders := n * 2
 	wantPositions := n * 2
 	wantRisk := n
@@ -179,7 +181,6 @@ func TestReplay_MixedAggregates(t *testing.T) {
 		t.Errorf("risk: want %d, got %d", wantRisk, len(r.Risk))
 	}
 
-	// Verify every order event in the Orders partition actually has type ORDER.
 	for i, ev := range r.Orders {
 		if ev.AggregateType != ledger.AggregateOrder {
 			t.Errorf("Orders[%d] has wrong aggregate type: %s", i, ev.AggregateType)
@@ -188,7 +189,7 @@ func TestReplay_MixedAggregates(t *testing.T) {
 }
 
 // TestReplay_SequenceIntegrity verifies that sequence numbers are monotonically
-// increasing within each aggregate — a precondition for correct state rebuild.
+// increasing within each aggregate.
 func TestReplay_SequenceIntegrity(t *testing.T) {
 	store := newCertStore(t)
 	accountID := "REPLAY_SEQ_001"
@@ -205,9 +206,8 @@ func TestReplay_SequenceIntegrity(t *testing.T) {
 	}
 
 	for _, et := range eventTypes {
-		ev := ledger.NewEvent(ledger.AggregateOrder, orderID, et, nil)
-		ev.AccountID = accountID
-		mustEvent(t, store, ev)
+		ev := newOrderEvent(t, accountID, orderID, et)
+		mustAppend(t, store, ev)
 	}
 
 	events, err := store.Replay(ctx, ledger.AggregateOrder, orderID)
@@ -237,8 +237,13 @@ func BenchmarkReplay_100K(b *testing.B) {
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderValidated, ledger.EventOrderFilled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, oid, et, nil)
-			ev.AccountID = accountID
+			ev, _ := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregateOrder,
+				AggregateID:   oid,
+				EventType:     et,
+				AccountID:     accountID,
+				Source:        "bench",
+			})
 			if _, err := store.Append(ctx, ev); err != nil {
 				b.Fatalf("seed: %v", err)
 			}
@@ -268,8 +273,13 @@ func BenchmarkReplay_1M(b *testing.B) {
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderFilled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, oid, et, nil)
-			ev.AccountID = accountID
+			ev, _ := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregateOrder,
+				AggregateID:   oid,
+				EventType:     et,
+				AccountID:     accountID,
+				Source:        "bench",
+			})
 			if _, err := store.Append(ctx, ev); err != nil {
 				b.Fatalf("seed: %v", err)
 			}

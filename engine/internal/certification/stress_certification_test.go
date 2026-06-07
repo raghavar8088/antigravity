@@ -111,19 +111,18 @@ func TestStress_KillSwitchActivatesUnderCrash(t *testing.T) {
 			}
 
 			// Risk gate must block all new orders while kill switch is active.
-			re := riskv2.NewEngine(riskv2.DefaultConfig())
+			re := riskv2.NewEngine(1_000_000)
 			pipeline := gate.NewPreTradeRiskPipeline(re, ks)
 			decision := pipeline.Check(context.Background(), gate.Input{
 				Request: riskv2.TradeRequest{
-					Symbol:     "BTC-USD",
-					Side:       "BUY",
-					Quantity:   0.1,
-					EntryPrice: 65000 * (1 - s.PriceDropPct),
+					Symbol:           "BTC-USD",
+					Side:             riskv2.SideLong,
+					RequestedSizeBTC: 0.1,
+					EntryPrice:       65000 * (1 - s.PriceDropPct),
+					StopLossPrice:    60000 * (1 - s.PriceDropPct),
 				},
-				Market: riskv2.MarketState{
-					Symbol: "BTC-USD",
-					Price:  65000 * (1 - s.PriceDropPct),
-				},
+				Market:  riskv2.MarketState{},
+				Metrics: riskv2.StrategyMetrics{},
 			})
 
 			if decision.Status != gate.DecisionBlocked {
@@ -157,20 +156,21 @@ func TestStress_RiskGateBlocksExtremeExposure(t *testing.T) {
 	_ = store
 	_ = accountID
 
-	cfg := riskv2.DefaultConfig()
-	re := riskv2.NewEngine(cfg)
+	re := riskv2.NewEngine(1_000_000)
 	ks := &inactiveKS{}
 	pipeline := gate.NewPreTradeRiskPipeline(re, ks)
 
 	// Attempt an oversized position at crash price.
 	decision := pipeline.Check(context.Background(), gate.Input{
 		Request: riskv2.TradeRequest{
-			Symbol:     "BTC-USD",
-			Side:       "BUY",
-			Quantity:   1000.0, // absurd size
-			EntryPrice: 65000,
+			Symbol:           "BTC-USD",
+			Side:             riskv2.SideLong,
+			RequestedSizeBTC: 1000.0, // absurd size
+			EntryPrice:       65000,
+			StopLossPrice:    60000,
 		},
-		Market: riskv2.MarketState{Symbol: "BTC-USD", Price: 65000},
+		Market:  riskv2.MarketState{},
+		Metrics: riskv2.StrategyMetrics{},
 	})
 
 	// The risk engine should block this — either due to exposure or missing
@@ -193,8 +193,7 @@ func TestStress_LedgerIntegrityAfterCrash(t *testing.T) {
 		for _, et := range []ledger.EventType{
 			ledger.EventOrderCreated, ledger.EventOrderCancelled,
 		} {
-			ev := ledger.NewEvent(ledger.AggregateOrder, orderID, et, nil)
-			ev.AccountID = accountID
+			ev := newOrderEvent(t, accountID, orderID, et)
 			if _, err := store.Append(ctx, ev); err != nil {
 				t.Fatalf("burst append: %v", err)
 			}

@@ -16,6 +16,7 @@ import (
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/omsv3"
+	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
 	riskgate "antigravity-engine/internal/risk/gate"
@@ -139,6 +140,14 @@ type Orchestrator struct {
 	signalIDByOrder map[string]string
 	signalIDMu      sync.Mutex
 
+	// ppPersist is the Phase 31B MongoDB persistence bundle.
+	// Nil until SetPaperPersist() is called from main.go.
+	ppPersist *PaperPersistBundle
+
+	// sessionStart records when this engine process started. Used by the
+	// AccountStateProvider to populate the session_start field in paper_state.
+	sessionStart time.Time
+
 	mu sync.RWMutex
 }
 
@@ -211,6 +220,7 @@ func NewOrchestrator(
 		// Zero until the browser bridge explicitly heartbeats — avoids treating
 		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
 		lastBridgeHeartbeat: time.Time{},
+		sessionStart:        time.Now(),
 	}
 }
 
@@ -256,6 +266,17 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 	if _, err := appendOrderEvent(ledger.EventOrderCreated, orderPayload); err != nil {
 		return execution.FillResult{}, err
 	}
+	// Phase 31B: record OMS NEW transition to MongoDB.
+	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+		OrderID:        clientOrderID,
+		StrategyID:     strategyName,
+		Symbol:         sig.Symbol,
+		Side:           string(sig.Action),
+		RequestedSize:  sig.TargetSize,
+		TransitionFrom: "",
+		TransitionTo:   paperpersist.OMSNew,
+		TransitionAt:   time.Now(),
+	})
 	events, err := store.Replay(ctx, ledger.AggregateOrder, clientOrderID)
 	if err != nil {
 		return execution.FillResult{}, err
@@ -284,6 +305,8 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		Market:  riskv2.MarketState{Regime: riskv2.RegimeUnknown, LiquidityScore: 0.65},
 		Metrics: o.tracker.BuildRiskMetrics(strategyName),
 	})
+	// Phase 31B: record RISK_CHECKED transition.
+	riskCheckedAt := time.Now()
 	if riskDecision.Status == riskgate.DecisionBlocked {
 		event, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 			AggregateType: ledger.AggregateOrder,
@@ -297,8 +320,33 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		if newEventErr == nil {
 			_, _ = store.Append(ctx, event)
 		}
+		o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+			OrderID:        clientOrderID,
+			StrategyID:     strategyName,
+			Symbol:         sig.Symbol,
+			Side:           string(sig.Action),
+			RequestedSize:  sig.TargetSize,
+			TransitionFrom: paperpersist.OMSNew,
+			TransitionTo:   paperpersist.OMSRejected,
+			TransitionAt:   riskCheckedAt,
+			Reason:         riskDecision.Reason,
+			RiskApproved:   false,
+		})
 		return execution.FillResult{}, riskDecision.Error()
 	}
+	// Risk approved — record RISK_CHECKED → ACCEPTED.
+	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+		OrderID:        clientOrderID,
+		StrategyID:     strategyName,
+		Symbol:         sig.Symbol,
+		Side:           string(sig.Action),
+		RequestedSize:  sig.TargetSize,
+		TransitionFrom: paperpersist.OMSNew,
+		TransitionTo:   paperpersist.OMSRiskChecked,
+		TransitionAt:   riskCheckedAt,
+		RiskApproved:   true,
+		KellyFraction:  riskDecision.RiskDecision.Kelly.SelectedFraction,
+	})
 	// Apply the risk engine's Kelly + dynamic-sizing recommended size.
 	// This is the critical wire that connects real performance metrics →
 	// Kelly fraction → actual trade size. Winners get more capital; losers get less.
@@ -309,6 +357,20 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
 		return execution.FillResult{}, err
 	}
+	// Phase 31B: record ACCEPTED transition.
+	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+		OrderID:         clientOrderID,
+		StrategyID:      strategyName,
+		Symbol:          sig.Symbol,
+		Side:            string(sig.Action),
+		RequestedSize:   sig.TargetSize,
+		TransitionFrom:  paperpersist.OMSRiskChecked,
+		TransitionTo:    paperpersist.OMSAccepted,
+		TransitionAt:    time.Now(),
+		RiskApproved:    true,
+		KellyFraction:   riskDecision.RiskDecision.Kelly.SelectedFraction,
+		ApprovedSizeBTC: sig.TargetSize,
+	})
 	if _, err := appendOrderEvent(ledger.EventOrderSubmitted, orderPayload); err != nil {
 		return execution.FillResult{}, err
 	}
@@ -332,6 +394,18 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		if newEventErr == nil {
 			_, _ = store.Append(ctx, rejectEvent)
 		}
+		// Phase 31B: record CANCELLED (execution failure).
+		o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+			OrderID:        clientOrderID,
+			StrategyID:     strategyName,
+			Symbol:         sig.Symbol,
+			Side:           string(sig.Action),
+			RequestedSize:  sig.TargetSize,
+			TransitionFrom: paperpersist.OMSAccepted,
+			TransitionTo:   paperpersist.OMSCancelled,
+			TransitionAt:   time.Now(),
+			Reason:         err.Error(),
+		})
 		return execution.FillResult{}, err
 	}
 	fillPayload := ackPayload
@@ -340,6 +414,19 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 	if _, err := appendOrderEvent(ledger.EventOrderFilled, fillPayload); err != nil {
 		return execution.FillResult{}, err
 	}
+	// Phase 31B: record SIMULATED_FILL transition.
+	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+		OrderID:        clientOrderID,
+		StrategyID:     strategyName,
+		Symbol:         sig.Symbol,
+		Side:           string(sig.Action),
+		RequestedSize:  sig.TargetSize,
+		TransitionFrom: paperpersist.OMSAccepted,
+		TransitionTo:   paperpersist.OMSSimulatedFill,
+		TransitionAt:   time.Now(),
+		FillPrice:      fill.ExecPrice,
+		FillSize:       sig.TargetSize,
+	})
 	// Attach the ClientOrderID so callers can correlate the fill with the OMS v3
 	// order aggregate and emit EventPositionOpened in the ledger.
 	fill.ClientOrderID = clientOrderID
@@ -442,6 +529,9 @@ func (o *Orchestrator) openAndTrackPosition(ctx context.Context, sig strategy.Si
 	o.positionToOrderMu.Unlock()
 
 	go o.emitPositionOpened(ctx, pos, fill, sig)
+
+	// Phase 31B: persist to paper_positions + record POSITION_OPENED transition.
+	o.persistPositionOpen(ctx, pos, fill, sig)
 }
 
 // emitPositionOpened appends an EventPositionOpened event to the OMS v3 ledger.
@@ -1354,6 +1444,10 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 				delete(o.positionToOrderID, event.Position.ID)
 				o.positionToOrderMu.Unlock()
 			}
+
+			// Phase 31B: persist closed position + trade record to MongoDB.
+			o.persistPositionClose(ctx, event, netPnL, clientOrderID)
+			o.persistClosedTrade(ctx, event, netPnL)
 
 			log.Printf("[✅ TRADE CLOSED] %s | %s | Entry: $%.2f → Exit: $%.2f | PnL: $%.4f | Reason: %s",
 				event.Position.StrategyName, event.Position.Side,

@@ -239,7 +239,7 @@ func TestProductionFlow_KillSwitchBlocksRiskGate(t *testing.T) {
 			EntryPrice:       65000,
 			StopLossPrice:    64000,
 		},
-		Market:  riskv2.MarketState{Symbol: "BTC-USD", Price: 65000},
+		Market:  riskv2.MarketState{},
 		Metrics: riskv2.StrategyMetrics{},
 	})
 

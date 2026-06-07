@@ -32,21 +32,21 @@ func TestSecurity_KillSwitchRequiresTrigger(t *testing.T) {
 func TestSecurity_LedgerRejectsEmptyAggregateType(t *testing.T) {
 	store := ledger.NewMemoryStore()
 
-	// Missing aggregate type.
-	ev := ledger.Event{
-		EventID:   "EVT_SEC_001",
-		EventType: ledger.EventOrderCreated,
-		// AggregateType intentionally empty.
-		AggregateID: "ORD_SEC_001",
-		AccountID:   "SEC_ACCT_001",
+	// Construct a valid event then wipe the aggregate type to simulate injection.
+	ev, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   "ORD_SEC_001",
+		EventType:     ledger.EventOrderCreated,
+		AccountID:     "SEC_ACCT_001",
+		Source:        "certification",
+	})
+	if err != nil {
+		t.Fatalf("NewEvent: %v", err)
 	}
-	// Recalculate hash so it passes hash check.
-	ev = ledger.NewEvent("", "ORD_SEC_001", ledger.EventOrderCreated, nil)
-	ev.AggregateType = "" // wipe after hash calculation
-	ev.AccountID = "SEC_ACCT_001"
+	ev.AggregateType = "" // wipe after hash calculation to simulate tampering
 
-	_, err := store.Append(context.Background(), ev)
-	if err == nil {
+	_, appErr := store.Append(context.Background(), ev)
+	if appErr == nil {
 		t.Fatal("FAIL: ledger accepted event with empty aggregate type — injection risk")
 	}
 }
@@ -57,8 +57,7 @@ func TestSecurity_DuplicateEventIDRejected(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	accountID := "SEC_ACCT_002"
 
-	ev := ledger.NewEvent(ledger.AggregateOrder, "ORD_SEC_002", ledger.EventOrderCreated, nil)
-	ev.AccountID = accountID
+	ev := newOrderEvent(t, accountID, "ORD_SEC_002", ledger.EventOrderCreated)
 
 	if _, err := store.Append(context.Background(), ev); err != nil {
 		t.Fatalf("first append: %v", err)
@@ -78,16 +77,26 @@ func TestSecurity_IdempotencyKeyPreventsFillReplay(t *testing.T) {
 	accountID := "SEC_ACCT_003"
 	orderID := "ORD_SEC_REPLAY_001"
 
-	fill := ledger.NewEvent(ledger.AggregateOrder, orderID, ledger.EventOrderFilled, nil)
-	fill.AccountID = accountID
-	fill.IdempotencyKey = "exchange_fill_report_TXID_9876543210"
+	fill, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType:  ledger.AggregateOrder,
+		AggregateID:    orderID,
+		EventType:      ledger.EventOrderFilled,
+		AccountID:      accountID,
+		Symbol:         "BTC-USD",
+		Payload:        ledger.OrderPayload{ClientOrderID: orderID},
+		IdempotencyKey: "exchange_fill_report_TXID_9876543210",
+		Source:         "certification",
+	})
+	if err != nil {
+		t.Fatalf("NewEvent: %v", err)
+	}
 
 	if _, err := store.Append(context.Background(), fill); err != nil {
 		t.Fatalf("legitimate fill: %v", err)
 	}
 
 	// Attacker replays the fill message.
-	_, err := store.Append(context.Background(), fill)
+	_, err = store.Append(context.Background(), fill)
 	if err == nil {
 		t.Fatal("FAIL: fill replay accepted — position double-counted (financial attack)")
 	}
@@ -98,16 +107,22 @@ func TestSecurity_IdempotencyKeyPreventsFillReplay(t *testing.T) {
 func TestSecurity_HashTamperingRejected(t *testing.T) {
 	store := ledger.NewMemoryStore()
 
-	// Create a valid event.
-	ev := ledger.NewEvent(ledger.AggregateOrder, "ORD_TAMPER_001",
-		ledger.EventOrderCreated, nil)
-	ev.AccountID = "SEC_ACCT_004"
+	ev, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   "ORD_TAMPER_001",
+		EventType:     ledger.EventOrderCreated,
+		AccountID:     "SEC_ACCT_004",
+		Source:        "certification",
+	})
+	if err != nil {
+		t.Fatalf("NewEvent: %v", err)
+	}
 
 	// Tamper the hash to simulate storage corruption or man-in-the-middle.
 	ev.PayloadHash = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
-	_, err := store.Append(context.Background(), ev)
-	if err == nil {
+	_, appendErr := store.Append(context.Background(), ev)
+	if appendErr == nil {
 		t.Fatal("FAIL: tampered event hash accepted — integrity guarantee broken")
 	}
 }
@@ -128,11 +143,9 @@ func TestSecurity_KillSwitchAuditTrailImmutable(t *testing.T) {
 		t.Fatalf("trigger: %v", err)
 	}
 
-	// Get initial event count.
 	events1, _ := store.Replay(context.Background(), ledger.AggregateSystem, accountID)
 	initialCount := len(events1)
 
-	// Attempt to write a second activation — must produce a new event, not overwrite.
 	_ = ks.Trigger(context.Background(), killswitch.Activation{
 		Trigger: killswitch.TriggerExchangeOutage,
 		Reason:  "second trigger attempt",
@@ -145,11 +158,9 @@ func TestSecurity_KillSwitchAuditTrailImmutable(t *testing.T) {
 			initialCount, len(events2))
 	}
 
-	// Original event must still be present with correct trigger type.
 	firstTrigger := killswitch.Trigger("")
 	for _, ev := range events2 {
 		if ev.EventType == ledger.EventKillSwitchTriggered {
-			// Parse the trigger from event payload.
 			firstTrigger = killswitch.TriggerManualOperator
 			break
 		}
@@ -167,32 +178,33 @@ func TestSecurity_ContextCancellationPropagates(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // immediately cancelled
 
-	ev := ledger.NewEvent(ledger.AggregateOrder, "ORD_CTX_001",
-		ledger.EventOrderCreated, nil)
-	ev.AccountID = "SEC_ACCT_006"
+	ev, err := ledger.NewEvent(ledger.NewEventInput{
+		AggregateType: ledger.AggregateOrder,
+		AggregateID:   "ORD_CTX_001",
+		EventType:     ledger.EventOrderCreated,
+		AccountID:     "SEC_ACCT_006",
+		Source:        "certification",
+	})
+	if err != nil {
+		t.Fatalf("NewEvent: %v", err)
+	}
 
-	_, err := store.Append(ctx, ev)
-	if err == nil {
+	_, appendErr := store.Append(ctx, ev)
+	if appendErr == nil {
 		t.Fatal("FAIL: cancelled context did not prevent write — shutdown race condition risk")
 	}
 }
 
 // TestSecurity_OrderTransitionGraphEnforced verifies the OMS v3 state machine
 // cannot be bypassed — an attacker cannot skip states to inject a fill directly.
-// Full state machine bypass testing is in flow_certification_test.go.
-// Here we verify that a fresh order aggregate refuses a direct EMPTY→FILLED jump.
 func TestSecurity_OrderTransitionGraphEnforced(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	accountID := "SEC_ACCT_007"
 	orderID := "ORD_BYPASS_001"
 
-	// Create an order event that claims FILLED without prior transitions.
-	ev := ledger.NewEvent(ledger.AggregateOrder, orderID, ledger.EventOrderFilled, nil)
-	ev.AccountID = accountID
-
-	// The event can be appended to the ledger (the ledger is an append-only log),
-	// but applying it to a fresh aggregate must fail.
-	persisted := mustEvent(t, store, ev)
+	// Append a fill event directly without prior lifecycle transitions.
+	ev := newOrderEvent(t, accountID, orderID, ledger.EventOrderFilled)
+	persisted := mustAppend(t, store, ev)
 
 	// Apply directly to a fresh aggregate — must fail ValidateTransition.
 	agg := omsv3.NewOrderAggregate(orderID)
