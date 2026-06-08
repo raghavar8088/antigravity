@@ -62,7 +62,7 @@ function makeRequest(body: unknown) {
 
 describe("POST /api/paper-trades", () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ALLOW_PAPER_TRADES_ANON: "1" };
+    process.env = { ...OLD_ENV, ALLOW_PAPER_TRADES_ANON: "1", ENGINE_EXECUTION_AUTHORITY: "0" };
     vi.mocked(mongoClient.isMongoConfigured).mockReturnValue(true);
     vi.mocked(mongoClient.upsertTradeMongo).mockResolvedValue({
       ok: true,
@@ -70,6 +70,16 @@ describe("POST /api/paper-trades", () => {
       modifiedCount: 0,
       matchedCount: 0,
     });
+  });
+
+  it("returns 410 DEPRECATED when Go engine is execution authority", async () => {
+    process.env.ENGINE_EXECUTION_AUTHORITY = "1";
+    const res = await POST(makeRequest({ accountKey: "anon_test-key", trade: makeValidTrade() }));
+    expect(res.status).toBe(410);
+    const body = await res.json() as { ok: boolean; code: string; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("DEPRECATED");
+    expect(body.error).toContain("Go engine is sole execution authority");
   });
 
   it("returns 200 with storage:'mongo' for a valid closed trade", async () => {

@@ -249,6 +249,17 @@ func (e *Engine) ValidateTrade(req TradeRequest, market MarketState, metrics Str
 			break
 		}
 	}
+	if decision.Approved {
+		if _, err := EnforceExecutionFloor(
+			req.Strategy,
+			decision.RecommendedSizeBTC,
+			decision.Kelly.SelectedFraction,
+			decision.DynamicSizing.Multiplier,
+		); err != nil {
+			decision.Approved = false
+			decision.Reason = err.Error()
+		}
+	}
 	decision.Alerts = GenerateAlerts(decision)
 	decision.LatencyBudgetMicros = time.Since(start).Microseconds()
 	e.heatHistory = appendBounded(e.heatHistory, heat, 1500)
@@ -256,6 +267,22 @@ func (e *Engine) ValidateTrade(req TradeRequest, market MarketState, metrics Str
 	e.cvarHistory = appendBounded(e.cvarHistory, cv, 1500)
 	e.decisions = appendBounded(e.decisions, decision, 2000)
 	return decision
+}
+
+// SyncEquity updates the account equity used by Kelly sizing, heat, VaR, and
+// all percentage-based risk calculations. Call this on every tick from the
+// trading orchestrator so Kelly fractions reflect current account value, not
+// the stale startup value (P2-D hardening).
+func (e *Engine) SyncEquity(equityUSD float64) {
+	if equityUSD <= 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.portfolio.Account.EquityUSD = equityUSD
+	if equityUSD > e.portfolio.Account.HighWatermarkUSD {
+		e.portfolio.Account.HighWatermarkUSD = equityUSD
+	}
 }
 
 func (e *Engine) AddPosition(pos Position) {

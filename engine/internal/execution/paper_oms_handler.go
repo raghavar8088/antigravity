@@ -6,17 +6,24 @@ package execution
 //
 // Routes (register in main.go):
 //   GET  /paper/state              → OMSStateSnapshot (equity, positions, recent trades)
-//   POST /paper/open               → open a paper position
-//   POST /paper/close/{id}         → manually close a position
-//   POST /paper/tick               → feed a mark-price tick + get back closed positions
-//   POST /paper/reset              → clear all state and restore initial balance
+//   POST /paper/open               → open a paper position (admin override only)
+//   POST /paper/close/{id}         → manually close a position (admin override only)
+//   POST /paper/tick               → feed a mark-price tick (admin override only)
+//   POST /paper/reset              → clear all state (admin override only)
+//
+// Mutation routes are disabled unless the caller supplies header
+// X-Paper-Oms-Admin-Override matching env PAPER_OMS_ADMIN_OVERRIDE.
+// The autonomous Orchestrator tick loop is the sole production execution path.
 
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
+
+const paperOMSAdminOverrideHeader = "X-Paper-Oms-Admin-Override"
 
 // PaperOMSHandler binds HTTP endpoints to a PaperOMS instance.
 type PaperOMSHandler struct {
@@ -44,6 +51,25 @@ func (h *PaperOMSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
+}
+
+func paperOMSMutationAllowed(r *http.Request) bool {
+	expected := strings.TrimSpace(os.Getenv("PAPER_OMS_ADMIN_OVERRIDE"))
+	if expected == "" {
+		return false
+	}
+	got := strings.TrimSpace(r.Header.Get(paperOMSAdminOverrideHeader))
+	return got != "" && got == expected
+}
+
+func (h *PaperOMSHandler) requireMutationOverride(w http.ResponseWriter, r *http.Request) bool {
+	if paperOMSMutationAllowed(r) {
+		return true
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{
+		"error": "paper OMS mutations disabled — autonomous orchestrator is execution authority; set PAPER_OMS_ADMIN_OVERRIDE and send X-Paper-Oms-Admin-Override for emergency local override only",
+	})
+	return false
 }
 
 // ── GET /paper/state ──────────────────────────────────────────────────────────
@@ -76,6 +102,9 @@ type openReqBody struct {
 }
 
 func (h *PaperOMSHandler) handleOpen(w http.ResponseWriter, r *http.Request) {
+	if !h.requireMutationOverride(w, r) {
+		return
+	}
 	var body openReqBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -111,6 +140,9 @@ func (h *PaperOMSHandler) handleOpen(w http.ResponseWriter, r *http.Request) {
 // ── POST /paper/close/{id} ────────────────────────────────────────────────────
 
 func (h *PaperOMSHandler) handleClose(w http.ResponseWriter, r *http.Request, id string) {
+	if !h.requireMutationOverride(w, r) {
+		return
+	}
 	if id == "" {
 		http.Error(w, "missing position id", http.StatusBadRequest)
 		return
@@ -133,6 +165,9 @@ type tickReqBody struct {
 }
 
 func (h *PaperOMSHandler) handleTick(w http.ResponseWriter, r *http.Request) {
+	if !h.requireMutationOverride(w, r) {
+		return
+	}
 	var body tickReqBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -165,6 +200,9 @@ func (h *PaperOMSHandler) handleTick(w http.ResponseWriter, r *http.Request) {
 // ── POST /paper/reset ─────────────────────────────────────────────────────────
 
 func (h *PaperOMSHandler) handleReset(w http.ResponseWriter, r *http.Request) {
+	if !h.requireMutationOverride(w, r) {
+		return
+	}
 	h.OMS.Reset()
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 }

@@ -4,6 +4,39 @@ package strategy
 // STRATEGY REGISTRY — ALL 40 SCALPING STRATEGIES
 // =============================================================================
 
+// StrategyTier classifies strategy quality for drawdown-regime enforcement.
+type StrategyTier string
+
+const (
+	StrategyTierElite        StrategyTier = "ELITE"
+	StrategyTierStandard     StrategyTier = "STANDARD"
+	StrategyTierExperimental StrategyTier = "EXPERIMENTAL"
+)
+
+// StrategyMetadata is the institutional metadata envelope for a registry entry.
+type StrategyMetadata struct {
+	Name      string
+	Category  string
+	Timeframe string
+	Tier      StrategyTier
+}
+
+// MetadataFromRegistry derives StrategyMetadata from a registry entry.
+func MetadataFromRegistry(entry RegistryEntry) StrategyMetadata {
+	return StrategyMetadata{
+		Name:      entry.Strategy.Name(),
+		Category:  entry.Category,
+		Timeframe: entry.Timeframe,
+		Tier:      TierFromCategory(entry.Category),
+	}
+}
+
+// TierFromCategory maps a registry category string to its StrategyTier.
+// Delegates to CategoryTier which holds the authoritative elite category map.
+func TierFromCategory(category string) StrategyTier {
+	return CategoryTier(category)
+}
+
 type RegistryEntry struct {
 	Strategy  Strategy
 	Category  string

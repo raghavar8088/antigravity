@@ -203,25 +203,11 @@ func (r *RiskEngine) validateLocked(sig strategy.Signal, currentPrice float64) e
 		}
 	}
 
-	if r.v2 != nil {
-		req := riskv2.TradeRequest{
-			Symbol:            sig.Symbol,
-			Strategy:          "UNSPECIFIED",
-			Family:            riskv2.FamilyReserve,
-			Side:              sideFromActionV2(sig.Action),
-			EntryPrice:        currentPrice,
-			StopLossPrice:     stopLossPriceFromSignal(sig, currentPrice),
-			RequestedSizeBTC:  sig.TargetSize,
-			RequestedLeverage: 1,
-			Confidence:        sig.Confidence,
-			Exchange:          "paper",
-		}
-		decision := r.v2.ValidateTrade(req, riskv2.MarketState{Regime: riskv2.RegimeUnknown}, riskv2.StrategyMetrics{Strategy: "UNSPECIFIED", Family: riskv2.FamilyReserve, WinRate: 0.5, ProfitFactor: 1.2, Sharpe: 1.2, OOSProfitFactor: 1.1, OOSExpectancyUSD: 1, HealthScore: 60, TotalTrades: 30})
-		if !decision.Approved {
-			return decision.Error()
-		}
-	}
-
+	// NOTE: The institutional PreTradeRiskPipeline (risk/gate/pipeline.go) runs
+	// ValidateTrade downstream with real per-strategy metrics from StrategyTracker.
+	// A second ValidateTrade call here with fabricated stub metrics was removed
+	// (P2-A hardening) — it produced decisions from fake WinRate/PF/Sharpe values
+	// that were inconsistent with the authoritative pipeline result.
 	return nil
 }
 
@@ -303,6 +289,18 @@ func (r *RiskEngine) V2() *riskv2.Engine {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.v2
+}
+
+// SyncEquity propagates the current paper account equity into the Risk V2 engine
+// so Kelly sizing and all percentage-based risk calculations use live equity.
+// Call this on every tick (P2-D hardening).
+func (r *RiskEngine) SyncEquity(equityUSD float64) {
+	r.mu.RLock()
+	v2 := r.v2
+	r.mu.RUnlock()
+	if v2 != nil {
+		v2.SyncEquity(equityUSD)
+	}
 }
 
 func sideFromAction(action strategy.Action) Side {

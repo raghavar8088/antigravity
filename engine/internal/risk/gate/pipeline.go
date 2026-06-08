@@ -3,6 +3,7 @@ package gate
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	riskv2 "antigravity-engine/internal/risk/v2"
@@ -48,7 +49,9 @@ func (p *PreTradeRiskPipeline) Check(ctx context.Context, input Input) Decision 
 		return Decision{Status: DecisionBlocked, Reason: err.Error(), CheckedAt: checkedAt}
 	}
 	if p.killSwitch != nil && p.killSwitch.IsActive() {
-		return Decision{Status: DecisionBlocked, Reason: "kill switch active: " + p.killSwitch.Reason(), CheckedAt: checkedAt}
+		reason := "kill switch active: " + p.killSwitch.Reason()
+		log.Printf("[RISK REJECTION] pre-trade pipeline blocked: %s", reason)
+		return Decision{Status: DecisionBlocked, Reason: reason, CheckedAt: checkedAt}
 	}
 	if p.engine == nil {
 		return Decision{Status: DecisionBlocked, Reason: "risk engine unavailable", CheckedAt: checkedAt}

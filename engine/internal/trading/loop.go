@@ -12,11 +12,13 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/execintel"
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/omsv3"
 	"antigravity-engine/internal/paperpersist"
+	"antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/risk"
 	riskgate "antigravity-engine/internal/risk/gate"
@@ -107,8 +109,9 @@ type Orchestrator struct {
 
 	// Internal state
 	lastPrice  float64
-	m15Counter int // Counts 5m candles to simulate 15m (every 3rd 5m candle)
-	h1Counter  int // Counts 5m candles to simulate 1h (every 12th)
+	lastRegime string // Last classified market regime — kept so executeThroughInstitutionalPath can pass live regime to Risk V2
+	m15Counter int    // Counts 5m candles to simulate 15m (every 3rd 5m candle)
+	h1Counter  int    // Counts 5m candles to simulate 1h (every 12th)
 
 	// Heartbeat for automated bridge failover
 	lastBridgeHeartbeat time.Time
@@ -139,6 +142,22 @@ type Orchestrator struct {
 	// TP/SL outcome + realized PnL) for the originating signal.
 	signalIDByOrder map[string]string
 	signalIDMu      sync.Mutex
+
+	// pmsBudget is the portfolio-level risk budget gate (P3-A).
+	// When set, CheckPortfolioRisk runs before the PreTradeRiskPipeline so
+	// portfolio-level heat, VaR, drawdown, and daily-loss limits can veto trades
+	// that would individually pass per-strategy risk checks.
+	// Nil until SetPMSBudget() is called from main.go.
+	pmsBudget *pms.PortfolioRiskBudget
+
+	// killSvc is the institutional kill switch service (internal/killswitch).
+	// Stored as the riskgate.KillSwitch interface so a nil *killswitch.Service
+	// does not become a non-nil interface value (which would break the nil-check
+	// inside PreTradeRiskPipeline). Nil until SetKillSwitch() is called.
+	// When active it blocks all new order submissions via the PreTradeRiskPipeline
+	// without shutting down the engine process, enabling graceful order blocking,
+	// position flattening, and restart without data loss.
+	killSvc riskgate.KillSwitch
 
 	// ppPersist is the Phase 31B MongoDB persistence bundle.
 	// Nil until SetPaperPersist() is called from main.go.
@@ -242,6 +261,30 @@ func (o *Orchestrator) SetEventLedger(store ledger.Store) {
 	o.eventLedger = store
 }
 
+// SetKillSwitch injects the institutional kill switch service. Call this from
+// main.go after constructing the Orchestrator. Once set, every new order
+// submission is gated through killSvc.IsActive() inside PreTradeRiskPipeline —
+// the engine process stays alive, only new order flow is blocked.
+// Passing nil is safe and disables kill-switch gating.
+func (o *Orchestrator) SetKillSwitch(svc *killswitch.Service) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if svc == nil {
+		o.killSvc = nil
+		return
+	}
+	o.killSvc = svc
+}
+
+// SetPMSBudget injects the portfolio-level risk budget manager (P3-A).
+// When set, every new order submission passes through CheckPortfolioRisk before
+// reaching the per-strategy PreTradeRiskPipeline.
+func (o *Orchestrator) SetPMSBudget(budget *pms.PortfolioRiskBudget) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.pmsBudget = budget
+}
+
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
 	clientOrderID := fmt.Sprintf("AG-PAPER-%s-%d", strings.ReplaceAll(sig.Symbol, "-", ""), time.Now().UTC().UnixNano())
 	store := o.eventLedger
@@ -297,12 +340,71 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		return execution.FillResult{}, err
 	}
 
-	pipeline := riskgate.NewPreTradeRiskPipeline(o.risk.V2(), nil)
+	// P2-C: look up the live strategy category so Risk V2 receives the correct
+	// family for family concentration checks — replaces hardcoded FamilyReserve.
+	stratCategory := ""
+	if stats, ok := o.tracker.GetStats(strategyName); ok {
+		stratCategory = stats.Category
+	}
+	stratFamily := strategy.CategoryToRiskFamily(stratCategory)
+
+	// P3-A: Portfolio-level risk gate (PMS). Runs before the per-strategy pipeline
+	// so portfolio-wide heat, VaR, drawdown, and daily-loss caps can block trades
+	// that would individually pass the per-strategy institutional check.
+	if o.pmsBudget != nil {
+		equityForPMS := o.exec.GetEquityUSD()
+		// Estimate dollar risk as stop-loss distance × proposed size.
+		proposedDollarRisk := riskv2.PositionRiskUSD(riskv2.TradeRequest{
+			EntryPrice:       currentPrice,
+			StopLossPrice:    stopLossFromSignal(sig, currentPrice),
+			RequestedSizeBTC: sig.TargetSize,
+		}, sig.TargetSize)
+		pmsBudgetConfig := pms.RiskBudget{
+			MaxHeatPct:      8,
+			MaxVaR95Pct:     6,
+			MaxCVaR95Pct:    9,
+			MaxDrawdownPct:  10,
+			MaxDailyLossPct: 3,
+			MaxGrossExpPct:  250,
+			MaxNetExpPct:    150,
+		}
+		if violations := o.pmsBudget.CheckPortfolioRisk(ctx, btcPaperAccountID, pmsBudgetConfig, proposedDollarRisk, equityForPMS); len(violations) > 0 {
+			pmsReason := fmt.Sprintf("PMS portfolio gate blocked: %s", violations[0].Message)
+			log.Printf("[PMS GATE] %s: %s", strategyName, pmsReason)
+			pmsEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregateOrder,
+				AggregateID:   clientOrderID,
+				EventType:     ledger.EventRiskBlocked,
+				StrategyID:    strategyName,
+				Symbol:        sig.Symbol,
+				Payload:       map[string]string{"reason": pmsReason, "violations": fmt.Sprintf("%d", len(violations))},
+				Source:        "pms-portfolio-gate",
+			})
+			if newEventErr == nil {
+				_, _ = store.Append(ctx, pmsEvent)
+			}
+			o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+				OrderID:        clientOrderID,
+				StrategyID:     strategyName,
+				Symbol:         sig.Symbol,
+				Side:           string(sig.Action),
+				RequestedSize:  sig.TargetSize,
+				TransitionFrom: paperpersist.OMSNew,
+				TransitionTo:   paperpersist.OMSRejected,
+				TransitionAt:   time.Now(),
+				Reason:         pmsReason,
+				RiskApproved:   false,
+			})
+			return execution.FillResult{}, fmt.Errorf("%s", pmsReason)
+		}
+	}
+
+	pipeline := riskgate.NewPreTradeRiskPipeline(o.risk.V2(), o.killSvc)
 	riskDecision := pipeline.Check(ctx, riskgate.Input{
 		Request: riskv2.TradeRequest{
 			Symbol:            sig.Symbol,
 			Strategy:          strategyName,
-			Family:            riskv2.FamilyReserve,
+			Family:            stratFamily,
 			Side:              riskSideFromAction(sig.Action),
 			EntryPrice:        currentPrice,
 			StopLossPrice:     stopLossFromSignal(sig, currentPrice),
@@ -311,7 +413,13 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 			Confidence:        sig.Confidence,
 			Exchange:          "paper",
 		},
-		Market:  riskv2.MarketState{Regime: riskv2.RegimeUnknown, LiquidityScore: 0.65},
+		Market: riskv2.MarketState{
+			// P2-B: pass live regime instead of hardcoded RegimeUnknown.
+			// Regime is read from o.lastRegime which is updated on every tick
+			// by the main signal processing loop.
+			Regime:         riskv2MarketRegimeFromString(o.lastRegime),
+			LiquidityScore: 0.65,
+		},
 		Metrics: o.tracker.BuildRiskMetrics(strategyName),
 	})
 	// Phase 31B: record RISK_CHECKED transition.
@@ -356,13 +464,85 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		RiskApproved:   true,
 		KellyFraction:  riskDecision.RiskDecision.Kelly.SelectedFraction,
 	})
-	// Apply the risk engine's Kelly + dynamic-sizing recommended size.
-	// This is the critical wire that connects real performance metrics →
-	// Kelly fraction → actual trade size. Winners get more capital; losers get less.
-	if rec := riskDecision.RiskDecision.RecommendedSizeBTC; rec >= minExecutionSizeBTC {
-		sig.TargetSize = rec
-		orderPayload.Quantity = rec
+	// Elite-only drawdown regime enforcement (P1-C).
+	if riskDecision.RiskDecision.Drawdown.OnlyEliteStrategies {
+		stratCategory := ""
+		if stats, ok := o.tracker.GetStats(strategyName); ok {
+			stratCategory = stats.Category
+		}
+		meta := strategy.StrategyMetadata{
+			Name:     strategyName,
+			Category: stratCategory,
+			Tier:     strategy.TierFromCategory(stratCategory),
+		}
+		if err := risk.EvaluateDrawdownExecution(meta, riskDecision.RiskDecision.Drawdown); err != nil {
+			eliteRej := err.Error()
+			log.Printf("[ELITE GATE] %s: %s", strategyName, eliteRej)
+			eliteEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
+				AggregateType: ledger.AggregateOrder,
+				AggregateID:   clientOrderID,
+				EventType:     ledger.EventRiskBlocked,
+				StrategyID:    strategyName,
+				Symbol:        sig.Symbol,
+				Payload:       map[string]string{"reason": eliteRej},
+				Source:        "elite-drawdown-gate",
+			})
+			if newEventErr == nil {
+				_, _ = store.Append(ctx, eliteEvent)
+			}
+			o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+				OrderID:        clientOrderID,
+				StrategyID:     strategyName,
+				Symbol:         sig.Symbol,
+				Side:           string(sig.Action),
+				RequestedSize:  sig.TargetSize,
+				TransitionFrom: paperpersist.OMSRiskChecked,
+				TransitionTo:   paperpersist.OMSRejected,
+				TransitionAt:   time.Now(),
+				Reason:         eliteRej,
+				RiskApproved:   false,
+			})
+			return execution.FillResult{}, err
+		}
 	}
+
+	// Risk V2 sizing floor — authoritative rejection via sizing.go (P1-A).
+	rec := riskDecision.RiskDecision.RecommendedSizeBTC
+	if _, err := riskv2.EnforceExecutionFloor(
+		strategyName,
+		rec,
+		riskDecision.RiskDecision.Kelly.SelectedFraction,
+		riskDecision.RiskDecision.DynamicSizing.Multiplier,
+	); err != nil {
+		rejReason := err.Error()
+		rejEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
+			AggregateType: ledger.AggregateOrder,
+			AggregateID:   clientOrderID,
+			EventType:     ledger.EventRiskBlocked,
+			StrategyID:    strategyName,
+			Symbol:        sig.Symbol,
+			Payload:       map[string]string{"reason": rejReason},
+			Source:        "risk-floor-gate",
+		})
+		if newEventErr == nil {
+			_, _ = store.Append(ctx, rejEvent)
+		}
+		o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+			OrderID:        clientOrderID,
+			StrategyID:     strategyName,
+			Symbol:         sig.Symbol,
+			Side:           string(sig.Action),
+			RequestedSize:  sig.TargetSize,
+			TransitionFrom: paperpersist.OMSRiskChecked,
+			TransitionTo:   paperpersist.OMSRejected,
+			TransitionAt:   time.Now(),
+			Reason:         rejReason,
+			RiskApproved:   false,
+		})
+		return execution.FillResult{}, fmt.Errorf("%s", rejReason)
+	}
+	sig.TargetSize = rec
+	orderPayload.Quantity = rec
 	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
 		return execution.FillResult{}, err
 	}
@@ -744,6 +924,10 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	}
 	o.mu.Unlock()
 
+	// P2-D: sync live equity into Risk V2 engine on every tick so Kelly sizing
+	// and all percentage-based risk calculations use current account value.
+	o.risk.SyncEquity(o.exec.GetEquityUSD())
+
 	// 2. Check SL/TP/trailing on all open positions
 	o.posMgr.CheckStopLossAndTakeProfit(t.Price)
 	o.posMgr.CheckExpiredPositions(t.Price)
@@ -935,9 +1119,11 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 		activeSig.size = normalizedSize
 	}
 
-	// Sanitize size
+	// Sanitize size — reject sub-floor AI signals; never bump to minExecutionSizeBTC.
 	if activeSig.size < minExecutionSizeBTC {
-		activeSig.size = minExecutionSizeBTC
+		log.Printf("[RISK REJECTION] AI_%s: size %.6f BTC below execution floor %.6f BTC — skipping",
+			decision.ID, activeSig.size, minExecutionSizeBTC)
+		return
 	}
 	if activeSig.size > 0.5 {
 		activeSig.size = 0.5
@@ -1112,6 +1298,12 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 	}
 	approved := o.aggregator.FilterSignalsSelective(rawSignals)
 	regime := o.classifyMarketRegime()
+
+	// Persist the live regime so executeThroughInstitutionalPath can pass it to
+	// the Risk V2 MarketState (P2-B: eliminates hardcoded RegimeUnknown).
+	o.mu.Lock()
+	o.lastRegime = regime
+	o.mu.Unlock()
 
 	// Execute approved signals
 	for _, aggSig := range approved {
@@ -1376,6 +1568,10 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 		// Notify risk engine
 		o.risk.NotifyFill(sig)
+
+		// P3-A: update PMS portfolio state after every fill so the next pre-trade
+		// check sees current heat and drawdown levels.
+		o.syncPMSState(ctx)
 
 		// Open tracked position with SL/TP and emit OMS v3 EventPositionOpened
 		o.openAndTrackPosition(ctx, sig, fill, aggSig.StrategyName)
@@ -2085,9 +2281,66 @@ func buildCandleHistoryText(ctx ai.MarketContext) string {
 	return sb.String()
 }
 
+// syncPMSState refreshes the PMS portfolio risk state from the live Risk V2
+// engine snapshot. Called after every fill so subsequent CheckPortfolioRisk calls
+// see current heat, VaR, and drawdown rather than stale values (P3-A).
+func (o *Orchestrator) syncPMSState(ctx context.Context) {
+	if o.pmsBudget == nil {
+		return
+	}
+	snap := o.risk.V2().Snapshot()
+	equityUSD := o.exec.GetEquityUSD()
+	if equityUSD <= 0 {
+		equityUSD = 1
+	}
+	heat := snap.Account.EquityUSD // fallback
+	if snap.Account.EquityUSD > 0 {
+		heat = snap.Account.EquityUSD
+	}
+	_ = heat
+	// Compute heat % from positions
+	heatPct := 0.0
+	for _, pos := range snap.Positions {
+		heatPct += riskv2.PositionRiskFromPosition(pos) / equityUSD * 100
+	}
+	drawdownPct := 0.0
+	if snap.Account.HighWatermarkUSD > 0 && equityUSD < snap.Account.HighWatermarkUSD {
+		drawdownPct = (snap.Account.HighWatermarkUSD-equityUSD) / snap.Account.HighWatermarkUSD * 100
+	}
+	dailyLossUSD := 0.0
+	if snap.Account.DailyPnLUSD < 0 {
+		dailyLossUSD = -snap.Account.DailyPnLUSD
+	}
+	o.pmsBudget.UpdateState(
+		btcPaperAccountID,
+		heatPct, 0, 0, drawdownPct,
+		dailyLossUSD, 0, 0,
+		0, 0,
+		nil, nil, nil,
+	)
+}
+
 func targetSizeForCapital(currentPrice float64) float64 {
 	if currentPrice <= 0 {
 		return 0
 	}
 	return fixedTradeCapitalUSD / currentPrice
+}
+
+// riskv2MarketRegimeFromString converts the internal regime string produced by
+// classifyMarketRegime() into the riskv2.MarketRegime type consumed by ValidateTrade.
+// This is the P2-B fix: Risk V2 now sees live regime instead of RegimeUnknown.
+func riskv2MarketRegimeFromString(regime string) riskv2.MarketRegime {
+	switch regime {
+	case marketRegimeTrend:
+		return riskv2.RegimeTrendingBull
+	case marketRegimeRange:
+		return riskv2.RegimeRange
+	case marketRegimeVolatile:
+		return riskv2.RegimeHighVol
+	case marketRegimeMixed:
+		return riskv2.RegimeRange // Mixed maps to ranging: neither strong trend nor high vol
+	default:
+		return riskv2.RegimeUnknown
+	}
 }

@@ -1,5 +1,10 @@
 package v2
 
+import (
+	"fmt"
+	"log"
+)
+
 type SizingScale string
 
 const (
@@ -9,6 +14,10 @@ const (
 	Size25      SizingScale = "25%"
 	Size10      SizingScale = "10%"
 	SizeDisable SizingScale = "DISABLE"
+
+	// MinExecutionSizeBTC is the minimum executable notional in BTC terms.
+	// Sizes below this floor are rejected — never bumped to a fixed-capital seed.
+	MinExecutionSizeBTC = 0.01
 )
 
 type SizingDecisionLog struct {
@@ -34,4 +43,18 @@ func scaleFromMultiplier(mult float64) SizingScale {
 	default:
 		return Size100
 	}
+}
+
+// EnforceExecutionFloor rejects recommended sizes below the institutional floor.
+// There is no fallback to a fixed-capital seed (e.g. $10k / price) — sub-floor
+// Kelly output means the strategy does not justify a minimum executable position.
+func EnforceExecutionFloor(strategyName string, rec, kellyFrac, dynMult float64) (float64, error) {
+	if rec >= MinExecutionSizeBTC {
+		return rec, nil
+	}
+	log.Printf(
+		"[RISK REJECTION] %s: recommended size %.6f BTC below execution floor %.6f BTC (Kelly=%.4f, DynMult=%.4f)",
+		strategyName, rec, MinExecutionSizeBTC, kellyFrac, dynMult,
+	)
+	return 0, fmt.Errorf("RISK_REJECT: recommended size below execution floor")
 }

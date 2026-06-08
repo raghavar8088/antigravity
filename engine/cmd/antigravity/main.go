@@ -23,7 +23,10 @@ import (
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/gateway"
+	killswitchpkg "antigravity-engine/internal/killswitch"
+	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
+	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
@@ -673,6 +676,35 @@ func main() {
 		candleAgg,
 	)
 
+	// ── Institutional Kill Switch (P1-B) ─────────────────────────────────────
+	// Wire the killswitch.Service into the orchestrator so PreTradeRiskPipeline
+	// can gate every new order submission without requiring a process shutdown.
+	// Three modes supported:
+	//   Mode A: block new orders (IsActive=true) — engine keeps running
+	//   Mode B: flatten positions (FlattenPositions action) — no process kill
+	//   Mode C: context cancellation via admin.KillSwitchController (nuclear stop)
+	ksExecutor := trading.NewKillSwitchExecutor(paperExecute, posMgr)
+	ksSvc := killswitchpkg.NewService(ledger.NewMemoryStore(), ksExecutor, "btc-paper-1")
+	orchestrator.SetKillSwitch(ksSvc)
+	log.Println("[KILL SWITCH] Institutional kill switch wired — PreTradeRiskPipeline gated")
+
+	// ── Portfolio Management System (P3-A) ───────────────────────────────────
+	// Activate PMS as the portfolio-level pre-trade gate. It runs before the
+	// per-strategy institutional pipeline and enforces heat, VaR, drawdown, and
+	// daily-loss limits at the aggregate portfolio level.
+	pmsBudget := pmspkg.NewPortfolioRiskBudget(ledger.NewMemoryStore())
+	pmsBudget.InitPortfolio("btc-paper-1", pmspkg.RiskBudget{
+		MaxHeatPct:      8,
+		MaxVaR95Pct:     6,
+		MaxCVaR95Pct:    9,
+		MaxDrawdownPct:  10,
+		MaxDailyLossPct: 3,
+		MaxGrossExpPct:  250,
+		MaxNetExpPct:    150,
+	})
+	orchestrator.SetPMSBudget(pmsBudget)
+	log.Println("[PMS] Portfolio risk budget gate active — btc-paper-1 initialized")
+
 	// Bootstrap portfolio ledger from MongoDB paper_trades (authoritative accounting).
 	if mongoMgr != nil && mongoMgr.IsConnected() {
 		if err := paperpersist.BootstrapPortfolioLedgerFromMongo(
@@ -1206,6 +1238,30 @@ func main() {
 		go safeGo("StateSaver", func() { saver.Run(ctx) })
 	}
 
+	// ── P3-C: Automated daily loss reset ─────────────────────────────────────
+	// Resets risk engine daily counters and strategy tracker daily PnL at
+	// 00:00:00 UTC every day. This eliminates the dependency on manual
+	// /api/admin/clear-history calls and ensures circuit breakers reset reliably.
+	// Timezone: UTC. BTC trades 24/7 so UTC midnight is the canonical reset point.
+	go safeGo("DailyLossReset", func() {
+		for {
+			now := time.Now().UTC()
+			// Next midnight UTC
+			nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+			sleepDur := time.Until(nextMidnight)
+			log.Printf("[DAILY RESET] Next daily loss reset scheduled at %s (in %s)",
+				nextMidnight.Format("2006-01-02T15:04:05Z"), sleepDur.Truncate(time.Second))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(sleepDur):
+				riskEngine.ResetDaily()
+				tracker.ResetDaily()
+				log.Printf("[DAILY RESET] Daily loss counters reset at %s UTC", time.Now().UTC().Format("2006-01-02T15:04:05Z"))
+			}
+		}
+	})
+
 	// ═══════════════════════════════════════════════════
 	// 12. HTTP API Server
 	// ═══════════════════════════════════════════════════
@@ -1472,6 +1528,61 @@ func main() {
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)
 	http.HandleFunc("/api/admin/reset", killswitch.HandleReset)
 	http.HandleFunc("/api/admin/clear-history", killswitch.HandleClearHistory)
+
+	// Institutional kill switch endpoints (P1-B):
+	//   POST /api/admin/ks/block  — Mode A: block new orders, engine stays alive
+	//   POST /api/admin/ks/release — release graceful block, resume order flow
+	//   GET  /api/admin/ks/status  — query kill switch state
+	http.HandleFunc("/api/admin/ks/block", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := ksSvc.Trigger(r.Context(), killswitchpkg.Activation{
+			Trigger:  killswitchpkg.TriggerManualOperator,
+			Reason:   "manual operator block via /api/admin/ks/block",
+			Actions:  []killswitchpkg.Action{killswitchpkg.ActionBlockNewOrders, killswitchpkg.ActionSendAlerts},
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Println("[KILL SWITCH] Mode A activated: new order flow blocked, engine running")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "blocked", "message": "New order submissions blocked. Engine running. Use /api/admin/ks/release to resume."})
+	})
+	http.HandleFunc("/api/admin/ks/release", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := ksSvc.Release(r.Context(), killswitchpkg.TriggerManualOperator, "operator", "manual release via /api/admin/ks/release"); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Println("[KILL SWITCH] Released: order flow resumed")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "released", "message": "Kill switch released. Order flow resumed."})
+	})
+	http.HandleFunc("/api/admin/ks/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active": ksSvc.IsActive(),
+			"reason": ksSvc.Reason(),
+		})
+	})
 
 	// Security status endpoint — SUPER_ADMIN only (gate enforces RBAC).
 	http.HandleFunc("/api/security/status", func(w http.ResponseWriter, r *http.Request) {

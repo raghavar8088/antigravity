@@ -1362,6 +1362,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   /** POST current engine state to MongoDB paper_state collection. */
   const saveToMongo = useCallback((overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
+    if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") return;
     if (!cloudAccountKey) return;
     const body = {
       accountKey: cloudAccountKey,
@@ -2672,6 +2673,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
+      if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") {
+        return;
+      }
       if (pollInFlightRef.current) return;
       // In worker monitor mode: hydration handled by the worker heartbeat effect above.
       // Only run the local poll for quotes/data-health; skip entry/exit writes.

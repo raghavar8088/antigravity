@@ -7,6 +7,7 @@ import {
 } from "@/lib/paperTradesTypes";
 import { isMongoConfigured, listTradesMongo, upsertTradeMongo } from "@/lib/mongoTradesClient";
 import { verifySession, SESSION_COOKIE } from "@/lib/jwtSession";
+import { isEngineExecutionAuthority, ENGINE_AUTHORITY_SKIP_REASON } from "@/lib/engineAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,13 @@ async function resolveAccountKey(bodyAccountKey: string | undefined): Promise<
 }
 
 export async function POST(req: Request) {
+  if (isEngineExecutionAuthority()) {
+    return NextResponse.json(
+      { ok: false, code: "DEPRECATED", error: ENGINE_AUTHORITY_SKIP_REASON },
+      { status: 410 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();

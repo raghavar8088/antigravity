@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured, getAccountState, upsertAccountState } from "@/lib/mongoTradesClient";
 import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { isEngineExecutionAuthority, ENGINE_AUTHORITY_SKIP_REASON } from "@/lib/engineAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,13 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (isEngineExecutionAuthority()) {
+    return NextResponse.json(
+      { ok: false, code: "DEPRECATED", error: ENGINE_AUTHORITY_SKIP_REASON },
+      { status: 410 },
+    );
+  }
+
   const auth = await getAuthenticatedApiSession();
   if (!auth.ok) return auth.response;
   const accountKey = auth.ctx.userId;
