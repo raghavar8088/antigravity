@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePaperPositionSide, unrealizedPnlForOpenPosition } from "./paperDeskClient";
+import { normalizePaperPositionSide, unrealizedPnlForOpenPosition } from "./paperDeskPositionMath";
 
 describe("normalizePaperPositionSide", () => {
   it("maps buy/sell and long/short", () => {

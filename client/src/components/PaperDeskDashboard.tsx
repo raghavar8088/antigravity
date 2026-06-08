@@ -22,7 +22,7 @@ import type {
   StrategyScoreDoc,
   StrategyHealthDoc,
 } from "@/lib/paperDeskClient";
-import { unrealizedPnlForOpenPosition } from "@/lib/paperDeskClient";
+import { unrealizedPnlForOpenPosition } from "@/lib/paperDeskPositionMath";
 import { DeskLinearProgress } from "@/components/desk/ui/DeskLinearProgress";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskMetricTile } from "@/components/desk/ui/DeskMetricTile";
