@@ -35,6 +35,26 @@ const DEFAULT_LAYOUT: LayoutConfig = {
   ],
 };
 
+function normalizeLayout(raw: unknown): LayoutConfig {
+  if (!raw || typeof raw !== "object") return DEFAULT_LAYOUT;
+  const candidate = raw as Partial<LayoutConfig>;
+  if (!Array.isArray(candidate.panels)) return DEFAULT_LAYOUT;
+  const panels = candidate.panels
+    .filter((panel): panel is LayoutConfig["panels"][number] => {
+      return !!panel
+        && typeof panel === "object"
+        && typeof panel.id === "string"
+        && typeof panel.visible === "boolean"
+        && typeof panel.gridColumn === "string";
+    });
+  if (panels.length === 0) return DEFAULT_LAYOUT;
+  return {
+    id: typeof candidate.id === "string" ? candidate.id : DEFAULT_LAYOUT.id,
+    name: typeof candidate.name === "string" ? candidate.name : DEFAULT_LAYOUT.name,
+    panels,
+  };
+}
+
 export function useTerminalLayout(storageKey: string = "terminal-layout") {
   const [layout, setLayout] = useState<LayoutConfig>(DEFAULT_LAYOUT);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -43,9 +63,10 @@ export function useTerminalLayout(storageKey: string = "terminal-layout") {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
-        setLayout(JSON.parse(saved));
+        setLayout(normalizeLayout(JSON.parse(saved)));
       } catch (e) {
         console.error("Failed to parse saved layout", e);
+        localStorage.removeItem(storageKey);
       }
     }
     setIsHydrated(true);
