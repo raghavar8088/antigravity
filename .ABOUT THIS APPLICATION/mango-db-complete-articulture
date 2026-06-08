@@ -1,0 +1,1594 @@
+PHASE 31: PAPER TRADING ENGINE MIGRATION — COMPLETE ARCHITECTURE & IMPLEMENTATION REPORT
+Classification: Principal Systems Architecture
+
+Date: 2026-06-06
+
+Audience: Senior Go engineers, trading infrastructure team
+
+Status: Actionable — Implementation-ready
+
+EXECUTIVE SUMMARY
+The paper trading engine currently operates across three execution tiers: a browser-hosted React strategy engine (useBTCFuturesScalperEngine.ts, 170 KB), a Node.js VPS worker (runPaperDeskPollTick.ts, 900 lines), and a Vercel 60-second cron fallback. The Go backend already contains a fully-featured $1M paper account with 600+ live strategies, deterministic OMS, risk gate, kill switch, ledger, and reconciliation — but it persists state only in-process (SQLite/file fallback) and does not write trades to the paper_trades MongoDB collection the frontend reads.
+
+The migration collapses all three tiers into one: the Go service on Render becomes the sole execution authority. The frontend becomes a pure read layer. This is achievable in 7 phases over approximately 8 weeks.
+
+PART 1: CURRENT ARCHITECTURE DIAGRAM
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                        CURRENT ARCHITECTURE (AS-IS)                              │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+Browser (Chrome/Safari/Mobile)
+┌──────────────────────────────────────────────────────────────────────┐
+│  useBTCFuturesScalperEngine.ts (170 KB)                              │
+│  ├─ Fetches Delta klines & mark price directly from Delta REST API   │
+│  ├─ Runs 600+ strategy signal evaluations (evalMinuteSignal)         │
+│  ├─ Manages WorkerPosition[] in React useState                       │
+│  ├─ Runs PositionLifecycleEngine.evaluate() on each price tick       │
+│  ├─ Calculates PnL, fees, funding costs                              │
+│  ├─ Fires persistTradeToServer() → POST /api/paper-trades            │
+│  └─ Holds balance, equity, drawdown in React state                   │
+│                                                                      │
+│  usePaperOMSEngine.ts (React OMS wrapper)                            │
+│  ├─ Polls /api/engine/paper/state every 5 seconds                    │
+│  ├─ POST /api/engine/paper/open → Go engine                          │
+│  └─ POST /api/engine/paper/close/{id} → Go engine                   │
+│                                                                      │
+│  Worker Lease: browser can own worker_owner = "browser"              │
+└───────────────────┬──────────────────────────────────────────────────┘
+                    │ HTTP
+                    ▼
+Next.js API Layer (Vercel / client/)
+┌──────────────────────────────────────────────────────────────────────┐
+│  POST /api/paper-trades    → upsertTradeMongo()                      │
+│  GET/POST /api/paper-state → paper_state collection                  │
+│  GET /api/paper-oms/orders → paper_oms_orders collection             │
+│  POST /api/paper-state/repair → runPaperStateRepair()                │
+│  GET /api/cron/paper-desk-tick (every 60s via Vercel cron)           │
+│    └─ runPaperDeskPollTick() ONLY if worker heartbeat stale          │
+└───────┬──────────────────────────────────────────────────────────────┘
+        │                         │
+        │ MongoDB Atlas            │ INTERNAL_API_URL
+        ▼                         ▼
+MongoDB (loop_trades db)     Go Engine (Render :10000)
+┌──────────────────┐        ┌──────────────────────────────────────────┐
+│ paper_trades     │        │  cmd/antigravity/main.go                 │
+│ paper_state      │        │  ├─ $1,000,000 paper account (RAM)       │
+│ paper_oms_orders │        │  ├─ 600+ strategies (tick/1m/5m)         │
+│ desk_worker_     │        │  ├─ PaperOMS (deterministic)             │
+│   events         │        │  ├─ Risk gate + kill switch              │
+│ equity_curve     │        │  ├─ Reconciliation v2                    │
+│ strategy_scores  │        │  └─ Persists to SQLite only              │
+└──────────────────┘        └──────────────────────────────────────────┘
+
+VPS Node.js Worker (separate server, NOT Render)
+┌──────────────────────────────────────────────────────────────────────┐
+│  scripts/btc-ft-paper-worker.ts                                      │
+│  ├─ Acquires worker lease (45s TTL) → paper_state.worker_id          │
+│  ├─ Every 4s: runPaperDeskPollTick() (TypeScript execution)          │
+│  ├─ Fetches Delta klines, evaluates strategies                       │
+│  ├─ Writes to paper_trades, paper_state, paper_oms_orders            │
+│  └─ Heartbeat updates paper_state.worker_last_poll_at                │
+└──────────────────────────────────────────────────────────────────────┘
+
+PROBLEMS:
+  ✗ Three separate execution sources — browser, VPS worker, Vercel cron
+  ✗ Browser = primary source of truth if VPS worker down
+  ✗ Go engine's paper account NOT connected to MongoDB paper_trades
+  ✗ Strategies evaluated twice (Go engine ignores Node worker, vice versa)
+  ✗ No browser = no trading (worker is optional VPS, not Render)
+  ✗ State divergence possible between Go in-memory and MongoDB
+PART 2: TARGET ARCHITECTURE DIAGRAM
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                     TARGET ARCHITECTURE (TO-BE) — PHASE 31                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+Render Go Service (engine/) — 24/7 Single Source of Truth
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                  │
+│  cmd/antigravity/main.go                                                         │
+│  │                                                                               │
+│  ├── [W1] Market Data Poller (goroutine)                                         │
+│  │   ├─ Coinbase WS (BTC tick stream, primary)                                   │
+│  │   ├─ Binance REST fallback (1m candles)                                        │
+│  │   └─ Delta Exchange REST (mark price, funding, OI)                            │
+│  │                                                                               │
+│  ├── [W2] Strategy Engine (existing trading/loop.go orchestrator)                │
+│  │   ├─ 600+ strategies on tick/1m/5m/15m/1h                                    │
+│  │   ├─ evalMinuteSignal per strategy                                            │
+│  │   ├─ Risk gate pre-trade check                                                │
+│  │   └─ Emit → OMS channel                                                      │
+│  │                                                                               │
+│  ├── [W3] OMS Engine (execution/paper_oms.go + internal/omsv3/)                 │
+│  │   ├─ NEW→RISK_CHECKED→ACCEPTED→SIMULATED_FILL→POSITION_OPENED               │
+│  │   ├─ Position lifecycle (SL/TP/TIME/TRAIL/BREAKEVEN/LIQ)                    │
+│  │   ├─ Emit closed trades → Persistence channel                                │
+│  │   └─ Write paper_oms_orders → MongoDB                                        │
+│  │                                                                               │
+│  ├── [W4] Risk Engine (risk/gate/ + risk/engine.go)                             │
+│  │   ├─ Kelly sizing                                                             │
+│  │   ├─ Daily loss circuit breaker ($50K / 5%)                                  │
+│  │   ├─ Position exposure caps (2 BTC max)                                       │
+│  │   ├─ Strategy throttle                                                        │
+│  │   └─ Kill switch integration                                                  │
+│  │                                                                               │
+│  ├── [W5] Portfolio Analytics Engine (new: internal/paperanalytics/)            │
+│  │   ├─ Equity curve computation (balance snapshots every 5m)                   │
+│  │   ├─ Daily PnL aggregation (midnight UTC)                                    │
+│  │   ├─ Sharpe ratio, max drawdown, Calmar                                      │
+│  │   └─ Write equity_curve, daily_pnl_history → MongoDB                        │
+│  │                                                                               │
+│  ├── [W6] Reconciliation Engine (reconciliationv2/)                             │
+│  │   ├─ MongoDB ↔ in-memory position drift detection                            │
+│  │   ├─ Balance reconciliation every 30s                                        │
+│  │   └─ Alert on mismatch > $0.01                                               │
+│  │                                                                               │
+│  ├── [W7] Strategy Health Engine (internal/strategyhealth/)                     │
+│  │   ├─ Per-strategy: win rate, PnL, Sharpe (rolling 30d)                      │
+│  │   ├─ WINNERS_ONLY gate enforcement                                           │
+│  │   ├─ Auto-disable losing strategies (cooldown)                               │
+│  │   └─ Write strategy_scores → MongoDB every 15m                              │
+│  │                                                                               │
+│  ├── [W8] Persistence Engine (new: internal/paperpersist/)                      │
+│  │   ├─ Trade writer: drain closed_trades channel → paper_trades                │
+│  │   ├─ State snapshot: balance/positions → paper_state every 10s              │
+│  │   ├─ OMS writer: drain oms_orders channel → paper_oms_orders                │
+│  │   └─ Retry queue with exponential backoff (Mongo transient errors)          │
+│  │                                                                               │
+│  └── [W9] SSE Hub (new: internal/ssehub/)                                       │
+│      ├─ GET /api/stream/paper-state (text/event-stream)                         │
+│      ├─ Broadcast: balance, positions, last trade, equity on each close        │
+│      └─ Heartbeat ping every 30s                                                │
+│                                                                                  │
+│  HTTP API (port 10000 on Render)                                                 │
+│  ├─ All existing endpoints preserved                                             │
+│  ├─ GET /api/paper/state → live in-memory snapshot                             │
+│  ├─ GET /api/paper/trades?limit=100 → MongoDB query                            │
+│  ├─ GET /api/paper/analytics → aggregated PnL stats                            │
+│  ├─ GET /api/paper/equity-curve → equity_curve collection                      │
+│  ├─ POST /api/admin/paper/reset → full account reset (owner only)              │
+│  └─ GET /api/stream/paper-state → SSE                                           │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+         │ MongoDB Atlas (auth: account_key = owner_admin)
+         ▼
+MongoDB (loop_trades database)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  paper_trades          ← Closed trade records (source of truth)                  │
+│  paper_positions       ← Open position snapshots (crash recovery)               │
+│  paper_orders          ← OMS order lifecycle                                    │
+│  paper_state           ← Account snapshot (balance, equity)                     │
+│  equity_curve          ← Timestamped balance snapshots                          │
+│  daily_pnl_history     ← Daily P&L archive                                      │
+│  strategy_scores       ← Per-strategy performance metrics                       │
+│  strategy_health       ← Strategy health flags                                  │
+│  portfolio_metrics     ← Sharpe, drawdown, Calmar                               │
+│  worker_events         ← Audit trail                                            │
+│  risk_events           ← Risk gate decisions                                    │
+│  execution_logs        ← Per-trade execution quality                            │
+└──────────────────────────────────────────────────────────────────────────────────┘
+         │ Next.js API (read-only proxy)
+         ▼
+Next.js on Vercel (client/)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  /api/engine/[...path] → INTERNAL_API_URL (existing catch-all proxy)            │
+│  /api/paper-trades GET → MongoDB read (existing, keep for legacy compat)        │
+│  /api/paper-state GET → proxy to Go /api/paper/state                           │
+│  DELETE all trading-write routes from client (Phases 31F)                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+         │ SSE + REST reads
+         ▼
+Browser (pure visualization)
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  React Dashboard (display only)                                                  │
+│  ├─ EventSource /api/stream/paper-state (live positions, balance, trades)       │
+│  ├─ REST GET /api/paper/trades → trade history table                            │
+│  ├─ REST GET /api/paper/analytics → strategy stats                              │
+│  ├─ REST GET /api/paper/equity-curve → equity chart                             │
+│  └─ POST /api/admin/paper/reset → owner-only control                           │
+└──────────────────────────────────────────────────────────────────────────────────┘
+PART 3: DATA FLOW DIAGRAM
+
+Market Data                         Go Engine (Render)                    MongoDB
+──────────┐                         ──────────────────                    ────────
+Coinbase WS│─tick──────────────────▶│                                    │
+Binance   │─1m candles─────────────▶│  processTickPipeline()             │
+REST      │                         │  ├─ updatePrice(tick)              │
+Delta REST│─mark/funding/OI────────▶│  ├─ checkSLTP(positions)           │
+          │                         │  ├─ aggregateCandle(tick)           │
+          │                         │  └─ runTickStrategies()             │
+          │                         │                                     │
+          │                   1m close                                    │
+          │                         │  run1mStrategies()                  │
+          │                         │  ├─ evalMinuteSignal(strat, bars)   │
+          │                         │  ├─ riskGate.Check(signal)          │
+          │                         │  └─ paperOMS.OpenPosition()         │
+          │                         │                                     │
+          │                   position                                    │
+          │                   opened                                      │
+          │                         │  paper_positions upsert────────────▶│
+          │                         │                                     │
+          │                   mark price                                  │
+          │                   tick                                        │
+          │                         │  PositionLifecycle.Evaluate()       │
+          │                         │  ├─ SL hit? ──────────────────┐    │
+          │                         │  ├─ TP hit? ──────────────────┤    │
+          │                         │  ├─ TIME expired? ────────────┤    │
+          │                         │  └─ TRAIL/BREAKEVEN ──────────┘    │
+          │                         │           │ exit decision           │
+          │                         │           ▼                         │
+          │                         │  closePosition()                    │
+          │                         │  ├─ PnL calc (incl. fees/funding)  │
+          │                         │  ├─ build BTCFuturesTrade struct    │
+          │                         │  └─ push → closed_trades chan       │
+          │                         │                                     │
+          │              closed_trades channel drain (W8)                 │
+          │                         │                                     │
+          │                         │  paperpersist.TradeWriter          │
+          │                         │  ├─ MongoDB upsert paper_trades────▶│
+          │                         │  ├─ update paper_state balance ────▶│
+          │                         │  └─ broadcast → SSE hub chan        │
+          │                         │                                     │
+          │              every 10s                                        │
+          │                         │  StateSnapshotter                   │
+          │                         │  └─ upsert paper_state─────────────▶│
+          │                         │                                     │
+          │              every 5m                                         │
+          │                         │  EquityCurveRecorder (W5)           │
+          │                         │  └─ insert equity_curve─────────────▶│
+          │                         │                                     │
+          │              every 15m                                        │
+          │                         │  StrategyHealthRecorder (W7)        │
+          │                         │  └─ upsert strategy_scores──────────▶│
+          │                         │                                     │
+          │              midnight UTC                                     │
+          │                         │  DailyPnLArchiver (W5)              │
+          │                         │  └─ insert daily_pnl_history────────▶│
+          │                         │                                     │
+SSE Push (W9)                       │                                     │
+          ◀──────────────────────────│  ssehub.Broadcast(event)           │
+          │  {                       │  ├─ "position_opened"              │
+Browser   │    type: "trade_closed", │  ├─ "position_closed"             │
+Dashboard │    balance: 1015234.50,  │  ├─ "balance_update"              │
+(read     │    trade: {...},         │  └─ heartbeat ping/30s            │
+ only)    │    equity: 1015234.50    │                                     │
+          │  }                       │                                     │
+PART 4: SERVICE BOUNDARIES
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ RENDER GO SERVICE — engine/                                          │
+│                                                                      │
+│  OWNS:                                                               │
+│  ✓ All strategy execution                                            │
+│  ✓ All position management                                           │
+│  ✓ All risk management                                               │
+│  ✓ All OMS transitions                                               │
+│  ✓ All PnL calculations                                              │
+│  ✓ All trade lifecycle                                               │
+│  ✓ All MongoDB writes (paper_trades, paper_state, etc.)             │
+│  ✓ All kill switch decisions                                         │
+│  ✓ All account state                                                 │
+│                                                                      │
+│  DOES NOT OWN:                                                       │
+│  ✗ User authentication (JWT managed by Next.js)                     │
+│  ✗ Dashboard presentation                                            │
+│  ✗ AngelOne/NIFTY trading (separate broker bridge)                  │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ NEXT.JS ON VERCEL — client/                                          │
+│                                                                      │
+│  OWNS:                                                               │
+│  ✓ Owner authentication (JWT session)                                │
+│  ✓ API proxying to Go engine (existing /api/engine/[...path])       │
+│  ✓ MongoDB reads for dashboard display                               │
+│  ✓ SSE relay (optional — or browser connects to Go directly)        │
+│                                                                      │
+│  DOES NOT OWN:                                                       │
+│  ✗ Any strategy execution                                            │
+│  ✗ Any trade writes to MongoDB                                       │
+│  ✗ Any position calculations                                         │
+│  ✗ Any cron execution of trading logic                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ BROWSER — client/src/                                                │
+│                                                                      │
+│  OWNS:                                                               │
+│  ✓ Display rendering                                                 │
+│  ✓ Chart visualization                                               │
+│  ✓ User controls (reset, kill switch trigger via API)                │
+│                                                                      │
+│  DOES NOT OWN:                                                       │
+│  ✗ useBTCFuturesScalperEngine trading logic                         │
+│  ✗ useMockTradingEngine execution                                    │
+│  ✗ Strategy evaluation                                               │
+│  ✗ Position lifecycle evaluation                                     │
+│  ✗ Any persistTradeToServer() calls                                  │
+└─────────────────────────────────────────────────────────────────────┘
+PART 5: MONGODB SCHEMA — COMPLETE AUTHORITATIVE DEFINITION
+All collections in database loop_trades. Account key for paper trading: owner_admin.
+
+5.1 paper_trades (Authoritative — replaces current)
+
+{
+  _id: ObjectId,
+  client_trade_id: String,      // UUID — idempotent upsert key (UNIQUE index)
+  account_key: String,           // "owner_admin" always
+  symbol: String,                // "BTCUSD"
+  strategy_id: Number,
+  strategy_name: String,
+  template_family: String,
+  side: "LONG" | "SHORT",
+  entry_price: Number,
+  exit_price: Number,
+  contracts: Number,
+  notional: Number,
+  margin_used: Number,
+  gross_pnl: Number,
+  fees: Number,
+  funding_costs: Number,
+  net_pnl: Number,
+  net_pnl_pct: Number,
+  price_move_pct: Number,
+  exit_reason: "TP"|"SL"|"TIME"|"TRAIL"|"BREAKEVEN"|"LIQUIDATION_RISK"|"PROFIT_LOCK"|"MOM_DECAY",
+  liquidation_price: Number,
+  liquidation_distance_pct: Number,
+  signal_contributions: [{ signal: String, contribution: Number }],
+  opened_at: ISODate,
+  closed_at: ISODate,
+  oms_order_id: String,          // Links to paper_orders
+  position_id: String,           // Internal position UUID
+  module_key: String,            // "btc_futures_scalper"
+  created_at: ISODate,           // Write timestamp (engine)
+  source: "go_engine"            // NEW: source tag for audit
+}
+
+Indexes:
+  { client_trade_id: 1 }                  UNIQUE
+  { account_key: 1, closed_at: -1 }
+  { strategy_id: 1, closed_at: -1 }
+  { exit_reason: 1, closed_at: -1 }
+  { closed_at: 1 }                        TTL: none (permanent)
+5.2 paper_positions (NEW — crash recovery)
+
+{
+  _id: ObjectId,
+  position_id: String,           // UUID — UNIQUE
+  account_key: String,           // "owner_admin"
+  symbol: String,
+  strategy_id: Number,
+  strategy_name: String,
+  side: "LONG" | "SHORT",
+  entry_price: Number,
+  contracts: Number,
+  notional: Number,
+  margin_used: Number,
+  sl_price: Number,
+  tp_price: Number,
+  hold_deadline_ms: Number,
+  opened_at: ISODate,
+  liquidation_price: Number,
+  funding_costs: Number,
+  last_funding_applied_at: Number,
+  oms_order_id: String,
+  status: "OPEN",
+  last_mark_price: Number,       // Updated on each tick snapshot
+  updated_at: ISODate
+}
+
+Indexes:
+  { position_id: 1 }             UNIQUE
+  { account_key: 1, status: 1 }
+  { opened_at: 1 }
+5.3 paper_orders (replaces paper_oms_orders)
+
+{
+  _id: ObjectId,
+  order_id: String,              // UUID — UNIQUE
+  intent_id: String,
+  account_key: String,           // "owner_admin"
+  symbol: String,
+  strategy_id: Number,
+  strategy_name: String,
+  side: "LONG" | "SHORT",
+  status: "NEW"|"RISK_CHECKED"|"REJECTED"|"ACCEPTED"|"SIMULATED_FILL"|
+          "POSITION_OPENED"|"POSITION_CLOSED"|"CANCELLED",
+  signal_score: Number,
+  required_threshold: Number,
+  notional: Number,
+  contracts: Number,
+  entry_price: Number,
+  fill_price: Number,
+  position_id: String,
+  trade_id: String,              // client_trade_id of closed trade
+  reject_reason: String,
+  gate: String,                  // Which gate caused rejection
+  source: "go_engine",
+  created_at: ISODate,
+  updated_at: ISODate
+}
+
+Indexes:
+  { order_id: 1 }                UNIQUE
+  { account_key: 1, status: 1, created_at: -1 }
+  { strategy_id: 1, created_at: -1 }
+  { position_id: 1 }
+  { created_at: 1 }              TTL: 30 days
+5.4 paper_state (Account snapshot)
+
+{
+  _id: ObjectId,
+  account_key: String,           // "owner_admin" — UNIQUE
+  balance_usd: Number,
+  equity_usd: Number,
+  unrealized_pnl: Number,
+  total_fees_usd: Number,
+  open_position_count: Number,
+  total_trades: Number,
+  total_wins: Number,
+  total_losses: Number,
+  win_rate: Number,
+  total_pnl_usd: Number,
+  pause_entries: Boolean,
+  disabled_strategies: [Number],
+  last_mark_price: Number,
+  // Worker fields (kept for backward compat, Go sets these)
+  worker_id: String,             // engine instance ID
+  worker_last_poll_at: Number,   // epoch ms
+  worker_owner: "go_engine",
+  updated_at: ISODate,
+  engine_version: String,        // "v6.0" 
+  engine_instance_id: String     // Render instance ID
+}
+
+Indexes:
+  { account_key: 1 }             UNIQUE
+5.5 equity_curve (NEW — authoritative)
+
+{
+  _id: ObjectId,
+  account_key: String,
+  balance_usd: Number,
+  equity_usd: Number,
+  unrealized_pnl: Number,
+  open_count: Number,
+  total_pnl_usd: Number,
+  drawdown_pct: Number,          // From peak
+  recorded_at: ISODate           // Every 5 minutes
+}
+
+Indexes:
+  { account_key: 1, recorded_at: -1 }
+  { recorded_at: 1 }             TTL: 90 days
+5.6 daily_pnl_history
+
+{
+  _id: ObjectId,
+  account_key: String,
+  day: String,                   // "2026-06-06" — UNIQUE per account
+  pnl_usd: Number,
+  trade_count: Number,
+  win_count: Number,
+  loss_count: Number,
+  gross_fees_usd: Number,
+  max_drawdown_usd: Number,
+  best_trade_pnl: Number,
+  worst_trade_pnl: Number,
+  opening_balance: Number,
+  closing_balance: Number,
+  computed_at: ISODate
+}
+
+Indexes:
+  { account_key: 1, day: -1 }   UNIQUE composite
+5.7 strategy_scores
+
+{
+  _id: ObjectId,
+  account_key: String,
+  strategy_id: Number,
+  strategy_name: String,
+  template_family: String,
+  total_trades: Number,
+  winning_trades: Number,
+  losing_trades: Number,
+  win_rate: Number,
+  total_pnl_usd: Number,
+  avg_pnl_per_trade: Number,
+  sharpe_ratio: Number,          // Rolling 30d
+  max_drawdown_pct: Number,
+  avg_hold_minutes: Number,
+  last_trade_at: ISODate,
+  is_active: Boolean,
+  is_disabled: Boolean,
+  disable_reason: String,
+  cooldown_until: ISODate,
+  execution_weight: Number,      // Kelly-derived
+  score_version: Number,         // Increment on recalc
+  computed_at: ISODate
+}
+
+Indexes:
+  { account_key: 1, strategy_id: 1 }  UNIQUE
+  { is_active: 1, computed_at: -1 }
+5.8 strategy_health (NEW)
+
+{
+  _id: ObjectId,
+  account_key: String,
+  strategy_id: Number,
+  health_status: "HEALTHY"|"WARNING"|"DEGRADED"|"DISABLED",
+  consecutive_losses: Number,
+  consecutive_wins: Number,
+  last_5_pnl: [Number],          // Last 5 trade PnL values
+  rolling_7d_pnl: Number,
+  rolling_30d_pnl: Number,
+  last_health_check: ISODate,
+  alert_fired: Boolean,
+  alert_reason: String
+}
+5.9 portfolio_metrics (NEW)
+
+{
+  _id: ObjectId,
+  account_key: String,
+  as_of: ISODate,                // UNIQUE per account
+  sharpe_ratio: Number,
+  sortino_ratio: Number,
+  calmar_ratio: Number,
+  max_drawdown_pct: Number,
+  max_drawdown_usd: Number,
+  current_drawdown_pct: Number,
+  var_95_usd: Number,            // Value at Risk 95%
+  cvar_95_usd: Number,           // Conditional VaR
+  total_return_pct: Number,
+  annualized_return_pct: Number,
+  volatility_annualized: Number,
+  win_rate: Number,
+  profit_factor: Number,
+  expectancy_usd: Number,
+  kelly_fraction: Number,
+  recovery_factor: Number
+}
+
+Indexes:
+  { account_key: 1, as_of: -1 }
+  { as_of: 1 }                   TTL: 180 days
+5.10 worker_events (Audit trail)
+
+{
+  _id: ObjectId,
+  account_key: String,
+  event_type: String,            // "engine_started"|"trade_closed"|"risk_blocked"|...
+  payload: Object,               // Event-specific data
+  source: "go_engine",
+  engine_instance_id: String,
+  created_at: ISODate
+}
+
+Indexes:
+  { account_key: 1, event_type: 1, created_at: -1 }
+  { created_at: 1 }              TTL: 30 days
+5.11 risk_events (NEW)
+
+{
+  _id: ObjectId,
+  account_key: String,
+  decision: "APPROVED"|"BLOCKED",
+  strategy_id: Number,
+  strategy_name: String,
+  block_reason: String,
+  signal_score: Number,
+  proposed_size_btc: Number,
+  approved_size_btc: Number,
+  balance_at_check: Number,
+  daily_pnl_at_check: Number,
+  created_at: ISODate
+}
+
+Indexes:
+  { account_key: 1, decision: 1, created_at: -1 }
+  { created_at: 1 }              TTL: 7 days
+5.12 execution_logs (Phase 22D — move from RAM)
+
+{
+  _id: ObjectId,
+  trade_id: String,
+  strategy_id: Number,
+  latency_ms: Number,
+  slippage_bps: Number,
+  entry_quality: "IDEAL"|"ACCEPTABLE"|"POOR",
+  missed_entry: Boolean,
+  missed_reason: String,
+  tp_override: Boolean,
+  created_at: ISODate
+}
+
+Indexes:
+  { trade_id: 1 }
+  { created_at: 1 }              TTL: 30 days
+PART 6: API CHANGES
+6.1 New Go Engine Endpoints (add to engine/cmd/antigravity/main.go)
+
+GET  /api/paper/state              → Live in-memory snapshot (balance, equity, positions)
+GET  /api/paper/trades             → MongoDB paper_trades (query: limit, offset, strategy_id)
+GET  /api/paper/trades/:id         → Single trade by client_trade_id
+GET  /api/paper/analytics          → Strategy-level stats (aggregated from paper_trades)
+GET  /api/paper/equity-curve       → equity_curve collection (last N points)
+GET  /api/paper/daily-pnl          → daily_pnl_history collection
+GET  /api/paper/oms/orders         → paper_orders (query: status, limit)
+GET  /api/paper/oms/summary        → OMS order count summary
+GET  /api/paper/portfolio-metrics  → Latest portfolio_metrics doc
+GET  /api/paper/strategy-scores    → strategy_scores for all strategies
+GET  /api/stream/paper-state       → SSE stream (text/event-stream)
+
+POST /api/admin/paper/reset        → Full account reset (owner only, via JWT or ADMIN_SECRET)
+POST /api/admin/paper/disable-strategy  → Disable strategy by ID
+POST /api/admin/paper/enable-strategy   → Re-enable strategy
+POST /api/admin/paper/pause-entries    → Pause all new entries
+POST /api/admin/paper/resume-entries   → Resume entries
+6.2 Next.js API Routes — Changes
+Routes to KEEP (read-only, thin proxy):
+
+
+GET  /api/paper-trades         → proxy to Go /api/paper/trades
+GET  /api/paper-state          → proxy to Go /api/paper/state
+GET  /api/paper-oms/orders     → proxy to Go /api/paper/oms/orders
+GET  /api/paper-oms/summary    → proxy to Go /api/paper/oms/summary
+Routes to DEPRECATE (add 410 Gone after migration):
+
+
+POST /api/paper-trades              → 410 Gone (Go writes directly to MongoDB)
+POST /api/paper-state               → 410 Gone (Go writes directly)
+POST /api/paper-state/repair        → redirect to POST /api/admin/paper/reset on Go
+GET  /api/cron/paper-desk-tick      → 410 Gone (Go runs 24/7)
+Routes to KEEP but redirect:
+
+
+GET  /api/paper-trades/analytics    → proxy to Go /api/paper/analytics
+GET  /api/paper-trades/leaderboard  → proxy to Go /api/paper/analytics?sort=pnl
+POST /api/paper-trades/clear        → proxy to Go /api/admin/paper/reset (owner only)
+6.3 Authentication on Go Engine
+The Go engine must validate requests to admin endpoints. Two mechanisms:
+
+For browser-initiated owner actions (reset, disable-strategy): Accept Authorization: Bearer <ADMIN_API_KEY> header. The Next.js route verifies the owner JWT session and injects this header when proxying.
+
+For internal monitoring: Continue using existing CRON_SECRET mechanism for any Vercel→Go calls during transition.
+
+Add to Go engine environment:
+
+
+ADMIN_API_KEY=<64-char-hex>   # owner-only control token
+MONGO_PAPER_ACCOUNT_KEY=owner_admin  # account key for all paper writes
+PART 7: FRONTEND CHANGES
+7.1 Files to DELETE (Phase 31F)
+
+client/src/hooks/useBTCFuturesScalperEngine.ts    ← Primary browser engine (170KB)
+client/src/hooks/useMockTradingEngine.ts           ← Local mock trading
+client/src/lib/paperDeskWorker/                    ← Entire directory
+  runPaperDeskPollTick.ts
+  workerLease.ts
+  workerHelpers.ts
+client/src/lib/paperTradesSync.ts                  ← persistTradeToServer()
+client/src/internal/positions/position_lifecycle.ts ← Moved to Go
+client/src/lib/paperOms.ts                         ← Moved to Go
+7.2 Files to KEEP (read-only consumers)
+
+client/src/lib/mongoTradesClient.ts    ← Keep for GET queries only (remove write ops)
+client/src/lib/paperOmsMongo.ts        ← Keep GET queries; remove insert ops
+client/src/lib/paperTradesMapper.ts    ← Keep for display mapping
+client/src/lib/paperTradesTypes.ts     ← Keep types (used in dashboard tables)
+client/src/hooks/usePaperOMSEngine.ts  ← Refactor to read-only (remove openPosition/closePosition)
+7.3 Files to MODIFY
+client/src/hooks/usePaperOMSEngine.ts
+
+Remove:
+
+openPosition() method (lines 194–221)
+closePosition() method (lines 223–233)
+tick() method (lines 235–255)
+Keep:
+
+State polling from /api/paper/state (convert to SSE subscription)
+Display state (positions, balance, equity)
+client/src/app/api/cron/paper-desk-tick/route.ts
+
+Replace entire body with:
+
+
+export async function GET() {
+  return new Response(JSON.stringify({
+    ok: true,
+    message: "Paper trading migrated to Go engine. This cron is retired.",
+    migration: "phase31"
+  }), { status: 410 });
+}
+client/src/app/api/paper-trades/route.ts
+
+Replace POST handler with 410 response. Keep GET handler (proxies to Go).
+
+7.4 New Frontend Component
+client/src/hooks/usePaperEngineSSE.ts (new, ~80 lines)
+
+
+// Subscribes to Go SSE stream. Provides live positions, balance, last trade.
+// Replaces useBTCFuturesScalperEngine state for display purposes.
+export function usePaperEngineSSE() {
+  const [state, setState] = useState<PaperEngineState>(defaultState);
+  
+  useEffect(() => {
+    const url = `${INTERNAL_API_URL}/api/stream/paper-state`;
+    const es = new EventSource(url);
+    es.onmessage = (e) => setState(JSON.parse(e.data));
+    es.onerror = () => { /* reconnect with backoff */ };
+    return () => es.close();
+  }, []);
+  
+  return state;
+}
+PART 8: BACKEND CHANGES — EXACT IMPLEMENTATION
+8.1 New Package: engine/internal/paperpersist/
+Purpose: Drains channels from the OMS/strategy engine and writes to MongoDB. Decouples execution from persistence. Non-blocking.
+
+Files to create:
+
+engine/internal/paperpersist/writer.go
+
+
+package paperpersist
+
+import (
+    "context"
+    "time"
+    "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/bson"
+    "go.mongodb.org/mongo-driver/mongo/options"
+)
+
+type TradeWriter struct {
+    coll       *mongo.Collection
+    trades     <-chan PaperTradeDoc
+    retryQueue []PaperTradeDoc
+    logger     Logger
+}
+
+// Run drains the trades channel and upserts to MongoDB.
+// Retries failed writes with exponential backoff (max 5 attempts).
+func (w *TradeWriter) Run(ctx context.Context) {
+    ticker := time.NewTicker(5 * time.Second)
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case trade := <-w.trades:
+            w.upsert(ctx, trade)
+        case <-ticker.C:
+            w.flushRetryQueue(ctx)
+        }
+    }
+}
+
+func (w *TradeWriter) upsert(ctx context.Context, trade PaperTradeDoc) {
+    filter := bson.M{"client_trade_id": trade.ClientTradeID}
+    update := bson.M{"$set": trade}
+    opts := options.Update().SetUpsert(true)
+    _, err := w.coll.UpdateOne(ctx, filter, update, opts)
+    if err != nil {
+        w.retryQueue = append(w.retryQueue, trade)
+    }
+}
+engine/internal/paperpersist/state_snapshotter.go
+
+
+// Writes paper_state to MongoDB every 10 seconds.
+// Called with current engine state snapshot.
+type StateSnapshotter struct {
+    coll       *mongo.Collection
+    accountKey string
+    getState   func() PaperStateDoc  // callback to engine
+}
+
+func (s *StateSnapshotter) Run(ctx context.Context) {
+    ticker := time.NewTicker(10 * time.Second)
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            state := s.getState()
+            s.upsert(ctx, state)
+        }
+    }
+}
+engine/internal/paperpersist/equity_recorder.go
+
+
+// Records equity_curve point every 5 minutes.
+// Also triggers daily_pnl_history aggregation at midnight UTC.
+type EquityRecorder struct {
+    equityColl    *mongo.Collection
+    dailyPnLColl  *mongo.Collection
+    accountKey    string
+    getState      func() PaperStateDoc
+    lastDay       string  // "2026-06-06"
+}
+
+func (e *EquityRecorder) Run(ctx context.Context) {
+    ticker := time.NewTicker(5 * time.Minute)
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            e.recordEquityPoint(ctx)
+            e.maybeSealDailyPnL(ctx)  // seals previous day at midnight
+        }
+    }
+}
+engine/internal/paperpersist/strategy_health.go
+
+
+// Computes and writes strategy_scores every 15 minutes.
+// Source: trade journal in-memory, enriched with MongoDB history.
+type StrategyHealthRecorder struct {
+    scoresColl   *mongo.Collection
+    healthColl   *mongo.Collection
+    getJournal   func() []JournalEntry
+    accountKey   string
+}
+
+func (r *StrategyHealthRecorder) Run(ctx context.Context) {
+    ticker := time.NewTicker(15 * time.Minute)
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            r.computeAndWrite(ctx)
+        }
+    }
+}
+engine/internal/paperpersist/types.go
+
+
+// PaperTradeDoc maps Go engine's JournalEntry to MongoDB paper_trades schema.
+// PaperStateDoc maps engine state to paper_state document.
+// All field names use snake_case MongoDB convention (bson tags).
+type PaperTradeDoc struct {
+    ClientTradeID           string    `bson:"client_trade_id"`
+    AccountKey              string    `bson:"account_key"`
+    Symbol                  string    `bson:"symbol"`
+    StrategyID              int       `bson:"strategy_id"`
+    StrategyName            string    `bson:"strategy_name"`
+    Side                    string    `bson:"side"`
+    EntryPrice              float64   `bson:"entry_price"`
+    ExitPrice               float64   `bson:"exit_price"`
+    Contracts               float64   `bson:"contracts"`
+    Notional                float64   `bson:"notional"`
+    MarginUsed              float64   `bson:"margin_used"`
+    GrossPnL                float64   `bson:"gross_pnl"`
+    Fees                    float64   `bson:"fees"`
+    FundingCosts            float64   `bson:"funding_costs"`
+    NetPnL                  float64   `bson:"net_pnl"`
+    NetPnLPct               float64   `bson:"net_pnl_pct"`
+    ExitReason              string    `bson:"exit_reason"`
+    OpenedAt                time.Time `bson:"opened_at"`
+    ClosedAt                time.Time `bson:"closed_at"`
+    OMSOrderID              string    `bson:"oms_order_id"`
+    Source                  string    `bson:"source"`   // always "go_engine"
+}
+8.2 New Package: engine/internal/ssehub/
+Purpose: Fan-out SSE broadcast to all connected dashboard clients.
+
+engine/internal/ssehub/hub.go
+
+
+package ssehub
+
+import (
+    "encoding/json"
+    "net/http"
+    "sync"
+)
+
+type Hub struct {
+    mu      sync.RWMutex
+    clients map[chan []byte]struct{}
+}
+
+func (h *Hub) Subscribe() (chan []byte, func()) {
+    ch := make(chan []byte, 32)
+    h.mu.Lock()
+    h.clients[ch] = struct{}{}
+    h.mu.Unlock()
+    return ch, func() {
+        h.mu.Lock()
+        delete(h.clients, ch)
+        close(ch)
+        h.mu.Unlock()
+    }
+}
+
+func (h *Hub) Broadcast(eventType string, payload any) {
+    data, _ := json.Marshal(map[string]any{
+        "type":    eventType,
+        "payload": payload,
+    })
+    h.mu.RLock()
+    for ch := range h.clients {
+        select {
+        case ch <- data:
+        default:
+            // Slow client — drop event, don't block
+        }
+    }
+    h.mu.RUnlock()
+}
+
+// ServeHTTP implements http.Handler for GET /api/stream/paper-state
+func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("X-Accel-Buffering", "no")
+
+    ch, unsub := h.Subscribe()
+    defer unsub()
+
+    ping := time.NewTicker(30 * time.Second)
+    defer ping.Stop()
+
+    for {
+        select {
+        case <-r.Context().Done():
+            return
+        case data := <-ch:
+            fmt.Fprintf(w, "data: %s\n\n", data)
+            if f, ok := w.(http.Flusher); ok { f.Flush() }
+        case <-ping.C:
+            fmt.Fprintf(w, ": ping\n\n")
+            if f, ok := w.(http.Flusher); ok { f.Flush() }
+        }
+    }
+}
+8.3 Modifications to engine/cmd/antigravity/main.go
+Lines to add in the boot sequence (after existing service initialization):
+
+
+// 1. Initialize MongoDB paper persistence
+mongoClient := connectMongoDB(ctx, os.Getenv("MONGODB_URI"))
+paperDB := mongoClient.Database(getEnv("MONGODB_DB", "loop_trades"))
+
+// 2. Create closed trades channel (buffered — OMS closes without blocking)
+closedTradesChan := make(chan paperpersist.PaperTradeDoc, 500)
+omsOrdersChan    := make(chan paperpersist.PaperOrderDoc, 500)
+
+// 3. Wire the OMS to emit to the channel (not direct MongoDB write)
+paperOMS.OnTradeClosed = func(trade PaperClosedTrade) {
+    closedTradesChan <- paperpersist.FromJournalEntry(trade)
+}
+paperOMS.OnOrderUpdated = func(order PaperOrderDoc) {
+    omsOrdersChan <- order
+}
+
+// 4. Create SSE hub
+sseHub := ssehub.New()
+
+// 5. Wire SSE broadcast on trade close
+// (injected into processCloseEvents in trading/loop.go)
+
+// 6. Start persistence workers
+tradeWriter := paperpersist.NewTradeWriter(paperDB.Collection("paper_trades"), closedTradesChan)
+go tradeWriter.Run(ctx)
+
+orderWriter := paperpersist.NewOrderWriter(paperDB.Collection("paper_orders"), omsOrdersChan)
+go orderWriter.Run(ctx)
+
+stateSnapshotter := paperpersist.NewStateSnapshotter(
+    paperDB.Collection("paper_state"),
+    getEnv("MONGO_PAPER_ACCOUNT_KEY", "owner_admin"),
+    func() paperpersist.PaperStateDoc { return buildPaperStateDoc(paperOMS, riskEngine) },
+)
+go stateSnapshotter.Run(ctx)
+
+equityRecorder := paperpersist.NewEquityRecorder(
+    paperDB.Collection("equity_curve"),
+    paperDB.Collection("daily_pnl_history"),
+    getEnv("MONGO_PAPER_ACCOUNT_KEY", "owner_admin"),
+    func() paperpersist.PaperStateDoc { return buildPaperStateDoc(paperOMS, riskEngine) },
+)
+go equityRecorder.Run(ctx)
+
+strategyHealthRecorder := paperpersist.NewStrategyHealthRecorder(
+    paperDB.Collection("strategy_scores"),
+    paperDB.Collection("strategy_health"),
+    func() []journal.JournalEntry { return tradeJournal.All() },
+    getEnv("MONGO_PAPER_ACCOUNT_KEY", "owner_admin"),
+)
+go strategyHealthRecorder.Run(ctx)
+
+// 7. Register new HTTP handlers
+mux.Handle("/api/stream/paper-state", sseHub)
+mux.HandleFunc("/api/paper/state",    makePaperStateHandler(paperOMS))
+mux.HandleFunc("/api/paper/trades",   makePaperTradesHandler(paperDB))
+mux.HandleFunc("/api/paper/analytics", makePaperAnalyticsHandler(paperDB))
+mux.HandleFunc("/api/paper/equity-curve", makeEquityCurveHandler(paperDB))
+mux.HandleFunc("/api/paper/oms/orders",   makePaperOrdersHandler(paperDB))
+mux.HandleFunc("/api/admin/paper/reset",  makeAdminResetHandler(paperOMS, paperDB))
+8.4 Modifications to engine/internal/trading/loop.go
+In processCloseEvents(), after recording the trade in the journal, add:
+
+
+// Broadcast to SSE clients
+sseHub.Broadcast("trade_closed", map[string]any{
+    "trade":    closedTrade,
+    "balance":  o.paperOMS.BalanceUSD(),
+    "equity":   o.paperOMS.EquityUSD(),
+    "open_count": o.positionManager.Count(),
+})
+In Run(), add goroutine for position snapshot on open:
+
+
+go func() {
+    for pos := range positionOpenedChan {
+        sseHub.Broadcast("position_opened", pos)
+    }
+}()
+8.5 Modifications to engine/internal/execution/paper_oms.go
+Add callback fields:
+
+
+type PaperOMS struct {
+    // ... existing fields ...
+    OnTradeClosed  func(PaperClosedTrade)
+    OnOrderUpdated func(PaperOrderDoc)
+}
+In closePosition(), after filling PaperClosedTrade, call:
+
+
+if o.OnTradeClosed != nil {
+    o.OnTradeClosed(trade)
+}
+PART 9: WORKER ARCHITECTURE
+The eight workers map to goroutines within the single Go process on Render. No separate processes are needed — Go's scheduler handles all concurrency.
+
+
+┌────────────────────────────────────────────────────────────────────┐
+│  WORKER ALLOCATION — All goroutines in one Go process              │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  W1: Market Data Poller                                            │
+│  ├─ EXISTING: Coinbase WS goroutine in cmd/antigravity/main.go    │
+│  ├─ EXISTING: Delta REST polling goroutine                         │
+│  └─ ACTION: No changes needed                                      │
+│                                                                    │
+│  W2: Strategy Engine                                               │
+│  ├─ EXISTING: trading/loop.go Orchestrator.Run()                  │
+│  │  ├─ processTickPipeline() (main goroutine)                     │
+│  │  ├─ process1mCandles() (goroutine)                             │
+│  │  ├─ process5mCandles() (goroutine)                             │
+│  │  ├─ processCloseEvents() (goroutine)                           │
+│  │  └─ processAIDecisions() (goroutine)                           │
+│  └─ ACTION: Wire OnTradeClosed callback → paperpersist channel    │
+│                                                                    │
+│  W3: OMS Engine                                                    │
+│  ├─ EXISTING: execution/paper_oms.go (single-threaded, called     │
+│  │  from strategy engine goroutine — no separate goroutine needed) │
+│  └─ ACTION: Add OnTradeClosed/OnOrderUpdated callbacks            │
+│                                                                    │
+│  W4: Risk Engine                                                   │
+│  ├─ EXISTING: risk/gate/pipeline.go (called synchronously)        │
+│  └─ ACTION: Add risk event emission to risk_events channel        │
+│                                                                    │
+│  W5: Portfolio Analytics Engine                                    │
+│  ├─ NEW: paperpersist.EquityRecorder goroutine (every 5m)         │
+│  └─ NEW: paperpersist.DailyPnLArchiver goroutine (midnight UTC)   │
+│                                                                    │
+│  W6: Reconciliation Engine                                         │
+│  ├─ EXISTING: reconciliationv2/ (10s loop)                        │
+│  └─ ACTION: Add MongoDB↔memory reconciliation check               │
+│                                                                    │
+│  W7: Strategy Health Engine                                        │
+│  └─ NEW: paperpersist.StrategyHealthRecorder goroutine (15m)      │
+│                                                                    │
+│  W8: Persistence Engine                                            │
+│  ├─ NEW: paperpersist.TradeWriter goroutine (channel drain)       │
+│  ├─ NEW: paperpersist.OrderWriter goroutine (channel drain)       │
+│  └─ NEW: paperpersist.StateSnapshotter goroutine (10s)            │
+│                                                                    │
+│  W9: SSE Hub                                                       │
+│  └─ NEW: ssehub.Hub embedded in HTTP handler (per-client goroutine)│
+│                                                                    │
+│  MERGED WORKERS:                                                   │
+│  W2+W3 are tightly coupled (OMS called from strategy goroutine).  │
+│  W5+W7 share the trade journal — single goroutine pool is fine.   │
+│  Total: 5 logical background services + HTTP handlers.             │
+└────────────────────────────────────────────────────────────────────┘
+PART 10: RENDER DEPLOYMENT PLAN
+10.1 Current Render Configuration
+The Go engine runs on Render as a background worker (or web service). The main.go self-pings /health every 2 minutes to prevent sleep on hobby plan.
+
+10.2 Required Render Environment Variables (additions)
+
+# Add to existing Render service env vars:
+MONGODB_URI=<existing value>
+MONGODB_DB=loop_trades
+MONGO_PAPER_ACCOUNT_KEY=owner_admin
+ADMIN_API_KEY=<generate: openssl rand -hex 32>
+PAPER_SSE_ENABLED=true
+PAPER_PERSIST_INTERVAL_SEC=10
+PAPER_EQUITY_INTERVAL_MIN=5
+PAPER_STRATEGY_HEALTH_INTERVAL_MIN=15
+10.3 Render Service Configuration
+No new services are needed. The existing engine web service handles everything. Ensure:
+
+Service type: Web Service (not Background Worker) — must expose port for HTTP
+Health check path: /health
+Auto-deploy: On push to main (existing)
+Persistent disk: Not required (MongoDB is external state)
+10.4 CORS Configuration for SSE
+Add to Go HTTP server initialization in main.go:
+
+
+// Allow Vercel client to connect to SSE
+w.Header().Set("Access-Control-Allow-Origin", os.Getenv("CLIENT_ORIGIN"))
+w.Header().Set("Access-Control-Allow-Credentials", "true")
+Add env var on Render: CLIENT_ORIGIN=https://your-app.vercel.app
+
+PART 11: MIGRATION PLAN — PHASED
+Phase 31A — Backend Engine Foundation (Week 1, Days 1–3)
+Objective: Wire the existing Go paper OMS to write to MongoDB without changing any frontend behavior.
+
+Files to CREATE:
+
+
+engine/internal/paperpersist/
+  types.go          (60 lines)  — PaperTradeDoc, PaperStateDoc bson structs
+  writer.go         (120 lines) — TradeWriter: channel drain → MongoDB upsert
+  order_writer.go   (80 lines)  — OrderWriter: OMS order lifecycle → paper_orders
+  state_snapshotter.go (80 lines) — State snapshot every 10s → paper_state
+  equity_recorder.go (100 lines) — Equity curve every 5m + daily PnL archival
+  strategy_health.go (120 lines) — Strategy scores every 15m → strategy_scores
+  portfolio_metrics.go (80 lines) — Sharpe/Sortino/Calmar every 30m
+  mongo.go          (60 lines)  — MongoDB index creation on startup
+Files to MODIFY:
+
+
+engine/cmd/antigravity/main.go
+  — Add MongoDB paper DB initialization (lines ~68–85)
+  — Add channel declarations (lines ~85–95)
+  — Add paperpersist goroutine start (lines ~380–430)
+  — Add new HTTP handlers (lines ~430–470)
+  
+engine/internal/execution/paper_oms.go
+  — Add OnTradeClosed func field (line ~45)
+  — Call OnTradeClosed in closePosition() (line ~215)
+  — Add OnOrderUpdated func field
+  — Call OnOrderUpdated at each status transition
+
+engine/internal/trading/loop.go
+  — Inject sseHub reference into Orchestrator struct
+  — Call sseHub.Broadcast() in processCloseEvents() (~line 370)
+MongoDB Changes: Create all collections + indexes via paperpersist.EnsureIndexes(ctx, db)
+
+Testing:
+
+Start Go engine locally
+Watch paper_trades collection in MongoDB Compass — verify trades appear within seconds of close events
+Verify paper_state updates every 10s with correct balance
+Verify equity_curve gets a point every 5 minutes
+Run go test ./engine/internal/paperpersist/...
+Risk Assessment: LOW — additive only. Existing Node worker and browser continue operating in parallel. No writes are removed. Worst case: duplicate writes (idempotent by client_trade_id).
+
+Rollback: Remove paperpersist goroutine start from main.go. Zero impact on existing system.
+
+Phase 31B — OMS Migration (Week 1, Days 4–5)
+Objective: Make the Go OMS the canonical order recorder. Retire TypeScript paperOms.ts writes.
+
+Files to CREATE:
+
+
+engine/internal/paperpersist/order_writer.go
+  — Full OMS lifecycle writer (NEW→...→POSITION_CLOSED)
+  — Maps engine/internal/execution/paper_oms.go states to paper_orders schema
+Files to MODIFY:
+
+
+engine/internal/execution/paper_oms.go
+  — Emit OnOrderUpdated at each state transition:
+    markRiskChecked(), markRejected(), markAccepted(),
+    markSimulatedFill(), markPositionOpened(), markPositionClosed()
+API Changes:
+
+Add GET /api/paper/oms/orders and GET /api/paper/oms/summary to Go engine
+Keep Next.js /api/paper-oms/orders as proxy to Go
+Testing:
+
+Open a position — verify paper_orders doc progresses through all states
+Reject a position (risk gate block) — verify REJECTED status written with gate + reason
+Verify GET /api/paper/oms/summary returns correct counts
+Risk Assessment: LOW — additive. TypeScript OMS writer continues in parallel.
+
+Rollback: Remove OnOrderUpdated callbacks. Node worker/browser OMS writes continue.
+
+Phase 31C — Risk Engine Migration (Week 2, Days 1–2)
+Objective: Persist all risk decisions to risk_events collection. Validate risk gate data completeness.
+
+Files to CREATE:
+
+
+engine/internal/paperpersist/risk_writer.go
+  — Drains risk_events channel → risk_events collection
+Files to MODIFY:
+
+
+engine/internal/risk/gate/pipeline.go
+  — After each Check() decision, push to risk_events_chan
+  — Include: strategy_id, decision, block_reason, signal_score, 
+             proposed_size_btc, balance_at_check, daily_pnl_at_check
+Testing:
+
+Let engine run for 5 minutes
+Check risk_events collection — verify APPROVED and BLOCKED events
+Verify daily_pnl_at_check resets at midnight UTC
+Risk Assessment: MINIMAL — risk gate logic unchanged, only adds event emission.
+
+Phase 31D — Strategy Execution Migration (Week 2, Days 3–5)
+Objective: The Go engine's trading/loop.go becomes the only strategy execution path. Disable Node VPS worker. Add SSE hub.
+
+Files to CREATE:
+
+
+engine/internal/ssehub/hub.go          (120 lines)
+engine/internal/ssehub/hub_test.go     (60 lines)
+Files to MODIFY:
+
+
+engine/cmd/antigravity/main.go
+  — Initialize ssehub.Hub
+  — Register GET /api/stream/paper-state → sseHub.ServeHTTP
+  — Pass sseHub to Orchestrator
+  
+engine/internal/trading/loop.go (Orchestrator struct)
+  — Add SSEHub field
+  — In processCloseEvents(): call SSEHub.Broadcast("trade_closed", ...)
+  — In openPosition path: call SSEHub.Broadcast("position_opened", ...)
+  — In balance update: call SSEHub.Broadcast("balance_update", ...)
+Action on Node VPS worker: Stop the VPS worker process. Set DESK_WORKER_DISABLED=true in its environment. The Go engine now handles all execution.
+
+Testing:
+
+Open browser devtools → Network → /api/stream/paper-state — watch SSE events
+Confirm trades appear in MongoDB paper_trades within 500ms of Go engine close event
+Confirm paper_state shows correct balance after each trade
+Let engine run for 1 hour — verify no duplicate trades in MongoDB
+Restart Go engine — verify positions recovered from paper_positions collection on boot
+Risk Assessment: MEDIUM — Node worker is being stopped. If Go engine crashes, there is no fallback until restart. Mitigate: ensure Render restart policy is aggressive (max 2 restart attempts, <30s).
+
+Rollback: Restart Node worker. Set it as primary. Go engine continues writing to MongoDB in parallel (harmless — idempotent).
+
+Phase 31E — Realtime Synchronization (Week 3, Days 1–2)
+Objective: Frontend switches from polling to SSE. Position state comes from Go engine only.
+
+Files to CREATE:
+
+
+client/src/hooks/usePaperEngineSSE.ts  (80 lines)
+Files to MODIFY:
+
+
+client/src/hooks/usePaperOMSEngine.ts
+  — Remove: openPosition(), closePosition(), tick() methods
+  — Replace 5s polling with SSE subscription via usePaperEngineSSE
+  — State becomes read-only display
+
+client/src/app/api/paper-state/route.ts (GET handler)
+  — Proxy to Go /api/paper/state instead of direct MongoDB read
+  — Keeps existing response shape for backward compat
+
+client/src/app/api/paper-trades/route.ts (GET handler)
+  — Proxy to Go /api/paper/trades
+  — Keep pagination/filtering params
+Testing:
+
+Open two browser windows — both show identical state from SSE
+Trade closes on Go engine — both windows update within 1 second
+Close one browser window — other window continues updating
+Reload browser — state recovered from SSE (no browser state needed)
+Risk Assessment: LOW — frontend becomes passive. If SSE disconnects, browser reconnects automatically.
+
+Phase 31F — Frontend Simplification (Week 3, Days 3–5)
+Objective: Remove all trading execution code from frontend.
+
+Files to DELETE:
+
+
+client/src/hooks/useBTCFuturesScalperEngine.ts
+client/src/hooks/useMockTradingEngine.ts
+client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts
+client/src/lib/paperDeskWorker/workerLease.ts
+client/src/lib/paperDeskWorker/workerHelpers.ts
+client/src/lib/paperTradesSync.ts
+client/src/internal/positions/position_lifecycle.ts
+Files to MODIFY:
+
+
+client/src/app/api/cron/paper-desk-tick/route.ts
+  — Return 410 Gone
+
+client/src/app/api/paper-trades/route.ts
+  — Remove POST handler, return 410
+  — Keep GET as MongoDB read (backward compat for 30 days)
+
+client/src/app/api/paper-state/route.ts
+  — Remove POST handler, return 410
+  — Keep GET as proxy to Go
+
+client/vercel.json
+  — Remove cron entry for /api/cron/paper-desk-tick
+  — VERIFY total cron count ≤ 2 (hard limit)
+TypeScript check: Run full TS typecheck after deletions. Fix any import errors.
+
+Testing:
+
+Run npx tsc --noEmit — zero errors
+Load dashboard — all charts populated from Go engine via SSE
+Close browser for 30 minutes — reopen — see 30 minutes of trades that occurred without browser
+Risk Assessment: HIGH — irreversible deletion. Perform after 2 full weeks of Phase 31A–31E running in parallel to confirm Go engine is reliable.
+
+Rollback: Git revert. Deploy previous Vercel build.
+
+Phase 31G — Final Production Hardening (Week 4)
+Objective: Crash recovery, health monitoring, operational runbook.
+
+Files to CREATE:
+
+
+engine/internal/paperpersist/recovery.go
+  — On startup: load open positions from paper_positions collection
+  — Restore to position manager (preserves positions across Render deploy)
+  — Load balance from paper_state (not paper account constructor default)
+  
+engine/internal/paperpersist/health_checker.go
+  — Every 60s: verify last MongoDB write age < 30s
+  — If stale: log CRITICAL, attempt reconnect
+  — Emit /api/health degraded status
+Files to MODIFY:
+
+
+engine/cmd/antigravity/main.go
+  — On startup: call paperpersist.RestoreState(ctx, db, paperOMS)
+  — Restore balance: paperOMS.SetBalance(restoredState.BalanceUSD)
+  — Restore positions: for each pos in paper_positions, call paperOMS.RestorePosition(pos)
+  
+engine/internal/execution/paper_oms.go
+  — Add SetBalance(usd float64) method
+  — Add RestorePosition(PaperPosition) method
+  — Idempotency: skip restore if position_id already exists in memory
+Testing:
+
+Start engine, generate 10 trades, kill process mid-trade
+Restart engine — verify balance restored from paper_state
+Verify open positions from paper_positions are back in memory
+Let engine run for 5 minutes — verify new trades append correctly (no duplicate client_trade_ids)
+PART 12: ROLLBACK PLAN
+Rollback Trigger Conditions
+Go engine crashes more than 3 times in 1 hour
+MongoDB write lag > 60 seconds
+Balance divergence > $1 between Go memory and MongoDB
+Frontend shows stale data for > 5 minutes
+Rollback Procedure (by phase)
+Phases 31A–31C (additive only):
+
+Remove paperpersist goroutine start from main.go — deploy Go
+No frontend changes required
+Node worker and browser execution continue unaffected
+Phase 31D (Node worker stopped):
+
+Restart VPS Node worker process
+Set DESK_WORKER_DISABLED=false in Node worker env
+Deploy previous Go engine version (without SSE hub)
+Worker resumes ownership via lease acquisition
+Phase 31E–31F (frontend simplified):
+
+Git revert frontend commit: git revert <phase31f-commit>
+Deploy previous Vercel build (instant rollback)
+useBTCFuturesScalperEngine.ts restored, resumes operation
+Data Recovery:
+
+All trades written by Go engine in MongoDB have source: "go_engine" tag
+All trades written by Node worker have source: null or source: "node_worker"
+No data loss in any rollback scenario — all writes are idempotent upserts
+PART 13: SECURITY IMPACT ANALYSIS
+Current Security Surface (paper trading)
+POST /api/paper-trades — accepts accountKey in body, no strict auth
+POST /api/paper-state — same
+Cron secret in Authorization: Bearer header — CRON_SECRET
+Post-Migration Security Surface
+All paper writes removed from Next.js — attack surface for trade injection eliminated
+Go admin endpoints (/api/admin/paper/reset) require Authorization: Bearer <ADMIN_API_KEY> — ADMIN_API_KEY never exposed to browser, only set in Render env
+SSE endpoint (/api/stream/paper-state) — read-only, no auth required (paper trading data only)
+MongoDB — only Go engine writes; Next.js client has read-only connection if needed
+Security Improvements
+Issue	Current	After Phase 31
+Trade injection via POST /api/paper-trades	Possible (weak auth)	Impossible (route deleted)
+Balance manipulation via POST /api/paper-state	Possible	Impossible (route deleted)
+Multiple execution sources (state divergence)	3 sources	1 source (Go engine)
+Admin reset without auth	Weak CRON_SECRET	ADMIN_API_KEY required
+No Regressions
+Existing owner JWT auth for dashboard pages — unchanged
+Existing getAuthenticatedApiSession on all owner routes — unchanged
+MongoDB Atlas IP allowlist — unchanged
+PART 14: OPERATIONAL RUNBOOK
+Health Check Procedure
+
+# 1. Verify Go engine alive on Render
+curl https://your-engine.onrender.com/health
+# Expected: {"ok": true, "uptime": "3h42m", "strategies": 600, ...}
+
+# 2. Verify MongoDB paper_state freshness
+# In MongoDB Atlas Data Explorer:
+db.paper_state.findOne({account_key: "owner_admin"}, {updated_at: 1})
+# Expected: updated_at within last 15 seconds
+
+# 3. Verify trade flow (1 trade every N minutes is normal)
+db.paper_trades.find({source: "go_engine"}).sort({closed_at: -1}).limit(5)
+
+# 4. Verify equity curve recording
+db.equity_curve.find({account_key: "owner_admin"}).sort({recorded_at: -1}).limit(3)
+
+# 5. Check SSE stream
+curl -N https://your-engine.onrender.com/api/stream/paper-state
+# Expected: periodic "data: {...}" events and ": ping" every 30s
+Emergency Procedures
+Kill all trading immediately:
+
+
+curl -X POST https://your-engine.onrender.com/api/admin/kill \
+  -H "Authorization: Bearer $ADMIN_API_KEY"
+Reset paper account:
+
+
+curl -X POST https://your-engine.onrender.com/api/admin/paper/reset \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{"reason": "manual reset", "initial_balance": 1000000}'
+Check strategy health:
+
+
+curl https://your-engine.onrender.com/api/paper/strategy-scores | jq '.[] | select(.win_rate < 0.4)'
+Alerting Thresholds
+Metric	Warning	Critical	Action
+paper_state.updated_at age	>30s	>120s	Restart Go engine
+MongoDB write errors (logs)	1/min	5/min	Check Atlas connectivity
+Daily PnL loss	>$25K	>$45K	Kill switch triggers automatically
+Engine restarts	>2/hour	>5/hour	Investigate OOM or panic
+SSE clients connected	0	—	Normal (no browser open)
+PART 15: ESTIMATED IMPLEMENTATION EFFORT
+
+Phase 31A — Backend Foundation
+  engine/internal/paperpersist/ (7 files, ~700 lines Go)
+  Modifications to main.go + paper_oms.go + loop.go
+  Effort: 3 engineer-days
+  Tests: 2 engineer-days
+  Total: 5 days
+
+Phase 31B — OMS Migration
+  order_writer.go (~80 lines)
+  paper_oms.go state transition hooks
+  Effort: 1 engineer-day
+  Tests: 1 engineer-day
+  Total: 2 days
+
+Phase 31C — Risk Engine Persistence
+  risk_writer.go (~60 lines)
+  risk/gate/pipeline.go hook
+  Effort: 1 engineer-day
+  Tests: 0.5 engineer-days
+  Total: 1.5 days
+
+Phase 31D — Strategy Migration + SSE
+  engine/internal/ssehub/ (2 files, ~200 lines)
+  loop.go broadcast wiring
+  Node worker decommission
+  Effort: 2 engineer-days
+  Tests: 1.5 engineer-days
+  Total: 3.5 days
+
+Phase 31E — Realtime Frontend Sync
+  usePaperEngineSSE.ts (~80 lines TS)
+  usePaperOMSEngine.ts refactor
+  Next.js proxy route updates
+  Effort: 2 engineer-days
+  Tests: 1 engineer-day
+  Total: 3 days
+
+Phase 31F — Frontend Simplification
+  File deletions + TypeScript cleanup
+  vercel.json cron removal
+  Effort: 2 engineer-days
+  Tests: 1 engineer-day
+  Total: 3 days
+
+Phase 31G — Production Hardening
+  recovery.go (~100 lines)
+  health_checker.go (~60 lines)
+  paper_oms.go restore methods
+  Effort: 2 engineer-days
+  Tests: 2 engineer-days
+  Total: 4 days
+
+TOTAL ESTIMATE:
+  Implementation: ~13 engineer-days
+  Testing:        ~9 engineer-days
+  Total:          ~22 engineer-days (4.5 weeks, single engineer)
+                  ~12 calendar days (2 engineers in parallel)
+CRITICAL DEPENDENCY MAP
+
+Phase 31A ──────────────────────────────────────────────────────────────────┐
+  [Must complete before any other phase]                                     │
+  Establishes: MongoDB paper collections, persistence channels, Go→Mongo   │
+  writes running in parallel with existing Node worker                      │
+  ─────────────────────────────────────────────────────────────────────────┘
+  │
+  ├── Phase 31B ────────────────────────────────────────────────────────────┐
+  │   Depends on: 31A (paper_orders collection, OrderWriter channel)        │
+  │   Unblocks: 31E (OMS state readable from Go API)                       │
+  │   ──────────────────────────────────────────────────────────────────────┘
+  │
+  ├── Phase 31C ────────────────────────────────────────────────────────────┐
+  │   Depends on: 31A                                                        │
+  │   Can run parallel with 31B                                             │
+  │   ──────────────────────────────────────────────────────────────────────┘
+  │
+  └── Phase 31D ────────────────────────────────────────────────────────────┐
+      Depends on: 31A, 31B (verified MongoDB writes reliable for 1+ week)  │
+      GATES: Node worker must be verifiably idle before this phase          │
+      ─────────────────────────────────────────────────────────────────────┘
+      │
+      └── Phase 31E ────────────────────────────────────────────────────────┐
+          Depends on: 31D (SSE hub running on Go)                           │
+          ─────────────────────────────────────────────────────────────────┘
+          │
+          └── Phase 31F ─────────────────────────────────────────────────┐
+              Depends on: 31E running stably for 3+ days                  │
+              IRREVERSIBLE: file deletion                                  │
+              ──────────────────────────────────────────────────────────┘
+              │
+              └── Phase 31G ─────────────────────────────────────────┐
+                  Depends on: 31F complete                             │
+                  Crash recovery makes Render restarts safe           │
+                  ──────────────────────────────────────────────────┘
+APPENDIX: KEY FILE REFERENCE
+File	Phase	Action	Lines Affected
+engine/internal/paperpersist/writer.go	31A	CREATE	~120
+engine/internal/paperpersist/types.go	31A	CREATE	~80
+engine/internal/paperpersist/state_snapshotter.go	31A	CREATE	~80
+engine/internal/paperpersist/equity_recorder.go	31A	CREATE	~100
+engine/internal/paperpersist/strategy_health.go	31A	CREATE	~120
+engine/internal/paperpersist/mongo.go	31A	CREATE	~60
+engine/internal/paperpersist/order_writer.go	31B	CREATE	~80
+engine/internal/paperpersist/risk_writer.go	31C	CREATE	~60
+engine/internal/paperpersist/recovery.go	31G	CREATE	~100
+engine/internal/ssehub/hub.go	31D	CREATE	~120
+engine/cmd/antigravity/main.go	31A	MODIFY	lines ~68–470
+engine/internal/execution/paper_oms.go	31A	MODIFY	callbacks ~+20 lines
+engine/internal/trading/loop.go	31D	MODIFY	broadcast ~+15 lines
+engine/internal/risk/gate/pipeline.go	31C	MODIFY	event emit ~+10 lines
+client/src/hooks/usePaperOMSEngine.ts	31E	MODIFY	remove write methods
+client/src/hooks/usePaperEngineSSE.ts	31E	CREATE	~80 lines TS
+client/src/app/api/paper-trades/route.ts	31F	MODIFY	410 POST
+client/src/app/api/paper-state/route.ts	31F	MODIFY	410 POST
+client/src/app/api/cron/paper-desk-tick/route.ts	31F	MODIFY	410 whole
+client/src/hooks/useBTCFuturesScalperEngine.ts	31F	DELETE	170 KB
+client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts	31F	DELETE	900 lines
+client/src/lib/paperTradesSync.ts	31F	DELETE	all
+client/vercel.json	31F	MODIFY	remove cron entry
+FINAL NOTES
+The Go engine already has everything needed. The 600+ strategies are running, the PaperOMS is deterministic, the risk gate is active, the kill switch is wired. The only gap is that it does not write to the MongoDB collections the frontend reads, and the frontend does not know it should stop executing its own engine.
+
+The migration is fundamentally a plumbing job: connect the existing Go execution outputs to MongoDB persistence channels (Phase 31A), then shut down the competing execution paths (Phase 31D+), then clean up the frontend (Phase 31F).
+
+The total lines of new Go code is approximately 800 lines across 9 files — modest relative to the existing engine scale. The SSE hub is ~120 lines. The risk is low because every phase runs in parallel with the existing system before any existing code is removed.
+
+The result: paper trading runs 24/7 on Render with zero browser dependency, MongoDB as single source of truth, and the browser as a pure read layer.

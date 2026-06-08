@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/terminal";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import { useMockCandleBuilder } from "@/hooks/useMockCandleBuilder";
-import { useMockTradingEngine } from "@/hooks/useMockTradingEngine";
-import type { MockTradeLog } from "@/lib/mockTradingEngine";
+import { fetchOrders, fetchStrategyHealth, usePaperDesk } from "@/hooks/usePaperDesk";
 import { useMarketRegime } from "@/hooks/useMarketRegime";
-import { useStrategyScoring } from "@/hooks/useStrategyScoring";
+import type { PaperOrderDoc, PaperPositionDoc, StrategyScoreDoc } from "@/lib/paperDeskClient";
+
+const STARTING_BALANCE = 1_000_000;
 
 function fmtUsd(v: number, compact = false): string {
   if (!Number.isFinite(v)) return "—";
@@ -211,73 +212,132 @@ function StrategyRow({ rank, name, pnl, winRate, sharpe }: {
   );
 }
 
+function unrealizedPnlForPosition(pos: PaperPositionDoc, mark: number): number {
+  if (!Number.isFinite(mark) || mark <= 0) return 0;
+  const delta = pos.side === "SHORT" ? pos.entry_price - mark : mark - pos.entry_price;
+  return delta * pos.size;
+}
+
+function orderFeedMessage(order: PaperOrderDoc): string {
+  const side = order.side ? `${order.side} ` : "";
+  const strat = order.strategy_id ? `${order.strategy_id}: ` : "";
+  return `${strat}${side}${order.transition_to.replace(/_/g, " ").toLowerCase()}`;
+}
+
 export default function TerminalDashboard() {
   const live = useLiveBTCPrice();
-  const engine = useMockTradingEngine({ price: live.price, disablePolling: true });
+  const desk = usePaperDesk();
   const candles = useMockCandleBuilder(live.price);
   const regime = useMarketRegime({ candles: candles.snapshot, newCandleReady: candles.newCandleReady });
-  const scoring = useStrategyScoring({
-    trades: engine.trades,
-    currentRegime: regime.regime,
-    newCandleReady: candles.newCandleReady,
-    topNCount: 10,
-  });
+  const [strategyScores, setStrategyScores] = useState<StrategyScoreDoc[]>([]);
+  const [recentOrders, setRecentOrders] = useState<PaperOrderDoc[]>([]);
 
-  const acct = engine.account;
-  const analytics = engine.analytics;
+  useEffect(() => {
+    if (desk.connection !== "live") return;
+    let active = true;
+    void Promise.all([fetchStrategyHealth(), fetchOrders(40)])
+      .then(([health, orders]) => {
+        if (!active) return;
+        setStrategyScores(health.scores ?? []);
+        setRecentOrders(orders ?? []);
+      })
+      .catch(() => {
+        if (!active) return;
+      });
+    return () => {
+      active = false;
+    };
+  }, [desk.connection, desk.lastUpdated]);
+
+  const state = desk.state;
+  const stateBalance = (state as { balance?: number } | null)?.balance;
+  const equity = state?.equity ?? stateBalance ?? STARTING_BALANCE;
+  const realizedPnl = state?.realized_pnl ?? (stateBalance != null ? stateBalance - STARTING_BALANCE : 0);
+  const unrealizedPnl = state?.unrealized_pnl ?? 0;
+  const totalPnl = state?.realized_pnl != null || state?.unrealized_pnl != null
+    ? realizedPnl + unrealizedPnl
+    : equity - STARTING_BALANCE;
+  const winRate = state?.win_rate ?? 0;
+  const totalTrades = state?.total_trades ?? desk.recentTrades.length;
+  const openCount = state?.open_position_count ?? desk.openPositions.length;
+
+  const profitFactor = useMemo(() => {
+    const scored = strategyScores.filter((s) => s.sample_size > 0 && Number.isFinite(s.profit_factor));
+    if (scored.length === 0) return null;
+    return scored.reduce((sum, s) => sum + s.profit_factor, 0) / scored.length;
+  }, [strategyScores]);
+
+  const sharpeRatio = useMemo(() => {
+    const scored = strategyScores.filter((s) => s.sample_size > 0 && Number.isFinite(s.expectancy));
+    if (scored.length === 0) return null;
+    const mean = scored.reduce((sum, s) => sum + s.expectancy, 0) / scored.length;
+    const variance = scored.reduce((sum, s) => sum + (s.expectancy - mean) ** 2, 0) / scored.length;
+    const std = Math.sqrt(variance);
+    return std > 0 ? mean / std : null;
+  }, [strategyScores]);
 
   const connectionStatus = live.connected ? "live" as const : "offline" as const;
-  const persistenceStatus = engine.persistence.status === "mongo"
-    ? "mongo" as const
-    : engine.persistence.status === "hydrating"
-      ? "hydrating" as const
-      : "local" as const;
+  const persistenceStatus =
+    desk.connection === "live"
+      ? "mongo" as const
+      : desk.connection === "connecting"
+        ? "hydrating" as const
+        : "local" as const;
 
-  /* Strategy leaderboard — top 5 by PnL */
+  /* Strategy leaderboard — top 5 by realized PnL from engine scores */
   const strategyLeaderboard = useMemo(() => {
-    const byStrategy = new Map<number, {
-      name: string;
-      trades: number;
-      wins: number;
-      totalPnl: number;
-    }>();
+    if (strategyScores.length > 0) {
+      return strategyScores
+        .filter((s) => s.sample_size > 0)
+        .slice(0, 5)
+        .map((s) => ({
+          id: s.strategy_id,
+          name: s.strategy_id,
+          pnl: s.total_pnl,
+          winRate: s.win_rate,
+          sharpe: s.expectancy,
+        }));
+    }
 
-    for (const t of engine.trades) {
-      if (t.status !== "CLOSED") continue;
-      const existing = byStrategy.get(t.strategyId) ?? {
-        name: t.strategyName,
-        trades: 0,
-        wins: 0,
-        totalPnl: 0,
-      };
+    const byStrategy = new Map<string, { trades: number; wins: number; totalPnl: number }>();
+    for (const t of desk.recentTrades) {
+      const existing = byStrategy.get(t.strategy_id) ?? { trades: 0, wins: 0, totalPnl: 0 };
       existing.trades++;
-      existing.totalPnl += t.realizedPnl;
-      if (t.realizedPnl > 0) existing.wins++;
-      byStrategy.set(t.strategyId, existing);
+      existing.totalPnl += t.net_pnl;
+      if (t.net_pnl > 0) existing.wins++;
+      byStrategy.set(t.strategy_id, existing);
     }
 
     return [...byStrategy.entries()]
       .map(([id, d]) => ({
         id,
-        name: d.name,
+        name: id,
         pnl: d.totalPnl,
         winRate: d.trades > 0 ? d.wins / d.trades : 0,
-        trades: d.trades,
+        sharpe: null as number | null,
       }))
       .sort((a, b) => b.pnl - a.pnl)
       .slice(0, 5);
-  }, [engine.trades]);
+  }, [desk.recentTrades, strategyScores]);
 
-  /* Recent signals */
-  const recentSignals = useMemo(
-    () => engine.logs.slice(0, 8),
-    [engine.logs],
-  );
+  const recentSignals = useMemo(() => {
+    if (recentOrders.length > 0) {
+      return recentOrders.slice(0, 8).map((order) => ({
+        ts: order.transition_at || order.recorded_at,
+        message: orderFeedMessage(order),
+        transition: order.transition_to,
+      }));
+    }
+    return desk.recentTrades.slice(0, 8).map((trade) => ({
+      ts: trade.closed_at || trade.exit_at,
+      message: `${trade.strategy_id} ${trade.side} closed ${trade.exit_reason} ${fmtUsd(trade.net_pnl)}`,
+      transition: trade.net_pnl >= 0 ? "POSITION_CLOSED_WIN" : "POSITION_CLOSED_LOSS",
+    }));
+  }, [desk.recentTrades, recentOrders]);
 
-  /* Open positions */
   const openPositions = useMemo(
-    () => engine.trades.filter((t) => t.status === "OPEN").slice(0, 5),
-    [engine.trades],
+    () => desk.openPositions.slice(0, 5),
+    [desk.openPositions],
   );
 
   return (
@@ -285,10 +345,10 @@ export default function TerminalDashboard() {
       btcPrice={live.price}
       btcChange24h={live.change24h}
       regime={regime.regime}
-      dailyPnl={analytics.totalPnl}
-      totalPnl={analytics.totalPnl}
-      equity={acct.equity}
-      openPositions={acct.openCount}
+      dailyPnl={totalPnl}
+      totalPnl={totalPnl}
+      equity={equity}
+      openPositions={openCount}
       connectionStatus={connectionStatus}
       persistenceStatus={persistenceStatus}
       pageTitle="Dashboard"
@@ -317,47 +377,47 @@ export default function TerminalDashboard() {
         <div className="kpi-grid">
           <KpiCard
             label="Account Equity"
-            value={`$${(acct.equity / 1_000_000).toFixed(3)}M`}
+            value={`$${(equity / 1_000_000).toFixed(3)}M`}
             variant="accent"
-            sub={`Started: $${(acct.startingBalance / 1_000_000).toFixed(1)}M`}
+            sub={`Started: $${(STARTING_BALANCE / 1_000_000).toFixed(1)}M`}
           />
           <KpiCard
             label="Total PnL"
-            value={fmtUsd(analytics.totalPnl, true)}
-            variant={analytics.totalPnl >= 0 ? "positive" : "negative"}
-            change={fmtPct(acct.equity > 0 ? analytics.totalPnl / acct.startingBalance : 0)}
+            value={fmtUsd(totalPnl, true)}
+            variant={totalPnl >= 0 ? "positive" : "negative"}
+            change={fmtPct(totalPnl / STARTING_BALANCE)}
           />
           <KpiCard
             label="Realized PnL"
-            value={fmtUsd(analytics.realizedPnl, true)}
-            variant={analytics.realizedPnl >= 0 ? "positive" : "negative"}
+            value={fmtUsd(realizedPnl, true)}
+            variant={realizedPnl >= 0 ? "positive" : "negative"}
           />
           <KpiCard
             label="Unrealized PnL"
-            value={fmtUsd(analytics.unrealizedPnl, true)}
-            variant={analytics.unrealizedPnl >= 0 ? "positive" : "negative"}
+            value={fmtUsd(unrealizedPnl, true)}
+            variant={unrealizedPnl >= 0 ? "positive" : "negative"}
           />
           <KpiCard
             label="Win Rate"
-            value={fmtPct(analytics.winRate)}
-            variant={analytics.winRate >= 0.5 ? "positive" : "negative"}
-            sub={`${analytics.totalTrades} total trades`}
+            value={fmtPct(winRate)}
+            variant={winRate >= 0.5 ? "positive" : "negative"}
+            sub={`${totalTrades} total trades`}
           />
           <KpiCard
             label="Profit Factor"
-            value={analytics.profitFactor != null ? analytics.profitFactor.toFixed(2) : "—"}
-            variant={analytics.profitFactor != null && analytics.profitFactor >= 1.2 ? "positive" : "default"}
+            value={profitFactor != null ? profitFactor.toFixed(2) : "—"}
+            variant={profitFactor != null && profitFactor >= 1.2 ? "positive" : "default"}
           />
           <KpiCard
             label="Sharpe Ratio"
-            value={analytics.sharpeRatio != null ? analytics.sharpeRatio.toFixed(2) : "—"}
-            variant={analytics.sharpeRatio != null && analytics.sharpeRatio >= 1 ? "positive" : "default"}
+            value={sharpeRatio != null ? sharpeRatio.toFixed(2) : "—"}
+            variant={sharpeRatio != null && sharpeRatio >= 1 ? "positive" : "default"}
           />
           <KpiCard
             label="Open Positions"
-            value={`${acct.openCount}`}
-            variant={acct.openCount > 0 ? "info" : "default"}
-            sub={`Max: ${engine.config.maxOpenMockTrades}`}
+            value={`${openCount}`}
+            variant={openCount > 0 ? "info" : "default"}
+            sub={desk.connection === "unauthorized" ? "Sign in to load desk data" : "Paper Desk live feed"}
           />
           <KpiCard
             label="BTC Price"
@@ -381,7 +441,11 @@ export default function TerminalDashboard() {
             title="Strategy Leaderboard"
             subtitle="Top performers by realized PnL"
           />
-          {strategyLeaderboard.length === 0 ? (
+          {desk.connection === "unauthorized" ? (
+            <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
+              Sign in to load Paper Desk trade history
+            </div>
+          ) : strategyLeaderboard.length === 0 ? (
             <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
               No closed trades yet
             </div>
@@ -406,12 +470,12 @@ export default function TerminalDashboard() {
               </div>
               {strategyLeaderboard.map((s, i) => (
                 <StrategyRow
-                  key={s.id}
+                  key={String(s.id)}
                   rank={i + 1}
                   name={s.name}
                   pnl={s.pnl}
                   winRate={s.winRate}
-                  sharpe={null}
+                  sharpe={s.sharpe ?? null}
                 />
               ))}
             </>
@@ -426,20 +490,30 @@ export default function TerminalDashboard() {
             actions={<LiveBadge />}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {recentSignals.length === 0 ? (
+            {desk.connection === "unauthorized" ? (
               <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
-                No signals yet — waiting for price feed
+                Sign in to load Paper Desk OMS events
+              </div>
+            ) : recentSignals.length === 0 ? (
+              <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
+                No engine events yet — waiting for Paper Desk activity
               </div>
             ) : (
-              recentSignals.map((entry: MockTradeLog, i: number) => {
-                const isCreated = entry.event === "MOCK_TRADE_CREATED";
-                const isTP = entry.event === "MOCK_TRADE_TP_HIT";
-                const isSL = entry.event === "MOCK_TRADE_SL_HIT";
-                const isRejected = entry.event === "MOCK_TRADE_REJECTED" || entry.event === "MOCK_TRADE_LIMIT_REACHED";
+              recentSignals.map((entry, i) => {
+                const transition = entry.transition.toUpperCase();
+                const isPositive =
+                  transition.includes("OPENED") ||
+                  transition.includes("FILL") ||
+                  transition.includes("ACCEPTED") ||
+                  transition.includes("WIN");
+                const isNegative =
+                  transition.includes("REJECTED") ||
+                  transition.includes("CANCELLED") ||
+                  transition.includes("LOSS");
 
-                const dotColor = isCreated || isTP
+                const dotColor = isPositive
                   ? "var(--green)"
-                  : isSL || isRejected
+                  : isNegative
                     ? "var(--red)"
                     : "var(--text-muted)";
 
@@ -498,8 +572,8 @@ export default function TerminalDashboard() {
             />
             <StatusRow
               label="Database"
-              value={engine.persistence.status === "mongo" ? "Mongo" : engine.persistence.status === "hydrating" ? "Syncing" : "Local"}
-              status={engine.persistence.status === "mongo" ? "ok" : engine.persistence.status === "hydrating" ? "info" : "warn"}
+              value={persistenceStatus === "mongo" ? "Mongo" : persistenceStatus === "hydrating" ? "Syncing" : "Local"}
+              status={persistenceStatus === "mongo" ? "ok" : persistenceStatus === "hydrating" ? "info" : "warn"}
             />
             <StatusRow
               label="Market Regime"
@@ -513,8 +587,8 @@ export default function TerminalDashboard() {
             />
             <StatusRow
               label="Active Strategies"
-              value={`${scoring.scores.length}`}
-              status={scoring.scores.length > 0 ? "ok" : "warn"}
+              value={`${desk.healthSummary?.total ?? strategyScores.length}`}
+              status={(desk.healthSummary?.total ?? strategyScores.length) > 0 ? "ok" : "warn"}
             />
           </div>
 
@@ -535,20 +609,20 @@ export default function TerminalDashboard() {
           {/* Trade Analytics */}
           <div className="terminal-card" style={{ padding: "16px 18px" }}>
             <SectionHeader title="Trade Analytics" />
-            <StatusRow label="Total Trades" value={`${analytics.totalTrades}`} />
-            <StatusRow label="Open"   value={`${analytics.openTrades}`}   status={analytics.openTrades > 0 ? "info" : "ok"} />
-            <StatusRow label="Closed" value={`${analytics.closedTrades}`} />
-            <StatusRow label="TP Wins"  value={`${analytics.takeProfitWins}`}  status="ok" />
-            <StatusRow label="SL Losses" value={`${analytics.stopLossLosses}`} status={analytics.stopLossLosses > 0 ? "warn" : "ok"} />
+            <StatusRow label="Total Trades" value={`${totalTrades}`} />
+            <StatusRow label="Open" value={`${openCount}`} status={openCount > 0 ? "info" : "ok"} />
+            <StatusRow label="Closed" value={`${Math.max(0, totalTrades - openCount)}`} />
+            <StatusRow label="Wins" value={`${state?.winning_trades ?? 0}`} status="ok" />
+            <StatusRow label="Losses" value={`${state?.losing_trades ?? 0}`} status={(state?.losing_trades ?? 0) > 0 ? "warn" : "ok"} />
             <StatusRow
-              label="Avg Win"
-              value={fmtUsd(analytics.averageWin, true)}
-              status="ok"
+              label="Total Fees"
+              value={fmtUsd(state?.total_fees ?? 0, true)}
+              status="warn"
             />
             <StatusRow
-              label="Avg Loss"
-              value={fmtUsd(analytics.averageLoss, true)}
-              status="error"
+              label="Max Drawdown"
+              value={fmtPct(state?.max_drawdown ?? 0)}
+              status={(state?.max_drawdown ?? 0) > 0 ? "error" : "ok"}
             />
           </div>
         </div>
@@ -559,7 +633,7 @@ export default function TerminalDashboard() {
         <div className="terminal-card" style={{ padding: "16px 18px", marginTop: 12 }}>
           <SectionHeader
             title="Open Positions"
-            subtitle={`${acct.openCount} active · ${fmtUsd(analytics.unrealizedPnl, true)} unrealized`}
+            subtitle={`${openCount} active · ${fmtUsd(unrealizedPnl, true)} unrealized`}
           />
           <div style={{ overflowX: "auto" }}>
             <table className="raig-table">
@@ -572,23 +646,25 @@ export default function TerminalDashboard() {
               </thead>
               <tbody>
                 {openPositions.map((t) => {
-                  const pnlColor = t.unrealizedPnl > 0
+                  const markPnl = unrealizedPnlForPosition(t, live.price);
+                  const pnlColor = markPnl > 0
                     ? "var(--green)"
-                    : t.unrealizedPnl < 0
+                    : markPnl < 0
                       ? "var(--red)"
                       : "var(--text-muted)";
-                  const ageMs = Date.now() - t.openedAt;
+                  const openedAt = new Date(t.opened_at).getTime();
+                  const ageMs = Number.isFinite(openedAt) ? Date.now() - openedAt : 0;
                   const ageMin = Math.floor(ageMs / 60_000);
                   const ageStr = ageMin < 60
                     ? `${ageMin}m`
                     : `${Math.floor(ageMin / 60)}h ${ageMin % 60}m`;
 
                   return (
-                    <tr key={t.id}>
-                      <td>{t.strategyName}</td>
+                    <tr key={t.position_id}>
+                      <td>{t.strategy_id}</td>
                       <td>
                         <span style={{
-                          color: t.side === "BUY" ? "var(--green)" : "var(--red)",
+                          color: t.side === "LONG" ? "var(--green)" : "var(--red)",
                           fontWeight: 700,
                           fontSize: 11,
                           letterSpacing: "0.04em",
@@ -597,16 +673,16 @@ export default function TerminalDashboard() {
                         </span>
                       </td>
                       <td style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                        ${t.entryPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ${t.entry_price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", color: pnlColor, fontWeight: 700 }}>
-                        {t.unrealizedPnl >= 0 ? "+" : ""}${Math.abs(t.unrealizedPnl).toFixed(2)}
+                        {markPnl >= 0 ? "+" : ""}${Math.abs(markPnl).toFixed(2)}
                       </td>
                       <td style={{ fontFamily: "var(--font-mono)", color: "var(--green)", fontSize: 11 }}>
-                        +${t.takeProfitUsd.toFixed(2)}
+                        {t.take_profit ? `$${t.take_profit.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
                       </td>
                       <td style={{ fontFamily: "var(--font-mono)", color: "var(--red)", fontSize: 11 }}>
-                        -${t.stopLossUsd.toFixed(2)}
+                        {t.stop_loss ? `$${t.stop_loss.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
                       </td>
                       <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)", fontSize: 11 }}>
                         {ageStr}
