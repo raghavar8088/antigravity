@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isNavItemActive, isPaperDeskRoute, paperDeskHref } from "@/lib/navRoutes";
 
 type NavItem = {
   href: string;
@@ -9,6 +10,7 @@ type NavItem = {
   icon: React.ReactNode;
   badge?: string | number;
   exactMatch?: boolean;
+  routeMatcher?: (pathname: string) => boolean;
 };
 
 type NavSection = {
@@ -32,6 +34,16 @@ function IconTrade() {
     <svg className="sidebar-nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="1,11 5,7 8,10 15,3" />
       <polyline points="11,3 15,3 15,7" />
+    </svg>
+  );
+}
+
+function IconExecution() {
+  return (
+    <svg className="sidebar-nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <path d="M4.5 6.5h7M4.5 9.5h4.5" />
+      <path d="M11.5 9.5l1.5 1.5 2.5-3.5" />
     </svg>
   );
 }
@@ -140,6 +152,12 @@ const NAV_SECTIONS: NavSection[] = [
         icon: <IconTrade />,
       },
       {
+        href: paperDeskHref(),
+        label: "Paper Desk",
+        icon: <IconExecution />,
+        routeMatcher: isPaperDeskRoute,
+      },
+      {
         href: "/terminal",
         label: "Terminal V2",
         icon: <IconBTC />,
@@ -180,7 +198,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "Execution & Logs",
     items: [
       {
-        href: "/mock-trading",
+        href: paperDeskHref("trades"),
         label: "Trade History",
         icon: <IconHistory />,
       },
@@ -206,18 +224,25 @@ const NAV_SECTIONS: NavSection[] = [
 type SidebarProps = {
   liveConnected?: boolean;
   openPositions?: number;
+  paperDeskOpenPositions?: number;
+  mobileOpen?: boolean;
+  onNavigate?: () => void;
 };
 
-export function Sidebar({ liveConnected = false, openPositions }: SidebarProps) {
+export function Sidebar({
+  liveConnected = false,
+  openPositions,
+  paperDeskOpenPositions,
+  mobileOpen = false,
+  onNavigate,
+}: SidebarProps) {
   const pathname = usePathname();
 
-  function isActive(item: NavItem): boolean {
-    if (item.exactMatch) return pathname === item.href;
-    return pathname === item.href || pathname.startsWith(item.href + "/");
-  }
-
   return (
-    <nav className="terminal-sidebar" aria-label="Main navigation">
+    <nav
+      className={`terminal-sidebar${mobileOpen ? " terminal-sidebar--mobile-open" : ""}`}
+      aria-label="Main navigation"
+    >
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon" aria-hidden="true">₿</div>
@@ -235,13 +260,14 @@ export function Sidebar({ liveConnected = false, openPositions }: SidebarProps) 
               <div className="sidebar-section-label">{section.label}</div>
             )}
             {section.items.map((item) => {
-              const active = isActive(item);
+              const active = isNavItemActive(pathname, item);
               return (
                 <Link
                   key={`${item.href}-${item.label}`}
                   href={item.href}
                   className={`sidebar-nav-item${active ? " active" : ""}`}
                   aria-current={active ? "page" : undefined}
+                  onClick={onNavigate}
                 >
                   {item.icon}
                   <span>{item.label}</span>
@@ -250,6 +276,9 @@ export function Sidebar({ liveConnected = false, openPositions }: SidebarProps) 
                   )}
                   {item.label === "Mock Trading" && openPositions != null && openPositions > 0 && (
                     <span className="sidebar-nav-badge">{openPositions}</span>
+                  )}
+                  {item.label === "Paper Desk" && paperDeskOpenPositions != null && paperDeskOpenPositions > 0 && (
+                    <span className="sidebar-nav-badge">{paperDeskOpenPositions}</span>
                   )}
                 </Link>
               );

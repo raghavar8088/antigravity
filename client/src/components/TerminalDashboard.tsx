@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/terminal";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import { useMockCandleBuilder } from "@/hooks/useMockCandleBuilder";
 import { fetchOrders, fetchStrategyHealth, usePaperDesk } from "@/hooks/usePaperDesk";
 import { useMarketRegime } from "@/hooks/useMarketRegime";
+import { paperDeskHref } from "@/lib/navRoutes";
 import type { PaperOrderDoc, PaperPositionDoc, StrategyScoreDoc } from "@/lib/paperDeskClient";
 
 const STARTING_BALANCE = 1_000_000;
@@ -34,7 +36,7 @@ type KpiCardProps = {
   value: string;
   change?: string;
   variant?: "default" | "positive" | "negative" | "accent" | "info";
-  sub?: string;
+  sub?: React.ReactNode;
 };
 
 function KpiCard({ label, value, change, variant = "default", sub }: KpiCardProps) {
@@ -117,6 +119,31 @@ function LiveBadge() {
       }} />
       LIVE
     </span>
+  );
+}
+
+function PaperDeskLink({
+  tab,
+  children,
+  style,
+}: {
+  tab?: "positions" | "trades" | "orders" | "equity" | "strategies";
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <Link
+      href={paperDeskHref(tab)}
+      style={{
+        color: "var(--accent)",
+        textDecoration: "none",
+        fontSize: 11,
+        fontWeight: 600,
+        ...style,
+      }}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -349,6 +376,7 @@ export default function TerminalDashboard() {
       totalPnl={totalPnl}
       equity={equity}
       openPositions={openCount}
+      paperDeskOpenPositions={openCount}
       connectionStatus={connectionStatus}
       persistenceStatus={persistenceStatus}
       pageTitle="Dashboard"
@@ -417,7 +445,13 @@ export default function TerminalDashboard() {
             label="Open Positions"
             value={`${openCount}`}
             variant={openCount > 0 ? "info" : "default"}
-            sub={desk.connection === "unauthorized" ? "Sign in to load desk data" : "Paper Desk live feed"}
+            sub={
+              desk.connection === "unauthorized"
+                ? "Sign in to load desk data"
+                : (
+                  <PaperDeskLink tab="positions">Paper Desk live feed →</PaperDeskLink>
+                )
+            }
           />
           <KpiCard
             label="BTC Price"
@@ -440,6 +474,9 @@ export default function TerminalDashboard() {
           <SectionHeader
             title="Strategy Leaderboard"
             subtitle="Top performers by realized PnL"
+            actions={desk.connection !== "unauthorized" ? (
+              <PaperDeskLink tab="trades">View trade history →</PaperDeskLink>
+            ) : undefined}
           />
           {desk.connection === "unauthorized" ? (
             <div style={{ color: "var(--text-muted)", fontSize: 12, padding: "20px 0", textAlign: "center" }}>
@@ -487,7 +524,16 @@ export default function TerminalDashboard() {
           <SectionHeader
             title="Signal Feed"
             subtitle="Latest engine events"
-            actions={<LiveBadge />}
+            actions={
+              desk.connection !== "unauthorized" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <PaperDeskLink tab="orders">OMS log →</PaperDeskLink>
+                  <LiveBadge />
+                </div>
+              ) : (
+                <LiveBadge />
+              )
+            }
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {desk.connection === "unauthorized" ? (
@@ -634,6 +680,7 @@ export default function TerminalDashboard() {
           <SectionHeader
             title="Open Positions"
             subtitle={`${openCount} active · ${fmtUsd(unrealizedPnl, true)} unrealized`}
+            actions={<PaperDeskLink tab="positions">View all in Paper Desk →</PaperDeskLink>}
           />
           <div style={{ overflowX: "auto" }}>
             <table className="raig-table">

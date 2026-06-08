@@ -1,19 +1,7 @@
 "use client";
 
-/**
- * PaperDeskDashboard — primary trading dashboard backed by the Go Engine's
- * MongoDB paper-trading collections (paper_state, paper_trades, paper_positions,
- * paper_orders, equity_curve, daily_pnl_history, strategy_scores, strategy_health).
- *
- * This is a READ-ONLY view of the engine's authoritative state. It does NOT
- * touch the separate browser-simulation Mock Trading Dashboard or its
- * mock_* collections.
- *
- * Live feed: usePaperDesk polls /api/paper-desk/snapshot every 5s. Detail tabs
- * lazily fetch their own collection on first open.
- */
-
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   usePaperDesk,
   fetchTradesPage,
@@ -22,6 +10,9 @@ import {
   fetchStrategyHealth,
   type TradesPage,
 } from "@/hooks/usePaperDesk";
+import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
+import { AppShell } from "@/components/terminal";
+import { isPaperDeskTabKey, paperDeskHref, type PaperDeskTabKey } from "@/lib/navRoutes";
 import type {
   PaperTradeDoc,
   PaperPositionDoc,
@@ -31,7 +22,7 @@ import type {
   StrategyScoreDoc,
   StrategyHealthDoc,
 } from "@/lib/paperDeskClient";
-import { DeskShell } from "@/components/desk/ui/DeskShell";
+import { DeskLinearProgress } from "@/components/desk/ui/DeskLinearProgress";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskMetricTile } from "@/components/desk/ui/DeskMetricTile";
 import { DeskSectionHeader } from "@/components/desk/ui/DeskSectionHeader";
@@ -137,7 +128,7 @@ function EquitySparkline({ points }: { points: EquityCurveDoc[] }) {
 
 // ── Tab keys ────────────────────────────────────────────────────────────────
 
-type TabKey = "positions" | "trades" | "orders" | "equity" | "strategies";
+type TabKey = PaperDeskTabKey;
 
 const TABS: DeskTabItem<TabKey>[] = [
   { key: "positions", label: "Open Positions" },
@@ -150,8 +141,26 @@ const TABS: DeskTabItem<TabKey>[] = [
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function PaperDeskDashboard() {
+  const live = useLiveBTCPrice();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const { state, openPositions, recentTrades, healthSummary, connection, lastUpdated, refresh } = usePaperDesk();
-  const [tab, setTab] = useState<TabKey>("positions");
+  const [tab, setTab] = useState<TabKey>(() => (isPaperDeskTabKey(tabParam) ? tabParam : "positions"));
+
+  useEffect(() => {
+    if (isPaperDeskTabKey(tabParam)) {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
+
+  const handleTabChange = useCallback(
+    (next: TabKey) => {
+      setTab(next);
+      router.replace(paperDeskHref(next), { scroll: false });
+    },
+    [router],
+  );
 
   const status: DeskEngineStatus =
     connection === "live" ? "live" : connection === "stale" ? "syncing" : connection === "unauthorized" ? "cloud-off" : "degraded";
@@ -160,9 +169,38 @@ export default function PaperDeskDashboard() {
   const balance = state?.balance ?? 0;
   const realized = state?.realized_pnl ?? 0;
   const unrealized = state?.unrealized_pnl ?? 0;
+  const openCount = state?.open_position_count ?? openPositions.length;
+
+  const connectionStatus =
+    connection === "live"
+      ? "live" as const
+      : connection === "connecting" || connection === "stale"
+        ? "reconnecting" as const
+        : "offline" as const;
+
+  const persistenceStatus =
+    connection === "live"
+      ? "mongo" as const
+      : connection === "connecting"
+        ? "hydrating" as const
+        : "local" as const;
 
   return (
-    <DeskShell loading={connection === "connecting"}>
+    <AppShell
+      btcPrice={live.price}
+      btcChange24h={live.change24h}
+      totalPnl={realized + unrealized}
+      equity={equity}
+      openPositions={openCount}
+      paperDeskOpenPositions={openCount}
+      activeStrategies={healthSummary?.total}
+      connectionStatus={connectionStatus}
+      persistenceStatus={persistenceStatus}
+      systemStatus={connection === "error" ? "degraded" : "nominal"}
+      dataFeedStatus={live.connected ? "synced" : "stale"}
+      pageTitle="Paper Desk"
+    >
+      <DeskLinearProgress visible={connection === "connecting"} />
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--desk-space-5)" }}>
         {/* Header */}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -244,7 +282,7 @@ export default function PaperDeskDashboard() {
 
             {/* Tabbed detail */}
             <DeskCard>
-              <DeskTabs items={TABS} active={tab} onChange={setTab} variant="primary" />
+              <DeskTabs items={TABS} active={tab} onChange={handleTabChange} variant="primary" />
               <div style={{ marginTop: "var(--desk-space-4)" }}>
                 {tab === "positions" && <PositionsPanel positions={openPositions} />}
                 {tab === "trades" && <TradesPanel recentTrades={recentTrades} />}
@@ -256,13 +294,13 @@ export default function PaperDeskDashboard() {
           </>
         )}
       </div>
-    </DeskShell>
+    </AppShell>
   );
 }
 
 // ── Positions panel ─────────────────────────────────────────────────────────
 
-function PositionsPanel({ positions }: { positions: PaperPositionDoc[] }) {
+const PositionsPanel = memo(function PositionsPanel({ positions }: { positions: PaperPositionDoc[] }) {
   const columns: DeskColumn<PaperPositionDoc>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span title={r.strategy_id}>{r.strategy_id}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol },
@@ -282,11 +320,11 @@ function PositionsPanel({ positions }: { positions: PaperPositionDoc[] }) {
       empty={<DeskEmptyState title="No open positions" subtitle="Positions opened by the engine appear here in real time." />}
     />
   );
-}
+});
 
 // ── Trades panel (recent live + paginated history) ──────────────────────────
 
-function TradesPanel({ recentTrades }: { recentTrades: PaperTradeDoc[] }) {
+const TradesPanel = memo(function TradesPanel({ recentTrades }: { recentTrades: PaperTradeDoc[] }) {
   const [page, setPage] = useState<TradesPage | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -369,11 +407,11 @@ function TradesPanel({ recentTrades }: { recentTrades: PaperTradeDoc[] }) {
       ) : null}
     </div>
   );
-}
+});
 
 // ── OMS Orders panel ────────────────────────────────────────────────────────
 
-function OrdersPanel() {
+const OrdersPanel = memo(function OrdersPanel() {
   const [orders, setOrders] = useState<PaperOrderDoc[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -432,11 +470,11 @@ function OrdersPanel() {
       empty={<DeskEmptyState title="No OMS transitions yet" subtitle="The order state machine logs every NEW→…→POSITION_CLOSED step here." />}
     />
   );
-}
+});
 
 // ── Equity panel ────────────────────────────────────────────────────────────
 
-function EquityPanel() {
+const EquityPanel = memo(function EquityPanel() {
   const [curve, setCurve] = useState<EquityCurveDoc[]>([]);
   const [daily, setDaily] = useState<DailyPnLDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -481,11 +519,11 @@ function EquityPanel() {
       </div>
     </div>
   );
-}
+});
 
 // ── Strategies panel ────────────────────────────────────────────────────────
 
-function StrategiesPanel() {
+const StrategiesPanel = memo(function StrategiesPanel() {
   const [scores, setScores] = useState<StrategyScoreDoc[]>([]);
   const [health, setHealth] = useState<StrategyHealthDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -559,4 +597,4 @@ function StrategiesPanel() {
       )}
     </div>
   );
-}
+});

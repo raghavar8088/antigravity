@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { isPaperDeskRoute } from "@/lib/navRoutes";
 
 type Regime = string | null | undefined;
 
@@ -22,11 +23,14 @@ type TopBarProps = {
   researchStatus?: "active" | "idle" | "paused";
   dataFeedStatus?: "synced" | "delayed" | "stale";
   title?: string;
+  onMenuToggle?: () => void;
+  menuOpen?: boolean;
 };
 
 const PAGE_TITLES: Record<string, string> = {
   "/":                   "Dashboard",
   "/mock-trading":       "Mock Trading",
+  "/paper-desk":         "Paper Desk",
   "/btc-future-trading": "BTC Futures",
 };
 
@@ -111,14 +115,29 @@ export function TopBar({
   researchStatus = "idle",
   dataFeedStatus = "synced",
   title,
+  onMenuToggle,
+  menuOpen = false,
 }: TopBarProps) {
   const pathname = usePathname();
-  const pageTitle = title ?? PAGE_TITLES[pathname] ?? "Terminal";
+  const pageTitle = title ?? (isPaperDeskRoute(pathname) ? "Paper Desk" : PAGE_TITLES[pathname]) ?? "Terminal";
   const isLive = connectionStatus === "live";
   const isReconnecting = connectionStatus === "reconnecting";
 
   return (
     <header className="terminal-topbar" role="banner">
+      {onMenuToggle ? (
+        <button
+          type="button"
+          className="topbar-menu-button"
+          aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={menuOpen}
+          onClick={onMenuToggle}
+        >
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </button>
+      ) : null}
       {/* Page title */}
       <div className="topbar-section">
         <span style={{

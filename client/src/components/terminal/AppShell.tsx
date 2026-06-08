@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -24,6 +25,8 @@ type AppShellProps = {
   equity?: number;
   /** Number of open positions */
   openPositions?: number;
+  /** Paper Desk open positions (sidebar badge) */
+  paperDeskOpenPositions?: number;
   /** Number of active strategies */
   activeStrategies?: number;
   /** WebSocket connection status */
@@ -53,6 +56,7 @@ export function AppShell({
   totalPnl,
   equity,
   openPositions,
+  paperDeskOpenPositions,
   activeStrategies,
   connectionStatus = "offline",
   persistenceStatus,
@@ -62,11 +66,29 @@ export function AppShell({
   dataFeedStatus,
   pageTitle,
 }: AppShellProps) {
+  const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   return (
     <div className="terminal-shell">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="sidebar-mobile-backdrop"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
       <Sidebar
         liveConnected={connectionStatus === "live"}
         openPositions={openPositions}
+        paperDeskOpenPositions={paperDeskOpenPositions}
+        mobileOpen={mobileNavOpen}
+        onNavigate={() => setMobileNavOpen(false)}
       />
 
       <div className="terminal-main">
@@ -88,6 +110,8 @@ export function AppShell({
           researchStatus={researchStatus}
           dataFeedStatus={dataFeedStatus}
           title={pageTitle}
+          onMenuToggle={() => setMobileNavOpen((open) => !open)}
+          menuOpen={mobileNavOpen}
         />
 
         <main className="terminal-content">
