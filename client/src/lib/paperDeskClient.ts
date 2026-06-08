@@ -98,6 +98,23 @@ export type PaperPositionDoc = {
   exit_reason?: string;
 };
 
+export function normalizePaperPositionSide(side: string): "LONG" | "SHORT" {
+  const s = side.trim().toUpperCase();
+  return s === "SHORT" || s === "SELL" ? "SHORT" : "LONG";
+}
+
+/** Mark-to-market unrealized PnL for an open position (size in BTC). */
+export function unrealizedPnlForOpenPosition(
+  pos: Pick<PaperPositionDoc, "side" | "entry_price" | "size">,
+  markPrice: number,
+): number {
+  if (!Number.isFinite(markPrice) || markPrice <= 0) return 0;
+  if (!Number.isFinite(pos.entry_price) || !Number.isFinite(pos.size)) return 0;
+  const side = normalizePaperPositionSide(pos.side);
+  const delta = side === "SHORT" ? pos.entry_price - markPrice : markPrice - pos.entry_price;
+  return delta * pos.size;
+}
+
 export type PaperOrderDoc = {
   account_key: string;
   order_id: string;

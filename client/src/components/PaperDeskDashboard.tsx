@@ -22,6 +22,7 @@ import type {
   StrategyScoreDoc,
   StrategyHealthDoc,
 } from "@/lib/paperDeskClient";
+import { unrealizedPnlForOpenPosition } from "@/lib/paperDeskClient";
 import { DeskLinearProgress } from "@/components/desk/ui/DeskLinearProgress";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskMetricTile } from "@/components/desk/ui/DeskMetricTile";
@@ -284,7 +285,7 @@ export default function PaperDeskDashboard() {
             <DeskCard>
               <DeskTabs items={TABS} active={tab} onChange={handleTabChange} variant="primary" />
               <div style={{ marginTop: "var(--desk-space-4)" }}>
-                {tab === "positions" && <PositionsPanel positions={openPositions} />}
+                {tab === "positions" && <PositionsPanel positions={openPositions} markPrice={live.price} />}
                 {tab === "trades" && <TradesPanel recentTrades={recentTrades} />}
                 {tab === "orders" && <OrdersPanel />}
                 {tab === "equity" && <EquityPanel />}
@@ -300,7 +301,13 @@ export default function PaperDeskDashboard() {
 
 // ── Positions panel ─────────────────────────────────────────────────────────
 
-const PositionsPanel = memo(function PositionsPanel({ positions }: { positions: PaperPositionDoc[] }) {
+const PositionsPanel = memo(function PositionsPanel({
+  positions,
+  markPrice,
+}: {
+  positions: PaperPositionDoc[];
+  markPrice: number;
+}) {
   const columns: DeskColumn<PaperPositionDoc>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span title={r.strategy_id}>{r.strategy_id}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol },
@@ -309,6 +316,19 @@ const PositionsPanel = memo(function PositionsPanel({ positions }: { positions: 
     { id: "entry", header: "Entry", align: "right", cell: (r) => usd(r.entry_price) },
     { id: "sl", header: "Stop", align: "right", cell: (r) => (r.stop_loss ? usd(r.stop_loss) : "—") },
     { id: "tp", header: "Target", align: "right", cell: (r) => (r.take_profit ? usd(r.take_profit) : "—") },
+    {
+      id: "pnl",
+      header: "PnL",
+      align: "right",
+      cell: (r) => {
+        const pnl = unrealizedPnlForOpenPosition(r, markPrice);
+        return (
+          <span style={{ color: pnlColor(pnl), fontWeight: 600 }}>
+            {signed(pnl)}
+          </span>
+        );
+      },
+    },
     { id: "opened", header: "Opened", align: "right", cell: (r) => fmtTime(r.opened_at) },
   ];
   return (
@@ -316,7 +336,7 @@ const PositionsPanel = memo(function PositionsPanel({ positions }: { positions: 
       columns={columns}
       rows={positions}
       getRowKey={(r) => r.position_id}
-      minWidth={760}
+      minWidth={860}
       empty={<DeskEmptyState title="No open positions" subtitle="Positions opened by the engine appear here in real time." />}
     />
   );
