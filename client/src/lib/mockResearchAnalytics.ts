@@ -1,3 +1,4 @@
+import { coerceEpochMs } from "@/lib/chartTime";
 import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 import type { MockAccountState, MockTrade } from "@/lib/mockTradingEngine";
 import type { StrategyScore } from "@/lib/strategyScoringEngine";
@@ -104,7 +105,9 @@ function profitFactor(trades: readonly MockTrade[]): number {
 export function computeDailyPnlPoints(trades: readonly MockTrade[]): ResearchChartPoint[] {
   const buckets = new Map<number, number>();
   for (const trade of closedTrades(trades)) {
-    const dayTs = Math.floor((trade.closedAt ?? 0) / DAY_MS) * DAY_MS;
+    const closedAt = coerceEpochMs(trade.closedAt);
+    if (closedAt <= 0) continue;
+    const dayTs = Math.floor(closedAt / DAY_MS) * DAY_MS;
     buckets.set(dayTs, (buckets.get(dayTs) ?? 0) + trade.realizedPnl);
   }
   return [...buckets.entries()]
@@ -115,10 +118,12 @@ export function computeDailyPnlPoints(trades: readonly MockTrade[]): ResearchCha
 export function computeCumulativeNetPnlPoints(trades: readonly MockTrade[]): ResearchChartPoint[] {
   let cumulative = 0;
   return closedTrades(trades)
-    .sort((a, b) => (a.closedAt ?? 0) - (b.closedAt ?? 0))
-    .map((trade) => {
+    .map((trade) => ({ trade, closedAt: coerceEpochMs(trade.closedAt) }))
+    .filter((row) => row.closedAt > 0)
+    .sort((a, b) => a.closedAt - b.closedAt)
+    .map(({ trade, closedAt }) => {
       cumulative += trade.realizedPnl;
-      return { timestamp: trade.closedAt ?? trade.openedAt, value: cumulative };
+      return { timestamp: closedAt, value: cumulative };
     });
 }
 

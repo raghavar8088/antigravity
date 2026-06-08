@@ -15,6 +15,7 @@ import {
 } from "lightweight-charts";
 import { TerminalPanel } from "@/components/terminal";
 import { DeskEmptyState } from "@/components/desk/ui";
+import { coerceEpochMs, toUtcChartTime } from "@/lib/chartTime";
 import type { MarketRegime } from "@/lib/marketRegimeClassifier";
 import type { MockAccountState, MockTrade } from "@/lib/mockTradingEngine";
 import {
@@ -43,15 +44,13 @@ interface MockResearchChartsPanelProps {
 
 const PALETTE = ["#60a5fa", "#34d399", "#f59e0b", "#f472b6", "#a78bfa", "#22d3ee", "#fb7185", "#84cc16"];
 
-function toChartTime(timestamp: number): Time {
-  return Math.floor(timestamp / 1000) as Time;
-}
-
 function uniqueLineData(points: readonly ResearchChartPoint[]): LineData<Time>[] {
   const byTime = new Map<number, number>();
   for (const point of points) {
     if (!Number.isFinite(point.value)) continue;
-    byTime.set(Math.floor(point.timestamp / 1000), point.value);
+    const time = toUtcChartTime(point.timestamp);
+    if (time == null) continue;
+    byTime.set(time as number, point.value);
   }
   return [...byTime.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -266,7 +265,7 @@ export function MockResearchChartsPanel({ trades, account, regime }: MockResearc
         if (cancelled || !json.points) return;
         setHistoricalEquity(
           json.points.map((point) => ({
-            timestamp: point.timestamp,
+            timestamp: coerceEpochMs(point.timestamp),
             equity: point.equity,
             realizedPnl: point.realized_pnl,
             unrealizedPnl: point.unrealized_pnl,

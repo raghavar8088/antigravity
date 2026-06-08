@@ -14,6 +14,7 @@ import {
   type SeriesMarker,
   type Time,
 } from "lightweight-charts";
+import { toMinuteUtcChartTime, toUtcChartTime } from "@/lib/chartTime";
 import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
 import type { MockTrade } from "@/lib/mockTradingEngine";
 
@@ -36,30 +37,33 @@ export function InstitutionalChart({
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   const chartData = useMemo(() => {
-    return candles.map((c) => ({
-      time: (c.time / 1000) as Time,
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close,
-    }));
+    const rows: Array<{ time: Time; open: number; high: number; low: number; close: number }> = [];
+    for (const c of candles) {
+      const time = toUtcChartTime(c.time);
+      if (time == null) continue;
+      if (![c.open, c.high, c.low, c.close].every(Number.isFinite)) continue;
+      rows.push({ time, open: c.open, high: c.high, low: c.low, close: c.close });
+    }
+    return rows;
   }, [candles]);
 
   const markers = useMemo(() => {
     const items: SeriesMarker<Time>[] = [];
     for (const trade of trades) {
-      if (trade.openedAt) {
+      const entryTime = toMinuteUtcChartTime(trade.openedAt);
+      if (entryTime != null) {
         items.push({
-          time: (Math.floor(trade.openedAt / 60000) * 60) as Time,
+          time: entryTime,
           position: trade.side === "BUY" ? "belowBar" : "aboveBar",
           color: trade.side === "BUY" ? "#26a69a" : "#ef5350",
           shape: trade.side === "BUY" ? "arrowUp" : "arrowDown",
           text: `Entry #${trade.strategyId}`,
         });
       }
-      if (trade.closedAt) {
+      const exitTime = toMinuteUtcChartTime(trade.closedAt);
+      if (exitTime != null) {
         items.push({
-          time: (Math.floor(trade.closedAt / 60000) * 60) as Time,
+          time: exitTime,
           position: trade.realizedPnl > 0 ? "aboveBar" : "belowBar",
           color: "#8b949e",
           shape: "circle",
