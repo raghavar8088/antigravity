@@ -4,8 +4,10 @@ import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import {
   getPaperState,
   getClosedTradeStats,
+  listOpenPositions,
   mergeClosedTradeStatsIntoState,
 } from "@/lib/paperDeskClient";
+import { buildPortfolioAccountingSnapshot } from "@/lib/portfolioAccountingService";
 import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +21,22 @@ export async function GET() {
 
   let state;
   try {
-    const [paperState, closedStats] = await Promise.all([
+    const [paperState, closedStats, openPositions] = await Promise.all([
       getPaperState(accountKey),
       getClosedTradeStats(accountKey),
+      listOpenPositions(accountKey),
     ]);
-    state = mergeClosedTradeStatsIntoState(paperState, closedStats);
+    const accounting = buildPortfolioAccountingSnapshot({
+      accountKey,
+      state: paperState,
+      closedStats,
+      openPositions,
+    });
+    state = mergeClosedTradeStatsIntoState(paperState, closedStats, {
+      unrealized_pnl: accounting.unrealized_pnl,
+      exposure: accounting.exposure,
+      drawdown: accounting.drawdown,
+    });
 
     if (!state && closedStats.total_trades > 0) {
       const INITIAL = 1_000_000;

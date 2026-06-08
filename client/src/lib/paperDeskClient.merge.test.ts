@@ -30,18 +30,22 @@ describe("mergeClosedTradeStatsIntoState", () => {
     winning_trades: 620,
     losing_trades: 1232,
     win_rate: 620 / 1852,
-    realized_pnl: -775.25,
-    total_fees: 5016.31,
+    realized_pnl: -2697,
+    gross_pnl: -1800,
+    total_fees: 22549,
+    entry_fees: 11274.5,
+    exit_fees: 11274.5,
   };
 
-  it("overrides session trade counts with MongoDB closed-trade totals", () => {
+  it("overrides trade counts and realized PnL with MongoDB closed-trade totals", () => {
     const merged = mergeClosedTradeStatsIntoState(baseState, closedStats);
     expect(merged?.total_trades).toBe(1852);
     expect(merged?.winning_trades).toBe(620);
     expect(merged?.losing_trades).toBe(1232);
     expect(merged?.win_rate).toBeCloseTo(620 / 1852, 6);
+    expect(merged?.realized_pnl).toBe(-2697);
+    expect(merged?.total_fees).toBe(22549);
     expect(merged?.balance).toBe(baseState.balance);
-    expect(merged?.realized_pnl).toBe(baseState.realized_pnl);
   });
 
   it("returns null when state is null", () => {

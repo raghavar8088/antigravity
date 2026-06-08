@@ -71,8 +71,8 @@ type Manager struct {
 	nextID    int
 	config    ManagerConfig
 
-	// Channel that emits close events when SL/TP triggers
-	CloseEvents chan CloseEvent
+	// Guaranteed-delivery close queue (blocking enqueue — never drops events)
+	closeQueue *CloseQueue
 }
 
 func NewManager() *Manager {
@@ -88,9 +88,24 @@ func NewManager() *Manager {
 			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
 			MaxPositionAgeMins: 45,    // Auto-close stale scalps after 45 min — free up capital
 		},
-		CloseEvents: make(chan CloseEvent, 200),
+		closeQueue: newCloseQueue(),
 	}
 	return mgr
+}
+
+// CloseEvents exposes the receive side of the guaranteed close queue.
+func (m *Manager) CloseEvents() <-chan CloseEvent {
+	return m.closeQueue.Receive()
+}
+
+// CloseQueueMetrics returns delivery observability counters.
+func (m *Manager) CloseQueueMetrics() CloseQueueMetrics {
+	return m.closeQueue.Snapshot()
+}
+
+// CloseQueueDepth returns buffered close events awaiting processing.
+func (m *Manager) CloseQueueDepth() int {
+	return m.closeQueue.Depth()
 }
 
 // CanOpenPosition checks if a strategy is allowed to open another position.
@@ -251,16 +266,12 @@ func (m *Manager) calculatePnL(pos *Position, exitPrice float64) float64 {
 }
 
 func (m *Manager) emitClose(pos *Position, reason CloseReason, exitPrice, pnl float64) {
-	select {
-	case m.CloseEvents <- CloseEvent{
+	m.closeQueue.Enqueue(CloseEvent{
 		Position:  *pos,
 		Reason:    reason,
 		ExitPrice: exitPrice,
 		PnL:       pnl,
-	}:
-	default:
-		log.Printf("[WARNING] CloseEvents channel full, dropping event for %s", pos.ID)
-	}
+	})
 }
 
 func (m *Manager) emitPartialTakeProfit(pos *Position, partialSize, exitPrice, pnl float64) {

@@ -11,12 +11,14 @@ import {
 import { isEngineExecutionAuthority } from "./engineAuthority";
 import { isMongoConfigured, pingMongo } from "./mongoTradesClient";
 import {
+  getClosedTradeStats,
   getPaperState,
   listOpenPositions,
   listPaperTrades,
   listPaperOrders,
   listStrategyHealth,
 } from "./paperDeskClient";
+import { getPortfolioAccountingSnapshot } from "./portfolioAccountingService";
 import { runEnvChecks } from "./envCheck";
 
 export type ValidationStatus = "PASS" | "WARNING" | "FAIL";
@@ -92,21 +94,22 @@ export async function runProductionValidation(
       message: pingOk ? "MongoDB ping OK" : "MongoDB ping failed",
     });
 
+    let paperState: Awaited<ReturnType<typeof getPaperState>> = null;
     try {
-      const state = await getPaperState(accountKey);
+      paperState = await getPaperState(accountKey);
       checks.push({
         id: "paper_state",
-        status: state ? "PASS" : "WARNING",
-        message: state
-          ? `paper_state found (balance=${state.balance ?? "?"})`
+        status: paperState ? "PASS" : "WARNING",
+        message: paperState
+          ? `paper_state found (balance=${paperState.balance ?? "?"})`
           : "No paper_state document for owner account — engine may not have started",
       });
 
-      if (state && typeof state.balance === "number" && state.balance < 0) {
+      if (paperState && typeof paperState.balance === "number" && paperState.balance < 0) {
         checks.push({
           id: "balance_integrity",
           status: "FAIL",
-          message: `Negative balance ${state.balance} USD in paper_state`,
+          message: `Negative balance ${paperState.balance} USD in paper_state`,
         });
       } else {
         checks.push({
@@ -189,6 +192,39 @@ export async function runProductionValidation(
         id: "strategy_health",
         status: "WARNING",
         message: err instanceof Error ? err.message : "strategy_health read failed",
+      });
+    }
+
+    try {
+      const [closedStats, snapshot] = await Promise.all([
+        getClosedTradeStats(accountKey),
+        getPortfolioAccountingSnapshot(accountKey),
+      ]);
+      const pnlDrift = paperState
+        ? Math.abs((paperState.realized_pnl ?? 0) - closedStats.realized_pnl)
+        : 0;
+      checks.push({
+        id: "realized_pnl_mongo_authoritative",
+        status:
+          snapshot.realized_pnl === closedStats.realized_pnl ? "PASS" : "FAIL",
+        message: `PortfolioAccountingService realized_pnl=${snapshot.realized_pnl}`,
+        detail: `Mongo SUM(net_pnl)=${closedStats.realized_pnl}`,
+      });
+      checks.push({
+        id: "paper_state_pnl_drift",
+        status: !paperState || pnlDrift <= 50 ? "PASS" : "FAIL",
+        message: paperState
+          ? `paper_state vs SUM(net_pnl) drift=$${pnlDrift.toFixed(2)}`
+          : "No paper_state — drift check skipped",
+        detail: paperState
+          ? `paper_state=${paperState.realized_pnl} mongo=${closedStats.realized_pnl}`
+          : undefined,
+      });
+    } catch (err) {
+      checks.push({
+        id: "portfolio_accounting",
+        status: "FAIL",
+        message: err instanceof Error ? err.message : "Portfolio accounting check failed",
       });
     }
   } else {

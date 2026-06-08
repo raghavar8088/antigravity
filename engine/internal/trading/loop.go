@@ -144,6 +144,9 @@ type Orchestrator struct {
 	// Nil until SetPaperPersist() is called from main.go.
 	ppPersist *PaperPersistBundle
 
+	// portfolioLedger mirrors MongoDB closed-trade accounting in-process.
+	portfolioLedger *paperpersist.PortfolioLedger
+
 	// sessionStart records when this engine process started. Used by the
 	// AccountStateProvider to populate the session_start field in paper_state.
 	sessionStart time.Time
@@ -221,7 +224,13 @@ func NewOrchestrator(
 		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
 		lastBridgeHeartbeat: time.Time{},
 		sessionStart:        time.Now(),
+		portfolioLedger:     paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
 	}
+}
+
+// PortfolioLedger exposes the in-process accounting mirror (Mongo-authoritative on bootstrap).
+func (o *Orchestrator) PortfolioLedger() *paperpersist.PortfolioLedger {
+	return o.portfolioLedger
 }
 
 func (o *Orchestrator) SetEventLedger(store ledger.Store) {
@@ -1388,19 +1397,19 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case event := <-o.posMgr.CloseEvents:
+		case event := <-o.posMgr.CloseEvents():
 			// ═══ FIX: Settle paper balance (credit USD back) ═══
 			// Without this, every BUY drains the balance permanently
 			// because no SELL ever executes to return the USD.
 			o.exec.SettlePosition(event.Position.Side, event.Position.Size, event.ExitPrice)
-			netPnL := execution.CalculateNetPnL(
-				event.PnL,
+			feeBreakdown := execution.CanonicalTradeFees(
 				event.Position.EntryPrice,
 				event.ExitPrice,
 				event.Position.Size,
 			)
+			netPnL := execution.CanonicalNetPnL(event.PnL, feeBreakdown)
 
-			// Record in trade journal
+			// Record in trade journal (cache — same values persisted to MongoDB)
 			entry := execution.JournalEntry{
 				ID:           event.Position.ID,
 				StrategyName: event.Position.StrategyName,
@@ -1409,11 +1418,23 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 				ExitPrice:    event.ExitPrice,
 				Size:         event.Position.Size,
 				GrossPnL:     event.PnL,
+				Fees:         feeBreakdown.TotalFee,
+				NetPnL:       netPnL,
 				Reason:       string(event.Reason),
 				EntryTime:    event.Position.OpenedAt,
 				ExitTime:     time.Now(),
 			}
 			o.journal.RecordTrade(entry)
+
+			if o.portfolioLedger != nil {
+				o.portfolioLedger.RecordClose(
+					event.PnL,
+					feeBreakdown.EntryFee,
+					feeBreakdown.ExitFee,
+					netPnL,
+					o.exec.GetBalanceUSD(),
+				)
+			}
 
 			// Update strategy tracker
 			o.tracker.RecordTradeResult(event.Position.StrategyName, netPnL)

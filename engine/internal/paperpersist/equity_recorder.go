@@ -1,6 +1,6 @@
 package paperpersist
 
-// equity_recorder.go — Equity curve snapshots (every 5 minutes) and
+// equity_recorder.go — Equity curve snapshots (every 1 minute) and
 // midnight-UTC daily PnL sealing.
 //
 // equity_curve documents carry a TTL index of 90 days so Atlas automatically
@@ -65,7 +65,7 @@ type DailyPnLProvider interface {
 // ── EquityRecorder ────────────────────────────────────────────────────────────
 
 // EquityRecorder runs two independent loops:
-//  1. Equity snapshot every 5 minutes → equity_curve (TTL 90 days)
+//  1. Equity snapshot every 1 minute → equity_curve (TTL 90 days)
 //  2. Daily PnL seal at midnight UTC → daily_pnl_history
 type EquityRecorder struct {
 	mgr          *MongoManager
@@ -79,7 +79,7 @@ type EquityRecorder struct {
 }
 
 // NewEquityRecorder creates an EquityRecorder.
-// snapInterval is typically 5 * time.Minute.
+// snapInterval is typically 1 * time.Minute.
 func NewEquityRecorder(mgr *MongoManager, eq EquityProvider, daily DailyPnLProvider, snapInterval time.Duration) *EquityRecorder {
 	return &EquityRecorder{
 		mgr:           mgr,

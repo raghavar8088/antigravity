@@ -9,6 +9,7 @@ import {
   getClosedTradeStats,
   mergeClosedTradeStatsIntoState,
 } from "@/lib/paperDeskClient";
+import { buildPortfolioAccountingSnapshot } from "@/lib/portfolioAccountingService";
 import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,17 @@ export async function GET() {
     return mongoUnavailable(err instanceof Error ? err.message : "unknown");
   }
 
-  state = mergeClosedTradeStatsIntoState(state, closedStats);
+  const accounting = buildPortfolioAccountingSnapshot({
+    accountKey,
+    state,
+    closedStats,
+    openPositions: openPositions ?? [],
+  });
+  state = mergeClosedTradeStatsIntoState(state, closedStats, {
+    unrealized_pnl: accounting.unrealized_pnl,
+    exposure: accounting.exposure,
+    drawdown: accounting.drawdown,
+  });
 
   return NextResponse.json({
     ok: true,
@@ -49,5 +60,6 @@ export async function GET() {
     open_positions: openPositions ?? [],
     recent_trades: recentTrades ?? [],
     health_summary: healthSummary,
+    portfolio: accounting,
   });
 }

@@ -46,10 +46,13 @@ type ClosedTrade struct {
 	ExitPrice  float64 `json:"exit_price"`
 	Quantity   float64 `json:"quantity"`
 
-	// P&L
+	// P&L — NetPnL = GrossPnL - EntryFee - ExitFee
 	GrossPnL float64 `json:"gross_pnl"`
-	Fees      float64 `json:"fees"`
-	NetPnL    float64 `json:"net_pnl"` // GrossPnL - Fees
+	EntryFee float64 `json:"entry_fee"`
+	ExitFee  float64 `json:"exit_fee"`
+	TotalFee float64 `json:"total_fee"`
+	Fees     float64 `json:"fees"` // legacy alias of TotalFee
+	NetPnL   float64 `json:"net_pnl"`
 
 	// Exit metadata
 	ExitReason string `json:"exit_reason"` // TP|SL|TIME|TRAIL|BREAKEVEN|etc.
@@ -150,7 +153,17 @@ func (w *TradeWriter) persist(ctx context.Context, t ClosedTrade) error {
 	doc["exit_price"] = t.ExitPrice
 	doc["quantity"] = t.Quantity
 	doc["gross_pnl"] = t.GrossPnL
-	doc["fees"] = t.Fees
+	doc["entry_fee"] = t.EntryFee
+	doc["exit_fee"] = t.ExitFee
+	totalFee := t.TotalFee
+	if totalFee <= 0 {
+		totalFee = t.Fees
+	}
+	if totalFee <= 0 {
+		totalFee = t.EntryFee + t.ExitFee
+	}
+	doc["total_fee"] = totalFee
+	doc["fees"] = totalFee
 	doc["net_pnl"] = t.NetPnL
 	doc["exit_reason"] = t.ExitReason
 	doc["entry_at"] = t.EntryAt

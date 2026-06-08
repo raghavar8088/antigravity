@@ -673,6 +673,17 @@ func main() {
 		candleAgg,
 	)
 
+	// Bootstrap portfolio ledger from MongoDB paper_trades (authoritative accounting).
+	if mongoMgr != nil && mongoMgr.IsConnected() {
+		if err := paperpersist.BootstrapPortfolioLedgerFromMongo(
+			ctx, mongoMgr, orchestrator.PortfolioLedger(), paperExecute.GetBalanceUSD(),
+		); err != nil {
+			log.Printf("[Phase31B] portfolio ledger bootstrap warning: %v", err)
+		} else {
+			log.Printf("[Phase31B] portfolio ledger bootstrapped from paper_trades")
+		}
+	}
+
 	// Phase 31B: register recovered position→order mappings so processCloseEvents
 	// can emit correct OMS transitions when recovered positions hit SL/TP.
 	if len(recoveryReport.OpenPositions) > 0 {
@@ -686,10 +697,40 @@ func main() {
 		go snapshotter.Run(ctx)
 		log.Printf("[Phase31B] StateSnapshotter started (10s interval)")
 
-		// Phase 31D: EquityRecorder — 5-minute equity curve snapshots + daily PnL seal.
-		equityRecorder := paperpersist.NewEquityRecorder(ppBundle.Mgr(), orchestrator, orchestrator, 5*time.Minute)
+		// Phase 31D: EquityRecorder — 1-minute equity curve snapshots + daily PnL seal.
+		equityRecorder := paperpersist.NewEquityRecorder(ppBundle.Mgr(), orchestrator, orchestrator, time.Minute)
 		go safeGo("EquityRecorder", func() { equityRecorder.Run(ctx) })
-		log.Printf("[Phase31D] EquityRecorder started (5m interval)")
+		log.Printf("[Phase31D] EquityRecorder started (1m interval)")
+
+		// Portfolio metrics writer — persists authoritative snapshot every 30 minutes.
+		go safeGo("PortfolioMetricsWriter", func() {
+			ticker := time.NewTicker(30 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					snap := orchestrator.GetAccountSnapshot()
+					_ = paperpersist.WritePortfolioMetrics(ctx, ppBundle.Mgr(), paperpersist.PortfolioMetricsDoc{
+						RealizedPnL:      snap.RealizedPnL,
+						UnrealizedPnL:    snap.UnrealizedPnL,
+						Equity:           snap.Equity,
+						Balance:          snap.Balance,
+						PeakEquity:       snap.PeakEquity,
+						CurrentDrawdown:  snap.CurrentDrawdown,
+						MaxDrawdown:      snap.MaxDrawdown,
+						TotalTrades:      snap.TotalTrades,
+						WinRate:          snap.WinRate,
+						TotalFees:        snap.TotalFees,
+						LongExposureBTC:  snap.LongExposureBTC,
+						ShortExposureBTC: snap.ShortExposureBTC,
+						GrossExposureBTC: snap.TotalExposureBTC,
+						OpenPositions:    snap.OpenPositionCount,
+					})
+				}
+			}
+		})
 
 		// Phase 31D: StrategyHealthMonitor — compute + persist health every 15 min.
 		healthMonitor := paperpersist.NewStrategyHealthMonitor(ppBundle.Mgr(), orchestrator, 15*time.Minute)

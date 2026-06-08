@@ -61,6 +61,9 @@ export type PaperTradeDoc = {
   quantity: number;
   gross_pnl: number;
   fees: number;
+  entry_fee?: number;
+  exit_fee?: number;
+  total_fee?: number;
   net_pnl: number;
   exit_reason: string;
   entry_at: string;
@@ -241,7 +244,10 @@ export type ClosedTradeStats = {
   losing_trades: number;
   win_rate: number;
   realized_pnl: number;
+  gross_pnl: number;
   total_fees: number;
+  entry_fees: number;
+  exit_fees: number;
 };
 
 function closedTradesFilter(accountKey: string, side?: string): Record<string, unknown> {
@@ -256,7 +262,10 @@ const EMPTY_CLOSED_TRADE_STATS: ClosedTradeStats = {
   losing_trades: 0,
   win_rate: 0,
   realized_pnl: 0,
+  gross_pnl: 0,
   total_fees: 0,
+  entry_fees: 0,
+  exit_fees: 0,
 };
 
 /** Authoritative closed-trade stats from paper_trades (matches Trade History pagination total). */
@@ -277,7 +286,17 @@ export async function getClosedTradeStats(
             winning_trades: { $sum: { $cond: [{ $gt: ["$net_pnl", 0] }, 1, 0] } },
             losing_trades: { $sum: { $cond: [{ $lte: ["$net_pnl", 0] }, 1, 0] } },
             realized_pnl: { $sum: { $ifNull: ["$net_pnl", 0] } },
-            total_fees: { $sum: { $ifNull: ["$fees", 0] } },
+            gross_pnl: { $sum: { $ifNull: ["$gross_pnl", 0] } },
+            total_fees: {
+              $sum: {
+                $ifNull: [
+                  "$total_fee",
+                  { $ifNull: ["$fees", { $add: [{ $ifNull: ["$entry_fee", 0] }, { $ifNull: ["$exit_fee", 0] }] }] },
+                ],
+              },
+            },
+            entry_fees: { $sum: { $ifNull: ["$entry_fee", 0] } },
+            exit_fees: { $sum: { $ifNull: ["$exit_fee", 0] } },
           },
         },
       ])
@@ -288,31 +307,58 @@ export async function getClosedTradeStats(
 
     const total = Number(row.total_trades) || 0;
     const wins = Number(row.winning_trades) || 0;
+    const totalFees = Number(row.total_fees) || 0;
+    const entryFees = Number(row.entry_fees) || 0;
+    const exitFees = Number(row.exit_fees) || 0;
     return {
       total_trades: total,
       winning_trades: wins,
       losing_trades: Number(row.losing_trades) || 0,
       win_rate: total > 0 ? wins / total : 0,
       realized_pnl: Number(row.realized_pnl) || 0,
-      total_fees: Number(row.total_fees) || 0,
+      gross_pnl: Number(row.gross_pnl) || 0,
+      total_fees: totalFees,
+      entry_fees: entryFees > 0 ? entryFees : totalFees / 2,
+      exit_fees: exitFees > 0 ? exitFees : totalFees / 2,
     };
   } catch {
     return EMPTY_CLOSED_TRADE_STATS;
   }
 }
 
-/** Merge MongoDB closed-trade counts into paper_state for display consistency. */
+/**
+ * Merge MongoDB-authoritative closed-trade accounting into paper_state.
+ * Realized PnL, fees, and trade counts always come from paper_trades aggregation.
+ */
 export function mergeClosedTradeStatsIntoState(
   state: PaperStateDoc | null,
   stats: ClosedTradeStats,
+  overrides?: {
+    unrealized_pnl?: number;
+    exposure?: { long_exposure_btc: number; short_exposure_btc: number; gross_exposure_btc: number };
+    drawdown?: { peak_equity: number; current_drawdown: number; max_drawdown: number };
+  },
 ): PaperStateDoc | null {
   if (!state) return null;
+  const unrealized = overrides?.unrealized_pnl ?? state.unrealized_pnl;
+  const balance = state.balance;
   return {
     ...state,
+    balance,
+    equity: balance + unrealized,
+    unrealized_pnl: unrealized,
+    realized_pnl: stats.realized_pnl,
+    total_fees: stats.total_fees,
     total_trades: stats.total_trades,
     winning_trades: stats.winning_trades,
     losing_trades: stats.losing_trades,
     win_rate: stats.win_rate,
+    total_exposure_btc: overrides?.exposure?.gross_exposure_btc ?? state.total_exposure_btc,
+    long_exposure_btc: overrides?.exposure?.long_exposure_btc ?? state.long_exposure_btc,
+    short_exposure_btc: overrides?.exposure?.short_exposure_btc ?? state.short_exposure_btc,
+    peak_equity: overrides?.drawdown?.peak_equity ?? state.peak_equity,
+    current_drawdown: overrides?.drawdown?.current_drawdown ?? state.current_drawdown,
+    max_drawdown: overrides?.drawdown?.max_drawdown ?? state.max_drawdown,
   };
 }
 

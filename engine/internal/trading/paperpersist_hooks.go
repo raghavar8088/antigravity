@@ -79,38 +79,103 @@ func (o *Orchestrator) pp() *PaperPersistBundle {
 
 // ── AccountStateProvider ─────────────────────────────────────────────────────
 
+// computeExposureFromOpenPositions derives BTC exposure from live positions.
+func computeExposureFromOpenPositions(positions []positions.Position) (longBTC, shortBTC, grossBTC float64) {
+	for _, pos := range positions {
+		if pos.Size <= 0 {
+			continue
+		}
+		if pos.Side == strategy.ActionBuy {
+			longBTC += pos.Size
+		} else {
+			shortBTC += pos.Size
+		}
+	}
+	grossBTC = longBTC + shortBTC
+	return longBTC, shortBTC, grossBTC
+}
+
 // GetAccountSnapshot implements paperpersist.AccountStateProvider.
 // Called every 10 seconds by the StateSnapshotter goroutine.
 // Must be lightweight and non-blocking.
 func (o *Orchestrator) GetAccountSnapshot() paperpersist.AccountSnapshot {
 	o.mu.RLock()
 	sessionStart := o.sessionStart
+	ledger := o.portfolioLedger
 	o.mu.RUnlock()
 
 	balance := o.exec.GetBalanceUSD()
 	equity := o.exec.GetEquityUSD()
-	fees := o.exec.GetTotalFees()
 	unrealizedPnL := equity - balance
 
-	stats := o.journal.GetAggregateStats()
-	openCount := o.posMgr.GetPositionCount()
+	openPositions := o.posMgr.GetOpenPositions()
+	openCount := len(openPositions)
+	longBTC, shortBTC, grossBTC := computeExposureFromOpenPositions(openPositions)
 
-	winRate := 0.0
-	if stats.TotalTrades > 0 {
-		winRate = float64(stats.TotalWins) / float64(stats.TotalTrades)
+	var (
+		realizedPnL   float64
+		totalTrades   int
+		winningTrades int
+		losingTrades  int
+		winRate       float64
+		totalFees     float64
+		peakEquity    float64
+		currentDD     float64
+		maxDD         float64
+	)
+
+	if ledger != nil {
+		snap := ledger.Snapshot()
+		realizedPnL = snap.RealizedPnL
+		totalTrades = snap.TotalTrades
+		winningTrades = snap.WinningTrades
+		losingTrades = snap.LosingTrades
+		totalFees = snap.TotalFees
+		peakEquity = snap.PeakEquity
+		currentDD = snap.CurrentDrawdown
+		maxDD = snap.MaxDrawdown
+		if totalTrades > 0 {
+			winRate = float64(winningTrades) / float64(totalTrades)
+		}
+	} else {
+		stats := o.journal.GetAggregateStats()
+		realizedPnL = stats.TotalPnL
+		totalTrades = stats.TotalTrades
+		winningTrades = stats.TotalWins
+		losingTrades = stats.TotalLosses
+		totalFees = o.exec.GetTotalFees()
+		if totalTrades > 0 {
+			winRate = float64(winningTrades) / float64(totalTrades)
+		}
+	}
+
+	if peakEquity <= 0 {
+		peakEquity = equity
+	}
+	if peakEquity > 0 && equity < peakEquity {
+		currentDD = (peakEquity - equity) / peakEquity
+	}
+	if currentDD > maxDD {
+		maxDD = currentDD
 	}
 
 	return paperpersist.AccountSnapshot{
 		Balance:           balance,
 		Equity:            equity,
 		UnrealizedPnL:     unrealizedPnL,
-		RealizedPnL:       stats.TotalPnL,
+		RealizedPnL:       realizedPnL,
+		PeakEquity:        peakEquity,
+		CurrentDrawdown:   currentDD,
+		MaxDrawdown:       maxDD,
 		OpenPositionCount: openCount,
-		TotalTrades:       stats.TotalTrades,
-		WinningTrades:     stats.TotalWins,
-		LosingTrades:      stats.TotalLosses,
+		TotalExposureBTC:  grossBTC,
+		LongExposureBTC:   longBTC,
+		ShortExposureBTC:  shortBTC,
+		TotalTrades:       totalTrades,
+		WinningTrades:     winningTrades,
+		LosingTrades:      losingTrades,
 		WinRate:           winRate,
-		TotalFees:         fees,
+		TotalFees:         totalFees,
 		SessionStart:      sessionStart,
 		SnappedAt:         time.Now(),
 	}
@@ -210,28 +275,18 @@ func (o *Orchestrator) persistPositionClose(ctx context.Context, event positions
 // ── EquityProvider ────────────────────────────────────────────────────────────
 
 // GetEquityPoint implements paperpersist.EquityProvider.
-// Called every 5 minutes by the EquityRecorder goroutine.
+// Called every minute by the EquityRecorder goroutine.
 func (o *Orchestrator) GetEquityPoint() paperpersist.EquityPoint {
-	balance := o.exec.GetBalanceUSD()
-	equity := o.exec.GetEquityUSD()
+	snap := o.GetAccountSnapshot()
 	lastPrice := o.exec.GetLastPrice()
 
-	stats := o.journal.GetAggregateStats()
-	realizedPnL := stats.TotalPnL
-	unrealizedPnL := equity - balance
-
-	drawdownPct := 0.0
-	if stats.MaxDrawdown > 0 {
-		drawdownPct = stats.MaxDrawdown
-	}
-
 	return paperpersist.EquityPoint{
-		Equity:        equity,
-		Balance:       balance,
-		UnrealizedPnL: unrealizedPnL,
-		RealizedPnL:   realizedPnL,
-		DrawdownPct:   drawdownPct,
-		OpenPositions: o.posMgr.GetPositionCount(),
+		Equity:        snap.Equity,
+		Balance:       snap.Balance,
+		UnrealizedPnL: snap.UnrealizedPnL,
+		RealizedPnL:   snap.RealizedPnL,
+		DrawdownPct:   snap.CurrentDrawdown,
+		OpenPositions: snap.OpenPositionCount,
 		BTCPrice:      lastPrice,
 	}
 }
@@ -242,23 +297,21 @@ func (o *Orchestrator) GetEquityPoint() paperpersist.EquityPoint {
 // Called at midnight UTC by the EquityRecorder to seal yesterday's record.
 // OpeningBalance is approximated as ClosingBalance - RealizedPnL for the session.
 func (o *Orchestrator) GetDailyPnL(date string) paperpersist.DailyPnL {
-	stats := o.journal.GetAggregateStats()
-	balance := o.exec.GetBalanceUSD()
-	fees := o.exec.GetTotalFees()
-	closingBal := balance
-	openingBal := closingBal - stats.TotalPnL
+	snap := o.GetAccountSnapshot()
+	closingBal := snap.Balance
+	openingBal := closingBal - snap.RealizedPnL
 
 	return paperpersist.DailyPnL{
 		Date:           date,
 		OpeningBalance: openingBal,
 		ClosingBalance: closingBal,
-		RealizedPnL:    stats.TotalPnL,
-		Fees:           fees,
-		NetPnL:         stats.TotalPnL - fees,
-		TradeCount:     stats.TotalTrades,
-		WinCount:       stats.TotalWins,
-		LossCount:      stats.TotalLosses,
-		MaxDrawdownPct: stats.MaxDrawdown,
+		RealizedPnL:    snap.RealizedPnL,
+		Fees:           snap.TotalFees,
+		NetPnL:         snap.RealizedPnL,
+		TradeCount:     snap.TotalTrades,
+		WinCount:       snap.WinningTrades,
+		LossCount:      snap.LosingTrades,
+		MaxDrawdownPct: snap.MaxDrawdown,
 	}
 }
 
@@ -313,8 +366,11 @@ func (o *Orchestrator) persistClosedTrade(ctx context.Context, event positions.C
 		return
 	}
 	now := time.Now()
-	notional := event.Position.Size * event.Position.EntryPrice
-	fees := notional * execution.BinanceFuturesTakerFeePct * 2
+	feeBreakdown := execution.CanonicalTradeFees(
+		event.Position.EntryPrice,
+		event.ExitPrice,
+		event.Position.Size,
+	)
 
 	trade := paperpersist.ClosedTrade{
 		ClientTradeID: event.Position.ID,
@@ -325,7 +381,10 @@ func (o *Orchestrator) persistClosedTrade(ctx context.Context, event positions.C
 		ExitPrice:     event.ExitPrice,
 		Quantity:      event.Position.Size,
 		GrossPnL:      event.PnL,
-		Fees:          fees,
+		EntryFee:      feeBreakdown.EntryFee,
+		ExitFee:       feeBreakdown.ExitFee,
+		TotalFee:      feeBreakdown.TotalFee,
+		Fees:          feeBreakdown.TotalFee,
 		NetPnL:        netPnL,
 		ExitReason:    string(event.Reason),
 		EntryAt:       event.Position.OpenedAt,

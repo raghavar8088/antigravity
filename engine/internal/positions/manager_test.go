@@ -33,7 +33,7 @@ func TestLongPartialTakeProfitEmitsEventAndKeepsPositionOpen(t *testing.T) {
 	mgr.CheckStopLossAndTakeProfit(101)
 
 	select {
-	case event := <-mgr.CloseEvents:
+	case event := <-mgr.CloseEvents():
 		if event.Reason != ReasonTakeProfit {
 			t.Fatalf("expected take profit event, got %s", event.Reason)
 		}
@@ -214,7 +214,7 @@ func TestCheckExpiredPositionsClosesStalePosition(t *testing.T) {
 	}
 
 	select {
-	case event := <-mgr.CloseEvents:
+	case event := <-mgr.CloseEvents():
 		if event.Reason != ReasonManual {
 			t.Fatalf("expected MANUAL close reason for expiry, got %s", event.Reason)
 		}

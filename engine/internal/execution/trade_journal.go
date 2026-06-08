@@ -57,12 +57,13 @@ func NewTradeJournal(maxEntries int) *TradeJournal {
 }
 
 func calculateFees(entryPrice, exitPrice, size float64) float64 {
-	return 0
+	return CanonicalTradeFees(entryPrice, exitPrice, size).TotalFee
 }
 
-// CalculateNetPnL returns realized PnL in zero-fee mode.
+// CalculateNetPnL returns gross minus canonical entry/exit fees.
 func CalculateNetPnL(grossPnL, entryPrice, exitPrice, size float64) float64 {
-	return grossPnL
+	fees := CanonicalTradeFees(entryPrice, exitPrice, size)
+	return CanonicalNetPnL(grossPnL, fees)
 }
 
 // RecordTrade adds a completed trade to the journal.
@@ -70,8 +71,9 @@ func (j *TradeJournal) RecordTrade(entry JournalEntry) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	entry.Fees = calculateFees(entry.EntryPrice, entry.ExitPrice, entry.Size)
-	entry.NetPnL = entry.GrossPnL
+	feeBreakdown := CanonicalTradeFees(entry.EntryPrice, entry.ExitPrice, entry.Size)
+	entry.Fees = feeBreakdown.TotalFee
+	entry.NetPnL = CanonicalNetPnL(entry.GrossPnL, feeBreakdown)
 	entry.Duration = entry.ExitTime.Sub(entry.EntryTime)
 
 	j.entries = append(j.entries, entry)
