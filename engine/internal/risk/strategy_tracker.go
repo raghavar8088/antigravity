@@ -7,6 +7,7 @@ import (
 	"time"
 
 	riskv2 "antigravity-engine/internal/risk/v2"
+	"antigravity-engine/internal/strategy"
 )
 
 const (
@@ -489,7 +490,7 @@ func (t *StrategyTracker) BuildRiskMetrics(name string) riskv2.StrategyMetrics {
 
 	return riskv2.StrategyMetrics{
 		Strategy:         name,
-		Family:           trackerFamilyFromCategory(s.Category),
+		Family:           strategy.CategoryToRiskFamily(s.Category),
 		WinRate:          winRate,
 		ProfitFactor:     profitFactor,
 		Sharpe:           trackerAnnualizedSharpe(s.recentReturns),
@@ -567,25 +568,3 @@ func trackerHealthScore(s *StrategyStats) float64 {
 	return math.Max(0, math.Min(100, score))
 }
 
-// trackerFamilyFromCategory maps a strategy's textual category to the riskv2 family
-// enum used for family-level risk budget and correlation grouping.
-func trackerFamilyFromCategory(cat string) riskv2.StrategyFamily {
-	switch cat {
-	case "Trend", "Trend Elite", "Momentum", "Momentum Elite", "Intraday":
-		return riskv2.FamilyTrend
-	case "Mean Reversion", "Mean Rev Elite", "Oscillator Elite", "Statistical":
-		return riskv2.FamilyMeanReversion
-	case "Breakout", "Breakout Elite":
-		return riskv2.FamilyBreakout
-	case "Microstructure", "Velocity":
-		return riskv2.FamilyOrderFlow
-	case "Smart Money", "Price Action", "Price Action Elite":
-		return riskv2.FamilySmartMoney
-	case "Volume Elite":
-		return riskv2.FamilyVolumeProfile
-	case "Adaptive", "Adaptive Elite", "Multi-Signal":
-		return riskv2.FamilyMSS
-	default:
-		return riskv2.FamilyReserve
-	}
-}

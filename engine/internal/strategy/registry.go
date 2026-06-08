@@ -19,6 +19,7 @@ type StrategyMetadata struct {
 	Category  string
 	Timeframe string
 	Tier      StrategyTier
+	Family    StrategyFamily
 }
 
 // MetadataFromRegistry derives StrategyMetadata from a registry entry.
@@ -28,6 +29,18 @@ func MetadataFromRegistry(entry RegistryEntry) StrategyMetadata {
 		Category:  entry.Category,
 		Timeframe: entry.Timeframe,
 		Tier:      TierFromCategory(entry.Category),
+		Family:    CategoryToRiskFamily(entry.Category),
+	}
+}
+
+// MetadataFromCategory builds metadata for a live strategy when only the tracker
+// category is available (e.g. during executeThroughInstitutionalPath).
+func MetadataFromCategory(name, category string) StrategyMetadata {
+	return StrategyMetadata{
+		Name:     name,
+		Category: category,
+		Tier:     TierFromCategory(category),
+		Family:   CategoryToRiskFamily(category),
 	}
 }
 

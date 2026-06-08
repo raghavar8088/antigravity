@@ -2,6 +2,26 @@ package strategy
 
 import riskv2 "antigravity-engine/internal/risk/v2"
 
+// StrategyFamily is the authoritative family enum consumed by Risk V2 concentration
+// controls. Aliased to riskv2.StrategyFamily so there is a single runtime type.
+type StrategyFamily = riskv2.StrategyFamily
+
+// Institutional family constants — use these instead of string literals or
+// FamilyReserve placeholders when wiring the execution pipeline.
+const (
+	FamilyTrend         StrategyFamily = riskv2.FamilyTrend
+	FamilyMeanReversion StrategyFamily = riskv2.FamilyMeanReversion
+	FamilyMomentum      StrategyFamily = riskv2.FamilyTrend // directional momentum
+	FamilyStatArb       StrategyFamily = riskv2.FamilyMeanReversion
+	FamilyBreakout      StrategyFamily = riskv2.FamilyBreakout
+	FamilyOrderFlow     StrategyFamily = riskv2.FamilyOrderFlow
+	FamilySmartMoney    StrategyFamily = riskv2.FamilySmartMoney
+	FamilyFunding       StrategyFamily = riskv2.FamilyFunding
+	FamilyVolumeProfile StrategyFamily = riskv2.FamilyVolumeProfile
+	FamilyMSS           StrategyFamily = riskv2.FamilyMSS
+	FamilyReserve       StrategyFamily = riskv2.FamilyReserve
+)
+
 // CategoryFamily maps a strategy category string to the riskv2.StrategyFamily
 // type used by the Risk V2 engine for family concentration checks.
 //
@@ -20,13 +40,13 @@ var categoryFamilyMap = map[string]riskv2.StrategyFamily{
 	"Breakout Elite":     riskv2.FamilyBreakout,
 	"Mean Reversion":     riskv2.FamilyMeanReversion,
 	"Mean Rev Elite":     riskv2.FamilyMeanReversion,
-	"Momentum":           riskv2.FamilyTrend, // Momentum is directional — closest to Trend
-	"Momentum Elite":     riskv2.FamilyTrend,
+	"Momentum":           FamilyMomentum,
+	"Momentum Elite":     FamilyMomentum,
 	"Oscillator Elite":   riskv2.FamilyMeanReversion,
 	"Volume Elite":       riskv2.FamilyVolumeProfile,
 	"Microstructure":     riskv2.FamilyOrderFlow,
 	"Velocity":           riskv2.FamilyOrderFlow,
-	"Statistical":        riskv2.FamilyMeanReversion,
+	"Statistical":        FamilyStatArb,
 	"Volatility":         riskv2.FamilyMeanReversion, // Volatility mean-reverts
 	"Volatility Elite":   riskv2.FamilyMeanReversion,
 	"Time-of-Day":        riskv2.FamilyTrend, // Session-based directional bias
@@ -41,11 +61,11 @@ var categoryFamilyMap = map[string]riskv2.StrategyFamily{
 	"Unknown":            riskv2.FamilyReserve,
 }
 
-// CategoryToRiskFamily returns the riskv2.StrategyFamily for a given category.
+// CategoryToRiskFamily returns the StrategyFamily for a given category.
 // Unknown categories fall back to FamilyReserve (uncapped bucket).
-func CategoryToRiskFamily(category string) riskv2.StrategyFamily {
+func CategoryToRiskFamily(category string) StrategyFamily {
 	if f, ok := categoryFamilyMap[category]; ok {
 		return f
 	}
-	return riskv2.FamilyReserve
+	return FamilyReserve
 }

@@ -286,6 +286,10 @@ func (o *Orchestrator) SetPMSBudget(budget *pms.PortfolioRiskBudget) {
 }
 
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
+	// P2-D: refresh equity immediately before Kelly sizing so Risk V2 never uses
+	// the stale boot-time seed (covers 1m/5m candle paths that skip tick pipeline).
+	o.risk.SyncEquity(o.exec.GetEquityUSD())
+
 	clientOrderID := fmt.Sprintf("AG-PAPER-%s-%d", strings.ReplaceAll(sig.Symbol, "-", ""), time.Now().UTC().UnixNano())
 	store := o.eventLedger
 	if store == nil {
@@ -340,13 +344,12 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		return execution.FillResult{}, err
 	}
 
-	// P2-C: look up the live strategy category so Risk V2 receives the correct
-	// family for family concentration checks — replaces hardcoded FamilyReserve.
+	// P2-C: authoritative strategy metadata with live family for concentration checks.
 	stratCategory := ""
 	if stats, ok := o.tracker.GetStats(strategyName); ok {
 		stratCategory = stats.Category
 	}
-	stratFamily := strategy.CategoryToRiskFamily(stratCategory)
+	stratMeta := strategy.MetadataFromCategory(strategyName, stratCategory)
 
 	// P3-A: Portfolio-level risk gate (PMS). Runs before the per-strategy pipeline
 	// so portfolio-wide heat, VaR, drawdown, and daily-loss caps can block trades
@@ -371,6 +374,7 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		if violations := o.pmsBudget.CheckPortfolioRisk(ctx, btcPaperAccountID, pmsBudgetConfig, proposedDollarRisk, equityForPMS); len(violations) > 0 {
 			pmsReason := fmt.Sprintf("PMS portfolio gate blocked: %s", violations[0].Message)
 			log.Printf("[PMS GATE] %s: %s", strategyName, pmsReason)
+			logDecisionFunnel(strategyName, stratCategory, stratMeta.Family, o.lastRegime, 0, 0, 0, 0, "pms_portfolio_gate: "+violations[0].Message)
 			pmsEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 				AggregateType: ledger.AggregateOrder,
 				AggregateID:   clientOrderID,
@@ -404,7 +408,7 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		Request: riskv2.TradeRequest{
 			Symbol:            sig.Symbol,
 			Strategy:          strategyName,
-			Family:            stratFamily,
+			Family:            stratMeta.Family,
 			Side:              riskSideFromAction(sig.Action),
 			EntryPrice:        currentPrice,
 			StopLossPrice:     stopLossFromSignal(sig, currentPrice),
@@ -413,18 +417,20 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 			Confidence:        sig.Confidence,
 			Exchange:          "paper",
 		},
-		Market: riskv2.MarketState{
-			// P2-B: pass live regime instead of hardcoded RegimeUnknown.
-			// Regime is read from o.lastRegime which is updated on every tick
-			// by the main signal processing loop.
-			Regime:         riskv2MarketRegimeFromString(o.lastRegime),
-			LiquidityScore: 0.65,
-		},
+		Market: o.buildRiskV2MarketState(),
 		Metrics: o.tracker.BuildRiskMetrics(strategyName),
 	})
 	// Phase 31B: record RISK_CHECKED transition.
 	riskCheckedAt := time.Now()
 	if riskDecision.Status == riskgate.DecisionBlocked {
+		logDecisionFunnel(
+			strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+			riskDecision.RiskDecision.Kelly.SelectedFraction,
+			riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
+			riskDecision.RiskDecision.DynamicSizing.Multiplier,
+			riskDecision.RiskDecision.DynamicSizing.RecommendedSizeBTC,
+			"risk_pipeline: "+riskDecision.Reason,
+		)
 		event, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 			AggregateType: ledger.AggregateOrder,
 			AggregateID:   clientOrderID,
@@ -466,18 +472,17 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 	})
 	// Elite-only drawdown regime enforcement (P1-C).
 	if riskDecision.RiskDecision.Drawdown.OnlyEliteStrategies {
-		stratCategory := ""
-		if stats, ok := o.tracker.GetStats(strategyName); ok {
-			stratCategory = stats.Category
-		}
-		meta := strategy.StrategyMetadata{
-			Name:     strategyName,
-			Category: stratCategory,
-			Tier:     strategy.TierFromCategory(stratCategory),
-		}
-		if err := risk.EvaluateDrawdownExecution(meta, riskDecision.RiskDecision.Drawdown); err != nil {
+		if err := risk.EvaluateDrawdownExecution(stratMeta, riskDecision.RiskDecision.Drawdown); err != nil {
 			eliteRej := err.Error()
 			log.Printf("[ELITE GATE] %s: %s", strategyName, eliteRej)
+			logDecisionFunnel(
+				strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+				riskDecision.RiskDecision.Kelly.SelectedFraction,
+				riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
+				riskDecision.RiskDecision.DynamicSizing.Multiplier,
+				riskDecision.RiskDecision.DynamicSizing.RecommendedSizeBTC,
+				"elite_drawdown_gate: "+eliteRej,
+			)
 			eliteEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 				AggregateType: ledger.AggregateOrder,
 				AggregateID:   clientOrderID,
@@ -515,6 +520,14 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		riskDecision.RiskDecision.DynamicSizing.Multiplier,
 	); err != nil {
 		rejReason := err.Error()
+		logDecisionFunnel(
+			strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+			riskDecision.RiskDecision.Kelly.SelectedFraction,
+			riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
+			riskDecision.RiskDecision.DynamicSizing.Multiplier,
+			riskDecision.RiskDecision.DynamicSizing.RecommendedSizeBTC,
+			"risk_floor_gate: "+rejReason,
+		)
 		rejEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 			AggregateType: ledger.AggregateOrder,
 			AggregateID:   clientOrderID,
@@ -2281,6 +2294,30 @@ func buildCandleHistoryText(ctx ai.MarketContext) string {
 	return sb.String()
 }
 
+// logDecisionFunnel emits a structured [DECISION FUNNEL] log line at every
+// trade rejection point. One log per rejection gives forensic reconstruction:
+// strategy → family → regime → Kelly output → DynamicSize output → reason.
+// P3-D: every rejected trade must expose the full sizing + rejection context.
+func logDecisionFunnel(
+	strategyName, category string,
+	family riskv2.StrategyFamily,
+	regime string,
+	kellyFraction, kellySizeBTC float64,
+	dynMultiplier, dynSizeBTC float64,
+	rejectionCode string,
+) {
+	log.Printf(
+		"[DECISION FUNNEL] REJECTED | strategy=%s category=%s family=%s regime=%s"+
+			" kelly_fraction=%.4f kelly_size_btc=%.6f"+
+			" dyn_multiplier=%.4f dyn_size_btc=%.6f"+
+			" reason=%s",
+		strategyName, category, family, regime,
+		kellyFraction, kellySizeBTC,
+		dynMultiplier, dynSizeBTC,
+		rejectionCode,
+	)
+}
+
 // syncPMSState refreshes the PMS portfolio risk state from the live Risk V2
 // engine snapshot. Called after every fill so subsequent CheckPortfolioRisk calls
 // see current heat, VaR, and drawdown rather than stale values (P3-A).
@@ -2327,20 +2364,87 @@ func targetSizeForCapital(currentPrice float64) float64 {
 	return fixedTradeCapitalUSD / currentPrice
 }
 
-// riskv2MarketRegimeFromString converts the internal regime string produced by
-// classifyMarketRegime() into the riskv2.MarketRegime type consumed by ValidateTrade.
-// This is the P2-B fix: Risk V2 now sees live regime instead of RegimeUnknown.
-func riskv2MarketRegimeFromString(regime string) riskv2.MarketRegime {
+// buildRiskV2MarketState assembles live market inputs for Risk V2 from the
+// orchestrator's rolling price/volume windows and last classified regime (P2-B).
+func (o *Orchestrator) buildRiskV2MarketState() riskv2.MarketState {
+	o.mu.RLock()
+	regime := o.lastRegime
+	prices := append([]float64(nil), o.priceWindow...)
+	volumes := append([]float64(nil), o.volumeWindow...)
+	o.mu.RUnlock()
+
+	state := riskv2.MarketState{
+		Regime:         o.riskV2RegimeFromLive(regime, prices),
+		LiquidityScore: computeLiquidityScore(volumes),
+	}
+	if len(prices) >= 14 {
+		atr := strategy.ATR(prices, 14)
+		latest := prices[len(prices)-1]
+		if latest > 0 {
+			state.VolatilityPct = atr / latest * 100
+		}
+		if len(prices) >= 60 {
+			anchor := prices[len(prices)-60]
+			if anchor > 0 {
+				state.BTCMovePct1m = (latest - anchor) / anchor * 100
+			}
+		}
+		if len(prices) >= 300 {
+			anchor5m := prices[len(prices)-300]
+			if anchor5m > 0 {
+				state.BTCMovePct5m = (latest - anchor5m) / anchor5m * 100
+			}
+		}
+	}
+	return state
+}
+
+// riskV2RegimeFromLive maps the internal regime classifier output to Risk V2
+// regime enums, resolving trend direction from live EMA alignment (P2-B).
+func (o *Orchestrator) riskV2RegimeFromLive(regime string, prices []float64) riskv2.MarketRegime {
 	switch regime {
 	case marketRegimeTrend:
+		if len(prices) >= 55 {
+			fast := strategy.EMA(prices, 21)
+			slow := strategy.EMA(prices, 55)
+			if fast >= slow {
+				return riskv2.RegimeTrendingBull
+			}
+			return riskv2.RegimeTrendingBear
+		}
 		return riskv2.RegimeTrendingBull
 	case marketRegimeRange:
 		return riskv2.RegimeRange
 	case marketRegimeVolatile:
 		return riskv2.RegimeHighVol
 	case marketRegimeMixed:
-		return riskv2.RegimeRange // Mixed maps to ranging: neither strong trend nor high vol
+		return riskv2.RegimeRange
 	default:
 		return riskv2.RegimeUnknown
 	}
+}
+
+// computeLiquidityScore derives a 0–1 liquidity score from recent vs baseline volume.
+func computeLiquidityScore(volumes []float64) float64 {
+	if len(volumes) < 10 {
+		return 0.5
+	}
+	recent := averageFloat(volumes[len(volumes)-5:])
+	baseline := averageFloat(volumes)
+	if baseline <= 0 {
+		return 0.5
+	}
+	ratio := recent / baseline
+	return math.Max(0.05, math.Min(1.0, 0.35+ratio*0.35))
+}
+
+func averageFloat(vals []float64) float64 {
+	if len(vals) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range vals {
+		sum += v
+	}
+	return sum / float64(len(vals))
 }

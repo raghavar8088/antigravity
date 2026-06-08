@@ -79,6 +79,27 @@ func (o *Orchestrator) pp() *PaperPersistBundle {
 
 // ── AccountStateProvider ─────────────────────────────────────────────────────
 
+// computeUnrealizedPnL returns the true mark-to-market P&L across all open
+// positions: sum of (markPrice - entryPrice) * size for longs, and
+// (entryPrice - markPrice) * size for shorts. Returns 0 if markPrice <= 0.
+func computeUnrealizedPnL(openPositions []positions.Position, markPrice float64) float64 {
+	if markPrice <= 0 {
+		return 0
+	}
+	var total float64
+	for _, pos := range openPositions {
+		if pos.Size <= 0 || pos.EntryPrice <= 0 {
+			continue
+		}
+		if pos.Side == strategy.ActionBuy {
+			total += (markPrice - pos.EntryPrice) * pos.Size
+		} else {
+			total += (pos.EntryPrice - markPrice) * pos.Size
+		}
+	}
+	return total
+}
+
 // computeExposureFromOpenPositions derives BTC exposure from live positions.
 func computeExposureFromOpenPositions(positions []positions.Position) (longBTC, shortBTC, grossBTC float64) {
 	for _, pos := range positions {
@@ -106,11 +127,17 @@ func (o *Orchestrator) GetAccountSnapshot() paperpersist.AccountSnapshot {
 
 	balance := o.exec.GetBalanceUSD()
 	equity := o.exec.GetEquityUSD()
-	unrealizedPnL := equity - balance
 
 	openPositions := o.posMgr.GetOpenPositions()
 	openCount := len(openPositions)
 	longBTC, shortBTC, grossBTC := computeExposureFromOpenPositions(openPositions)
+
+	// True mark-to-market P&L: sum of (markPrice - entryPrice) * size per
+	// position, signed for direction. This matches the per-row PnL shown in the
+	// UI (paperDeskPositionMath.ts) so the Account Summary total equals the sum
+	// of the position rows.
+	markPrice := o.exec.GetLastPrice()
+	unrealizedPnL := computeUnrealizedPnL(openPositions, markPrice)
 
 	var (
 		realizedPnL   float64
