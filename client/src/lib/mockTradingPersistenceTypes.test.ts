@@ -6,6 +6,7 @@ import {
 } from "@/lib/mockTradingEngine";
 import {
   mergeHydratedMockTrades,
+  mergePortfolioTrades,
   mockAccountStateSchema,
   mockTradeListQuerySchema,
   mockTradeSchema,
@@ -102,5 +103,21 @@ describe("Mock Trading persistence schemas", () => {
     const merged = mergeHydratedMockTrades([trade], [remote]);
     expect(merged).toHaveLength(1);
     expect(merged[0].currentPrice).toBe(61_000);
+  });
+
+  it("computes portfolio equity from persisted closed trades when live cache is empty", () => {
+    const closed = {
+      ...trade,
+      status: "CLOSED" as const,
+      closedAt: 1_700_000_100_000,
+      exitPrice: 60_100,
+      exitReason: "TAKE_PROFIT" as const,
+      unrealizedPnl: 0,
+      realizedPnl: -250,
+    };
+    const portfolio = mergePortfolioTrades([], [closed]);
+    const account = computeAccountState(portfolio, DEFAULT_MOCK_TRADING_CONFIG);
+    expect(account.realizedPnl).toBe(-250);
+    expect(account.equity).toBe(DEFAULT_MOCK_TRADING_CONFIG.startingBalanceUsd - 250);
   });
 });

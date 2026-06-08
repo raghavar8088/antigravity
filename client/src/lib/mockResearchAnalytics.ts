@@ -386,6 +386,14 @@ export function computeWeeklyPnl(trades: readonly MockTrade[]): number {
     .reduce((sum, trade) => sum + trade.realizedPnl, 0);
 }
 
+export function computeMonthlyPnl(trades: readonly MockTrade[]): number {
+  const now = Date.now();
+  const monthStart = now - (30 * DAY_MS);
+  return closedTrades(trades)
+    .filter((trade) => (trade.closedAt ?? 0) >= monthStart)
+    .reduce((sum, trade) => sum + trade.realizedPnl, 0);
+}
+
 export interface MonthlyHeatmapRow {
   year: number;
   months: Record<number, number>; // 0-11 -> PnL

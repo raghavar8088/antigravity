@@ -100,6 +100,7 @@ function mockEngine(trades: MockTrade[] = []) {
   return {
     trades,
     historyTrades: [],
+    portfolioTrades: trades,
     analytics: computeAnalytics(trades),
     account: computeAccountState(trades, DEFAULT_MOCK_TRADING_CONFIG),
     logs: [],

@@ -294,6 +294,17 @@ export function mergeHydratedMockTrades(localTrades: readonly MockTrade[], remot
   return [...byId.values()].sort((a, b) => a.openedAt - b.openedAt);
 }
 
+/** Merge persisted history with the live engine cache; live rows win on id conflicts. */
+export function mergePortfolioTrades(
+  liveTrades: readonly MockTrade[],
+  persistedTrades: readonly MockTrade[],
+): MockTrade[] {
+  const byId = new Map<string, MockTrade>();
+  for (const trade of persistedTrades) byId.set(trade.id, trade);
+  for (const trade of liveTrades) byId.set(trade.id, trade);
+  return [...byId.values()].sort((a, b) => a.openedAt - b.openedAt);
+}
+
 export type MockTradingHydrateResponse = {
   ok: true;
   trades: MockTrade[];

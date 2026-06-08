@@ -44,6 +44,7 @@ import {
   DEFAULT_MOCK_ACCOUNT_KEY,
   MOCK_RESET_CONFIRMATION,
   mergeHydratedMockTrades,
+  mergePortfolioTrades,
   type MockAccountSnapshotResponse,
   type MockLogsResponse,
   type MockTradingHydrateResponse,
@@ -57,6 +58,7 @@ const OPEN_MARK_PERSIST_BATCH_SIZE = 100;
 const LOG_RING_CAP = 200;
 const TRADE_CACHE_MIN_CAP = 500;
 const HISTORY_PAGE_SIZE = 100;
+const SUMMARY_FETCH_CAP = 50_000;
 
 const STRATEGY_EXIT_OVERRIDES = new Map<number, StrategyExitOverride>(
   FUTURES_STRAT_DEFS.map((d) => [
@@ -166,8 +168,12 @@ export interface UseMockTradingEngineOptions {
 }
 
 export interface UseMockTradingEngineResult {
+  /** Live engine cache — open trades and recently closed rows. */
   trades: MockTrade[];
+  /** Paginated Mongo history for the trade table. */
   historyTrades: MockTrade[];
+  /** Live cache merged with persisted history — use for portfolio metrics. */
+  portfolioTrades: MockTrade[];
   analytics: MockTradeAnalytics;
   account: MockAccountState;
   logs: MockTradeLog[];
@@ -213,6 +219,8 @@ export function useMockTradingEngine(
 
   const [trades, setTrades] = useState<MockTrade[]>([]);
   const [historyTrades, setHistoryTrades] = useState<MockTrade[]>([]);
+  const [summaryTrades, setSummaryTrades] = useState<MockTrade[]>([]);
+  const [hydratedAccount, setHydratedAccount] = useState<MockAccountState | null>(null);
   const [config, setConfigState] = useState<MockTradingConfig>(DEFAULT_MOCK_TRADING_CONFIG);
   const [logs, setLogs] = useState<MockTradeLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -240,6 +248,7 @@ export function useMockTradingEngine(
   const configRef = useRef(config);
   const priceRef = useRef(price);
   const tradesRef = useRef(trades);
+  const summaryTradesRef = useRef(summaryTrades);
   const lastMarkPersistAtRef = useRef(0);
   const lastAccountSnapshotAtRef = useRef(0);
   const lastPersistedConfigRef = useRef<string | null>(null);
@@ -248,6 +257,18 @@ export function useMockTradingEngine(
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { priceRef.current = price; }, [price]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
+  useEffect(() => { summaryTradesRef.current = summaryTrades; }, [summaryTrades]);
+
+  const portfolioTradesFor = useCallback(
+    (liveTrades: readonly MockTrade[]) =>
+      mergePortfolioTrades(liveTrades, summaryTradesRef.current.length > 0 ? summaryTradesRef.current : historyTrades),
+    [historyTrades],
+  );
+
+  const syncSummaryTrades = useCallback((updates: readonly MockTrade[]) => {
+    if (updates.length === 0) return;
+    setSummaryTrades((prev) => mergePortfolioTrades(updates, prev));
+  }, []);
 
   const markPersistenceOk = useCallback(() => {
     setPersistence((prev) => ({
@@ -401,6 +422,22 @@ export function useMockTradingEngine(
         const merged = mergeHydratedMockTrades(tradesRef.current, openTradesJson.trades);
         setTrades(merged);
         setHistoryTrades(historyJson.trades);
+
+        let summary = historyJson.trades;
+        if (historyJson.total > historyJson.trades.length) {
+          const fullParams = new URLSearchParams({
+            account_key: mockAccountKey,
+            page: "1",
+            limit: String(Math.min(historyJson.total, SUMMARY_FETCH_CAP)),
+            sort: "newest",
+          });
+          const fullRes = await fetch(`/api/mock-trading/trades?${fullParams.toString()}`);
+          const fullJson = await fullRes.json() as MockTradingHydrateResponse | { ok: false; error?: string };
+          if (fullRes.ok && fullJson.ok) summary = fullJson.trades;
+        }
+        setSummaryTrades(mergePortfolioTrades(merged, summary));
+        setHydratedAccount(accountJson.snapshot ?? null);
+
         setHistoryMeta({
           total: historyJson.total,
           totalPages: Math.max(1, Math.ceil(historyJson.total / HISTORY_PAGE_SIZE)),
@@ -442,7 +479,10 @@ export function useMockTradingEngine(
       const now = Date.now();
       let limitRejected = 0;
       // Equity for percent-of-equity sizing is based on current state.
-      const equity = computeAccountState(tradesRef.current, configRef.current).equity;
+      const equity = computeAccountState(
+        portfolioTradesFor(tradesRef.current),
+        configRef.current,
+      ).equity;
       const delta = diagnosticsDelta();
       const raisedRows = rows.filter((row) => isStrategySignalRaised(row) && !seenTraceIdsRef.current.has(row.traceId));
       delta.funnel.signalsGenerated += raisedRows.length;
@@ -601,6 +641,7 @@ export function useMockTradingEngine(
         const combined = [...prev, ...newTrades];
         return trimTradeCache(combined, configRef.current);
       });
+      syncSummaryTrades(newTrades);
       if (historyPage === 1) {
         setHistoryTrades((prev) => [...newTrades, ...prev].slice(0, HISTORY_PAGE_SIZE));
         setHistoryMeta((prev) => ({
@@ -611,7 +652,7 @@ export function useMockTradingEngine(
       }
       for (const trade of newTrades) void persistTrade(trade, "create");
     },
-    [historyPage, persistTrade],
+    [historyPage, persistTrade, portfolioTradesFor, syncSummaryTrades],
   );
 
   // ── Ingest 500-strategy research signals → create mock trades only ────────
@@ -624,7 +665,10 @@ export function useMockTradingEngine(
       const newLogs: MockTradeLog[] = [];
       const now = Date.now();
       let limitRejected = 0;
-      const equity = computeAccountState(tradesRef.current, configRef.current).equity;
+      const equity = computeAccountState(
+        portfolioTradesFor(tradesRef.current),
+        configRef.current,
+      ).equity;
       const delta = diagnosticsDelta();
       const freshSignals = signals.filter((signal) => !seenTraceIdsRef.current.has(`mock-research-${signal.strategyId}-${signal.evaluatedAt}-${signal.side}`));
       delta.funnel.signalsGenerated += freshSignals.length;
@@ -790,6 +834,7 @@ export function useMockTradingEngine(
         const combined = [...prev, ...newTrades];
         return trimTradeCache(combined, configRef.current);
       });
+      syncSummaryTrades(newTrades);
       if (historyPage === 1) {
         setHistoryTrades((prev) => [...newTrades, ...prev].slice(0, HISTORY_PAGE_SIZE));
         setHistoryMeta((prev) => ({
@@ -800,7 +845,7 @@ export function useMockTradingEngine(
       }
       for (const trade of newTrades) void persistTrade(trade, "create");
     },
-    [historyPage, persistTrade],
+    [historyPage, persistTrade, portfolioTradesFor, syncSummaryTrades],
   );
 
   // ── Poll the signal-trace API ─────────────────────────────────────────────
@@ -885,6 +930,7 @@ export function useMockTradingEngine(
       return updated;
     });
     if (mutated) setTrades(next);
+    if (closedTrades.length > 0) syncSummaryTrades(closedTrades);
     if (mutated && historyPage === 1) {
       const byId = new Map(next.map((trade) => [trade.id, trade]));
       setHistoryTrades((prev) => prev.map((trade) => byId.get(trade.id) ?? trade));
@@ -904,7 +950,7 @@ export function useMockTradingEngine(
       openMarkPersistCursorRef.current = (start + batch.length) % openUpdates.length;
       for (const trade of batch) void persistTrade(trade, "update");
     }
-  }, [historyPage, persistTrade, price]);
+  }, [historyPage, persistTrade, price, syncSummaryTrades]);
 
   // ── Tick the trace-age counter once per second ────────────────────────────
   useEffect(() => {
@@ -935,9 +981,10 @@ export function useMockTradingEngine(
         return combined.length > LOG_RING_CAP ? combined.slice(0, LOG_RING_CAP) : combined;
       });
       setHistoryTrades((prev) => prev.map((trade) => trade.id === closed?.id ? closed : trade));
+      syncSummaryTrades([closed]);
       void persistTrade(closed, "close");
     }
-  }, [persistTrade]);
+  }, [persistTrade, syncSummaryTrades]);
 
   const reset = useCallback(() => {
     const confirmed = typeof window === "undefined"
@@ -946,6 +993,8 @@ export function useMockTradingEngine(
     if (!confirmed) return;
     setTrades([]);
     setHistoryTrades([]);
+    setSummaryTrades([]);
+    setHydratedAccount(null);
     setLogs([]);
     setMockLimitRejectedSignals(0);
     setDiagnostics(emptyMockTradingDiagnostics());
@@ -963,8 +1012,19 @@ export function useMockTradingEngine(
     }
   }, [markPersistenceError, markPersistenceOk, mockAccountKey, persistenceDisabled]);
 
-  const analytics = useMemo(() => computeAnalytics(trades), [trades]);
-  const account = useMemo(() => computeAccountState(trades, config), [trades, config]);
+  const portfolioTrades = useMemo(
+    () => mergePortfolioTrades(trades, summaryTrades.length > 0 ? summaryTrades : historyTrades),
+    [trades, summaryTrades, historyTrades],
+  );
+  const computedAccount = useMemo(
+    () => computeAccountState(portfolioTrades, config),
+    [portfolioTrades, config],
+  );
+  const account = useMemo(() => {
+    if (portfolioTrades.length === 0 && hydratedAccount) return hydratedAccount;
+    return computedAccount;
+  }, [computedAccount, hydratedAccount, portfolioTrades.length]);
+  const analytics = useMemo(() => computeAnalytics(portfolioTrades), [portfolioTrades]);
   const traceAgeSeconds = lastFetchAt != null ? Math.floor((Date.now() - lastFetchAt) / 1000) : null;
 
   useEffect(() => {
@@ -983,6 +1043,7 @@ export function useMockTradingEngine(
   return {
     trades,
     historyTrades,
+    portfolioTrades,
     analytics,
     account,
     logs,

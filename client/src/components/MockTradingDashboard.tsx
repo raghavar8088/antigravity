@@ -97,6 +97,8 @@ import {
 import {
   computeAdvancedResearchAnalytics,
   computeDailyPnlPoints,
+  computeMonthlyPnl,
+  computeWeeklyPnl,
   createEquitySnapshot,
   type AdvancedResearchAnalytics,
 } from "@/lib/mockResearchAnalytics";
@@ -1201,7 +1203,7 @@ export default function MockTradingDashboard() {
     currentRegime: regime.regime,
   });
   const scoring = useStrategyScoring({
-    trades: engine.trades,
+    trades: engine.portfolioTrades,
     currentRegime: regime.regime,
     newCandleReady: candles.newCandleReady,
     topNCount: research.config.topN,
@@ -1229,7 +1231,7 @@ export default function MockTradingDashboard() {
   const tableSourceTrades =
     engine.persistence.status === "mongo" || engine.historyTrades.length > 0
       ? engine.historyTrades
-      : engine.trades;
+      : engine.portfolioTrades;
 
   const trades = useMemo(() => {
     const combined: MockTradeFilter = { ...filter };
@@ -1284,7 +1286,7 @@ export default function MockTradingDashboard() {
 
   useEffect(() => {
     if (!candles.newCandleReady || typeof fetch !== "function") return;
-    const snapshot = createEquitySnapshot({ account: engine.account, trades: engine.trades, regime: regime.regime });
+    const snapshot = createEquitySnapshot({ account: engine.account, trades: engine.portfolioTrades, regime: regime.regime });
     void fetch("/api/mock-trading/equity", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1303,10 +1305,10 @@ export default function MockTradingDashboard() {
       // Equity persistence is best-effort; local chart state continues updating.
     });
 
-    const latestDaily = computeDailyPnlPoints(engine.trades).at(-1);
+    const latestDaily = computeDailyPnlPoints(engine.portfolioTrades).at(-1);
     if (latestDaily) {
       const dayStart = Math.floor(latestDaily.timestamp / 86_400_000) * 86_400_000;
-      const tradeCount = engine.trades.filter(
+      const tradeCount = engine.portfolioTrades.filter(
         (trade) => trade.status === "CLOSED" && trade.closedAt != null && trade.closedAt >= dayStart,
       ).length;
       void fetch("/api/mock-trading/daily-pnl", {
@@ -1324,7 +1326,7 @@ export default function MockTradingDashboard() {
         // Daily PnL history is best-effort.
       });
     }
-  }, [candles.newCandleReady, engine.account, engine.trades, regime.regime]);
+  }, [candles.newCandleReady, engine.account, engine.portfolioTrades, regime.regime]);
 
   useEffect(() => {
     if (scoring.scores.length === 0 || typeof fetch !== "function") return;
@@ -1459,24 +1461,24 @@ export default function MockTradingDashboard() {
   const realizedClass = pnlClass(engine.analytics.realizedPnl);
   const unrealizedClass = pnlClass(engine.analytics.unrealizedPnl);
   const advancedResearch = useMemo(
-    () => computeAdvancedResearchAnalytics({ trades: engine.trades, scores: scoring.scores, account: acct }),
-    [acct, engine.trades, scoring.scores],
+    () => computeAdvancedResearchAnalytics({ trades: engine.portfolioTrades, scores: scoring.scores, account: acct }),
+    [acct, engine.portfolioTrades, scoring.scores],
   );
   const strategyHealth = useMemo(
-    () => computeStrategyHealth(scoring.scores, engine.trades),
-    [engine.trades, scoring.scores],
+    () => computeStrategyHealth(scoring.scores, engine.portfolioTrades),
+    [engine.portfolioTrades, scoring.scores],
   );
   const walkForwardRows = useMemo(
-    () => computeMockWalkForwardRows(engine.trades),
-    [engine.trades],
+    () => computeMockWalkForwardRows(engine.portfolioTrades),
+    [engine.portfolioTrades],
   );
   const strategyFamilyById = useMemo(() => {
     const map = new Map<number, string>();
-    for (const trade of engine.trades) {
+    for (const trade of engine.portfolioTrades) {
       if (trade.strategyFamily) map.set(trade.strategyId, trade.strategyFamily);
     }
     return map;
-  }, [engine.trades]);
+  }, [engine.portfolioTrades]);
 
   const portfolioAllocation = useMemo(
     () =>
@@ -1489,21 +1491,22 @@ export default function MockTradingDashboard() {
     [acct.equity, scoring.scores, strategyFamilyById, strategyHealth],
   );
 
-  const weeklyPnl = useMemo(() => {
-    const now = Date.now();
-    const weekStart = now - (7 * 86_400_000);
-    return engine.trades
-      .filter((t) => t.status === "CLOSED" && t.closedAt != null && t.closedAt >= weekStart)
-      .reduce((sum, t) => sum + t.realizedPnl, 0);
-  }, [engine.trades]);
-
-  const monthlyPnl = useMemo(() => {
-    const now = Date.now();
-    const monthStart = now - (30 * 86_400_000);
-    return engine.trades
-      .filter((t) => t.status === "CLOSED" && t.closedAt != null && t.closedAt >= monthStart)
-      .reduce((sum, t) => sum + t.realizedPnl, 0);
-  }, [engine.trades]);
+  const dailyPnl = useMemo(
+    () => createEquitySnapshot({ account: acct, trades: engine.portfolioTrades, regime: regime.regime }).dailyPnl,
+    [acct, engine.portfolioTrades, regime.regime],
+  );
+  const weeklyPnl = useMemo(
+    () => computeWeeklyPnl(engine.portfolioTrades),
+    [engine.portfolioTrades],
+  );
+  const monthlyPnl = useMemo(
+    () => computeMonthlyPnl(engine.portfolioTrades),
+    [engine.portfolioTrades],
+  );
+  const activeStrategies = useMemo(
+    () => new Set(engine.portfolioTrades.map((trade) => trade.strategyId)).size,
+    [engine.portfolioTrades],
+  );
 
   const combinedDiagnostics = useMemo<MockTradingDiagnostics>(() => ({
     funnel: combineDiagnostics(research.diagnostics.totals.funnel, engine.diagnostics.funnel),
@@ -1527,13 +1530,13 @@ export default function MockTradingDashboard() {
       btcPrice={live.price}
       btcChange24h={live.change24h}
       regime={regime.regime}
-      dailyPnl={engine.analytics.totalPnl}
+      dailyPnl={dailyPnl}
       weeklyPnl={weeklyPnl}
       monthlyPnl={monthlyPnl}
       totalPnl={engine.analytics.totalPnl}
       equity={acct.equity}
       openPositions={acct.openCount}
-      activeStrategies={strategyHealth.filter(h => h.state === "ACTIVE").length}
+      activeStrategies={activeStrategies}
       connectionStatus={connectionStatus}
       persistenceStatus={persistenceStatus}
       riskStatus={acct.maxDrawdownPct > 10 ? "warning" : "safe"}
