@@ -235,10 +235,91 @@ export async function listPaperTrades(opts: ListTradesOpts): Promise<PaperTradeD
   return docs.map((d) => strip(d) as PaperTradeDoc);
 }
 
-export async function countPaperTrades(accountKey: string): Promise<number> {
+export type ClosedTradeStats = {
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  realized_pnl: number;
+  total_fees: number;
+};
+
+function closedTradesFilter(accountKey: string, side?: string): Record<string, unknown> {
+  const filter: Record<string, unknown> = { account_key: accountKey };
+  if (side) filter.side = side;
+  return filter;
+}
+
+const EMPTY_CLOSED_TRADE_STATS: ClosedTradeStats = {
+  total_trades: 0,
+  winning_trades: 0,
+  losing_trades: 0,
+  win_rate: 0,
+  realized_pnl: 0,
+  total_fees: 0,
+};
+
+/** Authoritative closed-trade stats from paper_trades (matches Trade History pagination total). */
+export async function getClosedTradeStats(
+  accountKey: string,
+  opts?: { side?: string },
+): Promise<ClosedTradeStats> {
   try {
     const db = await getDb();
-    return await db.collection(COL_PAPER_TRADES).countDocuments({ account_key: accountKey });
+    const rows = await db
+      .collection(COL_PAPER_TRADES)
+      .aggregate([
+        { $match: closedTradesFilter(accountKey, opts?.side) },
+        {
+          $group: {
+            _id: null,
+            total_trades: { $sum: 1 },
+            winning_trades: { $sum: { $cond: [{ $gt: ["$net_pnl", 0] }, 1, 0] } },
+            losing_trades: { $sum: { $cond: [{ $lte: ["$net_pnl", 0] }, 1, 0] } },
+            realized_pnl: { $sum: { $ifNull: ["$net_pnl", 0] } },
+            total_fees: { $sum: { $ifNull: ["$fees", 0] } },
+          },
+        },
+      ])
+      .toArray();
+
+    const row = rows[0];
+    if (!row) return EMPTY_CLOSED_TRADE_STATS;
+
+    const total = Number(row.total_trades) || 0;
+    const wins = Number(row.winning_trades) || 0;
+    return {
+      total_trades: total,
+      winning_trades: wins,
+      losing_trades: Number(row.losing_trades) || 0,
+      win_rate: total > 0 ? wins / total : 0,
+      realized_pnl: Number(row.realized_pnl) || 0,
+      total_fees: Number(row.total_fees) || 0,
+    };
+  } catch {
+    return EMPTY_CLOSED_TRADE_STATS;
+  }
+}
+
+/** Merge MongoDB closed-trade counts into paper_state for display consistency. */
+export function mergeClosedTradeStatsIntoState(
+  state: PaperStateDoc | null,
+  stats: ClosedTradeStats,
+): PaperStateDoc | null {
+  if (!state) return null;
+  return {
+    ...state,
+    total_trades: stats.total_trades,
+    winning_trades: stats.winning_trades,
+    losing_trades: stats.losing_trades,
+    win_rate: stats.win_rate,
+  };
+}
+
+export async function countPaperTrades(accountKey: string, side?: string): Promise<number> {
+  try {
+    const db = await getDb();
+    return await db.collection(COL_PAPER_TRADES).countDocuments(closedTradesFilter(accountKey, side));
   } catch {
     return 0;
   }

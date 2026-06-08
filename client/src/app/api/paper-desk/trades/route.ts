@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   try {
     [trades, total] = await Promise.all([
       listPaperTrades({ accountKey, limit, offset, cursor, strategyId, symbol, side, sortBy, sortDir }),
-      countPaperTrades(accountKey),
+      countPaperTrades(accountKey, side),
     ]);
   } catch (err) {
     return mongoUnavailable(err instanceof Error ? err.message : "unknown");

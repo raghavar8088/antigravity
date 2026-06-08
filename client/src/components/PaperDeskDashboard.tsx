@@ -286,7 +286,12 @@ export default function PaperDeskDashboard() {
               <DeskTabs items={TABS} active={tab} onChange={handleTabChange} variant="primary" />
               <div style={{ marginTop: "var(--desk-space-4)" }}>
                 {tab === "positions" && <PositionsPanel positions={openPositions} markPrice={live.price} />}
-                {tab === "trades" && <TradesPanel recentTrades={recentTrades} />}
+                {tab === "trades" && (
+                  <TradesPanel
+                    recentTrades={recentTrades}
+                    closedTradeTotal={state?.total_trades}
+                  />
+                )}
                 {tab === "orders" && <OrdersPanel />}
                 {tab === "equity" && <EquityPanel />}
                 {tab === "strategies" && <StrategiesPanel />}
@@ -344,7 +349,13 @@ const PositionsPanel = memo(function PositionsPanel({
 
 // ── Trades panel (recent live + paginated history) ──────────────────────────
 
-const TradesPanel = memo(function TradesPanel({ recentTrades }: { recentTrades: PaperTradeDoc[] }) {
+const TradesPanel = memo(function TradesPanel({
+  recentTrades,
+  closedTradeTotal,
+}: {
+  recentTrades: PaperTradeDoc[];
+  closedTradeTotal?: number;
+}) {
   const [page, setPage] = useState<TradesPage | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -391,7 +402,13 @@ const TradesPanel = memo(function TradesPanel({ recentTrades }: { recentTrades: 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <DeskChip tone="primary">{page ? `${page.pagination.total} total trades` : `${rows.length} recent`}</DeskChip>
+        <DeskChip tone="primary">
+          {page
+            ? `${page.pagination.total} total trades`
+            : typeof closedTradeTotal === "number"
+              ? `${closedTradeTotal} total trades`
+              : `${rows.length} recent`}
+        </DeskChip>
         {(["", "LONG", "SHORT"] as const).map((s) => (
           <DeskButton
             key={s || "all"}

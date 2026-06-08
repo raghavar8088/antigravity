@@ -6,6 +6,8 @@ import {
   listOpenPositions,
   listPaperTrades,
   getStrategyHealthSummary,
+  getClosedTradeStats,
+  mergeClosedTradeStatsIntoState,
 } from "@/lib/paperDeskClient";
 import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
@@ -24,17 +26,20 @@ export async function GET() {
 
   if (!isMongoConfigured()) return mongoUnconfigured();
 
-  let state, openPositions, recentTrades, healthSummary;
+  let state, openPositions, recentTrades, healthSummary, closedStats;
   try {
-    [state, openPositions, recentTrades, healthSummary] = await Promise.all([
+    [state, openPositions, recentTrades, healthSummary, closedStats] = await Promise.all([
       getPaperState(accountKey),
       listOpenPositions(accountKey),
       listPaperTrades({ accountKey, limit: 20 }),
       getStrategyHealthSummary(accountKey),
+      getClosedTradeStats(accountKey),
     ]);
   } catch (err) {
     return mongoUnavailable(err instanceof Error ? err.message : "unknown");
   }
+
+  state = mergeClosedTradeStatsIntoState(state, closedStats);
 
   return NextResponse.json({
     ok: true,
