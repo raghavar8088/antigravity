@@ -721,6 +721,7 @@ func main() {
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
 	orchestrator.SetKillSwitch(ksSvc)
+	ksExecutor.SetOrchestrator(orchestrator)
 	log.Println("[KILL SWITCH] Institutional kill switch wired — PreTradeRiskPipeline gated")
 
 	// ── Portfolio Management System (P3-A) ───────────────────────────────────
@@ -1318,6 +1319,7 @@ func main() {
 	// 12. HTTP API Server
 	// ═══════════════════════════════════════════════════
 	killswitch := admin.NewKillSwitch(ctx, cancel, paperExecute, paperExecute, journal, posMgr, dbStore, riskEngine, tracker)
+	killswitch.SetEmergencyFlatten(orchestrator.ExecuteEmergencyFlatten)
 
 	// ── Phase 15J: Vault Secret Provider ─────────────────────────────────────
 	// Loads from HashiCorp Vault when VAULT_ADDR+VAULT_TOKEN are set;

@@ -216,4 +216,51 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 		bridge.RegisterOpenMapping(open.PaperTradeID, tradeID)
 		return nil
 	})
+	bridge.SetInstitutionalCloseHandler(func(ctx context.Context, close delta.CloseSignal, trade delta.LiveTrade) error {
+		o.mu.RLock()
+		price := close.ExitBTCPrice
+		if price <= 0 {
+			price = o.lastPrice
+		}
+		o.mu.RUnlock()
+		if price <= 0 {
+			return fmt.Errorf("no reference price for institutional delta close")
+		}
+		buying := bridge.IsBuyingMode()
+		closeSide := delta.SideBuy
+		action := strategy.ActionBuy
+		if buying {
+			closeSide = delta.SideSell
+			action = strategy.ActionSell
+		}
+		sig := strategy.Signal{
+			Symbol:        fmt.Sprintf("DELTA-CLOSE:%s:%.0f", trade.OptionType, trade.Strike),
+			Action:        action,
+			TargetSize:    float64(trade.Contracts) * 0.001,
+			Confidence:    0.95,
+			StopLossPct:   defaultSignalStopLossPct,
+			TakeProfitPct: minSignalTakeProfitPct,
+		}
+		if sig.TargetSize < 0.01 {
+			sig.TargetSize = 0.01
+		}
+		strategyName := trade.StrategyName
+		if strategyName == "" {
+			strategyName = "DELTA_BRIDGE_CLOSE"
+		}
+		var captured delta.PlaceOrderResult
+		fillFn := func(c context.Context, _ strategy.Signal, _ string) (execution.FillResult, error) {
+			result, err := bridge.SubmitReduceOnlyOrder(c, trade.ProductID, closeSide, trade.Contracts)
+			if err != nil {
+				return execution.FillResult{}, err
+			}
+			captured = result
+			return execution.FillResult{ExecPrice: result.Price, OrderMode: execution.OrderModeMarket}, nil
+		}
+		if _, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, strategyName+"_CLOSE", price, execution.OrderModeMarket, fillFn); err != nil {
+			return err
+		}
+		bridge.UpdateTradeAfterClose(trade.ID, captured, buying)
+		return nil
+	})
 }

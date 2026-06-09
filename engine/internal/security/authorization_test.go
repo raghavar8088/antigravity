@@ -111,10 +111,13 @@ func TestRBAC_Viewer_CannotExecute(t *testing.T) {
 	}
 }
 
-func TestRBAC_Trader_CanExecute(t *testing.T) {
+func TestRBAC_Trader_CanRequestExecution(t *testing.T) {
 	p := Principal{Role: RoleTrader, Permissions: PermissionsForRole(RoleTrader)}
-	if !p.HasPermission(PermTradeExecute) {
-		t.Error("TRADER should have trade.execute")
+	if !p.HasPermission(PermTradeRequest) {
+		t.Error("TRADER should have trade.request")
+	}
+	if p.HasPermission(PermTradeExecute) {
+		t.Error("TRADER should NOT have trade.execute — engine service only")
 	}
 	if p.HasPermission(PermSystemShutdown) {
 		t.Error("TRADER should NOT have system.shutdown")

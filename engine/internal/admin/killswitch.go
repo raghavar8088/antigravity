@@ -16,15 +16,16 @@ import (
 
 // KillSwitchController maps the API endpoints that control the bot forcibly.
 type KillSwitchController struct {
-	cancelFunc context.CancelFunc
-	engine     execution.Engine
-	paper      *execution.PaperClient
-	journal    *execution.TradeJournal
-	posMgr     *positions.Manager
-	dbStore    *persistence.Store
-	riskEngine *risk.RiskEngine
-	tracker    *risk.StrategyTracker
-	ctx        context.Context
+	cancelFunc       context.CancelFunc
+	engine           execution.Engine
+	paper            *execution.PaperClient
+	journal          *execution.TradeJournal
+	posMgr           *positions.Manager
+	dbStore          *persistence.Store
+	riskEngine       *risk.RiskEngine
+	tracker          *risk.StrategyTracker
+	ctx              context.Context
+	emergencyFlatten func(context.Context, strategy.Signal, string) error
 }
 
 func NewKillSwitch(
@@ -49,6 +50,11 @@ func NewKillSwitch(
 		riskEngine: riskEngine,
 		tracker:    tracker,
 	}
+}
+
+// SetEmergencyFlatten wires institutional emergency flatten (OMS + ledger path).
+func (k *KillSwitchController) SetEmergencyFlatten(fn func(context.Context, strategy.Signal, string) error) {
+	k.emergencyFlatten = fn
 }
 
 // HandleTrigger is a POST listener mapped to the Dashboard UI's big red alert button.
@@ -89,11 +95,14 @@ func (k *KillSwitchController) HandleTrigger(w http.ResponseWriter, r *http.Requ
 			TargetSize: targetSize,
 		}
 
-		err := k.engine.PlaceMarketOrder(dumpOrder)
-		if err != nil {
-			log.Printf("CRITICAL SHUTDOWN ERROR: Failed to flatten market exposure. Manual intervention required ASAP. Err: %s", err)
+		if k.emergencyFlatten != nil {
+			if err := k.emergencyFlatten(r.Context(), dumpOrder, "ADMIN_TRIGGER"); err != nil {
+				log.Printf("CRITICAL SHUTDOWN ERROR: Institutional flatten failed. Manual intervention required ASAP. Err: %s", err)
+			} else {
+				log.Println("[SHUTDOWN] SUCCESS - Net BTC exposure flattened via institutional path.")
+			}
 		} else {
-			log.Println("[SHUTDOWN] SUCCESS - Net BTC exposure flattened to 0.0.")
+			log.Printf("CRITICAL SHUTDOWN ERROR: emergency flatten not wired — exposure may remain open")
 		}
 	}
 

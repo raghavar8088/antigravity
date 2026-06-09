@@ -74,6 +74,9 @@ type Bridge struct {
 	// institutionalOpen, when set, replaces direct broker placement in OnOpen.
 	institutionalOpen func(context.Context, OpenSignal, string) error
 
+	// institutionalClose routes OnClose through the engine institutional execution stack.
+	institutionalClose func(context.Context, CloseSignal, LiveTrade) error
+
 	// killCheck blocks broker submission when the institutional kill switch is active.
 	killCheck func(context.Context) error
 }
@@ -117,6 +120,13 @@ func (b *Bridge) SetInstitutionalOpenHandler(fn func(context.Context, OpenSignal
 	b.institutionalOpen = fn
 }
 
+// SetInstitutionalCloseHandler routes OnClose through the engine institutional execution stack.
+func (b *Bridge) SetInstitutionalCloseHandler(fn func(context.Context, CloseSignal, LiveTrade) error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.institutionalClose = fn
+}
+
 // SubmitOrder places an order on Delta — callable only from institutional fill callbacks.
 func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide, contracts int) (PlaceOrderResult, error) {
 	if b.client == nil {
@@ -128,6 +138,38 @@ func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide,
 		Side:      side,
 		OrderType: TypeMarket,
 		Leverage:  10,
+	})
+}
+
+// SubmitReduceOnlyOrder closes a live position — callable only from institutional fill callbacks.
+func (b *Bridge) SubmitReduceOnlyOrder(ctx context.Context, productID int, side OrderSide, contracts int) (PlaceOrderResult, error) {
+	if b.client == nil {
+		return PlaceOrderResult{}, fmt.Errorf("delta client not configured")
+	}
+	return b.client.PlaceOrder(ctx, PlaceOrderRequest{
+		ProductID:            productID,
+		Size:                 contracts,
+		Side:                 side,
+		OrderType:            TypeMarket,
+		Leverage:             10,
+		ReduceOnly:           true,
+		CancelOrdersAccepted: "true",
+	})
+}
+
+// UpdateTradeAfterClose updates live trade state after an institutional close fill.
+func (b *Bridge) UpdateTradeAfterClose(tradeID string, result PlaceOrderResult, buying bool) {
+	now := time.Now().UTC()
+	b.updateTrade(tradeID, func(t *LiveTrade) {
+		t.Status = "CLOSED"
+		t.CloseOrderID = result.OrderID
+		t.CloseFillPrice = result.Price
+		t.ClosedAt = &now
+		if buying {
+			t.RealizedPnl = (result.Price - t.FillPrice) * float64(t.Contracts)
+		} else {
+			t.RealizedPnl = (t.FillPrice - result.Price) * float64(t.Contracts)
+		}
 	})
 }
 
@@ -251,120 +293,22 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
-		if b.institutionalOpen != nil {
-			if err := b.institutionalOpen(ctx, sig, id); err != nil {
-				b.updateTrade(id, func(t *LiveTrade) {
-					t.Status = "FAILED"
-					t.FailureReason = err.Error()
-				})
-				log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL OPEN FAILED %s — %v", id, err)
-			}
-			return
-		}
-
-		strike := sig.Strike
-		expiry := sig.ExpiryTime
-		spot := sig.BTCPrice
-		if buying && spot <= 0 && sig.Strike > 1000 {
-			// Paper hook may omit spot; infer from writer strike (≈1% OTM).
-			switch sig.OptionType {
-			case "PUT":
-				spot = sig.Strike / 0.989
-			case "CALL":
-				spot = sig.Strike / 1.011
-			default:
-				spot = sig.Strike
-			}
-		}
-
-		if buying {
-			if optType == "CALL" {
-				strike = roundBTCStrike(spot * 1.007)
-			} else {
-				strike = roundBTCStrike(spot * 0.993)
-			}
-			expiry = nextWeeklyFriday(time.Now().UTC(), 5)
-		}
-
-		var contracts int
-		if buying {
-			bal, err2 := b.client.GetWallet(ctx)
-			if err2 != nil || bal <= 0 {
-				reason := "wallet unavailable"
-				if err2 != nil {
-					reason = fmt.Sprintf("wallet read failed: %v", err2)
-				}
-				b.updateTrade(id, func(t *LiveTrade) {
-					t.Status = "FAILED"
-					t.FailureReason = reason
-				})
-				log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — %s", id, reason)
-				return
-			}
-			contracts = BuyingContractsFromWallet(bal)
-			if contracts == 0 {
-				b.updateTrade(id, func(t *LiveTrade) {
-					t.Status = "FAILED"
-					t.FailureReason = "wallet below DELTA_MIN_WALLET_USD — cannot size live buy safely"
-				})
-				log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — wallet %.2f below minimum for buys", id, bal)
-				return
-			}
-		} else {
-			contracts = max1(int(sig.PremiumUSD / 100))
-		}
-
-		info, err := b.client.FindOptionProduct(ctx, strike, expiry, optType)
-		if err != nil {
+		openHandler := b.institutionalOpen
+		if openHandler == nil {
 			b.updateTrade(id, func(t *LiveTrade) {
 				t.Status = "FAILED"
-				t.FailureReason = fmt.Sprintf("product lookup failed: %v", err)
+				t.FailureReason = "institutional open handler not wired — broker execution rejected"
 			})
-			log.Printf("[DELTA BRIDGE] ❌ OPEN FAILED %s — %v", id, err)
+			log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL OPEN REJECTED %s — handler not wired", id)
 			return
 		}
-
-		orderSide := SideSell
-		if buying {
-			orderSide = SideBuy
-		}
-
-		result, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
-			ProductID: info.ProductID,
-			Size:      contracts,
-			Side:      orderSide,
-			OrderType: TypeMarket,
-			Leverage:  10,
-		})
-		if err != nil {
+		if err := openHandler(ctx, sig, id); err != nil {
 			b.updateTrade(id, func(t *LiveTrade) {
 				t.Status = "FAILED"
-				t.FailureReason = fmt.Sprintf("order placement failed: %v", err)
+				t.FailureReason = err.Error()
 			})
-			log.Printf("[DELTA BRIDGE] ❌ ORDER FAILED %s — %v", id, err)
-			return
+			log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL OPEN FAILED %s — %v", id, err)
 		}
-
-		b.updateTrade(id, func(t *LiveTrade) {
-			t.DeltaOrderID = result.OrderID
-			t.DeltaSymbol = result.Symbol
-			t.ProductID = info.ProductID
-			t.Contracts = contracts
-			t.FillPrice = result.Price
-			t.Strike = strike
-			t.ExpiryTime = expiry
-			t.Status = "OPEN"
-		})
-		b.mu.Lock()
-		b.openByPaperID[sig.PaperTradeID] = b.indexOfID(id)
-		b.mu.Unlock()
-
-		action := "SELL"
-		if buying {
-			action = "BUY"
-		}
-		log.Printf("[DELTA BRIDGE] ✅ %s ORDER PLACED %s | %s | Strike: $%.0f | Contracts: %d | Fill: $%.4f",
-			action, id, result.Symbol, strike, contracts, result.Price)
 	}()
 
 	b.trades = append([]LiveTrade{trade}, b.trades...)
@@ -392,66 +336,35 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 	}
 	delete(b.openByPaperID, sig.PaperTradeID)
 
-	buying := b.buyingMode
+	tradeCopy := trade
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
-		if b.killCheck != nil {
-			if err := b.killCheck(ctx); err != nil {
-				now := time.Now().UTC()
-				b.updateTrade(trade.ID, func(t *LiveTrade) {
-					t.Status = "FAILED"
-					t.FailureReason = err.Error()
-					t.ClosedAt = &now
-				})
-				return
-			}
-		}
-
-		// Close side is the opposite of open side:
-		// Selling mode opened SHORT → close with BUY
-		// Buying mode opened LONG → close with SELL + ReduceOnly
-		closeSide := SideBuy
-		if buying {
-			closeSide = SideSell
-		}
-
-		result, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
-			ProductID:            trade.ProductID,
-			Size:                 trade.Contracts,
-			Side:                 closeSide,
-			OrderType:            TypeMarket,
-			Leverage:             10,
-			ReduceOnly:           true,
-			CancelOrdersAccepted: "true",
-		})
-		now := time.Now().UTC()
-		if err != nil {
-			b.updateTrade(trade.ID, func(t *LiveTrade) {
+		closeHandler := b.institutionalClose
+		if closeHandler == nil {
+			now := time.Now().UTC()
+			b.updateTrade(tradeCopy.ID, func(t *LiveTrade) {
 				t.Status = "FAILED"
-				t.FailureReason = fmt.Sprintf("close order failed: %v", err)
+				t.FailureReason = "institutional close handler not wired — broker execution rejected"
 				t.ClosedAt = &now
 			})
-			log.Printf("[DELTA BRIDGE] ❌ CLOSE FAILED %s — %v", trade.ID, err)
+			log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL CLOSE REJECTED %s — handler not wired", tradeCopy.ID)
 			return
 		}
-
-		b.updateTrade(trade.ID, func(t *LiveTrade) {
-			t.Status = "CLOSED"
-			t.CloseOrderID = result.OrderID
-			t.CloseFillPrice = result.Price
-			t.ClosedAt = &now
-			if buying {
-				// Long option: bought at FillPrice, sold at close price.
-				t.RealizedPnl = (result.Price - t.FillPrice) * float64(t.Contracts)
-			} else {
-				t.RealizedPnl = (t.FillPrice - result.Price) * float64(t.Contracts)
-			}
-		})
-		log.Printf("[DELTA BRIDGE] ✅ CLOSE ORDER PLACED %s | %s | Fill: $%.4f | Exit: %s",
-			trade.ID, trade.DeltaSymbol, result.Price, sig.ExitReason)
+		if err := closeHandler(ctx, sig, tradeCopy); err != nil {
+			now := time.Now().UTC()
+			b.updateTrade(tradeCopy.ID, func(t *LiveTrade) {
+				t.Status = "FAILED"
+				t.FailureReason = err.Error()
+				t.ClosedAt = &now
+			})
+			log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL CLOSE FAILED %s — %v", tradeCopy.ID, err)
+			return
+		}
+		log.Printf("[DELTA BRIDGE] ✅ INSTITUTIONAL CLOSE %s | %s | Exit: %s",
+			tradeCopy.ID, tradeCopy.DeltaSymbol, sig.ExitReason)
 	}()
 }
 

@@ -290,6 +290,12 @@ func (o *Orchestrator) SetDeltaBroker(b *delta.Bridge) {
 // brokerFillFunc performs the broker-specific submission after institutional gates pass.
 type brokerFillFunc func(ctx context.Context, sig strategy.Signal, clientOrderID string) (execution.FillResult, error)
 
+// InstitutionalPathOpts configures optional behaviour for institutional execution.
+type InstitutionalPathOpts struct {
+	// EmergencyFlatten skips PMS and sizing gates but still records OMS/ledger events.
+	EmergencyFlatten bool
+}
+
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
 	return o.executeThroughInstitutionalPathWithFill(ctx, sig, strategyName, currentPrice, mode, func(_ context.Context, s strategy.Signal, clientOrderID string) (execution.FillResult, error) {
 		fill, err := o.exec.ExecuteSignal(s, mode)
@@ -301,7 +307,47 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 	})
 }
 
-func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode, fillFn brokerFillFunc) (execution.FillResult, error) {
+// ExecuteEmergencyFlatten flattens exposure through the institutional ledger/OMS path.
+// Sizing gates are bypassed; audit, risk, and OMS transitions are still recorded.
+func (o *Orchestrator) ExecuteEmergencyFlatten(ctx context.Context, sig strategy.Signal, reason string) error {
+	o.mu.RLock()
+	price := o.lastPrice
+	o.mu.RUnlock()
+	if price <= 0 {
+		price = o.exec.GetLastPrice()
+	}
+	if price <= 0 {
+		return fmt.Errorf("no market price for emergency flatten")
+	}
+	if sig.StopLossPct <= 0 {
+		sig.StopLossPct = defaultSignalStopLossPct
+	}
+	if sig.TakeProfitPct <= 0 {
+		sig.TakeProfitPct = minSignalTakeProfitPct
+	}
+	strategyName := "KILL_SWITCH_FLATTEN"
+	if reason != "" {
+		strategyName = "KILL_SWITCH_" + strings.ToUpper(strings.ReplaceAll(reason, " ", "_"))
+	}
+	_, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, strategyName, price, execution.OrderModeMarket,
+		func(_ context.Context, s strategy.Signal, clientOrderID string) (execution.FillResult, error) {
+			fill, execErr := o.exec.ExecuteSignal(s, execution.OrderModeMarket)
+			if execErr != nil {
+				return execution.FillResult{}, execErr
+			}
+			fill.ClientOrderID = clientOrderID
+			return fill, nil
+		},
+		InstitutionalPathOpts{EmergencyFlatten: true},
+	)
+	return err
+}
+
+func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode, fillFn brokerFillFunc, opts ...InstitutionalPathOpts) (execution.FillResult, error) {
+	var pathOpts InstitutionalPathOpts
+	if len(opts) > 0 {
+		pathOpts = opts[0]
+	}
 	// P2-D: refresh equity immediately before Kelly sizing so Risk V2 never uses
 	// the stale boot-time seed (covers 1m/5m candle paths that skip tick pipeline).
 	o.risk.SyncEquity(o.exec.GetEquityUSD())
@@ -358,6 +404,22 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	}
 	if _, err := appendOrderEvent(ledger.EventOrderValidated, orderPayload); err != nil {
 		return execution.FillResult{}, err
+	}
+
+	if pathOpts.EmergencyFlatten {
+		o.persistOMSTransition(ctx, paperpersist.OrderTransition{
+			OrderID:        clientOrderID,
+			StrategyID:     strategyName,
+			Symbol:         sig.Symbol,
+			Side:           string(sig.Action),
+			RequestedSize:  sig.TargetSize,
+			TransitionFrom: paperpersist.OMSNew,
+			TransitionTo:   paperpersist.OMSRiskChecked,
+			TransitionAt:   time.Now(),
+			RiskApproved:   true,
+			Reason:         "emergency_flatten",
+		})
+		return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, 1.0, "emergency_flatten")
 	}
 
 	// P2-C: authoritative strategy metadata with live family for concentration checks.
@@ -572,10 +634,23 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	}
 	sig.TargetSize = rec
 	orderPayload.Quantity = rec
+	return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, riskDecision.RiskDecision.Kelly.SelectedFraction, "institutional_path")
+}
+
+func (o *Orchestrator) submitInstitutionalOrder(
+	ctx context.Context,
+	sig strategy.Signal,
+	strategyName string,
+	clientOrderID string,
+	orderPayload ledger.OrderPayload,
+	appendOrderEvent func(ledger.EventType, ledger.OrderPayload) (ledger.Event, error),
+	fillFn brokerFillFunc,
+	kellyFraction float64,
+	source string,
+) (execution.FillResult, error) {
 	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
 		return execution.FillResult{}, err
 	}
-	// Phase 31B: record ACCEPTED transition.
 	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
 		OrderID:         clientOrderID,
 		StrategyID:      strategyName,
@@ -586,8 +661,9 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 		TransitionTo:    paperpersist.OMSAccepted,
 		TransitionAt:    time.Now(),
 		RiskApproved:    true,
-		KellyFraction:   riskDecision.RiskDecision.Kelly.SelectedFraction,
+		KellyFraction:   kellyFraction,
 		ApprovedSizeBTC: sig.TargetSize,
+		Reason:          source,
 	})
 	if _, err := appendOrderEvent(ledger.EventOrderSubmitted, orderPayload); err != nil {
 		return execution.FillResult{}, err
@@ -607,12 +683,14 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 			StrategyID:    strategyName,
 			Symbol:        sig.Symbol,
 			Payload:       map[string]string{"reason": err.Error()},
-			Source:        "paper-execution",
+			Source:        source,
 		})
 		if newEventErr == nil {
-			_, _ = store.Append(ctx, rejectEvent)
+			store := o.eventLedger
+			if store != nil {
+				_, _ = store.Append(ctx, rejectEvent)
+			}
 		}
-		// Phase 31B: record CANCELLED (execution failure).
 		o.persistOMSTransition(ctx, paperpersist.OrderTransition{
 			OrderID:        clientOrderID,
 			StrategyID:     strategyName,
@@ -632,7 +710,6 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	if _, err := appendOrderEvent(ledger.EventOrderFilled, fillPayload); err != nil {
 		return execution.FillResult{}, err
 	}
-	// Phase 31B: record SIMULATED_FILL transition.
 	o.persistOMSTransition(ctx, paperpersist.OrderTransition{
 		OrderID:        clientOrderID,
 		StrategyID:     strategyName,
@@ -645,8 +722,6 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 		FillPrice:      fill.ExecPrice,
 		FillSize:       sig.TargetSize,
 	})
-	// Attach the ClientOrderID so callers can correlate the fill with the OMS v3
-	// order aggregate and emit EventPositionOpened in the ledger.
 	fill.ClientOrderID = clientOrderID
 	return fill, nil
 }

@@ -1360,9 +1360,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   const [clearedAt, setClearedAt] = useState(0);
 
-  /** POST current engine state to MongoDB paper_state collection. */
+  /** Browser never persists execution state — Go engine is sole authority. */
   const saveToMongo = useCallback((overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
-    if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") return;
+    return;
     if (!cloudAccountKey) return;
     const body = {
       accountKey: cloudAccountKey,
@@ -2673,9 +2673,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
-      if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") {
-        return;
-      }
+      // Institutional hardening: browser-side paper execution removed permanently.
+      // Quotes/state hydrate from MongoDB + engine; VPS worker + Go engine execute.
+      return;
       if (pollInFlightRef.current) return;
       // In worker monitor mode: hydration handled by the worker heartbeat effect above.
       // Only run the local poll for quotes/data-health; skip entry/exit writes.

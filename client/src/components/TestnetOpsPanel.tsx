@@ -108,30 +108,8 @@ export function TestnetOpsPanel() {
     }
   };
 
-  const cancelOrder = async (orderId: string) => {
-    if (!user || !orderId.trim()) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/delta/testnet/cancel-order", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
-      });
-      const data = await readJson(res);
-      if (!res.ok || !data.ok) {
-        setMessage(String(data.error ?? `Cancel failed (${res.status})`));
-        return;
-      }
-      setMessage(`Cancelled ${orderId}`);
-      setCancelId("");
-      await refresh();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Cancel failed");
-    } finally {
-      setBusy(false);
-    }
+  const cancelOrder = async (_orderId: string) => {
+    setMessage("Direct testnet cancel from UI is disabled — use institutional OMS cancel when available");
   };
 
   if (authLoading) {

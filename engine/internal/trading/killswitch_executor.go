@@ -14,6 +14,7 @@ import (
 // the live paper trading engine. It is passed to killswitch.NewService in main.go
 // and is called automatically when kill switch actions fire.
 type KillSwitchExecutor struct {
+	orch   *Orchestrator
 	paper  *execution.PaperClient
 	posMgr *positions.Manager
 }
@@ -21,6 +22,11 @@ type KillSwitchExecutor struct {
 // NewKillSwitchExecutor constructs an executor wired to the live paper engine.
 func NewKillSwitchExecutor(paper *execution.PaperClient, posMgr *positions.Manager) *KillSwitchExecutor {
 	return &KillSwitchExecutor{paper: paper, posMgr: posMgr}
+}
+
+// SetOrchestrator wires the orchestrator for institutional emergency flatten.
+func (e *KillSwitchExecutor) SetOrchestrator(o *Orchestrator) {
+	e.orch = o
 }
 
 // CancelOpenOrders closes all open paper positions at the current market price.
@@ -41,10 +47,8 @@ func (e *KillSwitchExecutor) CancelOpenOrders(ctx context.Context, reason string
 	return nil
 }
 
-// FlattenPositions performs a hard flatten by submitting a market order to zero
-// out net BTC exposure in the paper engine, then closing all tracked positions.
+// FlattenPositions performs a hard flatten through the institutional execution path.
 func (e *KillSwitchExecutor) FlattenPositions(ctx context.Context, reason string) error {
-	price := e.paper.GetLastPrice()
 	position := e.paper.GetPosition("BTCUSDT")
 	if position == 0 {
 		log.Printf("[KILL SWITCH] FlattenPositions: exposure already zero (%s)", reason)
@@ -61,14 +65,20 @@ func (e *KillSwitchExecutor) FlattenPositions(ctx context.Context, reason string
 		Action:     action,
 		TargetSize: size,
 	}
-	if err := e.paper.PlaceMarketOrder(sig); err != nil {
-		log.Printf("[KILL SWITCH] FlattenPositions: market order failed: %v (%s)", err, reason)
-		return err
+	if e.orch != nil {
+		if err := e.orch.ExecuteEmergencyFlatten(ctx, sig, reason); err != nil {
+			log.Printf("[KILL SWITCH] FlattenPositions: institutional flatten failed: %v (%s)", err, reason)
+			return err
+		}
+	} else {
+		log.Printf("[KILL SWITCH] FlattenPositions: orchestrator unavailable — refusing direct ExecuteSignal bypass")
+		return nil
 	}
+	price := e.paper.GetLastPrice()
 	if price > 0 {
 		e.posMgr.CloseAllPositions(price)
 	}
-	log.Printf("[KILL SWITCH] FlattenPositions: flattened %.4f BTC — %s", size, reason)
+	log.Printf("[KILL SWITCH] FlattenPositions: flattened %.4f BTC via institutional path — %s", size, reason)
 	return nil
 }
 

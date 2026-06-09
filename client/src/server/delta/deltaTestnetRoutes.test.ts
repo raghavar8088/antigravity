@@ -42,6 +42,8 @@ import { GET as positionsGet } from "@/app/api/delta/testnet/positions/route";
 
 describe("testnet API routes (mocked)", () => {
   beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_DESK_TESTNET_OPS", "1");
+    vi.stubEnv("DELTA_TESTNET", "1");
     vi.mocked(guardTestnetApiRoute).mockResolvedValue({
       ok: true,
       ctx: { userId: "test-user-uuid" },
@@ -52,7 +54,7 @@ describe("testnet API routes (mocked)", () => {
     mockGetOpenOrders.mockReset();
   });
 
-  it("place-order returns 401 when session guard fails", async () => {
+  it("place-order returns 410 even when session guard would fail — route retired", async () => {
     vi.mocked(guardTestnetApiRoute).mockResolvedValueOnce({
       ok: false,
       response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
@@ -69,15 +71,10 @@ describe("testnet API routes (mocked)", () => {
         }),
       }),
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(410);
   });
 
-  it("place-order returns order id on success", async () => {
-    mockPlaceOrder.mockResolvedValueOnce({
-      ok: true,
-      data: { orderId: "99", symbol: "BTCUSD", state: "open", averageFillPrice: 1 },
-    });
-
+  it("place-order returns 410 — route retired", async () => {
     const res = await placeOrderPost(
       new Request("http://localhost/api/delta/testnet/place-order", {
         method: "POST",
@@ -90,15 +87,10 @@ describe("testnet API routes (mocked)", () => {
         }),
       }),
     );
-    const json = (await res.json()) as { ok: boolean; orderId?: string };
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.orderId).toBe("99");
+    expect(res.status).toBe(410);
   });
 
-  it("cancel-order returns cancelled", async () => {
-    mockCancelOrder.mockResolvedValueOnce({ ok: true, data: { cancelled: true } });
-
+  it("cancel-order returns 410 — route retired", async () => {
     const res = await cancelOrderPost(
       new Request("http://localhost/api/delta/testnet/cancel-order", {
         method: "POST",
@@ -106,9 +98,7 @@ describe("testnet API routes (mocked)", () => {
         body: JSON.stringify({ orderId: "99" }),
       }),
     );
-    const json = (await res.json()) as { ok: boolean; cancelled?: boolean };
-    expect(json.ok).toBe(true);
-    expect(json.cancelled).toBe(true);
+    expect(res.status).toBe(410);
   });
 
   it("positions GET returns positions and open orders", async () => {

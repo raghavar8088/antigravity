@@ -47,12 +47,12 @@ function makeProxyRequest(
 
 export async function GET() {
   const proxyUrl = process.env.DELTA_PROXY_URL ?? "(not set)";
-  const postBody = JSON.stringify({ product_id: 27, size: 1, side: "sell", order_type: "market_order" });
 
-  const [getResult, postResult] = await Promise.all([
-    makeProxyRequest("GET", "/v2/products?contract_types=call_options&page_size=3"),
-    makeProxyRequest("POST", "/v2/orders", postBody),
-  ]);
+  const getResult = await makeProxyRequest("GET", "/v2/products?contract_types=call_options&page_size=3");
 
-  return NextResponse.json({ proxyUrl, get: getResult, post: postResult });
+  return NextResponse.json({
+    proxyUrl,
+    get: getResult,
+    post: { status: 410, body: "POST /v2/orders probe disabled — use /api/execution/request" },
+  });
 }
