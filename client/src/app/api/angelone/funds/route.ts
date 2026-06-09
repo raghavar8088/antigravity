@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export async function GET() {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+
   if (!isAngelConfigured()) {
     return NextResponse.json({
       ok: false,

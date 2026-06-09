@@ -1,0 +1,16 @@
+# Copy to production.tfvars and fill in values — NEVER commit production.tfvars
+
+aws_region            = "ap-south-1"
+environment           = "production"
+engine_image          = "ACCOUNT_ID.dkr.ecr.ap-south-1.amazonaws.com/antigravity-engine:latest"
+engine_cpu            = 2048
+engine_memory         = 4096
+engine_desired_count  = 2
+alb_certificate_arn   = "arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/UUID"
+aurora_min_capacity   = 0.5
+aurora_max_capacity   = 8
+redis_node_type       = "cache.t4g.small"
+redis_num_cache_nodes = 2
+alarm_sns_email       = "ops@yourdomain.com"
+backup_retention_days = 30
+log_retention_days    = 90

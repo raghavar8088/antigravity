@@ -9,7 +9,7 @@ import crypto from "node:crypto";
 export const SESSION_COOKIE = "raig_session";
 const EXPIRY_SECS = 24 * 60 * 60; // 24h — institutional requirement; reduces breach window from 30d
 
-export type SessionPayload = { userId: string; email: string };
+export type SessionPayload = { userId: string; email: string; role?: string };
 
 function getSecret(): string {
   const s = process.env.AUTH_JWT_SECRET?.trim();
@@ -25,12 +25,13 @@ function dec(s: string): unknown {
   return JSON.parse(Buffer.from(s, "base64url").toString("utf-8"));
 }
 
-export function signSession(userId: string, email: string): string {
+export function signSession(userId: string, email: string, role = "TRADER"): string {
   const secret = getSecret();
   const header = enc({ alg: "HS256", typ: "JWT" });
   const payload = enc({
     userId,
     email,
+    role,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + EXPIRY_SECS,
   });
@@ -54,10 +55,14 @@ export function verifySession(token: string): SessionPayload | null {
     if (aBuf.length !== bBuf.length) return null;
     if (!crypto.timingSafeEqual(aBuf, bBuf)) return null;
 
-    const p = dec(payload) as { userId?: unknown; email?: unknown; exp?: unknown };
+    const p = dec(payload) as { userId?: unknown; email?: unknown; role?: unknown; exp?: unknown };
     if (typeof p.exp === "number" && p.exp < Math.floor(Date.now() / 1000)) return null;
     if (typeof p.userId !== "string" || typeof p.email !== "string") return null;
-    return { userId: p.userId, email: p.email };
+    return {
+      userId: p.userId,
+      email: p.email,
+      role: typeof p.role === "string" ? p.role : "TRADER",
+    };
   } catch {
     return null;
   }

@@ -28,13 +28,18 @@ const DEMOTE_EXPECTANCY = -0.02;
 const DEMOTE_MIN_TRADES = 8;
 
 export async function GET(req: Request): Promise<NextResponse> {
-  // Verify cron secret to prevent unauthenticated runs
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
+  // CRON_SECRET is mandatory — fail closed to prevent unauthenticated runs.
+  // Vercel injects Authorization: Bearer <CRON_SECRET> automatically when the env var is set.
+  const secret = process.env.CRON_SECRET?.trim();
+  if (!secret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET env var is not configured — cron endpoint is locked" },
+      { status: 503 },
+    );
+  }
+  const auth = req.headers.get("authorization") ?? "";
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   if (!MONGODB_URI) {

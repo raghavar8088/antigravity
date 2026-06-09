@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { isMongoConfigured, getDb } from "@/lib/mongoTradesClient";
-import { verifySession, SESSION_COOKIE } from "@/lib/jwtSession";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
-function anonAllowed(): boolean {
-  return (
-    process.env.ALLOW_PAPER_TRADES_ANON === "1" ||
-    process.env.ALLOW_ANON_PAPER_TRADES === "1"
-  );
-}
+// Anonymous access to destructive operations is disabled regardless of env flags.
+// ALLOW_PAPER_TRADES_ANON / ALLOW_ANON_PAPER_TRADES must not enable DELETE.
 
 /**
  * DELETE /api/paper-trades/clear
@@ -21,31 +16,14 @@ function anonAllowed(): boolean {
  * paper_state to 0 so the client-side filter is no longer needed.
  */
 export async function DELETE(req: Request) {
+  // Always require an authenticated session — no anonymous destructive operations.
+  const session = await getAuthenticatedApiSession();
+  if (!session.ok) return session.response;
+  const accountKey = session.ctx.userId;
+
   let body: unknown;
   try { body = await req.json(); } catch { body = {}; }
   const b = (body ?? {}) as Record<string, unknown>;
-
-  // Resolve account key (session cookie → body → anon)
-  let accountKey: string | null = null;
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(SESSION_COOKIE)?.value;
-    if (token && process.env.AUTH_JWT_SECRET) {
-      const session = verifySession(token);
-      if (session?.userId) accountKey = session.userId;
-    }
-  } catch { /* fall through */ }
-
-  if (!accountKey) {
-    const bodyKey = typeof b.accountKey === "string" ? b.accountKey.trim() : null;
-    if (!bodyKey) {
-      return NextResponse.json({ ok: false, error: "accountKey required" }, { status: 400 });
-    }
-    if (!anonAllowed()) {
-      return NextResponse.json({ ok: false, error: "Anonymous deletes disabled" }, { status: 401 });
-    }
-    accountKey = bodyKey;
-  }
 
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });

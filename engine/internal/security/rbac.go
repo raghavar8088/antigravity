@@ -12,7 +12,7 @@ var rolePermissions = map[Role][]Permission{
 		PermUserManage, PermAuditView, PermMetricsView,
 	},
 	RoleAdmin: {
-		PermTradeExecute, PermTradeCancel, PermTradeClose, PermTradeView,
+		PermTradeRequest, PermTradeCancel, PermTradeClose, PermTradeView,
 		PermRiskOverride, PermRiskView,
 		PermStrategyEnable, PermStrategyDisable, PermStrategyView,
 		PermReconRun, PermReconView,
@@ -20,7 +20,7 @@ var rolePermissions = map[Role][]Permission{
 		PermAuditView, PermMetricsView,
 	},
 	RoleTrader: {
-		PermTradeExecute, PermTradeCancel, PermTradeClose, PermTradeView,
+		PermTradeRequest, PermTradeView,
 		PermRiskView,
 		PermStrategyView,
 		PermReconView,
@@ -110,14 +110,19 @@ var endpointPermissions = []endpointPolicy{
 	// ── Strategy data ──────────────────────────────────────────────────────────
 	{prefix: "/api/strategies", method: "GET", perm: PermStrategyView},
 
-	// ── AI + signals ───────────────────────────────────────────────────────────
+	// ── AI + signals — human confirmation requires trade.request ────────────────
+	{prefix: "/api/ai/submit", method: "POST", perm: PermTradeRequest},
+	{prefix: "/api/ai/bridge-result", method: "POST", perm: PermTradeRequest},
 	{prefix: "/api/ai", method: "", perm: PermTradeView},
+
+	// ── Institutional execution gateway ───────────────────────────────────────
+	{prefix: "/api/execution/request", method: "POST", perm: PermTradeRequest},
 
 	// ── Reconciliation ─────────────────────────────────────────────────────────
 	{prefix: "/api/reconciliation", method: "", perm: PermReconView},
 
-	// ── Delta live (trade execution) ───────────────────────────────────────────
-	{prefix: "/api/delta-live/order", method: "POST", perm: PermTradeExecute},
+	// ── Delta live — order placement disabled; use /api/execution/request ─────
+	{prefix: "/api/delta-live/order", method: "POST", perm: PermTradeRequest},
 	{prefix: "/api/delta-live/enable", method: "POST", perm: PermStrategyEnable},
 	{prefix: "/api/delta-live", method: "GET", perm: PermTradeView},
 

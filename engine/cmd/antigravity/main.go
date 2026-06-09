@@ -15,30 +15,33 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/executiongateway"
 	"antigravity-engine/internal/gateway"
 	killswitchpkg "antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/marketdata"
+	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
 	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/niftystocks"
+	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
+	"antigravity-engine/internal/reconciliation"
 	"antigravity-engine/internal/risk"
 	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/security/vault"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/trading"
 	"antigravity-engine/internal/validation/phase22e"
+	"antigravity-engine/internal/validation/production"
 )
 
 // RingLogger stores the last N log lines in memory
@@ -394,6 +397,16 @@ func main() {
 
 	loadDotEnv()
 
+	bootGate := production.RunBootGate(production.DefaultBootGateConfig())
+	if !bootGate.Passed {
+		for _, b := range bootGate.Blockers {
+			log.Fatalf("[BOOT GATE] %s", b)
+		}
+	}
+	for _, w := range bootGate.Warnings {
+		log.Printf("[BOOT GATE] WARNING: %s", w)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -684,7 +697,29 @@ func main() {
 	//   Mode B: flatten positions (FlattenPositions action) — no process kill
 	//   Mode C: context cancellation via admin.KillSwitchController (nuclear stop)
 	ksExecutor := trading.NewKillSwitchExecutor(paperExecute, posMgr)
-	ksSvc := killswitchpkg.NewService(ledger.NewMemoryStore(), ksExecutor, "btc-paper-1")
+
+	// ── Durable kill switch ledger ────────────────────────────────────────────
+	// Prefer PostgresStore so kill-switch state (trigger, reason, activatedAt)
+	// survives engine restarts. Falls back gracefully to MemoryStore when
+	// DATABASE_URL is absent (local dev, paper-only environments).
+	var ksLedger ledger.Store = ledger.NewMemoryStore()
+	var durableLedger *ledger.PostgresStore
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		if pgStore, pgErr := ledger.NewPostgresStore(ctx, dbURL); pgErr != nil {
+			log.Printf("[LEDGER] ⚠️  PostgresStore unavailable (%v) — kill switch state is non-durable", pgErr)
+		} else {
+			if schemaErr := pgStore.CreateSchema(ctx); schemaErr != nil {
+				log.Printf("[LEDGER] ⚠️  Schema init warning: %v", schemaErr)
+			}
+			durableLedger = pgStore
+			ksLedger = pgStore
+			log.Println("[LEDGER] ✅ Durable PostgresStore wired — kill switch and PMS state will survive restarts")
+		}
+	} else {
+		log.Println("[LEDGER] ⚠️  DATABASE_URL not set — kill switch ledger is in-memory only")
+	}
+
+	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
 	orchestrator.SetKillSwitch(ksSvc)
 	log.Println("[KILL SWITCH] Institutional kill switch wired — PreTradeRiskPipeline gated")
 
@@ -692,7 +727,11 @@ func main() {
 	// Activate PMS as the portfolio-level pre-trade gate. It runs before the
 	// per-strategy institutional pipeline and enforces heat, VaR, drawdown, and
 	// daily-loss limits at the aggregate portfolio level.
-	pmsBudget := pmspkg.NewPortfolioRiskBudget(ledger.NewMemoryStore())
+	var pmsLedger ledger.Store = ledger.NewMemoryStore()
+	if durableLedger != nil {
+		pmsLedger = durableLedger
+	}
+	pmsBudget := pmspkg.NewPortfolioRiskBudget(pmsLedger)
 	pmsBudget.InitPortfolio("btc-paper-1", pmspkg.RiskBudget{
 		MaxHeatPct:      8,
 		MaxVaR95Pct:     6,
@@ -837,6 +876,18 @@ func main() {
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
+	// ── Reconciliation Service ────────────────────────────────────────────────
+	// Runs continuously at 10s intervals. Compares position manager state against
+	// expected OMS state and emits ledger alerts on any detected drift.
+	// On CRITICAL drift the kill switch is auto-triggered (OMS_DESYNC).
+	reconLedger := ksLedger // share the durable ledger if available
+	reconProvider := reconciliation.NewPaperSnapshotProvider(posMgr, "btc-paper-1")
+	reconSvc := reconciliation.NewService(reconProvider, reconLedger, 10*time.Second)
+	go safeGo("Reconciliation", func() {
+		log.Println("[RECONCILIATION] ✅ Continuous reconciliation started (10s interval)")
+		reconSvc.Run(ctx)
+	})
+
 	// ═══════════════════════════════════════════════════
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $1,000,000 paper account
 	// ═══════════════════════════════════════════════════
@@ -848,6 +899,7 @@ func main() {
 	// Delta Exchange live bridge — mirrors BTC option signals to Delta when enabled.
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
+	orchestrator.WireDeltaBridge(deltaBridge)
 	deltaBridge.StartMonitor(ctx)
 	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
@@ -1316,8 +1368,10 @@ func main() {
 		json.NewEncoder(w).Encode(report)
 	})
 
-	// Prometheus metrics
-	http.Handle("/metrics", promhttp.Handler())
+	// Prometheus metrics — expose institutional metrics registry alongside default.
+	// observability.MetricsHandler() combines the default gatherer (Go runtime,
+	// process stats) with the custom trading metrics registry registered at import time.
+	http.Handle("/metrics", observability.MetricsHandler())
 
 	// Options Scalper endpoints
 	http.HandleFunc("/api/options/positions", optionsEngine.HandlePositions)
@@ -1432,11 +1486,7 @@ func main() {
 
 	http.HandleFunc("/api/delta-live/order", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		if r.Method != http.MethodPost {
@@ -1444,28 +1494,34 @@ func main() {
 			return
 		}
 		var body struct {
-			Symbol string `json:"symbol"` // e.g. "C-BTC-76000-290426"
-			Side   string `json:"side"`   // "buy" or "sell"
-			Size   int    `json:"size"`   // number of contracts
+			Symbol string `json:"symbol"`
+			Side   string `json:"side"`
+			Size   int    `json:"size"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Symbol == "" || body.Side == "" || body.Size < 1 {
 			http.Error(w, `{"error":"need symbol, side (buy/sell), size (>=1)"}`, http.StatusBadRequest)
 			return
 		}
-		side := delta.SideBuy
-		if strings.ToLower(body.Side) == "sell" {
-			side = delta.SideSell
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 		defer cancel()
-		result, err := deltaBridge.PlaceManualOrder(ctx, body.Symbol, side, body.Size)
+		resp, err := orchestrator.ProcessExecutionRequest(ctx, executiongateway.Request{
+			Venue: "delta", Symbol: body.Symbol, Side: body.Side,
+			Contracts: body.Size, StrategyName: "MANUAL_DELTA",
+		})
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(result)
+		if !resp.OK {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}
+		_ = json.NewEncoder(w).Encode(resp)
 	})
+
+	// Institutional execution gateway — sole human-facing execution API on the engine.
+	execGatewayHandler := executiongateway.NewHandler(orchestrator)
+	http.Handle("/api/execution/request", execGatewayHandler)
 
 	// NIFTY 50 Options Scalper endpoints
 	http.HandleFunc("/api/nifty-options/positions", niftyOptionsEngine.HandlePositions)
@@ -1534,9 +1590,9 @@ func main() {
 	//   POST /api/admin/ks/release — release graceful block, resume order flow
 	//   GET  /api/admin/ks/status  — query kill switch state
 	http.HandleFunc("/api/admin/ks/block", func(w http.ResponseWriter, r *http.Request) {
+		// No CORS wildcard — this is an admin-only endpoint.
+		// The security gate enforces ENGINE_ADMIN_SECRET before this handler runs.
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			return
 		}
 		if r.Method != http.MethodPost {
@@ -1557,9 +1613,8 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "blocked", "message": "New order submissions blocked. Engine running. Use /api/admin/ks/release to resume."})
 	})
 	http.HandleFunc("/api/admin/ks/release", func(w http.ResponseWriter, r *http.Request) {
+		// No CORS wildcard — admin-only endpoint protected by security gate.
 		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 			return
 		}
 		if r.Method != http.MethodPost {
@@ -1576,7 +1631,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "released", "message": "Kill switch released. Order flow resumed."})
 	})
 	http.HandleFunc("/api/admin/ks/status", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Status is a safe read but still should not leak CORS wildcard.
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"active": ksSvc.IsActive(),

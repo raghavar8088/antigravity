@@ -18,10 +18,14 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { runPaperStateRepair } from "@/lib/paperStateRepairCore";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await req.json();

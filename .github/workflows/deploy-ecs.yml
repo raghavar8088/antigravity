@@ -1,0 +1,133 @@
+##############################################################################
+# deploy-ecs.yml — Production Deployment to ECS Fargate (Multi-AZ)
+#
+# Replaces deploy.yml (Lightsail SSH) for the target AWS architecture.
+# Keep deploy.yml during the transition period until ECS is validated.
+#
+# Trigger: push to main when engine/** changes (same as Lightsail workflow)
+# Strategy: build → push to ECR → update ECS task definition → force deploy
+# Safety:   deployment circuit breaker auto-rolls back on unhealthy tasks
+#
+# Required GitHub Secrets:
+#   AWS_ROLE_ARN          — IAM Role ARN with ECS + ECR + Secrets permissions
+#   ECS_CLUSTER_NAME      — from Terraform output ecs_cluster_name
+#   ECS_SERVICE_NAME      — from Terraform output ecs_service_name
+#   ECS_TASK_FAMILY       — e.g. antigravity-production-engine
+#   ECR_REPOSITORY        — full ECR URI (no tag)
+#   TASK_EXECUTION_ROLE_ARN
+#   TASK_ROLE_ARN
+#   SECRETS_MANAGER_ARN   — from Terraform output secrets_manager_arn
+##############################################################################
+
+name: Deploy Engine → ECS Fargate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "engine/**"
+
+permissions:
+  id-token: write   # Required for OIDC → IAM role assumption
+  contents: read
+  packages: write   # GHCR fallback
+
+concurrency:
+  group: deploy-ecs-production
+  cancel-in-progress: false  # Never cancel in-flight deployments for trading systems
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production  # Requires manual approval in GitHub Environments
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC — no long-lived keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+          role-session-name: GHActionsDeploySession
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build with commit SHA tag + latest
+          docker build \
+            --label "git-commit=${{ github.sha }}" \
+            --label "build-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            ./engine
+
+          # Security scan before push
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 1 \
+            --severity CRITICAL \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || {
+            echo "CRITICAL vulnerability found — blocking deployment"
+            exit 1
+          }
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ secrets.ECS_TASK_FAMILY }} \
+            --query taskDefinition \
+            > task-definition.json
+
+      - name: Update image in task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: engine
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ secrets.ECS_SERVICE_NAME }}
+          cluster: ${{ secrets.ECS_CLUSTER_NAME }}
+          wait-for-service-stability: true
+          force-new-deployment: true
+          # Deployment circuit breaker is configured in Terraform (auto-rollback)
+
+      - name: Verify deployment health
+        run: |
+          # Wait for all tasks to pass health checks
+          aws ecs wait services-stable \
+            --cluster ${{ secrets.ECS_CLUSTER_NAME }} \
+            --services ${{ secrets.ECS_SERVICE_NAME }}
+
+          # Confirm running task count
+          RUNNING=$(aws ecs describe-services \
+            --cluster ${{ secrets.ECS_CLUSTER_NAME }} \
+            --services ${{ secrets.ECS_SERVICE_NAME }} \
+            --query 'services[0].runningCount' --output text)
+          echo "Running tasks after deploy: $RUNNING"
+          [ "$RUNNING" -ge "1" ] || (echo "No running tasks — deployment failed" && exit 1)
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::ECS deployment failed for commit ${{ github.sha }}"
+          # Add Slack/PagerDuty notification here

@@ -70,6 +70,12 @@ type Bridge struct {
 
 	// openByPaperID maps paper position ID → live trade index for fast lookup on close.
 	openByPaperID map[string]int
+
+	// institutionalOpen, when set, replaces direct broker placement in OnOpen.
+	institutionalOpen func(context.Context, OpenSignal, string) error
+
+	// killCheck blocks broker submission when the institutional kill switch is active.
+	killCheck func(context.Context) error
 }
 
 // NewBridge creates a Bridge. If Delta keys are not set it starts in a disabled/unconfigured state.
@@ -91,8 +97,75 @@ func NewBridge() *Bridge {
 	return b
 }
 
+// IsBuyingMode reports whether the bridge is in option-buy mode.
+func (b *Bridge) IsBuyingMode() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.buyingMode
+}
+
+func (b *Bridge) SetKillCheck(fn func(context.Context) error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.killCheck = fn
+}
+
+// SetInstitutionalOpenHandler routes OnOpen through the engine institutional execution stack.
+func (b *Bridge) SetInstitutionalOpenHandler(fn func(context.Context, OpenSignal, string) error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.institutionalOpen = fn
+}
+
+// SubmitOrder places an order on Delta — callable only from institutional fill callbacks.
+func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide, contracts int) (PlaceOrderResult, error) {
+	if b.client == nil {
+		return PlaceOrderResult{}, fmt.Errorf("delta client not configured")
+	}
+	return b.client.PlaceOrder(ctx, PlaceOrderRequest{
+		ProductID: productID,
+		Size:      contracts,
+		Side:      side,
+		OrderType: TypeMarket,
+		Leverage:  10,
+	})
+}
+
+// UpdateTradeAfterFill updates live trade state after institutional fill.
+func (b *Bridge) UpdateTradeAfterFill(tradeID string, result PlaceOrderResult, productID int, contracts int, strike float64, expiry time.Time) {
+	b.updateTrade(tradeID, func(t *LiveTrade) {
+		t.DeltaOrderID = result.OrderID
+		t.DeltaSymbol = result.Symbol
+		t.ProductID = productID
+		t.Contracts = contracts
+		t.FillPrice = result.Price
+		t.Strike = strike
+		t.ExpiryTime = expiry
+		t.Status = "OPEN"
+	})
+}
+
+func (b *Bridge) RegisterOpenMapping(paperTradeID, tradeID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if idx := b.indexOfID(tradeID); idx >= 0 {
+		b.openByPaperID[paperTradeID] = idx
+	}
+}
+
+// Client exposes the underlying Delta REST client for institutional fill planning.
+func (b *Bridge) Client() *Client {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.client
+}
+
 // IsConfigured returns whether API keys are present.
-func (b *Bridge) IsConfigured() bool { return b.configured }
+func (b *Bridge) IsConfigured() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.configured
+}
 
 // IsEnabled returns whether live order mirroring is active.
 func (b *Bridge) IsEnabled() bool {
@@ -113,13 +186,6 @@ func (b *Bridge) SetBuyingMode(v bool) {
 	} else {
 		log.Printf("[DELTA BRIDGE] 📉 SELLING MODE — will SELL options on signals")
 	}
-}
-
-// IsBuyingMode returns true when the bridge is configured to buy options.
-func (b *Bridge) IsBuyingMode() bool {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.buyingMode
 }
 
 // SetEnabled enables or disables live order mirroring.
@@ -184,6 +250,17 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
+
+		if b.institutionalOpen != nil {
+			if err := b.institutionalOpen(ctx, sig, id); err != nil {
+				b.updateTrade(id, func(t *LiveTrade) {
+					t.Status = "FAILED"
+					t.FailureReason = err.Error()
+				})
+				log.Printf("[DELTA BRIDGE] ❌ INSTITUTIONAL OPEN FAILED %s — %v", id, err)
+			}
+			return
+		}
 
 		strike := sig.Strike
 		expiry := sig.ExpiryTime
@@ -320,6 +397,18 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+
+		if b.killCheck != nil {
+			if err := b.killCheck(ctx); err != nil {
+				now := time.Now().UTC()
+				b.updateTrade(trade.ID, func(t *LiveTrade) {
+					t.Status = "FAILED"
+					t.FailureReason = err.Error()
+					t.ClosedAt = &now
+				})
+				return
+			}
+		}
 
 		// Close side is the opposite of open side:
 		// Selling mode opened SHORT → close with BUY
@@ -570,22 +659,13 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 	}
 }
 
-// PlaceManualOrder places a real order for any product by symbol. Useful for manual/test trades.
+// PlaceManualOrder is disabled — all manual orders must use POST /api/execution/request.
 func (b *Bridge) PlaceManualOrder(ctx context.Context, symbol string, side OrderSide, size int) (PlaceOrderResult, error) {
-	if !b.configured || b.client == nil {
-		return PlaceOrderResult{}, fmt.Errorf("bridge not configured")
-	}
-	info, err := b.client.FindProductBySymbol(ctx, symbol)
-	if err != nil {
-		return PlaceOrderResult{}, fmt.Errorf("symbol lookup: %w", err)
-	}
-	return b.client.PlaceOrder(ctx, PlaceOrderRequest{
-		ProductID: info.ProductID,
-		Size:      size,
-		Side:      side,
-		OrderType: TypeMarket,
-		Leverage:  10,
-	})
+	_ = ctx
+	_ = symbol
+	_ = side
+	_ = size
+	return PlaceOrderResult{}, fmt.Errorf("direct PlaceManualOrder disabled — use POST /api/execution/request with venue=delta")
 }
 
 // ---- helpers ----

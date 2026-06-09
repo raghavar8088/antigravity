@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { submitExecutionRequest } from "@/lib/executionRequest";
 
 const CONFIG_LS_KEY = "delta_api_config_v1";
 
@@ -234,12 +235,21 @@ export default function DeltaSpotBuy() {
         payload.productId = spotProduct.productId;
       }
 
-      const res = await fetch("/api/delta/spot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(payload),
+      const result = await submitExecutionRequest({
+        venue: "delta",
+        symbol: spotProduct?.symbol ?? "BTCUSDT",
+        side,
+        size: amount / 100,
+        strategyName: "DELTA_SPOT_UI",
+        reason: "spot_buy_panel",
       });
-      const data = await res.json() as OrderResult;
+      const data: OrderResult = {
+        ok: result.ok,
+        error: result.ok ? undefined : result.message,
+        orderId: result.clientOrderId,
+        side,
+        orderType,
+      };
       setLastOrder(data);
       if (data.ok) {
         setOrders((prev) => [{ ...data, side }, ...prev.slice(0, 49)]);

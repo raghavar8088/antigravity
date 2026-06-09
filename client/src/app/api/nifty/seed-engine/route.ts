@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 
 const INTERNAL_API_URL =
   process.env.INTERNAL_API_URL?.replace(/\/$/, "") ?? "http://localhost:8080";
@@ -56,7 +57,10 @@ async function fetchNiftyCandles(): Promise<number[]> {
   return [];
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+
   try {
     const closePrices = await fetchNiftyCandles();
 

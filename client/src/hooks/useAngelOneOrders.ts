@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { submitExecutionRequest, type ExecutionRequestPayload } from "@/lib/executionRequest";
 
 export type AngelOrder = {
   orderId: string;
@@ -14,6 +15,7 @@ export type AngelOrder = {
   productType?: string;
   exchange?: string;
 };
+
 
 export type PlaceOrderParams = {
   tradingsymbol: string;
@@ -122,41 +124,30 @@ export default function useAngelOneOrders() {
     }
   }, []);
 
+  /** @deprecated Direct broker placement disabled — submits an institutional execution request */
   const placeOrder = async (params: PlaceOrderParams): Promise<PlaceOrderResponse> => {
-    try {
-      const res = await fetch("/api/angelone/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-      });
-      const data = await res.json() as PlaceOrderResponse;
-      if (data.ok) {
-        // Refresh order list after successful placement
-        setTimeout(refresh, 1000);
-      }
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "unknown error";
-      return { ok: false, error: message };
-    }
+    const payload: ExecutionRequestPayload = {
+      venue: "angelone",
+      symbol: params.tradingsymbol,
+      side: params.transactiontype,
+      size: params.quantity,
+      strategyName: "ANGELONE_MANUAL",
+      reason: "ui_request",
+    };
+    const result = await submitExecutionRequest(payload);
+    return {
+      ok: result.ok,
+      order_id: result.clientOrderId,
+      message: result.message,
+      error: result.ok ? undefined : result.message,
+    };
   };
 
-  const cancelOrder = async (orderId: string, variety = "NORMAL"): Promise<CancelOrderResponse> => {
-    try {
-      const res = await fetch("/api/angelone/cancel-order", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId, variety }),
-      });
-      const data = await res.json() as CancelOrderResponse;
-      if (data.ok) {
-        setTimeout(refresh, 1000);
-      }
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "unknown error";
-      return { ok: false, error: message };
-    }
+  const cancelOrder = async (_orderId: string, _variety = "NORMAL"): Promise<CancelOrderResponse> => {
+    return {
+      ok: false,
+      error: "Direct order cancellation from UI is disabled — use backend OMS cancel when available",
+    };
   };
 
   useEffect(() => {

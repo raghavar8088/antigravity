@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { submitExecutionRequest } from "@/lib/executionRequest";
 import useDeltaLive, {
   type DeltaLiveTrade,
   type DeltaLiveStats,
@@ -702,14 +703,21 @@ function TestOrderTab({
       if (config?.apiSecret) mirrorHeaders["x-delta-api-secret"] = config.apiSecret;
       if (config?.testnet !== undefined) mirrorHeaders["x-delta-testnet"] = String(config.testnet);
 
-      const response = await fetch("/api/delta/mirror", {
-        method: "POST",
-        headers: mirrorHeaders,
-        body: JSON.stringify(payload),
+      const result = await submitExecutionRequest({
+        venue: "delta",
+        symbol: isClose ? String(strike) : `OPT-${strike}`,
+        side: isClose ? "buy" : "sell",
+        contracts: Number(contracts) || 1,
+        strategyName: "DELTA_MIRROR_UI",
+        reason: isClose ? "mirror_close" : "mirror_open",
       });
-      const data = await response.json() as TestOrderResponse;
+      const data: TestOrderResponse = {
+        ok: result.ok,
+        error: result.ok ? undefined : result.message,
+        orderId: result.clientOrderId,
+      };
       setLastResult(data);
-      if (response.ok && data.ok) {
+      if (result.ok && data.ok) {
         setFeedback({
           tone: "success",
           text: `${isClose ? "Close" : "Open"} order placed successfully.`,

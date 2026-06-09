@@ -103,12 +103,47 @@ function isProtectedPage(pathname: string): boolean {
   return !PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 
-function hasSessionCookie(req: NextRequest): boolean {
-  return !!req.cookies.get("raig_session")?.value;
+// ── JWT validation (Web Crypto — edge-safe, no external libs) ────────────────
+// Validates the HS256 signature and expiry of the raig_session cookie.
+// Using crypto.subtle so this runs correctly in Next.js edge middleware.
+async function hasValidSession(req: NextRequest): Promise<boolean> {
+  const token = req.cookies.get("raig_session")?.value;
+  if (!token) return false;
+  const secret = process.env.AUTH_JWT_SECRET?.trim();
+  if (!secret) return false;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+    const [header, payload, sig] = parts as [string, string, string];
+    const body = `${header}.${payload}`;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const expectedBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+    const expectedB64 = btoa(String.fromCharCode(...new Uint8Array(expectedBuf)))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
+    // Constant-time compare to prevent timing attacks
+    if (sig.length !== expectedB64.length) return false;
+    let diff = 0;
+    for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expectedB64.charCodeAt(i);
+    if (diff !== 0) return false;
+    // Validate expiry
+    const p = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    if (typeof p.exp === "number" && p.exp < Math.floor(Date.now() / 1000)) return false;
+    return typeof p.userId === "string";
+  } catch {
+    return false;
+  }
 }
 
 // ── Main middleware ───────────────────────────────────────────────────────────
-export function middleware(request: NextRequest): NextResponse {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   maybeGC();
 
@@ -129,8 +164,8 @@ export function middleware(request: NextRequest): NextResponse {
     return res;
   }
 
-  // ── Page auth guard ──────────────────────────────────────────────────────
-  if (isProtectedPage(pathname) && !hasSessionCookie(request)) {
+  // ── Page auth guard (JWT signature validated, not just cookie presence) ──
+  if (isProtectedPage(pathname) && !(await hasValidSession(request))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

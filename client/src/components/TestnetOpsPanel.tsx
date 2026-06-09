@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { submitExecutionRequest } from "@/lib/executionRequest";
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
@@ -87,29 +87,22 @@ export function TestnetOpsPanel() {
     setBusy(true);
     setMessage(null);
     try {
-      const body: Record<string, unknown> = {
+      const result = await submitExecutionRequest({
+        venue: "delta",
         symbol: DEFAULT_SYMBOL,
         side,
-        size: Number(size),
-        type: orderType,
-      };
-      if (orderType === "limit") body.price = Number(limitPrice);
-
-      const res = await fetch("/api/delta/testnet/place-order", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        contracts: Number(size),
+        strategyName: "TESTNET_OPS",
+        reason: "desk_testnet_panel",
       });
-      const data = await readJson(res);
-      if (!res.ok || !data.ok) {
-        setMessage(String(data.error ?? `Place failed (${res.status})`));
+      if (!result.ok) {
+        setMessage(result.message ?? "Execution request rejected");
         return;
       }
-      setMessage(`Placed order ${data.orderId} · ${data.status}`);
+      setMessage(`Request ${result.status}: ${result.clientOrderId ?? result.requestId ?? "accepted"}`);
       await refresh();
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Place failed");
+      setMessage(e instanceof Error ? e.message : "Request failed");
     } finally {
       setBusy(false);
     }

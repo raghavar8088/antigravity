@@ -36,7 +36,8 @@ type Principal struct {
 type Permission string
 
 const (
-	PermTradeExecute    Permission = "trade.execute"
+	PermTradeRequest    Permission = "trade.request" // human: submit execution intent only
+	PermTradeExecute    Permission = "trade.execute" // service/engine: broker submission
 	PermTradeCancel     Permission = "trade.cancel"
 	PermTradeClose      Permission = "trade.close"
 	PermTradeView       Permission = "trade.view"

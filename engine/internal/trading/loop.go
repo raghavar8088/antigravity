@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execintel"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/killswitch"
@@ -151,13 +152,10 @@ type Orchestrator struct {
 	pmsBudget *pms.PortfolioRiskBudget
 
 	// killSvc is the institutional kill switch service (internal/killswitch).
-	// Stored as the riskgate.KillSwitch interface so a nil *killswitch.Service
-	// does not become a non-nil interface value (which would break the nil-check
-	// inside PreTradeRiskPipeline). Nil until SetKillSwitch() is called.
-	// When active it blocks all new order submissions via the PreTradeRiskPipeline
-	// without shutting down the engine process, enabling graceful order blocking,
-	// position flattening, and restart without data loss.
 	killSvc riskgate.KillSwitch
+
+	// deltaBroker is the Delta live bridge — broker fills for delta venue route here only.
+	deltaBroker *delta.Bridge
 
 	// ppPersist is the Phase 31B MongoDB persistence bundle.
 	// Nil until SetPaperPersist() is called from main.go.
@@ -285,7 +283,25 @@ func (o *Orchestrator) SetPMSBudget(budget *pms.PortfolioRiskBudget) {
 	o.pmsBudget = budget
 }
 
+func (o *Orchestrator) SetDeltaBroker(b *delta.Bridge) {
+	o.deltaBroker = b
+}
+
+// brokerFillFunc performs the broker-specific submission after institutional gates pass.
+type brokerFillFunc func(ctx context.Context, sig strategy.Signal, clientOrderID string) (execution.FillResult, error)
+
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
+	return o.executeThroughInstitutionalPathWithFill(ctx, sig, strategyName, currentPrice, mode, func(_ context.Context, s strategy.Signal, clientOrderID string) (execution.FillResult, error) {
+		fill, err := o.exec.ExecuteSignal(s, mode)
+		if err != nil {
+			return execution.FillResult{}, err
+		}
+		fill.ClientOrderID = clientOrderID
+		return fill, nil
+	})
+}
+
+func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode, fillFn brokerFillFunc) (execution.FillResult, error) {
 	// P2-D: refresh equity immediately before Kelly sizing so Risk V2 never uses
 	// the stale boot-time seed (covers 1m/5m candle paths that skip tick pipeline).
 	o.risk.SyncEquity(o.exec.GetEquityUSD())
@@ -582,7 +598,7 @@ func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig 
 		return execution.FillResult{}, err
 	}
 
-	fill, err := o.exec.ExecuteSignal(sig, mode)
+	fill, err := fillFn(ctx, sig, clientOrderID)
 	if err != nil {
 		rejectEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 			AggregateType: ledger.AggregateOrder,
