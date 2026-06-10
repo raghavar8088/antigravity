@@ -1360,9 +1360,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   const [clearedAt, setClearedAt] = useState(0);
 
-  /** Browser never persists execution state — Go engine is sole authority. */
+  /** POST current engine state to MongoDB paper_state collection. */
   const saveToMongo = useCallback((overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
-    return;
+    if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") return;
     if (!cloudAccountKey) return;
     const body = {
       accountKey: cloudAccountKey,
@@ -2673,9 +2673,9 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
-      // Institutional hardening: browser-side paper execution removed permanently.
-      // Quotes/state hydrate from MongoDB + engine; VPS worker + Go engine execute.
-      return;
+      if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") {
+        return;
+      }
       if (pollInFlightRef.current) return;
       // In worker monitor mode: hydration handled by the worker heartbeat effect above.
       // Only run the local poll for quotes/data-health; skip entry/exit writes.
@@ -2772,10 +2772,17 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
               }
             }),
           );
-          for (const r of results) {
-            if (r.issue) symbolIssues.push(r.issue);
-            if (r.payload) payloads.set(r.sym, r.payload);
+          for (const { sym, payload } of results.filter(
+            (r): r is { sym: string; payload: KlinePayload; issue: FuturesDataHealthSymbolIssue | null } =>
+              r.payload !== null,
+          )) {
+            payloads.set(sym, payload);
           }
+          symbolIssues.push(
+            ...results
+              .map((r) => r.issue)
+              .filter((issue): issue is FuturesDataHealthSymbolIssue => issue !== null),
+          );
         }
 
         // Always populate "1m" first — it powers regime/mark/exits/probe.
@@ -2799,7 +2806,7 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
           if (!dueNow) {
             // Reuse cached payloads from a previous tick (if any).
             const cached = cachedPayloadsRef.current.get(tf);
-            if (cached) payloadsByInterval.set(tf, cached);
+            if (cached !== undefined) payloadsByInterval.set(tf, cached as Map<string, KlinePayload>);
             continue;
           }
           const tfMap = new Map<string, KlinePayload>();
@@ -2819,8 +2826,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
                 }
               }),
             );
-            for (const r of results) {
-              if (r.payload) tfMap.set(r.sym, r.payload);
+            for (const { sym, payload } of results.filter(
+              (r): r is { sym: string; payload: KlinePayload } => r.payload !== null,
+            )) {
+              tfMap.set(sym, payload);
             }
           }
           payloadsByInterval.set(tf, tfMap);
@@ -2841,10 +2850,11 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         if (status === "ok") notOkSinceRef.current = null;
         else if (notOkSinceRef.current === null) notOkSinceRef.current = now;
 
-        const showFeedWarning =
-          status !== "ok" &&
-          notOkSinceRef.current !== null &&
-          now - notOkSinceRef.current >= FUTURES_FEED_WARNING_AFTER_MS;
+        const notOkSince = notOkSinceRef.current;
+        let showFeedWarning = false;
+        if (status !== "ok" && notOkSince !== null) {
+          showFeedWarning = now - (notOkSince as number) >= FUTURES_FEED_WARNING_AFTER_MS;
+        }
 
         const lastError =
           symbolIssues.length > 0
@@ -3838,9 +3848,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
         const now = Date.now();
         const msg = e instanceof Error ? e.message : String(e);
         if (notOkSinceRef.current === null) notOkSinceRef.current = now;
+        const staleNotOkSince = notOkSinceRef.current;
         const showFeedWarning =
-          notOkSinceRef.current !== null &&
-          now - notOkSinceRef.current >= FUTURES_FEED_WARNING_AFTER_MS;
+          staleNotOkSince !== null &&
+          now - (staleNotOkSince as number) >= FUTURES_FEED_WARNING_AFTER_MS;
         setDataHealth((prev) => ({
           status: "stale",
           lastError: msg,

@@ -60,44 +60,17 @@ describe("testnet API routes (mocked)", () => {
       response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
     });
 
-    const res = await placeOrderPost(
-      new Request("http://localhost/api/delta/testnet/place-order", {
-        method: "POST",
-        body: JSON.stringify({
-          symbol: "BTCUSD",
-          side: "buy",
-          size: 1,
-          type: "market",
-        }),
-      }),
-    );
+    const res = await placeOrderPost();
     expect(res.status).toBe(410);
   });
 
   it("place-order returns 410 — route retired", async () => {
-    const res = await placeOrderPost(
-      new Request("http://localhost/api/delta/testnet/place-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          symbol: "BTCUSD",
-          side: "buy",
-          size: 1,
-          type: "market",
-        }),
-      }),
-    );
+    const res = await placeOrderPost();
     expect(res.status).toBe(410);
   });
 
   it("cancel-order returns 410 — route retired", async () => {
-    const res = await cancelOrderPost(
-      new Request("http://localhost/api/delta/testnet/cancel-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "99" }),
-      }),
-    );
+    const res = await cancelOrderPost();
     expect(res.status).toBe(410);
   });
 

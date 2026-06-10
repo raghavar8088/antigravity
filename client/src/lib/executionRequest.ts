@@ -38,5 +38,5 @@ export async function submitExecutionRequest(
   if (!res.ok) {
     return { ok: false, status: data.status ?? "REJECTED", message: data.message ?? data.error ?? `HTTP ${res.status}` };
   }
-  return { ok: data.ok ?? true, ...data };
+  return { ...data, ok: data.ok ?? true };
 }
