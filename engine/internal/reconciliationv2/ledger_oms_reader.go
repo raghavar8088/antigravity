@@ -10,20 +10,34 @@ import (
 	"antigravity-engine/internal/omsv3"
 )
 
+const defaultPaperInitialBalanceUSD = 1_000_000.0
+
+// LedgerOMSReaderConfig controls balance projection for reconciliation.
+type LedgerOMSReaderConfig struct {
+	// InitialBalanceUSD is the paper account starting balance (default $1M).
+	InitialBalanceUSD float64
+	// MarkPriceUSD supplies the current mark for unrealized PnL on open positions.
+	MarkPriceUSD func() float64
+}
+
 // LedgerOMSStateReader builds reconciliation OMSSnapshot views by replaying the
 // durable event ledger. This is the internal OMS truth used when comparing against
 // exchange REST snapshots or the live position manager runtime.
 type LedgerOMSStateReader struct {
 	store     ledger.Store
 	accountID string
+	cfg       LedgerOMSReaderConfig
 }
 
 // NewLedgerOMSStateReader creates a reader backed by the shared ledger store.
-func NewLedgerOMSStateReader(store ledger.Store, accountID string) *LedgerOMSStateReader {
+func NewLedgerOMSStateReader(store ledger.Store, accountID string, cfg LedgerOMSReaderConfig) *LedgerOMSStateReader {
 	if accountID == "" {
 		accountID = "btc-paper-1"
 	}
-	return &LedgerOMSStateReader{store: store, accountID: accountID}
+	if cfg.InitialBalanceUSD <= 0 {
+		cfg.InitialBalanceUSD = defaultPaperInitialBalanceUSD
+	}
+	return &LedgerOMSStateReader{store: store, accountID: accountID, cfg: cfg}
 }
 
 // GetOMSSnapshot implements OMSStateReader.
@@ -50,8 +64,8 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 		positions = append(positions, OMSPosition{
 			PositionID:    pos.PositionID,
 			ClientOrderID: pos.ClientOrderID,
-			Symbol:        pos.Symbol,
-			Side:          pos.Side,
+			Symbol:        normalizeReconSymbol(pos.Symbol),
+			Side:          normalizePositionSide(pos.Side),
 			State:         pos.State,
 			EntryPrice:    pos.EntryPrice,
 			Quantity:      pos.Quantity,
@@ -95,13 +109,11 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 		netNotional = -netNotional
 	}
 
+	balance := buildLedgerBalanceSnapshot(r.cfg, pnl, openPos)
+
 	return OMSSnapshot{
-		AccountID: accountID,
-		Balance: OMSBalanceSnapshot{
-			EquityUSD:     pnl.TotalPnLUSD,
-			AvailableUSD:  pnl.TotalPnLUSD,
-			RealizedPnL:   pnl.TotalPnLUSD,
-		},
+		AccountID:     accountID,
+		Balance:       balance,
 		Positions:     positions,
 		OpenOrders:    openOrders,
 		RecentFills:   recentFills,
@@ -109,6 +121,54 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 		NetNotional:   netNotional,
 		SnapshotAt:    now,
 	}, nil
+}
+
+// buildLedgerBalanceSnapshot projects paper equity from ledger events.
+// Equity = initial balance + realized PnL + unrealized PnL on open positions.
+// Previously TotalPnLUSD alone was used (~$0–$500), causing ~100% drift vs
+// runtime equity (~$1M) and spurious CRITICAL kill-switch activation.
+func buildLedgerBalanceSnapshot(
+	cfg LedgerOMSReaderConfig,
+	pnl omsv3.PnLProjection,
+	openPos []omsv3.PositionProjection,
+) OMSBalanceSnapshot {
+	initial := cfg.InitialBalanceUSD
+	if initial <= 0 {
+		initial = defaultPaperInitialBalanceUSD
+	}
+	realized := pnl.TotalPnLUSD
+	unrealized := computeUnrealizedPnL(openPos, cfg.MarkPriceUSD)
+	equity := initial + realized + unrealized
+	return OMSBalanceSnapshot{
+		EquityUSD:     equity,
+		AvailableUSD:  equity,
+		RealizedPnL:   realized,
+		UnrealizedPnL: unrealized,
+	}
+}
+
+func computeUnrealizedPnL(openPos []omsv3.PositionProjection, markFn func() float64) float64 {
+	if markFn == nil {
+		return 0
+	}
+	mark := markFn()
+	if mark <= 0 {
+		return 0
+	}
+	var unrealized float64
+	for _, pos := range openPos {
+		if pos.Quantity <= 0 {
+			continue
+		}
+		side := normalizePositionSide(pos.Side)
+		switch side {
+		case "SHORT":
+			unrealized += (pos.EntryPrice - mark) * pos.Quantity
+		default:
+			unrealized += (mark - pos.EntryPrice) * pos.Quantity
+		}
+	}
+	return unrealized
 }
 
 func isLiveOMSOrderState(state string) bool {

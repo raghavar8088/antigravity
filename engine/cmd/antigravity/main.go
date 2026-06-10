@@ -720,8 +720,14 @@ func main() {
 	}
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
+	if err := ksSvc.RestoreFromLedger(ctx); err != nil {
+		log.Printf("[KILL SWITCH] ⚠️  ledger restore failed: %v", err)
+	}
 	orchestrator.SetKillSwitch(ksSvc)
 	orchestrator.SetEventLedger(ksLedger)
+	execWatchdog := trading.NewExecutionWatchdog(coinbaseClient, ksSvc)
+	orchestrator.SetExecutionWatchdog(execWatchdog)
+	go safeGo("ExecutionWatchdog", func() { execWatchdog.Run(ctx) })
 	ksExecutor.SetOrchestrator(orchestrator)
 	log.Println("[KILL SWITCH] Institutional kill switch wired — PreTradeRiskPipeline gated")
 	log.Println("[LEDGER] Event ledger shared with orchestrator — OMS events durable for reconciliation")
@@ -891,6 +897,10 @@ func main() {
 		paperExecute.GetEquityUSD,
 		ksSvc,
 		"btc-paper-1",
+		&reconciliationv2.WireProductionConfig{
+			InitialBalanceUSD: initialPaperBalanceUSD,
+			MarkPriceUSD:      paperExecute.GetLastPrice,
+		},
 	); err != nil {
 		log.Printf("[RECON-V2] ⚠️  reconciliation bootstrap failed: %v", err)
 	}
@@ -1647,6 +1657,40 @@ func main() {
 		})
 	})
 
+	// Mock trading health — post-fix Sev-1 recovery certification endpoint.
+	http.HandleFunc("/api/health/mock-trading", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		wh := execWatchdog.Health()
+		tradingAllowed := !wh.KillSwitchActive && !wh.StaleMarketData
+		status := "healthy"
+		if wh.KillSwitchActive {
+			status = "blocked_kill_switch"
+		} else if wh.StaleMarketData {
+			status = "stale_market_data"
+		} else if wh.NoTradeAlertLevel != "" {
+			status = "no_trades_" + wh.NoTradeAlertLevel
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":              tradingAllowed,
+			"status":          status,
+			"trading_allowed": tradingAllowed,
+			"kill_switch": map[string]interface{}{
+				"active": wh.KillSwitchActive,
+				"reason": wh.KillSwitchReason,
+			},
+			"last_tick_at":          formatHealthTime(wh.LastTickAt),
+			"last_signal_at":        formatHealthTime(wh.LastSignalAt),
+			"last_fill_at":          formatHealthTime(wh.LastFillAt),
+			"no_trade_since_fill":   wh.NoTradeSinceFill.String(),
+			"no_trade_alert_level":  wh.NoTradeAlertLevel,
+			"stale_market_data":     wh.StaleMarketData,
+			"account_key":           paperpersist.FrontendAccountKey,
+			"execution_authority":   "go_engine",
+			"timestamp":             time.Now().UTC().Format(time.RFC3339),
+		})
+	})
+
 	// Security status endpoint — SUPER_ADMIN only (gate enforces RBAC).
 	http.HandleFunc("/api/security/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -2388,4 +2432,11 @@ func safeGo(name string, fn func()) {
 		}
 		time.Sleep(5 * time.Second)
 	}
+}
+
+func formatHealthTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }

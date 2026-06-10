@@ -4,19 +4,31 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"antigravity-engine/internal/killswitch"
 )
 
+const reconKillSwitchGracePeriod = 90 * time.Second
+
 // CriticalDriftKillSwitchHook returns a cycle hook that triggers the institutional
 // kill switch when reconciliation detects CRITICAL drift or manual escalation.
+// A startup grace period prevents false positives while ledger projections warm up.
 func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
+	startedAt := time.Now()
 	return func(ctx context.Context, domain MismatchDomain, entry AuditEntry) {
 		if ks == nil || ks.IsActive() {
 			return
 		}
+		if time.Since(startedAt) < reconKillSwitchGracePeriod {
+			return
+		}
 		for _, m := range entry.Mismatches {
 			if m.Severity != SeverityCritical {
+				continue
+			}
+			if isKnownFalsePositiveMismatch(m) {
+				log.Printf("[RECON-V2] suppressing false-positive critical mismatch: %s — %s", m.Type, m.Message)
 				continue
 			}
 			reason := fmt.Sprintf("reconciliation critical drift (%s): %s %s — %s",
@@ -51,5 +63,17 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 				log.Printf("[RECON-V2] kill switch triggered: %s", reason)
 			}
 		}
+	}
+}
+
+// isKnownFalsePositiveMismatch filters reconciliation artifacts that should not
+// halt trading (e.g. margin fields unused in paper mode).
+func isKnownFalsePositiveMismatch(m Mismatch) bool {
+	switch m.Type {
+	case "margin_used_drift":
+		// Paper runtime adapter never reports margin; OMS projection is zero.
+		return m.ExchangeVal == "0.000000" || m.InternalVal == "0.000000"
+	default:
+		return false
 	}
 }

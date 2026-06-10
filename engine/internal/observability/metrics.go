@@ -566,3 +566,55 @@ var (
 		Help:      "Total panic recoveries in background worker goroutines.",
 	}, []string{"worker"})
 )
+
+// Mock trading pipeline health (post-fix Sev-1 recovery observability).
+var (
+	MockTradingLastTickUnix = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "last_tick_unix",
+		Help:      "Unix timestamp of the last market tick processed by the orchestrator.",
+	})
+
+	MockTradingLastSignalUnix = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "last_signal_unix",
+		Help:      "Unix timestamp of the last approved signal entering institutional execution.",
+	})
+
+	MockTradingLastFillUnix = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "last_fill_unix",
+		Help:      "Unix timestamp of the last simulated paper fill.",
+	})
+
+	MockTradingFillsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "fills_total",
+		Help:      "Total mock paper fills since engine boot.",
+	})
+
+	MockTradingSignalsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "signals_total",
+		Help:      "Total approved signals entering institutional execution since boot.",
+	})
+
+	MockTradingNoTradeAlertTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "no_trade_alerts_total",
+		Help:      "No-trade watchdog alerts by threshold window.",
+	}, []string{"window"})
+
+	MockTradingWatchdogAlertsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "mock",
+		Name:      "watchdog_alerts_total",
+		Help:      "Execution watchdog alerts by type.",
+	}, []string{"alert_type"})
+)

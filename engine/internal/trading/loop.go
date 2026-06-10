@@ -168,6 +168,9 @@ type Orchestrator struct {
 	// AccountStateProvider to populate the session_start field in paper_state.
 	sessionStart time.Time
 
+	// execWatchdog tracks tick/signal/fill activity for stale-trading alerts.
+	execWatchdog *ExecutionWatchdog
+
 	mu sync.RWMutex
 }
 
@@ -281,6 +284,31 @@ func (o *Orchestrator) SetPMSBudget(budget *pms.PortfolioRiskBudget) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.pmsBudget = budget
+}
+
+// SetExecutionWatchdog attaches the execution health watchdog.
+func (o *Orchestrator) SetExecutionWatchdog(w *ExecutionWatchdog) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.execWatchdog = w
+}
+
+func (o *Orchestrator) recordWatchdogTick() {
+	if o.execWatchdog != nil {
+		o.execWatchdog.RecordTick()
+	}
+}
+
+func (o *Orchestrator) recordWatchdogSignal() {
+	if o.execWatchdog != nil {
+		o.execWatchdog.RecordSignal()
+	}
+}
+
+func (o *Orchestrator) recordWatchdogFill() {
+	if o.execWatchdog != nil {
+		o.execWatchdog.RecordFill()
+	}
 }
 
 func (o *Orchestrator) SetDeltaBroker(b *delta.Bridge) {
@@ -723,6 +751,7 @@ func (o *Orchestrator) submitInstitutionalOrder(
 		FillSize:       sig.TargetSize,
 	})
 	fill.ClientOrderID = clientOrderID
+	o.recordWatchdogFill()
 	return fill, nil
 }
 
@@ -1010,6 +1039,7 @@ func (o *Orchestrator) Run(ctx context.Context) {
 // 2. Feeds tick to candle aggregator (which emits candles on channels)
 // 3. Runs ONLY tick-timeframe strategies on the raw tick
 func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tick) {
+	o.recordWatchdogTick()
 	// 1. Update market state
 	o.exec.UpdateMarketState(t.Price)
 	o.mu.Lock()
@@ -1431,6 +1461,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			Timeframe:   sig.Timeframe,
 		})
 		o.execIntel.Record(sigID, execintel.StateSignalApproved, "passed selective aggregator")
+		o.recordWatchdogSignal()
 
 		// Stage 2: Strategy → Risk gate entry.
 		stageStart = observability.RecordPipelineStage(ctx, observability.StageStrategyToRisk, stageStart)

@@ -81,12 +81,12 @@ func (a *PositionManagerExchangeAdapter) GetPositions(context.Context) ([]Exchan
 		}
 		notional := pos.Size * pos.EntryPrice
 		result = append(result, ExchangePosition{
-			Symbol:        pos.Symbol,
-			Side:          side,
-			Quantity:      pos.Size,
-			EntryPrice:    pos.EntryPrice,
-			NotionalUSD:   notional,
-			UpdatedAt:     pos.OpenedAt,
+			Symbol:      normalizeReconSymbol(pos.Symbol),
+			Side:        side,
+			Quantity:    pos.Size,
+			EntryPrice:  pos.EntryPrice,
+			NotionalUSD: notional,
+			UpdatedAt:   pos.OpenedAt,
 		})
 	}
 	return result, nil
@@ -120,6 +120,22 @@ func normalizePositionSide(side string) string {
 		return "LONG"
 	case "SELL", "SHORT":
 		return "SHORT"
+	default:
+		return s
+	}
+}
+
+// positionSideKey builds a canonical symbol|side lookup key for drift detection.
+func positionSideKey(symbol, side string) string {
+	return normalizeReconSymbol(symbol) + "|" + normalizePositionSide(side)
+}
+
+// normalizeReconSymbol canonicalizes BTC symbol variants for comparison.
+func normalizeReconSymbol(symbol string) string {
+	s := strings.ToUpper(strings.TrimSpace(symbol))
+	switch s {
+	case "BTCUSDT", "BTC-USD", "BTCUSD", "XBTUSD":
+		return "BTC-USD"
 	default:
 		return s
 	}

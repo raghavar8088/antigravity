@@ -157,7 +157,7 @@ func (d *PositionDriftDetector) Detect(
 	for i := range omsPositions {
 		p := &omsPositions[i]
 		if p.State == "OPEN" || p.State == "REDUCED" {
-			key := p.Symbol + "|" + p.Side
+			key := positionSideKey(p.Symbol, p.Side)
 			omsIdx[key] = p
 		}
 	}
@@ -168,7 +168,7 @@ func (d *PositionDriftDetector) Detect(
 		if ep.Quantity == 0 {
 			continue // zero-size position = closed on exchange
 		}
-		key := ep.Symbol + "|" + ep.Side
+		key := positionSideKey(ep.Symbol, ep.Side)
 		seenKeys[key] = true
 
 		omsPos, found := omsIdx[key]
@@ -263,7 +263,7 @@ func (d *PositionDriftDetector) Detect(
 		if p.State != "OPEN" && p.State != "REDUCED" {
 			continue
 		}
-		k := p.Symbol + "|" + p.Side
+		k := positionSideKey(p.Symbol, p.Side)
 		seen[k]++
 		if seen[k] == 2 {
 			mismatches = append(mismatches, Mismatch{

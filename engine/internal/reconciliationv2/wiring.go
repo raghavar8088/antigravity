@@ -17,6 +17,12 @@ type WiredAuthorities struct {
 	Delta   *ExchangeReconciliationAuthority
 }
 
+// WireProductionConfig holds optional production wiring parameters.
+type WireProductionConfig struct {
+	InitialBalanceUSD float64
+	MarkPriceUSD      func() float64
+}
+
 // WireProduction boots reconciliationv2 authorities:
 //   - Runtime authority: ledger OMS vs live position manager (always)
 //   - Delta authority: ledger OMS vs Delta REST snapshots (when credentials present)
@@ -27,14 +33,24 @@ func WireProduction(
 	equityUSD func() float64,
 	ks *killswitch.Service,
 	accountID string,
+	cfg *WireProductionConfig,
 ) (*WiredAuthorities, error) {
 	if accountID == "" {
 		accountID = defaultReconAccountID
 	}
 
-	omsReader := NewLedgerOMSStateReader(store, accountID)
+	readerCfg := LedgerOMSReaderConfig{InitialBalanceUSD: defaultPaperInitialBalanceUSD}
+	if cfg != nil {
+		if cfg.InitialBalanceUSD > 0 {
+			readerCfg.InitialBalanceUSD = cfg.InitialBalanceUSD
+		}
+		if cfg.MarkPriceUSD != nil {
+			readerCfg.MarkPriceUSD = cfg.MarkPriceUSD
+		}
+	}
+	omsReader := NewLedgerOMSStateReader(store, accountID, readerCfg)
 	repairTarget := NewLedgerRepairTarget(store)
-	cfg := DefaultScheduleConfig()
+	schedCfg := DefaultScheduleConfig()
 	ksHook := CriticalDriftKillSwitchHook(ks)
 
 	out := &WiredAuthorities{}
@@ -46,7 +62,7 @@ func WireProduction(
 		store,
 		repairTarget,
 		accountID,
-		&cfg,
+		&schedCfg,
 	)
 	out.Runtime.SetCycleHook(ksHook)
 	if err := out.Runtime.Start(ctx); err != nil {
@@ -61,7 +77,7 @@ func WireProduction(
 			store,
 			repairTarget,
 			accountID,
-			&cfg,
+			&schedCfg,
 		)
 		out.Delta.SetCycleHook(ksHook)
 		if err := out.Delta.Start(ctx); err != nil {

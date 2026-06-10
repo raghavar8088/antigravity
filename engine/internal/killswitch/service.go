@@ -2,7 +2,10 @@ package killswitch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,6 +60,66 @@ type Service struct {
 
 func NewService(store ledger.Store, executor Executor, accountID string) *Service {
 	return &Service{ledger: store, executor: executor, accountID: accountID}
+}
+
+// RestoreFromLedger replays kill-switch events to restore in-memory active state
+// after engine restart. When a stale OMS_DESYNC was caused by reconciliation false
+// positives, auto-releases so trading can resume without manual operator action.
+func (s *Service) RestoreFromLedger(ctx context.Context) error {
+	if s.ledger == nil {
+		return nil
+	}
+	events, err := s.ledger.ReplayAccount(ctx, s.accountID)
+	if err != nil {
+		return err
+	}
+	active := false
+	reason := ""
+	var lastTrigger Trigger
+	for _, ev := range events {
+		if ev.AggregateType != ledger.AggregateRisk {
+			continue
+		}
+		switch ev.EventType {
+		case ledger.EventKillSwitchTriggered:
+			var act Activation
+			if len(ev.Payload) > 0 {
+				_ = json.Unmarshal(ev.Payload, &act)
+			}
+			active = true
+			reason = act.Reason
+			lastTrigger = act.Trigger
+		case ledger.EventKillSwitchReleased:
+			active = false
+			reason = ""
+		}
+	}
+	s.mu.Lock()
+	s.active = active
+	s.reason = reason
+	s.mu.Unlock()
+
+	if active && shouldAutoReleaseReconFalsePositive(reason) {
+		log.Printf("[KILL SWITCH] auto-releasing stale kill switch from reconciliation false positive: %s", reason)
+		return s.Release(ctx, lastTrigger, "startup-healer", "auto-release reconciliation false positive")
+	}
+	if active {
+		log.Printf("[KILL SWITCH] restored active state from ledger: %s", reason)
+	}
+	return nil
+}
+
+func shouldAutoReleaseReconFalsePositive(reason string) bool {
+	r := strings.ToLower(reason)
+	if !strings.Contains(r, "reconciliation") {
+		return false
+	}
+	for _, marker := range []string{"equity_drift", "available_margin_drift", "ghost_position", "missing_position"} {
+		if strings.Contains(r, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) IsActive() bool {
