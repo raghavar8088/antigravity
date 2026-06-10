@@ -34,7 +34,7 @@ import (
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
-	"antigravity-engine/internal/reconciliation"
+	reconciliationv2 "antigravity-engine/internal/reconciliationv2"
 	"antigravity-engine/internal/risk"
 	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/security/vault"
@@ -721,8 +721,10 @@ func main() {
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
 	orchestrator.SetKillSwitch(ksSvc)
+	orchestrator.SetEventLedger(ksLedger)
 	ksExecutor.SetOrchestrator(orchestrator)
 	log.Println("[KILL SWITCH] Institutional kill switch wired — PreTradeRiskPipeline gated")
+	log.Println("[LEDGER] Event ledger shared with orchestrator — OMS events durable for reconciliation")
 
 	// ── Portfolio Management System (P3-A) ───────────────────────────────────
 	// Activate PMS as the portfolio-level pre-trade gate. It runs before the
@@ -877,17 +879,21 @@ func main() {
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
-	// ── Reconciliation Service ────────────────────────────────────────────────
-	// Runs continuously at 10s intervals. Compares position manager state against
-	// expected OMS state and emits ledger alerts on any detected drift.
-	// On CRITICAL drift the kill switch is auto-triggered (OMS_DESYNC).
-	reconLedger := ksLedger // share the durable ledger if available
-	reconProvider := reconciliation.NewPaperSnapshotProvider(posMgr, "btc-paper-1")
-	reconSvc := reconciliation.NewService(reconProvider, reconLedger, 10*time.Second)
-	go safeGo("Reconciliation", func() {
-		log.Println("[RECONCILIATION] ✅ Continuous reconciliation started (10s interval)")
-		reconSvc.Run(ctx)
-	})
+	// ── Reconciliation Authority v2 ───────────────────────────────────────────
+	// Compares ledger OMS projections against:
+	//   1) live position manager runtime (always)
+	//   2) Delta Exchange REST snapshots (when DELTA_API_KEY/SECRET are set)
+	// CRITICAL drift triggers institutional kill switch (OMS_DESYNC).
+	if _, err := reconciliationv2.WireProduction(
+		ctx,
+		ksLedger,
+		posMgr,
+		paperExecute.GetEquityUSD,
+		ksSvc,
+		"btc-paper-1",
+	); err != nil {
+		log.Printf("[RECON-V2] ⚠️  reconciliation bootstrap failed: %v", err)
+	}
 
 	// ═══════════════════════════════════════════════════
 	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $1,000,000 paper account

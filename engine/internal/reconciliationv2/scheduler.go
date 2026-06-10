@@ -28,15 +28,19 @@ func DefaultScheduleConfig() ScheduleConfig {
 	}
 }
 
+// CycleHook is invoked after each reconciliation cycle completes successfully.
+type CycleHook func(ctx context.Context, domain MismatchDomain, entry AuditEntry)
+
 // ReconciliationScheduler drives periodic reconciliation cycles.
 // Each domain runs on its own independent ticker in a separate goroutine.
 // All cycles are non-blocking relative to each other — a slow full audit
 // does not delay the 2-second order check.
 type ReconciliationScheduler struct {
-	cfg     ScheduleConfig
-	engine  *ReconciliationEngine
-	metrics *Metrics
-	wg      sync.WaitGroup
+	cfg       ScheduleConfig
+	engine    *ReconciliationEngine
+	metrics   *Metrics
+	cycleHook CycleHook
+	wg        sync.WaitGroup
 }
 
 // NewReconciliationScheduler creates a scheduler wired to the given engine.
@@ -46,6 +50,11 @@ func NewReconciliationScheduler(engine *ReconciliationEngine, metrics *Metrics, 
 		engine:  engine,
 		metrics: metrics,
 	}
+}
+
+// SetCycleHook registers a post-cycle callback (e.g. kill-switch on critical drift).
+func (s *ReconciliationScheduler) SetCycleHook(hook CycleHook) {
+	s.cycleHook = hook
 }
 
 // Start launches all reconciliation goroutines. Blocks until ctx is cancelled,
@@ -104,5 +113,9 @@ func (s *ReconciliationScheduler) runCycle(ctx context.Context, domain MismatchD
 	if entry.DriftScore > 0 {
 		log.Printf("[RECON-V2] cycle done domain=%s mismatches=%d repairs=%d escalations=%d score=%.2f duration=%dms",
 			domain, entry.MismatchCount, entry.RepairCount, entry.EscalateCount, entry.DriftScore, entry.DurationMs)
+	}
+
+	if s.cycleHook != nil {
+		s.cycleHook(cycleCtx, domain, entry)
 	}
 }

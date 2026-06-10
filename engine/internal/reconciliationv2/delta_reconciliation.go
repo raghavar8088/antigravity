@@ -9,9 +9,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"antigravity-engine/internal/delta"
 )
 
 // DeltaReconciliationAdapter implements ReconciliationAdapter for Delta Exchange.
@@ -30,8 +33,25 @@ func NewDeltaReconciliationAdapter(apiKey, apiSecret string) *DeltaReconciliatio
 		apiKey:    apiKey,
 		apiSecret: apiSecret,
 		http:      &http.Client{Timeout: 10 * time.Second},
-		baseURL:   "https://api.delta.exchange",
+		baseURL:   deltaReconciliationBaseURL(),
 	}
+}
+
+// NewDeltaReconciliationAdapterFromEnv builds the adapter when DELTA_API_KEY/SECRET are set.
+func NewDeltaReconciliationAdapterFromEnv() (*DeltaReconciliationAdapter, error) {
+	key := strings.TrimSpace(os.Getenv("DELTA_API_KEY"))
+	secret := strings.TrimSpace(os.Getenv("DELTA_API_SECRET"))
+	if key == "" || secret == "" {
+		return nil, fmt.Errorf("DELTA_API_KEY and DELTA_API_SECRET must be set")
+	}
+	return NewDeltaReconciliationAdapter(key, secret), nil
+}
+
+func deltaReconciliationBaseURL() string {
+	if delta.IsTestnet() {
+		return "https://cdn-ind.testnet.deltaex.org"
+	}
+	return "https://cdn.india.deltaex.org"
 }
 
 func (a *DeltaReconciliationAdapter) Name() string { return "delta" }

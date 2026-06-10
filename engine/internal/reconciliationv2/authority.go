@@ -128,6 +128,13 @@ func (a *ExchangeReconciliationAuthority) RunDomain(ctx context.Context, domain 
 	return a.engine.RunDomain(ctx, domain)
 }
 
+// SetCycleHook registers a post-cycle callback on the background scheduler.
+func (a *ExchangeReconciliationAuthority) SetCycleHook(hook CycleHook) {
+	if a.scheduler != nil {
+		a.scheduler.SetCycleHook(hook)
+	}
+}
+
 // Status returns the current operational status of the authority.
 func (a *ExchangeReconciliationAuthority) Status() AuthorityStatus {
 	a.mu.RLock()
