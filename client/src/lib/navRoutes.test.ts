@@ -1,72 +1,57 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMMAND_CENTER_PATH,
   COMMAND_CENTER_NAV,
-  isNavItemActive,
+  MOCK_TRADING_PATH,
+  TERMINAL_ROUTES,
+  isMockTradingRoute,
   isPaperDeskRoute,
   isPaperDeskTabKey,
   isTerminalRoute,
   legacyPaperDeskRedirect,
   paperDeskHref,
-  TERMINAL_ROUTES,
 } from "./navRoutes";
 
 describe("isPaperDeskRoute", () => {
-  it("matches canonical and alias paths", () => {
+  it("matches retired paper desk paths", () => {
     expect(isPaperDeskRoute("/paper-desk")).toBe(true);
-    expect(isPaperDeskRoute("/paper-desk/settings")).toBe(true);
     expect(isPaperDeskRoute("/paperdesk")).toBe(true);
-    expect(isPaperDeskRoute("/paperdesk/trades")).toBe(true);
+    expect(isPaperDeskRoute("/btc-future-trading")).toBe(true);
   });
 
-  it("does not match unrelated routes", () => {
+  it("does not match mock trading or terminal", () => {
     expect(isPaperDeskRoute("/")).toBe(false);
     expect(isPaperDeskRoute("/mock-trading")).toBe(false);
     expect(isPaperDeskRoute("/terminal")).toBe(false);
   });
 });
 
-describe("isTerminalRoute", () => {
-  it("matches command center paths", () => {
-    expect(isTerminalRoute(COMMAND_CENTER_PATH)).toBe(true);
-    expect(isTerminalRoute(TERMINAL_ROUTES.execution)).toBe(true);
-    expect(isTerminalRoute("/paper-desk")).toBe(false);
+describe("isMockTradingRoute", () => {
+  it("matches mock trading paths", () => {
+    expect(isMockTradingRoute("/mock-trading")).toBe(true);
+    expect(isMockTradingRoute("/mock-trading/history")).toBe(true);
   });
 });
 
 describe("legacyPaperDeskRedirect", () => {
-  it("maps legacy tabs to terminal routes", () => {
-    expect(legacyPaperDeskRedirect()).toBe(TERMINAL_ROUTES.home);
-    expect(legacyPaperDeskRedirect("positions")).toBe(TERMINAL_ROUTES.execution);
-    expect(legacyPaperDeskRedirect("trades")).toBe(TERMINAL_ROUTES.journal);
-    expect(legacyPaperDeskRedirect("orders")).toBe(TERMINAL_ROUTES.events);
-    expect(legacyPaperDeskRedirect("equity")).toBe(TERMINAL_ROUTES.analytics);
-    expect(legacyPaperDeskRedirect("strategies")).toBe(TERMINAL_ROUTES.strategies);
-    expect(legacyPaperDeskRedirect("invalid")).toBe(TERMINAL_ROUTES.home);
-  });
-});
-
-describe("isNavItemActive", () => {
-  it("highlights command center home exactly", () => {
-    expect(
-      isNavItemActive("/terminal", {
-        href: TERMINAL_ROUTES.home,
-        exactMatch: true,
-      }),
-    ).toBe(true);
-    expect(
-      isNavItemActive("/terminal/execution", {
-        href: TERMINAL_ROUTES.home,
-        exactMatch: true,
-      }),
-    ).toBe(false);
+  it("redirects all legacy tabs to mock trading", () => {
+    expect(legacyPaperDeskRedirect()).toBe(MOCK_TRADING_PATH);
+    expect(legacyPaperDeskRedirect("positions")).toBe(MOCK_TRADING_PATH);
+    expect(legacyPaperDeskRedirect("trades")).toBe(MOCK_TRADING_PATH);
+    expect(legacyPaperDeskRedirect("invalid")).toBe(MOCK_TRADING_PATH);
   });
 });
 
 describe("paperDeskHref", () => {
-  it("redirects to command center routes", () => {
-    expect(paperDeskHref()).toBe(TERMINAL_ROUTES.home);
-    expect(paperDeskHref("trades")).toBe(TERMINAL_ROUTES.journal);
+  it("returns mock trading path", () => {
+    expect(paperDeskHref()).toBe(MOCK_TRADING_PATH);
+    expect(paperDeskHref("equity")).toBe(MOCK_TRADING_PATH);
+  });
+});
+
+describe("COMMAND_CENTER_NAV", () => {
+  it("lists mock trading first", () => {
+    expect(COMMAND_CENTER_NAV[0]?.href).toBe(MOCK_TRADING_PATH);
+    expect(COMMAND_CENTER_NAV.some((item) => item.href === TERMINAL_ROUTES.home)).toBe(true);
   });
 });
 
@@ -77,12 +62,10 @@ describe("isPaperDeskTabKey", () => {
   });
 });
 
-describe("COMMAND_CENTER_NAV", () => {
-  it("includes required operator surfaces", () => {
-    const labels = COMMAND_CENTER_NAV.map((n) => n.label);
-    expect(labels).toContain("Command Center");
-    expect(labels).toContain("Execution");
-    expect(labels).toContain("Health");
-    expect(labels).not.toContain("Paper Desk");
+describe("isTerminalRoute", () => {
+  it("matches terminal paths", () => {
+    expect(isTerminalRoute("/terminal")).toBe(true);
+    expect(isTerminalRoute("/terminal/execution")).toBe(true);
+    expect(isTerminalRoute("/paper-desk")).toBe(false);
   });
 });

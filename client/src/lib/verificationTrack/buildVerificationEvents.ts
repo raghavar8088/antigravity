@@ -8,8 +8,25 @@ import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
 import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
 import type { NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
 import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
-import type { PaperOmsOrder } from "@/lib/paperOms";
-import { summarizeOmsOrders } from "@/lib/paperOms";
+
+type LegacyOmsOrder = {
+  status?: string;
+  reject_gate?: string;
+};
+
+function summarizeOmsOrders(orders: LegacyOmsOrder[]) {
+  const countsByStatus: Record<string, number> = {};
+  for (const order of orders) {
+    const key = order.status ?? "UNKNOWN";
+    countsByStatus[key] = (countsByStatus[key] ?? 0) + 1;
+  }
+  return {
+    total: orders.length,
+    countsByStatus,
+    topRejectGate: orders.find((o) => o.reject_gate)?.reject_gate ?? null,
+    fillRate: orders.length > 0 ? (countsByStatus.POSITION_OPENED ?? 0) / orders.length : 0,
+  };
+}
 
 function makeId(tickAt: number, type: VerificationTrackEventType, extra = ""): string {
   return `${tickAt}-${type}${extra ? "-" + extra : ""}-${Math.random().toString(36).slice(2, 9)}`;
@@ -203,7 +220,7 @@ export function eventFromWorkerHealth(
  */
 export function eventsFromOmsTick(
   tickAt: number,
-  orders: PaperOmsOrder[],
+  orders: LegacyOmsOrder[],
   workerOwner: "browser" | "vps" | "cron" | null,
   accountKey?: string | null,
 ): VerificationTrackEvent[] {

@@ -11,18 +11,18 @@ type DiagnosticsPayload = {
 };
 
 export function DiagnosticsCenter() {
-  const [engineDiag, setEngineDiag] = useState<DiagnosticsPayload | null>(null);
+  const [mockDiag, setMockDiag] = useState<DiagnosticsPayload | null>(null);
   const [envBlockers, setEnvBlockers] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const [diag, health] = await Promise.all([
-        fetch("/api/paper-desk/diagnostics", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { ok: false })).catch(() => ({ ok: false })),
+        fetch("/api/mock-trading/snapshot", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { ok: false })).catch(() => ({ ok: false })),
         fetch("/api/system/health", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
       if (cancelled) return;
-      setEngineDiag(diag);
+      setMockDiag(diag);
       setEnvBlockers(health?.env?.blockers ?? null);
     };
     load();
@@ -32,25 +32,25 @@ export function DiagnosticsCenter() {
 
   return (
     <div className="grid gap-3 xl:grid-cols-2">
-      <TerminalCard title="Engine Diagnostics" subtitle="/api/paper-desk/diagnostics → Go engine proxy">
-        {!engineDiag ? (
+      <TerminalCard title="Mock Trading State" subtitle="/api/mock-trading/snapshot">
+        {!mockDiag ? (
           <TerminalNoData label="LOADING..." />
-        ) : engineDiag.ok === false ? (
-          <TerminalNoData label="ENGINE DIAGNOSTICS UNAVAILABLE" />
+        ) : mockDiag.ok === false ? (
+          <TerminalNoData label="MOCK TRADING SNAPSHOT UNAVAILABLE" />
         ) : (
           <pre className="max-h-80 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 font-mono text-[10px] text-zinc-400">
-            {JSON.stringify(engineDiag.engine ?? engineDiag, null, 2)}
+            {JSON.stringify(mockDiag, null, 2)}
           </pre>
         )}
       </TerminalCard>
-      <TerminalCard title="Environment & Worker" subtitle="Startup validation · cron worker">
+      <TerminalCard title="Environment" subtitle="Startup validation">
         <div className="grid gap-2">
           <Metric label="Env Blockers" value={envBlockers != null ? String(envBlockers) : "—"} tone={envBlockers && envBlockers > 0 ? "negative" : "positive"} />
           <p className="text-xs text-zinc-500">
-            Cron tick: <span className="font-mono text-zinc-400">/api/cron/paper-desk-tick</span>
+            Execution authority: <span className="font-mono text-zinc-400">mock-trading</span>
           </p>
           <p className="text-xs text-zinc-500">
-            Worker probe: <span className="font-mono text-zinc-400">/api/health/desk-worker</span>
+            Signal trace: <span className="font-mono text-zinc-400">/api/strategy-signal-trace</span>
           </p>
         </div>
       </TerminalCard>

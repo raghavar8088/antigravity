@@ -1,5 +1,7 @@
-import TradingDashboard from "@/components/TradingDashboard";
+import { redirect } from "next/navigation";
+import { MOCK_TRADING_PATH } from "@/lib/navRoutes";
 
-export default function BTCFutureTradingPage() {
-  return <TradingDashboard />;
+/** Retired BTC futures paper desk — redirects to mock trading. */
+export default function BtcFutureTradingLegacyPage() {
+  redirect(MOCK_TRADING_PATH);
 }

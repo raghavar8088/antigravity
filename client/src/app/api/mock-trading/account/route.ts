@@ -1,12 +1,49 @@
 import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { insertMockAccountSnapshot } from "@/lib/mockTradingMongo";
+import { mockAccountSnapshotBodySchema } from "@/lib/mockTradingPersistenceTypes";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
-// POST is disabled — account snapshots are now written exclusively by the Go engine
-// to paper_state every 10 seconds. Read account state from /api/paper-desk/state.
-export async function POST() {
-  return NextResponse.json(
-    { ok: false, code: "DEPRECATED", error: "Browser account snapshots are disabled. The Go engine writes account state to paper_state every 10s. Read from /api/paper-desk/state." },
-    { status: 410 },
-  );
+export async function POST(req: Request) {
+  const accountKey = OWNER_ACCOUNT_KEY;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const b = body as Record<string, unknown>;
+  const parsed = mockAccountSnapshotBodySchema.safeParse({ ...b, accountKey });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  if (!isMongoConfigured()) {
+    return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });
+  }
+
+  try {
+    const snapshot = await insertMockAccountSnapshot(accountKey, parsed.data.account, parsed.data.config);
+    return NextResponse.json({
+      ok: true,
+      storage: "mongo",
+      timestamp: snapshot.timestamp,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MONGO_WRITE_FAILED",
+        error: "Mongo write failed",
+        detail: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
 }

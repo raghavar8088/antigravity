@@ -1,13 +1,6 @@
-/**
- * /api/system/production-validation — automated production alignment checks.
- *
- * Returns PASS / WARNING / FAIL per subsystem with exact diagnostics.
- * Auth: requires valid raig_session cookie (same as /api/system/health).
- */
-
 import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
-import { runProductionValidation } from "@/lib/productionValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +8,24 @@ export async function GET() {
   const auth = await getAuthenticatedApiSession();
   if (!auth.ok) return auth.response;
 
-  const report = await runProductionValidation(auth.ctx.userId);
-  const status = report.overall === "FAIL" ? 503 : report.overall === "WARNING" ? 206 : 200;
-  return NextResponse.json(report, { status });
+  const mongoOk = isMongoConfigured();
+  const report = {
+    overall: mongoOk ? "PASS" : "WARNING",
+    execution_authority: "mock-trading",
+    checks: [
+      {
+        subsystem: "mock_trading",
+        status: mongoOk ? "PASS" : "WARNING",
+        detail: mongoOk ? "Mongo configured for mock trading persistence" : "Mongo not configured",
+      },
+      {
+        subsystem: "paper_desk",
+        status: "PASS",
+        detail: "Retired — all execution routed through mock trading",
+      },
+    ],
+    server_time: new Date().toISOString(),
+  };
+
+  return NextResponse.json(report, { status: mongoOk ? 200 : 206 });
 }

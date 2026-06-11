@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-vi.mock("@/lib/paperTradesApiAuth", () => ({
-  getAuthenticatedPaperApiUser: vi.fn(),
+vi.mock("@/lib/apiSessionAuth", () => ({
+  getAuthenticatedApiSession: vi.fn(),
 }));
 
 vi.mock("@/lib/shadowTradeIntentMapper", async (importOriginal) => {
@@ -38,21 +38,21 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 import { POST, GET } from "./route";
 
 describe("shadow-trade-intents API", () => {
   beforeEach(() => {
-    vi.mocked(getAuthenticatedPaperApiUser).mockResolvedValue({
+    vi.mocked(getAuthenticatedApiSession).mockResolvedValue({
       ok: true,
-      ctx: { userId: "user-1" },
+      ctx: { userId: "user-1", email: "test@example.com" },
     });
     mockUpsert.mockClear();
     mockSelect.mockResolvedValue({ data: [], error: null });
   });
 
   it("POST returns 401 without session", async () => {
-    vi.mocked(getAuthenticatedPaperApiUser).mockResolvedValueOnce({
+    vi.mocked(getAuthenticatedApiSession).mockResolvedValueOnce({
       ok: false,
       response: NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 }),
     });

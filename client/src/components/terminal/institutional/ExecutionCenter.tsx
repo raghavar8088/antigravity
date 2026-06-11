@@ -61,7 +61,7 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
             <TerminalNoData label={hasPrice ? `MARK ${px(snapshot.price)} — candle feed unavailable` : "NO MARKET DATA"} />
           )}
         </TerminalCard>
-        <TerminalCard title="Open Positions" subtitle="Go engine · paper_positions">
+        <TerminalCard title="Open Positions" subtitle="Mock trading · mock_trades">
           {snapshot.positions.length === 0 ? (
             <TerminalNoData label="NO OPEN POSITIONS" />
           ) : (

@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import {
-  listStrategyScores,
-  listStrategyHealth,
-  getStrategyHealthSummary,
-  getClosedTradeStats,
-} from "@/lib/paperDeskClient";
+import { buildMockStrategyIntelRows } from "@/lib/mockTradingSnapshotService";
+import { listMockTrades } from "@/lib/mockTradingMongo";
 import { readSepStrategyEvidence, sepReportsAvailable, type SepStrategyRow } from "@/lib/sep/sepPipeline";
-import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
+import { mongoUnconfigured, mongoUnavailable } from "@/lib/mockTradingApiErrors";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +29,6 @@ function filterSepRows(rows: SepStrategyRow[], view: string, limit: number) {
 }
 
 export async function GET(req: Request) {
-  const auth = await getAuthenticatedApiSession();
-  if (!auth.ok) return auth.response;
-
   const { searchParams } = new URL(req.url);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10) || 50, 600);
   const view = searchParams.get("view") ?? "rankings";
@@ -55,50 +48,32 @@ export async function GET(req: Request) {
   if (!isMongoConfigured()) return mongoUnconfigured();
 
   try {
-    const [scores, health, summary, closedStats] = await Promise.all([
-      listStrategyScores(auth.ctx.userId, limit),
-      listStrategyHealth(auth.ctx.userId, undefined, limit),
-      getStrategyHealthSummary(auth.ctx.userId),
-      getClosedTradeStats(auth.ctx.userId),
+    const [rows, closed] = await Promise.all([
+      buildMockStrategyIntelRows(OWNER_ACCOUNT_KEY),
+      listMockTrades({ account_key: OWNER_ACCOUNT_KEY, status: "CLOSED", page: 1, limit: 50_000, sort: "oldest" }),
     ]);
-
-    const healthMap = new Map(health.map((h) => [h.strategy_id, h]));
-    const rows = scores.map((s) => {
-      const h = healthMap.get(s.strategy_id);
-      return {
-        strategy_id: s.strategy_id,
-        status: h?.health_status ?? "INSUFFICIENT_DATA",
-        enabled: h?.health_status === "HEALTHY" || h?.health_status === "WARNING",
-        total_pnl: s.total_pnl,
-        expectancy: s.expectancy,
-        profit_factor: s.profit_factor,
-        win_rate: s.win_rate,
-        max_drawdown: s.max_drawdown,
-        sample_size: s.sample_size,
-        evidence_score: Math.round(Math.min(s.profit_factor / 2, 1) * 100),
-        allocation_tier: s.profit_factor >= 1.5 ? "A" : s.profit_factor >= 1.25 ? "B" : s.profit_factor >= 1.1 ? "C" : "D",
-        sharpe_ratio: null,
-        sortino_ratio: null,
-        regime: null,
-        last_signal: h?.computed_at ?? s.computed_at,
-      };
-    });
 
     let filtered = rows;
     if (view === "top" || view === "rankings") filtered = [...rows].sort((a, b) => b.expectancy - a.expectancy).slice(0, limit);
     else if (view === "bottom") filtered = [...rows].sort((a, b) => a.expectancy - b.expectancy).slice(0, limit);
     else if (view === "retirement") filtered = rows.filter((r) => r.status === "CRITICAL" || r.expectancy < 0);
 
+    const wins = closed.trades.filter((t) => t.realizedPnl >= 0).length;
     return NextResponse.json({
       ok: true,
-      source: "mongo_strategy_intelligence",
+      source: "mock_trading",
+      execution_authority: "mock-trading",
       sep_available: sepReportsAvailable(),
       view,
-      summary,
+      summary: {
+        healthy: rows.filter((r) => r.status === "HEALTHY").length,
+        warning: rows.filter((r) => r.status === "WARNING").length,
+        critical: rows.filter((r) => r.status === "CRITICAL").length,
+      },
       portfolio_stats: {
-        total_realized_pnl: closedStats.realized_pnl,
-        total_trades: closedStats.total_trades,
-        win_rate: closedStats.win_rate,
+        total_realized_pnl: closed.trades.reduce((s, t) => s + t.realizedPnl, 0),
+        total_trades: closed.trades.length,
+        win_rate: closed.trades.length > 0 ? wins / closed.trades.length : 0,
       },
       strategies: filtered,
       server_time: new Date().toISOString(),

@@ -1,5 +1,8 @@
-/** Institutional Command Center — canonical operator surface. */
+/** Institutional Command Center — monitoring surface (read-only). */
 export const COMMAND_CENTER_PATH = "/terminal";
+
+/** Primary execution surface — mock trading is the sole trade authority. */
+export const MOCK_TRADING_PATH = "/mock-trading";
 
 export const TERMINAL_ROUTES = {
   home: "/terminal",
@@ -19,31 +22,33 @@ export const TERMINAL_ROUTES = {
 
 export type TerminalRouteKey = keyof typeof TERMINAL_ROUTES;
 
-/** @deprecated Legacy path — UI redirects to Command Center. APIs remain at /api/paper-desk/*. */
+/** @deprecated Paper desk removed — redirects to mock trading. */
 export const PAPER_DESK_PATH = "/paper-desk";
 
 const PAPER_DESK_TAB_KEYS = ["positions", "trades", "orders", "equity", "strategies"] as const;
 export type PaperDeskTabKey = (typeof PAPER_DESK_TAB_KEYS)[number];
 
 const LEGACY_TAB_REDIRECTS: Record<PaperDeskTabKey, string> = {
-  positions: TERMINAL_ROUTES.execution,
-  trades: TERMINAL_ROUTES.journal,
-  orders: TERMINAL_ROUTES.events,
-  equity: TERMINAL_ROUTES.analytics,
-  strategies: TERMINAL_ROUTES.strategies,
+  positions: MOCK_TRADING_PATH,
+  trades: MOCK_TRADING_PATH,
+  orders: MOCK_TRADING_PATH,
+  equity: MOCK_TRADING_PATH,
+  strategies: MOCK_TRADING_PATH,
 };
 
 export function isPaperDeskTabKey(value: string | null | undefined): value is PaperDeskTabKey {
   return PAPER_DESK_TAB_KEYS.includes(value as PaperDeskTabKey);
 }
 
-/** True for /paper-desk, /paper-desk/*, /paperdesk, /paperdesk/* */
+/** True for retired paper desk paths (redirect targets). */
 export function isPaperDeskRoute(pathname: string): boolean {
   return (
     pathname === PAPER_DESK_PATH ||
     pathname.startsWith(`${PAPER_DESK_PATH}/`) ||
     pathname === "/paperdesk" ||
-    pathname.startsWith("/paperdesk/")
+    pathname.startsWith("/paperdesk/") ||
+    pathname === "/btc-future-trading" ||
+    pathname.startsWith("/btc-future-trading/")
   );
 }
 
@@ -51,13 +56,17 @@ export function isTerminalRoute(pathname: string): boolean {
   return pathname === COMMAND_CENTER_PATH || pathname.startsWith(`${COMMAND_CENTER_PATH}/`);
 }
 
-/** Resolve legacy Paper Desk deep links to Command Center routes. */
-export function legacyPaperDeskRedirect(tab?: string | null): string {
-  if (tab && isPaperDeskTabKey(tab)) return LEGACY_TAB_REDIRECTS[tab];
-  return TERMINAL_ROUTES.home;
+export function isMockTradingRoute(pathname: string): boolean {
+  return pathname === MOCK_TRADING_PATH || pathname.startsWith(`${MOCK_TRADING_PATH}/`);
 }
 
-/** @deprecated Use TERMINAL_ROUTES — retained for API-layer references only. */
+/** Resolve legacy Paper Desk deep links to mock trading. */
+export function legacyPaperDeskRedirect(tab?: string | null): string {
+  if (tab && isPaperDeskTabKey(tab)) return LEGACY_TAB_REDIRECTS[tab];
+  return MOCK_TRADING_PATH;
+}
+
+/** @deprecated Use MOCK_TRADING_PATH or TERMINAL_ROUTES. */
 export function paperDeskHref(tab?: PaperDeskTabKey): string {
   return legacyPaperDeskRedirect(tab);
 }
@@ -68,7 +77,6 @@ type NavActiveItem = {
   routeMatcher?: (pathname: string) => boolean;
 };
 
-/** Sidebar active-state resolver shared by desktop and mobile nav. */
 export function isNavItemActive(pathname: string, item: NavActiveItem): boolean {
   if (item.routeMatcher) return item.routeMatcher(pathname);
   if (item.exactMatch) return pathname === item.href;
@@ -76,7 +84,8 @@ export function isNavItemActive(pathname: string, item: NavActiveItem): boolean 
 }
 
 export const COMMAND_CENTER_NAV = [
-  { href: TERMINAL_ROUTES.home, label: "Command Center", exactMatch: true },
+  { href: MOCK_TRADING_PATH, label: "Mock Trading", exactMatch: true },
+  { href: TERMINAL_ROUTES.home, label: "Command Center" },
   { href: TERMINAL_ROUTES.execution, label: "Execution" },
   { href: TERMINAL_ROUTES.strategies, label: "Strategies" },
   { href: TERMINAL_ROUTES.portfolio, label: "Portfolio" },

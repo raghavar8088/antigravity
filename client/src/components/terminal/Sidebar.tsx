@@ -137,23 +137,27 @@ const ICONS: Record<string, React.ReactNode> = {
   Health: <IconHealth />,
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
+  "Mock Trading": <IconResearch />,
 };
 
 const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Command Center",
-    items: COMMAND_CENTER_NAV.map((item) => ({
+    label: "Trading",
+    items: COMMAND_CENTER_NAV.filter((item) => item.label === "Mock Trading").map((item) => ({
       href: item.href,
       label: item.label,
-      icon: ICONS[item.label] ?? <IconCommand />,
-      exactMatch: "exactMatch" in item ? item.exactMatch : false,
+      icon: ICONS[item.label] ?? <IconResearch />,
+      exactMatch: "exactMatch" in item ? Boolean(item.exactMatch) : false,
     })),
   },
   {
-    label: "Legacy Lab",
-    items: [
-      { href: "/mock-trading", label: "Mock Trading", icon: <IconResearch /> },
-    ],
+    label: "Command Center",
+    items: COMMAND_CENTER_NAV.filter((item) => item.label !== "Mock Trading").map((item) => ({
+      href: item.href,
+      label: item.label,
+      icon: ICONS[item.label] ?? <IconCommand />,
+      exactMatch: "exactMatch" in item ? Boolean(item.exactMatch) : false,
+    })),
   },
 ];
 

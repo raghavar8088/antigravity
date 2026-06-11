@@ -14,15 +14,15 @@ export function TerminalCard({
   className?: string;
 }) {
   return (
-    <section className={`rounded-xl border border-zinc-800 bg-[#0d1118] ${className}`}>
-      <header className="flex min-h-10 items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <section className={`m3-surface-card ${className}`}>
+      <header className="m3-surface-card__header">
         <div>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-200">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-[10px] text-zinc-500">{subtitle}</p> : null}
+          <h2 className="m3-surface-card__title">{title}</h2>
+          {subtitle ? <p className="m3-surface-card__subtitle">{subtitle}</p> : null}
         </div>
         {actions}
       </header>
-      <div className="p-3">{children}</div>
+      <div className="m3-surface-card__body">{children}</div>
     </section>
   );
 }
@@ -36,18 +36,19 @@ export function Metric({
   value: string;
   tone?: "neutral" | "positive" | "negative" | "warning";
 }) {
-  const cls =
+  const toneClass =
     tone === "positive"
-      ? "text-emerald-300"
+      ? "m3-metric-tile__value--profit"
       : tone === "negative"
-      ? "text-rose-300"
+      ? "m3-metric-tile__value--loss"
       : tone === "warning"
-      ? "text-amber-300"
-      : "text-zinc-100";
+      ? "m3-metric-tile__value--warning"
+      : "";
+
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">{label}</div>
-      <div className={`mt-1 font-mono text-sm font-semibold ${cls}`}>{value}</div>
+    <div className="m3-metric-tile">
+      <div className="m3-metric-tile__label">{label}</div>
+      <div className={`m3-metric-tile__value ${toneClass}`}>{value}</div>
     </div>
   );
 }

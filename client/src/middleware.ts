@@ -26,9 +26,8 @@ function routeClass(pathname: string): string {
   if (pathname.startsWith("/api/auth")) return "auth";
   if (pathname.startsWith("/api/admin") || pathname.startsWith("/api/security")) return "admin";
   if (
-    pathname.startsWith("/api/paper-") ||
-    pathname.startsWith("/api/delta-live/order") ||
     pathname.startsWith("/api/mock-trading") ||
+    pathname.startsWith("/api/delta-live/order") ||
     pathname.startsWith("/api/angel")
   ) return "trade";
   if (pathname.startsWith("/api/")) return "api";
@@ -96,7 +95,7 @@ function applySecurityHeaders(res: NextResponse): void {
 
 // ── Protected page paths (browser nav guard) ──────────────────────────────────
 // /login is the only public route. Every other page requires a valid raig_session.
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/session", "/api/health", "/mock-trading", "/api/mock-trading", "/api/strategy-signal-trace", "/paper-desk", "/paperdesk", "/api/paper-desk"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/session", "/api/health", "/mock-trading", "/api/mock-trading", "/api/strategy-signal-trace", "/paper-desk", "/paperdesk", "/btc-future-trading"];
 
 function isProtectedPage(pathname: string): boolean {
   // Static assets, Next.js internals, and explicitly public paths are allowed.

@@ -61,11 +61,48 @@ export async function GET(req: Request) {
   }
 }
 
-// POST is disabled — trade execution is now owned exclusively by the Go engine.
-// Trades are written to paper_trades by the engine and read via /api/paper-desk/trades.
-export async function POST() {
-  return NextResponse.json(
-    { ok: false, code: "DEPRECATED", error: "Browser trade creation is disabled. The Go engine is the sole execution authority. Read trades from /api/paper-desk/trades." },
-    { status: 410 },
-  );
+export async function POST(req: Request) {
+  const accountKey = OWNER_ACCOUNT_KEY;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const b = body as Record<string, unknown>;
+  const parsed = mockTradeWriteBodySchema.safeParse({ ...b, accountKey });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  if (!isMongoConfigured()) return mongoNotConfigured();
+
+  try {
+    const result = await upsertMockTrade(
+      accountKey,
+      parsed.data.trade,
+      parsed.data.config,
+      "MOCK_TRADE_CREATED",
+    );
+    return NextResponse.json({
+      ok: true,
+      storage: "mongo",
+      tradeId: parsed.data.trade.id,
+      ...result,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MONGO_WRITE_FAILED",
+        error: "Mongo write failed",
+        detail: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
 }

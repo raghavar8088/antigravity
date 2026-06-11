@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireAuthenticatedPaperUser } from "@/lib/paperTradesAuth";
 import { verifySession, SESSION_COOKIE, isMongoAuthConfigured } from "@/lib/jwtSession";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export type ApiSessionContext = {
   userId: string;
@@ -32,13 +32,5 @@ export async function getAuthenticatedApiSession(): Promise<
     };
   }
 
-  const guard = requireAuthenticatedPaperUser(session.userId);
-  if (!guard.ok) {
-    return {
-      ok: false,
-      response: NextResponse.json({ ok: false, error: guard.error }, { status: guard.status }),
-    };
-  }
-
-  return { ok: true, ctx: { userId: guard.userId } };
+  return { ok: true, ctx: { userId: OWNER_ACCOUNT_KEY } };
 }

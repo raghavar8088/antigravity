@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedPaperApiUser } from "@/lib/paperTradesApiAuth";
+import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
 import {
   dbRowToShadowIntentListItem,
   isDeskShadowIntentsEnabled,
@@ -29,7 +29,7 @@ function shadowApiDisabled() {
 export async function POST(req: Request) {
   if (!isDeskShadowIntentsEnabled()) return shadowApiDisabled();
 
-  const auth = await getAuthenticatedPaperApiUser();
+  const auth = await getAuthenticatedApiSession();
   if (!auth.ok) return auth.response;
 
   let body: unknown;
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   if (!isDeskShadowIntentsEnabled()) return shadowApiDisabled();
 
-  const auth = await getAuthenticatedPaperApiUser();
+  const auth = await getAuthenticatedApiSession();
   if (!auth.ok) return auth.response;
 
   const url = new URL(req.url);

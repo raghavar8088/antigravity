@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { isPaperDeskRoute, TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { isMockTradingRoute, isPaperDeskRoute, MOCK_TRADING_PATH, TERMINAL_ROUTES } from "@/lib/navRoutes";
 
 type Regime = string | null | undefined;
 
@@ -119,7 +119,14 @@ export function TopBar({
   menuOpen = false,
 }: TopBarProps) {
   const pathname = usePathname();
-  const pageTitle = title ?? (isPaperDeskRoute(pathname) ? "Command Center" : PAGE_TITLES[pathname]) ?? "Terminal";
+  const pageTitle =
+    title ??
+    (isPaperDeskRoute(pathname)
+      ? "Mock Trading"
+      : isMockTradingRoute(pathname)
+        ? PAGE_TITLES[MOCK_TRADING_PATH]
+        : PAGE_TITLES[pathname]) ??
+    "Terminal";
   const isLive = connectionStatus === "live";
   const isReconnecting = connectionStatus === "reconnecting";
 

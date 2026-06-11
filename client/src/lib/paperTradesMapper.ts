@@ -1,4 +1,4 @@
-import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
+﻿import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
 import type {
   PaperTradeClientPayload,
   PaperTradeDbRow,
@@ -27,7 +27,7 @@ export type PaperTradeInsertRow = {
   exit_reason: string;
   payload: Record<string, unknown>;
   module_key?: PaperTradeModuleKey;
-  /** Parent algorithm family — used for cross-strategy research leaderboards. */
+  /** Parent algorithm family ΓÇö used for cross-strategy research leaderboards. */
   template_family?: string;
   /** Exchange where execution was simulated (e.g. "binance", "delta", "nse"). */
   exchange?: string;

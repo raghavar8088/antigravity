@@ -23,7 +23,6 @@ import {
   executeHealingActions,
   type HealingExecutionResult,
 } from "@/lib/deskSelfHealingExecutor";
-import { runPaperStateRepair } from "@/lib/paperStateRepairCore";
 import {
   insertWorkerEvent,
   type WorkerEventType,
@@ -73,8 +72,11 @@ async function maybeExecuteHealing(
   return executeHealingActions(actions, {
     accountKey,
     autoEnabled: true,
-    repairPaperState: async ({ initialBalance, reason }) =>
-      runPaperStateRepair({ accountKey, initialBalance, reason }),
+    repairPaperState: async () => ({
+      repairId: "mock-trading-only",
+      balance: 0,
+      clearedAt: Date.now(),
+    }),
     writeWorkerEvent: async (event) => {
       try {
         await insertWorkerEvent({

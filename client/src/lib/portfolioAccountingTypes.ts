@@ -1,15 +1,15 @@
-/** Types for Mongo-authoritative Paper Desk portfolio accounting. */
+/** Types for mock-trading portfolio accounting snapshots. */
 
-import type { PaperPositionDoc, PaperStateDoc } from "@/lib/paperDeskClient";
-
-export const PAPER_DESK_STARTING_BALANCE = 1_000_000;
+export const MOCK_TRADING_STARTING_BALANCE = 1_000_000;
 
 export type ExposureMetrics = {
   long_exposure_btc: number;
   short_exposure_btc: number;
   net_exposure_btc: number;
   gross_exposure_btc: number;
-  exposure_usd: number;
+  gross_exposure_usd: number;
+  net_exposure_usd: number;
+  exposure_usd?: number;
 };
 
 export type DrawdownMetrics = {
@@ -24,7 +24,7 @@ export type DrawdownMetrics = {
 export type PortfolioAccountingSnapshot = {
   account_key: string;
   computed_at: string;
-  source: "mongodb";
+  source: "mock-trading" | "mongodb";
 
   balance: number;
   equity: number;
@@ -62,11 +62,5 @@ export type PortfolioAccountingSnapshot = {
   equity_curve_last_ts: string | null;
 };
 
-export type PortfolioAccountingInputs = {
-  accountKey: string;
-  state: PaperStateDoc | null;
-  closedStats: import("@/lib/paperDeskClient").ClosedTradeStats;
-  openPositions: PaperPositionDoc[];
-  markPrice?: number;
-  equityCurveLastTs?: string | null;
-};
+/** @deprecated Paper desk removed. */
+export const PAPER_DESK_STARTING_BALANCE = MOCK_TRADING_STARTING_BALANCE;

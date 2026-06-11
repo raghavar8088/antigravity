@@ -5,7 +5,7 @@ type PaperDeskLegacyPageProps = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-/** Legacy route — redirects to Institutional Command Center. */
+/** Retired paper desk route — redirects to mock trading. */
 export default async function PaperDeskLegacyPage({ searchParams }: PaperDeskLegacyPageProps) {
   const { tab } = await searchParams;
   redirect(legacyPaperDeskRedirect(tab));

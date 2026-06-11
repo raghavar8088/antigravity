@@ -3,85 +3,166 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import RiskRibbon from "@/components/RiskRibbon";
+import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
+import { StatusChip } from "@/components/ui/StatusChip";
+import { useThemeToggle } from "@/components/ui/ThemeProvider";
+import { resolvePageTitle } from "@/lib/commandPaletteItems";
+import { COMMAND_CENTER_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
 import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
 import { terminalAuthorityLabel } from "@/lib/terminal/terminalAuthority";
-import { COMMAND_CENTER_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
-import { pct, px, usd } from "./format";
+import { pct, px } from "./format";
+import { NavIcon } from "./NavIcons";
 
 export function InstitutionalTerminalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const snapshot = useTerminalSnapshot();
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { theme, toggle: toggleTheme } = useThemeToggle();
+
   const criticalAlerts = snapshot.alerts.filter((a) => a.severity === "CRITICAL").length;
   const authorityLabel = terminalAuthorityLabel(snapshot);
+  const pageTitle = resolvePageTitle(pathname);
+
+  const tradingNav = COMMAND_CENTER_NAV.filter((i) => i.label === "Mock Trading");
+  const monitorNav = COMMAND_CENTER_NAV.filter((i) => i.label !== "Mock Trading");
 
   return (
-    <div className="min-h-screen bg-[#080b10] text-zinc-100">
-      <header className="sticky top-0 z-40 border-b border-zinc-800 bg-[#0b0f16]/95 backdrop-blur">
-        <div className="flex min-h-[54px] flex-wrap items-center gap-3 px-3 lg:px-4">
-          <Link href={TERMINAL_ROUTES.home} className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/10 font-mono text-sm font-bold text-amber-300">
-              ICC
-            </span>
-            <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400 sm:inline">
-              Command Center
-            </span>
+    <CommandPaletteProvider>
+    <div className="m3-app-shell">
+
+      <aside
+        className={`m3-nav-rail ${railCollapsed ? "m3-nav-rail--collapsed" : ""} ${mobileNavOpen ? "m3-nav-rail--mobile-open" : ""}`}
+        aria-label="Main navigation"
+      >
+        <div className="m3-nav-rail__brand">
+          <Link href={TERMINAL_ROUTES.home} className="m3-nav-rail__brand-link">
+            <span className="m3-nav-rail__logo" aria-hidden>ICC</span>
+            <span className="m3-nav-rail__brand-text">Institutional Command Center</span>
           </Link>
-          <div className="h-7 w-px bg-zinc-800" />
-          <div className="font-mono text-lg font-semibold text-zinc-50">
-            {snapshot.hasAuthority && snapshot.price > 0 ? `$${px(snapshot.price)}` : "—"}
-          </div>
-          <div className={snapshot.priceChange24hPct >= 0 ? "font-mono text-xs text-emerald-400" : "font-mono text-xs text-rose-400"}>
-            {snapshot.hasAuthority && snapshot.price > 0 ? pct(snapshot.priceChange24hPct) : "—"}
-          </div>
-          <div className="hidden gap-3 text-[11px] text-zinc-400 md:flex">
-            <span>Spread <b className="font-mono text-zinc-200">{snapshot.spreadBps > 0 ? `${snapshot.spreadBps.toFixed(1)}bps` : "—"}</b></span>
-            <span>Funding <b className="font-mono text-amber-300">{snapshot.fundingRate !== 0 ? pct(snapshot.fundingRate * 100, 4) : "—"}</b></span>
-            <span>Regime <b className="text-sky-300">{snapshot.regime || "—"}</b></span>
-            <span>Heat <b className="font-mono text-emerald-300">{snapshot.risk.heatPct > 0 ? `${snapshot.risk.heatPct.toFixed(1)}%` : "—"}</b></span>
-            <span>Positions <b className="font-mono text-zinc-200">{snapshot.positions.length}</b></span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
-              snapshot.hasAuthority
-                ? snapshot.authoritySource === "ws"
-                  ? "bg-emerald-500/10 text-emerald-300"
-                  : "bg-sky-500/10 text-sky-300"
-                : "bg-rose-500/10 text-rose-300"
-            }`}>
-              {authorityLabel}
-            </span>
-            {criticalAlerts > 0 ? (
-              <span className="rounded-full bg-rose-500/15 px-2 py-1 text-[10px] font-semibold uppercase text-rose-300">
-                {criticalAlerts} Critical
-              </span>
-            ) : null}
-          </div>
         </div>
-        <div className="border-t border-zinc-900">
+
+        <div className="m3-nav-rail__scroll">
+          <div className="m3-nav-section-label">Trading</div>
+          {tradingNav.map((item) => (
+            <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
+          ))}
+
+          <div className="m3-nav-section-label">Monitor</div>
+          {monitorNav.map((item) => (
+            <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
+          ))}
+        </div>
+
+        <div className="m3-nav-rail__footer">
+          <button
+            type="button"
+            className="m3-nav-item m3-nav-rail-toggle"
+            onClick={() => setRailCollapsed((v) => !v)}
+            aria-label={railCollapsed ? "Expand navigation" : "Collapse navigation"}
+          >
+            <NavIcon name="collapse" />
+            <span className="m3-nav-item__label">{railCollapsed ? "Expand" : "Collapse"}</span>
+          </button>
+        </div>
+      </aside>
+
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="m3-mobile-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <div className={`m3-main-column ${railCollapsed ? "m3-main-column--collapsed" : ""}`}>
+        <header className="m3-top-app-bar" role="banner">
+          <button
+            type="button"
+            className="m3-icon-btn m3-mobile-menu-btn"
+            aria-label="Open navigation menu"
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <NavIcon name="menu" />
+          </button>
+
+          <div>
+            <h1 className="m3-top-app-bar__title">{pageTitle}</h1>
+            <div className="m3-top-app-bar__metrics">
+              <span className="m3-top-app-bar__price">
+                {snapshot.hasAuthority && snapshot.price > 0 ? `$${px(snapshot.price)}` : "—"}
+              </span>
+              <span className={snapshot.priceChange24hPct >= 0 ? "m3-text-profit" : "m3-text-loss"}>
+                {snapshot.hasAuthority && snapshot.price > 0 ? pct(snapshot.priceChange24hPct) : "—"}
+              </span>
+            </div>
+          </div>
+
+          <div className="m3-top-app-bar__search">
+            <CommandPaletteTrigger />
+          </div>
+
+          <div className="m3-top-app-bar__actions">
+            <StatusChip
+              label={authorityLabel}
+              tone={
+                snapshot.hasAuthority
+                  ? snapshot.authoritySource === "ws"
+                    ? "success"
+                    : "info"
+                  : "error"
+              }
+            />
+            {criticalAlerts > 0 ? (
+              <StatusChip label={`${criticalAlerts} critical`} tone="error" />
+            ) : null}
+            <button type="button" className="m3-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
+              <NavIcon name={theme === "dark" ? "light" : "dark"} />
+            </button>
+          </div>
+        </header>
+
+        <div className="m3-risk-ribbon-wrap">
           <RiskRibbon />
         </div>
-        <nav className="flex gap-1 overflow-x-auto border-t border-zinc-900 px-2 py-1 lg:px-4">
-          {COMMAND_CENTER_NAV.map((item) => {
-            const active = isNavItemActive(pathname, {
-              href: item.href,
-              exactMatch: "exactMatch" in item ? item.exactMatch : false,
-            });
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
-                  active ? "bg-sky-500/15 text-sky-200" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
-      <main className="p-2 lg:p-4">{children}</main>
+
+        <main className="m3-content-area" id="main-content">
+          {children}
+        </main>
+      </div>
     </div>
+    </CommandPaletteProvider>
+  );
+}
+
+function NavLink({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: (typeof COMMAND_CENTER_NAV)[number];
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const active = isNavItemActive(pathname, {
+    href: item.href,
+    exactMatch: "exactMatch" in item ? item.exactMatch : false,
+  });
+
+  return (
+    <Link
+      href={item.href}
+      className={`m3-nav-item ${active ? "m3-nav-item--active" : ""}`}
+      aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
+    >
+      <span className="m3-nav-item__icon">
+        <NavIcon name={item.label} />
+      </span>
+      <span className="m3-nav-item__label">{item.label}</span>
+    </Link>
   );
 }

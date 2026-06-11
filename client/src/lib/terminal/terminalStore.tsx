@@ -90,9 +90,9 @@ const CIRCUIT_BREAKER_BACKOFF_MS = 30_000;
 
 async function fetchRestAuthority(): Promise<TerminalDelta | null> {
   const [snapshotRes, intelRes, equityRes, priceRes] = await Promise.all([
-    fetch("/api/paper-desk/snapshot", { cache: "no-store" }),
+    fetch("/api/mock-trading/snapshot", { cache: "no-store" }),
     fetch("/api/strategy-intelligence?view=all&limit=100", { cache: "no-store" }),
-    fetch("/api/paper-desk/equity?points=30&days=7", { cache: "no-store" }),
+    fetch("/api/mock-trading/equity?limit=30", { cache: "no-store" }),
     fetch("/api/btc/price", { cache: "no-store" }),
   ]);
 
@@ -110,7 +110,15 @@ async function fetchRestAuthority(): Promise<TerminalDelta | null> {
   let equity: { curve?: Array<{ snapped_at?: string; ts?: string; equity?: number }> } | undefined;
   if (equityRes.ok) {
     const eq = await equityRes.json();
-    if (eq.ok) equity = eq;
+    if (eq.ok && Array.isArray(eq.points)) {
+      equity = {
+        curve: eq.points.map((pt: { timestamp?: number; equity?: number; drawdownPct?: number }) => ({
+          ts: pt.timestamp ? new Date(pt.timestamp).toISOString() : undefined,
+          equity: pt.equity,
+          drawdown_pct: pt.drawdownPct,
+        })),
+      };
+    }
   }
 
   let btcPrice: { price?: number; change24h?: number } | undefined;

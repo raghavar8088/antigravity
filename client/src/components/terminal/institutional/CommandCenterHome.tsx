@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import RiskRibbon from "@/components/RiskRibbon";
 import type { TerminalAuthorityState } from "@/lib/terminal/terminalAuthority";
 import { TERMINAL_ROUTES } from "@/lib/navRoutes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
@@ -18,12 +17,8 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
   const hasAuthority = snapshot.hasAuthority ?? false;
 
   return (
-    <div className="space-y-3">
-      <div className="overflow-hidden rounded-xl border border-zinc-800">
-        <RiskRibbon />
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+    <div className="m3-page-stack">
+      <div className="m3-kpi-strip">
         <Metric label="Portfolio Equity" value={equity > 0 ? usd(equity, { compact: true }) : "—"} tone={equity > 0 ? "positive" : "neutral"} />
         <Metric label="Gross Exposure" value={snapshot.risk.grossExposureUsd > 0 ? usd(snapshot.risk.grossExposureUsd, { compact: true }) : "—"} />
         <Metric label="Drawdown" value={snapshot.risk.drawdownPct !== 0 ? `${snapshot.risk.drawdownPct.toFixed(2)}%` : "—"} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "warning"} />
@@ -38,7 +33,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Strategy Intelligence"
           subtitle="Go engine · MongoDB strategy_scores"
-          actions={<Link href={TERMINAL_ROUTES.strategies} className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 hover:text-sky-300">Open →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.strategies} className="m3-link-action">Open →</Link>}
         >
           {snapshot.strategies.length === 0 ? (
             <TerminalNoData label="NO STRATEGY DATA" />
@@ -57,7 +52,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Portfolio Analytics"
           subtitle="Equity curve · risk metrics"
-          actions={<Link href={TERMINAL_ROUTES.portfolio} className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 hover:text-sky-300">Open →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.portfolio} className="m3-link-action">Open →</Link>}
         >
           {snapshot.analytics.equityCurve.length === 0 ? (
             <TerminalNoData label="NO EQUITY CURVE" />
@@ -74,7 +69,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Risk Metrics"
           subtitle="VaR · exposure · drawdown"
-          actions={<Link href={TERMINAL_ROUTES.risk} className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 hover:text-sky-300">Open →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.risk} className="m3-link-action">Open →</Link>}
         >
           {!hasAuthority && snapshot.risk.grossExposureUsd === 0 ? (
             <TerminalNoData />
@@ -93,7 +88,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Recent Events"
           subtitle="Platform event stream"
-          actions={<Link href={TERMINAL_ROUTES.events} className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 hover:text-sky-300">Console →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.events} className="m3-link-action">Console →</Link>}
         >
           {snapshot.alerts.length === 0 ? (
             <TerminalNoData label="NO RECENT EVENTS" />
@@ -112,7 +107,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Open Positions"
           subtitle="Live marks from engine"
-          actions={<Link href={TERMINAL_ROUTES.execution} className="text-[10px] font-semibold uppercase tracking-wider text-sky-400 hover:text-sky-300">Execution →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.execution} className="m3-link-action">Execution →</Link>}
         >
           {snapshot.positions.length === 0 ? (
             <TerminalNoData label="NO OPEN POSITIONS" />
@@ -162,7 +157,7 @@ function QuickLink({ href, label, detail }: { href: string; label: string; detai
   return (
     <Link
       href={href}
-      className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 transition hover:border-sky-500/30 hover:bg-sky-500/5"
+      className="m3-quick-link"
     >
       <div className="text-xs font-semibold text-zinc-200">{label}</div>
       <div className="mt-0.5 text-[10px] text-zinc-500">{detail}</div>

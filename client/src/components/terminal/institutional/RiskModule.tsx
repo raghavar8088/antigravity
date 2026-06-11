@@ -37,7 +37,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
           <Metric label="VaR 95" value={snapshot.risk.var95Usd !== 0 ? usd(-snapshot.risk.var95Usd) : "—"} tone="warning" />
           <Metric label="VaR 99" value={snapshot.risk.var99Usd !== 0 ? usd(-snapshot.risk.var99Usd) : "—"} tone="negative" />
           <Metric label="CVaR 95" value={snapshot.risk.cvar95Usd !== 0 ? usd(-snapshot.risk.cvar95Usd) : "—"} tone="negative" />
-          <Metric label="Drawdown" value={hasRisk ? `${snapshot.risk.drawdownPct.toFixed(2)}%` : "—"} tone="positive" />
+          <Metric label="Drawdown" value={hasRisk ? `${snapshot.risk.drawdownPct.toFixed(2)}%` : "—"} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "warning"} />
         </div>
         <TerminalCard title="Portfolio Heat" subtitle="0-4 normal · 4-6 reduce · 6+ block">
           {!hasRisk ? (

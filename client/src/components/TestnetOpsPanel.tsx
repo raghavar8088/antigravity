@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { submitExecutionRequest } from "@/lib/executionRequest";
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
-import { usePaperDeskAuth } from "@/hooks/usePaperDeskAuth";
 
 type BalanceSnippet = { asset: string; availableBalance: number };
 
@@ -35,7 +34,9 @@ async function readJson(res: Response): Promise<Record<string, unknown>> {
 }
 
 export function TestnetOpsPanel() {
-  const { user, configured, loading: authLoading } = usePaperDeskAuth();
+  const user = { id: "mock-trading" };
+  const configured = true;
+  const authLoading = false;
   const [balances, setBalances] = useState<BalanceSnippet[] | null>(null);
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [openOrders, setOpenOrders] = useState<OpenOrderRow[]>([]);

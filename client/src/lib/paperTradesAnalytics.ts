@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Rolling strategy expectancy analytics for paper-trade kill-switch (Supabase `paper_trades`).
  */
 
@@ -10,7 +10,7 @@ export type StratTradeRow = {
   grossPnl?: number;
   /** Optional: total fees on this trade. */
   fees?: number;
-  /** Optional: open→close duration in minutes. */
+  /** Optional: openΓåÆclose duration in minutes. */
   holdMinutes?: number;
 };
 
@@ -63,12 +63,12 @@ const DEFAULT_DISABLE_OPTS: BuildStratDisableOpts = {
 };
 
 /**
- * Proper quantitative expectancy: E = (W × Pavg) − (L × Lavg)
+ * Proper quantitative expectancy: E = (W ├ù Pavg) ΓêÆ (L ├ù Lavg)
  *
  * Where:
  *  W    = win rate (wins / total)
  *  Pavg = average net PnL of winning trades
- *  L    = loss rate (1 − W)
+ *  L    = loss rate (1 ΓêÆ W)
  *  Lavg = average absolute net PnL of losing trades
  *
  * Degrades gracefully to sumNet/count when no wins or no losses exist.
@@ -84,7 +84,7 @@ export function calcQuantExpectancy(rows: StratTradeRow[]): number {
   return W * Pavg - L * Lavg;
 }
 
-/** Aggregate closed trades by `strategyId` using proper W×Pavg − L×Lavg expectancy. */
+/** Aggregate closed trades by `strategyId` using proper W├ùPavg ΓêÆ L├ùLavg expectancy. */
 export function aggregateStrategyStats(rows: StratTradeRow[]): StrategyStatRow[] {
   const map = new Map<number, StratTradeRow[]>();
   for (const row of rows) {
@@ -149,7 +149,7 @@ export function mergeDisabledStrategyIds(
 export function formatAutoDisabledStratIds(ids: Iterable<number>, maxLen = 96): string {
   const sorted = [...ids].sort((a, b) => a - b);
   let s = sorted.join(",");
-  if (s.length > maxLen) s = `${s.slice(0, maxLen - 1)}…`;
+  if (s.length > maxLen) s = `${s.slice(0, maxLen - 1)}ΓÇª`;
   return s;
 }
 
@@ -239,10 +239,10 @@ export type ResearchAggRow = {
   strategyName: string;
   tradeCount: number;
   sumNet: number;
-  /** E = W × Pavg − L × Lavg (proper quant expectancy). */
+  /** E = W ├ù Pavg ΓêÆ L ├ù Lavg (proper quant expectancy). */
   expectancy: number;
   winRate: number;
-  /** sum(fees) / sum(|gross_pnl|) * 100 — null when gross is 0. */
+  /** sum(fees) / sum(|gross_pnl|) * 100 ΓÇö null when gross is 0. */
   feePctOfGross: number | null;
   avgHoldMin: number | null;
   lastTradeAt: string | null;

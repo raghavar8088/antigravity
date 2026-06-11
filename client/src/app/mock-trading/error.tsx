@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MOCK_TRADING_PATH } from "@/lib/navRoutes";
 
 export default function MockTradingError({
   error,
@@ -26,8 +27,6 @@ export default function MockTradingError({
         <h1 style={{ fontSize: 18, margin: "0 0 8px" }}>Mock Trading failed to load</h1>
         <p style={{ fontSize: 13, color: "var(--text-muted, #8b949e)", margin: "0 0 16px", lineHeight: 1.5 }}>
           {error.message || "A client error stopped this page from rendering."}
-          {" "}Live Paper Desk trades are at{" "}
-          <Link href="/paper-desk" style={{ color: "var(--accent, #4d7cfe)" }}>/paper-desk</Link>.
         </p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
           <button
@@ -46,7 +45,7 @@ export default function MockTradingError({
             Reload
           </button>
           <Link
-            href="/paper-desk"
+            href={MOCK_TRADING_PATH}
             style={{
               padding: "8px 16px",
               borderRadius: 6,
@@ -56,7 +55,7 @@ export default function MockTradingError({
               fontWeight: 600,
             }}
           >
-            Open Paper Desk
+            Open Mock Trading
           </Link>
         </div>
       </div>

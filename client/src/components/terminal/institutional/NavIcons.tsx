@@ -1,0 +1,132 @@
+type NavIconName =
+  | "Mock Trading"
+  | "Command Center"
+  | "Execution"
+  | "Strategies"
+  | "Portfolio"
+  | "Risk"
+  | "Analytics"
+  | "Research"
+  | "Events"
+  | "Health"
+  | "Diagnostics"
+  | "Settings"
+  | "menu"
+  | "collapse"
+  | "light"
+  | "dark";
+
+export function NavIcon({ name }: { name: NavIconName | string }) {
+  const props = {
+    className: "m3-nav-svg",
+    viewBox: "0 0 20 20",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.5,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "menu":
+      return (
+        <svg {...props}>
+          <path d="M3 5h14M3 10h14M3 15h14" />
+        </svg>
+      );
+    case "collapse":
+      return (
+        <svg {...props}>
+          <path d="M7 4L3 10l4 6M13 4l4 6-4 6" />
+        </svg>
+      );
+    case "light":
+      return (
+        <svg {...props}>
+          <circle cx="10" cy="10" r="3.5" />
+          <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4" />
+        </svg>
+      );
+    case "dark":
+      return (
+        <svg {...props}>
+          <path d="M15.5 11.5a6 6 0 0 1-8-8 7 7 0 1 0 8 8z" />
+        </svg>
+      );
+    case "Execution":
+      return (
+        <svg {...props}>
+          <rect x="2" y="3" width="16" height="14" rx="2" />
+          <path d="M6 8h8M6 11h5" />
+        </svg>
+      );
+    case "Strategies":
+    case "Research":
+      return (
+        <svg {...props}>
+          <circle cx="10" cy="10" r="7" />
+          <path d="M10 5v5l3 2" />
+        </svg>
+      );
+    case "Portfolio":
+      return (
+        <svg {...props}>
+          <rect x="2" y="5" width="16" height="12" rx="2" />
+          <path d="M7 5V3h6v2" />
+        </svg>
+      );
+    case "Risk":
+      return (
+        <svg {...props}>
+          <path d="M10 3l8 14H2L10 3z" />
+          <path d="M10 8v4" />
+        </svg>
+      );
+    case "Analytics":
+      return (
+        <svg {...props}>
+          <rect x="2" y="11" width="3" height="7" rx="0.5" />
+          <rect x="8" y="6" width="3" height="12" rx="0.5" />
+          <rect x="14" y="2" width="4" height="16" rx="0.5" />
+        </svg>
+      );
+    case "Events":
+      return (
+        <svg {...props}>
+          <path d="M4 4h12v12H4z" />
+          <path d="M7 8h6M7 11h4" />
+        </svg>
+      );
+    case "Health":
+      return (
+        <svg {...props}>
+          <path d="M10 17s-6-4.5-6-9a4 4 0 0 1 8 0c0 4.5-6 9-6 9z" />
+        </svg>
+      );
+    case "Diagnostics":
+    case "Settings":
+      return (
+        <svg {...props}>
+          <circle cx="10" cy="10" r="2.5" />
+          <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M4.6 15.4l1.4-1.4M14 6l1.4-1.4" />
+        </svg>
+      );
+    case "Mock Trading":
+      return (
+        <svg {...props}>
+          <path d="M3 14l4-4 3 3 7-7" />
+          <path d="M14 6h3v3" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...props}>
+          <rect x="2" y="2" width="7" height="7" rx="1.5" />
+          <rect x="11" y="2" width="7" height="7" rx="1.5" />
+          <rect x="2" y="11" width="7" height="7" rx="1.5" />
+          <rect x="11" y="11" width="7" height="7" rx="1.5" />
+        </svg>
+      );
+  }
+}
