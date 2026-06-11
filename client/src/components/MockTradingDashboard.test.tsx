@@ -26,6 +26,7 @@ const emptyResearchDiagnostics = () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => "/mock-trading",
 }));
 
 vi.mock("@/hooks/useLiveBTCPrice", () => ({

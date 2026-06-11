@@ -44,6 +44,13 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
     href: TERMINAL_ROUTES.journal,
     keywords: ["journal", "notes", "history"],
   },
+  {
+    id: "/terminal/design-system",
+    label: "Design System",
+    group: "Navigate",
+    href: "/terminal/design-system",
+    keywords: ["design", "tokens", "components", "m3", "preview"],
+  },
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
@@ -60,6 +67,7 @@ export const PAGE_TITLES: Record<string, string> = {
   [TERMINAL_ROUTES.observability]: "Observability",
   [TERMINAL_ROUTES.journal]: "Journal",
   [TERMINAL_ROUTES.settings]: "Settings",
+  "/terminal/design-system": "Design System",
   "/mock-trading": "Mock Trading",
 };
 

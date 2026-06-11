@@ -2,11 +2,11 @@
 
 import { usePathname } from "next/navigation";
 import RiskRibbon from "@/components/RiskRibbon";
-import { isTerminalRoute } from "@/lib/navRoutes";
+import { isMockTradingRoute, isTerminalRoute } from "@/lib/navRoutes";
 
-/** Renders global risk ribbon except on /terminal where the M3 shell embeds its own copy. */
+/** Shell routes embed their own risk ribbon — skip global duplicate. */
 export function GlobalRiskRibbon() {
   const pathname = usePathname();
-  if (isTerminalRoute(pathname)) return null;
+  if (isTerminalRoute(pathname) || isMockTradingRoute(pathname)) return null;
   return <RiskRibbon />;
 }

@@ -1,11 +1,9 @@
 "use client";
 
-import StrategyIntelligenceDashboard from "@/components/StrategyIntelligenceDashboard";
+import { ResearchCenter } from "@/components/terminal/institutional/ResearchCenter";
+import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
 
 export default function TerminalStrategiesPage() {
-  return (
-    <div className="min-h-[70vh] rounded-lg border border-zinc-800 overflow-hidden">
-      <StrategyIntelligenceDashboard />
-    </div>
-  );
+  const snapshot = useTerminalSnapshot();
+  return <ResearchCenter snapshot={snapshot} />;
 }

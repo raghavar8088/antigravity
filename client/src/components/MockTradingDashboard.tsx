@@ -46,11 +46,12 @@ const MockRiskAnalyticsPanel = dynamic(() => import("@/components/MockRiskAnalyt
 });
 
 import {
-  AppShell,
   TerminalPanel,
   TerminalWorkspace,
   InstitutionalChart,
 } from "@/components/terminal";
+import { M3AppShell } from "@/components/ui/M3AppShell";
+import { StatusChip } from "@/components/ui/StatusChip";
 import {
   DeskBanner,
   DeskButton,
@@ -1526,24 +1527,17 @@ export default function MockTradingDashboard() {
       : "local" as const;
 
   return (
-    <AppShell
-      btcPrice={live.price}
-      btcChange24h={live.change24h}
-      regime={regime.regime}
-      dailyPnl={dailyPnl}
-      weeklyPnl={weeklyPnl}
-      monthlyPnl={monthlyPnl}
-      totalPnl={engine.analytics.totalPnl}
-      equity={acct.equity}
-      openPositions={acct.openCount}
-      activeStrategies={activeStrategies}
-      connectionStatus={connectionStatus}
-      persistenceStatus={persistenceStatus}
-      riskStatus={acct.maxDrawdownPct > 10 ? "warning" : "safe"}
-      systemStatus={engine.error ? "degraded" : "nominal"}
-      researchStatus={research.config.enabled ? "active" : "idle"}
-      dataFeedStatus={live.connected ? "synced" : "stale"}
+    <M3AppShell
       pageTitle="Mock Trading"
+      price={live.price}
+      priceChange24hPct={live.change24h}
+      statusChips={
+        <>
+          <StatusChip label={connectionStatus === "live" ? "Live" : "Offline"} tone={connectionStatus === "live" ? "success" : "error"} />
+          <StatusChip label={persistenceStatus === "mongo" ? "Mongo" : persistenceStatus} tone={persistenceStatus === "mongo" ? "info" : "warning"} />
+          {engine.error ? <StatusChip label="Degraded" tone="warning" /> : null}
+        </>
+      }
     >
       <TerminalWorkspace columns="repeat(12, 1fr)">
 
@@ -2080,6 +2074,6 @@ export default function MockTradingDashboard() {
         )}
 
       </TerminalWorkspace>
-    </AppShell>
+    </M3AppShell>
   );
 }

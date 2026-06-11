@@ -1,10 +1,19 @@
-"use client";
-
+export { cn } from "./cn";
 export { Button } from "./Button";
 export { Card, Metric } from "./Card";
 export { CommandPaletteProvider, CommandPaletteTrigger } from "./CommandPalette";
+export { DataTable, type DataTableColumn } from "./DataTable";
+export { DensityProvider, useDensity, densityClass, type DensityMode } from "./DensityProvider";
+export { M3Dialog } from "./Dialog";
+export { TextField, Select, Switch, IconButton } from "./FormControls";
+export { M3AppShell, type M3AppShellProps } from "./M3AppShell";
+export { M3Providers, isM3Enabled } from "./M3Providers";
+export { PageHeader, SectionHeader } from "./PageHeader";
 export { EmptyState } from "./EmptyState";
 export { Skeleton, SkeletonCard } from "./Skeleton";
 export { Badge, Chip, StatusChip } from "./StatusChip";
+export { SnackbarProvider, useSnackbar } from "./Snackbar";
+export { M3Tabs } from "./Tabs";
+export { M3Tooltip, M3TooltipProvider } from "./Tooltip";
+export { M3ErrorBoundary } from "./ErrorBoundary";
 export { ThemeProvider, useThemeToggle } from "./ThemeProvider";
-export { cn } from "./cn";
