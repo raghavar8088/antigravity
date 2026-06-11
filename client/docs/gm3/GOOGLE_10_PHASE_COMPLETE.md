@@ -80,10 +80,10 @@ All primary routes now share **one M3 app shell**:
 
 ## Remaining (Non-Blocking)
 
-1. `PortfolioAnalyticsDashboard.tsx` — still inline styles (wrap with M3 PageHeader next)
+1. ~~`PortfolioAnalyticsDashboard.tsx` — still inline styles~~ ✅ Migrated to M3 + terminal snapshot
 2. `RiskRibbon.tsx` — inline styles → M3 tokens
-3. `globals.gmail.css` — safe to delete (707 lines dead)
-4. `TestnetOpsPanel.tsx` — pre-existing build TS error (unrelated)
+3. ~~`globals.gmail.css` — safe to delete~~ ✅ Deleted
+4. ~~`TestnetOpsPanel.tsx` — pre-existing build TS error~~ ✅ Already resolved (build green)
 5. Full axe-core CI audit (Phase 9 stretch)
 6. Playwright visual regression (Phase 10 stretch)
 

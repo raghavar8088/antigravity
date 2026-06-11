@@ -858,15 +858,22 @@ export function useMockTradingEngine(
       try {
         const params = new URLSearchParams();
         params.set("account_key", mockAccountKey);
-        params.set("limit", "500");
-        const res = await fetch(`/api/strategy-signal-trace?${params.toString()}`);
-        const json = (await res.json()) as { rows?: StrategySignalTraceRow[]; error?: string };
+        const res = await fetch(`/api/mock-trading/signal-tick?${params.toString()}`);
+        const json = (await res.json()) as {
+          rows?: StrategySignalTraceRow[];
+          markPrice?: number;
+          error?: string;
+        };
         if (cancelled) return;
         if (!res.ok || !json.rows) {
           setError(json.error ?? `HTTP ${res.status}`);
           return;
         }
-        ingestTraceRows(json.rows);
+        const tickPrice =
+          Number.isFinite(json.markPrice) && (json.markPrice ?? 0) > 0
+            ? json.markPrice
+            : undefined;
+        ingestTraceRows(json.rows, tickPrice);
         setLastFetchAt(Date.now());
       } catch (err) {
         if (cancelled) return;

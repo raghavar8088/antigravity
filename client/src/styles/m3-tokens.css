@@ -958,6 +958,17 @@ body {
 /* ── Chart theme (Google Analytics style) ───────────────────────────────── */
 .m3-chart-theme { --chart-grid: var(--m3-outline-variant); --chart-text: var(--m3-on-surface-variant); --chart-profit: var(--m3-profit); --chart-loss: var(--m3-loss); --chart-line: var(--m3-primary); --chart-tooltip-bg: var(--m3-surface-container-highest); }
 
+/* ── Portfolio analytics ────────────────────────────────────────────────── */
+.m3-portfolio-grid { display: grid; gap: var(--m3-space-4); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.m3-kpi-strip--2col { grid-template-columns: repeat(2, 1fr); }
+.m3-equity-chart { padding: var(--m3-space-3); border-radius: var(--m3-radius-sm); background: var(--m3-surface-container-low); border: 1px solid var(--m3-outline-variant); }
+.m3-equity-chart svg { width: 100%; height: 60px; display: block; }
+.m3-equity-chart__axis { display: flex; justify-content: space-between; margin-top: var(--m3-space-2); font: var(--m3-label-sm); color: var(--m3-on-surface-variant); }
+.m3-regime-list { display: flex; flex-direction: column; gap: var(--m3-space-2); }
+.m3-regime-row { display: flex; align-items: center; justify-content: space-between; gap: var(--m3-space-3); padding: var(--m3-space-2) var(--m3-space-3); border-radius: var(--m3-radius-sm); background: var(--m3-surface-container-low); border: 1px solid var(--m3-outline-variant); }
+.m3-regime-row__name { font: var(--m3-label-lg); color: var(--m3-on-surface); }
+.m3-regime-row__stats { font-family: var(--m3-font-mono); font-variant-numeric: tabular-nums; font-size: 0.8125rem; }
+
 /* ── Density modes ──────────────────────────────────────────────────────── */
 .m3-density-compact .m3-content-area { padding: var(--m3-space-4); }
 .m3-density-ultra-compact .m3-content-area { padding: var(--m3-space-3); font-size: 0.8125rem; }

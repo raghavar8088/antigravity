@@ -13,6 +13,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 import { getAccountState, isMongoConfigured } from "@/lib/mongoTradesClient";
 import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
 import { summarizeSignalTrace } from "@/lib/strategySignalTrace";
@@ -53,7 +54,9 @@ export async function GET(request: NextRequest) {
 
   const accountKey =
     url.searchParams.get("account_key")?.trim() ||
-    process.env.DESK_WORKER_ACCOUNT_KEY?.trim();
+    process.env.OWNER_ACCOUNT_KEY?.trim() ||
+    process.env.DESK_WORKER_ACCOUNT_KEY?.trim() ||
+    OWNER_ACCOUNT_KEY;
 
   if (!accountKey) {
     return NextResponse.json({ ok: false, error: "account_key required" }, { status: 400 });
