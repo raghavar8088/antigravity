@@ -10,7 +10,8 @@ type EventType =
   | "RISK_EVENT"
   | "KILL_SWITCH"
   | "RECONCILIATION"
-  | "SYSTEM";
+  | "SYSTEM"
+  | "ORDER";
 
 type EventSeverity = "INFO" | "WARNING" | "CRITICAL";
 
@@ -35,6 +36,7 @@ const SEV_COLOR: Record<EventSeverity, string> = {
 const TYPE_COLOR: Record<EventType, string> = {
   FILL: "#3b82f6",
   SIGNAL: "#8b5cf6",
+  ORDER: "#6366f1",
   POSITION_OPEN: "#22c55e",
   POSITION_CLOSE: "#94a3b8",
   RISK_EVENT: "#ef4444",
@@ -43,7 +45,7 @@ const TYPE_COLOR: Record<EventType, string> = {
   SYSTEM: "#64748b",
 };
 
-const ALL_TYPES: EventType[] = ["FILL", "SIGNAL", "POSITION_OPEN", "POSITION_CLOSE", "RISK_EVENT", "KILL_SWITCH", "RECONCILIATION", "SYSTEM"];
+const ALL_TYPES: EventType[] = ["FILL", "SIGNAL", "ORDER", "POSITION_OPEN", "POSITION_CLOSE", "RISK_EVENT", "KILL_SWITCH", "RECONCILIATION", "SYSTEM"];
 const ALL_SEVERITIES: EventSeverity[] = ["INFO", "WARNING", "CRITICAL"];
 
 export default function EventCenter() {

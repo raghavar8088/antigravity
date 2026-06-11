@@ -7,6 +7,7 @@ import {
   getStrategyHealthSummary,
   getClosedTradeStats,
 } from "@/lib/paperDeskClient";
+import { getPortfolioExtendedMetrics } from "@/lib/portfolioAccountingService";
 import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
@@ -23,11 +24,12 @@ export async function GET(req: Request) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "600", 10) || 600, 600);
 
   try {
-    const [scores, health, summary, closedStats] = await Promise.all([
+    const [scores, health, summary, closedStats, extendedMetrics] = await Promise.all([
       listStrategyScores(accountKey, limit),
       listStrategyHealth(accountKey, undefined, limit),
       getStrategyHealthSummary(accountKey),
       getClosedTradeStats(accountKey),
+      getPortfolioExtendedMetrics(accountKey),
     ]);
 
     // Build a merged row per strategy, keying off strategy_id
@@ -120,7 +122,8 @@ export async function GET(req: Request) {
         total_realized_pnl: closedStats.realized_pnl,
         total_trades: closedStats.total_trades,
         win_rate: closedStats.win_rate,
-        profit_factor: closedStats.profit_factor,
+        profit_factor: extendedMetrics.profit_factor,
+        sharpe: extendedMetrics.sharpe,
       },
       strategies: filtered,
       server_time: new Date().toISOString(),

@@ -4,10 +4,12 @@ import type {
   StrategyHealth,
   StrategyResearchRow,
   TerminalAlert,
-  TerminalDelta,
   TerminalPosition,
   TerminalRisk,
+  TerminalSnapshot,
 } from "./terminalTypes";
+
+export type TerminalDelta = Partial<TerminalSnapshot>;
 
 export type PaperDeskSnapshotPayload = {
   server_time?: string;
@@ -24,7 +26,7 @@ export type StrategyIntelRow = {
   enabled: boolean;
   total_pnl: number;
   expectancy: number;
-  profit_factor: number;
+  profit_factor: number | null;
   win_rate: number;
   max_drawdown: number;
   sample_size: number;
@@ -45,6 +47,12 @@ export type EquityCurvePayload = {
 function num(v: unknown, fallback = 0): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+}
+
+function nullableNum(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function healthFromStatus(status: string): StrategyHealth {
@@ -103,10 +111,10 @@ export function mapStrategies(rows: StrategyIntelRow[] | undefined): StrategyRes
     name: s.strategy_id,
     family: strategyFamily(s.strategy_id),
     health: healthFromStatus(s.status),
-    sharpe: s.evidence_score / 50,
+    sharpe: null,
     expectancy: s.expectancy,
     maxDrawdownPct: Math.abs(s.max_drawdown) * 100,
-    oosProfitFactor: s.profit_factor,
+    oosProfitFactor: nullableNum(s.profit_factor),
     promotionScore: s.evidence_score,
   }));
 }
@@ -156,11 +164,14 @@ export function mapAnalytics(
 
   return {
     equityCurve,
-    rollingSharpe30d: num(portfolio?.sharpe),
-    rollingSharpe90d: num(portfolio?.sharpe),
-    profitFactorTrend: num(portfolio?.profit_factor, num(state?.profit_factor)),
-    winRatePct: num(state?.win_rate, num(portfolio?.win_rate)) * 100,
-    feeDragUsd: num(state?.total_fees, num(portfolio?.total_fees)),
+    rollingSharpe30d: nullableNum(portfolio?.sharpe),
+    rollingSharpe90d: nullableNum(portfolio?.sharpe),
+    profitFactorTrend: nullableNum(portfolio?.profit_factor) ?? nullableNum(state?.profit_factor),
+    winRatePct: (() => {
+      const wr = nullableNum(state?.win_rate) ?? nullableNum(portfolio?.win_rate);
+      return wr != null ? wr * 100 : null;
+    })(),
+    feeDragUsd: nullableNum(state?.total_fees) ?? nullableNum(portfolio?.total_fees),
     rMultipleBuckets: [],
   };
 }

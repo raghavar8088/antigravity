@@ -39,6 +39,8 @@ scp @scpArgs -r `
   "$Source\.env.example" `
   "$Source\setup-lightsail.sh" `
   "$Source\install-cron.sh" `
+  "$Source\install-cron-api.sh" `
+  "$Source\api-send.js" `
   "$Source\lib" `
   "${User}@${LightsailIp}:${RemoteDir}/"
 

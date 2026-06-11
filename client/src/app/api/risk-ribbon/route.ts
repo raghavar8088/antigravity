@@ -7,6 +7,7 @@ import {
   getClosedTradeStats,
   listPaperOrders,
 } from "@/lib/paperDeskClient";
+import { getTodayRealizedPnlUtc } from "@/lib/portfolioAccountingService";
 
 export const dynamic = "force-dynamic";
 
@@ -70,18 +71,15 @@ export async function GET() {
   items.push({ label: "WATCHDOG", status: engineStatus, value: engineStatus === "GREEN" ? "OK" : "ALERT" });
 
   const mongoOk = isMongoConfigured();
-  items.push({
-    label: "DATABASE",
-    status: mongoOk ? "GREEN" : "RED",
-    value: mongoOk ? "CONNECTED" : "UNCONFIGURED",
-  });
+  let dbStatus: RibbonStatus = mongoOk ? "UNKNOWN" : "RED";
+  let dbValue = mongoOk ? "PROBING" : "UNCONFIGURED";
 
   let dailyDrawdown = 0;
   let maxDrawdown = 0;
   let openPositions = 0;
   let balance = 0;
   let equity = 0;
-  let todayPnl = 0;
+  let todayPnl: number | null = null;
   let portfolioStatus: RibbonStatus = "UNKNOWN";
   let omsStatus: RibbonStatus = "UNKNOWN";
   let reconStatus: RibbonStatus = "UNKNOWN";
@@ -100,7 +98,9 @@ export async function GET() {
         balance = state.balance ?? 0;
         equity = state.equity ?? balance;
         openPositions = (positions ?? []).length;
-        todayPnl = closedStats.realized_pnl ?? 0;
+        todayPnl = await getTodayRealizedPnlUtc(accountKey);
+        dbStatus = "GREEN";
+        dbValue = "CONNECTED";
 
         if (dailyDrawdown < -0.03 || maxDrawdown < -0.1) portfolioStatus = "RED";
         else if (dailyDrawdown < -0.01 || maxDrawdown < -0.05) portfolioStatus = "AMBER";
@@ -108,17 +108,41 @@ export async function GET() {
 
         const staleMs = state.snapped_at ? Date.now() - new Date(state.snapped_at).getTime() : Infinity;
         reconStatus = staleMs > 120_000 ? "AMBER" : "GREEN";
+
+        const latestOrderTs = orders?.[0]?.recorded_at ?? orders?.[0]?.transition_at;
+        const orderAgeMs = latestOrderTs ? Date.now() - new Date(latestOrderTs).getTime() : Infinity;
+        if (engineStatus !== "GREEN") {
+          omsStatus = "RED";
+        } else if (openPositions > 0 && orderAgeMs > 300_000) {
+          omsStatus = "AMBER";
+        } else if (orderAgeMs === Infinity && openPositions === 0) {
+          omsStatus = "GREEN";
+        } else if (orderAgeMs <= 600_000) {
+          omsStatus = "GREEN";
+        } else {
+          omsStatus = "AMBER";
+        }
       } else {
         portfolioStatus = "AMBER";
         reconStatus = "AMBER";
+        dbStatus = "AMBER";
+        dbValue = "NO STATE";
+        omsStatus = engineStatus === "GREEN" ? "AMBER" : "RED";
       }
-      omsStatus = (orders ?? []).length > 0 || openPositions > 0 ? "GREEN" : "GREEN";
     } catch {
       portfolioStatus = "RED";
       omsStatus = "RED";
       reconStatus = "RED";
+      dbStatus = "RED";
+      dbValue = "UNREACHABLE";
     }
   }
+
+  items.push({
+    label: "DATABASE",
+    status: dbStatus,
+    value: dbValue,
+  });
 
   items.push({ label: "OMS", status: omsStatus, value: omsStatus === "GREEN" ? "ACTIVE" : "DEGRADED" });
   items.push({ label: "RECON", status: reconStatus, value: reconStatus === "GREEN" ? "OK" : reconStatus === "AMBER" ? "STALE" : "FAIL" });
@@ -153,9 +177,13 @@ export async function GET() {
 
   items.push({
     label: "TODAY PnL",
-    status: todayPnl >= 0 ? "GREEN" : todayPnl < -1000 ? "RED" : "AMBER",
-    value: todayPnl >= 0 ? `+$${Math.round(todayPnl).toLocaleString()}` : `-$${Math.round(Math.abs(todayPnl)).toLocaleString()}`,
-    detail: "realized",
+    status: todayPnl == null ? "UNKNOWN" : todayPnl >= 0 ? "GREEN" : todayPnl < -1000 ? "RED" : "AMBER",
+    value: todayPnl == null
+      ? "NO DATA"
+      : todayPnl >= 0
+        ? `+$${Math.round(todayPnl).toLocaleString()}`
+        : `-$${Math.round(Math.abs(todayPnl)).toLocaleString()}`,
+    detail: "UTC day · realized",
   });
 
   items.push({

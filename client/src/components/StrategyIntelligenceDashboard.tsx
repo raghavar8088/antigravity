@@ -35,7 +35,8 @@ type PortfolioStats = {
   total_realized_pnl: number;
   total_trades: number;
   win_rate: number;
-  profit_factor: number;
+  profit_factor: number | null;
+  sharpe?: number | null;
 };
 
 type IntelData = {
@@ -71,8 +72,9 @@ const TIER_COLOR: Record<AllocationTier, string> = {
   F: "#ef4444",
 };
 
-function fmt(n: number, decimals = 2) {
-  return Number.isFinite(n) ? n.toFixed(decimals) : "—";
+function fmt(n: number | null | undefined, decimals = 2) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
+  return n.toFixed(decimals);
 }
 
 function fmtPnl(n: number) {
@@ -161,7 +163,7 @@ export default function StrategyIntelligenceDashboard() {
             { label: "TOTAL PnL", value: fmtPnl(ps.total_realized_pnl), color: ps.total_realized_pnl >= 0 ? "#22c55e" : "#ef4444" },
             { label: "TOTAL TRADES", value: ps.total_trades.toLocaleString(), color: "#94a3b8" },
             { label: "WIN RATE", value: `${(ps.win_rate * 100).toFixed(1)}%`, color: "#94a3b8" },
-            { label: "PROFIT FACTOR", value: fmt(ps.profit_factor), color: ps.profit_factor >= 1.25 ? "#22c55e" : ps.profit_factor >= 1.0 ? "#f59e0b" : "#ef4444" },
+            { label: "PROFIT FACTOR", value: fmt(ps.profit_factor), color: ps.profit_factor == null ? "#64748b" : ps.profit_factor >= 1.25 ? "#22c55e" : ps.profit_factor >= 1.0 ? "#f59e0b" : "#ef4444" },
           ].map((tile) => (
             <div key={tile.label} style={{ background: "#1e293b", borderRadius: 6, padding: "10px 12px", border: "1px solid #334155" }}>
               <div style={{ color: "#64748b", fontSize: 10, marginBottom: 4 }}>{tile.label}</div>

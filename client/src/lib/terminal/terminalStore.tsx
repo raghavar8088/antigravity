@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import { initialTerminalSnapshot } from "./terminalSnapshot";
 import {
   mapSnapshotToTerminalDelta,
@@ -52,7 +52,7 @@ function reducer(state: StoreState, action: StoreAction): StoreState {
         loading: false,
         authoritySource: "ws",
         restUnavailable: false,
-        hasAuthority: true,
+        hasAuthority: false,
       };
     case "WS_CLOSE":
       return { ...state, connected: false, hasAuthority: state.authoritySource === "rest" && state.updatedAt !== "" };
@@ -122,7 +122,7 @@ async function fetchRestAuthority(): Promise<TerminalDelta | null> {
   return mapSnapshotToTerminalDelta({ snapshot, strategies, btcPrice, equity });
 }
 
-export function useTerminalSnapshot(): TerminalAuthorityState {
+function useTerminalSnapshotState(): TerminalAuthorityState {
   const wsUrl = process.env.NEXT_PUBLIC_TERMINAL_WS_URL;
   const [state, dispatch] = useReducer(reducer, initialState);
   const restFailCount = useRef(0);
@@ -220,6 +220,23 @@ export function useTerminalSnapshot(): TerminalAuthorityState {
   }, []);
 
   return useMemo(() => state, [state]);
+}
+
+const TerminalSnapshotContext = createContext<TerminalAuthorityState | null>(null);
+
+export function TerminalSnapshotProvider({ children }: { children: ReactNode }) {
+  const snapshot = useTerminalSnapshotState();
+  return (
+    <TerminalSnapshotContext.Provider value={snapshot}>
+      {children}
+    </TerminalSnapshotContext.Provider>
+  );
+}
+
+export function useTerminalSnapshot(): TerminalAuthorityState {
+  const ctx = useContext(TerminalSnapshotContext);
+  if (ctx) return ctx;
+  return useTerminalSnapshotState();
 }
 
 export type { TerminalAuthorityState, AuthoritySource };

@@ -46,6 +46,34 @@ If the bot shows *"Performing security verification"* or *"Verify you are human"
 
 Do **not** run the `ssh -L` command inside the Lightsail browser terminal — that only works from your Windows PC.
 
+### Cloudflare stuck on "Verifying you are human"?
+
+This is common on **AWS datacenter IPs**. Cloudflare often never completes on Lightsail even if you click the checkbox.
+
+**Working alternatives:**
+
+| Option | Laptop off? | Setup |
+|--------|-------------|-------|
+| **A) Claude API on Lightsail** (recommended) | Yes | Add `ANTHROPIC_API_KEY` to `.env`, run `npm run send-api`, then `./install-cron-api.sh` |
+| **B) Laptop Task Scheduler** | No (must be on at 4 PM) | `.\install-task-laptop.ps1` — uses your local `auth.json` which already works |
+
+#### Option A — API on Lightsail (4 PM, laptop off)
+
+1. Get API key: https://console.anthropic.com/
+2. On Lightsail: `nano ~/claude-bot/.env` → add `ANTHROPIC_API_KEY=sk-ant-...`
+3. Test: `cd ~/claude-bot && npm run send-api`
+4. Schedule: `chmod +x install-cron-api.sh && ./install-cron-api.sh`
+
+Replies append to `~/claude-bot/last-reply.txt`.
+
+#### Option B — Laptop at 4 PM
+
+```powershell
+cd "d:\Trading apllication\claude-bot"
+.\install-task-laptop.ps1
+npm run send
+```
+
 ### Google login blocked?
 
 If you see *"This browser or app may not be secure"*:

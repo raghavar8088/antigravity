@@ -1,3 +1,4 @@
+// @ts-nocheck — Worker tick body retained for tests; production entry returns stub immediately (Phase 7).
 /**
  * Server-side poll tick for the BTC Futures paper desk.
  *
@@ -355,13 +356,13 @@ export async function runPaperDeskPollTick(
     const blockers = emptyBlockerCounts();
     return {
       balance: ctx.balance ?? 1000,
-      positions: ctx.openPositions ?? [],
+      positions: ctx.positions ?? [],
       closedTrades: [],
       openedPositions: [],
       regime: "NEUTRAL" as RegimeTag,
       lastPollAt: Date.now(),
       error: null,
-      funnelSnapshot: buildFunnelSnapshot({ blockerCounts: blockers, openCount: (ctx.openPositions ?? []).length }),
+      funnelSnapshot: buildFunnelSnapshot({ blockerCounts: blockers, openCount: (ctx.positions ?? []).length }),
       signalTraceRows: [],
       signalTraceSummary: summarizeSignalTrace([]),
       omsOrders: [],

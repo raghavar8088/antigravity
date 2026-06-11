@@ -1,7 +1,5 @@
-"use client";
-
-import TerminalDashboard from "@/components/TerminalDashboard";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <TerminalDashboard />;
+  redirect("/terminal/execution");
 }

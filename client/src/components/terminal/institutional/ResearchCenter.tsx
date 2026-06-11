@@ -43,7 +43,7 @@ export function ResearchCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
                   <th>Strategy</th>
                   <th>Health</th>
                   <th>Family</th>
-                  <th className="text-right">Sharpe</th>
+                  <th className="text-right">Sharpe (N/A)</th>
                   <th className="text-right">Expectancy</th>
                   <th className="text-right">Max DD</th>
                   <th className="text-right">OOS PF</th>
@@ -57,10 +57,14 @@ export function ResearchCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
                     <td className="font-medium text-zinc-200">{strategy.name}</td>
                     <td><HealthPill health={strategy.health} /></td>
                     <td className="text-zinc-400">{strategy.family}</td>
-                    <td className="text-right font-mono text-zinc-200">{strategy.sharpe.toFixed(2)}</td>
+                    <td className="text-right font-mono text-zinc-200">
+                      {strategy.sharpe != null ? strategy.sharpe.toFixed(2) : "—"}
+                    </td>
                     <td className="text-right font-mono text-emerald-300">{usd(strategy.expectancy)}</td>
                     <td className="text-right font-mono text-amber-300">{strategy.maxDrawdownPct.toFixed(1)}%</td>
-                    <td className="text-right font-mono text-zinc-200">{strategy.oosProfitFactor.toFixed(2)}</td>
+                    <td className="text-right font-mono text-zinc-200">
+                      {strategy.oosProfitFactor != null ? strategy.oosProfitFactor.toFixed(2) : "—"}
+                    </td>
                     <td className="text-right font-mono text-sky-300">{strategy.promotionScore}</td>
                   </tr>
                 ))}

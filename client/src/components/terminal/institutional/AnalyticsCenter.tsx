@@ -54,14 +54,13 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
       <div className="space-y-3">
         <TerminalCard title="Rolling Performance" subtitle="Portfolio accounting authority">
           <div className="grid grid-cols-2 gap-2">
-            <Metric label="Sharpe 30D" value={snapshot.analytics.rollingSharpe30d > 0 ? snapshot.analytics.rollingSharpe30d.toFixed(2) : "—"} />
-            <Metric label="Sharpe 90D" value={snapshot.analytics.rollingSharpe90d > 0 ? snapshot.analytics.rollingSharpe90d.toFixed(2) : "—"} />
-            <Metric label="PF Trend" value={snapshot.analytics.profitFactorTrend > 0 ? snapshot.analytics.profitFactorTrend.toFixed(2) : "—"} tone="positive" />
-            <Metric label="Win Rate" value={snapshot.analytics.winRatePct > 0 ? pct(snapshot.analytics.winRatePct, 1) : "—"} />
+            <Metric label="Portfolio Sharpe" value={snapshot.analytics.rollingSharpe30d != null ? snapshot.analytics.rollingSharpe30d.toFixed(2) : "—"} />
+            <Metric label="Portfolio PF" value={snapshot.analytics.profitFactorTrend != null ? snapshot.analytics.profitFactorTrend.toFixed(2) : "—"} tone="positive" />
+            <Metric label="Win Rate" value={snapshot.analytics.winRatePct != null ? pct(snapshot.analytics.winRatePct, 1) : "—"} />
           </div>
         </TerminalCard>
         <TerminalCard title="Fee Drag">
-          <Metric label="Fee Drag" value={snapshot.analytics.feeDragUsd > 0 ? usd(-snapshot.analytics.feeDragUsd) : "—"} tone="negative" />
+          <Metric label="Fee Drag" value={snapshot.analytics.feeDragUsd != null && snapshot.analytics.feeDragUsd > 0 ? usd(-snapshot.analytics.feeDragUsd) : "—"} tone="negative" />
         </TerminalCard>
         <RegimeBreakdown />
       </div>

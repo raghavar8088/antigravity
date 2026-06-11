@@ -53,20 +53,21 @@ export type StrategyResearchRow = {
   name: string;
   family: string;
   health: StrategyHealth;
-  sharpe: number;
+  /** Per-strategy Sharpe — null when Mongo strategy_scores has no Sharpe field. */
+  sharpe: number | null;
   expectancy: number;
   maxDrawdownPct: number;
-  oosProfitFactor: number;
+  oosProfitFactor: number | null;
   promotionScore: number;
 };
 
 export type AnalyticsSnapshot = {
   equityCurve: { time: string; equity: number; btcBenchmark: number }[];
-  rollingSharpe30d: number;
-  rollingSharpe90d: number;
-  profitFactorTrend: number;
-  winRatePct: number;
-  feeDragUsd: number;
+  rollingSharpe30d: number | null;
+  rollingSharpe90d: number | null;
+  profitFactorTrend: number | null;
+  winRatePct: number | null;
+  feeDragUsd: number | null;
   rMultipleBuckets: { bucket: string; count: number }[];
 };
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { InstitutionalTerminalShell } from "@/components/terminal/institutional/TerminalShell";
+import { TerminalLayoutClient } from "@/components/terminal/institutional/TerminalLayoutClient";
 
 export default function TerminalLayout({ children }: { children: ReactNode }) {
-  return <InstitutionalTerminalShell>{children}</InstitutionalTerminalShell>;
+  return <TerminalLayoutClient>{children}</TerminalLayoutClient>;
 }

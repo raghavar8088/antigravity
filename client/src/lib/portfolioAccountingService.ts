@@ -208,6 +208,39 @@ export async function getPortfolioAccountingSnapshot(
   return snapshot;
 }
 
+export function utcDayBounds(now = new Date()): { start: Date; end: Date } {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+/** Realized PnL for trades closed on the current UTC calendar day. */
+export async function getTodayRealizedPnlUtc(accountKey: string, now = new Date()): Promise<number> {
+  const { start, end } = utcDayBounds(now);
+  const stats = await getClosedTradeStats(accountKey, { closedAfter: start, closedBefore: end });
+  return stats.realized_pnl;
+}
+
+export type PortfolioExtendedMetrics = {
+  profit_factor: number | null;
+  sharpe: number | null;
+};
+
+/** Portfolio-level PF and Sharpe from closed trade records (mockExtendedMetrics authority). */
+export async function getPortfolioExtendedMetrics(accountKey: string): Promise<PortfolioExtendedMetrics> {
+  const closedStats = await getClosedTradeStats(accountKey);
+  if (closedStats.total_trades === 0) {
+    return { profit_factor: null, sharpe: null };
+  }
+  const tradeRecords = await loadClosedTradeRecordsForMetrics(accountKey);
+  const extended = computeExtendedMetricsFromRecords(tradeRecords, PAPER_DESK_STARTING_BALANCE);
+  return {
+    profit_factor: extended.profitFactor,
+    sharpe: extended.sharpeRatio,
+  };
+}
+
 async function loadClosedTradeRecordsForMetrics(
   accountKey: string,
 ): Promise<{ realizedPnl: number; openedAt: number; closedAt: number }[]> {

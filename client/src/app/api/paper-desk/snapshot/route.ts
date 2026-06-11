@@ -9,7 +9,7 @@ import {
   getClosedTradeStats,
   mergeClosedTradeStatsIntoState,
 } from "@/lib/paperDeskClient";
-import { buildPortfolioAccountingSnapshot } from "@/lib/portfolioAccountingService";
+import { buildPortfolioAccountingSnapshot, getPortfolioExtendedMetrics } from "@/lib/portfolioAccountingService";
 import { mongoUnconfigured, mongoUnavailable } from "@/lib/paperDeskErrors";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +46,9 @@ export async function GET() {
     closedStats,
     openPositions: openPositions ?? [],
   });
+  const extended = await getPortfolioExtendedMetrics(accountKey);
+  accounting.profit_factor = extended.profit_factor;
+  accounting.sharpe = extended.sharpe;
   state = mergeClosedTradeStatsIntoState(state, closedStats, {
     unrealized_pnl: accounting.unrealized_pnl,
     exposure: accounting.exposure,

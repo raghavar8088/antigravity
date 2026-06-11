@@ -271,14 +271,21 @@ const EMPTY_CLOSED_TRADE_STATS: ClosedTradeStats = {
 /** Authoritative closed-trade stats from paper_trades (matches Trade History pagination total). */
 export async function getClosedTradeStats(
   accountKey: string,
-  opts?: { side?: string },
+  opts?: { side?: string; closedAfter?: Date; closedBefore?: Date },
 ): Promise<ClosedTradeStats> {
   try {
     const db = await getDb();
+    const filter: Record<string, unknown> = closedTradesFilter(accountKey, opts?.side);
+    if (opts?.closedAfter || opts?.closedBefore) {
+      const closedAt: Record<string, string> = {};
+      if (opts.closedAfter) closedAt.$gte = opts.closedAfter.toISOString();
+      if (opts.closedBefore) closedAt.$lt = opts.closedBefore.toISOString();
+      filter.closed_at = closedAt;
+    }
     const rows = await db
       .collection(COL_PAPER_TRADES)
       .aggregate([
-        { $match: closedTradesFilter(accountKey, opts?.side) },
+        { $match: filter },
         {
           $group: {
             _id: null,

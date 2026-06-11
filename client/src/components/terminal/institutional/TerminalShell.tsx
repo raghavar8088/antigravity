@@ -43,10 +43,10 @@ export function InstitutionalTerminalShell({ children }: { children: ReactNode }
           </Link>
           <div className="h-7 w-px bg-zinc-800" />
           <div className="font-mono text-lg font-semibold text-zinc-50">
-            {snapshot.price > 0 ? `$${px(snapshot.price)}` : "—"}
+            {snapshot.hasAuthority && snapshot.price > 0 ? `$${px(snapshot.price)}` : "—"}
           </div>
           <div className={snapshot.priceChange24hPct >= 0 ? "font-mono text-xs text-emerald-400" : "font-mono text-xs text-rose-400"}>
-            {snapshot.price > 0 ? pct(snapshot.priceChange24hPct) : "—"}
+            {snapshot.hasAuthority && snapshot.price > 0 ? pct(snapshot.priceChange24hPct) : "—"}
           </div>
           <div className="hidden gap-3 text-[11px] text-zinc-400 md:flex">
             <span>Spread <b className="font-mono text-zinc-200">{snapshot.spreadBps > 0 ? `${snapshot.spreadBps.toFixed(1)}bps` : "—"}</b></span>

@@ -297,14 +297,7 @@ export default function TerminalDashboard() {
     return scored.reduce((sum, s) => sum + s.profit_factor, 0) / scored.length;
   }, [strategyScores]);
 
-  const sharpeRatio = useMemo(() => {
-    const scored = strategyScores.filter((s) => s.sample_size > 0 && Number.isFinite(s.expectancy));
-    if (scored.length === 0) return null;
-    const mean = scored.reduce((sum, s) => sum + s.expectancy, 0) / scored.length;
-    const variance = scored.reduce((sum, s) => sum + (s.expectancy - mean) ** 2, 0) / scored.length;
-    const std = Math.sqrt(variance);
-    return std > 0 ? mean / std : null;
-  }, [strategyScores]);
+  const sharpeRatio = useMemo(() => null as number | null, []);
 
   const connectionStatus = live.connected ? "live" as const : "offline" as const;
   const persistenceStatus =
@@ -325,7 +318,7 @@ export default function TerminalDashboard() {
           name: s.strategy_id,
           pnl: s.total_pnl,
           winRate: s.win_rate,
-          sharpe: s.expectancy,
+          sharpe: null as number | null,
         }));
     }
 
@@ -375,9 +368,9 @@ export default function TerminalDashboard() {
       btcPrice={live.price}
       btcChange24h={live.change24h}
       regime={regime.regime}
-      dailyPnl={totalPnl}
-      totalPnl={totalPnl}
-      equity={equity}
+      dailyPnl={undefined}
+      totalPnl={totalPnl ?? undefined}
+      equity={equity ?? undefined}
       openPositions={openCount}
       paperDeskOpenPositions={openCount}
       connectionStatus={connectionStatus}

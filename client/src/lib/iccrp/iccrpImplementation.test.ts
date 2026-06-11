@@ -50,7 +50,10 @@ describe("mapSnapshotToTerminalDelta", () => {
     expect(delta.price).toBe(100500);
     expect(delta.positions?.length).toBe(1);
     expect(delta.strategies?.length).toBe(1);
-    expect(delta.alerts?.some((a) => a.severity === "CRITICAL")).toBe(true);
+    expect(delta.strategies?.[0]?.sharpe).toBeNull();
+    expect(delta.analytics?.rollingSharpe30d).toBe(1.2);
+    expect(delta.analytics?.profitFactorTrend).toBe(1.3);
+    expect(delta.alerts?.some((a: { severity: string }) => a.severity === "CRITICAL")).toBe(true);
     expect(delta.updatedAt).toBe("2026-06-11T12:00:00.000Z");
   });
 });
@@ -62,6 +65,28 @@ describe("terminalHasAuthority", () => {
       authoritySource: "rest",
       restUnavailable: false,
       hasAuthority: false,
+      updatedAt: "2026-06-11T12:00:00.000Z",
+    })).toBe(true);
+  });
+
+  it("rejects WS connected before first delta", () => {
+    expect(terminalHasAuthority({
+      ...initialTerminalSnapshot,
+      authoritySource: "ws",
+      connected: true,
+      restUnavailable: false,
+      hasAuthority: false,
+      updatedAt: "",
+    })).toBe(false);
+  });
+
+  it("accepts WS after first delta", () => {
+    expect(terminalHasAuthority({
+      ...initialTerminalSnapshot,
+      authoritySource: "ws",
+      connected: true,
+      restUnavailable: false,
+      hasAuthority: true,
       updatedAt: "2026-06-11T12:00:00.000Z",
     })).toBe(true);
   });
