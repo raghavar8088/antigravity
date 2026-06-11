@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { isPaperDeskRoute } from "@/lib/navRoutes";
+import { isPaperDeskRoute, TERMINAL_ROUTES } from "@/lib/navRoutes";
 
 type Regime = string | null | undefined;
 
@@ -28,9 +28,9 @@ type TopBarProps = {
 };
 
 const PAGE_TITLES: Record<string, string> = {
-  "/":                   "Dashboard",
+  "/":                   "Command Center",
+  "/terminal":           "Command Center",
   "/mock-trading":       "Mock Trading",
-  "/paper-desk":         "Paper Desk",
   "/btc-future-trading": "BTC Futures",
 };
 
@@ -119,7 +119,7 @@ export function TopBar({
   menuOpen = false,
 }: TopBarProps) {
   const pathname = usePathname();
-  const pageTitle = title ?? (isPaperDeskRoute(pathname) ? "Paper Desk" : PAGE_TITLES[pathname]) ?? "Terminal";
+  const pageTitle = title ?? (isPaperDeskRoute(pathname) ? "Command Center" : PAGE_TITLES[pathname]) ?? "Terminal";
   const isLive = connectionStatus === "live";
   const isReconnecting = connectionStatus === "reconnecting";
 

@@ -14,7 +14,7 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   return (
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-3">
-        <TerminalCard title="Equity Curve" subtitle="/api/paper-desk/equity">
+        <TerminalCard title="Equity Curve" subtitle="MongoDB authority · equity curve">
           {!hasCurve ? (
             <TerminalNoData label="NO EQUITY CURVE DATA" />
           ) : (

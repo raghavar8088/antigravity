@@ -372,7 +372,6 @@ export default function TerminalDashboard() {
       totalPnl={totalPnl ?? undefined}
       equity={equity ?? undefined}
       openPositions={openCount}
-      paperDeskOpenPositions={openCount}
       connectionStatus={connectionStatus}
       persistenceStatus={persistenceStatus}
       pageTitle="Dashboard"

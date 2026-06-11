@@ -218,7 +218,6 @@ export default function PaperDeskDashboard() {
       totalPnl={realized + unrealized}
       equity={equity}
       openPositions={openCount}
-      paperDeskOpenPositions={openCount}
       activeStrategies={healthSummary?.total}
       connectionStatus={connectionStatus}
       persistenceStatus={persistenceStatus}

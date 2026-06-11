@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
+import { legacyPaperDeskRedirect } from "@/lib/navRoutes";
 
 type PaperdeskAliasPageProps = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-/** Legacy alias — /paperdesk → /paper-desk */
+/** Legacy alias — /paperdesk → Command Center */
 export default async function PaperdeskAliasPage({ searchParams }: PaperdeskAliasPageProps) {
-  const params = await searchParams;
-  const tab = params.tab?.trim();
-  redirect(tab ? `/paper-desk?tab=${encodeURIComponent(tab)}` : "/paper-desk");
+  const { tab } = await searchParams;
+  redirect(legacyPaperDeskRedirect(tab));
 }

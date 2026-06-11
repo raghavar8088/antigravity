@@ -1,5 +1,9 @@
-import { redirect } from "next/navigation";
+"use client";
 
-export default function TerminalIndexPage() {
-  redirect("/terminal/execution");
+import { CommandCenterHome } from "@/components/terminal/institutional/CommandCenterHome";
+import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
+
+export default function CommandCenterPage() {
+  const snapshot = useTerminalSnapshot();
+  return <CommandCenterHome snapshot={snapshot} />;
 }

@@ -102,10 +102,10 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
       <div className="space-y-3">
         <TerminalCard title="Execution Authority" subtitle="Go engine is sole execution authority">
           <p className="text-xs text-zinc-400">
-            Browser-side trade execution is permanently disabled. View positions and alerts from backend authority only.
+            Browser-side trade execution is permanently disabled. All positions and fills originate from the Go engine OMS.
           </p>
-          <Link href="/paper-desk" className="mt-3 inline-block text-xs font-semibold text-sky-400 hover:text-sky-300">
-            Open Paper Desk Dashboard →
+          <Link href="/terminal/events" className="mt-3 inline-block text-xs font-semibold text-sky-400 hover:text-sky-300">
+            Open Event Console →
           </Link>
         </TerminalCard>
         <TerminalCard title="Alert Tape" subtitle="Risk and health events">

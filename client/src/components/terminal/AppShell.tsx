@@ -25,8 +25,6 @@ type AppShellProps = {
   equity?: number;
   /** Number of open positions */
   openPositions?: number;
-  /** Paper Desk open positions (sidebar badge) */
-  paperDeskOpenPositions?: number;
   /** Number of active strategies */
   activeStrategies?: number;
   /** WebSocket connection status */
@@ -56,7 +54,6 @@ export function AppShell({
   totalPnl,
   equity,
   openPositions,
-  paperDeskOpenPositions,
   activeStrategies,
   connectionStatus = "offline",
   persistenceStatus,
@@ -86,7 +83,6 @@ export function AppShell({
       <Sidebar
         liveConnected={connectionStatus === "live"}
         openPositions={openPositions}
-        paperDeskOpenPositions={paperDeskOpenPositions}
         mobileOpen={mobileNavOpen}
         onNavigate={() => setMobileNavOpen(false)}
       />

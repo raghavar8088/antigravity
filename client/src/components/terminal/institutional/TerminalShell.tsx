@@ -3,42 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import RiskRibbon from "@/components/RiskRibbon";
 import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
 import { terminalAuthorityLabel } from "@/lib/terminal/terminalAuthority";
+import { COMMAND_CENTER_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
 import { pct, px, usd } from "./format";
-
-const nav = [
-  { href: "/terminal/execution", label: "Execution" },
-  { href: "/terminal/risk", label: "Risk" },
-  { href: "/terminal/research", label: "Research" },
-  { href: "/terminal/strategies", label: "Strategies" },
-  { href: "/terminal/analytics", label: "Analytics" },
-  { href: "/terminal/portfolio", label: "Portfolio" },
-  { href: "/terminal/events", label: "Events" },
-  { href: "/terminal/journal", label: "Journal" },
-];
 
 export function InstitutionalTerminalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const snapshot = useTerminalSnapshot();
   const criticalAlerts = snapshot.alerts.filter((a) => a.severity === "CRITICAL").length;
   const authorityLabel = terminalAuthorityLabel(snapshot);
-  const equityDisplay = snapshot.risk.netExposureUsd > 0
-    ? usd(snapshot.risk.netExposureUsd + (snapshot.risk.grossExposureUsd > 0 ? 0 : 0), { compact: true })
-    : snapshot.updatedAt
-      ? usd(snapshot.risk.grossExposureUsd, { compact: true })
-      : "—";
 
   return (
     <div className="min-h-screen bg-[#080b10] text-zinc-100">
       <header className="sticky top-0 z-40 border-b border-zinc-800 bg-[#0b0f16]/95 backdrop-blur">
         <div className="flex min-h-[54px] flex-wrap items-center gap-3 px-3 lg:px-4">
-          <Link href="/terminal/execution" className="flex items-center gap-2">
+          <Link href={TERMINAL_ROUTES.home} className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/10 font-mono text-sm font-bold text-amber-300">
-              BTC
+              ICC
             </span>
             <span className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400 sm:inline">
-              Institutional Terminal
+              Command Center
             </span>
           </Link>
           <div className="h-7 w-px bg-zinc-800" />
@@ -53,7 +39,7 @@ export function InstitutionalTerminalShell({ children }: { children: ReactNode }
             <span>Funding <b className="font-mono text-amber-300">{snapshot.fundingRate !== 0 ? pct(snapshot.fundingRate * 100, 4) : "—"}</b></span>
             <span>Regime <b className="text-sky-300">{snapshot.regime || "—"}</b></span>
             <span>Heat <b className="font-mono text-emerald-300">{snapshot.risk.heatPct > 0 ? `${snapshot.risk.heatPct.toFixed(1)}%` : "—"}</b></span>
-            <span>Exposure <b className="font-mono text-zinc-200">{equityDisplay}</b></span>
+            <span>Positions <b className="font-mono text-zinc-200">{snapshot.positions.length}</b></span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase ${
@@ -72,14 +58,20 @@ export function InstitutionalTerminalShell({ children }: { children: ReactNode }
             ) : null}
           </div>
         </div>
+        <div className="border-t border-zinc-900">
+          <RiskRibbon />
+        </div>
         <nav className="flex gap-1 overflow-x-auto border-t border-zinc-900 px-2 py-1 lg:px-4">
-          {nav.map((item) => {
-            const active = pathname === item.href;
+          {COMMAND_CENTER_NAV.map((item) => {
+            const active = isNavItemActive(pathname, {
+              href: item.href,
+              exactMatch: "exactMatch" in item ? item.exactMatch : false,
+            });
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`rounded-md px-3 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
+                className={`whitespace-nowrap rounded-md px-3 py-2 text-xs font-medium uppercase tracking-[0.12em] transition ${
                   active ? "bg-sky-500/15 text-sky-200" : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
                 }`}
               >
