@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import RiskRibbon from "@/components/RiskRibbon";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="theme-color" content="#0d1117" />
         <meta name="color-scheme" content="dark" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <RiskRibbon />
+        {children}
+      </body>
     </html>
   );
 }

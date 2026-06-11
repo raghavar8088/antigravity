@@ -1360,9 +1360,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
 
   const [clearedAt, setClearedAt] = useState(0);
 
-  /** POST current engine state to MongoDB paper_state collection. */
-  const saveToMongo = useCallback((overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
-    if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") return;
+  /** POST current engine state to MongoDB paper_state collection — DISABLED. */
+  const saveToMongo = useCallback((_overrides?: { clearedAt?: number; balance?: number; pauseEntries?: boolean; disabledStrategies?: number[] }) => {
+    // SINGLE MOCK TRADING AUTHORITY — Phase 7 (2026-06-11): permanently disabled.
+    return;
     if (!cloudAccountKey) return;
     const body = {
       accountKey: cloudAccountKey,
@@ -2673,9 +2674,10 @@ export function useBTCFuturesScalperEngine(options: BTCFuturesEngineOptions = {}
     let interval: NodeJS.Timeout | null = null;
 
     const poll = async () => {
-      if (process.env.NEXT_PUBLIC_ENGINE_EXECUTION_AUTHORITY !== "0") {
-        return;
-      }
+      // SINGLE MOCK TRADING AUTHORITY — Phase 7 (2026-06-11)
+      // Browser execution is permanently disabled. The Go engine is sole authority.
+      return;
+      // eslint-disable-next-line no-unreachable
       if (pollInFlightRef.current) return;
       // In worker monitor mode: hydration handled by the worker heartbeat effect above.
       // Only run the local poll for quotes/data-health; skip entry/exit writes.

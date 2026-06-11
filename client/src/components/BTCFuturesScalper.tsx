@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { StrategyLeaderboardRow } from "@/lib/paperTradesAnalytics";
+import { BTCFuturesScalperReadOnly } from "@/components/BTCFuturesScalperReadOnly";
+
 import {
   useBTCFuturesScalperEngine,
   type BTCFuturesPosition,
@@ -49,6 +51,7 @@ import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/noT
 
 const deskTestnetOpsEnabled = process.env.NEXT_PUBLIC_DESK_TESTNET_OPS === "1";
 const deskShadowIntentsEnabled = process.env.NEXT_PUBLIC_DESK_SHADOW_INTENTS === "1";
+const ENGINE_AUTHORITY_CLIENT = process.env.NEXT_PUBLIC_ENGINE_AUTHORITY !== "0";
 
 
 type BTCFuturesScalperProps = {
@@ -136,6 +139,10 @@ export function BTCFuturesScalper({
   statusChips,
   allStrategiesAvailable = false,
 }: BTCFuturesScalperProps = {}) {
+  if (ENGINE_AUTHORITY_CLIENT) {
+    return <BTCFuturesScalperReadOnly title={title} />;
+  }
+
   const { user: authUser, configured: authConfigured } = usePaperDeskAuth();
   const deskMounted = useDeskMounted();
   const [deskDark, setDeskDark] = useState(false);

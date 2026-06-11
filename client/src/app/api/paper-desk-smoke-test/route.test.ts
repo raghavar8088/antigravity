@@ -23,4 +23,12 @@ describe("paper desk smoke test helpers", () => {
     expect(trade.net_pnl).toBe(0);
     expect(isProbeOrBootstrapTrade({ strategy_name: trade.strategy_name })).toBe(true);
   });
+
+  it("POST returns 410 under engine execution authority", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(new Request("http://localhost/api/paper-desk-smoke-test", { method: "POST" }));
+    expect(res.status).toBe(410);
+    const body = await res.json();
+    expect(body.code).toBe("DEPRECATED");
+  });
 });

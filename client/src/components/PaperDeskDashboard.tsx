@@ -147,7 +147,32 @@ export default function PaperDeskDashboard() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const { state, openPositions, recentTrades, healthSummary, connection, lastUpdated, refresh } = usePaperDesk();
+  const [riskMetrics, setRiskMetrics] = useState<{
+    sharpeRatio: number | null;
+    sortinoRatio: number | null;
+    calmarRatio: number | null;
+    maxDrawdownPct: number;
+  } | null>(null);
   const [tab, setTab] = useState<TabKey>(() => (isPaperDeskTabKey(tabParam) ? tabParam : "positions"));
+
+  useEffect(() => {
+    if (connection !== "live") return;
+    let active = true;
+    fetch("/api/paper-desk/risk-metrics")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (active && data?.ok) {
+          setRiskMetrics({
+            sharpeRatio: data.sharpeRatio ?? null,
+            sortinoRatio: data.sortinoRatio ?? null,
+            calmarRatio: data.calmarRatio ?? null,
+            maxDrawdownPct: data.maxDrawdownPct ?? 0,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [connection, lastUpdated]);
 
   useEffect(() => {
     if (isPaperDeskTabKey(tabParam)) {
@@ -271,6 +296,10 @@ export default function PaperDeskDashboard() {
                   subColor="neutral"
                 />
                 <DeskMetricTile label="Max Drawdown" value={pct(state?.max_drawdown)} valueClassName={state?.max_drawdown ? "desk-pnl-negative" : ""} sub={`Current ${pct(state?.current_drawdown)}`} subColor="neutral" />
+                <DeskMetricTile label="Sharpe" value={riskMetrics?.sharpeRatio != null ? num(riskMetrics.sharpeRatio) : "—"} />
+                <DeskMetricTile label="Sortino" value={riskMetrics?.sortinoRatio != null ? num(riskMetrics.sortinoRatio) : "—"} />
+                <DeskMetricTile label="Calmar" value={riskMetrics?.calmarRatio != null ? num(riskMetrics.calmarRatio) : "—"} />
+                <DeskMetricTile label="Risk Max DD" value={riskMetrics ? `${num(riskMetrics.maxDrawdownPct, 1)}%` : "—"} />
                 <DeskMetricTile label="Total Fees" value={usd(state?.total_fees)} />
                 <DeskMetricTile
                   label="Strategy Health"

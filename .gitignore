@@ -38,3 +38,11 @@ engine/internal/**/*.go.*
 *.log
 dev-server.err
 dev-server2.err
+
+# Claude bot secrets (local + Lightsail copies)
+claude-bot/auth.json
+claude-bot/.env
+claude-bot/log.txt
+claude-bot/last-reply.txt
+claude-bot/.send.lock
+claude-bot/screenshots/

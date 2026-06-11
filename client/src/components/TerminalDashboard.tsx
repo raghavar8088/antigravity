@@ -278,12 +278,15 @@ export default function TerminalDashboard() {
 
   const state = desk.state;
   const stateBalance = (state as { balance?: number } | null)?.balance;
-  const equity = state?.equity ?? stateBalance ?? STARTING_BALANCE;
-  const realizedPnl = state?.realized_pnl ?? (stateBalance != null ? stateBalance - STARTING_BALANCE : 0);
+  const hasState = stateBalance != null && Number.isFinite(stateBalance);
+  const equity = state?.equity ?? (hasState ? stateBalance : null);
+  const realizedPnl = state?.realized_pnl ?? (hasState && stateBalance != null ? stateBalance - STARTING_BALANCE : null);
   const unrealizedPnl = state?.unrealized_pnl ?? 0;
   const totalPnl = state?.realized_pnl != null || state?.unrealized_pnl != null
-    ? realizedPnl + unrealizedPnl
-    : equity - STARTING_BALANCE;
+    ? (realizedPnl ?? 0) + unrealizedPnl
+    : equity != null
+      ? equity - STARTING_BALANCE
+      : null;
   const winRate = state?.win_rate ?? 0;
   const totalTrades = state?.total_trades ?? desk.recentTrades.length;
   const openCount = state?.open_position_count ?? desk.openPositions.length;
@@ -405,20 +408,20 @@ export default function TerminalDashboard() {
         <div className="kpi-grid">
           <KpiCard
             label="Account Equity"
-            value={`$${(equity / 1_000_000).toFixed(3)}M`}
+            value={equity != null ? `$${(equity / 1_000_000).toFixed(3)}M` : "—"}
             variant="accent"
             sub={`Started: $${(STARTING_BALANCE / 1_000_000).toFixed(1)}M`}
           />
           <KpiCard
             label="Total PnL"
-            value={fmtUsd(totalPnl, true)}
-            variant={totalPnl >= 0 ? "positive" : "negative"}
-            change={fmtPct(totalPnl / STARTING_BALANCE)}
+            value={totalPnl != null ? fmtUsd(totalPnl, true) : "—"}
+            variant={totalPnl != null ? (totalPnl >= 0 ? "positive" : "negative") : "default"}
+            change={totalPnl != null ? fmtPct(totalPnl / STARTING_BALANCE) : undefined}
           />
           <KpiCard
             label="Realized PnL"
-            value={fmtUsd(realizedPnl, true)}
-            variant={realizedPnl >= 0 ? "positive" : "negative"}
+            value={realizedPnl != null ? fmtUsd(realizedPnl, true) : "—"}
+            variant={realizedPnl != null ? (realizedPnl >= 0 ? "positive" : "negative") : "default"}
           />
           <KpiCard
             label="Unrealized PnL"

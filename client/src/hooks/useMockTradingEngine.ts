@@ -213,8 +213,13 @@ export interface UseMockTradingEngineResult {
 export function useMockTradingEngine(
   opts: UseMockTradingEngineOptions,
 ): UseMockTradingEngineResult {
-  const { price, accountKey, disablePolling, disablePersistence } = opts;
-  const persistenceDisabled = disablePersistence === true || disablePolling === true;
+  // SINGLE MOCK TRADING AUTHORITY — Phase 7 (2026-06-11)
+  // Client-side mock trade generation and polling are permanently disabled.
+  // The Go engine on AWS Lightsail is the sole execution authority.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { price, accountKey, disablePolling: _disablePolling, disablePersistence } = opts;
+  const disablePolling = true;
+  const persistenceDisabled = true;
   const mockAccountKey = accountKey?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
 
   const [trades, setTrades] = useState<MockTrade[]>([]);

@@ -97,6 +97,7 @@ export type TerminalAlert = {
 
 export type TerminalSnapshot = {
   connected: boolean;
+  loading: boolean;
   price: number;
   priceChange24hPct: number;
   spreadBps: number;

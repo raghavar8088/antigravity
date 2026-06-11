@@ -2,8 +2,13 @@
 
 import { RiskModule } from "@/components/terminal/institutional/RiskModule";
 import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
+import { TerminalAuthorityGuard } from "@/components/terminal/TerminalAuthorityGuard";
 
 export default function RiskPage() {
   const snapshot = useTerminalSnapshot();
-  return <RiskModule snapshot={snapshot} />;
+  return (
+    <TerminalAuthorityGuard snapshot={snapshot}>
+      <RiskModule snapshot={snapshot} />
+    </TerminalAuthorityGuard>
+  );
 }

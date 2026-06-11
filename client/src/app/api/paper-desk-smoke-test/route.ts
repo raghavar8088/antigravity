@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { isMongoConfigured, upsertTradeMongo } from "@/lib/mongoTradesClient";
+import { isEngineExecutionAuthority, ENGINE_AUTHORITY_SKIP_REASON } from "@/lib/engineAuthority";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,12 @@ export function buildPaperDeskSmokeTrade(accountKey: string, nowIso = new Date()
 }
 
 export async function POST(req: Request) {
+  if (isEngineExecutionAuthority()) {
+    return NextResponse.json(
+      { ok: false, code: "DEPRECATED", error: ENGINE_AUTHORITY_SKIP_REASON },
+      { status: 410 },
+    );
+  }
   if (!paperDeskSmokeTestEnabled()) {
     return NextResponse.json(
       { ok: false, error: "Smoke test disabled. Set NEXT_PUBLIC_DESK_SMOKE_TEST=1 to enable." },

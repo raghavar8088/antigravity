@@ -347,6 +347,27 @@ export function resolveWorkerStrategyRoster(params: {
 export async function runPaperDeskPollTick(
   ctx: PaperDeskWorkerContext,
 ): Promise<PaperDeskTickResult> {
+  // SINGLE MOCK TRADING AUTHORITY — Phase 7 (2026-06-11)
+  // The paper desk worker is permanently disabled. The Go engine on AWS
+  // Lightsail is the sole execution authority. Returns a no-op result
+  // without fetching klines, evaluating signals, or opening positions.
+  {
+    const blockers = emptyBlockerCounts();
+    return {
+      balance: ctx.balance ?? 1000,
+      positions: ctx.openPositions ?? [],
+      closedTrades: [],
+      openedPositions: [],
+      regime: "NEUTRAL" as RegimeTag,
+      lastPollAt: Date.now(),
+      error: null,
+      funnelSnapshot: buildFunnelSnapshot({ blockerCounts: blockers, openCount: (ctx.openPositions ?? []).length }),
+      signalTraceRows: [],
+      signalTraceSummary: summarizeSignalTrace([]),
+      omsOrders: [],
+      omsPositionsClosed: [],
+    };
+  }
   const symbol = ctx.symbol ?? process.env.DELTA_BTC_FUTURES_SYMBOL ?? "BTCUSD";
   const lastPollAt = Date.now();
 
