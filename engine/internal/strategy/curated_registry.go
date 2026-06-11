@@ -406,5 +406,5 @@ func BuildCuratedScalpers() []RegistryEntry {
 		RegistryEntry{NewPhase11MSSAlpha(), "Phase 11 Structure", "1m"},
 	)
 
-	return append(entries, buildExpansionPack()...)
+	return entries
 }

@@ -17,6 +17,7 @@ import (
 
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/alpha/funding"
 	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
@@ -447,6 +448,48 @@ func main() {
 		categories[i] = strategy.NormalizeCategory(e.Category, e.Strategy.Name())
 		timeframes[i] = e.Timeframe
 	}
+
+	// ═══════════════════════════════════════════════════
+	// 2b. Funding Alpha — live collection loop
+	// Fetches BTC perpetual funding rates from Binance every 8 hours and
+	// injects snapshots directly into every InstitutionalAlphaScalper so
+	// the FundingMeanReversion and Confluence modules have live data.
+	// ═══════════════════════════════════════════════════
+	go safeGo("FundingCollector", func() {
+		collector := funding.NewCollector()
+		collect := func() {
+			cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			snap, err := collector.Fetch(cctx, "binance", "BTCUSDT")
+			if err != nil {
+				log.Printf("[FUNDING] collection error: %v", err)
+				return
+			}
+			snap2, _ := collector.Fetch(cctx, "bybit", "BTCUSDT")
+			for _, entry := range allStrategies {
+				if inj, ok := entry.Strategy.(interface {
+					InjectFunding(funding.FundingSnapshot)
+				}); ok {
+					inj.InjectFunding(snap)
+					if snap2.Exchange != "" {
+						inj.InjectFunding(snap2)
+					}
+				}
+			}
+			log.Printf("[FUNDING] collected rate=%.6f (Binance BTCUSDT)", snap.FundingRate)
+		}
+		collect() // immediate on startup
+		ticker := time.NewTicker(8 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				collect()
+			}
+		}
+	})
 
 	// ═══════════════════════════════════════════════════
 	// 3. Risk Engine (configured for the $1,000,000 futures paper account)

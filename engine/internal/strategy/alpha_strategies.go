@@ -203,10 +203,62 @@ func (s *InstitutionalAlphaScalper) OnCandle(t marketdata.Tick) []Signal {
 	return s.evaluate(t.Symbol)
 }
 
+// atrSL returns an ATR-based stop loss percentage (minimum 0.25%).
+// SL = 2 × ATR(14) expressed as percent of current price.
+func (s *InstitutionalAlphaScalper) atrSL() float64 {
+	if len(s.candles) < 2 {
+		return 0.30
+	}
+	last := s.candles[len(s.candles)-1]
+	if last.Close <= 0 {
+		return 0.30
+	}
+	atr := alpha.ATR(s.candles, 14)
+	pct := atr / last.Close * 100
+	if pct < 0.25 {
+		return 0.25
+	}
+	sl := pct * 2.0
+	if sl > 0.60 {
+		return 0.60
+	}
+	return sl
+}
+
+// atrTP returns take-profit as 3× the ATR-based stop loss (minimum 0.75%).
+func (s *InstitutionalAlphaScalper) atrTP() float64 {
+	tp := s.atrSL() * 3.0
+	if tp < 0.75 {
+		return 0.75
+	}
+	if tp > 1.80 {
+		return 1.80
+	}
+	return tp
+}
+
+// InjectFunding pushes a live funding snapshot into this strategy's cache.
+// Call this from the background funding collection goroutine in main.go.
+func (s *InstitutionalAlphaScalper) InjectFunding(snap funding.FundingSnapshot) {
+	if s.fundingCache != nil {
+		_ = s.fundingCache.Add(snap)
+	}
+}
+
 func (s *InstitutionalAlphaScalper) evaluate(symbol string) []Signal {
 	if len(s.prices) < 20 && len(s.candles) < 20 {
 		return holdSignal()
 	}
+
+	// Regime gate: compute ADX to distinguish trending vs ranging market.
+	// Skip regime gating if candle buffer is too short.
+	adx := 0.0
+	if len(s.candles) >= 15 {
+		adx = alpha.ADX(s.candles, 14)
+	}
+	isTrending := adx > 25
+	isRanging := adx < 20 && adx > 0
+
 	var sig alpha.Signal
 	switch s.module {
 	case alphaCVD:
@@ -214,28 +266,58 @@ func (s *InstitutionalAlphaScalper) evaluate(symbol string) []Signal {
 	case alphaDelta:
 		sig = alphadelta.NewStrategy(s.deltaEngine).Evaluate(symbol)
 	case alphaLiquidity:
+		// Liquidity sweeps require a trending or volatile regime (ADX > 20 or undefined).
+		if isRanging {
+			return holdSignal()
+		}
 		event := s.liquidityEngine.Add(lastCandle(s.candles))
 		if event.Direction != alpha.ActionHold {
-			sig = alpha.Signal{Source: "LiquiditySweepReversal", Symbol: symbol, Action: event.Direction, Confidence: event.Confidence, Reason: "liquidity sweep reversal", StopLossPct: 0.30, TakeProfitPct: 0.85, Timestamp: time.Now().UTC()}
+			sl, tp := s.atrSL(), s.atrTP()
+			sig = alpha.Signal{Source: "LiquiditySweepReversal", Symbol: symbol, Action: event.Direction, Confidence: event.Confidence, Reason: "liquidity sweep reversal", StopLossPct: sl, TakeProfitPct: tp, Timestamp: time.Now().UTC()}
 		}
 	case alphaFVG:
 		sig = s.fvgStrategy.Evaluate(s.candles)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	case alphaOrderBlock:
 		sig = s.orderBlocks.Evaluate(s.candles)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	case alphaMSS:
+		// MSS requires a trend regime — needs directional bias.
+		if isRanging {
+			return holdSignal()
+		}
 		sig = s.mssEngine.Evaluate(s.candles)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	case alphaPOC:
 		sig = s.profileStrategy.Evaluate(s.candles)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	case alphaSession:
 		snap := s.sessionEngine.Analyze(s.candles)
 		if snap.Expansion && snap.Bias != alpha.ActionHold {
-			sig = alpha.Signal{Source: "SessionExpansion", Symbol: symbol, Action: snap.Bias, Confidence: alpha.Clamp(0.62+absFloat(snap.Momentum)/4, 0.62, 0.88), Reason: string(snap.Name) + " expansion bias", StopLossPct: 0.35, TakeProfitPct: 0.75, Timestamp: time.Now().UTC()}
+			sl, tp := s.atrSL(), s.atrTP()
+			sig = alpha.Signal{Source: "SessionExpansion", Symbol: symbol, Action: snap.Bias, Confidence: alpha.Clamp(0.62+absFloat(snap.Momentum)/4, 0.62, 0.88), Reason: string(snap.Name) + " expansion bias", StopLossPct: sl, TakeProfitPct: tp, Timestamp: time.Now().UTC()}
 		}
 	case alphaLiquidation:
 		sig = s.liquidationEngine.Signal(symbol)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	case alphaConfluence:
 		sig = s.confluence(symbol)
+		if sig.Action != alpha.ActionHold {
+			sig.StopLossPct, sig.TakeProfitPct = s.atrSL(), s.atrTP()
+		}
 	}
+
+	_ = isTrending // used implicitly via regime gates above
 	if sig.Action == "" || sig.Action == alpha.ActionHold {
 		return holdSignal()
 	}
