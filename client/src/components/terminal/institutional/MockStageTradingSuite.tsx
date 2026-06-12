@@ -25,7 +25,7 @@ const STAGE_LABEL: Record<StrategyStatus, string> = {
   RETIRED: "Retired",
 };
 
-const TABLE_CAP = PAGE_SIZE;
+const PAGE_SIZE = 100;
 
 function fmtUsd(value: number) {
   if (!Number.isFinite(value)) return "—";
@@ -75,8 +75,6 @@ function ScoreBar({ score }: { score: number }) {
     </div>
   );
 }
-
-const PAGE_SIZE = 100;
 
 function TablePagination({
   page,
@@ -360,7 +358,7 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
   const closedTrades = closedPaged.items;
 
   const leaderboard = useMemo(
-    () => rankStrategies({ trades: sourceTrades }).rows.slice(0, TABLE_CAP),
+    () => rankStrategies({ trades: sourceTrades }).rows.slice(0, PAGE_SIZE),
     [sourceTrades],
   );
 
