@@ -76,6 +76,25 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
+function TargetCell({
+  price,
+  pnlUsd,
+  tone,
+}: {
+  price: number;
+  pnlUsd: number;
+  tone: "profit" | "loss";
+}) {
+  return (
+    <div className="flex flex-col items-end gap-0.5 leading-tight">
+      <span className="tabular-nums text-zinc-400">{fmtPrice(price)}</span>
+      <span className={`tabular-nums font-semibold ${tone === "profit" ? "text-emerald-400" : "text-rose-400"}`}>
+        {tone === "profit" ? fmtUsd(pnlUsd) : fmtUsd(-Math.abs(pnlUsd))}
+      </span>
+    </div>
+  );
+}
+
 function TradeTable({
   trades,
   mode,
@@ -101,12 +120,16 @@ function TradeTable({
             {mode === "open" ? (
               <>
                 <th className="py-2 px-2 text-right">Mark</th>
-                <th className="py-2 px-2 text-right">uPnL</th>
+                <th className="py-2 px-2 text-right">TP · Profit</th>
+                <th className="py-2 px-2 text-right">SL · Loss</th>
+                <th className="py-2 px-2 text-right">Unrealized PnL</th>
               </>
             ) : (
               <>
                 <th className="py-2 px-2 text-right">Exit</th>
-                <th className="py-2 px-2 text-right">PnL</th>
+                <th className="py-2 px-2 text-right">Realized PnL</th>
+                <th className="py-2 px-2 text-right">TP Target</th>
+                <th className="py-2 px-2 text-right">SL Target</th>
                 <th className="py-2 px-2">Reason</th>
               </>
             )}
@@ -129,6 +152,12 @@ function TradeTable({
                 {mode === "open" ? (
                   <>
                     <td className="py-1.5 px-2 tabular-nums text-right">{fmtPrice(t.currentPrice)}</td>
+                    <td className="py-1.5 px-2">
+                      <TargetCell price={t.takeProfitPrice} pnlUsd={t.takeProfitUsd} tone="profit" />
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <TargetCell price={t.stopLossPrice} pnlUsd={t.stopLossUsd} tone="loss" />
+                    </td>
                     <td className={`py-1.5 px-2 tabular-nums text-right font-semibold ${pnlClass(pnl)}`}>
                       {fmtUsd(pnl)}
                     </td>
@@ -140,6 +169,12 @@ function TradeTable({
                     </td>
                     <td className={`py-1.5 px-2 tabular-nums text-right font-semibold ${pnlClass(pnl)}`}>
                       {fmtUsd(pnl)}
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <TargetCell price={t.takeProfitPrice} pnlUsd={t.takeProfitUsd} tone="profit" />
+                    </td>
+                    <td className="py-1.5 px-2">
+                      <TargetCell price={t.stopLossPrice} pnlUsd={t.stopLossUsd} tone="loss" />
                     </td>
                     <td className="py-1.5 px-2 text-[10px] text-zinc-500">{t.exitReason ?? "—"}</td>
                   </>
@@ -286,6 +321,11 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
           <Metric label="Max Open Cap" value={String(maxOpen)} />
           <Metric label="Equity" value={fmtUsd(engine.account.equity)} />
           <Metric
+            label="Unrealized PnL"
+            value={fmtUsd(engine.account.unrealizedPnl)}
+            tone={engine.account.unrealizedPnl >= 0 ? "positive" : "negative"}
+          />
+          <Metric
             label="Realized PnL"
             value={fmtUsd(analytics.realizedPnl)}
             tone={analytics.realizedPnl >= 0 ? "positive" : "negative"}
@@ -312,7 +352,7 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
 
       <TerminalCard
         title="Open Positions"
-        subtitle={`${openTrades.length} open · signal score per trade`}
+        subtitle={`${openTrades.length} open · TP/SL targets in USD · live unrealized PnL`}
       >
         <TradeTable
           trades={openTrades}
