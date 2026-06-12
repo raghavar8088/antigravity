@@ -6,7 +6,7 @@
  * same value via OWNER_ACCOUNT_KEY env (default: mock_trading_default).
  */
 
-import { OWNER_ACCOUNT_KEY } from "./ownerAuth";
+import { OWNER_ACCOUNT_KEY } from "./ownerAccountKey";
 
 /** Must match engine/internal/paperpersist/accountkey.go FrontendAccountKey */
 export const FRONTEND_OWNER_ACCOUNT_KEY = OWNER_ACCOUNT_KEY;

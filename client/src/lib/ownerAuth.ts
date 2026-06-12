@@ -14,10 +14,11 @@
 
 import crypto, { type BinaryLike } from "node:crypto";
 import { promisify } from "node:util";
+import { OWNER_ACCOUNT_KEY } from "./ownerAccountKey";
+
+export { OWNER_ACCOUNT_KEY };
 
 const scryptAsync = promisify<BinaryLike, BinaryLike, number, Buffer>(crypto.scrypt);
-
-export const OWNER_ACCOUNT_KEY = "mock_trading_default";
 
 // ── Hashing ──────────────────────────────────────────────────────────────────
 

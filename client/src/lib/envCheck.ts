@@ -1,5 +1,5 @@
 import { validateAccountKeyAlignment } from "./authoritativeAccountKey";
-import { OWNER_ACCOUNT_KEY } from "./ownerAuth";
+import { OWNER_ACCOUNT_KEY } from "./ownerAccountKey";
 
 /**
  * envCheck.ts — Single-source startup environment validator.
