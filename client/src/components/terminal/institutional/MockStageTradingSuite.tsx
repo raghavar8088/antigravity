@@ -257,7 +257,7 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
   );
 
   const leaderboard = useMemo(
-    () => rankStrategies(sourceTrades).slice(0, TABLE_CAP),
+    () => rankStrategies({ trades: sourceTrades }).rows.slice(0, TABLE_CAP),
     [sourceTrades],
   );
 
