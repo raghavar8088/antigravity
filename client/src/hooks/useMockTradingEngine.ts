@@ -402,10 +402,13 @@ export function useMockTradingEngine(
     const hydrate = async () => {
       setPersistence((prev) => ({ ...prev, status: "hydrating", loading: true, error: null }));
       try {
+        const hydrateOpenLimit = pipelineStage
+          ? maxOpenMockTradesFromConfig(getMockConfigForPipelineStage(pipelineStage))
+          : DEFAULT_MAX_OPEN_MOCK_TRADES;
         const openParams = new URLSearchParams({
           account_key: mockAccountKey,
           page: "1",
-          limit: String(DEFAULT_MAX_OPEN_MOCK_TRADES),
+          limit: String(hydrateOpenLimit),
           status: "OPEN",
           sort: "oldest",
         });
@@ -422,18 +425,20 @@ export function useMockTradingEngine(
           fetch(`/api/mock-trading/logs?account_key=${encodeURIComponent(mockAccountKey)}&limit=${LOG_RING_CAP}`),
         ]);
         if (cancelled) return;
-        if (openTradesRes.status === 503 || historyRes.status === 503 || accountRes.status === 503 || logsRes.status === 503) {
+        if (openTradesRes.status === 503 && historyRes.status === 503) {
           markPersistenceError("MongoDB not configured", true);
           return;
         }
         const openTradesJson = await openTradesRes.json() as MockTradingHydrateResponse | { ok: false; error?: string };
         const historyJson = await historyRes.json() as MockTradingHydrateResponse | { ok: false; error?: string };
-        const accountJson = await accountRes.json() as MockAccountSnapshotResponse | { ok: false; error?: string };
-        const logsJson = await logsRes.json() as MockLogsResponse | { ok: false; error?: string };
+        const accountJson = accountRes.ok
+          ? await accountRes.json() as MockAccountSnapshotResponse | { ok: false; error?: string }
+          : { ok: false as const, error: `HTTP ${accountRes.status}` };
+        const logsJson = logsRes.ok
+          ? await logsRes.json() as MockLogsResponse | { ok: false; error?: string }
+          : { ok: false as const, error: `HTTP ${logsRes.status}` };
         if (!openTradesRes.ok || !openTradesJson.ok) throw new Error("error" in openTradesJson ? openTradesJson.error ?? "Open trade hydrate failed" : "Open trade hydrate failed");
         if (!historyRes.ok || !historyJson.ok) throw new Error("error" in historyJson ? historyJson.error ?? "Trade history hydrate failed" : "Trade history hydrate failed");
-        if (!accountRes.ok || !accountJson.ok) throw new Error("error" in accountJson ? accountJson.error ?? "Account hydrate failed" : "Account hydrate failed");
-        if (!logsRes.ok || !logsJson.ok) throw new Error("error" in logsJson ? logsJson.error ?? "Log hydrate failed" : "Log hydrate failed");
 
         const merged = mergeHydratedMockTrades(tradesRef.current, openTradesJson.trades);
         setTrades(merged);
@@ -452,7 +457,7 @@ export function useMockTradingEngine(
           if (fullRes.ok && fullJson.ok) summary = fullJson.trades;
         }
         setSummaryTrades(mergePortfolioTrades(merged, summary));
-        setHydratedAccount(accountJson.snapshot ?? null);
+        setHydratedAccount(accountJson.ok ? accountJson.snapshot ?? null : null);
 
         setHistoryMeta({
           total: historyJson.total,
@@ -460,14 +465,14 @@ export function useMockTradingEngine(
           loading: false,
           error: null,
         });
-        if (accountJson.config) {
+        if (accountJson.ok && accountJson.config) {
           setConfigState(
             pipelineStage
               ? getMockConfigForPipelineStage(pipelineStage)
               : normalizeMockTradingConfig(accountJson.config),
           );
         }
-        setLogs(logsJson.logs.slice(0, LOG_RING_CAP));
+        setLogs(logsJson.ok ? logsJson.logs.slice(0, LOG_RING_CAP) : []);
         seenTraceIdsRef.current = new Set(merged.map((t) => t.traceId));
         setPersistence({
           status: "mongo",
@@ -484,7 +489,7 @@ export function useMockTradingEngine(
     return () => {
       cancelled = true;
     };
-  }, [markPersistenceError, mockAccountKey, persistenceDisabled]);
+  }, [markPersistenceError, mockAccountKey, persistenceDisabled, pipelineStage]);
 
   useEffect(() => {
     void loadHistoryPage(historyPage);

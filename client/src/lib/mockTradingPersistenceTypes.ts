@@ -57,6 +57,7 @@ export const mockTradingConfigSchema = z
     maxDrawdownPct: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.maxDrawdownPct),
     fundingRatePctPer8h: finiteNumber.default(DEFAULT_MOCK_TRADING_CONFIG.fundingRatePctPer8h),
     fundingIntervalHours: finiteNumber.positive().default(DEFAULT_MOCK_TRADING_CONFIG.fundingIntervalHours),
+    pipelineStage: z.string().trim().max(32).nullable().optional(),
   })
   .strict();
 
@@ -96,6 +97,9 @@ export const mockTradeSchema = z
     confidenceScore: finiteNumber.min(0).max(100).optional(),
     strategyParams: z.record(z.string().trim().min(1).max(80), strategyParamValueSchema).optional(),
     researchPack: z.boolean().optional(),
+    regimeAtEntry: z.string().trim().min(1).max(64).optional(),
+    ispapStrategyId: z.string().trim().min(1).max(180).optional(),
+    pipelineStage: z.string().trim().min(1).max(32).optional(),
   })
   .strict()
   .superRefine((trade, ctx) => {
@@ -188,7 +192,7 @@ export const mockTradeListQuerySchema = z
   .object({
     account_key: mockAccountKeySchema.default(DEFAULT_MOCK_ACCOUNT_KEY),
     page: z.coerce.number().int().min(1).max(10_000).default(1),
-    limit: z.coerce.number().int().min(1).max(5_000).default(100),
+    limit: z.coerce.number().int().min(1).max(50_000).default(100),
     status: z.enum(["OPEN", "CLOSED"]).optional(),
     side: z.enum(["BUY", "SELL"]).optional(),
     strategy_id: z.coerce.number().int().nonnegative().optional(),

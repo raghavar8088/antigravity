@@ -233,10 +233,7 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
     initialConfig: getMockConfigForPipelineStage(status),
   });
 
-  const sourceTrades =
-    engine.persistence.status === "mongo" || engine.historyTrades.length > 0
-      ? engine.portfolioTrades
-      : engine.trades;
+  const sourceTrades = engine.portfolioTrades;
 
   const openTrades = useMemo(
     () =>

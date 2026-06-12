@@ -10,9 +10,11 @@ import {
   mockAccountStateSchema,
   mockTradeListQuerySchema,
   mockTradeSchema,
+  mockTradeWriteBodySchema,
   mockTradingConfigSchema,
   strategyFamilyForTrade,
 } from "@/lib/mockTradingPersistenceTypes";
+import { getMockConfigForPipelineStage } from "@/lib/strategyAuthority/gradeStageMockConfig";
 import { mockTradeToDoc } from "@/lib/mockTradingMongo";
 
 const trade: MockTrade = {
@@ -87,6 +89,26 @@ describe("Mock Trading persistence schemas", () => {
   it("allows mock trade hydration pages larger than the open-position cap", () => {
     const parsed = mockTradeListQuerySchema.parse({ limit: "100", status: "OPEN" });
     expect(parsed.limit).toBe(100);
+  });
+
+  it("accepts grade-stage mock config and catalog trades for Mongo writes", () => {
+    const config = getMockConfigForPipelineStage("GRADE_5");
+    expect(mockTradingConfigSchema.safeParse(config).success).toBe(true);
+
+    const gradeTrade = {
+      ...trade,
+      ispapStrategyId: "ema-cross-fast",
+      pipelineStage: "GRADE_5",
+      regimeAtEntry: "TREND",
+    };
+    expect(mockTradeSchema.safeParse(gradeTrade).success).toBe(true);
+    expect(
+      mockTradeWriteBodySchema.safeParse({
+        accountKey: "mock_trading_grade_5",
+        trade: gradeTrade,
+        config,
+      }).success,
+    ).toBe(true);
   });
 
   it("maps raw trades to Mongo documents with required searchable fields", () => {
