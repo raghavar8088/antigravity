@@ -9,6 +9,7 @@ import { CorrelationMatrix } from "./CorrelationMatrix";
 import { FamilyLeaderboard } from "./FamilyLeaderboard";
 import { MainEngineSurvivors } from "./MainEngineSurvivors";
 import { PromotionTower } from "./PromotionTower";
+import { MockStageTradingSuite } from "./MockStageTradingSuite";
 import { RegimeIntelligence } from "./RegimeIntelligence";
 import { TerminalCard, Metric } from "./TerminalCard";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
@@ -95,6 +96,7 @@ export function MockEngineCenter() {
 
   return (
     <div className="m3-page-stack">
+      <MockStageTradingSuite status="MAIN_ENGINE" />
       {tower.length > 0 && (
         <TerminalCard title="Institutional Pipeline" subtitle="Grade 5 ↓ Grade 4 ↓ Grade 3 ↓ Grade 2 ↓ Grade 1 ↓ Mock Trading Engine">
           <PromotionTower

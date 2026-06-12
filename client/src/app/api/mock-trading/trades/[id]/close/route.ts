@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { closeMockTradeInMongo, upsertMockTrade } from "@/lib/mockTradingMongo";
 import { mockTradeCloseBodySchema } from "@/lib/mockTradingPersistenceTypes";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +9,6 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const accountKey = OWNER_ACCOUNT_KEY;
-
   const { id } = await params;
   let body: unknown;
   try {
@@ -20,8 +17,7 @@ export async function POST(
     return NextResponse.json({ ok: false, code: "INVALID_JSON", error: "Invalid JSON" }, { status: 400 });
   }
 
-  const b = body as Record<string, unknown>;
-  const parsed = mockTradeCloseBodySchema.safeParse({ ...b, accountKey });
+  const parsed = mockTradeCloseBodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, code: "VALIDATION_FAILED", error: "Validation failed", details: parsed.error.flatten() },
@@ -31,6 +27,8 @@ export async function POST(
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });
   }
+
+  const accountKey = parsed.data.accountKey;
 
   try {
     if (parsed.data.trade) {

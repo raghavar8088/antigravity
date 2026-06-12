@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { StageSummary } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 import type { StrategyStatus, StrategyWithMetrics } from "@/lib/strategyAuthority/types";
 import { PromotionTower } from "./PromotionTower";
-import { GradeStageExecutionPanel } from "./GradeStageExecutionPanel";
+import { MockStageTradingSuite } from "./MockStageTradingSuite";
 import { TerminalCard, Metric } from "./TerminalCard";
 
 const STATUS_LABEL: Record<StrategyStatus, string> = {
@@ -167,7 +167,7 @@ export function GradeStageCenter({ status }: { status: StrategyStatus }) {
 
   return (
     <div className="m3-page-stack">
-      {status === "GRADE_5" ? <GradeStageExecutionPanel status={status} /> : null}
+      <MockStageTradingSuite status={status} />
       {tower.length > 0 && (
         <TerminalCard title="Strategy Pipeline" subtitle="Grade 5 → Main Engine institutional progression">
           <PromotionTower

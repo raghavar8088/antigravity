@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+import { DEFAULT_MOCK_ACCOUNT_KEY, mockAccountKeySchema } from "@/lib/mockTradingPersistenceTypes";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const accountKey = OWNER_ACCOUNT_KEY;
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const accountKey = mockAccountKeySchema.safeParse(url.searchParams.get("account_key") ?? DEFAULT_MOCK_ACCOUNT_KEY);
+  if (!accountKey.success) {
+    return NextResponse.json(
+      { ok: false, code: "VALIDATION_FAILED", error: "Invalid account_key", details: accountKey.error.flatten() },
+      { status: 400 },
+    );
+  }
 
   if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });
   }
 
   try {
-    const latest = await getLatestMockAccountSnapshot(accountKey);
+    const latest = await getLatestMockAccountSnapshot(accountKey.data);
     return NextResponse.json({
       ok: true,
       snapshot: latest.account,

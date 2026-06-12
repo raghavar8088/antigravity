@@ -321,6 +321,10 @@ export function useMockTradingEngine(
         });
         if (!res.ok) {
           const json = await res.json().catch(() => null) as { error?: string; code?: string } | null;
+          if (mode === "update" && json?.code === "DEPRECATED") {
+            markPersistenceOk();
+            return;
+          }
           markPersistenceError(json?.error ?? `HTTP ${res.status}`, res.status === 503);
           return;
         }
@@ -456,7 +460,13 @@ export function useMockTradingEngine(
           loading: false,
           error: null,
         });
-        if (accountJson.config) setConfigState(normalizeMockTradingConfig(accountJson.config));
+        if (accountJson.config) {
+          setConfigState(
+            pipelineStage
+              ? getMockConfigForPipelineStage(pipelineStage)
+              : normalizeMockTradingConfig(accountJson.config),
+          );
+        }
         setLogs(logsJson.logs.slice(0, LOG_RING_CAP));
         seenTraceIdsRef.current = new Set(merged.map((t) => t.traceId));
         setPersistence({

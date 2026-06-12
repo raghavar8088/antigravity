@@ -3,6 +3,7 @@ import {
   normalizeMockTradingConfig,
   type MockTradingConfig,
 } from "@/lib/mockTradingEngine";
+import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 import type { StrategyStatus } from "./types";
 
 /** Grade 5 discovery — unlimited concurrent positions, no risk gates. */
@@ -22,6 +23,7 @@ export const GRADE_5_DISCOVERY_CONFIG: MockTradingConfig = normalizeMockTradingC
 });
 
 export function mockAccountKeyForStage(status: StrategyStatus): string {
+  if (status === "MAIN_ENGINE") return OWNER_ACCOUNT_KEY;
   return `mock_trading_${status.toLowerCase()}`;
 }
 

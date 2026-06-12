@@ -2,16 +2,13 @@ import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { listMockLogs } from "@/lib/mockTradingMongo";
 import { mockLogListQuerySchema } from "@/lib/mockTradingPersistenceTypes";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const accountKey = OWNER_ACCOUNT_KEY;
-
   const url = new URL(req.url);
   const parsed = mockLogListQuerySchema.safeParse({
-    account_key: accountKey,
+    account_key: url.searchParams.get("account_key") ?? undefined,
     page: url.searchParams.get("page") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
     event: url.searchParams.get("event") ?? undefined,
