@@ -9,7 +9,8 @@ import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/C
 import { StatusChip } from "@/components/ui/StatusChip";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
 import { resolvePageTitle } from "@/lib/commandPaletteItems";
-import { COMMAND_CENTER_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
+import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES, type CommandCenterNavItem } from "@/lib/navRoutes";
 import { NavIcon } from "@/components/terminal/institutional/NavIcons";
 import { pct, px } from "@/components/terminal/institutional/format";
 
@@ -39,9 +40,7 @@ export function M3AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, toggle: toggleTheme } = useThemeToggle();
   const pageTitle = pageTitleProp ?? resolvePageTitle(pathname);
-
-  const tradingNav = COMMAND_CENTER_NAV.filter((i) => i.label === "Mock Trading");
-  const monitorNav = COMMAND_CENTER_NAV.filter((i) => i.label !== "Mock Trading");
+  const pipelineCounts = usePipelineCounts();
 
   return (
     <CommandPaletteProvider>
@@ -58,11 +57,17 @@ export function M3AppShell({
           </div>
           <div className="m3-nav-rail__scroll">
             <div className="m3-nav-section-label">Trading</div>
-            {tradingNav.map((item) => (
-              <ShellNavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
+            {TRADING_NAV.map((item) => (
+              <ShellNavLink
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                count={formatNavCount(pipelineCounts, item.countStatus)}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
             ))}
             <div className="m3-nav-section-label">Monitor</div>
-            {monitorNav.map((item) => (
+            {MONITOR_NAV.map((item) => (
               <ShellNavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setMobileNavOpen(false)} />
             ))}
           </div>
@@ -128,25 +133,32 @@ export function M3AppShell({
 function ShellNavLink({
   item,
   pathname,
+  count,
   onNavigate,
 }: {
-  item: (typeof COMMAND_CENTER_NAV)[number];
+  item: CommandCenterNavItem;
   pathname: string;
+  count?: string;
   onNavigate: () => void;
 }) {
   const active = isNavItemActive(pathname, {
     href: item.href,
-    exactMatch: "exactMatch" in item ? item.exactMatch : false,
+    exactMatch: item.exactMatch ?? false,
   });
+  const labelWithCount = count != null ? `${item.label} (${count})` : item.label;
   return (
     <Link
       href={item.href}
       className={`m3-nav-item ${active ? "m3-nav-item--active" : ""}`}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
+      title={labelWithCount}
     >
       <span className="m3-nav-item__icon"><NavIcon name={item.label} /></span>
-      <span className="m3-nav-item__label">{item.label}</span>
+      <span className="m3-nav-item__label">
+        {item.label}
+        {count != null ? <span className="m3-nav-item__count"> ({count})</span> : null}
+      </span>
     </Link>
   );
 }

@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { COMMAND_CENTER_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
+import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
   badge?: string | number;
+  countStatus?: import("@/lib/strategyAuthority/types").StrategyStatus;
   exactMatch?: boolean;
   routeMatcher?: (pathname: string) => boolean;
 };
@@ -137,26 +139,32 @@ const ICONS: Record<string, React.ReactNode> = {
   Health: <IconHealth />,
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
-  "Mock Trading": <IconResearch />,
+  "Mock Trading Engine": <IconResearch />,
+  "Mock Trading Grade 1": <IconAnalytics />,
+  "Mock Trading Grade 2": <IconAnalytics />,
+  "Mock Trading Grade 3": <IconAnalytics />,
+  "Mock Trading Grade 4": <IconAnalytics />,
+  "Mock Trading Grade 5": <IconAnalytics />,
 };
 
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "Trading",
-    items: COMMAND_CENTER_NAV.filter((item) => item.label === "Mock Trading").map((item) => ({
+    items: TRADING_NAV.map((item) => ({
       href: item.href,
       label: item.label,
       icon: ICONS[item.label] ?? <IconResearch />,
-      exactMatch: "exactMatch" in item ? Boolean(item.exactMatch) : false,
+      exactMatch: item.exactMatch ?? false,
+      countStatus: item.countStatus,
     })),
   },
   {
-    label: "Command Center",
-    items: COMMAND_CENTER_NAV.filter((item) => item.label !== "Mock Trading").map((item) => ({
+    label: "Monitor",
+    items: MONITOR_NAV.map((item) => ({
       href: item.href,
       label: item.label,
       icon: ICONS[item.label] ?? <IconCommand />,
-      exactMatch: "exactMatch" in item ? Boolean(item.exactMatch) : false,
+      exactMatch: item.exactMatch ?? false,
     })),
   },
 ];
@@ -175,6 +183,7 @@ export function Sidebar({
   onNavigate,
 }: SidebarProps) {
   const pathname = usePathname();
+  const pipelineCounts = usePipelineCounts();
 
   return (
     <nav
@@ -206,7 +215,12 @@ export function Sidebar({
                   onClick={onNavigate}
                 >
                   {item.icon}
-                  <span>{item.label}</span>
+                  <span>
+                    {item.label}
+                    {item.countStatus
+                      ? ` (${formatNavCount(pipelineCounts, item.countStatus) ?? ""})`
+                      : ""}
+                  </span>
                   {item.badge != null && (
                     <span className="sidebar-nav-badge">{item.badge}</span>
                   )}

@@ -1,4 +1,10 @@
 type NavIconName =
+  | "Mock Trading Engine"
+  | "Mock Trading Grade 1"
+  | "Mock Trading Grade 2"
+  | "Mock Trading Grade 3"
+  | "Mock Trading Grade 4"
+  | "Mock Trading Grade 5"
   | "Mock Trading"
   | "Command Center"
   | "Execution"
@@ -128,6 +134,25 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
         <svg {...props}>
           <circle cx="10" cy="10" r="2.5" />
           <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M4.6 15.4l1.4-1.4M14 6l1.4-1.4" />
+        </svg>
+      );
+    case "Mock Trading Engine":
+      return (
+        <svg {...props}>
+          <rect x="3" y="4" width="14" height="12" rx="2" />
+          <path d="M7 9h6M7 12h4" />
+          <circle cx="14" cy="7" r="2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "Mock Trading Grade 1":
+    case "Mock Trading Grade 2":
+    case "Mock Trading Grade 3":
+    case "Mock Trading Grade 4":
+    case "Mock Trading Grade 5":
+      return (
+        <svg {...props}>
+          <path d="M4 16l4-8 3 4 5-10" />
+          <path d="M3 16h14" />
         </svg>
       );
     case "Mock Trading":

@@ -322,6 +322,12 @@
   height: 20px;
 }
 
+.m3-nav-item__count {
+  font-weight: 500;
+  color: var(--m3-outline);
+  font-variant-numeric: tabular-nums;
+}
+
 .m3-nav-rail--collapsed .m3-nav-item__label,
 .m3-nav-rail--collapsed .m3-nav-rail__brand-text,
 .m3-nav-rail--collapsed .m3-nav-section-label {

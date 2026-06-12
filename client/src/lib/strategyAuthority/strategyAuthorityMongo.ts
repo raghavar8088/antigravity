@@ -533,6 +533,69 @@ export async function getMainEngineStrategies(): Promise<StrategyWithMetrics[]> 
   return results.sort((a, b) => b.metrics.profitFactor - a.metrics.profitFactor);
 }
 
+export interface StageSummary {
+  status: StrategyStatus;
+  totalStrategies: number;
+  promotionCandidates: number;
+  demotionCandidates: number;
+  avgProfitFactor: number;
+  avgSharpe: number;
+  avgExpectancy: number;
+  avgDrawdown: number;
+}
+
+async function profileToStrategyWithMetrics(
+  d: Db,
+  profile: StrategyProfileDoc
+): Promise<StrategyWithMetrics> {
+  const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+  const status = profile.current_status as StrategyStatus;
+  return {
+    ...profile,
+    metrics,
+    promotionEligible: checkPromotionEligible(metrics, status),
+    demotionRisk: checkDemotionRisk(metrics),
+    retirementCandidate: checkRetirementCandidate(metrics),
+    promotionProgress: computePromotionProgress(metrics, status) as GradePromotionProgress | null,
+  };
+}
+
+/** Full strategy roster for a pipeline stage (MongoDB authority). */
+export async function getStrategiesByStatus(status: StrategyStatus): Promise<{
+  strategies: StrategyWithMetrics[];
+  summary: StageSummary;
+}> {
+  const d = await db();
+  const profiles = d.collection<StrategyProfileDoc>(ISPAP_PROFILES_COLLECTION);
+  const stageProfiles = await profiles.find({ current_status: status }).toArray();
+
+  const strategies: StrategyWithMetrics[] = [];
+  for (const profile of stageProfiles) {
+    strategies.push(await profileToStrategyWithMetrics(d, profile));
+  }
+
+  strategies.sort((a, b) => b.metrics.profitFactor - a.metrics.profitFactor);
+
+  const metricsArr = strategies.map((s) => s.metrics);
+  const n = metricsArr.length;
+  const avg = (fn: (m: StrategyGradeMetrics) => number) =>
+    n ? metricsArr.reduce((a, m) => a + fn(m), 0) / n : 0;
+
+  return {
+    strategies,
+    summary: {
+      status,
+      totalStrategies: strategies.length,
+      promotionCandidates: strategies.filter((s) => s.promotionEligible).length,
+      demotionCandidates: strategies.filter((s) => s.demotionRisk).length,
+      avgProfitFactor: +avg((m) => m.profitFactor).toFixed(3),
+      avgSharpe: +avg((m) => m.sharpeRatio).toFixed(3),
+      avgExpectancy: +avg((m) => m.expectancy).toFixed(2),
+      avgDrawdown: +avg((m) => m.maxDrawdown).toFixed(1),
+    },
+  };
+}
+
 export async function getMigrationStatus(): Promise<{
   migrated: boolean;
   totalInDb: number;
