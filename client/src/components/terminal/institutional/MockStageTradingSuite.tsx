@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import { useMockTradingEngine } from "@/hooks/useMockTradingEngine";
 import {
@@ -25,7 +25,7 @@ const STAGE_LABEL: Record<StrategyStatus, string> = {
   RETIRED: "Retired",
 };
 
-const TABLE_CAP = 100;
+const TABLE_CAP = PAGE_SIZE;
 
 function fmtUsd(value: number) {
   if (!Number.isFinite(value)) return "—";
@@ -74,6 +74,56 @@ function ScoreBar({ score }: { score: number }) {
       <span className="text-[10px] tabular-nums text-zinc-300 w-6 text-right">{Math.round(pct)}</span>
     </div>
   );
+}
+
+const PAGE_SIZE = 100;
+
+function TablePagination({
+  page,
+  total,
+  pageSize,
+  onPageChange,
+}: {
+  page: number;
+  total: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  if (total <= pageSize) return null;
+
+  const start = page * pageSize + 1;
+  const end = Math.min((page + 1) * pageSize, total);
+
+  return (
+    <footer className="m3-data-table__footer mt-3">
+      <span className="text-[10px] text-zinc-500 tabular-nums">
+        Showing {start.toLocaleString()}–{end.toLocaleString()} of {total.toLocaleString()}
+      </span>
+      <div className="m3-data-table__pagination">
+        <button type="button" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
+          Previous
+        </button>
+        <span className="text-[10px] tabular-nums text-zinc-400">
+          Page {page + 1} / {totalPages}
+        </span>
+        <button type="button" disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>
+          Next
+        </button>
+      </div>
+    </footer>
+  );
+}
+
+function paginateTrades(trades: MockTrade[], page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
+  const safePage = Math.min(Math.max(0, page), totalPages - 1);
+  const start = safePage * pageSize;
+  return {
+    page: safePage,
+    totalPages,
+    items: trades.slice(start, start + pageSize),
+  };
 }
 
 function TargetCell({
@@ -261,6 +311,8 @@ function LeaderboardTable({ rows }: { rows: StrategyRankRow[] }) {
 export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
   const label = STAGE_LABEL[status];
   const live = useLiveBTCPrice();
+  const [openPage, setOpenPage] = useState(0);
+  const [closedPage, setClosedPage] = useState(0);
   const engine = useMockTradingEngine({
     price: live.price,
     accountKey: mockAccountKeyForStage(status),
@@ -270,23 +322,42 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
 
   const sourceTrades = engine.portfolioTrades;
 
-  const openTrades = useMemo(
+  const allOpenTrades = useMemo(
     () =>
       [...sourceTrades]
         .filter((t) => t.status === "OPEN")
-        .sort((a, b) => b.openedAt - a.openedAt)
-        .slice(0, TABLE_CAP),
+        .sort((a, b) => b.openedAt - a.openedAt),
     [sourceTrades],
   );
 
-  const closedTrades = useMemo(
+  const allClosedTrades = useMemo(
     () =>
       [...sourceTrades]
         .filter((t) => t.status === "CLOSED")
-        .sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0))
-        .slice(0, TABLE_CAP),
+        .sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0)),
     [sourceTrades],
   );
+
+  const openPaged = useMemo(
+    () => paginateTrades(allOpenTrades, openPage, PAGE_SIZE),
+    [allOpenTrades, openPage],
+  );
+
+  const closedPaged = useMemo(
+    () => paginateTrades(allClosedTrades, closedPage, PAGE_SIZE),
+    [allClosedTrades, closedPage],
+  );
+
+  useEffect(() => {
+    if (openPage !== openPaged.page) setOpenPage(openPaged.page);
+  }, [openPage, openPaged.page]);
+
+  useEffect(() => {
+    if (closedPage !== closedPaged.page) setClosedPage(closedPaged.page);
+  }, [closedPage, closedPaged.page]);
+
+  const openTrades = openPaged.items;
+  const closedTrades = closedPaged.items;
 
   const leaderboard = useMemo(
     () => rankStrategies({ trades: sourceTrades }).rows.slice(0, TABLE_CAP),
@@ -352,23 +423,35 @@ export function MockStageTradingSuite({ status }: { status: StrategyStatus }) {
 
       <TerminalCard
         title="Open Positions"
-        subtitle={`${openTrades.length} open · TP/SL targets in USD · live unrealized PnL`}
+        subtitle={`${allOpenTrades.length.toLocaleString()} open · ${PAGE_SIZE} per page · TP/SL targets in USD`}
       >
         <TradeTable
           trades={openTrades}
           mode="open"
           emptyLabel="No open positions — engine is waiting for executable candidates."
         />
+        <TablePagination
+          page={openPaged.page}
+          total={allOpenTrades.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setOpenPage}
+        />
       </TerminalCard>
 
       <TerminalCard
         title="Closed Trades"
-        subtitle={`${closedTrades.length} recent closes · newest first`}
+        subtitle={`${allClosedTrades.length.toLocaleString()} closed · newest first · ${PAGE_SIZE} per page`}
       >
         <TradeTable
           trades={closedTrades}
           mode="closed"
           emptyLabel="No closed trades yet for this stage account."
+        />
+        <TablePagination
+          page={closedPaged.page}
+          total={allClosedTrades.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setClosedPage}
         />
       </TerminalCard>
 
