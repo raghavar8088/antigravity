@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchBtcSpotPrice } from "@/lib/btcSpotPrice";
 import { isMongoConfigured } from "@/lib/mongoTradesClient";
 import { buildMockStrategyIntelRows } from "@/lib/mockTradingSnapshotService";
 import { listMockTrades, getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
@@ -17,27 +18,12 @@ type RibbonItem = {
   detail?: string;
 };
 
-async function fetchBtcPrice(): Promise<{ price: number; change24h: number } | null> {
-  try {
-    const base = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : `http://127.0.0.1:${process.env.PORT ?? 3000}`;
-    const r = await fetch(`${base}/api/btc/price`, { signal: AbortSignal.timeout(3_000), cache: "no-store" });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!d.ok || !Number.isFinite(d.price)) return null;
-    return { price: d.price, change24h: Number(d.change24h ?? 0) };
-  } catch {
-    return null;
-  }
-}
-
 export async function GET() {
   const accountKey = OWNER_ACCOUNT_KEY;
   const items: RibbonItem[] = [];
   const engineBase = process.env.INTERNAL_API_URL?.trim().replace(/\/$/, "") ?? "http://localhost:8080";
 
-  const btc = await fetchBtcPrice();
+  const btc = await fetchBtcSpotPrice();
   items.push({
     label: "MARKET DATA",
     status: btc ? "GREEN" : "RED",
