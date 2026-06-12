@@ -41,6 +41,8 @@ export type MockTradeDoc = {
   trace_id: string;
   strategy_id: number;
   strategy_name: string;
+  ispap_strategy_id?: string;
+  pipeline_stage?: string;
   strategy_family: string;
   symbol: string;
   side: "BUY" | "SELL";
@@ -329,6 +331,8 @@ export function mockTradeToDoc(
     trace_id: trade.traceId,
     strategy_id: trade.strategyId,
     strategy_name: trade.strategyName,
+    ispap_strategy_id: trade.ispapStrategyId,
+    pipeline_stage: trade.pipelineStage,
     strategy_family: strategyFamilyForTrade(trade),
     symbol: trade.symbol,
     side: trade.side,

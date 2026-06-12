@@ -125,12 +125,19 @@ export async function migrateAllToGrade5(): Promise<{ inserted: number; alreadyE
 /** Compute grade metrics from mock_trades for a given strategy_name. */
 async function computeMetricsForStrategy(
   d: Db,
-  strategyName: string
+  strategyName: string,
+  strategyId?: string,
 ): Promise<StrategyGradeMetrics> {
+  const matchConditions: Record<string, unknown>[] = [{ strategy_name: strategyName }];
+  if (strategyId) {
+    matchConditions.push({ ispap_strategy_id: strategyId });
+    matchConditions.push({ "raw_trade.ispapStrategyId": strategyId });
+  }
+
   const result = await d.collection(MOCK_TRADES_COLLECTION).aggregate([
     {
       $match: {
-        strategy_name: strategyName,
+        $or: matchConditions,
         status: "CLOSED",
       },
     },
@@ -225,7 +232,7 @@ export async function evaluateAndUpdateGrades(): Promise<{
   let retired = 0;
 
   for (const profile of activeProfiles) {
-    const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+    const metrics = await computeMetricsForStrategy(d, profile.strategy_name, profile.strategy_id);
 
     // Retirement check
     if (
@@ -379,7 +386,7 @@ export async function getPipelineState(): Promise<PipelineState> {
     const sample = stageProfiles.slice(0, 20);
     await Promise.all(
       sample.map(async (p) => {
-        const m = await computeMetricsForStrategy(d, p.strategy_name);
+        const m = await computeMetricsForStrategy(d, p.strategy_name, p.strategy_id);
         metricsMap.set(p.strategy_id, m);
       })
     );
@@ -460,7 +467,7 @@ export async function getLeaderboard(limit = 100): Promise<StrategyLeaderboardEn
 
   const entries: StrategyLeaderboardEntry[] = [];
   for (const profile of allProfiles) {
-    const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+    const metrics = await computeMetricsForStrategy(d, profile.strategy_name, profile.strategy_id);
     entries.push({
       rank: 0,
       strategy_id: profile.strategy_id,
@@ -519,7 +526,7 @@ export async function getMainEngineStrategies(): Promise<StrategyWithMetrics[]> 
   const results: StrategyWithMetrics[] = [];
 
   for (const profile of mainProfiles) {
-    const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+    const metrics = await computeMetricsForStrategy(d, profile.strategy_name, profile.strategy_id);
     results.push({
       ...profile,
       metrics,
@@ -548,7 +555,7 @@ async function profileToStrategyWithMetrics(
   d: Db,
   profile: StrategyProfileDoc
 ): Promise<StrategyWithMetrics> {
-  const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+  const metrics = await computeMetricsForStrategy(d, profile.strategy_name, profile.strategy_id);
   const status = profile.current_status as StrategyStatus;
   return {
     ...profile,
@@ -685,7 +692,7 @@ export async function getFamilyIntelligence(): Promise<FamilyIntelligenceRow[]> 
     let sampleCount = 0;
 
     for (const p of activeSample) {
-      const m = await computeMetricsForStrategy(d, p.strategy_name);
+      const m = await computeMetricsForStrategy(d, p.strategy_name, p.strategy_id);
       pfSum += m.profitFactor;
       expSum += m.expectancy;
       wrSum += m.winRate;
@@ -731,7 +738,7 @@ export async function getStrategyDetail(strategyId: string): Promise<StrategyDet
 
   if (!profile) return null;
 
-  const metrics = await computeMetricsForStrategy(d, profile.strategy_name);
+  const metrics = await computeMetricsForStrategy(d, profile.strategy_name, profile.strategy_id);
   const { computeAuthorityScore } = await import("./authorityScore");
   const scoreBreakdown = computeAuthorityScore(metrics, profile.current_status as StrategyStatus);
 

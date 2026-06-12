@@ -69,6 +69,10 @@ export interface StrategySignalTraceRow {
 
   /** Score contributions from the signal builder for debugging. */
   contributions?: Array<{ reason: string; pts: number }>;
+  /** ISPAP catalog slug when the trace row maps to strategy_authority_profiles. */
+  ispapStrategyId?: string;
+  /** Pipeline stage that produced this trace row (Grade 5 discovery, etc.). */
+  pipelineStage?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

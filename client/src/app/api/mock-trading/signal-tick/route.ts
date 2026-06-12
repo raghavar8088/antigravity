@@ -17,6 +17,10 @@ import {
   fetchMockTradingKlines,
   sanitizeMockTradingSymbol,
 } from "@/lib/mockTradingMarketData";
+import { STRATEGY_CATALOG } from "@/lib/strategyAuthority/strategyCatalog";
+import { fanOutGrade5CatalogSignals } from "@/lib/strategyAuthority/grade5CatalogSignals";
+import { capTraceRows, summarizeSignalTrace } from "@/lib/strategySignalTrace";
+import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
@@ -24,19 +28,42 @@ export const maxDuration = 15;
 export async function GET(request: NextRequest): Promise<Response> {
   const url = new URL(request.url);
   const symbol = sanitizeMockTradingSymbol(url.searchParams.get("symbol"));
-  const accountKey = OWNER_ACCOUNT_KEY;
+  const gradeParam = url.searchParams.get("grade")?.trim().toUpperCase() ?? null;
+  const grade = gradeParam === "GRADE_5" ? ("GRADE_5" as StrategyStatus) : null;
+  const accountKey =
+    grade === "GRADE_5"
+      ? url.searchParams.get("account_key")?.trim() || "mock_trading_grade_5"
+      : OWNER_ACCOUNT_KEY;
 
   try {
     const { bars, markPrice } = await fetchMockTradingKlines(symbol);
-    const result = evaluateMockTradingSignals({ bars, markPrice, symbol });
+    const baseResult = evaluateMockTradingSignals({ bars, markPrice, symbol });
+
+    let rows = baseResult.rows;
+    let candidateCount = baseResult.candidateCount;
+    let summary = baseResult.summary;
+
+    if (grade === "GRADE_5") {
+      rows = fanOutGrade5CatalogSignals({
+        catalog: STRATEGY_CATALOG,
+        baseRows: baseResult.rows,
+        tickAt: baseResult.tickAt,
+        symbol: baseResult.symbol,
+        regime: baseResult.regime,
+      });
+      candidateCount = rows.length;
+      summary = summarizeSignalTrace(rows);
+    }
+
+    rows = capTraceRows(rows, grade === "GRADE_5" ? 305 : 500);
 
     if (isMongoConfigured()) {
       await upsertSignalTrace(accountKey, {
-        tickAt: result.tickAt,
+        tickAt: baseResult.tickAt,
         mode: "browser",
-        symbol: result.symbol,
-        summary: result.summary,
-        rows: result.rows,
+        symbol: baseResult.symbol,
+        summary,
+        rows,
       });
     }
 
@@ -44,18 +71,19 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({
       ok: true,
       account_key: accountKey,
+      grade,
       ageSeconds,
-      markPrice: result.markPrice,
-      regime: result.regime,
-      bars: result.bars,
+      markPrice: baseResult.markPrice,
+      regime: baseResult.regime,
+      bars: baseResult.bars,
       minBars: MOCK_TRADING_MIN_BARS,
-      activeStrategies: result.activeStrategies,
-      evaluatedStrategies: result.evaluatedStrategies,
-      candidateCount: result.candidateCount,
-      summary: result.summary,
-      rows: result.rows,
-      error: result.error,
-      fetchedAt: new Date(result.tickAt).toISOString(),
+      activeStrategies: grade === "GRADE_5" ? STRATEGY_CATALOG.length : baseResult.activeStrategies,
+      evaluatedStrategies: baseResult.evaluatedStrategies,
+      candidateCount,
+      summary,
+      rows,
+      error: baseResult.error,
+      fetchedAt: new Date(baseResult.tickAt).toISOString(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "signal tick failed";

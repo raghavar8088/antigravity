@@ -304,6 +304,30 @@ describe("portfolio risk controls", () => {
       now: T0 + 2 * 60_000,
     })).toMatchObject({ allowed: false, code: "DAILY_LOSS" });
   });
+
+  it("allows Grade 5 discovery trades through portfolio risk gates", () => {
+    const longs = [0, 1, 2].map((i) => build({
+      row: traceRow({ traceId: `g5-long-${i}`, strategyId: 900_000 + i, side: "LONG" }),
+    }));
+    const nextLong = build({ row: traceRow({ traceId: "g5-long-next", strategyId: 900_010, side: "LONG" }) });
+    const discoveryConfig = {
+      ...baseConfig,
+      pipelineStage: "GRADE_5",
+      maxOpenMockTrades: 50_000,
+      maxOpenLongTrades: 50_000,
+      tradeCooldownMinutes: 0,
+      dailyLossLimitPct: 0,
+      weeklyLossLimitPct: 0,
+      maxDrawdownPct: 0,
+    };
+
+    expect(evaluateMockTradeOpenRisk({
+      trade: nextLong,
+      existingTrades: longs,
+      config: discoveryConfig,
+      now: T0 + 60_000,
+    })).toMatchObject({ allowed: true });
+  });
 });
 
 // ── Live price movement → equity and unrealized PnL ──────────────────────────

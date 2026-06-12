@@ -14,7 +14,7 @@ import {
   emptyMockRejectionCounts,
   emptyMockTradingDiagnostics,
   evaluateMockTradeOpenRisk,
-  isStrategySignalRaised,
+  isExecutableTraceRow,
   isValidMockTrade,
   logForMockTradeCreated,
   logForMockTradeClosed,
@@ -49,6 +49,8 @@ import {
   type MockLogsResponse,
   type MockTradingHydrateResponse,
 } from "@/lib/mockTradingPersistenceTypes";
+import type { StrategyStatus } from "@/lib/strategyAuthority/types";
+import { getMockConfigForPipelineStage } from "@/lib/strategyAuthority/gradeStageMockConfig";
 import type { StrategySignalTraceRow } from "@/lib/strategySignalTrace";
 
 const TRACE_POLL_MS = 5_000;
@@ -161,6 +163,10 @@ export interface UseMockTradingEngineOptions {
   price: number;
   /** Optional account key to forward to the signal-trace API. */
   accountKey?: string | null;
+  /** ISPAP pipeline stage — enables grade-specific signal-tick and risk config. */
+  pipelineStage?: StrategyStatus | null;
+  /** Optional initial config override (merged via normalizeMockTradingConfig). */
+  initialConfig?: Partial<MockTradingConfig>;
   /** Disable the network poll (used by tests). */
   disablePolling?: boolean;
   /** Disable Mongo persistence/hydration (used by tests). */
@@ -213,15 +219,21 @@ export interface UseMockTradingEngineResult {
 export function useMockTradingEngine(
   opts: UseMockTradingEngineOptions,
 ): UseMockTradingEngineResult {
-  const { price, accountKey, disablePolling = false, disablePersistence = false } = opts;
+  const { price, accountKey, pipelineStage = null, initialConfig, disablePolling = false, disablePersistence = false } = opts;
   const persistenceDisabled = disablePersistence;
   const mockAccountKey = accountKey?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
+  const stageConfig = pipelineStage ? getMockConfigForPipelineStage(pipelineStage) : DEFAULT_MOCK_TRADING_CONFIG;
+  const bootConfig = normalizeMockTradingConfig({
+    ...stageConfig,
+    ...(initialConfig ?? {}),
+    ...(pipelineStage ? { pipelineStage } : {}),
+  });
 
   const [trades, setTrades] = useState<MockTrade[]>([]);
   const [historyTrades, setHistoryTrades] = useState<MockTrade[]>([]);
   const [summaryTrades, setSummaryTrades] = useState<MockTrade[]>([]);
   const [hydratedAccount, setHydratedAccount] = useState<MockAccountState | null>(null);
-  const [config, setConfigState] = useState<MockTradingConfig>(DEFAULT_MOCK_TRADING_CONFIG);
+  const [config, setConfigState] = useState<MockTradingConfig>(bootConfig);
   const [logs, setLogs] = useState<MockTradeLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -484,7 +496,9 @@ export function useMockTradingEngine(
         configRef.current,
       ).equity;
       const delta = diagnosticsDelta();
-      const raisedRows = rows.filter((row) => isStrategySignalRaised(row) && !seenTraceIdsRef.current.has(row.traceId));
+      const raisedRows = rows.filter(
+        (row) => isExecutableTraceRow(row) && !seenTraceIdsRef.current.has(row.traceId),
+      );
       delta.funnel.signalsGenerated += raisedRows.length;
       delta.funnel.confidencePassed += raisedRows.length;
       const rankedRows = raisedRows
@@ -858,6 +872,9 @@ export function useMockTradingEngine(
       try {
         const params = new URLSearchParams();
         params.set("account_key", mockAccountKey);
+        if (pipelineStage === "GRADE_5") {
+          params.set("grade", "GRADE_5");
+        }
         const res = await fetch(`/api/mock-trading/signal-tick?${params.toString()}`);
         const json = (await res.json()) as {
           rows?: StrategySignalTraceRow[];
@@ -888,7 +905,7 @@ export function useMockTradingEngine(
       cancelled = true;
       clearInterval(id);
     };
-  }, [mockAccountKey, disablePolling, ingestTraceRows]);
+  }, [mockAccountKey, disablePolling, ingestTraceRows, pipelineStage]);
 
   // ── Apply price ticks → unrealized PnL and TP/SL ──────────────────────────
   // Disabled when polling is off — the Go engine owns SL/TP execution.
