@@ -18,6 +18,8 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { MongoClient } from "mongodb";
+import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { evaluateAndUpdateGrades } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB = process.env.MONGODB_DB || "loop_trades";
@@ -129,12 +131,23 @@ export async function GET(req: Request): Promise<NextResponse> {
       })),
     });
 
+    // Piggyback ISPAP grade evaluation — no extra cron slot needed (already at 2/2)
+    let isapResult: { promoted: number; demoted: number; retired: number; evaluated: number } | null = null;
+    if (isMongoConfigured()) {
+      try {
+        isapResult = await evaluateAndUpdateGrades();
+      } catch {
+        // Non-fatal — ranking output still valid if ISPAP evaluation fails
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       rankedCount: rankings.length,
       promoted: rankings.filter((r) => r.promoted).map((r) => r.id),
       demoted: rankings.filter((r) => r.demoted).map((r) => r.id),
       windowDays: WINDOW_DAYS,
+      ispap: isapResult ?? { skipped: "MONGO_NOT_CONFIGURED" },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

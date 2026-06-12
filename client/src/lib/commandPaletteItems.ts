@@ -56,6 +56,9 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
 export const PAGE_TITLES: Record<string, string> = {
   [TERMINAL_ROUTES.home]: "Command Center",
   [TERMINAL_ROUTES.execution]: "Execution",
+  [TERMINAL_ROUTES["strategy-authority"]]: "Strategy Authority",
+  [TERMINAL_ROUTES["retired-strategies"]]: "Retired Strategies",
+  [TERMINAL_ROUTES["main-engine"]]: "Main Engine",
   [TERMINAL_ROUTES.strategies]: "Strategies",
   [TERMINAL_ROUTES.portfolio]: "Portfolio",
   [TERMINAL_ROUTES.risk]: "Risk",

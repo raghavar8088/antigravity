@@ -2,6 +2,8 @@ type NavIconName =
   | "Mock Trading"
   | "Command Center"
   | "Execution"
+  | "Strategy Authority"
+  | "Portfolio Intelligence"
   | "Strategies"
   | "Portfolio"
   | "Risk"
@@ -54,6 +56,13 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
           <path d="M15.5 11.5a6 6 0 0 1-8-8 7 7 0 1 0 8 8z" />
         </svg>
       );
+    case "Strategy Authority":
+      return (
+        <svg {...props}>
+          <path d="M10 2l2 4h4l-3 3 1 4-4-2-4 2 1-4L4 6h4z" />
+          <path d="M10 14v4" strokeWidth={1.5} />
+        </svg>
+      );
     case "Execution":
       return (
         <svg {...props}>
@@ -67,6 +76,15 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
         <svg {...props}>
           <circle cx="10" cy="10" r="7" />
           <path d="M10 5v5l3 2" />
+        </svg>
+      );
+    case "Portfolio Intelligence":
+      return (
+        <svg {...props}>
+          <circle cx="10" cy="10" r="7" />
+          <path d="M10 5v5l2.5-2.5" />
+          <path d="M5 13.5h10" />
+          <path d="M7 11.5l3-3 3 3" />
         </svg>
       );
     case "Portfolio":
