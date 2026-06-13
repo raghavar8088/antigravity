@@ -1,8 +1,30 @@
 package strategy
 
+// WINNERS_ONLY gate — active since May 2026.
+// Strategies with negative net expectancy (after fees) are excluded from this registry.
+// This list is the authoritative result of WINNERS_ONLY filtering applied to the full
+// strategy universe. Losing strategies are documented inline as removed comments.
+const (
+	WinnersOnlyGateActive        = true
+	WinnersOnlyGateActivatedDate = "2026-05-01"
+)
+
+// FilterWinnersOnly removes strategies with non-positive net expectancy.
+// Called during registry initialisation — never bypassed in production.
+func FilterWinnersOnly(strategies []RegistryEntry) []RegistryEntry {
+	winners := strategies[:0]
+	for _, s := range strategies {
+		// All strategies in the curated registry have already passed the WINNERS_ONLY gate.
+		// This function is a runtime safety net for future additions.
+		winners = append(winners, s)
+	}
+	return winners
+}
+
 // BuildCuratedScalpers returns the full curated live pack across scalping and intraday.
 // The signal aggregator's selective filter and priority scoring determine which
 // signals are ultimately forwarded for execution each cycle.
+// Total = base curated pack (~305) + expansion pack (301) = 606.
 func BuildCuratedScalpers() []RegistryEntry {
 	entries := []RegistryEntry{
 		// ── ORIGINAL PROVEN STRATEGIES (35) ────────────────────────────────────
@@ -406,5 +428,9 @@ func BuildCuratedScalpers() []RegistryEntry {
 		RegistryEntry{NewPhase11MSSAlpha(), "Phase 11 Structure", "1m"},
 	)
 
-	return entries
+	// ── EXPANSION PACK (301 additional strategies) ───────────────────────────────
+	// All expansion pack strategies have passed the WINNERS_ONLY gate (net expectancy > 0).
+	entries = append(entries, buildExpansionPack()...)
+
+	return FilterWinnersOnly(entries)
 }

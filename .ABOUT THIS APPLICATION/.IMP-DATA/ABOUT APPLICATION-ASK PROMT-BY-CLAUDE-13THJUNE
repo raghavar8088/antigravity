@@ -1,0 +1,480 @@
+You are performing a complete health check on the BTC-PILOT SOVEREIGN 
+algorithmic trading application. This is a read-only audit — do not modify 
+any files, do not fix anything, do not generate new code. 
+
+Your job is to inspect, run checks, and report findings clearly.
+Report every result — pass, fail, missing, or warning — in a structured format
+so the results can be analysed by a senior engineer.
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 1 — PROJECT STRUCTURE VERIFICATION
+════════════════════════════════════════════════════════════════════════════════
+
+Check that every critical file and directory exists.
+For each item: report EXISTS or MISSING.
+
+ENGINE PACKAGES (check engine/internal/{name}/ exists):
+  secrets, dataquality, reconciliationv2, aiscoring, regime, trading,
+  derivatives, orderbook, alpha, kelly, mongopersist, observability,
+  eventstore, montecarlo, calibration, learning, hypothesis, ml,
+  etf, dominance, macro, sentiment, temporal, integration, tracing,
+  killswitch, riskv3, omsv3, execution, strategy, ledger, positions,
+  events, validation, backtest, pms, fundops, research, options,
+  options_selling, performance, reconciliation, live, delta, security
+
+ENGINE COMMANDS (check engine/cmd/{name}/ exists):
+  antigravity, backtest, sep_evidence, perfbench, seed_db
+  archive (should exist)
+  phase22e, phase22f, phase23a, phase23b, phase24, phase25, phase29
+  (these should NOT exist directly in engine/cmd/ — only in engine/cmd/archive/)
+
+KEY ENGINE FILES:
+  engine/cmd/antigravity/main.go
+  engine/internal/trading/loop.go
+  engine/internal/trading/loop_deps.go
+  engine/internal/trading/cycle_guard.go
+  engine/internal/aiscoring/async_scorer.go
+  engine/internal/aiscoring/fallback.go
+  engine/internal/regime/classifier.go
+  engine/internal/regime/strategy_gate.go
+  engine/internal/kelly/kelly.go
+  engine/internal/montecarlo/simulator.go
+  engine/internal/calibration/calibrator.go
+  engine/internal/learning/lesson_generator.go
+  engine/internal/eventstore/writer.go
+  engine/internal/eventstore/reader.go
+  engine/internal/eventstore/validator.go
+  engine/internal/derivatives/funding.go
+  engine/internal/derivatives/oi.go
+  engine/internal/orderbook/depth.go
+  engine/internal/etf/fetcher.go
+  engine/internal/dominance/fetcher.go
+  engine/internal/macro/fetcher.go
+  engine/internal/sentiment/fetcher.go
+  engine/internal/temporal/analyser.go
+  engine/internal/temporal/pattern_builder.go
+  engine/internal/ml/prescorer.go
+  engine/internal/tracing/tracer.go
+  engine/internal/integration/e2e_test.go
+  engine/internal/integration/mocks/mock_ai_client.go
+  engine/internal/integration/mocks/mock_mongo.go
+  engine/internal/integration/mocks/mock_broker.go
+
+INFRASTRUCTURE FILES:
+  infrastructure/systemd/btc-engine.service
+  infrastructure/database/mongodb_ttl_indexes.js
+  infrastructure/terraform/secrets.tf
+  infrastructure/ai/ml_scorer.py
+  infrastructure/ai/sentiment_server.py
+  infrastructure/ai/etf_fetcher.py
+  infrastructure/ai/macro_fetcher.py
+  grafana/prometheus.yml
+  grafana/dashboards/btc_pilot_main.json
+  grafana/dashboards/btc_pilot_alerts.json
+  grafana/docker-compose.grafana.yml
+
+KUBERNETES FILES:
+  infrastructure/kubernetes/namespace.yaml
+  infrastructure/kubernetes/engine-deployment.yaml
+  infrastructure/kubernetes/engine-service.yaml
+  infrastructure/kubernetes/engine-configmap.yaml
+  infrastructure/kubernetes/engine-hpa.yaml
+
+FRONTEND FILES:
+  client/src/components/killswitch/KillSwitchPanel.tsx
+  client/src/components/risk/RiskHUD.tsx
+  client/src/components/session/SessionClock.tsx
+  client/src/hooks/useKillSwitch.ts
+  client/src/types/trading.ts
+  client/src/types/strategy.ts
+  client/src/app/terminal/trading/page.tsx
+  client/src/app/terminal/strategy-ops/page.tsx
+  client/src/app/terminal/backtest/page.tsx
+  client/src/app/mobile/page.tsx
+  client/src/styles/tokens.css
+
+DOCS:
+  docs/UPGRADE_V2_COMPLETION_REPORT.md
+  docs/RUNBOOK.md
+  docs/WIRING_DIAGRAM.md
+
+GITHUB ACTIONS:
+  .github/workflows/deploy.yml
+  .github/workflows/deploy-k8s.yml
+  .github/workflows/dependency-update.yml
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 2 — BUILD CHECKS
+════════════════════════════════════════════════════════════════════════════════
+
+Run each command and report the exact output or "PASS" if zero errors.
+If a command fails, paste the FULL error output — do not truncate.
+
+2.1 Go build — full engine:
+  cd engine && go build ./...
+  Report: PASS or FAIL with full error
+
+2.2 Go vet — full engine:
+  cd engine && go vet ./...
+  Report: PASS or FAIL with full error
+
+2.3 Go build — antigravity only:
+  cd engine && go build ./cmd/antigravity/...
+  Report: PASS or FAIL with full error
+
+2.4 TypeScript type check — full client:
+  cd client && npx tsc --noEmit
+  Report: PASS or FAIL with full error
+
+2.5 Frontend build:
+  cd client && npm run build 2>&1 | tail -20
+  Report: PASS or FAIL with last 20 lines of output
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 3 — TEST RESULTS
+════════════════════════════════════════════════════════════════════════════════
+
+Run each test command and report exact pass/fail counts.
+Never truncate test output — report every failure in full.
+
+3.1 All Go tests:
+  cd engine && go test ./... 2>&1
+  Report: Total tests run, total passed, total failed, total skipped
+  List any FAIL lines with their full error messages
+
+3.2 Integration tests specifically:
+  cd engine && go test ./internal/integration/... -v 2>&1
+  Report: Each test name and PASS/FAIL/SKIP
+
+3.3 Monte Carlo benchmark:
+  cd engine && go test -bench=BenchmarkMonteCarlo -benchtime=3s ./internal/montecarlo/... 2>&1
+  Report: ns/op value. Flag if > 100,000,000 ns/op (100ms threshold)
+
+3.4 Race condition check on critical packages:
+  cd engine && go test -race ./internal/trading/... ./internal/aiscoring/... ./internal/kelly/... 2>&1
+  Report: PASS or FAIL with any race condition details
+
+3.5 Data quality package tests:
+  cd engine && go test -v ./internal/dataquality/... 2>&1
+  Report: Each test name and result
+
+3.6 Kelly package tests:
+  cd engine && go test -v ./internal/kelly/... 2>&1
+  Report: Each test name and result, especially the hard ceiling test
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 4 — WIRING VERIFICATION
+════════════════════════════════════════════════════════════════════════════════
+
+Read the following files and verify specific wiring exists.
+For each check: report WIRED, MISSING, or PARTIAL with the relevant line(s).
+
+4.1 — main.go startup sequence
+Read: engine/cmd/antigravity/main.go
+Check for presence of each wiring call (WIRED or MISSING):
+  [ ] secrets.NewSecretClient(
+  [ ] mongopersist.EnsureIndexes(
+  [ ] dataquality.NewValidator(
+  [ ] reconciliationv2.ReconcileOnRestart(
+  [ ] regime.NewClassifier(
+  [ ] regime.NewStrategyGate(
+  [ ] aiscoring.NewAsyncScorer(
+  [ ] aiscoring.NewFallbackScorer(
+  [ ] trading.NewCycleGuard(
+  [ ] derivatives.NewFundingFetcher(
+  [ ] derivatives.NewOIFetcher(
+  [ ] orderbook.NewDepthSubscriber(
+  [ ] tracing.InitTracer(
+  [ ] etf.NewETFFetcher(          (or similar — may be named differently)
+  [ ] dominance.NewDominanceFetcher(
+  [ ] macro.NewMacroFetcher(
+  [ ] sentiment.NewSentimentFetcher(
+  [ ] temporal.NewTemporalAnalyser(
+  [ ] calibration.LoadLatest(
+  [ ] learning.NewLessonGenerator(
+  [ ] eventstore.NewEventWriter(
+  [ ] ml.NewMLPrescorer(
+
+4.2 — LoopDeps struct
+Read: engine/internal/trading/loop_deps.go
+Check for presence of each field (PRESENT or MISSING):
+  [ ] DataValidator
+  [ ] AsyncScorer
+  [ ] FallbackScorer
+  [ ] RegimeClassifier
+  [ ] StrategyGate
+  [ ] CycleGuard
+  [ ] FundingFetcher
+  [ ] OIFetcher
+  [ ] DepthSubscriber
+  [ ] Ledger
+  [ ] ETFFetcher      (or equivalent)
+  [ ] DominanceFetcher
+  [ ] MacroFetcher
+  [ ] SentimentFetcher
+  [ ] TemporalAnalyser
+  [ ] CalibrationResult (or Calibrator)
+  [ ] LessonGenerator
+  [ ] EventStore
+  [ ] MLPrescorer
+
+4.3 — loop.go critical changes
+Read: engine/internal/trading/loop.go
+Check for presence of each block (PRESENT or MISSING):
+
+  Change A — data quality gate:
+  [ ] ValidateCandle( appears in loop.go
+  [ ] ActionHalt case handled (kill switch activation)
+  [ ] ActionProceedReduced case handled (50% size modifier)
+  [ ] ActionSkipCandle case handled (continue to next tick)
+
+  Change B — regime + microstructure collection:
+  [ ] RegimeClassifier.Classify( appears
+  [ ] AllowNewEntries check (early return for HIGH_VOLATILITY)
+  [ ] StrategyGate.GetActiveStrategies( appears
+  [ ] FundingFetcher.GetLatest( appears
+  [ ] OIFetcher.GetLatest( appears
+  [ ] DepthSubscriber.GetLatestAnalysis( appears
+  [ ] ETFScore or etfScore collected
+  [ ] DominanceScore or domScore collected
+  [ ] MacroScore or macScore collected
+  [ ] SentimentScore or sentScore collected
+  [ ] TemporalAnalyser.Analyse( appears
+
+  Change C — per-signal evaluation:
+  [ ] StrategyGate.IsStrategyAllowed( appears
+  [ ] AsyncScorer.GetCachedScore( appears
+  [ ] ApplyMicrostructureWeight( appears
+  [ ] montecarlo.Simulate( appears
+  [ ] kelly.Compute( appears
+  [ ] calibration.Apply( appears (may be inside scorer)
+  [ ] RiskGate.Submit( or equivalent execution call
+
+  Change D — pre-scoring goroutine:
+  [ ] AsyncScorer.SubmitForScoring( appears in a goroutine with ticker
+
+4.4 — Prometheus metrics registration
+Read: engine/internal/observability/metrics.go (or wherever metrics are registered)
+Count the total number of metric definitions.
+List any of these that are MISSING:
+  btc_data_quality_score, btc_data_quality_halts_total
+  btc_regime, btc_regime_position_mult
+  btc_strategy_gate_active, btc_strategy_gate_filtered_total
+  btc_ai_cache_hits_total, btc_ai_cache_misses_total, btc_ai_fallback_total
+  btc_cycle_overlaps_total, btc_cycle_duration_ms
+  btc_funding_rate, btc_funding_score
+  btc_oi_usd, btc_oi_score
+  btc_orderbook_imbalance, btc_orderbook_score
+  btc_kelly_raw, btc_kelly_final, btc_kelly_constrained_total
+  btc_montecarlo_blocked_total, btc_montecarlo_expected_value, btc_montecarlo_prob_sl
+  btc_calibration_factor, btc_calibration_trades_analysed
+  btc_eventstore_events_written_total, btc_eventstore_write_errors_total
+  btc_ml_blocked_total, btc_ml_available
+  btc_reconciliation_restart_duration_ms, btc_reconciliation_closures_total
+  btc_secrets_resolutions_total
+
+4.5 — kill switch safety
+Read: engine/internal/killswitch/ directory
+Verify:
+  [ ] Kill switch package exists and is non-empty
+  [ ] main.go calls killswitch in at least one place
+  [ ] loop.go references kill switch (for data quality HALT)
+  [ ] Kill switch was NOT modified in any upgrade (compare function signatures to original)
+
+4.6 — WINNERS_ONLY gate
+Read: engine/internal/strategy/curated_registry.go
+Verify:
+  [ ] WINNERS_ONLY or winners_only logic exists in the file
+  [ ] File was NOT structurally reorganised (still one file, not split)
+  [ ] Strategy gate in engine/internal/regime/strategy_gate.go
+      does NOT modify the registry — only reads from it
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 5 — CONFIGURATION VERIFICATION
+════════════════════════════════════════════════════════════════════════════════
+
+5.1 — Environment variables
+Check engine/cmd/antigravity/main.go or config files for these env var reads.
+Report PRESENT or MISSING for each:
+  LOCAL_SECRETS, AWS_REGION
+  SQLITE_ENABLED
+  OTEL_ENABLED, OTEL_JAEGER_ENDPOINT
+  ML_SCORER_ENDPOINT
+  DATABASE_URL (for PostgreSQL event store)
+  MONGODB_URI (or read via Secrets Manager)
+  MAX_POSITION_BTC, MAX_DAILY_LOSS_PCT
+
+5.2 — SQLite disabled in production
+Read: engine/internal/persistence/store.go
+Verify:
+  [ ] SQLITE_ENABLED env var is read
+  [ ] When false: SQLite is not opened (ErrDisabled or early return)
+  [ ] Report the exact lines that implement this guard
+
+5.3 — K8s ConfigMap
+Read: infrastructure/kubernetes/engine-configmap.yaml
+Verify:
+  [ ] SQLITE_ENABLED: "false" is present
+  [ ] OTEL_ENABLED is present
+  [ ] LOCAL_SECRETS: "false" is present
+  [ ] No secrets in the ConfigMap (secrets should be in K8s Secret, not ConfigMap)
+
+5.4 — Systemd service file
+Read: infrastructure/systemd/btc-engine.service
+Verify:
+  [ ] Restart=always is set
+  [ ] RestartSec=5 is set
+  [ ] KillMode=mixed is set
+  [ ] TimeoutStopSec=30 (or similar) is set
+  [ ] EnvironmentFile line is present
+  [ ] ExecStart points to a real binary path (not a placeholder)
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 6 — SECURITY CHECKS
+════════════════════════════════════════════════════════════════════════════════
+
+6.1 — No secrets in source code
+Run: grep -r "TOTP\|api_key\|api_secret\|jwt_secret\|mongodb://.*:.*@" \
+  engine/ client/ infrastructure/ \
+  --include="*.go" --include="*.ts" --include="*.tsx" --include="*.py" \
+  --include="*.yaml" --include="*.yml" --include="*.json" \
+  -l 2>/dev/null | grep -v ".env" | grep -v "test" | grep -v "mock"
+Report: any files found (should be NONE)
+
+6.2 — .env files not committed
+Run: git ls-files | grep "\.env$"
+Report: any .env files tracked by git (should be NONE)
+
+6.3 — Mutex copy check (the bug that was fixed)
+Run: cd engine && go vet ./... 2>&1 | grep -i "mutex\|lock\|copy"
+Report: any mutex-related vet warnings (should be NONE after the fix)
+
+6.4 — govulncheck (if installed)
+Run: cd engine && govulncheck ./... 2>&1 | head -30
+Report: any HIGH or CRITICAL vulnerabilities found
+If govulncheck not installed: report "NOT INSTALLED — add to CI"
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 7 — FRONTEND SPECIFIC CHECKS
+════════════════════════════════════════════════════════════════════════════════
+
+7.1 — lib directory structure
+Run: ls client/src/lib/
+Report: the exact list of items. Should be ONLY sub-folders:
+  trading/ risk/ ai/ broker/ analytics/ portfolio/ utils/
+  Report any .ts or .tsx files directly in lib/ root (should be NONE)
+
+7.2 — lib file count
+Run: find client/src/lib -name "*.ts" -o -name "*.tsx" | wc -l
+Run: find client/src/lib -maxdepth 1 -name "*.ts" -o -name "*.tsx" | wc -l
+Report: total files in lib, files directly in lib root (should be 0)
+
+7.3 — Mobile emergency page
+Read: client/src/app/mobile/page.tsx
+Verify:
+  [ ] HALT ALL button exists
+  [ ] Button has a large touch target (min 64px or 72px height referenced)
+  [ ] useKillSwitch hook is used
+  [ ] Page is marked as 375px-optimised (meta viewport or comment)
+
+7.4 — Kill switch hook
+Read: client/src/hooks/useKillSwitch.ts
+Verify:
+  [ ] Polling interval is 2 seconds or less
+  [ ] trigger() function calls /api/killswitch/trigger
+  [ ] resume() function calls /api/killswitch/resume
+  [ ] Status polling calls /api/killswitch/status
+
+7.5 — API routes exist
+Check these route files exist:
+  client/src/app/api/killswitch/status/route.ts
+  client/src/app/api/killswitch/trigger/route.ts
+  client/src/app/api/killswitch/resume/route.ts
+  client/src/app/api/trading/orders/route.ts
+  client/src/app/api/trading/positions/route.ts
+  client/src/app/api/strategies/route.ts
+  client/src/app/api/risk/summary/route.ts
+  client/src/app/api/backtest/run/route.ts
+  client/src/app/api/backtest/status/[jobId]/route.ts
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 8 — PACKAGE COMPLETENESS SPOT CHECK
+════════════════════════════════════════════════════════════════════════════════
+
+For each package below, read the main file and report:
+  STATUS: COMPLETE (has real implementation) or STUB (empty / pass-through)
+  KEY FUNCTIONS: list the exported function names found
+  HAS TESTS: YES or NO (check if _test.go exists)
+
+Packages to spot-check:
+  engine/internal/montecarlo/   — read simulator.go
+  engine/internal/calibration/  — read calibrator.go
+  engine/internal/learning/     — read lesson_generator.go
+  engine/internal/hypothesis/   — read tracker.go (may not exist)
+  engine/internal/etf/          — read fetcher.go
+  engine/internal/dominance/    — read fetcher.go
+  engine/internal/macro/        — read fetcher.go
+  engine/internal/sentiment/    — read fetcher.go
+  engine/internal/temporal/     — read analyser.go
+  engine/internal/ml/           — read prescorer.go
+  engine/internal/eventstore/   — read writer.go
+  engine/internal/tracing/      — read tracer.go
+  engine/internal/secrets/      — read client.go
+  engine/internal/dataquality/  — read validator.go
+  engine/internal/kelly/        — read kelly.go
+  engine/internal/aiscoring/    — read async_scorer.go
+  engine/internal/regime/       — read classifier.go
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 9 — FINAL SUMMARY
+════════════════════════════════════════════════════════════════════════════════
+
+After completing all checks, produce this exact summary format:
+
+BUILD STATUS:
+  Go build:        [PASS / FAIL]
+  Go vet:          [PASS / FAIL]
+  TypeScript:      [PASS / FAIL]
+  Frontend build:  [PASS / FAIL]
+
+TEST STATUS:
+  Total tests run:    [N]
+  Total passing:      [N]
+  Total failing:      [N]
+  Integration tests:  [N pass / N fail]
+  Race conditions:    [NONE / list]
+
+WIRING STATUS:
+  main.go wiring calls:   [N of 22 present]
+  LoopDeps fields:        [N of 19 present]
+  loop.go Change A:       [N of 4 present]
+  loop.go Change B:       [N of 11 present]
+  loop.go Change C:       [N of 7 present]
+  loop.go Change D:       [PRESENT / MISSING]
+
+PACKAGE STATUS:
+  Complete implementations:  [list package names]
+  Stubs / empty:             [list package names]
+  Missing entirely:          [list package names]
+
+SECURITY:
+  Secrets in source:   [NONE / list files]
+  .env committed:      [NONE / list]
+  Mutex vet warnings:  [NONE / list]
+  Known CVEs:          [NONE / list / NOT CHECKED]
+
+METRICS COUNT:
+  Total Prometheus metrics registered: [N]
+  Missing from expected list:          [list any missing]
+
+CRITICAL ISSUES: (anything that would prevent the engine from starting or trading)
+  [list each critical issue found, or "NONE"]
+
+WARNINGS: (things that are wrong but non-fatal)
+  [list each warning found, or "NONE"]
+
+MISSING FEATURES: (things from the upgrade plan that appear not to be built)
+  [list each missing feature found, or "NONE"]
+
+OVERALL HEALTH: [HEALTHY / DEGRADED / CRITICAL]
+  One sentence summary of the application's current state.

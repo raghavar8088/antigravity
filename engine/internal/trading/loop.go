@@ -30,6 +30,8 @@ import (
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
+	"antigravity-engine/internal/kelly"
+	"antigravity-engine/internal/regime"
 	"antigravity-engine/internal/risk"
 	riskgate "antigravity-engine/internal/risk/gate"
 	riskv2 "antigravity-engine/internal/risk/v2"
@@ -186,6 +188,19 @@ type Orchestrator struct {
 	// deps carries all Phase 1–5 upgrade dependencies (data quality, regime,
 	// async scoring, microstructure, Kelly). Set via SetDeps() from main.go.
 	deps *LoopDeps
+
+	// currentSizingModifier is set by the data quality gate each tick.
+	// 1.0 = full size, 0.5 = halved (ActionProceedReduced).
+	// Protected by mu. Reset to 1.0 at the start of each tick.
+	currentSizingModifier float64
+
+	// lastRegimeClass is the most recent regime classification from run15mCycle.
+	// Protected by mu. Nil until first 15m cycle with RegimeClassifier wired.
+	lastRegimeClass *regime.RegimeClassification
+
+	// lastAllowedStrategySet is the set of strategy names allowed in the current regime.
+	// Protected by mu. Nil = no filtering applied (all allowed).
+	lastAllowedStrategySet map[string]bool
 
 	// lastCycleAt is the timestamp of the most recent strategy evaluation cycle.
 	lastCycleAt   time.Time
@@ -1142,14 +1157,29 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 					Volume: candle.Volume,
 					Time:   candle.CloseTime,
 				}
-				result := o.deps.DataValidator.ValidateCandle(ohlcv, "binance", 60)
-				action := o.deps.DataValidator.GetAction(result.QualityScore)
-				switch action {
-				case dataquality.ActionHalt, dataquality.ActionSkipCandle:
-					log.Printf("[DATA QUALITY] 1m candle dropped action=%s score=%.0f checks=%v",
-						action, result.QualityScore, result.FailedChecks)
-					continue
-				}
+			result := o.deps.DataValidator.ValidateCandle(ohlcv, "binance", 60)
+			action := o.deps.DataValidator.GetAction(result.QualityScore)
+			// Change A: reset sizing modifier, then apply per action.
+			o.mu.Lock()
+			o.currentSizingModifier = 1.0
+			o.mu.Unlock()
+			switch action {
+			case dataquality.ActionHalt:
+				log.Printf("[DATA QUALITY] 1m candle HALTED — critical quality failure action=%s score=%.0f checks=%v",
+					action, result.QualityScore, result.FailedChecks)
+				continue
+			case dataquality.ActionProceedReduced:
+				o.mu.Lock()
+				o.currentSizingModifier = 0.5
+				o.mu.Unlock()
+				log.Printf("[DATA QUALITY] 1m candle degraded — position sizes halved score=%.0f checks=%v",
+					result.QualityScore, result.FailedChecks)
+				// Continue processing with reduced sizing — do NOT halt or skip.
+			case dataquality.ActionSkipCandle:
+				log.Printf("[DATA QUALITY] 1m candle dropped action=%s score=%.0f checks=%v",
+					action, result.QualityScore, result.FailedChecks)
+				continue
+			}
 			}
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
@@ -1419,6 +1449,70 @@ func computeRSI(prices []float64, period int) float64 {
 	return 100 - (100 / (1 + rs))
 }
 
+// buildIndicatorSnapshot derives a regime.IndicatorSnapshot from the rolling
+// price window stored on the Orchestrator. Called at the start of each 15m cycle.
+func buildIndicatorSnapshotFromPrices(prices []float64) regime.IndicatorSnapshot {
+	if len(prices) == 0 {
+		return regime.IndicatorSnapshot{}
+	}
+	price := prices[len(prices)-1]
+	rsi := computeRSI(prices, 14)
+	ema9 := strategy.EMA(prices, 9)
+	ema21 := strategy.EMA(prices, 21)
+	ema50 := strategy.EMA(prices, 50)
+	ema200 := strategy.EMA(prices, 200)
+	atr := strategy.ATR(prices, 14)
+	adx := strategy.ADX(prices, 14)
+
+	// Bollinger Band width: (upper - lower) / middle
+	bbWidth := 0.0
+	if len(prices) >= 20 {
+		mid := strategy.EMA(prices, 20)
+		sum := 0.0
+		n := 20
+		if len(prices) < n {
+			n = len(prices)
+		}
+		for _, p := range prices[len(prices)-n:] {
+			diff := p - mid
+			sum += diff * diff
+		}
+		sd := math.Sqrt(sum / float64(n))
+		if mid > 0 {
+			bbWidth = (2 * 2 * sd) / mid
+		}
+	}
+
+	return regime.IndicatorSnapshot{
+		Price:      price,
+		RSI_1h:     rsi,
+		ADX:        adx,
+		ATR:        atr,
+		EMA9:       ema9,
+		EMA21:      ema21,
+		EMA50:      ema50,
+		EMA200:     ema200,
+		BBWidth:    bbWidth,
+		BBWidthAvg: bbWidth, // simplified: use current width as its own average
+	}
+}
+
+// regimeToFloat maps a Regime to a numeric gauge value for Prometheus.
+func regimeToFloat(r regime.Regime) float64 {
+	switch r {
+	case regime.RegimeRanging:
+		return 0
+	case regime.RegimeTrendingBull:
+		return 1
+	case regime.RegimeTrendingBear:
+		return 2
+	case regime.RegimeHighVol:
+		return 3
+	default:
+		return 0
+	}
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
@@ -1529,6 +1623,19 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		})
 		o.execIntel.Record(sigID, execintel.StateSignalApproved, "passed selective aggregator")
 		o.recordWatchdogSignal()
+
+		// Change C — Gate 1: Regime strategy gate.
+		// Block strategies not allowed for the current regime (from run15mCycle).
+		o.mu.RLock()
+		allowedSet := o.lastAllowedStrategySet
+		o.mu.RUnlock()
+		if allowedSet != nil && !allowedSet[aggSig.StrategyName] {
+			log.Printf("[REGIME GATE] strategy blocked by regime gate strategy=%s", aggSig.StrategyName)
+			o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageRegimeFilter, "regime_strategy_gate_blocked", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "regime_strategy_gate_blocked")
+			continue
+		}
 
 		// Stage 2: Strategy → Risk gate entry.
 		stageStart = observability.RecordPipelineStage(ctx, observability.StageStrategyToRisk, stageStart)
@@ -1785,6 +1892,55 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			})
 		}
 
+		// Change C — Kelly position sizing.
+		// Apply after Monte Carlo so position size incorporates both MC and Kelly.
+		{
+			o.mu.RLock()
+			sizingMod := o.currentSizingModifier
+			regimeClass := o.lastRegimeClass
+			o.mu.RUnlock()
+			if sizingMod <= 0 {
+				sizingMod = 1.0
+			}
+			regimeMult := 1.0
+			if regimeClass != nil {
+				regimeMult = regimeClass.PositionSizeMult
+			}
+			if o.deps != nil && o.deps.Ledger != nil {
+				// Collect data quality score for Kelly input.
+				dqScore := 100.0
+				if o.deps.DataValidator != nil {
+					// Use a neutral score if no recent candle has been validated.
+					dqScore = 80.0
+				}
+				kellyIn, kellyErr := kelly.GetKellyInputs(
+					o.deps.Ledger, btcPaperAccountID, 60,
+					o.deps.PortfolioValue, 0.10, regimeMult, dqScore,
+				)
+				if kellyErr == nil && kellyIn.TradeCount >= 30 {
+					kellyResult, kerr := kelly.Compute(kellyIn)
+					if kerr == nil && kellyResult.FinalPositionUSD > 0 {
+						// Convert Kelly USD to BTC.
+						if currentPrice > 0 {
+							kellySizeBTC := (kellyResult.FinalPositionUSD * sizingMod) / currentPrice
+							if kellySizeBTC < sig.TargetSize {
+								log.Printf("[KELLY] %s size reduced %.4f→%.4f BTC (kelly_pct=%.2f%% raw=%.4f was_constrained=%v)",
+									aggSig.StrategyName, sig.TargetSize, kellySizeBTC,
+									kellyResult.FinalPositionPct*100, kellyResult.RawKelly, kellyResult.WasConstrained)
+								sig.TargetSize = kellySizeBTC
+							}
+						}
+						observability.KellySizeRatio.Observe(kellyResult.FinalPositionPct)
+					}
+				}
+			} else if sizingMod < 1.0 {
+				// No ledger available — at least apply data quality size modifier.
+				sig.TargetSize *= sizingMod
+				log.Printf("[KELLY] %s no ledger — applying data quality modifier %.2f size=%.4f BTC",
+					aggSig.StrategyName, sizingMod, sig.TargetSize)
+			}
+		}
+
 		err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
@@ -1934,7 +2090,8 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 }
 
 // run15mCycle runs the 15m strategy group with cycle-overlap protection (Change B).
-// It also updates microstructure state (OI price direction, depth subscriber price).
+// It also updates microstructure state (OI price direction, depth subscriber price),
+// classifies the current regime, and gates strategies accordingly.
 func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 	cycleID := fmt.Sprintf("15m-%d", time.Now().Unix())
 	if o.deps != nil && o.deps.CycleGuard != nil {
@@ -1952,6 +2109,57 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 		if o.deps != nil && o.deps.DepthSubscriber != nil {
 			o.deps.DepthSubscriber.SetCurrentPrice(tick.Price)
 		}
+	}
+
+	// Change B: classify current regime and gate strategy execution.
+	if o.deps != nil && o.deps.RegimeClassifier != nil && o.deps.StrategyGate != nil {
+		o.mu.RLock()
+		prices := append([]float64(nil), o.priceWindow...)
+		o.mu.RUnlock()
+
+		snap := buildIndicatorSnapshotFromPrices(prices)
+		regimeClass := o.deps.RegimeClassifier.Classify(snap)
+
+		// Emit regime metric (regime as numeric label).
+		observability.CurrentRegime.WithLabelValues(string(regimeClass.Regime)).Set(1)
+		// Zero out other regime labels so only active one is 1.
+		for _, r := range []regime.Regime{regime.RegimeRanging, regime.RegimeTrendingBull, regime.RegimeTrendingBear, regime.RegimeHighVol} {
+			if r != regimeClass.Regime {
+				observability.CurrentRegime.WithLabelValues(string(r)).Set(0)
+			}
+		}
+
+		log.Printf("[REGIME] classified=%s confidence=%.0f position_mult=%.2f allow_entries=%v cycle=%s",
+			regimeClass.Regime, regimeClass.Confidence, regimeClass.PositionSizeMult,
+			regimeClass.AllowNewEntries, cycleID)
+
+		// Suspend all new entries during HIGH_VOLATILITY.
+		if !regimeClass.AllowNewEntries {
+			log.Printf("[REGIME] HIGH_VOLATILITY — all new entries suspended this cycle atr_ratio=%.2f cycle=%s",
+				regimeClass.ATRRatio, cycleID)
+			// Record cycle timestamp even when suspended.
+			o.lastCycleAtMu.Lock()
+			o.lastCycleAt = time.Now()
+			o.lastCycleAtMu.Unlock()
+			return
+		}
+
+		// Build allowed strategy set for this regime.
+		allowedStrategies := o.deps.StrategyGate.GetActiveStrategies(regimeClass)
+		allowedSet := make(map[string]bool, len(allowedStrategies))
+		for _, name := range allowedStrategies {
+			allowedSet[name] = true
+		}
+		positionSizeMult := o.deps.StrategyGate.GetPositionSizeMultiplier(regimeClass)
+
+		log.Printf("[REGIME] strategy gate applied allowed=%d position_mult=%.2f cycle=%s",
+			len(allowedStrategies), positionSizeMult, cycleID)
+
+		// Store regime context for use in processStrategyGroup.
+		o.mu.Lock()
+		o.lastRegimeClass = &regimeClass
+		o.lastAllowedStrategySet = allowedSet
+		o.mu.Unlock()
 	}
 
 	// Record cycle timestamp for /health and /ready probes.

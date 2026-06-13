@@ -122,6 +122,27 @@ func shouldAutoReleaseReconFalsePositive(reason string) bool {
 	return false
 }
 
+// RestoreStateOnStartup checks the ledger for a persisted kill switch activation
+// from a previous session. If found and not auto-released, the engine starts HALTED.
+// Returns true if the kill switch was restored as active (engine will start halted).
+// Call this BEFORE starting the trading loop.
+func (s *Service) RestoreStateOnStartup(ctx context.Context) bool {
+	if err := s.RestoreFromLedger(ctx); err != nil {
+		log.Printf("[KILL SWITCH] RestoreStateOnStartup: failed to restore from ledger: %v — starting normally", err)
+		return false
+	}
+	s.mu.RLock()
+	active := s.active
+	reason := s.reason
+	s.mu.RUnlock()
+	if active {
+		log.Printf("[KILL SWITCH] ⚠️  RESTORED HALTED STATE from previous session reason=%q action_required='POST /api/admin/ks/release to resume trading'", reason)
+	} else {
+		log.Printf("[KILL SWITCH] no persisted activation found — starting normally")
+	}
+	return active
+}
+
 func (s *Service) IsActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

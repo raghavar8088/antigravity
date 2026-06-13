@@ -55,6 +55,7 @@ import (
 	"antigravity-engine/internal/learning"
 	"antigravity-engine/internal/ml"
 	"antigravity-engine/internal/sentiment"
+	"antigravity-engine/internal/tracing"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/temporal"
@@ -415,6 +416,26 @@ func main() {
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	loadDotEnv()
+
+	// Log key env config at startup so misconfiguration is immediately visible.
+	log.Printf("[CONFIG] SQLITE_ENABLED=%s OTEL_ENABLED=%s ML_SCORER_ENDPOINT=%s MAX_POSITION_BTC=%s MAX_DAILY_LOSS_PCT=%s",
+		os.Getenv("SQLITE_ENABLED"),
+		os.Getenv("OTEL_ENABLED"),
+		os.Getenv("ML_SCORER_ENDPOINT"),
+		os.Getenv("MAX_POSITION_BTC"),
+		os.Getenv("MAX_DAILY_LOSS_PCT"),
+	)
+
+	// Initialise distributed tracing — must be first after env load.
+	tracingCfg := tracing.ConfigFromEnv()
+	tracingShutdown, tracingErr := tracing.InitTracer(tracingCfg)
+	if tracingErr != nil {
+		log.Printf("[TRACING] ⚠️  OpenTelemetry initialisation failed — continuing without traces: %v", tracingErr)
+	} else {
+		defer tracingShutdown()
+		log.Printf("[TRACING] ✅ OpenTelemetry tracer initialised jaeger_endpoint=%s enabled=%v",
+			tracingCfg.JaegerEndpoint, tracingCfg.Enabled)
+	}
 
 	// ── Wiring 1: AWS Secrets Manager (Phase 5) ──────────────────────────────
 	// When USE_LOCAL_SECRETS=true (dev) or AWS is unavailable, falls back to env vars.
@@ -828,8 +849,10 @@ func main() {
 	}
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
-	if err := ksSvc.RestoreFromLedger(ctx); err != nil {
-		log.Printf("[KILL SWITCH] ⚠️  ledger restore failed: %v", err)
+	wasHalted := ksSvc.RestoreStateOnStartup(ctx)
+	if wasHalted {
+		log.Printf("[KILL SWITCH] ⚠️  engine starting in HALTED state — kill switch was active from prior session")
+		log.Printf("[KILL SWITCH] ⚠️  action: POST /api/admin/ks/release with body {confirm:RESUME} to resume trading")
 	}
 	orchestrator.SetKillSwitch(ksSvc)
 	orchestrator.SetEventLedger(ksLedger)
@@ -997,8 +1020,8 @@ func main() {
 	// Wiring 5: regime classifier, strategy gate, cycle guard, async scorer
 	regimeClassifier := regime.NewClassifier()
 	strategyGate := regime.NewStrategyGate(regimeClassifier, &strategyNamesAdapter{strategies: allStrategies})
-	cycleGuard := &trading.CycleGuard{}
-	fallbackScorer := &aiscoring.FallbackScorer{}
+	cycleGuard := trading.NewCycleGuard()
+	fallbackScorer := aiscoring.NewFallbackScorer()
 	asyncScorer := aiscoring.NewAsyncScorer(nil, 3) // no AI client; uses fallback scorer internally
 	asyncScorer.Start()
 

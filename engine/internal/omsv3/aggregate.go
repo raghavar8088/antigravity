@@ -15,6 +15,7 @@ const (
 	StateValidated       OrderState = "VALIDATED"
 	StateRiskApproved    OrderState = "RISK_APPROVED"
 	StateSubmitted       OrderState = "SUBMITTED"
+	StateAccepted        OrderState = "ACCEPTED"  // broker confirmed receipt (ORDER_ACCEPTED event)
 	StateAcknowledged    OrderState = "ACKNOWLEDGED"
 	StatePartiallyFilled OrderState = "PARTIALLY_FILLED"
 	StateFilled          OrderState = "FILLED"
@@ -29,7 +30,10 @@ var transitions = map[OrderState][]OrderState{
 	StateNew:             {StateValidated, StateCancelled, StateRejected},
 	StateValidated:       {StateRiskApproved, StateCancelled, StateRejected},
 	StateRiskApproved:    {StateSubmitted, StateCancelled, StateRejected},
-	StateSubmitted:       {StateAcknowledged, StateCancelled, StateRejected},
+	// SUBMITTED can go to ACCEPTED (broker confirmed) or ACKNOWLEDGED (legacy ack path).
+	StateSubmitted:       {StateAccepted, StateAcknowledged, StateCancelled, StateRejected},
+	// ACCEPTED → FILLED is the correct lifecycle (VALIDATED→FILLED direct jump is rejected).
+	StateAccepted:        {StatePartiallyFilled, StateFilled, StateCancelled, StateRejected},
 	StateAcknowledged:    {StatePartiallyFilled, StateFilled, StateCancelled, StateRejected},
 	StatePartiallyFilled: {StatePartiallyFilled, StateFilled, StateCancelled, StateRejected},
 	StateFilled:          {},
@@ -127,6 +131,10 @@ func stateFromEvent(eventType ledger.EventType) (OrderState, bool) {
 		return StateRiskApproved, true
 	case ledger.EventOrderSubmitted:
 		return StateSubmitted, true
+	case ledger.EventOrderAccepted:
+		// ORDER_ACCEPTED: broker confirmed receipt. Correct path is
+		// SUBMITTED → ACCEPTED → FILLED. Direct VALIDATED → FILLED is rejected.
+		return StateAccepted, true
 	case ledger.EventOrderAcked:
 		return StateAcknowledged, true
 	case ledger.EventOrderPartial:

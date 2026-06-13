@@ -64,7 +64,6 @@ describe("terminalHasAuthority", () => {
       ...initialTerminalSnapshot,
       authoritySource: "rest",
       restUnavailable: false,
-      hasAuthority: false,
       updatedAt: "2026-06-11T12:00:00.000Z",
     })).toBe(true);
   });
@@ -75,7 +74,6 @@ describe("terminalHasAuthority", () => {
       authoritySource: "ws",
       connected: true,
       restUnavailable: false,
-      hasAuthority: false,
       updatedAt: "",
     })).toBe(false);
   });
@@ -86,7 +84,6 @@ describe("terminalHasAuthority", () => {
       authoritySource: "ws",
       connected: true,
       restUnavailable: false,
-      hasAuthority: true,
       updatedAt: "2026-06-11T12:00:00.000Z",
     })).toBe(true);
   });

@@ -6,6 +6,11 @@ import "time"
 // cached AI score is available. It requires zero external API calls.
 type FallbackScorer struct{}
 
+// NewFallbackScorer constructs a ready-to-use FallbackScorer.
+func NewFallbackScorer() *FallbackScorer {
+	return &FallbackScorer{}
+}
+
 // Score computes a confidence score from market indicators alone.
 func (f *FallbackScorer) Score(ctx MarketContext) SignalScore {
 	confidence := 50.0

@@ -5,6 +5,11 @@ import (
 	"sync/atomic"
 )
 
+// NewCycleGuard constructs a ready-to-use CycleGuard.
+func NewCycleGuard() *CycleGuard {
+	return &CycleGuard{}
+}
+
 // CycleGuard prevents evaluation cycles from overlapping. If the previous
 // 15-minute cycle has not finished by the time the next tick fires, the new
 // cycle is skipped and a metric is incremented.
