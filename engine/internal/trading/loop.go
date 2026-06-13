@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -197,10 +198,6 @@ type Orchestrator struct {
 	// lastRegimeClass is the most recent regime classification from run15mCycle.
 	// Protected by mu. Nil until first 15m cycle with RegimeClassifier wired.
 	lastRegimeClass *regime.RegimeClassification
-
-	// lastAllowedStrategySet is the set of strategy names allowed in the current regime.
-	// Protected by mu. Nil = no filtering applied (all allowed).
-	lastAllowedStrategySet map[string]bool
 
 	// lastCycleAt is the timestamp of the most recent strategy evaluation cycle.
 	lastCycleAt   time.Time
@@ -1136,7 +1133,8 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	if len(o.groups.Tick) == 0 {
 		return
 	}
-	o.processStrategyGroup(ctx, o.groups.Tick, t, "tick")
+	// Tick strategies are not regime-gated at name level (nil = no filter).
+	o.processStrategyGroup(ctx, o.groups.Tick, t, "tick", nil)
 }
 
 // process1mCandles listens for closed 1-minute candles and runs all 1m strategies.
@@ -1184,7 +1182,8 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
-			o.processStrategyGroup(ctx, o.groups.M1, tick, "1m")
+			// 1m strategies are not regime-gated at name level (nil = no filter).
+			o.processStrategyGroup(ctx, o.groups.M1, tick, "1m", nil)
 		}
 	}
 }
@@ -1199,7 +1198,8 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
-			o.processStrategyGroup(ctx, o.groups.M5, tick, "5m")
+			// 5m strategies are not regime-gated at name level (nil = no filter).
+			o.processStrategyGroup(ctx, o.groups.M5, tick, "5m", nil)
 
 			// Simulate 15m candle: run 15m strategies every 3rd 5m candle.
 			o.m15Counter++
@@ -1213,7 +1213,8 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			if o.h1Counter >= 12 {
 				o.h1Counter = 0
 				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
-				o.processStrategyGroup(ctx, o.groups.H1, tick, "1h")
+				// 1h strategies are not regime-gated at name level (nil = no filter).
+				o.processStrategyGroup(ctx, o.groups.H1, tick, "1h", nil)
 			}
 
 			// Record candle in history for AI context
@@ -1522,7 +1523,11 @@ func truncate(s string, n int) string {
 
 // processStrategyGroup runs a group of strategies against a tick/candle and
 // processes any resulting signals through aggregation, risk, and execution.
-func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strategy.RegistryEntry, t marketdata.Tick, timeframe string) {
+// processStrategyGroup evaluates a strategy group, applies all gates, and executes
+// approved signals. regimeAllowedSet restricts which strategies may execute based on
+// the current 15m regime classification — pass nil to disable this filter (required
+// for 1m/5m/tick/1h calls which should NOT be regime-gated at the name level).
+func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strategy.RegistryEntry, t marketdata.Tick, timeframe string, regimeAllowedSet map[string]bool) {
 	// Anchor pipeline timer at tick arrival; use exchange timestamp when available.
 	tickAt := time.Now()
 	if t.TimeMs > 0 {
@@ -1624,13 +1629,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		o.execIntel.Record(sigID, execintel.StateSignalApproved, "passed selective aggregator")
 		o.recordWatchdogSignal()
 
-		// Change C — Gate 1: Regime strategy gate.
-		// Block strategies not allowed for the current regime (from run15mCycle).
-		o.mu.RLock()
-		allowedSet := o.lastAllowedStrategySet
-		o.mu.RUnlock()
-		if allowedSet != nil && !allowedSet[aggSig.StrategyName] {
-			log.Printf("[REGIME GATE] strategy blocked by regime gate strategy=%s", aggSig.StrategyName)
+		// Change C — Gate 1: Regime strategy gate (15m-only).
+		// Only non-nil when called from run15mCycle; nil for all other timeframes
+		// so 1m/5m/tick/1h signals are not incorrectly regime-gated.
+		if regimeAllowedSet != nil && !regimeAllowedSet[aggSig.StrategyName] {
+			log.Printf("[REGIME GATE] 15m strategy blocked by regime gate strategy=%s", aggSig.StrategyName)
 			o.aggregator.RecordSignalFlowStage(SignalStageRegimeFilter, 1, 0)
 			o.aggregator.RecordSignalFlowRejection(SignalStageRegimeFilter, "regime_strategy_gate_blocked", aggSig.Category)
 			o.execIntel.RecordRejection(sigID, "regime_strategy_gate_blocked")
@@ -1933,15 +1936,25 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 						observability.KellySizeRatio.Observe(kellyResult.FinalPositionPct)
 					}
 				}
-			} else if sizingMod < 1.0 {
-				// No ledger available — at least apply data quality size modifier.
-				sig.TargetSize *= sizingMod
-				log.Printf("[KELLY] %s no ledger — applying data quality modifier %.2f size=%.4f BTC",
-					aggSig.StrategyName, sizingMod, sig.TargetSize)
-			}
+		} else if sizingMod < 1.0 {
+			// No ledger available — at least apply data quality size modifier.
+			sig.TargetSize *= sizingMod
+			log.Printf("[KELLY] %s no ledger — applying data quality modifier %.2f size=%.4f BTC",
+				aggSig.StrategyName, sizingMod, sig.TargetSize)
 		}
 
-		err := o.risk.Validate(sig, currentPrice)
+		// Post-Kelly execution floor: Kelly can reduce size below the minimum
+		// executable threshold. Reject here rather than letting it propagate to
+		// the risk V2 floor where the rejection log is less informative.
+		if sig.TargetSize < minExecutionSizeBTC {
+			log.Printf("[KELLY FLOOR] %s post-Kelly size %.4f BTC is below minimum %.4f BTC — skipping",
+				aggSig.StrategyName, sig.TargetSize, minExecutionSizeBTC)
+			o.execIntel.RecordRejection(sigID, "post_kelly_size_below_floor")
+			continue
+		}
+	}
+
+	err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
 			log.Printf("[RISK DROPPED] %s from %s: %s", sig.Action, aggSig.StrategyName, err.Error())
 			o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 0)
@@ -1962,10 +1975,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		// Signals are parked ONLY when a human has the Command Center open
 		// (bridge heartbeat < 15s). When the bridge is offline, all signals
 		// that pass regime/risk/confidence checks execute directly.
-		// The AI multi-agent loop (processAIDecisions) runs independently
-		// and places its own trades without touching this execution path.
+		// PAPER_TRADING_AUTO_EXECUTE=true → bypass parking entirely for paper
+		// accounts so the desk places trades even when the command center is open.
 		// ══════════════════════════════════════════════════════════════════════
-		if o.IsBridgeOnline() && !isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
+		paperAutoExec := os.Getenv("PAPER_TRADING_AUTO_EXECUTE") == "true" || os.Getenv("PAPER_TRADING_AUTO_EXECUTE") == "1"
+		if o.IsBridgeOnline() && !paperAutoExec && !isTrustedStrategy(aggSig.StrategyName, sig.Confidence) {
 			// Build market context for the parked signal card
 			o.mu.RLock()
 			prices := append([]float64(nil), o.priceWindow...)
@@ -2111,7 +2125,10 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 		}
 	}
 
-	// Change B: classify current regime and gate strategy execution.
+	// Change B: classify current regime and gate 15m strategy execution only.
+	// This gate is scoped to 15m strategies. 1m/5m/tick/1h strategies are NOT
+	// blocked here — they have their own category-alignment gate (isCategoryAlignedWithRegime).
+	var m15AllowedSet map[string]bool // nil = no name-level filtering
 	if o.deps != nil && o.deps.RegimeClassifier != nil && o.deps.StrategyGate != nil {
 		o.mu.RLock()
 		prices := append([]float64(nil), o.priceWindow...)
@@ -2120,9 +2137,8 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 		snap := buildIndicatorSnapshotFromPrices(prices)
 		regimeClass := o.deps.RegimeClassifier.Classify(snap)
 
-		// Emit regime metric (regime as numeric label).
+		// Emit regime metric (regime as numeric label per dimension).
 		observability.CurrentRegime.WithLabelValues(string(regimeClass.Regime)).Set(1)
-		// Zero out other regime labels so only active one is 1.
 		for _, r := range []regime.Regime{regime.RegimeRanging, regime.RegimeTrendingBull, regime.RegimeTrendingBear, regime.RegimeHighVol} {
 			if r != regimeClass.Regime {
 				observability.CurrentRegime.WithLabelValues(string(r)).Set(0)
@@ -2133,33 +2149,31 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 			regimeClass.Regime, regimeClass.Confidence, regimeClass.PositionSizeMult,
 			regimeClass.AllowNewEntries, cycleID)
 
-		// Suspend all new entries during HIGH_VOLATILITY.
+		// Store for Kelly sizing in processStrategyGroup.
+		o.mu.Lock()
+		o.lastRegimeClass = &regimeClass
+		o.mu.Unlock()
+
+		// Suspend all 15m new entries during HIGH_VOLATILITY.
 		if !regimeClass.AllowNewEntries {
-			log.Printf("[REGIME] HIGH_VOLATILITY — all new entries suspended this cycle atr_ratio=%.2f cycle=%s",
+			log.Printf("[REGIME] HIGH_VOLATILITY — 15m new entries suspended this cycle atr_ratio=%.2f cycle=%s",
 				regimeClass.ATRRatio, cycleID)
-			// Record cycle timestamp even when suspended.
 			o.lastCycleAtMu.Lock()
 			o.lastCycleAt = time.Now()
 			o.lastCycleAtMu.Unlock()
 			return
 		}
 
-		// Build allowed strategy set for this regime.
+		// Build 15m-specific allowed strategy set — local, not stored globally.
 		allowedStrategies := o.deps.StrategyGate.GetActiveStrategies(regimeClass)
-		allowedSet := make(map[string]bool, len(allowedStrategies))
+		m15AllowedSet = make(map[string]bool, len(allowedStrategies))
 		for _, name := range allowedStrategies {
-			allowedSet[name] = true
+			m15AllowedSet[name] = true
 		}
 		positionSizeMult := o.deps.StrategyGate.GetPositionSizeMultiplier(regimeClass)
 
-		log.Printf("[REGIME] strategy gate applied allowed=%d position_mult=%.2f cycle=%s",
+		log.Printf("[REGIME] 15m strategy gate applied allowed=%d position_mult=%.2f cycle=%s",
 			len(allowedStrategies), positionSizeMult, cycleID)
-
-		// Store regime context for use in processStrategyGroup.
-		o.mu.Lock()
-		o.lastRegimeClass = &regimeClass
-		o.lastAllowedStrategySet = allowedSet
-		o.mu.Unlock()
 	}
 
 	// Record cycle timestamp for /health and /ready probes.
@@ -2168,7 +2182,8 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 	o.lastCycleAtMu.Unlock()
 
 	log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
-	o.processStrategyGroup(ctx, o.groups.M15, tick, "15m")
+	// Pass the 15m-specific regime allowed set — only 15m strategies are filtered.
+	o.processStrategyGroup(ctx, o.groups.M15, tick, "15m", m15AllowedSet)
 }
 
 // preScoreLoop warms the async scorer cache every 30 seconds (Change D).
@@ -2250,6 +2265,12 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 					netPnL,
 					o.exec.GetBalanceUSD(),
 				)
+				// Record per-trade PnL% for Kelly sizing.
+				// entryNotional = entryPrice × size (USD value of the position).
+				entryNotional := event.Position.EntryPrice * event.Position.Size
+				if entryNotional > 0 {
+					o.portfolioLedger.RecordTradePnLPct(netPnL / entryNotional)
+				}
 			}
 
 			// Update strategy tracker

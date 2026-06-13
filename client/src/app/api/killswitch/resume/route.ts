@@ -3,11 +3,10 @@
  *
  * POST /api/killswitch/resume
  *
- * Proxies to Go engine: POST /api/admin/ks/release
- * Requires ENGINE_ADMIN_SECRET env var on the server.
+ * Proxies to Go engine: POST /api/system/resume
+ * Session-authenticated at edge; no ENGINE_ADMIN_SECRET required.
  *
- * Expected engine response shape:
- * { ok: boolean; message: string; releasedAt: string }
+ * Engine response shape: { resumed: boolean; message: string }
  */
 
 import { type NextRequest, NextResponse } from "next/server";
@@ -39,28 +38,18 @@ async function verifySession(token: string): Promise<boolean> {
 }
 
 export async function POST(req: NextRequest) {
+  void req; // body not forwarded — engine endpoint uses fixed {"confirm":"RESUME"}
   const cookieStore = await cookies();
   const token = cookieStore.get("raig_session")?.value ?? "";
   if (!(await verifySession(token))) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const adminSecret = process.env.ENGINE_ADMIN_SECRET;
-  if (!adminSecret) {
-    return NextResponse.json({ ok: false, error: "ENGINE_ADMIN_SECRET not configured" }, { status: 503 });
-  }
-
   try {
-    const body = await req.json().catch(() => ({}));
-    const res = await fetch(`${ENGINE_BASE}/api/admin/ks/release`, {
+    const res = await fetch(`${ENGINE_BASE}/api/system/resume`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Engine-Admin-Secret": adminSecret,
-        "X-Service-Name": "vercel-ks-resume",
-        "X-Service-Timestamp": String(Date.now()),
-      },
-      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: "RESUME" }),
       signal: AbortSignal.timeout(10_000),
     });
     const data = await res.json();

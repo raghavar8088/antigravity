@@ -9,10 +9,16 @@ import (
 	"sync"
 	"time"
 
+	"antigravity-engine/internal/kelly"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+// pnlHistoryMax is the ring-buffer capacity for Kelly sizing.
+// 60 trades gives enough history for half-Kelly to stabilise.
+const pnlHistoryMax = 60
+
 // PortfolioLedger tracks cumulative accounting derived from persisted closes.
+// It also implements kelly.LedgerInterface so it can drive Kelly position sizing.
 type PortfolioLedger struct {
 	mu sync.RWMutex
 
@@ -31,6 +37,11 @@ type PortfolioLedger struct {
 
 	StartingBalance float64
 	LastUpdated     time.Time
+
+	// pnlHistory is a ring buffer of the last pnlHistoryMax per-trade PnL
+	// as a fraction of entry notional (positive = win, negative = loss).
+	// Used by ClosedTrades() to feed Kelly sizing.
+	pnlHistory []float64
 }
 
 // NewPortfolioLedger creates a ledger with the given starting balance.
@@ -42,6 +53,8 @@ func NewPortfolioLedger(startingBalance float64) *PortfolioLedger {
 }
 
 // RecordClose updates ledger from a canonical closed trade.
+// entryNotional is entryPrice×size in USD; used to compute PnL% for Kelly.
+// Pass 0 if unknown — the PnL% entry is skipped in that case.
 func (l *PortfolioLedger) RecordClose(grossPnL, entryFee, exitFee, netPnL float64, balanceAfter float64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -104,6 +117,36 @@ func (l *PortfolioLedger) WinRate() float64 {
 		return 0
 	}
 	return float64(l.WinningTrades) / float64(l.TotalTrades)
+}
+
+// RecordTradePnLPct stores one trade's PnL% (netPnL / entryNotional) in the ring buffer.
+// Must be called with the ledger mutex NOT held.
+func (l *PortfolioLedger) RecordTradePnLPct(pnlPct float64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.pnlHistory = append(l.pnlHistory, pnlPct)
+	if len(l.pnlHistory) > pnlHistoryMax {
+		// Drop oldest entry — keep only the last pnlHistoryMax.
+		l.pnlHistory = l.pnlHistory[len(l.pnlHistory)-pnlHistoryMax:]
+	}
+}
+
+// ClosedTrades implements kelly.LedgerInterface.
+// Returns the last min(n, len(history)) trades as Kelly-compatible records.
+// accountID is accepted for interface compatibility but ignored — the ledger
+// is single-account (btc-paper-1).
+func (l *PortfolioLedger) ClosedTrades(accountID string, n int) ([]kelly.ClosedTrade, error) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	src := l.pnlHistory
+	if n > 0 && n < len(src) {
+		src = src[len(src)-n:]
+	}
+	out := make([]kelly.ClosedTrade, len(src))
+	for i, pct := range src {
+		out[i] = kelly.ClosedTrade{PnLPct: pct}
+	}
+	return out, nil
 }
 
 // BootstrapPortfolioLedgerFromMongo hydrates the ledger from paper_trades aggregation.

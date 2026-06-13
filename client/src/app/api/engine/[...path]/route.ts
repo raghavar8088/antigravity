@@ -56,6 +56,7 @@ async function verifySessionToken(token: string): Promise<boolean> {
 
 // Paths that may be read via Vercel with a valid session only.
 const READ_PATH_PREFIXES = [
+  // Paper desk (legacy path names that some UIs still use)
   "/api/paper-desk/state",
   "/api/paper-desk/positions",
   "/api/paper-desk/trades",
@@ -63,17 +64,34 @@ const READ_PATH_PREFIXES = [
   "/api/paper-desk/metrics",
   "/api/paper-desk/strategy-stats",
   "/api/paper-desk/account-snapshot",
+  // Direct engine REST endpoints (canonical paths served by the Go engine)
+  "/api/positions",
+  "/api/trades",
+  "/api/stats",
+  "/api/strategies",
+  "/api/logs",
+  "/api/regime",
+  "/api/ai/insights",
+  "/api/health/mock-trading",
+  "/api/security/status",
+  "/api/security/audit",
+  "/api/security/incidents",
+  // Options
   "/api/options/positions",
   "/api/options/trades",
   "/api/options/stats",
+  // Nifty
   "/api/nifty/candles",
   "/api/nifty/option-chain",
   "/api/nifty/vix",
   "/api/nifty/ltp",
+  // Delta live (stats only — orders are admin-tier)
   "/api/delta-live/stats",
-  "/api/security/status",
+  // Kill switch status
   "/api/admin/ks/status",
+  // Health / metrics
   "/health",
+  "/ready",
   "/metrics",
 ];
 

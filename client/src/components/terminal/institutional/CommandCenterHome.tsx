@@ -6,6 +6,7 @@ import { TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pct, pnlClass, usd } from "./format";
+import { LiveDeskStatus } from "@/components/trading/LiveDeskStatus";
 
 export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthorityState }) {
   const equity =
@@ -18,6 +19,15 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
 
   return (
     <div className="m3-page-stack">
+      {/* ── Live BTC Paper Desk — always first, always visible ── */}
+      <TerminalCard
+        title="BTC Paper Desk — Live Activity"
+        subtitle="Go engine · real-time positions, fills, P&L"
+        actions={<Link href={TERMINAL_ROUTES.trading} className="m3-link-action">Full Dashboard →</Link>}
+      >
+        <LiveDeskStatus />
+      </TerminalCard>
+
       <div className="m3-kpi-strip">
         <Metric label="Portfolio Equity" value={equity > 0 ? usd(equity, { compact: true }) : "—"} tone={equity > 0 ? "positive" : "neutral"} />
         <Metric label="Gross Exposure" value={snapshot.risk.grossExposureUsd > 0 ? usd(snapshot.risk.grossExposureUsd, { compact: true }) : "—"} />

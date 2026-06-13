@@ -1,6 +1,9 @@
 ﻿import { redirect } from "next/navigation";
-import { MOCK_TRADING_PATH } from "@/lib/utils/navRoutes";
 
+/**
+ * Root redirect — send all users to the institutional terminal.
+ * Auth middleware will forward unauthenticated sessions to /login.
+ */
 export default function Home() {
-  redirect(MOCK_TRADING_PATH);
+  redirect("/terminal");
 }

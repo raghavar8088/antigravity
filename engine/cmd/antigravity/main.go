@@ -1103,6 +1103,10 @@ func main() {
 		OIFetcher:        oiFetcher,
 		DepthSubscriber:  depthSubscriber,
 		PortfolioValue:   initialPaperBalanceUSD,
+		// Kelly ledger — PortfolioLedger implements kelly.LedgerInterface via
+		// its ClosedTrades() method, which returns the per-trade PnL% ring buffer.
+		// Kelly sizing requires at least 30 closed trades before activating.
+		Ledger:           orchestrator.PortfolioLedger(),
 		// Phase C signals (optional — nil = score 0)
 		ETFFetcher:       etfFetcher,
 		DominanceFetcher: dominanceFetcher,
@@ -1945,6 +1949,37 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"active": ksSvc.IsActive(),
 			"reason": ksSvc.Reason(),
+		})
+	})
+	// /api/system/resume — session-gated operator resume (no ENGINE_ADMIN_SECRET required).
+	// The caller (Next.js /api/killswitch/resume) validates the raig_session JWT before
+	// forwarding here, so this endpoint only needs the body confirmation guard.
+	http.HandleFunc("/api/system/resume", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Confirm string `json:"confirm"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Confirm != "RESUME" {
+			http.Error(w, `{"error":"confirm must equal RESUME"}`, http.StatusBadRequest)
+			return
+		}
+		if err := ksSvc.Release(r.Context(), killswitchpkg.TriggerManualOperator, "operator", "manual release via /api/system/resume"); err != nil {
+			log.Printf("[KILL SWITCH] release error: %v", err)
+			http.Error(w, `{"error":"release failed"}`, http.StatusInternalServerError)
+			return
+		}
+		log.Println("[KILL SWITCH] Released via /api/system/resume: order flow resumed")
+		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+			"resumed": true,
+			"message": "Trading resumed. Kill switch cleared.",
 		})
 	})
 
