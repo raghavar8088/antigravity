@@ -227,15 +227,11 @@ export async function collectRowsForDay(client: PoolClient, targetDay: string): 
     trades_json: string;
     options_trades_json: string;
     options_selling_trades_json: string;
-    nifty_options_trades_json: string;
-    nifty_options_selling_trades_json: string;
   }>(
     client,
     `SELECT trades_json,
             COALESCE(options_trades_json, '[]') AS options_trades_json,
-            COALESCE(options_selling_trades_json, '[]') AS options_selling_trades_json,
-            COALESCE(nifty_options_trades_json, '[]') AS nifty_options_trades_json,
-            COALESCE(nifty_options_selling_trades_json, '[]') AS nifty_options_selling_trades_json
+            COALESCE(options_selling_trades_json, '[]') AS options_selling_trades_json
      FROM engine_state WHERE id = 1`,
   );
 
@@ -257,51 +253,6 @@ export async function collectRowsForDay(client: PoolClient, targetDay: string): 
     const paperSell = await loadPaperDesk(client, "sell");
     addJsonTrades(out, "btc_options_sell", paperSell, targetDay);
   }
-
-  const niftyRows = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM nifty_client_state WHERE id = 1`,
-  );
-  const niftySellingRows = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM nifty_selling_state WHERE id = 1`,
-  );
-
-  if (niftyRows.length) {
-    const t = parseJsonArray(niftyRows[0].trades_json);
-    if (t.length) addJsonTrades(out, "nifty_options_buy", t, targetDay);
-    else if (eng.length)
-      addJsonTrades(out, "nifty_options_buy", parseJsonArray(eng[0].nifty_options_trades_json), targetDay);
-  } else if (eng.length) {
-    addJsonTrades(out, "nifty_options_buy", parseJsonArray(eng[0].nifty_options_trades_json), targetDay);
-  }
-
-  if (niftySellingRows.length) {
-    const t = parseJsonArray(niftySellingRows[0].trades_json);
-    if (t.length) addJsonTrades(out, "nifty_options_sell", t, targetDay);
-    else if (eng.length)
-      addJsonTrades(out, "nifty_options_sell", parseJsonArray(eng[0].nifty_options_selling_trades_json), targetDay);
-  } else if (eng.length) {
-    addJsonTrades(out, "nifty_options_sell", parseJsonArray(eng[0].nifty_options_selling_trades_json), targetDay);
-  }
-
-  const crypto = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM crypto_equity_state WHERE id = 1`,
-  );
-  if (crypto.length) addJsonTrades(out, "crypto_equity", parseJsonArray(crypto[0].trades_json), targetDay);
-
-  const mcx = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM mcx_state WHERE id = 1`,
-  );
-  if (mcx.length) addJsonTrades(out, "mcx", parseJsonArray(mcx[0].trades_json), targetDay);
-
-  const stocks = await safeQuery<{ trades_json: string }>(
-    client,
-    `SELECT trades_json FROM nifty_stocks_state WHERE id = 1`,
-  );
-  if (stocks.length) addJsonTrades(out, "nifty_stocks", parseJsonArray(stocks[0].trades_json), targetDay);
 
   return out;
 }

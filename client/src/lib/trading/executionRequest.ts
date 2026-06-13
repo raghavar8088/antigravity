@@ -5,7 +5,7 @@
 
 export type ExecutionRequestPayload = {
   requestId?: string;
-  venue: "paper" | "delta" | "angelone";
+  venue: "paper" | "delta";
   symbol: string;
   side: "BUY" | "SELL" | "buy" | "sell" | "LONG" | "SHORT";
   size?: number;

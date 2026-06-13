@@ -111,10 +111,6 @@ jobs:
         run: |
           # Fetch each secret and create/update the K8s secret object.
           # Uses --dry-run=client | kubectl apply to make this idempotent.
-          ANGELONE_TOTP=$(aws secretsmanager get-secret-value \
-            --secret-id btc-pilot/ANGELONE_TOTP_SECRET --query SecretString --output text)
-          ANGELONE_KEY=$(aws secretsmanager get-secret-value \
-            --secret-id btc-pilot/ANGELONE_API_KEY --query SecretString --output text)
           DELTA_KEY=$(aws secretsmanager get-secret-value \
             --secret-id btc-pilot/DELTA_API_KEY --query SecretString --output text)
           DELTA_SECRET=$(aws secretsmanager get-secret-value \
@@ -130,8 +126,6 @@ jobs:
 
           kubectl create secret generic btc-engine-secrets \
             --namespace=btc-pilot \
-            --from-literal=ANGELONE_TOTP_SECRET="$ANGELONE_TOTP" \
-            --from-literal=ANGELONE_API_KEY="$ANGELONE_KEY" \
             --from-literal=DELTA_API_KEY="$DELTA_KEY" \
             --from-literal=DELTA_API_SECRET="$DELTA_SECRET" \
             --from-literal=MONGODB_URI="$MONGODB_URI" \

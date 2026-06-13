@@ -190,7 +190,7 @@ export default function BacktestPage() {
           <label className="text-[11px] text-[var(--color-text-muted)] block mb-1">Exchange</label>
           <select value={config.exchange} onChange={(e) => set("exchange", e.target.value)}
             className="w-full text-[12px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] outline-none">
-            {["BINANCE","DELTA","NSE","BSE"].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+            {["BINANCE","DELTA","COINBASE"].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
           </select>
         </div>
 

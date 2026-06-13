@@ -1,8 +1,0 @@
-node_modules/
-.chrome-profile/
-auth.json
-.env
-log.txt
-last-reply.txt
-.send.lock
-screenshots/

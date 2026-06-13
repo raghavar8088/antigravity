@@ -54,30 +54,6 @@ var defaultOptionsMarketProfile = MarketProfile{
 	},
 }
 
-var niftyOptionsMarketProfile = MarketProfile{
-	Name:      "NIFTY 50 option scalper",
-	DefaultIV: 0.16,
-	MinIV:     0.08,
-	MaxIV:     0.80,
-	ChainConfig: ChainConfig{
-		WeeklyExpiryWeekday: time.Thursday,
-		ExpiryHourUTC:       10,
-		WeeklyCount:         4,
-		StrikeIncrement:     50,
-		NumStrikes:          20,
-		FallbackSpot:        24000,
-		SmileFactor:         1.10,
-		SkewFactor:          0.20,
-		OIBase:              200000,
-		OIDecay:             6.5,
-		SpreadBase:          0.007,
-		SpreadSlope:         0.045,
-		SpreadCap:           0.08,
-		VolumeNoiseFloor:    0.05,
-		VolumeNoiseRange:    0.20,
-	},
-}
-
 func (e *Engine) resolvedProfile() MarketProfile {
 	if e.marketProfile.Name == "" {
 		return defaultOptionsMarketProfile

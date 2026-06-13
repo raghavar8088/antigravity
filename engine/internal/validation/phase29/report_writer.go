@@ -724,7 +724,7 @@ func finalVerdictReport(r *Phase29Result) string {
 		s.WriteString("  2. Improve execution quality (reduce drift)\n")
 		s.WriteString("  3. Improve portfolio construction (reduce correlation)\n")
 		s.WriteString("  4. Reduce strategy inventory (retire underperformers)\n")
-		s.WriteString("  5. Expand asset coverage (NIFTY, BTC options)\n")
+		s.WriteString("  5. Expand BTC options coverage\n")
 		s.WriteString("  6. Improve deployment infrastructure\n")
 	} else {
 		s.WriteString("NEW STRATEGY DEVELOPMENT: RECOMMENDED\n\n")

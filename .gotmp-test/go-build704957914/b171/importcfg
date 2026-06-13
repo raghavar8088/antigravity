@@ -1,8 +1,0 @@
-# import config
-importmap golang.org/x/crypto/internal/alias=vendor/golang.org/x/crypto/internal/alias
-packagefile crypto/cipher=c:\Trading apllication\.gotmp-test\go-build704957914\b084\_pkg_.a
-packagefile encoding/binary=c:\Trading apllication\.gotmp-test\go-build704957914\b108\_pkg_.a
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile vendor/golang.org/x/crypto/internal/alias=c:\Trading apllication\.gotmp-test\go-build704957914\b172\_pkg_.a
-packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a
-packagefile runtime=c:\Trading apllication\.gotmp-test\go-build704957914\b009\_pkg_.a

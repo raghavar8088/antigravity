@@ -1,6 +1,0 @@
-# import config
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build704957914\b010\_pkg_.a
-packagefile internal/strconv=c:\Trading apllication\.gotmp-test\go-build704957914\b031\_pkg_.a
-packagefile internal/stringslite=c:\Trading apllication\.gotmp-test\go-build704957914\b033\_pkg_.a
-packagefile unicode/utf8=c:\Trading apllication\.gotmp-test\go-build704957914\b049\_pkg_.a

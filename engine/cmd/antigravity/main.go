@@ -33,7 +33,6 @@ import (
 	"antigravity-engine/internal/marketdata"
 	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
 	pmspkg "antigravity-engine/internal/pms"
-	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/dominance"
 	"antigravity-engine/internal/etf"
@@ -95,9 +94,7 @@ var globalLogs = &RingLogger{max: 100}
 const initialPaperBalanceUSD = 1000000.0
 
 var (
-	deltaProbeClient    *marketdata.DeltaTickerClient
-	angelOneProbeClient *marketdata.AngelOneClient
-	niftyOptionsEngine  *options.Engine
+	deltaProbeClient *marketdata.DeltaTickerClient
 
 	// optionsEngineBTCSpot is updated by OptionsPriceFeed for GET /api/options/btc-feed (UI).
 	optionsEngineBTCSpot struct {
@@ -210,69 +207,6 @@ func loadOptionsSnapshot(state *persistence.OptionsState) (options.PersistedStat
 	return snapshot, nil
 }
 
-func saveNiftyOptionsSnapshot(ctx context.Context, store *persistence.Store, snapshot options.PersistedState) error {
-	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options price history: %w", err)
-	}
-	minuteBarsJSON, err := json.Marshal(snapshot.MinuteBars)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options minute bars: %w", err)
-	}
-	tradesJSON, err := json.Marshal(snapshot.Trades)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options trades: %w", err)
-	}
-	strategiesJSON, err := json.Marshal(snapshot.Strategies)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options strategies: %w", err)
-	}
-
-	return store.SaveNiftyOptionsState(ctx, &persistence.NiftyOptionsState{
-		Balance:    snapshot.Balance,
-		LastPrice:  snapshot.LastPrice,
-		LastMinute: snapshot.LastMinute,
-		TradeSeq:   snapshot.TradeSeq,
-		PriceHist:  priceHistJSON,
-		MinuteBars: minuteBarsJSON,
-		Trades:     tradesJSON,
-		Strategies: strategiesJSON,
-	})
-}
-
-func loadNiftyOptionsSnapshot(state *persistence.NiftyOptionsState) (options.PersistedState, error) {
-	snapshot := options.PersistedState{
-		Balance:    state.Balance,
-		LastPrice:  state.LastPrice,
-		LastMinute: state.LastMinute,
-		TradeSeq:   state.TradeSeq,
-		SavedAt:    state.SavedAt,
-	}
-
-	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
-		if err := json.Unmarshal(state.PriceHist, &snapshot.PriceHist); err != nil {
-			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options price history: %w", err)
-		}
-	}
-	if len(state.MinuteBars) > 0 && string(state.MinuteBars) != "[]" {
-		if err := json.Unmarshal(state.MinuteBars, &snapshot.MinuteBars); err != nil {
-			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options minute bars: %w", err)
-		}
-	}
-	if len(state.Trades) > 0 && string(state.Trades) != "[]" {
-		if err := json.Unmarshal(state.Trades, &snapshot.Trades); err != nil {
-			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options trades: %w", err)
-		}
-	}
-	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
-		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
-			return options.PersistedState{}, fmt.Errorf("unmarshal nifty options strategies: %w", err)
-		}
-	}
-
-	return snapshot, nil
-}
-
 func saveOptionsSellingSnapshot(ctx context.Context, store persistence.OptionsSellPaperPersistence, snapshot options_selling.PersistedState) error {
 	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
 	if err != nil {
@@ -335,73 +269,6 @@ func loadOptionsSellingSnapshot(state *persistence.OptionsSellingState) (options
 	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
 		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
 			return options_selling.PersistedState{}, fmt.Errorf("unmarshal options selling strategies: %w", err)
-		}
-	}
-
-	return snapshot, nil
-}
-
-func saveNiftyOptionsSellingSnapshot(ctx context.Context, store *persistence.Store, snapshot options_selling.PersistedState) error {
-	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options selling price history: %w", err)
-	}
-	minuteBarsJSON, err := json.Marshal(snapshot.MinuteBars)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options selling minute bars: %w", err)
-	}
-	tradesJSON, err := json.Marshal(snapshot.Trades)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options selling trades: %w", err)
-	}
-	strategiesJSON, err := json.Marshal(snapshot.Strategies)
-	if err != nil {
-		return fmt.Errorf("marshal nifty options selling strategies: %w", err)
-	}
-
-	return store.SaveNiftyOptionsSellingState(ctx, &persistence.NiftyOptionsSellingState{
-		Balance:         snapshot.Balance,
-		DayStartBalance: snapshot.DayStartBalance,
-		DayStartDate:    snapshot.DayStartDate,
-		LastPrice:       snapshot.LastPrice,
-		LastMinute:      snapshot.LastMinute,
-		TradeSeq:        snapshot.TradeSeq,
-		PriceHist:       priceHistJSON,
-		MinuteBars:      minuteBarsJSON,
-		Trades:          tradesJSON,
-		Strategies:      strategiesJSON,
-	})
-}
-
-func loadNiftyOptionsSellingSnapshot(state *persistence.NiftyOptionsSellingState) (options_selling.PersistedState, error) {
-	snapshot := options_selling.PersistedState{
-		Balance:         state.Balance,
-		DayStartBalance: state.DayStartBalance,
-		DayStartDate:    state.DayStartDate,
-		LastPrice:       state.LastPrice,
-		LastMinute:      state.LastMinute,
-		TradeSeq:        state.TradeSeq,
-		SavedAt:         state.SavedAt,
-	}
-
-	if len(state.PriceHist) > 0 && string(state.PriceHist) != "[]" {
-		if err := json.Unmarshal(state.PriceHist, &snapshot.PriceHist); err != nil {
-			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling price history: %w", err)
-		}
-	}
-	if len(state.MinuteBars) > 0 && string(state.MinuteBars) != "[]" {
-		if err := json.Unmarshal(state.MinuteBars, &snapshot.MinuteBars); err != nil {
-			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling minute bars: %w", err)
-		}
-	}
-	if len(state.Trades) > 0 && string(state.Trades) != "[]" {
-		if err := json.Unmarshal(state.Trades, &snapshot.Trades); err != nil {
-			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling trades: %w", err)
-		}
-	}
-	if len(state.Strategies) > 0 && string(state.Strategies) != "[]" {
-		if err := json.Unmarshal(state.Strategies, &snapshot.Strategies); err != nil {
-			return options_selling.PersistedState{}, fmt.Errorf("unmarshal nifty options selling strategies: %w", err)
 		}
 	}
 
@@ -472,10 +339,7 @@ func main() {
 	// 1. WebSocket Live Stream (Coinbase)
 	// ═══════════════════════════════════════════════════
 	coinbaseClient := marketdata.NewCoinbaseClient()
-	nseIndexClient := marketdata.NewNSEIndexClient()
-	niftyMarketCache := NewNiftyMarketCache(240)
 	deltaProbeClient = marketdata.NewDeltaTickerClient()
-	angelOneProbeClient = marketdata.NewAngelOneClient()
 	go func() {
 		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
 		if err != nil {
@@ -1205,8 +1069,6 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
 	optionsSellingEngine := options_selling.NewEngine()
-	niftyOptionsEngine = options.NewNiftyEngine()
-	niftyOptionsSellingEngine := options_selling.NewNiftyEngine()
 
 	// Delta Exchange live bridge — mirrors BTC option signals to Delta when enabled.
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
@@ -1234,8 +1096,6 @@ func main() {
 			ExitReason:   exitReason,
 		})
 	})
-	niftyStocksEngine := niftystocks.NewEngine()
-
 	var btcBuy persistence.OptionsBuyPaperPersistence
 	var btcSell persistence.OptionsSellPaperPersistence
 	if dbStore != nil {
@@ -1313,64 +1173,6 @@ func main() {
 		}
 	}
 
-	if dbStore != nil {
-		niftyOptionsEngine.SetStateSaveHook(func(snapshot options.PersistedState) {
-			if err := saveNiftyOptionsSnapshot(context.Background(), dbStore, snapshot); err != nil {
-				log.Printf("[DB] WARN Failed to save NIFTY options state: %v", err)
-			}
-		})
-
-		niftyState, loadErr := dbStore.LoadNiftyOptionsState(ctx)
-		if loadErr != nil {
-			log.Printf("[DB] WARN Failed to load NIFTY options state: %v", loadErr)
-		} else {
-			snapshot, snapshotErr := loadNiftyOptionsSnapshot(niftyState)
-			if snapshotErr != nil {
-				log.Printf("[DB] WARN Failed to decode NIFTY options state: %v", snapshotErr)
-			} else {
-				niftyOptionsEngine.RestoreState(snapshot)
-				restoredOpen := 0
-				for _, strategyState := range snapshot.Strategies {
-					if strategyState.Position != nil {
-						restoredOpen++
-					}
-				}
-				log.Printf(
-					"[DB] RESTORE NIFTY options state from %s | Balance: INR %.2f | Open Positions: %d | Trades: %d",
-					niftyState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
-				)
-			}
-		}
-
-		niftyOptionsSellingEngine.SetStateSaveHook(func(snapshot options_selling.PersistedState) {
-			if err := saveNiftyOptionsSellingSnapshot(context.Background(), dbStore, snapshot); err != nil {
-				log.Printf("[DB] WARN Failed to save NIFTY options selling state: %v", err)
-			}
-		})
-
-		niftySellingState, loadErr := dbStore.LoadNiftyOptionsSellingState(ctx)
-		if loadErr != nil {
-			log.Printf("[DB] WARN Failed to load NIFTY options selling state: %v", loadErr)
-		} else {
-			snapshot, snapshotErr := loadNiftyOptionsSellingSnapshot(niftySellingState)
-			if snapshotErr != nil {
-				log.Printf("[DB] WARN Failed to decode NIFTY options selling state: %v", snapshotErr)
-			} else {
-				niftyOptionsSellingEngine.RestoreState(snapshot)
-				restoredOpen := 0
-				for _, strategyState := range snapshot.Strategies {
-					if strategyState.Position != nil {
-						restoredOpen++
-					}
-				}
-				log.Printf(
-					"[DB] RESTORE NIFTY options SELLING state from %s | Balance: INR %.2f | Open Positions: %d | Trades: %d",
-					niftySellingState.SavedAt.Format(time.RFC3339), snapshot.Balance, restoredOpen, len(snapshot.Trades),
-				)
-			}
-		}
-	}
-
 	// Pre-fill BTC options engines with historical 1m bars — eliminates the 55-min wait.
 	if warmupData != nil && len(warmupData.Candles1m) > 0 {
 		closes := make([]float64, len(warmupData.Candles1m))
@@ -1380,18 +1182,6 @@ func main() {
 		optionsEngine.InjectMinuteBars(closes)
 		optionsSellingEngine.InjectMinuteBars(closes)
 	}
-
-	// Pre-fill NIFTY options engines with today's 1m bars from Yahoo Finance.
-	go safeGo("NiftyOptionsWarmup", func() {
-		niftyCloses, err := marketdata.FetchNiftyWarmupBars(ctx)
-		if err != nil {
-			log.Printf("[WARMUP] NIFTY warmup failed: %v", err)
-			return
-		}
-		niftyOptionsEngine.InjectMinuteBars(niftyCloses)
-		niftyOptionsSellingEngine.InjectMinuteBars(niftyCloses)
-		log.Printf("[WARMUP] ✅ Injected %d NIFTY 1m bars into NIFTY options engines", len(niftyCloses))
-	})
 
 	// Feed live BTC spot into the BTC options engines: Delta Exchange public ticker first,
 	// then Binance REST if Delta is unavailable (no API key required for ticker).
@@ -1449,150 +1239,8 @@ func main() {
 		}
 	})
 
-	// isNSEHoliday returns true when the IST date is a declared NSE exchange holiday.
-	isNSEHoliday := func(t time.Time) bool {
-		type md struct{ m time.Month; d int }
-		holidays := map[int][]md{
-			2025: {
-				{time.January, 26}, {time.February, 19}, {time.March, 14},
-				{time.March, 31}, {time.April, 14}, {time.April, 18},
-				{time.May, 1}, {time.August, 15}, {time.August, 27},
-				{time.October, 2}, {time.October, 24}, {time.November, 5},
-				{time.December, 25},
-			},
-			2026: {
-				{time.January, 26}, {time.March, 14}, {time.April, 6},
-				{time.April, 14}, {time.April, 18}, {time.May, 1},
-				{time.August, 15}, {time.October, 2}, {time.October, 21},
-				{time.November, 5}, {time.December, 25},
-			},
-		}
-		for _, h := range holidays[t.Year()] {
-			if t.Month() == h.m && t.Day() == h.d {
-				return true
-			}
-		}
-		return false
-	}
-
-	// indianMarketOpen returns true when NSE cash session is live (9:15–15:30 IST,
-	// weekdays only, excluding declared NSE holidays).
-	indianMarketOpen := func() bool {
-		ist := time.FixedZone("IST", 5*3600+30*60)
-		now := time.Now().In(ist)
-		if wd := now.Weekday(); wd == time.Saturday || wd == time.Sunday {
-			return false
-		}
-		if isNSEHoliday(now) {
-			return false
-		}
-		open := time.Date(now.Year(), now.Month(), now.Day(), 9, 15, 0, 0, ist)
-		close := time.Date(now.Year(), now.Month(), now.Day(), 15, 30, 0, 0, ist)
-		return now.After(open) && now.Before(close)
-	}
-
-	// Feed NIFTY 50 spot into NIFTY modules.
-	// During session (9:15–15:30 IST): polls NSE every 15s, Angel One as fallback.
-	// Outside session: 60s cadence, synthetic price only (engines not updated).
-	go safeGo("Nifty50PriceFeed", func() {
-		var feedPrimed bool
-		var lastLive bool
-		var lastErr string
-
-		pullQuote := func() {
-			var quote marketdata.NSEIndexQuote
-			live := false
-
-			if indianMarketOpen() {
-				q, nseErr := nseIndexClient.FetchNifty50Quote(ctx)
-				if nseErr == nil && q.Price > 0 {
-					quote = q
-					live = true
-					lastErr = ""
-				} else {
-					// Angel One as fallback when NSE API fails
-					if angelOneProbeClient.Enabled() {
-						if ao, _ := angelOneProbeClient.FetchNiftyQuote(ctx); ao.Price > 0 {
-							quote = marketdata.NSEIndexQuote{
-								Index:     "NIFTY 50",
-								Price:     ao.Price,
-								FetchedAt: time.Now(),
-							}
-							live = true
-							lastErr = ""
-							if nseErr != nil {
-								log.Printf("[NSE] Falling back to Angel One (NSE err: %v)", nseErr)
-							}
-						}
-					}
-					if !live && nseErr != nil {
-						msg := nseErr.Error()
-						if msg != lastErr {
-							log.Printf("[NSE] WARN live quote failed: %v", nseErr)
-							lastErr = msg
-						}
-					}
-				}
-			}
-
-			if !live || quote.Price <= 0 {
-				quote = marketdata.NSEIndexQuote{
-					Index:        "NIFTY 50",
-					Price:        options.PaperNiftyFallbackSpot(),
-					ExchangeTime: "SYNTHETIC",
-					FetchedAt:    time.Now(),
-				}
-			}
-
-			// Log session boundary transitions
-			if !feedPrimed {
-				feedPrimed = true
-				lastLive = live
-				if live {
-					log.Printf("[NSE] 🟢 Session OPEN — NIFTY 50 live at %.2f (%s)", quote.Price, quote.ExchangeTime)
-				} else {
-					log.Printf("[NIFTY FEED] Session closed — synthetic NIFTY spot %.0f", quote.Price)
-				}
-			} else if live && !lastLive {
-				log.Printf("[NSE] 🟢 Session OPEN — NIFTY 50 at %.2f", quote.Price)
-				lastLive = true
-			} else if !live && lastLive {
-				log.Printf("[NSE] 🔴 Session CLOSED — last NIFTY 50 at %.2f", quote.Price)
-				lastLive = false
-			} else if live && lastErr != "" {
-				log.Printf("[NSE] Feed recovered at %.2f", quote.Price)
-			}
-
-			niftyMarketCache.Update(quote)
-			if live {
-				niftyOptionsEngine.UpdatePrice(quote.Price)
-				niftyOptionsSellingEngine.UpdatePrice(quote.Price)
-				niftyStocksEngine.UpdatePrice(quote.Price)
-			}
-		}
-
-		pullQuote()
-		for {
-			// 15s during session for fresh signals; 60s outside to reduce API pressure
-			interval := 60 * time.Second
-			if indianMarketOpen() {
-				interval = 15 * time.Second
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(interval):
-				pullQuote()
-			}
-		}
-	})
-
 	go safeGo("OptionsScalper", func() { optionsEngine.Run(ctx.Done()) })
 	go safeGo("OptionsSellingScalper", func() { optionsSellingEngine.Run(ctx.Done()) })
-	// NIFTY engines re-enabled — price updates are session-gated in Nifty50PriceFeed,
-	// so engines only receive real prices during 9:15–15:30 IST on trading days.
-	go safeGo("NiftyOptionsScalper", func() { niftyOptionsEngine.Run(ctx.Done()) })
-	go safeGo("NiftyOptionsSellingScalper", func() { niftyOptionsSellingEngine.Run(ctx.Done()) })
 
 	// ═══════════════════════════════════════════════════
 	// 11b. STATE SAVER — Periodic DB snapshots
@@ -1836,30 +1484,6 @@ func main() {
 	execGatewayHandler := executiongateway.NewHandler(orchestrator)
 	http.Handle("/api/execution/request", execGatewayHandler)
 
-	// NIFTY 50 Options Scalper endpoints
-	http.HandleFunc("/api/nifty-options/positions", niftyOptionsEngine.HandlePositions)
-	http.HandleFunc("/api/nifty-options/trades", niftyOptionsEngine.HandleTrades)
-	http.HandleFunc("/api/nifty-options/strategies", niftyOptionsEngine.HandleStrategies)
-	http.HandleFunc("/api/nifty-options/stats", niftyOptionsEngine.HandleStats)
-	http.HandleFunc("/api/nifty-options/reset", niftyOptionsEngine.HandleReset)
-	http.HandleFunc("/api/nifty-options/clear-history", niftyOptionsEngine.HandleClearHistory)
-	http.HandleFunc("/api/nifty-options-selling/positions", niftyOptionsSellingEngine.HandlePositions)
-	http.HandleFunc("/api/nifty-options-selling/trades", niftyOptionsSellingEngine.HandleTrades)
-	http.HandleFunc("/api/nifty-options-selling/strategies", niftyOptionsSellingEngine.HandleStrategies)
-	http.HandleFunc("/api/nifty-options-selling/stats", niftyOptionsSellingEngine.HandleStats)
-	http.HandleFunc("/api/nifty-options-selling/reset", niftyOptionsSellingEngine.HandleReset)
-	http.HandleFunc("/api/nifty-options-selling/clear-history", niftyOptionsSellingEngine.HandleClearHistory)
-	http.HandleFunc("/api/nifty-option-chain", niftyOptionsEngine.HandleOptionChain)
-	http.HandleFunc("/api/nifty-options/inject-candles", handleNiftyInjectCandles)
-
-	http.HandleFunc("/api/nifty-stocks/positions", niftyStocksEngine.HandlePositions)
-	http.HandleFunc("/api/nifty-stocks/trades", niftyStocksEngine.HandleTrades)
-	http.HandleFunc("/api/nifty-stocks/strategies", niftyStocksEngine.HandleStrategies)
-	http.HandleFunc("/api/nifty-stocks/stats", niftyStocksEngine.HandleStats)
-	http.HandleFunc("/api/nifty-stocks/reset", niftyStocksEngine.HandleReset)
-	http.HandleFunc("/api/nifty-stocks/clear-history", niftyStocksEngine.HandleClearHistory)
-	http.HandleFunc("/api/nifty-market", niftyMarketCache.HandleQuote)
-
 	// Health check — used by load balancers, Docker HEALTHCHECK, and uptime monitors
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1871,23 +1495,18 @@ func main() {
 		})
 	})
 
-	// Regime endpoint — current market regime for BTC and NIFTY engines
+	// Regime endpoint — current market regime for BTC engines
 	http.HandleFunc("/api/regime", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"btc":       optionsSellingEngine.RegimeInfo(),
-			"nifty":     niftyOptionsSellingEngine.RegimeInfo(),
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 
-	// Probe endpoints — connectivity tests for Delta Exchange and Angel One
+	// Probe endpoint — connectivity test for Delta Exchange BTC ticker
 	http.HandleFunc("/api/probe/delta-btc", handleDeltaBTCProbe)
-	http.HandleFunc("/api/probe/angelone-nifty", handleAngelOneNiftyProbe)
-
-	// Angel One proxy — routes MCX/NSE API calls from Vercel through this whitelisted IP
-	http.HandleFunc("/api/angel-proxy", handleAngelOneProxy)
 
 	// BTC Option Chain endpoint
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
@@ -2667,136 +2286,6 @@ func handleDeltaBTCProbe(w http.ResponseWriter, r *http.Request) {
 		"ok":            true,
 		"error":         "",
 	})
-}
-
-// handleNiftyInjectCandles receives a JSON body with close prices and injects them into the NIFTY options engine.
-func handleNiftyInjectCandles(w http.ResponseWriter, r *http.Request) {
-	setCORS(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var body struct {
-		ClosePrices []float64 `json:"close_prices"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.ClosePrices) == 0 {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	niftyOptionsEngine.InjectMinuteBars(body.ClosePrices)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":       true,
-		"injected": len(body.ClosePrices),
-	})
-}
-
-// handleAngelOneNiftyProbe fetches a live NIFTY 50 quote from Angel One and returns it as JSON.
-func handleAngelOneNiftyProbe(w http.ResponseWriter, r *http.Request) {
-	setCORS(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
-
-	if !angelOneProbeClient.Enabled() {
-		missing := angelOneProbeClient.MissingEnv()
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"ok":         false,
-			"configured": false,
-			"error":      "missing env: " + strings.Join(missing, ", "),
-			"source":     "angel_one",
-		})
-		return
-	}
-
-	quote, err := angelOneProbeClient.FetchNiftyQuote(r.Context())
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"ok":         false,
-			"configured": true,
-			"error":      err.Error(),
-			"source":     "angel_one",
-		})
-		return
-	}
-
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"source":         "angel_one",
-		"exchange":       quote.Exchange,
-		"symbol":         quote.TradingSymbol,
-		"symbol_token":   quote.SymbolToken,
-		"price":          quote.Price,
-		"open":           quote.Open,
-		"high":           quote.High,
-		"low":            quote.Low,
-		"close":          quote.Close,
-		"change":         quote.Change,
-		"percent_change": quote.PercentChange,
-		"exchange_time":  quote.ExchangeTime,
-		"fetched_at":     quote.FetchedAt.Format(time.RFC3339),
-		"configured":     true,
-		"ok":             true,
-		"error":          "",
-	})
-}
-
-// handleAngelOneProxy proxies POST requests to Angel One API using the engine's whitelisted IP.
-// The request body must be JSON: {"path": "/rest/secure/...", "body": {...}}.
-func handleAngelOneProxy(w http.ResponseWriter, r *http.Request) {
-	setCORS(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	var proxyReq struct {
-		Path string          `json:"path"`
-		Body json.RawMessage `json:"body"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&proxyReq); err != nil || proxyReq.Path == "" {
-		http.Error(w, `{"error":"bad request: path required"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Allowlist: only permit specific Angel One API paths
-	allowed := false
-	for _, prefix := range []string{
-		"/rest/secure/angelbroking/order/v1/searchScrip",
-		"/rest/secure/angelbroking/market/v1/quote/",
-		"/rest/secure/angelbroking/market/v1/optionChain",
-		"/rest/secure/angelbroking/order/v1/getLtpData",
-		"/rest/secure/angelbroking/historical/v1/getCandleData",
-	} {
-		if strings.HasPrefix(proxyReq.Path, prefix) {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		http.Error(w, `{"error":"path not permitted"}`, http.StatusForbidden)
-		return
-	}
-
-	if !angelOneProbeClient.Enabled() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Angel One not configured"})
-		return
-	}
-
-	body, status, err := angelOneProbeClient.ForwardRequest(r.Context(), proxyReq.Path, []byte(proxyReq.Body))
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-		return
-	}
-	w.WriteHeader(status)
-	w.Write(body)
 }
 
 // safeGo wraps a goroutine function with panic recovery.

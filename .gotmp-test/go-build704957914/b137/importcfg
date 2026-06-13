@@ -1,6 +1,0 @@
-# import config
-packagefile crypto/internal/boring=c:\Trading apllication\.gotmp-test\go-build704957914\b083\_pkg_.a
-packagefile crypto/internal/fips140/drbg=c:\Trading apllication\.gotmp-test\go-build704957914\b100\_pkg_.a
-packagefile crypto/internal/randutil=c:\Trading apllication\.gotmp-test\go-build704957914\b138\_pkg_.a
-packagefile internal/godebug=c:\Trading apllication\.gotmp-test\go-build704957914\b054\_pkg_.a
-packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a

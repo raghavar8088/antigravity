@@ -17,7 +17,7 @@
  *   totalCapitalUsdt: number;      // Total account capital
  *   exposurePct: number;           // 0-100: % of capital deployed
  *   cashPct: number;               // % held as cash
- *   nseExposurePct: number;        // % in NSE equity
+ *   spotExposurePct: number;       // % in BTC spot/cash-equivalent exposure
  *   cryptoLongPct: number;         // % in crypto long
  *   cryptoShortPct: number;        // % in crypto short
  *   activeStrategies: number;

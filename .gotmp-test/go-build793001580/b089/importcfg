@@ -1,7 +1,0 @@
-# import config
-packagefile crypto/internal/fips140=c:\Trading apllication\.gotmp-test\go-build793001580\b086\_pkg_.a
-packagefile crypto/internal/fips140/hmac=c:\Trading apllication\.gotmp-test\go-build793001580\b090\_pkg_.a
-packagefile crypto/internal/fips140/sha256=c:\Trading apllication\.gotmp-test\go-build793001580\b091\_pkg_.a
-packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gocache-test\2b\2ba273331d1e3b7824f28ad718b5dc4b7856b9bb6ba99e7cdd3f5a054083472d-d
-packagefile crypto/internal/fips140deps/godebug=c:\Trading apllication\.gotmp-test\go-build793001580\b087\_pkg_.a
-packagefile io=c:\Trading apllication\.gotmp-test\go-build793001580\b051\_pkg_.a

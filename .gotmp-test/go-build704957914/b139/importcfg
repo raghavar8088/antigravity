@@ -1,6 +1,0 @@
-# import config
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile internal/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b012\_pkg_.a
-packagefile internal/chacha8rand=c:\Trading apllication\.gotmp-test\go-build704957914\b013\_pkg_.a
-packagefile math=c:\Trading apllication\.gotmp-test\go-build704957914\b061\_pkg_.a
-packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a

@@ -152,7 +152,7 @@ export function StrategyRegistryDashboard({ onSelectStrategy }: { onSelectStrate
           aria-label="Search strategies"
         />
         {[
-          { label: "Exchange", val: filterExchange, set: setFilterExchange, opts: ["ALL","NSE","BSE","BINANCE","DELTA"] },
+          { label: "Exchange", val: filterExchange, set: setFilterExchange, opts: ["ALL","BINANCE","DELTA","COINBASE"] },
           { label: "Status",   val: filterStatus,   set: setFilterStatus,   opts: ["ALL","ACTIVE","PAUSED","DISQUALIFIED"] },
           { label: "Tier",     val: filterTier,     set: setFilterTier,     opts: ["ALL","A","B","C"] },
         ].map(({ label, val, set, opts }) => (
@@ -223,7 +223,7 @@ export function StrategyRegistryDashboard({ onSelectStrategy }: { onSelectStrate
         open={enableTarget !== null}
         onOpenChange={(v) => { if (!v) setEnableTarget(null); }}
         title={`Enable: ${enableTarget?.name ?? ""}`}
-        description={`Capital allocated: ${enableTarget?.exchange === "NSE" || enableTarget?.exchange === "BSE" ? "₹" : "$"}—. This strategy will immediately begin scanning for entry signals.`}
+        description="Capital allocated: $—. This strategy will immediately begin scanning for entry signals."
         consequence="Enabling this strategy may immediately place orders. Existing risk gates still apply."
         confirmLabel="Enable Strategy"
         destructive={false}

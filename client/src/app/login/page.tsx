@@ -122,7 +122,7 @@ function LoginForm() {
               Institutional Command Center
             </h1>
             <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
-              BTC Futures · NIFTY · Paper Trading Engine
+              BTC Futures · Paper Trading Engine
             </p>
           </div>
 

@@ -39,6 +39,11 @@ engine/internal/**/*.go.*
 dev-server.err
 dev-server2.err
 
+# Graphify knowledge graph outputs (rebuild with: graphify update . or python merge_graphs.py)
+graphify-out/
+engine/internal/graphify-out/
+engine/cmd/graphify-out/
+
 # Claude bot secrets (local + Lightsail copies)
 claude-bot/auth.json
 claude-bot/.env

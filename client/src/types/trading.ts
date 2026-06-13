@@ -1,6 +1,6 @@
 /** All TypeScript interfaces for the Live Trading Dashboard (Phase 3). */
 
-export type Exchange = "NSE" | "BSE" | "BINANCE" | "DELTA";
+export type Exchange = "BINANCE" | "DELTA" | "COINBASE";
 export type Direction = "LONG" | "SHORT" | "BUY" | "SELL";
 export type OrderType = "MARKET" | "LIMIT" | "SL" | "SL-M";
 export type OrderStatus = "PENDING" | "OPEN" | "PARTIAL_FILL" | "FILLED" | "CANCELLED" | "REJECTED";

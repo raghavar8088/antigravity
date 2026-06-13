@@ -1,0 +1,42 @@
+{
+  "antigravity/main.go": {
+    "mtime": 1781378892.291625,
+    "ast_hash": "9ad19c3f3d2737c6add5802e146b92fe",
+    "semantic_hash": "9ad19c3f3d2737c6add5802e146b92fe"
+  },
+  "backtest/main.go": {
+    "mtime": 1781376936.3912475,
+    "ast_hash": "0fbd24a1c4b2ddba124de27317aa48be",
+    "semantic_hash": "0fbd24a1c4b2ddba124de27317aa48be"
+  },
+  "perfbench/main.go": {
+    "mtime": 1781376936.3912475,
+    "ast_hash": "19ad3eeed36d7020a9d4aff464f713cd",
+    "semantic_hash": "19ad3eeed36d7020a9d4aff464f713cd"
+  },
+  "seed_db/main.go": {
+    "mtime": 1781376936.3912475,
+    "ast_hash": "69d3a3cc7f3e1f89ee46f1fa539fb2c0",
+    "semantic_hash": "69d3a3cc7f3e1f89ee46f1fa539fb2c0"
+  },
+  "sep_evidence/analytics.go": {
+    "mtime": 1781376936.39634,
+    "ast_hash": "a1682388684c3a4cf9aa51a187e56f1d",
+    "semantic_hash": "a1682388684c3a4cf9aa51a187e56f1d"
+  },
+  "sep_evidence/datasource.go": {
+    "mtime": 1781376936.39634,
+    "ast_hash": "e5d38e24dc565b989fb4300389d22f29",
+    "semantic_hash": "e5d38e24dc565b989fb4300389d22f29"
+  },
+  "sep_evidence/main.go": {
+    "mtime": 1781376936.39634,
+    "ast_hash": "38e5edf994eca569cadead83ae08127c",
+    "semantic_hash": "38e5edf994eca569cadead83ae08127c"
+  },
+  "sep_evidence/reports.go": {
+    "mtime": 1781376936.3981583,
+    "ast_hash": "5ea24535412bc2a2c12442e5b5bcf6fa",
+    "semantic_hash": "5ea24535412bc2a2c12442e5b5bcf6fa"
+  }
+}

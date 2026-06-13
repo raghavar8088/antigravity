@@ -54,30 +54,6 @@ var defaultOptionsMarketProfile = MarketProfile{
 	},
 }
 
-var niftyOptionsMarketProfile = MarketProfile{
-	Name:      "NIFTY 50 option scalper",
-	DefaultIV: 0.16,  // India VIX typically 12-18 in calm markets
-	MinIV:     0.08,
-	MaxIV:     0.80,  // stress events (Budget, RBI) can spike to 40+ VIX
-	ChainConfig: ChainConfig{
-		WeeklyExpiryWeekday: time.Thursday, // NSE weekly expiry on Thursday
-		ExpiryHourUTC:       10,            // 15:30 IST = 10:00 UTC
-		WeeklyCount:         4,
-		StrikeIncrement:     50,
-		NumStrikes:          20,
-		FallbackSpot:        24000,
-		SmileFactor:         1.10,
-		SkewFactor:          0.20, // NIFTY has negative skew (put premium)
-		OIBase:              200000,
-		OIDecay:             6.5,
-		SpreadBase:          0.007,
-		SpreadSlope:         0.045,
-		SpreadCap:           0.08,
-		VolumeNoiseFloor:    0.05,
-		VolumeNoiseRange:    0.20,
-	},
-}
-
 func (e *Engine) resolvedProfile() MarketProfile {
 	if e.marketProfile.Name == "" {
 		return defaultOptionsMarketProfile
@@ -90,10 +66,4 @@ func (e *Engine) resolvedProfile() MarketProfile {
 // paper options engines ticking on minimal infrastructure.
 func PaperBTCFallbackSpot() float64 {
 	return defaultOptionsMarketProfile.ChainConfig.FallbackSpot
-}
-
-// PaperNiftyFallbackSpot is a positive NIFTY 50 index level when NSE/Yahoo feeds
-// are unavailable or the cash session is closed — keeps NIFTY paper desks running.
-func PaperNiftyFallbackSpot() float64 {
-	return niftyOptionsMarketProfile.ChainConfig.FallbackSpot
 }

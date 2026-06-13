@@ -1,9 +1,0 @@
-# import config
-packagefile bytes=c:\Trading apllication\.gotmp-test\go-build1494167655\b065\_pkg_.a
-packagefile crypto/internal/fips140=c:\Trading apllication\.gotmp-test\go-build1494167655\b086\_pkg_.a
-packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gocache-test\2b\2ba273331d1e3b7824f28ad718b5dc4b7856b9bb6ba99e7cdd3f5a054083472d-d
-packagefile crypto/internal/fips140deps/cpu=c:\Trading apllication\.gocache-test\8c\8cf5ba16ae0020431b648dbd69c08139ef4ebe57e58206e80005ad3826e30fa5-d
-packagefile crypto/internal/impl=c:\Trading apllication\.gotmp-test\go-build1494167655\b094\_pkg_.a
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
-packagefile hash=c:\Trading apllication\.gotmp-test\go-build1494167655\b082\_pkg_.a
-packagefile math/bits=c:\Trading apllication\.gocache-test\65\65d4da48e3a14b17e1767b118237f9c405c6b5b6fe9a31fe16173d262b036166-d

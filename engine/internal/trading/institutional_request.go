@@ -25,11 +25,6 @@ func (o *Orchestrator) ProcessExecutionRequest(ctx context.Context, req executio
 		return o.processPaperExecutionRequest(ctx, req)
 	case "delta":
 		return o.processDeltaExecutionRequest(ctx, req)
-	case "angelone":
-		return executiongateway.Response{
-			OK: false, Status: "REJECTED", RequestID: req.RequestID,
-			Message: "angelone broker adapter disabled — use engine-native NSE path when enabled",
-		}, nil
 	default:
 		return executiongateway.Response{
 			OK: false, Status: "REJECTED", RequestID: req.RequestID,

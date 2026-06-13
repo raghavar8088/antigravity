@@ -135,7 +135,7 @@ func (c *SecretClient) storeCache(path, value string) {
 	c.mu.Unlock()
 }
 
-// pathToEnvVar converts /btcpilot/angelone/totp → BTCPILOT_ANGELONE_TOTP.
+// pathToEnvVar converts /btcpilot/delta/api-key to BTCPILOT_DELTA_API_KEY.
 func pathToEnvVar(path string) string {
 	s := strings.TrimPrefix(path, "/")
 	s = strings.ReplaceAll(s, "/", "_")

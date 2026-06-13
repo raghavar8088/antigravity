@@ -9,8 +9,8 @@ export interface StrategyRow {
   id: string;
   name: string;
   family: string;
-  exchange: "NSE" | "BSE" | "BINANCE" | "DELTA";
-  market: "EQUITY" | "FUTURES" | "OPTIONS" | "SPOT";
+  exchange: "BINANCE" | "DELTA" | "COINBASE";
+  market: "FUTURES" | "OPTIONS" | "SPOT";
   status: StrategyStatus;
   alphaTier: AlphaTier;
   sessionType: SessionType;
@@ -38,7 +38,7 @@ export interface StrategyDetail extends StrategyRow {
   recentTrades: StrategyTrade[];
   recentSignals: StrategySignal[];
   betaToBTC: number;
-  betaToNifty: number;
+  betaToBTC: number;
   correlationBucket: string;
   capitalAllocated: number;
   capitalCurrency: "INR" | "USDT";

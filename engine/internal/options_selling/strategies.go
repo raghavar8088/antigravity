@@ -108,12 +108,6 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
-// BuildNiftyStrategies returns the 100 native NIFTY-calibrated strategies
-// plus the NSE-specific strategies (IDs 301+).
-func BuildNiftyStrategies() []StrategyDef {
-	return buildNiftyNativeStrategies()
-}
-
 // buildAllStrategies defines BTC option SELLING (writing) strategies.
 //
 // Efficiency Improvements:

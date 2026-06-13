@@ -31,13 +31,11 @@ export function SessionKPIs() {
 
       {/* Session state */}
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] text-[var(--color-text-muted)]">NSE Session</span>
-        <span className={`text-[13px] font-semibold ${session.nseOpen ? "text-[var(--color-profit)]" : "text-[var(--color-neutral)]"}`}>
+        <span className="text-[10px] text-[var(--color-text-muted)]">BTC Session</span>
+        <span className="text-[13px] font-semibold text-[var(--color-profit)]">
           {session.sessionLabel}
         </span>
-        {session.nextEventLabel !== "—" && !session.isHoliday ? (
-          <span className="text-[10px] text-[var(--color-caution)] font-mono tnum">{session.nextEventLabel}</span>
-        ) : null}
+        <span className="text-[10px] text-[var(--color-text-muted)] font-mono tnum">{session.nextEventLabel}</span>
       </div>
 
       {risk ? (

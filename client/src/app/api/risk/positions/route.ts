@@ -9,14 +9,14 @@
  * {
  *   positions: Array<{
  *     symbol: string;
- *     exchange: "NSE" | "BSE" | "BINANCE" | "DELTA";
+ *     exchange: "BINANCE" | "DELTA" | "COINBASE";
  *     direction: "LONG" | "SHORT";
  *     size: number;
  *     entryPrice: number;
  *     currentPrice: number;
  *     unrealizedPnl: number;
  *     portfolioPct: number;       // % of total portfolio this position represents
- *     correlationBucket: string;  // e.g. "BTC_MOMENTUM", "NIFTY_TREND"
+ *     correlationBucket: string;  // e.g. "BTC_MOMENTUM", "BTC_VOLATILITY"
  *     strategyId: string;
  *   }>;
  *   concentrationWarnings: Array<{

@@ -512,7 +512,7 @@ func TestAttribution_BHBDecomposes(t *testing.T) {
 		{Symbol: "ETH-USD", Strategy: "MEAN_REV", Exchange: "BINANCE", Sector: "CRYPTO",
 			PortfolioWeight: 0.30, PositionReturn: -0.05,
 			BenchmarkWeight: 0.30, BenchmarkReturn: 0.08},
-		{Symbol: "NIFTY", Strategy: "INTRADAY", Exchange: "ANGELONE", Sector: "EQUITY",
+		{Symbol: "SOL-USD", Strategy: "INTRADAY", Exchange: "BINANCE", Sector: "CRYPTO",
 			PortfolioWeight: 0.30, PositionReturn: 0.08,
 			BenchmarkWeight: 0.35, BenchmarkReturn: 0.06},
 	}

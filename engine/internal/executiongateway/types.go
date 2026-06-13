@@ -11,7 +11,7 @@ import (
 // Request is a human- or service-initiated execution intent (NOT a direct broker order).
 type Request struct {
 	RequestID    string  `json:"requestId"`
-	Venue        string  `json:"venue"` // "paper", "delta", "angelone"
+	Venue        string  `json:"venue"` // "paper", "delta"
 	Symbol       string  `json:"symbol"`
 	Side         string  `json:"side"` // BUY, SELL, buy, sell, LONG, SHORT
 	Size         float64 `json:"size"`

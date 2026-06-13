@@ -1,4 +1,0 @@
-./aggregator.go
-./aggregator_selective.go
-./loop.go
-./aggregator_selective_test.go

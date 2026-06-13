@@ -1,9 +1,0 @@
-# import config
-packagefile bytes=c:\Trading apllication\.gotmp-test\go-build704957914\b065\_pkg_.a
-packagefile crypto/internal/fips140=c:\Trading apllication\.gotmp-test\go-build704957914\b086\_pkg_.a
-packagefile crypto/internal/fips140/check=c:\Trading apllication\.gotmp-test\go-build704957914\b089\_pkg_.a
-packagefile crypto/internal/fips140/hkdf=c:\Trading apllication\.gotmp-test\go-build704957914\b166\_pkg_.a
-packagefile crypto/internal/fips140/sha256=c:\Trading apllication\.gotmp-test\go-build704957914\b091\_pkg_.a
-packagefile crypto/internal/fips140deps/byteorder=c:\Trading apllication\.gotmp-test\go-build704957914\b092\_pkg_.a
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile hash=c:\Trading apllication\.gotmp-test\go-build704957914\b082\_pkg_.a

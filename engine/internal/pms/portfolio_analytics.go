@@ -54,7 +54,7 @@ type PortfolioPerformance struct {
 	AvgGrossExpPct float64
 	AvgNetExpPct   float64
 
-	// Alpha / Beta (vs benchmark BTC or NIFTY)
+	// Alpha / Beta (vs BTC benchmark)
 	Alpha float64
 	Beta  float64
 

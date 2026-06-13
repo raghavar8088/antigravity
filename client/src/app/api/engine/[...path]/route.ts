@@ -80,11 +80,6 @@ const READ_PATH_PREFIXES = [
   "/api/options/positions",
   "/api/options/trades",
   "/api/options/stats",
-  // Nifty
-  "/api/nifty/candles",
-  "/api/nifty/option-chain",
-  "/api/nifty/vix",
-  "/api/nifty/ltp",
   // Delta live (stats only — orders are admin-tier)
   "/api/delta-live/stats",
   // Kill switch status
@@ -107,8 +102,6 @@ const ADMIN_PATH_PREFIXES = [
 
 // Paths that are NEVER proxied via Vercel — must be called directly on engine.
 const BLOCKED_PATH_PREFIXES = [
-  "/api/nifty/seed-engine",
-  "/api/nifty-options/inject-candles",
   "/api/admin/clear-history",
   "/api/admin/migrate",
   "/api/debug",

@@ -25,9 +25,6 @@ export const PAPER_TRADE_MODULE_KEYS = [
   "btc_futures_scalper",  // Future Trading (multi-symbol futures scalper)
   "btc_option_buying",    // BTC Option Buying (OptionsScalper)
   "btc_option_selling",   // BTC Option Selling (OptionsSellingScalper)
-  "nifty_option_buying",  // Nifty 50 Option Buying
-  "nifty_option_selling", // Nifty Option Selling
-  "nifty_bees",           // Nifty BEES ETF scalper
 ] as const;
 
 export type PaperTradeModuleKey = (typeof PAPER_TRADE_MODULE_KEYS)[number];

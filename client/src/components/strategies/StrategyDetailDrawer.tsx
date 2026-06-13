@@ -77,11 +77,11 @@ export function StrategyDetailDrawer({ strategyId, onClose }: { strategyId: stri
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant={detail.status === "ACTIVE" ? "profit" : "caution"} size="md">{detail.status}</Badge>
               <Badge variant={detail.alphaTier === "A" ? "profit" : "neutral"} size="md">Tier {detail.alphaTier}</Badge>
-              <Badge variant={detail.exchange === "NSE" || detail.exchange === "BSE" ? "caution" : "info"} size="md">
+              <Badge variant="info" size="md">
                 {detail.exchange}
               </Badge>
               <Badge variant={detail.sessionType === "SESSION_GATED" ? "caution" : "info"} size="md">
-                {detail.sessionType === "SESSION_GATED" ? "9:15–15:30 IST" : "24/7"}
+                {detail.sessionType === "SESSION_GATED" ? "UTC gated" : "24/7"}
               </Badge>
             </div>
 
@@ -130,7 +130,7 @@ export function StrategyDetailDrawer({ strategyId, onClose }: { strategyId: stri
             <div>
               <div className="text-[11px] font-medium text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">Risk Contribution</div>
               <StatRow label="Beta to BTC" value={detail.betaToBTC.toFixed(2)} />
-              <StatRow label="Beta to Nifty" value={detail.betaToNifty.toFixed(2)} />
+              <StatRow label="Beta to BTC" value={detail.betaToBTC.toFixed(2)} />
               <StatRow label="Correlation Bucket" value={detail.correlationBucket} />
               <StatRow label="Capital Allocated" value={`${detail.capitalCurrency === "INR" ? "₹" : "$"}${detail.capitalAllocated.toLocaleString()}`} />
             </div>

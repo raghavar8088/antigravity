@@ -1,7 +1,7 @@
 /**
  * Strategy Registry
  *
- * GET /api/strategies?status=ACTIVE|PAUSED|DISQUALIFIED&exchange=NSE|BSE|BINANCE|DELTA&tier=A|B|C
+ * GET /api/strategies?status=ACTIVE|PAUSED|DISQUALIFIED&exchange=BINANCE|DELTA|COINBASE&tier=A|B|C
  *
  * Proxies to Go engine: GET /api/strategies/registry
  *

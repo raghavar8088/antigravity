@@ -1,7 +1,0 @@
-# import config
-packagefile crypto/internal/boring=c:\Trading apllication\.gotmp-test\go-build1494167655\b083\_pkg_.a
-packagefile crypto/internal/fips140/hmac=c:\Trading apllication\.gotmp-test\go-build1494167655\b090\_pkg_.a
-packagefile crypto/internal/fips140hash=c:\Trading apllication\.gotmp-test\go-build1494167655\b130\_pkg_.a
-packagefile crypto/internal/fips140only=c:\Trading apllication\.gotmp-test\go-build1494167655\b104\_pkg_.a
-packagefile crypto/subtle=c:\Trading apllication\.gotmp-test\go-build1494167655\b106\_pkg_.a
-packagefile hash=c:\Trading apllication\.gotmp-test\go-build1494167655\b082\_pkg_.a

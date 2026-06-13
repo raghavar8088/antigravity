@@ -98,7 +98,6 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 		HasShadowPosition: false,
 	}
 }
-
 func newStrategyState(def StrategyDef) *strategyState {
 	def.PositionUSD = optionTradeAllocationUSD
 	return &strategyState{
@@ -106,7 +105,6 @@ func newStrategyState(def StrategyDef) *strategyState {
 		stats: newStrategyStatus(def),
 	}
 }
-
 func optionRecentAbsMove(prices []float64, period int) float64 {
 	if len(prices) < period+1 || period <= 0 {
 		return 0
@@ -256,90 +254,5 @@ func optionEntryConfirmed(def StrategyDef, ctx SignalContext, regime string) boo
 		return price <= fast*1.001 && mom3 < 0.0012 && rsiVal >= 38 && rsiVal <= 60
 	default:
 		return price <= fast*1.002 && mom3 <= 0.0002
-	}
-}
-
-func isNSEMarketOpen(utcHour, utcMin int) bool {
-	// NSE is closed Sat/Sun; skip time-window check entirely.
-	now := time.Now().UTC()
-	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
-		return false
-	}
-	total := utcHour*60 + utcMin
-	return total >= 225 && total <= 600 // 03:45–10:00 UTC
-}
-
-// isNSEPreClose returns true in the final 45 min of NSE session (08:45–09:30 UTC).
-func isNSEPreClose(utcHour, utcMin int) bool {
-	total := utcHour*60 + utcMin
-	return total >= 525 && total <= 570
-}
-
-// niftyEntryConfirmed is the NIFTY-calibrated entry gate.
-// NIFTY IV ~16% vs BTC ~62%, so momentum thresholds are ~0.25× BTC values.
-// NSE session guard prevents phantom fills when the market is closed.
-// Pre-close tightens RSI so we don't chase late moves with little time left.
-func niftyEntryConfirmed(def StrategyDef, ctx SignalContext, _ string) bool {
-	if len(ctx.Prices) < 15 {
-		return false
-	}
-	// Hard gate: no live entries outside NSE hours.
-	if !isNSEMarketOpen(ctx.UTCHour, ctx.UTCMin) {
-		return false
-	}
-
-	price := ctx.BTCPrice
-	fast := ema(ctx.Prices, 9)
-	slow := ema(ctx.Prices, 21)
-	trendPeriod := 55
-	if len(ctx.Prices) < 55 {
-		trendPeriod = len(ctx.Prices)
-	}
-	trend := ema(ctx.Prices, trendPeriod)
-	rsiVal := rsi(ctx.Prices, 14)
-	mom3 := momentum(ctx.Prices, 3)
-	mom8 := momentum(ctx.Prices, 8)
-
-	// Pre-close: tighten RSI band and require stronger momentum before entering.
-	preClose := isNSEPreClose(ctx.UTCHour, ctx.UTCMin)
-
-	trendAligned := (price >= fast && fast >= slow) || (price <= fast && fast <= slow)
-	if def.Type == Put {
-		switch def.Category {
-		case "Momentum", "Breakout", "Hybrid", "MACD", "ATR":
-			rsiLo, rsiHi := 44.0, 80.0
-			momFloor := 0.0002
-			if preClose {
-				rsiLo, rsiHi = 48.0, 72.0
-				momFloor = 0.0004
-			}
-			return trendAligned && price >= trend*0.995 && mom3 > momFloor && mom8 > -0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
-		case "Mean Reversion", "Capitulation":
-			rsiLo, rsiHi := 22.0, 75.0
-			if preClose {
-				rsiLo, rsiHi = 28.0, 68.0
-			}
-			return price >= fast*0.999 && mom3 > -0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
-		default:
-			return price >= fast && mom3 >= -0.0001
-		}
-	}
-	switch def.Category {
-	case "Momentum", "Breakout", "Hybrid", "MACD", "ATR":
-		rsiLo, rsiHi := 20.0, 56.0
-		momCeil := -0.0002
-		if preClose {
-			rsiLo, rsiHi = 28.0, 52.0
-			momCeil = -0.0004
-		}
-		return trendAligned && price <= trend*1.005 && mom3 < momCeil && mom8 < 0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
-	case "Mean Reversion", "Capitulation":
-		rsiLo, rsiHi := 25.0, 78.0
-		if preClose {
-			rsiLo, rsiHi = 32.0, 70.0
-		}
-		return price <= fast*1.001 && mom3 < 0.0005 && rsiVal >= rsiLo && rsiVal <= rsiHi
-	default:
-		return price <= fast && mom3 <= 0.0001
 	}
 }

@@ -5,7 +5,7 @@
  * new 1-minute candle and feeds BUY/SELL signals into the mock trading engine
  * via ingestResearchSignals().
  *
- * ISOLATION: Never calls real broker, OMS, Delta, or Angel One APIs. All
+ * ISOLATION: Never calls real broker, OMS, or live Delta APIs. All
  * signals are mock-only and route exclusively to the mock trading engine.
  */
 

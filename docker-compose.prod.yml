@@ -1,7 +1,7 @@
 version: '3.8'
 
 # Production backend only — frontend runs on Vercel.
-# On Vercel set INTERNAL_API_URL (and LIGHTSAIL_ENGINE_URL for Angel proxy) to:
+# On Vercel set INTERNAL_API_URL to:
 #   http://YOUR_AWS_PUBLIC_IP   (same host:port as below, no trailing slash)
 services:
   engine:

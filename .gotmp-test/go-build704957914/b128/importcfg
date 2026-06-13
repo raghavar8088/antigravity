@@ -1,7 +1,0 @@
-# import config
-packagefile antigravity-engine/internal/marketdata=c:\Trading apllication\.gotmp-test\go-build704957914\b129\_pkg_.a
-packagefile fmt=c:\Trading apllication\.gotmp-test\go-build704957914\b069\_pkg_.a
-packagefile log=c:\Trading apllication\.gotmp-test\go-build704957914\b202\_pkg_.a
-packagefile math=c:\Trading apllication\.gotmp-test\go-build704957914\b061\_pkg_.a
-packagefile strings=c:\Trading apllication\.gotmp-test\go-build704957914\b071\_pkg_.a
-packagefile time=c:\Trading apllication\.gotmp-test\go-build704957914\b053\_pkg_.a

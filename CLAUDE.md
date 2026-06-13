@@ -160,6 +160,33 @@ New engine modules (untracked): `engine/internal/killswitch/`, `engine/internal/
 
 ---
 
+## Graphify Knowledge Graph
+Graphify is installed to reduce AI token consumption by providing a structured graph of the codebase.
+
+```bash
+# First-time setup (after cloning)
+pip install graphifyy
+python merge_graphs.py          # rebuilds graphify-out/ from pre-extracted sub-graphs
+# OR re-extract from scratch (no API key needed for code-only):
+graphify extract client/src --out . --no-cluster
+graphify extract engine/internal --out engine/internal --no-cluster
+graphify extract engine/cmd --out engine/cmd --no-cluster
+python merge_graphs.py
+graphify cluster-only . --no-label --no-viz
+
+# After changing code files (fast, no API cost)
+graphify update .
+
+# Query the graph (use instead of grep/read for architecture questions)
+graphify query "how does X connect to Y?"
+graphify path "SymbolA" "SymbolB"
+graphify explain "concept"
+```
+
+The Cursor rule at `.cursor/rules/graphify.mdc` automatically instructs the AI to consult the graph before exploring raw files.
+
+---
+
 ## Common Commands
 ```bash
 # Frontend dev

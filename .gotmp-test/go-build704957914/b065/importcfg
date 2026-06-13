@@ -1,8 +1,0 @@
-# import config
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build704957914\b010\_pkg_.a
-packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
-packagefile iter=c:\Trading apllication\.gocache-test\3d\3d99601ed836db41d3ffb6070c4258fe55457a978fcded5069e06f6a78607243-d
-packagefile math/bits=c:\Trading apllication\.gotmp-test\go-build704957914\b032\_pkg_.a
-packagefile unicode=c:\Trading apllication\.gotmp-test\go-build704957914\b063\_pkg_.a
-packagefile unicode/utf8=c:\Trading apllication\.gotmp-test\go-build704957914\b049\_pkg_.a

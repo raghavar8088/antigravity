@@ -1,7 +1,0 @@
-{
-  "provider": "chatgpt",
-  "prompt_file": "output\\autonomous_bot\\prompts\\dependencies_part_1.md",
-  "prompt_copy_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T10-16-08-392Z_dependencies_part_1.prompt.md",
-  "response_file": "output\\autonomous_bot\\browser_results\\chatgpt\\2026-04-12T10-16-08-392Z_dependencies_part_1.response.md",
-  "saved_at": "2026-04-12T10:16:08.396Z"
-}

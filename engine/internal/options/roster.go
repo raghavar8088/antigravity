@@ -157,7 +157,7 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 	if regime == "" {
 		regime = optionMarketRegimeUnknown
 	}
-	// BTC / NIFTY paper: recompute roster every tick so live allocation/size never go stale behind the 30s throttle.
+	// BTC paper: recompute roster every tick so live allocation/size never go stale behind the 30s throttle.
 	if !e.isPaperIndexDesk() &&
 		!e.lastRosterEval.IsZero() && regime == e.lastRosterRegime && now.Sub(e.lastRosterEval) < optionRosterRefreshInterval {
 		return

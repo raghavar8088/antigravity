@@ -23,7 +23,6 @@ export default function MobileEmergencyPage() {
   const [showHalt, setShowHalt] = useState(false);
   const [showResume, setShowResume] = useState(false);
   const [showPauseCrypto, setShowPauseCrypto] = useState(false);
-  const [showPauseEquity, setShowPauseEquity] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -158,13 +157,6 @@ export default function MobileEmergencyPage() {
         >
           Pause All Crypto Strategies
         </button>
-        <button
-          type="button"
-          onClick={() => setShowPauseEquity(true)}
-          className="w-full h-12 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[14px] font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]"
-        >
-          Pause All Equity Strategies
-        </button>
         <a
           href="/terminal/trading"
           className="w-full h-12 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[14px] font-medium text-[var(--color-info)] hover:bg-[var(--color-bg-elevated)] flex items-center justify-center"
@@ -198,26 +190,13 @@ export default function MobileEmergencyPage() {
         open={showPauseCrypto}
         onOpenChange={setShowPauseCrypto}
         title="Pause Crypto Strategies"
-        description="Pauses all BINANCE and DELTA exchange strategies. NSE/BSE strategies continue running."
+        description="Pauses all BINANCE, DELTA, and COINBASE strategies."
         consequence="Open crypto positions are NOT auto-closed."
         confirmLabel="Pause Crypto"
         destructive
         onConfirm={async () => {
-          await fetch("/api/strategies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pause_by_exchange", exchange: ["BINANCE","DELTA"] }) });
+          await fetch("/api/strategies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pause_by_exchange", exchange: ["BINANCE","DELTA","COINBASE"] }) });
           setShowPauseCrypto(false);
-        }}
-      />
-      <ConfirmModal
-        open={showPauseEquity}
-        onOpenChange={setShowPauseEquity}
-        title="Pause Equity Strategies"
-        description="Pauses all NSE and BSE exchange strategies. Crypto strategies continue running."
-        consequence="Open equity positions are NOT auto-closed."
-        confirmLabel="Pause Equity"
-        destructive
-        onConfirm={async () => {
-          await fetch("/api/strategies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pause_by_exchange", exchange: ["NSE","BSE"] }) });
-          setShowPauseEquity(false);
         }}
       />
     </div>

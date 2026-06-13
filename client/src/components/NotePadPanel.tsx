@@ -50,7 +50,7 @@ const DEFAULT_DATA: NotePadData = {
       color: "#1a73e8",
       entries: [
         { id: "demo-1", key: "Delta Exchange API Key", value: "", type: "secret", createdAt: Date.now() },
-        { id: "demo-2", key: "Angel One Client ID",    value: "", type: "secret", createdAt: Date.now() },
+        { id: "demo-2", key: "Delta API Secret",       value: "", type: "secret", createdAt: Date.now() },
       ],
     },
     { id: "notes", title: "Notes", color: "#1e8e3e", entries: [] },

@@ -1,9 +1,0 @@
-# import config
-packagefile fmt=c:\Trading apllication\.gotmp-test\go-build1494167655\b069\_pkg_.a
-packagefile io=c:\Trading apllication\.gotmp-test\go-build1494167655\b051\_pkg_.a
-packagefile log/internal=c:\Trading apllication\.gotmp-test\go-build1494167655\b202\_pkg_.a
-packagefile os=c:\Trading apllication\.gotmp-test\go-build1494167655\b002\_pkg_.a
-packagefile runtime=c:\Trading apllication\.gotmp-test\go-build1494167655\b009\_pkg_.a
-packagefile sync=c:\Trading apllication\.gotmp-test\go-build1494167655\b040\_pkg_.a
-packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
-packagefile time=c:\Trading apllication\.gotmp-test\go-build1494167655\b053\_pkg_.a

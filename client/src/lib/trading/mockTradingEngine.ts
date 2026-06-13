@@ -12,7 +12,7 @@
  *   - Fixed-%-of-equity sizing (deskFixedNotionalPctOfEquity)
  *   - Vol-aware risk sizing (paperNotionalForTargetRisk)
  *
- * NEVER imports paperOms, broker, Delta, or Angel One code paths — this is a
+ * NEVER imports paperOms, broker, or live Delta order paths — this is a
  * pure simulation. All inputs are observability data (signal trace rows + a
  * live Binance mark). All outputs stay in-memory + localStorage.
  *

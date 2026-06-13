@@ -94,10 +94,6 @@ var endpointPermissions = []endpointPolicy{
 
 	// ── Probe / connectivity tests — restrict to TRADER+ (information disclosure) ─
 	{prefix: "/api/probe/delta-btc", method: "GET", perm: PermTradeView},
-	{prefix: "/api/probe/angelone-nifty", method: "GET", perm: PermTradeView},
-
-	// ── Angel One proxy — requires trade execution permission ──────────────────
-	{prefix: "/api/angel-proxy", method: "", perm: PermTradeExecute},
 
 	// ── Risk ───────────────────────────────────────────────────────────────────
 	{prefix: "/api/risk", method: "", perm: PermRiskView},
@@ -130,12 +126,6 @@ var endpointPermissions = []endpointPolicy{
 	{prefix: "/api/options/reset", method: "POST", perm: PermSystemReset},
 	{prefix: "/api/options", method: "GET", perm: PermTradeView},
 	{prefix: "/api/option-chain", method: "GET", perm: PermTradeView},
-	{prefix: "/api/nifty-options/reset", method: "POST", perm: PermSystemReset},
-	{prefix: "/api/nifty-options", method: "GET", perm: PermTradeView},
-	{prefix: "/api/nifty-stocks", method: "GET", perm: PermTradeView},
-
-	// ── NIFTY market data ──────────────────────────────────────────────────────
-	{prefix: "/api/nifty", method: "GET", perm: PermTradeView},
 
 	// ── Regime classification ──────────────────────────────────────────────────
 	{prefix: "/api/regime", method: "GET", perm: PermTradeView},

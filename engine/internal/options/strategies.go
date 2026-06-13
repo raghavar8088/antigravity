@@ -129,14 +129,6 @@ func BuildStrategies() []StrategyDef {
 	return filtered
 }
 
-// BuildNiftyStrategies returns the 100 native NIFTY-calibrated strategies
-// plus the 20 new NSE-specific strategies (IDs 301-320).
-// Uses buildNiftyNativeStrategies() instead of scaling BTC parameters — the
-// native set has proper intraday expiry, correct strike OTM, and NSE signals.
-func BuildNiftyStrategies() []StrategyDef {
-	return buildNiftyNativeStrategies()
-}
-
 // buildAllStrategies defines writer-style templates (bull put / bear call) used as
 // the base to derive long CALL / long PUT legs in BuildStrategies().
 //

@@ -41,36 +41,8 @@ type OptionsState struct {
 	SavedAt    time.Time       `json:"savedAt"`
 }
 
-// NiftyOptionsState is the persisted snapshot for the NIFTY 50 options engine.
-type NiftyOptionsState struct {
-	Balance    float64         `json:"balance"`
-	LastPrice  float64         `json:"lastPrice"`
-	LastMinute int64           `json:"lastMinute"`
-	TradeSeq   int             `json:"tradeSeq"`
-	PriceHist  json.RawMessage `json:"priceHist"`
-	MinuteBars json.RawMessage `json:"minuteBars"`
-	Trades     json.RawMessage `json:"trades"`
-	Strategies json.RawMessage `json:"strategies"`
-	SavedAt    time.Time       `json:"savedAt"`
-}
-
 // OptionsSellingState is the persisted snapshot for the BTC options selling (writing) engine.
 type OptionsSellingState struct {
-	Balance         float64         `json:"balance"`
-	DayStartBalance float64         `json:"dayStartBalance"`
-	DayStartDate    int             `json:"dayStartDate"`
-	LastPrice       float64         `json:"lastPrice"`
-	LastMinute      int64           `json:"lastMinute"`
-	TradeSeq        int             `json:"tradeSeq"`
-	PriceHist       json.RawMessage `json:"priceHist"`
-	MinuteBars      json.RawMessage `json:"minuteBars"`
-	Trades          json.RawMessage `json:"trades"`
-	Strategies      json.RawMessage `json:"strategies"`
-	SavedAt         time.Time       `json:"savedAt"`
-}
-
-// NiftyOptionsSellingState is the persisted snapshot for the NIFTY options selling engine.
-type NiftyOptionsSellingState struct {
 	Balance         float64         `json:"balance"`
 	DayStartBalance float64         `json:"dayStartBalance"`
 	DayStartDate    int             `json:"dayStartDate"`
@@ -361,77 +333,6 @@ func (s *Store) SaveOptionsState(ctx context.Context, state *OptionsState) error
 	return err
 }
 
-// LoadNiftyOptionsState retrieves the last saved NIFTY 50 options engine snapshot.
-func (s *Store) LoadNiftyOptionsState(ctx context.Context) (*NiftyOptionsState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var state NiftyOptionsState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
-
-	err := s.db.QueryRowContext(ctx, `
-		SELECT nifty_options_balance, nifty_options_last_price, nifty_options_last_minute, nifty_options_trade_seq,
-		       nifty_options_price_hist_json, nifty_options_minute_bars_json,
-		       nifty_options_trades_json, nifty_options_strategies_json, nifty_options_saved_at
-		FROM engine_state WHERE id = 1
-	`).Scan(
-		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
-		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &savedAtStr,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load nifty options state: %w", err)
-	}
-
-	state.PriceHist = json.RawMessage(priceHistJSON)
-	state.MinuteBars = json.RawMessage(minuteBarsJSON)
-	state.Trades = json.RawMessage(tradesJSON)
-	state.Strategies = json.RawMessage(strategiesJSON)
-	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
-	return &state, nil
-}
-
-// SaveNiftyOptionsState persists the NIFTY 50 options engine snapshot.
-func (s *Store) SaveNiftyOptionsState(ctx context.Context, state *NiftyOptionsState) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	priceHistJSON := string(state.PriceHist)
-	if priceHistJSON == "" {
-		priceHistJSON = "[]"
-	}
-	minuteBarsJSON := string(state.MinuteBars)
-	if minuteBarsJSON == "" {
-		minuteBarsJSON = "[]"
-	}
-	tradesJSON := string(state.Trades)
-	if tradesJSON == "" {
-		tradesJSON = "[]"
-	}
-	strategiesJSON := string(state.Strategies)
-	if strategiesJSON == "" {
-		strategiesJSON = "[]"
-	}
-
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE engine_state SET
-			nifty_options_balance = ?,
-			nifty_options_last_price = ?,
-			nifty_options_last_minute = ?,
-			nifty_options_trade_seq = ?,
-			nifty_options_price_hist_json = ?,
-			nifty_options_minute_bars_json = ?,
-			nifty_options_trades_json = ?,
-			nifty_options_strategies_json = ?,
-			nifty_options_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
-		WHERE id = 1
-	`,
-		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
-		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
-	)
-	return err
-}
-
 // LoadOptionsSellingState retrieves the last saved BTC options selling engine snapshot.
 func (s *Store) LoadOptionsSellingState(ctx context.Context) (*OptionsSellingState, error) {
 	s.mu.Lock()
@@ -495,77 +396,6 @@ func (s *Store) SaveOptionsSellingState(ctx context.Context, state *OptionsSelli
 			options_selling_trades_json = ?,
 			options_selling_strategies_json = ?,
 			options_selling_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
-		WHERE id = 1
-	`,
-		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,
-		priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON,
-	)
-	return err
-}
-
-// LoadNiftyOptionsSellingState retrieves the last saved NIFTY options selling engine snapshot.
-func (s *Store) LoadNiftyOptionsSellingState(ctx context.Context) (*NiftyOptionsSellingState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var state NiftyOptionsSellingState
-	var priceHistJSON, minuteBarsJSON, tradesJSON, strategiesJSON, savedAtStr string
-
-	err := s.db.QueryRowContext(ctx, `
-		SELECT nifty_options_selling_balance, nifty_options_selling_last_price, nifty_options_selling_last_minute, nifty_options_selling_trade_seq,
-		       nifty_options_selling_price_hist_json, nifty_options_selling_minute_bars_json,
-		       nifty_options_selling_trades_json, nifty_options_selling_strategies_json, nifty_options_selling_saved_at
-		FROM engine_state WHERE id = 1
-	`).Scan(
-		&state.Balance, &state.LastPrice, &state.LastMinute, &state.TradeSeq,
-		&priceHistJSON, &minuteBarsJSON,
-		&tradesJSON, &strategiesJSON, &savedAtStr,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load nifty options selling state: %w", err)
-	}
-
-	state.PriceHist = json.RawMessage(priceHistJSON)
-	state.MinuteBars = json.RawMessage(minuteBarsJSON)
-	state.Trades = json.RawMessage(tradesJSON)
-	state.Strategies = json.RawMessage(strategiesJSON)
-	state.SavedAt, _ = time.Parse(time.RFC3339, savedAtStr)
-	return &state, nil
-}
-
-// SaveNiftyOptionsSellingState persists the NIFTY options selling engine snapshot.
-func (s *Store) SaveNiftyOptionsSellingState(ctx context.Context, state *NiftyOptionsSellingState) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	priceHistJSON := string(state.PriceHist)
-	if priceHistJSON == "" {
-		priceHistJSON = "[]"
-	}
-	minuteBarsJSON := string(state.MinuteBars)
-	if minuteBarsJSON == "" {
-		minuteBarsJSON = "[]"
-	}
-	tradesJSON := string(state.Trades)
-	if tradesJSON == "" {
-		tradesJSON = "[]"
-	}
-	strategiesJSON := string(state.Strategies)
-	if strategiesJSON == "" {
-		strategiesJSON = "[]"
-	}
-
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE engine_state SET
-			nifty_options_selling_balance = ?,
-			nifty_options_selling_last_price = ?,
-			nifty_options_selling_last_minute = ?,
-			nifty_options_selling_trade_seq = ?,
-			nifty_options_selling_price_hist_json = ?,
-			nifty_options_selling_minute_bars_json = ?,
-			nifty_options_selling_trades_json = ?,
-			nifty_options_selling_strategies_json = ?,
-			nifty_options_selling_saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
 	`,
 		state.Balance, state.LastPrice, state.LastMinute, state.TradeSeq,

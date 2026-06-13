@@ -1,5 +1,0 @@
-# import config
-packagefile crypto=c:\Trading apllication\.gotmp-test\go-build704957914\b081\_pkg_.a
-packagefile crypto/cipher=c:\Trading apllication\.gotmp-test\go-build704957914\b084\_pkg_.a
-packagefile crypto/internal/boring/sig=c:\Trading apllication\.gotmp-test\go-build704957914\b107\_pkg_.a
-packagefile hash=c:\Trading apllication\.gotmp-test\go-build704957914\b082\_pkg_.a

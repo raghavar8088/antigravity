@@ -1,9 +1,0 @@
-# import config
-packagefile cmp=c:\Trading apllication\.gocache-test\d8\d8421d35927268847bd22e9a81514e1b6371fe287b4ed04a0f5c139ff308a96c-d
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build1494167655\b003\_pkg_.a
-packagefile internal/bytealg=c:\Trading apllication\.gotmp-test\go-build1494167655\b010\_pkg_.a
-packagefile internal/byteorder=c:\Trading apllication\.gocache-test\9f\9fc588e51e19272d2f3554a8abd3d50ba74c9e47c4335b635194b6b79f92f5ec-d
-packagefile math=c:\Trading apllication\.gotmp-test\go-build1494167655\b061\_pkg_.a
-packagefile math/bits=c:\Trading apllication\.gocache-test\65\65d4da48e3a14b17e1767b118237f9c405c6b5b6fe9a31fe16173d262b036166-d
-packagefile strconv=c:\Trading apllication\.gotmp-test\go-build1494167655\b062\_pkg_.a
-packagefile unique=c:\Trading apllication\.gotmp-test\go-build1494167655\b192\_pkg_.a

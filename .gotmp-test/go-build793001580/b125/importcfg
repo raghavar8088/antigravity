@@ -1,7 +1,0 @@
-# import config
-packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
-packagefile hash=c:\Trading apllication\.gotmp-test\go-build793001580\b082\_pkg_.a
-packagefile internal/byteorder=c:\Trading apllication\.gocache-test\9f\9fc588e51e19272d2f3554a8abd3d50ba74c9e47c4335b635194b6b79f92f5ec-d
-packagefile internal/cpu=c:\Trading apllication\.gotmp-test\go-build793001580\b011\_pkg_.a
-packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
-packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d

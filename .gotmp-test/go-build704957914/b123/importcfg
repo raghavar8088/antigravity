@@ -1,9 +1,0 @@
-# import config
-packagefile bufio=c:\Trading apllication\.gotmp-test\go-build704957914\b078\_pkg_.a
-packagefile compress/flate=c:\Trading apllication\.gotmp-test\go-build704957914\b124\_pkg_.a
-packagefile encoding/binary=c:\Trading apllication\.gotmp-test\go-build704957914\b108\_pkg_.a
-packagefile errors=c:\Trading apllication\.gotmp-test\go-build704957914\b003\_pkg_.a
-packagefile fmt=c:\Trading apllication\.gotmp-test\go-build704957914\b069\_pkg_.a
-packagefile hash/crc32=c:\Trading apllication\.gotmp-test\go-build704957914\b125\_pkg_.a
-packagefile io=c:\Trading apllication\.gotmp-test\go-build704957914\b051\_pkg_.a
-packagefile time=c:\Trading apllication\.gotmp-test\go-build704957914\b053\_pkg_.a

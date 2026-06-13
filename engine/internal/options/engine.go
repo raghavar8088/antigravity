@@ -47,7 +47,7 @@ type Engine struct {
 	persistHook      func(PersistedState)
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
-	tickEvery        time.Duration // trading loop interval; BTC/NIFTY paper use a short interval
+	tickEvery        time.Duration // trading loop interval; BTC paper uses a short interval
 }
 
 // NewEngine initialises the options engine with the full strategy library.
@@ -55,26 +55,15 @@ func NewEngine() *Engine {
 	return newEngineWithProfile(defaultOptionsMarketProfile)
 }
 
-// NewNiftyEngine initialises the NIFTY 50 options engine with NIFTY-specific
-// market modeling while preserving the same strategy library and persistence shape.
-func NewNiftyEngine() *Engine {
-	return newEngineWithProfile(niftyOptionsMarketProfile)
-}
-
 func newEngineWithProfile(profile MarketProfile) *Engine {
-	var defs []StrategyDef
-	if profile.Name == niftyOptionsMarketProfile.Name {
-		defs = BuildNiftyStrategies()
-	} else {
-		defs = BuildStrategies()
-	}
+	defs := BuildStrategies()
 	states := make([]*strategyState, len(defs))
 	for i, d := range defs {
 		states[i] = newStrategyState(d)
 	}
 
 	tickEvery := 10 * time.Second
-	if profile.Name == defaultOptionsMarketProfile.Name || profile.Name == niftyOptionsMarketProfile.Name {
+	if profile.Name == defaultOptionsMarketProfile.Name {
 		tickEvery = 1 * time.Second
 	}
 
@@ -93,17 +82,10 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 }
 
 func (e *Engine) isPaperIndexDesk() bool {
-	switch e.marketProfile.Name {
-	case defaultOptionsMarketProfile.Name, niftyOptionsMarketProfile.Name:
-		return true
-	default:
-		return false
-	}
+	return e.marketProfile.Name == defaultOptionsMarketProfile.Name
 }
 
 func (e *Engine) paperDeskAggressiveOpen() bool {
-	// Only BTC paper desk uses aggressive open (skips signals for demo rotation).
-	// NIFTY must respect all signal, regime, and entry confirmation gates.
 	return e.marketProfile.Name == defaultOptionsMarketProfile.Name && e.lastPrice > 0
 }
 
@@ -406,7 +388,7 @@ func (e *Engine) RegimeInfo() RegimeInfo {
 	}
 }
 
-// UpdatePrice feeds a new underlying spot tick (BTC USD or NIFTY index) into the engine.
+// UpdatePrice feeds a new BTC spot tick into the engine.
 func (e *Engine) UpdatePrice(price float64) {
 	e.mu.Lock()
 	hadNoPrice := e.lastPrice <= 0
@@ -493,7 +475,7 @@ func (e *Engine) Run(stopCh <-chan struct{}) {
 	}
 }
 
-// stripStalePaperDeskShadowsLocked removes shadow-only paper fills on BTC/NIFTY paper desks
+// stripStalePaperDeskShadowsLocked removes shadow-only paper fills on BTC paper desks
 // so ACTIVE strategies are not stuck behind "position nil && shadow non-nil" (e.g. after DB restore).
 func (e *Engine) stripStalePaperDeskShadowsLocked() {
 	if !e.isPaperIndexDesk() {
@@ -750,21 +732,11 @@ func (e *Engine) maybeOpenShadowPositionLocked(s *strategyState, ctx SignalConte
 }
 
 func (e *Engine) entryConfirmedFor(def StrategyDef, ctx SignalContext, regime string) bool {
-	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
-		return niftyEntryConfirmed(def, ctx, regime)
-	}
 	return optionEntryConfirmed(def, ctx, regime)
 }
 
-// signalFuncFor returns the appropriate signal function for the engine's market.
-// NIFTY engines use NiftySignals (with NIFTY-calibrated thresholds), falling
-// back to the base Signals map for any key not overridden.
+// signalFuncFor returns the signal function for the given key.
 func (e *Engine) signalFuncFor(key string) (SignalFunc, bool) {
-	if e.marketProfile.Name == niftyOptionsMarketProfile.Name {
-		if fn, ok := NiftySignals[key]; ok {
-			return fn, true
-		}
-	}
 	fn, ok := Signals[key]
 	return fn, ok
 }

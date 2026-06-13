@@ -1,6 +1,0 @@
-# import config
-packagefile errors=c:\Trading apllication\.gocache-test\7c\7c7e94fb5ae6a2180a1c74981abdd6eca0488f65cd71f1296acf9abf89b3835c-d
-packagefile internal/reflectlite=c:\Trading apllication\.gotmp-test\go-build793001580\b004\_pkg_.a
-packagefile sync=c:\Trading apllication\.gotmp-test\go-build793001580\b040\_pkg_.a
-packagefile sync/atomic=c:\Trading apllication\.gocache-test\5a\5a25e61c92ad00090120e8b7787b98f8298d33a2c4af0722a2c0f44a4ef3af57-d
-packagefile time=c:\Trading apllication\.gotmp-test\go-build793001580\b053\_pkg_.a

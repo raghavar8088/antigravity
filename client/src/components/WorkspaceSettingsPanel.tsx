@@ -10,7 +10,7 @@ export type StrategyToggleItem = {
 };
 
 type WorkspaceMode = "paper" | "live" | "analysis";
-type DataSource = "binance" | "bybit" | "nse" | "angel" | "yahoo";
+type DataSource = "binance" | "bybit" | "delta";
 
 type StoredSettings = {
   capital: string;
@@ -195,9 +195,7 @@ export default function WorkspaceSettingsPanel({
                 >
                   <option value="binance">Binance</option>
                   <option value="bybit">Bybit</option>
-                  <option value="nse">NSE mirror</option>
-                  <option value="angel">Angel One</option>
-                  <option value="yahoo">Yahoo Finance</option>
+                  <option value="delta">Delta Exchange</option>
                 </select>
               </label>
               <label className="settings-field">
