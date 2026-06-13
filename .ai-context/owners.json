@@ -1,0 +1,80 @@
+{
+  "ai-context": {
+    "location": ".ai-context",
+    "dependsOn": ["graphify", "repomix", "repo-maps"],
+    "purpose": "Low-token repository orientation and workflow guidance for AI agents.",
+    "preferredContext": [".ai-context/README_FOR_AI.md", ".ai-context/system-manifest.json"]
+  },
+  "api-layer": {
+    "location": "client/src/app/api",
+    "dependsOn": ["auth", "domain-libs", "broker-clients", "engine-proxy", "persistence"],
+    "purpose": "Next.js route handlers for trading, admin, auth, diagnostics, and engine proxy workflows.",
+    "preferredContext": [".ai-context/api-index.md", ".ai-context/modules/infrastructure.md"]
+  },
+  "dashboard-ui": {
+    "location": "client/src/components",
+    "dependsOn": ["hooks", "api-layer", "client-domain"],
+    "purpose": "Trading dashboard panels, terminal UI, reusable UI primitives, and status views.",
+    "preferredContext": [".ai-context/module-index.md", ".ai-context/execution-flow.md"]
+  },
+  "client-domain": {
+    "location": "client/src/lib",
+    "dependsOn": ["api-layer", "broker-clients", "persistence", "strategy-engine"],
+    "purpose": "TypeScript trading helpers, broker persistence, analytics, strategy authority, and shared types.",
+    "preferredContext": [".ai-context/domain-model.md", ".ai-context/modules/strategies.md"]
+  },
+  "market-data": {
+    "location": "engine/internal/marketdata",
+    "dependsOn": ["exchange-adapters", "sessions", "fallback-providers"],
+    "purpose": "Normalize exchange, broker, and fallback quote/candle data for strategies and dashboards.",
+    "preferredContext": [".ai-context/modules/exchanges.md", ".ai-context/domain-model.md"]
+  },
+  "strategy-engine": {
+    "location": "engine/internal/strategy",
+    "dependsOn": ["market-data", "risk-engine", "strategy-analytics"],
+    "purpose": "Curated strategy registry, signal generation, and active strategy selection.",
+    "preferredContext": [".ai-context/strategy-index.md", ".ai-context/modules/strategies.md"]
+  },
+  "risk-engine": {
+    "location": "engine/internal/risk",
+    "dependsOn": ["positions", "portfolio-state", "sessions", "kill-switch"],
+    "purpose": "Validate exposure, sizing, losses, session constraints, and safety before execution.",
+    "preferredContext": [".ai-context/business-rules.md", ".ai-context/modules/risk.md"]
+  },
+  "order-manager": {
+    "location": "engine/internal/omsv3",
+    "dependsOn": ["risk-engine", "execution-engine", "ledger", "reconciliation"],
+    "purpose": "Command/event order lifecycle and aggregate invariants.",
+    "preferredContext": [".ai-context/modules/execution.md", ".ai-context/adr/003-order-execution.md"]
+  },
+  "execution-engine": {
+    "location": "engine/internal/execution",
+    "dependsOn": ["order-manager", "exchange-adapters", "ledger", "kill-switch"],
+    "purpose": "Convert approved orders into paper/live execution operations.",
+    "preferredContext": [".ai-context/execution-flow.md", ".ai-context/modules/execution.md"]
+  },
+  "exchange-adapters": {
+    "location": "engine/internal/exchange",
+    "dependsOn": ["market-data", "broker-sessions", "execution-engine"],
+    "purpose": "Broker/exchange-specific normalization and execution boundaries.",
+    "preferredContext": [".ai-context/modules/exchanges.md", ".ai-context/adr/001-exchange-abstraction.md"]
+  },
+  "persistence": {
+    "location": "engine/internal/persistence",
+    "dependsOn": ["ledger", "reconciliation", "api-layer"],
+    "purpose": "Persist engine state through SQLite/filesystem fallback and Mongo-backed projections.",
+    "preferredContext": [".ai-context/modules/infrastructure.md", ".ai-context/dependency-map.md"]
+  },
+  "observability": {
+    "location": "engine/internal/observability",
+    "dependsOn": ["engine-runtime", "security", "metrics"],
+    "purpose": "Health, metrics, tracing, logs, and operational visibility.",
+    "preferredContext": [".ai-context/modules/infrastructure.md"]
+  },
+  "backtesting": {
+    "location": "engine/internal/backtest",
+    "dependsOn": ["strategy-engine", "market-data", "fee-models", "pnl-math"],
+    "purpose": "Replay historical data and evaluate strategy/execution assumptions.",
+    "preferredContext": [".ai-context/modules/backtesting.md", ".ai-context/business-rules.md"]
+  }
+}

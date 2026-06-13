@@ -1,0 +1,22 @@
+# Feature Prompt
+
+Before implementing:
+1. Read `.ai-context/README_FOR_AI.md`.
+2. Read `.ai-context/architecture.md`.
+3. Read `.ai-context/domain-model.md`.
+4. Query Graphify for the target subsystem.
+5. Read only the exact files needed for implementation.
+
+Implementation flow:
+- Identify the owning subsystem and boundary.
+- Follow existing patterns before adding abstractions.
+- Preserve trading invariants: risk before execution, kill switch wiring, session gates, and PnL math.
+- Add focused tests for policy, math, risk, execution, API shape, or UI behavior touched.
+- Run the smallest relevant verification command.
+- Refresh Graphify or AI context if structure changed.
+
+Prefer:
+- Small cohesive edits.
+- Existing helpers and types.
+- Explicit rejection reasons for trading gates.
+- Clear API response shapes.

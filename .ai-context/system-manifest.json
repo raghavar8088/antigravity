@@ -1,0 +1,155 @@
+{
+  "name": "antigravity-trading-platform",
+  "description": "Multi-market algorithmic trading platform with Next.js client/API and Go execution engine.",
+  "aiEntryFile": ".ai-context/README_FOR_AI.md",
+  "primaryContext": [
+    "AI_CONTEXT.md",
+    ".ai-context/README_FOR_AI.md",
+    ".ai-context/session/current-work.md",
+    ".ai-context/session/active-features.md",
+    ".ai-context/session/recent-decisions.md",
+    ".ai-context/session/known-issues.md",
+    ".ai-context/session/next-steps.md",
+    ".ai-context/repository-summary.md",
+    ".ai-context/architecture.md",
+    ".ai-context/module-index.md",
+    ".ai-context/domain-model.md",
+    ".ai-context/business-rules.md",
+    ".ai-context/glossary.md",
+    ".ai-context/owners.json",
+    ".ai-context/protected-modules.md",
+    ".ai-context/versions/current.md"
+  ],
+  "entryPoints": {
+    "frontend": "client/src",
+    "apiRoutes": "client/src/app/api",
+    "goEngine": "engine/cmd/antigravity/main.go",
+    "backtest": "engine/cmd/backtest/main.go",
+    "performanceBench": "engine/cmd/perfbench/main.go",
+    "databaseSeed": "engine/cmd/seed_db/main.go"
+  },
+  "subsystems": {
+    "marketData": [
+      "engine/internal/marketdata",
+      "client/src/app/api/nifty",
+      "client/src/app/api/delta-live",
+      "client/src/app/api/angelone"
+    ],
+    "strategyEngine": [
+      "engine/internal/strategy",
+      "client/src/lib/trading",
+      "client/src/lib/strategyAuthority"
+    ],
+    "riskEngine": [
+      "engine/internal/risk",
+      "engine/internal/risk/gate",
+      "engine/internal/riskv3",
+      "client/src/lib/trading/futuresDeskPolicy.ts"
+    ],
+    "executionEngine": [
+      "engine/internal/execution",
+      "engine/internal/trading",
+      "client/src/internal/execution"
+    ],
+    "orderManager": [
+      "engine/internal/omsv3",
+      "engine/internal/oms",
+      "client/src/internal/oms"
+    ],
+    "exchangeAdapters": [
+      "engine/internal/exchange",
+      "engine/internal/marketdata",
+      "client/src/lib/broker"
+    ],
+    "portfolioAndLedger": [
+      "engine/internal/ledger",
+      "engine/internal/positions",
+      "engine/internal/pms"
+    ],
+    "reconciliation": [
+      "engine/internal/reconciliation",
+      "engine/internal/reconciliationv2"
+    ],
+    "persistence": [
+      "engine/internal/persistence",
+      "engine/internal/mongopersist",
+      "client/src/lib/broker"
+    ],
+    "observability": [
+      "engine/internal/observability",
+      "engine/internal/tracing",
+      "engine/internal/telemetry"
+    ],
+    "safety": [
+      "engine/internal/killswitch",
+      "engine/internal/security",
+      "client/src/app/api/admin"
+    ]
+  },
+  "generatedContext": {
+    "graphify": "graphify-out/graph.json",
+    "graphReport": "graphify-out/GRAPH_REPORT.md",
+    "repomixSummary": ".ai-context/repomix-output.md",
+    "repoMap": ".ai-context/repo-map.json",
+    "symbols": ".ai-context/symbols.json",
+    "dependencies": ".ai-context/dependencies.json",
+    "callGraph": ".ai-context/call-graph.json"
+  },
+  "decisions": {
+    "exchangeAbstraction": ".ai-context/adr/001-exchange-abstraction.md",
+    "riskEngine": ".ai-context/adr/002-risk-engine.md",
+    "orderExecution": ".ai-context/adr/003-order-execution.md"
+  },
+  "commands": {
+    "queryGraph": "npm run graphify:query -- \"question\"",
+    "queryClientScope": "python scripts/graphify_workflow.py query --scope client \"question\"",
+    "queryEngineScope": "python scripts/graphify_workflow.py query --scope engine-internal \"question\"",
+    "refreshGraph": "npm run graphify:update",
+    "rebuildGraph": "npm run graphify:rebuild",
+    "refreshAiContext": "npm run ai-context:refresh",
+    "installAiContextHooks": "npm run ai-context:install-hooks"
+  },
+  "hardRules": [
+    "Use AI context and Graphify before broad source reads.",
+    "Do not bypass the kill switch in production paths.",
+    "Risk gates must precede execution.",
+    "Preserve funding, liquidation, fee, and PnL invariants.",
+    "Respect NSE/BSE market sessions.",
+    "Do not re-add known losing strategies while WINNERS_ONLY is active.",
+    "Do not index runtime data as source code.",
+    "Protected trading modules require explicit approval for deletion, public interface renames, or business-rule changes.",
+    "Read session context before commit history or broad source exploration."
+  ],
+  "runtimeData": {
+    "root": "runtime/",
+    "ignoredByGit": true,
+    "ignoredByCursor": true,
+    "children": [
+      "candles/",
+      "ticks/",
+      "backtests/",
+      "logs/",
+      "reports/",
+      "exports/",
+      "snapshots/"
+    ],
+    "rule": "Runtime market data, logs, reports, exports, and snapshots must not be indexed as source context."
+  },
+  "protectedModules": ".ai-context/protected-modules.md",
+  "architectureVersion": {
+    "current": ".ai-context/versions/current.md",
+    "history": [
+      ".ai-context/versions/v1.0.md",
+      ".ai-context/versions/v1.1.md"
+    ]
+  },
+  "sessionContext": {
+    "root": ".ai-context/session/",
+    "currentWork": ".ai-context/session/current-work.md",
+    "activeFeatures": ".ai-context/session/active-features.md",
+    "recentDecisions": ".ai-context/session/recent-decisions.md",
+    "knownIssues": ".ai-context/session/known-issues.md",
+    "nextSteps": ".ai-context/session/next-steps.md",
+    "rule": "Update session context at the end of substantial work so future agents do not reread history."
+  }
+}

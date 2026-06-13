@@ -1,0 +1,21 @@
+# Debug Prompt
+
+Before answering:
+1. Read `.ai-context/README_FOR_AI.md`.
+2. Read `.ai-context/repository-summary.md`.
+3. Read `.ai-context/domain-model.md`.
+4. Query Graphify for the failing subsystem.
+5. Open only files Graphify or the maps identify as relevant.
+
+Debug flow:
+- Identify the symptom, expected behavior, and actual behavior.
+- Trace the lifecycle:
+  - Desk bug: signal -> gate/policy -> position -> mark/exit -> math -> persistence -> API -> UI.
+  - Engine bug: market data -> strategy -> risk gate -> OMS -> execution -> ledger -> reconciliation -> kill switch.
+- Check whether the issue is data freshness, gate rejection, math, persistence, or UI projection.
+- Prefer narrow line reads and focused tests.
+
+Never:
+- Scan the whole repository.
+- Guess trading math.
+- Bypass risk or kill switch logic to make a test pass.

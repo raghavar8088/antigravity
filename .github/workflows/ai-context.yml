@@ -1,0 +1,52 @@
+name: AI Context Freshness
+
+on:
+  pull_request:
+    paths:
+      - "client/src/**"
+      - "engine/internal/**"
+      - "engine/cmd/**"
+      - "docs/**"
+      - ".ai-context/**"
+      - ".cursor/rules/**"
+      - "scripts/**"
+      - "merge_graphs.py"
+      - "package.json"
+      - "package-lock.json"
+  schedule:
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+
+jobs:
+  verify-ai-context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Graphify
+        run: python -m pip install graphifyy
+
+      - name: Refresh AI context
+        run: npm run ai-context:refresh
+
+      - name: Verify generated context is committed
+        run: |
+          git diff -- .ai-context AI_CONTEXT.md .cursor/rules package.json package-lock.json scripts merge_graphs.py
+          git diff --quiet -- .ai-context AI_CONTEXT.md .cursor/rules package.json package-lock.json scripts merge_graphs.py

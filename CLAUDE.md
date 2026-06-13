@@ -163,27 +163,38 @@ New engine modules (untracked): `engine/internal/killswitch/`, `engine/internal/
 ## Graphify Knowledge Graph
 Graphify is installed to reduce AI token consumption by providing a structured graph of the codebase.
 
+Always start broad codebase questions from:
+
+1. `.ai-context/README_FOR_AI.md`
+2. `.ai-context/system-manifest.json`
+3. `.ai-context/repository-summary.md`
+4. `.ai-context/dependency-map.md`
+5. `.ai-context/domain-model.md`
+6. `.ai-context/business-rules.md`
+7. `.ai-context/glossary.md`
+
+Never scan the entire repository by default. Open source files only when implementation details are required. Prefer maps, summaries, ADRs, ownership metadata, and Graphify scoped queries over raw source.
+
 ```bash
 # First-time setup (after cloning)
 pip install graphifyy
-python merge_graphs.py          # rebuilds graphify-out/ from pre-extracted sub-graphs
-# OR re-extract from scratch (no API key needed for code-only):
-graphify extract client/src --out . --no-cluster
-graphify extract engine/internal --out engine/internal --no-cluster
-graphify extract engine/cmd --out engine/cmd --no-cluster
-python merge_graphs.py
-graphify cluster-only . --no-label --no-viz
+npm run graphify:rebuild
+npm run ai-context:install-hooks
 
 # After changing code files (fast, no API cost)
-graphify update .
+npm run graphify:update
 
-# Query the graph (use instead of grep/read for architecture questions)
-graphify query "how does X connect to Y?"
+# Query the graph with a small default budget
+npm run graphify:query -- "how does X connect to Y?"
+python scripts/graphify_workflow.py query --scope client "where is the paper desk UI wired?"
+python scripts/graphify_workflow.py query --scope engine-internal "how does risk gate connect to OMS?"
+
+# More targeted graph tools
 graphify path "SymbolA" "SymbolB"
 graphify explain "concept"
 ```
 
-The Cursor rule at `.cursor/rules/graphify.mdc` automatically instructs the AI to consult the graph before exploring raw files.
+The Cursor rule at `.cursor/rules/graphify.mdc` instructs the AI to consult `AI_CONTEXT.md` and Graphify before exploring raw files. Use scoped graphs (`client`, `engine-internal`, `engine-cmd`) whenever the subsystem is known; this keeps graph answers smaller and cheaper.
 
 ---
 

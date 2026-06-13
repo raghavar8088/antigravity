@@ -1,0 +1,25 @@
+# Review Prompt
+
+Before review:
+1. Read `.ai-context/README_FOR_AI.md`.
+2. Read `.ai-context/domain-model.md`.
+3. Query Graphify for the touched subsystem if the diff spans multiple files.
+4. Review exact changed files and tests.
+
+Review focus:
+- Trading safety regressions.
+- Risk gate bypasses.
+- Kill switch wiring changes.
+- PnL, fee, funding, liquidation, and sizing drift.
+- NSE/BSE session gate regressions.
+- API response contract changes.
+- Persistence shape changes.
+- Missing focused tests for changed behavior.
+
+Output format:
+- Findings first, ordered by severity.
+- Cite exact files/symbols.
+- Include open questions only when they affect correctness.
+- Keep summary brief after findings.
+
+If no issues are found, say that clearly and mention residual test gaps.

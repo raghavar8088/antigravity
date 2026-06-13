@@ -1,0 +1,41 @@
+---
+description: core AI context and trading safety rules
+alwaysApply: true
+---
+
+Before broad repository exploration, always read or consult:
+
+1. `.ai-context/README_FOR_AI.md`
+2. `.ai-context/session/current-work.md`
+3. `.ai-context/session/recent-decisions.md`
+4. `.ai-context/session/known-issues.md`
+5. `.ai-context/system-manifest.json`
+6. `.ai-context/repository-summary.md`
+7. `.ai-context/dependency-map.md`
+8. `.ai-context/domain-model.md`
+9. `.ai-context/business-rules.md`
+10. `.ai-context/glossary.md`
+11. `.ai-context/protected-modules.md`
+12. `.ai-context/versions/current.md`
+
+Never scan the entire repository by default. Open source files only when implementation details are required for modifying code, debugging, adding features, reviewing changes, or tracing runtime behavior.
+
+Prefer maps and summaries over raw source:
+- `.ai-context/repomix-output.md`
+- `.ai-context/repo-map.json`
+- `.ai-context/dependencies.json`
+- Graphify scoped queries
+
+Do not read huge generated context files in full:
+- `.ai-context/symbols.json`
+- `.ai-context/call-graph.json`
+- `graphify-out/graph.json`
+- `runtime/`
+
+Trading safety rules:
+- Preserve BTC futures funding, liquidation, fee, PnL, sizing, and ledger invariants.
+- Risk gates must precede execution.
+- Kill switch wiring must remain in production paths.
+- NSE/BSE logic must respect market sessions and holidays.
+- Do not re-add known losing strategies while WINNERS_ONLY is active.
+- Protected modules in `.ai-context/protected-modules.md` require explicit approval for public interface renames, business-rule changes, or deletion.

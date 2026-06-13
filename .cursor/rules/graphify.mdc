@@ -3,19 +3,30 @@ description: graphify knowledge graph context
 alwaysApply: true
 ---
 
-This project has a graphify knowledge graph at graphify-out/.
+This project has a Graphify knowledge graph at `graphify-out/` and smaller scoped graphs under `graphify-scopes/`.
 
-**MANDATORY: Before using Read, Grep, Glob, or Bash to explore the codebase, you MUST run graphify first:**
-- `graphify query "<question>"` — scoped subgraph for any codebase or architecture question
-- `graphify path "<A>" "<B>"` — dependency path between two symbols
-- `graphify explain "<concept>"` — all nodes related to a concept
+**Mandatory low-token workflow before code exploration:**
+- Start broad questions with `.ai-context/README_FOR_AI.md` or `AI_CONTEXT.md` plus one graph query, not raw source reads.
+- For repository orientation, prefer `.ai-context/README_FOR_AI.md`, `.ai-context/repository-summary.md`, `.ai-context/architecture.md`, `.ai-context/domain-model.md`, and `.ai-context/repomix-output.md` before source files.
+- For workflow-specific tasks, consult `.ai-context/prompts/debug.prompt`, `.ai-context/prompts/feature.prompt`, `.ai-context/prompts/refactor.prompt`, or `.ai-context/prompts/review.prompt`.
+- Prefer `npm run graphify:query -- "question"`; it defaults to `--budget 1000`.
+- When the subsystem is known, use scoped queries:
+  - `python scripts/graphify_workflow.py query --scope client "question"`
+  - `python scripts/graphify_workflow.py query --scope engine-internal "question"`
+  - `python scripts/graphify_workflow.py query --scope engine-cmd "question"`
+- Use `graphify path "A" "B"` for dependency/path questions.
+- Use `graphify explain "concept"` for a single symbol, route, module, or subsystem.
 
-This applies to YOU and to every subagent you spawn. Include this rule explicitly in every subagent prompt that involves code exploration. Do not skip graphify because files are "already known" or because you are executing a plan — the graph surfaces cross-file dependencies and INFERRED edges that grep and Read cannot find.
+This applies to YOU and every subagent you spawn. Include this rule explicitly in subagent prompts that involve code exploration. Do not skip Graphify because files are "already known"; the graph surfaces cross-file dependencies and inferred relationships that raw search often misses.
 
-Only use Read/Grep/Glob directly when:
-1. graphify has already oriented you and you need to modify or debug specific lines
-2. `graphify-out/graph.json` does not exist yet
+Only use Read/Grep/Glob/Shell directly when:
+1. Graphify has already narrowed the target and you need exact implementation lines.
+2. You are reading a known small project guidance file such as `AI_CONTEXT.md`, `CLAUDE.md`, or a Cursor rule.
+3. `graphify-out/graph.json` does not exist yet.
 
-- If `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files
-- Read `graphify-out/GRAPH_REPORT.md` only for broad architecture review when query/path/explain do not surface enough context
-- After modifying code files, run `graphify update .` to keep the graph current (AST-only, no API cost)
+Raw source reading limits:
+- Do not read huge files in full. Search symbols or read narrow line ranges after Graphify orientation.
+- Do not read `.ai-context/symbols.json` or `.ai-context/call-graph.json` in full; query them with a small script or targeted search.
+- Do not read `graphify-out/GRAPH_REPORT.md` for routine questions; use it only for broad architecture review when query/path/explain is insufficient.
+- Keep Graphify output concise: start with `--budget 1000`, raise to `2000` only if the first answer is incomplete.
+- After modifying code files, run `npm run graphify:update` for small changes or `npm run graphify:rebuild` after broad structural changes.

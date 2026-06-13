@@ -6,9 +6,9 @@ import json
 import os
 
 GRAPH_FILES = [
-    "graphify-out/graph.json",                    # TypeScript: client/src (651 files)
-    "engine/internal/graphify-out/graph.json",    # Go: engine/internal (733 files)
-    "engine/cmd/graphify-out/graph.json",         # Go: engine/cmd (8 files)
+    "graphify-scopes/client-src/graphify-out/graph.json",
+    "graphify-scopes/engine-internal/graphify-out/graph.json",
+    "graphify-scopes/engine-cmd/graphify-out/graph.json",
 ]
 OUTPUT_FILE = "graphify-out/graph.json"
 
@@ -29,7 +29,7 @@ def merge_graphs(graph_files, output_path):
             data = json.load(f)
 
         nodes = data.get("nodes", [])
-        edges = data.get("edges", [])
+        edges = data.get("edges", data.get("links", []))
         hyperedges = data.get("hyperedges", [])
 
         for node in nodes:
@@ -41,7 +41,7 @@ def merge_graphs(graph_files, output_path):
             src = edge.get("source") or edge.get("from")
             tgt = edge.get("target") or edge.get("to")
             rel = edge.get("relation", "")
-            key = (src, tgt, rel)
+            key = (src, tgt, rel, edge.get("context", ""))
             if key not in seen_edges:
                 seen_edges.add(key)
                 merged_edges.append(edge)

@@ -1,0 +1,86 @@
+﻿# Dependencies and build outputs
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.turbo/
+.cache/
+.parcel-cache/
+
+# Python and Go generated artifacts
+__pycache__/
+*.pyc
+.venv/
+venv/
+.gocache/
+.gocache-test/
+.gotmp-test/
+bin/
+*.exe
+*.test
+*.prof
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+output/
+runtime/
+*.tmp
+*.bak
+
+# AI/generated context that should be queried by tools, not read wholesale
+graphify-out/
+graphify-scopes/
+client/src/graphify-out/
+engine/internal/graphify-out/
+engine/cmd/graphify-out/
+
+# Market data and backtest artifacts
+data/historical/
+data/ticks/
+data/candles/
+data/backtests/
+backtests/results/
+backtests/reports/
+engine/data/
+engine/phase22e_reports/
+engine/cover_v3.out
+exports/
+
+# Large structured data and binary archives
+*.csv
+*.tsv
+*.jsonl
+*.ndjson
+*.parquet
+*.feather
+*.sqlite
+*.sqlite3
+*.db
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Media, screenshots, and reports that inflate context
+screenshots/
+UI_AUDIT/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp4
+*.mov
+*.avi
+*.pdf
+
+# Secrets and local machine state
+.env
+.env.*
+*.pem
+claude-bot/auth.json
+claude-bot/.env

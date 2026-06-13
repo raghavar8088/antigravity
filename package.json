@@ -1,0 +1,18 @@
+{
+  "name": "antigravity-ai-workflows",
+  "private": true,
+  "scripts": {
+    "graphify:query": "python scripts/graphify_workflow.py query",
+    "graphify:update": "python scripts/graphify_workflow.py update",
+    "graphify:rebuild": "python scripts/graphify_workflow.py rebuild",
+    "graphify:stats": "python scripts/graphify_workflow.py stats",
+    "ai-context:maps": "python scripts/ai_context_maps.py",
+    "ai-context:repomix": "repomix client/src engine/internal engine/cmd docs --style markdown --output .ai-context/repomix-output.md --no-files --include-full-directory-structure --ignore \"**/node_modules/**,**/.next/**,**/graphify-out/**,**/graphify-scopes/**,**/data/**,**/logs/**,**/*.log,**/*.csv,**/*.jsonl,**/*.parquet,**/*.png,**/*.jpg,**/*.pdf,**/*.mp4\" --top-files-len 20",
+    "ai-context:repomix:full": "repomix client/src engine/internal engine/cmd docs --compress --style markdown --output .ai-context/repomix-full.md --ignore \"**/node_modules/**,**/.next/**,**/graphify-out/**,**/graphify-scopes/**,**/data/**,**/logs/**,**/*.log,**/*.csv,**/*.jsonl,**/*.parquet,**/*.png,**/*.jpg,**/*.pdf,**/*.mp4\" --top-files-len 20",
+    "ai-context:refresh": "npm run graphify:rebuild && npm run ai-context:maps && npm run ai-context:repomix",
+    "ai-context:install-hooks": "python scripts/install_ai_context_hooks.py"
+  },
+  "devDependencies": {
+    "repomix": "^1.14.1"
+  }
+}

@@ -39,8 +39,12 @@ engine/internal/**/*.go.*
 dev-server.err
 dev-server2.err
 
-# Graphify knowledge graph outputs (rebuild with: graphify update . or python merge_graphs.py)
+# Runtime data and generated trading artifacts
+runtime/
+
+# Graphify knowledge graph outputs (rebuild with: npm run graphify:rebuild)
 graphify-out/
+graphify-scopes/
 engine/internal/graphify-out/
 engine/cmd/graphify-out/
 

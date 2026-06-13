@@ -1,0 +1,21 @@
+# Refactor Prompt
+
+Before refactoring:
+1. Read `.ai-context/README_FOR_AI.md`.
+2. Read `.ai-context/module-index.md`.
+3. Read `.ai-context/dependency-map.md`.
+4. Use Graphify `path`, `query`, or `explain` to identify callers and dependencies.
+5. Read exact source files only after the dependency surface is known.
+
+Refactor flow:
+- Define the behavior that must remain unchanged.
+- Identify public interfaces, API routes, persisted data shapes, and tests.
+- Keep trading math and safety checks stable unless explicitly requested.
+- Avoid compatibility shims for unshipped branch-only code; replace cleanly when safe.
+- Update tests around changed contracts.
+- Refresh maps with `npm run ai-context:maps` if symbols or dependencies changed significantly.
+
+Never:
+- Move risk checks after execution.
+- Remove kill switch wiring.
+- Change persisted data shape without migration/compatibility analysis.
