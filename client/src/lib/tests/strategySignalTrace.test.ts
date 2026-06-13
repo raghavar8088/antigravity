@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for strategySignalTrace helpers.
  * Pure functions — no MongoDB, no I/O.
  */
@@ -11,7 +11,7 @@ import {
   summarizeSignalTrace,
   capTraceRows,
   type StrategySignalTraceRow,
-} from "../strategySignalTrace";
+} from "../ai/strategySignalTrace";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

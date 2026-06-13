@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MongoDB persistence for Verification Track events.
  *
  * Collection: verification_track_events
@@ -8,7 +8,7 @@
  * - Only account_key_suffix is stored (never full key).
  */
 
-import { getDb, isMongoConfigured } from "@/lib/mongoTradesClient";
+import { getDb, isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import type { VerificationTrackEvent } from "./types";
 
 const COLLECTION = "verification_track_events";

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 

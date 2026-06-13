@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
-import { DEFAULT_MOCK_ACCOUNT_KEY, mockAccountKeySchema } from "@/lib/mockTradingPersistenceTypes";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { getLatestMockAccountSnapshot } from "@/lib/trading/mockTradingMongo";
+import { DEFAULT_MOCK_ACCOUNT_KEY, mockAccountKeySchema } from "@/lib/trading/mockTradingPersistenceTypes";
 
 export const dynamic = "force-dynamic";
 

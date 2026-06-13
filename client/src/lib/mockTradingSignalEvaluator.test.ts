@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
-import { buildPaperDeskStrategies } from "@/lib/futuresDeskPolicy";
-import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/btcFtRoster";
+﻿import { describe, expect, it } from "vitest";
+import { FUTURES_STRAT_DEFS } from "@/lib/trading/futuresStrategies";
+import { buildPaperDeskStrategies } from "@/lib/trading/futuresDeskPolicy";
+import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/trading/btcFtRoster";
 import {
   evaluateMockTradingSignals,
   MOCK_TRADING_MIN_BARS,
   resolveMockTradingStrategies,
-} from "@/lib/mockTradingSignalEvaluator";
-import type { MockTradingBar } from "@/lib/mockTradingMarketData";
-import { isExecutableTraceRow } from "@/lib/mockTradingEngine";
+} from "@/lib/trading/mockTradingSignalEvaluator";
+import type { MockTradingBar } from "@/lib/trading/mockTradingMarketData";
+import { isExecutableTraceRow } from "@/lib/trading/mockTradingEngine";
 
 function bullishBars(base = 100_000, count = 40): MockTradingBar[] {
   const bars: MockTradingBar[] = [];

@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tests for the self-healing recommendation engine.
  * Pure-function tests — no MongoDB / no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { recommendHealingActions, type DeskHealingActionType } from "./deskSelfHealing";
+import { recommendHealingActions, type DeskHealingActionType } from "./trading/deskSelfHealing";
 import type { AiAppTrackerSnapshot } from "./aiAppTracker/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────

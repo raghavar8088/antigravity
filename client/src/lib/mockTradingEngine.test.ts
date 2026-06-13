@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smoke tests for the Mock Trading engine.
  *
  * Each test proves a requirement from the Mock Trading spec:
@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createTraceRow, type SignalTraceGate, type StrategySignalTraceRow } from "@/lib/strategySignalTrace";
+import { createTraceRow, type SignalTraceGate, type StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 import {
   applyPriceTickToTrade,
   buildMockTradeFromTrace,
@@ -43,7 +43,7 @@ import {
   sortMockTrades,
   type MockTrade,
   type MockTradingConfig,
-} from "@/lib/mockTradingEngine";
+} from "@/lib/trading/mockTradingEngine";
 
 const T0 = 1_700_000_000_000;
 const ENTRY = 60_000;

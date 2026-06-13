@@ -90,8 +90,18 @@ type Store struct {
 	mu sync.Mutex
 }
 
+// ErrDisabled is returned by NewStore when SQLITE_ENABLED=false.
+var ErrDisabled = fmt.Errorf("SQLite disabled via SQLITE_ENABLED=false")
+
 // NewStore opens the SQLite database and creates all tables if needed.
+// Set SQLITE_ENABLED=false to skip SQLite entirely (production default on AWS Lightsail,
+// where MongoDB Atlas is the primary persistence layer).
 func NewStore(ctx context.Context) (*Store, error) {
+	if v := os.Getenv("SQLITE_ENABLED"); v == "false" {
+		log.Printf("[DB] SQLite disabled (SQLITE_ENABLED=false) — skipping local store")
+		return nil, ErrDisabled
+	}
+
 	dbPath := os.Getenv("SQLITE_PATH")
 	if dbPath == "" {
 		dbPath = "./data/engine.db"

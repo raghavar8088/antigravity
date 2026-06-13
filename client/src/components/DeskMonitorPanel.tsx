@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * DeskMonitorPanel
@@ -14,27 +14,27 @@ import {
   type RotationReport,
 } from "@/hooks/useDeskPerformanceMonitor";
 import { StrategyRotationPanel } from "@/components/StrategyRotationPanel";
-import { generateHealthReport } from "@/lib/futuresHealthReport";
+import { generateHealthReport } from "@/lib/analytics/futuresHealthReport";
 import {
   blockStrategyRuntime,
   getRuntimeBlocklist,
   unblockStrategyRuntime,
-} from "@/lib/futuresDeskPolicy";
-import { markAgeMs } from "@/lib/canonicalMarkPrice";
+} from "@/lib/trading/futuresDeskPolicy";
+import { markAgeMs } from "@/lib/trading/canonicalMarkPrice";
 import {
   runProductionReadiness,
   type ReadinessReport,
-} from "@/lib/futuresProductionReadiness";
+} from "@/lib/risk/futuresProductionReadiness";
 import type { TuningRecommendation } from "@/hooks/useDeskPerformanceMonitor";
-import { deriveDeskRecommendation, type DeskRecommendation } from "@/lib/futuresDeskRecommendation";
-import type { AttributionReport } from "@/lib/futuresAttribution";
-import { computeGoLiveGates } from "@/lib/futuresGoLiveGates";
-import { generateValidationReport } from "@/lib/futuresValidationReport";
+import { deriveDeskRecommendation, type DeskRecommendation } from "@/lib/trading/futuresDeskRecommendation";
+import type { AttributionReport } from "@/lib/analytics/futuresAttribution";
+import { computeGoLiveGates } from "@/lib/risk/futuresGoLiveGates";
+import { generateValidationReport } from "@/lib/analytics/futuresValidationReport";
 import { GoLiveGatesPanel } from "@/components/GoLiveGatesPanel";
-import type { DiagnosticSummary } from "@/lib/futuresStrategyDiagnostics";
-import { suggestWinnersFromScorecard } from "@/lib/futuresWinnersRefresh";
-import type { SoakDaySnapshot } from "@/lib/futuresSoakTracker";
-import type { UnifiedReadiness } from "@/lib/futuresUnifiedReadiness";
+import type { DiagnosticSummary } from "@/lib/trading/futuresStrategyDiagnostics";
+import { suggestWinnersFromScorecard } from "@/lib/trading/futuresWinnersRefresh";
+import type { SoakDaySnapshot } from "@/lib/analytics/futuresSoakTracker";
+import type { UnifiedReadiness } from "@/lib/risk/futuresUnifiedReadiness";
 
 type SkipSummaryRow = { reason: string; count: number };
 

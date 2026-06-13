@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
-import { formatDeskInr, formatDeskUsd } from "@/lib/deskFormat";
+import { formatDeskInr, formatDeskUsd } from "@/lib/trading/deskFormat";
 import { DeskChip } from "./DeskChip";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
 import { StatusBadge, type DeskEngineStatus } from "./StatusBadge";

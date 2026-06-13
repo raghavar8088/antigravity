@@ -1,9 +1,9 @@
-import {
+﻿import {
   evalMinuteSignal,
   passesEntryConfirmation,
   type FuturesSignalInputs,
-} from "@/lib/futuresSignals";
-import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+} from "@/lib/trading/futuresSignals";
+import type { FuturesStratDef } from "@/lib/trading/futuresStratTypes";
 
 export type SignalDirection = "BUY" | "SELL";
 

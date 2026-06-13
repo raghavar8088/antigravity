@@ -1,4 +1,4 @@
-/**
+﻿/**
  * /api/nifty/seed-engine — Feed historical NIFTY 50 candles into the Go engine
  *
  * Uses Yahoo Finance v8/chart (no credentials needed) to fetch today's 1-min
@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 
 const INTERNAL_API_URL =
   process.env.INTERNAL_API_URL?.replace(/\/$/, "") ?? "http://localhost:8080";

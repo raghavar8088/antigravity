@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { submitExecutionRequest } from "@/lib/executionRequest";
+import { submitExecutionRequest } from "@/lib/trading/executionRequest";
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 

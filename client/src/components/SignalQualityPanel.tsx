@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import type { SignalQualityScore } from "@/lib/futuresSignalQuality";
+import type { SignalQualityScore } from "@/lib/analytics/futuresSignalQuality";
 
 interface Props {
   quality: SignalQualityScore | null;

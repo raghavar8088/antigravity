@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { formatReplayCompareTable, statsFromClosedTrades } from "./futuresReplayCompare";
-import type { BTCFuturesTrade } from "./btcFuturesTrade.types";
+﻿import { describe, expect, it } from "vitest";
+import { formatReplayCompareTable, statsFromClosedTrades } from "./analytics/futuresReplayCompare";
+import type { BTCFuturesTrade } from "./trading/btcFuturesTrade.types";
 
 const mockTrade = (net: number, reason: BTCFuturesTrade["exitReason"]): BTCFuturesTrade => ({
   id: "x",

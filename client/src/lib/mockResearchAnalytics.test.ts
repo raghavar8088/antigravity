@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeAdvancedResearchAnalytics,
   computeDailyPnlPoints,
   computeStrategyComparisonSeries,
   createEquitySnapshot,
-} from "@/lib/mockResearchAnalytics";
-import type { MockAccountState, MockTrade } from "@/lib/mockTradingEngine";
+} from "@/lib/ai/mockResearchAnalytics";
+import type { MockAccountState, MockTrade } from "@/lib/trading/mockTradingEngine";
 
 const T0 = 1_700_000_000_000;
 

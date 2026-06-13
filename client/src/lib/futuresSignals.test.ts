@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import type { FuturesStratDef } from "./futuresStrategies";
+﻿import { describe, expect, it } from "vitest";
+import type { FuturesStratDef } from "./trading/futuresStrategies";
 import {
   aggregate1mOhlcvToPeriodMinutes,
   buildSignalInputs,
@@ -9,7 +9,7 @@ import {
   evalMinuteSignal,
   passesEntryConfirmation,
   type FuturesSignalInputs,
-} from "./futuresSignals";
+} from "./trading/futuresSignals";
 
 // ========== SYNTHETIC BAR FIXTURES ==========
 

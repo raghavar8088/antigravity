@@ -20,13 +20,13 @@ import {
   fetchDeltaFutures1mCandles,
   fetchDeltaFutures1mCandlesPaged,
   countCandleGaps,
-} from "../src/lib/futuresKlinesFetch";
+} from "../src/lib/trading/futuresKlinesFetch";
 import {
   REPLAY_FIXTURE_DIR,
   replayFixturePath,
   replayFixturePathForDays,
   computeCoverageDays,
-} from "../src/lib/futuresReplayFixtures";
+} from "../src/lib/analytics/futuresReplayFixtures";
 import { loadEnvLocal, parseArg } from "./replayCliShared";
 
 loadEnvLocal();

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 
@@ -57,7 +57,7 @@ type AIInsightsState = {
   loading: boolean;
 };
 
-import { resolveEngineApiUrl } from "@/lib/engineApi";
+import { resolveEngineApiUrl } from "@/lib/broker/engineApi";
 const API_URL = resolveEngineApiUrl();
 
 export default function useAIInsights(refreshKey = 0, enabled = true): AIInsightsState {

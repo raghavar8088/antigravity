@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { submitExecutionRequest } from "@/lib/executionRequest";
+import { submitExecutionRequest } from "@/lib/trading/executionRequest";
 
 const CONFIG_LS_KEY = "delta_api_config_v1";
 

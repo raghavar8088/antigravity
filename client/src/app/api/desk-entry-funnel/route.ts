@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/desk-entry-funnel
  *
  * Returns the latest entry funnel snapshot stored in paper_state by the worker
@@ -17,8 +17,8 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { isMongoConfigured, getAccountState, getDb } from "@/lib/mongoTradesClient";
-import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
+import { isMongoConfigured, getAccountState, getDb } from "@/lib/broker/mongoTradesClient";
+import type { EntryFunnelSnapshot } from "@/lib/trading/deskEntryFunnelSnapshot";
 
 export const dynamic = "force-dynamic";
 

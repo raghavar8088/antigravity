@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Per-category signal scoring tests for the 160-strategy research pool.
  *
  * Strategy: build synthetic OHLCV that creates the indicator condition
@@ -7,10 +7,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildSignalInputs, evalMinuteSignal, passesEntryConfirmation } from "../futuresSignals";
-import { scoreCategoryStrategy, scoreScalping, scoreDay } from "../futuresSignalScoring";
-import { SCALPING_STRATEGIES, DAY_TRADING_STRATEGIES } from "../futuresCategoryStrategies";
-import type { FuturesStratDef } from "../futuresStratTypes";
+import { buildSignalInputs, evalMinuteSignal, passesEntryConfirmation } from "../trading/futuresSignals";
+import { scoreCategoryStrategy, scoreScalping, scoreDay } from "../trading/futuresSignalScoring";
+import { SCALPING_STRATEGIES, DAY_TRADING_STRATEGIES } from "../trading/futuresCategoryStrategies";
+import type { FuturesStratDef } from "../trading/futuresStratTypes";
 
 // ─── Bar fixtures ─────────────────────────────────────────────────────────────
 
@@ -426,8 +426,8 @@ describe("passesEntryConfirmation — day_trading gates", () => {
 
 // ─── Swing trading scoring tests (PR 4) ──────────────────────────────────────
 
-import { SWING_TRADING_STRATEGIES } from "../futuresCategoryStrategies";
-import { scoreSwing } from "../futuresSignalScoring";
+import { SWING_TRADING_STRATEGIES } from "../trading/futuresCategoryStrategies";
+import { scoreSwing } from "../trading/futuresSignalScoring";
 
 function findSwingStrat(id: number): FuturesStratDef {
   const s = SWING_TRADING_STRATEGIES.find((d) => d.id === id);

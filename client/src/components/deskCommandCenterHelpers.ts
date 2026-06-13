@@ -1,4 +1,4 @@
-import type { ScorecardAction } from "@/lib/futuresScorecardActions";
+﻿import type { ScorecardAction } from "@/lib/analytics/futuresScorecardActions";
 
 /** Whether hero "Copy env fix" should show (UI-20). */
 export function scorecardShowsEnvFixCopy(action: ScorecardAction | null | undefined): boolean {

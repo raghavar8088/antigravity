@@ -1,5 +1,5 @@
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
-import { buildPlatformEvents } from "@/lib/platformEvents";
+﻿import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
+import { buildPlatformEvents } from "@/lib/trading/platformEvents";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

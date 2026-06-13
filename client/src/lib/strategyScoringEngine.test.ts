@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { scoreAllStrategies } from "@/lib/strategyScoringEngine";
-import type { StrategyPerformanceMetrics } from "@/lib/strategyPerformanceEngine";
+import { scoreAllStrategies } from "@/lib/ai/strategyScoringEngine";
+import type { StrategyPerformanceMetrics } from "@/lib/ai/strategyPerformanceEngine";
 
 function metrics(id: number, netPnl: number, winRate: number, profitFactor: number): StrategyPerformanceMetrics {
   return {

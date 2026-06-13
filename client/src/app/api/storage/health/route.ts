@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/storage/health
  *
  * Returns combined health of MongoDB + local filesystem storage.
@@ -6,9 +6,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured, pingMongo } from "@/lib/mongoTradesClient";
-import { dps } from "@/lib/dualPersistenceService";
-import { writeQueue } from "@/lib/writeQueue";
+import { isMongoConfigured, pingMongo } from "@/lib/broker/mongoTradesClient";
+import { dps } from "@/lib/portfolio/dualPersistenceService";
+import { writeQueue } from "@/lib/portfolio/writeQueue";
 
 export const dynamic = "force-dynamic";
 

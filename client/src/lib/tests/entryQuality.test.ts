@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PR-6 Entry Quality tests.
  */
 
@@ -13,12 +13,12 @@ import {
   isStrategyRuntimeBlocked,
   unblockStrategyRuntime,
   CHOP_THRESHOLD_BOOST,
-} from "../futuresDeskPolicy";
+} from "../trading/futuresDeskPolicy";
 import {
   logSkipReason,
   getSkipReasonSummary,
   resetSkipReasonLog,
-} from "../entrySkipReason";
+} from "../risk/entrySkipReason";
 
 describe("runtime strategy blocklist", () => {
   it("blocks and unblocks strategy ids in memory", () => {

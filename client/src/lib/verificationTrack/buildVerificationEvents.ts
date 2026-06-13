@@ -1,13 +1,13 @@
-/**
+﻿/**
  * Pure builders that convert existing diagnostic snapshots into VerificationTrackEvent records.
  * No side effects, no I/O, no trading logic changes.
  */
 
 import type { VerificationTrackEvent, VerificationTrackEventType } from "./types";
-import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
-import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
-import type { NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
-import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
+import type { EntryFunnelSnapshot } from "@/lib/trading/deskEntryFunnelSnapshot";
+import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/ai/strategySignalTrace";
+import type { NoTradeRootCauseResult } from "@/lib/risk/noTradeRootCause";
+import type { BTCFuturesTrade } from "@/lib/trading/btcFuturesTrade.types";
 
 type LegacyOmsOrder = {
   status?: string;

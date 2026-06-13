@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { diagnoseNoTradeRootCause } from "../noTradeRootCause";
-import { buildFunnelSnapshot, emptyBlockerCounts } from "../deskEntryFunnelSnapshot";
-import type { SignalTraceSummary } from "../strategySignalTrace";
+﻿import { describe, expect, it } from "vitest";
+import { diagnoseNoTradeRootCause } from "../risk/noTradeRootCause";
+import { buildFunnelSnapshot, emptyBlockerCounts } from "../trading/deskEntryFunnelSnapshot";
+import type { SignalTraceSummary } from "../ai/strategySignalTrace";
 
 function snap(overrides: Partial<Parameters<typeof buildFunnelSnapshot>[0]> = {}) {
   return buildFunnelSnapshot({

@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import type { TerminalAuthorityState } from "@/lib/terminal/terminalAuthority";
-import { TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pct, pnlClass, usd } from "./format";

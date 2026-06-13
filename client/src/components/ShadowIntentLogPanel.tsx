@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { ShadowIntentListItem } from "@/lib/shadowTradeIntentTypes";
+import type { ShadowIntentListItem } from "@/lib/ai/shadowTradeIntentTypes";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 import { DeskChip } from "@/components/desk/ui/DeskChip";
 import type { DeskColumn } from "@/components/desk/ui/DeskDataTable";

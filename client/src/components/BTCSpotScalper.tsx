@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 // Dynamically import the chart (uses DOM APIs — must be client-only, no SSR)
 const BTCLiveChart = dynamic(() => import("@/components/BTCLiveChart"), { ssr: false });
 import DailyPnlLedger from "@/components/DailyPnlLedger";
-import { formatShortDate, formatShortTime } from "@/lib/time";
+import { formatShortDate, formatShortTime } from "@/lib/utils/time";
 import {
   BTC_SPOT_CLIP_USD,
   type BTCSpotEngineStats,

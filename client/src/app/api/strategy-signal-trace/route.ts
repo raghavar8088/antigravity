@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/strategy-signal-trace
  *
  * Returns the latest per-strategy signal trace snapshot stored in paper_state.
@@ -13,10 +13,10 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
-import { getAccountState, isMongoConfigured } from "@/lib/mongoTradesClient";
-import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
-import { summarizeSignalTrace } from "@/lib/strategySignalTrace";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
+import { getAccountState, isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/ai/strategySignalTrace";
+import { summarizeSignalTrace } from "@/lib/ai/strategySignalTrace";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "MongoDB not configured" }, { status: 503 });
   }
 
-  const { upsertSignalTrace } = await import("@/lib/mongoTradesClient");
+  const { upsertSignalTrace } = await import("@/lib/broker/mongoTradesClient");
   await upsertSignalTrace(accountKey, b.trace as Record<string, unknown>);
   return NextResponse.json({ ok: true });
 }

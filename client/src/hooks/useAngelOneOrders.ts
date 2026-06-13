@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useCallback } from "react";
-import { submitExecutionRequest, type ExecutionRequestPayload } from "@/lib/executionRequest";
+import { submitExecutionRequest, type ExecutionRequestPayload } from "@/lib/trading/executionRequest";
 
 export type AngelOrder = {
   orderId: string;

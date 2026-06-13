@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   COMMAND_CENTER_NAV,
   MOCK_TRADING_PATH,
@@ -12,7 +12,7 @@ import {
   isTerminalRoute,
   legacyPaperDeskRedirect,
   paperDeskHref,
-} from "./navRoutes";
+} from "./utils/navRoutes";
 
 describe("isPaperDeskRoute", () => {
   it("matches retired paper desk paths", () => {

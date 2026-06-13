@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
-import { legacyPaperDeskRedirect } from "@/lib/navRoutes";
+﻿import { redirect } from "next/navigation";
+import { legacyPaperDeskRedirect } from "@/lib/utils/navRoutes";
 
 type PaperDeskLegacyPageProps = {
   searchParams: Promise<{ tab?: string }>;

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: btc-engine
+  namespace: btc-pilot
+  labels:
+    app: btc-engine
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  # CRITICAL: replicas MUST remain 1.
+  # Two engine instances would duplicate trades and corrupt position state.
+  # The HPA (engine-hpa.yaml) is locked to minReplicas=maxReplicas=1.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: btc-engine
+  strategy:
+    type: Recreate   # Not RollingUpdate — avoid any overlap between instances
+  template:
+    metadata:
+      labels:
+        app: btc-engine
+    spec:
+      terminationGracePeriodSeconds: 60
+      lifecycle:
+        preStop:
+          exec:
+            command: ["/bin/sh", "-c", "sleep 10"]
+      containers:
+        - name: btc-engine
+          image: ${ECR_IMAGE_URI}   # replaced by CI via kubectl set image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: btc-engine-config
+            - secretRef:
+                name: btc-engine-secrets
+          volumeMounts:
+            - name: engine-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 2
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24   # 120s startup window for reconciliation
+      volumes:
+        - name: engine-data
+          persistentVolumeClaim:
+            claimName: btc-engine-data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: btc-engine-data
+  namespace: btc-pilot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

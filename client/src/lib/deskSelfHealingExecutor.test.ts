@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for the self-healing executor.
  *
  * Mocks: none — the executor takes injected deps so tests pass in spies.
@@ -16,8 +16,8 @@ import { describe, it, expect, vi } from "vitest";
 import {
   executeHealingActions,
   type HealingExecutionDeps,
-} from "./deskSelfHealingExecutor";
-import type { DeskHealingAction } from "./deskSelfHealing";
+} from "./trading/deskSelfHealingExecutor";
+import type { DeskHealingAction } from "./trading/deskSelfHealing";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

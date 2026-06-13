@@ -173,6 +173,15 @@ func (m *MongoManager) connect(ctx context.Context) error {
 	return nil
 }
 
+// DB returns the underlying *mongo.Database handle. Needed by packages that
+// require a raw database reference (e.g. mongopersist.EnsureIndexes).
+// Returns nil if the manager is not connected.
+func (m *MongoManager) DB() *mongo.Database {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.db
+}
+
 // EnsureIndexes creates all required indexes. Called once at startup.
 // Duplicate index creation is harmless and logged, not fatal.
 func (m *MongoManager) EnsureIndexes(ctx context.Context) error {

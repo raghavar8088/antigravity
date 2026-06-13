@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+﻿import { afterEach, describe, expect, it } from "vitest";
 import {
   FRONTEND_OWNER_ACCOUNT_KEY,
   validateAccountKeyAlignment,
-} from "./authoritativeAccountKey";
+} from "./broker/authoritativeAccountKey";
 
 describe("authoritativeAccountKey", () => {
   const origOwner = process.env.OWNER_ACCOUNT_KEY;

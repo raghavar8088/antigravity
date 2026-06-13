@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { canonicalNetPnl, canonicalTradeFees, resolveTradeFeeLegs } from "@/lib/portfolioAccountingFees";
+﻿import { describe, expect, it } from "vitest";
+import { canonicalNetPnl, canonicalTradeFees, resolveTradeFeeLegs } from "@/lib/portfolio/portfolioAccountingFees";
 
 describe("resolveTradeFeeLegs", () => {
   it("prefers explicit entry/exit fee fields", () => {

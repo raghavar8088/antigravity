@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,11 +8,15 @@ import RiskRibbon from "@/components/RiskRibbon";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
-import { resolvePageTitle } from "@/lib/commandPaletteItems";
+import { resolvePageTitle } from "@/lib/utils/commandPaletteItems";
 import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
-import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES, type CommandCenterNavItem } from "@/lib/navRoutes";
+import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES, type CommandCenterNavItem } from "@/lib/utils/navRoutes";
 import { NavIcon } from "@/components/terminal/institutional/NavIcons";
 import { pct, px } from "@/components/terminal/institutional/format";
+import { SessionClock } from "@/components/session/SessionClock";
+import { KillSwitchIndicator } from "@/components/killswitch/KillSwitchIndicator";
+import { KillSwitchPanel } from "@/components/killswitch/KillSwitchPanel";
+import { RiskHUD } from "@/components/risk/RiskHUD";
 
 export type M3AppShellProps = {
   children: ReactNode;
@@ -45,6 +49,7 @@ export function M3AppShell({
   return (
     <CommandPaletteProvider>
       <div className="m3-app-shell">
+        <KillSwitchPanel />
         <aside
           className={`m3-nav-rail ${railCollapsed ? "m3-nav-rail--collapsed" : ""} ${mobileNavOpen ? "m3-nav-rail--mobile-open" : ""}`}
           aria-label="Main navigation"
@@ -107,7 +112,10 @@ export function M3AppShell({
               <CommandPaletteTrigger />
             </div>
             <div className="m3-top-app-bar__actions">
+              <SessionClock />
+              <RiskHUD />
               {statusChips}
+              <KillSwitchIndicator />
               <button type="button" className="m3-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
                 <NavIcon name={theme === "dark" ? "light" : "dark"} />
               </button>

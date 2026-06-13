@@ -9,9 +9,9 @@ import {
   replayFixturePath,
   type ReplayCandle,
   type ReplayFixtureKind,
-} from "../src/lib/futuresReplayFixtures";
-import type { PaperReplayConfig } from "../src/lib/futuresReplayEngine";
-import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "../src/lib/btcFutureTradingRoster";
+} from "../src/lib/analytics/futuresReplayFixtures";
+import type { PaperReplayConfig } from "../src/lib/analytics/futuresReplayEngine";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "../src/lib/trading/btcFutureTradingRoster";
 
 export { BTC_FUTURE_TRADING_STRATEGY_IDS };
 

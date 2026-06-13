@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { fetchBtcSpotPrice } from "@/lib/btcSpotPrice";
+﻿import { NextResponse } from "next/server";
+import { fetchBtcSpotPrice } from "@/lib/trading/btcSpotPrice";
 
 export const dynamic = "force-dynamic";
 

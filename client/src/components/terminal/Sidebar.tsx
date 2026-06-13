@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
-import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 
 type NavItem = {
   href: string;

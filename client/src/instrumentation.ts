@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Next.js server instrumentation — runs once when the server process starts.
  * Logs the full environment readiness report so startup failures are visible
  * immediately in Vercel Function logs and local terminal output.
@@ -17,6 +17,6 @@ export async function register() {
   }
 
   // Dynamic import keeps this out of the browser bundle entirely.
-  const { logEnvReport } = await import("@/lib/envCheck");
+  const { logEnvReport } = await import("@/lib/utils/envCheck");
   logEnvReport();
 }

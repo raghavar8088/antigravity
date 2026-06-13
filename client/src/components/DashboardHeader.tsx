@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { resolveEngineApiUrl } from "@/lib/engineApi";
+import { resolveEngineApiUrl } from "@/lib/broker/engineApi";
 
 type DashboardHeaderProps = {
   online: boolean;

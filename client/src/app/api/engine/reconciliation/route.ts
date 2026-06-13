@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
-import { mongoUnconfigured } from "@/lib/mockTradingApiErrors";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { getLatestMockAccountSnapshot } from "@/lib/trading/mockTradingMongo";
+import { mongoUnconfigured } from "@/lib/trading/mockTradingApiErrors";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
 

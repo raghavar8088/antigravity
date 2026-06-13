@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { blockedDirectExecutionRoute } from "@/lib/blockedExecutionRoute";
+import { blockedDirectExecutionRoute } from "@/lib/risk/blockedExecutionRoute";
 
 export const dynamic = "force-dynamic";
 

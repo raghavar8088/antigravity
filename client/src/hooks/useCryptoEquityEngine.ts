@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CRYPTO_TOP_20, type CryptoAsset } from "@/lib/cryptoTop20";
+import { CRYPTO_TOP_20, type CryptoAsset } from "@/lib/trading/cryptoTop20";
 import type { CryptoMarketItem } from "@/app/api/crypto/markets/route";
 
 const INITIAL_BALANCE = 1_000_000;

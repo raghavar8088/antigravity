@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,9 +15,9 @@ import {
 } from "lightweight-charts";
 import { TerminalPanel } from "@/components/terminal";
 import { DeskEmptyState } from "@/components/desk/ui";
-import { coerceEpochMs, toUtcChartTime } from "@/lib/chartTime";
-import type { MarketRegime } from "@/lib/marketRegimeClassifier";
-import type { MockAccountState, MockTrade } from "@/lib/mockTradingEngine";
+import { coerceEpochMs, toUtcChartTime } from "@/lib/utils/chartTime";
+import type { MarketRegime } from "@/lib/ai/marketRegimeClassifier";
+import type { MockAccountState, MockTrade } from "@/lib/trading/mockTradingEngine";
 import {
   computeCumulativeNetPnlPoints,
   computeDailyPnlPoints,
@@ -26,7 +26,7 @@ import {
   createEquitySnapshot,
   type EquityAnalyticsSnapshot,
   type ResearchChartPoint,
-} from "@/lib/mockResearchAnalytics";
+} from "@/lib/ai/mockResearchAnalytics";
 
 type SeriesKind = "line" | "area" | "histogram";
 

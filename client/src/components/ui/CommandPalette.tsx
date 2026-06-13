@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { Command } from "cmdk";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { COMMAND_PALETTE_ITEMS } from "@/lib/commandPaletteItems";
+import { COMMAND_PALETTE_ITEMS } from "@/lib/utils/commandPaletteItems";
 import { useThemeToggle } from "./ThemeProvider";
 
 type CommandPaletteContextValue = {

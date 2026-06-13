@@ -1,4 +1,4 @@
-import type { FuturesSignalInputs } from "@/lib/futuresSignals";
+﻿import type { FuturesSignalInputs } from "@/lib/trading/futuresSignals";
 
 export type RegimeType =
   | "TRENDING_BULL"

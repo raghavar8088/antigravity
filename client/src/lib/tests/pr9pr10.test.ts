@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { recommendOneTune } from "../futuresParameterTuner";
-import { runProductionReadiness } from "../futuresProductionReadiness";
-import type { PaperTradeDbRow } from "../paperTradesTypes";
-import type { HealthCheckResult } from "../futuresStrategyDiagnostics";
+﻿import { describe, expect, it } from "vitest";
+import { recommendOneTune } from "../trading/futuresParameterTuner";
+import { runProductionReadiness } from "../risk/futuresProductionReadiness";
+import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
+import type { HealthCheckResult } from "../trading/futuresStrategyDiagnostics";
 
 const now = Date.now();
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();

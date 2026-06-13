@@ -6,7 +6,7 @@
  * Pure functions — no React, no I/O.
  */
 
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
 export type { OHLCVCandle };
 

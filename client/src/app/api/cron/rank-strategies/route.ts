@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/cron/rank-strategies
  *
  * Nightly cron (P1.4.5): reads last 7d closed trades from MongoDB, computes
@@ -18,7 +18,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { MongoClient } from "mongodb";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { evaluateAndUpdateGrades } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 
 const MONGODB_URI = process.env.MONGODB_URI;

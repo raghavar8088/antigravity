@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import BtcSpotStrip from "@/components/BtcSpotStrip";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
-import { formatShortDate, formatShortTime } from "@/lib/time";
+import { formatShortDate, formatShortTime } from "@/lib/utils/time";
 import type {
   CryptoEngineStats,
   CryptoPosition,

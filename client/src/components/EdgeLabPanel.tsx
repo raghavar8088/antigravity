@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { DeskButton, DeskChip } from "@/components/desk/ui";
-import type { ResearchEdgeScore } from "@/lib/researchEdgeScore";
-import type { RegimeRosterOutput } from "@/lib/regimeRosterBuilder";
-import type { WalkForwardResult } from "@/lib/walkForwardValidation";
+import type { ResearchEdgeScore } from "@/lib/ai/researchEdgeScore";
+import type { RegimeRosterOutput } from "@/lib/analytics/regimeRosterBuilder";
+import type { WalkForwardResult } from "@/lib/analytics/walkForwardValidation";
 
 // ─── API response shape ───────────────────────────────────────────────────────
 

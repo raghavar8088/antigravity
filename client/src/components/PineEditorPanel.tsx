@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { TerminalPanel } from "./terminal/TerminalPanel";
 import { DeskButton, DeskCard } from "./desk/ui";
-import { PineScriptEngine, type PineExecutionResult } from "@/lib/PineScriptEngine";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import { PineScriptEngine, type PineExecutionResult } from "@/lib/analytics/PineScriptEngine";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
 interface PineEditorPanelProps {
   candles: OHLCVCandle[];

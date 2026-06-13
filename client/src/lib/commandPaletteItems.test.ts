@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { COMMAND_PALETTE_ITEMS, PAGE_TITLES, resolvePageTitle } from "@/lib/commandPaletteItems";
-import { TERMINAL_ROUTES, TRADING_NAV } from "@/lib/navRoutes";
+﻿import { describe, expect, it } from "vitest";
+import { COMMAND_PALETTE_ITEMS, PAGE_TITLES, resolvePageTitle } from "@/lib/utils/commandPaletteItems";
+import { TERMINAL_ROUTES, TRADING_NAV } from "@/lib/utils/navRoutes";
 
 describe("commandPaletteItems", () => {
   it("includes all command center nav routes", () => {

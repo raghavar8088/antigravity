@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 import { useEffect, useMemo, useState } from "react";
 import DailyPnlLedger from "@/components/DailyPnlLedger";
 import useMCXEngine from "@/hooks/useMCXEngine";
 import type { MCXPosition, MCXTrade, MCXStrategyStatus, MCXCommodityQuote } from "@/hooks/useMCXEngine";
-import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
-import { formatShortDate, formatShortTime } from "@/lib/time";
+import { MCX_COMMODITIES } from "@/lib/trading/mcxCommodities";
+import { formatShortDate, formatShortTime } from "@/lib/utils/time";
 
 const INITIAL_MCX_BALANCE = 1_000_000;
 

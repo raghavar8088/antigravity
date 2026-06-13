@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { classifyMarketRegime, type MarketRegime, type RegimeSnapshot } from "@/lib/marketRegimeClassifier";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import { classifyMarketRegime, type MarketRegime, type RegimeSnapshot } from "@/lib/ai/marketRegimeClassifier";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
 export function useMarketRegime(deps: {
   candles: OHLCVCandle[];

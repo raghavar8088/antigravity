@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { createTraceRow } from "@/lib/strategySignalTrace";
-import { isExecutableTraceRow } from "@/lib/mockTradingEngine";
+﻿import { describe, expect, it } from "vitest";
+import { createTraceRow } from "@/lib/ai/strategySignalTrace";
+import { isExecutableTraceRow } from "@/lib/trading/mockTradingEngine";
 import {
   catalogStrategyNumericId,
   fanOutGrade5CatalogSignals,

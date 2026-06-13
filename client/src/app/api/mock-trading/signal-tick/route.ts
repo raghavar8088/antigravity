@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/mock-trading/signal-tick
  *
  * Fetches live klines, evaluates the mock-trading strategy roster, persists the
@@ -7,19 +7,19 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
-import { isMongoConfigured, upsertSignalTrace } from "@/lib/mongoTradesClient";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
+import { isMongoConfigured, upsertSignalTrace } from "@/lib/broker/mongoTradesClient";
 import {
   evaluateMockTradingSignals,
   MOCK_TRADING_MIN_BARS,
-} from "@/lib/mockTradingSignalEvaluator";
+} from "@/lib/trading/mockTradingSignalEvaluator";
 import {
   fetchMockTradingKlines,
   sanitizeMockTradingSymbol,
-} from "@/lib/mockTradingMarketData";
+} from "@/lib/trading/mockTradingMarketData";
 import { STRATEGY_CATALOG } from "@/lib/strategyAuthority/strategyCatalog";
 import { fanOutGrade5CatalogSignals } from "@/lib/strategyAuthority/grade5CatalogSignals";
-import { capTraceRows, summarizeSignalTrace } from "@/lib/strategySignalTrace";
+import { capTraceRows, summarizeSignalTrace } from "@/lib/ai/strategySignalTrace";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 
 export const dynamic = "force-dynamic";

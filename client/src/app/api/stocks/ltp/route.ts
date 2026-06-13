@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { NIFTY50_STOCKS } from "@/lib/nifty50Stocks";
+﻿import { NextResponse } from "next/server";
+import { NIFTY50_STOCKS } from "@/lib/trading/nifty50Stocks";
 
 export type StockLTPItem = {
   symbol: string;

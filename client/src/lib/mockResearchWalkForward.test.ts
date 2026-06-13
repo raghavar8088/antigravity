@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { computeMockWalkForwardRows } from "@/lib/mockResearchWalkForward";
-import type { MockTrade } from "@/lib/mockTradingEngine";
+﻿import { describe, expect, it } from "vitest";
+import { computeMockWalkForwardRows } from "@/lib/ai/mockResearchWalkForward";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 
 const T0 = Date.UTC(2026, 0, 1);
 

@@ -7,14 +7,14 @@ import {
   filterCandlesByTimeRange,
   loadReplayFixture,
   utcDayBoundsMs,
-} from "../src/lib/futuresReplayFixtures";
-import { fetchAutoDisabledStrategyIds } from "../src/lib/futuresReplayAutoDisable";
+} from "../src/lib/analytics/futuresReplayFixtures";
+import { fetchAutoDisabledStrategyIds } from "../src/lib/analytics/futuresReplayAutoDisable";
 import {
   formatReplayCompareTable,
   loadSupabaseTradesForUtcDay,
   statsFromClosedTrades,
-} from "../src/lib/futuresReplayCompare";
-import { runPaperDeskReplay } from "../src/lib/futuresReplayEngine";
+} from "../src/lib/analytics/futuresReplayCompare";
+import { runPaperDeskReplay } from "../src/lib/analytics/futuresReplayEngine";
 import {
   BTC_FUTURE_TRADING_STRATEGY_IDS,
   buildReplayConfigFromCli,

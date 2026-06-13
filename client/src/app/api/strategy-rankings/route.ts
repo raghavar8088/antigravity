@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/strategy-rankings
  *
  * Returns the rankings JSON produced by `npm run rank:btc-ft`.
@@ -11,8 +11,8 @@
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { BtcFtStrategyRankingRow } from "@/lib/btcFtRoster";
-import { winnerIdsFromRankings } from "@/lib/btcFtRoster";
+import type { BtcFtStrategyRankingRow } from "@/lib/trading/btcFtRoster";
+import { winnerIdsFromRankings } from "@/lib/trading/btcFtRoster";
 
 export const dynamic = "force-dynamic";
 

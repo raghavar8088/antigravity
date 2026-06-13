@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured, getDb } from "@/lib/mongoTradesClient";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured, getDb } from "@/lib/broker/mongoTradesClient";
 import { getCorrelationMatrix, STRATEGY_CORRELATIONS_COLLECTION } from "@/lib/strategyAuthority/correlationEngine";
 
 export const dynamic = "force-dynamic";

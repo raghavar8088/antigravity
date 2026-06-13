@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeStrategyHourlyStats,
   isStrategyInProvenSession,
   SESSION_MIN_HOUR_TRADES,
   SESSION_MIN_TOTAL_TRADES,
   type SessionTradeSample,
-} from "./strategySessionStats";
+} from "./trading/strategySessionStats";
 
 function sample(strategyId: number, netPnl: number, isoTime: string): SessionTradeSample {
   return { strategyId, netPnl, closedAtMs: Date.parse(isoTime) };

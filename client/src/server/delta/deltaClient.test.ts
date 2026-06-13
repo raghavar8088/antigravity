@@ -1,6 +1,6 @@
-import { createHmac } from "crypto";
+﻿import { createHmac } from "crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { deltaSign } from "@/lib/deltaSign";
+import { deltaSign } from "@/lib/broker/deltaSign";
 import { buildDeltaSignedHeaders, DeltaTestnetClient } from "./deltaClient";
 import { isDeltaTestnetExecutionEnabled } from "./deltaConfig";
 

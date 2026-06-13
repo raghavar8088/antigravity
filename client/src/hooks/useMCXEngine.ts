@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * useMCXEngine
@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MCX_COMMODITIES, MCX_COMMODITY_MAP, type MCXCommodity } from "@/lib/mcxCommodities";
+import { MCX_COMMODITIES, MCX_COMMODITY_MAP, type MCXCommodity } from "@/lib/trading/mcxCommodities";
 import type { MCXLTPItem } from "@/app/api/mcx/ltp/route";
 import type { MCXCandle } from "@/app/api/mcx/candles/route";
 

@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tests for replayWalkForwardRanker — pure, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { rankReplayStrategies } from "./replayWalkForwardRanker";
-import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
+import { rankReplayStrategies } from "./ai/replayWalkForwardRanker";
+import type { BTCFuturesTrade } from "@/lib/trading/btcFuturesTrade.types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

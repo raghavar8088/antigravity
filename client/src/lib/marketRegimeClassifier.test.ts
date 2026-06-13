@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { classifyMarketRegime } from "@/lib/marketRegimeClassifier";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import { classifyMarketRegime } from "@/lib/ai/marketRegimeClassifier";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
 const T0 = 1_700_000_000_000;
 

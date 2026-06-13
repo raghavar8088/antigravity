@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * StrategyRotationPanel
@@ -7,7 +7,7 @@
  * No new state, no new fetches — consumes monitor output.
  */
 import { useState } from "react";
-import type { RotationReport, RotationStatus } from "@/lib/futuresStrategyRotation";
+import type { RotationReport, RotationStatus } from "@/lib/trading/futuresStrategyRotation";
 
 interface Props {
   report: RotationReport | null;

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
@@ -84,8 +84,8 @@ import {
   type MockDiagnosticFunnel,
   type MockRejectionCounts,
   type MockTradingDiagnostics,
-} from "@/lib/mockTradingEngine";
-import { ALL_RESEARCH_FAMILIES, type ResearchFamily } from "@/lib/mockResearchStrategies";
+} from "@/lib/trading/mockTradingEngine";
+import { ALL_RESEARCH_FAMILIES, type ResearchFamily } from "@/lib/ai/mockResearchStrategies";
 import {
   fmtUsd,
   fmtUsdK,
@@ -94,7 +94,7 @@ import {
   fmtPct,
   exportToCsv,
   exportToJson,
-} from "@/lib/utils";
+} from "@/lib/utils/utils";
 import {
   computeAdvancedResearchAnalytics,
   computeDailyPnlPoints,
@@ -102,11 +102,11 @@ import {
   computeWeeklyPnl,
   createEquitySnapshot,
   type AdvancedResearchAnalytics,
-} from "@/lib/mockResearchAnalytics";
-import { computeMockWalkForwardRows, type MockWalkForwardRow } from "@/lib/mockResearchWalkForward";
-import { computePortfolioAllocation, type PortfolioAllocationResult } from "@/lib/mockResearchPortfolioAllocation";
-import { computeStrategyHealth, type StrategyHealthRow } from "@/lib/strategyHealthEngine";
-import type { StrategyScore } from "@/lib/strategyScoringEngine";
+} from "@/lib/ai/mockResearchAnalytics";
+import { computeMockWalkForwardRows, type MockWalkForwardRow } from "@/lib/ai/mockResearchWalkForward";
+import { computePortfolioAllocation, type PortfolioAllocationResult } from "@/lib/ai/mockResearchPortfolioAllocation";
+import { computeStrategyHealth, type StrategyHealthRow } from "@/lib/ai/strategyHealthEngine";
+import type { StrategyScore } from "@/lib/ai/strategyScoringEngine";
 
 const selectStyle: React.CSSProperties = {
   padding: "4px 8px",

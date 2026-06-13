@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   computeVerdict,
   resolveResearchActiveIds,
@@ -6,9 +6,9 @@ import {
   poolGeneratedCount,
   isResearchModeEnabled,
   resolveBtcFtActiveStrategyIds,
-} from "./btcFtResearch";
-import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "./btcFtRoster";
-import { aggregateResearchStratStats, type ResearchDbRow } from "./paperTradesAnalytics";
+} from "./trading/btcFtResearch";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "./trading/btcFtRoster";
+import { aggregateResearchStratStats, type ResearchDbRow } from "./portfolio/paperTradesAnalytics";
 
 afterEach(() => {
   vi.unstubAllEnvs();

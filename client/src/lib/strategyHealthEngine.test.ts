@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { computeStrategyHealth } from "@/lib/strategyHealthEngine";
-import type { MockTrade } from "@/lib/mockTradingEngine";
-import type { StrategyScore } from "@/lib/strategyScoringEngine";
-import type { StrategyPerformanceMetrics } from "@/lib/strategyPerformanceEngine";
+﻿import { describe, expect, it } from "vitest";
+import { computeStrategyHealth } from "@/lib/ai/strategyHealthEngine";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
+import type { StrategyScore } from "@/lib/ai/strategyScoringEngine";
+import type { StrategyPerformanceMetrics } from "@/lib/ai/strategyPerformanceEngine";
 
 const T0 = 1_700_000_000_000;
 

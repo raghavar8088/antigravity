@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import {
   BTC_FT_GENERATED_COUNT_DEFAULT,
@@ -6,7 +6,7 @@ import {
   BTC_FT_GENERATED_STRATEGY_IDS,
   BTC_FT_GENERATED_TEMPLATE_CYCLE,
   isGeneratedPoolEnabled,
-} from "@/lib/btcFtStrategyGenerator";
+} from "@/lib/trading/btcFtStrategyGenerator";
 
 describe("btcFtStrategyGenerator — stubs (research pool removed)", () => {
   it("generated pool is empty", () => {

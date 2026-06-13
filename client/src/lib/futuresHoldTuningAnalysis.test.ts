@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   buildDeskHoldTuningDumpPayload,
   rankWorstTimeOffenders,
   reduceTradesToStrategyDeskBuckets,
   type TradeRowForHoldTuning,
-} from "./futuresHoldTuningAnalysis";
+} from "./analytics/futuresHoldTuningAnalysis";
 
 describe("reduceTradesToStrategyDeskBuckets", () => {
   const widened = new Map<number, boolean>([

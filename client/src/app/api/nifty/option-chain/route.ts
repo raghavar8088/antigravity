@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
+﻿import { NextResponse } from "next/server";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/broker/engineProxy";
 import type { ChainData, ChainRow, ChainLeg, ExpiryMeta } from "@/hooks/useOptionChain";
 
 // ─── Angel One types ──────────────────────────────────────────────────────────

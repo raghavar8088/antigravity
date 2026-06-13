@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { resolveEngineApiUrl } from "@/lib/engineApi";
+import { resolveEngineApiUrl } from "@/lib/broker/engineApi";
 
 interface PendingSignal {
   id: string;

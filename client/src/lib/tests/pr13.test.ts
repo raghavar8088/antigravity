@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { scoreSignalQuality, rankSignalsByQuality } from "../futuresSignalQuality";
-import { computeMTFConfluence, mtfSkipReason } from "../futuresMTFConfluence";
-import { computeAttribution } from "../futuresAttribution";
+﻿import { describe, it, expect } from "vitest";
+import { scoreSignalQuality, rankSignalsByQuality } from "../analytics/futuresSignalQuality";
+import { computeMTFConfluence, mtfSkipReason } from "../trading/futuresMTFConfluence";
+import { computeAttribution } from "../analytics/futuresAttribution";
 
 const now = Date.now();
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();

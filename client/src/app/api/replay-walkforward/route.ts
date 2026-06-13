@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/replay-walkforward?days=30&strategy_ids=91,92,95
  *
  * Runs a deterministic bar-by-bar replay on the stored fixture candles then
@@ -17,9 +17,9 @@ import {
   computeCoverageDays,
   hasSufficientCoverage,
   loadReplayFixtureForDays,
-} from "@/lib/futuresReplayFixtures";
-import { runPaperDeskReplay, summarizeReplayTrades } from "@/lib/futuresReplayEngine";
-import { rankReplayStrategies } from "@/lib/replayWalkForwardRanker";
+} from "@/lib/analytics/futuresReplayFixtures";
+import { runPaperDeskReplay, summarizeReplayTrades } from "@/lib/analytics/futuresReplayEngine";
+import { rankReplayStrategies } from "@/lib/ai/replayWalkForwardRanker";
 
 export const dynamic = "force-dynamic";
 

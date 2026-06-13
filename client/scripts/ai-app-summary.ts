@@ -122,7 +122,7 @@ async function main() {
       // Self-healing actions derived from the snapshot
       const snapshot = r.snapshot as AiAppTrackerSnapshot | undefined;
       if (snapshot) {
-        const { recommendHealingActions } = await import("../src/lib/deskSelfHealing");
+        const { recommendHealingActions } = await import("../src/lib/trading/deskSelfHealing");
         const healing = recommendHealingActions(snapshot);
         const actionable = healing.filter((a) => a.type !== "NO_ACTION");
         if (actionable.length > 0) {

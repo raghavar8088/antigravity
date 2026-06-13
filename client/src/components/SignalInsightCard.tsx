@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import type React from "react";
-import type { MarketSignal } from "@/lib/marketSignal";
+import type { MarketSignal } from "@/lib/trading/marketSignal";
 
 export default function SignalInsightCard({ signal }: { signal: MarketSignal | null }) {
   if (!signal) {

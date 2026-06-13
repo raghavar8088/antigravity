@@ -1,4 +1,4 @@
-/**
+﻿/**
  * APICAP — Portfolio Intelligence MongoDB Orchestration Layer
  *
  * Wires together: Correlation → Allocation → Regime → Genome → Candidate Queue → Portfolio Construction
@@ -8,7 +8,7 @@
  */
 
 import type { Db } from "mongodb";
-import { getDb } from "@/lib/mongoTradesClient";
+import { getDb } from "@/lib/broker/mongoTradesClient";
 import { ISPAP_PROFILES_COLLECTION } from "./strategyAuthorityMongo";
 import type { StrategyProfileDoc } from "./types";
 import { computeAuthorityScore } from "./authorityScore";

@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
-import { formatUSD } from "@/lib/money";
-import { formatShortDate, formatShortTime } from "@/lib/time";
+import { formatUSD } from "@/lib/portfolio/money";
+import { formatShortDate, formatShortTime } from "@/lib/utils/time";
 
 interface RunningTrade {
   id: string;

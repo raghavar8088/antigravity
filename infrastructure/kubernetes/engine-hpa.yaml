@@ -1,0 +1,21 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: btc-engine-hpa
+  namespace: btc-pilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: btc-engine
+  # DO NOT increase maxReplicas — dual engines would duplicate trades and corrupt positions.
+  # This HPA exists only to satisfy K8s requirements; scaling is intentionally disabled.
+  minReplicas: 1
+  maxReplicas: 1
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

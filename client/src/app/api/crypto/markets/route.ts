@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { CRYPTO_TOP_20 } from "@/lib/cryptoTop20";
+﻿import { NextResponse } from "next/server";
+import { CRYPTO_TOP_20 } from "@/lib/trading/cryptoTop20";
 
 export type CryptoMarketItem = {
   symbol: string;

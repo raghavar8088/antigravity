@@ -1,9 +1,9 @@
-import {
+﻿import {
   DEFAULT_MOCK_TRADING_CONFIG,
   normalizeMockTradingConfig,
   type MockTradingConfig,
-} from "@/lib/mockTradingEngine";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAccountKey";
+} from "@/lib/trading/mockTradingEngine";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAccountKey";
 import type { StrategyStatus } from "./types";
 
 /** Grade 5 discovery — unlimited concurrent positions, no risk gates. */

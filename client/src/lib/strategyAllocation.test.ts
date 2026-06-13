@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   ALLOCATION_MAX_MULTIPLIER,
   ALLOCATION_MIN_MULTIPLIER,
@@ -8,7 +8,7 @@ import {
   computeAllocationMultiplier,
   computeStrategyEdgeStats,
   type StrategyTradeSample,
-} from "./strategyAllocation";
+} from "./trading/strategyAllocation";
 
 function trade(netPnl: number, notional = 100, holdMinutes = 10): StrategyTradeSample {
   return { netPnl, notional, holdMinutes };

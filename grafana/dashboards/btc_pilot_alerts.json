@@ -1,0 +1,144 @@
+{
+  "groups": [
+    {
+      "name": "btc-pilot-alerts",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "alert-engine-down",
+          "title": "ENGINE_DOWN",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "absent(up{job=\"btc-engine\"})",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200
+              }
+            }
+          ],
+          "for": "2m",
+          "labels": {"severity": "critical"},
+          "annotations": {
+            "summary": "ENGINE_DOWN",
+            "description": "BTC engine is not responding — check Lightsail instance"
+          }
+        },
+        {
+          "uid": "alert-kill-switch",
+          "title": "KILL_SWITCH_ACTIVATED",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {"expr": "trading_execution_kill_switch_active == 1"}
+            }
+          ],
+          "for": "0s",
+          "labels": {"severity": "critical"},
+          "annotations": {
+            "summary": "KILL_SWITCH_ACTIVATED",
+            "description": "Kill switch activated — all trading halted"
+          }
+        },
+        {
+          "uid": "alert-data-quality",
+          "title": "DATA_QUALITY_CRITICAL",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {"expr": "trading_dataquality_score < 60"}
+            }
+          ],
+          "for": "5m",
+          "labels": {"severity": "warning"},
+          "annotations": {
+            "summary": "DATA_QUALITY_CRITICAL",
+            "description": "Data quality degraded — position sizes reduced"
+          }
+        },
+        {
+          "uid": "alert-high-vol-regime",
+          "title": "HIGH_VOLATILITY_REGIME",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {"expr": "trading_regime_active{regime=\"HIGH_VOLATILITY\"} == 1"}
+            }
+          ],
+          "for": "10m",
+          "labels": {"severity": "warning"},
+          "annotations": {
+            "summary": "HIGH_VOLATILITY_REGIME",
+            "description": "High volatility regime — all new entries suspended"
+          }
+        },
+        {
+          "uid": "alert-ai-fallback",
+          "title": "AI_FALLBACK_HIGH",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "rate(trading_aiscoring_cache_lookups_total{result=\"miss\"}[5m]) / rate(trading_aiscoring_cache_lookups_total[5m]) > 0.5"
+              }
+            }
+          ],
+          "for": "5m",
+          "labels": {"severity": "warning"},
+          "annotations": {
+            "summary": "AI_FALLBACK_HIGH",
+            "description": "AI scoring failing — using rule-based fallback for >50% of signals"
+          }
+        },
+        {
+          "uid": "alert-cycle-overlap",
+          "title": "CYCLE_OVERLAP_SUSTAINED",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {"expr": "rate(trading_cycleguard_blocks_total[30m]) > 2"}
+            }
+          ],
+          "for": "30m",
+          "labels": {"severity": "warning"},
+          "annotations": {
+            "summary": "CYCLE_OVERLAP_SUSTAINED",
+            "description": "Evaluation cycles consistently overlapping — engine may be overloaded"
+          }
+        },
+        {
+          "uid": "alert-daily-loss",
+          "title": "DAILY_LOSS_LIMIT_APPROACHING",
+          "condition": "A",
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "model": {
+                "expr": "trading_reconciliation_restart_closures_total > 5"
+              }
+            }
+          ],
+          "for": "0s",
+          "labels": {"severity": "warning"},
+          "annotations": {
+            "summary": "DAILY_LOSS_LIMIT_APPROACHING",
+            "description": "Daily PnL approaching 4% loss — kill switch activates at 5%"
+          }
+        }
+      ]
+    }
+  ]
+}

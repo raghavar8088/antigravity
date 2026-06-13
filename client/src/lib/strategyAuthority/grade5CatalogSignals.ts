@@ -1,8 +1,8 @@
-import {
+﻿import {
   createTraceRow,
   type StrategySignalTraceRow,
-} from "@/lib/strategySignalTrace";
-import { isExecutableTraceRow } from "@/lib/mockTradingEngine";
+} from "@/lib/ai/strategySignalTrace";
+import { isExecutableTraceRow } from "@/lib/trading/mockTradingEngine";
 import type { ISPAPCatalogEntry } from "./types";
 
 const FAMILY_BUCKETS: Record<string, readonly string[]> = {

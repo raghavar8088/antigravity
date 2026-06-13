@@ -17,9 +17,9 @@
 
 import fs from "fs";
 import path from "path";
-import { CORE_BTC_FT_STRATEGY_IDS } from "../src/lib/btcFtRoster";
-import { runPaperDeskReplay } from "../src/lib/futuresReplayEngine";
-import type { ReplayFixtureKind } from "../src/lib/futuresReplayFixtures";
+import { CORE_BTC_FT_STRATEGY_IDS } from "../src/lib/trading/btcFtRoster";
+import { runPaperDeskReplay } from "../src/lib/analytics/futuresReplayEngine";
+import type { ReplayFixtureKind } from "../src/lib/analytics/futuresReplayFixtures";
 import {
   buildReplayConfigFromCli,
   loadEnvLocal,

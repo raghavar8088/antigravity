@@ -1,4 +1,4 @@
-import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+﻿import type { FuturesStratDef } from "@/lib/trading/futuresStratTypes";
 import type { RegimeState, RegimeType } from "@/internal/regime";
 
 const ACTIVE_CATEGORY_HINTS: Record<RegimeType, readonly string[]> = {

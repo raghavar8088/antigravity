@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
-import type { MockTrade } from "@/lib/mockTradingEngine";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 import {
   runMonteCarlo,
   analyseWorstStreak,
   type MonteCarloResult,
-} from "@/lib/mockMonteCarloEngine";
+} from "@/lib/analytics/mockMonteCarloEngine";
 import {
   DeskCard,
   DeskMetricTile,

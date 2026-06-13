@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tests for regimeRosterBuilder — pure function, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { buildRegimeRosters } from "./regimeRosterBuilder";
-import type { ResearchEdgeScore } from "./researchEdgeScore";
+import { buildRegimeRosters } from "./analytics/regimeRosterBuilder";
+import type { ResearchEdgeScore } from "./ai/researchEdgeScore";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

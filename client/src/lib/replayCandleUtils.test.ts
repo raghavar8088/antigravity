@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for replay candle utilities — dedup, coverage, gap counting, and the
  * coverage guard logic used by replay-walkforward and the API route.
  *
@@ -9,12 +9,12 @@ import {
   deduplicateAndSortCandles,
   countCandleGaps,
   normalizeCandleTimeMs,
-} from "@/lib/futuresKlinesFetch";
+} from "@/lib/trading/futuresKlinesFetch";
 import {
   computeCoverageDays,
   hasSufficientCoverage,
-} from "@/lib/futuresReplayFixtures";
-import type { ReplayCandle } from "@/lib/futuresReplayFixtures";
+} from "@/lib/analytics/futuresReplayFixtures";
+import type { ReplayCandle } from "@/lib/analytics/futuresReplayFixtures";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

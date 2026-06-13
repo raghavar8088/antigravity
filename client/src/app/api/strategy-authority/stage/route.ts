@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { getStrategiesByStatus } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 

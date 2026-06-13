@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: btc-engine-config
+  namespace: btc-pilot
+data:
+  PORT: "8080"
+  SQLITE_ENABLED: "false"
+  SQLITE_PATH: "/data/engine.db"
+  ENGINE_DATA_DIR: "/data"
+  LOG_LEVEL: "info"
+  AWS_REGION: "ap-south-1"
+  USE_LOCAL_SECRETS: "false"
+  OTEL_ENABLED: "true"
+  OTEL_JAEGER_ENDPOINT: "http://jaeger:14268/api/traces"
+  OTEL_SAMPLING_RATE: "1.0"
+  # Feature flags (paper desk)
+  NEXT_PUBLIC_DESK_SLIPPAGE: "0.0005"
+  NEXT_PUBLIC_DESK_VOL_SIZING: "true"
+  NEXT_PUBLIC_DESK_RISK_PCT: "0.01"
+  NEXT_PUBLIC_DESK_SESSION_GATE: "true"
+  NEXT_PUBLIC_DESK_CORRELATION_GATE: "true"

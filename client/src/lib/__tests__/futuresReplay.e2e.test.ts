@@ -1,4 +1,4 @@
-/**
+﻿/**
  * E2E integration test: full signal → replay → trade lifecycle.
  *
  * Tests the complete pipeline from raw OHLCV candles through signal scoring,
@@ -9,9 +9,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { makeSyntheticBtcusd1mCandles } from "@/lib/futuresReplayFixtures";
-import { runPaperDeskReplay, type PaperReplayConfig } from "@/lib/futuresReplayEngine";
-import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/btcFtRoster";
+import { makeSyntheticBtcusd1mCandles } from "@/lib/analytics/futuresReplayFixtures";
+import { runPaperDeskReplay, type PaperReplayConfig } from "@/lib/analytics/futuresReplayEngine";
+import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/trading/btcFtRoster";
 
 // ---------------------------------------------------------------------------
 // Shared fixture — 500 bars, realistic trending price action

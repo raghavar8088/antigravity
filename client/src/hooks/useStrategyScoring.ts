@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BTC_RESEARCH_STRATEGIES } from "@/lib/btcResearchStrategyRegistry";
-import type { MarketRegime } from "@/lib/marketRegimeClassifier";
-import type { MockTrade } from "@/lib/mockTradingEngine";
-import { computeStrategyPerformance } from "@/lib/strategyPerformanceEngine";
-import { scoreAllStrategies, type StrategyScore } from "@/lib/strategyScoringEngine";
+import { BTC_RESEARCH_STRATEGIES } from "@/lib/trading/btcResearchStrategyRegistry";
+import type { MarketRegime } from "@/lib/ai/marketRegimeClassifier";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
+import { computeStrategyPerformance } from "@/lib/ai/strategyPerformanceEngine";
+import { scoreAllStrategies, type StrategyScore } from "@/lib/ai/strategyScoringEngine";
 
 const DEFAULT_REGIME: MarketRegime = "RANGING";
 

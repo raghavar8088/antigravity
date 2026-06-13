@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * useMockResearchRunner — evaluates all 500 mock research strategies on every
@@ -16,20 +16,20 @@ import {
   BTC_RESEARCH_STRATEGIES,
   type BtcResearchFamily,
   type BtcResearchStrategy,
-} from "@/lib/btcResearchStrategyRegistry";
+} from "@/lib/trading/btcResearchStrategyRegistry";
 import {
   INSTITUTIONAL_STRATEGIES,
   INSTITUTIONAL_FAMILY_LABELS,
   type InstitutionalStrategy,
-} from "@/lib/btcInstitutionalStrategies";
+} from "@/lib/trading/btcInstitutionalStrategies";
 import {
   ALL_RESEARCH_FAMILIES,
   RESEARCH_FAMILY_LABELS,
   RESEARCH_STRATEGIES,
   type ResearchFamily,
   type ResearchStrategy,
-} from "@/lib/mockResearchStrategies";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+} from "@/lib/ai/mockResearchStrategies";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 import {
   emptyMockDiagnosticFunnel,
   emptyMockRejectionCounts,
@@ -37,8 +37,8 @@ import {
   type MockRejectionCounts,
   type MockRejectionEvent,
   type MockResearchSignalInput,
-} from "@/lib/mockTradingEngine";
-import type { MarketRegime } from "@/lib/marketRegimeClassifier";
+} from "@/lib/trading/mockTradingEngine";
+import type { MarketRegime } from "@/lib/ai/marketRegimeClassifier";
 
 const MAX_SIGNALS_PER_MINUTE_DEFAULT = 10;
 const MIN_CONFIDENCE_DEFAULT = 50;

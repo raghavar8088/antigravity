@@ -1,0 +1,120 @@
+name: Weekly Dependency Updates
+
+on:
+  schedule:
+    # Every Monday at 00:00 UTC
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+jobs:
+  update-go-deps:
+    name: Update Go Dependencies
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.25
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: engine/go.sum
+
+      - name: Update Go dependencies
+        id: go-update
+        working-directory: engine
+        run: |
+          go get -u ./...
+          go mod tidy
+          if git diff --quiet go.mod go.sum; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Go dependency update PR
+        if: steps.go-update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: deps/go-update-${{ github.run_number }}
+          title: "chore(deps): weekly Go dependency updates"
+          body: |
+            Automated weekly Go dependency update.
+
+            - Updated all `go.mod` dependencies to their latest versions.
+            - Run `go mod tidy` to clean up indirect deps.
+
+            **Review checklist:**
+            - [ ] `govulncheck ./...` passes
+            - [ ] `go test ./...` passes
+            - [ ] No major version bumps with breaking changes
+          labels: dependencies
+          commit-message: "chore(deps): update Go dependencies"
+
+  update-npm-deps:
+    name: Check npm Dependencies
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Check for outdated packages
+        id: npm-outdated
+        working-directory: client
+        run: |
+          OUTDATED=$(npm outdated --json 2>/dev/null || true)
+          if [[ -n "$OUTDATED" && "$OUTDATED" != "{}" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "$OUTDATED" > /tmp/outdated.json
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update npm major-version packages
+        if: steps.npm-outdated.outputs.changed == 'true'
+        working-directory: client
+        run: |
+          # Update non-major versions only (safe upgrades)
+          npx npm-check-updates --target minor -u
+          npm install
+          if git diff --quiet package.json package-lock.json; then
+            echo "no minor updates"
+          fi
+
+      - name: Create npm dependency update PR
+        if: steps.npm-outdated.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: deps/npm-update-${{ github.run_number }}
+          title: "chore(deps): weekly npm dependency updates"
+          body: |
+            Automated weekly npm dependency update (minor and patch versions only).
+
+            **Review checklist:**
+            - [ ] `npm audit --audit-level=high` passes
+            - [ ] `npm run build` passes
+            - [ ] No breaking changes in updated packages
+          labels: dependencies
+          commit-message: "chore(deps): update npm dependencies"

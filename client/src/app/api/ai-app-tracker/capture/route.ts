@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET  /api/ai-app-tracker/capture  — Vercel cron (every 15 min via vercel.json)
  * POST /api/ai-app-tracker/capture  — manual trigger from UI / operator scripts
  *
@@ -18,15 +18,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { collectAppSnapshot } from "@/lib/aiAppTracker/collectAppSnapshot";
 import { buildTrackerReport } from "@/lib/aiAppTracker/writeTrackerReport";
 import { insertAiTrackerReport } from "@/lib/aiAppTracker/aiAppTrackerMongo";
-import { recommendHealingActions } from "@/lib/deskSelfHealing";
+import { recommendHealingActions } from "@/lib/trading/deskSelfHealing";
 import {
   executeHealingActions,
   type HealingExecutionResult,
-} from "@/lib/deskSelfHealingExecutor";
+} from "@/lib/trading/deskSelfHealingExecutor";
 import {
   insertWorkerEvent,
   type WorkerEventType,
-} from "@/lib/mongoTradesClient";
+} from "@/lib/broker/mongoTradesClient";
 import type { AiAppTrackerHealingResult } from "@/lib/aiAppTracker/types";
 
 export const dynamic = "force-dynamic";

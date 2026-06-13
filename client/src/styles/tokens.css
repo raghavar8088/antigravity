@@ -1,0 +1,116 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TRADING TERMINAL — Design Tokens (Phase 1)
+   Bridges new semantic token names onto the existing terminal color system.
+   Import after m3-tokens.css and desk-tokens.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Background layers — maps to existing --bg / --surface* */
+  --color-bg-base:     var(--bg,     #0d1117);
+  --color-bg-surface:  var(--surface,  #161b22);
+  --color-bg-elevated: var(--surface-3, #21262d);
+  --color-bg-overlay:  var(--surface-overlay, rgba(22,27,34,0.96));
+  --color-border:      var(--border, #30363d);
+  --color-border-focus: var(--accent, #2962ff);
+
+  /* Semantic status */
+  --color-profit:  var(--green,  #22c55e);
+  --color-loss:    var(--red,    #ef4444);
+  --color-warning: var(--gold,   #f97316);
+  --color-info:    var(--info,   #3b82f6);
+  --color-caution: var(--amber,  #eab308);
+  --color-neutral: #64748b;
+
+  /* Text hierarchy */
+  --color-text-primary:   var(--text-primary,   #f1f5f9);
+  --color-text-secondary: var(--text-secondary, #94a3b8);
+  --color-text-muted:     var(--text-muted,     #475569);
+  --color-text-disabled:  #334155;
+
+  /* Spacing — 4px base */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Typography */
+  --font-ui:   var(--font-body, "Inter", system-ui, sans-serif);
+  --font-mono: var(--font-mono, "JetBrains Mono", "Roboto Mono", monospace);
+
+  /* Font sizes */
+  --font-size-xs:   11px;
+  --font-size-sm:   12px;
+  --font-size-base: 13px;
+  --font-size-md:   14px;
+  --font-size-lg:   16px;
+  --font-size-xl:   20px;
+
+  /* Shadows */
+  --shadow-card:     var(--shadow-xs,  0 1px 3px rgba(0,0,0,0.4));
+  --shadow-elevated: var(--shadow-md,  0 4px 16px rgba(0,0,0,0.5));
+
+  /* Transitions */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+}
+
+/* ── Tailwind v4 custom utilities ─────────────────────────────────────────── */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ── Semantic helper classes ──────────────────────────────────────────────── */
+.text-profit  { color: var(--color-profit);  }
+.text-loss    { color: var(--color-loss);    }
+.text-warning { color: var(--color-warning); }
+.text-info    { color: var(--color-info);    }
+.text-caution { color: var(--color-caution); }
+.text-neutral { color: var(--color-neutral); }
+
+.bg-surface   { background: var(--color-bg-surface);  }
+.bg-elevated  { background: var(--color-bg-elevated); }
+
+/* Shimmer skeleton animation */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0;  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-elevated) 25%,
+    var(--color-bg-surface)  50%,
+    var(--color-bg-elevated) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Row flash animations for live data updates */
+@keyframes flash-profit {
+  0%   { background-color: rgba(34, 197, 94, 0.18); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-loss {
+  0%   { background-color: rgba(239, 68, 68, 0.18); }
+  100% { background-color: transparent; }
+}
+
+.flash-profit { animation: flash-profit 400ms ease-out forwards; }
+.flash-loss   { animation: flash-loss   400ms ease-out forwards; }

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for aiAppTracker/aiAppTrackerMongo helpers.
  * MongoDB is mocked — no real Atlas connection required.
  */
@@ -38,7 +38,7 @@ const mockCollection = {
   })),
 };
 
-vi.mock("../mongoTradesClient", () => ({
+vi.mock("../broker/mongoTradesClient", () => ({
   getDb: vi.fn().mockResolvedValue({
     collection: vi.fn().mockReturnValue(mockCollection),
   }),

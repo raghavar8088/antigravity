@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { buildMockTradingSnapshot } from "@/lib/mockTradingSnapshotService";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { buildMockTradingSnapshot } from "@/lib/trading/mockTradingSnapshotService";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
 

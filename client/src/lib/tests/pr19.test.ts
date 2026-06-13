@@ -1,14 +1,14 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import {
   appendSoakSnapshot,
   soakTrendSummary,
   type SoakDaySnapshot,
-} from "../futuresSoakTracker";
-import { computeUnifiedReadiness } from "../futuresUnifiedReadiness";
-import { computeReplaySignFlipRate } from "../futuresReplayCompare";
-import type { DeskRollingPnLScorecard } from "../futuresDeskPnLTracker";
-import type { GoLiveGateReport } from "../futuresGoLiveGates";
-import { computeDeskRollingPnLScorecard } from "../futuresDeskPnLTracker";
+} from "../analytics/futuresSoakTracker";
+import { computeUnifiedReadiness } from "../risk/futuresUnifiedReadiness";
+import { computeReplaySignFlipRate } from "../analytics/futuresReplayCompare";
+import type { DeskRollingPnLScorecard } from "../portfolio/futuresDeskPnLTracker";
+import type { GoLiveGateReport } from "../risk/futuresGoLiveGates";
+import { computeDeskRollingPnLScorecard } from "../portfolio/futuresDeskPnLTracker";
 
 function mockScorecard(
   hint: DeskRollingPnLScorecard["paperReadyHint"],

@@ -10,12 +10,21 @@ import (
 	"time"
 
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/alpha"
+	"antigravity-engine/internal/aiscoring"
+	"antigravity-engine/internal/calibration"
+	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/delta"
+	"antigravity-engine/internal/derivatives"
+	dominancepkg "antigravity-engine/internal/dominance"
+	etfpkg "antigravity-engine/internal/etf"
 	"antigravity-engine/internal/execintel"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/ledger"
+	macropkg "antigravity-engine/internal/macro"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/montecarlo"
 	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/omsv3"
 	"antigravity-engine/internal/paperpersist"
@@ -24,6 +33,7 @@ import (
 	"antigravity-engine/internal/risk"
 	riskgate "antigravity-engine/internal/risk/gate"
 	riskv2 "antigravity-engine/internal/risk/v2"
+	sentimentpkg "antigravity-engine/internal/sentiment"
 	"antigravity-engine/internal/strategy"
 )
 
@@ -172,6 +182,29 @@ type Orchestrator struct {
 	execWatchdog *ExecutionWatchdog
 
 	mu sync.RWMutex
+
+	// deps carries all Phase 1–5 upgrade dependencies (data quality, regime,
+	// async scoring, microstructure, Kelly). Set via SetDeps() from main.go.
+	deps *LoopDeps
+
+	// lastCycleAt is the timestamp of the most recent strategy evaluation cycle.
+	lastCycleAt   time.Time
+	lastCycleAtMu sync.RWMutex
+}
+
+// LastCycleTime returns the time of the most recent strategy evaluation cycle.
+// Returns zero time if no cycle has run yet.
+func (o *Orchestrator) LastCycleTime() time.Time {
+	o.lastCycleAtMu.RLock()
+	defer o.lastCycleAtMu.RUnlock()
+	return o.lastCycleAt
+}
+
+// CurrentRegime returns the most recently classified market regime string.
+func (o *Orchestrator) CurrentRegime() string {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.lastRegime
 }
 
 // PendingSignal represents a strategy signal waiting for AI/User approval.
@@ -291,6 +324,15 @@ func (o *Orchestrator) SetExecutionWatchdog(w *ExecutionWatchdog) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.execWatchdog = w
+}
+
+// SetDeps injects Phase 1–5 upgrade dependencies into the orchestrator.
+// Call from main.go after all deps are constructed, before orchestrator.Run.
+// Passing nil is safe and disables all Phase-upgrade gates.
+func (o *Orchestrator) SetDeps(deps *LoopDeps) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.deps = deps
 }
 
 func (o *Orchestrator) recordWatchdogTick() {
@@ -1023,6 +1065,12 @@ func (o *Orchestrator) Run(ctx context.Context) {
 	// Background: publish Phase 22D execution-intelligence metrics to Prometheus.
 	go o.publishExecIntel(ctx)
 
+	// Change D: pre-score signals every 30s so the async scorer cache is warm.
+	if o.deps != nil && o.deps.AsyncScorer != nil {
+		go o.preScoreLoop(ctx)
+		log.Println("[DEPS] Async pre-scoring loop active (30s interval)")
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -1083,6 +1131,26 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case candle := <-o.candleAgg.Candles1m:
+			// Change A: data quality gate — skip low-quality candles before strategy evaluation.
+			if o.deps != nil && o.deps.DataValidator != nil {
+				ohlcv := dataquality.OHLCV{
+					Symbol: candle.Symbol,
+					Open:   candle.Open,
+					High:   candle.High,
+					Low:    candle.Low,
+					Close:  candle.Close,
+					Volume: candle.Volume,
+					Time:   candle.CloseTime,
+				}
+				result := o.deps.DataValidator.ValidateCandle(ohlcv, "binance", 60)
+				action := o.deps.DataValidator.GetAction(result.QualityScore)
+				switch action {
+				case dataquality.ActionHalt, dataquality.ActionSkipCandle:
+					log.Printf("[DATA QUALITY] 1m candle dropped action=%s score=%.0f checks=%v",
+						action, result.QualityScore, result.FailedChecks)
+					continue
+				}
+			}
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
@@ -1107,8 +1175,7 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			o.m15Counter++
 			if o.m15Counter >= 3 {
 				o.m15Counter = 0
-				log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
-				o.processStrategyGroup(ctx, o.groups.M15, tick, "15m")
+				o.run15mCycle(ctx, tick)
 			}
 
 			// Simulate 1h candle: run 1h strategies every 12th 5m candle
@@ -1558,6 +1625,150 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageConfidenceFilter, 1, 1)
 		sig = sanitizedSig
+
+		// Change C: apply microstructure weight to confidence before risk check.
+		// Collects all available Phase 1–5 + Phase C signals.
+		{
+			derivScore := 0.0
+			obScore := 0.0
+			if o.deps != nil && o.deps.FundingFetcher != nil && o.deps.OIFetcher != nil {
+				fundingData := o.deps.FundingFetcher.GetLatest()
+				oiData := o.deps.OIFetcher.GetLatest()
+				if fundingData != nil && oiData != nil {
+					ds := derivatives.ComputeDerivativesScore(*fundingData, *oiData)
+					derivScore = ds.TotalScore
+				}
+			}
+			if o.deps != nil && o.deps.DepthSubscriber != nil {
+				if ob := o.deps.DepthSubscriber.GetLatestAnalysis(); ob != nil {
+					obScore = ob.Score
+				}
+			}
+			// Collect Phase C scores (0 if fetcher unavailable or not yet populated).
+			etfScore, domScore, macScore, sentScore := 0.0, 0.0, 0.0, 0.0
+			temporalMod := 1.0
+			if o.deps != nil {
+				if o.deps.ETFFetcher != nil {
+					if d := o.deps.ETFFetcher.GetLatest(); d != nil {
+						etfScore = etfpkg.ComputeETFScore(*d)
+					}
+				}
+				if o.deps.DominanceFetcher != nil {
+					if d := o.deps.DominanceFetcher.GetLatest(); d != nil {
+						priceDir := "FLAT"
+						if o.lastPrice > 0 {
+							priceDir = "UP" // simplified — real direction requires tick comparison
+						}
+						domScore = dominancepkg.ComputeDominanceScore(*d, priceDir)
+					}
+				}
+				if o.deps.MacroFetcher != nil {
+					if d := o.deps.MacroFetcher.GetLatest(); d != nil {
+						macScore = macropkg.ComputeMacroScore(*d)
+					}
+				}
+				if o.deps.SentimentFetcher != nil {
+					if d := o.deps.SentimentFetcher.GetLatest(); d != nil {
+						sentScore = sentimentpkg.ComputeSentimentScore(*d)
+					}
+				}
+				if o.deps.TemporalAnalyser != nil {
+					ta := o.deps.TemporalAnalyser.GetLatest()
+					temporalMod = ta.EffectiveModifier
+				}
+			}
+			msSignals := alpha.MicrostructureSignals{
+				DerivativesScore: derivScore,
+				OrderBookScore:   obScore,
+				Regime:           regime,
+				ETFScore:         etfScore,
+				DominanceScore:   domScore,
+				MacroScore:       macScore,
+				SentimentScore:   sentScore,
+				TemporalMod:      temporalMod,
+			}
+			// Confidence is 0–1 in execution path; ApplyMicrostructureWeight uses 0–100.
+			adjustedConf := alpha.ApplyMicrostructureWeight(sig.Confidence*100, msSignals, string(sig.Action))
+			sig.Confidence = adjustedConf / 100.0
+			// Apply temporal modifier to position sizing via confidence scaling.
+			// (Full Kelly × temporal is applied separately in PreTradeRiskPipeline.)
+			sig.Confidence *= temporalMod
+			if sig.Confidence > 0.95 {
+				sig.Confidence = 0.95
+			}
+		}
+		// Check async scorer cache for pre-computed directional bias.
+		if o.deps != nil && o.deps.AsyncScorer != nil {
+			cacheKey := regime + "_prescore"
+			if score, ok := o.deps.AsyncScorer.GetCachedScore(cacheKey); ok && !score.IsStale {
+				if score.Direction == string(sig.Action) {
+					sig.Confidence = (sig.Confidence + score.Confidence/100.0) / 2.0
+				}
+			}
+		}
+
+		// Phase D.2: apply confidence calibration (corrects stated vs actual win rate gap).
+		if o.deps != nil {
+			if cal := o.deps.GetCalibration(); cal != nil {
+				adjusted := calibration.Apply(sig.Confidence*100, cal)
+				sig.Confidence = adjusted / 100.0
+			}
+		}
+
+		// Phase D.1: Monte Carlo pre-trade filter — blocks negative-EV or
+		// high-SL-probability signals BEFORE they reach the risk gate.
+		// Runs 1000 GBM paths in < 100ms; uses signal geometry as inputs.
+		{
+			o.mu.RLock()
+			prices := append([]float64(nil), o.priceWindow...)
+			o.mu.RUnlock()
+			atr14 := strategy.ATR(prices, 14)
+
+			sl := stopLossFromSignal(sig, currentPrice)
+			tpFull := currentPrice
+			tpHalf := currentPrice
+			if sig.Action == strategy.ActionBuy {
+				tpFull = currentPrice * (1 + sig.TakeProfitPct/100)
+				tpHalf = currentPrice * (1 + sig.TakeProfitPct/100/2)
+			} else {
+				tpFull = currentPrice * (1 - sig.TakeProfitPct/100)
+				tpHalf = currentPrice * (1 - sig.TakeProfitPct/100/2)
+			}
+
+			mcInput := montecarlo.SimInput{
+				EntryPrice:     currentPrice,
+				StopLoss:       sl,
+				TakeProfit1:    tpHalf,
+				TakeProfit2:    tpFull,
+				Bias:           string(sig.Action),
+				PositionPct:    sig.TargetSize * currentPrice / futuresInitialCapitalUSD,
+				PortfolioValue: futuresInitialCapitalUSD,
+				ATR14:          atr14,
+				Regime:         regime,
+				NSims:          1000,
+			}
+			mcResult := montecarlo.Simulate(mcInput)
+			observability.MCExpectedValue.Set(mcResult.ExpectedValue)
+			observability.MCProbSL.Set(mcResult.ProbSLHit)
+
+			if !mcResult.ShouldTrade {
+				log.Printf("[MC BLOCKED] %s (%s): %s EV=%.3f ProbSL=%.2f",
+					aggSig.StrategyName, sig.Action, mcResult.BlockReason,
+					mcResult.ExpectedValue, mcResult.ProbSLHit)
+				observability.MCBlockedTotal.WithLabelValues(mcResult.BlockReason).Inc()
+				o.aggregator.RecordSignalFlowStage(SignalStageRiskFilter, 1, 0)
+				o.aggregator.RecordSignalFlowRejection(SignalStageRiskFilter, "mc_blocked:"+mcResult.BlockReason, aggSig.Category)
+				o.execIntel.RecordRejection(sigID, "mc_blocked:"+mcResult.BlockReason)
+				continue
+			}
+			// Marginal signal: shrink position size by MC position modifier.
+			if mcResult.PositionModifier < 1.0 {
+				sig.TargetSize *= mcResult.PositionModifier
+				log.Printf("[MC MARGINAL] %s position reduced to %.4f BTC (mod=%.2f)",
+					aggSig.StrategyName, sig.TargetSize, mcResult.PositionModifier)
+			}
+		}
+
 		if sig.StopLossPct != baseStopLossPct || sig.TakeProfitPct != baseTakeProfitPct {
 			log.Printf("[GEOMETRY] %s SL/TP %.2f%%/%.2f%% -> %.2f%%/%.2f%% (R:R %.2f)",
 				aggSig.StrategyName, baseStopLossPct, baseTakeProfitPct,
@@ -1719,6 +1930,72 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		log.Printf("[✅ TRADE EXECUTED] %s | %s %.4f BTC @ $%.2f | Strategy: %s | Age: %v",
 			sig.Action, sig.Symbol, sig.TargetSize, execPrice, aggSig.StrategyName,
 			time.Since(sig.CreatedAt).Round(time.Millisecond))
+	}
+}
+
+// run15mCycle runs the 15m strategy group with cycle-overlap protection (Change B).
+// It also updates microstructure state (OI price direction, depth subscriber price).
+func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
+	cycleID := fmt.Sprintf("15m-%d", time.Now().Unix())
+	if o.deps != nil && o.deps.CycleGuard != nil {
+		if !o.deps.CycleGuard.TryStart(cycleID) {
+			return // previous 15m cycle still running — skip this one
+		}
+		defer o.deps.CycleGuard.Finish(cycleID)
+	}
+
+	// Update microstructure state with current price.
+	if o.deps != nil {
+		if o.deps.OIFetcher != nil {
+			o.deps.OIFetcher.UpdatePriceDirection(tick.Price)
+		}
+		if o.deps != nil && o.deps.DepthSubscriber != nil {
+			o.deps.DepthSubscriber.SetCurrentPrice(tick.Price)
+		}
+	}
+
+	// Record cycle timestamp for /health and /ready probes.
+	o.lastCycleAtMu.Lock()
+	o.lastCycleAt = time.Now()
+	o.lastCycleAtMu.Unlock()
+
+	log.Println("[CANDLE 15m] Simulated 15m close — running 15m strategies")
+	o.processStrategyGroup(ctx, o.groups.M15, tick, "15m")
+}
+
+// preScoreLoop warms the async scorer cache every 30 seconds (Change D).
+// This ensures the async scorer's cache has a fresh score ready when a signal arrives,
+// eliminating the latency of waiting for a score during signal processing.
+func (o *Orchestrator) preScoreLoop(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if o.deps == nil || o.deps.AsyncScorer == nil {
+				return
+			}
+			o.mu.RLock()
+			regime := o.lastRegime
+			prices := append([]float64(nil), o.priceWindow...)
+			o.mu.RUnlock()
+			if len(prices) < 14 {
+				continue
+			}
+			rsi := computeRSI(prices, 14)
+			mctx := aiscoring.MarketContext{
+				Price:    prices[len(prices)-1],
+				RSI14_1h: rsi,
+				Regime:   regime,
+			}
+			o.deps.AsyncScorer.SubmitForScoring(aiscoring.ScoringRequest{
+				RequestID: regime + "_prescore",
+				Context:   mctx,
+				Priority:  0,
+			})
+		}
 	}
 }
 

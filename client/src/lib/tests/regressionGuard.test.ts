@@ -1,20 +1,20 @@
-/**
+﻿/**
  * regressionGuard.test.ts
  * These tests encode the hard invariants from PRs 1-10.
  * If ANY of these fail, a regression has been introduced.
  * Run in CI on every PR.
  */
 import { describe, it, expect } from "vitest";
-import { isProbeOrBootstrapTrade } from "../futuresSessionMetrics";
-import { computeAdaptiveThreshold } from "../futuresDeskPolicy";
-import { runProductionReadiness } from "../futuresProductionReadiness";
-import { recommendOneTune } from "../futuresParameterTuner";
-import type { HealthCheckResult } from "../futuresStrategyDiagnostics";
-import { scoreSignalQuality } from "../futuresSignalQuality";
+import { isProbeOrBootstrapTrade } from "../analytics/futuresSessionMetrics";
+import { computeAdaptiveThreshold } from "../trading/futuresDeskPolicy";
+import { runProductionReadiness } from "../risk/futuresProductionReadiness";
+import { recommendOneTune } from "../trading/futuresParameterTuner";
+import type { HealthCheckResult } from "../trading/futuresStrategyDiagnostics";
+import { scoreSignalQuality } from "../analytics/futuresSignalQuality";
 import {
   computeMTFConfluence,
   mtfSkipReason,
-} from "../futuresMTFConfluence";
+} from "../trading/futuresMTFConfluence";
 
 const mkLossTrade = () => ({
   strategy_name: "MTF_Trend_Align",

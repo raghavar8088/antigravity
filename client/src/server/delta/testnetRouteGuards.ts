@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession, type ApiSessionContext } from "@/lib/apiSessionAuth";
+﻿import { NextResponse } from "next/server";
+import { getAuthenticatedApiSession, type ApiSessionContext } from "@/lib/broker/apiSessionAuth";
 import { isDeltaTestnetExecutionEnabled } from "./deltaConfig";
 import { isDeskTestnetOpsPanelEnabled } from "./deltaTestnetSchemas";
 

@@ -6,18 +6,23 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"antigravity-engine/internal/admin"
 	"antigravity-engine/internal/ai"
+	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/alpha/funding"
+	"antigravity-engine/internal/dataquality"
+	"antigravity-engine/internal/derivatives"
 	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
@@ -30,16 +35,29 @@ import (
 	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/niftystocks"
 	"antigravity-engine/internal/observability"
+	"antigravity-engine/internal/dominance"
+	"antigravity-engine/internal/etf"
+	"antigravity-engine/internal/macro"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
+	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/persistence"
 	"antigravity-engine/internal/positions"
+	"antigravity-engine/internal/regime"
 	reconciliationv2 "antigravity-engine/internal/reconciliationv2"
 	"antigravity-engine/internal/risk"
+	"antigravity-engine/internal/secrets"
 	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/security/vault"
+	"antigravity-engine/internal/calibration"
+	"antigravity-engine/internal/eventstore"
+	"antigravity-engine/internal/learning"
+	"antigravity-engine/internal/ml"
+	"antigravity-engine/internal/sentiment"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"antigravity-engine/internal/strategy"
+	"antigravity-engine/internal/temporal"
 	"antigravity-engine/internal/trading"
 	"antigravity-engine/internal/validation/phase22e"
 	"antigravity-engine/internal/validation/production"
@@ -398,6 +416,21 @@ func main() {
 
 	loadDotEnv()
 
+	// ── Wiring 1: AWS Secrets Manager (Phase 5) ──────────────────────────────
+	// When USE_LOCAL_SECRETS=true (dev) or AWS is unavailable, falls back to env vars.
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "ap-south-1"
+	}
+	useLocalSecrets := os.Getenv("USE_LOCAL_SECRETS") == "true"
+	secretClient, secretErr := secrets.NewSecretClient(awsRegion, useLocalSecrets)
+	if secretErr != nil {
+		log.Printf("[SECRETS] ⚠️  AWS Secrets Manager unavailable — using env fallback: %v", secretErr)
+	} else {
+		log.Printf("[SECRETS] ✅ Secret client ready (region=%s local_fallback=%v)", awsRegion, useLocalSecrets)
+	}
+	_ = secretClient // available for callers that switch from os.Getenv to secretClient.Get()
+
 	bootGate := production.RunBootGate(production.DefaultBootGateConfig())
 	if !bootGate.Passed {
 		for _, b := range bootGate.Blockers {
@@ -412,6 +445,7 @@ func main() {
 	defer cancel()
 
 	bootStart := time.Now()
+	var reconciliationComplete atomic.Bool // set to true after ReconcileOnRestart completes
 
 	// ═══════════════════════════════════════════════════
 	// 1. WebSocket Live Stream (Coinbase)
@@ -649,6 +683,14 @@ func main() {
 		if idxErr := mongoMgr.EnsureIndexes(ctx); idxErr != nil {
 			log.Printf("[Phase31B] index creation warning: %v", idxErr)
 		}
+		// Wiring 2: ensure TTL + compound indexes created by Phase 1 EnsureIndexes.
+		if db := mongoMgr.DB(); db != nil {
+			indexCtx, indexCancel := context.WithTimeout(ctx, 30*time.Second)
+			if indexErr := mongopersist.EnsureIndexes(indexCtx, db); indexErr != nil {
+				log.Printf("[INDEXES] TTL index creation warning: %v", indexErr)
+			}
+			indexCancel()
+		}
 		// Startup diagnostics: logs connectivity, account_key, URI, and collection presence.
 		mongoMgr.StartupReport(ctx)
 
@@ -715,6 +757,29 @@ func main() {
 		go mongoMgr.RunPingMonitor(ctx, 30*time.Second)
 
 		log.Printf("[Phase31B] MongoDB persistence active — account_key=%s", paperpersist.AccountKey())
+	}
+
+	// ── Wiring 4: Reconcile open trades that may have hit SL/TP during downtime ─
+	// This is BLOCKING and fatal on error — runs before any trading starts.
+	if mongoMgr != nil && mongoMgr.IsConnected() && mongoMgr.DB() != nil {
+		reconCtx, reconCancel := context.WithTimeout(ctx, 30*time.Second)
+		reconPrice, reconPriceErr := fetchBinanceBTCSpot(reconCtx)
+		if reconPriceErr != nil {
+			log.Printf("[RECON RESTART] ⚠️  BTC price fetch failed (using 0): %v", reconPriceErr)
+			reconPrice = 0
+		}
+		reconReport, reconErr := reconciliationv2.ReconcileOnRestart(reconCtx, mongoMgr.DB(), reconPrice)
+		reconCancel()
+		if reconErr != nil {
+			log.Fatalf("[RECON RESTART] FATAL: restart reconciliation failed: %v", reconErr)
+		}
+		log.Printf("[RECON RESTART] ✅ complete — found=%d reconciled=%d closed_retroactively=%d discrepancies=%d price=%.0f",
+			reconReport.TradesFound, reconReport.TradesReconciled,
+			reconReport.TradesClosedRetroactively, len(reconReport.DiscrepanciesFound), reconPrice)
+		reconciliationComplete.Store(true)
+	} else {
+		// No MongoDB — reconciliation not needed; mark complete so /ready doesn't block.
+		reconciliationComplete.Store(true)
 	}
 
 	// ═══════════════════════════════════════════════════
@@ -924,6 +989,166 @@ func main() {
 	}
 
 	log.Printf("[BOOT] Engine fully initialized in %s", time.Since(bootStart).Round(time.Millisecond))
+
+	// ── Wirings 3 + 5 + 6 + 7: Phase 1–5 LoopDeps construction ─────────────────
+	// Wiring 3: data quality validator
+	dataValidator := dataquality.NewValidator()
+
+	// Wiring 5: regime classifier, strategy gate, cycle guard, async scorer
+	regimeClassifier := regime.NewClassifier()
+	strategyGate := regime.NewStrategyGate(regimeClassifier, &strategyNamesAdapter{strategies: allStrategies})
+	cycleGuard := &trading.CycleGuard{}
+	fallbackScorer := &aiscoring.FallbackScorer{}
+	asyncScorer := aiscoring.NewAsyncScorer(nil, 3) // no AI client; uses fallback scorer internally
+	asyncScorer.Start()
+
+	// Wiring 6: funding rate + open interest fetchers
+	fundingFetcher := derivatives.NewFundingFetcher()
+	oiFetcher := derivatives.NewOIFetcher()
+	go fundingFetcher.StartPolling(ctx, 15*time.Minute)
+	go oiFetcher.StartPolling(ctx, 15*time.Minute)
+	log.Println("[DEPS] Funding rate + OI fetchers polling every 15m")
+
+	// Wiring 7: L2 order book depth subscriber
+	depthSubscriber := orderbook.NewDepthSubscriber()
+	go safeGo("DepthSubscriber", func() {
+		if err := depthSubscriber.Connect(ctx); err != nil {
+			log.Printf("[DEPTH] subscriber exited: %v", err)
+		}
+	})
+	log.Println("[DEPS] L2 depth subscriber connecting to Binance BTCUSDT@depth20")
+
+	// Wiring 8: BTC ETF flow fetcher (daily, via Python yfinance script)
+	pythonPath := os.Getenv("PYTHON_PATH")
+	if pythonPath == "" {
+		pythonPath = "python3"
+	}
+	etfScriptPath := os.Getenv("ETF_SCRIPT_PATH")
+	if etfScriptPath == "" {
+		etfScriptPath = "infrastructure/ai/etf_fetcher.py"
+	}
+	etfFetcher := etf.NewETFFetcher(pythonPath, etfScriptPath)
+	etfFetcher.StartDailyPoll(ctx)
+	log.Printf("[DEPS] ETF flow tracker started (09:30 UTC daily, script=%s)", etfScriptPath)
+
+	// Wiring 9: BTC dominance tracker (hourly, CoinGecko public API)
+	dominanceFetcher := dominance.NewDominanceFetcher(nil)
+	dominanceFetcher.StartPolling(ctx, time.Hour)
+	log.Println("[DEPS] BTC dominance tracker started (1h interval)")
+
+	// Wiring 10: Macro correlation fetcher (hourly, via Python yfinance script)
+	macroScriptPath := os.Getenv("MACRO_SCRIPT_PATH")
+	if macroScriptPath == "" {
+		macroScriptPath = "infrastructure/ai/macro_fetcher.py"
+	}
+	macroFetcher := macro.NewMacroFetcher(pythonPath, macroScriptPath)
+	macroFetcher.StartHourlyPoll(ctx)
+	log.Printf("[DEPS] Macro correlation tracker started (1h interval, script=%s)", macroScriptPath)
+
+	// Wiring 11: News sentiment fetcher (30m interval, local sentiment server)
+	sentimentServerURL := os.Getenv("SENTIMENT_SERVER_URL")
+	if sentimentServerURL == "" {
+		sentimentServerURL = "http://localhost:8001"
+	}
+	sentimentFetcher := sentiment.NewSentimentFetcher(nil, sentimentServerURL)
+	sentimentFetcher.StartPolling(ctx, 30*time.Minute)
+	log.Printf("[DEPS] Sentiment fetcher started (30m interval, server=%s)", sentimentServerURL)
+
+	// Wiring 12: Temporal pattern analyser
+	temporalAnalyser := temporal.NewTemporalAnalyser()
+	temporalPatternsPath := os.Getenv("TEMPORAL_PATTERNS_PATH")
+	if temporalPatternsPath == "" {
+		temporalPatternsPath = "data/temporal_patterns.json"
+	}
+	if err := temporalAnalyser.LoadPatterns(temporalPatternsPath); err != nil {
+		log.Printf("[DEPS] Temporal patterns not found — will build from trade history: %v", err)
+		if mongoMgr != nil && mongoMgr.DB() != nil {
+			go temporal.BuildAndSavePatterns(ctx, mongoMgr.DB(), temporalPatternsPath)
+		}
+	} else {
+		log.Printf("[DEPS] Temporal patterns loaded from %s", temporalPatternsPath)
+	}
+
+	loopDeps := &trading.LoopDeps{
+		DataValidator:    dataValidator,
+		AsyncScorer:      asyncScorer,
+		FallbackScorer:   fallbackScorer,
+		RegimeClassifier: regimeClassifier,
+		StrategyGate:     strategyGate,
+		CycleGuard:       cycleGuard,
+		FundingFetcher:   fundingFetcher,
+		OIFetcher:        oiFetcher,
+		DepthSubscriber:  depthSubscriber,
+		PortfolioValue:   initialPaperBalanceUSD,
+		// Phase C signals (optional — nil = score 0)
+		ETFFetcher:       etfFetcher,
+		DominanceFetcher: dominanceFetcher,
+		MacroFetcher:     macroFetcher,
+		SentimentFetcher: sentimentFetcher,
+		TemporalAnalyser: temporalAnalyser,
+	}
+	if err := loopDeps.Validate(); err != nil {
+		log.Printf("[DEPS] ⚠️  LoopDeps validation warning: %v", err)
+	}
+	orchestrator.SetDeps(loopDeps)
+	log.Println("[DEPS] ✅ Phase 1–5 + Phase C LoopDeps wired into orchestrator")
+
+	// Wiring 13: Confidence calibration (Phase D.2)
+	// Loads the most recent calibration from MongoDB and schedules monthly recalibration.
+	if mongoMgr != nil && mongoMgr.DB() != nil {
+		if calResult, err := calibration.LoadLatest(ctx, mongoMgr.DB()); err == nil {
+			if calResult != nil {
+				loopDeps.UpdateCalibration(calResult)
+				observability.CalibrationFactor.Set(calResult.CalibrationFactor)
+				observability.CalibrationTradesAnalysed.Set(float64(calResult.TradesAnalysed))
+				log.Printf("[CALIBRATION] Loaded from MongoDB: factor=%.3f overconfident=%v trades=%d",
+					calResult.CalibrationFactor, calResult.IsOverconfident, calResult.TradesAnalysed)
+			} else {
+				log.Println("[CALIBRATION] No prior calibration result — will compute after 60 trades accumulate")
+			}
+		} else {
+			log.Printf("[CALIBRATION] Load error (non-fatal): %v", err)
+		}
+		calibration.ScheduleRecalibration(ctx, mongoMgr.DB(), 30*24*time.Hour, func(r *calibration.CalibrationResult) {
+			loopDeps.UpdateCalibration(r)
+			observability.CalibrationFactor.Set(r.CalibrationFactor)
+			observability.CalibrationTradesAnalysed.Set(float64(r.TradesAnalysed))
+			log.Printf("[CALIBRATION] Recalibrated: factor=%.3f overconfident=%v trades=%d",
+				r.CalibrationFactor, r.IsOverconfident, r.TradesAnalysed)
+		})
+		log.Println("[CALIBRATION] Monthly recalibration scheduler started")
+	}
+
+	// Wiring 14: Post-trade self-learning loop (Phase D.3)
+	if mongoMgr != nil && mongoMgr.DB() != nil {
+		lessonGen := learning.NewLessonGenerator(mongoMgr.DB())
+		loopDeps.LessonGenerator = lessonGen
+		lessonGen.StartPeriodicLearning(ctx, 24*time.Hour)
+		log.Println("[LEARNING] Post-trade lesson generator started (24h interval)")
+	}
+
+	// Wiring 15: Event store dual-write (Phase E.2) — optional, non-blocking
+	{
+		pgPool, pgErr := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
+		if pgErr != nil || os.Getenv("DATABASE_URL") == "" {
+			log.Println("[EVENTSTORE] ⚠️  DATABASE_URL unavailable — events not persisted to TimescaleDB")
+		} else {
+			slogLogger := slog.Default()
+			evWriter := eventstore.NewEventWriter(pgPool, slogLogger)
+			evWriter.Start(ctx)
+			loopDeps.EventStore = evWriter
+			log.Println("[EVENTSTORE] ✅ Event store writer initialised")
+		}
+	}
+
+	// Wiring 16: Local ML pre-scorer (Phase E.6) — fully optional
+	{
+		mlEndpoint := getEnvOrDefault("ML_SCORER_ENDPOINT", "http://localhost:8002")
+		mlPrescorer := ml.NewMLPrescorer(mlEndpoint, 0.55, slog.Default())
+		mlPrescorer.StartHealthPoller(ctx)
+		loopDeps.MLPrescorer = mlPrescorer
+		log.Printf("[ML] ✅ ML pre-scorer health poller started (endpoint=%s threshold=0.55)", mlEndpoint)
+	}
 
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
@@ -1749,19 +1974,79 @@ func main() {
 		json.NewEncoder(w).Encode(secGate.Monitor().OpenIncidents()) //nolint:errcheck
 	})
 
-	// Health check
+	// /health — liveness probe (K8s + load balancer).
+	// Returns 200 as long as the process is alive.
+	// Returns 500 only if the kill switch is active (engine should restart).
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
 		if r.Method == http.MethodOptions {
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":     "ok",
-			"service":    "raig-engine-v3",
-			"strategies": len(allStrategies),
-			"uptime":     time.Since(bootStart).String(),
-		})
+		ksActive := ksSvc.IsActive()
+		lastCycleAgo := int64(-1)
+		if lt := orchestrator.LastCycleTime(); !lt.IsZero() {
+			lastCycleAgo = int64(time.Since(lt).Seconds())
+		}
+		regime := "UNKNOWN"
+		if rc := orchestrator.CurrentRegime(); rc != "" {
+			regime = rc
+		}
+		body := map[string]interface{}{
+			"status":                "alive",
+			"service":               "btc-pilot-engine",
+			"uptime_seconds":        int64(time.Since(bootStart).Seconds()),
+			"kill_switch_active":    ksActive,
+			"regime":                regime,
+			"last_cycle_ago_seconds": lastCycleAgo,
+			"strategies":            len(allStrategies),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if ksActive {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+		json.NewEncoder(w).Encode(body) //nolint:errcheck
+	})
+
+	// /ready — readiness probe (K8s). Returns 503 if engine is not ready to trade.
+	http.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		mongoOK := mongoMgr != nil && mongoMgr.IsConnected()
+		fundingOK := loopDeps != nil && loopDeps.FundingFetcher != nil && loopDeps.FundingFetcher.GetLatest() != nil
+		oiOK := loopDeps != nil && loopDeps.OIFetcher != nil && loopDeps.OIFetcher.GetLatest() != nil
+		depthOK := loopDeps != nil && loopDeps.DepthSubscriber != nil
+		dqScore := 100.0
+		if loopDeps != nil && loopDeps.DataValidator != nil {
+			dqScore = loopDeps.DataValidator.LatestScore()
+		}
+		reconOK := reconciliationComplete.Load()
+		lastCycleAgo := int64(-1)
+		if lt := orchestrator.LastCycleTime(); !lt.IsZero() {
+			lastCycleAgo = int64(time.Since(lt).Seconds())
+		}
+		body := map[string]interface{}{
+			"status":                    "ready",
+			"mongodb_connected":         mongoOK,
+			"funding_fetcher_ok":        fundingOK,
+			"oi_fetcher_ok":             oiOK,
+			"depth_subscriber_connected": depthOK,
+			"data_quality_score":        dqScore,
+			"reconciliation_complete":   reconOK,
+			"last_cycle_ago_seconds":    lastCycleAgo,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		notReady := !mongoOK || dqScore < 60 || !reconOK
+		if notReady {
+			body["status"] = "not_ready"
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+		json.NewEncoder(w).Encode(body) //nolint:errcheck
 	})
 
 	// ───── API ENDPOINTS ─────
@@ -2180,6 +2465,8 @@ func main() {
 		}
 		log.Printf("[Phase31B] MongoDB persistence shut down cleanly")
 	}
+	// Stop async scorer workers cleanly.
+	asyncScorer.Stop()
 	time.Sleep(2 * time.Second) // Allow state saver final flush
 	log.Println("Systems offline.")
 }
@@ -2477,9 +2764,31 @@ func safeGo(name string, fn func()) {
 	}
 }
 
+// strategyNamesAdapter wraps []strategy.RegistryEntry so it satisfies
+// regime.StrategyRegistry without importing the regime package at the call-site.
+type strategyNamesAdapter struct {
+	strategies []strategy.RegistryEntry
+}
+
+func (a *strategyNamesAdapter) Names() []string {
+	names := make([]string, len(a.strategies))
+	for i, e := range a.strategies {
+		names[i] = e.Strategy.Name()
+	}
+	return names
+}
+
 func formatHealthTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// getEnvOrDefault returns the env var value or fallback when the var is unset.
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

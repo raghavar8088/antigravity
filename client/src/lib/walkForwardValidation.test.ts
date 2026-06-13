@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tests for walkForwardValidation — pure function, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { runWalkForwardValidation } from "./walkForwardValidation";
-import type { WalkForwardTrade } from "./walkForwardValidation";
+import { runWalkForwardValidation } from "./analytics/walkForwardValidation";
+import type { WalkForwardTrade } from "./analytics/walkForwardValidation";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MongoDB helpers for the ai_app_tracker_reports collection.
  * Server-side only — never import from browser code.
  *
@@ -8,7 +8,7 @@
  *   { created_at: 1 } TTL 30d        — auto-delete old reports
  */
 
-import { getDb } from "@/lib/mongoTradesClient";
+import { getDb } from "@/lib/broker/mongoTradesClient";
 import type { AiAppTrackerReport } from "./types";
 import { TRACKER_COLLECTION, TRACKER_TTL_SECONDS } from "./trackerConstants";
 

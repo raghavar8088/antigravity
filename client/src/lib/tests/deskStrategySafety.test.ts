@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { computeStrategySafety, formatDisableListAsEnv } from "../deskStrategySafety";
-import type { RotationReport } from "../futuresStrategyRotation";
-import type { DiagnosticSummary, StrategyDiagnosticRow } from "../futuresStrategyDiagnostics";
+﻿import { describe, it, expect } from "vitest";
+import { computeStrategySafety, formatDisableListAsEnv } from "../risk/deskStrategySafety";
+import type { RotationReport } from "../trading/futuresStrategyRotation";
+import type { DiagnosticSummary, StrategyDiagnosticRow } from "../trading/futuresStrategyDiagnostics";
 
 function makeRotationReport(
   scores: { strategyId: number; status: string; score: number }[],

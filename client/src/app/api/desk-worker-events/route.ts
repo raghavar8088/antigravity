@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/desk-worker-events?limit=50
  *
  * Returns recent worker audit events from `desk_worker_events` collection,
@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured, listWorkerEvents } from "@/lib/mongoTradesClient";
+import { isMongoConfigured, listWorkerEvents } from "@/lib/broker/mongoTradesClient";
 
 export const dynamic = "force-dynamic";
 

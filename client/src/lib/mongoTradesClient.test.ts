@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { PaperTradeDbRow } from "@/lib/portfolio/paperTradesTypes";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -9,19 +9,19 @@ afterEach(() => {
 describe("isMongoConfigured", () => {
   it("returns false when MONGODB_URI is unset or empty", async () => {
     vi.stubEnv("MONGODB_URI", "");
-    const { isMongoConfigured } = await import("./mongoTradesClient");
+    const { isMongoConfigured } = await import("./broker/mongoTradesClient");
     expect(isMongoConfigured()).toBe(false);
   });
 
   it("returns true when MONGODB_URI is set", async () => {
     vi.stubEnv("MONGODB_URI", "mongodb+srv://user:pass@cluster.test.mongodb.net/?retryWrites=true");
-    const { isMongoConfigured } = await import("./mongoTradesClient");
+    const { isMongoConfigured } = await import("./broker/mongoTradesClient");
     expect(isMongoConfigured()).toBe(true);
   });
 
   it("treats whitespace-only URI as unconfigured", async () => {
     vi.stubEnv("MONGODB_URI", "   ");
-    const { isMongoConfigured } = await import("./mongoTradesClient");
+    const { isMongoConfigured } = await import("./broker/mongoTradesClient");
     expect(isMongoConfigured()).toBe(false);
   });
 });
@@ -93,7 +93,7 @@ describe("upsertTradeMongo", () => {
   });
 
   it("upserts by client_trade_id with $set for row fields and $setOnInsert for created_at", async () => {
-    const { upsertTradeMongo, _closeMongoForTests } = await import("./mongoTradesClient");
+    const { upsertTradeMongo, _closeMongoForTests } = await import("./broker/mongoTradesClient");
     const row = sampleRow();
     const result = await upsertTradeMongo(row);
 
@@ -112,7 +112,7 @@ describe("upsertTradeMongo", () => {
   });
 
   it("creates the unique + per-account + per-module indexes on first access", async () => {
-    const { upsertTradeMongo, _closeMongoForTests } = await import("./mongoTradesClient");
+    const { upsertTradeMongo, _closeMongoForTests } = await import("./broker/mongoTradesClient");
     await upsertTradeMongo(sampleRow());
 
     expect(mockCol.createIndex).toHaveBeenCalledTimes(4);
@@ -125,7 +125,7 @@ describe("upsertTradeMongo", () => {
   });
 
   it("reuses the cached client across multiple writes (no reconnect)", async () => {
-    const { upsertTradeMongo, _closeMongoForTests } = await import("./mongoTradesClient");
+    const { upsertTradeMongo, _closeMongoForTests } = await import("./broker/mongoTradesClient");
     await upsertTradeMongo(sampleRow());
     await upsertTradeMongo(sampleRow({ client_trade_id: "00000000-0000-0000-0000-000000000002" }));
 
@@ -138,7 +138,7 @@ describe("upsertTradeMongo", () => {
 
   it("returns { ok:false, error } when MONGODB_URI is missing", async () => {
     vi.stubEnv("MONGODB_URI", "");
-    const { upsertTradeMongo } = await import("./mongoTradesClient");
+    const { upsertTradeMongo } = await import("./broker/mongoTradesClient");
     const result = await upsertTradeMongo(sampleRow());
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -170,7 +170,7 @@ describe("listTradesMongo", () => {
   });
 
   it("filters by accountKey, sorts closed_at desc, applies limit", async () => {
-    const { listTradesMongo, _closeMongoForTests } = await import("./mongoTradesClient");
+    const { listTradesMongo, _closeMongoForTests } = await import("./broker/mongoTradesClient");
     const rows = await listTradesMongo({ accountKey: "user-1", limit: 50 });
 
     expect(rows).toEqual([ROW]);
@@ -184,7 +184,7 @@ describe("listTradesMongo", () => {
   });
 
   it("applies cursor as a closed_at < cursor filter", async () => {
-    const { listTradesMongo, _closeMongoForTests } = await import("./mongoTradesClient");
+    const { listTradesMongo, _closeMongoForTests } = await import("./broker/mongoTradesClient");
     await listTradesMongo({ accountKey: "user-2", limit: 10, cursor: "2026-05-17T09:00:00.000Z" });
 
     expect(mockCol.find).toHaveBeenCalledWith({

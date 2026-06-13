@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   filterCandlesByTimeRange,
   parseReplayFixtureFile,
   utcDayBoundsMs,
-} from "./futuresReplayFixtures";
+} from "./analytics/futuresReplayFixtures";
 
 describe("parseReplayFixtureFile (live JSON shape)", () => {
   it("parses Delta-style fixture payload", () => {

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MOCK_TRADING_CONFIG,
   computeAccountState,
   type MockTrade,
-} from "@/lib/mockTradingEngine";
+} from "@/lib/trading/mockTradingEngine";
 import {
   mergeHydratedMockTrades,
   mergePortfolioTrades,
@@ -13,9 +13,9 @@ import {
   mockTradeWriteBodySchema,
   mockTradingConfigSchema,
   strategyFamilyForTrade,
-} from "@/lib/mockTradingPersistenceTypes";
+} from "@/lib/trading/mockTradingPersistenceTypes";
 import { getMockConfigForPipelineStage } from "@/lib/strategyAuthority/gradeStageMockConfig";
-import { mockTradeToDoc } from "@/lib/mockTradingMongo";
+import { mockTradeToDoc } from "@/lib/trading/mockTradingMongo";
 
 const trade: MockTrade = {
   id: "mock-trace-1",

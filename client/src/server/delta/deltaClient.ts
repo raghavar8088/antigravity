@@ -1,4 +1,4 @@
-import { deltaSign, nowTs } from "@/lib/deltaSign";
+﻿import { deltaSign, nowTs } from "@/lib/broker/deltaSign";
 import {
   assertDeltaTestnetExecutionEnv,
   getDeltaServerCredentials,

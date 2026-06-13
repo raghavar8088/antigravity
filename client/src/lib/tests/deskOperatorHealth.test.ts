@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import {
   computeDeskOperatorHealth,
   type DeskOperatorHealthInput,
-} from "../deskOperatorHealth";
+} from "../trading/deskOperatorHealth";
 
 const base: DeskOperatorHealthInput = {
   workerEnabled: true,

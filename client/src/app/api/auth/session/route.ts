@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { verifySession, SESSION_COOKIE } from "@/lib/jwtSession";
+import { verifySession, SESSION_COOKIE } from "@/lib/broker/jwtSession";
 
 export const dynamic = "force-dynamic";
 

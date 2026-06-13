@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
-import type { MockTrade } from "@/lib/mockTradingEngine";
-import { rankStrategies, type StrategyRankRow, type StrategyClassification } from "@/lib/mockStrategyRankingEngine";
-import { computePerRegimeMetrics } from "@/lib/mockExtendedMetrics";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
+import { rankStrategies, type StrategyRankRow, type StrategyClassification } from "@/lib/ai/mockStrategyRankingEngine";
+import { computePerRegimeMetrics } from "@/lib/analytics/mockExtendedMetrics";
 import {
   DeskCard,
   DeskSectionHeader,

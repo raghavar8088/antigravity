@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MOCK_RESET_CONFIRMATION } from "@/lib/mockTradingPersistenceTypes";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MOCK_RESET_CONFIRMATION } from "@/lib/trading/mockTradingPersistenceTypes";
 
-vi.mock("@/lib/mongoTradesClient", () => ({
+vi.mock("@/lib/broker/mongoTradesClient", () => ({
   isMongoConfigured: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("@/lib/mockTradingMongo", () => ({
+vi.mock("@/lib/trading/mockTradingMongo", () => ({
   resetMockTradingState: vi.fn().mockResolvedValue({
     tradesDeleted: 1,
     snapshotsDeleted: 2,
@@ -15,7 +15,7 @@ vi.mock("@/lib/mockTradingMongo", () => ({
 }));
 
 import { DELETE } from "./route";
-import * as mockMongo from "@/lib/mockTradingMongo";
+import * as mockMongo from "@/lib/trading/mockTradingMongo";
 
 function request(body: unknown) {
   return new Request("http://localhost/api/mock-trading/reset", {

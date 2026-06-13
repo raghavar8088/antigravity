@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   applyFundingAccrual,
   DELTA_PAPER_FUNDING_INTERVAL_MS,
@@ -24,7 +24,7 @@ import {
   paperSameDirNotionalWouldExceedCap,
   paperWidenTpToMinSlRatio,
   type PaperFuturesExitPatchConsts,
-} from "./futuresPaperMath";
+} from "./trading/futuresPaperMath";
 
 describe("applyFundingAccrual (time-scaled periodic funding)", () => {
   const interval = DELTA_PAPER_FUNDING_INTERVAL_MS; // 8h

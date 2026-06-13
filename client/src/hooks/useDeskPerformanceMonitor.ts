@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * useDeskPerformanceMonitor
@@ -11,19 +11,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   DiagnosticSummary,
   HealthCheckResult,
-} from "@/lib/futuresStrategyDiagnostics";
+} from "@/lib/trading/futuresStrategyDiagnostics";
 import {
   recommendOneTune,
   type TuneRecommendation,
-} from "@/lib/futuresParameterTuner";
-import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
+} from "@/lib/trading/futuresParameterTuner";
+import type { PaperTradeDbRow } from "@/lib/portfolio/paperTradesTypes";
 import {
   computeStrategyRotation,
   type RotationReport,
-} from "@/lib/futuresStrategyRotation";
-import { computeGoLiveGates, type GoLiveGateReport } from "@/lib/futuresGoLiveGates";
-import { deskReplayGateEnabled } from "@/lib/futuresReplayGate";
-import { utcDateString } from "@/lib/futuresSoakTracker";
+} from "@/lib/trading/futuresStrategyRotation";
+import { computeGoLiveGates, type GoLiveGateReport } from "@/lib/risk/futuresGoLiveGates";
+import { deskReplayGateEnabled } from "@/lib/analytics/futuresReplayGate";
+import { utcDateString } from "@/lib/analytics/futuresSoakTracker";
 
 export type { TuneRecommendation, RotationReport };
 

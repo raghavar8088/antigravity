@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { computeGoLiveGates } from "../futuresGoLiveGates";
-import { generateValidationReport } from "../futuresValidationReport";
-import { runProductionReadiness } from "../futuresProductionReadiness";
+﻿import { describe, it, expect } from "vitest";
+import { computeGoLiveGates } from "../risk/futuresGoLiveGates";
+import { generateValidationReport } from "../analytics/futuresValidationReport";
+import { runProductionReadiness } from "../risk/futuresProductionReadiness";
 
 const now = Date.now();
 const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();

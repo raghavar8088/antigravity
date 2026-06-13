@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+﻿import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   applyProfitModeThreshold,
   profitModeAllowsStrategyInChop,
@@ -9,8 +9,8 @@ import {
   profitModePassesQuality,
   profitModeAllowsRotationStrategy,
   type ProfitModeConfig,
-} from "../futuresProfitMode";
-import { computeMTFConfluence } from "../futuresMTFConfluence";
+} from "../trading/futuresProfitMode";
+import { computeMTFConfluence } from "../trading/futuresMTFConfluence";
 
 const cfg = (overrides: Partial<ProfitModeConfig> = {}): ProfitModeConfig => ({
   enabled: true,

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/angelAuth";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+﻿import { NextResponse } from "next/server";
+import { getAngelJWT, isAngelConfigured, angelMissingEnv, commonHeaders, BASE_URL } from "@/lib/broker/angelAuth";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 
 export async function GET() {
   const auth = await getAuthenticatedApiSession();

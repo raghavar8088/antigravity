@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import type { MarketCandle } from "@/hooks/useLiveBTCMarket";
-import { calcEMA } from "@/lib/marketSignal";
+import { calcEMA } from "@/lib/trading/marketSignal";
 
 type ChartPosition = {
   id: string;

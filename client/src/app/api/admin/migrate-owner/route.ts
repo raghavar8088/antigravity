@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/admin/migrate-owner
  *
  * One-time migration: renames all anon_* account_key values in MongoDB to
@@ -24,9 +24,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/mongoTradesClient";
-import { getAuthenticatedApiSession } from "@/lib/apiSessionAuth";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+import { getDb } from "@/lib/broker/mongoTradesClient";
+import { getAuthenticatedApiSession } from "@/lib/broker/apiSessionAuth";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 const COLLECTIONS_TO_MIGRATE = [
   "paper_trades",

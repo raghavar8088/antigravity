@@ -1,11 +1,11 @@
-import crypto from "node:crypto";
+﻿import crypto from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getAdminCredentials,
   verifyPassword,
   OWNER_ACCOUNT_KEY,
-} from "@/lib/ownerAuth";
-import { signSession, SESSION_COOKIE } from "@/lib/jwtSession";
+} from "@/lib/broker/ownerAuth";
+import { signSession, SESSION_COOKIE } from "@/lib/broker/jwtSession";
 
 // ── In-process rate limit: 5 attempts per 15 minutes per IP ──────────────────
 // Per-pod; distributed enforcement is handled by middleware Redis tier.

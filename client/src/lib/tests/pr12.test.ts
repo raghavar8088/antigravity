@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import {
   computeStrategyRotation,
   getSuspendedStrategyIds,
-} from "../futuresStrategyRotation";
-import { generateHealthReport } from "../futuresHealthReport";
+} from "../trading/futuresStrategyRotation";
+import { generateHealthReport } from "../analytics/futuresHealthReport";
 
 const mkRow = (
   o: Partial<{

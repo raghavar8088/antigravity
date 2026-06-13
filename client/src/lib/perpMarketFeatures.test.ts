@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tests for perpMarketFeatures — pure function, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { extractPerpMarketFeatures } from "./perpMarketFeatures";
+import { extractPerpMarketFeatures } from "./trading/perpMarketFeatures";
 
 describe("extractPerpMarketFeatures — funding annualized", () => {
   it("annualises funding correctly (3/day × 365 × rate × 100)", () => {

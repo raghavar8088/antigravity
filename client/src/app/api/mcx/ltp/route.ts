@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
-import { MCX_COMMODITIES } from "@/lib/mcxCommodities";
-import { resolveMCXFutureToken } from "@/lib/mcxTokenResolver";
+﻿import { NextResponse } from "next/server";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/broker/engineProxy";
+import { MCX_COMMODITIES } from "@/lib/trading/mcxCommodities";
+import { resolveMCXFutureToken } from "@/lib/trading/mcxTokenResolver";
 
 // ── In-memory token cache (survives warm Vercel invocations) ──────────────────
 

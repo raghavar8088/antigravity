@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { getPipelineCounts, getTowerCounts } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 
 export const dynamic = "force-dynamic";

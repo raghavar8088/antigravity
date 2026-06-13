@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { DEFAULT_MOCK_ACCOUNT_KEY, type MockTradeListQuery } from "@/lib/mockTradingPersistenceTypes";
-import { mockTradeMongoFilterForQuery } from "@/lib/mockTradingMongo";
+﻿import { describe, expect, it } from "vitest";
+import { DEFAULT_MOCK_ACCOUNT_KEY, type MockTradeListQuery } from "@/lib/trading/mockTradingPersistenceTypes";
+import { mockTradeMongoFilterForQuery } from "@/lib/trading/mockTradingMongo";
 
 function query(overrides: Partial<MockTradeListQuery>): MockTradeListQuery {
   return {

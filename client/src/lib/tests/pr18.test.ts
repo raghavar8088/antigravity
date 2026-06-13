@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
+﻿import { describe, it, expect } from "vitest";
 import {
   profitModeAllowsStrategyInChop,
   type ProfitModeConfig,
-} from "../futuresProfitMode";
-import { deriveScorecardAction } from "../futuresScorecardActions";
-import { computeDeskRollingPnLScorecard } from "../futuresDeskPnLTracker";
-import { suggestWinnersFromScorecard } from "../futuresWinnersRefresh";
-import type { StrategyDiagnosticRow } from "../futuresStrategyDiagnostics";
+} from "../trading/futuresProfitMode";
+import { deriveScorecardAction } from "../analytics/futuresScorecardActions";
+import { computeDeskRollingPnLScorecard } from "../portfolio/futuresDeskPnLTracker";
+import { suggestWinnersFromScorecard } from "../trading/futuresWinnersRefresh";
+import type { StrategyDiagnosticRow } from "../trading/futuresStrategyDiagnostics";
 
 const pmOn = (): ProfitModeConfig => ({
   enabled: true,

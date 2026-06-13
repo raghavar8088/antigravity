@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/jwtSession";
+﻿import { NextResponse } from "next/server";
+import { SESSION_COOKIE } from "@/lib/broker/jwtSession";
 
 export async function POST() {
   const res = NextResponse.json({ ok: true });

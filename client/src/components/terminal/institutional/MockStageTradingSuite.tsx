@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
@@ -6,8 +6,8 @@ import { useMockTradingEngine } from "@/hooks/useMockTradingEngine";
 import {
   computeAnalytics,
   type MockTrade,
-} from "@/lib/mockTradingEngine";
-import { rankStrategies, type StrategyRankRow } from "@/lib/mockStrategyRankingEngine";
+} from "@/lib/trading/mockTradingEngine";
+import { rankStrategies, type StrategyRankRow } from "@/lib/ai/mockStrategyRankingEngine";
 import {
   getMockConfigForPipelineStage,
   mockAccountKeyForStage,

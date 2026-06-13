@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { deriveDeskRecommendation } from "../futuresDeskRecommendation";
-import { scoreSignalQuality } from "../futuresSignalQuality";
+﻿import { describe, it, expect } from "vitest";
+import { deriveDeskRecommendation } from "../trading/futuresDeskRecommendation";
+import { scoreSignalQuality } from "../analytics/futuresSignalQuality";
 import {
   computeMTFConfluence,
   mtfSkipReason,
-} from "../futuresMTFConfluence";
-import { computeAttribution } from "../futuresAttribution";
-import type { TuneRecommendation } from "../futuresParameterTuner";
+} from "../trading/futuresMTFConfluence";
+import { computeAttribution } from "../analytics/futuresAttribution";
+import type { TuneRecommendation } from "../trading/futuresParameterTuner";
 
 describe("deriveDeskRecommendation", () => {
   it("returns NO_CHANGE with null inputs", () => {

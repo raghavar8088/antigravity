@@ -1,9 +1,9 @@
-/**
+﻿/**
  * DeskHealthBadge — read-only display of rolling health check.
  * Drop into existing stats panel. No new state, no new fetches.
  * Receives healthCheck from parent that already has engine stats.
  */
-import type { HealthCheckResult } from "@/lib/futuresStrategyDiagnostics";
+import type { HealthCheckResult } from "@/lib/trading/futuresStrategyDiagnostics";
 
 interface Props {
   health: HealthCheckResult | null;

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+﻿import { describe, it, expect, beforeEach } from "vitest";
 import {
   blockStrategyRuntime,
   clearRuntimeBlocklist,
@@ -6,7 +6,7 @@ import {
   getRuntimeBlocklist,
   isStrategyRuntimeBlocked,
   unblockStrategyRuntime,
-} from "../futuresDeskPolicy";
+} from "../trading/futuresDeskPolicy";
 
 describe("computeAdaptiveThreshold", () => {
   it("chop adds 6", () => {

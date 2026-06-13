@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { NIFTY50_STOCKS, type Nifty50Stock } from "@/lib/nifty50Stocks";
+import { NIFTY50_STOCKS, type Nifty50Stock } from "@/lib/trading/nifty50Stocks";
 import type { StockLTPItem } from "@/app/api/stocks/ltp/route";
 
 // ─── Constants ────────────────────────────────────────────────────────────────

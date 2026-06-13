@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   buildCorrelationMatrix,
   computePortfolioRiskMetrics,
   aggregateByRegime,
   type TradeRow,
-} from "@/lib/paperTradeAnalyticsApi";
+} from "@/lib/portfolio/paperTradeAnalyticsApi";
 import { mapSnapshotToTerminalDelta } from "@/lib/terminal/mapSnapshotToTerminalDelta";
 import { terminalHasAuthority } from "@/lib/terminal/terminalAuthority";
 import { initialTerminalSnapshot } from "@/lib/terminal/terminalSnapshot";

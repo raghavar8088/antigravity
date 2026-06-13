@@ -1,16 +1,30 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { TerminalAuthorityState } from "@/lib/terminal/terminalStore";
-import { terminalAuthorityLabel, terminalHasAuthority } from "@/lib/terminal/terminalAuthority";
+import { terminalHasAuthority } from "@/lib/terminal/terminalAuthority";
 
 type Props = {
   snapshot: TerminalAuthorityState;
+  /**
+   * When true (default) the guard blocks with a full-page spinner during the
+   * very first load before any data arrives. Pages that own their own data
+   * sources (Grade 1–5 mock stages) should pass authorityRequired={false} so
+   * they render immediately — the degraded banner still shows when the paper
+   * desk is unreachable.
+   */
+  authorityRequired?: boolean;
   children: ReactNode;
 };
 
-export function TerminalAuthorityGuard({ snapshot, children }: Props) {
-  if (snapshot.loading && !snapshot.hasAuthority) {
+export function TerminalAuthorityGuard({
+  snapshot,
+  authorityRequired = true,
+  children,
+}: Props) {
+  const [dismissed, setDismissed] = useState(false);
+
+  if (authorityRequired && snapshot.loading && !snapshot.hasAuthority) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 font-mono text-sm text-zinc-500">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
@@ -20,17 +34,32 @@ export function TerminalAuthorityGuard({ snapshot, children }: Props) {
     );
   }
 
-  if (snapshot.restUnavailable || !terminalHasAuthority(snapshot)) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 font-mono text-sm">
-        <p className="text-rose-400 text-lg font-bold">{terminalAuthorityLabel(snapshot)}</p>
-        <p className="text-zinc-500 text-xs">WebSocket disconnected · REST polling failed</p>
-        <p className="text-zinc-600 text-xs">NO DATA AVAILABLE — retrying every 30s after circuit break</p>
-      </div>
-    );
-  }
+  const degraded = snapshot.restUnavailable || !terminalHasAuthority(snapshot);
 
-  return <>{children}</>;
+  return (
+    <>
+      {degraded && !dismissed && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-rose-900/60 bg-rose-950/30 px-4 py-2 font-mono text-xs text-rose-400 mb-3">
+          <span>
+            <span className="font-bold">PAPER DESK OFFLINE</span>
+            {" — "}
+            {snapshot.restUnavailable
+              ? "REST circuit open · retrying every 30 s"
+              : "WebSocket disconnected · polling…"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="text-rose-600 hover:text-rose-300 transition-colors"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {children}
+    </>
+  );
 }
 
 export function TerminalNoData({ label = "NO DATA AVAILABLE" }: { label?: string }) {

@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { buildDailyPnlRows, type ClosedTradeLike } from "@/lib/dailyPnl";
+import { buildDailyPnlRows, type ClosedTradeLike } from "@/lib/portfolio/dailyPnl";
 
 type CurrencyFormatOptions = {
   signed?: boolean;

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   dbRowToShadowIntentListItem,
   shadowIntentFromPaperClose,
   shadowIntentFromPaperOpen,
   shadowIntentPostBodyToInsertRow,
-} from "./shadowTradeIntentMapper";
-import type { BTCFuturesTrade } from "@/lib/btcFuturesTrade.types";
-import type { ShadowTradeIntentDbRow } from "./shadowTradeIntentTypes";
+} from "./ai/shadowTradeIntentMapper";
+import type { BTCFuturesTrade } from "@/lib/trading/btcFuturesTrade.types";
+import type { ShadowTradeIntentDbRow } from "./ai/shadowTradeIntentTypes";
 
 const sampleClose: BTCFuturesTrade = {
   clientTradeId: "550e8400-e29b-41d4-a716-446655440000",

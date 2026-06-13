@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import {
   deskSlippageBpsFromEnv,
   deskVolSizedNotionalEnabledFromEnv,
-} from "@/lib/futuresDeskPolicy";
-import type { PaperReplayApiSuccess } from "@/lib/futuresReplayUi";
+} from "@/lib/trading/futuresDeskPolicy";
+import type { PaperReplayApiSuccess } from "@/lib/analytics/futuresReplayUi";
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskButton } from "@/components/desk/ui/DeskButton";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
@@ -21,7 +21,7 @@ import {
   REPLAY_EMPTY_FIXTURE_HINT,
   replayErrorWithFixtureHint,
   type DeskReplayFixtureKind,
-} from "@/lib/futuresReplayUi";
+} from "@/lib/analytics/futuresReplayUi";
 
 export type ReplayEvent = {
   id: string;

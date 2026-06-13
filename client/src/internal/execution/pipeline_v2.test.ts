@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { EventBus } from "@/internal/events";
 import { ExecutionEngineV2 } from "@/internal/execution/engine_v2";
 import { ExecutionPipelineV2 } from "@/internal/execution/pipeline_v2";
 import { PaperExchangeAdapter } from "@/internal/exchange";
 import { OMSV2 } from "@/internal/oms";
 import { StrategyEvaluationEngine, type MarketSnapshot, type Signal } from "@/internal/strategy/evaluator";
-import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+import type { FuturesStratDef } from "@/lib/trading/futuresStratTypes";
 
 const market: MarketSnapshot = {
   symbol: "BTCUSD",

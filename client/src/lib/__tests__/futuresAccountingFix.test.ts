@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { isProbeOrBootstrapTrade, computeSessionTradingMetrics } from "../futuresSessionMetrics";
+﻿import { describe, expect, it } from "vitest";
+import { isProbeOrBootstrapTrade, computeSessionTradingMetrics } from "../analytics/futuresSessionMetrics";
 
 describe("isProbeOrBootstrapTrade", () => {
   it("returns true for BOOTSTRAP strategy names (case-insensitive)", () => {

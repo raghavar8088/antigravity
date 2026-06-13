@@ -1,13 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { isProbeOrBootstrapTrade, computeSessionTradingMetrics } from "../futuresSessionMetrics";
+﻿import { describe, it, expect } from "vitest";
+import { isProbeOrBootstrapTrade, computeSessionTradingMetrics } from "../analytics/futuresSessionMetrics";
 import {
   computeStrategyDiagnostics,
   computeRollingHealthCheck,
-} from "../futuresStrategyDiagnostics";
-import { recommendOneTune } from "../futuresParameterTuner";
-import { runProductionReadiness } from "../futuresProductionReadiness";
-import { computeAdaptiveThreshold, isSameSideCapped } from "../futuresDeskPolicy";
-import type { PaperTradeDbRow } from "../paperTradesTypes";
+} from "../trading/futuresStrategyDiagnostics";
+import { recommendOneTune } from "../trading/futuresParameterTuner";
+import { runProductionReadiness } from "../risk/futuresProductionReadiness";
+import { computeAdaptiveThreshold, isSameSideCapped } from "../trading/futuresDeskPolicy";
+import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
 
 const now = Date.now();
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();

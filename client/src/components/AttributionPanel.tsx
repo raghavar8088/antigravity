@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * AttributionPanel
@@ -6,7 +6,7 @@
  * Additive only. No new state or fetches.
  */
 import { useState } from "react";
-import type { AttributionReport, AttributionBucket } from "@/lib/futuresAttribution";
+import type { AttributionReport, AttributionBucket } from "@/lib/analytics/futuresAttribution";
 
 interface Props {
   report: AttributionReport | null;

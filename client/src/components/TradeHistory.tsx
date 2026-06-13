@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { formatUSD } from "@/lib/money";
-import { formatShortDate, formatShortTime } from "@/lib/time";
+import { formatUSD } from "@/lib/portfolio/money";
+import { formatShortDate, formatShortTime } from "@/lib/utils/time";
 
 type ExitReason = "TP_HIT" | "SL_HIT" | "TRAILING_STOP" | "BREAK_EVEN" | "MANUAL";
 

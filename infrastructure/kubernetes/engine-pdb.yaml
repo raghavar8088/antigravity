@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: btc-engine-pdb
+  namespace: btc-pilot
+spec:
+  # minAvailable: 0 — during rolling deploy or node drain, brief downtime is
+  # safer than running two engine instances simultaneously (which duplicates trades).
+  minAvailable: 0
+  selector:
+    matchLabels:
+      app: btc-engine

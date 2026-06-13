@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { MOCK_TRADING_PATH } from "@/lib/navRoutes";
+import { MOCK_TRADING_PATH } from "@/lib/utils/navRoutes";
 
 export default function MockTradingError({
   error,

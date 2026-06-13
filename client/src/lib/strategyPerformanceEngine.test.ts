@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { computeStrategyPerformance } from "@/lib/strategyPerformanceEngine";
-import type { MockTrade } from "@/lib/mockTradingEngine";
+﻿import { describe, expect, it } from "vitest";
+import { computeStrategyPerformance } from "@/lib/ai/strategyPerformanceEngine";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 
 const T0 = 1_700_000_000_000;
 

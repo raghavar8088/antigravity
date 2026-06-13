@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -9,7 +9,7 @@ import {
   DeskSectionHeader,
 } from "@/components/desk/ui";
 import type { StrategyToggleItem } from "@/components/WorkspaceSettingsPanel";
-import { formatDeskInr, formatDeskUsd } from "@/lib/deskFormat";
+import { formatDeskInr, formatDeskUsd } from "@/lib/trading/deskFormat";
 import { useDeskMounted } from "@/hooks/useDeskMounted";
 
 type WorkspaceMode = "paper" | "live" | "analysis";

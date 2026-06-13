@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import type { DeskRollingPnLScorecard } from "@/lib/futuresDeskPnLTracker";
-import { profitModeExitConfig, type ProfitModeConfig } from "@/lib/futuresProfitMode";
+import type { DeskRollingPnLScorecard } from "@/lib/portfolio/futuresDeskPnLTracker";
+import { profitModeExitConfig, type ProfitModeConfig } from "@/lib/trading/futuresProfitMode";
 
 interface Props {
   scorecard: DeskRollingPnLScorecard | null;

@@ -1,9 +1,9 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+﻿import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   CORE_BTC_FT_STRATEGY_IDS,
   BTC_FUTURE_TRADING_STRATEGY_IDS,
   resolveBtcFtActiveStrategyIds,
-} from "./btcFtRoster";
+} from "./trading/btcFtRoster";
 
 afterEach(() => {
   vi.unstubAllEnvs();

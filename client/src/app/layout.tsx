@@ -3,6 +3,7 @@ import { Roboto, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { GlobalRiskRibbon } from "@/components/GlobalRiskRibbon";
 import { M3Providers } from "@/components/ui/M3Providers";
+import { SessionProvider } from "@/context/SessionContext";
 
 const roboto = Roboto({
   subsets: ["latin"],
@@ -40,10 +41,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={roboto.className}>
-        <M3Providers>
-          <GlobalRiskRibbon />
-          {children}
-        </M3Providers>
+        <SessionProvider>
+          <M3Providers>
+            <GlobalRiskRibbon />
+            {children}
+          </M3Providers>
+        </SessionProvider>
       </body>
     </html>
   );

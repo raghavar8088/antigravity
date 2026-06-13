@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { insertStrategySignals, listRecentSignals } from "@/lib/mockTradingMongo";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { insertStrategySignals, listRecentSignals } from "@/lib/trading/mockTradingMongo";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
 

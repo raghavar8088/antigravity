@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computePortfolioAllocation } from "@/lib/mockResearchPortfolioAllocation";
-import type { StrategyHealthRow } from "@/lib/strategyHealthEngine";
-import type { StrategyScore } from "@/lib/strategyScoringEngine";
-import type { StrategyPerformanceMetrics } from "@/lib/strategyPerformanceEngine";
+import { computePortfolioAllocation } from "@/lib/ai/mockResearchPortfolioAllocation";
+import type { StrategyHealthRow } from "@/lib/ai/strategyHealthEngine";
+import type { StrategyScore } from "@/lib/ai/strategyScoringEngine";
+import type { StrategyPerformanceMetrics } from "@/lib/ai/strategyPerformanceEngine";
 
 function metrics(id: number): StrategyPerformanceMetrics {
   return {

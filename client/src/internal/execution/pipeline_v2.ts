@@ -1,4 +1,4 @@
-import { EventBus } from "@/internal/events";
+﻿import { EventBus } from "@/internal/events";
 import { ExecutionEngineV2 } from "@/internal/execution/engine_v2";
 import { MarketRegimeEngine } from "@/internal/regime";
 import { RegimeStrategyRouter } from "@/internal/regime/router";
@@ -11,7 +11,7 @@ import {
   type SignalQualityFeatures,
   type SignalQualityScore,
 } from "@/internal/trading/signal_scoring";
-import type { FuturesStratDef } from "@/lib/futuresStratTypes";
+import type { FuturesStratDef } from "@/lib/trading/futuresStratTypes";
 
 export interface PipelineRiskLimits {
   maxOrdersPerTick: number;

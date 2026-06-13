@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useMemo } from "react";
 import {
@@ -14,9 +14,9 @@ import {
   type SeriesMarker,
   type Time,
 } from "lightweight-charts";
-import { toMinuteUtcChartTime, toUtcChartTime } from "@/lib/chartTime";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
-import type { MockTrade } from "@/lib/mockTradingEngine";
+import { toMinuteUtcChartTime, toUtcChartTime } from "@/lib/utils/chartTime";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 
 interface InstitutionalChartProps {
   candles: OHLCVCandle[];

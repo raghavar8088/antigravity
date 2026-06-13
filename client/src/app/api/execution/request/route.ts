@@ -1,11 +1,11 @@
-/**
+﻿/**
  * POST /api/execution/request
  * Proxies authenticated execution intents to the Go engine institutional gateway.
  * Frontend must never call brokers directly.
  */
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
 

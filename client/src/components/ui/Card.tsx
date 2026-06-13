@@ -3,17 +3,28 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 
+export type CardVariant = "default" | "elevated" | "danger" | "warning";
+
 type CardProps = {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  /** Visual variant controlling border and background tint */
+  variant?: CardVariant;
 };
 
-export function Card({ title, subtitle, actions, children, className }: CardProps) {
+const variantClass: Record<CardVariant, string> = {
+  default:  "m3-surface-card",
+  elevated: "m3-surface-card border-[var(--color-border)] shadow-[var(--shadow-elevated)]",
+  danger:   "m3-surface-card border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.04)]",
+  warning:  "m3-surface-card border-[rgba(249,115,22,0.3)] bg-[rgba(249,115,22,0.04)]",
+};
+
+export function Card({ title, subtitle, actions, children, className, variant = "default" }: CardProps) {
   return (
-    <section className={cn("m3-surface-card", className)}>
+    <section className={cn(variantClass[variant], className)}>
       <header className="m3-surface-card__header">
         <div>
           <h2 className="m3-surface-card__title">{title}</h2>

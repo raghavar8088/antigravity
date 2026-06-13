@@ -7,7 +7,7 @@ import {
   INITIAL_CANDLE_STATE,
   type CandleBuilderState,
 } from "@/lib/mockCandleBuilder";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
 export interface UseMockCandleBuilderResult {
   /** All closed 1-min candles + in-progress partial bar (oldest → newest). */

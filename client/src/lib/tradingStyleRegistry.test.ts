@@ -1,18 +1,18 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   TRADING_STYLE_PROFILES,
   TRADING_STYLE_IDS,
   getTradingStyleProfile,
   clampHoldMinutesToStyle,
-} from "./tradingStyleRegistry";
+} from "./trading/tradingStyleRegistry";
 import {
   PLAYBOOK_PROFILES,
   PLAYBOOK_IDS,
   getPlaybookProfile,
   categoryPassesPlaybook,
-} from "./playbookRegistry";
-import { buildStyleRoster } from "./styleRoster";
-import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
+} from "./trading/playbookRegistry";
+import { buildStyleRoster } from "./trading/styleRoster";
+import { FUTURES_STRAT_DEFS } from "./trading/futuresStrategies";
 
 // ─── tradingStyleRegistry ──────────────────────────────────────────────────
 
@@ -189,7 +189,7 @@ describe("buildStyleRoster", () => {
 
   it("all FUTURES_STRAT_DEFS tagged strats appear in at least one style roster", () => {
     const taggedIds = new Set(
-      (FUTURES_STRAT_DEFS as readonly import("./futuresStratTypes").FuturesStratDef[])
+      (FUTURES_STRAT_DEFS as readonly import("./trading/futuresStratTypes").FuturesStratDef[])
         .filter((d) => d.styles && d.styles.length > 0)
         .map((d) => d.id),
     );

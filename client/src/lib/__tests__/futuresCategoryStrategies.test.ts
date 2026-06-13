@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Structural tests for the 160-strategy research pool.
  *
  * Validates: unique IDs, signal keys, category tagging, RR ratios, ID-range
@@ -17,18 +17,18 @@ import {
   MOMENTUM_TRADING_STRATEGIES,
   CATEGORY_POOL_160,
   LEGACY_CORE_CATEGORY_MAP,
-} from "../futuresCategoryStrategies";
-import { CATEGORY_REGISTRY as CR } from "../futuresCategoryRegistry";
+} from "../trading/futuresCategoryStrategies";
+import { CATEGORY_REGISTRY as CR } from "../trading/futuresCategoryRegistry";
 import {
   CATEGORY_REGISTRY,
   CATEGORY_ID_RANGES,
   TRADING_CATEGORY_IDS,
   idInCategoryBlock,
   getCategoryProfile,
-} from "../futuresCategoryRegistry";
-import { CORE_BTC_FT_STRATEGY_IDS, CATEGORY_STRATEGY_IDS, buildCategoryRoster } from "../btcFtRoster";
-import { BTC_FT_PREMIUM_STRATEGY_IDS } from "../btcFtPremiumStrategies";
-import type { FuturesStratDef } from "../futuresStratTypes";
+} from "../trading/futuresCategoryRegistry";
+import { CORE_BTC_FT_STRATEGY_IDS, CATEGORY_STRATEGY_IDS, buildCategoryRoster } from "../trading/btcFtRoster";
+import { BTC_FT_PREMIUM_STRATEGY_IDS } from "../trading/btcFtPremiumStrategies";
+import type { FuturesStratDef } from "../trading/futuresStratTypes";
 
 describe("CATEGORY_REGISTRY structural invariants", () => {
   it("has exactly 8 categories", () => {

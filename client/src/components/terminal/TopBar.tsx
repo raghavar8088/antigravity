@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { usePathname } from "next/navigation";
-import { isMockTradingRoute, isPaperDeskRoute, MOCK_TRADING_PATH, TERMINAL_ROUTES } from "@/lib/navRoutes";
+import { isMockTradingRoute, isPaperDeskRoute, MOCK_TRADING_PATH, TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 
 type Regime = string | null | undefined;
 

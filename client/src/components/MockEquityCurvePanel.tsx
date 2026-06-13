@@ -1,13 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
-import type { MockTrade } from "@/lib/mockTradingEngine";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 import {
   buildEquityCurve,
   computeDailyPnl,
   computeMonthlyPnl,
   computeExtendedMetrics,
-} from "@/lib/mockExtendedMetrics";
+} from "@/lib/analytics/mockExtendedMetrics";
 import {
   DeskCard,
   DeskMetricTile,

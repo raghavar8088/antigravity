@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { resolveEngineApiUrl } from "@/lib/engineApi";
+import { resolveEngineApiUrl } from "@/lib/broker/engineApi";
 import {
   clearOptionsSellCache,
   readOptionsSellCache,
   writeOptionsSellCache,
-} from "@/lib/optionsSnapshotCache";
+} from "@/lib/portfolio/optionsSnapshotCache";
 import {
   fetchPaperSnapshotFromServer,
   mergeStrategiesById,
@@ -14,7 +14,7 @@ import {
   postPaperSnapshotToServer,
   sortTradesByExitDesc,
   type OptionsDesk,
-} from "@/lib/optionsPaperLedger";
+} from "@/lib/portfolio/optionsPaperLedger";
 
 export type {
   OptionPosition,

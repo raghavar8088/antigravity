@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { recommendOneTune } from "../futuresParameterTuner";
-import type { PaperTradeDbRow } from "../paperTradesTypes";
+﻿import { describe, expect, it } from "vitest";
+import { recommendOneTune } from "../trading/futuresParameterTuner";
+import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
 
 const BASE: PaperTradeDbRow = {
   id: "t1",

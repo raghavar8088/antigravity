@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/apiSessionAuth";
+﻿import { NextResponse } from "next/server";
+import { getAuthenticatedApiSession } from "@/lib/broker/apiSessionAuth";
 import { DeltaClientError } from "@/server/delta/deltaErrors";
 import { DeltaTestnetClient, balanceSnippetFromWallets } from "@/server/delta/deltaClient";
 import { isDeltaTestnetExecutionEnabled, resolveDeltaTestnetBaseUrl } from "@/server/delta/deltaConfig";

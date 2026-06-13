@@ -1,14 +1,14 @@
-import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+﻿import { NextResponse } from "next/server";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 import {
   dbRowToShadowIntentListItem,
   isDeskShadowIntentsEnabled,
   shadowIntentPostBodyToInsertRow,
-} from "@/lib/shadowTradeIntentMapper";
+} from "@/lib/ai/shadowTradeIntentMapper";
 import {
   shadowIntentPostBodySchema,
   type ShadowTradeIntentDbRow,
-} from "@/lib/shadowTradeIntentTypes";
+} from "@/lib/ai/shadowTradeIntentTypes";
 import { computeWouldPlaceTestnetShadow } from "@/server/delta/shadowWouldPlaceTestnet";
 import { createServiceSupabase } from "@/lib/supabase/server";
 import { z } from "zod";

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeRollingHealthCheck,
   computeStrategyDiagnostics,
-} from "../futuresStrategyDiagnostics";
-import type { PaperTradeDbRow } from "../paperTradesTypes";
+} from "../trading/futuresStrategyDiagnostics";
+import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { closeMockTradeInMongo, upsertMockTrade } from "@/lib/mockTradingMongo";
-import { mockTradeCloseBodySchema } from "@/lib/mockTradingPersistenceTypes";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { closeMockTradeInMongo, upsertMockTrade } from "@/lib/trading/mockTradingMongo";
+import { mockTradeCloseBodySchema } from "@/lib/trading/mockTradingPersistenceTypes";
 
 export const dynamic = "force-dynamic";
 

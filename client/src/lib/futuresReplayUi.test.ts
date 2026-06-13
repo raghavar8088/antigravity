@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
-import type { BTCFuturesTrade } from "./btcFuturesTrade.types";
+﻿import { describe, expect, it } from "vitest";
+import type { BTCFuturesTrade } from "./trading/btcFuturesTrade.types";
 import {
   formatReplaySummary,
   mapReplayTradesToTableRows,
   parsePaperReplayApiResponse,
-} from "./futuresReplayUi";
-import type { PaperReplayStats } from "./futuresReplayEngine";
+} from "./analytics/futuresReplayUi";
+import type { PaperReplayStats } from "./analytics/futuresReplayEngine";
 
 const sampleTrade: BTCFuturesTrade = {
   id: "t1",

@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { fetchBtcSpotPrice } from "./btcSpotPrice";
+﻿import { describe, expect, it, vi } from "vitest";
+import { fetchBtcSpotPrice } from "./trading/btcSpotPrice";
 
 describe("fetchBtcSpotPrice", () => {
   it("returns Binance spot when the primary feed succeeds", async () => {

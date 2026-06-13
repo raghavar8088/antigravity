@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { makeSyntheticBtcusd1mCandles } from "./futuresReplayFixtures";
+﻿import { describe, expect, it } from "vitest";
+import { makeSyntheticBtcusd1mCandles } from "./analytics/futuresReplayFixtures";
 import {
   replayClientTradeId,
   runPaperDeskReplay,
   type PaperReplayConfig,
-} from "./futuresReplayEngine";
-import { BTC_FUTURE_TRADING_CORE_STRATEGY_IDS } from "./btcFutureTradingRoster";
+} from "./analytics/futuresReplayEngine";
+import { BTC_FUTURE_TRADING_CORE_STRATEGY_IDS } from "./trading/btcFutureTradingRoster";
 
 /** Golden replay stays on the 20-strategy core basket for a compact stable snapshot; live desk uses `BTC_FUTURE_TRADING_STRATEGY_IDS`. */
 const goldenConfig: PaperReplayConfig = {

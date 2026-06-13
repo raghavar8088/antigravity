@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import type { SoakDaySnapshot } from "@/lib/futuresSoakTracker";
-import type { UnifiedReadiness } from "@/lib/futuresUnifiedReadiness";
-import { unifiedReadinessLabel } from "@/lib/futuresUnifiedReadiness";
-import { deskReplayGateEnabled } from "@/lib/futuresReplayGate";
+import type { SoakDaySnapshot } from "@/lib/analytics/futuresSoakTracker";
+import type { UnifiedReadiness } from "@/lib/risk/futuresUnifiedReadiness";
+import { unifiedReadinessLabel } from "@/lib/risk/futuresUnifiedReadiness";
+import { deskReplayGateEnabled } from "@/lib/analytics/futuresReplayGate";
 
 const STATE_COLOR: Record<UnifiedReadiness, string> = {
   NOT_READY: "#f85149",

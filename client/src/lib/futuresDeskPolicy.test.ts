@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { FUTURES_STRAT_DEFS } from "./futuresStrategies";
+﻿import { afterEach, describe, expect, it, vi } from "vitest";
+import { FUTURES_STRAT_DEFS } from "./trading/futuresStrategies";
 import {
   buildPaperDeskStrategies,
   checkEntryBurstGuard,
@@ -62,7 +62,7 @@ import {
   BTC_FT_PAPER_MIN_OPENS_PER_10M_DEFAULT,
   BTC_FT_PAPER_THROUGHPUT_WINDOW_MS,
   paperDeskEffectiveStops,
-} from "./futuresDeskPolicy";
+} from "./trading/futuresDeskPolicy";
 
 describe("deskEffectiveHoldMinutesAtOpen", () => {
   it("bumps base hold only for scalp_aggro_v1 when desk widened TP", () => {

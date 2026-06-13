@@ -75,11 +75,25 @@ func (l *PortfolioLedger) RecordClose(grossPnL, entryFee, exitFee, netPnL float6
 	}
 }
 
-// Snapshot returns a point-in-time copy.
+// Snapshot returns a point-in-time copy (mutex excluded).
 func (l *PortfolioLedger) Snapshot() PortfolioLedger {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return *l
+	return PortfolioLedger{
+		TotalTrades:     l.TotalTrades,
+		WinningTrades:   l.WinningTrades,
+		LosingTrades:    l.LosingTrades,
+		RealizedPnL:     l.RealizedPnL,
+		GrossPnL:        l.GrossPnL,
+		TotalFees:       l.TotalFees,
+		EntryFees:       l.EntryFees,
+		ExitFees:        l.ExitFees,
+		PeakEquity:      l.PeakEquity,
+		CurrentDrawdown: l.CurrentDrawdown,
+		MaxDrawdown:     l.MaxDrawdown,
+		StartingBalance: l.StartingBalance,
+		LastUpdated:     l.LastUpdated,
+	}
 }
 
 // WinRate returns 0–1 win rate.

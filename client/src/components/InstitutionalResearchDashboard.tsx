@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * Institutional Research Dashboard
@@ -11,16 +11,16 @@
  */
 
 import { useMemo, useState } from "react";
-import type { MockTrade } from "@/lib/mockTradingEngine";
-import { REGIME_LABELS, type MarketRegime } from "@/lib/marketRegimeClassifier";
+import type { MockTrade } from "@/lib/trading/mockTradingEngine";
+import { REGIME_LABELS, type MarketRegime } from "@/lib/ai/marketRegimeClassifier";
 import {
   buildInstitutionalReport,
   buildWalkForwardSummary,
   getStaticStrategyTable,
   type InstitutionalResearchReport,
   type InstitutionalStrategyMetrics,
-} from "@/lib/institutionalResearchEngine";
-import { INSTITUTIONAL_STRATEGIES } from "@/lib/btcInstitutionalStrategies";
+} from "@/lib/ai/institutionalResearchEngine";
+import { INSTITUTIONAL_STRATEGIES } from "@/lib/trading/btcInstitutionalStrategies";
 import {
   DeskCard,
   DeskChip,

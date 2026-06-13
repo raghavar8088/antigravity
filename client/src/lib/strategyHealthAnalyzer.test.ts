@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for strategyHealthAnalyzer.
  * Pure-function tests — no I/O, no MongoDB.
  */
@@ -7,7 +7,7 @@ import {
   analyzeStrategyHealth,
   summarizeRosterHealth,
   type AnalyzerTradeInput,
-} from "./strategyHealthAnalyzer";
+} from "./ai/strategyHealthAnalyzer";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

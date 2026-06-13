@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { DeskBanner } from "@/components/desk/ui/DeskBanner";
 import { DeskCard } from "@/components/desk/ui/DeskCard";
 import { DeskChip } from "@/components/desk/ui/DeskChip";
 import { DeskCopyButton } from "@/components/desk/ui/DeskCopyButton";
 import { DeskTabs, type DeskTabItem } from "@/components/desk/ui/DeskTabs";
-import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/btcFutureTradingRoster";
+import { BTC_FUTURE_TRADING_STRATEGY_IDS } from "@/lib/trading/btcFutureTradingRoster";
 import { isSupabaseAuthConfigured } from "@/lib/supabase/client";
 
 export type DashboardModule = "btcFutureTrading" | "mockTrading";

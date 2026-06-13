@@ -1,12 +1,12 @@
-import { describe, it, expect, afterEach } from "vitest";
+﻿import { describe, it, expect, afterEach } from "vitest";
 import {
   profitModeExitConfig,
   profitModeFromEnv,
   profitModeSessionGateEnabled,
   profitModeAllocationByEdgeEnabled,
-} from "../futuresProfitMode";
-import { computeDeskRollingPnLScorecard } from "../futuresDeskPnLTracker";
-import { resolveFuturesExitStep, type FuturesExitStepPosition } from "../futuresDeskRuntime";
+} from "../trading/futuresProfitMode";
+import { computeDeskRollingPnLScorecard } from "../portfolio/futuresDeskPnLTracker";
+import { resolveFuturesExitStep, type FuturesExitStepPosition } from "../trading/futuresDeskRuntime";
 
 describe("profitModeExitConfig", () => {
   it("returns strict exits when enabled", () => {

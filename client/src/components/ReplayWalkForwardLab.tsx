@@ -13,7 +13,7 @@
 
 import { useCallback, useState } from "react";
 import { DeskButton } from "@/components/desk/ui";
-import type { ReplayWalkForwardRank } from "@/lib/replayWalkForwardRanker";
+import type { ReplayWalkForwardRank } from "@/lib/ai/replayWalkForwardRanker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

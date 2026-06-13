@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeSessionExitReasonAnalytics,
   computeSessionTradingMetrics,
@@ -6,8 +6,8 @@ import {
   formatExitReasonSessionSummary,
   FUTURES_STRATEGY_PROFILES,
   resolveStrategyProfile,
-} from "./futuresSessionMetrics";
-import { effectiveSignalThreshold } from "./futuresSignals";
+} from "./analytics/futuresSessionMetrics";
+import { effectiveSignalThreshold } from "./trading/futuresSignals";
 
 describe("computeSessionTradingMetrics", () => {
   const t0 = "2026-05-11T10:00:00.000Z";

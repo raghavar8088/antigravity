@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tests for buildSnapshotFromRaw — pure function, no MongoDB.
  * Covers: security, stale worker, missing account key, balance drift, funnel fields.
  */
@@ -10,7 +10,7 @@ import {
   BALANCE_DRIFT_WARN_USD,
   STALE_FUNNEL_THRESHOLD_MS,
 } from "../aiAppTracker/trackerConstants";
-import type { EntryFunnelSnapshot } from "../deskEntryFunnelSnapshot";
+import type { EntryFunnelSnapshot } from "../trading/deskEntryFunnelSnapshot";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

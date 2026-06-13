@@ -1,4 +1,4 @@
-/**
+﻿/**
  * /api/system/health — Complete system readiness endpoint.
  *
  * Returns a full diagnostic report covering:
@@ -16,10 +16,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
-import { runEnvChecks } from "@/lib/envCheck";
-import { pingMongo, isMongoConfigured } from "@/lib/mongoTradesClient";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
+import { runEnvChecks } from "@/lib/utils/envCheck";
+import { pingMongo, isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/research-edge-report?window_days=30
  *
  * Research-grade edge report for the BTC Futures paper desk.
@@ -13,10 +13,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured, listTradesMongo } from "@/lib/mongoTradesClient";
-import { computeResearchEdgeScores } from "@/lib/researchEdgeScore";
-import { buildRegimeRosters } from "@/lib/regimeRosterBuilder";
-import { runWalkForwardValidation } from "@/lib/walkForwardValidation";
+import { isMongoConfigured, listTradesMongo } from "@/lib/broker/mongoTradesClient";
+import { computeResearchEdgeScores } from "@/lib/ai/researchEdgeScore";
+import { buildRegimeRosters } from "@/lib/analytics/regimeRosterBuilder";
+import { runWalkForwardValidation } from "@/lib/analytics/walkForwardValidation";
 
 export const dynamic = "force-dynamic";
 

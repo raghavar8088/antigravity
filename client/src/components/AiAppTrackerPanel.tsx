@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeskButton, DeskChip } from "@/components/desk/ui";
 import type { AiAppTrackerReport } from "@/lib/aiAppTracker/types";
-import { recommendHealingActions, type DeskHealingAction } from "@/lib/deskSelfHealing";
+import { recommendHealingActions, type DeskHealingAction } from "@/lib/trading/deskSelfHealing";
 
 type Props = {
   workerStatus: string;

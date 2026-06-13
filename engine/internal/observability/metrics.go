@@ -618,3 +618,251 @@ var (
 		Help:      "Execution watchdog alerts by type.",
 	}, []string{"alert_type"})
 )
+
+// ─────────────────────────────────────────────
+// Phase 1–5 Upgrade Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// DataQualityCandlesDropped counts 1m candles dropped by the data quality gate.
+	DataQualityCandlesDropped = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "dataquality",
+		Name:      "candles_dropped_total",
+		Help:      "Total 1m candles dropped by the data quality validator, by action and exchange.",
+	}, []string{"action", "exchange"})
+
+	// DataQualityScore is the most recent quality score emitted by the validator.
+	DataQualityScore = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "dataquality",
+		Name:      "score",
+		Help:      "Most recent data quality score (0–100) per exchange/symbol.",
+	}, []string{"exchange", "symbol"})
+
+	// DataQualityChecks counts individual quality check results.
+	DataQualityChecks = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "dataquality",
+		Name:      "checks_total",
+		Help:      "Total data quality checks completed per check name and result.",
+	}, []string{"check", "result"})
+
+	// RegimeClassifications counts regime classification events.
+	RegimeClassifications = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "regime",
+		Name:      "classifications_total",
+		Help:      "Total regime classification events per regime type.",
+	}, []string{"regime"})
+
+	// CurrentRegime records the current market regime as a label.
+	CurrentRegime = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "regime",
+		Name:      "active",
+		Help:      "1 if the labelled regime is currently active, 0 otherwise.",
+	}, []string{"regime"})
+
+	// StrategyGateFiltered counts strategies blocked by the regime strategy gate.
+	StrategyGateFiltered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "regime",
+		Name:      "strategies_filtered_total",
+		Help:      "Total strategy signals filtered by the regime strategy gate.",
+	}, []string{"regime", "family"})
+
+	// AsyncScorerCacheHits counts async scorer cache hits/misses.
+	AsyncScorerCacheHits = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "aiscoring",
+		Name:      "cache_lookups_total",
+		Help:      "Total async scorer cache lookups, by hit/miss/stale.",
+	}, []string{"result"})
+
+	// AsyncScorerQueueDepth is the current number of items pending in the scorer queue.
+	AsyncScorerQueueDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "aiscoring",
+		Name:      "queue_depth",
+		Help:      "Current number of items pending in the async scorer work queue.",
+	})
+
+	// CycleGuardBlocks counts 15m cycles blocked by the cycle guard (overlap prevention).
+	CycleGuardBlocks = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "cycleguard",
+		Name:      "blocks_total",
+		Help:      "Total 15m strategy cycles blocked because a prior cycle was still running.",
+	})
+
+	// FundingRate is the latest Binance perpetual funding rate.
+	FundingRate = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "derivatives",
+		Name:      "funding_rate",
+		Help:      "Latest Binance perpetual funding rate (raw, e.g. 0.0001 = 0.01%).",
+	})
+
+	// OpenInterestUSD is the latest open interest in USD.
+	OpenInterestUSD = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "derivatives",
+		Name:      "open_interest_usd",
+		Help:      "Latest Binance perpetual open interest in USD.",
+	})
+
+	// DerivativesScore is the blended derivatives confidence score [-3, +3].
+	DerivativesScore = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "derivatives",
+		Name:      "composite_score",
+		Help:      "Blended derivatives composite score in range [-3, +3]. Positive = bullish.",
+	})
+
+	// OrderBookScore is the latest L2 order book imbalance score [-3, +3].
+	OrderBookScore = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "orderbook",
+		Name:      "imbalance_score",
+		Help:      "Latest L2 order book bid/ask imbalance score [-3, +3]. Positive = bid-heavy.",
+	})
+
+	// OrderBookSnapshots counts depth snapshots processed by the subscriber.
+	OrderBookSnapshots = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "orderbook",
+		Name:      "snapshots_total",
+		Help:      "Total L2 depth snapshots processed by the depth subscriber.",
+	})
+
+	// MicrostructureConfidenceAdjustment is the last confidence delta applied.
+	MicrostructureConfidenceAdjustment = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "trading",
+		Subsystem: "microstructure",
+		Name:      "confidence_adjustment",
+		Help:      "Confidence adjustment applied by microstructure weight (signed, 0–100 scale).",
+		Buckets:   []float64{-20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20},
+	})
+
+	// KellySizeRatio is the fraction of portfolio allocated by Kelly per signal.
+	KellySizeRatio = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "trading",
+		Subsystem: "kelly",
+		Name:      "size_ratio",
+		Help:      "Kelly-computed position size as a fraction of portfolio (0–1).",
+		Buckets:   []float64{0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.10, 0.15, 0.20},
+	})
+
+	// SecretsResolutions counts AWS Secrets Manager fetch results.
+	SecretsResolutions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "secrets",
+		Name:      "resolutions_total",
+		Help:      "Total secret resolution attempts, by source (aws/env) and result (hit/miss/error).",
+	}, []string{"source", "result"})
+
+	// RestartReconciliationDuration measures how long restart reconciliation takes.
+	RestartReconciliationDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "trading",
+		Subsystem: "reconciliation",
+		Name:      "restart_duration_ms",
+		Help:      "Duration of restart reconciliation (ReconcileOnRestart) in milliseconds.",
+		Buckets:   []float64{50, 100, 250, 500, 1000, 2500, 5000, 10000},
+	})
+
+	// RestartReconciliationClosures counts positions retroactively closed at restart.
+	RestartReconciliationClosures = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "reconciliation",
+		Name:      "restart_closures_total",
+		Help:      "Total positions retroactively closed during restart reconciliation.",
+	})
+)
+
+// ─────────────────────────────────────────────
+// Phase D — AI Intelligence Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// MCBlockedTotal counts signals blocked by the Monte Carlo pre-trade filter.
+	MCBlockedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "montecarlo",
+		Name:      "blocked_total",
+		Help:      "Total signals blocked by Monte Carlo pre-trade filter, by block reason.",
+	}, []string{"reason"})
+
+	// MCExpectedValue is the probability-weighted expected value of the last MC simulation.
+	MCExpectedValue = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "montecarlo",
+		Name:      "expected_value",
+		Help:      "Probability-weighted expected PnL % from last Monte Carlo simulation.",
+	})
+
+	// MCProbSL is the probability of stop loss hit in the last MC simulation.
+	MCProbSL = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "montecarlo",
+		Name:      "prob_sl",
+		Help:      "Probability of stop loss hit in the last Monte Carlo simulation (0–1).",
+	})
+
+	// CalibrationFactor is the current confidence calibration factor.
+	CalibrationFactor = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "calibration",
+		Name:      "factor",
+		Help:      "Current AI confidence calibration factor (actual/stated win rate ratio).",
+	})
+
+	// CalibrationTradesAnalysed is the number of trades in the latest calibration.
+	CalibrationTradesAnalysed = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "trading",
+		Subsystem: "calibration",
+		Name:      "trades_analysed",
+		Help:      "Number of closed trades analysed in the most recent calibration run.",
+	})
+)
+
+// ─────────────────────────────────────────────
+// Phase E — Event Store Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// EventStoreWrittenTotal counts events successfully written to TimescaleDB.
+	EventStoreWrittenTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "btc",
+		Name:      "eventstore_events_written_total",
+		Help:      "Total events successfully written to the TimescaleDB event store.",
+	})
+
+	// EventStoreWriteErrors counts events dropped due to channel full or DB errors.
+	EventStoreWriteErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "btc",
+		Name:      "eventstore_write_errors_total",
+		Help:      "Total events dropped due to channel overflow or write errors.",
+	})
+
+	// EventStoreChannelDepth tracks the current depth of the async write buffer.
+	EventStoreChannelDepth = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "btc",
+		Name:      "eventstore_channel_depth",
+		Help:      "Current number of events pending in the event store write buffer.",
+	})
+
+	// MLBlockedTotal counts signals blocked by the local ML pre-scorer.
+	MLBlockedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "btc",
+		Name:      "ml_blocked_total",
+		Help:      "Total signals blocked by the local XGBoost ML pre-scorer.",
+	})
+
+	// MLAvailable is 1 when the ML model is loaded and active, 0 otherwise.
+	MLAvailable = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: "btc",
+		Name:      "ml_available",
+		Help:      "1 if the local ML pre-scorer model is loaded and active, 0 otherwise.",
+	})
+)

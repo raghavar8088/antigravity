@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { buildWorkbookForDay, isIsoDate } from "@/lib/tradeHistoryService";
+﻿import { NextRequest, NextResponse } from "next/server";
+import { buildWorkbookForDay, isIsoDate } from "@/lib/portfolio/tradeHistoryService";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

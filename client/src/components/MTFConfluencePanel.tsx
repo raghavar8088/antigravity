@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import type { MTFConfluenceResult } from "@/lib/futuresMTFConfluence";
+import type { MTFConfluenceResult } from "@/lib/trading/futuresMTFConfluence";
 
 interface Props {
   result: MTFConfluenceResult | null;

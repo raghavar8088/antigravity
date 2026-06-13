@@ -1,6 +1,6 @@
-import { randomUUID } from "crypto";
+﻿import { randomUUID } from "crypto";
 import type { Db } from "mongodb";
-import { getDb } from "@/lib/mongoTradesClient";
+import { getDb } from "@/lib/broker/mongoTradesClient";
 import { STRATEGY_CATALOG } from "./strategyCatalog";
 import {
   checkDemotionRisk,

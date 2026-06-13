@@ -1,12 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-vi.mock("@/lib/apiSessionAuth", () => ({
+vi.mock("@/lib/broker/apiSessionAuth", () => ({
   getAuthenticatedApiSession: vi.fn(),
 }));
 
-vi.mock("@/lib/shadowTradeIntentMapper", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/shadowTradeIntentMapper")>();
+vi.mock("@/lib/ai/shadowTradeIntentMapper", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/shadowTradeIntentMapper")>();
   return {
     ...actual,
     isDeskShadowIntentsEnabled: vi.fn(() => true),
@@ -38,7 +38,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { getAuthenticatedApiSession } from "@/lib/getAuthenticatedApiSession";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 import { POST, GET } from "./route";
 
 describe("shadow-trade-intents API", () => {

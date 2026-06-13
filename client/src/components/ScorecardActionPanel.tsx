@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
-import type { ScorecardAction } from "@/lib/futuresScorecardActions";
-import { formatScorecardActionEnv } from "@/lib/futuresScorecardActions";
-import type { DeskRollingPnLScorecard } from "@/lib/futuresDeskPnLTracker";
+import type { ScorecardAction } from "@/lib/analytics/futuresScorecardActions";
+import { formatScorecardActionEnv } from "@/lib/analytics/futuresScorecardActions";
+import type { DeskRollingPnLScorecard } from "@/lib/portfolio/futuresDeskPnLTracker";
 
 const SEV_COLOR: Record<ScorecardAction["severity"], string> = {
   OK: "#3fb950",

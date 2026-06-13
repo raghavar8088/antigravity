@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
-import { fetchBtcSpotPrice } from "@/lib/btcSpotPrice";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
-import { buildMockStrategyIntelRows } from "@/lib/mockTradingSnapshotService";
-import { listMockTrades, getLatestMockAccountSnapshot } from "@/lib/mockTradingMongo";
-import { getTodayRealizedPnlUtc } from "@/lib/portfolioAccountingService";
-import { mongoUnconfigured } from "@/lib/mockTradingApiErrors";
-import { OWNER_ACCOUNT_KEY } from "@/lib/ownerAuth";
+﻿import { NextResponse } from "next/server";
+import { fetchBtcSpotPrice } from "@/lib/trading/btcSpotPrice";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { buildMockStrategyIntelRows } from "@/lib/trading/mockTradingSnapshotService";
+import { listMockTrades, getLatestMockAccountSnapshot } from "@/lib/trading/mockTradingMongo";
+import { getTodayRealizedPnlUtc } from "@/lib/portfolio/portfolioAccountingService";
+import { mongoUnconfigured } from "@/lib/trading/mockTradingApiErrors";
+import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
 

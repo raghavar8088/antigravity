@@ -18,11 +18,11 @@
  */
 
 import { loadEnvLocal, loadReplayCandlesForDays, parseArg } from "./replayCliShared";
-import { runPaperDeskReplay, summarizeReplayTrades } from "../src/lib/futuresReplayEngine";
-import { rankReplayStrategies } from "../src/lib/replayWalkForwardRanker";
+import { runPaperDeskReplay, summarizeReplayTrades } from "../src/lib/analytics/futuresReplayEngine";
+import { rankReplayStrategies } from "../src/lib/ai/replayWalkForwardRanker";
 import { eventFromReplayWalkForwardRun } from "../src/lib/verificationTrack/buildVerificationEvents";
 import { insertVerificationEvents } from "../src/lib/verificationTrack/verificationTrackMongo";
-import { isMongoConfigured } from "../src/lib/mongoTradesClient";
+import { isMongoConfigured } from "../src/lib/broker/mongoTradesClient";
 
 loadEnvLocal();
 

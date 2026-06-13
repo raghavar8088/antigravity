@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/engineProxy";
+﻿import { NextResponse } from "next/server";
+import { isEngineProxyConfigured, engineProxyFetch } from "@/lib/broker/engineProxy";
 
 export async function GET(request: Request): Promise<Response> {
   if (!isEngineProxyConfigured()) {

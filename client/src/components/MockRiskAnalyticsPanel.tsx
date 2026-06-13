@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
-import type { MockTrade, MockAccountState, MockTradingConfig } from "@/lib/mockTradingEngine";
-import { computeExtendedMetrics, computeDailyPnl } from "@/lib/mockExtendedMetrics";
-import { runStressTest, buildScenarioComparisonTable } from "@/lib/mockStressTest";
-import { computeQualityAggregate } from "@/lib/mockTradeQualityScorer";
+import type { MockTrade, MockAccountState, MockTradingConfig } from "@/lib/trading/mockTradingEngine";
+import { computeExtendedMetrics, computeDailyPnl } from "@/lib/analytics/mockExtendedMetrics";
+import { runStressTest, buildScenarioComparisonTable } from "@/lib/analytics/mockStressTest";
+import { computeQualityAggregate } from "@/lib/ai/mockTradeQualityScorer";
 import {
   DeskCard,
   DeskSectionHeader,

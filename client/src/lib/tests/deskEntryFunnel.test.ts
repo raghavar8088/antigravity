@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeDominantBlocker,
   buildFunnelSnapshot,
@@ -6,8 +6,8 @@ import {
   emptyBlockerCounts,
   funnelSnapshotFromBrowserDebug,
   type EntryFunnelBlockerCounts,
-} from "../deskEntryFunnelSnapshot";
-import { isProbeOrBootstrapTrade } from "../futuresSessionMetrics";
+} from "../trading/deskEntryFunnelSnapshot";
+import { isProbeOrBootstrapTrade } from "../analytics/futuresSessionMetrics";
 
 // ── emptyBlockerCounts ────────────────────────────────────────────────────────
 

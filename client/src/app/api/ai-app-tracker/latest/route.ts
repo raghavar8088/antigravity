@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/ai-app-tracker/latest
  *
  * Returns the most recent AI tracker report for the btc_future_trading module,
@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { getLatestAiTrackerReport } from "@/lib/aiAppTracker/aiAppTrackerMongo";
 import { TRACKER_MODULE } from "@/lib/aiAppTracker/trackerConstants";
 

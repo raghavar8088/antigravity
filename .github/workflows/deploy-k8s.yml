@@ -1,0 +1,182 @@
+##############################################################################
+# deploy-k8s.yml — Production Deployment to EKS / Kubernetes
+#
+# Trigger: push to main when engine/** changes
+# Strategy: build → push ECR → sync K8s secrets → kubectl set image → verify
+# Safety: Recreate strategy means zero overlap between engine instances.
+#
+# Required GitHub Secrets:
+#   AWS_ROLE_ARN             — IAM Role ARN (OIDC-based, no long-lived keys)
+#   ECR_REPOSITORY           — Full ECR URI without tag
+#   EKS_CLUSTER_NAME         — EKS cluster name
+#   EKS_CLUSTER_REGION       — AWS region (default ap-south-1)
+#   ENGINE_HOST              — Engine hostname for post-deploy health check
+#   SECRETS_MANAGER_ARN      — ARN prefix for btc-pilot/* secrets
+##############################################################################
+
+name: Deploy Engine → Kubernetes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "engine/**"
+      - "infrastructure/kubernetes/**"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-k8s-production
+  cancel-in-progress: false  # Never cancel in-flight trading system deploys
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: engine/
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+  build-and-push:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.build.outputs.image_uri }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.EKS_CLUSTER_REGION || 'ap-south-1' }}
+          role-session-name: K8sDeploySession
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, scan, and push image
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --label "git-commit=${{ github.sha }}" \
+            --label "build-date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            ./engine
+
+          # Security scan before push — CRITICAL vulns block deploy
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 1 --severity CRITICAL \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "image_uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  deploy-k8s:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.EKS_CLUSTER_REGION || 'ap-south-1' }}
+          role-session-name: K8sDeploySession
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.EKS_CLUSTER_REGION || 'ap-south-1' }}
+
+      - name: Sync secrets from AWS Secrets Manager to K8s
+        run: |
+          # Fetch each secret and create/update the K8s secret object.
+          # Uses --dry-run=client | kubectl apply to make this idempotent.
+          ANGELONE_TOTP=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/ANGELONE_TOTP_SECRET --query SecretString --output text)
+          ANGELONE_KEY=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/ANGELONE_API_KEY --query SecretString --output text)
+          DELTA_KEY=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/DELTA_API_KEY --query SecretString --output text)
+          DELTA_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/DELTA_API_SECRET --query SecretString --output text)
+          MONGODB_URI=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/MONGODB_URI --query SecretString --output text)
+          AUTH_JWT=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/AUTH_JWT_SECRET --query SecretString --output text)
+          BINANCE_KEY=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/BINANCE_API_KEY --query SecretString --output text)
+          BINANCE_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id btc-pilot/BINANCE_API_SECRET --query SecretString --output text)
+
+          kubectl create secret generic btc-engine-secrets \
+            --namespace=btc-pilot \
+            --from-literal=ANGELONE_TOTP_SECRET="$ANGELONE_TOTP" \
+            --from-literal=ANGELONE_API_KEY="$ANGELONE_KEY" \
+            --from-literal=DELTA_API_KEY="$DELTA_KEY" \
+            --from-literal=DELTA_API_SECRET="$DELTA_SECRET" \
+            --from-literal=MONGODB_URI="$MONGODB_URI" \
+            --from-literal=AUTH_JWT_SECRET="$AUTH_JWT" \
+            --from-literal=BINANCE_API_KEY="$BINANCE_KEY" \
+            --from-literal=BINANCE_API_SECRET="$BINANCE_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply K8s manifests
+        run: kubectl apply -f infrastructure/kubernetes/
+
+      - name: Roll out new image
+        run: |
+          kubectl set image deployment/btc-engine \
+            btc-engine=${{ needs.build-and-push.outputs.image_uri }} \
+            --namespace=btc-pilot
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/btc-engine \
+            --namespace=btc-pilot --timeout=120s || {
+            echo "Rollout failed — rolling back"
+            kubectl rollout undo deployment/btc-engine --namespace=btc-pilot
+            exit 1
+          }
+
+  verify:
+    needs: deploy-k8s
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for engine warm-up
+        run: sleep 30
+
+      - name: Health check
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://${{ secrets.ENGINE_HOST }}/health)
+          [ "$STATUS" = "200" ] || (echo "Health check failed: HTTP $STATUS" && exit 1)
+
+      - name: Metrics check
+        run: |
+          METRICS=$(curl -s https://${{ secrets.ENGINE_HOST }}/metrics)
+          echo "$METRICS" | grep -q "trading_regime_active" || \
+            (echo "Metrics missing expected series" && exit 1)
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::error::K8s deployment failed for commit ${{ github.sha }}"

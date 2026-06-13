@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PR-6 Entry Quality tests.
  *
  * Simulation note (see PR description):
@@ -10,12 +10,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { computeChopAwareThreshold, isSameSideCapped, CHOP_THRESHOLD_BOOST } from "../futuresDeskPolicy";
+import { computeChopAwareThreshold, isSameSideCapped, CHOP_THRESHOLD_BOOST } from "../trading/futuresDeskPolicy";
 import {
   logSkipReason,
   getSkipReasonSummary,
   resetSkipReasonLog,
-} from "../entrySkipReason";
+} from "../risk/entrySkipReason";
 
 describe("regime-aware threshold (computeChopAwareThreshold)", () => {
   it("raises threshold by CHOP_THRESHOLD_BOOST in chop", () => {

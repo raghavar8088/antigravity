@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/cron/policy-snapshot
  *
  * Daily policy snapshot (P2.4.4): captures the current desk state — enabled strats,
@@ -14,13 +14,13 @@
 
 import { NextResponse } from "next/server";
 import { MongoClient } from "mongodb";
-import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/btcFtRoster";
+import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/trading/btcFtRoster";
 import {
   btcFtSignalThresholdFromEnv,
   deskVolSizedNotionalEnabledFromEnv,
   deskRiskPctOfEquityFromEnv,
   DESK_MAX_OPEN_PER_CLUSTER,
-} from "@/lib/futuresDeskPolicy";
+} from "@/lib/trading/futuresDeskPolicy";
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB = process.env.MONGODB_DB || "loop_trades";

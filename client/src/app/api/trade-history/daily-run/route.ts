@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import {
   authorizeCronRequest,
   defaultArchiveDateUtc,
   readArchiveDateFromRequest,
   runDailyArchive,
-} from "@/lib/tradeHistoryService";
+} from "@/lib/portfolio/tradeHistoryService";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

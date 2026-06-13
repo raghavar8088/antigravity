@@ -1,12 +1,12 @@
-import { readFileSync } from "node:fs";
+﻿import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { OHLCVCandle } from "@/lib/mockResearchIndicators";
+import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 import {
   ALL_RESEARCH_FAMILIES,
   RESEARCH_STRATEGIES,
   type ResearchFamily,
-} from "@/lib/mockResearchStrategies";
+} from "@/lib/ai/mockResearchStrategies";
 import {
   DEFAULT_RESEARCH_RUNNER_CONFIG,
   evaluateMockResearchStrategies,
@@ -15,8 +15,8 @@ import {
 import {
   buildMockTradeFromResearchSignal,
   DEFAULT_MOCK_TRADING_CONFIG,
-} from "@/lib/mockTradingEngine";
-import { BTC_RESEARCH_STRATEGIES, type BtcResearchFamily } from "@/lib/btcResearchStrategyRegistry";
+} from "@/lib/trading/mockTradingEngine";
+import { BTC_RESEARCH_STRATEGIES, type BtcResearchFamily } from "@/lib/trading/btcResearchStrategyRegistry";
 
 const T0 = 1_700_000_000_000;
 

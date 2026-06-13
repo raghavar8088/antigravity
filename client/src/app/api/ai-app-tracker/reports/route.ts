@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/ai-app-tracker/reports?limit=20
  *
  * Returns tracker reports newest-first. Max limit 100.
@@ -6,7 +6,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { listAiTrackerReports } from "@/lib/aiAppTracker/aiAppTrackerMongo";
 import { TRACKER_MODULE } from "@/lib/aiAppTracker/trackerConstants";
 

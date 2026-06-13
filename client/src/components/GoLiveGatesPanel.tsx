@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { GoLiveGateReport } from "@/lib/futuresGoLiveGates";
+import type { GoLiveGateReport } from "@/lib/risk/futuresGoLiveGates";
 
 const REC_COLOR: Record<string, string> = {
   NOT_READY: "#f85149",

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Collect a live AiAppTrackerSnapshot from MongoDB paper_state.
  * Server-side only — imports MongoDB helpers.
  *
@@ -16,7 +16,7 @@ import {
   STALE_FUNNEL_THRESHOLD_MS,
   TRACKER_MODULE,
 } from "./trackerConstants";
-import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
+import type { EntryFunnelSnapshot } from "@/lib/trading/deskEntryFunnelSnapshot";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -220,7 +220,7 @@ export async function collectAppSnapshot(opts: {
   }
 
   // Dynamic import keeps this server-side only (mongoTradesClient uses Node.js APIs)
-  const { isMongoConfigured, getAccountState } = await import("@/lib/mongoTradesClient");
+  const { isMongoConfigured, getAccountState } = await import("@/lib/broker/mongoTradesClient");
 
   if (!isMongoConfigured()) {
     const snap = buildSnapshotFromRaw({

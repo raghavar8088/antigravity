@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import {
   computeStrategyDiagnostics,
   computeRollingHealthCheck,
   computeStrategyDiagnosticsFromEngineTrades,
   computeRollingHealthCheckFromEngineTrades,
-} from "../futuresStrategyDiagnostics";
-import type { PaperTradeDbRow } from "../paperTradesTypes";
-import type { BTCFuturesTrade } from "../btcFuturesTrade.types";
+} from "../trading/futuresStrategyDiagnostics";
+import type { PaperTradeDbRow } from "../portfolio/paperTradesTypes";
+import type { BTCFuturesTrade } from "../trading/btcFuturesTrade.types";
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 

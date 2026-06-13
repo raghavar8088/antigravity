@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DeskButton, DeskChip, DeskBanner, DeskCard, DeskSectionHeader } from "@/components/desk/ui";
-import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/strategySignalTrace";
-import { closestSignalRows, signalTraceRatio } from "@/lib/strategySignalTrace";
-import type { EntryFunnelSnapshot } from "@/lib/deskEntryFunnelSnapshot";
-import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/noTradeRootCause";
+import type { StrategySignalTraceRow, SignalTraceSummary } from "@/lib/ai/strategySignalTrace";
+import { closestSignalRows, signalTraceRatio } from "@/lib/ai/strategySignalTrace";
+import type { EntryFunnelSnapshot } from "@/lib/trading/deskEntryFunnelSnapshot";
+import { diagnoseNoTradeRootCause, type NoTradeRootCauseResult } from "@/lib/risk/noTradeRootCause";
 
 type TraceApiResponse = {
   ok: boolean;

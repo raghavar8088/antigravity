@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { isMongoConfigured, pingMongo } from "@/lib/mongoTradesClient";
+﻿import { NextResponse } from "next/server";
+import { isMongoConfigured, pingMongo } from "@/lib/broker/mongoTradesClient";
 
 export const dynamic = "force-dynamic";
 

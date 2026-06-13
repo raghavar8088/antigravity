@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/storage/backup
  *   body: { period?: "daily" | "weekly" | "monthly" | "all" }
  *   Triggers an immediate backup for the given period(s).
@@ -15,9 +15,9 @@ import {
   validateBackup,
   determinePeriod,
   type BackupPeriod,
-} from "@/lib/backupManager.server";
-import { generateDailyReport, generateWeeklyReport, generateMonthlyReport } from "@/lib/analyticsReporter";
-import { dps } from "@/lib/dualPersistenceService";
+} from "@/lib/portfolio/backupManager.server";
+import { generateDailyReport, generateWeeklyReport, generateMonthlyReport } from "@/lib/analytics/analyticsReporter";
+import { dps } from "@/lib/portfolio/dualPersistenceService";
 
 export const dynamic = "force-dynamic";
 

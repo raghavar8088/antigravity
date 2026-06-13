@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useMemo } from "react";
 import { TerminalPanel } from "./terminal/TerminalPanel";
 import { DeskDataTable, type DeskColumn } from "./desk/ui";
-import { fmtUsd, fmtPct, pnlClass } from "@/lib/utils";
-import type { MockTrade, MockStrategyAggregate } from "@/lib/mockTradingEngine";
-import { computeAnalytics } from "@/lib/mockTradingEngine";
+import { fmtUsd, fmtPct, pnlClass } from "@/lib/utils/utils";
+import type { MockTrade, MockStrategyAggregate } from "@/lib/trading/mockTradingEngine";
+import { computeAnalytics } from "@/lib/trading/mockTradingEngine";
 
 interface StrategyLeaderboardProps {
   trades: readonly MockTrade[];

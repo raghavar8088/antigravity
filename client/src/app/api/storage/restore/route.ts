@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/storage/restore
  *   body: { filename: string; period: "daily"|"weekly"|"monthly"; targetDir?: string }
  *   Validates a backup then restores it to targetDir (or data/restored/<date>/).
@@ -10,9 +10,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import path from "path";
-import { restoreFromBackup, validateBackup, listBackups } from "@/lib/backupManager.server";
-import { getDataRoot, DATA_DIRS } from "@/lib/localStorageService";
-import { dps } from "@/lib/dualPersistenceService";
+import { restoreFromBackup, validateBackup, listBackups } from "@/lib/portfolio/backupManager.server";
+import { getDataRoot, DATA_DIRS } from "@/lib/utils/localStorageService";
+import { dps } from "@/lib/portfolio/dualPersistenceService";
 
 export const dynamic = "force-dynamic";
 

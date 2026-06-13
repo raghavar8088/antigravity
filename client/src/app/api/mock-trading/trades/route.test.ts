@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_MOCK_TRADING_CONFIG, type MockTrade } from "@/lib/mockTradingEngine";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_MOCK_TRADING_CONFIG, type MockTrade } from "@/lib/trading/mockTradingEngine";
 
-vi.mock("@/lib/mongoTradesClient", () => ({
+vi.mock("@/lib/broker/mongoTradesClient", () => ({
   isMongoConfigured: vi.fn().mockReturnValue(true),
 }));
 
-vi.mock("@/lib/mockTradingMongo", () => ({
+vi.mock("@/lib/trading/mockTradingMongo", () => ({
   listMockTrades: vi.fn().mockResolvedValue({
     trades: [],
     total: 0,
@@ -25,8 +25,8 @@ vi.mock("@/lib/mockTradingMongo", () => ({
 import { GET, POST } from "./route";
 import { GET as GET_ONE, PATCH } from "./[id]/route";
 import { POST as CLOSE } from "./[id]/close/route";
-import * as mongoClient from "@/lib/mongoTradesClient";
-import * as mockMongo from "@/lib/mockTradingMongo";
+import * as mongoClient from "@/lib/broker/mongoTradesClient";
+import * as mockMongo from "@/lib/trading/mockTradingMongo";
 
 const openTrade: MockTrade = {
   id: "mock-trace-1",

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -38,8 +38,8 @@ import {
   type MockResearchSignalInput,
   type MockTradingDiagnostics,
   type StrategyExitOverride,
-} from "@/lib/mockTradingEngine";
-import { FUTURES_STRAT_DEFS } from "@/lib/futuresStrategies";
+} from "@/lib/trading/mockTradingEngine";
+import { FUTURES_STRAT_DEFS } from "@/lib/trading/futuresStrategies";
 import {
   DEFAULT_MOCK_ACCOUNT_KEY,
   MOCK_RESET_CONFIRMATION,
@@ -48,10 +48,10 @@ import {
   type MockAccountSnapshotResponse,
   type MockLogsResponse,
   type MockTradingHydrateResponse,
-} from "@/lib/mockTradingPersistenceTypes";
+} from "@/lib/trading/mockTradingPersistenceTypes";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 import { getMockConfigForPipelineStage } from "@/lib/strategyAuthority/gradeStageMockConfig";
-import type { StrategySignalTraceRow } from "@/lib/strategySignalTrace";
+import type { StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 
 const TRACE_POLL_MS = 5_000;
 const MARK_PERSIST_THROTTLE_MS = 15_000;

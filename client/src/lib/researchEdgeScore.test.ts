@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tests for researchEdgeScore — pure function, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { computeResearchEdgeScores } from "./researchEdgeScore";
-import type { PaperTradeDbRow } from "@/lib/paperTradesTypes";
+import { computeResearchEdgeScores } from "./ai/researchEdgeScore";
+import type { PaperTradeDbRow } from "@/lib/portfolio/paperTradesTypes";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

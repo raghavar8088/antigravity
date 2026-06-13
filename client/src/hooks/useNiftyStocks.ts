@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
-import { resolveEngineApiUrl } from "@/lib/engineApi";
+import { resolveEngineApiUrl } from "@/lib/broker/engineApi";
 
 export type NiftyStockPosition = {
   id: string;

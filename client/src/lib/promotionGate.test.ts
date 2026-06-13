@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Tests for promotionGate — pure function, no I/O.
  */
 import { describe, it, expect } from "vitest";
-import { canPromoteStrategy } from "./promotionGate";
+import { canPromoteStrategy } from "./risk/promotionGate";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

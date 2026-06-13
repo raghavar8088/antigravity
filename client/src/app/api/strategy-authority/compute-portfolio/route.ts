@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/strategy-authority/compute-portfolio
  *
  * Triggers the full APICAP pipeline:
@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { isMongoConfigured } from "@/lib/mongoTradesClient";
+import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { runFullPortfolioIntelligence } from "@/lib/strategyAuthority/portfolioIntelligenceMongo";
 
 export const dynamic = "force-dynamic";

@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import {
   DESK_EXIT_LATE_EXIT_MIN_GAIN,
   resolveFuturesExitStep,
   type FuturesExitStepPosition,
-} from "./futuresDeskRuntime";
+} from "./trading/futuresDeskRuntime";
 
 /**
  * Build a position that satisfies PROFIT_LOCK's progress + return gates but has
