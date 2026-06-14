@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
+import { FUTURES_STRAT_DEFS, type FuturesStratDef } from "@/lib/trading/futuresStrategies";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pnlClass, usd } from "./format";
 
@@ -32,9 +33,78 @@ type StrategyAnalytics = {
   perStrategy: StrategyAggregate[];
 };
 
+type StrategyRow = StrategyAggregate & {
+  category: string;
+  signalKey: string;
+  templateFamily: string;
+  tpPct: number;
+  slPct: number;
+  holdMinutes: number;
+  hasAnalytics: boolean;
+};
+
 type AnalyticsResponse =
   | { ok: true; analytics: StrategyAnalytics; source?: string; storage?: string }
   | { ok: false; code?: string; error?: string; detail?: string };
+
+const TRADE_ENGINE_STRATEGY_DEFS = [...FUTURES_STRAT_DEFS].sort((a, b) => a.id - b.id);
+
+function emptyStrategyAggregate(strategy: FuturesStratDef): StrategyAggregate {
+  return {
+    strategyId: strategy.id,
+    strategyName: strategy.name,
+    total: 0,
+    open: 0,
+    closed: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    totalPnl: 0,
+    realizedPnl: 0,
+    unrealizedPnl: 0,
+    exposure: 0,
+  };
+}
+
+function strategyRowFromDef(strategy: FuturesStratDef, analytics?: StrategyAggregate): StrategyRow {
+  return {
+    ...emptyStrategyAggregate(strategy),
+    ...analytics,
+    category: strategy.category,
+    signalKey: strategy.signalKey,
+    templateFamily: strategy.templateFamily ?? strategy.signalKey,
+    tpPct: strategy.tpPct,
+    slPct: strategy.slPct,
+    holdMinutes: strategy.holdMinutes,
+    hasAnalytics: analytics != null,
+  };
+}
+
+export function buildTradeEngineStrategyRows(analyticsRows: readonly StrategyAggregate[] = []): StrategyRow[] {
+  const analyticsById = new Map(analyticsRows.map((strategy) => [strategy.strategyId, strategy]));
+  const rosterRows = TRADE_ENGINE_STRATEGY_DEFS.map((strategy) => {
+    const analytics = analyticsById.get(strategy.id);
+    analyticsById.delete(strategy.id);
+    return strategyRowFromDef(strategy, analytics);
+  });
+
+  const externalRows: StrategyRow[] = [...analyticsById.values()].map((strategy) => ({
+    ...strategy,
+    category: "Trade Engine",
+    signalKey: `STRATEGY_${strategy.strategyId}`,
+    templateFamily: "Persisted Analytics",
+    tpPct: 0,
+    slPct: 0,
+    holdMinutes: 0,
+    hasAnalytics: true,
+  }));
+
+  return [...rosterRows, ...externalRows].sort((a, b) => {
+    if (b.totalPnl !== a.totalPnl) return b.totalPnl - a.totalPnl;
+    if (b.total !== a.total) return b.total - a.total;
+    return a.strategyId - b.strategyId;
+  });
+}
 
 function rate(value: number) {
   return `${(value * 100).toFixed(1)}%`;
@@ -83,12 +153,14 @@ export function StrategiesCenter() {
     loadAnalytics();
   }, [loadAnalytics]);
 
-  const strategies = useMemo(() => analytics?.perStrategy ?? [], [analytics]);
+  const strategies = useMemo(() => buildTradeEngineStrategyRows(analytics?.perStrategy), [analytics]);
   const filteredStrategies = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return strategies;
     return strategies.filter((strategy) =>
-      `${strategy.strategyId} ${strategy.strategyName}`.toLowerCase().includes(q),
+      `${strategy.strategyId} ${strategy.strategyName} ${strategy.category} ${strategy.signalKey} ${strategy.templateFamily}`
+        .toLowerCase()
+        .includes(q),
     );
   }, [query, strategies]);
 
@@ -102,8 +174,8 @@ export function StrategiesCenter() {
           <div className="text-[10px] uppercase tracking-widest text-emerald-500">Trade Engine</div>
           <h1 className="text-xl font-bold text-zinc-100">Strategies</h1>
           <p className="mt-1 max-w-2xl text-xs text-zinc-500">
-            Full strategy performance from the Trade Engine ledger: win rate, trade count, open exposure, realized PnL,
-            unrealized PnL, and total PnL.
+            Active Trade Engine roster with ledger metrics overlaid when trades exist: win rate, trade count, open
+            exposure, realized PnL, unrealized PnL, and total PnL.
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -127,7 +199,7 @@ export function StrategiesCenter() {
       ) : null}
 
       <div className="m3-kpi-strip">
-        <Metric label="Strategies" value={analytics ? int(strategies.length) : "-"} tone={strategies.length > 0 ? "positive" : "neutral"} />
+        <Metric label="Strategies" value={int(strategies.length)} tone={strategies.length > 0 ? "positive" : "neutral"} />
         <Metric label="Total Trades" value={analytics ? int(analytics.totalTrades) : "-"} />
         <Metric label="Closed Trades" value={analytics ? int(analytics.closedTrades) : "-"} />
         <Metric label="Open Positions" value={analytics ? int(analytics.openTrades) : "-"} tone={analytics?.openTrades ? "warning" : "neutral"} />
@@ -139,10 +211,11 @@ export function StrategiesCenter() {
 
       <TerminalCard
         title="Strategy Roll-up"
-        subtitle="Ranked by total PnL from the mock trading engine analytics"
+        subtitle="Active roster first, ranked by total PnL when ledger analytics are available"
         actions={
           <div className="flex items-center gap-2">
             <span className="text-[9px] uppercase tracking-wider text-zinc-600">{activeStrategies} active</span>
+            {loading ? <span className="text-[9px] uppercase tracking-wider text-amber-500">loading metrics</span> : null}
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -152,17 +225,19 @@ export function StrategiesCenter() {
           </div>
         }
       >
-        {loading && !analytics ? (
-          <div className="py-10 text-center text-xs text-zinc-600 animate-pulse">Loading strategy analytics...</div>
-        ) : filteredStrategies.length === 0 ? (
-          <TerminalNoData label={query ? "No matching strategies" : "No strategy analytics available"} />
+        {filteredStrategies.length === 0 ? (
+          <TerminalNoData label={query ? "No matching strategies" : "No Trade Engine strategies available"} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-xs">
+            <table className="w-full min-w-[1200px] text-xs">
               <thead>
                 <tr className="border-b border-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-500">
                   <th className="px-2 py-2">#</th>
                   <th className="px-2 py-2">Strategy</th>
+                  <th className="px-2 py-2">Category</th>
+                  <th className="px-2 py-2">Template</th>
+                  <th className="px-2 py-2 text-right">TP / SL</th>
+                  <th className="px-2 py-2 text-right">Hold</th>
                   <th className="px-2 py-2 text-right">Trades</th>
                   <th className="px-2 py-2 text-right">Open</th>
                   <th className="px-2 py-2 text-right">Closed</th>
@@ -181,8 +256,22 @@ export function StrategiesCenter() {
                     <td className="px-2 py-2">
                       <div className="font-semibold text-zinc-200">#{strategy.strategyId} {strategy.strategyName}</div>
                       <div className="text-[10px] text-zinc-600">
-                        {strategy.open > 0 ? "In position" : strategy.closed > 0 ? "Closed history" : "Awaiting fills"}
+                        {strategy.open > 0
+                          ? "In position"
+                          : strategy.closed > 0
+                            ? "Closed history"
+                            : strategy.hasAnalytics
+                              ? "No closed trades yet"
+                              : "Roster strategy"}
                       </div>
+                    </td>
+                    <td className="px-2 py-2 text-[10px] text-zinc-500">{strategy.category}</td>
+                    <td className="px-2 py-2 text-[10px] text-zinc-500">{strategy.templateFamily}</td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-400">
+                      {strategy.tpPct > 0 || strategy.slPct > 0 ? `${strategy.tpPct.toFixed(2)}% / ${strategy.slPct.toFixed(2)}%` : "-"}
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-400">
+                      {strategy.holdMinutes > 0 ? `${strategy.holdMinutes}m` : "-"}
                     </td>
                     <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-300">{int(strategy.total)}</td>
                     <td className="px-2 py-2 text-right font-mono tabular-nums text-amber-300">{int(strategy.open)}</td>

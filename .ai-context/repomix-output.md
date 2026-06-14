@@ -270,6 +270,7 @@ The content is organized as follows:
   components/terminal/institutional/ResearchCenter.tsx
   components/terminal/institutional/RetirementCenter.tsx
   components/terminal/institutional/RiskModule.tsx
+  components/terminal/institutional/StrategiesCenter.test.ts
   components/terminal/institutional/StrategiesCenter.tsx
   components/terminal/institutional/StrategyGenome.tsx
   components/terminal/institutional/TerminalCard.tsx
