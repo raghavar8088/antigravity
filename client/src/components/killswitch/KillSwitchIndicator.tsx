@@ -13,7 +13,7 @@ export function KillSwitchIndicator() {
 
   const isActive = status.active;
   const isOffline = status.dataState !== "ok";
-  const label = isActive ? "TRIGGERED" : isOffline ? "OFFLINE" : "HALT ALL";
+  const label = isActive ? "Triggered" : isOffline ? "Status updating" : "Halt all";
 
   async function onHaltConfirm() {
     await trigger("operator_manual_halt");
@@ -32,6 +32,7 @@ export function KillSwitchIndicator() {
         className={cn(
           "m3-kill-switch-indicator",
           isActive && "m3-kill-switch-indicator--active",
+          isOffline && !isActive && "m3-kill-switch-indicator--offline",
         )}
         onClick={() => (isActive ? setShowResumeModal(true) : setShowHaltModal(true))}
         disabled={loading || (!isActive && isOffline)}

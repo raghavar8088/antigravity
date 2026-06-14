@@ -1992,6 +1992,42 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.m3-kill-switch-indicator {
+  min-height: 38px;
+  border: 1px solid #f4c7c3;
+  border-radius: 999px;
+  background: #fff5f4;
+  color: #b3261e;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.06);
+}
+
+.m3-kill-switch-indicator:hover:not(:disabled) {
+  background: #fce8e6;
+  box-shadow: 0 8px 18px rgba(217, 48, 37, 0.12);
+}
+
+.m3-kill-switch-indicator--active {
+  background: #d93025;
+  border-color: #d93025;
+  color: #ffffff;
+}
+
+.m3-kill-switch-indicator--offline {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.m3-kill-switch-indicator:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .icc-authority-banner,
 .m3-banner {
   border-radius: 18px;
