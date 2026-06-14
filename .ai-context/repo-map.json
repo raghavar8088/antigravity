@@ -1,1 +1,1 @@
-{}
+{"client-components":{"communities":[2,3],"files":1,"symbols":8,"top_files":[{"file":"client/src/components/terminal/institutional/StrategiesCenter.tsx","symbols":8}]},"client-lib":{"communities":[0,1,4],"files":2,"symbols":19,"top_files":[{"file":"client/src/lib/utils/navRoutes.ts","symbols":19}]},"other":{"communities":[5],"files":1,"symbols":1,"top_files":[{"file":"client/src/app/terminal/strategies/page.tsx","symbols":1}]}}

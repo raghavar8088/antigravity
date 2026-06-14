@@ -1,1 +1,1 @@
-{}
+{"client/src/app/terminal/strategies/page.tsx":{"imports":["client/src/components/terminal/institutional/StrategiesCenter.tsx"]},"client/src/lib/navRoutes.test.ts":{"imports":["client/src/lib/utils/navRoutes.ts"]}}
