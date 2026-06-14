@@ -1804,7 +1804,6 @@ export default function MockTradingDashboard() {
             >
               <MockStrategyLeaderboardPanel
                 trades={engine.trades}
-                startingEquityUsd={engine.config.startingBalanceUsd}
               />
             </TerminalPanel>
           </div>
