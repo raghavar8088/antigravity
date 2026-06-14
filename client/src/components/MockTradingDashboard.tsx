@@ -1740,7 +1740,7 @@ export default function MockTradingDashboard() {
 
         {isVisible("leaderboard") && (
           <div style={{ gridColumn: getGridColumn("leaderboard") }}>
-            <StrategyLeaderboard trades={engine.trades} />
+            <StrategyLeaderboard scores={scoring.scores} />
           </div>
         )}
 
