@@ -568,6 +568,8 @@ The content is organized as follows:
   lib/trading/futuresSignals.ts
   lib/trading/futuresSignalScoring.ts
   lib/trading/futuresStrategies.ts
+  lib/trading/futuresStrategyDiagnostics.ts
+  lib/trading/futuresStrategyRotation.ts
   lib/trading/futuresStratTypes.ts
   lib/trading/futuresWinnersRefresh.ts
   lib/trading/marketSignal.ts
