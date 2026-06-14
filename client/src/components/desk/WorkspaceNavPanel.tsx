@@ -14,7 +14,7 @@ type ModuleTab = Omit<DeskTabItem<DashboardModule>, "trailing">;
 
 const MODULES: ModuleTab[] = [
   { key: "btcFutureTrading", label: "BTC Future Trading" },
-  { key: "mockTrading", label: "Mock Trading" },
+  { key: "mockTrading", label: "Trade Engine" },
 ];
 
 const MODULE_PATHS: Record<DashboardModule, string> = {

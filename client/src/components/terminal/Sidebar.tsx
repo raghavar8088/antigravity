@@ -139,12 +139,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Health: <IconHealth />,
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
-  "Mock Trading Engine": <IconResearch />,
-  "Mock Trading Grade 1": <IconAnalytics />,
-  "Mock Trading Grade 2": <IconAnalytics />,
-  "Mock Trading Grade 3": <IconAnalytics />,
-  "Mock Trading Grade 4": <IconAnalytics />,
-  "Mock Trading Grade 5": <IconAnalytics />,
+  "Trade Engine": <IconResearch />,
 };
 
 const NAV_SECTIONS: NavSection[] = [

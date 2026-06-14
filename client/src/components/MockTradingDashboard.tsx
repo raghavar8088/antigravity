@@ -664,7 +664,7 @@ function MockTradingDiagnosticsCard({
 
   return (
     <TerminalPanel
-      title="Mock Trading Diagnostics"
+      title="Trade Engine Diagnostics"
       subtitle="Root-cause funnel for mock signals"
       onMaximize={onMaximize}
       isMaximized={isMaximized}
@@ -1528,7 +1528,7 @@ export default function MockTradingDashboard() {
 
   return (
     <M3AppShell
-      pageTitle="Mock Trading"
+      pageTitle="Trade Engine"
       price={live.price}
       priceChange24hPct={live.change24h}
       statusChips={
@@ -1927,7 +1927,7 @@ export default function MockTradingDashboard() {
                         engine.error
                           ? `Trace fetch error: ${engine.error}`
                           : engine.persistence.loading
-                            ? "Hydrating persisted Mock Trading state from MongoDB."
+                            ? "Hydrating persisted Trade Engine state from MongoDB."
                             : "Waiting for the next strategy signal trace tick."
                       }
                     />

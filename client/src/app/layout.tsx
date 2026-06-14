@@ -21,7 +21,7 @@ const robotoMono = Roboto_Mono({
 
 export const metadata: Metadata = {
   title: "ICC — Institutional Command Center",
-  description: "Google Material 3 institutional trading platform for BTC futures research, mock trading, and risk monitoring.",
+  description: "Google Material 3 institutional trading platform for BTC futures research, Trade Engine execution, and risk monitoring.",
   icons: {
     icon: "/branding/in-loop-logo.png",
     apple: "/branding/in-loop-logo.png",

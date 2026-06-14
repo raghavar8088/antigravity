@@ -37,7 +37,7 @@ export function MainEngineCenter() {
     <div className="m3-page-stack">
       <div className="m3-kpi-strip">
         <Metric
-          label="Main Engine Strategies"
+          label="Trade Engine Strategies"
           value={String(strategies.length)}
           tone={strategies.length > 0 ? "positive" : "neutral"}
         />
@@ -68,16 +68,16 @@ export function MainEngineCenter() {
       </div>
 
       <TerminalCard
-        title="Main Mock Trading Engine"
-        subtitle="Elite survivors — all 575+ trade requirement fulfilled at every grade"
+        title="Trade Engine"
+        subtitle="Elite survivors — 575+ trade requirement fulfilled across all admission gates"
       >
         {loading ? (
           <div className="py-8 text-center text-xs text-zinc-600 animate-pulse">Loading main engine strategies…</div>
         ) : strategies.length === 0 ? (
           <div className="py-12 text-center space-y-2">
-            <div className="text-sm font-semibold text-zinc-500">No Strategies in Main Engine</div>
+            <div className="text-sm font-semibold text-zinc-500">No Strategies in Trade Engine</div>
             <div className="text-xs text-zinc-600 max-w-md mx-auto">
-              Strategies must complete 575+ total trades across all 5 grades with positive expectancy and PF {">"} 1 at every stage before earning Main Engine admission.
+              Strategies must complete 575+ total trades across all admission gates with positive expectancy and PF {">"} 1 before earning Trade Engine admission.
             </div>
           </div>
         ) : (
@@ -142,20 +142,20 @@ export function MainEngineCenter() {
 
       <TerminalCard
         title="Admission Requirements"
-        subtitle="All gates must pass at every grade level"
+        subtitle="All gates must pass before engine admission"
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            { grade: "Grade 5 → 4", trades: 50, wr: 55, pf: 1.10, dd: "—", sharpe: "—" },
-            { grade: "Grade 4 → 3", trades: 75, wr: 55, pf: 1.15, dd: "25%", sharpe: "—" },
-            { grade: "Grade 3 → 2", trades: 100, wr: 55, pf: 1.20, dd: "20%", sharpe: "—" },
-            { grade: "Grade 2 → 1", trades: 150, wr: 55, pf: 1.25, dd: "15%", sharpe: "0.50" },
-            { grade: "Grade 1 → Main", trades: 200, wr: 55, pf: 1.30, dd: "10%", sharpe: "0.75" },
-            { grade: "Total Required", trades: 575, wr: 55, pf: 1.30, dd: "10%", sharpe: "0.75" },
+            { label: "Admission Gate 1", trades: 50, wr: 55, pf: 1.10, dd: "—", sharpe: "—" },
+            { label: "Admission Gate 2", trades: 75, wr: 55, pf: 1.15, dd: "25%", sharpe: "—" },
+            { label: "Admission Gate 3", trades: 100, wr: 55, pf: 1.20, dd: "20%", sharpe: "—" },
+            { label: "Admission Gate 4", trades: 150, wr: 55, pf: 1.25, dd: "15%", sharpe: "0.50" },
+            { label: "Engine Admission", trades: 200, wr: 55, pf: 1.30, dd: "10%", sharpe: "0.75" },
+            { label: "Total Required", trades: 575, wr: 55, pf: 1.30, dd: "10%", sharpe: "0.75" },
           ].map((r) => (
-            <div key={r.grade} className={`rounded border p-2.5 ${r.grade === "Total Required" ? "border-emerald-800 bg-emerald-950/30" : "border-zinc-800"}`}>
-              <div className={`text-[10px] font-bold uppercase tracking-wide mb-1.5 ${r.grade === "Total Required" ? "text-emerald-400" : "text-zinc-400"}`}>
-                {r.grade}
+            <div key={r.label} className={`rounded border p-2.5 ${r.label === "Total Required" ? "border-emerald-800 bg-emerald-950/30" : "border-zinc-800"}`}>
+              <div className={`text-[10px] font-bold uppercase tracking-wide mb-1.5 ${r.label === "Total Required" ? "text-emerald-400" : "text-zinc-400"}`}>
+                {r.label}
               </div>
               <div className="space-y-0.5 text-[10px] tabular-nums text-zinc-500">
                 <div>Trades: <span className="text-zinc-300">{r.trades}</span></div>
@@ -170,7 +170,7 @@ export function MainEngineCenter() {
       </TerminalCard>
 
       <p className="text-[10px] uppercase tracking-wider text-zinc-600">
-        Main Engine — elite survivors only — no live capital at risk — mock trading only
+        Trade Engine — elite survivors only — no live capital at risk
       </p>
     </div>
   );

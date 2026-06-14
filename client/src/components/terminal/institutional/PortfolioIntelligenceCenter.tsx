@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TerminalCard, Metric } from "./TerminalCard";
-import { PromotionTower } from "./PromotionTower";
-import { PromotionFeed } from "./PromotionFeed";
 import { CorrelationMatrix } from "./CorrelationMatrix";
 import { AllocationView } from "./AllocationView";
 import { RegimeIntelligence } from "./RegimeIntelligence";
@@ -37,7 +35,6 @@ const TABS = [
   { id: "families", label: "Families" },
   { id: "portfolio", label: "Construction" },
   { id: "genome", label: "Genome" },
-  { id: "tower", label: "Tower" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -84,9 +81,8 @@ function ComputeButton({ onComplete }: { onComplete: () => void }) {
 
 // ── Overview panel ────────────────────────────────────────────────────────────
 
-function OverviewPanel({ kpis, towerCounts, onRefresh }: {
+function OverviewPanel({ kpis, onRefresh }: {
   kpis: OverviewKpis;
-  towerCounts: any[];
   onRefresh: () => void;
 }) {
   return (
@@ -95,7 +91,7 @@ function OverviewPanel({ kpis, towerCounts, onRefresh }: {
       <div className="grid grid-cols-4 gap-2 md:grid-cols-8">
         {[
           { label: "Strategies", value: String(kpis.totalStrategies) },
-          { label: "Main Engine", value: String(kpis.mainEngine), color: "text-emerald-400" },
+          { label: "Trade Engine", value: String(kpis.mainEngine), color: "text-emerald-400" },
           { label: "Candidate Queue", value: String(kpis.candidateQueue), color: "text-sky-400" },
           { label: "Allocated", value: String(kpis.allocated), color: "text-violet-400" },
           { label: "Portfolio PF", value: kpis.expectedPf > 0 ? kpis.expectedPf.toFixed(3) : "—", color: "text-sky-400" },
@@ -116,41 +112,18 @@ function OverviewPanel({ kpis, towerCounts, onRefresh }: {
         <div className="flex flex-wrap items-center gap-1 text-[9px]">
           {[
             { label: "305 Strategies", color: "border-zinc-700 text-zinc-400" },
-            { label: "Promotion Engine", color: "border-sky-800 text-sky-400" },
+            { label: "Trade Engine", color: "border-sky-800 text-sky-400" },
             { label: "Portfolio Intelligence", color: "border-violet-700 text-violet-400" },
             { label: "Correlation Engine", color: "border-blue-800 text-blue-400" },
             { label: "Allocation Engine", color: "border-emerald-800 text-emerald-400" },
             { label: "Candidate Queue", color: "border-amber-800 text-amber-400" },
-            { label: "Main Engine", color: "border-emerald-700 text-emerald-300" },
+            { label: "Trade Engine", color: "border-emerald-700 text-emerald-300" },
           ].map((s, i) => (
             <div key={s.label} className="flex items-center gap-1">
               {i > 0 && <span className="text-zinc-700">↓</span>}
               <span className={`rounded border px-1.5 py-0.5 ${s.color}`}>{s.label}</span>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Tower + Feed */}
-      <div className="grid gap-3 xl:grid-cols-5">
-        <div className="xl:col-span-2">
-          <TerminalCard title="Promotion Tower" subtitle="Strategy pipeline population">
-            <PromotionTower
-              layers={towerCounts.filter((t) => t.status !== "RETIRED").map((t: any) => ({
-                status: t.status,
-                count: t.count,
-                promotionEventsTotal: t.promotionEventsTotal,
-                demotionEventsTotal: t.demotionEventsTotal,
-              }))}
-              retiredCount={towerCounts.find((t: any) => t.status === "RETIRED")?.count ?? 0}
-              totalStrategies={kpis.totalStrategies || 305}
-            />
-          </TerminalCard>
-        </div>
-        <div className="xl:col-span-3">
-          <TerminalCard title="Live Activity Feed" subtitle="Promotions, demotions, retirements">
-            <PromotionFeed maxHeight="max-h-80" />
-          </TerminalCard>
         </div>
       </div>
 
@@ -249,7 +222,7 @@ export function PortfolioIntelligenceCenter() {
       {/* KPI Strip */}
       <div className="m3-kpi-strip">
         <Metric label="Total" value={String(overviewKpis.totalStrategies)} />
-        <Metric label="Main Engine" value={String(overviewKpis.mainEngine)} tone={overviewKpis.mainEngine > 0 ? "positive" : "neutral"} />
+        <Metric label="Trade Engine" value={String(overviewKpis.mainEngine)} tone={overviewKpis.mainEngine > 0 ? "positive" : "neutral"} />
         <Metric label="Candidates" value={String(overviewKpis.candidateQueue)} tone={overviewKpis.candidateQueue > 0 ? "positive" : "neutral"} />
         <Metric label="Allocated" value={String(overviewKpis.allocated)} tone={overviewKpis.allocated > 0 ? "positive" : "neutral"} />
         <Metric label="Portfolio PF" value={overviewKpis.expectedPf > 0 ? overviewKpis.expectedPf.toFixed(3) : "—"} tone={overviewKpis.expectedPf >= 1.2 ? "positive" : "neutral"} />
@@ -277,7 +250,7 @@ export function PortfolioIntelligenceCenter() {
 
       {/* Tab content */}
       {activeTab === "overview" && (
-        <OverviewPanel kpis={overviewKpis} towerCounts={towerCounts} onRefresh={fetchOverview} />
+        <OverviewPanel kpis={overviewKpis} onRefresh={fetchOverview} />
       )}
 
       {activeTab === "allocation" && (
@@ -299,7 +272,7 @@ export function PortfolioIntelligenceCenter() {
       )}
 
       {activeTab === "candidate-queue" && (
-        <TerminalCard title="Candidate Queue" subtitle="5-gate portfolio admission system for Grade 1 → Main Engine">
+        <TerminalCard title="Candidate Queue" subtitle="5-gate portfolio admission system for Trade Engine">
           <CandidateQueue />
         </TerminalCard>
       )}
@@ -319,21 +292,6 @@ export function PortfolioIntelligenceCenter() {
       {activeTab === "genome" && (
         <TerminalCard title="Strategy Genome" subtitle="Full per-strategy profile: authority + diversification + regime + allocation">
           <StrategyGenome />
-        </TerminalCard>
-      )}
-
-      {activeTab === "tower" && (
-        <TerminalCard title="Promotion Tower" subtitle="Full strategy ecosystem — Grade 5 to Main Engine">
-          <PromotionTower
-            layers={towerCounts.filter((t: any) => t.status !== "RETIRED").map((t: any) => ({
-              status: t.status,
-              count: t.count,
-              promotionEventsTotal: t.promotionEventsTotal,
-              demotionEventsTotal: t.demotionEventsTotal,
-            }))}
-            retiredCount={towerCounts.find((t: any) => t.status === "RETIRED")?.count ?? 0}
-            totalStrategies={overviewKpis.totalStrategies || 305}
-          />
         </TerminalCard>
       )}
 

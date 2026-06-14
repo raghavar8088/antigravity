@@ -9,7 +9,7 @@ type Props = {
   /**
    * When true (default) the guard blocks with a full-page spinner during the
    * very first load before any data arrives. Pages that own their own data
-   * sources (Grade 1–5 mock stages) should pass authorityRequired={false} so
+   * sources (non-authoritative review layers) should pass authorityRequired={false} so
    * they render immediately — the degraded banner still shows when the paper
    * desk is unreachable.
    */

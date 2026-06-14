@@ -8,12 +8,10 @@ import { AllocationView } from "./AllocationView";
 import { CorrelationMatrix } from "./CorrelationMatrix";
 import { FamilyLeaderboard } from "./FamilyLeaderboard";
 import { MainEngineSurvivors } from "./MainEngineSurvivors";
-import { PromotionTower } from "./PromotionTower";
 import { MockStageTradingSuite } from "./MockStageTradingSuite";
 import { RegimeIntelligence } from "./RegimeIntelligence";
 import { TerminalCard, Metric } from "./TerminalCard";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
-import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 
 type SortKey = "authority" | "pf" | "sharpe" | "drawdown" | "allocation";
 
@@ -57,8 +55,6 @@ function EngineRosterSkeleton() {
 export function MockEngineCenter() {
   const [strategies, setStrategies] = useState<StrategyWithMetrics[]>([]);
   const [allocation, setAllocation] = useState<PortfolioAllocationSummary | null>(null);
-  const [tower, setTower] = useState<{ status: StrategyStatus; count: number }[]>([]);
-  const [totalStrategies, setTotalStrategies] = useState(0);
   const [loading, setLoading] = useState(true);
   const [hasAuthority, setHasAuthority] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("authority");
@@ -67,27 +63,13 @@ export function MockEngineCenter() {
     Promise.all([
       fetch("/api/strategy-authority/stage?status=MAIN_ENGINE").then((r) => r.json()),
       fetch("/api/strategy-authority/allocation").then((r) => r.json()),
-      fetch("/api/strategy-authority/counts").then((r) => r.json()),
     ])
-      .then(([stageData, allocData, countsData]) => {
+      .then(([stageData, allocData]) => {
         if (stageData.ok) {
           setStrategies(stageData.strategies);
           setHasAuthority(true);
         }
         if (allocData.ok) setAllocation(allocData.allocation);
-        if (countsData.ok) {
-          if (countsData.counts?.total != null) setTotalStrategies(countsData.counts.total);
-          if (countsData.tower) {
-            setTower(
-              countsData.tower
-                .filter((t: { status: StrategyStatus }) => t.status !== "RETIRED")
-                .map((t: { status: StrategyStatus; count: number }) => ({
-                  status: t.status,
-                  count: t.count,
-                }))
-            );
-          }
-        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -130,20 +112,6 @@ export function MockEngineCenter() {
   return (
     <div className="m3-page-stack">
       <MockStageTradingSuite status="MAIN_ENGINE" />
-      {tower.length > 0 && (
-        <TerminalCard title="Institutional Pipeline" subtitle="Grade 5 ↓ Grade 4 ↓ Grade 3 ↓ Grade 2 ↓ Grade 1 ↓ Mock Trading Engine">
-          <PromotionTower
-            layers={tower.map((t) => ({
-              status: t.status,
-              count: t.count,
-              promotionEventsTotal: 0,
-              demotionEventsTotal: 0,
-            }))}
-            selectedStatus="MAIN_ENGINE"
-            totalStrategies={totalStrategies || undefined}
-          />
-        </TerminalCard>
-      )}
 
       <div className="m3-kpi-strip">
         <Metric label="Engine Population" value={population} tone={strategies.length > 0 ? "positive" : "neutral"} />

@@ -163,7 +163,7 @@ export interface UseMockTradingEngineOptions {
   price: number;
   /** Optional account key to forward to the signal-trace API. */
   accountKey?: string | null;
-  /** ISPAP pipeline stage — enables grade-specific signal-tick and risk config. */
+  /** Legacy pipeline stage label retained for persisted mock trade compatibility. */
   pipelineStage?: StrategyStatus | null;
   /** Optional initial config override (merged via normalizeMockTradingConfig). */
   initialConfig?: Partial<MockTradingConfig>;
@@ -887,9 +887,6 @@ export function useMockTradingEngine(
       try {
         const params = new URLSearchParams();
         params.set("account_key", mockAccountKey);
-        if (pipelineStage === "GRADE_5") {
-          params.set("grade", "GRADE_5");
-        }
         const res = await fetch(`/api/mock-trading/signal-tick?${params.toString()}`);
         const json = (await res.json()) as {
           rows?: StrategySignalTraceRow[];
@@ -1028,7 +1025,7 @@ export function useMockTradingEngine(
   const reset = useCallback(() => {
     const confirmed = typeof window === "undefined"
       ? true
-      : window.confirm("Reset all persisted Mock Trading trades, logs, analytics, and account snapshots?");
+      : window.confirm("Reset all persisted Trade Engine trades, logs, analytics, and account snapshots?");
     if (!confirmed) return;
     setTrades([]);
     setHistoryTrades([]);

@@ -88,7 +88,7 @@ export function MainEngineSurvivors() {
 
       {atRisk > 0 && (
         <div className="rounded border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-[10px] text-rose-400">
-          ⚠ {atRisk} Main Engine {atRisk === 1 ? "strategy" : "strategies"} flagged for demotion risk — rolling 50-trade window below thresholds
+          ⚠ {atRisk} Trade Engine {atRisk === 1 ? "strategy" : "strategies"} flagged for risk review — rolling 50-trade window below thresholds
         </div>
       )}
 
@@ -96,9 +96,9 @@ export function MainEngineSurvivors() {
         <div className="py-8 text-center text-xs text-zinc-600 animate-pulse">Loading main engine strategies…</div>
       ) : strategies.length === 0 ? (
         <div className="py-12 text-center space-y-2">
-          <div className="text-sm font-semibold text-zinc-500">No Strategies in Main Engine</div>
+          <div className="text-sm font-semibold text-zinc-500">No Strategies in Trade Engine</div>
           <div className="text-xs text-zinc-600 max-w-md mx-auto">
-            Strategies must complete 575+ total trades across all 5 grades with positive expectancy and PF {">"} 1 at every stage.
+            Strategies must maintain positive expectancy and PF {">"} 1 before remaining active.
           </div>
         </div>
       ) : (
@@ -177,7 +177,7 @@ export function MainEngineSurvivors() {
                                 <MiniGauge label="Expectancy" value={score.expectancyScore} max={15} colorClass="bg-blue-700" />
                                 <MiniGauge label="Drawdown" value={score.drawdownScore} max={15} colorClass="bg-violet-700" />
                                 <MiniGauge label="Sharpe" value={score.sharpeScore} max={15} colorClass="bg-amber-700" />
-                                <MiniGauge label="Grade" value={score.gradeScore} max={15} colorClass="bg-emerald-900" />
+                                <MiniGauge label="Engine" value={score.gradeScore} max={15} colorClass="bg-emerald-900" />
                               </div>
                             </div>
                             {/* Lifecycle */}
@@ -185,8 +185,8 @@ export function MainEngineSurvivors() {
                               <div className="text-[9px] uppercase text-zinc-600 mb-1.5">Lifecycle</div>
                               <div className="space-y-0.5 text-[9px]">
                                 {[
-                                  { label: "Promotions", value: String(s.promotion_count) },
-                                  { label: "Demotions", value: String(s.demotion_count) },
+                                  { label: "Review Events", value: String(s.promotion_count) },
+                                  { label: "Risk Events", value: String(s.demotion_count) },
                                   { label: "Admitted", value: s.migrated_at ? new Date(s.migrated_at).toLocaleDateString() : "—" },
                                   { label: "Last Evaluated", value: s.last_evaluated_at ? new Date(s.last_evaluated_at).toLocaleDateString() : "—" },
                                   { label: "Timeframe", value: s.timeframe },
@@ -323,7 +323,7 @@ export function MainEngineSurvivors() {
       </TerminalCard>
 
       <p className="text-[10px] uppercase tracking-wider text-zinc-600">
-        Main Engine Survivors — elite only — mock trading — no live capital at risk
+        Trade Engine Survivors — elite only — no live capital at risk
       </p>
     </div>
   );

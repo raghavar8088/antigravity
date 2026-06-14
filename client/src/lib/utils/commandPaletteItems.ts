@@ -13,13 +13,12 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
   ...COMMAND_CENTER_NAV.map((item) => ({
     id: item.href,
     label: item.label,
-    group: item.section === "trading" ? "Trading Pipeline" : "Navigate",
+    group: item.section === "trading" ? "Trading" : "Navigate",
     href: item.href,
     keywords: [
       item.label.toLowerCase(),
       item.href,
-      ...(item.label.includes("Grade") ? ["grade", "mock trading", "pipeline"] : []),
-      ...(item.label.includes("Engine") ? ["engine", "main engine", "mock trading"] : []),
+      ...(item.label.includes("Engine") ? ["engine", "trade engine"] : []),
     ],
   })),
   {
@@ -30,7 +29,7 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
   },
   {
     id: "search-trades",
-    label: "Open Mock Trading Desk (execution)",
+    label: "Open Trade Engine (execution)",
     group: "Trading",
     href: "/mock-trading",
     keywords: ["trades", "orders", "execution", "paper", "desk"],
@@ -61,17 +60,17 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
 export const PAGE_TITLES: Record<string, string> = {
   [TERMINAL_ROUTES.home]: "Command Center",
   [TERMINAL_ROUTES["trade-engine"]]: "Trade Engine",
-  [TERMINAL_ROUTES["mock-engine"]]: "Mock Trading Engine",
-  [TERMINAL_ROUTES["grade-1"]]: "Mock Trading Grade 1",
-  [TERMINAL_ROUTES["grade-2"]]: "Mock Trading Grade 2",
-  [TERMINAL_ROUTES["grade-3"]]: "Mock Trading Grade 3",
-  [TERMINAL_ROUTES["grade-4"]]: "Mock Trading Grade 4",
-  [TERMINAL_ROUTES["grade-5"]]: "Mock Trading Grade 5",
+  [TERMINAL_ROUTES["mock-engine"]]: "Trade Engine",
+  [TERMINAL_ROUTES["grade-1"]]: "Trade Engine",
+  [TERMINAL_ROUTES["grade-2"]]: "Trade Engine",
+  [TERMINAL_ROUTES["grade-3"]]: "Trade Engine",
+  [TERMINAL_ROUTES["grade-4"]]: "Trade Engine",
+  [TERMINAL_ROUTES["grade-5"]]: "Trade Engine",
   [TERMINAL_ROUTES.execution]: "Execution",
   [TERMINAL_ROUTES["strategy-authority"]]: "Strategy Authority",
   [TERMINAL_ROUTES["portfolio-intelligence"]]: "Portfolio Intelligence",
   [TERMINAL_ROUTES["retired-strategies"]]: "Retired Strategies",
-  [TERMINAL_ROUTES["main-engine"]]: "Main Engine",
+  [TERMINAL_ROUTES["main-engine"]]: "Trade Engine",
   [TERMINAL_ROUTES.strategies]: "Strategies",
   [TERMINAL_ROUTES.portfolio]: "Portfolio",
   [TERMINAL_ROUTES.risk]: "Risk",
@@ -84,7 +83,7 @@ export const PAGE_TITLES: Record<string, string> = {
   [TERMINAL_ROUTES.journal]: "Journal",
   [TERMINAL_ROUTES.settings]: "Settings",
   "/terminal/design-system": "Design System",
-  "/mock-trading": "Mock Trading Desk",
+  "/mock-trading": "Trade Engine",
 };
 
 export function resolvePageTitle(pathname: string): string {

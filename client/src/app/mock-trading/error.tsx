@@ -24,7 +24,7 @@ export default function MockTradingError({
       }}
     >
       <div style={{ maxWidth: 480, textAlign: "center" }}>
-        <h1 style={{ fontSize: 18, margin: "0 0 8px" }}>Mock Trading failed to load</h1>
+        <h1 style={{ fontSize: 18, margin: "0 0 8px" }}>Trade Engine failed to load</h1>
         <p style={{ fontSize: 13, color: "var(--text-muted, #8b949e)", margin: "0 0 16px", lineHeight: 1.5 }}>
           {error.message || "A client error stopped this page from rendering."}
         </p>
@@ -55,7 +55,7 @@ export default function MockTradingError({
               fontWeight: 600,
             }}
           >
-            Open Mock Trading
+            Open Trade Engine
           </Link>
         </div>
       </div>

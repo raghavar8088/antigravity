@@ -30,7 +30,7 @@ type TopBarProps = {
 const PAGE_TITLES: Record<string, string> = {
   "/":                   "Command Center",
   "/terminal":           "Command Center",
-  "/mock-trading":       "Mock Trading",
+  "/mock-trading":       "Trade Engine",
   "/btc-future-trading": "BTC Futures",
 };
 
@@ -122,7 +122,7 @@ export function TopBar({
   const pageTitle =
     title ??
     (isPaperDeskRoute(pathname)
-      ? "Mock Trading"
+      ? "Trade Engine"
       : isMockTradingRoute(pathname)
         ? PAGE_TITLES[MOCK_TRADING_PATH]
         : PAGE_TITLES[pathname]) ??

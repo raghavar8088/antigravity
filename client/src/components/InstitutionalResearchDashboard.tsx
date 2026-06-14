@@ -260,7 +260,7 @@ function LiveRankingsTab({ report }: { report: InstitutionalResearchReport }) {
       {ranked.length === 0 ? (
         <DeskEmptyState
           title="No data yet"
-          subtitle="Run the mock trading engine to accumulate trade history."
+          subtitle="Run the Trade Engine to accumulate trade history."
         />
       ) : (
         <DeskDataTable

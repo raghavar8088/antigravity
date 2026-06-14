@@ -32,11 +32,11 @@ export function DiagnosticsCenter() {
 
   return (
     <div className="grid gap-3 xl:grid-cols-2">
-      <TerminalCard title="Mock Trading State" subtitle="/api/mock-trading/snapshot">
+      <TerminalCard title="Trade Engine State" subtitle="/api/mock-trading/snapshot">
         {!mockDiag ? (
           <TerminalNoData label="LOADING..." />
         ) : mockDiag.ok === false ? (
-          <TerminalNoData label="MOCK TRADING SNAPSHOT UNAVAILABLE" />
+          <TerminalNoData label="TRADE ENGINE SNAPSHOT UNAVAILABLE" />
         ) : (
           <pre className="max-h-80 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 font-mono text-[10px] text-zinc-400">
             {JSON.stringify(mockDiag, null, 2)}

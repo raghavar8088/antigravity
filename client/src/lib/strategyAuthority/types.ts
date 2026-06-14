@@ -1,15 +1,22 @@
 /**
  * Shared types for the Strategy Authority system.
- * Strategies move through a promotion pipeline from Grade 5 → Main Engine.
+ * Trade Engine is the only active strategy surface. Legacy stage statuses are
+ * retained only so existing persisted MongoDB documents continue to parse.
  */
 
+/**
+ * Trade Engine uses two statuses only.
+ * Grade statuses retained for backward-compatibility with existing
+ * MongoDB documents — never surfaced in UI.
+ */
 export type StrategyStatus =
+  | "TRADE_ENGINE"
+  | "MAIN_ENGINE"
   | "GRADE_5"
   | "GRADE_4"
   | "GRADE_3"
   | "GRADE_2"
   | "GRADE_1"
-  | "MAIN_ENGINE"
   | "RETIRED";
 
 export interface StrategyMetrics {

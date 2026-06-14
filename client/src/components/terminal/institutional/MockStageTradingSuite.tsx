@@ -15,18 +15,9 @@ import {
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
-import { PromotionTower, type TowerLayerData } from "./PromotionTower";
 import { TerminalCard } from "./TerminalCard";
 
-const STAGE_LABEL: Record<StrategyStatus, string> = {
-  GRADE_5: "Grade 5",
-  GRADE_4: "Grade 4",
-  GRADE_3: "Grade 3",
-  GRADE_2: "Grade 2",
-  GRADE_1: "Grade 1",
-  MAIN_ENGINE: "Main Mock Trading Engine",
-  RETIRED: "Retired",
-};
+const TRADE_ENGINE_TITLE = "Trade Engine";
 
 const CLOSED_TRADE_INITIAL_LIMIT = 50;
 const CLOSED_TRADE_LIMIT_STEP = 50;
@@ -915,17 +906,14 @@ export function MockStageTradingSuite({
   showPipeline = false,
   renderShell,
 }: MockStageTradingSuiteProps) {
-  const label = STAGE_LABEL[status];
   const live = useLiveBTCPrice();
   const [closedVisibleLimit, setClosedVisibleLimit] = useState(CLOSED_TRADE_INITIAL_LIMIT);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [tower, setTower] = useState<TowerLayerData[]>([]);
-  const [totalStrategies, setTotalStrategies] = useState(0);
   const [scalersStats, setScalersStats] = useState<ScalersStatsState>(UNKNOWN_SCALERS_STATS);
   const engine = useMockTradingEngine({
     price: live.price,
     accountKey: mockAccountKeyForStage(status),
-    pipelineStage: status === "RETIRED" ? null : status,
+    pipelineStage: status === "RETIRED" ? null : "MAIN_ENGINE",
     initialConfig: getMockConfigForPipelineStage(status),
   });
 
@@ -987,37 +975,6 @@ export function MockStageTradingSuite({
     setClosedVisibleLimit(CLOSED_TRADE_INITIAL_LIMIT);
   }, [status]);
 
-  useEffect(() => {
-    if (!showPipeline) return;
-
-    let cancelled = false;
-    void fetch("/api/strategy-authority/counts")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.ok) return;
-        if (data.counts?.total != null) setTotalStrategies(data.counts.total);
-        if (Array.isArray(data.tower)) {
-          setTower(
-            data.tower
-              .filter((layer: { status: StrategyStatus }) => layer.status !== "RETIRED")
-              .map((layer: { status: StrategyStatus; count: number }) => ({
-                status: layer.status,
-                count: layer.count,
-                promotionEventsTotal: 0,
-                demotionEventsTotal: 0,
-              })),
-          );
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setTower([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [showPipeline]);
-
   const leaderboard = useMemo(
     () => rankStrategies({ trades: sourceTrades }).rows.slice(0, LEADERBOARD_LIMIT),
     [sourceTrades],
@@ -1038,7 +995,7 @@ export function MockStageTradingSuite({
 
   const summaryStrip = (
     <section
-      aria-label={`${label} summary`}
+      aria-label={`${TRADE_ENGINE_TITLE} summary`}
       style={{
         overflowX: "auto",
         borderBottom: "1px solid var(--border)",
@@ -1060,14 +1017,14 @@ export function MockStageTradingSuite({
             style={{
               margin: 0,
               color: "var(--text-primary)",
-              fontSize: 14,
-              fontWeight: 800,
-              letterSpacing: "0.08em",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
             }}
           >
-            {label}
+            {TRADE_ENGINE_TITLE}
           </h1>
           <RegimeBadge regime={scalersStats.regime} />
         </div>
@@ -1182,18 +1139,7 @@ export function MockStageTradingSuite({
         <LeaderboardTable rows={leaderboard} />
       </TerminalCard>
 
-      {showPipeline ? (
-        <TerminalCard
-          title="Promotion Tower"
-          subtitle="Grade 5 to Main Engine progression"
-        >
-          <PromotionTower
-            layers={tower}
-            selectedStatus={status}
-            totalStrategies={totalStrategies || undefined}
-          />
-        </TerminalCard>
-      ) : null}
+      {false && showPipeline ? null : null}
     </>
   );
 

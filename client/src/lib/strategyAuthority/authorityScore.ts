@@ -1,6 +1,6 @@
 /**
- * Authority score — composite performance rating for strategies in the ISPAP
- * pipeline. Maps raw metrics to a 0–100 score and a tier label (S / A / B / C / D).
+ * Authority score — composite performance rating for Trade Engine strategies.
+ * Legacy stage statuses are scored as the active Trade Engine tier.
  */
 
 import type { StrategyMetrics } from "./types";
@@ -57,15 +57,19 @@ export interface AuthorityScore {
   gradeScore: number;
 }
 
-/** Stage-based multiplier: higher stages get a slight bonus for surviving longer. */
+/** Active strategies all use the former Main Engine multiplier. */
 function stageMultiplier(status: string): number {
   switch (status) {
-    case "MAIN_ENGINE": return 1.10;
-    case "GRADE_1": return 1.05;
-    case "GRADE_2": return 1.02;
-    case "GRADE_3": return 1.00;
-    case "GRADE_4": return 0.98;
-    case "GRADE_5": return 0.95;
+    case "TRADE_ENGINE":
+    case "MAIN_ENGINE":
+    case "GRADE_1":
+    case "GRADE_2":
+    case "GRADE_3":
+    case "GRADE_4":
+    case "GRADE_5":
+      return 1.10;
+    case "RETIRED":
+      return 1.00;
     default: return 1.00;
   }
 }
@@ -80,7 +84,7 @@ function tierFromScore(score: number): AuthorityTier {
 
 export function computeAuthorityScore(
   metrics: StrategyMetrics,
-  status: StrategyStatus | string = "GRADE_5",
+  status: StrategyStatus | string = "TRADE_ENGINE",
 ): AuthorityScore {
   const pnlComponent = clamp(
     metrics.totalPnl >= 1000

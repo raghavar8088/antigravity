@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 import type { FamilyIntelligenceRow } from "@/lib/strategyAuthority/strategyAuthorityMongo";
 
-const STATUS_ORDER: StrategyStatus[] = ["MAIN_ENGINE", "GRADE_1", "GRADE_2", "GRADE_3", "GRADE_4", "GRADE_5"];
+const STATUS_ORDER: StrategyStatus[] = ["TRADE_ENGINE", "MAIN_ENGINE", "GRADE_1", "GRADE_2", "GRADE_3", "GRADE_4", "GRADE_5"];
 const STATUS_COLOR: Record<StrategyStatus, string> = {
+  TRADE_ENGINE: "bg-emerald-700",
   MAIN_ENGINE: "bg-emerald-700",
   GRADE_1: "bg-amber-600",
   GRADE_2: "bg-violet-700",
@@ -15,8 +16,8 @@ const STATUS_COLOR: Record<StrategyStatus, string> = {
   RETIRED: "bg-rose-900",
 };
 const STATUS_SHORT: Partial<Record<StrategyStatus, string>> = {
-  MAIN_ENGINE: "M", GRADE_1: "G1", GRADE_2: "G2",
-  GRADE_3: "G3", GRADE_4: "G4", GRADE_5: "G5",
+  TRADE_ENGINE: "T", MAIN_ENGINE: "M", GRADE_1: "L1", GRADE_2: "L2",
+  GRADE_3: "L3", GRADE_4: "L4", GRADE_5: "L5",
 };
 
 function fmt(n: number | undefined, dec = 2) {
@@ -30,6 +31,12 @@ function Pill({ status, count }: { status: StrategyStatus; count: number }) {
       {STATUS_SHORT[status] ?? status.slice(0, 2)}{count > 1 ? `×${count}` : ""}
     </span>
   );
+}
+
+function statusDisplayLabel(status: StrategyStatus): string {
+  if (status === "TRADE_ENGINE" || status === "MAIN_ENGINE") return "Trade Engine";
+  if (status === "RETIRED") return "Retired";
+  return "Legacy Active";
 }
 
 type SortKey = "avgProfitFactor" | "avgExpectancy" | "avgWinRate" | "avgDrawdown" | "avgSharpe" | "total" | "mainEngineCount";
@@ -121,7 +128,7 @@ export function FamilyLeaderboard() {
                   <SortHeader label="Avg E" sortKey="avgExpectancy" current={sortKey} onSort={setSortKey} />
                   <SortHeader label="Avg DD%" sortKey="avgDrawdown" current={sortKey} onSort={setSortKey} />
                   <SortHeader label="Sharpe" sortKey="avgSharpe" current={sortKey} onSort={setSortKey} />
-                  <SortHeader label="Main" sortKey="mainEngineCount" current={sortKey} onSort={setSortKey} />
+                  <SortHeader label="Engine" sortKey="mainEngineCount" current={sortKey} onSort={setSortKey} />
                   <th className="py-2 px-2 text-[9px] uppercase tracking-wider text-zinc-500">Distribution</th>
                 </tr>
               </thead>
@@ -138,12 +145,6 @@ export function FamilyLeaderboard() {
                         <td className="py-2 px-2 text-[10px] tabular-nums text-zinc-600">{i + 1}</td>
                         <td className="py-2 px-2 font-medium text-zinc-200 max-w-[140px] truncate">
                           {f.family}
-                          {f.promotionCandidates > 0 && (
-                            <span className="ml-1.5 text-[8px] text-emerald-500">↑{f.promotionCandidates}</span>
-                          )}
-                          {f.demotionRisk > 0 && (
-                            <span className="ml-1 text-[8px] text-rose-500">↓{f.demotionRisk}</span>
-                          )}
                         </td>
                         <td className="py-2 px-2 text-right tabular-nums text-zinc-400">{f.total}</td>
                         <td className="py-2 px-2 text-right tabular-nums">
@@ -197,7 +198,7 @@ export function FamilyLeaderboard() {
                                     .map(([s, n]) => (
                                       <div key={s} className="flex items-center gap-1 text-[9px]">
                                         <div className={`w-1.5 h-1.5 rounded-full ${STATUS_COLOR[s]}`} />
-                                        <span className="text-zinc-500">{s.replace("_", " ")}</span>
+                                        <span className="text-zinc-500">{statusDisplayLabel(s)}</span>
                                         <span className="ml-auto tabular-nums text-zinc-300">{n}</span>
                                       </div>
                                     ))}
@@ -224,11 +225,11 @@ export function FamilyLeaderboard() {
                                 <div className="text-[9px] text-zinc-600 uppercase mb-1">Alerts</div>
                                 <div className="space-y-0.5">
                                   <div className="flex justify-between text-[9px]">
-                                    <span className="text-emerald-600">Promo Candidates</span>
+                                    <span className="text-emerald-600">Review Candidates</span>
                                     <span className="text-emerald-400 tabular-nums">{f.promotionCandidates}</span>
                                   </div>
                                   <div className="flex justify-between text-[9px]">
-                                    <span className="text-rose-600">Demotion Risk</span>
+                                    <span className="text-rose-600">Risk Review</span>
                                     <span className="text-rose-400 tabular-nums">{f.demotionRisk}</span>
                                   </div>
                                   <div className="flex justify-between text-[9px]">
@@ -238,7 +239,7 @@ export function FamilyLeaderboard() {
                                 </div>
                               </div>
                               <div>
-                                <div className="text-[9px] text-zinc-600 uppercase mb-1">Main Engine</div>
+                                <div className="text-[9px] text-zinc-600 uppercase mb-1">Trade Engine</div>
                                 <div className="text-2xl font-bold tabular-nums text-emerald-400">{f.mainEngineCount}</div>
                                 <div className="text-[9px] text-zinc-600">
                                   {f.total > 0 ? `${((f.mainEngineCount / f.total) * 100).toFixed(0)}% of family` : ""}

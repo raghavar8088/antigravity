@@ -140,8 +140,8 @@ export function RetirementCenter() {
         >
           <option value="retired_at">Sort: Date Retired</option>
           <option value="family">Sort: Family</option>
-          <option value="demotion_count">Sort: Demotions</option>
-          <option value="promotion_count">Sort: Promotions</option>
+          <option value="demotion_count">Sort: Risk Events</option>
+          <option value="promotion_count">Sort: Review Events</option>
         </select>
         <span className="text-[10px] text-zinc-600">{filtered.length} of {retired.length}</span>
       </div>
@@ -199,8 +199,8 @@ export function RetirementCenter() {
                   <th className="py-2 px-2">TF</th>
                   <th className="py-2 px-2">Retired</th>
                   <th className="py-2 px-2">Root Cause</th>
-                  <th className="py-2 px-2 text-right">↑ Promo</th>
-                  <th className="py-2 px-2 text-right">↓ Demo</th>
+                  <th className="py-2 px-2 text-right">Review</th>
+                  <th className="py-2 px-2 text-right">Risk</th>
                 </tr>
               </thead>
               <tbody>

@@ -201,12 +201,13 @@ export interface MockTradingConfig {
   fundingRatePctPer8h: number;
   /** Funding interval in hours, defaults to the BTC perp 8h convention. */
   fundingIntervalHours: number;
-  /** ISPAP pipeline stage — GRADE_5 enables discovery mode (no risk gates). */
+  /** Legacy persisted stage label. Trade Engine no longer branches on it. */
   pipelineStage?: string | null;
 }
 
 export function isGradeDiscoveryStage(config: MockTradingConfig): boolean {
-  return config.pipelineStage === "GRADE_5";
+  void config;
+  return false;
 }
 
 export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
@@ -1617,7 +1618,6 @@ export function isValidMockConfig(value: unknown): value is MockTradingConfig {
   const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
   if (!num(c.startingBalanceUsd) || (c.startingBalanceUsd as number) <= 0) return false;
   if (c.sizingMode !== "fixed_pct_equity" && c.sizingMode !== "fixed_notional" && c.sizingMode !== "risk_pct_equity") return false;
-  const discoveryStage = c.pipelineStage === "GRADE_5";
   return (
     num(c.fixedPctOfEquity) &&
     num(c.fixedNotionalUsd) &&
@@ -1639,12 +1639,12 @@ export function isValidMockConfig(value: unknown): value is MockTradingConfig {
     num(c.maxOpenShortTrades) &&
     (c.maxOpenShortTrades as number) >= 1 &&
     num(c.tradeCooldownMinutes) &&
-    ((c.tradeCooldownMinutes as number) >= DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES || discoveryStage) &&
+    (c.tradeCooldownMinutes as number) >= DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES &&
     num(c.minSignalScore) &&
     num(c.maxSignalsPerBatch) &&
     (c.maxSignalsPerBatch as number) >= 1 &&
     num(c.minRiskRewardRatio) &&
-    ((c.minRiskRewardRatio as number) >= DEFAULT_MOCK_MIN_RISK_REWARD_RATIO || discoveryStage) &&
+    (c.minRiskRewardRatio as number) >= DEFAULT_MOCK_MIN_RISK_REWARD_RATIO &&
     num(c.dailyLossLimitPct) &&
     num(c.weeklyLossLimitPct) &&
     num(c.maxDrawdownPct) &&
@@ -1698,25 +1698,19 @@ export function normalizeMockTradingConfig(value: unknown): MockTradingConfig {
       typeof source.pipelineStage === "string" && source.pipelineStage.trim().length > 0
         ? source.pipelineStage.trim()
         : null,
-    tradeCooldownMinutes:
-      source.pipelineStage === "GRADE_5"
-        ? Math.max(0, num(source.tradeCooldownMinutes, 0))
-        : Math.max(
-            DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES,
-            num(source.tradeCooldownMinutes, DEFAULT_MOCK_TRADING_CONFIG.tradeCooldownMinutes),
-          ),
+    tradeCooldownMinutes: Math.max(
+      DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES,
+      num(source.tradeCooldownMinutes, DEFAULT_MOCK_TRADING_CONFIG.tradeCooldownMinutes),
+    ),
     minSignalScore: Math.max(0, Math.min(100, num(source.minSignalScore, DEFAULT_MOCK_TRADING_CONFIG.minSignalScore))),
     maxSignalsPerBatch: maxSignalsPerBatchFromConfig({
       ...DEFAULT_MOCK_TRADING_CONFIG,
       maxSignalsPerBatch: num(source.maxSignalsPerBatch, DEFAULT_MOCK_TRADING_CONFIG.maxSignalsPerBatch, true),
     }),
-    minRiskRewardRatio:
-      source.pipelineStage === "GRADE_5"
-        ? Math.max(0, num(source.minRiskRewardRatio, 0))
-        : Math.max(
-            DEFAULT_MOCK_MIN_RISK_REWARD_RATIO,
-            num(source.minRiskRewardRatio, DEFAULT_MOCK_TRADING_CONFIG.minRiskRewardRatio),
-          ),
+    minRiskRewardRatio: Math.max(
+      DEFAULT_MOCK_MIN_RISK_REWARD_RATIO,
+      num(source.minRiskRewardRatio, DEFAULT_MOCK_TRADING_CONFIG.minRiskRewardRatio),
+    ),
     dailyLossLimitPct: Math.max(0, num(source.dailyLossLimitPct, DEFAULT_MOCK_TRADING_CONFIG.dailyLossLimitPct)),
     weeklyLossLimitPct: Math.max(0, num(source.weeklyLossLimitPct, DEFAULT_MOCK_TRADING_CONFIG.weeklyLossLimitPct)),
     maxDrawdownPct: Math.max(0, num(source.maxDrawdownPct, DEFAULT_MOCK_TRADING_CONFIG.maxDrawdownPct)),

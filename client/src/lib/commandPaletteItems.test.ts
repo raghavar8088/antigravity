@@ -10,13 +10,12 @@ describe("commandPaletteItems", () => {
     expect(hrefs).toContain(TERMINAL_ROUTES.execution);
   });
 
-  it("includes all trading pipeline routes in command palette", () => {
-    const tradingHrefs = COMMAND_PALETTE_ITEMS.filter((i) => i.group === "Trading Pipeline").map((i) => i.href);
+  it("includes all trading routes in command palette", () => {
+    const tradingHrefs = COMMAND_PALETTE_ITEMS.filter((i) => i.group === "Trading").map((i) => i.href);
     for (const item of TRADING_NAV) {
       expect(tradingHrefs).toContain(item.href);
     }
-    expect(COMMAND_PALETTE_ITEMS.some((i) => i.label === "Mock Trading Engine")).toBe(true);
-    expect(COMMAND_PALETTE_ITEMS.some((i) => i.label === "Mock Trading Grade 5")).toBe(true);
+    expect(COMMAND_PALETTE_ITEMS.some((i) => i.label === "Trade Engine")).toBe(true);
   });
 
   it("resolves page titles for terminal sub-routes", () => {

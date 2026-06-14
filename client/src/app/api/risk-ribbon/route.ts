@@ -32,7 +32,7 @@ export async function GET() {
   });
 
   if (!isMongoConfigured()) {
-    items.push({ label: "MOCK TRADING", status: "RED", value: "NO MONGO" });
+    items.push({ label: "TRADE ENGINE", status: "RED", value: "NO MONGO" });
     return NextResponse.json({ ok: true, items, execution_authority: "mock-trading" });
   }
 
@@ -49,7 +49,7 @@ export async function GET() {
     const critical = strategies.filter((s) => s.status === "CRITICAL").length;
 
     items.push({
-      label: "MOCK TRADING",
+      label: "TRADE ENGINE",
       status: "GREEN",
       value: `$${Math.round(equity).toLocaleString()}`,
       detail: `${open.trades.length} open · today ${todayPnl >= 0 ? "+" : ""}$${todayPnl.toFixed(0)}`,
@@ -65,7 +65,7 @@ export async function GET() {
       value: critical > 0 ? `${critical} critical` : "OK",
     });
   } catch {
-    items.push({ label: "MOCK TRADING", status: "RED", value: "READ FAIL" });
+    items.push({ label: "TRADE ENGINE", status: "RED", value: "READ FAIL" });
   }
 
   try {
