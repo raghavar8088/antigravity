@@ -16,8 +16,8 @@ const STATUS_COLOR: Record<StrategyStatus, string> = {
   RETIRED: "bg-rose-900",
 };
 const STATUS_SHORT: Partial<Record<StrategyStatus, string>> = {
-  TRADE_ENGINE: "T", MAIN_ENGINE: "M", GRADE_1: "L1", GRADE_2: "L2",
-  GRADE_3: "L3", GRADE_4: "L4", GRADE_5: "L5",
+  TRADE_ENGINE: "T", MAIN_ENGINE: "T", GRADE_1: "L", GRADE_2: "L",
+  GRADE_3: "L", GRADE_4: "L", GRADE_5: "L",
 };
 
 function fmt(n: number | undefined, dec = 2) {
@@ -105,7 +105,7 @@ export function FamilyLeaderboard() {
             {[
               { label: "Families", value: String(families.length) },
               { label: "Total Strategies", value: String(families.reduce((a, f) => a + f.total, 0)) },
-              { label: "Main Engine", value: String(families.reduce((a, f) => a + f.mainEngineCount, 0)), color: "text-emerald-400" },
+              { label: "Trade Engine", value: String(families.reduce((a, f) => a + f.mainEngineCount, 0)), color: "text-emerald-400" },
               { label: "Retired", value: String(families.reduce((a, f) => a + f.retiredCount, 0)), color: "text-rose-400" },
             ].map((k) => (
               <div key={k.label} className="rounded border border-zinc-800 bg-zinc-900/40 px-2 py-1.5 text-center">

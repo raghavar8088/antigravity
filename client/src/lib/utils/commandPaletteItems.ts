@@ -31,7 +31,7 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
     id: "search-trades",
     label: "Open Trade Engine (execution)",
     group: "Trading",
-    href: "/mock-trading",
+    href: TERMINAL_ROUTES["trade-engine"],
     keywords: ["trades", "orders", "execution", "paper", "desk"],
   },
   {

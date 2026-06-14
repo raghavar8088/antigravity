@@ -11,6 +11,7 @@ import (
 
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
+	regimepkg "antigravity-engine/internal/regime"
 	"antigravity-engine/internal/strategy"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
@@ -60,8 +61,12 @@ type ScalerBundle struct {
 	strategies []scalers.RegistryEntry
 
 	// Eval telemetry — updated each evalAndExecuteScalers cycle
-	evalCount  int64     // accessed atomically — no mu required
-	lastEvalAt time.Time // protected by mu
+	evalCount               int64     // accessed atomically — no mu required
+	lastEvalAt              time.Time // protected by mu
+	rawSignalsLastCycle     int
+	approvedSignalsLastCycle int
+	rejectedSignalsLastCycle int
+	lastSignals             []ScalersSignalSnapshot
 }
 
 func newScalerBundle() *ScalerBundle {
@@ -260,13 +265,16 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	ks := o.killSvc
 	price := o.lastPrice
 	lastRegime := o.lastRegime
+	lastRegimeClass := o.lastRegimeClass
 	o.mu.RUnlock()
 
 	if ks != nil && ks.IsActive() {
+		log.Printf("[SCALERS] cycle skipped reason=kill_switch_active")
 		return
 	}
 
 	if price <= 0 {
+		log.Printf("[SCALERS] cycle skipped reason=no_price")
 		return
 	}
 
@@ -292,10 +300,14 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 	}
 
-	regime := mapToScalersRegime(lastRegime)
+	scalersRegime := mapToScalersRegime(lastRegime)
+	if scalersRegime == scalers.RegimeUnknown && lastRegimeClass != nil {
+		scalersRegime = mapRegimeClassToScalersRegime(lastRegimeClass.Regime)
+	}
 
 	// UNKNOWN regime → no new trades from any scalers strategy
-	if regime == scalers.RegimeUnknown {
+	if scalersRegime == scalers.RegimeUnknown {
+		log.Printf("[SCALERS] cycle skipped reason=unknown_regime loop_regime=%q", lastRegime)
 		return
 	}
 
@@ -308,12 +320,13 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	// Build context under lock: copy candle slices atomically, then advance cvdPrev
 	// so the NEXT cycle sees the current CVD as "previous bar" (not this cycle).
 	o.scalerBundle.mu.Lock()
-	mctx := o.scalerBundle.buildContextLocked(price, regime) // uses cvdPrev from LAST cycle
+	mctx := o.scalerBundle.buildContextLocked(price, scalersRegime) // uses cvdPrev from LAST cycle
 	o.scalerBundle.cvdPrev = o.scalerBundle.cvd              // save for NEXT cycle
 	o.scalerBundle.mu.Unlock()
 
 	// Collect non-none signals from all curated scalers
 	var rawAgg []AggregatedSignal
+	rejected := 0
 	for _, entry := range o.scalerBundle.strategies {
 		// Walk-forward gate: skip DEMOTED strategies.
 		if o.walkForward != nil && !o.walkForward.IsActive(entry.Name) {
@@ -324,6 +337,8 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		if sig.Direction == scalers.DirectionNone {
 			continue
 		}
+		log.Printf("[SCALERS] eval strategy=%s direction=%s confidence=%.2f reason=%s",
+			sig.Strategy, sig.Direction, sig.Confidence, sig.Reason)
 		legacySig := scalerSignalToLegacy(sig, price)
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {
@@ -331,6 +346,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 		if err := sanitizeScalerSignal(&legacySig, adaptiveFloor); err != nil {
 			log.Printf("[SCALERS] %s signal rejected: %v", sig.Strategy, err)
+			rejected++
 			continue
 		}
 		legacySig.CreatedAt = sig.Timestamp
@@ -344,11 +360,21 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 
 	// Apply existing 15s cooldown gate
 	approved := o.aggregator.FilterSignals(rawAgg)
+	rejected += len(rawAgg) - len(approved)
 
 	// Single summary line: lets you see whether strategies are generating signals
 	// (but being filtered by cooldown) vs not generating signals at all.
-	log.Printf("[SCALERS] cycle eval=%d raw_signals=%d approved=%d regime=%s",
-		newCount, len(rawAgg), len(approved), string(regime))
+	log.Printf("[SCALERS] cycle eval=%d regime=%s price=%.2f candles_1m=%d candles_5m=%d candles_15m=%d candles_1h=%d candles_4h=%d raw=%d approved=%d rejected=%d",
+		newCount, string(scalersRegime), price,
+		len(mctx.Candles1m), len(mctx.Candles5m), len(mctx.Candles15m), len(mctx.Candles1h), len(mctx.Candles4h),
+		len(rawAgg), len(approved), rejected)
+
+	o.scalerBundle.mu.Lock()
+	o.scalerBundle.rawSignalsLastCycle = len(rawAgg)
+	o.scalerBundle.approvedSignalsLastCycle = len(approved)
+	o.scalerBundle.rejectedSignalsLastCycle = rejected
+	o.scalerBundle.lastSignals = scalersSignalSnapshots(approved, price)
+	o.scalerBundle.mu.Unlock()
 
 	for _, agg := range approved {
 		sig := agg.Signal
@@ -383,6 +409,14 @@ func (b *ScalerBundle) GetEvalStats() (count int64, lastAt time.Time) {
 	return
 }
 
+// GetLastCycleStats returns a copy of the most recent scalers evaluation telemetry.
+func (b *ScalerBundle) GetLastCycleStats() (raw, approved, rejected int, signals []ScalersSignalSnapshot) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	signals = append([]ScalersSignalSnapshot(nil), b.lastSignals...)
+	return b.rawSignalsLastCycle, b.approvedSignalsLastCycle, b.rejectedSignalsLastCycle, signals
+}
+
 // ScalersStrategyStats holds per-strategy monitoring fields for the
 // /api/scalers/stats endpoint.
 type ScalersStrategyStats struct {
@@ -394,13 +428,27 @@ type ScalersStrategyStats struct {
 	LastPnL     float64 `json:"last_pnl"`
 }
 
+// ScalersSignalSnapshot is the recent signal telemetry shown by the Trade Engine UI.
+type ScalersSignalSnapshot struct {
+	ID         string    `json:"id"`
+	Strategy   string    `json:"strategy"`
+	Side       string    `json:"side"`
+	Confidence float64   `json:"confidence"`
+	Price      float64   `json:"price"`
+	Timestamp  time.Time `json:"timestamp"`
+}
+
 // ScalersSnapshot is the full payload returned by GET /api/scalers/stats.
 type ScalersSnapshot struct {
-	Strategies []ScalersStrategyStats `json:"strategies"`
-	Regime     string                 `json:"regime"`
-	CVD        float64                `json:"cvd"`
-	EvalCount  int64                  `json:"eval_count"`
-	LastEvalAt time.Time              `json:"last_eval_at"`
+	Strategies               []ScalersStrategyStats  `json:"strategies"`
+	Regime                   string                  `json:"regime"`
+	CVD                      float64                 `json:"cvd"`
+	EvalCount                int64                   `json:"eval_count"`
+	LastEvalAt               time.Time               `json:"last_eval_at"`
+	RawSignalsLastCycle      int                     `json:"raw_signals_last_cycle"`
+	ApprovedSignalsLastCycle int                     `json:"approved_signals_last_cycle"`
+	RejectedSignalsLastCycle int                     `json:"rejected_signals_last_cycle"`
+	RecentSignals            []ScalersSignalSnapshot `json:"recent_signals"`
 }
 
 // GetScalersStats assembles a monitoring snapshot of the scalers engine.
@@ -408,36 +456,84 @@ type ScalersSnapshot struct {
 func (o *Orchestrator) GetScalersStats() ScalersSnapshot {
 	o.mu.RLock()
 	regime := o.lastRegime
+	regimeClass := o.lastRegimeClass
 	o.mu.RUnlock()
+	scalersRegime := mapToScalersRegime(regime)
+	if scalersRegime == scalers.RegimeUnknown && regimeClass != nil {
+		scalersRegime = mapRegimeClassToScalersRegime(regimeClass.Regime)
+	}
+	regimeLabel := string(scalersRegime)
+	if scalersRegime == scalers.RegimeUnknown {
+		regimeLabel = regime
+	}
 
 	var cvd float64
 	var evalCount int64
 	var lastEvalAt time.Time
+	var rawLast, approvedLast, rejectedLast int
+	var recentSignals []ScalersSignalSnapshot
 	if o.scalerBundle != nil {
 		cvd = o.scalerBundle.GetCVD()
 		evalCount, lastEvalAt = o.scalerBundle.GetEvalStats()
+		rawLast, approvedLast, rejectedLast, recentSignals = o.scalerBundle.GetLastCycleStats()
 	}
 
 	perfs := scalers.AllPerformance()
-	strategies := make([]ScalersStrategyStats, 0, len(perfs))
+	perfByName := make(map[string]scalers.Performance, len(perfs))
 	for _, p := range perfs {
-		wins := int(math.Round(p.WinRate * float64(p.TotalTrades)))
-		strategies = append(strategies, ScalersStrategyStats{
-			Name:        p.StrategyName,
-			TotalTrades: p.TotalTrades,
-			Wins:        wins,
-			WinRate:     math.Round(p.WinRate*100) / 100,
-			Active:      p.Active,
-			LastPnL:     math.Round(p.LastPnL*100) / 100,
-		})
+		perfByName[p.StrategyName] = p
+	}
+
+	strategies := make([]ScalersStrategyStats, 0, len(perfs))
+	if o.scalerBundle != nil {
+		o.scalerBundle.mu.Lock()
+		strategies = make([]ScalersStrategyStats, 0, len(o.scalerBundle.strategies))
+		for _, entry := range o.scalerBundle.strategies {
+			p, ok := perfByName[entry.Name]
+			if !ok {
+				strategies = append(strategies, ScalersStrategyStats{
+					Name:   entry.Name,
+					Active: o.walkForward == nil || o.walkForward.IsActive(entry.Name),
+				})
+				continue
+			}
+			wins := int(math.Round(p.WinRate * float64(p.TotalTrades)))
+			strategies = append(strategies, ScalersStrategyStats{
+				Name:        p.StrategyName,
+				TotalTrades: p.TotalTrades,
+				Wins:        wins,
+				WinRate:     math.Round(p.WinRate*100) / 100,
+				Active:      p.Active,
+				LastPnL:     math.Round(p.LastPnL*100) / 100,
+			})
+		}
+		o.scalerBundle.mu.Unlock()
+	}
+	if len(strategies) == 0 {
+		strategies = make([]ScalersStrategyStats, 0, len(perfs))
+		for _, p := range perfs {
+			wins := int(math.Round(p.WinRate * float64(p.TotalTrades)))
+			strategies = append(strategies, ScalersStrategyStats{
+				Name:        p.StrategyName,
+				TotalTrades: p.TotalTrades,
+				Wins:        wins,
+				WinRate:     math.Round(p.WinRate*100) / 100,
+				Active:      p.Active,
+				LastPnL:     math.Round(p.LastPnL*100) / 100,
+			})
+		}
 	}
 
 	return ScalersSnapshot{
-		Strategies: strategies,
-		Regime:     regime,
-		CVD:        math.Round(cvd*10) / 10,
-		EvalCount:  evalCount,
-		LastEvalAt: lastEvalAt,
+		Strategies:               strategies,
+		Regime:                   regimeLabel,
+		CVD:                      math.Round(cvd*10) / 10,
+		EvalCount:                evalCount,
+		LastEvalAt:               lastEvalAt,
+		RawSignalsLastCycle:      rawLast,
+		ApprovedSignalsLastCycle: approvedLast,
+		RejectedSignalsLastCycle: rejectedLast,
+		RecentSignals:            recentSignals,
 	}
 }
 
@@ -479,9 +575,43 @@ func mapToScalersRegime(lastRegime string) scalers.Regime {
 		return scalers.RegimeRanging
 	case marketRegimeVolatile:
 		return scalers.RegimeVolatile
+	case marketRegimeMixed:
+		return scalers.RegimeRanging
 	default:
 		return scalers.RegimeUnknown
 	}
+}
+
+func mapRegimeClassToScalersRegime(r regimepkg.Regime) scalers.Regime {
+	switch r {
+	case regimepkg.RegimeTrendingBull, regimepkg.RegimeTrendingBear:
+		return scalers.RegimeTrending
+	case regimepkg.RegimeRanging, regimepkg.RegimeLowVol:
+		return scalers.RegimeRanging
+	case regimepkg.RegimeHighVol:
+		return scalers.RegimeVolatile
+	default:
+		return scalers.RegimeUnknown
+	}
+}
+
+func scalersSignalSnapshots(approved []AggregatedSignal, price float64) []ScalersSignalSnapshot {
+	out := make([]ScalersSignalSnapshot, 0, len(approved))
+	for _, agg := range approved {
+		ts := agg.Signal.CreatedAt
+		if ts.IsZero() {
+			ts = agg.FiredAt
+		}
+		out = append(out, ScalersSignalSnapshot{
+			ID:         fmt.Sprintf("%s-%d", agg.StrategyName, ts.UnixNano()),
+			Strategy:   agg.StrategyName,
+			Side:       string(agg.Signal.Action),
+			Confidence: agg.Signal.Confidence,
+			Price:      price,
+			Timestamp:  ts,
+		})
+	}
+	return out
 }
 
 // aggregate4h merges exactly 4 consecutive 1h candles into one 4h candle.

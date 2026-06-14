@@ -2,15 +2,19 @@
 import type { RegimeSnapshot } from "@/lib/ai/marketRegimeClassifier";
 import { getDb } from "@/lib/broker/mongoTradesClient";
 import {
+  DEFAULT_MOCK_TRADING_CONFIG,
   computeAccountState,
   computeAnalytics,
   closeMockTrade,
+  filterMockTrades,
   logForMockTradeClosed,
   normalizeMockTradingConfig,
+  sortMockTrades,
   withMockExitFields,
   type MockAccountState,
   type MockTrade,
   type MockTradeAnalytics,
+  type MockTradeFilter,
   type MockTradeLog,
   type MockTradingConfig,
 } from "@/lib/trading/mockTradingEngine";
@@ -34,6 +38,8 @@ export const MOCK_STRATEGY_SCORES_COLLECTION = "strategy_scores";
 export const MOCK_STRATEGY_SCORE_HISTORY_COLLECTION = "strategy_score_history";
 export const MOCK_EQUITY_CURVE_COLLECTION = "equity_curve";
 export const MOCK_DAILY_PNL_HISTORY_COLLECTION = "daily_pnl_history";
+const PAPER_POSITIONS_COLLECTION = "paper_positions";
+const PAPER_TRADES_COLLECTION = "paper_trades";
 
 export type MockTradeDoc = {
   account_key: string;
@@ -225,6 +231,41 @@ export type MockTradeLogDoc = {
   created_at: string;
 };
 
+type PaperPositionDoc = {
+  account_key: string;
+  position_id: string;
+  order_id?: string;
+  strategy_id?: string;
+  symbol?: string;
+  side?: string;
+  entry_price?: number;
+  size?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  status?: string;
+  opened_at?: Date | string | number;
+  updated_at?: Date | string | number;
+};
+
+type PaperClosedTradeDoc = {
+  account_key: string;
+  client_trade_id: string;
+  strategy_id?: string;
+  symbol?: string;
+  side?: string;
+  entry_price?: number;
+  exit_price?: number;
+  quantity?: number;
+  gross_pnl?: number;
+  total_fee?: number;
+  fees?: number;
+  net_pnl?: number;
+  exit_reason?: string;
+  entry_at?: Date | string | number;
+  exit_at?: Date | string | number;
+  closed_at?: Date | string | number;
+};
+
 export type MockEngineConfigDoc = {
   account_key: string;
   config: MockTradingConfig;
@@ -283,6 +324,8 @@ async function ensureMockIndexes(db: Db): Promise<void> {
 
 async function collections(): Promise<{
   trades: Collection<MockTradeDoc>;
+  paperPositions: Collection<PaperPositionDoc>;
+  paperTrades: Collection<PaperClosedTradeDoc>;
   snapshots: Collection<MockAccountSnapshotDoc>;
   analytics: Collection<MockStrategyAnalyticsDoc>;
   logs: Collection<MockTradeLogDoc>;
@@ -298,6 +341,8 @@ async function collections(): Promise<{
   await ensureMockIndexes(db);
   return {
     trades: db.collection<MockTradeDoc>(MOCK_TRADES_COLLECTION),
+    paperPositions: db.collection<PaperPositionDoc>(PAPER_POSITIONS_COLLECTION),
+    paperTrades: db.collection<PaperClosedTradeDoc>(PAPER_TRADES_COLLECTION),
     snapshots: db.collection<MockAccountSnapshotDoc>(MOCK_ACCOUNT_SNAPSHOTS_COLLECTION),
     analytics: db.collection<MockStrategyAnalyticsDoc>(MOCK_STRATEGY_ANALYTICS_COLLECTION),
     logs: db.collection<MockTradeLogDoc>(MOCK_TRADE_LOGS_COLLECTION),
@@ -372,6 +417,163 @@ export function mockTradeToDoc(
 
 export function mockTradeFromDoc(doc: MockTradeDoc): MockTrade {
   return withMockExitFields(doc.raw_trade, normalizeMockTradingConfig(doc.parameters_used));
+}
+
+function timeToMs(value: Date | string | number | null | undefined): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
+}
+
+function strategyNumericId(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return hash % 1_000_000;
+}
+
+function paperSideToMockSide(side: string | undefined): MockTrade["side"] {
+  const normalized = side?.toUpperCase();
+  return normalized === "SHORT" || normalized === "SELL" ? "SELL" : "BUY";
+}
+
+function paperExitReasonToMock(reason: string | undefined): MockTrade["exitReason"] {
+  const normalized = reason?.toUpperCase();
+  if (normalized === "TP" || normalized === "TAKE_PROFIT") return "TAKE_PROFIT";
+  if (normalized === "SL" || normalized === "STOP_LOSS") return "STOP_LOSS";
+  if (normalized === "TIME" || normalized === "MAX_HOLD") return "MAX_HOLD";
+  return "MANUAL";
+}
+
+function paperPositionToMockTrade(doc: PaperPositionDoc): MockTrade {
+  const strategyName = doc.strategy_id?.trim() || "Go_Paper_Engine";
+  const entryPrice = Number.isFinite(doc.entry_price) && (doc.entry_price ?? 0) > 0 ? doc.entry_price as number : 1;
+  const quantity = Number.isFinite(doc.size) && (doc.size ?? 0) > 0 ? doc.size as number : 0;
+  const stopLossPrice = Number.isFinite(doc.stop_loss) && (doc.stop_loss ?? 0) > 0 ? doc.stop_loss as number : entryPrice;
+  const takeProfitPrice = Number.isFinite(doc.take_profit) && (doc.take_profit ?? 0) > 0 ? doc.take_profit as number : entryPrice;
+  const notional = entryPrice * quantity;
+  const side = paperSideToMockSide(doc.side);
+  const stopLossUsd = Math.abs(entryPrice - stopLossPrice) * quantity;
+  const takeProfitUsd = Math.abs(takeProfitPrice - entryPrice) * quantity;
+
+  return {
+    id: doc.position_id,
+    traceId: doc.order_id ?? doc.position_id,
+    strategyId: strategyNumericId(strategyName),
+    strategyName,
+    symbol: doc.symbol ?? "BTC-USD",
+    side,
+    notional,
+    quantity,
+    leverage: DEFAULT_MOCK_TRADING_CONFIG.leverage,
+    marginUsed: notional / DEFAULT_MOCK_TRADING_CONFIG.leverage,
+    signalPrice: entryPrice,
+    entryPrice,
+    takeProfitPrice,
+    stopLossPrice,
+    takeProfitUsd,
+    stopLossUsd,
+    riskRewardRatio: stopLossUsd > 0 ? takeProfitUsd / stopLossUsd : 0,
+    signalScore: 100,
+    requiredThreshold: 0,
+    blockers: [],
+    status: "OPEN",
+    openedAt: timeToMs(doc.opened_at),
+    closedAt: null,
+    currentPrice: entryPrice,
+    unrealizedPnl: 0,
+    realizedPnl: 0,
+    fees: 0,
+    fundingCosts: 0,
+    exitReason: null,
+    exitPrice: null,
+    strategyFamily: "SCALERS",
+    pipelineStage: "MAIN_ENGINE",
+  };
+}
+
+function paperClosedTradeToMockTrade(doc: PaperClosedTradeDoc): MockTrade {
+  const strategyName = doc.strategy_id?.trim() || "Go_Paper_Engine";
+  const entryPrice = Number.isFinite(doc.entry_price) && (doc.entry_price ?? 0) > 0 ? doc.entry_price as number : 1;
+  const exitPrice = Number.isFinite(doc.exit_price) && (doc.exit_price ?? 0) > 0 ? doc.exit_price as number : entryPrice;
+  const quantity = Number.isFinite(doc.quantity) && (doc.quantity ?? 0) > 0 ? doc.quantity as number : 0;
+  const netPnl = Number.isFinite(doc.net_pnl) ? doc.net_pnl as number : 0;
+  const fees = Number.isFinite(doc.total_fee) ? doc.total_fee as number : Number.isFinite(doc.fees) ? doc.fees as number : 0;
+  const notional = entryPrice * quantity;
+  const closedAt = timeToMs(doc.closed_at ?? doc.exit_at);
+
+  return {
+    id: doc.client_trade_id,
+    traceId: doc.client_trade_id,
+    strategyId: strategyNumericId(strategyName),
+    strategyName,
+    symbol: doc.symbol ?? "BTC-USD",
+    side: paperSideToMockSide(doc.side),
+    notional,
+    quantity,
+    leverage: DEFAULT_MOCK_TRADING_CONFIG.leverage,
+    marginUsed: notional / DEFAULT_MOCK_TRADING_CONFIG.leverage,
+    signalPrice: entryPrice,
+    entryPrice,
+    takeProfitPrice: exitPrice,
+    stopLossPrice: entryPrice,
+    takeProfitUsd: Math.max(0, netPnl),
+    stopLossUsd: Math.max(0, -netPnl),
+    riskRewardRatio: netPnl > 0 ? 1 : 0,
+    signalScore: 100,
+    requiredThreshold: 0,
+    blockers: [],
+    status: "CLOSED",
+    openedAt: timeToMs(doc.entry_at),
+    closedAt,
+    currentPrice: exitPrice,
+    unrealizedPnl: 0,
+    realizedPnl: netPnl,
+    fees,
+    fundingCosts: 0,
+    exitReason: paperExitReasonToMock(doc.exit_reason),
+    exitPrice,
+    strategyFamily: "SCALERS",
+    pipelineStage: "MAIN_ENGINE",
+  };
+}
+
+function queryFilterFromMockTradeQuery(query: MockTradeListQuery): MockTradeFilter {
+  const filter: MockTradeFilter = {};
+  if (query.strategy_id != null) filter.strategyId = query.strategy_id;
+  if (query.side) filter.side = query.side;
+  if (query.status) filter.status = query.status;
+  if (query.blocker_gate) filter.blockerGate = query.blocker_gate;
+  if (query.profitability) filter.profitability = query.profitability;
+  if (query.strategy_family) filter.strategyFamily = query.strategy_family;
+  if (query.age_mode) filter.ageMode = query.age_mode;
+  if (query.age_min_minutes != null) filter.ageMinMinutes = query.age_min_minutes;
+  if (query.age_max_minutes != null) filter.ageMaxMinutes = query.age_max_minutes;
+  return filter;
+}
+
+async function listPaperPersistTrades(query: MockTradeListQuery): Promise<MockTrade[]> {
+  const { paperPositions, paperTrades } = await collections();
+  const accountFilter = { account_key: query.account_key };
+  const [openDocs, closedDocs] = await Promise.all([
+    query.status === "CLOSED"
+      ? Promise.resolve([])
+      : paperPositions.find({ ...accountFilter, status: "OPEN" }).sort({ opened_at: -1 }).limit(50_000).toArray(),
+    query.status === "OPEN"
+      ? Promise.resolve([])
+      : paperTrades.find(accountFilter).sort({ closed_at: -1 }).limit(50_000).toArray(),
+  ]);
+  return [
+    ...openDocs.map(paperPositionToMockTrade),
+    ...closedDocs.map(paperClosedTradeToMockTrade),
+  ];
 }
 
 type PersistableMockLog = {
@@ -584,14 +786,23 @@ export async function listMockTrades(query: MockTradeListQuery): Promise<{
   totalPages: number;
 }> {
   const { trades } = await collections();
-  const filter = mockTradeMongoFilterForQuery(query);
-  const skip = (query.page - 1) * query.limit;
-  const [docs, total] = await Promise.all([
-    trades.find(filter).sort(sortForQuery(query.sort)).skip(skip).limit(query.limit).toArray(),
-    trades.countDocuments(filter),
+  const [mockDocs, paperTrades] = await Promise.all([
+    trades.find({ account_key: query.account_key }).sort(sortForQuery(query.sort)).limit(50_000).toArray(),
+    listPaperPersistTrades(query),
   ]);
+  const byId = new Map<string, MockTrade>();
+  for (const trade of mockDocs.map(mockTradeFromDoc)) byId.set(trade.id, trade);
+  // Authoritative Go-engine rows override browser-era mock rows when IDs overlap.
+  for (const trade of paperTrades) byId.set(trade.id, trade);
+
+  const filtered = filterMockTrades([...byId.values()], queryFilterFromMockTradeQuery(query));
+  const sorted = sortMockTrades(filtered, query.sort);
+  const total = sorted.length;
+  const skip = (query.page - 1) * query.limit;
+  const pageTrades = sorted.slice(skip, skip + query.limit);
+
   return {
-    trades: docs.map(mockTradeFromDoc),
+    trades: pageTrades,
     total,
     page: query.page,
     limit: query.limit,

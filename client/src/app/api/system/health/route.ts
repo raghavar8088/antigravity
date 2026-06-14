@@ -74,7 +74,7 @@ export async function GET() {
   }
 
   // ── account_key consistency ────────────────────────────────────────────────
-  const frontendAccountKey = OWNER_ACCOUNT_KEY; // "mock_trading_default" hardcoded
+  const frontendAccountKey = OWNER_ACCOUNT_KEY; // "mock_trading_main" hardcoded
   const sessionAccountKey = auth.ctx.userId;     // from JWT, should match
   const engineAccountKey =
     (engineDiag as { account_key?: string } | null)?.account_key ?? null;

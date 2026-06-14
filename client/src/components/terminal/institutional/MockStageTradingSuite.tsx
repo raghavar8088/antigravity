@@ -68,25 +68,29 @@ type MockStageTradingSuiteProps = {
 
 const tableStyle: CSSProperties = {
   width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 12,
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  fontSize: 13,
+  minWidth: 820,
 };
 
 const thStyle: CSSProperties = {
-  padding: "8px 8px",
-  fontSize: 10,
+  padding: "12px 12px",
+  fontSize: 11,
   fontWeight: 700,
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   color: "var(--text-muted)",
-  borderBottom: "1px solid var(--border)",
+  borderBottom: "1px solid var(--border-subtle, var(--border))",
+  background: "var(--surface-2)",
   whiteSpace: "nowrap",
 };
 
 const tdStyle: CSSProperties = {
-  padding: "7px 8px",
+  padding: "13px 12px",
   verticalAlign: "middle",
   color: "var(--text-secondary)",
+  borderBottom: "1px solid var(--border-subtle, var(--border))",
 };
 
 const monoCellStyle: CSSProperties = {
@@ -96,7 +100,7 @@ const monoCellStyle: CSSProperties = {
 };
 
 function rowBackground(index: number) {
-  return index % 2 === 1 ? "var(--surface-2)" : "transparent";
+  return index % 2 === 1 ? "#fbfdff" : "#ffffff";
 }
 
 function fmtUsd(value: number) {
@@ -134,11 +138,6 @@ function fmtAge(startTs: number | null, endTs: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
-}
-
-function tradePnlPct(trade: MockTrade, pnl: number) {
-  if (!Number.isFinite(trade.notional) || trade.notional <= 0 || !Number.isFinite(pnl)) return Number.NaN;
-  return (pnl / trade.notional) * 100;
 }
 
 function pnlColor(value: number) {
@@ -278,12 +277,12 @@ function parseScalersStats(payload: unknown): ScalersStatsState {
   const regime = normalizeRegime(
     firstDefined(root.regime, root.marketRegime, root.market_regime, data.regime, data.marketRegime, stats.regime),
   );
-  const signals = firstArray(root.signals, root.recentSignals, data.signals, data.recentSignals, stats.signals)
+  const signals = firstArray(root.signals, root.recentSignals, root.recent_signals, data.signals, data.recentSignals, data.recent_signals, stats.signals)
     .map((signal, index) => parseSignal(signal, index))
     .filter((signal): signal is ScalersSignal => signal != null)
     .slice(0, MAX_LIVE_SIGNALS);
   const strategyStats = parseStrategyStats(
-    firstDefined(root.perStrategy, root.per_strategy, root.strategyStats, data.perStrategy, data.strategies, stats.perStrategy),
+    firstDefined(root.perStrategy, root.per_strategy, root.strategyStats, root.strategies, data.perStrategy, data.strategies, stats.perStrategy),
   );
 
   return { regime, signals, strategyStats };
@@ -325,15 +324,9 @@ function buildEquitySparklineValues(
 
 function TableEmptyState({ label }: { label: string }) {
   return (
-    <div
-      style={{
-        padding: "34px 12px",
-        textAlign: "center",
-        color: "var(--text-muted)",
-        fontSize: 12,
-      }}
-    >
-      {label}
+    <div className="google-empty-state" role="status">
+      <p className="m3-empty-state__title">{label}</p>
+      <p className="m3-empty-state__subtitle">This section updates automatically when Trade Engine activity is available.</p>
     </div>
   );
 }
@@ -357,6 +350,9 @@ export function RegimeBadge({ regime }: { regime: string }) {
       TRENDING: { color: "var(--green)", bg: "var(--green-dim)", icon: "▲", label: "TRENDING" },
       RANGING: { color: "var(--info)", bg: "var(--info-dim)", icon: "↔", label: "RANGING" },
       VOLATILE: { color: "var(--amber)", bg: "var(--amber-dim)", icon: "⚡", label: "VOLATILE" },
+      LIVE: { color: "var(--green)", bg: "var(--green-dim)", icon: "●", label: "LIVE" },
+      UPDATING: { color: "var(--amber)", bg: "var(--amber-dim)", icon: "●", label: "UPDATING" },
+      ATTENTION: { color: "var(--red)", bg: "var(--red-dim)", icon: "●", label: "ATTENTION" },
       UNKNOWN: { color: "var(--text-muted)", bg: "var(--surface-3)", icon: "?", label: "UNKNOWN" },
     } as Record<string, { color: string; bg: string; icon: string; label: string }>
   )[regime] ?? { color: "var(--text-muted)", bg: "var(--surface-3)", icon: "?", label: regime };
@@ -368,10 +364,10 @@ export function RegimeBadge({ regime }: { regime: string }) {
         alignItems: "center",
         gap: 6,
         padding: "4px 10px",
-        borderRadius: 4,
+        borderRadius: 999,
         background: cfg.bg,
-        border: `1px solid ${cfg.color}`,
-        fontSize: 11,
+        border: "1px solid var(--card-border)",
+        fontSize: 12,
         fontWeight: 700,
         letterSpacing: "0.06em",
         color: cfg.color,
@@ -379,7 +375,7 @@ export function RegimeBadge({ regime }: { regime: string }) {
       }}
     >
       <span>{cfg.icon}</span>
-      <span>REGIME: {cfg.label}</span>
+      <span>{cfg.label}</span>
     </div>
   );
 }
@@ -390,7 +386,7 @@ function PositionsTableSkeleton() {
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREAL PnL", "AGE", "SL", "TP"].map((header, index) => (
+            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
               <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 ? "left" : "right" }}>
                 {header}
               </th>
@@ -403,7 +399,7 @@ function PositionsTableSkeleton() {
               key={rowIndex}
               style={{
                 background: rowBackground(rowIndex),
-                borderBottom: "1px solid var(--border-subtle, var(--border))",
+                borderBottom: 0,
               }}
             >
               {Array.from({ length: 9 }).map((__, cellIndex) => (
@@ -538,7 +534,7 @@ function LiveSignalsPanel({ stats }: { stats: ScalersStatsState }) {
     );
   }
 
-  return <TerminalEmptyState title="No Live Signals" subtitle="Waiting for /api/scalers/stats signal telemetry." />;
+      return <TerminalEmptyState title="No live signals" subtitle="Waiting for live signal telemetry." />;
 }
 
 function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTrade[]; nowMs: number; loading?: boolean }) {
@@ -555,7 +551,7 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREAL PnL", "AGE", "SL", "TP"].map((header, index) => (
+            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
               <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 ? "left" : "right" }}>
                 {header}
               </th>
@@ -570,11 +566,11 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
                 key={trade.id}
                 style={{
                   background: baseBg,
-                  borderBottom: "1px solid var(--border-subtle, var(--border))",
+                  borderBottom: 0,
                   transition: "background 120ms ease",
                 }}
                 onMouseEnter={(event) => {
-                  event.currentTarget.style.background = "var(--surface-3)";
+                  event.currentTarget.style.background = "#f8fbff";
                 }}
                 onMouseLeave={(event) => {
                   event.currentTarget.style.background = baseBg;
@@ -602,9 +598,9 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
                 >
                   {fmtUsd(trade.unrealizedPnl)}
                 </td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(trade.openedAt, nowMs)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(trade.stopLossPrice)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(trade.takeProfitPrice)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(trade.openedAt, nowMs)}</td>
               </tr>
             );
           })}
@@ -705,8 +701,8 @@ function ClosedTradesTable({
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["STRATEGY", "SIDE", "ENTRY", "EXIT", "PnL", "PnL%", "REASON", "DURATION"].map((header, index) => (
-                  <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 6 ? "left" : "right" }}>
+                {["STRATEGY", "SIDE", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
+                  <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 5 ? "left" : "right" }}>
                     {header}
                   </th>
                 ))}
@@ -720,11 +716,11 @@ function ClosedTradesTable({
                     key={trade.id}
                     style={{
                       background: baseBg,
-                      borderBottom: "1px solid var(--border-subtle, var(--border))",
+                      borderBottom: 0,
                       transition: "background 120ms ease",
                     }}
                     onMouseEnter={(event) => {
-                      event.currentTarget.style.background = "var(--surface-3)";
+                      event.currentTarget.style.background = "#f8fbff";
                     }}
                     onMouseLeave={(event) => {
                       event.currentTarget.style.background = baseBg;
@@ -750,16 +746,6 @@ function ClosedTradesTable({
                       }}
                     >
                       {fmtUsd(trade.realizedPnl)}
-                    </td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        ...monoCellStyle,
-                        textAlign: "right",
-                        color: pnlColor(trade.realizedPnl),
-                      }}
-                    >
-                      {fmtSignedPct(tradePnlPct(trade, trade.realizedPnl))}
                     </td>
                     <td style={tdStyle}>
                       <ReasonChip reason={trade.exitReason} />
@@ -805,7 +791,7 @@ function LeaderboardTable({ rows }: { rows: StrategyRankRow[] }) {
             style={{
               border: "1px solid var(--border-subtle, var(--border))",
               borderRadius: 10,
-              background: "var(--surface-2)",
+                background: "#ffffff",
               padding: "10px 11px",
             }}
           >
@@ -915,6 +901,7 @@ export function MockStageTradingSuite({
     accountKey: mockAccountKeyForStage(status),
     pipelineStage: status === "RETIRED" ? null : "MAIN_ENGINE",
     initialConfig: getMockConfigForPipelineStage(status),
+    disablePolling: true,
   });
 
   const sourceTrades = engine.portfolioTrades;
@@ -986,21 +973,23 @@ export function MockStageTradingSuite({
     [analytics.realizedPnl, analytics.unrealizedPnl, engine.account.equity, sourceTrades],
   );
 
-  const dash = "—";
   const priceReady = Number.isFinite(live.price) && live.price > 0;
   const isInitialLoading = engine.loading || engine.persistence.loading || engine.history.loading;
   const maxOpen = engine.config.maxOpenMockTrades;
   const winRatePct = analytics.winRate * 100;
   const winRateAccent = analytics.closedTrades > 0 && winRatePct > 50 ? "var(--green)" : analytics.closedTrades > 0 && winRatePct < 50 ? "var(--amber)" : "var(--border)";
+  const engineStatus = priceReady && !engine.error ? "Live" : engine.error ? "Attention" : "Updating";
 
   const summaryStrip = (
     <section
       aria-label={`${TRADE_ENGINE_TITLE} summary`}
       style={{
         overflowX: "auto",
-        borderBottom: "1px solid var(--border)",
-        background: "var(--surface)",
-        padding: "10px 12px 12px",
+        border: "1px solid var(--card-border, var(--border))",
+        borderRadius: "var(--radius-card)",
+        background: "var(--card-bg, var(--surface))",
+        boxShadow: "var(--shadow-card)",
+        padding: "18px",
       }}
     >
       <div
@@ -1009,31 +998,31 @@ export function MockStageTradingSuite({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          marginBottom: 10,
+          marginBottom: 14,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, minWidth: 0 }}>
           <h1
             style={{
               margin: 0,
               color: "var(--text-primary)",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
+              fontSize: 20,
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
               whiteSpace: "nowrap",
             }}
           >
             {TRADE_ENGINE_TITLE}
           </h1>
           <RegimeBadge regime={scalersStats.regime} />
+          <RegimeBadge regime={engineStatus.toUpperCase()} />
         </div>
       </div>
       <div
         className="m3-kpi-strip"
         style={{
-          gridTemplateColumns: "repeat(6, minmax(148px, 1fr))",
-          minWidth: 900,
+          gridTemplateColumns: "repeat(8, minmax(150px, 1fr))",
+          minWidth: 1100,
         }}
       >
         {isInitialLoading ? (
@@ -1042,11 +1031,23 @@ export function MockStageTradingSuite({
           <>
             <StageStat
               label="BTC Mark"
-              value={priceReady ? fmtPrice(live.price) : dash}
+              value={priceReady ? fmtPrice(live.price) : "$0.00"}
               accent={priceReady ? "var(--green)" : "var(--amber)"}
               tone={priceReady ? "positive" : "warning"}
               size="lg"
             />
+            <StageStat label="Equity" value={fmtUsd(engine.account.equity)} accent="var(--gold)" size="lg">
+              <Sparkline
+                data={equitySparklineValues}
+                width={88}
+                height={28}
+                color={
+                  equitySparklineValues.length < 2 || equitySparklineValues[equitySparklineValues.length - 1] >= equitySparklineValues[0]
+                    ? "var(--green)"
+                    : "var(--red)"
+                }
+              />
+            </StageStat>
             <StageStat
               label="Open Positions"
               value={String(engine.account.openCount)}
@@ -1062,24 +1063,26 @@ export function MockStageTradingSuite({
               tone={analytics.closedTrades > 0 && winRatePct > 50 ? "positive" : analytics.closedTrades > 0 && winRatePct < 50 ? "warning" : "neutral"}
               size="md"
             />
-            <StageStat label="Equity" value={fmtUsd(engine.account.equity)} accent="var(--gold)" size="lg">
-              <Sparkline
-                data={equitySparklineValues}
-                width={88}
-                height={28}
-                color={
-                  equitySparklineValues.length < 2 || equitySparklineValues[equitySparklineValues.length - 1] >= equitySparklineValues[0]
-                    ? "var(--green)"
-                    : "var(--red)"
-                }
-              />
-            </StageStat>
             <StageStat
               label="Realized PnL"
               value={fmtUsd(analytics.realizedPnl)}
               accent={analytics.realizedPnl >= 0 ? "var(--green)" : "var(--red)"}
               tone={analytics.realizedPnl >= 0 ? "positive" : "negative"}
               size="md"
+            />
+            <StageStat
+              label="Unrealized PnL"
+              value={fmtUsd(analytics.unrealizedPnl)}
+              accent={analytics.unrealizedPnl >= 0 ? "var(--green)" : "var(--red)"}
+              tone={analytics.unrealizedPnl >= 0 ? "positive" : "negative"}
+              size="md"
+            />
+            <StageStat
+              label="Engine Status"
+              value={engineStatus}
+              accent={engineStatus === "Live" ? "var(--green)" : "var(--amber)"}
+              tone={engineStatus === "Live" ? "positive" : "warning"}
+              size="sm"
             />
           </>
         )}

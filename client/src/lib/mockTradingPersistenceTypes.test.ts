@@ -112,7 +112,7 @@ describe("Mock Trading persistence schemas", () => {
   });
 
   it("maps raw trades to Mongo documents with required searchable fields", () => {
-    const doc = mockTradeToDoc("mock_trading_default", trade, DEFAULT_MOCK_TRADING_CONFIG);
+    const doc = mockTradeToDoc("mock_trading_main", trade, DEFAULT_MOCK_TRADING_CONFIG);
     expect(doc.trade_id).toBe(trade.id);
     expect(doc.strategy_family).toBe(strategyFamilyForTrade(trade));
     expect(doc.blockers_rejected).toEqual(["REGIME"]);

@@ -14,11 +14,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
+    const saved = localStorage.getItem("m3-theme");
     const current = document.documentElement.getAttribute("data-theme");
-    if (current === "light" || current === "dark") setTheme(current);
+    const next = current === "light" || current === "dark"
+      ? current
+      : saved === "light" || saved === "dark"
+        ? saved
+        : "light";
+
+    document.documentElement.setAttribute("data-theme", next);
+    setTheme(next);
   }, []);
 
   const toggle = () => {

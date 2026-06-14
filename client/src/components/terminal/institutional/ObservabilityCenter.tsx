@@ -73,7 +73,7 @@ export function ObservabilityCenter() {
         )}
       </TerminalCard>
 
-      <TerminalCard title="Queue & Execution" subtitle="OMS pipeline visibility">
+      <TerminalCard title="Queue & Execution" subtitle="OMS activity visibility">
         <div className="grid gap-2 sm:grid-cols-3">
           <Metric label="OMS" value={ribbon?.items?.find((i) => i.label === "OMS")?.value ?? "—"} />
           <Metric label="Reconciliation" value={ribbon?.items?.find((i) => i.label === "RECON")?.value ?? "—"} />

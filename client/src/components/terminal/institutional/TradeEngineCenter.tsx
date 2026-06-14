@@ -1,19 +1,12 @@
 "use client";
 
+import { PageHeader } from "@/components/ui/PageHeader";
 import { MockStageTradingSuite } from "./MockStageTradingSuite";
 
 export function TradeEngineCenter() {
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateRows: "auto 1fr",
-        gridTemplateColumns: "1fr",
-        height: "calc(100vh - var(--topbar-h, 48px) - var(--risk-ribbon-h, 0px))",
-        minHeight: 0,
-        overflow: "hidden",
-      }}
-    >
+    <div className="google-page">
+      <PageHeader title="Trade Engine" subtitle="Live BTC paper trading engine" />
       <MockStageTradingSuite
         status="MAIN_ENGINE"
         showPipeline={false}
@@ -25,20 +18,16 @@ export function TradeEngineCenter() {
               style={{
                 display: "grid",
                 gridTemplateColumns: "3fr 2fr",
-                gap: 12,
-                overflow: "hidden",
+                gap: 18,
                 minHeight: 0,
-                padding: 12,
               }}
             >
               <div
                 style={{
                   display: "grid",
                   alignContent: "start",
-                  gap: 12,
+                  gap: 18,
                   minHeight: 0,
-                  overflowY: "auto",
-                  paddingRight: 2,
                 }}
               >
                 {leftPanel}
@@ -47,10 +36,8 @@ export function TradeEngineCenter() {
                 style={{
                   display: "grid",
                   alignContent: "start",
-                  gap: 12,
+                  gap: 18,
                   minHeight: 0,
-                  overflowY: "auto",
-                  paddingRight: 2,
                 }}
               >
                 {rightPanel}

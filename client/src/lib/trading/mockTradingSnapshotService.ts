@@ -83,7 +83,7 @@ export async function buildMockTradingSnapshot(accountKey: string): Promise<Pape
     open_position_count: account.openCount,
     closed_trade_count: account.closedCount,
     snapped_at: new Date().toISOString(),
-    execution_authority: "mock-trading",
+    execution_authority: "go_engine",
   };
 
   const portfolio: Record<string, unknown> = {

@@ -79,20 +79,19 @@ export function HealthCenter() {
         {error && !data ? (
           <TerminalNoData label={error.toUpperCase()} />
         ) : !data ? (
-          <TerminalNoData label="LOADING..." />
+          <TerminalNoData label="Loading health checks" />
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {checks.map((c) => (
-              <Metric key={c.name} label={c.name} value={c.detail.toUpperCase()} tone={tone(c.status)} />
+              <Metric key={c.name} label={c.name} value={c.detail} tone={tone(c.status)} />
             ))}
           </div>
         )}
       </TerminalCard>
-      <TerminalCard title="OMS & Reconciliation" subtitle="Engine authority chain">
-        <div className="space-y-2 text-xs text-zinc-400">
-          <p>Execution authority: Go Engine → MongoDB → Command Center UI.</p>
-          <p>Browser-side trade creation is permanently disabled. All fills originate from engine OMS v3.</p>
-          <p className="font-mono text-[10px] text-zinc-500">Data: paper_state · paper_positions · paper_trades · paper_orders</p>
+      <TerminalCard title="OMS & Reconciliation" subtitle="Trade Engine authority chain">
+        <div className="space-y-2 text-xs text-slate-500">
+          <p>Execution authority flows from the engine through MongoDB into the Command Center UI.</p>
+          <p>All fills originate from engine OMS v3 and reconciliation checks run continuously.</p>
         </div>
       </TerminalCard>
     </div>

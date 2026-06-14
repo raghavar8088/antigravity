@@ -20,7 +20,7 @@ func TestValidateAccountKeyAlignmentRejectsAnon(t *testing.T) {
 }
 
 func TestValidateAccountKeyAlignmentRejectsMismatch(t *testing.T) {
-	t.Setenv("OWNER_ACCOUNT_KEY", "owner_admin")
+	t.Setenv("OWNER_ACCOUNT_KEY", "mock_trading_default")
 	if err := ValidateAccountKeyAlignment(); err == nil {
 		t.Fatal("expected mismatch error")
 	}

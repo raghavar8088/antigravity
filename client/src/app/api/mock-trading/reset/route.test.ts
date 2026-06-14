@@ -31,7 +31,7 @@ describe("DELETE /api/mock-trading/reset", () => {
   });
 
   it("requires explicit confirmation", async () => {
-    const res = await DELETE(request({ accountKey: "mock_trading_default" }));
+    const res = await DELETE(request({ accountKey: "mock_trading_main" }));
     expect(res.status).toBe(400);
     const body = await res.json() as { code: string };
     expect(body.code).toBe("CONFIRMATION_REQUIRED");
@@ -40,13 +40,13 @@ describe("DELETE /api/mock-trading/reset", () => {
 
   it("resets mock state when confirmation is supplied", async () => {
     const res = await DELETE(request({
-      accountKey: "mock_trading_default",
+      accountKey: "mock_trading_main",
       confirmation: MOCK_RESET_CONFIRMATION,
     }));
     expect(res.status).toBe(200);
     const body = await res.json() as { ok: boolean; tradesDeleted: number };
     expect(body.ok).toBe(true);
     expect(body.tradesDeleted).toBe(1);
-    expect(mockMongo.resetMockTradingState).toHaveBeenCalledWith("mock_trading_default");
+    expect(mockMongo.resetMockTradingState).toHaveBeenCalledWith("mock_trading_main");
   });
 });

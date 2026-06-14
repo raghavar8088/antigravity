@@ -15,7 +15,7 @@ describe("authoritativeAccountKey", () => {
     else process.env.DESK_WORKER_ACCOUNT_KEY = origWorker;
   });
 
-  it("defaults to mock_trading_default", () => {
+  it("defaults to mock_trading_main", () => {
     delete process.env.OWNER_ACCOUNT_KEY;
     delete process.env.DESK_WORKER_ACCOUNT_KEY;
     const r = validateAccountKeyAlignment();

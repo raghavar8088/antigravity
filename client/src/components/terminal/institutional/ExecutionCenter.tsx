@@ -21,14 +21,14 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
       <div className="space-y-3">
         <TerminalCard title="Order Book" subtitle="Live depth — requires WS feed">
           {!hasBook ? (
-            <TerminalNoData label="NO ORDER BOOK — WS not connected" />
+            <TerminalNoData label="Order book unavailable" />
           ) : (
             <div className="space-y-1">
               {[...snapshot.asks].reverse().slice(-10).map((level) => (
                 <DepthRow key={`ask-${level.price}`} level={level} maxDepth={maxDepth} side="ask" />
               ))}
-              <div className="my-2 rounded-md bg-zinc-900 px-2 py-2 text-center font-mono text-sm text-zinc-100">
-                {hasPrice ? `$${px(snapshot.price)}` : "—"}
+              <div className="my-2 rounded-full border border-slate-200 bg-white px-2 py-2 text-center font-mono text-sm font-semibold text-slate-900">
+                {hasPrice ? `$${px(snapshot.price)}` : "$0.00"}
               </div>
               {snapshot.bids.slice(0, 10).map((level) => (
                 <DepthRow key={`bid-${level.price}`} level={level} maxDepth={maxDepth} side="bid" />
@@ -38,7 +38,7 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
         </TerminalCard>
         <TerminalCard title="Portfolio Summary" subtitle="MongoDB authority">
           {snapshot.risk.grossExposureUsd === 0 && snapshot.risk.drawdownPct === 0 ? (
-            <TerminalNoData />
+            <TerminalNoData label="No portfolio exposure" />
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <Metric label="Net Exp" value={usd(snapshot.risk.netExposureUsd, { compact: true })} />
@@ -58,12 +58,12 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
           {snapshot.candles.length > 0 ? (
             <InstitutionalChart candles={snapshot.candles} height={520} title="BTCUSD · PERP · Execution" />
           ) : (
-            <TerminalNoData label={hasPrice ? `MARK ${px(snapshot.price)} — candle feed unavailable` : "NO MARKET DATA"} />
+            <TerminalNoData label={hasPrice ? `Mark ${px(snapshot.price)} - candle feed unavailable` : "No market data"} />
           )}
         </TerminalCard>
-        <TerminalCard title="Open Positions" subtitle="Trade Engine · mock_trades">
+        <TerminalCard title="Open Positions" subtitle="Trade Engine positions">
           {snapshot.positions.length === 0 ? (
-            <TerminalNoData label="NO OPEN POSITIONS" />
+            <TerminalNoData label="No open positions" />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-xs">
@@ -100,17 +100,17 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
       </div>
 
       <div className="space-y-3">
-        <TerminalCard title="Execution Authority" subtitle="Go engine is sole execution authority">
-          <p className="text-xs text-zinc-400">
-            Browser-side trade execution is permanently disabled. All positions and fills originate from the Go engine OMS.
+        <TerminalCard title="Execution Authority" subtitle="Trade Engine is the sole execution surface">
+          <p className="text-xs text-slate-500">
+            All positions and fills originate from the engine OMS.
           </p>
-          <Link href="/terminal/events" className="mt-3 inline-block text-xs font-semibold text-sky-400 hover:text-sky-300">
-            Open Event Console →
+          <Link href="/terminal/events" className="mt-3 inline-block text-xs font-semibold text-blue-600 hover:text-blue-700">
+            Open Events
           </Link>
         </TerminalCard>
         <TerminalCard title="Alert Tape" subtitle="Risk and health events">
           {snapshot.alerts.length === 0 ? (
-            <TerminalNoData label="NO ALERTS" />
+            <TerminalNoData label="No alerts" />
           ) : (
             <div className="space-y-2">
               {snapshot.alerts.map((alert) => (

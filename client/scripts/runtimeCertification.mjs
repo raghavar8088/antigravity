@@ -21,7 +21,7 @@ loadEnv();
 const URI = process.env.MONGODB_URI;
 const DB = process.env.MONGODB_DB || "loop_trades";
 const ANON = "anon_e7da5e39-2185-4006-a990-62b5b357feb1";
-const OWNER = "mock_trading_default";
+const OWNER = "mock_trading_main";
 
 async function main() {
   const client = new MongoClient(URI);

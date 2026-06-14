@@ -6,7 +6,6 @@ import { TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pct, pnlClass, usd } from "./format";
-import { LiveDeskStatus } from "@/components/trading/LiveDeskStatus";
 import { Sparkline } from "@/components/ui/Sparkline";
 
 export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthorityState }) {
@@ -22,21 +21,28 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
   const hasAuthority = snapshot.hasAuthority ?? false;
   const pastInitialLoad = !snapshot.loading;
   const freshnessLabel = formatFreshness(snapshot.updatedAt);
+  const realizedPnl = snapshot.journal.reduce((sum, trade) => sum + trade.netPnl, 0);
+  const riskState = snapshot.risk.heatPct > 70 ? "Reduce risk" : snapshot.risk.heatPct > 40 ? "Watch" : "Normal";
 
   return (
     <div className="m3-page-stack">
-      {/* ── Live BTC Paper Desk — always first, always visible ── */}
       <TerminalCard
-        title="BTC Paper Desk — Live Activity"
-        subtitle="Go engine · real-time positions, fills, P&L"
-        actions={<Link href={TERMINAL_ROUTES.trading} className="m3-link-action">Full Dashboard →</Link>}
+        title="Trade Engine"
+        subtitle="Live BTC paper trading engine"
+        actions={<Link href={TERMINAL_ROUTES["trade-engine"]} className="m3-link-action">Open Trade Engine</Link>}
       >
-        <LiveDeskStatus />
+        <div className="m3-kpi-strip">
+          <Metric label="Engine Status" value={hasAuthority ? "Live" : "Updating"} tone={hasAuthority ? "positive" : "warning"} />
+          <Metric label="Equity" value={usd(equity, { compact: true })} tone={equity > 0 ? "positive" : "neutral"} />
+          <Metric label="BTC Mark" value={snapshot.price > 0 ? usd(snapshot.price) : "$0.00"} tone={snapshot.price > 0 ? "positive" : "neutral"} />
+          <Metric label="Realized PnL" value={usd(realizedPnl, { signed: true, compact: true })} tone={realizedPnl >= 0 ? "positive" : "negative"} />
+          <Metric label="Risk State" value={riskState} tone={riskState === "Normal" ? "positive" : riskState === "Watch" ? "warning" : "negative"} />
+        </div>
       </TerminalCard>
 
       {!hasAuthority && pastInitialLoad ? (
         <div className="icc-authority-banner" role="status">
-          Engine data updating — authority handshake pending
+          Trade Engine data is updating
         </div>
       ) : null}
 
@@ -59,14 +65,14 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <Metric label="Sharpe" value={snapshot.analytics.rollingSharpe30d != null ? snapshot.analytics.rollingSharpe30d.toFixed(2) : "—"} />
         <Metric label="Active Strategies" value={String(activeStrategies)} />
         <Metric label="Open Positions" value={String(openPositions)} tone={openPositions > 0 ? "warning" : "neutral"} />
-        <Metric label="Authority" value={hasAuthority ? "LIVE" : "STALE"} tone={hasAuthority ? "positive" : "negative"} />
+        <Metric label="Authority" value={hasAuthority ? "Live" : "Stale"} tone={hasAuthority ? "positive" : "negative"} />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
         <TerminalCard
-          title="Strategy Intelligence"
-          subtitle="Go engine · MongoDB strategy_scores"
-          actions={<Link href={TERMINAL_ROUTES.strategies} className="m3-link-action">Open →</Link>}
+          title="Strategy Performance"
+          subtitle="Live strategy health and leadership"
+          actions={<Link href={TERMINAL_ROUTES["trade-engine"]} className="m3-link-action">View</Link>}
         >
           {snapshot.strategies.length === 0 ? (
             <StrategyWaitingState />
@@ -84,12 +90,12 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         </TerminalCard>
 
         <TerminalCard
-          title="Portfolio Analytics"
+          title="Portfolio"
           subtitle="Equity curve · risk metrics"
-          actions={<Link href={TERMINAL_ROUTES.portfolio} className="m3-link-action">Open →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.portfolio} className="m3-link-action">View</Link>}
         >
           {snapshot.analytics.equityCurve.length === 0 ? (
-            <TerminalNoData label="NO EQUITY CURVE" />
+            <TerminalNoData label="No equity curve" />
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <Metric label="Win Rate" value={snapshot.analytics.winRatePct != null ? `${snapshot.analytics.winRatePct.toFixed(1)}%` : "—"} />
@@ -102,9 +108,9 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         </TerminalCard>
 
         <TerminalCard
-          title="Risk Metrics"
+          title="Risk"
           subtitle="VaR · exposure · drawdown"
-          actions={<Link href={TERMINAL_ROUTES.risk} className="m3-link-action">Open →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.risk} className="m3-link-action">View</Link>}
         >
           {!hasAuthority && snapshot.risk.grossExposureUsd === 0 ? (
             <TerminalNoData />
@@ -124,10 +130,10 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <TerminalCard
           title="Recent Events"
           subtitle="Platform event stream"
-          actions={<Link href={TERMINAL_ROUTES.events} className="m3-link-action">Console →</Link>}
+          actions={<Link href={TERMINAL_ROUTES.events} className="m3-link-action">View</Link>}
         >
           {snapshot.alerts.length === 0 ? (
-            <TerminalNoData label="NO RECENT EVENTS" />
+            <TerminalNoData label="No recent events" />
           ) : (
             <div className="max-h-48 space-y-1 overflow-y-auto">
               {snapshot.alerts.slice(0, 8).map((a) => (
@@ -142,11 +148,11 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
 
         <TerminalCard
           title="Open Positions"
-          subtitle="Live marks from engine"
-          actions={<Link href={TERMINAL_ROUTES.execution} className="m3-link-action">Execution →</Link>}
+          subtitle="Live marks from Trade Engine"
+          actions={<Link href={TERMINAL_ROUTES.execution} className="m3-link-action">View</Link>}
         >
           {snapshot.positions.length === 0 ? (
-            <TerminalNoData label="NO OPEN POSITIONS" />
+            <TerminalNoData label="No open positions" />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -173,10 +179,10 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <QuickLink href={TERMINAL_ROUTES.execution} label="Execution Center" detail="Order book · positions · chart" />
-        <QuickLink href={TERMINAL_ROUTES.observability} label="Observability" detail="API · engine · latency · feeds" />
-        <QuickLink href={TERMINAL_ROUTES.health} label="System Health" detail="Mongo · OMS · reconciliation" />
-        <QuickLink href={TERMINAL_ROUTES.diagnostics} label="Diagnostics" detail="Env · worker · engine probes" />
+        <QuickLink href={TERMINAL_ROUTES["trade-engine"]} label="Trade Engine" detail="Positions · trades · live signals" />
+        <QuickLink href={TERMINAL_ROUTES.portfolio} label="Portfolio" detail="Equity · exposure · fees" />
+        <QuickLink href={TERMINAL_ROUTES.risk} label="Risk" detail="VaR · heat · margin" />
+        <QuickLink href={TERMINAL_ROUTES.health} label="Events & Health" detail="Alerts · system checks" />
       </div>
 
       {snapshot.regime ? (
@@ -202,7 +208,7 @@ function StrategyWaitingState() {
   return (
     <div className="icc-waiting-state" role="status">
       <span className="icc-pulse-dot" aria-hidden />
-      <span>Waiting for strategy scores from Go engine</span>
+      <span>Waiting for strategy performance data</span>
     </div>
   );
 }
@@ -217,8 +223,8 @@ function QuickLink({ href, label, detail }: { href: string; label: string; detai
       href={href}
       className="m3-quick-link"
     >
-      <div className="text-xs font-semibold text-zinc-200">{label}</div>
-      <div className="mt-0.5 text-[10px] text-zinc-500">{detail}</div>
+      <div className="text-xs font-semibold text-slate-800">{label}</div>
+      <div className="mt-0.5 text-[11px] text-slate-500">{detail}</div>
     </Link>
   );
 }

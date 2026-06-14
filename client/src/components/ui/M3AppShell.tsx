@@ -8,14 +8,11 @@ import RiskRibbon from "@/components/RiskRibbon";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
 import { resolvePageTitle } from "@/lib/utils/commandPaletteItems";
-import { usePipelineCounts } from "@/hooks/usePipelineCounts";
 import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES, type CommandCenterNavItem } from "@/lib/utils/navRoutes";
 import { NavIcon } from "@/components/terminal/institutional/NavIcons";
 import { pct, px } from "@/components/terminal/institutional/format";
-import { SessionClock } from "@/components/session/SessionClock";
 import { KillSwitchIndicator } from "@/components/killswitch/KillSwitchIndicator";
 import { KillSwitchPanel } from "@/components/killswitch/KillSwitchPanel";
-import { RiskHUD } from "@/components/risk/RiskHUD";
 
 export type M3AppShellProps = {
   children: ReactNode;
@@ -43,7 +40,6 @@ export function M3AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, toggle: toggleTheme } = useThemeToggle();
   const pageTitle = pageTitleProp ?? resolvePageTitle(pathname);
-  usePipelineCounts();
 
   return (
     <CommandPaletteProvider>
@@ -65,7 +61,7 @@ export function M3AppShell({
                   textTransform: "uppercase",
                 }}
               >
-                ICC
+                BTC
               </div>
               <div
                 className="m3-nav-rail__brand-text"
@@ -75,7 +71,7 @@ export function M3AppShell({
                   lineHeight: 1.3,
                 }}
               >
-                Institutional<br />Command Center
+                BTC-PILOT<br />SOVEREIGN
               </div>
             </Link>
           </div>
@@ -133,8 +129,6 @@ export function M3AppShell({
               <CommandPaletteTrigger />
             </div>
             <div className="m3-top-app-bar__actions">
-              <SessionClock />
-              <RiskHUD />
               {statusChips ? <div className="m3-top-app-bar__status-chips">{statusChips}</div> : null}
               <button type="button" className="m3-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
                 <NavIcon name={theme === "dark" ? "light" : "dark"} />

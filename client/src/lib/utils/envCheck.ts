@@ -188,7 +188,7 @@ function checkDeskWorkerAccountKey(): EnvCheckResult {
       status: "FAIL",
       value_hint: `"${legacy}"`,
       message: `Retired anonymous key "${legacy}" — remove from Vercel/VPS env.`,
-      fix: `Unset DESK_WORKER_ACCOUNT_KEY or set OWNER_ACCOUNT_KEY=mock_trading_default everywhere.`,
+      fix: `Unset DESK_WORKER_ACCOUNT_KEY or set OWNER_ACCOUNT_KEY=mock_trading_main everywhere.`,
     };
   }
 

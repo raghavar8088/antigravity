@@ -20,7 +20,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       account_key: accountKey,
-      execution_authority: "mock-trading",
+      execution_authority: "go_engine",
       ...snapshot,
     });
   } catch (err) {

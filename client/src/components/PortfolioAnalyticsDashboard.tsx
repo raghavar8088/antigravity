@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
-import type { TerminalPosition } from "@/lib/terminal/terminalTypes";
+import type { JournalTrade, TerminalPosition } from "@/lib/terminal/terminalTypes";
 import { useTerminalSnapshot } from "@/lib/terminal/terminalStore";
 import { pct, pnlClass, usd } from "@/components/terminal/institutional/format";
 
@@ -19,6 +19,21 @@ function metricTone(value: number, good = 0, warn?: number): "positive" | "negat
   if (warn != null && value >= warn) return "warning";
   if (value < 0) return "negative";
   return "neutral";
+}
+
+function dateLabel(value: string | undefined) {
+  if (!value) return "";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return "";
+  return new Date(parsed).toLocaleDateString();
+}
+
+function metricUsd(value: number | null | undefined, options?: { compact?: boolean; signed?: boolean }) {
+  return usd(typeof value === "number" && Number.isFinite(value) ? value : 0, options);
+}
+
+function metricPct(value: number | null | undefined, decimals = 1) {
+  return `${(typeof value === "number" && Number.isFinite(value) ? value : 0).toFixed(decimals)}%`;
 }
 
 export default function PortfolioAnalyticsDashboard() {
@@ -45,7 +60,7 @@ export default function PortfolioAnalyticsDashboard() {
   if (snapshot.loading && !hasAuthority) {
     return (
       <div className="m3-page-stack">
-        <PageHeader title="Portfolio Analytics" subtitle="Loading authority data…" />
+        <PageHeader title="Portfolio" subtitle="Loading Trade Engine portfolio analytics" />
         <div className="m3-kpi-strip">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} rows={2} />
@@ -58,10 +73,10 @@ export default function PortfolioAnalyticsDashboard() {
   if (!hasAuthority && equity === 0 && positions.length === 0) {
     return (
       <div className="m3-page-stack">
-        <PageHeader title="Portfolio Analytics" subtitle="Equity · exposure · drawdown · allocation" />
+        <PageHeader title="Portfolio" subtitle="Trade Engine portfolio analytics" />
         <EmptyState
           title="Portfolio data unavailable"
-          subtitle="Waiting for mock-trading authority or MongoDB snapshot"
+          subtitle="Waiting for Trade Engine authority or MongoDB snapshot"
         />
       </div>
     );
@@ -101,11 +116,27 @@ export default function PortfolioAnalyticsDashboard() {
     },
   ];
 
+  const closedTradeColumns: DataTableColumn<JournalTrade>[] = [
+    { id: "strategy", header: "Strategy", cell: (t) => t.strategy, sortable: true, sortValue: (t) => t.strategy },
+    { id: "side", header: "Side", cell: (t) => t.side, width: "80px" },
+    { id: "entry", header: "Entry", align: "right", cell: (t) => usd(t.entryPrice), sortable: true, sortValue: (t) => t.entryPrice },
+    { id: "exit", header: "Exit", align: "right", cell: (t) => usd(t.exitPrice), sortable: true, sortValue: (t) => t.exitPrice },
+    {
+      id: "pnl",
+      header: "PnL",
+      align: "right",
+      cell: (t) => <span className={pnlClass(t.netPnl)}>{usd(t.netPnl, { signed: true })}</span>,
+      sortable: true,
+      sortValue: (t) => t.netPnl,
+    },
+    { id: "reason", header: "Reason", cell: (t) => t.exitReason || "Closed" },
+  ];
+
   return (
     <div className="m3-page-stack">
       <PageHeader
-        title="Portfolio Analytics"
-        subtitle="Google Finance + Analytics style · mock-trading authority"
+        title="Portfolio"
+        subtitle="Trade Engine portfolio analytics"
         actions={
           <StatusChip
             label={hasAuthority ? "Live" : "Stale"}
@@ -114,19 +145,29 @@ export default function PortfolioAnalyticsDashboard() {
         }
       />
 
+      <Card title="Portfolio Overview" subtitle="Equity, PnL, and exposure at a glance">
+        <div className="m3-kpi-strip">
+          <Metric label="Current Equity" value={metricUsd(equity, { compact: true })} tone={equity > 0 ? "positive" : "neutral"} />
+          <Metric label="Realized PnL" value={metricUsd(snapshot.journal.reduce((sum, trade) => sum + trade.netPnl, 0), { signed: true, compact: true })} tone={metricTone(snapshot.journal.reduce((sum, trade) => sum + trade.netPnl, 0))} />
+          <Metric label="Unrealized PnL" value={metricUsd(positions.reduce((sum, position) => sum + position.unrealizedPnl, 0), { signed: true, compact: true })} tone={metricTone(positions.reduce((sum, position) => sum + position.unrealizedPnl, 0))} />
+          <Metric label="Win Rate" value={analytics.winRatePct != null ? metricPct(analytics.winRatePct, 1) : "0.0%"} tone={metricTone(analytics.winRatePct ?? 0, 50, 40)} />
+          <Metric label="Drawdown" value={metricPct(risk.drawdownPct, 2)} tone={risk.drawdownPct < -3 ? "negative" : "neutral"} />
+        </div>
+      </Card>
+
       <div className="m3-kpi-strip">
-        <Metric label="Equity" value={equity > 0 ? usd(equity, { compact: true }) : "—"} tone={equity > 0 ? "positive" : "neutral"} />
-        <Metric label="Gross Exposure" value={risk.grossExposureUsd > 0 ? usd(risk.grossExposureUsd, { compact: true }) : "—"} />
-        <Metric label="Net Exposure" value={usd(risk.netExposureUsd, { compact: true })} tone={metricTone(risk.netExposureUsd)} />
-        <Metric label="Drawdown" value={risk.drawdownPct !== 0 ? `${risk.drawdownPct.toFixed(2)}%` : "—"} tone={risk.drawdownPct < -3 ? "negative" : "warning"} />
-        <Metric label="Portfolio PF" value={analytics.profitFactorTrend != null ? analytics.profitFactorTrend.toFixed(2) : "—"} tone={metricTone(analytics.profitFactorTrend ?? 0, 1.25, 1)} />
-        <Metric label="Sharpe (30d)" value={analytics.rollingSharpe30d != null ? analytics.rollingSharpe30d.toFixed(2) : "—"} />
-        <Metric label="Win Rate" value={analytics.winRatePct != null ? `${analytics.winRatePct.toFixed(1)}%` : "—"} tone={metricTone(analytics.winRatePct ?? 0, 50, 40)} />
+        <Metric label="Equity" value={metricUsd(equity, { compact: true })} tone={equity > 0 ? "positive" : "neutral"} />
+        <Metric label="Gross Exposure" value={metricUsd(risk.grossExposureUsd, { compact: true })} />
+        <Metric label="Net Exposure" value={metricUsd(risk.netExposureUsd, { compact: true })} tone={metricTone(risk.netExposureUsd)} />
+        <Metric label="Drawdown" value={metricPct(risk.drawdownPct, 2)} tone={risk.drawdownPct < -3 ? "negative" : "neutral"} />
+        <Metric label="Portfolio PF" value={(analytics.profitFactorTrend ?? 0).toFixed(2)} tone={metricTone(analytics.profitFactorTrend ?? 0, 1.25, 1)} />
+        <Metric label="Sharpe (30d)" value={(analytics.rollingSharpe30d ?? 0).toFixed(2)} />
+        <Metric label="Win Rate" value={analytics.winRatePct != null ? metricPct(analytics.winRatePct, 1) : "0.0%"} tone={metricTone(analytics.winRatePct ?? 0, 50, 40)} />
         <Metric label="Open Positions" value={String(positions.length)} tone={positions.length > 0 ? "warning" : "neutral"} />
       </div>
 
       <div className="m3-portfolio-grid">
-        <Card title="Equity Curve" subtitle="MongoDB authority · last 96 snapshots">
+        <Card title="Equity Chart" subtitle="Last 96 portfolio snapshots">
           {!hasCurve ? (
             <TerminalNoData label="No equity curve data" />
           ) : (
@@ -140,8 +181,8 @@ export default function PortfolioAnalyticsDashboard() {
                 />
               </svg>
               <div className="m3-equity-chart__axis">
-                <span>{new Date(sparkPoints[0]?.time ?? "").toLocaleDateString()}</span>
-                <span>{new Date(sparkPoints[sparkPoints.length - 1]?.time ?? "").toLocaleDateString()}</span>
+                <span>{dateLabel(sparkPoints[0]?.time) || "Start"}</span>
+                <span>{dateLabel(sparkPoints[sparkPoints.length - 1]?.time) || "Latest"}</span>
               </div>
             </div>
           )}
@@ -149,24 +190,38 @@ export default function PortfolioAnalyticsDashboard() {
 
         <Card title="Risk & Exposure" subtitle="VaR · margin · funding">
           <div className="m3-kpi-strip m3-kpi-strip--2col">
-            <Metric label="VaR 95" value={risk.var95Usd !== 0 ? usd(-risk.var95Usd) : "—"} tone="warning" />
-            <Metric label="Heat" value={`${risk.heatPct.toFixed(1)}%`} tone={risk.heatPct > 70 ? "negative" : "warning"} />
-            <Metric label="Margin Usage" value={`${risk.marginUsagePct.toFixed(1)}%`} />
-            <Metric label="Long Exp" value={usd(risk.longExposureUsd, { compact: true })} tone="positive" />
-            <Metric label="Short Exp" value={usd(risk.shortExposureUsd, { compact: true })} tone="negative" />
-            <Metric label="Fee Drag" value={analytics.feeDragUsd != null ? usd(-analytics.feeDragUsd) : "—"} tone="warning" />
+            <Metric label="VaR 95" value={metricUsd(-risk.var95Usd)} tone="warning" />
+            <Metric label="Heat" value={metricPct(risk.heatPct, 1)} tone={risk.heatPct > 70 ? "negative" : "neutral"} />
+            <Metric label="Margin Usage" value={metricPct(risk.marginUsagePct, 1)} />
+            <Metric label="Long Exp" value={metricUsd(risk.longExposureUsd, { compact: true })} tone="positive" />
+            <Metric label="Short Exp" value={metricUsd(risk.shortExposureUsd, { compact: true })} tone="negative" />
+            <Metric label="Fee Drag" value={metricUsd(-(analytics.feeDragUsd ?? 0))} tone="warning" />
           </div>
         </Card>
       </div>
 
-      <Card title="Open Positions" subtitle={`${positions.length} live marks from engine`}>
+      <Card title="Open Positions" subtitle={`${positions.length} live marks from Trade Engine`}>
         {positions.length === 0 ? (
-          <EmptyState title="No open positions" subtitle="Positions appear when mock-trading strategies are active" />
+          <EmptyState title="No open positions" subtitle="Positions appear when Trade Engine strategies are active" />
         ) : (
           <DataTable
             columns={positionColumns}
             rows={positions}
             getRowKey={(p) => p.id}
+            density="compact"
+            pageSize={25}
+          />
+        )}
+      </Card>
+
+      <Card title="Recent Closed Trades" subtitle="Latest journal entries from Trade Engine">
+        {snapshot.journal.length === 0 ? (
+          <EmptyState title="No closed trades yet" subtitle="Closed trades will appear here after positions exit." />
+        ) : (
+          <DataTable
+            columns={closedTradeColumns}
+            rows={snapshot.journal.slice(0, 25)}
+            getRowKey={(trade) => trade.id}
             density="compact"
             pageSize={25}
           />

@@ -16,7 +16,7 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
       <div className="space-y-3">
         <TerminalCard title="Equity Curve" subtitle="MongoDB authority · equity curve">
           {!hasCurve ? (
-            <TerminalNoData label="NO EQUITY CURVE DATA" />
+            <TerminalNoData label="No equity curve data" />
           ) : (
             <div className="h-72 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
               <svg viewBox="0 0 700 240" className="h-full w-full" role="img" aria-label="Equity curve">
@@ -52,15 +52,15 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
         </TerminalCard>
       </div>
       <div className="space-y-3">
-        <TerminalCard title="Rolling Performance" subtitle="Portfolio accounting authority">
+        <TerminalCard title="Rolling Performance" subtitle="Portfolio accounting view">
           <div className="grid grid-cols-2 gap-2">
-            <Metric label="Portfolio Sharpe" value={snapshot.analytics.rollingSharpe30d != null ? snapshot.analytics.rollingSharpe30d.toFixed(2) : "—"} />
-            <Metric label="Portfolio PF" value={snapshot.analytics.profitFactorTrend != null ? snapshot.analytics.profitFactorTrend.toFixed(2) : "—"} tone="positive" />
-            <Metric label="Win Rate" value={snapshot.analytics.winRatePct != null ? pct(snapshot.analytics.winRatePct, 1) : "—"} />
+            <Metric label="Portfolio Sharpe" value={(snapshot.analytics.rollingSharpe30d ?? 0).toFixed(2)} />
+            <Metric label="Portfolio PF" value={(snapshot.analytics.profitFactorTrend ?? 0).toFixed(2)} tone="positive" />
+            <Metric label="Win Rate" value={snapshot.analytics.winRatePct != null ? pct(snapshot.analytics.winRatePct, 1) : "0.0%"} />
           </div>
         </TerminalCard>
         <TerminalCard title="Fee Drag">
-          <Metric label="Fee Drag" value={snapshot.analytics.feeDragUsd != null && snapshot.analytics.feeDragUsd > 0 ? usd(-snapshot.analytics.feeDragUsd) : "—"} tone="negative" />
+          <Metric label="Fee Drag" value={usd(-(snapshot.analytics.feeDragUsd ?? 0))} tone="negative" />
         </TerminalCard>
         <RegimeBreakdown />
       </div>

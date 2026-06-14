@@ -7,7 +7,7 @@
  *   node scripts/migrate-collections-phase31.mjs [--dry-run] [--from=anon_e7da5e39]
  *
  * Copies historical documents into the authoritative account_key
- * (mock_trading_default) and canonical collections:
+ * (mock_trading_main) and canonical collections:
  *   mock_trades            → paper_trades
  *   mock_account_snapshots → paper_state (latest snapshot fields only)
  *
@@ -16,7 +16,7 @@
 
 import { MongoClient } from "mongodb";
 
-const TARGET_KEY = process.env.OWNER_ACCOUNT_KEY?.trim() || "mock_trading_default";
+const TARGET_KEY = process.env.OWNER_ACCOUNT_KEY?.trim() || "mock_trading_main";
 const DRY_RUN = process.argv.includes("--dry-run");
 const FROM_ARG = process.argv.find((a) => a.startsWith("--from="));
 const SOURCE_KEYS = FROM_ARG

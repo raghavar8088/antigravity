@@ -122,14 +122,10 @@ export const TRADING_NAV: CommandCenterNavItem[] = [
 /** MONITOR section — mandatory order. */
 export const MONITOR_NAV: CommandCenterNavItem[] = [
   { href: TERMINAL_ROUTES.home, label: "Command Center", section: "monitor" },
-  { href: TERMINAL_ROUTES.execution, label: "Execution", section: "monitor" },
-  { href: TERMINAL_ROUTES["strategy-authority"], label: "Strategy Authority", section: "monitor" },
-  { href: TERMINAL_ROUTES["portfolio-intelligence"], label: "Portfolio Intelligence", section: "monitor" },
-  { href: TERMINAL_ROUTES.strategies, label: "Strategies", section: "monitor" },
   { href: TERMINAL_ROUTES.portfolio, label: "Portfolio", section: "monitor" },
   { href: TERMINAL_ROUTES.risk, label: "Risk", section: "monitor" },
   { href: TERMINAL_ROUTES.analytics, label: "Analytics", section: "monitor" },
-  { href: TERMINAL_ROUTES.research, label: "Research", section: "monitor" },
+  { href: TERMINAL_ROUTES.execution, label: "Execution", section: "monitor" },
   { href: TERMINAL_ROUTES.events, label: "Events", section: "monitor" },
   { href: TERMINAL_ROUTES.health, label: "Health", section: "monitor" },
   { href: TERMINAL_ROUTES.diagnostics, label: "Diagnostics", section: "monitor" },

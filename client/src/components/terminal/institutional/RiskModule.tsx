@@ -13,7 +13,7 @@ type CorrelationMatrix = {
 
 export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
   const [correlation, setCorrelation] = useState<CorrelationMatrix | null>(null);
-  const [reconStatus, setReconStatus] = useState<string>("—");
+  const [reconStatus, setReconStatus] = useState<string>("Updating");
 
   useEffect(() => {
     let active = true;
@@ -34,10 +34,10 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="space-y-3">
         <div className="grid gap-3 md:grid-cols-4">
-          <Metric label="VaR 95" value={snapshot.risk.var95Usd !== 0 ? usd(-snapshot.risk.var95Usd) : "—"} tone="warning" />
-          <Metric label="VaR 99" value={snapshot.risk.var99Usd !== 0 ? usd(-snapshot.risk.var99Usd) : "—"} tone="negative" />
-          <Metric label="CVaR 95" value={snapshot.risk.cvar95Usd !== 0 ? usd(-snapshot.risk.cvar95Usd) : "—"} tone="negative" />
-          <Metric label="Drawdown" value={hasRisk ? `${snapshot.risk.drawdownPct.toFixed(2)}%` : "—"} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "warning"} />
+          <Metric label="VaR 95" value={usd(-snapshot.risk.var95Usd)} tone="warning" />
+          <Metric label="VaR 99" value={usd(-snapshot.risk.var99Usd)} tone="negative" />
+          <Metric label="CVaR 95" value={usd(-snapshot.risk.cvar95Usd)} tone="negative" />
+          <Metric label="Drawdown" value={`${snapshot.risk.drawdownPct.toFixed(2)}%`} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "neutral"} />
         </div>
         <TerminalCard title="Portfolio Heat" subtitle="0-4 normal · 4-6 reduce · 6+ block">
           {!hasRisk ? (
@@ -86,7 +86,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
               </table>
             </div>
           ) : (
-            <TerminalNoData label="NO CORRELATION DATA" />
+            <TerminalNoData label="No correlation data" />
           )}
         </TerminalCard>
         <ReconciliationPanel />
@@ -97,7 +97,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
         </TerminalCard>
         <TerminalCard title="Open Position Risk">
           {snapshot.positions.length === 0 ? (
-            <TerminalNoData label="NO OPEN POSITIONS" />
+            <TerminalNoData label="No open positions" />
           ) : (
             <div className="mt-3 space-y-2">
               {snapshot.positions.map((position) => (
@@ -129,12 +129,12 @@ function ReconciliationPanel() {
   return (
     <TerminalCard title="Reconciliation History" subtitle="Last 24h · /api/engine/reconciliation">
       {events.length === 0 ? (
-        <TerminalNoData label="NO RECONCILIATION EVENTS" />
+        <TerminalNoData label="No reconciliation events" />
       ) : (
         <div className="space-y-2 text-xs">
           {events.map((e, i) => (
             <div key={`${e.ts}-${i}`} className="flex justify-between rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-              <span className="text-zinc-400">{new Date(e.ts).toLocaleString()}</span>
+              <span className="text-zinc-400">{safeDateTime(e.ts)}</span>
               <span className="font-mono text-zinc-200">{e.action}</span>
               <span className={e.kill_switch_triggered ? "text-rose-300" : "text-emerald-300"}>
                 drift {e.drift_amount.toFixed(4)}{e.kill_switch_triggered ? " · KS" : ""}
@@ -145,4 +145,9 @@ function ReconciliationPanel() {
       )}
     </TerminalCard>
   );
+}
+
+function safeDateTime(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : "Timestamp unavailable";
 }

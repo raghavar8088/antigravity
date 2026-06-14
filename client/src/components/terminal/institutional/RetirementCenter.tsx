@@ -112,8 +112,8 @@ export function RetirementCenter() {
       <div className="m3-kpi-strip">
         <Metric label="Total Retired" value={String(retired.length)} tone={retired.length > 0 ? "negative" : "neutral"} />
         <Metric label="Families Affected" value={String(Object.keys(familyCounts).length)} />
-        <Metric label="Avg Demotions Before Retirement" value={avgDemotions} />
-        <Metric label="Avg Promotions Achieved" value={avgPromotions} />
+        <Metric label="Avg Risk Events" value={avgDemotions} />
+        <Metric label="Avg Review Events" value={avgPromotions} />
       </div>
 
       {/* Search + filter bar */}

@@ -19,8 +19,8 @@ export function terminalHasAuthority(
 }
 
 export function terminalAuthorityLabel(state: TerminalAuthorityState): string {
-  if (state.loading) return "LOADING";
-  if (!terminalHasAuthority(state)) return "BACKEND AUTHORITY UNAVAILABLE";
-  if (state.authoritySource === "ws") return "WS LIVE";
-  return "REST AUTHORITY";
+  if (state.loading) return "Updating";
+  if (!terminalHasAuthority(state)) return "Stale";
+  if (state.authoritySource === "ws") return "Live";
+  return "Polling";
 }

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
 import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES } from "@/lib/utils/navRoutes";
 
 type NavItem = {
@@ -178,7 +177,6 @@ export function Sidebar({
   onNavigate,
 }: SidebarProps) {
   const pathname = usePathname();
-  const pipelineCounts = usePipelineCounts();
 
   return (
     <nav
@@ -186,10 +184,10 @@ export function Sidebar({
       aria-label="Main navigation"
     >
       <div className="sidebar-brand">
-        <div className="sidebar-brand-icon" aria-hidden="true">ICC</div>
+        <div className="sidebar-brand-icon" aria-hidden="true">BTC</div>
         <div className="sidebar-brand-text">
-          <span className="sidebar-brand-name">Command Center</span>
-          <span className="sidebar-brand-sub">Institutional Terminal V3</span>
+          <span className="sidebar-brand-name">BTC-PILOT</span>
+          <span className="sidebar-brand-sub">Sovereign</span>
         </div>
       </div>
 
@@ -210,12 +208,7 @@ export function Sidebar({
                   onClick={onNavigate}
                 >
                   {item.icon}
-                  <span>
-                    {item.label}
-                    {item.countStatus
-                      ? ` (${formatNavCount(pipelineCounts, item.countStatus) ?? ""})`
-                      : ""}
-                  </span>
+                  <span>{item.label}</span>
                   {item.badge != null && (
                     <span className="sidebar-nav-badge">{item.badge}</span>
                   )}

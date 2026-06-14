@@ -1,4 +1,4 @@
-// Phase 31C — account_key reconciliation: what will the dashboard (mock_trading_default) actually show?
+// Phase 31C — account_key reconciliation: what will the dashboard (mock_trading_main) actually show?
 import { MongoClient } from "mongodb";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ function loadEnv() {
 loadEnv();
 const URI = process.env.MONGODB_URI;
 const DB = process.env.MONGODB_DB || "loop_trades";
-const KEY = "mock_trading_default"; // session userId / OWNER_ACCOUNT_KEY
+const KEY = "mock_trading_main"; // session userId / OWNER_ACCOUNT_KEY
 const ENGINE_FALLBACK = "owner_admin";
 
 const cols = ["paper_trades","paper_positions","paper_orders","paper_state","equity_curve","daily_pnl_history","strategy_scores","strategy_health"];
@@ -31,7 +31,7 @@ async function main() {
   await client.connect();
   const db = client.db(DB);
   console.log(`\n=== RECONCILE — dashboard key="${KEY}" vs engine-fallback="${ENGINE_FALLBACK}" ===\n`);
-  console.log("collection            | docs(mock_trading_default) | docs(owner_admin) | total");
+  console.log("collection            | docs(mock_trading_main) | docs(owner_admin) | total");
   console.log("----------------------|----------------------------|-------------------|------");
   for (const c of cols) {
     const a = await safeCount(db, c, { account_key: KEY });

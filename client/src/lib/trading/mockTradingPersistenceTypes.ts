@@ -8,7 +8,7 @@ import {
   type MockTradingConfig,
 } from "@/lib/trading/mockTradingEngine";
 
-export const DEFAULT_MOCK_ACCOUNT_KEY = "mock_trading_default";
+export const DEFAULT_MOCK_ACCOUNT_KEY = "mock_trading_main";
 export const MOCK_RESET_CONFIRMATION = "RESET_MOCK_TRADING";
 
 const finiteNumber = z.number().finite();

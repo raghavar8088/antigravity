@@ -26,10 +26,10 @@ export function TerminalAuthorityGuard({
 
   if (authorityRequired && snapshot.loading && !snapshot.hasAuthority) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 font-mono text-sm text-zinc-500">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
-        <p>LOADING</p>
-        <p className="text-xs text-zinc-600">Connecting to backend authority...</p>
+      <div className="google-empty-state min-h-[60vh]">
+        <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-blue-100 border-t-blue-500" />
+        <p className="m3-empty-state__title">Loading Trade Engine data</p>
+        <p className="m3-empty-state__subtitle">Connecting to the backend authority.</p>
       </div>
     );
   }
@@ -39,18 +39,18 @@ export function TerminalAuthorityGuard({
   return (
     <>
       {degraded && !dismissed && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-rose-900/60 bg-rose-950/30 px-4 py-2 font-mono text-xs text-rose-400 mb-3">
+        <div className="m3-banner m3-banner--error mb-3 flex items-center justify-between gap-3 px-4 py-3 text-sm" role="status">
           <span>
-            <span className="font-bold">PAPER DESK OFFLINE</span>
+            <span className="font-bold">Trade Engine data is updating</span>
             {" — "}
             {snapshot.restUnavailable
-              ? "REST circuit open · retrying every 30 s"
-              : "WebSocket disconnected · polling…"}
+              ? "REST circuit is retrying every 30s"
+              : "Live stream is reconnecting while polling continues."}
           </span>
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="text-rose-600 hover:text-rose-300 transition-colors"
+            className="text-rose-600 transition-colors hover:text-rose-700"
             aria-label="Dismiss"
           >
             ✕
@@ -62,10 +62,24 @@ export function TerminalAuthorityGuard({
   );
 }
 
-export function TerminalNoData({ label = "NO DATA AVAILABLE" }: { label?: string }) {
+function humanizeEmptyLabel(label: string) {
+  const cleaned = label
+    .replace(/\bNO\b/g, "No")
+    .replace(/\bDATA\b/g, "data")
+    .replace(/\bAVAILABLE\b/g, "available")
+    .replace(/\bLOADING\.\.\./g, "Loading")
+    .replace(/\bMOCK[-_ ]TRADING\b/gi, "Trade Engine")
+    .replace(/\bPAPER DESK\b/gi, "Trade Engine")
+    .replace(/\s+—\s+/g, " - ")
+    .trim();
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase().replace(/\bbtc\b/g, "BTC").replace(/\bws\b/g, "WS");
+}
+
+export function TerminalNoData({ label = "No data available" }: { label?: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950/40 px-4 py-8 text-center font-mono text-xs text-zinc-500">
-      {label}
+    <div className="google-empty-state google-empty-state-inline" role="status">
+      <p className="m3-empty-state__title">{humanizeEmptyLabel(label)}</p>
+      <p className="m3-empty-state__subtitle">This section will update automatically when Trade Engine data is available.</p>
     </div>
   );
 }

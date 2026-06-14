@@ -3,7 +3,7 @@
  *
  * Every subsystem MUST use resolveAuthoritativeAccountKey() instead of
  * DESK_WORKER_ACCOUNT_KEY or client-supplied keys. The Go engine uses the
- * same value via OWNER_ACCOUNT_KEY env (default: mock_trading_default).
+ * same value via OWNER_ACCOUNT_KEY env (default: mock_trading_main).
  */
 
 import { OWNER_ACCOUNT_KEY } from "./ownerAccountKey";

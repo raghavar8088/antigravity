@@ -2,7 +2,7 @@ package paperpersist
 
 // accountkey.go — Authoritative account key validation at engine startup.
 //
-// The frontend hardcodes FrontendAccountKey in client/src/lib/ownerAuth.ts.
+// The frontend hardcodes FrontendAccountKey in client/src/lib/broker/ownerAccountKey.ts.
 // The engine MUST use the same value or Paper Desk reads a different MongoDB
 // document set than the engine writes.
 
@@ -14,8 +14,8 @@ import (
 )
 
 // FrontendAccountKey is the canonical owner account key shared with the Next.js
-// frontend (client/src/lib/ownerAuth.ts OWNER_ACCOUNT_KEY).
-const FrontendAccountKey = "mock_trading_default"
+// frontend (client/src/lib/broker/ownerAccountKey.ts OWNER_ACCOUNT_KEY).
+const FrontendAccountKey = "mock_trading_main"
 
 // ValidateAccountKeyAlignment returns an error when the engine account key is
 // anonymous, empty, or diverges from the frontend constant.
