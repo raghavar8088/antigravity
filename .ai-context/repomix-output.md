@@ -52,7 +52,6 @@ The content is organized as follows:
   app/api/btc/spot-klines/route.ts
   app/api/btc/spot-state/route.ts
   app/api/cron/policy-snapshot/route.ts
-  app/api/cron/rank-strategies/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
   app/api/delta/myip/route.ts
@@ -106,32 +105,6 @@ The content is organized as follows:
   app/api/storage/backup/route.ts
   app/api/storage/health/route.ts
   app/api/storage/restore/route.ts
-  app/api/strategies/[id]/route.ts
-  app/api/strategies/route.ts
-  app/api/strategy-attribution/[id]/route.ts
-  app/api/strategy-authority/allocation/route.ts
-  app/api/strategy-authority/candidate-queue/route.ts
-  app/api/strategy-authority/compute-portfolio/route.ts
-  app/api/strategy-authority/correlation/route.ts
-  app/api/strategy-authority/counts/route.ts
-  app/api/strategy-authority/demotions/route.ts
-  app/api/strategy-authority/diversification/route.ts
-  app/api/strategy-authority/evaluate/route.ts
-  app/api/strategy-authority/events/route.ts
-  app/api/strategy-authority/families/route.ts
-  app/api/strategy-authority/genome/route.ts
-  app/api/strategy-authority/leaderboard/route.ts
-  app/api/strategy-authority/main-engine/route.ts
-  app/api/strategy-authority/migrate/route.ts
-  app/api/strategy-authority/portfolio-construction/route.ts
-  app/api/strategy-authority/promotions/route.ts
-  app/api/strategy-authority/regimes/route.ts
-  app/api/strategy-authority/retirements/route.ts
-  app/api/strategy-authority/stage/route.ts
-  app/api/strategy-authority/stages/route.ts
-  app/api/strategy-intelligence/route.ts
-  app/api/strategy-rankings/route.ts
-  app/api/strategy-signal-trace/route.ts
   app/api/system/health/route.ts
   app/api/system/production-validation/route.ts
   app/api/trade-history/daily-run/route.ts
@@ -177,12 +150,8 @@ The content is organized as follows:
   app/terminal/portfolio-intelligence/page.tsx
   app/terminal/portfolio/page.tsx
   app/terminal/research/page.tsx
-  app/terminal/retired-strategies/page.tsx
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
-  app/terminal/strategies/page.tsx
-  app/terminal/strategy-authority/page.tsx
-  app/terminal/strategy-ops/page.tsx
   app/terminal/trading/page.tsx
   components/ActivityFeed.tsx
   components/AiAppTrackerPanel.tsx
@@ -244,7 +213,6 @@ The content is organized as follows:
   components/MockMonteCarloPanel.tsx
   components/MockResearchChartsPanel.tsx
   components/MockRiskAnalyticsPanel.tsx
-  components/MockStrategyLeaderboardPanel.tsx
   components/MockTradingDashboard.test.tsx
   components/MockTradingDashboard.tsx
   components/MTFConfluencePanel.tsx
@@ -269,12 +237,6 @@ The content is organized as follows:
   components/SignalTracePanel.tsx
   components/SoakTrendPanel.tsx
   components/StorageHealthPanel.tsx
-  components/strategies/StrategyDetailDrawer.tsx
-  components/strategies/StrategyRegistryDashboard.tsx
-  components/StrategyCard.tsx
-  components/StrategyIntelligenceDashboard.tsx
-  components/StrategyLeaderboard.tsx
-  components/StrategyRotationPanel.tsx
   components/terminal/AppShell.tsx
   components/terminal/index.ts
   components/terminal/institutional/AllocationView.tsx
@@ -301,11 +263,8 @@ The content is organized as follows:
   components/terminal/institutional/PromotionTower.tsx
   components/terminal/institutional/RegimeIntelligence.tsx
   components/terminal/institutional/ResearchCenter.tsx
-  components/terminal/institutional/RetiredStrategiesCenter.tsx
   components/terminal/institutional/RetirementCenter.tsx
   components/terminal/institutional/RiskModule.tsx
-  components/terminal/institutional/StrategyAuthorityCenter.tsx
-  components/terminal/institutional/StrategyGenome.tsx
   components/terminal/institutional/TerminalCard.tsx
   components/terminal/institutional/TerminalLayoutClient.tsx
   components/terminal/institutional/TerminalShell.tsx
@@ -376,8 +335,6 @@ The content is organized as follows:
   hooks/useOwnerAuth.ts
   hooks/usePipelineCounts.ts
   hooks/usePositions.ts
-  hooks/useStrategies.ts
-  hooks/useStrategyScoring.ts
   hooks/useTerminalLayout.ts
   hooks/useTrades.ts
   instrumentation.ts
@@ -396,7 +353,6 @@ The content is organized as follows:
   internal/regime/index.ts
   internal/regime/router.ts
   internal/research_ai/index.ts
-  internal/strategy/evaluator.ts
   internal/trading/aggregator_v2.test.ts
   internal/trading/aggregator_v2.ts
   internal/trading/signal_scoring.ts
@@ -407,7 +363,6 @@ The content is organized as follows:
   lib/__tests__/futuresCategoryStrategies.test.ts
   lib/__tests__/futuresReplay.e2e.test.ts
   lib/__tests__/futuresSignalScoring.test.ts
-  lib/__tests__/futuresStrategyDiagnostics.test.ts
   lib/__tests__/masterIntegration.test.ts
   lib/ai/aiAppTrackerMongo.ts
   lib/ai/institutionalResearchEngine.ts
@@ -418,7 +373,6 @@ The content is organized as follows:
   lib/ai/mockResearchPortfolioAllocation.ts
   lib/ai/mockResearchStrategies.ts
   lib/ai/mockResearchWalkForward.ts
-  lib/ai/mockStrategyRankingEngine.ts
   lib/ai/mockTradeQualityScorer.ts
   lib/ai/QuantAIAgent.ts
   lib/ai/replayWalkForwardRanker.ts
@@ -426,11 +380,6 @@ The content is organized as follows:
   lib/ai/shadowTradeIntentMapper.ts
   lib/ai/shadowTradeIntentSync.ts
   lib/ai/shadowTradeIntentTypes.ts
-  lib/ai/strategyHealthAnalyzer.ts
-  lib/ai/strategyHealthEngine.ts
-  lib/ai/strategyPerformanceEngine.ts
-  lib/ai/strategyScoringEngine.ts
-  lib/ai/strategySignalTrace.ts
   lib/aiAppTracker/aiAppTrackerMongo.ts
   lib/aiAppTracker/collectAppSnapshot.ts
   lib/aiAppTracker/summarizeTrackerReport.ts
@@ -480,8 +429,6 @@ The content is organized as follows:
   lib/btcFtPremiumStrategies.test.ts
   lib/btcFtResearch.test.ts
   lib/btcFtRoster.test.ts
-  lib/btcFtStrategyGenerator.test.ts
-  lib/btcFtStrategySignals.test.ts
   lib/btcResearchStrategyRegistry.test.ts
   lib/btcSpotPrice.test.ts
   lib/chartTime.test.ts
@@ -536,7 +483,6 @@ The content is organized as follows:
   lib/replayWalkForwardRanker.test.ts
   lib/researchEdgeScore.test.ts
   lib/risk/blockedExecutionRoute.ts
-  lib/risk/deskStrategySafety.ts
   lib/risk/entrySkipReason.ts
   lib/risk/futuresGoLiveGates.ts
   lib/risk/futuresProductionReadiness.ts
@@ -546,26 +492,7 @@ The content is organized as follows:
   lib/risk/RiskEngine.ts
   lib/sep/sepPipeline.ts
   lib/shadowTradeIntentMapper.test.ts
-  lib/strategyAllocation.test.ts
-  lib/strategyAuthority/allocationEngine.ts
-  lib/strategyAuthority/authorityScore.ts
-  lib/strategyAuthority/correlationEngine.ts
-  lib/strategyAuthority/genomeEngine.ts
-  lib/strategyAuthority/grade5CatalogSignals.test.ts
-  lib/strategyAuthority/grade5CatalogSignals.ts
-  lib/strategyAuthority/gradeStageMockConfig.ts
-  lib/strategyAuthority/gradeThresholds.ts
-  lib/strategyAuthority/portfolioIntelligenceMongo.ts
-  lib/strategyAuthority/portfolioTypes.ts
-  lib/strategyAuthority/regimeEngine.ts
-  lib/strategyAuthority/strategyAuthorityMongo.ts
   lib/strategyAuthority/strategyCatalog.ts
-  lib/strategyAuthority/types.ts
-  lib/strategyHealthAnalyzer.test.ts
-  lib/strategyHealthEngine.test.ts
-  lib/strategyPerformanceEngine.test.ts
-  lib/strategyScoringEngine.test.ts
-  lib/strategySessionStats.test.ts
   lib/supabase/client.ts
   lib/supabase/server.ts
   lib/terminal/mapSnapshotToTerminalDelta.ts
@@ -579,12 +506,10 @@ The content is organized as follows:
   lib/tests/aiAppTrackerSummarizer.test.ts
   lib/tests/deskEntryFunnel.test.ts
   lib/tests/deskOperatorHealth.test.ts
-  lib/tests/deskStrategySafety.test.ts
   lib/tests/entryQuality.test.ts
   lib/tests/futuresAccountingFix.test.ts
   lib/tests/futuresParameterTuner.test.ts
   lib/tests/futuresProfitMode.test.ts
-  lib/tests/futuresStrategyDiagnostics.test.ts
   lib/tests/noTradeRootCause.test.ts
   lib/tests/pr12.test.ts
   lib/tests/pr13.test.ts
@@ -595,13 +520,10 @@ The content is organized as follows:
   lib/tests/pr19.test.ts
   lib/tests/pr9pr10.test.ts
   lib/tests/regressionGuard.test.ts
-  lib/tests/strategySignalTrace.test.ts
   lib/trading/btcFtDeskBuild.ts
   lib/trading/btcFtPremiumStrategies.ts
   lib/trading/btcFtResearch.ts
   lib/trading/btcFtRoster.ts
-  lib/trading/btcFtStrategyGenerator.ts
-  lib/trading/btcFtStrategyTemplates.ts
   lib/trading/btcFuturesTrade.types.ts
   lib/trading/btcFutureTradingEntryProbe.test.ts
   lib/trading/btcFutureTradingRoster.ts
@@ -633,12 +555,9 @@ The content is organized as follows:
   lib/trading/futuresSignals.ts
   lib/trading/futuresSignalScoring.ts
   lib/trading/futuresStrategies.ts
-  lib/trading/futuresStrategyDiagnostics.ts
-  lib/trading/futuresStrategyRotation.ts
   lib/trading/futuresStratTypes.ts
   lib/trading/futuresWinnersRefresh.ts
   lib/trading/marketSignal.ts
-  lib/trading/mockInstitutionalStrategies.ts
   lib/trading/mockOrderManagement.ts
   lib/trading/mockPortfolioOptimizer.ts
   lib/trading/mockPositionLifecycle.ts
@@ -654,9 +573,6 @@ The content is organized as follows:
   lib/trading/platformEvents.ts
   lib/trading/playbookRegistry.ts
   lib/trading/randomTrader.ts
-  lib/trading/strategyAllocation.ts
-  lib/trading/strategyProfitabilityAnalysis.ts
-  lib/trading/strategySessionStats.ts
   lib/trading/styleRoster.ts
   lib/trading/tradingStyleRegistry.ts
   lib/trading/tradingStyleTypes.ts
@@ -692,7 +608,6 @@ The content is organized as follows:
   styles/desk-trading.css
   styles/m3-tokens.css
   styles/tokens.css
-  types/strategy.ts
   types/trading.ts
 
 [internal]/
@@ -720,16 +635,12 @@ The content is organized as follows:
   alpha/alpha_engine_test.go
   alpha/cvd/cvd_cache.go
   alpha/cvd/cvd_divergence.go
-  alpha/cvd/cvd_strategy.go
   alpha/cvd/cvd.go
   alpha/delta/delta_engine.go
-  alpha/delta/delta_strategy.go
   alpha/funding/funding_cache.go
   alpha/funding/funding_collector.go
   alpha/funding/funding_engine.go
-  alpha/funding/funding_strategy.go
   alpha/fvg/fvg_detector.go
-  alpha/fvg/fvg_strategy.go
   alpha/liquidations/liquidations_engine.go
   alpha/liquidity/liquidity_engine.go
   alpha/liquidity/liquidity_levels.go
@@ -738,14 +649,12 @@ The content is organized as follows:
   alpha/microstructure_weight.go
   alpha/microstructure/engine.go
   alpha/microstructure/microstructure_test.go
-  alpha/microstructure/strategy.go
   alpha/microstructure/types.go
   alpha/mss/mss_engine.go
   alpha/orderblock/orderblock_engine.go
   alpha/quality/quality_engine.go
   alpha/session/session_engine.go
   alpha/types.go
-  alpha/volumeprofile/volume_profile_strategy.go
   alpha/volumeprofile/volume_profile.go
   backtest/engine.go
   backtest/execution/execution_model_test.go
@@ -987,8 +896,6 @@ The content is organized as follows:
   omsv3/risk_aggregate.go
   omsv3/risk_projection.go
   omsv3/snapshot_provider.go
-  omsv3/strategy_aggregate.go
-  omsv3/strategy_projection.go
   omsv3/system_aggregate.go
   omsv3/system_projection.go
   options_selling/chain_profile.go
@@ -1029,7 +936,6 @@ The content is organized as follows:
   paperpersist/portfolio_metrics_writer.go
   paperpersist/recovery.go
   paperpersist/state_snapshotter.go
-  paperpersist/strategy_health.go
   paperpersist/writer.go
   performance/analytics.go
   performance/indicator_cache.go
@@ -1038,7 +944,6 @@ The content is organized as follows:
   performance/performance_test.go
   performance/redis_cache.go
   performance/runtime.go
-  performance/strategy_scheduler.go
   persistence/file_snapshot.go
   persistence/saver.go
   persistence/store.go
@@ -1050,7 +955,6 @@ The content is organized as follows:
   pilot/metrics.go
   pilot/pilot_test.go
   pilot/projections.go
-  pilot/strategy_ranker.go
   pms/account_manager.go
   pms/allocation_engine.go
   pms/exposure_aggregation.go
@@ -1065,7 +969,6 @@ The content is organized as follows:
   pms/portfolio_projection.go
   pms/portfolio_risk_budget.go
   pms/projections.go
-  pms/strategy_budget_engine.go
   positions/close_queue_test.go
   positions/close_queue.go
   positions/manager_test.go
@@ -1106,7 +1009,6 @@ The content is organized as follows:
   regime/classifier.go
   regime/engine.go
   regime/router.go
-  regime/strategy_gate.go
   research/alphadecay/alpha_decay_engine.go
   research/boundary/boundary.go
   research/certification/research_cert_test.go
@@ -1154,8 +1056,6 @@ The content is organized as follows:
   risk/regime_risk.go
   risk/risk_budget.go
   risk/risk_of_ruin.go
-  risk/strategy_tracker_test.go
-  risk/strategy_tracker.go
   risk/stress_testing.go
   risk/v2/alerts.go
   risk/v2/allocation.go
@@ -1254,35 +1154,11 @@ The content is organized as follows:
   sor/sor_test.go
   sor/venue_registry.go
   strategy/alpha_registry_test.go
-  strategy/alpha_strategies.go
-  strategy/category_normalizer.go
-  strategy/chart_scalpers.go
   strategy/curated_expansion_pack.go
   strategy/curated_registry_test.go
   strategy/curated_registry.go
-  strategy/elite_v2.go
-  strategy/elite_v3.go
-  strategy/external_ai.go
-  strategy/family_test.go
-  strategy/family.go
-  strategy/indicators.go
-  strategy/interface.go
-  strategy/intraday_strategies.go
-  strategy/moving_average.go
   strategy/phase22c_alpha_test.go
-  strategy/profit_composites.go
-  strategy/registry_runtime_test.go
   strategy/registry.go
-  strategy/research_scalpers_test.go
-  strategy/research_scalpers.go
-  strategy/scalpers_advanced.go
-  strategy/scalpers_elite.go
-  strategy/scalpers_elite2.go
-  strategy/scalpers_pro.go
-  strategy/scalpers_pro2.go
-  strategy/scalpers.go
-  strategy/sentiment_confluence_scalper.go
-  strategy/tier.go
   telemetry/metrics.go
   temporal/analyser.go
   temporal/pattern_builder.go

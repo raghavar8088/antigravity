@@ -2,88 +2,14 @@ package options
 
 import "testing"
 
-func TestBuildStrategiesFiltersWeakShortExpiryAndOTMStrategies(t *testing.T) {
-	all := buildAllStrategies()
-	live := BuildStrategies()
-
-	if len(all) == 0 {
-		t.Fatal("expected full strategy library to be non-empty")
-	}
-	if len(live) == 0 {
-		t.Fatal("expected live-approved strategy set to be non-empty")
-	}
-	for _, def := range live {
-		if def.ExpiryMinutes < minLiveExpiryMinutes {
-			t.Fatalf("strategy %s should have been filtered for expiry %d", def.Name, def.ExpiryMinutes)
-		}
-		if def.StrikePctOTM > maxLiveStrikePctOTM {
-			t.Fatalf("strategy %s should have been filtered for strike pct %.4f", def.Name, def.StrikePctOTM)
-		}
-	}
-
-	for _, def := range all {
-		if def.ExpiryMinutes < minLiveExpiryMinutes || def.StrikePctOTM > maxLiveStrikePctOTM {
-			t.Fatalf("full strategy library still contains a weak live-disallowed strategy: %s", def.Name)
-		}
+func TestBuildStrategiesIsEmpty(t *testing.T) {
+	if got := len(BuildStrategies()); got != 0 {
+		t.Fatalf("expected no live option strategies, got %d", got)
 	}
 }
 
-func TestBuildStrategiesKeepsBothCallsAndPuts(t *testing.T) {
-	live := BuildStrategies()
-
-	var calls, puts int
-	for _, def := range live {
-		switch def.Type {
-		case Call:
-			calls++
-		case Put:
-			puts++
-		}
-	}
-
-	if calls == 0 || puts == 0 {
-		t.Fatalf("expected both calls and puts in live set, got calls=%d puts=%d", calls, puts)
-	}
-}
-
-func TestBuildStrategyLibraryIncludesExpandedLiveBook(t *testing.T) {
-	live := BuildStrategies()
-
-	if len(live) < 29 {
-		t.Fatalf("expected at least 29 live strategies after expansion, got %d", len(live))
-	}
-}
-
-func TestBuildStrategiesReturnsFullTradeableLibrary(t *testing.T) {
-	live := BuildStrategies()
-	if len(live) < 29 {
-		t.Fatalf("expected full tradeable library, got %d strategies", len(live))
-	}
-
-	for _, def := range live {
-		if def.Category == "" {
-			t.Fatalf("expected %s to carry category metadata", def.Name)
-		}
-	}
-}
-
-func TestAllLiveStrategiesReferenceKnownSignals(t *testing.T) {
-	for _, def := range BuildStrategies() {
-		if _, ok := Signals[def.Signal]; !ok {
-			t.Fatalf("strategy %s references unknown signal %s", def.Name, def.Signal)
-		}
-	}
-}
-
-func TestAllLiveStrategiesHaveStableUniqueIDs(t *testing.T) {
-	seen := make(map[int]string)
-	for _, def := range BuildStrategies() {
-		if def.ID <= 0 {
-			t.Fatalf("strategy %s is missing a permanent ID", def.Name)
-		}
-		if existing, ok := seen[def.ID]; ok {
-			t.Fatalf("duplicate strategy ID %d used by %s and %s", def.ID, existing, def.Name)
-		}
-		seen[def.ID] = def.Name
+func TestBuildAllStrategiesIsEmpty(t *testing.T) {
+	if got := len(buildAllStrategies()); got != 0 {
+		t.Fatalf("expected no base option strategies, got %d", got)
 	}
 }

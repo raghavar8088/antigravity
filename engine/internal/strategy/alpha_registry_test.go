@@ -2,35 +2,8 @@ package strategy
 
 import "testing"
 
-func TestBuildAllScalpersIncludesInstitutionalAlphaStrategies(t *testing.T) {
-	entries := BuildAllScalpers()
-	want := map[string]bool{
-		"FundingMeanReversion_Alpha":              false,
-		"CVDDivergence_Alpha":                     false,
-		"DeltaAbsorption_Alpha":                   false,
-		"LiquiditySweepReversal_Alpha":            false,
-		"FVGRetest_Alpha":                         false,
-		"OrderBlockRetest_Alpha":                  false,
-		"MSSContinuation_Alpha":                   false,
-		"POCBounce_Alpha":                         false,
-		"SessionExpansion_Alpha":                  false,
-		"LiquidationCascade_Alpha":                false, // Phase 22C activation
-		"Phase11LiquiditySweepReversal_Alpha":     false,
-		"Phase11FundingMeanReversion_Alpha":       false,
-		"Phase11CVDDivergence_Alpha":              false,
-		"Phase11LiquidationCascadeReversal_Alpha": false,
-		"Phase11FairValueGap_Alpha":               false,
-		"Phase11OrderBlock_Alpha":                 false,
-		"Phase11MSSCHOCH_Alpha":                   false,
-	}
-	for _, entry := range entries {
-		if _, ok := want[entry.Strategy.Name()]; ok {
-			want[entry.Strategy.Name()] = true
-		}
-	}
-	for name, found := range want {
-		if !found {
-			t.Fatalf("expected alpha strategy %s in registry", name)
-		}
+func TestBuildAllScalpersHasNoAlphaStrategies(t *testing.T) {
+	if got := len(BuildAllScalpers()); got != 0 {
+		t.Fatalf("expected no registered alpha strategies, got %d", got)
 	}
 }

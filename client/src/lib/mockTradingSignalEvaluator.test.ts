@@ -1,77 +1,38 @@
 ﻿import { describe, expect, it } from "vitest";
-import { FUTURES_STRAT_DEFS } from "@/lib/trading/futuresStrategies";
-import { buildPaperDeskStrategies } from "@/lib/trading/futuresDeskPolicy";
-import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/trading/btcFtRoster";
 import {
   evaluateMockTradingSignals,
   MOCK_TRADING_MIN_BARS,
   resolveMockTradingStrategies,
 } from "@/lib/trading/mockTradingSignalEvaluator";
 import type { MockTradingBar } from "@/lib/trading/mockTradingMarketData";
-import { isExecutableTraceRow } from "@/lib/trading/mockTradingEngine";
 
-function bullishBars(base = 100_000, count = 40): MockTradingBar[] {
-  const bars: MockTradingBar[] = [];
-  let price = base;
-  for (let i = 0; i < count; i++) {
-    price *= 1.002 + (i % 3) * 0.0003;
-    const high = price * 1.001;
-    const low = price * 0.998;
-    const open = i === 0 ? low : bars[i - 1]!.close;
-    bars.push({
-      time: 1_700_000_000 + i * 60,
-      open,
-      high,
-      low,
-      close: price,
-      volume: 5000 + i * 200,
-    });
-  }
-  return bars;
+function bars(count = MOCK_TRADING_MIN_BARS): MockTradingBar[] {
+  return Array.from({ length: count }, (_, index) => ({
+    time: 1_700_000_000 + index * 60,
+    open: 100_000,
+    high: 100_100,
+    low: 99_900,
+    close: 100_000,
+    volume: 1_000,
+  }));
 }
 
 describe("mockTradingSignalEvaluator", () => {
-  it("resolves a non-empty CORE strategy roster", () => {
-    const strategies = resolveMockTradingStrategies();
-    expect(strategies.length).toBeGreaterThan(0);
-    expect(strategies.every((s) => CORE_BTC_FT_STRATEGY_IDS.includes(s.id))).toBe(true);
+  it("resolves no strategies", () => {
+    expect(resolveMockTradingStrategies()).toEqual([]);
   });
 
-  it("returns insufficient bars error below minimum", () => {
-    const bars = bullishBars(100_000, MOCK_TRADING_MIN_BARS - 1);
+  it("evaluates zero strategies without emitting rows", () => {
+    const inputBars = bars();
     const result = evaluateMockTradingSignals({
-      bars,
-      markPrice: bars[bars.length - 1]!.close,
+      bars: inputBars,
+      markPrice: inputBars[inputBars.length - 1]!.close,
       symbol: "BTCUSD",
-      strategies: resolveMockTradingStrategies().slice(0, 3),
-    });
-    expect(result.error).toMatch(/insufficient bars/i);
-    expect(result.rows).toHaveLength(0);
-  });
-
-  it("emits executable CANDIDATE rows on strong bullish synthetic bars", () => {
-    const bars = bullishBars(100_000, 45);
-    const markPrice = bars[bars.length - 1]!.close;
-    const coreRaw = FUTURES_STRAT_DEFS.filter((s) => CORE_BTC_FT_STRATEGY_IDS.includes(s.id));
-    const { strategies } = buildPaperDeskStrategies(coreRaw, {
-      strategyIdAllowlist: null,
-      minTpSlRatio: 2,
-      allowFakeDiversity: false,
-    });
-
-    const result = evaluateMockTradingSignals({
-      bars,
-      markPrice,
-      symbol: "BTCUSD",
-      tickAt: 1_700_000_000_000,
-      strategies,
+      strategies: resolveMockTradingStrategies(),
     });
 
     expect(result.error).toBeNull();
-    expect(result.evaluatedStrategies).toBe(strategies.length);
-    const candidates = result.rows.filter((row) => row.status === "CANDIDATE");
-    expect(candidates.length).toBeGreaterThan(0);
-    expect(candidates.some((row) => isExecutableTraceRow(row))).toBe(true);
-    expect(new Set(candidates.map((row) => row.traceId)).size).toBe(candidates.length);
+    expect(result.evaluatedStrategies).toBe(0);
+    expect(result.rows).toEqual([]);
   });
 });
