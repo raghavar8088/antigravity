@@ -57,21 +57,18 @@ describe("ICC-NRP navigation registry", () => {
     expect(TRADING_NAV[0]?.label).toBe("Trade Engine");
   });
 
-  it("has a single consolidated trading pipeline item", () => {
-    expect(TRADING_NAV.map((i) => i.label)).toEqual(["Trade Engine"]);
+  it("lists the strategies module after trade engine", () => {
+    expect(TRADING_NAV.map((i) => i.label)).toEqual(["Trade Engine", "Strategies"]);
+    expect(TRADING_NAV[1]?.href).toBe(TERMINAL_ROUTES.strategies);
   });
 
-  it("has thirteen monitor items in mandatory order", () => {
+  it("has monitor items in mandatory order", () => {
     expect(MONITOR_NAV.map((i) => i.label)).toEqual([
       "Command Center",
-      "Execution",
-      "Strategy Authority",
-      "Portfolio Intelligence",
-      "Strategies",
       "Portfolio",
       "Risk",
       "Analytics",
-      "Research",
+      "Execution",
       "Events",
       "Health",
       "Diagnostics",

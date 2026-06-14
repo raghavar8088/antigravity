@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import RiskRibbon from "@/components/RiskRibbon";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
 import { resolvePageTitle } from "@/lib/utils/commandPaletteItems";
@@ -30,7 +29,6 @@ export function M3AppShell({
   pageTitle: pageTitleProp,
   price,
   priceChange24hPct = 0,
-  showRiskRibbon = true,
   statusChips,
   breadcrumb,
   pageActions,
@@ -137,12 +135,6 @@ export function M3AppShell({
               <KillSwitchIndicator />
             </div>
           </header>
-
-          {showRiskRibbon ? (
-            <div className="m3-risk-ribbon-wrap">
-              <RiskRibbon />
-            </div>
-          ) : null}
 
           <main className="m3-content-area" id="main-content">
             {children}
