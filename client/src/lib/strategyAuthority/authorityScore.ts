@@ -49,6 +49,12 @@ export interface AuthorityScore {
   wrComponent: number;
   ddComponent: number;
   sharpeComponent: number;
+  winRateScore: number;
+  pfScore: number;
+  expectancyScore: number;
+  drawdownScore: number;
+  sharpeScore: number;
+  gradeScore: number;
 }
 
 /** Stage-based multiplier: higher stages get a slight bonus for surviving longer. */
@@ -110,6 +116,15 @@ export function computeAuthorityScore(
         : ((metrics.sharpeRatio + 1) / 4) * 100,
   );
 
+  const expectancyComponent = clamp(
+    metrics.expectancy >= 50
+      ? 100
+      : metrics.expectancy <= -50
+        ? 0
+        : 50 + metrics.expectancy,
+  );
+  const stageBonus = clamp(((stageMultiplier(status) - 0.95) / 0.15) * 15, 0, 15);
+
   const raw = clamp(
     pnlComponent * 0.25 +
       pfComponent * 0.30 +
@@ -128,5 +143,11 @@ export function computeAuthorityScore(
     wrComponent,
     ddComponent,
     sharpeComponent,
+    winRateScore: clamp(wrComponent * 0.20, 0, 20),
+    pfScore: clamp(pfComponent * 0.20, 0, 20),
+    expectancyScore: clamp(expectancyComponent * 0.15, 0, 15),
+    drawdownScore: clamp(ddComponent * 0.15, 0, 15),
+    sharpeScore: clamp(sharpeComponent * 0.15, 0, 15),
+    gradeScore: stageBonus,
   };
 }

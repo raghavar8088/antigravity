@@ -1,1 +1,1 @@
-{}
+{"client/src/lib/strategyAuthority/authorityScore.ts":{"imports":["client/src/lib/strategyAuthority/types.ts"]},"client/src/lib/strategyAuthority/strategyAuthorityMongo.ts":{"imports":["client/src/lib/strategyAuthority/types.ts"],"references":["client/src/lib/strategyAuthority/types.ts"]}}

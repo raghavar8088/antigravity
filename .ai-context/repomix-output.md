@@ -358,6 +358,7 @@ The content is organized as follows:
   internal/regime/index.ts
   internal/regime/router.ts
   internal/research_ai/index.ts
+  internal/strategy/evaluator.ts
   internal/trading/aggregator_v2.test.ts
   internal/trading/aggregator_v2.ts
   internal/trading/signal_scoring.ts
@@ -506,6 +507,7 @@ The content is organized as follows:
   lib/strategyAuthority/grade5CatalogSignals.ts
   lib/strategyAuthority/gradeStageMockConfig.ts
   lib/strategyAuthority/portfolioTypes.ts
+  lib/strategyAuthority/strategyAuthorityMongo.ts
   lib/strategyAuthority/strategyCatalog.ts
   lib/strategyAuthority/types.ts
   lib/supabase/client.ts
