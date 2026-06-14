@@ -1507,7 +1507,7 @@ img { display: block; }
   --m3-elevation-2: var(--shadow-card);
   --m3-elevation-3: var(--shadow-card-hover);
   --m3-elevation-4: var(--shadow-card-hover);
-  --m3-nav-rail-expanded: 248px;
+  --m3-nav-rail-expanded: 200px;
   --m3-top-app-bar-height: 68px;
   --m3-page-padding: 24px;
 
@@ -1588,8 +1588,8 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 1560px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
 }
 
 .google-card,
@@ -1985,6 +1985,8 @@ textarea:focus-visible {
 
 .m3-content-area {
   padding: 24px;
+  max-width: none;
+  margin: 0;
 }
 
 .m3-risk-ribbon-wrap {
