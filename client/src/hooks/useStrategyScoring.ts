@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { scoreAllStrategies, type StrategyScore } from "@/lib/ai/strategyScoringEngine";
+import { scoreStrategiesFromTrades, type StrategyScore } from "@/lib/ai/strategyScoringEngine";
 import type { MockTrade } from "@/lib/trading/mockTradingEngine";
 
 export interface UseStrategyScoringArgs {
@@ -32,7 +32,7 @@ export function useStrategyScoring({
   );
 
   const scores = useMemo<StrategyScore[]>(
-    () => scoreAllStrategies(trades, currentRegime),
+    () => scoreStrategiesFromTrades(trades, currentRegime),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [closedCount, currentRegime],
   );

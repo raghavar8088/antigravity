@@ -387,6 +387,7 @@ The content is organized as follows:
   lib/ai/shadowTradeIntentSync.ts
   lib/ai/shadowTradeIntentTypes.ts
   lib/ai/strategyHealthEngine.ts
+  lib/ai/strategyPerformanceEngine.ts
   lib/ai/strategyScoringEngine.ts
   lib/ai/strategySignalTrace.ts
   lib/aiAppTracker/aiAppTrackerMongo.ts

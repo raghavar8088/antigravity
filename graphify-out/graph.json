@@ -20,7 +20,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "ai_context_repomix_output_file_summary",
-      "community": 2,
+      "community": 1,
       "norm_label": "file summary"
     },
     {
@@ -30,7 +30,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "ai_context_repomix_output_purpose",
-      "community": 2,
+      "community": 1,
       "norm_label": "purpose"
     },
     {
@@ -40,7 +40,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "ai_context_repomix_output_file_format",
-      "community": 2,
+      "community": 1,
       "norm_label": "file format"
     },
     {
@@ -50,7 +50,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "ai_context_repomix_output_usage_guidelines",
-      "community": 2,
+      "community": 1,
       "norm_label": "usage guidelines"
     },
     {
@@ -60,7 +60,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "ai_context_repomix_output_notes",
-      "community": 2,
+      "community": 1,
       "norm_label": "notes"
     },
     {
@@ -74,124 +74,64 @@
       "norm_label": "directory structure"
     },
     {
-      "label": "futuresStrategyDiagnostics.ts",
+      "label": "StrategyRotationPanel.tsx",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "trading_futuresstrategydiagnostics",
-      "community": 1,
-      "norm_label": "futuresstrategydiagnostics.ts"
-    },
-    {
-      "label": "StrategyDiagnosticRow",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "trading_futuresstrategydiagnostics_strategydiagnosticrow",
-      "community": 1,
-      "norm_label": "strategydiagnosticrow"
-    },
-    {
-      "label": "HealthCheckResult",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L29",
-      "_origin": "ast",
-      "id": "trading_futuresstrategydiagnostics_healthcheckresult",
-      "community": 1,
-      "norm_label": "healthcheckresult"
-    },
-    {
-      "label": "DiagnosticSummary",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L47",
-      "_origin": "ast",
-      "id": "trading_futuresstrategydiagnostics_diagnosticsummary",
-      "community": 1,
-      "norm_label": "diagnosticsummary"
-    },
-    {
-      "label": "futuresStrategyRotation.ts",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "trading_futuresstrategyrotation",
+      "id": "components_strategyrotationpanel",
       "community": 0,
-      "norm_label": "futuresstrategyrotation.ts"
+      "norm_label": "strategyrotationpanel.tsx"
     },
     {
-      "label": "RotationStatus",
+      "label": "StrategyRotationPanelProps",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L3",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L5",
       "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_rotationstatus",
+      "id": "components_strategyrotationpanel_strategyrotationpanelprops",
       "community": 0,
-      "norm_label": "rotationstatus"
+      "norm_label": "strategyrotationpanelprops"
     },
     {
-      "label": "RotationScore",
+      "label": "STATUS_COLOR",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
       "source_location": "L10",
       "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_rotationscore",
+      "id": "components_strategyrotationpanel_status_color",
       "community": 0,
-      "norm_label": "rotationscore"
+      "norm_label": "status_color"
     },
     {
-      "label": "RotationReport",
+      "label": "fmt()",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L19",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L18",
       "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_rotationreport",
+      "id": "components_strategyrotationpanel_fmt",
       "community": 0,
-      "norm_label": "rotationreport"
+      "norm_label": "fmt()"
     },
     {
-      "label": "scoreRow()",
+      "label": "ScoreRow()",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L31",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L23",
       "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_scorerow",
+      "id": "components_strategyrotationpanel_scorerow",
       "community": 0,
       "norm_label": "scorerow()"
     },
     {
-      "label": "toStatus()",
+      "label": "StrategyRotationPanel()",
       "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L46",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L108",
       "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_tostatus",
+      "id": "components_strategyrotationpanel_strategyrotationpanel",
       "community": 0,
-      "norm_label": "tostatus()"
-    },
-    {
-      "label": "computeStrategyRotation()",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L53",
-      "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_computestrategyrotation",
-      "community": 0,
-      "norm_label": "computestrategyrotation()"
-    },
-    {
-      "label": "getSuspendedStrategyIds()",
-      "file_type": "code",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L103",
-      "_origin": "ast",
-      "id": "trading_futuresstrategyrotation_getsuspendedstrategyids",
-      "community": 0,
-      "norm_label": "getsuspendedstrategyids()"
+      "norm_label": "strategyrotationpanel()"
     }
   ],
   "links": [
@@ -258,126 +198,65 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L47",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L18",
       "weight": 1.0,
-      "source": "trading_futuresstrategydiagnostics",
-      "target": "trading_futuresstrategydiagnostics_diagnosticsummary",
+      "source": "components_strategyrotationpanel",
+      "target": "components_strategyrotationpanel_fmt",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L29",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L23",
       "weight": 1.0,
-      "source": "trading_futuresstrategydiagnostics",
-      "target": "trading_futuresstrategydiagnostics_healthcheckresult",
+      "source": "components_strategyrotationpanel",
+      "target": "components_strategyrotationpanel_scorerow",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyDiagnostics.ts",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "trading_futuresstrategydiagnostics",
-      "target": "trading_futuresstrategydiagnostics_strategydiagnosticrow",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "imports_from",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategydiagnostics",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "imports",
-      "context": "import",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategydiagnostics_strategydiagnosticrow",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L53",
-      "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_computestrategyrotation",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L103",
-      "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_getsuspendedstrategyids",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L19",
-      "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_rotationreport",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
       "source_location": "L10",
       "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_rotationscore",
+      "source": "components_strategyrotationpanel",
+      "target": "components_strategyrotationpanel_status_color",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L3",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L108",
       "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_rotationstatus",
+      "source": "components_strategyrotationpanel",
+      "target": "components_strategyrotationpanel_strategyrotationpanel",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L31",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L5",
       "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_scorerow",
+      "source": "components_strategyrotationpanel",
+      "target": "components_strategyrotationpanel_strategyrotationpanelprops",
       "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "calls",
+      "context": "call",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/lib/trading/futuresStrategyRotation.ts",
-      "source_location": "L46",
+      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_location": "L52",
       "weight": 1.0,
-      "source": "trading_futuresstrategyrotation",
-      "target": "trading_futuresstrategyrotation_tostatus",
-      "confidence_score": 1.0
+      "confidence_score": 1.0,
+      "source": "components_strategyrotationpanel_scorerow",
+      "target": "components_strategyrotationpanel_fmt"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "509a31a18c6c8e6fe525c3368395fb0c19660369"
+  "built_at_commit": "d8492570bb672168e996c82fd64e5f0f6370813b"
 }

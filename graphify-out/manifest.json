@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781437704.2660158,
+    "mtime": 1781437949.2800455,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781437704.2660158,
-    "ast_hash": "1bcc953b92d2f09833dd83b1f2e6f768",
+    "mtime": 1781437949.2800455,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781437704.2646463,
-    "ast_hash": "0879d9adcce6b0d41f649f875a3ab0df",
+    "mtime": 1781437949.2800455,
+    "ast_hash": "18edd58f454a6c474f6970e5d35668bd",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781437704.2656574,
-    "ast_hash": "f32859a88e6c4cba7941f312905550da",
+    "mtime": 1781437949.2800455,
+    "ast_hash": "ab1f081f507a6dfd179663a84563b61f",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781437705.5980754,
-    "ast_hash": "c52f6d0703dc824f83e200034c6493d4",
+    "mtime": 1781437950.4901156,
+    "ast_hash": "eabea2760066caed204e9af6b6e4aaf0",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23277,6 +23277,11 @@
   "client/src/lib/trading/futuresStrategyRotation.ts": {
     "mtime": 1781437566.735441,
     "ast_hash": "211309c827b881073661496106ec9d75",
+    "semantic_hash": ""
+  },
+  "client/src/components/StrategyRotationPanel.tsx": {
+    "mtime": 1781437914.26018,
+    "ast_hash": "f5a20eff3c428ab3d71814b0263b6164",
     "semantic_hash": ""
   }
 }

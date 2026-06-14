@@ -1,1 +1,1 @@
-{"client-components":{"communities":[0,1],"files":1,"symbols":5,"top_files":[{"file":"client/src/components/StrategyRotationPanel.tsx","symbols":5}]}}
+{"client-hooks":{"communities":[2],"files":1,"symbols":3,"top_files":[{"file":"client/src/hooks/useStrategyScoring.ts","symbols":3}]},"client-lib":{"communities":[0,1,2,3],"files":2,"symbols":21,"top_files":[{"file":"client/src/lib/ai/strategyScoringEngine.ts","symbols":12},{"file":"client/src/lib/ai/strategyPerformanceEngine.ts","symbols":9}]}}
