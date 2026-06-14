@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781437949.2800455,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781438355.6792283,
+    "ast_hash": "afc607b059b4863601859da29fd1c3e4",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781437949.2800455,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781438355.6792283,
+    "ast_hash": "491fa8c87a270afad6026dd1dc14f1e3",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781437949.2800455,
-    "ast_hash": "18edd58f454a6c474f6970e5d35668bd",
+    "mtime": 1781438355.6772132,
+    "ast_hash": "d73544f92cad34d66a75558eefef0555",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781437949.2800455,
-    "ast_hash": "ab1f081f507a6dfd179663a84563b61f",
+    "mtime": 1781438355.6772132,
+    "ast_hash": "531ef3507ef5a584ebb9d84b1511f1e5",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781437950.4901156,
-    "ast_hash": "eabea2760066caed204e9af6b6e4aaf0",
+    "mtime": 1781438356.9754887,
+    "ast_hash": "7f5b04104c26d6599c9f8a7902396dfb",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23230,8 +23230,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useStrategyScoring.ts": {
-    "mtime": 1781436901.838246,
-    "ast_hash": "6208dcdd3b682a89d08d008b1155632f",
+    "mtime": 1781438314.113393,
+    "ast_hash": "b31fe6873cd382d173c8d0b966ba351c",
     "semantic_hash": ""
   },
   "client/src/lib/ai/mockStrategyRankingEngine.ts": {
@@ -23245,8 +23245,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/ai/strategyScoringEngine.ts": {
-    "mtime": 1781437047.6226602,
-    "ast_hash": "65dd91c9da160736f9802b06dac4900f",
+    "mtime": 1781438305.6946933,
+    "ast_hash": "a1261b049769c53372dd15403e875deb",
     "semantic_hash": ""
   },
   "client/src/lib/ai/strategySignalTrace.ts": {
@@ -23282,6 +23282,11 @@
   "client/src/components/StrategyRotationPanel.tsx": {
     "mtime": 1781437914.26018,
     "ast_hash": "f5a20eff3c428ab3d71814b0263b6164",
+    "semantic_hash": ""
+  },
+  "client/src/lib/ai/strategyPerformanceEngine.ts": {
+    "mtime": 1781438275.4426148,
+    "ast_hash": "397bd7ba586b68a1b79d6501e2429d7b",
     "semantic_hash": ""
   }
 }

@@ -10,7 +10,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "ai_context_repomix_output",
-      "community": 2,
+      "community": 4,
       "norm_label": "repomix-output.md"
     },
     {
@@ -20,7 +20,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "ai_context_repomix_output_file_summary",
-      "community": 1,
+      "community": 4,
       "norm_label": "file summary"
     },
     {
@@ -30,7 +30,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "ai_context_repomix_output_purpose",
-      "community": 1,
+      "community": 4,
       "norm_label": "purpose"
     },
     {
@@ -40,7 +40,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "ai_context_repomix_output_file_format",
-      "community": 1,
+      "community": 4,
       "norm_label": "file format"
     },
     {
@@ -50,7 +50,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "ai_context_repomix_output_usage_guidelines",
-      "community": 1,
+      "community": 4,
       "norm_label": "usage guidelines"
     },
     {
@@ -60,7 +60,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "ai_context_repomix_output_notes",
-      "community": 1,
+      "community": 4,
       "norm_label": "notes"
     },
     {
@@ -70,68 +70,278 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "ai_context_repomix_output_directory_structure",
-      "community": 2,
+      "community": 4,
       "norm_label": "directory structure"
     },
     {
-      "label": "StrategyRotationPanel.tsx",
+      "label": "useStrategyScoring.ts",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel",
-      "community": 0,
-      "norm_label": "strategyrotationpanel.tsx"
+      "id": "hooks_usestrategyscoring",
+      "community": 2,
+      "norm_label": "usestrategyscoring.ts"
     },
     {
-      "label": "StrategyRotationPanelProps",
+      "label": "UseStrategyScoringArgs",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L5",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L7",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel_strategyrotationpanelprops",
-      "community": 0,
-      "norm_label": "strategyrotationpanelprops"
+      "id": "hooks_usestrategyscoring_usestrategyscoringargs",
+      "community": 2,
+      "norm_label": "usestrategyscoringargs"
     },
     {
-      "label": "STATUS_COLOR",
+      "label": "UseStrategyScoringResult",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L10",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L14",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel_status_color",
-      "community": 0,
-      "norm_label": "status_color"
+      "id": "hooks_usestrategyscoring_usestrategyscoringresult",
+      "community": 2,
+      "norm_label": "usestrategyscoringresult"
     },
     {
-      "label": "fmt()",
+      "label": "useStrategyScoring()",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L24",
+      "_origin": "ast",
+      "id": "hooks_usestrategyscoring_usestrategyscoring",
+      "community": 2,
+      "norm_label": "usestrategyscoring()"
+    },
+    {
+      "label": "strategyPerformanceEngine.ts",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine",
+      "community": 1,
+      "norm_label": "strategyperformanceengine.ts"
+    },
+    {
+      "label": "RegimeKey",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_regimekey",
+      "community": 1,
+      "norm_label": "regimekey"
+    },
+    {
+      "label": "RegimeStats",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L11",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_regimestats",
+      "community": 1,
+      "norm_label": "regimestats"
+    },
+    {
+      "label": "StrategyPerformanceMetrics",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
       "source_location": "L18",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel_fmt",
-      "community": 0,
-      "norm_label": "fmt()"
+      "id": "ai_strategyperformanceengine_strategyperformancemetrics",
+      "community": 2,
+      "norm_label": "strategyperformancemetrics"
     },
     {
-      "label": "ScoreRow()",
+      "label": "EMPTY_REGIME_STATS",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L23",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L44",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel_scorerow",
-      "community": 0,
-      "norm_label": "scorerow()"
+      "id": "ai_strategyperformanceengine_empty_regime_stats",
+      "community": 1,
+      "norm_label": "empty_regime_stats"
     },
     {
-      "label": "StrategyRotationPanel()",
+      "label": "safeDiv()",
       "file_type": "code",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L108",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L46",
       "_origin": "ast",
-      "id": "components_strategyrotationpanel_strategyrotationpanel",
+      "id": "ai_strategyperformanceengine_safediv",
+      "community": 1,
+      "norm_label": "safediv()"
+    },
+    {
+      "label": "computeMaxDrawdown()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L51",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_computemaxdrawdown",
+      "community": 1,
+      "norm_label": "computemaxdrawdown()"
+    },
+    {
+      "label": "computeSharpe()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L64",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_computesharpe",
+      "community": 1,
+      "norm_label": "computesharpe()"
+    },
+    {
+      "label": "computeSortino()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L73",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_computesortino",
+      "community": 1,
+      "norm_label": "computesortino()"
+    },
+    {
+      "label": "computeStrategyPerformance()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L84",
+      "_origin": "ast",
+      "id": "ai_strategyperformanceengine_computestrategyperformance",
+      "community": 1,
+      "norm_label": "computestrategyperformance()"
+    },
+    {
+      "label": "strategyScoringEngine.ts",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine",
       "community": 0,
-      "norm_label": "strategyrotationpanel()"
+      "norm_label": "strategyscoringengine.ts"
+    },
+    {
+      "label": "ConfidenceRating",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_confidencerating",
+      "community": 0,
+      "norm_label": "confidencerating"
+    },
+    {
+      "label": "StrategyScore",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_strategyscore",
+      "community": 2,
+      "norm_label": "strategyscore"
+    },
+    {
+      "label": "clamp()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L49",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_clamp",
+      "community": 0,
+      "norm_label": "clamp()"
+    },
+    {
+      "label": "scorePnl()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L54",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scorepnl",
+      "community": 0,
+      "norm_label": "scorepnl()"
+    },
+    {
+      "label": "scoreProfitFactor()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L60",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scoreprofitfactor",
+      "community": 0,
+      "norm_label": "scoreprofitfactor()"
+    },
+    {
+      "label": "scoreWinRate()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L66",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scorewinrate",
+      "community": 0,
+      "norm_label": "scorewinrate()"
+    },
+    {
+      "label": "scoreDrawdown()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scoredrawdown",
+      "community": 0,
+      "norm_label": "scoredrawdown()"
+    },
+    {
+      "label": "scoreSharpe()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L76",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scoresharpe",
+      "community": 0,
+      "norm_label": "scoresharpe()"
+    },
+    {
+      "label": "confidenceFromSample()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L82",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_confidencefromsample",
+      "community": 0,
+      "norm_label": "confidencefromsample()"
+    },
+    {
+      "label": "metricsToScore()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L89",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_metricstoscore",
+      "community": 0,
+      "norm_label": "metricstoscore()"
+    },
+    {
+      "label": "scoreAllStrategies()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L150",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scoreallstrategies",
+      "community": 3,
+      "norm_label": "scoreallstrategies()"
+    },
+    {
+      "label": "scoreStrategiesFromTrades()",
+      "file_type": "code",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L176",
+      "_origin": "ast",
+      "id": "ai_strategyscoringengine_scorestrategiesfromtrades",
+      "community": 3,
+      "norm_label": "scorestrategiesfromtrades()"
     }
   ],
   "links": [
@@ -196,67 +406,543 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "ai_strategyscoringengine",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "ai_strategyscoringengine_scorestrategiesfromtrades",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "ai_strategyscoringengine_strategyscore",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L24",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "hooks_usestrategyscoring_usestrategyscoring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "hooks_usestrategyscoring_usestrategyscoringargs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "hooks_usestrategyscoring",
+      "target": "hooks_usestrategyscoring_usestrategyscoringresult",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "field",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useStrategyScoring.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "hooks_usestrategyscoring_usestrategyscoringresult",
+      "target": "ai_strategyscoringengine_strategyscore"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_computemaxdrawdown",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L64",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_computesharpe",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L73",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_computesortino",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L84",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_computestrategyperformance",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L44",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_empty_regime_stats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_regimekey",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_regimestats",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L46",
+      "weight": 1.0,
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_safediv",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
       "source_location": "L18",
       "weight": 1.0,
-      "source": "components_strategyrotationpanel",
-      "target": "components_strategyrotationpanel_fmt",
+      "source": "ai_strategyperformanceengine",
+      "target": "ai_strategyperformanceengine_strategyperformancemetrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyperformanceengine",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyperformanceengine_strategyperformancemetrics",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "generic_arg",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L22",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_strategyscore",
+      "target": "ai_strategyperformanceengine_strategyperformancemetrics"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L131",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyperformanceengine_computestrategyperformance",
+      "target": "ai_strategyperformanceengine_safediv"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L143",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyperformanceengine_computestrategyperformance",
+      "target": "ai_strategyperformanceengine_computemaxdrawdown"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L144",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyperformanceengine_computestrategyperformance",
+      "target": "ai_strategyperformanceengine_computesharpe"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyPerformanceEngine.ts",
+      "source_location": "L145",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyperformanceengine_computestrategyperformance",
+      "target": "ai_strategyperformanceengine_computesortino"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyperformanceengine_computestrategyperformance",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L190",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine_scorestrategiesfromtrades",
+      "target": "ai_strategyperformanceengine_computestrategyperformance"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_clamp",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L23",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L82",
       "weight": 1.0,
-      "source": "components_strategyrotationpanel",
-      "target": "components_strategyrotationpanel_scorerow",
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_confidencefromsample",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L10",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L17",
       "weight": 1.0,
-      "source": "components_strategyrotationpanel",
-      "target": "components_strategyrotationpanel_status_color",
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_confidencerating",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L108",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L89",
       "weight": 1.0,
-      "source": "components_strategyrotationpanel",
-      "target": "components_strategyrotationpanel_strategyrotationpanel",
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_metricstoscore",
       "confidence_score": 1.0
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L5",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L150",
       "weight": 1.0,
-      "source": "components_strategyrotationpanel",
-      "target": "components_strategyrotationpanel_strategyrotationpanelprops",
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scoreallstrategies",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L70",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scoredrawdown",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L54",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scorepnl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L60",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scoreprofitfactor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L76",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scoresharpe",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L176",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scorestrategiesfromtrades",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L66",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_scorewinrate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "ai_strategyscoringengine",
+      "target": "ai_strategyscoringengine_strategyscore",
       "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "context": "call",
       "confidence": "EXTRACTED",
-      "source_file": "client/src/components/StrategyRotationPanel.tsx",
-      "source_location": "L52",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L99",
       "weight": 1.0,
       "confidence_score": 1.0,
-      "source": "components_strategyrotationpanel_scorerow",
-      "target": "components_strategyrotationpanel_fmt"
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L73",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scoredrawdown",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L56",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scorepnl",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L63",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scoreprofitfactor",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L79",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scoresharpe",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L67",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scorewinrate",
+      "target": "ai_strategyscoringengine_clamp"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L94",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_scorepnl"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L95",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_scoreprofitfactor"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L96",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_scorewinrate"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L97",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_scoredrawdown"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L98",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_scoresharpe"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L140",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_metricstoscore",
+      "target": "ai_strategyscoringengine_confidencefromsample"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L158",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scoreallstrategies",
+      "target": "ai_strategyscoringengine_metricstoscore"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/lib/ai/strategyScoringEngine.ts",
+      "source_location": "L193",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "ai_strategyscoringengine_scorestrategiesfromtrades",
+      "target": "ai_strategyscoringengine_scoreallstrategies"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "d8492570bb672168e996c82fd64e5f0f6370813b"
+  "built_at_commit": "2060799bfc79a909353d124aff7e686e3bdaad0d"
 }
