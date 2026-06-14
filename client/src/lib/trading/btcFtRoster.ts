@@ -1,9 +1,8 @@
 ﻿/**
  * BTC Future Trading — roster resolution.
  *
- * Strategy inventories have been removed from the application. This resolver
- * now returns empty rosters while preserving the public API used by the desk,
- * diagnostics, and UI.
+ * Trade Engine resolves the active production winner roster only. Research,
+ * generated, and premium pools remain empty unless explicitly restored.
  */
 
 import { applyWinnersOnlyGate, buildPaperDeskStrategies } from "@/lib/trading/futuresDeskPolicy";
@@ -22,7 +21,10 @@ import {
 } from "@/lib/trading/futuresCategoryStrategies";
 import type { FuturesStratDef, TradingCategoryId } from "@/lib/trading/futuresStratTypes";
 
-export const CORE_BTC_FT_STRATEGY_IDS: readonly number[] = [];
+export const CORE_BTC_FT_STRATEGY_IDS: readonly number[] = [
+  91, 92, 95, 96, 111, 112, 117, 118, 123, 124,
+  125, 126, 131, 132, 133, 134, 139, 140, 151, 152,
+];
 
 export const CATEGORY_STRATEGY_IDS: Readonly<Record<TradingCategoryId, readonly number[]>> = {
   scalping: SCALPING_STRATEGIES.map((d) => d.id),

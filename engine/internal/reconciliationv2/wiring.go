@@ -55,7 +55,7 @@ func WireProduction(
 
 	out := &WiredAuthorities{}
 
-	runtimeAdapter := NewPositionManagerExchangeAdapter(posMgr, equityUSD, accountID)
+	runtimeAdapter := NewPositionManagerExchangeAdapter(posMgr, equityUSD, accountID, readerCfg.MarkPriceUSD)
 	out.Runtime = NewExchangeReconciliationAuthority(
 		runtimeAdapter,
 		omsReader,

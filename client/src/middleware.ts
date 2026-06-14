@@ -101,6 +101,8 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/session",
   "/api/health",
+  "/api/killswitch/status",
+  "/api/risk-ribbon",
   // Mock trading is public (browser simulation — no engine required)
   "/mock-trading",
   "/api/mock-trading",

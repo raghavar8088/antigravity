@@ -14,9 +14,10 @@ import (
 // ledger-backed OMS reader, this detects drift between event-sourced projections
 // and the execution hot-path without mirroring OMS to itself.
 type PositionManagerExchangeAdapter struct {
-	posMgr      *positions.Manager
-	equityUSD   func() float64
-	accountID   string
+	posMgr       *positions.Manager
+	equityUSD    func() float64
+	markPriceUSD func() float64
+	accountID    string
 }
 
 // NewPositionManagerExchangeAdapter wires runtime position/equity sources.
@@ -24,11 +25,17 @@ func NewPositionManagerExchangeAdapter(
 	posMgr *positions.Manager,
 	equityUSD func() float64,
 	accountID string,
+	markPriceUSD ...func() float64,
 ) *PositionManagerExchangeAdapter {
+	var markFn func() float64
+	if len(markPriceUSD) > 0 {
+		markFn = markPriceUSD[0]
+	}
 	return &PositionManagerExchangeAdapter{
-		posMgr:    posMgr,
-		equityUSD: equityUSD,
-		accountID: accountID,
+		posMgr:       posMgr,
+		equityUSD:    equityUSD,
+		markPriceUSD: markFn,
+		accountID:    accountID,
 	}
 }
 
@@ -60,11 +67,13 @@ func (a *PositionManagerExchangeAdapter) GetBalances(context.Context) ([]AssetBa
 	if a.equityUSD != nil {
 		equity = a.equityUSD()
 	}
+	unrealized := a.computeRuntimeUnrealizedPnL()
 	return []AssetBalance{{
 		Asset:         "USD",
 		WalletBalance: equity,
 		Available:     equity,
 		EquityUSD:     equity,
+		UnrealizedPnL: unrealized,
 	}}, nil
 }
 
@@ -79,17 +88,57 @@ func (a *PositionManagerExchangeAdapter) GetPositions(context.Context) ([]Exchan
 		if pos.Side == strategy.ActionSell {
 			side = "SHORT"
 		}
+		mark := a.runtimeMarkPrice()
 		notional := pos.Size * pos.EntryPrice
+		unrealized := runtimePositionUnrealizedPnL(pos, mark)
 		result = append(result, ExchangePosition{
-			Symbol:      normalizeReconSymbol(pos.Symbol),
-			Side:        side,
-			Quantity:    pos.Size,
-			EntryPrice:  pos.EntryPrice,
-			NotionalUSD: notional,
-			UpdatedAt:   pos.OpenedAt,
+			Symbol:        normalizeReconSymbol(pos.Symbol),
+			Side:          side,
+			Quantity:      pos.Size,
+			EntryPrice:    pos.EntryPrice,
+			MarkPrice:     mark,
+			NotionalUSD:   notional,
+			UnrealizedPnL: unrealized,
+			UpdatedAt:     pos.OpenedAt,
 		})
 	}
 	return result, nil
+}
+
+func (a *PositionManagerExchangeAdapter) runtimeMarkPrice() float64 {
+	if a.markPriceUSD == nil {
+		return 0
+	}
+	mark := a.markPriceUSD()
+	if mark <= 0 {
+		return 0
+	}
+	return mark
+}
+
+func (a *PositionManagerExchangeAdapter) computeRuntimeUnrealizedPnL() float64 {
+	if a.posMgr == nil {
+		return 0
+	}
+	mark := a.runtimeMarkPrice()
+	if mark <= 0 {
+		return 0
+	}
+	var unrealized float64
+	for _, pos := range a.posMgr.GetOpenPositions() {
+		unrealized += runtimePositionUnrealizedPnL(pos, mark)
+	}
+	return unrealized
+}
+
+func runtimePositionUnrealizedPnL(pos positions.Position, mark float64) float64 {
+	if mark <= 0 || pos.Size <= 0 || pos.EntryPrice <= 0 {
+		return 0
+	}
+	if pos.Side == strategy.ActionSell {
+		return (pos.EntryPrice - mark) * pos.Size
+	}
+	return (mark - pos.EntryPrice) * pos.Size
 }
 
 func (a *PositionManagerExchangeAdapter) GetOrders(context.Context, string, time.Time) ([]ExchangeOrder, error) {

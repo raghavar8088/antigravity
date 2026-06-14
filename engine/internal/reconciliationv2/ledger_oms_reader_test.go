@@ -8,6 +8,7 @@ import (
 	"antigravity-engine/internal/ledger"
 	"antigravity-engine/internal/omsv3"
 	"antigravity-engine/internal/positions"
+	"antigravity-engine/internal/strategy"
 )
 
 func TestLedgerOMSStateReader_GetOMSSnapshot_Empty(t *testing.T) {
@@ -41,6 +42,24 @@ func TestBuildLedgerBalanceSnapshot_UsesInitialBalanceNotPnLAlone(t *testing.T) 
 	}
 }
 
+func TestComputeOMSNotionalUSD_UsesNotionalNotQuantity(t *testing.T) {
+	positions := []OMSPosition{{
+		Symbol:      "BTCUSDT",
+		Side:        "LONG",
+		Quantity:    0.156,
+		EntryPrice:  64094.87,
+		NotionalUSD: 9998.80,
+	}}
+
+	gross, net := computeOMSNotionalUSD(positions)
+	if gross != 9998.80 {
+		t.Fatalf("gross=%f want 9998.80", gross)
+	}
+	if net != 9998.80 {
+		t.Fatalf("net=%f want 9998.80; must not compare exchange USD notional to BTC quantity", net)
+	}
+}
+
 func TestPositionSideKey_NormalizesBuyLong(t *testing.T) {
 	if positionSideKey("BTC-USD", "BUY") != positionSideKey("BTC-USD", "LONG") {
 		t.Fatal("BUY and LONG should produce same key")
@@ -62,6 +81,41 @@ func TestPositionManagerExchangeAdapter_GetPositions(t *testing.T) {
 	}
 	if adapter.Name() != "engine-runtime" {
 		t.Fatalf("name=%s", adapter.Name())
+	}
+}
+
+func TestPositionManagerExchangeAdapter_ReportsRuntimeUnrealizedPnL(t *testing.T) {
+	posMgr := positions.NewManager()
+	_, err := posMgr.OpenPosition(strategy.Signal{
+		Symbol:        "BTCUSDT",
+		Action:        strategy.ActionBuy,
+		TargetSize:    0.1,
+		StopLossPct:   0.5,
+		TakeProfitPct: 1.5,
+	}, 100, "test")
+	if err != nil {
+		t.Fatalf("OpenPosition: %v", err)
+	}
+
+	adapter := NewPositionManagerExchangeAdapter(
+		posMgr,
+		func() float64 { return 1_000_001 },
+		"btc-paper-1",
+		func() float64 { return 110 },
+	)
+	balances, err := adapter.GetBalances(context.Background())
+	if err != nil {
+		t.Fatalf("GetBalances: %v", err)
+	}
+	if balances[0].UnrealizedPnL != 1 {
+		t.Fatalf("runtime unrealized=%f want 1", balances[0].UnrealizedPnL)
+	}
+	exchangePositions, err := adapter.GetPositions(context.Background())
+	if err != nil {
+		t.Fatalf("GetPositions: %v", err)
+	}
+	if exchangePositions[0].UnrealizedPnL != 1 {
+		t.Fatalf("position unrealized=%f want 1", exchangePositions[0].UnrealizedPnL)
 	}
 }
 

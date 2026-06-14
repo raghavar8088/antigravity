@@ -71,18 +71,21 @@ func New(ctx context.Context) (*Client, error) {
 		dbName = DefaultDB
 	}
 
+	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	mc, err := mongo.Connect(options.Client().ApplyURI(uri))
 	if err != nil {
 		return nil, fmt.Errorf("mongopersist connect: %w", err)
 	}
 
-	if err := mc.Ping(ctx, nil); err != nil {
+	if err := mc.Ping(connectCtx, nil); err != nil {
 		return nil, fmt.Errorf("mongopersist ping: %w", err)
 	}
 
 	c := &Client{mc: mc, db: mc.Database(dbName)}
 
-	if err := c.ensureIndexes(ctx); err != nil {
+	if err := c.ensureIndexes(connectCtx); err != nil {
 		log.Printf("[mongopersist] warn: index creation: %v", err)
 	}
 
@@ -104,10 +107,10 @@ func (c *Client) Col(name string) *mongo.Collection {
 
 func (c *Client) ensureIndexes(ctx context.Context) error {
 	type idxSpec struct {
-		col     string
-		keys    bson.D
-		unique  bool
-		sparse  bool
+		col    string
+		keys   bson.D
+		unique bool
+		sparse bool
 	}
 
 	specs := []idxSpec{

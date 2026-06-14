@@ -100,13 +100,10 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 	now := time.Now().UTC()
 	recentFills := buildRecentFillsFromEvents(events, now.Add(-30*time.Minute))
 
-	grossNotional := exposure.TotalNotionalUSD
-	netNotional := 0.0
-	for _, qty := range exposure.NetExposure {
-		netNotional += qty
-	}
-	if netNotional < 0 {
-		netNotional = -netNotional
+	grossNotional, netNotional := computeOMSNotionalUSD(positions)
+	if grossNotional == 0 && exposure.TotalNotionalUSD > 0 {
+		grossNotional = exposure.TotalNotionalUSD
+		netNotional = exposure.TotalNotionalUSD
 	}
 
 	balance := buildLedgerBalanceSnapshot(r.cfg, pnl, openPos)
@@ -121,6 +118,32 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 		NetNotional:   netNotional,
 		SnapshotAt:    now,
 	}, nil
+}
+
+func computeOMSNotionalUSD(positions []OMSPosition) (grossNotional float64, netNotional float64) {
+	var longNotional float64
+	var shortNotional float64
+	for _, pos := range positions {
+		notional := pos.NotionalUSD
+		if notional == 0 {
+			notional = pos.Quantity * pos.EntryPrice
+		}
+		if notional < 0 {
+			notional = -notional
+		}
+		grossNotional += notional
+		switch normalizePositionSide(pos.Side) {
+		case "SHORT":
+			shortNotional += notional
+		default:
+			longNotional += notional
+		}
+	}
+	netNotional = longNotional - shortNotional
+	if netNotional < 0 {
+		netNotional = -netNotional
+	}
+	return grossNotional, netNotional
 }
 
 // buildLedgerBalanceSnapshot projects paper equity from ledger events.
