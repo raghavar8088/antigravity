@@ -16,7 +16,7 @@ export interface UseMarketRegimeArgs {
 }
 
 export interface UseMarketRegimeResult {
-  regime: MarketRegime | "unknown";
+  regime: MarketRegime | null;
   snapshot: RegimeSnapshot | null;
 }
 
@@ -38,7 +38,7 @@ export function useMarketRegime({
   }, [candles.length]);
 
   return {
-    regime: snapshot?.regime ?? "unknown",
+    regime: snapshot?.regime ?? null,
     snapshot,
   };
 }

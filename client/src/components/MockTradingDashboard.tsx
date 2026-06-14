@@ -1205,7 +1205,7 @@ export default function MockTradingDashboard() {
   });
   const scoring = useStrategyScoring({
     trades: engine.portfolioTrades,
-    currentRegime: regime.regime,
+    currentRegime: regime.regime ?? "unknown",
     newCandleReady: candles.newCandleReady,
     topNCount: research.config.topN,
   });

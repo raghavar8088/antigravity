@@ -1,1 +1,1 @@
-{}
+{"client/src/components/MockTradingDashboard.tsx":{"imports":["client/src/hooks/useMarketRegime.ts"]}}

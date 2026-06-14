@@ -1,1 +1,1 @@
-{"client-hooks":{"communities":[0],"files":1,"symbols":3,"top_files":[{"file":"client/src/hooks/useStrategyScoring.ts","symbols":3}]}}
+{"client-components":{"communities":[0,1,2,3,4],"files":1,"symbols":35,"top_files":[{"file":"client/src/components/MockTradingDashboard.tsx","symbols":35}]},"client-hooks":{"communities":[1],"files":1,"symbols":3,"top_files":[{"file":"client/src/hooks/useMarketRegime.ts","symbols":3}]}}
