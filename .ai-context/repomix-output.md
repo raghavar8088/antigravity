@@ -213,6 +213,7 @@ The content is organized as follows:
   components/MockMonteCarloPanel.tsx
   components/MockResearchChartsPanel.tsx
   components/MockRiskAnalyticsPanel.tsx
+  components/MockStrategyLeaderboardPanel.tsx
   components/MockTradingDashboard.test.tsx
   components/MockTradingDashboard.tsx
   components/MTFConfluencePanel.tsx
@@ -237,6 +238,7 @@ The content is organized as follows:
   components/SignalTracePanel.tsx
   components/SoakTrendPanel.tsx
   components/StorageHealthPanel.tsx
+  components/StrategyLeaderboard.tsx
   components/terminal/AppShell.tsx
   components/terminal/index.ts
   components/terminal/institutional/AllocationView.tsx
@@ -265,6 +267,7 @@ The content is organized as follows:
   components/terminal/institutional/ResearchCenter.tsx
   components/terminal/institutional/RetirementCenter.tsx
   components/terminal/institutional/RiskModule.tsx
+  components/terminal/institutional/StrategyGenome.tsx
   components/terminal/institutional/TerminalCard.tsx
   components/terminal/institutional/TerminalLayoutClient.tsx
   components/terminal/institutional/TerminalShell.tsx
@@ -335,6 +338,7 @@ The content is organized as follows:
   hooks/useOwnerAuth.ts
   hooks/usePipelineCounts.ts
   hooks/usePositions.ts
+  hooks/useStrategyScoring.ts
   hooks/useTerminalLayout.ts
   hooks/useTrades.ts
   instrumentation.ts
@@ -373,6 +377,7 @@ The content is organized as follows:
   lib/ai/mockResearchPortfolioAllocation.ts
   lib/ai/mockResearchStrategies.ts
   lib/ai/mockResearchWalkForward.ts
+  lib/ai/mockStrategyRankingEngine.ts
   lib/ai/mockTradeQualityScorer.ts
   lib/ai/QuantAIAgent.ts
   lib/ai/replayWalkForwardRanker.ts
@@ -380,6 +385,9 @@ The content is organized as follows:
   lib/ai/shadowTradeIntentMapper.ts
   lib/ai/shadowTradeIntentSync.ts
   lib/ai/shadowTradeIntentTypes.ts
+  lib/ai/strategyHealthEngine.ts
+  lib/ai/strategyScoringEngine.ts
+  lib/ai/strategySignalTrace.ts
   lib/aiAppTracker/aiAppTrackerMongo.ts
   lib/aiAppTracker/collectAppSnapshot.ts
   lib/aiAppTracker/summarizeTrackerReport.ts
@@ -492,6 +500,9 @@ The content is organized as follows:
   lib/risk/RiskEngine.ts
   lib/sep/sepPipeline.ts
   lib/shadowTradeIntentMapper.test.ts
+  lib/strategyAuthority/authorityScore.ts
+  lib/strategyAuthority/grade5CatalogSignals.ts
+  lib/strategyAuthority/gradeStageMockConfig.ts
   lib/strategyAuthority/portfolioTypes.ts
   lib/strategyAuthority/strategyCatalog.ts
   lib/strategyAuthority/types.ts

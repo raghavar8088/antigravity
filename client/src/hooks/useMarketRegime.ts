@@ -1,25 +1,44 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { classifyMarketRegime, type MarketRegime, type RegimeSnapshot } from "@/lib/ai/marketRegimeClassifier";
+import { useMemo } from "react";
+import {
+  classifyMarketRegime,
+  type MarketRegime,
+  type RegimeSnapshot,
+} from "@/lib/ai/marketRegimeClassifier";
 import type { OHLCVCandle } from "@/lib/ai/mockResearchIndicators";
 
-export function useMarketRegime(deps: {
-  candles: OHLCVCandle[];
+const MIN_CANDLES_FOR_REGIME = 20;
+
+export interface UseMarketRegimeArgs {
+  candles: readonly OHLCVCandle[];
   newCandleReady: boolean;
-}): { snapshot: RegimeSnapshot | null; regime: MarketRegime | null } {
-  const [snapshot, setSnapshot] = useState<RegimeSnapshot | null>(null);
-  const ref = useRef(deps);
-  ref.current = deps;
+}
 
-  useEffect(() => {
-    if (!deps.newCandleReady) return;
-    const id = setTimeout(() => {
-      if (ref.current.candles.length < 60) return;
-      setSnapshot(classifyMarketRegime(ref.current.candles));
-    }, 0);
-    return () => clearTimeout(id);
-  }, [deps.newCandleReady]);
+export interface UseMarketRegimeResult {
+  regime: MarketRegime | "unknown";
+  snapshot: RegimeSnapshot | null;
+}
 
-  return { snapshot, regime: snapshot?.regime ?? null };
+/**
+ * Classifies the current market regime from the live OHLCV candle history.
+ * Re-runs classification whenever `newCandleReady` flips (each closed 1m bar).
+ */
+export function useMarketRegime({
+  candles,
+}: UseMarketRegimeArgs): UseMarketRegimeResult {
+  const snapshot = useMemo<RegimeSnapshot | null>(() => {
+    if (candles.length < MIN_CANDLES_FOR_REGIME) return null;
+    try {
+      return classifyMarketRegime(candles);
+    } catch {
+      return null;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candles.length]);
+
+  return {
+    regime: snapshot?.regime ?? "unknown",
+    snapshot,
+  };
 }
