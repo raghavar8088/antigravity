@@ -23,8 +23,10 @@ export function StatusChip({
   dot?: boolean;
   className?: string;
 }) {
+  const isOffline = label.toLowerCase() === "offline" || label.toLowerCase().includes("unavailable");
+
   return (
-    <span className={cn("m3-status-chip", toneClass[tone], className)}>
+    <span className={cn("m3-status-chip", toneClass[tone], isOffline && "m3-status-chip--offline", className)}>
       {dot ? <span className="m3-status-chip__dot" aria-hidden /> : null}
       {label}
     </span>

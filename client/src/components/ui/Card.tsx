@@ -38,15 +38,20 @@ export function Card({ title, subtitle, actions, children, className, variant = 
 }
 
 type MetricTone = "neutral" | "positive" | "negative" | "warning";
+type MetricSize = "sm" | "md" | "lg";
 
 export function Metric({
   label,
   value,
   tone = "neutral",
+  delta,
+  size = "md",
 }: {
   label: string;
   value: string;
   tone?: MetricTone;
+  delta?: string;
+  size?: MetricSize;
 }) {
   const toneClass =
     tone === "positive"
@@ -56,11 +61,17 @@ export function Metric({
       : tone === "warning"
       ? "m3-metric-tile__value--warning"
       : "";
+  const deltaToneClass = delta?.trim().startsWith("+")
+    ? "m3-metric-tile__delta--positive"
+    : delta?.trim().startsWith("-")
+    ? "m3-metric-tile__delta--negative"
+    : "";
 
   return (
     <div className="m3-metric-tile">
       <div className="m3-metric-tile__label">{label}</div>
-      <div className={cn("m3-metric-tile__value", toneClass)}>{value}</div>
+      <div className={cn("m3-metric-tile__value", `m3-metric-tile__value--${size}`, toneClass)}>{value}</div>
+      {delta ? <div className={cn("m3-metric-tile__delta", deltaToneClass)}>{delta}</div> : null}
     </div>
   );
 }

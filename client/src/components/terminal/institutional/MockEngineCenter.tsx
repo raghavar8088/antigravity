@@ -12,6 +12,7 @@ import { PromotionTower } from "./PromotionTower";
 import { MockStageTradingSuite } from "./MockStageTradingSuite";
 import { RegimeIntelligence } from "./RegimeIntelligence";
 import { TerminalCard, Metric } from "./TerminalCard";
+import { SkeletonBlock } from "@/components/ui/EmptyState";
 import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 
 type SortKey = "authority" | "pf" | "sharpe" | "drawdown" | "allocation";
@@ -19,6 +20,38 @@ type SortKey = "authority" | "pf" | "sharpe" | "drawdown" | "allocation";
 function fmt(n: number | undefined, dec = 2) {
   if (n == null || isNaN(n)) return "—";
   return n.toFixed(dec);
+}
+
+function EngineRosterSkeleton() {
+  return (
+    <div className="overflow-x-auto" aria-busy="true" aria-label="Loading engine roster">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-[9px] uppercase tracking-wider text-zinc-500 border-b border-zinc-800">
+            <th className="py-2 px-2">#</th>
+            <th className="py-2 px-2">Strategy</th>
+            <th className="py-2 px-2">Family</th>
+            <th className="py-2 px-2 text-right">Authority</th>
+            <th className="py-2 px-2 text-right">PF</th>
+            <th className="py-2 px-2 text-right">Sharpe</th>
+            <th className="py-2 px-2 text-right">Drawdown</th>
+            <th className="py-2 px-2 text-right">Allocation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 5 }).map((_, rowIndex) => (
+            <tr key={rowIndex} className="border-t border-zinc-800">
+              {Array.from({ length: 8 }).map((__, cellIndex) => (
+                <td key={cellIndex} className={`py-2 px-2 ${cellIndex >= 3 ? "text-right" : ""}`}>
+                  <SkeletonBlock width={cellIndex === 1 ? 164 : cellIndex === 2 ? 96 : 54} height={12} rounded={3} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function MockEngineCenter() {
@@ -195,7 +228,7 @@ export function MockEngineCenter() {
         }
       >
         {loading ? (
-          <div className="py-8 text-center text-xs text-zinc-600 animate-pulse">Loading engine roster…</div>
+          <EngineRosterSkeleton />
         ) : !hasAuthority ? (
           <div className="py-8 text-center text-xs text-zinc-500">—</div>
         ) : ranked.length === 0 ? (

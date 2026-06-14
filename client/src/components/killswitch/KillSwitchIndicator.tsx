@@ -1,36 +1,74 @@
 "use client";
 
+import { useState } from "react";
 import { useKillSwitch } from "@/hooks/useKillSwitch";
 import { cn } from "@/components/ui/cn";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
-/** Compact header indicator — always visible. Shows ARMED or TRIGGERED state. */
+/** Compact header emergency control. Always visible in the top app bar. */
 export function KillSwitchIndicator() {
-  const { status } = useKillSwitch();
+  const { status, loading, trigger, resume } = useKillSwitch();
+  const [showHaltModal, setShowHaltModal] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
 
   const isActive = status.active;
   const isOffline = status.dataState !== "ok";
+  const label = isActive ? "TRIGGERED" : isOffline ? "OFFLINE" : "HALT ALL";
+
+  async function onHaltConfirm() {
+    await trigger("operator_manual_halt");
+    setShowHaltModal(false);
+  }
+
+  async function onResumeConfirm() {
+    await resume();
+    setShowResumeModal(false);
+  }
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-[4px]",
-        isActive
-          ? "text-[var(--color-loss)] bg-[rgba(239,68,68,0.12)] animate-pulse"
-          : isOffline
-          ? "text-[var(--color-warning)] bg-[rgba(249,115,22,0.08)]"
-          : "text-[var(--color-profit)] bg-[rgba(34,197,94,0.08)]",
-      )}
-      role="status"
-      aria-label={isActive ? "Kill switch triggered" : "Kill switch armed"}
-    >
-      <span
+    <>
+      <button
+        type="button"
         className={cn(
-          "w-[6px] h-[6px] rounded-full",
-          isActive ? "bg-[var(--color-loss)] animate-pulse" : isOffline ? "bg-[var(--color-warning)]" : "bg-[var(--color-profit)] animate-pulse",
+          "m3-kill-switch-indicator",
+          isActive && "m3-kill-switch-indicator--active",
         )}
-        aria-hidden
+        onClick={() => (isActive ? setShowResumeModal(true) : setShowHaltModal(true))}
+        disabled={loading || (!isActive && isOffline)}
+        aria-label={isActive ? "Kill switch triggered. Open resume confirmation." : "Halt all trading. Open confirmation."}
+      >
+        {label}
+      </button>
+
+      <ConfirmModal
+        open={showHaltModal}
+        onOpenChange={setShowHaltModal}
+        title="Halt All Trading"
+        description={`This will immediately halt all ${status.activeStrategies || "active"} strategies and cancel all open orders.`}
+        consequence="This will cancel open orders, halt active strategies, and prevent new signals. This action cannot be auto-reversed."
+        confirmLabel="HALT ALL TRADING"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={onHaltConfirm}
+        loading={loading}
       />
-      {isActive ? "TRIGGERED" : isOffline ? "OFFLINE" : "ARMED"}
-    </div>
+
+      <ConfirmModal
+        open={showResumeModal}
+        onOpenChange={setShowResumeModal}
+        title="Resume Trading"
+        description={
+          status.openOrders > 0
+            ? `There are ${status.openOrders} open orders in the system. Resuming will allow strategies to place new orders.`
+            : "All strategies will be unblocked and allowed to place new orders."
+        }
+        consequence="Strategies will immediately resume scanning for entries and may place orders in the market."
+        confirmLabel="Resume Trading"
+        cancelLabel="Cancel"
+        destructive={false}
+        onConfirm={onResumeConfirm}
+        loading={loading}
+      />
+    </>
   );
 }

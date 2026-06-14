@@ -6,10 +6,9 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import RiskRibbon from "@/components/RiskRibbon";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
-import { StatusChip } from "@/components/ui/StatusChip";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
 import { resolvePageTitle } from "@/lib/utils/commandPaletteItems";
-import { formatNavCount, usePipelineCounts } from "@/hooks/usePipelineCounts";
+import { usePipelineCounts } from "@/hooks/usePipelineCounts";
 import { MONITOR_NAV, TRADING_NAV, isNavItemActive, TERMINAL_ROUTES, type CommandCenterNavItem } from "@/lib/utils/navRoutes";
 import { NavIcon } from "@/components/terminal/institutional/NavIcons";
 import { pct, px } from "@/components/terminal/institutional/format";
@@ -44,7 +43,7 @@ export function M3AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { theme, toggle: toggleTheme } = useThemeToggle();
   const pageTitle = pageTitleProp ?? resolvePageTitle(pathname);
-  const pipelineCounts = usePipelineCounts();
+  usePipelineCounts();
 
   return (
     <CommandPaletteProvider>
@@ -56,8 +55,28 @@ export function M3AppShell({
         >
           <div className="m3-nav-rail__brand">
             <Link href={TERMINAL_ROUTES.home} className="m3-nav-rail__brand-link">
-              <span className="m3-nav-rail__logo" aria-hidden>ICC</span>
-              <span className="m3-nav-rail__brand-text">Institutional Command Center</span>
+              <div
+                aria-hidden
+                style={{
+                  color: "var(--accent)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                }}
+              >
+                ICC
+              </div>
+              <div
+                className="m3-nav-rail__brand-text"
+                style={{
+                  color: "var(--text-secondary)",
+                  fontSize: 11,
+                  lineHeight: 1.3,
+                }}
+              >
+                Institutional<br />Command Center
+              </div>
             </Link>
           </div>
           <div className="m3-nav-rail__scroll">
@@ -67,7 +86,6 @@ export function M3AppShell({
                 key={item.href}
                 item={item}
                 pathname={pathname}
-                count={formatNavCount(pipelineCounts, item.countStatus)}
                 onNavigate={() => setMobileNavOpen(false)}
               />
             ))}
@@ -98,28 +116,31 @@ export function M3AppShell({
             <button type="button" className="m3-icon-btn m3-mobile-menu-btn" aria-label="Open navigation menu" onClick={() => setMobileNavOpen(true)}>
               <NavIcon name="menu" />
             </button>
-            <div>
-              {breadcrumb ? <div className="m3-breadcrumb">{breadcrumb}</div> : null}
+            <div className="m3-top-app-bar__identity">
               <h1 className="m3-top-app-bar__title">{pageTitle}</h1>
-              {price != null && price > 0 ? (
-                <div className="m3-top-app-bar__metrics">
-                  <span className="m3-top-app-bar__price">${px(price)}</span>
-                  <span className={priceChange24hPct >= 0 ? "m3-text-profit" : "m3-text-loss"}>{pct(priceChange24hPct)}</span>
-                </div>
-              ) : null}
+              {breadcrumb ? <div className="m3-breadcrumb">{breadcrumb}</div> : null}
             </div>
+            {price != null && price > 0 ? (
+              <div className="m3-top-app-bar__metrics icc-header-price" aria-label="BTC 24/7 live price">
+                <span className="m3-top-app-bar__price">${px(price)}</span>
+                <span className={`m3-top-app-bar__change ${priceChange24hPct >= 0 ? "m3-text-profit" : "m3-text-loss"}`}>
+                  {priceChange24hPct >= 0 ? "▲" : "▼"} {pct(priceChange24hPct)}
+                </span>
+                <span className="m3-top-app-bar__live-label">BTC 24/7 LIVE</span>
+              </div>
+            ) : null}
             <div className="m3-top-app-bar__search">
               <CommandPaletteTrigger />
             </div>
             <div className="m3-top-app-bar__actions">
               <SessionClock />
               <RiskHUD />
-              {statusChips}
-              <KillSwitchIndicator />
+              {statusChips ? <div className="m3-top-app-bar__status-chips">{statusChips}</div> : null}
               <button type="button" className="m3-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
                 <NavIcon name={theme === "dark" ? "light" : "dark"} />
               </button>
               {pageActions}
+              <KillSwitchIndicator />
             </div>
           </header>
 
@@ -141,32 +162,26 @@ export function M3AppShell({
 function ShellNavLink({
   item,
   pathname,
-  count,
   onNavigate,
 }: {
   item: CommandCenterNavItem;
   pathname: string;
-  count?: string;
   onNavigate: () => void;
 }) {
   const active = isNavItemActive(pathname, {
     href: item.href,
     exactMatch: item.exactMatch ?? false,
   });
-  const labelWithCount = count != null ? `${item.label} (${count})` : item.label;
   return (
     <Link
       href={item.href}
-      className={`m3-nav-item ${active ? "m3-nav-item--active" : ""}`}
+      className={`m3-nav-item m3-nav-link ${active ? "m3-nav-item--active" : ""}`}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
-      title={labelWithCount}
+      title={item.label}
     >
       <span className="m3-nav-item__icon"><NavIcon name={item.label} /></span>
-      <span className="m3-nav-item__label">
-        {item.label}
-        {count != null ? <span className="m3-nav-item__count"> ({count})</span> : null}
-      </span>
+      <span className="m3-nav-item__label">{item.label}</span>
     </Link>
   );
 }

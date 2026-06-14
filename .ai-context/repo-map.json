@@ -1,1 +1,1 @@
-{"client-lib":{"communities":[0,1,2,3],"files":5,"symbols":42,"top_files":[{"file":"client/src/lib/strategyAuthority/portfolioTypes.ts","symbols":12},{"file":"client/src/lib/ai/strategySignalTrace.ts","symbols":10},{"file":"client/src/lib/strategyAuthority/authorityScore.ts","symbols":9},{"file":"client/src/lib/strategyAuthority/types.ts","symbols":9},{"file":"client/src/lib/strategyAuthority/strategyAuthorityMongo.ts","symbols":2}]},"other":{"communities":[4],"files":1,"symbols":8,"top_files":[{"file":"client/src/internal/strategy/evaluator.ts","symbols":8}]}}
+{}

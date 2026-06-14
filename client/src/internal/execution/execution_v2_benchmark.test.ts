@@ -13,6 +13,7 @@ function signal(i: number): Signal {
     TakeProfit: 104,
     Timestamp: i,
     StrategyID: 90 + (i % 100),
+    strategyName: `BenchmarkStrategy${i % 100}`,
     rawScore: 70 + (i % 20),
     reason: "benchmark",
   };

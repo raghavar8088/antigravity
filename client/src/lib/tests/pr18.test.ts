@@ -144,7 +144,7 @@ describe("suggestWinnersFromScorecard", () => {
     profitLockCount: 0,
     worstTrade: -10,
     bestTrade: 20,
-    lastTradeAt: null,
+    lastTradeAt: new Date().toISOString(),
     isProbe: false,
   });
 

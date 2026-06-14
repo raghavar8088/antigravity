@@ -52,20 +52,13 @@ describe("paperDeskHref", () => {
 });
 
 describe("ICC-NRP navigation registry", () => {
-  it("lists mock engine first in trading section", () => {
-    expect(TRADING_NAV[0]?.href).toBe(TERMINAL_ROUTES["mock-engine"]);
-    expect(TRADING_NAV[0]?.label).toBe("Mock Trading Engine");
+  it("lists trade engine first in trading section", () => {
+    expect(TRADING_NAV[0]?.href).toBe(TERMINAL_ROUTES["trade-engine"]);
+    expect(TRADING_NAV[0]?.label).toBe("Trade Engine");
   });
 
-  it("has six trading pipeline items in mandatory order", () => {
-    expect(TRADING_NAV.map((i) => i.label)).toEqual([
-      "Mock Trading Engine",
-      "Mock Trading Grade 1",
-      "Mock Trading Grade 2",
-      "Mock Trading Grade 3",
-      "Mock Trading Grade 4",
-      "Mock Trading Grade 5",
-    ]);
+  it("has a single consolidated trading pipeline item", () => {
+    expect(TRADING_NAV.map((i) => i.label)).toEqual(["Trade Engine"]);
   });
 
   it("has thirteen monitor items in mandatory order", () => {

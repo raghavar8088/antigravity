@@ -152,6 +152,7 @@ The content is organized as follows:
   app/terminal/research/page.tsx
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
+  app/terminal/trade-engine/page.tsx
   app/terminal/trading/page.tsx
   components/ActivityFeed.tsx
   components/AiAppTrackerPanel.tsx
@@ -272,6 +273,7 @@ The content is organized as follows:
   components/terminal/institutional/TerminalCard.tsx
   components/terminal/institutional/TerminalLayoutClient.tsx
   components/terminal/institutional/TerminalShell.tsx
+  components/terminal/institutional/TradeEngineCenter.tsx
   components/terminal/institutional/TradeJournalPro.tsx
   components/terminal/InstitutionalChart.tsx
   components/terminal/Sidebar.tsx

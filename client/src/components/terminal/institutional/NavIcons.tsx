@@ -1,4 +1,5 @@
 type NavIconName =
+  | "Trade Engine"
   | "Mock Trading Engine"
   | "Mock Trading Grade 1"
   | "Mock Trading Grade 2"
@@ -137,6 +138,7 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
         </svg>
       );
     case "Mock Trading Engine":
+    case "Trade Engine":
       return (
         <svg {...props}>
           <rect x="3" y="4" width="14" height="12" rx="2" />

@@ -243,26 +243,82 @@ export function MainEngineSurvivors() {
       )}
 
       <TerminalCard title="Admission Thresholds" subtitle="All gates required at every grade">
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {[
-            { label: "G5→4", trades: 50, pf: 1.10, wr: 55, dd: "—", sh: "—" },
-            { label: "G4→3", trades: 75, pf: 1.15, wr: 55, dd: "25", sh: "—" },
-            { label: "G3→2", trades: 100, pf: 1.20, wr: 55, dd: "20", sh: "—" },
-            { label: "G2→1", trades: 150, pf: 1.25, wr: 55, dd: "15", sh: "0.5" },
-            { label: "G1→Main", trades: 200, pf: 1.30, wr: 55, dd: "10", sh: "0.75" },
-            { label: "TOTAL", trades: 575, pf: 1.30, wr: 55, dd: "10", sh: "0.75" },
-          ].map((r) => (
-            <div key={r.label} className={`rounded border px-2 py-1.5 ${r.label === "TOTAL" ? "border-emerald-800 bg-emerald-950/20" : "border-zinc-800"}`}>
-              <div className={`text-[9px] font-bold uppercase mb-1 ${r.label === "TOTAL" ? "text-emerald-400" : "text-zinc-400"}`}>{r.label}</div>
-              <div className="space-y-0.5 text-[9px] text-zinc-600 tabular-nums">
-                <div><span className="text-zinc-500">T</span> {r.trades}</div>
-                <div><span className="text-zinc-500">PF</span> ≥{r.pf}</div>
-                <div><span className="text-zinc-500">WR</span> ≥{r.wr}%</div>
-                <div><span className="text-zinc-500">DD</span> {"<"}{r.dd}%</div>
-                <div><span className="text-zinc-500">Sh</span> ≥{r.sh}</div>
-              </div>
-            </div>
-          ))}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Stage", "T", "PF", "WR", "DD", "Sh"].map((header, index) => (
+                  <th
+                    key={header}
+                    style={{
+                      padding: "7px 8px",
+                      textAlign: index === 0 ? "left" : "right",
+                      color: "var(--text-muted)",
+                      fontSize: 9,
+                      fontWeight: 800,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      borderBottom: "1px solid var(--border)",
+                    }}
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: "G5→4", trades: "50", pf: "≥1.10", wr: "≥55%", dd: "—", sh: "—" },
+                { label: "G4→3", trades: "75", pf: "≥1.15", wr: "≥55%", dd: "<25%", sh: "—" },
+                { label: "G3→2", trades: "100", pf: "≥1.20", wr: "≥55%", dd: "<20%", sh: "—" },
+                { label: "G2→1", trades: "150", pf: "≥1.25", wr: "≥55%", dd: "<15%", sh: "≥0.50" },
+                { label: "G1→MAIN", trades: "200", pf: "≥1.30", wr: "≥55%", dd: "<10%", sh: "≥0.75", gold: true },
+                { label: "MAIN ENGINE SURVIVORS", trades: "575", pf: "≥1.30", wr: "≥55%", dd: "<10%", sh: "≥0.75", survivor: true },
+              ].map((row, index) => {
+                const color = row.gold ? "var(--gold)" : "var(--text-secondary)";
+                return (
+                  <tr
+                    key={row.label}
+                    style={{
+                      background: index % 2 === 0 ? "var(--surface)" : "var(--surface-2)",
+                      borderTop: row.survivor ? "1px solid var(--gold)" : "1px solid var(--border-subtle, var(--border))",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "7px 8px",
+                        color,
+                        fontSize: 12,
+                        fontWeight: row.gold || row.survivor ? 700 : 600,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.label}
+                    </td>
+                    {[row.trades, row.pf, row.wr, row.dd, row.sh].map((value, valueIndex) => (
+                      <td
+                        key={`${row.label}-${valueIndex}`}
+                        style={{
+                          padding: "7px 8px",
+                          textAlign: "right",
+                          color,
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 12,
+                          fontVariantNumeric: "tabular-nums",
+                          fontWeight: row.gold ? 700 : 500,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {value}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </TerminalCard>
 

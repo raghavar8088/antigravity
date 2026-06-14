@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { MockEngineCenter } from "@/components/terminal/institutional/MockEngineCenter";
-
-export default function MockEnginePage() {
-  return <MockEngineCenter />;
+export default function OldPage() {
+  redirect("/terminal/trade-engine");
 }

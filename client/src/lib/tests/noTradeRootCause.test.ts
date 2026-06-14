@@ -24,12 +24,16 @@ function snap(overrides: Partial<Parameters<typeof buildFunnelSnapshot>[0]> = {}
 }
 
 const summary = (topRejectedGate: string | null, fired = 0): SignalTraceSummary => ({
+  tickAt: Date.now(),
   totalEvaluated: 20,
   fired,
   candidates: 0,
   opened: 0,
   rejectedByGate: topRejectedGate ? { [topRejectedGate]: 20 } : {},
   topRejectedGate,
+  candidateCount: 0,
+  rejectedCount: topRejectedGate ? 20 : 0,
+  topGates: topRejectedGate ? [{ gate: topRejectedGate, count: 20 }] : [],
 });
 
 describe("diagnoseNoTradeRootCause", () => {

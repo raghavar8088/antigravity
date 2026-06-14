@@ -8,9 +8,12 @@ import {
   EmptyState,
   Metric,
   Skeleton,
+  SkeletonBlock,
   SkeletonCard,
   StatusChip,
 } from "@/components/ui";
+import { RegimeBadge } from "@/components/terminal/institutional/MockStageTradingSuite";
+import { Metric as TerminalMetric, TerminalCard } from "@/components/terminal/institutional/TerminalCard";
 import { M3Tabs } from "@/components/ui/Tabs";
 import { PageHeader, SectionHeader } from "@/components/ui/PageHeader";
 import { TextField, Select, Switch } from "@/components/ui/FormControls";
@@ -71,19 +74,36 @@ export default function DesignSystemPage() {
         <Card title="Status">
           <div className="m3-ds-row">
             <StatusChip label="Live" tone="success" />
+            <StatusChip label="Info" tone="info" />
             <StatusChip label="Warning" tone="warning" />
             <StatusChip label="Critical" tone="error" />
+            <StatusChip label="Offline" tone="neutral" />
             <Chip label="Filter" selected />
           </div>
         </Card>
 
         <Card title="Metrics">
           <div className="m3-kpi-strip">
-            <Metric label="Equity" value="$1.02M" tone="positive" />
-            <Metric label="Drawdown" value="-2.4%" tone="negative" />
-            <Metric label="Heat" value="18%" tone="warning" />
+            <Metric label="Equity" value="$1.02M" tone="positive" delta="+1.8%" size="lg" />
+            <Metric label="Drawdown" value="-2.4%" tone="negative" delta="-0.6%" size="md" />
+            <Metric label="Heat" value="18%" tone="warning" delta="Stable" size="sm" />
           </div>
         </Card>
+
+        <Card title="Regime Badge">
+          <div className="m3-ds-row">
+            <RegimeBadge regime="RANGING" />
+            <RegimeBadge regime="TRENDING" />
+            <RegimeBadge regime="VOLATILE" />
+          </div>
+        </Card>
+
+        <TerminalCard title="Terminal Card Accent" subtitle="Left border follows the strongest metric tone">
+          <div className="m3-kpi-strip">
+            <TerminalMetric label="Net PnL" value="+$12.4K" tone="positive" delta="+3.2%" size="lg" />
+            <TerminalMetric label="Risk Heat" value="18%" tone="warning" size="md" />
+          </div>
+        </TerminalCard>
 
         <Card title="Forms">
           <div className="m3-ds-form">
@@ -97,6 +117,7 @@ export default function DesignSystemPage() {
           <div className="m3-ds-row">
             <Button variant="tonal" onClick={() => show("Settings saved", { tone: "success" })}>Show snackbar</Button>
             <Skeleton width={120} height={16} />
+            <SkeletonBlock width={160} height={16} rounded={4} />
           </div>
           <EmptyState title="No trades" subtitle="Trades appear when strategies fire" />
         </Card>
@@ -120,7 +141,14 @@ export default function DesignSystemPage() {
       </Card>
 
       <Card title="Loading">
-        <SkeletonCard rows={4} />
+        <div className="m3-page-stack">
+          <SkeletonCard rows={4} />
+          <div className="m3-kpi-strip">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <SkeletonBlock key={index} height={52} rounded={8} />
+            ))}
+          </div>
+        </div>
       </Card>
     </div>
   );

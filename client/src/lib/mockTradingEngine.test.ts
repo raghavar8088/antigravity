@@ -74,6 +74,7 @@ function traceRow(
     regime: "chop",
     regimeAllowed: true,
     ...overrides,
+    traceId: overrides.traceId ?? "trace-test",
   });
 }
 

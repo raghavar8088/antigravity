@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { GradeStageCenter } from "@/components/terminal/institutional/GradeStageCenter";
-
-export default function Grade5Page() {
-  return <GradeStageCenter status="GRADE_5" />;
+export default function OldPage() {
+  redirect("/terminal/trade-engine");
 }

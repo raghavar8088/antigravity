@@ -16,6 +16,7 @@ function signal(overrides: Partial<Signal> = {}): Signal {
     rawScore: 80,
     reason: "test",
     ...overrides,
+    strategyName: overrides.strategyName ?? "AggregatorTestStrategy",
   };
 }
 

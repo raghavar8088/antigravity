@@ -9,7 +9,7 @@ export { TextField, Select, Switch, IconButton } from "./FormControls";
 export { M3AppShell, type M3AppShellProps } from "./M3AppShell";
 export { M3Providers, isM3Enabled } from "./M3Providers";
 export { PageHeader, SectionHeader } from "./PageHeader";
-export { EmptyState } from "./EmptyState";
+export { EmptyState, SkeletonBlock } from "./EmptyState";
 export { Skeleton, SkeletonCard } from "./Skeleton";
 export { Badge, Chip, StatusChip } from "./StatusChip";
 export { SnackbarProvider, useSnackbar } from "./Snackbar";

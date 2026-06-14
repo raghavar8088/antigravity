@@ -307,7 +307,7 @@ export function computeChopAwareThreshold(
   return regime === "chop" ? baseThreshold + CHOP_THRESHOLD_BOOST : baseThreshold;
 }
 
-export type HealthGrade = "A" | "B" | "C" | "F";
+export type HealthGrade = "A" | "B" | "C" | "D" | "F";
 
 const ADAPTIVE_THRESHOLD_MAX_BOOST = 12;
 

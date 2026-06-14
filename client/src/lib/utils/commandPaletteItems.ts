@@ -60,6 +60,7 @@ export const COMMAND_PALETTE_ITEMS: CommandPaletteItem[] = [
 
 export const PAGE_TITLES: Record<string, string> = {
   [TERMINAL_ROUTES.home]: "Command Center",
+  [TERMINAL_ROUTES["trade-engine"]]: "Trade Engine",
   [TERMINAL_ROUTES["mock-engine"]]: "Mock Trading Engine",
   [TERMINAL_ROUTES["grade-1"]]: "Mock Trading Grade 1",
   [TERMINAL_ROUTES["grade-2"]]: "Mock Trading Grade 2",

@@ -8,11 +8,18 @@ export const MOCK_TRADING_PATH = "/mock-trading";
 
 export const TERMINAL_ROUTES = {
   home: "/terminal",
+  "trade-engine": "/terminal/trade-engine",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "mock-engine": "/terminal/mock-engine",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "grade-1": "/terminal/grade-1",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "grade-2": "/terminal/grade-2",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "grade-3": "/terminal/grade-3",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "grade-4": "/terminal/grade-4",
+  /** @deprecated Old route redirects to /terminal/trade-engine. */
   "grade-5": "/terminal/grade-5",
   execution: "/terminal/execution",
   "strategy-authority": "/terminal/strategy-authority",
@@ -109,12 +116,7 @@ export type CommandCenterNavItem = {
 
 /** Institutional strategy pipeline — TRADING section (mandatory order). */
 export const TRADING_NAV: CommandCenterNavItem[] = [
-  { href: TERMINAL_ROUTES["mock-engine"], label: "Mock Trading Engine", section: "trading", countStatus: "MAIN_ENGINE" },
-  { href: TERMINAL_ROUTES["grade-1"], label: "Mock Trading Grade 1", section: "trading", countStatus: "GRADE_1" },
-  { href: TERMINAL_ROUTES["grade-2"], label: "Mock Trading Grade 2", section: "trading", countStatus: "GRADE_2" },
-  { href: TERMINAL_ROUTES["grade-3"], label: "Mock Trading Grade 3", section: "trading", countStatus: "GRADE_3" },
-  { href: TERMINAL_ROUTES["grade-4"], label: "Mock Trading Grade 4", section: "trading", countStatus: "GRADE_4" },
-  { href: TERMINAL_ROUTES["grade-5"], label: "Mock Trading Grade 5", section: "trading", countStatus: "GRADE_5" },
+  { href: TERMINAL_ROUTES["trade-engine"], label: "Trade Engine", section: "trading" },
 ];
 
 /** MONITOR section — mandatory order. */

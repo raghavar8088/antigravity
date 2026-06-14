@@ -7,15 +7,21 @@ import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pct, pnlClass, usd } from "./format";
 import { LiveDeskStatus } from "@/components/trading/LiveDeskStatus";
+import { Sparkline } from "@/components/ui/Sparkline";
 
 export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthorityState }) {
   const equity =
     snapshot.analytics.equityCurve.length > 0
       ? snapshot.analytics.equityCurve[snapshot.analytics.equityCurve.length - 1]?.equity ?? 0
       : 0;
+  const equityCurveValues = snapshot.analytics.equityCurve
+    .map((point) => point.equity)
+    .filter((value) => Number.isFinite(value));
   const activeStrategies = snapshot.strategies.filter((s) => s.health === "ACTIVE").length;
   const openPositions = snapshot.positions.length;
   const hasAuthority = snapshot.hasAuthority ?? false;
+  const pastInitialLoad = !snapshot.loading;
+  const freshnessLabel = formatFreshness(snapshot.updatedAt);
 
   return (
     <div className="m3-page-stack">
@@ -28,13 +34,30 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
         <LiveDeskStatus />
       </TerminalCard>
 
+      {!hasAuthority && pastInitialLoad ? (
+        <div className="icc-authority-banner" role="status">
+          Engine data updating — authority handshake pending
+        </div>
+      ) : null}
+
       <div className="m3-kpi-strip">
-        <Metric label="Portfolio Equity" value={equity > 0 ? usd(equity, { compact: true }) : "—"} tone={equity > 0 ? "positive" : "neutral"} />
-        <Metric label="Gross Exposure" value={snapshot.risk.grossExposureUsd > 0 ? usd(snapshot.risk.grossExposureUsd, { compact: true }) : "—"} />
-        <Metric label="Drawdown" value={snapshot.risk.drawdownPct !== 0 ? `${snapshot.risk.drawdownPct.toFixed(2)}%` : "—"} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "warning"} />
+        <Metric label="Portfolio Equity" value={usd(equity, { compact: true })} tone={equity > 0 ? "positive" : "neutral"} size="lg">
+          <Sparkline
+            data={equityCurveValues}
+            width={88}
+            height={28}
+            color={
+              equityCurveValues.length < 2 || equityCurveValues[equityCurveValues.length - 1] >= equityCurveValues[0]
+                ? "var(--green)"
+                : "var(--red)"
+            }
+          />
+        </Metric>
+        <Metric label="Gross Exposure" value={usd(snapshot.risk.grossExposureUsd, { compact: true })} />
+        <Metric label="Drawdown" value={`${snapshot.risk.drawdownPct.toFixed(2)}%`} tone={snapshot.risk.drawdownPct < -3 ? "negative" : "warning"} />
         <Metric label="Portfolio PF" value={snapshot.analytics.profitFactorTrend != null ? snapshot.analytics.profitFactorTrend.toFixed(2) : "—"} />
         <Metric label="Sharpe" value={snapshot.analytics.rollingSharpe30d != null ? snapshot.analytics.rollingSharpe30d.toFixed(2) : "—"} />
-        <Metric label="Active Strategies" value={activeStrategies > 0 ? String(activeStrategies) : "—"} />
+        <Metric label="Active Strategies" value={String(activeStrategies)} />
         <Metric label="Open Positions" value={String(openPositions)} tone={openPositions > 0 ? "warning" : "neutral"} />
         <Metric label="Authority" value={hasAuthority ? "LIVE" : "STALE"} tone={hasAuthority ? "positive" : "negative"} />
       </div>
@@ -46,7 +69,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
           actions={<Link href={TERMINAL_ROUTES.strategies} className="m3-link-action">Open →</Link>}
         >
           {snapshot.strategies.length === 0 ? (
-            <TerminalNoData label="NO STRATEGY DATA" />
+            <StrategyWaitingState />
           ) : (
             <div className="space-y-1">
               {snapshot.strategies.slice(0, 6).map((s) => (
@@ -57,6 +80,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
               ))}
             </div>
           )}
+          <CardFreshness label={freshnessLabel} />
         </TerminalCard>
 
         <TerminalCard
@@ -74,6 +98,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
               <Metric label="Margin" value={`${snapshot.risk.marginUsagePct.toFixed(1)}%`} />
             </div>
           )}
+          <CardFreshness label={freshnessLabel} />
         </TerminalCard>
 
         <TerminalCard
@@ -91,6 +116,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
               <Metric label="Short" value={usd(snapshot.risk.shortExposureUsd, { compact: true })} />
             </div>
           )}
+          <CardFreshness label={freshnessLabel} />
         </TerminalCard>
       </div>
 
@@ -161,6 +187,28 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
       ) : null}
     </div>
   );
+}
+
+function formatFreshness(updatedAt: string) {
+  const parsed = Date.parse(updatedAt);
+  if (!Number.isFinite(parsed)) return "Updated just now";
+
+  const minutesAgo = Math.max(0, Math.floor((Date.now() - parsed) / 60_000));
+  if (minutesAgo < 1) return "Updated just now";
+  return `Updated ${minutesAgo}m ago`;
+}
+
+function StrategyWaitingState() {
+  return (
+    <div className="icc-waiting-state" role="status">
+      <span className="icc-pulse-dot" aria-hidden />
+      <span>Waiting for strategy scores from Go engine</span>
+    </div>
+  );
+}
+
+function CardFreshness({ label }: { label: string }) {
+  return <div className="icc-card-updated">{label}</div>;
 }
 
 function QuickLink({ href, label, detail }: { href: string; label: string; detail: string }) {
