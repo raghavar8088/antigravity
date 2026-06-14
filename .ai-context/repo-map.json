@@ -1,1 +1,1 @@
-{"client-lib":{"communities":[0,1],"files":2,"symbols":10,"top_files":[{"file":"client/src/lib/trading/futuresStrategyRotation.ts","symbols":7},{"file":"client/src/lib/trading/futuresStrategyDiagnostics.ts","symbols":3}]}}
+{"client-components":{"communities":[0,1],"files":1,"symbols":5,"top_files":[{"file":"client/src/components/StrategyRotationPanel.tsx","symbols":5}]}}

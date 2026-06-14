@@ -1590,8 +1590,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useMarketRegime.ts": {
-    "mtime": 1781376936.1321266,
-    "ast_hash": "01e5f247969fa3b8089e5feeab9da8e9",
+    "mtime": 1781436894.2190218,
+    "ast_hash": "6dbaa9fb82b1ae5dbdeff06c7229300b",
     "semantic_hash": ""
   },
   "client/src/hooks/useMockCandleBuilder.ts": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781436255.03716,
-    "ast_hash": "5ab1f7866a6a3b7ea204b6493aee8b2f",
+    "mtime": 1781437704.2660158,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781436255.0317805,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781437704.2660158,
+    "ast_hash": "1bcc953b92d2f09833dd83b1f2e6f768",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781436255.0317805,
-    "ast_hash": "3e1fbdb6494f42c899a40f7b2c561d53",
+    "mtime": 1781437704.2646463,
+    "ast_hash": "0879d9adcce6b0d41f649f875a3ab0df",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781436255.0317805,
-    "ast_hash": "3b717ba9e81f268116e8462521be6057",
+    "mtime": 1781437704.2656574,
+    "ast_hash": "f32859a88e6c4cba7941f312905550da",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781436257.1621673,
-    "ast_hash": "85bb7a076526fe9ba7d3f24d447c3189",
+    "mtime": 1781437705.5980754,
+    "ast_hash": "c52f6d0703dc824f83e200034c6493d4",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23212,6 +23212,71 @@
   "BTC_PILOT_SOVEREIGN_HANDOFF.md": {
     "mtime": 1781408396.7041728,
     "ast_hash": "9b286bacae295a18fd2d9c3cfed04bbf",
+    "semantic_hash": ""
+  },
+  "client/src/components/MockStrategyLeaderboardPanel.tsx": {
+    "mtime": 1781436950.5534322,
+    "ast_hash": "41f554818c814918ce253a1647c7036a",
+    "semantic_hash": ""
+  },
+  "client/src/components/StrategyLeaderboard.tsx": {
+    "mtime": 1781437028.4184859,
+    "ast_hash": "69d8040250f7a081064ff44a1ca7b1ed",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/StrategyGenome.tsx": {
+    "mtime": 1781436920.3193226,
+    "ast_hash": "b558c01a3f75fbdebb6f98184f709cc8",
+    "semantic_hash": ""
+  },
+  "client/src/hooks/useStrategyScoring.ts": {
+    "mtime": 1781436901.838246,
+    "ast_hash": "6208dcdd3b682a89d08d008b1155632f",
+    "semantic_hash": ""
+  },
+  "client/src/lib/ai/mockStrategyRankingEngine.ts": {
+    "mtime": 1781436822.6759548,
+    "ast_hash": "dad804d903c9152f39641fc767c2079b",
+    "semantic_hash": ""
+  },
+  "client/src/lib/ai/strategyHealthEngine.ts": {
+    "mtime": 1781436804.6340039,
+    "ast_hash": "2d33d343b5b08e910576d91971b154cb",
+    "semantic_hash": ""
+  },
+  "client/src/lib/ai/strategyScoringEngine.ts": {
+    "mtime": 1781437047.6226602,
+    "ast_hash": "65dd91c9da160736f9802b06dac4900f",
+    "semantic_hash": ""
+  },
+  "client/src/lib/ai/strategySignalTrace.ts": {
+    "mtime": 1781436766.0050027,
+    "ast_hash": "07101bde5a7bf8c9f490fc65af983cf0",
+    "semantic_hash": ""
+  },
+  "client/src/lib/strategyAuthority/authorityScore.ts": {
+    "mtime": 1781436841.0584142,
+    "ast_hash": "56bc9dba8a94abf70a8d9303178c0b63",
+    "semantic_hash": ""
+  },
+  "client/src/lib/strategyAuthority/grade5CatalogSignals.ts": {
+    "mtime": 1781436855.1673174,
+    "ast_hash": "8ae012e7a3076aa593cb0046f9d9e9b4",
+    "semantic_hash": ""
+  },
+  "client/src/lib/strategyAuthority/gradeStageMockConfig.ts": {
+    "mtime": 1781436988.2036903,
+    "ast_hash": "996f375a2a3f6589a2fa050a1a56d459",
+    "semantic_hash": ""
+  },
+  "client/src/lib/trading/futuresStrategyDiagnostics.ts": {
+    "mtime": 1781437551.579812,
+    "ast_hash": "9442c432ad750fb2d2f45e606e30dce4",
+    "semantic_hash": ""
+  },
+  "client/src/lib/trading/futuresStrategyRotation.ts": {
+    "mtime": 1781437566.735441,
+    "ast_hash": "211309c827b881073661496106ec9d75",
     "semantic_hash": ""
   }
 }

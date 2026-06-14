@@ -239,6 +239,7 @@ The content is organized as follows:
   components/SoakTrendPanel.tsx
   components/StorageHealthPanel.tsx
   components/StrategyLeaderboard.tsx
+  components/StrategyRotationPanel.tsx
   components/terminal/AppShell.tsx
   components/terminal/index.ts
   components/terminal/institutional/AllocationView.tsx
