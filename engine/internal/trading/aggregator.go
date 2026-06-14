@@ -20,14 +20,32 @@ type AggregatedSignal struct {
 	TotalPnL        float64
 }
 
+// CooldownForTimeframe returns the recommended signal cooldown for a given candle timeframe.
+// Higher-timeframe strategies need longer cooldowns to avoid thrashing on slow signals.
+func CooldownForTimeframe(tf string) time.Duration {
+	switch tf {
+	case "1m":
+		return 30 * time.Second
+	case "5m":
+		return 2 * time.Minute
+	case "15m":
+		return 5 * time.Minute
+	case "1h":
+		return 15 * time.Minute
+	default:
+		return 15 * time.Second
+	}
+}
+
 // SignalAggregator collects signals from all strategies on each tick,
 // applies cooldown filters, and emits deduplicated actionable signals.
 type SignalAggregator struct {
 	mu sync.Mutex
 
-	// Cooldown: minimum seconds between signals from the same strategy
-	cooldownSec int
-	lastSignal  map[string]time.Time // strategyName -> last signal time
+	// defaultCooldown applies when no per-strategy override is registered.
+	defaultCooldown   time.Duration
+	strategyCooldowns map[string]time.Duration // strategyName -> cooldown override
+	lastSignal        map[string]time.Time     // strategyName -> last signal time
 
 	// Stats tracking for logging
 	totalSignals    int64
@@ -35,12 +53,21 @@ type SignalAggregator struct {
 	flowMetrics     *SignalFlowMetrics
 }
 
-func NewSignalAggregator(cooldownSeconds int) *SignalAggregator {
+func NewSignalAggregator(defaultSeconds int) *SignalAggregator {
 	return &SignalAggregator{
-		cooldownSec: cooldownSeconds,
-		lastSignal:  make(map[string]time.Time),
-		flowMetrics: NewSignalFlowMetrics(),
+		defaultCooldown:   time.Duration(defaultSeconds) * time.Second,
+		strategyCooldowns: make(map[string]time.Duration),
+		lastSignal:        make(map[string]time.Time),
+		flowMetrics:       NewSignalFlowMetrics(),
 	}
+}
+
+// SetStrategyCooldown registers a per-strategy cooldown override.
+// Call once per strategy after construction, using CooldownForTimeframe(entry.Timeframe).
+func (a *SignalAggregator) SetStrategyCooldown(strategyName string, d time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.strategyCooldowns[strategyName] = d
 }
 
 // FilterSignals takes raw signals from all strategies for a given tick
@@ -64,8 +91,11 @@ func (a *SignalAggregator) FilterSignals(rawSignals []AggregatedSignal) []Aggreg
 
 		// Cooldown check: has this strategy fired too recently?
 		if lastFired, ok := a.lastSignal[sig.StrategyName]; ok {
-			elapsed := now.Sub(lastFired)
-			if elapsed < time.Duration(a.cooldownSec)*time.Second {
+			cd := a.defaultCooldown
+			if override, ok2 := a.strategyCooldowns[sig.StrategyName]; ok2 {
+				cd = override
+			}
+			if now.Sub(lastFired) < cd {
 				a.filteredSignals++
 				continue
 			}

@@ -56,8 +56,11 @@ func (a *SignalAggregator) FilterSignalsSelective(rawSignals []AggregatedSignal)
 		}
 
 		if lastFired, ok := a.lastSignal[sig.StrategyName]; ok {
-			elapsed := now.Sub(lastFired)
-			if elapsed < time.Duration(a.cooldownSec)*time.Second {
+			cd := a.defaultCooldown
+			if override, ok2 := a.strategyCooldowns[sig.StrategyName]; ok2 {
+				cd = override
+			}
+			if now.Sub(lastFired) < cd {
 				a.filteredSignals++
 				a.RecordSignalFlowRejection(SignalStageCooldownFilter, "strategy_cooldown", sig.Category)
 				continue

@@ -492,7 +492,9 @@ The content is organized as follows:
   lib/risk/RiskEngine.ts
   lib/sep/sepPipeline.ts
   lib/shadowTradeIntentMapper.test.ts
+  lib/strategyAuthority/portfolioTypes.ts
   lib/strategyAuthority/strategyCatalog.ts
+  lib/strategyAuthority/types.ts
   lib/supabase/client.ts
   lib/supabase/server.ts
   lib/terminal/mapSnapshotToTerminalDelta.ts
@@ -649,6 +651,7 @@ The content is organized as follows:
   alpha/microstructure_weight.go
   alpha/microstructure/engine.go
   alpha/microstructure/microstructure_test.go
+  alpha/microstructure/strategies.go
   alpha/microstructure/types.go
   alpha/mss/mss_engine.go
   alpha/orderblock/orderblock_engine.go
@@ -819,6 +822,7 @@ The content is organized as follows:
   integration/mocks/mock_risk_gate.go
   kelly/kelly_test.go
   kelly/kelly.go
+  kelly/session.go
   killswitch/restore_test.go
   killswitch/service_test.go
   killswitch/service.go
@@ -849,6 +853,7 @@ The content is organized as follows:
   macro/macro_test.go
   macro/score.go
   macro/types.go
+  marketdata/binance_klines.go
   marketdata/candle_test.go
   marketdata/candle.go
   marketdata/client.go
@@ -896,6 +901,7 @@ The content is organized as follows:
   omsv3/risk_aggregate.go
   omsv3/risk_projection.go
   omsv3/snapshot_provider.go
+  omsv3/strategy_aggregate.go
   omsv3/system_aggregate.go
   omsv3/system_projection.go
   options_selling/chain_profile.go
@@ -936,6 +942,8 @@ The content is organized as follows:
   paperpersist/portfolio_metrics_writer.go
   paperpersist/recovery.go
   paperpersist/state_snapshotter.go
+  paperpersist/strategy_health_monitor.go
+  paperpersist/strategy_trade.go
   paperpersist/writer.go
   performance/analytics.go
   performance/indicator_cache.go
@@ -944,6 +952,7 @@ The content is organized as follows:
   performance/performance_test.go
   performance/redis_cache.go
   performance/runtime.go
+  performance/scheduler.go
   persistence/file_snapshot.go
   persistence/saver.go
   persistence/store.go
@@ -955,9 +964,11 @@ The content is organized as follows:
   pilot/metrics.go
   pilot/pilot_test.go
   pilot/projections.go
+  pilot/strategy_ranker.go
   pms/account_manager.go
   pms/allocation_engine.go
   pms/exposure_aggregation.go
+  pms/helpers.go
   pms/master_account_controller.go
   pms/pms_events.go
   pms/pms_metrics.go
@@ -969,6 +980,7 @@ The content is organized as follows:
   pms/portfolio_projection.go
   pms/portfolio_risk_budget.go
   pms/projections.go
+  pms/strategy_budget_engine.go
   positions/close_queue_test.go
   positions/close_queue.go
   positions/manager_test.go
@@ -1009,6 +1021,7 @@ The content is organized as follows:
   regime/classifier.go
   regime/engine.go
   regime/router.go
+  regime/strategy_gate.go
   research/alphadecay/alpha_decay_engine.go
   research/boundary/boundary.go
   research/certification/research_cert_test.go
@@ -1056,6 +1069,7 @@ The content is organized as follows:
   risk/regime_risk.go
   risk/risk_budget.go
   risk/risk_of_ruin.go
+  risk/strategy_tracker.go
   risk/stress_testing.go
   risk/v2/alerts.go
   risk/v2/allocation.go
@@ -1157,8 +1171,25 @@ The content is organized as follows:
   strategy/curated_expansion_pack.go
   strategy/curated_registry_test.go
   strategy/curated_registry.go
+  strategy/moving_average_crossover.go
   strategy/phase22c_alpha_test.go
   strategy/registry.go
+  strategy/scalpers/curated_expansion_pack.go
+  strategy/scalpers/curated_registry.go
+  strategy/scalpers/indicators.go
+  strategy/scalpers/registry.go
+  strategy/scalpers/s1_ema_ribbon_trend_rider.go
+  strategy/scalpers/s2_bollinger_mean_reversion.go
+  strategy/scalpers/s3_liquidity_sweep_reversal.go
+  strategy/scalpers/s4_adx_momentum_breakout.go
+  strategy/scalpers/s5_vwap_institutional_fade.go
+  strategy/scalpers/s6_cvd_divergence_sniper.go
+  strategy/scalpers/s7_opening_range_breakout.go
+  strategy/scalpers/s8_funding_rate_fade.go
+  strategy/scalpers/s9_oi_divergence.go
+  strategy/scalpers/types.go
+  strategy/scalpers/walkforward.go
+  strategy/types.go
   telemetry/metrics.go
   temporal/analyser.go
   temporal/pattern_builder.go
@@ -1166,6 +1197,7 @@ The content is organized as follows:
   temporal/types.go
   tracing/tracer_test.go
   tracing/tracer.go
+  trading/adaptive_confidence.go
   trading/aggregator_selective_test.go
   trading/aggregator_selective.go
   trading/aggregator_v2.go
@@ -1180,6 +1212,7 @@ The content is organized as follows:
   trading/loop_profit_test.go
   trading/loop.go
   trading/paperpersist_hooks.go
+  trading/scalers_eval.go
   trading/signal_flow_metrics.go
   trading/signal_scoring.go
   validation/phase22e/alpha.go

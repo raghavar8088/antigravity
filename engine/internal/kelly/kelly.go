@@ -20,6 +20,7 @@ type KellyInputs struct {
 	PortfolioValue    float64 // current portfolio value in USD
 	MaxPositionPct    float64 // hard ceiling from env var (e.g. 0.10 = 10%)
 	RegimeMult        float64 // from regime engine: 0.5, 0.75, 1.0, or 1.25
+	SessionMult       float64 // from session detection: 1.0 London/NY, 0.5 Asia, 0.25 Off
 	DataQualityScore  float64 // from data quality validator: 0–100
 	MinTradesRequired int     // minimum trades before Kelly is applied (default 30)
 	TradeCount        int     // number of closed trades in history
@@ -27,14 +28,15 @@ type KellyInputs struct {
 
 // KellyResult holds the sizing recommendation and full audit trail.
 type KellyResult struct {
-	RawKelly          float64    // f* = (p×b − q) / b
-	HalfKelly         float64    // RawKelly × 0.5
-	AfterRegime       float64    // HalfKelly × RegimeMult
-	AfterDataQuality  float64    // AfterRegime × dataQualityMult
-	FinalPositionPct  float64    // after all constraints (0–0.10)
-	FinalPositionUSD  float64    // FinalPositionPct × PortfolioValue
-	WasConstrained    bool       // true if a ceiling was applied
-	ConstraintReason  string     // which constraint fired
+	RawKelly          float64     // f* = (p×b − q) / b
+	HalfKelly         float64     // RawKelly × 0.5
+	AfterRegime       float64     // HalfKelly × RegimeMult
+	AfterSession      float64     // AfterRegime × SessionMult
+	AfterDataQuality  float64     // AfterSession × dataQualityMult
+	FinalPositionPct  float64     // after all constraints (0–0.10)
+	FinalPositionUSD  float64     // FinalPositionPct × PortfolioValue
+	WasConstrained    bool        // true if a ceiling was applied
+	ConstraintReason  string      // which constraint fired
 	Inputs            KellyInputs
 }
 
@@ -94,9 +96,16 @@ func Compute(inputs KellyInputs) (KellyResult, error) {
 	}
 	afterRegime := halfKelly * regimeMult
 
+	// ── Step 5b: Session multiplier ───────────────────────────────────────────
+	sessionMult := inputs.SessionMult
+	if sessionMult <= 0 {
+		sessionMult = 1.0 // default to full size when not set
+	}
+	afterSession := afterRegime * sessionMult
+
 	// ── Step 6: Data quality multiplier ──────────────────────────────────────
 	qMult := dataQualityMult(inputs.DataQualityScore)
-	afterQuality := afterRegime * qMult
+	afterQuality := afterSession * qMult
 
 	// ── Step 7: Floor and hard ceiling ────────────────────────────────────────
 	floor := max64(afterQuality, 0.01)
@@ -120,6 +129,7 @@ func Compute(inputs KellyInputs) (KellyResult, error) {
 		RawKelly:         rawKelly,
 		HalfKelly:        halfKelly,
 		AfterRegime:      afterRegime,
+		AfterSession:     afterSession,
 		AfterDataQuality: afterQuality,
 		FinalPositionPct: final,
 		FinalPositionUSD: finalUSD,

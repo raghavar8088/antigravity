@@ -38,6 +38,7 @@ import (
 	riskv2 "antigravity-engine/internal/risk/v2"
 	sentimentpkg "antigravity-engine/internal/sentiment"
 	"antigravity-engine/internal/strategy"
+	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
 const (
@@ -55,8 +56,8 @@ const (
 	minExecutableConfidence     = 0.68 // Phase 22A unlock: 0.74→0.68; aligns with ScoringConfig.MinConfidence=0.65 while keeping a safety buffer
 	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
 	minRewardToRiskRatio        = 2.40 // Stronger edge requirement for scalping signals
-	minSignalTakeProfitPct      = 0.50 // Wider TP — avoid noise-driven exits
-	maxSignalStopLossPct        = 0.20 // Allow slightly wider SL for more stable execution
+	minSignalTakeProfitPct      = 0.15 // Lowered from 0.50 — scalper TPs are 0.15–0.40%
+	maxSignalStopLossPct        = 1.50 // Raised from 0.20 — BTC moves 1–3% on scalper timeframes
 	defaultSignalStopLossPct    = 0.18 // Safer default SL — reduce micro noise losses
 
 	minExecutionWeightToTrade = 0.50 // Require stronger strategy quality before execution
@@ -124,8 +125,8 @@ type Orchestrator struct {
 	// Internal state
 	lastPrice  float64
 	lastRegime string // Last classified market regime — kept so executeThroughInstitutionalPath can pass live regime to Risk V2
-	m15Counter int    // Counts 5m candles to simulate 15m (every 3rd 5m candle)
-	h1Counter  int    // Counts 5m candles to simulate 1h (every 12th)
+	prevTruncated15m time.Time // last 15m boundary that triggered a 15m cycle
+	prevTruncated1h  time.Time // last 1h boundary that triggered a 1h cycle
 
 	// Heartbeat for automated bridge failover
 	lastBridgeHeartbeat time.Time
@@ -202,6 +203,23 @@ type Orchestrator struct {
 	// lastCycleAt is the timestamp of the most recent strategy evaluation cycle.
 	lastCycleAt   time.Time
 	lastCycleAtMu sync.RWMutex
+
+	// scalerBundle accumulates candle history and market state for the curated
+	// scalers strategies. Evaluated on every 15m cycle via evalAndExecuteScalers.
+	scalerBundle *ScalerBundle
+
+	// walkForward tracks rolling 30-trade Sharpe and win rate per strategy,
+	// auto-promoting or demoting strategies from live rotation.
+	walkForward *scalers.WalkForwardValidator
+
+	// adaptiveFloor raises the minimum confidence threshold during low data
+	// quality periods.
+	adaptiveFloor *AdaptiveConfidenceFloor
+
+	// klineFeed15mActive / klineFeed1hActive track whether the Binance kline
+	// WebSocket is the active source so the 5m synthesis path can yield.
+	klineFeed15mActive bool
+	klineFeed1hActive  bool
 }
 
 // LastCycleTime returns the time of the most recent strategy evaluation cycle.
@@ -290,12 +308,66 @@ func NewOrchestrator(
 		lastBridgeHeartbeat: time.Time{},
 		sessionStart:        time.Now(),
 		portfolioLedger:     paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
+		scalerBundle:        newScalerBundle(),
+		walkForward:         scalers.NewWalkForwardValidator(),
+		adaptiveFloor:       NewAdaptiveConfidenceFloor(minExecutableConfidence),
 	}
 }
 
 // PortfolioLedger exposes the in-process accounting mirror (Mongo-authoritative on bootstrap).
 func (o *Orchestrator) PortfolioLedger() *paperpersist.PortfolioLedger {
 	return o.portfolioLedger
+}
+
+// WalkForwardSummary returns the current walk-forward validator state for all strategies.
+func (o *Orchestrator) WalkForwardSummary() map[string]scalers.WalkForwardSummary {
+	if o.walkForward == nil {
+		return nil
+	}
+	return o.walkForward.Summary()
+}
+
+// ConfidenceFloorSnapshot returns the adaptive confidence floor state for the HTTP endpoint.
+func (o *Orchestrator) ConfidenceFloorSnapshot() map[string]float64 {
+	if o.adaptiveFloor == nil {
+		return map[string]float64{"floor": minExecutableConfidence, "baseFloor": minExecutableConfidence}
+	}
+	return o.adaptiveFloor.Snapshot()
+}
+
+// Push15mKlineCandle delivers a closed Binance 15m kline candle to the scaler bundle.
+// Called by BinanceKlineClient when a real 15m kline closes.
+func (o *Orchestrator) Push15mKlineCandle(c marketdata.Candle) {
+	o.mu.Lock()
+	o.klineFeed15mActive = true
+	o.mu.Unlock()
+	if o.scalerBundle != nil {
+		o.scalerBundle.Push15mCandle(c)
+	}
+}
+
+// Push1hKlineCandle delivers a closed Binance 1h kline candle to the scaler bundle.
+// Called by BinanceKlineClient when a real 1h kline closes.
+func (o *Orchestrator) Push1hKlineCandle(c marketdata.Candle) {
+	o.mu.Lock()
+	o.klineFeed1hActive = true
+	o.mu.Unlock()
+	if o.scalerBundle != nil {
+		o.scalerBundle.Push1hCandle(c)
+	}
+}
+
+// SetKlineFeedActive marks the kline feed for an interval as active or inactive.
+// Used by BinanceKlineClient on reconnect/disconnect.
+func (o *Orchestrator) SetKlineFeedActive(interval string, active bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	switch interval {
+	case "15m":
+		o.klineFeed15mActive = active
+	case "1h":
+		o.klineFeed1hActive = active
+	}
 }
 
 func (o *Orchestrator) SetEventLedger(store ledger.Store) {
@@ -534,7 +606,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 		if violations := o.pmsBudget.CheckPortfolioRisk(ctx, btcPaperAccountID, pmsBudgetConfig, proposedDollarRisk, equityForPMS); len(violations) > 0 {
 			pmsReason := fmt.Sprintf("PMS portfolio gate blocked: %s", violations[0].Message)
 			log.Printf("[PMS GATE] %s: %s", strategyName, pmsReason)
-			logDecisionFunnel(strategyName, stratCategory, stratMeta.Family, o.lastRegime, 0, 0, 0, 0, "pms_portfolio_gate: "+violations[0].Message)
+			logDecisionFunnel(strategyName, stratCategory, string(stratMeta.Family), o.lastRegime, 0, 0, 0, 0, "pms_portfolio_gate: "+violations[0].Message)
 			pmsEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 				AggregateType: ledger.AggregateOrder,
 				AggregateID:   clientOrderID,
@@ -568,7 +640,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 		Request: riskv2.TradeRequest{
 			Symbol:            sig.Symbol,
 			Strategy:          strategyName,
-			Family:            stratMeta.Family,
+			Family:            riskv2.StrategyFamily(stratMeta.Family),
 			Side:              riskSideFromAction(sig.Action),
 			EntryPrice:        currentPrice,
 			StopLossPrice:     stopLossFromSignal(sig, currentPrice),
@@ -584,7 +656,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	riskCheckedAt := time.Now()
 	if riskDecision.Status == riskgate.DecisionBlocked {
 		logDecisionFunnel(
-			strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+			strategyName, stratCategory, string(stratMeta.Family), o.lastRegime,
 			riskDecision.RiskDecision.Kelly.SelectedFraction,
 			riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
 			riskDecision.RiskDecision.DynamicSizing.Multiplier,
@@ -636,7 +708,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 			eliteRej := err.Error()
 			log.Printf("[ELITE GATE] %s: %s", strategyName, eliteRej)
 			logDecisionFunnel(
-				strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+				strategyName, stratCategory, string(stratMeta.Family), o.lastRegime,
 				riskDecision.RiskDecision.Kelly.SelectedFraction,
 				riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
 				riskDecision.RiskDecision.DynamicSizing.Multiplier,
@@ -681,7 +753,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	); err != nil {
 		rejReason := err.Error()
 		logDecisionFunnel(
-			strategyName, stratCategory, stratMeta.Family, o.lastRegime,
+			strategyName, stratCategory, string(stratMeta.Family), o.lastRegime,
 			riskDecision.RiskDecision.Kelly.SelectedFraction,
 			riskDecision.RiskDecision.Kelly.RecommendedSizeBTC,
 			riskDecision.RiskDecision.DynamicSizing.Multiplier,
@@ -1045,6 +1117,14 @@ func (o *Orchestrator) WarmupStrategies(warmup *marketdata.WarmupData) {
 	}
 
 	log.Println("[WARMUP] ✅ All strategy buffers pre-filled. Ready for live trading.")
+
+	// Warm up the ScalerBundle so the first evalAndExecuteScalers cycle has
+	// full indicator history instead of starting cold.
+	if o.scalerBundle != nil {
+		o.scalerBundle.WarmupFromHistory(warmup.Candles1m, warmup.Candles5m)
+		// prevTruncated15m and prevTruncated1h start at zero so the first live
+		// candle always fires a 15m and 1h cycle; no counter warmup needed.
+	}
 }
 
 // Run is the infinite heartbeat of RAIG Autonomous Trading.
@@ -1104,6 +1184,9 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	o.exec.UpdateMarketState(t.Price)
 	o.mu.Lock()
 	o.lastPrice = t.Price
+	if o.scalerBundle != nil {
+		o.scalerBundle.UpdateCVD(t)
+	}
 	o.priceWindow = append(o.priceWindow, t.Price)
 	if len(o.priceWindow) > marketHistoryMaxSamples {
 		o.priceWindow = o.priceWindow[len(o.priceWindow)-marketHistoryMaxSamples:]
@@ -1156,6 +1239,10 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 					Time:   candle.CloseTime,
 				}
 			result := o.deps.DataValidator.ValidateCandle(ohlcv, "binance", 60)
+			// Update adaptive confidence floor with normalized quality (0-1).
+			if o.adaptiveFloor != nil {
+				o.adaptiveFloor.Update(result.QualityScore / 100.0)
+			}
 			action := o.deps.DataValidator.GetAction(result.QualityScore)
 			// Change A: reset sizing modifier, then apply per action.
 			o.mu.Lock()
@@ -1182,6 +1269,9 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 1m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f Trades=%d",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume, candle.Trades)
+			if o.scalerBundle != nil {
+				o.scalerBundle.Push1mCandle(candle)
+			}
 			// 1m strategies are not regime-gated at name level (nil = no filter).
 			o.processStrategyGroup(ctx, o.groups.M1, tick, "1m", nil)
 		}
@@ -1198,20 +1288,32 @@ func (o *Orchestrator) process5mCandles(ctx context.Context) {
 			tick := candle.ToTick()
 			log.Printf("[CANDLE 5m] Closed: O=%.2f H=%.2f L=%.2f C=%.2f Vol=%.4f",
 				candle.Open, candle.High, candle.Low, candle.Close, candle.Volume)
+			if o.scalerBundle != nil {
+				o.scalerBundle.Push5mCandle(candle)
+			}
 			// 5m strategies are not regime-gated at name level (nil = no filter).
 			o.processStrategyGroup(ctx, o.groups.M5, tick, "5m", nil)
 
-			// Simulate 15m candle: run 15m strategies every 3rd 5m candle.
-			o.m15Counter++
-			if o.m15Counter >= 3 {
-				o.m15Counter = 0
+			// Simulate 15m candle: fire on each new 15-minute wall-clock boundary.
+			// Drift-free: uses candle.OpenTime rather than counting skippable candles.
+			if t15 := candle.OpenTime.Truncate(15 * time.Minute); t15.After(o.prevTruncated15m) {
+				o.prevTruncated15m = t15
+				// Only push synthesised 15m candle if the live Binance kline feed is inactive.
+				if o.scalerBundle != nil && !o.klineFeed15mActive {
+					o.scalerBundle.Push15mCandle(candle)
+				}
 				o.run15mCycle(ctx, tick)
+				// Evaluate scalers after the 15m regime cycle completes.
+				o.evalAndExecuteScalers(ctx, tick)
 			}
 
-			// Simulate 1h candle: run 1h strategies every 12th 5m candle
-			o.h1Counter++
-			if o.h1Counter >= 12 {
-				o.h1Counter = 0
+			// Simulate 1h candle: fire on each new hour boundary.
+			if t1h := candle.OpenTime.Truncate(time.Hour); t1h.After(o.prevTruncated1h) {
+				o.prevTruncated1h = t1h
+				// Only push synthesised 1h candle if the live Binance kline feed is inactive.
+				if o.scalerBundle != nil && !o.klineFeed1hActive {
+					o.scalerBundle.Push1hCandle(candle)
+				}
 				log.Println("[CANDLE 1h] Simulated 1h close — running hourly strategies")
 				// 1h strategies are not regime-gated at name level (nil = no filter).
 				o.processStrategyGroup(ctx, o.groups.H1, tick, "1h", nil)
@@ -1370,8 +1472,12 @@ func (o *Orchestrator) runAIDecision(ctx context.Context) {
 		TakeProfitPct: activeSig.takeProfitPct,
 	}
 
-	// Sanitize SL/TP
-	sanitized, sanitizeReason, ok := sanitizeSignalForProfit(sig)
+	// Sanitize SL/TP (pass adaptive floor so data quality gates apply to AI signals too).
+	floor := minExecutableConfidence
+	if o.adaptiveFloor != nil {
+		floor = o.adaptiveFloor.Floor()
+	}
+	sanitized, sanitizeReason, ok := sanitizeSignalForProfit(sig, floor)
 	if !ok {
 		log.Printf("[AI] Signal sanitization failed — skipping: %s", sanitizeReason)
 		return
@@ -1724,7 +1830,11 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 
 		baseStopLossPct := sig.StopLossPct
 		baseTakeProfitPct := sig.TakeProfitPct
-		sanitizedSig, sanitizeReason, allowed := sanitizeSignalForProfit(sig)
+		adaptFloor := minExecutableConfidence
+		if o.adaptiveFloor != nil {
+			adaptFloor = o.adaptiveFloor.Floor()
+		}
+		sanitizedSig, sanitizeReason, allowed := sanitizeSignalForProfit(sig, adaptFloor)
 		if !allowed {
 			log.Printf("[PROFIT FILTER] %s dropped: %s",
 				aggSig.StrategyName, sanitizeReason)
@@ -1920,6 +2030,12 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 					o.deps.Ledger, btcPaperAccountID, 60,
 					o.deps.PortfolioValue, 0.10, regimeMult, dqScore,
 				)
+				if kellyErr == nil {
+					// Session-aware Kelly multiplier.
+					sess := kelly.DetectSession(time.Now().UTC())
+					kellyIn.SessionMult = kelly.SessionKellyMultiplier(sess)
+					log.Printf("[KELLY] Session=%s mult=%.2f", sess, kellyIn.SessionMult)
+				}
 				if kellyErr == nil && kellyIn.TradeCount >= 30 {
 					kellyResult, kerr := kelly.Compute(kellyIn)
 					if kerr == nil && kellyResult.FinalPositionUSD > 0 {
@@ -1927,9 +2043,10 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 						if currentPrice > 0 {
 							kellySizeBTC := (kellyResult.FinalPositionUSD * sizingMod) / currentPrice
 							if kellySizeBTC < sig.TargetSize {
-								log.Printf("[KELLY] %s size reduced %.4f→%.4f BTC (kelly_pct=%.2f%% raw=%.4f was_constrained=%v)",
+								log.Printf("[KELLY] %s size reduced %.4f→%.4f BTC (kelly_pct=%.2f%% raw=%.4f session_mult=%.2f was_constrained=%v)",
 									aggSig.StrategyName, sig.TargetSize, kellySizeBTC,
-									kellyResult.FinalPositionPct*100, kellyResult.RawKelly, kellyResult.WasConstrained)
+									kellyResult.FinalPositionPct*100, kellyResult.RawKelly,
+									kellyIn.SessionMult, kellyResult.WasConstrained)
 								sig.TargetSize = kellySizeBTC
 							}
 						}
@@ -2152,6 +2269,9 @@ func (o *Orchestrator) run15mCycle(ctx context.Context, tick marketdata.Tick) {
 		// Store for Kelly sizing in processStrategyGroup.
 		o.mu.Lock()
 		o.lastRegimeClass = &regimeClass
+		// Sync o.lastRegime so evalAndExecuteScalers can map it to scalers.Regime.
+		// This is the primary regime update path when there are no tick strategies.
+		o.lastRegime = regimeClassToLoopString(regimeClass.Regime)
 		o.mu.Unlock()
 
 		// Suspend all 15m new entries during HIGH_VOLATILITY.
@@ -2275,6 +2395,40 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 
 			// Update strategy tracker
 			o.tracker.RecordTradeResult(event.Position.StrategyName, netPnL)
+
+			// Walk-forward validator: record PnL% for rolling Sharpe calculation.
+			if o.walkForward != nil {
+				entryNotional := event.Position.EntryPrice * event.Position.Size
+				pnlPct := 0.0
+				if entryNotional > 0 {
+					pnlPct = netPnL / entryNotional
+				}
+				o.walkForward.RecordTrade(event.Position.StrategyName, pnlPct)
+				// Publish Prometheus gauge for this strategy's status.
+				status := o.walkForward.GetStatus(event.Position.StrategyName)
+				for _, s := range []scalers.StrategyStatus{scalers.StatusProbationary, scalers.StatusActive, scalers.StatusDemoted} {
+					v := 0.0
+					if s == status {
+						v = 1.0
+					}
+					observability.WalkForwardStatus.WithLabelValues(event.Position.StrategyName, string(s)).Set(v)
+				}
+			}
+
+			// Update scalers performance registry so FilterWinnersOnly stays current.
+			if stats, ok := o.tracker.GetStats(event.Position.StrategyName); ok {
+				winRate := 0.0
+				if stats.TotalTrades > 0 {
+					winRate = float64(stats.Wins) / float64(stats.TotalTrades)
+				}
+				scalers.UpdatePerformance(scalers.Performance{
+					StrategyName: event.Position.StrategyName,
+					TotalTrades:  stats.TotalTrades,
+					WinRate:      winRate,
+					Active:       winRate >= 0.4 || stats.TotalTrades < 30,
+					LastPnL:      netPnL,
+				})
+			}
 
 			// Phase 22D: finalize the execution-intelligence lifecycle for this
 			// position — record the terminal TP/SL state, realized PnL for
@@ -2571,7 +2725,11 @@ func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID st
 	if normalizedSize := targetSizeForCapital(p.Context.Price); normalizedSize > 0 {
 		p.Signal.TargetSize = normalizedSize
 	}
-	sanitized, reason, allowed := sanitizeSignalForProfit(p.Signal)
+	bridgeFloor := minExecutableConfidence
+	if o.adaptiveFloor != nil {
+		bridgeFloor = o.adaptiveFloor.Floor()
+	}
+	sanitized, reason, allowed := sanitizeSignalForProfit(p.Signal, bridgeFloor)
 	if !allowed {
 		log.Printf("[COMMAND CENTER] ⛔ Bridge signal %s blocked by profit filter: %s (conf=%.2f)",
 			pendingID, reason, p.Signal.Confidence)
@@ -2694,7 +2852,15 @@ func (o *Orchestrator) GetLastPrice() float64 {
 	return o.lastPrice
 }
 
-func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool) {
+// sanitizeSignalForProfit validates and sanitizes a signal for execution.
+// The optional confidenceFloor parameter overrides minExecutableConfidence;
+// pass no value to use the static constant (e.g. from test code).
+func sanitizeSignalForProfit(sig strategy.Signal, confidenceFloor ...float64) (strategy.Signal, string, bool) {
+	floor := minExecutableConfidence
+	if len(confidenceFloor) > 0 && confidenceFloor[0] > floor {
+		floor = confidenceFloor[0]
+	}
+
 	adjusted := sig
 
 	if adjusted.Confidence < 0 {
@@ -2703,8 +2869,8 @@ func sanitizeSignalForProfit(sig strategy.Signal) (strategy.Signal, string, bool
 	if adjusted.Confidence == 0 {
 		adjusted.Confidence = 1.0
 	}
-	if adjusted.Confidence < minExecutableConfidence {
-		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, minExecutableConfidence), false
+	if adjusted.Confidence < floor {
+		return adjusted, fmt.Sprintf("confidence %.2f below minimum %.2f", adjusted.Confidence, floor), false
 	}
 
 	if adjusted.StopLossPct <= 0 {
@@ -2788,6 +2954,21 @@ func adjustConfidenceByExecutionWeight(confidence, executionWeight float64) floa
 		return 0
 	}
 	return adjusted
+}
+
+// regimeClassToLoopString converts a regime.Regime (from the RegimeClassifier)
+// to the marketRegime* string constants used by the trading loop.
+func regimeClassToLoopString(r regime.Regime) string {
+	switch r {
+	case regime.RegimeTrendingBull, regime.RegimeTrendingBear:
+		return marketRegimeTrend
+	case regime.RegimeRanging, regime.RegimeLowVol:
+		return marketRegimeRange
+	case regime.RegimeHighVol:
+		return marketRegimeVolatile
+	default:
+		return ""
+	}
 }
 
 func (o *Orchestrator) classifyMarketRegime() string {
@@ -2928,7 +3109,7 @@ func buildCandleHistoryText(ctx ai.MarketContext) string {
 // P3-D: every rejected trade must expose the full sizing + rejection context.
 func logDecisionFunnel(
 	strategyName, category string,
-	family riskv2.StrategyFamily,
+	family string,
 	regime string,
 	kellyFraction, kellySizeBTC float64,
 	dynMultiplier, dynSizeBTC float64,

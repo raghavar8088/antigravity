@@ -143,6 +143,39 @@ func loadDotEnv() {
 	log.Println("[ENV] Loaded local .env file")
 }
 
+// requireEnv returns the value of an environment variable or terminates the
+// process with a descriptive fatal error if the variable is unset or empty.
+// Call this after loadDotEnv() so .env files are already applied.
+func requireEnv(key string) string {
+	val := os.Getenv(key)
+	if val == "" {
+		log.Fatalf("FATAL: required environment variable %s is not set. Check your .env file.", key)
+	}
+	return val
+}
+
+// validateRequiredEnv checks all required environment variables in a single pass
+// so operators see every missing variable at once instead of restarting for each one.
+func validateRequiredEnv() {
+	required := []string{
+		"DATABASE_URL",
+		"MONGODB_URI",
+		"BINANCE_API_KEY",
+		"BINANCE_API_SECRET",
+		"ENGINE_ADMIN_SECRET",
+		"AUTH_JWT_SECRET",
+	}
+	var missing []string
+	for _, key := range required {
+		if os.Getenv(key) == "" {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		log.Fatalf("FATAL: missing required environment variables: %s — check your .env file", strings.Join(missing, ", "))
+	}
+}
+
 func saveOptionsSnapshot(ctx context.Context, store persistence.OptionsBuyPaperPersistence, snapshot options.PersistedState) error {
 	priceHistJSON, err := json.Marshal(snapshot.PriceHist)
 	if err != nil {
@@ -284,6 +317,11 @@ func main() {
 
 	loadDotEnv()
 
+	// Validate required environment variables before any DB or exchange connections.
+	// A missing variable here is the #1 cause of exit status 0xffffffff on Windows
+	// because the process panics deep in a driver before logging anything useful.
+	validateRequiredEnv()
+
 	// Log key env config at startup so misconfiguration is immediately visible.
 	log.Printf("[CONFIG] SQLITE_ENABLED=%s OTEL_ENABLED=%s ML_SCORER_ENDPOINT=%s MAX_POSITION_BTC=%s MAX_DAILY_LOSS_PCT=%s",
 		os.Getenv("SQLITE_ENABLED"),
@@ -352,6 +390,14 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	const btcEquityStrategyCapacity = 600
 	allStrategies := strategy.BuildCuratedScalpers()
+	if len(allStrategies) == 0 {
+		log.Fatalf("[INIT] FATAL: zero strategies loaded — check strategy registry (engine/internal/strategy/scalpers/)")
+	}
+	strategyNames := make([]string, len(allStrategies))
+	for i, e := range allStrategies {
+		strategyNames[i] = e.Strategy.Name()
+	}
+	log.Printf("[STRATEGY] Loaded %d strategies: %v", len(allStrategies), strategyNames)
 	if len(allStrategies) > btcEquityStrategyCapacity {
 		log.Printf("[INIT] Loaded %d curated live strategies (capacity %d exceeded; no truncation applied)", len(allStrategies), btcEquityStrategyCapacity)
 	} else {
@@ -441,9 +487,12 @@ func main() {
 	posMgr := positions.NewManager()
 
 	// ═══════════════════════════════════════════════════
-	// 7. Signal Aggregator (15s cooldown per strategy)
+	// 7. Signal Aggregator (per-timeframe cooldown per strategy)
 	// ═══════════════════════════════════════════════════
-	aggregator := trading.NewSignalAggregator(15)
+	aggregator := trading.NewSignalAggregator(15) // 15s default for tick/unknown strategies
+	for _, e := range allStrategies {
+		aggregator.SetStrategyCooldown(e.Strategy.Name(), trading.CooldownForTimeframe(e.Timeframe))
+	}
 
 	// ═══════════════════════════════════════════════════
 	// 8. Trade Journal
@@ -585,7 +634,8 @@ func main() {
 		if recoveryReport.AccountRestored {
 			restoredBalance := recoveryReport.AccountState.Balance
 			if restoredBalance < 0 {
-				log.Printf("[Phase31B] ⚠️  MongoDB recovery: negative balance %.4f clamped to 0", restoredBalance)
+				log.Printf("[Phase31B] CRITICAL: MongoDB recovery: negative balance %.4f clamped to 0 — bookkeeping inconsistency detected", restoredBalance)
+				observability.NegativeBalanceRecoveries.Inc()
 				restoredBalance = 0
 			}
 			if restoredBalance != initialPaperBalanceUSD {
@@ -653,14 +703,30 @@ func main() {
 			log.Printf("[RECON RESTART] ⚠️  BTC price fetch failed (using 0): %v", reconPriceErr)
 			reconPrice = 0
 		}
-		reconReport, reconErr := reconciliationv2.ReconcileOnRestart(reconCtx, mongoMgr.DB(), reconPrice)
 		reconCancel()
-		if reconErr != nil {
-			log.Fatalf("[RECON RESTART] FATAL: restart reconciliation failed: %v", reconErr)
+
+		const maxReconAttempts = 3
+		var reconReport *reconciliationv2.ReconciliationReport
+		var reconErr error
+		for attempt := 1; attempt <= maxReconAttempts; attempt++ {
+			attemptCtx, attemptCancel := context.WithTimeout(ctx, 30*time.Second)
+			reconReport, reconErr = reconciliationv2.ReconcileOnRestart(attemptCtx, mongoMgr.DB(), reconPrice)
+			attemptCancel()
+			if reconErr == nil {
+				break
+			}
+			log.Printf("[RECON RESTART] attempt %d/%d failed: %v", attempt, maxReconAttempts, reconErr)
+			if attempt < maxReconAttempts {
+				time.Sleep(5 * time.Second)
+			}
 		}
-		log.Printf("[RECON RESTART] ✅ complete — found=%d reconciled=%d closed_retroactively=%d discrepancies=%d price=%.0f",
-			reconReport.TradesFound, reconReport.TradesReconciled,
-			reconReport.TradesClosedRetroactively, len(reconReport.DiscrepanciesFound), reconPrice)
+		if reconErr != nil {
+			log.Printf("[RECON RESTART] ⚠️  all %d attempts failed — continuing without full reconciliation: %v", maxReconAttempts, reconErr)
+		} else {
+			log.Printf("[RECON RESTART] ✅ complete — found=%d reconciled=%d closed_retroactively=%d discrepancies=%d price=%.0f",
+				reconReport.TradesFound, reconReport.TradesReconciled,
+				reconReport.TradesClosedRetroactively, len(reconReport.DiscrepanciesFound), reconPrice)
+		}
 		reconciliationComplete.Store(true)
 	} else {
 		// No MongoDB — reconciliation not needed; mark complete so /ready doesn't block.
@@ -1043,6 +1109,27 @@ func main() {
 
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
+
+	// Upgrade 6: Binance kline WebSocket feed for live 15m/1h candles.
+	// Falls back to 5m synthesis automatically on disconnect.
+	klineClient := marketdata.NewBinanceKlineClient([]string{"15m", "1h"})
+	go safeGo("BinanceKlines", func() {
+		if err := klineClient.Start(
+			ctx,
+			func(c marketdata.Candle) {
+				orchestrator.Push15mKlineCandle(c)
+				orchestrator.SetKlineFeedActive("15m", true)
+			},
+			func(c marketdata.Candle) {
+				orchestrator.Push1hKlineCandle(c)
+				orchestrator.SetKlineFeedActive("1h", true)
+			},
+		); err != nil {
+			log.Printf("[KLINES] BinanceKlineClient stopped: %v", err)
+		}
+		orchestrator.SetKlineFeedActive("15m", false)
+		orchestrator.SetKlineFeedActive("1h", false)
+	})
 
 	// ── Reconciliation Authority v2 ───────────────────────────────────────────
 	// Compares ledger OMS projections against:
@@ -1738,6 +1825,26 @@ func main() {
 		json.NewEncoder(w).Encode(stats)
 	})
 
+	// GET /api/strategies/walkforward — Walk-forward validator status per strategy
+	http.HandleFunc("/api/strategies/walkforward", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(orchestrator.WalkForwardSummary())
+	})
+
+	// GET /api/system/confidence-floor — Adaptive confidence floor status
+	http.HandleFunc("/api/system/confidence-floor", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(orchestrator.ConfidenceFloorSnapshot())
+	})
+
 	// GET /api/positions — Open positions with live SL/TP
 	http.HandleFunc("/api/positions", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)
@@ -1794,6 +1901,17 @@ func main() {
 			"candlesClosed":  candles,
 		}
 		json.NewEncoder(w).Encode(response)
+	})
+
+	// GET /api/scalers/stats — Live monitoring for the 7 curated scalper strategies.
+	// Returns per-strategy win/loss stats, current regime, CVD, and eval cycle count.
+	// Use this to detect which strategies are trading and tune selectivity per regime.
+	http.HandleFunc("/api/scalers/stats", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		json.NewEncoder(w).Encode(orchestrator.GetScalersStats()) //nolint:errcheck
 	})
 
 	// GET /api/logs — Diagnostic memory buffer

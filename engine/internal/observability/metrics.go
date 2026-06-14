@@ -453,6 +453,22 @@ var (
 )
 
 // ─────────────────────────────────────────────
+// Paper Account Recovery Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// NegativeBalanceRecoveries counts how many times MongoDB recovery returned a
+	// negative paper balance that had to be clamped to zero. A non-zero value
+	// indicates a bookkeeping inconsistency and should trigger a CRITICAL alert.
+	NegativeBalanceRecoveries = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "trading",
+		Subsystem: "paper_oms",
+		Name:      "negative_balance_recoveries_total",
+		Help:      "Total times MongoDB recovery produced a negative balance clamped to 0. Non-zero = bookkeeping inconsistency.",
+	})
+)
+
+// ─────────────────────────────────────────────
 // Security Metrics
 // ─────────────────────────────────────────────
 
@@ -824,6 +840,20 @@ var (
 		Name:      "trades_analysed",
 		Help:      "Number of closed trades analysed in the most recent calibration run.",
 	})
+)
+
+// ─────────────────────────────────────────────
+// Upgrades 1–6 Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// WalkForwardStatus tracks each strategy's walk-forward validator status.
+	// Value: 1 = the labelled status is active for this strategy, 0 otherwise.
+	WalkForwardStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "strategy",
+		Name:      "walkforward_status",
+		Help:      "Walk-forward validator status per strategy (1=active label, 0=inactive). Labels: PROBATIONARY, ACTIVE, DEMOTED.",
+	}, []string{"strategy", "status"})
 )
 
 // ─────────────────────────────────────────────
