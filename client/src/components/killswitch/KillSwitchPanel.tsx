@@ -48,6 +48,11 @@ export function KillSwitchPanel() {
             <>
               <StatusDot variant="error" size={6} />
               ⚡ KILL SWITCH ACTIVE — ALL STRATEGIES HALTED
+              {status.reason ? (
+                <span className="font-mono text-[var(--color-text-muted)] max-w-[420px] truncate" title={status.reason}>
+                  · {status.reason}
+                </span>
+              ) : null}
               {status.triggeredAt ? (
                 <span className="font-mono tnum text-[var(--color-text-muted)]">
                   · {new Date(status.triggeredAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })} IST

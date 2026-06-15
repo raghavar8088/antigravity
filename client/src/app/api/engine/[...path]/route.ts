@@ -71,6 +71,7 @@ const READ_PATH_PREFIXES = [
   "/api/strategies",
   "/api/logs",
   "/api/regime",
+  "/api/scalers/stats",
   "/api/ai/insights",
   "/api/health/mock-trading",
   "/api/security/status",

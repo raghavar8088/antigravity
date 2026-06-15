@@ -59,6 +59,7 @@ type Service struct {
 	mu           sync.RWMutex
 	active       bool
 	reason       string
+	activatedAt  time.Time
 	ledger       ledger.Store
 	executor     Executor
 	accountID    string
@@ -92,6 +93,7 @@ func (s *Service) RestoreFromLedger(ctx context.Context) error {
 	active := false
 	reason := ""
 	var lastTrigger Trigger
+	var lastActivated time.Time
 	for _, ev := range events {
 		if ev.AggregateType != ledger.AggregateRisk {
 			continue
@@ -105,14 +107,19 @@ func (s *Service) RestoreFromLedger(ctx context.Context) error {
 			active = true
 			reason = act.Reason
 			lastTrigger = act.Trigger
+			if !act.ActivatedAt.IsZero() {
+				lastActivated = act.ActivatedAt
+			}
 		case ledger.EventKillSwitchReleased:
 			active = false
 			reason = ""
+			lastActivated = time.Time{}
 		}
 	}
 	s.mu.Lock()
 	s.active = active
 	s.reason = reason
+	s.activatedAt = lastActivated
 	s.mu.Unlock()
 
 	if active && shouldAutoReleaseReconFalsePositive(reason) {
@@ -184,6 +191,12 @@ func (s *Service) Reason() string {
 	return s.reason
 }
 
+func (s *Service) ActivatedAt() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.activatedAt
+}
+
 func (s *Service) Trigger(ctx context.Context, activation Activation) error {
 	if activation.Trigger == "" {
 		return errors.New("killswitch: trigger is required")
@@ -201,6 +214,11 @@ func (s *Service) Trigger(ctx context.Context, activation Activation) error {
 	s.mu.Lock()
 	s.active = true
 	s.reason = activation.Reason
+	if !activation.ActivatedAt.IsZero() {
+		s.activatedAt = activation.ActivatedAt
+	} else {
+		s.activatedAt = time.Now().UTC()
+	}
 	s.mu.Unlock()
 
 	if s.executor == nil {
@@ -253,6 +271,7 @@ func (s *Service) Release(ctx context.Context, originalTrigger Trigger, released
 	s.mu.Lock()
 	s.active = false
 	s.reason = ""
+	s.activatedAt = time.Time{}
 	s.mu.Unlock()
 	return nil
 }

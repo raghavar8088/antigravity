@@ -102,6 +102,7 @@ The content is organized as follows:
   app/api/risk/gates/route.ts
   app/api/risk/positions/route.ts
   app/api/risk/summary/route.ts
+  app/api/scalers/stats/route.ts
   app/api/sep/bottom/route.ts
   app/api/sep/rankings/route.ts
   app/api/sep/retirement-candidates/route.ts
@@ -111,6 +112,7 @@ The content is organized as follows:
   app/api/storage/backup/route.ts
   app/api/storage/health/route.ts
   app/api/storage/restore/route.ts
+  app/api/strategy-intelligence/route.ts
   app/api/system/health/route.ts
   app/api/system/production-validation/route.ts
   app/api/trade-history/daily-run/route.ts

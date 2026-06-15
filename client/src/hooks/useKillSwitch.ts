@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface KillSwitchStatus {
   active: boolean;
+  reason: string | null;
   triggeredAt: string | null;
   triggeredBy: string | null;
   activeStrategies: number;
@@ -14,6 +15,7 @@ export interface KillSwitchStatus {
 
 const DEFAULT: KillSwitchStatus = {
   active: false,
+  reason: null,
   triggeredAt: null,
   triggeredBy: null,
   activeStrategies: 0,
@@ -34,8 +36,9 @@ export function useKillSwitch() {
       backoffRef.current = 2000;
       setStatus({
         active: !!data.active,
+        reason: typeof data.reason === "string" ? data.reason : null,
         triggeredAt: data.triggeredAt ?? data.blockedAt ?? null,
-        triggeredBy: data.triggeredBy ?? null,
+        triggeredBy: data.triggeredBy ?? inferTriggeredBy(data.reason),
         activeStrategies: data.activeStrategies ?? 0,
         openOrders: data.openOrders ?? 0,
         dataState: data.error === "engine_offline" ? "engine_offline" : "ok",
@@ -84,4 +87,16 @@ export function useKillSwitch() {
   }, [poll]);
 
   return { status, loading, trigger, resume };
+}
+
+function inferTriggeredBy(reason: unknown): string | null {
+  if (typeof reason !== "string" || reason.trim() === "") return null;
+  const r = reason.toLowerCase();
+  if (r.includes("reconciliation") || r.includes("oms_desync") || r.includes("drift")) {
+    return "reconciliation";
+  }
+  if (r.includes("manual operator") || r.includes("operator block") || r.includes("/api/admin/ks/block")) {
+    return "operator";
+  }
+  return "engine";
 }

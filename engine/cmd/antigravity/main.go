@@ -1669,10 +1669,14 @@ func main() {
 	http.HandleFunc("/api/admin/ks/status", func(w http.ResponseWriter, r *http.Request) {
 		// Status is a safe read but still should not leak CORS wildcard.
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		payload := map[string]interface{}{
 			"active": ksSvc.IsActive(),
 			"reason": ksSvc.Reason(),
-		})
+		}
+		if at := ksSvc.ActivatedAt(); !at.IsZero() {
+			payload["triggeredAt"] = at.UTC().Format(time.RFC3339)
+		}
+		json.NewEncoder(w).Encode(payload)
 	})
 	// /api/system/resume — session-gated operator resume (no ENGINE_ADMIN_SECRET required).
 	// The caller (Next.js /api/killswitch/resume) validates the raig_session JWT before

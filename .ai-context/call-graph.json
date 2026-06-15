@@ -1,1 +1,1 @@
-{}
+{"client/src/components/killswitch/KillSwitchPanel.tsx::KillSwitchPanel()":["client/src/hooks/useKillSwitch.ts::useKillSwitch()"],"engine/cmd/antigravity/main.go::handleDeltaBTCProbe()":["engine/internal/killswitch/service.go::Context"],"engine/cmd/antigravity/main.go::main()":["engine/internal/killswitch/service.go::Context"]}

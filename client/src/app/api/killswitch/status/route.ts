@@ -20,6 +20,18 @@ import { NextResponse } from "next/server";
 
 const ENGINE_BASE = (process.env.INTERNAL_API_URL ?? process.env.ENGINE_URL ?? "http://127.0.0.1:8080").replace(/\/+$/, "");
 
+function inferTriggeredBy(reason: unknown): string | null {
+  if (typeof reason !== "string" || reason.trim() === "") return null;
+  const r = reason.toLowerCase();
+  if (r.includes("reconciliation") || r.includes("oms_desync") || r.includes("drift")) {
+    return "reconciliation";
+  }
+  if (r.includes("manual operator") || r.includes("operator block") || r.includes("/api/admin/ks/block")) {
+    return "operator";
+  }
+  return "engine";
+}
+
 export async function GET() {
   try {
     const res = await fetch(`${ENGINE_BASE}/api/admin/ks/status`, {
@@ -31,7 +43,14 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: "Engine returned " + res.status }, { status: res.status });
     }
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json({
+      active: !!data.active,
+      reason: typeof data.reason === "string" ? data.reason : null,
+      triggeredAt: data.triggeredAt ?? data.blockedAt ?? null,
+      triggeredBy: data.triggeredBy ?? inferTriggeredBy(data.reason),
+      activeStrategies: data.activeStrategies ?? 0,
+      openOrders: data.openOrders ?? 0,
+    });
   } catch {
     // Return a safe "unknown" state so UI can show a warning rather than crash
     return NextResponse.json(
