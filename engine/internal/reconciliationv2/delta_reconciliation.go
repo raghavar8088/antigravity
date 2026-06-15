@@ -357,7 +357,8 @@ func (a *DeltaReconciliationAdapter) GetFunding(ctx context.Context, symbol stri
 // ─── Delta helpers ─────────────────────────────────────────────────────────────
 
 func (a *DeltaReconciliationAdapter) get(ctx context.Context, path, body string) ([]byte, error) {
-	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	// Delta auth expects Unix seconds (see internal/delta/client.go), not milliseconds.
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 	method := "GET"
 
 	req, err := http.NewRequestWithContext(ctx, method, a.baseURL+path, nil)

@@ -1,1 +1,1 @@
-{"client/src/app/api/killswitch/status/route.ts::GET()":["client/src/lib/killswitch/killSwitchPolicy.ts::isKillSwitchArmedOnServer()","client/src/lib/killswitch/killSwitchPolicy.ts::shouldAutoClearHalt()","client/src/lib/killswitch/releaseEngineKillSwitch.ts::releaseEngineKillSwitch()"]}
+{}
