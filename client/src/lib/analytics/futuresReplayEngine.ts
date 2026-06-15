@@ -471,7 +471,7 @@ export function runPaperDeskReplay(
       leverage,
       slPrice,
       tpPrice,
-      liquidationPrice: paperLiquidationPrice(entryPrice, side, leverage),
+      liquidationPrice: paperLiquidationPrice(side, entryPrice, leverage),
       unrealizedPnl: 0,
       unrealizedPnlPct: 0,
       returnPct: 0,

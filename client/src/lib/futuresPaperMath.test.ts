@@ -112,7 +112,7 @@ describe("applyFundingAccrual (time-scaled periodic funding)", () => {
 describe("paperLiquidationPrice + paperLiquidationCrossed", () => {
   it("long: modeled liq below entry; crossed when mark at or below liq", () => {
     const entry = 100_000;
-    const liq = paperLiquidationPrice(entry, "LONG", 25);
+    const liq = paperLiquidationPrice("LONG", entry, 25);
     expect(liq).toBeLessThan(entry);
     expect(paperLiquidationCrossed("LONG", liq - 1, liq)).toBe(true);
     expect(paperLiquidationCrossed("LONG", liq, liq)).toBe(true);
@@ -121,7 +121,7 @@ describe("paperLiquidationPrice + paperLiquidationCrossed", () => {
 
   it("short: modeled liq above entry; crossed when mark at or above liq", () => {
     const entry = 100_000;
-    const liq = paperLiquidationPrice(entry, "SHORT", 25);
+    const liq = paperLiquidationPrice("SHORT", entry, 25);
     expect(liq).toBeGreaterThan(entry);
     expect(paperLiquidationCrossed("SHORT", liq + 1, liq)).toBe(true);
     expect(paperLiquidationCrossed("SHORT", liq, liq)).toBe(true);

@@ -465,6 +465,10 @@ func main() {
 		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($50,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
+	// BUG 2: schedule daily P&L reset at midnight UTC so daily-loss circuit breaker
+	// resets automatically without a process restart.
+	go riskEngine.ScheduleDailyReset(ctx)
+	log.Println("[RISK] Daily loss reset scheduled (fires at 00:00 UTC)")
 
 	// ═══════════════════════════════════════════════════
 	// 4. Strategy Tracker (Per-Strategy Performance)
@@ -779,6 +783,19 @@ func main() {
 	}
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")
+	// RISK 2: wire reconciler into kill switch so OMS_DESYNC auto-release is
+	// blocked when reconciliation finds live mismatches.
+	if mongoMgr != nil && mongoMgr.IsConnected() {
+		ksSvc.SetReconciler(func(rctx context.Context) (int, error) {
+			price := paperExecute.GetLastPrice()
+			report, err := reconciliationv2.ReconcileOnRestart(rctx, mongoMgr.DB(), price)
+			if err != nil {
+				return 0, err
+			}
+			return len(report.DiscrepanciesFound), nil
+		})
+		log.Println("[KILL SWITCH] Reconciler wired — OMS_DESYNC auto-release validates trade reconciliation")
+	}
 	wasHalted := ksSvc.RestoreStateOnStartup(ctx)
 	if wasHalted {
 		log.Printf("[KILL SWITCH] ⚠️  engine starting in HALTED state — kill switch was active from prior session")

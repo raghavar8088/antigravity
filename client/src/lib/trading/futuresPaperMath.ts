@@ -25,15 +25,33 @@ export type PaperSide = "LONG" | "SHORT";
  *
  * `slippageBps ≤ 0` or non-finite inputs → unchanged `price`.
  */
-export function paperApplyEntrySlippage(side: PaperSide, price: number, slippageBps: number): number {
+/**
+ * Apply entry slippage. PERF 6: accepts optional atrPct for dynamic scaling.
+ * dynamicBps = baseBps * (1 + atrPct / 0.005), capped at baseBps * 5.
+ */
+export function paperApplyEntrySlippage(side: PaperSide, price: number, slippageBps: number, atrPct = 0): number {
   if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(slippageBps) || slippageBps <= 0) return price;
-  const mul = slippageBps / 10_000;
+  let bps = slippageBps;
+  if (Number.isFinite(atrPct) && atrPct > 0) {
+    const dynamic = slippageBps * (1 + atrPct / 0.005);
+    bps = Math.min(dynamic, slippageBps * 5);
+  }
+  const mul = bps / 10_000;
   return side === "LONG" ? price * (1 + mul) : price * (1 - mul);
 }
 
-export function paperApplyExitSlippage(side: PaperSide, price: number, slippageBps: number): number {
+/**
+ * Apply exit slippage. PERF 6: accepts optional atrPct for dynamic scaling.
+ * LONG exit receives less; SHORT exit covers higher.
+ */
+export function paperApplyExitSlippage(side: PaperSide, price: number, slippageBps: number, atrPct = 0): number {
   if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(slippageBps) || slippageBps <= 0) return price;
-  const mul = slippageBps / 10_000;
+  let bps = slippageBps;
+  if (Number.isFinite(atrPct) && atrPct > 0) {
+    const dynamic = slippageBps * (1 + atrPct / 0.005);
+    bps = Math.min(dynamic, slippageBps * 5);
+  }
+  const mul = bps / 10_000;
   return side === "LONG" ? price * (1 - mul) : price * (1 + mul);
 }
 
@@ -73,20 +91,21 @@ export type PaperHardExitResult =
   | { shouldClose: true; reason: PaperHardExitReason; exitPrice: number }
   | { shouldClose: false };
 
-/** Modeled isolated liquidation price (same formula as legacy hook). */
+/** Modeled isolated liquidation price. BUG 8: fixed SHORT formula. */
 export function paperLiquidationPrice(
-  entryPrice: number,
-  side: PaperSide,
+  side: "LONG" | "SHORT",
+  entry: number,
   leverage: number,
-  maintenanceMarginPct = 0.005,
+  maintenanceMarginRate = 0.005,
 ): number {
-  if (!Number.isFinite(entryPrice) || entryPrice <= 0) return 0;
-  // Leverage must be >= 1; below 1x isolated margin the formula produces a negative liq price
+  if (!Number.isFinite(entry) || entry <= 0) return 0;
   const lev = Math.max(1, leverage);
+  const initialMarginRate = 1 / lev;
   if (side === "LONG") {
-    return entryPrice * (1 - 1 / lev + maintenanceMarginPct);
+    return entry * (1 - initialMarginRate + maintenanceMarginRate);
   }
-  return entryPrice * (1 + 1 / lev - maintenanceMarginPct);
+  // BUG 8: SHORT liq price is ABOVE entry — price rises against short position.
+  return entry * (1 + initialMarginRate - maintenanceMarginRate);
 }
 
 /** True when mark has crossed through modeled liquidation (first liq check in runtime). */
@@ -262,6 +281,32 @@ export function paperSameDirNotionalWouldExceedCap(
  * Delta India perpetuals commonly use 8h funding periods (some products differ — see exchange docs).
  */
 export const DELTA_PAPER_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
+
+/** BUG 7: Funding interval in ms (8h). */
+const FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * BUG 7: Compute accrued funding as a USD cost based on completed 8h windows.
+ * Uses floor(elapsed / 8h) windows so partial windows are not charged.
+ * Returns a positive number for cost (longs pay when rate > 0).
+ *
+ * @param openedAt - trade open timestamp in ms
+ * @param notional - position notional in USD
+ * @param fundingRatePctPer8h - funding rate as percent (e.g. 0.01 = 0.01%) per 8h period
+ */
+export function paperComputeAccruedFunding(
+  openedAt: number,
+  notional: number,
+  fundingRatePctPer8h: number,
+): number {
+  if (!Number.isFinite(openedAt) || !Number.isFinite(notional) || notional <= 0) return 0;
+  if (!Number.isFinite(fundingRatePctPer8h)) return 0;
+  const elapsedMs = Date.now() - openedAt;
+  if (elapsedMs <= 0) return 0;
+  const windows = Math.floor(elapsedMs / FUNDING_INTERVAL_MS);
+  if (windows <= 0) return 0;
+  return windows * (fundingRatePctPer8h / 100) * notional;
+}
 
 export type PaperFundingAccrualInput = {
   side: PaperSide;

@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,12 +54,13 @@ const (
 	// account can be replayed together via ledger.Store.ReplayAccount.
 	btcPaperAccountID = "btc-paper-1"
 
-	minExecutableConfidence     = 0.68 // Phase 22A unlock: 0.74→0.68; aligns with ScoringConfig.MinConfidence=0.65 while keeping a safety buffer
-	minBridgeApprovalConfidence = 0.65 // Minimum ChatGPT confidence to honour a bridge approval
-	minRewardToRiskRatio        = 2.40 // Stronger edge requirement for scalping signals
-	minSignalTakeProfitPct      = 0.15 // Lowered from 0.50 — scalper TPs are 0.15–0.40%
-	maxSignalStopLossPct        = 1.50 // Raised from 0.20 — BTC moves 1–3% on scalper timeframes
-	defaultSignalStopLossPct    = 0.18 // Safer default SL — reduce micro noise losses
+	// FEAT 9: base defaults — all overridable via env vars at runtime.
+	defaultMinExecutableConfidence     = 0.68
+	defaultMinBridgeApprovalConfidence = 0.65
+	defaultMinRewardToRiskRatio        = 2.40
+	defaultMinSignalTakeProfitPct      = 0.15
+	defaultMaxSignalStopLossPct        = 1.50
+	defaultSignalStopLossPct           = 0.18 // Safer default SL — reduce micro noise losses
 
 	minExecutionWeightToTrade = 0.50 // Require stronger strategy quality before execution
 	marketHistoryMaxSamples   = 320
@@ -69,6 +71,54 @@ const (
 	marketRegimeVolatile = "VOLATILE"
 	marketRegimeMixed    = "MIXED"
 )
+
+// FEAT 9: runtime-loaded constants from env (fall back to defaults defined above).
+// These are package-level vars so all callers in this file see the live values.
+var (
+	minExecutableConfidence     = defaultMinExecutableConfidence
+	minBridgeApprovalConfidence = defaultMinBridgeApprovalConfidence
+	minRewardToRiskRatio        = defaultMinRewardToRiskRatio
+	minSignalTakeProfitPct      = defaultMinSignalTakeProfitPct
+	maxSignalStopLossPct        = defaultMaxSignalStopLossPct
+)
+
+func init() {
+	minExecutableConfidence = parseFloatEnvLazy("MIN_EXECUTABLE_CONFIDENCE", defaultMinExecutableConfidence)
+	minBridgeApprovalConfidence = parseFloatEnvLazy("MIN_BRIDGE_CONFIDENCE", defaultMinBridgeApprovalConfidence)
+	minRewardToRiskRatio = parseFloatEnvLazy("MIN_REWARD_TO_RISK_RATIO", defaultMinRewardToRiskRatio)
+	minSignalTakeProfitPct = parseFloatEnvLazy("MIN_SIGNAL_TAKE_PROFIT_PCT", defaultMinSignalTakeProfitPct)
+	maxSignalStopLossPct = parseFloatEnvLazy("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
+}
+
+// parseFloatEnvLazy is the init-time version (before parseFloatEnv is declared).
+func parseFloatEnvLazy(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+// parseFloatEnv returns the float64 value of an env var or the default.
+func parseFloatEnv(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+// parseIntEnv returns the int value of an env var or the default.
+func parseIntEnv(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
 
 // signalMaxAge returns the maximum age a signal may reach before execution is
 // skipped.  Signals older than their timeframe's expiry window are stale — the
@@ -83,8 +133,12 @@ func signalMaxAge(timeframe string) time.Duration {
 		return 7 * time.Minute
 	case "15m":
 		return 20 * time.Minute
+	case "30m": // BUG 3
+		return 38 * time.Minute
 	case "1h":
 		return 75 * time.Minute
+	case "4h": // BUG 3
+		return 5 * time.Hour
 	default: // "tick" or unset
 		return 500 * time.Millisecond
 	}
@@ -185,6 +239,16 @@ type Orchestrator struct {
 	// execWatchdog tracks tick/signal/fill activity for stale-trading alerts.
 	execWatchdog *ExecutionWatchdog
 
+	// BUG 4: directional trade caps
+	openLongCount  int
+	openShortCount int
+	maxOpenLongs   int
+	maxOpenShorts  int
+
+	// BUG 5: per-strategy trade cooldown
+	lastTradeByStrategy map[string]time.Time
+	strategyMu          sync.RWMutex
+
 	mu sync.RWMutex
 
 	// deps carries all Phase 1–5 upgrade dependencies (data quality, regime,
@@ -228,6 +292,61 @@ func (o *Orchestrator) LastCycleTime() time.Time {
 	o.lastCycleAtMu.RLock()
 	defer o.lastCycleAtMu.RUnlock()
 	return o.lastCycleAt
+}
+
+// canOpenDirectional returns true when a new order for the given side ("BUY"/"SELL")
+// would not exceed the configured max-open-long or max-open-short cap. BUG 4.
+func (o *Orchestrator) canOpenDirectional(side string) bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
+		return o.maxOpenLongs <= 0 || o.openLongCount < o.maxOpenLongs
+	}
+	return o.maxOpenShorts <= 0 || o.openShortCount < o.maxOpenShorts
+}
+
+// recordDirectionalOpen increments the appropriate directional counter. BUG 4.
+func (o *Orchestrator) recordDirectionalOpen(side string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
+		o.openLongCount++
+	} else {
+		o.openShortCount++
+	}
+}
+
+// recordDirectionalClose decrements the appropriate directional counter. BUG 4.
+func (o *Orchestrator) recordDirectionalClose(side string) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
+		if o.openLongCount > 0 {
+			o.openLongCount--
+		}
+	} else {
+		if o.openShortCount > 0 {
+			o.openShortCount--
+		}
+	}
+}
+
+// isOnCooldown returns true if the strategy has traded within the cooldown window. BUG 5.
+func (o *Orchestrator) isOnCooldown(strategyName string, cooldown time.Duration) bool {
+	if cooldown <= 0 {
+		return false
+	}
+	o.strategyMu.RLock()
+	last, ok := o.lastTradeByStrategy[strategyName]
+	o.strategyMu.RUnlock()
+	return ok && time.Since(last) < cooldown
+}
+
+// recordStrategyTrade marks the current time as the last trade time for a strategy. BUG 5.
+func (o *Orchestrator) recordStrategyTrade(strategyName string) {
+	o.strategyMu.Lock()
+	o.lastTradeByStrategy[strategyName] = time.Now().UTC()
+	o.strategyMu.Unlock()
 }
 
 // CurrentRegime returns the most recently classified market regime string.
@@ -305,12 +424,17 @@ func NewOrchestrator(
 		signalIDByOrder:        make(map[string]string),
 		// Zero until the browser bridge explicitly heartbeats — avoids treating
 		// "fresh boot" as bridge-online and parking every signal for 15s with no approver.
-		lastBridgeHeartbeat: time.Time{},
-		sessionStart:        time.Now(),
-		portfolioLedger:     paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
-		scalerBundle:        newScalerBundle(),
-		walkForward:         scalers.NewWalkForwardValidator(),
-		adaptiveFloor:       NewAdaptiveConfidenceFloor(minExecutableConfidence),
+		lastBridgeHeartbeat:     time.Time{},
+		sessionStart:            time.Now(),
+		portfolioLedger:         paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
+		scalerBundle:            newScalerBundle(),
+		walkForward:             scalers.NewWalkForwardValidator(),
+		adaptiveFloor:           NewAdaptiveConfidenceFloor(minExecutableConfidence),
+		// BUG 4: directional caps from env
+		maxOpenLongs:            parseIntEnv("MAX_OPEN_LONG_TRADES", 3),
+		maxOpenShorts:           parseIntEnv("MAX_OPEN_SHORT_TRADES", 3),
+		// BUG 5: per-strategy cooldown map
+		lastTradeByStrategy:     make(map[string]time.Time),
 	}
 }
 
@@ -1203,7 +1327,10 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 
 	// P2-D: sync live equity into Risk V2 engine on every tick so Kelly sizing
 	// and all percentage-based risk calculations use current account value.
-	o.risk.SyncEquity(o.exec.GetEquityUSD())
+	liveEquity := o.exec.GetEquityUSD()
+	o.risk.SyncEquity(liveEquity)
+	// RISK 1: update intraday peak so the drawdown ratchet has accurate equity.
+	o.risk.UpdateIntradayPeak(liveEquity)
 
 	// 2. Check SL/TP/trailing on all open positions
 	o.posMgr.CheckStopLossAndTakeProfit(t.Price)
@@ -2152,6 +2279,29 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		}
 
 		// ══════════════════════════════════════════════════════════════════════
+		// 12b. BUG 4 — Directional Trade Caps
+		// ══════════════════════════════════════════════════════════════════════
+		if !o.canOpenDirectional(string(sig.Action)) {
+			log.Printf("[DIRECTIONAL CAP] %s rejected — max open %s positions reached", aggSig.StrategyName, sig.Action)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "directional_cap", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "directional_cap")
+			continue
+		}
+
+		// ══════════════════════════════════════════════════════════════════════
+		// 12c. BUG 5 — Per-Strategy Cooldown
+		// ══════════════════════════════════════════════════════════════════════
+		const strategyCooldown = 15 * time.Minute
+		if o.isOnCooldown(aggSig.StrategyName, strategyCooldown) {
+			log.Printf("[COOLDOWN] %s rejected — strategy on cooldown", aggSig.StrategyName)
+			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
+			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "strategy_cooldown", aggSig.Category)
+			o.execIntel.RecordRejection(sigID, "strategy_cooldown")
+			continue
+		}
+
+		// ══════════════════════════════════════════════════════════════════════
 		// 13. EXECUTION — Fill via Coinbase Advanced Trad (Live/Paper)
 		// ══════════════════════════════════════════════════════════════════════
 		o.execIntel.Record(sigID, execintel.StateOrderSubmitted, string(orderMode))
@@ -2165,6 +2315,9 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
 		o.aggregator.RecordStrategyExecution(aggSig.StrategyName)
+		// BUG 4/5: record successful fill for directional cap and cooldown tracking
+		o.recordDirectionalOpen(string(sig.Action))
+		o.recordStrategyTrade(aggSig.StrategyName)
 		execPrice := fill.ExecPrice
 
 		// Phase 22D lifecycle: order acknowledged + filled.

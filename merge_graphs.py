@@ -4,6 +4,7 @@ Bypasses the graphify merge-graphs NetworkX compatibility bug.
 """
 import json
 import os
+import tempfile
 
 GRAPH_FILES = [
     "graphify-scopes/client-src/graphify-out/graph.json",
@@ -60,9 +61,19 @@ def merge_graphs(graph_files, output_path):
         "output_tokens": total_output_tokens,
     }
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(result, f)
+    output_dir = os.path.dirname(output_path)
+    os.makedirs(output_dir, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=".graph.", suffix=".json", dir=output_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(result, f)
+        os.replace(tmp_path, output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     print(f"\nMerged graph written to: {output_path}")
     print(f"  Total nodes : {len(result['nodes'])}")

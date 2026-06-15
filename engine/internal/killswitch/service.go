@@ -49,17 +49,33 @@ type Activation struct {
 	ActivatedAt time.Time `json:"activated_at"`
 }
 
+// ReconcilerFunc is a function that validates position/order reconciliation.
+// Returns the number of mismatches and any operational error.
+// Used by the kill-switch auto-release path to verify system integrity
+// before re-enabling trading. RISK 2.
+type ReconcilerFunc func(ctx context.Context) (mismatches int, err error)
+
 type Service struct {
-	mu        sync.RWMutex
-	active    bool
-	reason    string
-	ledger    ledger.Store
-	executor  Executor
-	accountID string
+	mu           sync.RWMutex
+	active       bool
+	reason       string
+	ledger       ledger.Store
+	executor     Executor
+	accountID    string
+	reconciler   ReconcilerFunc // RISK 2: optional reconciliation validator
 }
 
 func NewService(store ledger.Store, executor Executor, accountID string) *Service {
 	return &Service{ledger: store, executor: executor, accountID: accountID}
+}
+
+// SetReconciler attaches a reconciliation validator. When set, the OMS_DESYNC
+// auto-release path calls this function first — if mismatches > 0 the release
+// is blocked. RISK 2.
+func (s *Service) SetReconciler(fn ReconcilerFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reconciler = fn
 }
 
 // RestoreFromLedger replays kill-switch events to restore in-memory active state
@@ -100,6 +116,19 @@ func (s *Service) RestoreFromLedger(ctx context.Context) error {
 	s.mu.Unlock()
 
 	if active && shouldAutoReleaseReconFalsePositive(reason) {
+		// RISK 2: For OMS_DESYNC triggers, validate reconciliation before releasing.
+		if lastTrigger == TriggerOMSDesync && s.reconciler != nil {
+			mismatches, reconErr := s.reconciler(ctx)
+			if reconErr != nil {
+				log.Printf("[KILL SWITCH] reconciliation check failed — keeping kill switch active: %v", reconErr)
+				return nil
+			}
+			if mismatches > 0 {
+				log.Printf("[KILL SWITCH] reconciliation found %d mismatches — NOT releasing kill switch for OMS_DESYNC", mismatches)
+				return nil
+			}
+			log.Printf("[KILL SWITCH] reconciliation clean (0 mismatches) — proceeding with auto-release")
+		}
 		log.Printf("[KILL SWITCH] auto-releasing stale kill switch from reconciliation false positive: %s", reason)
 		return s.Release(ctx, lastTrigger, "startup-healer", "auto-release reconciliation false positive")
 	}

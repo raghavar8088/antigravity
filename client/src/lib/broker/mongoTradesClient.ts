@@ -22,7 +22,10 @@
 import { MongoClient, type Collection, type Db } from "mongodb";
 import type { PaperTradeDbRow } from "@/lib/portfolio/paperTradesTypes";
 
-const TRADES_COLLECTION = "paper_trades";
+// PERF 4: Vercel global MongoClient cache — survives hot-reloads and lambda warm starts.
+const g = global as typeof globalThis & { __mongoClient?: MongoClient };
+
+const TRADES_COLLECTION = "mock_trades" // BUG 9: consolidated from paper_trades → mock_trades;
 const DEFAULT_DB_NAME = "loop_trades";
 const EVENTS_COLLECTION = "desk_worker_events";
 
@@ -56,14 +59,17 @@ async function connect(): Promise<CachedClient> {
   const dbName = process.env.MONGODB_DB_NAME?.trim() || process.env.MONGODB_DB?.trim() || DEFAULT_DB_NAME;
 
   connectPromise = (async () => {
-    const client = new MongoClient(uri, {
-      // Atlas M0 caps at 500 conns project-wide; keep our pool small.
+    // PERF 4: Reuse global MongoClient across hot-reloads and lambdas.
+    const opts = {
       maxPoolSize: 10,
       minPoolSize: 0,
-      // Fail fast in serverless when the cluster is unreachable.
       serverSelectionTimeoutMS: 5_000,
       connectTimeoutMS: 5_000,
-    });
+    };
+    if (!g.__mongoClient) {
+      g.__mongoClient = new MongoClient(uri, opts);
+    }
+    const client = g.__mongoClient;
     await client.connect();
     const db = client.db(dbName);
     const entry: CachedClient = { client, db, indexesEnsured: false };
@@ -471,5 +477,45 @@ export async function _closeMongoForTests(): Promise<void> {
     await cached.client.close().catch(() => undefined);
     cached = null;
     connectPromise = null;
+    g.__mongoClient = undefined;
+  }
+}
+
+/**
+ * BUG 9: Migrate documents from the legacy paper_trades collection into mock_trades.
+ * Only copies documents whose client_trade_id is not already present in mock_trades.
+ * Safe to run multiple times (idempotent).
+ */
+export async function migrateFromPaperTrades(): Promise<{ migrated: number }> {
+  try {
+    const entry = await connect();
+    const source = entry.db.collection<PaperTradeDbRow>("paper_trades");
+    const dest = entry.db.collection<PaperTradeDbRow>(TRADES_COLLECTION);
+
+    // Get all trade IDs already in mock_trades.
+    const existingIds = new Set<string>(
+      (await dest.distinct("client_trade_id", {})).map(String),
+    );
+
+    const cursor = source.find({});
+    let migrated = 0;
+
+    for await (const doc of cursor) {
+      if (!doc.client_trade_id || existingIds.has(doc.client_trade_id)) continue;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _id: _ignored, ...docWithoutId } = doc as PaperTradeDbRow & { _id?: unknown };
+        await dest.insertOne(docWithoutId as PaperTradeDbRow);
+        migrated++;
+      } catch {
+        // skip duplicates that race-inserted
+      }
+    }
+
+    console.log(`[migrateFromPaperTrades] migrated ${migrated} docs from paper_trades → mock_trades`);
+    return { migrated };
+  } catch (err) {
+    console.error("[migrateFromPaperTrades] error:", err);
+    return { migrated: 0 };
   }
 }

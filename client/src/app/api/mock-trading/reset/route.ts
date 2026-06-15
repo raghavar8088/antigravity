@@ -7,6 +7,12 @@ import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 export const dynamic = "force-dynamic";
 
 export async function DELETE(req: Request) {
+  // BUG 10: Require admin secret for destructive reset operation.
+  const adminSecret = req.headers.get("x-engine-admin-secret");
+  if (!adminSecret || adminSecret !== process.env.ENGINE_ADMIN_SECRET) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const accountKey = OWNER_ACCOUNT_KEY;
 
   let body: unknown;

@@ -51,6 +51,7 @@ The content is organized as follows:
   app/api/btc/price/route.ts
   app/api/btc/spot-klines/route.ts
   app/api/btc/spot-state/route.ts
+  app/api/btc/trade-candles/route.ts
   app/api/cron/policy-snapshot/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
@@ -74,18 +75,23 @@ The content is organized as follows:
   app/api/killswitch/trigger/route.ts
   app/api/mock-trading/account/latest/route.ts
   app/api/mock-trading/account/route.ts
+  app/api/mock-trading/analytics/correlation/route.ts
+  app/api/mock-trading/analytics/montecarlo/route.ts
   app/api/mock-trading/analytics/route.ts
   app/api/mock-trading/daily-pnl/route.ts
   app/api/mock-trading/equity/route.ts
   app/api/mock-trading/regime/route.ts
+  app/api/mock-trading/reset/preview/route.ts
   app/api/mock-trading/reset/route.test.ts
   app/api/mock-trading/reset/route.ts
   app/api/mock-trading/scores/route.ts
   app/api/mock-trading/signal-tick/route.ts
   app/api/mock-trading/signals/route.ts
   app/api/mock-trading/snapshot/route.ts
+  app/api/mock-trading/stream/route.ts
   app/api/mock-trading/trades/[id]/close/route.ts
   app/api/mock-trading/trades/[id]/route.ts
+  app/api/mock-trading/trades/export/route.ts
   app/api/mock-trading/trades/route.test.ts
   app/api/mock-trading/trades/route.ts
   app/api/options/paper-snapshot/route.ts
@@ -286,6 +292,7 @@ The content is organized as follows:
   components/terminal/TopBar.tsx
   components/TestnetOpsPanel.tsx
   components/TradeHistory.tsx
+  components/TradeReplayDrawer.tsx
   components/trading/EventStreamViewer.tsx
   components/trading/LiveDeskStatus.tsx
   components/trading/LivePnlFeed.tsx
@@ -542,6 +549,7 @@ The content is organized as follows:
   lib/tests/pr19.test.ts
   lib/tests/pr9pr10.test.ts
   lib/tests/regressionGuard.test.ts
+  lib/trading/__tests__/futuresPaperMath.test.ts
   lib/trading/btcFtDeskBuild.ts
   lib/trading/btcFtPremiumStrategies.ts
   lib/trading/btcFtResearch.ts
@@ -857,6 +865,7 @@ The content is organized as follows:
   ledger/event_migrations.go
   ledger/event_types.go
   ledger/event.go
+  ledger/mongo_store.go
   ledger/order_projection.go
   ledger/postgres_snapshot_store.go
   ledger/postgres_store_test.go
@@ -871,6 +880,7 @@ The content is organized as follows:
   live/live_test.go
   live/orphan_detector.go
   live/parity_checker.go
+  logger/logger.go
   macro/fetcher.go
   macro/macro_test.go
   macro/score.go

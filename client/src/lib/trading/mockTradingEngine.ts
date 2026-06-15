@@ -293,6 +293,8 @@ export interface MockTrade {
   unrealizedPnl: number;
   /** Net realized PnL in USD once CLOSED. */
   realizedPnl: number;
+  /** PERF 9: Gross realized PnL before fees and funding (pure price-move profit). */
+  grossPnl?: number;
   /** Round-trip fees in USD once CLOSED. */
   fees: number;
   /** Futures funding paid by the position. Negative means the position received funding. */
@@ -1067,6 +1069,7 @@ function finalizeClose(args: {
     currentPrice: fillPrice,
     unrealizedPnl: 0,
     realizedPnl: net,
+    grossPnl: gross, // PERF 9: gross PnL before fees and funding
     fees,
     fundingCosts,
     exitReason,
@@ -1226,6 +1229,10 @@ export interface MockTradeAnalytics {
   maxDrawdown: number;
   expectancy: number | null;
   recoveryFactor: number | null;
+  /** PERF 9: Total gross PnL before fees and funding. */
+  grossPnl: number;
+  /** PERF 9: Total fees and funding costs deducted from gross to arrive at realized PnL. */
+  totalCosts: number;
   perStrategy: MockStrategyAggregate[];
   perBlocker: MockBlockerAggregate[];
   perFamily: MockFamilyAggregate[];
@@ -1281,6 +1288,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
   let stopLossLosses = 0;
   let grossWins = 0;
   let grossLosses = 0;
+  let totalGrossPnl = 0; // PERF 9
   const closedPnls: number[] = [];
 
   const stratMap = new Map<number, MockStrategyAggregate>();
@@ -1294,6 +1302,7 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
       closed++;
       realized += t.realizedPnl;
       closedPnls.push(t.realizedPnl);
+      totalGrossPnl += t.grossPnl ?? t.realizedPnl; // PERF 9
       if (t.realizedPnl > 0) {
         wins++;
         grossWins += t.realizedPnl;
@@ -1382,11 +1391,36 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
 
   const decided = wins + losses;
   const averageTrade = closed > 0 ? realized / closed : 0;
+
+  // PERF 8: Sharpe ratio uses daily PnL padded with zeros for inactive trading days.
+  // This prevents the ratio from being inflated on sparse datasets.
+  const sharpeRatio = (() => {
+    const closedTrades = trades.filter(t => t.status !== "OPEN" && t.closedAt);
+    if (closedTrades.length < 2) return null;
+    const dayPnlMap = new Map<string, number>();
+    for (const t of closedTrades) {
+      const day = new Date(t.closedAt!).toISOString().slice(0, 10);
+      dayPnlMap.set(day, (dayPnlMap.get(day) ?? 0) + t.realizedPnl);
+    }
+    if (dayPnlMap.size < 2) return null;
+    const days = [...dayPnlMap.keys()].sort();
+    const first = new Date(days[0]);
+    const last = new Date(days[days.length - 1]);
+    const dailyPnls: number[] = [];
+    for (let d = new Date(first); d <= last; d.setUTCDate(d.getUTCDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      dailyPnls.push(dayPnlMap.get(key) ?? 0);
+    }
+    const meanDaily = dailyPnls.reduce((s, v) => s + v, 0) / dailyPnls.length;
+    const varDaily = dailyPnls.reduce((s, v) => s + (v - meanDaily) ** 2, 0) / (dailyPnls.length - 1);
+    const stdevDaily = Math.sqrt(varDaily);
+    return stdevDaily > 0 ? (meanDaily / stdevDaily) * Math.sqrt(252) : null;
+  })();
+
   const variance = closedPnls.length > 1
     ? closedPnls.reduce((sum, pnl) => sum + (pnl - averageTrade) ** 2, 0) / (closedPnls.length - 1)
     : 0;
   const stdev = Math.sqrt(variance);
-  const sharpeRatio = stdev > 0 ? (averageTrade / stdev) * Math.sqrt(closedPnls.length) : null;
 
   const downPnls = closedPnls.filter(p => p < 0);
   const downStdev = downPnls.length > 1
@@ -1428,6 +1462,8 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
     maxDrawdown,
     expectancy,
     recoveryFactor,
+    grossPnl: totalGrossPnl, // PERF 9
+    totalCosts: totalGrossPnl - realized, // PERF 9: fees + funding
     perStrategy: [...stratMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),
     perBlocker: [...blockerMap.values()].sort((a, b) => b.total - a.total),
     perFamily: [...familyMap.values()].sort((a, b) => b.totalPnl - a.totalPnl),

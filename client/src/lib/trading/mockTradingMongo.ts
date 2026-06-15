@@ -297,10 +297,16 @@ async function ensureMockIndexes(db: Db): Promise<void> {
     trades.createIndex({ account_key: 1, closed_at: -1 }, { name: "by_account_closed" }),
     trades.createIndex({ account_key: 1, side: 1, opened_at: -1 }, { name: "by_account_side_opened" }),
     trades.createIndex({ account_key: 1, blockers_rejected: 1, opened_at: -1 }, { name: "by_account_blocker_opened" }),
+    // PERF 1: compound indexes for analytics and filter queries
+    trades.createIndex({ account_key: 1, strategy_family: 1, status: 1, opened_at: -1 }, { name: "by_account_family_status_opened" }),
+    trades.createIndex({ account_key: 1, status: 1, realized_pnl: 1 }, { name: "by_account_status_pnl" }),
+    trades.createIndex({ account_key: 1, blocker_gate: 1, status: 1 }, { name: "by_account_blocker_gate_status" }),
     snapshots.createIndex({ account_key: 1, timestamp: -1 }, { name: "by_account_snapshot_time" }),
     analytics.createIndex({ account_key: 1, generated_at: -1 }, { name: "by_account_analytics_time" }),
     logs.createIndex({ account_key: 1, ts: -1 }, { name: "by_account_log_time" }),
     logs.createIndex({ account_key: 1, event: 1, ts: -1 }, { name: "by_account_log_event" }),
+    // PERF 5: TTL index — auto-delete logs older than 30 days
+    logs.createIndex({ created_at: 1 }, { expireAfterSeconds: 2592000, name: "ttl_mock_trade_logs_30d" }),
     config.createIndex({ account_key: 1 }, { unique: true, name: "uniq_mock_config_account" }),
     signals.createIndex({ account_key: 1, timestamp: -1 }, { name: "by_account_signal_time" }),
     signals.createIndex({ account_key: 1, strategy_id: 1, timestamp: -1 }, { name: "by_account_signal_strategy" }),

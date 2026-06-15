@@ -21,16 +21,28 @@ const (
 type PaperClient struct {
 	initialUSD     float64
 	balanceUSD     float64
-	positionBTC    float64 // Signed net BTC position; negative values represent shorts.
+	longBTC        float64 // BUG 11: gross long BTC held
+	shortBTC       float64 // BUG 11: gross short BTC sold
 	lastKnownPrice float64
 	totalFeesUSD   float64 // Cumulative taker fees deducted across all fills.
+}
+
+// NetPosition returns longBTC - shortBTC (signed net exposure). BUG 11.
+func (p *PaperClient) NetPosition() float64 {
+	return clampNearZero(p.longBTC - p.shortBTC)
+}
+
+// GrossExposure returns longBTC + shortBTC (total absolute exposure). BUG 11.
+func (p *PaperClient) GrossExposure() float64 {
+	return p.longBTC + p.shortBTC
 }
 
 func NewPaperClient(startingUSD float64) *PaperClient {
 	return &PaperClient{
 		initialUSD:     startingUSD,
 		balanceUSD:     startingUSD,
-		positionBTC:    0,
+		longBTC:        0, // BUG 11
+		shortBTC:       0, // BUG 11
 		lastKnownPrice: 0,
 	}
 }
@@ -109,25 +121,21 @@ func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode Ord
 		}
 
 		p.balanceUSD -= totalCost
-		p.positionBTC += sig.TargetSize
-		p.positionBTC = clampNearZero(p.positionBTC)
+		p.longBTC += sig.TargetSize // BUG 11: add to long leg
+		p.longBTC = math.Max(0, p.longBTC)
 		p.totalFeesUSD += fee
-		log.Printf("[PAPER EXEC] %s BUY %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
-			mode, sig.TargetSize, execPrice, fee, p.balanceUSD)
+		log.Printf("[PAPER EXEC] %s BUY %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f | Net=%.4f",
+			mode, sig.TargetSize, execPrice, fee, p.balanceUSD, p.NetPosition())
 
 	} else if sig.Action == strategy.ActionSell {
-		if p.positionBTC <= 0 {
-			log.Printf("[PAPER EXEC] %s SHORT %.4f BTC @ $%.2f", mode, sig.TargetSize, execPrice)
-		}
-
 		// Revenue net of taker fee (fee paid on sell side too).
 		netRevenue := notional - fee
-		p.positionBTC -= sig.TargetSize
-		p.positionBTC = clampNearZero(p.positionBTC)
+		p.shortBTC += sig.TargetSize // BUG 11: add to short leg
+		p.shortBTC = math.Max(0, p.shortBTC)
 		p.balanceUSD += netRevenue
 		p.totalFeesUSD += fee
-		log.Printf("[PAPER EXEC] %s SELL %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f",
-			mode, sig.TargetSize, execPrice, fee, p.balanceUSD)
+		log.Printf("[PAPER EXEC] %s SELL %.4f BTC @ $%.2f | Fee: $%.4f | Balance: $%.2f | Net=%.4f",
+			mode, sig.TargetSize, execPrice, fee, p.balanceUSD, p.NetPosition())
 	}
 
 	p.clampBalance("applyFill")
@@ -172,7 +180,7 @@ func (p *PaperClient) PlaceMarketOrder(sig strategy.Signal) error {
 
 func (p *PaperClient) GetPosition(symbol string) float64 {
 	if isSupportedBTCSymbol(symbol) {
-		return p.positionBTC
+		return p.NetPosition() // BUG 11: return net signed position
 	}
 	return 0
 }
@@ -181,12 +189,12 @@ func (p *PaperClient) GetBalanceUSD() float64 {
 	return p.balanceUSD
 }
 
-// GetEquityUSD returns cash plus mark-to-market value of the signed BTC position.
+// GetEquityUSD returns cash plus mark-to-market value of the net BTC position.
 func (p *PaperClient) GetEquityUSD() float64 {
 	if p.lastKnownPrice <= 0 {
 		return p.balanceUSD
 	}
-	return p.balanceUSD + (p.positionBTC * p.lastKnownPrice)
+	return p.balanceUSD + (p.NetPosition() * p.lastKnownPrice) // BUG 11
 }
 
 func (p *PaperClient) GetTotalFees() float64 {
@@ -198,7 +206,8 @@ func (p *PaperClient) GetLastPrice() float64 {
 }
 
 func (p *PaperClient) ResetAccount() error {
-	p.positionBTC = 0
+	p.longBTC = 0  // BUG 11
+	p.shortBTC = 0 // BUG 11
 	p.balanceUSD = p.initialUSD
 	p.lastKnownPrice = 0
 	return nil
@@ -212,10 +221,10 @@ func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float
 		// Closing a LONG position: sell BTC back at exit price
 		revenue := size * exitPrice
 		p.balanceUSD += revenue
-		p.positionBTC -= size
-		p.positionBTC = clampNearZero(p.positionBTC)
-		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Balance: $%.2f",
-			size, exitPrice, p.balanceUSD)
+		p.longBTC -= size // BUG 11: decrement long leg
+		p.longBTC = math.Max(0, clampNearZero(p.longBTC))
+		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Balance: $%.2f | Net=%.4f",
+			size, exitPrice, p.balanceUSD, p.NetPosition())
 	} else {
 		// Closing a SHORT position: buy BTC back at exit price
 		cost := size * exitPrice
@@ -226,10 +235,10 @@ func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float
 		} else {
 			p.balanceUSD -= cost
 		}
-		p.positionBTC += size
-		p.positionBTC = clampNearZero(p.positionBTC)
-		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Balance: $%.2f",
-			size, exitPrice, p.balanceUSD)
+		p.shortBTC -= size // BUG 11: decrement short leg
+		p.shortBTC = math.Max(0, clampNearZero(p.shortBTC))
+		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Balance: $%.2f | Net=%.4f",
+			size, exitPrice, p.balanceUSD, p.NetPosition())
 	}
 	p.clampBalance("SettlePosition")
 }
@@ -250,11 +259,48 @@ func (p *PaperClient) RestoreBalance(balance, fees float64) {
 // are correct after a restart. Call once per recovered open position before Run().
 func (p *PaperClient) RestoreOpenPosition(side strategy.Action, sizeBTC float64) {
 	if side == strategy.ActionBuy {
-		p.positionBTC += sizeBTC
+		p.longBTC += sizeBTC  // BUG 11
 	} else {
-		p.positionBTC -= sizeBTC
+		p.shortBTC += sizeBTC // BUG 11
 	}
-	p.positionBTC = clampNearZero(p.positionBTC)
-	log.Printf("[PAPER EXEC] Restored open position: side=%s size=%.4f BTC | net positionBTC=%.4f",
-		side, sizeBTC, p.positionBTC)
+	p.longBTC = math.Max(0, clampNearZero(p.longBTC))
+	p.shortBTC = math.Max(0, clampNearZero(p.shortBTC))
+	log.Printf("[PAPER EXEC] Restored open position: side=%s size=%.4f BTC | net=%.4f gross=%.4f",
+		side, sizeBTC, p.NetPosition(), p.GrossExposure())
+}
+
+// PERF 7 — Partial Fill Simulation.
+// estimateFillFraction returns the fraction of an order that can be filled given
+// available market depth. Returns 1.0 if depthUSD <= 0 (assume full liquidity).
+func estimateFillFraction(notionalUSD, depthUSD float64) float64 {
+	if depthUSD <= 0 {
+		return 1.0
+	}
+	if notionalUSD <= 0 {
+		return 1.0
+	}
+	if notionalUSD <= depthUSD {
+		return 1.0
+	}
+	return depthUSD / notionalUSD
+}
+
+// ApplyPartialFillIfLargeOrder adjusts sig.TargetSize for very large orders.
+// Returns the adjusted signal and any error (too thin a market = reject).
+func (p *PaperClient) ApplyPartialFillIfLargeOrder(sig strategy.Signal, currentPrice float64) (strategy.Signal, error) {
+	const largeOrderThresholdUSD = 500_000.0
+	const assumedDepthUSD = 500_000.0
+	notional := sig.TargetSize * currentPrice
+	if notional <= largeOrderThresholdUSD {
+		return sig, nil
+	}
+	fraction := estimateFillFraction(notional, assumedDepthUSD)
+	if fraction < 0.5 {
+		return sig, fmt.Errorf("partial fill %.0f%% below 50%% threshold — order rejected (notional $%.0f > depth $%.0f)",
+			fraction*100, notional, assumedDepthUSD)
+	}
+	sig.TargetSize = sig.TargetSize * fraction
+	log.Printf("[PAPER EXEC] Partial fill applied: %.0f%% of %.4f BTC (notional $%.0f)",
+		fraction*100, sig.TargetSize, notional)
+	return sig, nil
 }
