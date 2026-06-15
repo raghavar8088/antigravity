@@ -31,6 +31,10 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 				log.Printf("[RECON-V2] suppressing false-positive critical mismatch: %s — %s", m.Type, m.Message)
 				continue
 			}
+			if !isKillSwitchWorthyMismatch(domain, m) {
+				log.Printf("[RECON-V2] balance drift logged (no kill switch): %s — %s", m.Type, m.Message)
+				continue
+			}
 			reason := fmt.Sprintf("reconciliation critical drift (%s): %s %s — %s",
 				domain, m.Domain, m.Type, m.Message)
 			if err := ks.Trigger(ctx, killswitch.Activation{
@@ -64,6 +68,23 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 			}
 		}
 	}
+}
+
+// isKillSwitchWorthyMismatch decides whether a CRITICAL mismatch should halt trading.
+// Paper balance projection lag (runtime paper client vs ledger OMS reader) must not
+// stop the engine — only position/order/exposure integrity failures do.
+func isKillSwitchWorthyMismatch(domain MismatchDomain, m Mismatch) bool {
+	switch domain {
+	case DomainBalance:
+		switch m.Type {
+		case "equity_drift", "available_margin_drift", "margin_used_drift":
+			return false
+		}
+	case DomainExposure:
+		// Exposure totals are derived; defer to position domain for halts.
+		return false
+	}
+	return true
 }
 
 // isKnownFalsePositiveMismatch filters reconciliation artifacts that should not

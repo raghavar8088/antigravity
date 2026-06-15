@@ -1,1 +1,1 @@
-{"client/src/components/killswitch/KillSwitchPanel.tsx":{"imports":["client/src/hooks/useKillSwitch.ts"]},"engine/cmd/antigravity/main.go":{"references":["engine/internal/killswitch/service.go"]}}
+{}
