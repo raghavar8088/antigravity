@@ -471,6 +471,9 @@ The content is organized as follows:
   lib/futuresSessionMetrics.test.ts
   lib/futuresSignals.test.ts
   lib/iccrp/iccrpImplementation.test.ts
+  lib/killswitch/killSwitchPolicy.test.ts
+  lib/killswitch/killSwitchPolicy.ts
+  lib/killswitch/releaseEngineKillSwitch.ts
   lib/marketRegimeClassifier.test.ts
   lib/mockCandleBuilder.ts
   lib/mockResearchAnalytics.test.ts

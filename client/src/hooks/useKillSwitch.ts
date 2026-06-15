@@ -16,7 +16,7 @@ export interface KillSwitchStatus {
 
 const DEFAULT: KillSwitchStatus = {
   active: false,
-  enabled: true,
+  enabled: false,
   reason: null,
   triggeredAt: null,
   triggeredBy: null,
@@ -38,7 +38,7 @@ export function useKillSwitch() {
       backoffRef.current = 2000;
       setStatus({
         active: !!data.active,
-        enabled: data.enabled !== false,
+        enabled: data.enabled === true,
         reason: typeof data.reason === "string" ? data.reason : null,
         triggeredAt: data.triggeredAt ?? data.blockedAt ?? null,
         triggeredBy: data.triggeredBy ?? inferTriggeredBy(data.reason),
