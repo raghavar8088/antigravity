@@ -45,6 +45,7 @@ export async function GET() {
     const data = await res.json();
     return NextResponse.json({
       active: !!data.active,
+      enabled: data.enabled !== false,
       reason: typeof data.reason === "string" ? data.reason : null,
       triggeredAt: data.triggeredAt ?? data.blockedAt ?? null,
       triggeredBy: data.triggeredBy ?? inferTriggeredBy(data.reason),

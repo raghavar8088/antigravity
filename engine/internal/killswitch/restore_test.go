@@ -10,6 +10,7 @@ import (
 func TestRestoreFromLedger_AutoReleaseReconFalsePositive(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	svc := NewService(store, nil, "btc-paper-1")
+	svc.SetEnabled(true)
 	ctx := context.Background()
 
 	if err := svc.Trigger(ctx, Activation{
@@ -48,6 +49,7 @@ func TestRestoreFromLedger_AutoReleaseReconFalsePositive(t *testing.T) {
 func TestRestoreFromLedger_AutoReleaseBalanceDriftDespiteReconciler(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	svc := NewService(store, nil, "btc-paper-1")
+	svc.SetEnabled(true)
 	svc.SetReconciler(func(context.Context) (int, error) {
 		return 3, nil // would block release for non-balance reasons
 	})
@@ -72,6 +74,7 @@ func TestRestoreFromLedger_AutoReleaseBalanceDriftDespiteReconciler(t *testing.T
 func TestRestoreFromLedger_KeepsLegitimateActive(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	svc := NewService(store, nil, "btc-paper-1")
+	svc.SetEnabled(true)
 	ctx := context.Background()
 
 	if err := svc.Trigger(ctx, Activation{

@@ -13,7 +13,8 @@ export function KillSwitchIndicator() {
 
   const isActive = status.active;
   const isOffline = status.dataState !== "ok";
-  const label = isActive ? "Triggered" : isOffline ? "Status updating" : "Halt all";
+  const isDisabled = !status.enabled;
+  const label = isActive ? "Triggered" : isDisabled ? "Disabled" : isOffline ? "Status updating" : "Halt all";
 
   async function onHaltConfirm() {
     await trigger("operator_manual_halt");
@@ -34,9 +35,15 @@ export function KillSwitchIndicator() {
           isActive && "m3-kill-switch-indicator--active",
           isOffline && !isActive && "m3-kill-switch-indicator--offline",
         )}
-        onClick={() => (isActive ? setShowResumeModal(true) : setShowHaltModal(true))}
-        disabled={loading || (!isActive && isOffline)}
-        aria-label={isActive ? "Kill switch triggered. Open resume confirmation." : "Halt all trading. Open confirmation."}
+        onClick={() => (isActive ? setShowResumeModal(true) : isDisabled ? undefined : setShowHaltModal(true))}
+        disabled={loading || isDisabled || (!isActive && isOffline)}
+        aria-label={
+          isActive
+            ? "Kill switch triggered. Open resume confirmation."
+            : isDisabled
+            ? "Kill switch disabled on engine"
+            : "Halt all trading. Open confirmation."
+        }
       >
         {label}
       </button>

@@ -12,6 +12,7 @@ export function KillSwitchPanel() {
   const [showResumeModal, setShowResumeModal] = useState(false);
 
   const isOffline = status.dataState === "engine_offline" || status.dataState === "error";
+  const isDisabled = !status.enabled;
 
   async function onHaltConfirm() {
     await trigger("operator_manual_halt");
@@ -64,6 +65,11 @@ export function KillSwitchPanel() {
               <StatusDot variant="warning" size={6} />
               ENGINE OFFLINE — Kill switch status unknown
             </>
+          ) : isDisabled ? (
+            <>
+              <StatusDot variant="inactive" size={6} />
+              ✓ SYSTEM ACTIVE · Kill switch disabled
+            </>
           ) : (
             <>
               <StatusDot variant="live" size={6} />
@@ -85,7 +91,7 @@ export function KillSwitchPanel() {
             >
               ▶ RESUME TRADING
             </button>
-          ) : (
+          ) : !isDisabled ? (
             <button
               type="button"
               onClick={() => setShowHaltModal(true)}
@@ -100,7 +106,7 @@ export function KillSwitchPanel() {
             >
               ⛔ HALT ALL
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 

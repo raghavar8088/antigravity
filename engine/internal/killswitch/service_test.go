@@ -11,6 +11,7 @@ func TestKillSwitchPersistsAndExecutesActions(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	exec := &recordingExecutor{}
 	service := NewService(store, exec, "acct-1")
+	service.SetEnabled(true)
 
 	err := service.Trigger(context.Background(), Activation{
 		Trigger: TriggerOMSDesync,

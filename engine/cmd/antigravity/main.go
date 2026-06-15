@@ -797,6 +797,13 @@ func main() {
 		log.Println("[KILL SWITCH] Reconciler wired — OMS_DESYNC auto-release validates trade reconciliation")
 	}
 	wasHalted := ksSvc.RestoreStateOnStartup(ctx)
+	if !ksSvc.IsEnabled() {
+		log.Println("[KILL SWITCH] DISABLED — trading will not halt. Set KILL_SWITCH_ENABLED=true on engine to re-arm.")
+		if err := ksSvc.DisableAndRelease(ctx); err != nil {
+			log.Printf("[KILL SWITCH] disable release error: %v", err)
+		}
+		wasHalted = false
+	}
 	if wasHalted {
 		log.Printf("[KILL SWITCH] ⚠️  engine starting in HALTED state — kill switch was active from prior session")
 		log.Printf("[KILL SWITCH] ⚠️  action: POST /api/admin/ks/release with body {confirm:RESUME} to resume trading")
@@ -1635,6 +1642,15 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if !ksSvc.IsEnabled() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{
+				"status":  "ignored",
+				"message": "Kill switch is disabled (KILL_SWITCH_ENABLED=false). Set KILL_SWITCH_ENABLED=true to arm.",
+			})
+			return
+		}
 		if err := ksSvc.Trigger(r.Context(), killswitchpkg.Activation{
 			Trigger:  killswitchpkg.TriggerManualOperator,
 			Reason:   "manual operator block via /api/admin/ks/block",
@@ -1670,8 +1686,9 @@ func main() {
 		// Status is a safe read but still should not leak CORS wildcard.
 		w.Header().Set("Content-Type", "application/json")
 		payload := map[string]interface{}{
-			"active": ksSvc.IsActive(),
-			"reason": ksSvc.Reason(),
+			"active":  ksSvc.IsActive(),
+			"enabled": ksSvc.IsEnabled(),
+			"reason":  ksSvc.Reason(),
 		}
 		if at := ksSvc.ActivatedAt(); !at.IsZero() {
 			payload["triggeredAt"] = at.UTC().Format(time.RFC3339)

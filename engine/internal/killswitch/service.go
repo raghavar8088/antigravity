@@ -56,18 +56,50 @@ type Activation struct {
 type ReconcilerFunc func(ctx context.Context) (mismatches int, err error)
 
 type Service struct {
-	mu           sync.RWMutex
-	active       bool
-	reason       string
-	activatedAt  time.Time
-	ledger       ledger.Store
-	executor     Executor
-	accountID    string
-	reconciler   ReconcilerFunc // RISK 2: optional reconciliation validator
+	mu          sync.RWMutex
+	enabled     bool
+	active      bool
+	reason      string
+	activatedAt time.Time
+	ledger      ledger.Store
+	executor    Executor
+	accountID   string
+	reconciler  ReconcilerFunc // RISK 2: optional reconciliation validator
 }
 
 func NewService(store ledger.Store, executor Executor, accountID string) *Service {
-	return &Service{ledger: store, executor: executor, accountID: accountID}
+	return &Service{
+		ledger:    store,
+		executor:  executor,
+		accountID: accountID,
+		enabled:   EnabledFromEnv(),
+	}
+}
+
+// IsEnabled reports whether the kill switch feature is armed (env + runtime toggle).
+func (s *Service) IsEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.enabled
+}
+
+// SetEnabled toggles the kill switch feature without clearing ledger history.
+func (s *Service) SetEnabled(enabled bool) {
+	s.mu.Lock()
+	s.enabled = enabled
+	s.mu.Unlock()
+}
+
+// DisableAndRelease turns off the kill switch and clears any active halt.
+func (s *Service) DisableAndRelease(ctx context.Context) error {
+	s.mu.Lock()
+	s.enabled = false
+	active := s.active
+	s.mu.Unlock()
+	if !active {
+		return nil
+	}
+	return s.Release(ctx, TriggerManualOperator, "system", "kill switch disabled via KILL_SWITCH_ENABLED=false")
 }
 
 // SetReconciler attaches a reconciliation validator. When set, the OMS_DESYNC
@@ -198,6 +230,9 @@ func (s *Service) RestoreStateOnStartup(ctx context.Context) bool {
 func (s *Service) IsActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if !s.enabled {
+		return false
+	}
 	return s.active
 }
 
@@ -214,6 +249,13 @@ func (s *Service) ActivatedAt() time.Time {
 }
 
 func (s *Service) Trigger(ctx context.Context, activation Activation) error {
+	s.mu.RLock()
+	enabled := s.enabled
+	s.mu.RUnlock()
+	if !enabled {
+		log.Printf("[KILL SWITCH] trigger ignored — kill switch disabled (set KILL_SWITCH_ENABLED=true to arm): %s", activation.Reason)
+		return nil
+	}
 	if activation.Trigger == "" {
 		return errors.New("killswitch: trigger is required")
 	}
@@ -295,6 +337,7 @@ func (s *Service) Release(ctx context.Context, originalTrigger Trigger, released
 func (s *Service) ResetForTest() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.enabled = true
 	s.active = false
 	s.reason = ""
 }

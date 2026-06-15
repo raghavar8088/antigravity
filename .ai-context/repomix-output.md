@@ -855,6 +855,8 @@ The content is organized as follows:
   kelly/kelly_test.go
   kelly/kelly.go
   kelly/session.go
+  killswitch/config.go
+  killswitch/disabled_test.go
   killswitch/restore_test.go
   killswitch/service_test.go
   killswitch/service.go

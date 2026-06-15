@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface KillSwitchStatus {
   active: boolean;
+  enabled: boolean;
   reason: string | null;
   triggeredAt: string | null;
   triggeredBy: string | null;
@@ -15,6 +16,7 @@ export interface KillSwitchStatus {
 
 const DEFAULT: KillSwitchStatus = {
   active: false,
+  enabled: true,
   reason: null,
   triggeredAt: null,
   triggeredBy: null,
@@ -36,6 +38,7 @@ export function useKillSwitch() {
       backoffRef.current = 2000;
       setStatus({
         active: !!data.active,
+        enabled: data.enabled !== false,
         reason: typeof data.reason === "string" ? data.reason : null,
         triggeredAt: data.triggeredAt ?? data.blockedAt ?? null,
         triggeredBy: data.triggeredBy ?? inferTriggeredBy(data.reason),
