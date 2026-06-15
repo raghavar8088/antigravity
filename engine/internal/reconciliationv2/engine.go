@@ -134,8 +134,15 @@ func (e *ReconciliationEngine) RunDomain(ctx context.Context, domain MismatchDom
 	return entry, nil
 }
 
+func (e *ReconciliationEngine) skipPaperBalanceRecon() bool {
+	return e.exchangeName == PaperRuntimeExchangeName
+}
+
 // runBalance fetches exchange balances and detects drift against OMS.
 func (e *ReconciliationEngine) runBalance(ctx context.Context, oms OMSSnapshot) ([]Mismatch, error) {
+	if e.skipPaperBalanceRecon() {
+		return nil, nil
+	}
 	balances, err := e.adapter.GetBalances(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get balances: %w", err)
@@ -203,7 +210,9 @@ func (e *ReconciliationEngine) runFull(ctx context.Context, oms OMSSnapshot) ([]
 	now := time.Now().UTC()
 	var all []Mismatch
 
-	all = append(all, e.balanceDet.Detect(state.Balances, oms.Balance, now)...)
+	if !e.skipPaperBalanceRecon() {
+		all = append(all, e.balanceDet.Detect(state.Balances, oms.Balance, now)...)
+	}
 	all = append(all, e.positionDet.Detect(state.Positions, oms.Positions, now)...)
 	all = append(all, e.orderDet.Detect(state.OpenOrders, oms.OpenOrders, now)...)
 	if len(fills) > 0 {

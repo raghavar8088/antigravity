@@ -9,6 +9,12 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
+// PaperRuntimeExchangeName identifies the in-process paper runtime adapter.
+// Balance reconciliation is skipped for this exchange — equity is derived from
+// two different accounting paths (paper client vs ledger projection) and must
+// not halt trading; position/order integrity checks still run.
+const PaperRuntimeExchangeName = "engine-runtime"
+
 // PositionManagerExchangeAdapter treats the live in-process position manager and
 // paper equity as the authoritative runtime exchange view. Compared against the
 // ledger-backed OMS reader, this detects drift between event-sourced projections
@@ -39,7 +45,7 @@ func NewPositionManagerExchangeAdapter(
 	}
 }
 
-func (a *PositionManagerExchangeAdapter) Name() string { return "engine-runtime" }
+func (a *PositionManagerExchangeAdapter) Name() string { return PaperRuntimeExchangeName }
 
 func (a *PositionManagerExchangeAdapter) HealthCheck(context.Context) error { return nil }
 

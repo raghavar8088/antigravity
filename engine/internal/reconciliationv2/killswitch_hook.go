@@ -31,8 +31,8 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 				log.Printf("[RECON-V2] suppressing false-positive critical mismatch: %s — %s", m.Type, m.Message)
 				continue
 			}
-			if !isKillSwitchWorthyMismatch(domain, m) {
-				log.Printf("[RECON-V2] balance drift logged (no kill switch): %s — %s", m.Type, m.Message)
+			if !isKillSwitchWorthyMismatch(m) {
+				log.Printf("[RECON-V2] non-halting drift logged domain=%s type=%s: %s", m.Domain, m.Type, m.Message)
 				continue
 			}
 			reason := fmt.Sprintf("reconciliation critical drift (%s): %s %s — %s",
@@ -51,7 +51,7 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 			}
 			return
 		}
-		if entry.EscalateCount > 0 {
+		if entry.EscalateCount > 0 && domain != DomainBalance && domain != DomainExposure && domain != DomainPnL {
 			reason := fmt.Sprintf("reconciliation escalation required (%s): %d mismatches need manual intervention",
 				domain, entry.EscalateCount)
 			if err := ks.Trigger(ctx, killswitch.Activation{
@@ -71,17 +71,16 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 }
 
 // isKillSwitchWorthyMismatch decides whether a CRITICAL mismatch should halt trading.
-// Paper balance projection lag (runtime paper client vs ledger OMS reader) must not
-// stop the engine — only position/order/exposure integrity failures do.
-func isKillSwitchWorthyMismatch(domain MismatchDomain, m Mismatch) bool {
-	switch domain {
+// Paper balance/PnL projection lag must not stop the engine — only position/order
+// integrity failures do. Uses m.Domain so full-audit cycles cannot bypass filters.
+func isKillSwitchWorthyMismatch(m Mismatch) bool {
+	switch m.Domain {
 	case DomainBalance:
 		switch m.Type {
 		case "equity_drift", "available_margin_drift", "margin_used_drift":
 			return false
 		}
-	case DomainExposure:
-		// Exposure totals are derived; defer to position domain for halts.
+	case DomainExposure, DomainPnL:
 		return false
 	}
 	return true

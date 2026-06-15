@@ -1032,6 +1032,7 @@ The content is organized as follows:
   reconciliationv2/delta_reconciliation.go
   reconciliationv2/detectors.go
   reconciliationv2/drift_detector_test.go
+  reconciliationv2/engine_paper_balance_test.go
   reconciliationv2/engine.go
   reconciliationv2/events.go
   reconciliationv2/exchange_adapter_test.go

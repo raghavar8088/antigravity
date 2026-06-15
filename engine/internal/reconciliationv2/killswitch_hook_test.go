@@ -33,6 +33,30 @@ func TestKillSwitchHook_SkipsBalanceEquityDrift(t *testing.T) {
 	}
 }
 
+func TestKillSwitchHook_SkipsBalanceEquityDriftOnFullAudit(t *testing.T) {
+	store := ledger.NewMemoryStore()
+	ks := killswitch.NewService(store, nil, "btc-paper-1")
+
+	entry := AuditEntry{
+		Mismatches: []Mismatch{{
+			Domain:      DomainBalance,
+			Type:        "equity_drift",
+			Severity:    SeverityCritical,
+			ExchangeVal: "1000000.000000",
+			InternalVal: "980000.000000",
+			Message:     "equity drift 2.0000% — exchange=1000000.00 OMS=980000.00",
+			DetectedAt:  time.Now().UTC(),
+		}},
+	}
+
+	hook := CriticalDriftKillSwitchHook(ks)
+	hook(context.Background(), DomainFull, entry)
+
+	if ks.IsActive() {
+		t.Fatal("balance equity_drift must not trigger kill switch on full audit")
+	}
+}
+
 func TestKillSwitchHook_TriggersOnCriticalPositionDrift(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")

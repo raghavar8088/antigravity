@@ -123,8 +123,9 @@ func (s *Service) RestoreFromLedger(ctx context.Context) error {
 	s.mu.Unlock()
 
 	if active && shouldAutoReleaseReconFalsePositive(reason) {
-		// RISK 2: For OMS_DESYNC triggers, validate reconciliation before releasing.
-		if lastTrigger == TriggerOMSDesync && s.reconciler != nil {
+		// Balance projection drift is a paper accounting artifact — always auto-release.
+		// RISK 2: For other OMS_DESYNC triggers, validate reconciliation before releasing.
+		if lastTrigger == TriggerOMSDesync && s.reconciler != nil && !isBalanceDriftOnlyReason(reason) {
 			mismatches, reconErr := s.reconciler(ctx)
 			if reconErr != nil {
 				log.Printf("[KILL SWITCH] reconciliation check failed — keeping kill switch active: %v", reconErr)
@@ -150,8 +151,23 @@ func shouldAutoReleaseReconFalsePositive(reason string) bool {
 	if !strings.Contains(r, "reconciliation") {
 		return false
 	}
-	for _, marker := range []string{"equity_drift", "available_margin_drift", "ghost_position", "missing_position"} {
+	for _, marker := range []string{"equity_drift", "available_margin_drift", "margin_used_drift", "ghost_position", "missing_position"} {
 		if strings.Contains(r, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBalanceDriftOnlyReason(reason string) bool {
+	r := strings.ToLower(reason)
+	for _, positionMarker := range []string{"ghost_position", "missing_position"} {
+		if strings.Contains(r, positionMarker) {
+			return false
+		}
+	}
+	for _, balanceMarker := range []string{"equity_drift", "available_margin_drift", "margin_used_drift"} {
+		if strings.Contains(r, balanceMarker) {
 			return true
 		}
 	}

@@ -45,6 +45,30 @@ func TestRestoreFromLedger_AutoReleaseReconFalsePositive(t *testing.T) {
 	}
 }
 
+func TestRestoreFromLedger_AutoReleaseBalanceDriftDespiteReconciler(t *testing.T) {
+	store := ledger.NewMemoryStore()
+	svc := NewService(store, nil, "btc-paper-1")
+	svc.SetReconciler(func(context.Context) (int, error) {
+		return 3, nil // would block release for non-balance reasons
+	})
+	ctx := context.Background()
+
+	if err := svc.Trigger(ctx, Activation{
+		Trigger: TriggerOMSDesync,
+		Reason:  "reconciliation critical drift (balance): balance equity_drift — exchange=1000000 OMS=0",
+		Actions: []Action{ActionBlockNewOrders},
+	}); err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+
+	if err := svc.RestoreFromLedger(ctx); err != nil {
+		t.Fatalf("RestoreFromLedger: %v", err)
+	}
+	if svc.IsActive() {
+		t.Fatal("balance-only equity_drift must auto-release even when reconciler reports mismatches")
+	}
+}
+
 func TestRestoreFromLedger_KeepsLegitimateActive(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	svc := NewService(store, nil, "btc-paper-1")

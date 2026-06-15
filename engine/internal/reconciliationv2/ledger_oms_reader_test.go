@@ -79,7 +79,7 @@ func TestPositionManagerExchangeAdapter_GetPositions(t *testing.T) {
 	if len(positions) != 0 {
 		t.Fatalf("expected empty positions, got %d", len(positions))
 	}
-	if adapter.Name() != "engine-runtime" {
+	if adapter.Name() != PaperRuntimeExchangeName {
 		t.Fatalf("name=%s", adapter.Name())
 	}
 }
