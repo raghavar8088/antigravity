@@ -12,6 +12,7 @@ import (
 func TestKillSwitchHook_SkipsBalanceEquityDrift(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
+	ks.SetEnabled(true)
 
 	entry := AuditEntry{
 		Mismatches: []Mismatch{{
@@ -36,6 +37,7 @@ func TestKillSwitchHook_SkipsBalanceEquityDrift(t *testing.T) {
 func TestKillSwitchHook_SkipsBalanceEquityDriftOnFullAudit(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
+	ks.SetEnabled(true)
 
 	entry := AuditEntry{
 		Mismatches: []Mismatch{{
@@ -60,6 +62,7 @@ func TestKillSwitchHook_SkipsBalanceEquityDriftOnFullAudit(t *testing.T) {
 func TestKillSwitchHook_TriggersOnCriticalPositionDrift(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
+	ks.SetEnabled(true)
 
 	entry := AuditEntry{
 		Mismatches: []Mismatch{{

@@ -961,6 +961,34 @@ function reachedExitTarget(args: {
 }
 
 /**
+ * Refresh mark price and unrealized PnL only — no TP/SL evaluation or close.
+ * Used when the Go engine owns execution but the UI still needs live marks.
+ */
+export function markMockTradeAtPrice(args: {
+  trade: MockTrade;
+  price: number;
+  config: MockTradingConfig;
+  now: number;
+  override?: StrategyExitOverride;
+}): MockTrade {
+  const { trade, price, config, now, override } = args;
+  if (trade.status === "CLOSED") return trade;
+  if (!Number.isFinite(price) || price <= 0) return trade;
+
+  const activeTrade = withMockExitFields(trade, config, override);
+  const gross = computeMockPnl(activeTrade.side, activeTrade.entryPrice, price, activeTrade.quantity);
+  const feesIfClosed = paperRoundTripTakerFees(activeTrade.notional, config.takerFeePct);
+  const fundingCosts = computeMockFundingCost({
+    side: activeTrade.side,
+    notional: activeTrade.notional,
+    openedAt: activeTrade.openedAt,
+    now,
+    config,
+  });
+  return { ...activeTrade, currentPrice: price, unrealizedPnl: gross - feesIfClosed - fundingCosts, fundingCosts };
+}
+
+/**
  * Apply a price tick to a single trade and (optionally) exit it if TP/SL/maxHold
  * conditions are met. Returns a new trade object — caller should replace the
  * old one in their store. Idempotent for CLOSED trades.
@@ -1009,17 +1037,7 @@ export function applyPriceTickToTrade(args: {
     return finalizeClose({ trade: activeTrade, fillBeforeSlippage: exitPrice, exitReason, now, config });
   }
 
-  // Surface NET unrealized so the equity card matches realized math.
-  const gross = computeMockPnl(activeTrade.side, activeTrade.entryPrice, price, activeTrade.quantity);
-  const feesIfClosed = paperRoundTripTakerFees(activeTrade.notional, config.takerFeePct);
-  const fundingCosts = computeMockFundingCost({
-    side: activeTrade.side,
-    notional: activeTrade.notional,
-    openedAt: activeTrade.openedAt,
-    now,
-    config,
-  });
-  return { ...activeTrade, currentPrice: price, unrealizedPnl: gross - feesIfClosed - fundingCosts, fundingCosts };
+  return markMockTradeAtPrice({ trade: activeTrade, price, config, now, override });
 }
 
 /** Manually close an open trade at the given mark. */

@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { createTraceRow, type SignalTraceGate, type StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 import {
   applyPriceTickToTrade,
+  markMockTradeAtPrice,
   buildMockTradeFromTrace,
   buildMockTradeFromResearchSignal,
   canOpenAdditionalMockTrade,
@@ -361,6 +362,18 @@ describe("PnL updates when BTC price changes", () => {
     const acctUp = computeAccountState([up], baseConfig);
     const acctDown = computeAccountState([down], baseConfig);
     expect(acctUp.equity).toBeGreaterThan(acctDown.equity);
+  });
+  it("markMockTradeAtPrice updates unrealized PnL without closing at TP/SL", () => {
+    const trade = build();
+    const marked = markMockTradeAtPrice({
+      trade,
+      price: trade.takeProfitPrice,
+      config: baseConfig,
+      now: T0 + 60_000,
+    });
+    expect(marked.status).toBe("OPEN");
+    expect(marked.currentPrice).toBe(trade.takeProfitPrice);
+    expect(marked.unrealizedPnl).not.toBe(0);
   });
 });
 

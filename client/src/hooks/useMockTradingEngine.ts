@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyPriceTickToTrade,
+  markMockTradeAtPrice,
   buildMockTradeFromTrace,
   buildMockTradeFromResearchSignal,
   closeMockTrade,
@@ -920,11 +921,12 @@ export function useMockTradingEngine(
   }, [mockAccountKey, disablePolling, ingestTraceRows, pipelineStage]);
 
   // ── Apply price ticks → unrealized PnL and TP/SL ──────────────────────────
-  // Disabled when polling is off — the Go engine owns SL/TP execution.
+  // Engine-owned mode (disablePolling): live marks are applied in portfolioTrades useMemo.
   useEffect(() => {
     if (disablePolling) return;
     if (!Number.isFinite(price) || price <= 0) return;
     const now = Date.now();
+
     let mutated = false;
     const closedLogs: MockTradeLog[] = [];
     const closedTrades: MockTrade[] = [];
@@ -1048,10 +1050,19 @@ export function useMockTradingEngine(
     }
   }, [markPersistenceError, markPersistenceOk, mockAccountKey, persistenceDisabled]);
 
-  const portfolioTrades = useMemo(
+  const basePortfolioTrades = useMemo(
     () => mergePortfolioTrades(trades, summaryTrades.length > 0 ? summaryTrades : historyTrades),
     [trades, summaryTrades, historyTrades],
   );
+  const portfolioTrades = useMemo(() => {
+    if (!disablePolling || !Number.isFinite(price) || price <= 0) return basePortfolioTrades;
+    const now = Date.now();
+    return basePortfolioTrades.map((t) => {
+      if (t.status !== "OPEN") return t;
+      const override = STRATEGY_EXIT_OVERRIDES.get(t.strategyId);
+      return markMockTradeAtPrice({ trade: t, price, config, now, override });
+    });
+  }, [basePortfolioTrades, config, disablePolling, price]);
   const computedAccount = useMemo(
     () => computeAccountState(portfolioTrades, config),
     [portfolioTrades, config],
