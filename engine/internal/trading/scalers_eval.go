@@ -46,6 +46,10 @@ type ScalerBundle struct {
 	cvdPrev       float64
 	lastTickPrice float64
 
+	// CVD ring buffer — last 5 readings (newest at cvdHistoryIdx-1 mod 5)
+	cvdHistory    [5]float64
+	cvdHistoryIdx int
+
 	// Funding rate cached from FundingFetcher
 	fundingRate    float64
 	fundingHistory []float64 // last 3 raw readings (newest last)
@@ -228,6 +232,12 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 	for i := range fh {
 		fh[i] *= 100
 	}
+	// Build an ordered CVD history slice (oldest → newest) from the ring buffer.
+	cvdHistSlice := make([]float64, 5)
+	for i := 0; i < 5; i++ {
+		idx := (b.cvdHistoryIdx + i) % 5
+		cvdHistSlice[i] = b.cvdHistory[idx]
+	}
 	return scalers.MarketContext{
 		Regime:           regime,
 		Price:            price,
@@ -238,6 +248,7 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 		Candles4h:        append([]scalers.Candle(nil), b.candles4h...),
 		CVD:              b.cvd,
 		CVDPrev:          b.cvdPrev,
+		CVDHistory:       cvdHistSlice,
 		FundingRate:      b.fundingRate * 100, // convert raw 0.0001 → 0.01%
 		FundingHistory:   fh,
 		OpenInterest:     b.oiCurrent,
@@ -311,6 +322,12 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		return
 	}
 
+	// FIX 5: Block all entries if regime classifier says no new entries allowed
+	if lastRegimeClass != nil && !lastRegimeClass.AllowNewEntries {
+		log.Printf("[SCALERS] cycle skipped reason=regime_no_new_entries regime=%s", lastRegimeClass.Regime)
+		return
+	}
+
 	// Increment eval cycle counter (only counts real evaluation cycles, not unknown-regime skips)
 	newCount := atomic.AddInt64(&o.scalerBundle.evalCount, 1)
 	o.scalerBundle.mu.Lock()
@@ -321,7 +338,10 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	// so the NEXT cycle sees the current CVD as "previous bar" (not this cycle).
 	o.scalerBundle.mu.Lock()
 	mctx := o.scalerBundle.buildContextLocked(price, scalersRegime) // uses cvdPrev from LAST cycle
-	o.scalerBundle.cvdPrev = o.scalerBundle.cvd              // save for NEXT cycle
+	// Advance CVD ring buffer before updating cvdPrev
+	o.scalerBundle.cvdHistory[o.scalerBundle.cvdHistoryIdx%5] = o.scalerBundle.cvd
+	o.scalerBundle.cvdHistoryIdx++
+	o.scalerBundle.cvdPrev = o.scalerBundle.cvd // save for NEXT cycle
 	o.scalerBundle.mu.Unlock()
 
 	// Collect non-none signals from all curated scalers
@@ -340,6 +360,15 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		log.Printf("[SCALERS] eval strategy=%s direction=%s confidence=%.2f reason=%s",
 			sig.Strategy, sig.Direction, sig.Confidence, sig.Reason)
 		legacySig := scalerSignalToLegacy(sig, price)
+		// FIX 5: apply regime size multiplier to position size
+		if lastRegimeClass != nil && lastRegimeClass.PositionSizeMult > 0 {
+			legacySig.TargetSize *= lastRegimeClass.PositionSizeMult
+		}
+		if legacySig.TargetSize < minExecutionSizeBTC {
+			log.Printf("[SCALERS] %s signal skipped: adjusted size %.6f BTC below min after regime mult", sig.Strategy, legacySig.TargetSize)
+			rejected++
+			continue
+		}
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {
 			adaptiveFloor = o.adaptiveFloor.Floor()
@@ -614,6 +643,88 @@ func scalersSignalSnapshots(approved []AggregatedSignal, price float64) []Scaler
 	return out
 }
 
+// StrategyPerformance is the payload for the GET /api/strategies/performance endpoint.
+type StrategyPerformance struct {
+	Name        string    `json:"name"`
+	Status      string    `json:"status"`
+	TotalTrades int       `json:"total_trades"`
+	WinRate     float64   `json:"win_rate"`
+	Sharpe      float64   `json:"sharpe"`
+	AvgRR       float64   `json:"avg_rr"`
+	TotalPnL    float64   `json:"total_pnl"`
+	LastTradeAt time.Time `json:"last_trade_at,omitempty"`
+}
+
+// StrategyPerformanceSummary assembles a []StrategyPerformance from the
+// walk-forward validator and the scalers performance registry.
+// Safe to call from any goroutine.
+func (o *Orchestrator) StrategyPerformanceSummary() []StrategyPerformance {
+	wfSummary := o.WalkForwardSummary() // map[string]WalkForwardSummary; nil-safe
+
+	// Gather base performance from the scalers perf registry.
+	perfs := scalers.AllPerformance()
+	perfMap := make(map[string]scalers.Performance, len(perfs))
+	for _, p := range perfs {
+		perfMap[p.StrategyName] = p
+	}
+
+	// Build unified result; walk-forward entries are authoritative for Sharpe / status.
+	seen := make(map[string]bool)
+	var out []StrategyPerformance
+
+	if o.scalerBundle != nil {
+		o.scalerBundle.mu.Lock()
+		for _, entry := range o.scalerBundle.strategies {
+			n := entry.Name
+			seen[n] = true
+			sp := StrategyPerformance{Name: n, Status: "ACTIVE"}
+			if wf, ok := wfSummary[n]; ok {
+				sp.Status = string(wf.Status)
+				sp.Sharpe = math.Round(wf.Sharpe*100) / 100
+				sp.WinRate = math.Round(wf.WinRate*100) / 100
+				sp.TotalTrades = wf.Trades
+			}
+			if p, ok := perfMap[n]; ok {
+				if sp.TotalTrades == 0 {
+					sp.TotalTrades = p.TotalTrades
+				}
+				if sp.WinRate == 0 {
+					sp.WinRate = math.Round(p.WinRate*100) / 100
+				}
+				sp.TotalPnL = math.Round(p.LastPnL*100) / 100
+				if !p.Active {
+					sp.Status = "DEMOTED"
+				}
+			}
+			out = append(out, sp)
+		}
+		o.scalerBundle.mu.Unlock()
+	}
+
+	// Include any walk-forward entries not in scalerBundle strategies list.
+	for n, wf := range wfSummary {
+		if seen[n] {
+			continue
+		}
+		sp := StrategyPerformance{
+			Name:        n,
+			Status:      string(wf.Status),
+			TotalTrades: wf.Trades,
+			WinRate:     math.Round(wf.WinRate*100) / 100,
+			Sharpe:      math.Round(wf.Sharpe*100) / 100,
+		}
+		if p, ok := perfMap[n]; ok {
+			sp.TotalPnL = math.Round(p.LastPnL*100) / 100
+		}
+		out = append(out, sp)
+	}
+
+	if out == nil {
+		out = []StrategyPerformance{}
+	}
+	return out
+}
+
 // aggregate4h merges exactly 4 consecutive 1h candles into one 4h candle.
 func aggregate4h(hours []scalers.Candle) scalers.Candle {
 	if len(hours) == 0 {
@@ -738,5 +849,22 @@ func sanitizeScalerSignal(sig *strategy.Signal, confidenceFloor ...float64) erro
 	if sig.TargetSize < minExecutionSizeBTC {
 		return fmt.Errorf("size %.6f BTC below min %.6f", sig.TargetSize, minExecutionSizeBTC)
 	}
+
+	// FIX 8: Universal signal quality gate
+	slPct := sig.StopLossPct / 100.0 // convert to decimal fraction
+	tpPct := sig.TakeProfitPct / 100.0
+	// Reject if SL is closer than 0.25% of price
+	if slPct < 0.0025 {
+		return fmt.Errorf("SL %.4f%% too tight (min 0.25%%)", sig.StopLossPct)
+	}
+	// Reject if SL wider than 2% of price
+	if slPct > 0.02 {
+		return fmt.Errorf("SL %.4f%% too wide (max 2%%)", sig.StopLossPct)
+	}
+	// Reject if R:R < 2:1
+	if slPct > 0 && tpPct/slPct < 2.0 {
+		return fmt.Errorf("R:R %.2f below 2:1 (TP=%.4f%% SL=%.4f%%)", tpPct/slPct, sig.TakeProfitPct, sig.StopLossPct)
+	}
+
 	return nil
 }

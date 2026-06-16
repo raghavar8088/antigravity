@@ -47,12 +47,15 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 	rsiOversold := rsi5m < 35
 	bidWallPresent := ob.BidWallSize > ob.AskWallSize*1.5
 	cvdExhaustedSell := ctx.CVD >= ctx.CVDPrev
+	obPopulated := ob.IsPopulated()
 
-	if atLowerBand && rsiOversold && bidWallPresent && cvdExhaustedSell {
-		sl := bb5m.Lower - 0.3*atr5m
+	longOBOK := (obPopulated && bidWallPresent) || (!obPopulated && cvdExhaustedSell)
+
+	if atLowerBand && rsiOversold && longOBOK && cvdExhaustedSell {
+		sl := bb5m.Lower - 0.5*atr5m
 		tp1 := bb5m.Middle
 		tp2 := bb5m.Upper
-		if price-sl < 0.0005*price {
+		if price-sl < 0.0025*price {
 			return NoSignal(name)
 		}
 		risk := price - sl
@@ -60,10 +63,14 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 		if reward < 2*risk {
 			return NoSignal(name)
 		}
+		conf := 0.75
+		if !obPopulated {
+			conf *= 0.90
+		}
 		return Signal{
 			Strategy:    name,
 			Direction:   DirectionLong,
-			Confidence:  0.75,
+			Confidence:  conf,
 			StopLoss:    sl,
 			TakeProfit:  tp1,
 			TakeProfit2: tp2,
@@ -79,12 +86,13 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 	rsiOverbought := rsi5m > 65
 	askWallPresent := ob.AskWallSize > ob.BidWallSize*1.5
 	cvdExhaustedBuy := ctx.CVD <= ctx.CVDPrev
+	shortOBOK := (obPopulated && askWallPresent) || (!obPopulated && cvdExhaustedBuy)
 
-	if atUpperBand && rsiOverbought && askWallPresent && cvdExhaustedBuy {
-		sl := bb5m.Upper + 0.3*atr5m
+	if atUpperBand && rsiOverbought && shortOBOK && cvdExhaustedBuy {
+		sl := bb5m.Upper + 0.5*atr5m
 		tp1 := bb5m.Middle
 		tp2 := bb5m.Lower
-		if sl-price < 0.0005*price {
+		if sl-price < 0.0025*price {
 			return NoSignal(name)
 		}
 		risk := sl - price
@@ -92,10 +100,14 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 		if reward < 2*risk {
 			return NoSignal(name)
 		}
+		shortConf := 0.75
+		if !obPopulated {
+			shortConf *= 0.90
+		}
 		return Signal{
 			Strategy:    name,
 			Direction:   DirectionShort,
-			Confidence:  0.75,
+			Confidence:  shortConf,
 			StopLoss:    sl,
 			TakeProfit:  tp1,
 			TakeProfit2: tp2,

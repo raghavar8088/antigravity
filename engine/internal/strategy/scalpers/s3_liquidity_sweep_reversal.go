@@ -1,6 +1,9 @@
 package scalpers
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // S3 — Liquidity Sweep Reversal
 //
@@ -60,7 +63,7 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 	cvdBearishDiv := CVDDivergesBearish(prev2.High, rangeHigh, ctx.CVD, ctx.CVDPrev)
 
 	if sweepHigh && cvdBearishDiv && fundingSpike {
-		sl := prev2.High + 0.001*prev2.High
+		sl := prev2.High + math.Max(0.5*atr5m, 0.001*prev2.High)
 		tp := rangeLow
 		risk := sl - price
 		reward := price - tp
@@ -85,7 +88,7 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 	cvdBullishDiv := CVDDivergesBullish(prev2.Low, rangeLow, ctx.CVD, ctx.CVDPrev)
 
 	if sweepLow && cvdBullishDiv && fundingSpike {
-		sl := prev2.Low - 0.001*prev2.Low
+		sl := prev2.Low - math.Max(0.5*atr5m, 0.001*prev2.Low)
 		tp := rangeHigh
 		risk := price - sl
 		reward := tp - price

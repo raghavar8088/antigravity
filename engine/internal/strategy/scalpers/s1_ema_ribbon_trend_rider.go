@@ -59,7 +59,7 @@ func (s *EMARibbonTrendRider) Evaluate(ctx MarketContext) Signal {
 		sl := ema50_15m - 0.5*atr15m
 		tp1 := price + 1.5*atr15m
 		tp2 := price + 3.0*atr15m
-		if price-sl < 0.001*price {
+		if price-sl < 0.0025*price {
 			return NoSignal(name)
 		}
 		return Signal{
@@ -81,7 +81,7 @@ func (s *EMARibbonTrendRider) Evaluate(ctx MarketContext) Signal {
 		sl := ema50_15m + 0.5*atr15m
 		tp1 := price - 1.5*atr15m
 		tp2 := price - 3.0*atr15m
-		if sl-price < 0.001*price {
+		if sl-price < 0.0025*price {
 			return NoSignal(name)
 		}
 		return Signal{

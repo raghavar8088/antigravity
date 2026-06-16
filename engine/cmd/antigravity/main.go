@@ -1873,6 +1873,16 @@ func main() {
 		json.NewEncoder(w).Encode(orchestrator.WalkForwardSummary())
 	})
 
+	// GET /api/strategies/performance — Per-strategy performance metrics
+	http.HandleFunc("/api/strategies/performance", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(orchestrator.StrategyPerformanceSummary())
+	})
+
 	// GET /api/system/confidence-floor — Adaptive confidence floor status
 	http.HandleFunc("/api/system/confidence-floor", func(w http.ResponseWriter, r *http.Request) {
 		setCORS(w)

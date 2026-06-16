@@ -320,8 +320,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/killswitch/status/route.ts": {
-    "mtime": 1781545264.9050872,
-    "ast_hash": "c9822bbd1f89ab34d16c8a2e6c133f46",
+    "mtime": 1781547513.1584108,
+    "ast_hash": "1734d7896d223b9a61289d84dd4ffdad",
     "semantic_hash": ""
   },
   "client/src/app/api/killswitch/trigger/route.ts": {
@@ -1145,13 +1145,13 @@
     "semantic_hash": ""
   },
   "client/src/components/killswitch/KillSwitchIndicator.tsx": {
-    "mtime": 1781461314.3559444,
-    "ast_hash": "0e53107b3676300f240b6554fdd58125",
+    "mtime": 1781546988.2400365,
+    "ast_hash": "2f319d8a26ffe112ce2052c64daad071",
     "semantic_hash": ""
   },
   "client/src/components/killswitch/KillSwitchPanel.tsx": {
-    "mtime": 1781545265.301019,
-    "ast_hash": "9c0e1c739122875de7b55b2bee8ff3be",
+    "mtime": 1781546995.1515644,
+    "ast_hash": "16e1dbd3837b092bfe51d83a1b12f059",
     "semantic_hash": ""
   },
   "client/src/components/observability/GrafanaEmbed.tsx": {
@@ -1575,8 +1575,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useKillSwitch.ts": {
-    "mtime": 1781545263.8892753,
-    "ast_hash": "381501049dfb9711bc773e1a65981f2d",
+    "mtime": 1781547508.7518954,
+    "ast_hash": "71ddb270a59656459fb16fefbed0b56e",
     "semantic_hash": ""
   },
   "client/src/hooks/useLiveBTCMarket.ts": {
@@ -1605,8 +1605,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useMockTradingEngine.ts": {
-    "mtime": 1781454089.8575175,
-    "ast_hash": "3a87d0c898c1e0ddd89665f38e3e4089",
+    "mtime": 1781548746.7201355,
+    "ast_hash": "55d8615345dd7d2812e4d426cce91083",
     "semantic_hash": ""
   },
   "client/src/hooks/useOptionChain.ts": {
@@ -2215,8 +2215,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/mockTradingEngine.test.ts": {
-    "mtime": 1781451021.1254604,
-    "ast_hash": "5d77ee4b69ed0394d249206fd2a22c3c",
+    "mtime": 1781548754.810905,
+    "ast_hash": "42ae09ae0728718260e93df06a8ea1b2",
     "semantic_hash": ""
   },
   "client/src/lib/mockTradingMongo.test.ts": {
@@ -2770,8 +2770,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingEngine.ts": {
-    "mtime": 1781537147.6921904,
-    "ast_hash": "27aafcf6dc439c8631c55d7361cb499c",
+    "mtime": 1781548747.2425725,
+    "ast_hash": "870159c2c76e96c8bf6bad633ad81de6",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingMarketData.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1781545272.4408915,
-    "ast_hash": "0d6aed64bf307861bc3ace3c84df467c",
+    "mtime": 1781546964.6303234,
+    "ast_hash": "c322974bd11b07a2a87e5c48f7238e98",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -4140,18 +4140,18 @@
     "semantic_hash": ""
   },
   "engine/internal/killswitch/restore_test.go": {
-    "mtime": 1781376936.5147593,
-    "ast_hash": "050e1d82a5105649996bcb3205499832",
+    "mtime": 1781546983.2356343,
+    "ast_hash": "4b110dc6d634f43fd39b6deaef494c0f",
     "semantic_hash": ""
   },
   "engine/internal/killswitch/service.go": {
-    "mtime": 1781545269.9105618,
-    "ast_hash": "6bd6a068c5dde3431216ae811640ed7c",
+    "mtime": 1781546953.8522508,
+    "ast_hash": "ced452cda80dbf4744f96d2ef53008e9",
     "semantic_hash": ""
   },
   "engine/internal/killswitch/service_test.go": {
-    "mtime": 1781376936.5147593,
-    "ast_hash": "416efe0dadc16f4baede9ae8908afa00",
+    "mtime": 1781546972.5810523,
+    "ast_hash": "12b3f820a9b853e6d9fa5b8c246f4125",
     "semantic_hash": ""
   },
   "engine/internal/learning/learning_test.go": {
@@ -4960,8 +4960,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/delta_reconciliation.go": {
-    "mtime": 1781376936.6117985,
-    "ast_hash": "4f21781e85aa3b3ccb65fa607ed42992",
+    "mtime": 1781547776.3833473,
+    "ast_hash": "edcaaced1c77b9016e6fd0a1f127eda8",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/detectors.go": {
@@ -4975,8 +4975,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/engine.go": {
-    "mtime": 1781376936.6117985,
-    "ast_hash": "45c078b322b9faf159780c968d8c87c2",
+    "mtime": 1781546243.3291404,
+    "ast_hash": "cbf619b4087a5c65a4da497da6457af3",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/events.go": {
@@ -4995,8 +4995,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/killswitch_hook.go": {
-    "mtime": 1781545856.7403355,
-    "ast_hash": "b70e53de8cfb651b9781758d220f0867",
+    "mtime": 1781546246.5035436,
+    "ast_hash": "5290fa5f6230b448977857578f654aac",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/ledger_oms_reader.go": {
@@ -5005,8 +5005,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/ledger_oms_reader_test.go": {
-    "mtime": 1781458573.9972453,
-    "ast_hash": "a1eeabf009906bca03a9f31297d07af0",
+    "mtime": 1781546262.998992,
+    "ast_hash": "b55834c11f2289c9c2949420032c65f9",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/ledger_repair_target.go": {
@@ -5025,8 +5025,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/position_manager_adapter.go": {
-    "mtime": 1781458584.7579703,
-    "ast_hash": "c172fb6ced1db3106f6c325cb0591ec5",
+    "mtime": 1781546242.1498454,
+    "ast_hash": "3929db597bce60197c97d76f45c80cd3",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/postfix_certification_test.go": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781545998.4854925,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781548882.844384,
+    "ast_hash": "7bd459febfb234e8d769db79f8d3dcc9",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781545998.4823654,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781548882.844384,
+    "ast_hash": "fa502e6c29f79c78df77ebaf9d6811af",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781545998.4823654,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781548882.844384,
+    "ast_hash": "77c03538bdd5cf111e82d4c8e3dc8e1b",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781545998.4823654,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781548882.844384,
+    "ast_hash": "43bebd94006d907c910ee17035877c36",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781545968.2249703,
-    "ast_hash": "530cfe503134549b284d558db7e0328b",
+    "mtime": 1781548885.5984414,
+    "ast_hash": "1a0e49f9269d06f41ab58df3a72aad28",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23395,8 +23395,38 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/killswitch_hook_test.go": {
-    "mtime": 1781545863.1376727,
-    "ast_hash": "f85733a790090590b85aa5ada65f53e2",
+    "mtime": 1781546983.6059875,
+    "ast_hash": "70c666fcf08640d1416dbffb0f68b4de",
+    "semantic_hash": ""
+  },
+  "engine/internal/reconciliationv2/engine_paper_balance_test.go": {
+    "mtime": 1781546262.7093256,
+    "ast_hash": "850ad9adc71285d52b992091bfca50a8",
+    "semantic_hash": ""
+  },
+  "engine/internal/killswitch/config.go": {
+    "mtime": 1781546947.6777909,
+    "ast_hash": "448e5e0e44a71de914c40544bf7a363f",
+    "semantic_hash": ""
+  },
+  "engine/internal/killswitch/disabled_test.go": {
+    "mtime": 1781546974.2591207,
+    "ast_hash": "4cbf76bd1e91a4bfbede2b5aa7dcfb19",
+    "semantic_hash": ""
+  },
+  "client/src/lib/killswitch/killSwitchPolicy.test.ts": {
+    "mtime": 1781547514.3274066,
+    "ast_hash": "9b2fad0991015604cce557f414361492",
+    "semantic_hash": ""
+  },
+  "client/src/lib/killswitch/killSwitchPolicy.ts": {
+    "mtime": 1781547503.3853927,
+    "ast_hash": "36d1a4591f45e66a9d191005678c5d82",
+    "semantic_hash": ""
+  },
+  "client/src/lib/killswitch/releaseEngineKillSwitch.ts": {
+    "mtime": 1781547505.1022768,
+    "ast_hash": "58efea796e9b8e3fc93b274296290c09",
     "semantic_hash": ""
   }
 }

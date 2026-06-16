@@ -40,6 +40,13 @@ type OrderBookSnapshot struct {
 	Imbalance   float64 // positive = more bids, negative = more asks, range -1..1
 }
 
+// IsPopulated returns true when the snapshot contains real order book data.
+// Strategies should use this to decide whether to apply OB confirmation or
+// fall back to CVD/MACD-only confirmation.
+func (ob OrderBookSnapshot) IsPopulated() bool {
+	return ob.BidWallSize > 0 || ob.AskWallSize > 0
+}
+
 // MarketContext is everything a strategy needs to evaluate a signal.
 // Populated by the trading loop before calling Evaluate().
 type MarketContext struct {
@@ -59,6 +66,7 @@ type MarketContext struct {
 	// Order flow
 	CVD            float64   // cumulative volume delta (current)
 	CVDPrev        float64   // CVD from 1 bar ago (divergence check)
+	CVDHistory     []float64 // rolling CVD history (up to 5 readings, newest last)
 	FundingRate    float64   // perpetual swap funding rate in percent (8h, e.g. 0.01 = 0.01% — raw Binance value × 100)
 	FundingHistory []float64 // last 3 funding readings (newest last); nil = not available
 	OpenInterest   float64   // current OI in BTC-equivalent (USD / price)
