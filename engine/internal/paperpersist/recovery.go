@@ -187,10 +187,10 @@ func recoverAccountState(ctx context.Context, mgr *MongoManager) (RecoveredAccou
 	acct.TotalTrades = getInt(raw, "total_trades")
 	acct.WinRate = getFloat(raw, "win_rate")
 	acct.TotalFees = getFloat(raw, "total_fees")
-	if t, ok := raw["session_start"].(time.Time); ok {
+	if t := getTime(raw, "session_start"); !t.IsZero() {
 		acct.SessionStart = t
 	}
-	if t, ok := raw["snapped_at"].(time.Time); ok {
+	if t := getTime(raw, "snapped_at"); !t.IsZero() {
 		acct.SnappedAt = t
 	}
 
@@ -233,7 +233,7 @@ func recoverOpenPositions(ctx context.Context, mgr *MongoManager) ([]RecoveredPo
 			StopLoss:   getFloat(raw, "stop_loss"),
 			TakeProfit: getFloat(raw, "take_profit"),
 		}
-		if t, ok := raw["opened_at"].(time.Time); ok {
+		if t := getTime(raw, "opened_at"); !t.IsZero() {
 			p.OpenedAt = t
 		}
 		if p.PositionID == "" {
@@ -319,6 +319,21 @@ func getString(m bson.M, key string) string {
 		return s
 	}
 	return ""
+}
+
+// getTime extracts a time.Time from a raw BSON map decode. The mongo driver
+// decodes BSON datetime fields into bson.DateTime (int64 millis) — not
+// time.Time — when the destination is interface{}/bson.M, so a plain
+// `m[key].(time.Time)` assertion silently fails and leaves the zero value
+// (year 0001), which then propagates into closed-trade records.
+func getTime(m bson.M, key string) time.Time {
+	switch v := m[key].(type) {
+	case time.Time:
+		return v
+	case bson.DateTime:
+		return v.Time()
+	}
+	return time.Time{}
 }
 
 // applyRecoveredProtection fills missing SL/TP on recovered MongoDB positions.

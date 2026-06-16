@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"antigravity-engine/internal/execution"
 
@@ -66,10 +65,10 @@ func BootstrapJournalFromMongo(ctx context.Context, mgr *MongoManager, journal *
 			NetPnL:       getFloat(raw, "net_pnl"),
 			Reason:       getString(raw, "exit_reason"),
 		}
-		if t, ok := raw["entry_at"].(time.Time); ok {
+		if t := getTime(raw, "entry_at"); !t.IsZero() {
 			entry.EntryTime = t
 		}
-		if t, ok := raw["exit_at"].(time.Time); ok {
+		if t := getTime(raw, "exit_at"); !t.IsZero() {
 			entry.ExitTime = t
 		}
 		if entry.ID == "" || entry.StrategyName == "" {
