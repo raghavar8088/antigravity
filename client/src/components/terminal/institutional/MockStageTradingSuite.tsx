@@ -140,23 +140,24 @@ function fmtAge(startTs: number | null, endTs: number) {
   return `${hours}h ${minutes}m`;
 }
 
-/** Entry open time (UTC) — when the position was opened (BUY long or SELL short). */
+const TRADE_ENTRY_TIMEZONE = "Asia/Kolkata";
+
+/** Entry open time (IST, 12-hour) — when the position was opened (BUY long or SELL short). */
 function fmtTradeEntryTime(ts: number | null | undefined): string {
   if (ts == null || !Number.isFinite(ts)) return "—";
-  const date = new Intl.DateTimeFormat("en-US", {
+  const datePart = new Intl.DateTimeFormat("en-IN", {
     month: "short",
     day: "2-digit",
     year: "numeric",
-    timeZone: "UTC",
+    timeZone: TRADE_ENTRY_TIMEZONE,
   }).format(ts);
-  const time = new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
+  const timePart = new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
     minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
+    hour12: true,
+    timeZone: TRADE_ENTRY_TIMEZONE,
   }).format(ts);
-  return `${date} ${time} UTC`;
+  return `${datePart} ${timePart} IST`;
 }
 
 function pnlColor(value: number) {
@@ -405,7 +406,7 @@ function PositionsTableSkeleton() {
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "OPENED (UTC)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
+            {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
               <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 ? "left" : "right" }}>
                 {header}
               </th>
@@ -570,7 +571,7 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "OPENED (UTC)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
+            {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
               <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 ? "left" : "right" }}>
                 {header}
               </th>
@@ -723,7 +724,7 @@ function ClosedTradesTable({
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["STRATEGY", "SIDE", "OPENED (UTC)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
+                {["STRATEGY", "SIDE", "OPENED (IST)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
                   <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 || index === 6 ? "left" : "right" }}>
                     {header}
                   </th>
