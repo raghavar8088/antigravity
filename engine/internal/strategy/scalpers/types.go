@@ -73,6 +73,10 @@ type MarketContext struct {
 	OpenInterestPrev float64 // OI from previous reading
 	OrderBook      OrderBookSnapshot
 
+	// Opening Range (NY session) — persisted by ScalerBundle across evaluation cycles
+	ORHigh float64 // NY opening range high (0 if not yet formed)
+	ORLow  float64 // NY opening range low (0 if not yet formed)
+
 	// Session
 	SessionName string    // "ASIA" | "LONDON" | "NEW_YORK"
 	Now         time.Time // UTC

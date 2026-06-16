@@ -141,24 +141,42 @@ type MACDResult struct {
 	Histogram float64
 }
 
-// MACD computes standard 12/26/9 MACD.
+// emaOfFloats computes EMA over a float64 slice using standard smoothing factor.
+// Returns 0 if fewer values than period.
+func emaOfFloats(values []float64, period int) float64 {
+	if len(values) < period {
+		return 0
+	}
+	k := 2.0 / float64(period+1)
+	ema := values[0]
+	for i := 1; i < len(values); i++ {
+		ema = values[i]*k + ema*(1-k)
+	}
+	return ema
+}
+
+// MACD computes standard 12/26/9 MACD using a proper float64 MACD line history
+// rather than the fake-Candle approach, giving a more accurate signal line.
 func MACD(candles []Candle) MACDResult {
 	if len(candles) < 35 {
 		return MACDResult{}
 	}
-	fast := EMA(candles, 12)
-	slow := EMA(candles, 26)
-	macdVal := fast - slow
 
-	// Signal line: EMA-9 of the MACD values over last 9 bars
-	macdHistory := make([]Candle, 9)
-	for i := 0; i < 9; i++ {
-		offset := len(candles) - 9 + i
-		f := EMA(candles[:offset], 12)
-		s := EMA(candles[:offset], 26)
-		macdHistory[i] = Candle{Close: f - s}
+	// Build MACD line (fast EMA - slow EMA) for all candle positions starting at bar 26.
+	// We need at least 26 bars for the slow EMA to be valid, plus 9 more for signal EMA.
+	n := len(candles)
+	macdValues := make([]float64, n-25) // index 0 = candles[25], index n-26 = candles[n-1]
+	for i := 26; i <= n; i++ {
+		f := EMA(candles[:i], 12)
+		s := EMA(candles[:i], 26)
+		macdValues[i-26] = f - s
 	}
-	signal := EMA(macdHistory, 9)
+
+	macdVal := macdValues[len(macdValues)-1]
+
+	// Signal line: EMA-9 of the MACD values (starting after first 26 bars gives enough history)
+	signal := emaOfFloats(macdValues, 9)
+
 	return MACDResult{
 		MACD:      macdVal,
 		Signal:    signal,

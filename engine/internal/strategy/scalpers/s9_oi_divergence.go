@@ -1,6 +1,9 @@
 package scalpers
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 // S9 — Open Interest Divergence
 //
@@ -37,6 +40,7 @@ func (s *OIDivergence) Evaluate(ctx MarketContext) Signal {
 	oi := ctx.OpenInterest
 	oiPrev := ctx.OpenInterestPrev
 	if oi == 0 || oiPrev == 0 {
+		log.Printf("[S9] OI data unavailable (oi=%.2f oiPrev=%.2f) — skipping OI_Divergence signal", oi, oiPrev)
 		return NoSignal(name)
 	}
 

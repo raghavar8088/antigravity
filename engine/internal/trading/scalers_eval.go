@@ -71,16 +71,35 @@ type ScalerBundle struct {
 	approvedSignalsLastCycle int
 	rejectedSignalsLastCycle int
 	lastSignals             []ScalersSignalSnapshot
+
+	// Opening Range state — persisted across evaluation cycles for S7
+	orHigh float64
+	orLow  float64
+	orDate string // YYYY-MM-DD UTC date the OR was formed for
+
+	// Per-strategy cooldown tracking
+	lastSignalByStrategy map[string]time.Time
+	signalMu             sync.RWMutex
+
+	// Directional cap for scalers path
+	openLongCount  int
+	openShortCount int
+	maxOpenLongs   int
+	maxOpenShorts  int
+	dirMu          sync.Mutex
 }
 
 func newScalerBundle() *ScalerBundle {
 	return &ScalerBundle{
-		candles1m:  make([]scalers.Candle, 0, maxCandles1m+1),
-		candles5m:  make([]scalers.Candle, 0, maxCandles5m+1),
-		candles15m: make([]scalers.Candle, 0, maxCandles15m+1),
-		candles1h:  make([]scalers.Candle, 0, maxCandles1h+1),
-		candles4h:  make([]scalers.Candle, 0, maxCandles4h+1),
-		strategies: scalers.BuildCuratedScalpers(),
+		candles1m:            make([]scalers.Candle, 0, maxCandles1m+1),
+		candles5m:            make([]scalers.Candle, 0, maxCandles5m+1),
+		candles15m:           make([]scalers.Candle, 0, maxCandles15m+1),
+		candles1h:            make([]scalers.Candle, 0, maxCandles1h+1),
+		candles4h:            make([]scalers.Candle, 0, maxCandles4h+1),
+		strategies:           scalers.BuildCuratedScalpers(),
+		lastSignalByStrategy: make(map[string]time.Time),
+		maxOpenLongs:         3,
+		maxOpenShorts:        3,
 	}
 }
 
@@ -227,16 +246,37 @@ func (b *ScalerBundle) UpdateOrderBook(bidWall, askWall, depthImbalance float64)
 // Caller must hold b.mu; cvdPrev is advanced by the caller after this returns.
 func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) scalers.MarketContext {
 	// Copy funding history so strategies see a stable snapshot.
+	// FundingRate is raw decimal (e.g. 0.0001 = 0.01% per 8h) — no conversion needed.
 	fh := append([]float64(nil), b.fundingHistory...)
-	// Convert raw history readings to percent format (×100) to match FundingRate.
-	for i := range fh {
-		fh[i] *= 100
-	}
 	// Build an ordered CVD history slice (oldest → newest) from the ring buffer.
 	cvdHistSlice := make([]float64, 5)
 	for i := 0; i < 5; i++ {
 		idx := (b.cvdHistoryIdx + i) % 5
 		cvdHistSlice[i] = b.cvdHistory[idx]
+	}
+	now := time.Now().UTC()
+	todayStr := now.Format("2006-01-02")
+	// Reset OR state on a new day.
+	if b.orDate != todayStr {
+		b.orHigh = 0
+		b.orLow = 0
+		b.orDate = todayStr
+	}
+	// Update OR from 5m candles during the NY opening range window (14:00–14:30 UTC).
+	if now.Hour() == 14 && now.Minute() < 30 {
+		orStart := time.Date(now.Year(), now.Month(), now.Day(), 14, 0, 0, 0, time.UTC)
+		orEnd := orStart.Add(30 * time.Minute)
+		for _, c := range b.candles5m {
+			if c.OpenTime.Before(orStart) || c.OpenTime.After(orEnd) {
+				continue
+			}
+			if b.orHigh == 0 || c.High > b.orHigh {
+				b.orHigh = c.High
+			}
+			if b.orLow == 0 || c.Low < b.orLow {
+				b.orLow = c.Low
+			}
+		}
 	}
 	return scalers.MarketContext{
 		Regime:           regime,
@@ -249,13 +289,15 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 		CVD:              b.cvd,
 		CVDPrev:          b.cvdPrev,
 		CVDHistory:       cvdHistSlice,
-		FundingRate:      b.fundingRate * 100, // convert raw 0.0001 → 0.01%
+		FundingRate:      b.fundingRate, // FundingRate is raw decimal (e.g. 0.0001 = 0.01% per 8h)
 		FundingHistory:   fh,
 		OpenInterest:     b.oiCurrent,
 		OpenInterestPrev: b.oiPrev,
 		OrderBook:        b.orderBook,
-		SessionName:      tradingSession(time.Now().UTC()),
-		Now:              time.Now().UTC(),
+		ORHigh:           b.orHigh,
+		ORLow:            b.orLow,
+		SessionName:      tradingSession(now),
+		Now:              now,
 	}
 }
 
@@ -308,7 +350,14 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 				oiPrevBTC = oi.OI_1h_ago / price
 			}
 			o.scalerBundle.UpdateOI(oiCurrentBTC, oiPrevBTC)
+			if oiCurrentBTC == 0 {
+				log.Printf("[SCALERS] WARNING: OpenInterest feed returned 0 — S9_OI_Divergence will be suppressed this cycle")
+			}
+		} else {
+			log.Printf("[SCALERS] WARNING: OIFetcher returned nil — OpenInterest unavailable, S9_OI_Divergence suppressed")
 		}
+	} else if o.deps == nil || o.deps.OIFetcher == nil {
+		log.Printf("[SCALERS] WARNING: OIFetcher not configured — OpenInterest unavailable, S9_OI_Divergence suppressed")
 	}
 
 	scalersRegime := mapToScalersRegime(lastRegime)
@@ -353,8 +402,21 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			log.Printf("[SCALERS] %s DEMOTED by walk-forward validator — skipping", entry.Name)
 			continue
 		}
+		// Per-strategy cooldown gate.
+		cooldown := scalerStrategyCooldown(entry.Name)
+		if o.scalerBundle.isStrategyOnCooldown(entry.Name, cooldown) {
+			log.Printf("[SCALERS] %s on cooldown (%.0fs) — skipping", entry.Name, cooldown.Seconds())
+			continue
+		}
 		sig := entry.Strategy.Evaluate(mctx)
 		if sig.Direction == scalers.DirectionNone {
+			continue
+		}
+		// Directional cap gate.
+		sigDir := string(sig.Direction)
+		if !o.scalerBundle.canOpenDirectionScaler(sigDir) {
+			log.Printf("[SCALERS] %s directional cap reached for %s — skipping", entry.Name, sigDir)
+			rejected++
 			continue
 		}
 		log.Printf("[SCALERS] eval strategy=%s direction=%s confidence=%.2f reason=%s",
@@ -379,6 +441,8 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			continue
 		}
 		legacySig.CreatedAt = sig.Timestamp
+		// Record signal for cooldown tracking (after quality gate passes).
+		o.scalerBundle.recordStrategySignal(entry.Name)
 		rawAgg = append(rawAgg, AggregatedSignal{
 			Signal:       legacySig,
 			StrategyName: sig.Strategy,
@@ -418,6 +482,92 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		o.risk.NotifyFill(sig)
 		o.openAndTrackPosition(ctx, sig, fill, agg.StrategyName)
 		o.tracker.RecordSignal(agg.StrategyName)
+		// Track directional open for per-direction cap.
+		o.scalerBundle.onScalerTradeOpen(string(sig.Action))
+	}
+}
+
+// scalerStrategyCooldown returns the cooldown duration for a strategy by name.
+func scalerStrategyCooldown(name string) time.Duration {
+	switch {
+	case containsAny(name, "Sniper", "Sweep", "Reversion"):
+		return 30 * time.Second
+	case containsAny(name, "Trend", "Fade", "VWAP"):
+		return 3 * time.Minute
+	case containsAny(name, "Breakout", "Funding", "OI"):
+		return 10 * time.Minute
+	case containsAny(name, "ADX", "Momentum"):
+		return 30 * time.Minute
+	default:
+		return 30 * time.Second
+	}
+}
+
+// containsAny returns true if s contains any of the given substrings.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if len(sub) > 0 && len(s) >= len(sub) {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isStrategyOnCooldown returns true if the strategy has fired within its cooldown window.
+func (b *ScalerBundle) isStrategyOnCooldown(name string, cooldown time.Duration) bool {
+	b.signalMu.RLock()
+	last, ok := b.lastSignalByStrategy[name]
+	b.signalMu.RUnlock()
+	if !ok {
+		return false
+	}
+	return time.Since(last) < cooldown
+}
+
+// recordStrategySignal records that a strategy just fired.
+func (b *ScalerBundle) recordStrategySignal(name string) {
+	b.signalMu.Lock()
+	b.lastSignalByStrategy[name] = time.Now().UTC()
+	b.signalMu.Unlock()
+}
+
+// canOpenDirectionScaler returns true if a new trade can be opened in the given direction.
+func (b *ScalerBundle) canOpenDirectionScaler(dir string) bool {
+	b.dirMu.Lock()
+	defer b.dirMu.Unlock()
+	if dir == "LONG" || dir == "BUY" {
+		return b.maxOpenLongs <= 0 || b.openLongCount < b.maxOpenLongs
+	}
+	return b.maxOpenShorts <= 0 || b.openShortCount < b.maxOpenShorts
+}
+
+// onScalerTradeOpen increments the directional counter when a scaler trade opens.
+func (b *ScalerBundle) onScalerTradeOpen(dir string) {
+	b.dirMu.Lock()
+	defer b.dirMu.Unlock()
+	if dir == "LONG" || dir == "BUY" {
+		b.openLongCount++
+	} else {
+		b.openShortCount++
+	}
+}
+
+// onScalerTradeClose decrements the directional counter when a scaler trade closes.
+func (b *ScalerBundle) onScalerTradeClose(dir string) {
+	b.dirMu.Lock()
+	defer b.dirMu.Unlock()
+	if dir == "LONG" || dir == "BUY" {
+		if b.openLongCount > 0 {
+			b.openLongCount--
+		}
+	} else {
+		if b.openShortCount > 0 {
+			b.openShortCount--
+		}
 	}
 }
 

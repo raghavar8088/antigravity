@@ -71,8 +71,14 @@ func (s *VWAPInstitutionalFade) Evaluate(ctx MarketContext) Signal {
 	ob := ctx.OrderBook
 	deviation := price - vwap
 	absDeviation := math.Abs(deviation)
-	extended := absDeviation > 1.5*atr5m
 
+	// VWAP deviation gate: use percentage-based threshold (1.2%) instead of ATR-based.
+	deviationPct := absDeviation / vwap
+	if deviationPct < 0.012 {
+		return NoSignal(name)
+	}
+
+	extended := absDeviation > 1.5*atr5m
 	if !extended {
 		return NoSignal(name)
 	}
@@ -95,7 +101,7 @@ func (s *VWAPInstitutionalFade) Evaluate(ctx MarketContext) Signal {
 		}
 		bearishRSIDiv := currentHigh > priorHigh && rsiCurrent < rsiPrior
 
-		if !bearishRSIDiv && rsiCurrent <= 70 {
+		if !bearishRSIDiv && rsiCurrent <= 65 {
 			return NoSignal(name)
 		}
 
@@ -141,7 +147,7 @@ func (s *VWAPInstitutionalFade) Evaluate(ctx MarketContext) Signal {
 		}
 		bullishRSIDiv := currentLow < priorLow && rsiCurrent > rsiPrior
 
-		if !bullishRSIDiv && rsiCurrent >= 30 {
+		if !bullishRSIDiv && rsiCurrent >= 35 {
 			return NoSignal(name)
 		}
 

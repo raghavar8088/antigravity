@@ -76,6 +76,14 @@ func (s *OpeningRangeBreakout) Evaluate(ctx MarketContext) Signal {
 		s.orBuilt = true
 	}
 
+	// Use ScalerBundle-persisted OR values from context if struct state not populated.
+	if s.orHigh == 0 && ctx.ORHigh > 0 {
+		s.orHigh = ctx.ORHigh
+	}
+	if s.orLow == 0 && ctx.ORLow > 0 {
+		s.orLow = ctx.ORLow
+	}
+
 	if s.orHigh == 0 || s.orLow == 0 || s.orHigh <= s.orLow {
 		return NoSignal(name)
 	}

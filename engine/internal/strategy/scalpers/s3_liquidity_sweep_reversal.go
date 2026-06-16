@@ -5,6 +5,26 @@ import (
 	"math"
 )
 
+// sweepCVDBearishDiv checks 3-bar rolling CVD divergence for bearish sweep reversals.
+// Returns true when CVD has been declining for the last 3 readings.
+func sweepCVDBearishDiv(ctx MarketContext) bool {
+	if len(ctx.CVDHistory) < 3 {
+		return false
+	}
+	n := len(ctx.CVDHistory)
+	return ctx.CVDHistory[n-2] < ctx.CVDHistory[n-3] && ctx.CVDHistory[n-1] < ctx.CVDHistory[n-2]
+}
+
+// sweepCVDBullishDiv checks 3-bar rolling CVD divergence for bullish sweep reversals.
+// Returns true when CVD has been rising for the last 3 readings.
+func sweepCVDBullishDiv(ctx MarketContext) bool {
+	if len(ctx.CVDHistory) < 3 {
+		return false
+	}
+	n := len(ctx.CVDHistory)
+	return ctx.CVDHistory[n-2] > ctx.CVDHistory[n-3] && ctx.CVDHistory[n-1] > ctx.CVDHistory[n-2]
+}
+
 // S3 — Liquidity Sweep Reversal
 //
 // Regime:     VOLATILE only
@@ -46,9 +66,8 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 	if n < 3 {
 		return NoSignal(name)
 	}
-	prev2 := c1m[n-2]
-	prev1 := c1m[n-1]
-	_ = prev1
+	// Use last CLOSED candle (index n-2) as the reference point to avoid look-ahead bias.
+	lastClosed := c1m[n-2]
 
 	atr1m := ATR(ctx.Candles1m, 14)
 	atr5m := ATR(ctx.Candles5m, 14)
@@ -57,13 +76,13 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 	}
 
 	price := ctx.Price
-	fundingSpike := ctx.FundingRate > 0.01 || ctx.FundingRate < -0.01
+	fundingSpike := ctx.FundingRate > 0.0001 || ctx.FundingRate < -0.0001 // raw: 0.0001 = 0.01% per 8h
 
-	sweepHigh := prev2.High > rangeHigh && prev2.Close < rangeHigh
-	cvdBearishDiv := CVDDivergesBearish(prev2.High, rangeHigh, ctx.CVD, ctx.CVDPrev)
+	sweepHigh := lastClosed.High > rangeHigh && lastClosed.Close < rangeHigh
+	cvdBearishDiv := sweepCVDBearishDiv(ctx)
 
 	if sweepHigh && cvdBearishDiv && fundingSpike {
-		sl := prev2.High + math.Max(0.5*atr5m, 0.001*prev2.High)
+		sl := lastClosed.High + math.Max(0.5*atr5m, 0.001*lastClosed.High)
 		tp := rangeLow
 		risk := sl - price
 		reward := price - tp
@@ -78,17 +97,17 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 			TakeProfit: tp,
 			Reason: fmt.Sprintf(
 				"VOLATILE: liquidity sweep above %.0f (wick=%.0f, close=%.0f), "+
-					"CVD bearish divergence (%.0f→%.0f), funding spike=%.4f%%",
-				rangeHigh, prev2.High, prev2.Close, ctx.CVDPrev, ctx.CVD, ctx.FundingRate,
+					"3-bar CVD bearish div, funding spike=%.5f raw",
+				rangeHigh, lastClosed.High, lastClosed.Close, ctx.FundingRate,
 			),
 		}
 	}
 
-	sweepLow := prev2.Low < rangeLow && prev2.Close > rangeLow
-	cvdBullishDiv := CVDDivergesBullish(prev2.Low, rangeLow, ctx.CVD, ctx.CVDPrev)
+	sweepLow := lastClosed.Low < rangeLow && lastClosed.Close > rangeLow
+	cvdBullishDiv := sweepCVDBullishDiv(ctx)
 
 	if sweepLow && cvdBullishDiv && fundingSpike {
-		sl := prev2.Low - math.Max(0.5*atr5m, 0.001*prev2.Low)
+		sl := lastClosed.Low - math.Max(0.5*atr5m, 0.001*lastClosed.Low)
 		tp := rangeHigh
 		risk := price - sl
 		reward := tp - price
@@ -103,8 +122,8 @@ func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 			TakeProfit: tp,
 			Reason: fmt.Sprintf(
 				"VOLATILE: liquidity sweep below %.0f (wick=%.0f, close=%.0f), "+
-					"CVD bullish divergence (%.0f→%.0f), funding spike=%.4f%%",
-				rangeLow, prev2.Low, prev2.Close, ctx.CVDPrev, ctx.CVD, ctx.FundingRate,
+					"3-bar CVD bullish div, funding spike=%.5f raw",
+				rangeLow, lastClosed.Low, lastClosed.Close, ctx.FundingRate,
 			),
 		}
 	}

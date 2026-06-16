@@ -36,9 +36,8 @@ func (s *FundingRateFade) Evaluate(ctx MarketContext) Signal {
 		return NoSignal(name)
 	}
 
-	// Convert stored rate from percent format back to raw (stored as rate×100 in MarketContext).
-	// FundingRate is stored as e.g. 0.01 meaning 0.01%, raw = 0.0001.
-	fundingRaw := ctx.FundingRate / 100.0
+	// FundingRate is raw decimal (e.g. 0.0001 = 0.01% per 8h) — no conversion needed.
+	fundingRaw := ctx.FundingRate
 
 	// Check for 2 consecutive readings via FundingHistory.
 	// FundingHistory holds last 3 raw Binance values (newest last).

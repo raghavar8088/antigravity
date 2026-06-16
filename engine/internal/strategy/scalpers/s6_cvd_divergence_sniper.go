@@ -143,7 +143,7 @@ func (s *CVDDivergenceSniper) Evaluate(ctx MarketContext) Signal {
 			return NoSignal(name)
 		}
 
-		fundingLongBias := ctx.FundingRate > 0.005
+		fundingLongBias := ctx.FundingRate > 0.00005 // raw: 0.00005 = 0.005% per 8h
 		conf := 0.71
 		if fundingLongBias {
 			conf = 0.74
@@ -188,7 +188,7 @@ func (s *CVDDivergenceSniper) Evaluate(ctx MarketContext) Signal {
 			return NoSignal(name)
 		}
 
-		fundingShortBias := ctx.FundingRate < -0.005
+		fundingShortBias := ctx.FundingRate < -0.00005 // raw: -0.00005 = -0.005% per 8h
 		conf := 0.71
 		if fundingShortBias {
 			conf = 0.74
