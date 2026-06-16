@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1781546964.6303234,
-    "ast_hash": "c322974bd11b07a2a87e5c48f7238e98",
+    "mtime": 1781576681.5949743,
+    "ast_hash": "8608cbb6b834a4e1388560058b476a43",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781548882.844384,
-    "ast_hash": "7bd459febfb234e8d769db79f8d3dcc9",
+    "mtime": 1781577871.570096,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781548882.844384,
-    "ast_hash": "fa502e6c29f79c78df77ebaf9d6811af",
+    "mtime": 1781577871.5689154,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781548882.844384,
-    "ast_hash": "77c03538bdd5cf111e82d4c8e3dc8e1b",
+    "mtime": 1781577871.5671642,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781548882.844384,
-    "ast_hash": "43bebd94006d907c910ee17035877c36",
+    "mtime": 1781577871.5689154,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,7 +22920,7 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781548885.5984414,
+    "mtime": 1781577874.3405957,
     "ast_hash": "1a0e49f9269d06f41ab58df3a72aad28",
     "semantic_hash": ""
   },
@@ -23080,18 +23080,18 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s1_ema_ribbon_trend_rider.go": {
-    "mtime": 1781411399.5379093,
-    "ast_hash": "2d93269feaaa19ed7703e098eb726f06",
+    "mtime": 1781576820.4651067,
+    "ast_hash": "36b4c022c54acc1974a08af105249a1d",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s2_bollinger_mean_reversion.go": {
-    "mtime": 1781411417.5686035,
-    "ast_hash": "f205baa2577b2f07fc22407d12e04692",
+    "mtime": 1781577631.565993,
+    "ast_hash": "b4141a8f38af38dfb7e677c92449c660",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go": {
-    "mtime": 1781411437.5140054,
-    "ast_hash": "9a89ba90fa580d8e0bfbb4da94c516d8",
+    "mtime": 1781576807.2064023,
+    "ast_hash": "0c877c2a9adba8589cb4b4f6a7ccd5c3",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s4_adx_momentum_breakout.go": {
@@ -23100,13 +23100,13 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go": {
-    "mtime": 1781411647.0498893,
-    "ast_hash": "e3ddb2d95f2c20b2d66e818d8957f0f9",
+    "mtime": 1781576598.3531408,
+    "ast_hash": "a9aecae8739c32fc9f8e6f1bb4bfac42",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go": {
-    "mtime": 1781411663.7468889,
-    "ast_hash": "ed290edfed17a498278abbe36dbf756f",
+    "mtime": 1781576552.3333468,
+    "ast_hash": "16fb315b47a5ed0b278f1dcdea24662b",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s7_opening_range_breakout.go": {
@@ -23125,8 +23125,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/types.go": {
-    "mtime": 1781432827.5352626,
-    "ast_hash": "85636b67e7d7101fb0132b04afa0d1f1",
+    "mtime": 1781576566.0130122,
+    "ast_hash": "faa0d5ad88dab71d711dbbee941fa9c5",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
@@ -23145,8 +23145,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1781460260.194604,
-    "ast_hash": "0bc228db2bbde9c775be7c6c91cae6c9",
+    "mtime": 1781576699.1288917,
+    "ast_hash": "d52f1284a3a59b17c0787c5b4b7c8232",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {
