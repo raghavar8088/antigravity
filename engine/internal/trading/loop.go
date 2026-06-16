@@ -1244,8 +1244,10 @@ func (o *Orchestrator) WarmupStrategies(warmup *marketdata.WarmupData) {
 
 	// Warm up the ScalerBundle so the first evalAndExecuteScalers cycle has
 	// full indicator history instead of starting cold.
+	// Pass directly-fetched 1h candles (warmup.Candles1h) so S1 EMA Ribbon
+	// has ≥55 bars immediately rather than waiting 55+ hours for live synthesis.
 	if o.scalerBundle != nil {
-		o.scalerBundle.WarmupFromHistory(warmup.Candles1m, warmup.Candles5m)
+		o.scalerBundle.WarmupFromHistory(warmup.Candles1m, warmup.Candles5m, warmup.Candles1h)
 		// prevTruncated15m and prevTruncated1h start at zero so the first live
 		// candle always fires a 15m and 1h cycle; no counter warmup needed.
 	}

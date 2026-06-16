@@ -1,1 +1,1 @@
-{}
+{"engine/internal/strategy/scalpers/s8_funding_rate_fade.go::.Evaluate()":["engine/internal/strategy/scalpers/types.go::NoSignal()"],"engine/internal/trading/loop.go::NewOrchestrator()":["engine/internal/strategy/scalpers/walkforward.go::NewWalkForwardValidator()","engine/internal/trading/scalers_eval.go::newScalerBundle()"]}

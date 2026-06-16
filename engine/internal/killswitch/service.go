@@ -304,7 +304,12 @@ func (s *Service) Trigger(ctx context.Context, activation Activation) error {
 // Release deactivates the kill switch and emits EventKillSwitchReleased to
 // the ledger. Requires manual operator action — the switch never self-releases.
 // releasedBy identifies the operator or service performing the release.
+//
+// IMPORTANT: in-memory state is ALWAYS cleared even when the ledger write fails.
+// A ledger write failure must not leave the engine permanently halted. The release
+// event will be missing from the audit trail but trading can resume immediately.
 func (s *Service) Release(ctx context.Context, originalTrigger Trigger, releasedBy, reason string) error {
+	var ledgerErr error
 	if s.ledger != nil {
 		payload := ledger.KillSwitchReleasedPayload{
 			OriginalTrigger: string(originalTrigger),
@@ -320,18 +325,22 @@ func (s *Service) Release(ctx context.Context, originalTrigger Trigger, released
 			Source:        "kill-switch-service",
 		})
 		if err != nil {
-			return err
-		}
-		if _, err := s.ledger.Append(ctx, event); err != nil {
-			return err
+			// NewEvent construction failure: still clear in-memory state but report error.
+			ledgerErr = err
+			log.Printf("[KILL SWITCH] WARNING: failed to build release ledger event — clearing in-memory state anyway: %v", err)
+		} else if _, err := s.ledger.Append(ctx, event); err != nil {
+			// Ledger write failure: still clear in-memory state so engine can resume trading.
+			ledgerErr = err
+			log.Printf("[KILL SWITCH] WARNING: failed to persist release to ledger — clearing in-memory state anyway: %v", err)
 		}
 	}
+	// Always clear active state — do NOT hold the engine hostage on ledger failures.
 	s.mu.Lock()
 	s.active = false
 	s.reason = ""
 	s.activatedAt = time.Time{}
 	s.mu.Unlock()
-	return nil
+	return ledgerErr
 }
 
 func (s *Service) ResetForTest() {

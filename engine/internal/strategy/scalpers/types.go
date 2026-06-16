@@ -67,7 +67,12 @@ type MarketContext struct {
 	CVD            float64   // cumulative volume delta (current)
 	CVDPrev        float64   // CVD from 1 bar ago (divergence check)
 	CVDHistory     []float64 // rolling CVD history (up to 5 readings, newest last)
-	FundingRate    float64   // perpetual swap funding rate in percent (8h, e.g. 0.01 = 0.01% — raw Binance value × 100)
+	// FundingRate is the raw Binance perpetual funding rate as a decimal.
+	// Example: 0.0001 = 0.01% per 8h funding interval.
+	// Do NOT multiply by 100. Thresholds in strategies use raw decimal values:
+	//   S8 threshold: ±0.0003 = ±0.03% per 8h (crowded positioning signal).
+	//   S3 threshold: ±0.0001 = ±0.01% per 8h (funding spike signal).
+	FundingRate    float64
 	FundingHistory []float64 // last 3 funding readings (newest last); nil = not available
 	OpenInterest   float64   // current OI in BTC-equivalent (USD / price)
 	OpenInterestPrev float64 // OI from previous reading

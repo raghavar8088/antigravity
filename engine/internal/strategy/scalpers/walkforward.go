@@ -226,7 +226,7 @@ func wfAvg(vals []float64) float64 {
 }
 
 func wfStddev(vals []float64, mean float64) float64 {
-	if len(vals) == 0 {
+	if len(vals) < 2 {
 		return 0
 	}
 	sum := 0.0
@@ -234,7 +234,9 @@ func wfStddev(vals []float64, mean float64) float64 {
 		d := v - mean
 		sum += d * d
 	}
-	return math.Sqrt(sum / float64(len(vals)))
+	// Bessel's correction: divide by N-1 (sample stddev) not N (population).
+	// For N=30 this reduces Sharpe overestimation from ~1.7% to 0%.
+	return math.Sqrt(sum / float64(len(vals)-1))
 }
 
 func wfTopNBySharpe(sharpes map[string]float64, n int) []string {

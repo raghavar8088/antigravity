@@ -23,7 +23,7 @@ const (
 	maxCandles1m  = 100
 	maxCandles5m  = 100
 	maxCandles15m = 60
-	maxCandles1h  = 48
+	maxCandles1h  = 72 // ≥55 required by S1 EMA Ribbon (needs EMA50 on 1h + warmup bars)
 	maxCandles4h  = 30
 )
 
@@ -107,10 +107,10 @@ func newScalerBundle() *ScalerBundle {
 // WarmupFromHistory pre-fills the ScalerBundle candle buffers with historical
 // data so that strategy indicators are ready on the first live evaluation cycle.
 // candles1m and candles5m come from the Binance REST warmup fetch on startup.
-// Synthesises 15m candles from 5m by grouping every 3 bars, and 1h candles by
-// grouping every 12 5m bars.  Called once from WarmupStrategies; safe to call
-// before any live data arrives.
-func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candle) {
+// candles1h, when non-empty, are used directly (preferred over synthesis from 5m)
+// so that S1 EMA Ribbon (requires ≥55 × 1h candles) is ready immediately.
+// Called once from WarmupStrategies; safe to call before any live data arrives.
+func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candle, candles1h ...[]marketdata.Candle) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -118,11 +118,13 @@ func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candl
 		b.candles1m = appendCapped(b.candles1m, mdToScalerCandle(c), maxCandles1m)
 	}
 
-	// Synthesise 15m and 1h candles from 5m history using proper OHLC aggregation.
+	// Synthesise 15m candles from 5m history using proper OHLC aggregation.
 	// Each 15m bar aggregates exactly 3 consecutive 5m bars (O=first, H=max, L=min,
-	// C=last, V=sum). Each 1h bar aggregates exactly 12 consecutive 5m bars.
-	// Using the raw last-bar approach (old code) makes ATR, BB Width, and RSI
-	// slightly wrong on startup because open/high/low are not representative.
+	// C=last, V=sum).
+	// 1h candles: use directly-fetched bars if provided, otherwise synthesise from 5m
+	// by grouping every 12 bars. Direct fetch is preferred because it provides more
+	// bars (100 fetched vs ~25 synthesised from 300 × 5m) and uses real OHLC data.
+	directH1 := len(candles1h) > 0 && len(candles1h[0]) > 0
 	var buf15m []marketdata.Candle
 	var buf1h []marketdata.Candle
 	for _, c := range candles5m {
@@ -134,13 +136,23 @@ func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candl
 			buf15m = buf15m[:0]
 		}
 
-		buf1h = append(buf1h, c)
-		if len(buf1h) == 12 {
-			b.candles1h = appendCapped(b.candles1h, mdToScalerCandle(aggregate5mBars(buf1h)), maxCandles1h)
-			buf1h = buf1h[:0]
+		if !directH1 {
+			buf1h = append(buf1h, c)
+			if len(buf1h) == 12 {
+				b.candles1h = appendCapped(b.candles1h, mdToScalerCandle(aggregate5mBars(buf1h)), maxCandles1h)
+				buf1h = buf1h[:0]
+			}
 		}
 	}
-	// seed 4h synthesis buffer from the last remaining 1h bars
+
+	// Load directly-fetched 1h candles when available (provides ≥55 bars for S1).
+	if directH1 {
+		for _, c := range candles1h[0] {
+			b.candles1h = appendCapped(b.candles1h, mdToScalerCandle(c), maxCandles1h)
+		}
+	}
+
+	// Seed 4h synthesis buffer from the accumulated 1h bars.
 	for _, c := range b.candles1h {
 		b.pending4h = append(b.pending4h, c)
 		if len(b.pending4h) >= 4 {
@@ -148,8 +160,41 @@ func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candl
 			b.pending4h = b.pending4h[4:]
 		}
 	}
-	log.Printf("[WARMUP] ScalerBundle seeded: 1m=%d 5m=%d 15m=%d 1h=%d 4h=%d",
-		len(b.candles1m), len(b.candles5m), len(b.candles15m), len(b.candles1h), len(b.candles4h))
+
+	// Pre-populate CVDHistory ring buffer from warmup 1m candles so S3 and S6
+	// CVD divergence logic is ready on the first evaluation cycle.
+	b.warmupCVDHistoryLocked()
+
+	log.Printf("[WARMUP] ScalerBundle seeded: 1m=%d 5m=%d 15m=%d 1h=%d 4h=%d cvdHistory=%v (directH1=%v)",
+		len(b.candles1m), len(b.candles5m), len(b.candles15m), len(b.candles1h), len(b.candles4h),
+		b.cvdHistory, directH1)
+}
+
+// warmupCVDHistoryLocked pre-populates the 5-slot CVD ring buffer from the
+// warmup 1m candles by computing the net volume delta for each of the last
+// 5 × 15m windows. Caller must hold b.mu.
+func (b *ScalerBundle) warmupCVDHistoryLocked() {
+	candles := b.candles1m
+	if len(candles) < 75 {
+		return // need at least 5 × 15 1m bars
+	}
+	// Walk 5 successive 15-bar windows (newest last) and compute net delta per window.
+	for i := 0; i < 5; i++ {
+		start := len(candles) - 75 + i*15
+		end := start + 15
+		window := candles[start:end]
+		var delta float64
+		for j := 1; j < len(window); j++ {
+			if window[j].Close > window[j-1].Close {
+				delta += window[j].Volume
+			} else if window[j].Close < window[j-1].Close {
+				delta -= window[j].Volume
+			}
+		}
+		b.cvdHistory[i] = delta
+	}
+	b.cvdHistoryIdx = 5 // mark all 5 slots as populated
+	log.Printf("[WARMUP] CVDHistory pre-populated from warmup 1m candles: %v", b.cvdHistory)
 }
 
 func (b *ScalerBundle) Push1mCandle(c marketdata.Candle) {
@@ -1022,16 +1067,14 @@ func sanitizeScalerSignal(sig *strategy.Signal, confidenceFloor ...float64) erro
 		return fmt.Errorf("size %.6f BTC below min %.6f", sig.TargetSize, minExecutionSizeBTC)
 	}
 
-	// FIX 8: Universal signal quality gate
-	slPct := sig.StopLossPct / 100.0 // convert to decimal fraction
+	// Universal signal quality gate: SL range and R:R enforcement.
+	// slPct is a decimal fraction (e.g. 0.01 = 1% of price).
+	// Upper bound is maxSignalStopLossPct (default 1.5%, env-configurable) checked
+	// above. The 0.25% lower bound prevents noise-level SL placement.
+	slPct := sig.StopLossPct / 100.0 // convert percent to decimal fraction
 	tpPct := sig.TakeProfitPct / 100.0
-	// Reject if SL is closer than 0.25% of price
 	if slPct < 0.0025 {
 		return fmt.Errorf("SL %.4f%% too tight (min 0.25%%)", sig.StopLossPct)
-	}
-	// Reject if SL wider than 2% of price
-	if slPct > 0.02 {
-		return fmt.Errorf("SL %.4f%% too wide (max 2%%)", sig.StopLossPct)
 	}
 	// Reject if R:R < 2:1
 	if slPct > 0 && tpPct/slPct < 2.0 {

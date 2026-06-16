@@ -213,32 +213,51 @@ func (p *PaperClient) ResetAccount() error {
 	return nil
 }
 
-// SettlePosition updates the paper balance when a position is closed or
-// partially reduced, crediting USD back after a long close or debiting for a
-// short cover.
-func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float64) {
+// exitAdjustedPrice applies adverse slippage to an exit fill price.
+// Exits are always treated as IOC (taker) orders in paper mode: LONG exits
+// (selling BTC) fill slightly below market, SHORT exits (buying back) slightly above.
+// 1.2 bps adverse slippage mirrors the entry model in executionPrice(OrderModeIOC).
+func exitAdjustedPrice(side strategy.Action, price float64) float64 {
+	const slippageFactor = 1.2 / 10000.0 // 1.2 bps
 	if side == strategy.ActionBuy {
-		// Closing a LONG position: sell BTC back at exit price
-		revenue := size * exitPrice
-		p.balanceUSD += revenue
+		// Closing LONG = selling BTC → adverse = lower fill price
+		return price * (1 - slippageFactor)
+	}
+	// Closing SHORT = buying BTC back → adverse = higher fill price
+	return price * (1 + slippageFactor)
+}
+
+// SettlePosition updates the paper balance when a position is closed or
+// partially reduced. Applies both adverse exit slippage (1.2 bps IOC) and
+// taker exit fee (0.05%) — matching the full round-trip cost model.
+func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float64) {
+	adjPrice := exitAdjustedPrice(side, exitPrice)
+	exitNotional := size * adjPrice
+	exitFee := exitNotional * BinanceFuturesTakerFeePct
+	p.totalFeesUSD += exitFee
+
+	if side == strategy.ActionBuy {
+		// Closing a LONG position: sell BTC back at adjusted exit price, net of fee
+		netRevenue := exitNotional - exitFee
+		p.balanceUSD += netRevenue
 		p.longBTC -= size // BUG 11: decrement long leg
 		p.longBTC = math.Max(0, clampNearZero(p.longBTC))
-		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f | Balance: $%.2f | Net=%.4f",
-			size, exitPrice, p.balanceUSD, p.NetPosition())
+		log.Printf("[PAPER SETTLE] CLOSE LONG: SELL %.4f BTC @ $%.2f (slip adj=%.2f) | fee=$%.4f | net=$%.2f | Balance=$%.2f | Net=%.4f",
+			size, exitPrice, adjPrice, exitFee, netRevenue, p.balanceUSD, p.NetPosition())
 	} else {
-		// Closing a SHORT position: buy BTC back at exit price
-		cost := size * exitPrice
-		if cost > p.balanceUSD {
-			log.Printf("[PAPER SETTLE] INSUFFICIENT FUNDS for short cover: needs $%.2f, has $%.2f — clamping balance to 0",
-				cost, p.balanceUSD)
+		// Closing a SHORT position: buy BTC back at adjusted exit price, plus fee
+		totalCost := exitNotional + exitFee
+		if totalCost > p.balanceUSD {
+			log.Printf("[PAPER SETTLE] INSUFFICIENT FUNDS for short cover: needs $%.2f (incl fee $%.4f), has $%.2f — clamping balance to 0",
+				totalCost, exitFee, p.balanceUSD)
 			p.balanceUSD = 0
 		} else {
-			p.balanceUSD -= cost
+			p.balanceUSD -= totalCost
 		}
 		p.shortBTC -= size // BUG 11: decrement short leg
 		p.shortBTC = math.Max(0, clampNearZero(p.shortBTC))
-		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f | Balance: $%.2f | Net=%.4f",
-			size, exitPrice, p.balanceUSD, p.NetPosition())
+		log.Printf("[PAPER SETTLE] CLOSE SHORT: BUY %.4f BTC @ $%.2f (slip adj=%.2f) | fee=$%.4f | cost=$%.2f | Balance=$%.2f | Net=%.4f",
+			size, exitPrice, adjPrice, exitFee, totalCost, p.balanceUSD, p.NetPosition())
 	}
 	p.clampBalance("SettlePosition")
 }

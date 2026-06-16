@@ -8,15 +8,16 @@ import (
 	"time"
 )
 
-// WarmupData holds historical candles fetched from Coinbase REST API
+// WarmupData holds historical candles fetched from Binance REST API
 // for pre-filling strategy price buffers on engine startup.
 type WarmupData struct {
 	Candles1m []Candle
 	Candles5m []Candle
+	Candles1h []Candle // directly fetched 1h klines; used by S1 (needs ≥55 bars)
 }
 
 func FetchWarmupCandles(symbol string) (*WarmupData, error) {
-	log.Printf("[WARMUP] Fetching real-time 1m and 5m candles from Binance REST...")
+	log.Printf("[WARMUP] Fetching real-time 1m, 5m, and 1h candles from Binance REST...")
 
 	candles1m, err := fetchBinanceKlines("BTCUSDT", "1m", 300)
 	if err != nil {
@@ -28,10 +29,21 @@ func FetchWarmupCandles(symbol string) (*WarmupData, error) {
 		return nil, fmt.Errorf("warmup 5m fetch failed: %w", err)
 	}
 
-	log.Printf("[WARMUP] ✅ Loaded %d x 1m candles and %d x 5m candles", len(candles1m), len(candles5m))
+	// Fetch 100 × 1h candles directly so S1 EMA Ribbon (needs ≥55 1h bars) is
+	// ready on the first evaluation cycle rather than waiting 55+ hours for live data.
+	candles1h, err := fetchBinanceKlines("BTCUSDT", "1h", 100)
+	if err != nil {
+		// Non-fatal: ScalerBundle will synthesise 1h from 5m as a fallback.
+		log.Printf("[WARMUP] ⚠️  1h kline fetch failed (will synthesise from 5m): %v", err)
+		candles1h = nil
+	}
+
+	log.Printf("[WARMUP] ✅ Loaded %d x 1m, %d x 5m, %d x 1h candles",
+		len(candles1m), len(candles5m), len(candles1h))
 	return &WarmupData{
 		Candles1m: candles1m,
 		Candles5m: candles5m,
+		Candles1h: candles1h,
 	}, nil
 }
 
