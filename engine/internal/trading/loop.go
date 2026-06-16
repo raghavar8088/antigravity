@@ -2566,6 +2566,17 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 					}
 					observability.WalkForwardStatus.WithLabelValues(event.Position.StrategyName, string(s)).Set(v)
 				}
+				// Emit numeric status gauge: 0=PROBATIONARY, 1=ACTIVE, 2=DEMOTED
+				var statusVal float64
+				switch status {
+				case scalers.StatusActive:
+					statusVal = 1
+				case scalers.StatusDemoted:
+					statusVal = 2
+				default:
+					statusVal = 0
+				}
+				observability.ScalersStrategyStatus.WithLabelValues(event.Position.StrategyName).Set(statusVal)
 			}
 
 			// Update scalers performance registry so FilterWinnersOnly stays current.

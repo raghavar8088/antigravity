@@ -11,6 +11,7 @@ import (
 
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/observability"
 	regimepkg "antigravity-engine/internal/regime"
 	"antigravity-engine/internal/strategy"
 	scalers "antigravity-engine/internal/strategy/scalpers"
@@ -374,6 +375,12 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	// FIX 5: Block all entries if regime classifier says no new entries allowed
 	if lastRegimeClass != nil && !lastRegimeClass.AllowNewEntries {
 		log.Printf("[SCALERS] cycle skipped reason=regime_no_new_entries regime=%s", lastRegimeClass.Regime)
+		// B: emit per-strategy rejection for regime block
+		if o.scalerBundle != nil {
+			for _, entry := range o.scalerBundle.strategies {
+				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "regime_blocked").Inc()
+			}
+		}
 		return
 	}
 
@@ -393,6 +400,13 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	o.scalerBundle.cvdPrev = o.scalerBundle.cvd // save for NEXT cycle
 	o.scalerBundle.mu.Unlock()
 
+	// Emit OI feed health metric (I)
+	if mctx.OpenInterest > 0 {
+		observability.ScalersOIFeedActive.Set(1)
+	} else {
+		observability.ScalersOIFeedActive.Set(0)
+	}
+
 	// Collect non-none signals from all curated scalers
 	var rawAgg []AggregatedSignal
 	rejected := 0
@@ -400,22 +414,27 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		// Walk-forward gate: skip DEMOTED strategies.
 		if o.walkForward != nil && !o.walkForward.IsActive(entry.Name) {
 			log.Printf("[SCALERS] %s DEMOTED by walk-forward validator — skipping", entry.Name)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "walkforward_demoted").Inc() // C
 			continue
 		}
 		// Per-strategy cooldown gate.
 		cooldown := scalerStrategyCooldown(entry.Name)
 		if o.scalerBundle.isStrategyOnCooldown(entry.Name, cooldown) {
 			log.Printf("[SCALERS] %s on cooldown (%.0fs) — skipping", entry.Name, cooldown.Seconds())
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "cooldown").Inc() // E
 			continue
 		}
 		sig := entry.Strategy.Evaluate(mctx)
+		observability.ScalersSignalsEvaluated.WithLabelValues(entry.Name).Inc() // A
 		if sig.Direction == scalers.DirectionNone {
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "no_signal").Inc() // D
 			continue
 		}
 		// Directional cap gate.
 		sigDir := string(sig.Direction)
 		if !o.scalerBundle.canOpenDirectionScaler(sigDir) {
 			log.Printf("[SCALERS] %s directional cap reached for %s — skipping", entry.Name, sigDir)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "directional_cap").Inc() // G
 			rejected++
 			continue
 		}
@@ -428,6 +447,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 		if legacySig.TargetSize < minExecutionSizeBTC {
 			log.Printf("[SCALERS] %s signal skipped: adjusted size %.6f BTC below min after regime mult", sig.Strategy, legacySig.TargetSize)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "quality_gate").Inc() // F (size check is a quality gate)
 			rejected++
 			continue
 		}
@@ -437,6 +457,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 		if err := sanitizeScalerSignal(&legacySig, adaptiveFloor); err != nil {
 			log.Printf("[SCALERS] %s signal rejected: %v", sig.Strategy, err)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "quality_gate").Inc() // F
 			rejected++
 			continue
 		}
@@ -479,6 +500,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			continue
 		}
 
+		observability.ScalersSignalsExecuted.WithLabelValues(agg.StrategyName, string(sig.Action)).Inc() // H
 		o.risk.NotifyFill(sig)
 		o.openAndTrackPosition(ctx, sig, fill, agg.StrategyName)
 		o.tracker.RecordSignal(agg.StrategyName)

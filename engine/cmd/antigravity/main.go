@@ -398,6 +398,10 @@ func main() {
 		strategyNames[i] = e.Strategy.Name()
 	}
 	log.Printf("[STRATEGY] Loaded %d strategies: %v", len(allStrategies), strategyNames)
+	// Emit initial PROBATIONARY (0) status for all strategies at startup.
+	for _, e := range allStrategies {
+		observability.ScalersStrategyStatus.WithLabelValues(e.Strategy.Name()).Set(0)
+	}
 	if len(allStrategies) > btcEquityStrategyCapacity {
 		log.Printf("[INIT] Loaded %d curated live strategies (capacity %d exceeded; no truncation applied)", len(allStrategies), btcEquityStrategyCapacity)
 	} else {

@@ -4415,8 +4415,8 @@
     "semantic_hash": ""
   },
   "engine/internal/observability/metrics.go": {
-    "mtime": 1781432946.5720522,
-    "ast_hash": "ce4c69cb6cec91045159d8b40b6b9638",
+    "mtime": 1781579816.3637238,
+    "ast_hash": "412036f302e45b4fc325a2118f483e5e",
     "semantic_hash": ""
   },
   "engine/internal/observability/middleware.go": {
@@ -22780,12 +22780,12 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781577871.570096,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781579770.6577685,
+    "ast_hash": "12551c0c46808c7a04b26cc066960e01",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781577871.5689154,
+    "mtime": 1781579770.6577685,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781577871.5671642,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781579770.6577685,
+    "ast_hash": "91d46b299fc168ec3faa52df28e258aa",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781577871.5689154,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781579770.6577685,
+    "ast_hash": "fb1816b94295846f33fd9821fea0147b",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,7 +22920,7 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781577874.3405957,
+    "mtime": 1781579773.7234273,
     "ast_hash": "1a0e49f9269d06f41ab58df3a72aad28",
     "semantic_hash": ""
   },
@@ -23070,8 +23070,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/indicators.go": {
-    "mtime": 1781411378.7866783,
-    "ast_hash": "76135d1bf21ffa5db6d419a79453a9cc",
+    "mtime": 1781579426.975912,
+    "ast_hash": "68f475b14c7a79c1c13535e609ce2f81",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/registry.go": {
@@ -23090,8 +23090,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go": {
-    "mtime": 1781576807.2064023,
-    "ast_hash": "0c877c2a9adba8589cb4b4f6a7ccd5c3",
+    "mtime": 1781579313.3966608,
+    "ast_hash": "b066f1bb2bf31ce176b6a22618906374",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s4_adx_momentum_breakout.go": {
@@ -23100,33 +23100,33 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go": {
-    "mtime": 1781576598.3531408,
-    "ast_hash": "a9aecae8739c32fc9f8e6f1bb4bfac42",
+    "mtime": 1781579329.071199,
+    "ast_hash": "28ac45eafbe2bb4eb23abdb39b201748",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go": {
-    "mtime": 1781576552.3333468,
-    "ast_hash": "16fb315b47a5ed0b278f1dcdea24662b",
+    "mtime": 1781579281.4283895,
+    "ast_hash": "30f09329c7b977a7e07510c6b5554b1c",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s7_opening_range_breakout.go": {
-    "mtime": 1781411690.3326063,
-    "ast_hash": "80e0758827dbf99d676ab40b1ac8bf9b",
+    "mtime": 1781579461.994548,
+    "ast_hash": "8ae5dcf6d735e342c4ea68adc7f61117",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s8_funding_rate_fade.go": {
-    "mtime": 1781432853.18133,
-    "ast_hash": "01cafe66baa1c344ce29f1030100818a",
+    "mtime": 1781579271.2635381,
+    "ast_hash": "ba8ad812013fe049f4299c749dc41585",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s9_oi_divergence.go": {
-    "mtime": 1781432883.7154858,
-    "ast_hash": "72c6073a850f5ef2830c9b2c3fcae170",
+    "mtime": 1781579341.324223,
+    "ast_hash": "e448078c8e930833c92b913a77d51c56",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/types.go": {
-    "mtime": 1781576566.0130122,
-    "ast_hash": "faa0d5ad88dab71d711dbbee941fa9c5",
+    "mtime": 1781579433.9590049,
+    "ast_hash": "ccd11641efb54bf5dddf00f64e8fc27e",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
@@ -23145,8 +23145,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1781576699.1288917,
-    "ast_hash": "d52f1284a3a59b17c0787c5b4b7c8232",
+    "mtime": 1781579455.2316196,
+    "ast_hash": "dc93b24279227ac86a6125f6bf86786c",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {

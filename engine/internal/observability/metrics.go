@@ -857,6 +857,42 @@ var (
 )
 
 // ─────────────────────────────────────────────
+// Scalers Pipeline Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// ScalersSignalsEvaluated counts total signals evaluated per strategy before gates.
+	ScalersSignalsEvaluated = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_scalers_signals_evaluated_total",
+		Help: "Total signals evaluated per strategy before gates",
+	}, []string{"strategy"})
+
+	// ScalersSignalsExecuted counts total signals executed per strategy and direction.
+	ScalersSignalsExecuted = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_scalers_signals_executed_total",
+		Help: "Total signals executed per strategy and direction",
+	}, []string{"strategy", "direction"})
+
+	// ScalersSignalsRejected counts total signals rejected per strategy and reason.
+	ScalersSignalsRejected = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_scalers_signals_rejected_total",
+		Help: "Total signals rejected per strategy and reason",
+	}, []string{"strategy", "reason"})
+
+	// ScalersStrategyStatus tracks walk-forward status per strategy: 0=PROBATIONARY 1=ACTIVE 2=DEMOTED.
+	ScalersStrategyStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_scalers_strategy_status",
+		Help: "Walk-forward status: 0=PROBATIONARY 1=ACTIVE 2=DEMOTED",
+	}, []string{"strategy"})
+
+	// ScalersOIFeedActive is 1 if OI data present in last MarketContext, 0 if missing.
+	ScalersOIFeedActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_scalers_oi_feed_active",
+		Help: "1 if OI data present in last MarketContext, 0 if missing",
+	})
+)
+
+// ─────────────────────────────────────────────
 // Phase E — Event Store Metrics
 // ─────────────────────────────────────────────
 
