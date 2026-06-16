@@ -71,7 +71,7 @@ const tableStyle: CSSProperties = {
   borderCollapse: "separate",
   borderSpacing: 0,
   fontSize: 13,
-  minWidth: 820,
+  minWidth: 920,
 };
 
 const thStyle: CSSProperties = {
@@ -138,6 +138,25 @@ function fmtAge(startTs: number | null, endTs: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes}m`;
+}
+
+/** Entry open time (UTC) — when the position was opened (BUY long or SELL short). */
+function fmtTradeEntryTime(ts: number | null | undefined): string {
+  if (ts == null || !Number.isFinite(ts)) return "—";
+  const date = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(ts);
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }).format(ts);
+  return `${date} ${time} UTC`;
 }
 
 function pnlColor(value: number) {
@@ -386,8 +405,8 @@ function PositionsTableSkeleton() {
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
-              <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 ? "left" : "right" }}>
+            {["STRATEGY", "SIDE", "OPENED (UTC)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
+              <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 ? "left" : "right" }}>
                 {header}
               </th>
             ))}
@@ -402,7 +421,7 @@ function PositionsTableSkeleton() {
                 borderBottom: 0,
               }}
             >
-              {Array.from({ length: 9 }).map((__, cellIndex) => (
+              {Array.from({ length: 10 }).map((__, cellIndex) => (
                 <td key={cellIndex} style={{ ...tdStyle, textAlign: cellIndex <= 1 ? "left" : "right" }}>
                   <SkeletonBlock width={cellIndex === 0 ? 148 : cellIndex === 1 ? 48 : 68} height={12} rounded={3} />
                 </td>
@@ -551,8 +570,8 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
       <table style={tableStyle}>
         <thead>
           <tr>
-            {["STRATEGY", "SIDE", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
-              <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 ? "left" : "right" }}>
+            {["STRATEGY", "SIDE", "OPENED (UTC)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((header, index) => (
+              <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 ? "left" : "right" }}>
                 {header}
               </th>
             ))}
@@ -583,6 +602,9 @@ function OpenPositionsTable({ trades, nowMs, loading = false }: { trades: MockTr
                 </td>
                 <td style={{ ...tdStyle, color: sideColor(trade.side), fontWeight: 700 }}>
                   {trade.side}
+                </td>
+                <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12, whiteSpace: "nowrap" }}>
+                  {fmtTradeEntryTime(trade.openedAt)}
                 </td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtSize(trade)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(trade.entryPrice)}</td>
@@ -701,8 +723,8 @@ function ClosedTradesTable({
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["STRATEGY", "SIDE", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
-                  <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 5 ? "left" : "right" }}>
+                {["STRATEGY", "SIDE", "OPENED (UTC)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
+                  <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 || index === 6 ? "left" : "right" }}>
                     {header}
                   </th>
                 ))}
@@ -732,6 +754,9 @@ function ClosedTradesTable({
                       </div>
                     </td>
                     <td style={{ ...tdStyle, color: sideColor(trade.side), fontWeight: 700 }}>{trade.side}</td>
+                    <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12, whiteSpace: "nowrap" }}>
+                      {fmtTradeEntryTime(trade.openedAt)}
+                    </td>
                     <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(trade.entryPrice)}</td>
                     <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>
                       {trade.exitPrice != null ? fmtPrice(trade.exitPrice) : "—"}
