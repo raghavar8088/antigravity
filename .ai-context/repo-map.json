@@ -1,1 +1,1 @@
-{"client-lib":{"communities":[0],"files":1,"symbols":32,"top_files":[{"file":"client/src/lib/trading/mockTradingPersistenceTypes.ts","symbols":32}]}}
+{"client-api":{"communities":[7],"files":1,"symbols":1,"top_files":[{"file":"client/src/app/api/mock-trading/trades/closed/route.test.ts","symbols":1}]},"client-lib":{"communities":[0,1,2,3,4,5,6],"files":1,"symbols":61,"top_files":[{"file":"client/src/lib/trading/mockTradingMongo.ts","symbols":61}]}}

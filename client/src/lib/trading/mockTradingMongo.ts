@@ -1166,26 +1166,48 @@ export async function listDailyPnlHistory(
     .toArray();
 }
 
-export async function deleteClosedMockTrades(accountKey: string): Promise<{ tradesDeleted: number }> {
-  const { trades, logs } = await collections();
-  const result = await trades.deleteMany({ account_key: accountKey, status: "CLOSED" });
+export async function deleteClosedMockTrades(accountKey: string): Promise<{
+  tradesDeleted: number;
+  paperTradesDeleted: number;
+}> {
+  const { trades, paperTrades, logs } = await collections();
+  const closedMockFilter: Filter<MockTradeDoc> = {
+    account_key: accountKey,
+    $or: [
+      { status: "CLOSED" },
+      { closed_at: { $exists: true, $ne: null } },
+    ],
+  };
+  const [mockResult, paperResult] = await Promise.all([
+    trades.deleteMany(closedMockFilter),
+    paperTrades.deleteMany({ account_key: accountKey }),
+  ]);
+  const tradesDeleted = mockResult.deletedCount ?? 0;
+  const paperTradesDeleted = paperResult.deletedCount ?? 0;
   await logs.insertOne({
     account_key: accountKey,
     ts: Date.now(),
     event: "MOCK_CLOSED_TRADES_CLEARED",
     ignored_blockers: [],
-    message: `Cleared ${result.deletedCount ?? 0} closed mock trades`,
+    message: `Cleared ${tradesDeleted} mock trades and ${paperTradesDeleted} paper trades`,
     created_at: nowIso(),
   });
-  return { tradesDeleted: result.deletedCount ?? 0 };
+  return { tradesDeleted, paperTradesDeleted };
 }
 
 export async function deleteClosedMockTrade(accountKey: string, tradeId: string): Promise<{ deleted: boolean }> {
-  const { trades, logs } = await collections();
-  const doc = await trades.findOne({ account_key: accountKey, trade_id: tradeId, status: "CLOSED" });
-  if (!doc) return { deleted: false };
-  const result = await trades.deleteOne({ account_key: accountKey, trade_id: tradeId, status: "CLOSED" });
-  if ((result.deletedCount ?? 0) > 0) {
+  const { trades, paperTrades, logs } = await collections();
+  const closedMockFilter: Filter<MockTradeDoc> = {
+    account_key: accountKey,
+    trade_id: tradeId,
+    $or: [
+      { status: "CLOSED" },
+      { closed_at: { $exists: true, $ne: null } },
+    ],
+  };
+  const mockDoc = await trades.findOne(closedMockFilter);
+  if (mockDoc) {
+    await trades.deleteOne({ account_key: accountKey, trade_id: tradeId });
     await logs.insertOne({
       account_key: accountKey,
       ts: Date.now(),
@@ -1195,8 +1217,23 @@ export async function deleteClosedMockTrade(accountKey: string, tradeId: string)
       message: `Deleted closed mock trade ${tradeId}`,
       created_at: nowIso(),
     });
+    return { deleted: true };
   }
-  return { deleted: (result.deletedCount ?? 0) > 0 };
+
+  const paperResult = await paperTrades.deleteOne({ account_key: accountKey, client_trade_id: tradeId });
+  if ((paperResult.deletedCount ?? 0) > 0) {
+    await logs.insertOne({
+      account_key: accountKey,
+      ts: Date.now(),
+      event: "MOCK_CLOSED_TRADE_DELETED",
+      trade_id: tradeId,
+      ignored_blockers: [],
+      message: `Deleted closed paper trade ${tradeId}`,
+      created_at: nowIso(),
+    });
+    return { deleted: true };
+  }
+  return { deleted: false };
 }
 
 export async function resetMockTradingState(accountKey: string): Promise<{

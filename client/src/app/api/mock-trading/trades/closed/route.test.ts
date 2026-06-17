@@ -6,7 +6,7 @@ vi.mock("@/lib/broker/mongoTradesClient", () => ({
 }));
 
 vi.mock("@/lib/trading/mockTradingMongo", () => ({
-  deleteClosedMockTrades: vi.fn().mockResolvedValue({ tradesDeleted: 12 }),
+  deleteClosedMockTrades: vi.fn().mockResolvedValue({ tradesDeleted: 12, paperTradesDeleted: 35 }),
 }));
 
 import { DELETE } from "./route";
@@ -39,9 +39,10 @@ describe("DELETE /api/mock-trading/trades/closed", () => {
       confirmation: MOCK_CLEAR_CLOSED_CONFIRMATION,
     }));
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; tradesDeleted: number };
+    const body = await res.json() as { ok: boolean; tradesDeleted: number; paperTradesDeleted: number };
     expect(body.ok).toBe(true);
     expect(body.tradesDeleted).toBe(12);
+    expect(body.paperTradesDeleted).toBe(35);
     expect(mockMongo.deleteClosedMockTrades).toHaveBeenCalledWith("mock_trading_main");
   });
 });
