@@ -47,6 +47,7 @@ export function evaluateMockTradingTick(args: {
   markPrice: number;
   symbol: string;
   tickAt?: number;
+  signalThreshold?: number;
 }): MockTradingTickEval {
   const baseResult = evaluateMockTradingSignals(args);
   const rows = buildMockTradingTraceRows(baseResult);

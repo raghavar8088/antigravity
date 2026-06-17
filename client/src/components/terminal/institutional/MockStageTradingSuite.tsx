@@ -16,6 +16,7 @@ import type { StrategyStatus } from "@/lib/strategyAuthority/types";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
+import { MockTradingConfigurationPanel } from "./MockTradingConfigurationPanel";
 
 const TRADE_ENGINE_TITLE = "Trade Engine";
 
@@ -922,6 +923,7 @@ export function MockStageTradingSuite({
   const [closedVisibleLimit, setClosedVisibleLimit] = useState(CLOSED_TRADE_INITIAL_LIMIT);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [scalersStats, setScalersStats] = useState<ScalersStatsState>(UNKNOWN_SCALERS_STATS);
+  const [workspaceTab, setWorkspaceTab] = useState<"overview" | "config">("overview");
   const engine = useMockTradingEngine({
     price: live.price,
     accountKey: mockAccountKeyForStage(status),
@@ -1226,25 +1228,56 @@ export function MockStageTradingSuite({
     return <>{renderShell({ summaryStrip, leftPanel, rightPanel })}</>;
   }
 
+  const tabButtonStyle = (active: boolean): CSSProperties => ({
+    padding: "8px 14px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: active ? "var(--amber)" : "var(--surface)",
+    color: active ? "#111" : "var(--text-primary)",
+    fontWeight: 700,
+    fontSize: 12,
+    cursor: "pointer",
+  });
+
   return (
     <div className="grid gap-3">
       {summaryStrip}
-      <div
-        className="icc-trade-engine-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "3fr 2fr",
-          gap: 12,
-          minHeight: 0,
-        }}
-      >
-        <div style={{ display: "grid", alignContent: "start", gap: 12, minHeight: 0 }}>
-          {leftPanel}
-        </div>
-        <div style={{ display: "grid", alignContent: "start", gap: 12, minHeight: 0 }}>
-          {rightPanel}
-        </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button type="button" style={tabButtonStyle(workspaceTab === "overview")} onClick={() => setWorkspaceTab("overview")}>
+          Overview
+        </button>
+        <button type="button" style={tabButtonStyle(workspaceTab === "config")} onClick={() => setWorkspaceTab("config")}>
+          Configuration
+        </button>
       </div>
+      {workspaceTab === "config" ? (
+        <TerminalCard
+          title="Signal Threshold Configuration"
+          subtitle="Adjust mock-trading gates without redeploying — saved to MongoDB for the backend executor"
+        >
+          <MockTradingConfigurationPanel
+            accountKey={mockAccountKeyForStage(status)}
+            executorAgeSeconds={engine.executor.health?.ageSeconds ?? null}
+          />
+        </TerminalCard>
+      ) : (
+        <div
+          className="icc-trade-engine-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "3fr 2fr",
+            gap: 12,
+            minHeight: 0,
+          }}
+        >
+          <div style={{ display: "grid", alignContent: "start", gap: 12, minHeight: 0 }}>
+            {leftPanel}
+          </div>
+          <div style={{ display: "grid", alignContent: "start", gap: 12, minHeight: 0 }}>
+            {rightPanel}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { getDb, isMongoConfigured } from "@/lib/broker/mongoTradesClient";
+import { ensureExecutorConfigIndexes } from "@/lib/mockTradingExecutor/executorConfig";
 import type {
   MockExecutionLogDoc,
   MockExecutorCycleResult,
@@ -96,6 +97,7 @@ export async function ensureExecutorIndexes(): Promise<void> {
       .createIndex({ account_key: 1 }, { unique: true }),
     db.collection(MOCK_EXECUTION_LOGS_COLLECTION).createIndex({ account_key: 1, timestamp: -1 }),
     db.collection(MOCK_EXECUTION_LOGS_COLLECTION).createIndex({ timestamp: -1 }),
+    ensureExecutorConfigIndexes(),
   ]);
 }
 

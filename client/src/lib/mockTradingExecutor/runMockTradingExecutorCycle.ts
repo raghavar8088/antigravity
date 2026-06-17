@@ -12,6 +12,7 @@ import {
 } from "@/lib/trading/mockTradingMongo";
 import { computeAccountState, type MockTrade } from "@/lib/trading/mockTradingEngine";
 import { evaluateMockTradingTick } from "@/lib/mockTradingExecutor/evaluateMockTradingTick";
+import { loadExecutorThresholdConfig } from "@/lib/mockTradingExecutor/executorConfig";
 import { funnelSnapshotFromTraceEval } from "@/lib/mockTradingExecutor/funnelFromTrace";
 import {
   closeOpenTradesAtPrice,
@@ -75,8 +76,16 @@ export async function runMockTradingExecutorCycle(
 
   await ensureExecutorIndexes();
 
-  const { config: storedConfig } = await getLatestMockAccountSnapshot(accountKey);
-  const config = storedConfig ?? mockConfigForStage("MAIN_ENGINE");
+  const [{ config: storedConfig }, thresholdBundle] = await Promise.all([
+    getLatestMockAccountSnapshot(accountKey),
+    loadExecutorThresholdConfig(accountKey),
+  ]);
+  const baseConfig = storedConfig ?? mockConfigForStage("MAIN_ENGINE");
+  const config = {
+    ...baseConfig,
+    minSignalScore: thresholdBundle.doc.min_signal_score,
+  };
+  const signalThreshold = thresholdBundle.doc.signal_threshold;
 
   let markPrice = 0;
   let bars = 0;
@@ -91,6 +100,7 @@ export async function runMockTradingExecutorCycle(
       markPrice,
       symbol,
       tickAt,
+      signalThreshold,
     });
 
     if (evalResult.error) errors.push(evalResult.error);

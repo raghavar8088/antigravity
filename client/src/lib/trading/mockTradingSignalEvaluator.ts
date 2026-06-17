@@ -4,6 +4,7 @@
  */
 
 import { resolveBtcFtActiveStrategyIds } from "@/lib/trading/btcFtRoster";
+import { clampSignalThreshold } from "@/lib/mockTradingExecutor/executorConfigConstants";
 import {
   btcFtRelaxConfirmEnabledFromEnv,
   btcFtSignalThresholdFromEnv,
@@ -89,6 +90,8 @@ export function evaluateMockTradingSignals(args: {
   symbol: string;
   tickAt?: number;
   strategies?: readonly FuturesStratDef[];
+  /** Override env/default signal threshold (18–32). */
+  signalThreshold?: number;
 }): MockTradingSignalEvalResult {
   const tickAt = args.tickAt ?? Date.now();
   const symbol = args.symbol;
@@ -153,7 +156,9 @@ export function evaluateMockTradingSignals(args: {
 
   const signals = buildSignalInputs(opens, closes, highs, lows, volumes, markPrice, lastBarTimeMs);
   const regime = classifyRegimeTagFrom1mOhlcv(opens, highs, lows, closes, volumes) as RegimeTag;
-  const baseThreshold = btcFtSignalThresholdFromEnv();
+  const baseThreshold = clampSignalThreshold(
+    args.signalThreshold ?? btcFtSignalThresholdFromEnv(),
+  );
   const operatorRelaxed = mockTradingRelaxedConfirmEnabled();
   const atrFeeK = operatorRelaxed ? 0.45 : 1.0;
   const atrPct = markPrice > 0 ? signals.atr14 / markPrice : 0;

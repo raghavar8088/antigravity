@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { buildExecutorDiagnosis } from "@/lib/mockTradingExecutor/diagnoseExecutor";
+import { getExecutorConfigView } from "@/lib/mockTradingExecutor/executorConfig";
 import { recommendExecutorHealing } from "@/lib/mockTradingExecutor/healingEngine";
 import {
   executorStateHealth,
@@ -25,7 +26,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   const accountKey = url.searchParams.get("account_key")?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
 
   try {
-    const [state, accountSnap, recentTrades] = await Promise.all([
+    const [state, accountSnap, recentTrades, thresholdConfig] = await Promise.all([
       loadExecutorState(accountKey),
       getLatestMockAccountSnapshot(accountKey),
       listMockTrades({
@@ -34,6 +35,7 @@ export async function GET(req: Request): Promise<NextResponse> {
         limit: 10,
         sort: "newest",
       }),
+      getExecutorConfigView(accountKey),
     ]);
 
     const healthFlags = executorStateHealth(state);
@@ -60,6 +62,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       funnel: state?.entry_funnel_snapshot ?? null,
       account: accountSnap.account,
       config: accountSnap.config,
+      threshold_config: thresholdConfig,
       recent_trades: recentTrades.trades,
       no_trade_diagnosis: diagnosis,
       healing,

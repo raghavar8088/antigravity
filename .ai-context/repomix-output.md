@@ -81,6 +81,8 @@ The content is organized as follows:
   app/api/mock-trading/analytics/correlation/route.ts
   app/api/mock-trading/analytics/montecarlo/route.ts
   app/api/mock-trading/analytics/route.ts
+  app/api/mock-trading/config/history/route.ts
+  app/api/mock-trading/config/route.ts
   app/api/mock-trading/daily-pnl/route.ts
   app/api/mock-trading/equity/route.ts
   app/api/mock-trading/executor-status/route.ts
@@ -89,6 +91,7 @@ The content is organized as follows:
   app/api/mock-trading/reset/route.test.ts
   app/api/mock-trading/reset/route.ts
   app/api/mock-trading/scores/route.ts
+  app/api/mock-trading/signal-impact/route.ts
   app/api/mock-trading/signal-tick/route.ts
   app/api/mock-trading/signal-trace/route.ts
   app/api/mock-trading/signals/route.ts
@@ -272,6 +275,7 @@ The content is organized as follows:
   components/terminal/institutional/MainEngineSurvivors.tsx
   components/terminal/institutional/MockEngineCenter.tsx
   components/terminal/institutional/MockStageTradingSuite.tsx
+  components/terminal/institutional/MockTradingConfigurationPanel.tsx
   components/terminal/institutional/NavIcons.tsx
   components/terminal/institutional/ObservabilityCenter.tsx
   components/terminal/institutional/PortfolioConstruction.tsx
@@ -489,11 +493,15 @@ The content is organized as follows:
   lib/mockTradingExecutor/diagnoseExecutor.ts
   lib/mockTradingExecutor/diagnosticsHealth.ts
   lib/mockTradingExecutor/evaluateMockTradingTick.ts
+  lib/mockTradingExecutor/executorConfig.ts
+  lib/mockTradingExecutor/executorConfigConstants.ts
   lib/mockTradingExecutor/funnelFromTrace.ts
   lib/mockTradingExecutor/healingEngine.ts
   lib/mockTradingExecutor/persistExecutorState.ts
   lib/mockTradingExecutor/processTrades.ts
   lib/mockTradingExecutor/runMockTradingExecutorCycle.ts
+  lib/mockTradingExecutor/signalImpact.ts
+  lib/mockTradingExecutor/signalImpactTypes.ts
   lib/mockTradingExecutor/signalTraceDiagnostic.ts
   lib/mockTradingExecutor/types.ts
   lib/mockTradingMongo.test.ts
@@ -559,7 +567,9 @@ The content is organized as follows:
   lib/tests/futuresAccountingFix.test.ts
   lib/tests/futuresParameterTuner.test.ts
   lib/tests/futuresProfitMode.test.ts
+  lib/tests/mockTradingConfigurationPanel.test.ts
   lib/tests/mockTradingExecutor.test.ts
+  lib/tests/mockTradingExecutorConfig.test.ts
   lib/tests/mockTradingExecutorDiagnostics.test.ts
   lib/tests/mockTradingExecutorFunnel.test.ts
   lib/tests/noTradeRootCause.test.ts
