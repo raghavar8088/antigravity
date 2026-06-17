@@ -52,6 +52,8 @@ The content is organized as follows:
   app/api/btc/spot-klines/route.ts
   app/api/btc/spot-state/route.ts
   app/api/btc/trade-candles/route.ts
+  app/api/cron/mock-trading-executor/route.ts
+  app/api/cron/mock-trading-tick/route.ts
   app/api/cron/policy-snapshot/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
@@ -64,6 +66,7 @@ The content is organized as follows:
   app/api/delta/testnet/positions/route.ts
   app/api/desk-entry-funnel/route.ts
   app/api/desk-worker-events/route.ts
+  app/api/diagnostics/health/route.ts
   app/api/engine/[...path]/route.ts
   app/api/engine/events/route.ts
   app/api/engine/reconciliation/route.ts
@@ -80,12 +83,14 @@ The content is organized as follows:
   app/api/mock-trading/analytics/route.ts
   app/api/mock-trading/daily-pnl/route.ts
   app/api/mock-trading/equity/route.ts
+  app/api/mock-trading/executor-status/route.ts
   app/api/mock-trading/regime/route.ts
   app/api/mock-trading/reset/preview/route.ts
   app/api/mock-trading/reset/route.test.ts
   app/api/mock-trading/reset/route.ts
   app/api/mock-trading/scores/route.ts
   app/api/mock-trading/signal-tick/route.ts
+  app/api/mock-trading/signal-trace/route.ts
   app/api/mock-trading/signals/route.ts
   app/api/mock-trading/snapshot/route.ts
   app/api/mock-trading/stream/route.ts
@@ -481,6 +486,16 @@ The content is organized as follows:
   lib/mockResearchStrategies.test.ts
   lib/mockResearchWalkForward.test.ts
   lib/mockTradingEngine.test.ts
+  lib/mockTradingExecutor/diagnoseExecutor.ts
+  lib/mockTradingExecutor/diagnosticsHealth.ts
+  lib/mockTradingExecutor/evaluateMockTradingTick.ts
+  lib/mockTradingExecutor/funnelFromTrace.ts
+  lib/mockTradingExecutor/healingEngine.ts
+  lib/mockTradingExecutor/persistExecutorState.ts
+  lib/mockTradingExecutor/processTrades.ts
+  lib/mockTradingExecutor/runMockTradingExecutorCycle.ts
+  lib/mockTradingExecutor/signalTraceDiagnostic.ts
+  lib/mockTradingExecutor/types.ts
   lib/mockTradingMongo.test.ts
   lib/mockTradingPersistenceTypes.test.ts
   lib/mockTradingSignalEvaluator.test.ts
@@ -544,6 +559,9 @@ The content is organized as follows:
   lib/tests/futuresAccountingFix.test.ts
   lib/tests/futuresParameterTuner.test.ts
   lib/tests/futuresProfitMode.test.ts
+  lib/tests/mockTradingExecutor.test.ts
+  lib/tests/mockTradingExecutorDiagnostics.test.ts
+  lib/tests/mockTradingExecutorFunnel.test.ts
   lib/tests/noTradeRootCause.test.ts
   lib/tests/pr12.test.ts
   lib/tests/pr13.test.ts

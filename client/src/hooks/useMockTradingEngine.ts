@@ -41,6 +41,8 @@ import {
   type StrategyExitOverride,
 } from "@/lib/trading/mockTradingEngine";
 import { FUTURES_STRAT_DEFS } from "@/lib/trading/futuresStrategies";
+import type { MockExecutorHealth } from "@/lib/mockTradingExecutor/types";
+import type { ExecutorDiagnosis } from "@/lib/mockTradingExecutor/diagnoseExecutor";
 import {
   DEFAULT_MOCK_ACCOUNT_KEY,
   MOCK_RESET_CONFIRMATION,
@@ -55,6 +57,7 @@ import { getMockConfigForPipelineStage } from "@/lib/strategyAuthority/gradeStag
 import type { StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 
 const TRACE_POLL_MS = 5_000;
+const DEFAULT_EXECUTOR_STATUS_POLL_MS = 2_000;
 const MARK_PERSIST_THROTTLE_MS = 15_000;
 const ACCOUNT_SNAPSHOT_THROTTLE_MS = 15_000;
 const OPEN_MARK_PERSIST_BATCH_SIZE = 100;
@@ -172,6 +175,10 @@ export interface UseMockTradingEngineOptions {
   disablePolling?: boolean;
   /** Disable Mongo persistence/hydration (used by tests). */
   disablePersistence?: boolean;
+  /** Poll backend executor health (read-only Trade Engine mode). */
+  refetchExecutorStatus?: boolean;
+  /** Executor status poll interval when refetchExecutorStatus is true. */
+  executorStatusPollMs?: number;
 }
 
 export interface UseMockTradingEngineResult {
@@ -215,12 +222,28 @@ export interface UseMockTradingEngineResult {
     error: string | null;
     setPage: (page: number) => void;
   };
+  executor: {
+    health: MockExecutorHealth | null;
+    /** @deprecated use diagnosis.reason */
+    noTradeReason: ExecutorDiagnosis["reason"] | null;
+    diagnosis: ExecutorDiagnosis | null;
+    lastFetchedAt: number | null;
+  };
 }
 
 export function useMockTradingEngine(
   opts: UseMockTradingEngineOptions,
 ): UseMockTradingEngineResult {
-  const { price, accountKey, pipelineStage = null, initialConfig, disablePolling = false, disablePersistence = false } = opts;
+  const {
+    price,
+    accountKey,
+    pipelineStage = null,
+    initialConfig,
+    disablePolling = false,
+    disablePersistence = false,
+    refetchExecutorStatus = false,
+    executorStatusPollMs = DEFAULT_EXECUTOR_STATUS_POLL_MS,
+  } = opts;
   const persistenceDisabled = disablePersistence;
   const mockAccountKey = accountKey?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
   const stageConfig = pipelineStage ? getMockConfigForPipelineStage(pipelineStage) : DEFAULT_MOCK_TRADING_CONFIG;
@@ -920,6 +943,91 @@ export function useMockTradingEngine(
     };
   }, [mockAccountKey, disablePolling, ingestTraceRows, pipelineStage]);
 
+  const [executorHealth, setExecutorHealth] = useState<MockExecutorHealth | null>(null);
+  const [executorDiagnosis, setExecutorDiagnosis] = useState<ExecutorDiagnosis | null>(null);
+  const [executorLastFetchedAt, setExecutorLastFetchedAt] = useState<number | null>(null);
+
+  // ── Backend executor health (read-only Trade Engine) ─────────────────────
+  useEffect(() => {
+    if (!refetchExecutorStatus || persistenceDisabled) return;
+    let cancelled = false;
+
+    const syncOpenTrades = async () => {
+      const openParams = new URLSearchParams({
+        account_key: mockAccountKey,
+        page: "1",
+        limit: String(maxOpenMockTradesFromConfig(configRef.current)),
+        status: "OPEN",
+        sort: "newest",
+      });
+      const res = await fetch(`/api/mock-trading/trades?${openParams.toString()}`);
+      if (!res.ok) return;
+      const json = (await res.json()) as MockTradingHydrateResponse;
+      if (!json.ok) return;
+      setTrades((prev) => {
+        const closed = prev.filter((t) => t.status === "CLOSED");
+        const byId = new Map(closed.map((t) => [t.id, t]));
+        for (const open of json.trades) byId.set(open.id, open);
+        return [...byId.values()];
+      });
+      if (historyPage === 1) {
+        void loadHistoryPage(1);
+      }
+    };
+
+    const pollExecutor = async () => {
+      try {
+        const params = new URLSearchParams({ account_key: mockAccountKey });
+        const res = await fetch(`/api/mock-trading/executor-status?${params.toString()}`);
+        const json = (await res.json()) as {
+          ok?: boolean;
+          executor?: MockExecutorHealth;
+          no_trade_diagnosis?: ExecutorDiagnosis;
+        };
+        if (cancelled || !res.ok || !json.ok || !json.executor) return;
+        setExecutorHealth(json.executor);
+        setExecutorDiagnosis(json.no_trade_diagnosis ?? null);
+        setExecutorLastFetchedAt(Date.now());
+        if (json.executor.healthy) {
+          await syncOpenTrades();
+        }
+      } catch {
+        if (!cancelled) {
+          setExecutorHealth((prev) =>
+            prev
+              ? { ...prev, healthy: false, stale: true }
+              : {
+                  healthy: false,
+                  stale: true,
+                  ageSeconds: null,
+                  lastTickAt: null,
+                  lastMode: null,
+                  dominantBlocker: null,
+                  candidateCount: null,
+                  openedLastCycle: null,
+                  closedLastCycle: null,
+                  errors: ["executor_status_fetch_failed"],
+                },
+          );
+        }
+      }
+    };
+
+    void pollExecutor();
+    const id = setInterval(() => void pollExecutor(), executorStatusPollMs);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [
+    executorStatusPollMs,
+    historyPage,
+    loadHistoryPage,
+    mockAccountKey,
+    persistenceDisabled,
+    refetchExecutorStatus,
+  ]);
+
   // ── Apply price ticks → unrealized PnL and TP/SL ──────────────────────────
   // Engine-owned mode (disablePolling): live marks are applied in portfolioTrades useMemo.
   useEffect(() => {
@@ -1114,6 +1222,12 @@ export function useMockTradingEngine(
       loading: historyMeta.loading,
       error: historyMeta.error,
       setPage: setHistoryPage,
+    },
+    executor: {
+      health: executorHealth,
+      noTradeReason: executorDiagnosis?.reason ?? null,
+      diagnosis: executorDiagnosis,
+      lastFetchedAt: executorLastFetchedAt,
     },
   };
 }

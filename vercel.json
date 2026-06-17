@@ -5,8 +5,8 @@
   "installCommand": "npm install --legacy-peer-deps --ignore-scripts",
   "crons": [
     {
-      "path": "/api/cron/rank-strategies",
-      "schedule": "0 0 * * *"
+      "path": "/api/cron/mock-trading-tick",
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/policy-snapshot",

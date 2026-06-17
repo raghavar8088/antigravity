@@ -18,7 +18,9 @@
     "test:mongo": "node --env-file=.env.local scripts/test-mongo.mjs",
     "ai:summary": "tsx --env-file=.env.local scripts/ai-app-summary.ts",
     "ai:verification": "tsx --env-file=.env.local scripts/verification-summary.ts",
-    "ai:mindmap": "tsx scripts/update-ai-mindmap.ts"
+    "ai:mindmap": "tsx scripts/update-ai-mindmap.ts",
+    "mock-trading:worker": "tsx --env-file=.env.local scripts/mock-trading-executor-worker.ts",
+    "mock-trading:fix-corrupt": "tsx --env-file=.env.local scripts/fix-corrupt-mock-trades.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.16",

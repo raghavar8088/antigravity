@@ -1193,7 +1193,12 @@ function StrategyRankTable({
 
 export default function MockTradingDashboard() {
   const live = useLiveBTCPrice();
-  const engine = useMockTradingEngine({ price: live.price });
+  const engine = useMockTradingEngine({
+    price: live.price,
+    disablePolling: true,
+    refetchExecutorStatus: true,
+    executorStatusPollMs: 2_000,
+  });
   const candles = useMockCandleBuilder(live.price);
   const regime = useMarketRegime({ candles: candles.snapshot, newCandleReady: candles.newCandleReady });
   const research = useMockResearchRunner({

@@ -132,6 +132,12 @@ function mockEngine(trades: MockTrade[] = []) {
       error: null,
       setPage: vi.fn(),
     },
+    executor: {
+      health: null,
+      noTradeReason: null,
+      diagnosis: null,
+      lastFetchedAt: null,
+    },
   };
 }
 

@@ -928,6 +928,8 @@ export function MockStageTradingSuite({
     pipelineStage: status === "RETIRED" ? null : "MAIN_ENGINE",
     initialConfig: getMockConfigForPipelineStage(status),
     disablePolling: true,
+    refetchExecutorStatus: true,
+    executorStatusPollMs: 2_000,
   });
 
   const sourceTrades = engine.portfolioTrades;
@@ -1004,7 +1006,18 @@ export function MockStageTradingSuite({
   const maxOpen = engine.config.maxOpenMockTrades;
   const winRatePct = analytics.winRate * 100;
   const winRateAccent = analytics.closedTrades > 0 && winRatePct > 50 ? "var(--green)" : analytics.closedTrades > 0 && winRatePct < 50 ? "var(--amber)" : "var(--border)";
-  const engineStatus = priceReady && !engine.error ? "Live" : engine.error ? "Attention" : "Updating";
+  const executorHealthy = engine.executor.health?.healthy ?? false;
+  const executorStale = engine.executor.health?.stale ?? true;
+  const executorAgeSec = engine.executor.health?.ageSeconds;
+  const engineStatus = executorHealthy
+    ? "Backend Live"
+    : executorStale
+      ? "Executor Stale"
+      : priceReady && !engine.error
+        ? "Live"
+        : engine.error
+          ? "Attention"
+          : "Updating";
 
   const summaryStrip = (
     <section
@@ -1114,9 +1127,46 @@ export function MockStageTradingSuite({
         )}
       </div>
 
-      {!priceReady || engine.error || engine.diagnostics.recentRejections[0] ? (
-        <div style={{ marginTop: 8, display: "grid", gap: 3, fontSize: 10, color: "var(--text-muted)" }}>
-          {!priceReady ? <p style={{ color: "var(--amber)" }}>Waiting for live BTC price before trade creation can start.</p> : null}
+      {!priceReady || engine.error || engine.diagnostics.recentRejections[0] || engine.executor.diagnosis ? (
+        <div style={{ marginTop: 8, display: "grid", gap: 6, fontSize: 10, color: "var(--text-muted)" }}>
+          {!priceReady ? <p style={{ color: "var(--amber)" }}>Waiting for live BTC price feed.</p> : null}
+          {engine.executor.health ? (
+            <p>
+              Backend executor: {executorHealthy ? "healthy" : "stale"}
+              {executorAgeSec != null ? ` · last cycle ${executorAgeSec}s ago` : ""}
+              {engine.executor.diagnosis?.dominantBlocker
+                ? ` · blocker ${engine.executor.diagnosis.dominantBlocker}`
+                : engine.executor.health.dominantBlocker
+                  ? ` · blocker ${engine.executor.health.dominantBlocker}`
+                  : ""}
+            </p>
+          ) : (
+            <p style={{ color: "var(--amber)" }}>Waiting for backend executor status…</p>
+          )}
+          {engine.executor.diagnosis ? (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: `1px solid ${engine.executor.diagnosis.isHealthy ? "var(--border)" : "var(--red)"}`,
+                background: engine.executor.diagnosis.isHealthy
+                  ? "color-mix(in srgb, var(--surface) 92%, var(--amber) 8%)"
+                  : "color-mix(in srgb, var(--surface) 88%, var(--red) 12%)",
+                display: "grid",
+                gap: 4,
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 700, color: engine.executor.diagnosis.isHealthy ? "var(--amber)" : "var(--red)" }}>
+                Status: {engine.executor.diagnosis.status}
+                {" · "}
+                {engine.executor.diagnosis.headline}
+              </p>
+              <p style={{ margin: 0 }}>{engine.executor.diagnosis.explanation}</p>
+              <p style={{ margin: 0, fontWeight: 600 }}>Recommendation: {engine.executor.diagnosis.nextAction}</p>
+            </div>
+          ) : engine.executor.noTradeReason ? (
+            <p style={{ color: "var(--amber)" }}>No-trade diagnosis: {engine.executor.noTradeReason}</p>
+          ) : null}
           {engine.error ? <p style={{ color: "var(--red)" }}>Signal tick: {engine.error}</p> : null}
           {engine.diagnostics.recentRejections[0] ? (
             <p>Latest rejection: {engine.diagnostics.recentRejections[0].message}</p>
