@@ -160,6 +160,8 @@ export const mockTradeLogEventSchema = z.enum([
   "MOCK_TRADE_LIMIT_REACHED",
   "MOCK_TRADE_REJECTED",
   "MOCK_TRADING_RESET",
+  "MOCK_CLOSED_TRADES_CLEARED",
+  "MOCK_CLOSED_TRADE_DELETED",
 ]);
 
 export const mockTradeLogSchema = z
