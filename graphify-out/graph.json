@@ -4,14 +4,244 @@
   "graph": {},
   "nodes": [
     {
+      "label": "journal_bootstrap.go",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "paperpersist_journal_bootstrap",
+      "community": 12,
+      "norm_label": "journal_bootstrap.go"
+    },
+    {
+      "label": "BootstrapJournalFromMongo()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "community": 12,
+      "norm_label": "bootstrapjournalfrommongo()"
+    },
+    {
+      "label": "Context",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "engine_internal_paperpersist_journal_bootstrap_go_context",
+      "community": 12,
+      "norm_label": "context"
+    },
+    {
+      "label": "MongoManager",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "engine_internal_paperpersist_journal_bootstrap_go_mongomanager",
+      "community": 12,
+      "norm_label": "mongomanager"
+    },
+    {
+      "label": "TradeJournal",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "tradejournal",
+      "community": 12,
+      "norm_label": "tradejournal"
+    },
+    {
+      "label": "recovery.go",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "paperpersist_recovery",
+      "community": 12,
+      "norm_label": "recovery.go"
+    },
+    {
+      "label": "RecoveredAccountState",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L32",
+      "_origin": "ast",
+      "id": "paperpersist_recoveredaccountstate",
+      "community": 12,
+      "norm_label": "recoveredaccountstate"
+    },
+    {
+      "label": "Time",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L41",
+      "_origin": "ast",
+      "id": "time",
+      "community": 12,
+      "norm_label": "time"
+    },
+    {
+      "label": "RecoveredPosition",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L46",
+      "_origin": "ast",
+      "id": "paperpersist_recoveredposition",
+      "community": 12,
+      "norm_label": "recoveredposition"
+    },
+    {
+      "label": "RecoveryReport",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L62",
+      "_origin": "ast",
+      "id": "paperpersist_recoveryreport",
+      "community": 12,
+      "norm_label": "recoveryreport"
+    },
+    {
+      "label": "Duration",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L70",
+      "_origin": "ast",
+      "id": "duration",
+      "community": 9,
+      "norm_label": "duration"
+    },
+    {
+      "label": "Recover()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_recover",
+      "community": 12,
+      "norm_label": "recover()"
+    },
+    {
+      "label": "Context",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "_origin": "ast",
+      "id": "engine_internal_paperpersist_recovery_go_context",
+      "community": 12,
+      "norm_label": "context"
+    },
+    {
+      "label": "MongoManager",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "_origin": "ast",
+      "id": "engine_internal_paperpersist_recovery_go_mongomanager",
+      "community": 12,
+      "norm_label": "mongomanager"
+    },
+    {
+      "label": "recoverAccountState()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L160",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_recoveraccountstate",
+      "community": 12,
+      "norm_label": "recoveraccountstate()"
+    },
+    {
+      "label": "recoverOpenPositions()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L200",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_recoveropenpositions",
+      "community": 12,
+      "norm_label": "recoveropenpositions()"
+    },
+    {
+      "label": "logReport()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L253",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_logreport",
+      "community": 12,
+      "norm_label": "logreport()"
+    },
+    {
+      "label": "getFloat()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L287",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_getfloat",
+      "community": 12,
+      "norm_label": "getfloat()"
+    },
+    {
+      "label": "M",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L287",
+      "_origin": "ast",
+      "id": "m",
+      "community": 12,
+      "norm_label": "m"
+    },
+    {
+      "label": "getInt()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L303",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_getint",
+      "community": 12,
+      "norm_label": "getint()"
+    },
+    {
+      "label": "getString()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L317",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_getstring",
+      "community": 12,
+      "norm_label": "getstring()"
+    },
+    {
+      "label": "getTime()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L329",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_gettime",
+      "community": 12,
+      "norm_label": "gettime()"
+    },
+    {
+      "label": "applyRecoveredProtection()",
+      "file_type": "code",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L340",
+      "_origin": "ast",
+      "id": "paperpersist_recovery_applyrecoveredprotection",
+      "community": 12,
+      "norm_label": "applyrecoveredprotection()"
+    },
+    {
       "label": "indicators.go",
       "file_type": "code",
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_indicators",
       "community": 8,
-      "norm_label": "indicators.go"
+      "norm_label": "indicators.go",
+      "id": "scalpers_indicators"
     },
     {
       "label": "EMA()",
@@ -19,9 +249,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L9",
       "_origin": "ast",
-      "id": "scalpers_indicators_ema",
       "community": 8,
-      "norm_label": "ema()"
+      "norm_label": "ema()",
+      "id": "scalpers_indicators_ema"
     },
     {
       "label": "Candle",
@@ -29,9 +259,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L9",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_indicators_go_candle",
       "community": 8,
-      "norm_label": "candle"
+      "norm_label": "candle",
+      "id": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "label": "EMASlice()",
@@ -39,9 +269,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "scalpers_indicators_emaslice",
       "community": 8,
-      "norm_label": "emaslice()"
+      "norm_label": "emaslice()",
+      "id": "scalpers_indicators_emaslice"
     },
     {
       "label": "RSI()",
@@ -49,9 +279,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L38",
       "_origin": "ast",
-      "id": "scalpers_indicators_rsi",
       "community": 8,
-      "norm_label": "rsi()"
+      "norm_label": "rsi()",
+      "id": "scalpers_indicators_rsi"
     },
     {
       "label": "ATR()",
@@ -59,9 +289,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L64",
       "_origin": "ast",
-      "id": "scalpers_indicators_atr",
       "community": 8,
-      "norm_label": "atr()"
+      "norm_label": "atr()",
+      "id": "scalpers_indicators_atr"
     },
     {
       "label": "BollingerBands",
@@ -69,9 +299,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "scalpers_bollingerbands",
       "community": 8,
-      "norm_label": "bollingerbands"
+      "norm_label": "bollingerbands",
+      "id": "scalpers_bollingerbands"
     },
     {
       "label": "BB()",
@@ -79,9 +309,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L90",
       "_origin": "ast",
-      "id": "scalpers_indicators_bb",
       "community": 8,
-      "norm_label": "bb()"
+      "norm_label": "bb()",
+      "id": "scalpers_indicators_bb"
     },
     {
       "label": "BBWidthPercentile()",
@@ -89,9 +319,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L117",
       "_origin": "ast",
-      "id": "scalpers_indicators_bbwidthpercentile",
       "community": 8,
-      "norm_label": "bbwidthpercentile()"
+      "norm_label": "bbwidthpercentile()",
+      "id": "scalpers_indicators_bbwidthpercentile"
     },
     {
       "label": "MACDResult",
@@ -99,9 +329,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L138",
       "_origin": "ast",
-      "id": "scalpers_macdresult",
       "community": 8,
-      "norm_label": "macdresult"
+      "norm_label": "macdresult",
+      "id": "scalpers_macdresult"
     },
     {
       "label": "emaOfFloats()",
@@ -109,9 +339,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L146",
       "_origin": "ast",
-      "id": "scalpers_indicators_emaoffloats",
       "community": 8,
-      "norm_label": "emaoffloats()"
+      "norm_label": "emaoffloats()",
+      "id": "scalpers_indicators_emaoffloats"
     },
     {
       "label": "MACD()",
@@ -119,9 +349,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L160",
       "_origin": "ast",
-      "id": "scalpers_indicators_macd",
       "community": 8,
-      "norm_label": "macd()"
+      "norm_label": "macd()",
+      "id": "scalpers_indicators_macd"
     },
     {
       "label": "ADX()",
@@ -129,9 +359,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L190",
       "_origin": "ast",
-      "id": "scalpers_indicators_adx",
       "community": 8,
-      "norm_label": "adx()"
+      "norm_label": "adx()",
+      "id": "scalpers_indicators_adx"
     },
     {
       "label": "smoothed()",
@@ -139,9 +369,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L232",
       "_origin": "ast",
-      "id": "scalpers_indicators_smoothed",
       "community": 8,
-      "norm_label": "smoothed()"
+      "norm_label": "smoothed()",
+      "id": "scalpers_indicators_smoothed"
     },
     {
       "label": "VWAP()",
@@ -149,9 +379,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L248",
       "_origin": "ast",
-      "id": "scalpers_indicators_vwap",
       "community": 8,
-      "norm_label": "vwap()"
+      "norm_label": "vwap()",
+      "id": "scalpers_indicators_vwap"
     },
     {
       "label": "AvgVolume()",
@@ -159,9 +389,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L264",
       "_origin": "ast",
-      "id": "scalpers_indicators_avgvolume",
       "community": 11,
-      "norm_label": "avgvolume()"
+      "norm_label": "avgvolume()",
+      "id": "scalpers_indicators_avgvolume"
     },
     {
       "label": "SwingHigh()",
@@ -169,9 +399,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L279",
       "_origin": "ast",
-      "id": "scalpers_indicators_swinghigh",
-      "community": 7,
-      "norm_label": "swinghigh()"
+      "community": 8,
+      "norm_label": "swinghigh()",
+      "id": "scalpers_indicators_swinghigh"
     },
     {
       "label": "SwingLow()",
@@ -179,9 +409,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L294",
       "_origin": "ast",
-      "id": "scalpers_indicators_swinglow",
       "community": 7,
-      "norm_label": "swinglow()"
+      "norm_label": "swinglow()",
+      "id": "scalpers_indicators_swinglow"
     },
     {
       "label": "CVDDivergesBearish()",
@@ -189,9 +419,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L311",
       "_origin": "ast",
-      "id": "scalpers_indicators_cvddivergesbearish",
       "community": 8,
-      "norm_label": "cvddivergesbearish()"
+      "norm_label": "cvddivergesbearish()",
+      "id": "scalpers_indicators_cvddivergesbearish"
     },
     {
       "label": "CVDDivergesBullish()",
@@ -199,9 +429,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L316",
       "_origin": "ast",
-      "id": "scalpers_indicators_cvddivergesbullish",
       "community": 8,
-      "norm_label": "cvddivergesbullish()"
+      "norm_label": "cvddivergesbullish()",
+      "id": "scalpers_indicators_cvddivergesbullish"
     },
     {
       "label": "s3_liquidity_sweep_reversal.go",
@@ -209,9 +439,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s3_liquidity_sweep_reversal",
       "community": 7,
-      "norm_label": "s3_liquidity_sweep_reversal.go"
+      "norm_label": "s3_liquidity_sweep_reversal.go",
+      "id": "scalpers_s3_liquidity_sweep_reversal"
     },
     {
       "label": "sweepCVDBearishDiv()",
@@ -219,9 +449,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L10",
       "_origin": "ast",
-      "id": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv",
       "community": 7,
-      "norm_label": "sweepcvdbearishdiv()"
+      "norm_label": "sweepcvdbearishdiv()",
+      "id": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv"
     },
     {
       "label": "MarketContext",
@@ -229,9 +459,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L10",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext",
       "community": 7,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext"
     },
     {
       "label": "sweepCVDBullishDiv()",
@@ -239,9 +469,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L20",
       "_origin": "ast",
-      "id": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv",
       "community": 7,
-      "norm_label": "sweepcvdbullishdiv()"
+      "norm_label": "sweepcvdbullishdiv()",
+      "id": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv"
     },
     {
       "label": "LiquiditySweepReversal",
@@ -249,9 +479,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L36",
       "_origin": "ast",
-      "id": "scalpers_liquiditysweepreversal",
       "community": 7,
-      "norm_label": "liquiditysweepreversal"
+      "norm_label": "liquiditysweepreversal",
+      "id": "scalpers_liquiditysweepreversal"
     },
     {
       "label": ".Name()",
@@ -259,9 +489,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L38",
       "_origin": "ast",
-      "id": "scalpers_liquiditysweepreversal_name",
       "community": 7,
-      "norm_label": ".name()"
+      "norm_label": ".name()",
+      "id": "scalpers_liquiditysweepreversal_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -269,9 +499,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L40",
       "_origin": "ast",
-      "id": "scalpers_liquiditysweepreversal_validregimes",
       "community": 7,
-      "norm_label": ".validregimes()"
+      "norm_label": ".validregimes()",
+      "id": "scalpers_liquiditysweepreversal_validregimes"
     },
     {
       "label": "Regime",
@@ -279,9 +509,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L40",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_regime",
       "community": 7,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_regime"
     },
     {
       "label": ".Evaluate()",
@@ -289,9 +519,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L44",
       "_origin": "ast",
-      "id": "scalpers_liquiditysweepreversal_evaluate",
       "community": 7,
-      "norm_label": ".evaluate()"
+      "norm_label": ".evaluate()",
+      "id": "scalpers_liquiditysweepreversal_evaluate"
     },
     {
       "label": "Signal",
@@ -299,9 +529,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L44",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_signal",
       "community": 7,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_signal"
     },
     {
       "label": "s5_vwap_institutional_fade.go",
@@ -309,9 +539,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s5_vwap_institutional_fade",
       "community": 8,
-      "norm_label": "s5_vwap_institutional_fade.go"
+      "norm_label": "s5_vwap_institutional_fade.go",
+      "id": "scalpers_s5_vwap_institutional_fade"
     },
     {
       "label": "VWAPInstitutionalFade",
@@ -319,9 +549,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L19",
       "_origin": "ast",
-      "id": "scalpers_vwapinstitutionalfade",
       "community": 8,
-      "norm_label": "vwapinstitutionalfade"
+      "norm_label": "vwapinstitutionalfade",
+      "id": "scalpers_vwapinstitutionalfade"
     },
     {
       "label": ".Name()",
@@ -329,9 +559,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L21",
       "_origin": "ast",
-      "id": "scalpers_vwapinstitutionalfade_name",
       "community": 8,
-      "norm_label": ".name()"
+      "norm_label": ".name()",
+      "id": "scalpers_vwapinstitutionalfade_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -339,9 +569,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "scalpers_vwapinstitutionalfade_validregimes",
       "community": 8,
-      "norm_label": ".validregimes()"
+      "norm_label": ".validregimes()",
+      "id": "scalpers_vwapinstitutionalfade_validregimes"
     },
     {
       "label": "Regime",
@@ -349,9 +579,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_regime",
       "community": 8,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_regime"
     },
     {
       "label": ".Evaluate()",
@@ -359,9 +589,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L27",
       "_origin": "ast",
-      "id": "scalpers_vwapinstitutionalfade_evaluate",
       "community": 8,
-      "norm_label": ".evaluate()"
+      "norm_label": ".evaluate()",
+      "id": "scalpers_vwapinstitutionalfade_evaluate"
     },
     {
       "label": "MarketContext",
@@ -369,9 +599,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L27",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_marketcontext",
       "community": 8,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_marketcontext"
     },
     {
       "label": "Signal",
@@ -379,9 +609,9 @@
       "source_file": "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go",
       "source_location": "L27",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_signal",
       "community": 8,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s5_vwap_institutional_fade_go_signal"
     },
     {
       "label": "s6_cvd_divergence_sniper.go",
@@ -389,9 +619,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s6_cvd_divergence_sniper",
       "community": 4,
-      "norm_label": "s6_cvd_divergence_sniper.go"
+      "norm_label": "s6_cvd_divergence_sniper.go",
+      "id": "scalpers_s6_cvd_divergence_sniper"
     },
     {
       "label": "CVDDivergenceSniper",
@@ -399,9 +629,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L18",
       "_origin": "ast",
-      "id": "scalpers_cvddivergencesniper",
       "community": 4,
-      "norm_label": "cvddivergencesniper"
+      "norm_label": "cvddivergencesniper",
+      "id": "scalpers_cvddivergencesniper"
     },
     {
       "label": ".Name()",
@@ -409,9 +639,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L20",
       "_origin": "ast",
-      "id": "scalpers_cvddivergencesniper_name",
       "community": 4,
-      "norm_label": ".name()"
+      "norm_label": ".name()",
+      "id": "scalpers_cvddivergencesniper_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -419,9 +649,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "scalpers_cvddivergencesniper_validregimes",
       "community": 4,
-      "norm_label": ".validregimes()"
+      "norm_label": ".validregimes()",
+      "id": "scalpers_cvddivergencesniper_validregimes"
     },
     {
       "label": "Regime",
@@ -429,9 +659,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_regime",
       "community": 4,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_regime"
     },
     {
       "label": "rollingCVDBearishDiv()",
@@ -439,9 +669,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "scalpers_s6_cvd_divergence_sniper_rollingcvdbearishdiv",
       "community": 4,
-      "norm_label": "rollingcvdbearishdiv()"
+      "norm_label": "rollingcvdbearishdiv()",
+      "id": "scalpers_s6_cvd_divergence_sniper_rollingcvdbearishdiv"
     },
     {
       "label": "Candle",
@@ -449,9 +679,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_candle",
       "community": 4,
-      "norm_label": "candle"
+      "norm_label": "candle",
+      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_candle"
     },
     {
       "label": "rollingCVDBullishDiv()",
@@ -459,9 +689,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L60",
       "_origin": "ast",
-      "id": "scalpers_s6_cvd_divergence_sniper_rollingcvdbullishdiv",
       "community": 4,
-      "norm_label": "rollingcvdbullishdiv()"
+      "norm_label": "rollingcvdbullishdiv()",
+      "id": "scalpers_s6_cvd_divergence_sniper_rollingcvdbullishdiv"
     },
     {
       "label": ".Evaluate()",
@@ -469,9 +699,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L85",
       "_origin": "ast",
-      "id": "scalpers_cvddivergencesniper_evaluate",
       "community": 4,
-      "norm_label": ".evaluate()"
+      "norm_label": ".evaluate()",
+      "id": "scalpers_cvddivergencesniper_evaluate"
     },
     {
       "label": "MarketContext",
@@ -479,9 +709,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L85",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_marketcontext",
       "community": 4,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_marketcontext"
     },
     {
       "label": "Signal",
@@ -489,9 +719,9 @@
       "source_file": "engine/internal/strategy/scalpers/s6_cvd_divergence_sniper.go",
       "source_location": "L85",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_signal",
       "community": 4,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s6_cvd_divergence_sniper_go_signal"
     },
     {
       "label": "s7_opening_range_breakout.go",
@@ -499,9 +729,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s7_opening_range_breakout",
       "community": 11,
-      "norm_label": "s7_opening_range_breakout.go"
+      "norm_label": "s7_opening_range_breakout.go",
+      "id": "scalpers_s7_opening_range_breakout"
     },
     {
       "label": "OpeningRangeBreakout",
@@ -509,9 +739,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "scalpers_openingrangebreakout",
       "community": 11,
-      "norm_label": "openingrangebreakout"
+      "norm_label": "openingrangebreakout",
+      "id": "scalpers_openingrangebreakout"
     },
     {
       "label": "Time",
@@ -519,9 +749,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L28",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time",
       "community": 11,
-      "norm_label": "time"
+      "norm_label": "time",
+      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time"
     },
     {
       "label": ".Name()",
@@ -529,9 +759,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L31",
       "_origin": "ast",
-      "id": "scalpers_openingrangebreakout_name",
       "community": 11,
-      "norm_label": ".name()"
+      "norm_label": ".name()",
+      "id": "scalpers_openingrangebreakout_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -539,9 +769,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L33",
       "_origin": "ast",
-      "id": "scalpers_openingrangebreakout_validregimes",
       "community": 11,
-      "norm_label": ".validregimes()"
+      "norm_label": ".validregimes()",
+      "id": "scalpers_openingrangebreakout_validregimes"
     },
     {
       "label": "Regime",
@@ -549,9 +779,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L33",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_regime",
       "community": 11,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_regime"
     },
     {
       "label": ".Evaluate()",
@@ -559,9 +789,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L37",
       "_origin": "ast",
-      "id": "scalpers_openingrangebreakout_evaluate",
       "community": 11,
-      "norm_label": ".evaluate()"
+      "norm_label": ".evaluate()",
+      "id": "scalpers_openingrangebreakout_evaluate"
     },
     {
       "label": "MarketContext",
@@ -569,9 +799,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L37",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_marketcontext",
       "community": 11,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_marketcontext"
     },
     {
       "label": "Signal",
@@ -579,9 +809,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L37",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_signal",
       "community": 11,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_signal"
     },
     {
       "label": ".buildOR()",
@@ -589,9 +819,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L158",
       "_origin": "ast",
-      "id": "scalpers_openingrangebreakout_buildor",
       "community": 11,
-      "norm_label": ".buildor()"
+      "norm_label": ".buildor()",
+      "id": "scalpers_openingrangebreakout_buildor"
     },
     {
       "label": "Candle",
@@ -599,9 +829,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L158",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_candle",
       "community": 11,
-      "norm_label": "candle"
+      "norm_label": "candle",
+      "id": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_candle"
     },
     {
       "label": "s8_funding_rate_fade.go",
@@ -609,9 +839,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s8_funding_rate_fade",
-      "community": 12,
-      "norm_label": "s8_funding_rate_fade.go"
+      "community": 8,
+      "norm_label": "s8_funding_rate_fade.go",
+      "id": "scalpers_s8_funding_rate_fade"
     },
     {
       "label": "FundingRateFade",
@@ -619,9 +849,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L21",
       "_origin": "ast",
-      "id": "scalpers_fundingratefade",
-      "community": 12,
-      "norm_label": "fundingratefade"
+      "community": 8,
+      "norm_label": "fundingratefade",
+      "id": "scalpers_fundingratefade"
     },
     {
       "label": ".Name()",
@@ -629,9 +859,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "scalpers_fundingratefade_name",
-      "community": 12,
-      "norm_label": ".name()"
+      "community": 8,
+      "norm_label": ".name()",
+      "id": "scalpers_fundingratefade_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -639,9 +869,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L25",
       "_origin": "ast",
-      "id": "scalpers_fundingratefade_validregimes",
-      "community": 12,
-      "norm_label": ".validregimes()"
+      "community": 8,
+      "norm_label": ".validregimes()",
+      "id": "scalpers_fundingratefade_validregimes"
     },
     {
       "label": "Regime",
@@ -649,9 +879,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L25",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_regime",
-      "community": 12,
-      "norm_label": "regime"
+      "community": 8,
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_regime"
     },
     {
       "label": ".Evaluate()",
@@ -659,9 +889,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "scalpers_fundingratefade_evaluate",
-      "community": 12,
-      "norm_label": ".evaluate()"
+      "community": 8,
+      "norm_label": ".evaluate()",
+      "id": "scalpers_fundingratefade_evaluate"
     },
     {
       "label": "MarketContext",
@@ -669,9 +899,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_marketcontext",
-      "community": 12,
-      "norm_label": "marketcontext"
+      "community": 8,
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_marketcontext"
     },
     {
       "label": "Signal",
@@ -679,9 +909,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_signal",
-      "community": 12,
-      "norm_label": "signal"
+      "community": 8,
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_signal"
     },
     {
       "label": "abs64()",
@@ -689,9 +919,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L128",
       "_origin": "ast",
-      "id": "scalpers_s8_funding_rate_fade_abs64",
-      "community": 12,
-      "norm_label": "abs64()"
+      "community": 8,
+      "norm_label": "abs64()",
+      "id": "scalpers_s8_funding_rate_fade_abs64"
     },
     {
       "label": "s9_oi_divergence.go",
@@ -699,9 +929,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_s9_oi_divergence",
       "community": 8,
-      "norm_label": "s9_oi_divergence.go"
+      "norm_label": "s9_oi_divergence.go",
+      "id": "scalpers_s9_oi_divergence"
     },
     {
       "label": "OIDivergence",
@@ -709,9 +939,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L21",
       "_origin": "ast",
-      "id": "scalpers_oidivergence",
       "community": 8,
-      "norm_label": "oidivergence"
+      "norm_label": "oidivergence",
+      "id": "scalpers_oidivergence"
     },
     {
       "label": ".Name()",
@@ -719,9 +949,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "scalpers_oidivergence_name",
       "community": 8,
-      "norm_label": ".name()"
+      "norm_label": ".name()",
+      "id": "scalpers_oidivergence_name"
     },
     {
       "label": ".ValidRegimes()",
@@ -729,9 +959,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L25",
       "_origin": "ast",
-      "id": "scalpers_oidivergence_validregimes",
       "community": 8,
-      "norm_label": ".validregimes()"
+      "norm_label": ".validregimes()",
+      "id": "scalpers_oidivergence_validregimes"
     },
     {
       "label": "Regime",
@@ -739,9 +969,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L25",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_regime",
       "community": 8,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_regime"
     },
     {
       "label": ".Evaluate()",
@@ -749,9 +979,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "scalpers_oidivergence_evaluate",
       "community": 8,
-      "norm_label": ".evaluate()"
+      "norm_label": ".evaluate()",
+      "id": "scalpers_oidivergence_evaluate"
     },
     {
       "label": "MarketContext",
@@ -759,9 +989,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_marketcontext",
       "community": 8,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_marketcontext"
     },
     {
       "label": "Signal",
@@ -769,9 +999,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L29",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_signal",
       "community": 8,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_strategy_scalpers_s9_oi_divergence_go_signal"
     },
     {
       "label": "types.go",
@@ -779,9 +1009,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "scalpers_types",
       "community": 3,
-      "norm_label": "types.go"
+      "norm_label": "types.go",
+      "id": "scalpers_types"
     },
     {
       "label": "Regime",
@@ -789,9 +1019,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L6",
       "_origin": "ast",
-      "id": "scalpers_regime",
       "community": 3,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "scalpers_regime"
     },
     {
       "label": "Direction",
@@ -799,9 +1029,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L16",
       "_origin": "ast",
-      "id": "scalpers_direction",
       "community": 3,
-      "norm_label": "direction"
+      "norm_label": "direction",
+      "id": "scalpers_direction"
     },
     {
       "label": "Candle",
@@ -809,9 +1039,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L25",
       "_origin": "ast",
-      "id": "scalpers_candle",
       "community": 3,
-      "norm_label": "candle"
+      "norm_label": "candle",
+      "id": "scalpers_candle"
     },
     {
       "label": "Time",
@@ -819,9 +1049,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L26",
       "_origin": "ast",
-      "id": "engine_internal_strategy_scalpers_types_go_time",
       "community": 3,
-      "norm_label": "time"
+      "norm_label": "time",
+      "id": "engine_internal_strategy_scalpers_types_go_time"
     },
     {
       "label": "OrderBookSnapshot",
@@ -829,9 +1059,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L35",
       "_origin": "ast",
-      "id": "scalpers_orderbooksnapshot",
       "community": 3,
-      "norm_label": "orderbooksnapshot"
+      "norm_label": "orderbooksnapshot",
+      "id": "scalpers_orderbooksnapshot"
     },
     {
       "label": ".IsPopulated()",
@@ -839,9 +1069,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L46",
       "_origin": "ast",
-      "id": "scalpers_orderbooksnapshot_ispopulated",
       "community": 3,
-      "norm_label": ".ispopulated()"
+      "norm_label": ".ispopulated()",
+      "id": "scalpers_orderbooksnapshot_ispopulated"
     },
     {
       "label": "MarketContext",
@@ -849,9 +1079,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L52",
       "_origin": "ast",
-      "id": "scalpers_marketcontext",
       "community": 3,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "scalpers_marketcontext"
     },
     {
       "label": "Signal",
@@ -859,9 +1089,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L86",
       "_origin": "ast",
-      "id": "scalpers_signal",
       "community": 3,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "scalpers_signal"
     },
     {
       "label": "NoSignal()",
@@ -869,9 +1099,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L98",
       "_origin": "ast",
-      "id": "scalpers_types_nosignal",
       "community": 3,
-      "norm_label": "nosignal()"
+      "norm_label": "nosignal()",
+      "id": "scalpers_types_nosignal"
     },
     {
       "label": "Strategy",
@@ -879,9 +1109,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L107",
       "_origin": "ast",
-      "id": "scalpers_strategy",
       "community": 3,
-      "norm_label": "strategy"
+      "norm_label": "strategy",
+      "id": "scalpers_strategy"
     },
     {
       "label": "RegistryEntry",
@@ -889,9 +1119,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L114",
       "_origin": "ast",
-      "id": "scalpers_registryentry",
       "community": 3,
-      "norm_label": "registryentry"
+      "norm_label": "registryentry",
+      "id": "scalpers_registryentry"
     },
     {
       "label": "Performance",
@@ -899,9 +1129,9 @@
       "source_file": "engine/internal/strategy/scalpers/types.go",
       "source_location": "L124",
       "_origin": "ast",
-      "id": "scalpers_performance",
       "community": 3,
-      "norm_label": "performance"
+      "norm_label": "performance",
+      "id": "scalpers_performance"
     },
     {
       "label": "scalers_eval.go",
@@ -909,9 +1139,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "trading_scalers_eval",
       "community": 9,
-      "norm_label": "scalers_eval.go"
+      "norm_label": "scalers_eval.go",
+      "id": "trading_scalers_eval"
     },
     {
       "label": "ScalerBundle",
@@ -919,9 +1149,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L32",
       "_origin": "ast",
-      "id": "trading_scalerbundle",
       "community": 10,
-      "norm_label": "scalerbundle"
+      "norm_label": "scalerbundle",
+      "id": "trading_scalerbundle"
     },
     {
       "label": "Mutex",
@@ -929,9 +1159,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L33",
       "_origin": "ast",
-      "id": "mutex",
       "community": 10,
-      "norm_label": "mutex"
+      "norm_label": "mutex",
+      "id": "mutex"
     },
     {
       "label": "Candle",
@@ -939,9 +1169,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L35",
       "_origin": "ast",
-      "id": "engine_internal_trading_scalers_eval_go_candle",
       "community": 2,
-      "norm_label": "candle"
+      "norm_label": "candle",
+      "id": "engine_internal_trading_scalers_eval_go_candle"
     },
     {
       "label": "OrderBookSnapshot",
@@ -949,9 +1179,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L62",
       "_origin": "ast",
-      "id": "orderbooksnapshot",
       "community": 10,
-      "norm_label": "orderbooksnapshot"
+      "norm_label": "orderbooksnapshot",
+      "id": "orderbooksnapshot"
     },
     {
       "label": "RegistryEntry",
@@ -959,9 +1189,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L65",
       "_origin": "ast",
-      "id": "registryentry",
       "community": 10,
-      "norm_label": "registryentry"
+      "norm_label": "registryentry",
+      "id": "registryentry"
     },
     {
       "label": "Time",
@@ -969,9 +1199,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L69",
       "_origin": "ast",
-      "id": "engine_internal_trading_scalers_eval_go_time",
       "community": 10,
-      "norm_label": "time"
+      "norm_label": "time",
+      "id": "engine_internal_trading_scalers_eval_go_time"
     },
     {
       "label": "ScalersSignalSnapshot",
@@ -979,9 +1209,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L73",
       "_origin": "ast",
-      "id": "scalerssignalsnapshot",
       "community": 10,
-      "norm_label": "scalerssignalsnapshot"
+      "norm_label": "scalerssignalsnapshot",
+      "id": "scalerssignalsnapshot"
     },
     {
       "label": "RWMutex",
@@ -989,9 +1219,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "rwmutex",
       "community": 10,
-      "norm_label": "rwmutex"
+      "norm_label": "rwmutex",
+      "id": "rwmutex"
     },
     {
       "label": "newScalerBundle()",
@@ -999,9 +1229,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L92",
       "_origin": "ast",
-      "id": "trading_scalers_eval_newscalerbundle",
       "community": 9,
-      "norm_label": "newscalerbundle()"
+      "norm_label": "newscalerbundle()",
+      "id": "trading_scalers_eval_newscalerbundle"
     },
     {
       "label": ".WarmupFromHistory()",
@@ -1009,9 +1239,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L112",
       "_origin": "ast",
-      "id": "trading_scalerbundle_warmupfromhistory",
       "community": 2,
-      "norm_label": ".warmupfromhistory()"
+      "norm_label": ".warmupfromhistory()",
+      "id": "trading_scalerbundle_warmupfromhistory"
     },
     {
       "label": ".Push1mCandle()",
@@ -1019,9 +1249,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L154",
       "_origin": "ast",
-      "id": "trading_scalerbundle_push1mcandle",
       "community": 2,
-      "norm_label": ".push1mcandle()"
+      "norm_label": ".push1mcandle()",
+      "id": "trading_scalerbundle_push1mcandle"
     },
     {
       "label": ".Push5mCandle()",
@@ -1029,9 +1259,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L160",
       "_origin": "ast",
-      "id": "trading_scalerbundle_push5mcandle",
       "community": 2,
-      "norm_label": ".push5mcandle()"
+      "norm_label": ".push5mcandle()",
+      "id": "trading_scalerbundle_push5mcandle"
     },
     {
       "label": ".Push15mCandle()",
@@ -1039,9 +1269,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L166",
       "_origin": "ast",
-      "id": "trading_scalerbundle_push15mcandle",
       "community": 2,
-      "norm_label": ".push15mcandle()"
+      "norm_label": ".push15mcandle()",
+      "id": "trading_scalerbundle_push15mcandle"
     },
     {
       "label": ".Push1hCandle()",
@@ -1049,9 +1279,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L172",
       "_origin": "ast",
-      "id": "trading_scalerbundle_push1hcandle",
       "community": 2,
-      "norm_label": ".push1hcandle()"
+      "norm_label": ".push1hcandle()",
+      "id": "trading_scalerbundle_push1hcandle"
     },
     {
       "label": ".UpdateCVD()",
@@ -1059,9 +1289,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L188",
       "_origin": "ast",
-      "id": "trading_scalerbundle_updatecvd",
       "community": 1,
-      "norm_label": ".updatecvd()"
+      "norm_label": ".updatecvd()",
+      "id": "trading_scalerbundle_updatecvd"
     },
     {
       "label": "Tick",
@@ -1069,9 +1299,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L188",
       "_origin": "ast",
-      "id": "tick",
       "community": 1,
-      "norm_label": "tick"
+      "norm_label": "tick",
+      "id": "tick"
     },
     {
       "label": ".UpdateFundingRate()",
@@ -1079,9 +1309,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L209",
       "_origin": "ast",
-      "id": "trading_scalerbundle_updatefundingrate",
       "community": 1,
-      "norm_label": ".updatefundingrate()"
+      "norm_label": ".updatefundingrate()",
+      "id": "trading_scalerbundle_updatefundingrate"
     },
     {
       "label": ".UpdateOI()",
@@ -1089,9 +1319,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L220",
       "_origin": "ast",
-      "id": "trading_scalerbundle_updateoi",
       "community": 1,
-      "norm_label": ".updateoi()"
+      "norm_label": ".updateoi()",
+      "id": "trading_scalerbundle_updateoi"
     },
     {
       "label": ".UpdateOrderBook()",
@@ -1099,9 +1329,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L230",
       "_origin": "ast",
-      "id": "trading_scalerbundle_updateorderbook",
       "community": 1,
-      "norm_label": ".updateorderbook()"
+      "norm_label": ".updateorderbook()",
+      "id": "trading_scalerbundle_updateorderbook"
     },
     {
       "label": ".buildContextLocked()",
@@ -1109,9 +1339,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L247",
       "_origin": "ast",
-      "id": "trading_scalerbundle_buildcontextlocked",
       "community": 10,
-      "norm_label": ".buildcontextlocked()"
+      "norm_label": ".buildcontextlocked()",
+      "id": "trading_scalerbundle_buildcontextlocked"
     },
     {
       "label": "Regime",
@@ -1119,9 +1349,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L247",
       "_origin": "ast",
-      "id": "engine_internal_trading_scalers_eval_go_regime",
       "community": 13,
-      "norm_label": "regime"
+      "norm_label": "regime",
+      "id": "engine_internal_trading_scalers_eval_go_regime"
     },
     {
       "label": "MarketContext",
@@ -1129,9 +1359,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L247",
       "_origin": "ast",
-      "id": "engine_internal_trading_scalers_eval_go_marketcontext",
       "community": 10,
-      "norm_label": "marketcontext"
+      "norm_label": "marketcontext",
+      "id": "engine_internal_trading_scalers_eval_go_marketcontext"
     },
     {
       "label": "Orchestrator",
@@ -1139,9 +1369,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L309",
       "_origin": "ast",
-      "id": "trading_orchestrator",
       "community": 13,
-      "norm_label": "orchestrator"
+      "norm_label": "orchestrator",
+      "id": "trading_orchestrator"
     },
     {
       "label": ".evalAndExecuteScalers()",
@@ -1149,9 +1379,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L309",
       "_origin": "ast",
-      "id": "trading_orchestrator_evalandexecutescalers",
       "community": 1,
-      "norm_label": ".evalandexecutescalers()"
+      "norm_label": ".evalandexecutescalers()",
+      "id": "trading_orchestrator_evalandexecutescalers"
     },
     {
       "label": "Context",
@@ -1159,9 +1389,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L309",
       "_origin": "ast",
-      "id": "context",
       "community": 1,
-      "norm_label": "context"
+      "norm_label": "context",
+      "id": "context"
     },
     {
       "label": "scalerStrategyCooldown()",
@@ -1169,19 +1399,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L491",
       "_origin": "ast",
-      "id": "trading_scalers_eval_scalerstrategycooldown",
       "community": 9,
-      "norm_label": "scalerstrategycooldown()"
-    },
-    {
-      "label": "Duration",
-      "file_type": "code",
-      "source_file": "engine/internal/trading/scalers_eval.go",
-      "source_location": "L491",
-      "_origin": "ast",
-      "id": "duration",
-      "community": 9,
-      "norm_label": "duration"
+      "norm_label": "scalerstrategycooldown()",
+      "id": "trading_scalers_eval_scalerstrategycooldown"
     },
     {
       "label": "containsAny()",
@@ -1189,9 +1409,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L507",
       "_origin": "ast",
-      "id": "trading_scalers_eval_containsany",
       "community": 9,
-      "norm_label": "containsany()"
+      "norm_label": "containsany()",
+      "id": "trading_scalers_eval_containsany"
     },
     {
       "label": ".isStrategyOnCooldown()",
@@ -1199,9 +1419,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L521",
       "_origin": "ast",
-      "id": "trading_scalerbundle_isstrategyoncooldown",
       "community": 9,
-      "norm_label": ".isstrategyoncooldown()"
+      "norm_label": ".isstrategyoncooldown()",
+      "id": "trading_scalerbundle_isstrategyoncooldown"
     },
     {
       "label": ".recordStrategySignal()",
@@ -1209,9 +1429,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L532",
       "_origin": "ast",
-      "id": "trading_scalerbundle_recordstrategysignal",
       "community": 1,
-      "norm_label": ".recordstrategysignal()"
+      "norm_label": ".recordstrategysignal()",
+      "id": "trading_scalerbundle_recordstrategysignal"
     },
     {
       "label": ".canOpenDirectionScaler()",
@@ -1219,9 +1439,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L539",
       "_origin": "ast",
-      "id": "trading_scalerbundle_canopendirectionscaler",
       "community": 1,
-      "norm_label": ".canopendirectionscaler()"
+      "norm_label": ".canopendirectionscaler()",
+      "id": "trading_scalerbundle_canopendirectionscaler"
     },
     {
       "label": ".onScalerTradeOpen()",
@@ -1229,9 +1449,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L549",
       "_origin": "ast",
-      "id": "trading_scalerbundle_onscalertradeopen",
       "community": 1,
-      "norm_label": ".onscalertradeopen()"
+      "norm_label": ".onscalertradeopen()",
+      "id": "trading_scalerbundle_onscalertradeopen"
     },
     {
       "label": ".onScalerTradeClose()",
@@ -1239,9 +1459,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L560",
       "_origin": "ast",
-      "id": "trading_scalerbundle_onscalertradeclose",
       "community": 10,
-      "norm_label": ".onscalertradeclose()"
+      "norm_label": ".onscalertradeclose()",
+      "id": "trading_scalerbundle_onscalertradeclose"
     },
     {
       "label": ".GetCVD()",
@@ -1249,9 +1469,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L575",
       "_origin": "ast",
-      "id": "trading_scalerbundle_getcvd",
       "community": 13,
-      "norm_label": ".getcvd()"
+      "norm_label": ".getcvd()",
+      "id": "trading_scalerbundle_getcvd"
     },
     {
       "label": ".GetEvalStats()",
@@ -1259,9 +1479,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L583",
       "_origin": "ast",
-      "id": "trading_scalerbundle_getevalstats",
       "community": 10,
-      "norm_label": ".getevalstats()"
+      "norm_label": ".getevalstats()",
+      "id": "trading_scalerbundle_getevalstats"
     },
     {
       "label": ".GetLastCycleStats()",
@@ -1269,9 +1489,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L592",
       "_origin": "ast",
-      "id": "trading_scalerbundle_getlastcyclestats",
       "community": 10,
-      "norm_label": ".getlastcyclestats()"
+      "norm_label": ".getlastcyclestats()",
+      "id": "trading_scalerbundle_getlastcyclestats"
     },
     {
       "label": "ScalersStrategyStats",
@@ -1279,9 +1499,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L601",
       "_origin": "ast",
-      "id": "trading_scalersstrategystats",
       "community": 9,
-      "norm_label": "scalersstrategystats"
+      "norm_label": "scalersstrategystats",
+      "id": "trading_scalersstrategystats"
     },
     {
       "label": "ScalersSignalSnapshot",
@@ -1289,9 +1509,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L611",
       "_origin": "ast",
-      "id": "trading_scalerssignalsnapshot",
       "community": 9,
-      "norm_label": "scalerssignalsnapshot"
+      "norm_label": "scalerssignalsnapshot",
+      "id": "trading_scalerssignalsnapshot"
     },
     {
       "label": "ScalersSnapshot",
@@ -1299,9 +1519,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L621",
       "_origin": "ast",
-      "id": "trading_scalerssnapshot",
       "community": 9,
-      "norm_label": "scalerssnapshot"
+      "norm_label": "scalerssnapshot",
+      "id": "trading_scalerssnapshot"
     },
     {
       "label": ".GetScalersStats()",
@@ -1309,9 +1529,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L635",
       "_origin": "ast",
-      "id": "trading_orchestrator_getscalersstats",
       "community": 13,
-      "norm_label": ".getscalersstats()"
+      "norm_label": ".getscalersstats()",
+      "id": "trading_orchestrator_getscalersstats"
     },
     {
       "label": "scalerSignalToLegacy()",
@@ -1319,9 +1539,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L723",
       "_origin": "ast",
-      "id": "trading_scalers_eval_scalersignaltolegacy",
       "community": 1,
-      "norm_label": "scalersignaltolegacy()"
+      "norm_label": "scalersignaltolegacy()",
+      "id": "trading_scalers_eval_scalersignaltolegacy"
     },
     {
       "label": "Signal",
@@ -1329,9 +1549,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L723",
       "_origin": "ast",
-      "id": "engine_internal_trading_scalers_eval_go_signal",
       "community": 1,
-      "norm_label": "signal"
+      "norm_label": "signal",
+      "id": "engine_internal_trading_scalers_eval_go_signal"
     },
     {
       "label": "mapToScalersRegime()",
@@ -1339,9 +1559,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L749",
       "_origin": "ast",
-      "id": "trading_scalers_eval_maptoscalersregime",
       "community": 13,
-      "norm_label": "maptoscalersregime()"
+      "norm_label": "maptoscalersregime()",
+      "id": "trading_scalers_eval_maptoscalersregime"
     },
     {
       "label": "mapRegimeClassToScalersRegime()",
@@ -1349,9 +1569,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L764",
       "_origin": "ast",
-      "id": "trading_scalers_eval_mapregimeclasstoscalersregime",
       "community": 13,
-      "norm_label": "mapregimeclasstoscalersregime()"
+      "norm_label": "mapregimeclasstoscalersregime()",
+      "id": "trading_scalers_eval_mapregimeclasstoscalersregime"
     },
     {
       "label": "scalersSignalSnapshots()",
@@ -1359,9 +1579,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L777",
       "_origin": "ast",
-      "id": "trading_scalers_eval_scalerssignalsnapshots",
       "community": 9,
-      "norm_label": "scalerssignalsnapshots()"
+      "norm_label": "scalerssignalsnapshots()",
+      "id": "trading_scalers_eval_scalerssignalsnapshots"
     },
     {
       "label": "AggregatedSignal",
@@ -1369,9 +1589,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L777",
       "_origin": "ast",
-      "id": "aggregatedsignal",
       "community": 9,
-      "norm_label": "aggregatedsignal"
+      "norm_label": "aggregatedsignal",
+      "id": "aggregatedsignal"
     },
     {
       "label": "StrategyPerformance",
@@ -1379,9 +1599,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L797",
       "_origin": "ast",
-      "id": "trading_strategyperformance",
       "community": 13,
-      "norm_label": "strategyperformance"
+      "norm_label": "strategyperformance",
+      "id": "trading_strategyperformance"
     },
     {
       "label": ".StrategyPerformanceSummary()",
@@ -1389,9 +1609,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L811",
       "_origin": "ast",
-      "id": "trading_orchestrator_strategyperformancesummary",
       "community": 13,
-      "norm_label": ".strategyperformancesummary()"
+      "norm_label": ".strategyperformancesummary()",
+      "id": "trading_orchestrator_strategyperformancesummary"
     },
     {
       "label": "aggregate4h()",
@@ -1399,9 +1619,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L879",
       "_origin": "ast",
-      "id": "trading_scalers_eval_aggregate4h",
       "community": 2,
-      "norm_label": "aggregate4h()"
+      "norm_label": "aggregate4h()",
+      "id": "trading_scalers_eval_aggregate4h"
     },
     {
       "label": "mdToScalerCandle()",
@@ -1409,9 +1629,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L903",
       "_origin": "ast",
-      "id": "trading_scalers_eval_mdtoscalercandle",
       "community": 2,
-      "norm_label": "mdtoscalercandle()"
+      "norm_label": "mdtoscalercandle()",
+      "id": "trading_scalers_eval_mdtoscalercandle"
     },
     {
       "label": "tradingSession()",
@@ -1419,9 +1639,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L915",
       "_origin": "ast",
-      "id": "trading_scalers_eval_tradingsession",
       "community": 10,
-      "norm_label": "tradingsession()"
+      "norm_label": "tradingsession()",
+      "id": "trading_scalers_eval_tradingsession"
     },
     {
       "label": "appendCapped()",
@@ -1429,9 +1649,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L928",
       "_origin": "ast",
-      "id": "trading_scalers_eval_appendcapped",
       "community": 2,
-      "norm_label": "appendcapped()"
+      "norm_label": "appendcapped()",
+      "id": "trading_scalers_eval_appendcapped"
     },
     {
       "label": "aggregate5mBars()",
@@ -1439,9 +1659,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L939",
       "_origin": "ast",
-      "id": "trading_scalers_eval_aggregate5mbars",
       "community": 2,
-      "norm_label": "aggregate5mbars()"
+      "norm_label": "aggregate5mbars()",
+      "id": "trading_scalers_eval_aggregate5mbars"
     },
     {
       "label": "max3()",
@@ -1449,9 +1669,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L963",
       "_origin": "ast",
-      "id": "trading_scalers_eval_max3",
       "community": 9,
-      "norm_label": "max3()"
+      "norm_label": "max3()",
+      "id": "trading_scalers_eval_max3"
     },
     {
       "label": "min3()",
@@ -1459,9 +1679,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L974",
       "_origin": "ast",
-      "id": "trading_scalers_eval_min3",
       "community": 9,
-      "norm_label": "min3()"
+      "norm_label": "min3()",
+      "id": "trading_scalers_eval_min3"
     },
     {
       "label": "sanitizeScalerSignal()",
@@ -1469,9 +1689,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L985",
       "_origin": "ast",
-      "id": "trading_scalers_eval_sanitizescalersignal",
       "community": 1,
-      "norm_label": "sanitizescalersignal()"
+      "norm_label": "sanitizescalersignal()",
+      "id": "trading_scalers_eval_sanitizescalersignal"
     },
     {
       "label": "main.go",
@@ -1998,12 +2218,593 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "weight": 1.0,
+      "source": "paperpersist_journal_bootstrap",
+      "target": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "engine_internal_paperpersist_journal_bootstrap_go_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "engine_internal_paperpersist_journal_bootstrap_go_mongomanager",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L60",
+      "weight": 1.0,
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "paperpersist_recovery_getfloat"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "paperpersist_recovery_getstring"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L68",
+      "weight": 1.0,
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "paperpersist_recovery_gettime"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/journal_bootstrap.go",
+      "source_location": "L21",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_journal_bootstrap_bootstrapjournalfrommongo",
+      "target": "tradejournal",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recoveredaccountstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L46",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recoveredposition",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L340",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_applyrecoveredprotection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L287",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_getfloat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L303",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_getint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L317",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_getstring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L329",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_gettime",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L253",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_logreport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_recover",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_recoveraccountstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L200",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recovery_recoveropenpositions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L62",
+      "weight": 1.0,
+      "source": "paperpersist_recovery",
+      "target": "paperpersist_recoveryreport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L42",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveredaccountstate",
+      "target": "time",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L160",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "paperpersist_recoveredaccountstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L69",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveryreport",
+      "target": "paperpersist_recoveredaccountstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L56",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveredposition",
+      "target": "time",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "context": "return_type",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L329",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_gettime",
+      "target": "time",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L81",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveryreport",
+      "target": "time",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L340",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_applyrecoveredprotection",
+      "target": "paperpersist_recoveredposition",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L200",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "paperpersist_recoveredposition",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L74",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveryreport",
+      "target": "paperpersist_recoveredposition",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L253",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_logreport",
+      "target": "paperpersist_recoveryreport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "weight": 1.0,
+      "context": "return_type",
+      "source": "paperpersist_recovery_recover",
+      "target": "paperpersist_recoveryreport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L70",
+      "weight": 1.0,
+      "context": "field",
+      "source": "paperpersist_recoveryreport",
+      "target": "duration",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
+      "source_location": "L160",
+      "weight": 1.0,
+      "source": "scalpers_openingrangebreakout_buildor",
+      "target": "duration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/trading/scalers_eval.go",
+      "source_location": "L521",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "confidence_score": 1.0,
+      "source": "trading_scalerbundle_isstrategyoncooldown",
+      "target": "duration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/trading/scalers_eval.go",
+      "source_location": "L491",
+      "weight": 1.0,
+      "context": "return_type",
+      "confidence_score": 1.0,
+      "source": "trading_scalers_eval_scalerstrategycooldown",
+      "target": "duration"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recover",
+      "target": "engine_internal_paperpersist_recovery_go_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L90",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recover",
+      "target": "engine_internal_paperpersist_recovery_go_mongomanager",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L154",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recover",
+      "target": "paperpersist_recovery_logreport",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recover",
+      "target": "paperpersist_recovery_recoveraccountstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L123",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recover",
+      "target": "paperpersist_recovery_recoveropenpositions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L160",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "engine_internal_paperpersist_recovery_go_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L200",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "engine_internal_paperpersist_recovery_go_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L160",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "engine_internal_paperpersist_recovery_go_mongomanager",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L200",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "engine_internal_paperpersist_recovery_go_mongomanager",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L178",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "paperpersist_recovery_getfloat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L187",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "paperpersist_recovery_getint",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L190",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveraccountstate",
+      "target": "paperpersist_recovery_gettime",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L242",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "paperpersist_recovery_applyrecoveredprotection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L231",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "paperpersist_recovery_getfloat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L226",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "paperpersist_recovery_getstring",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L236",
+      "weight": 1.0,
+      "source": "paperpersist_recovery_recoveropenpositions",
+      "target": "paperpersist_recovery_gettime",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L287",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_getfloat",
+      "target": "m",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L303",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_getint",
+      "target": "m",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L317",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_getstring",
+      "target": "m",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "engine/internal/paperpersist/recovery.go",
+      "source_location": "L329",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "source": "paperpersist_recovery_gettime",
+      "target": "m",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_bollingerbands",
-      "confidence_score": 1.0
+      "target": "scalpers_bollingerbands"
     },
     {
       "relation": "contains",
@@ -2011,9 +2812,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L190",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_adx",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_adx"
     },
     {
       "relation": "contains",
@@ -2021,9 +2822,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_atr",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_atr"
     },
     {
       "relation": "contains",
@@ -2031,9 +2832,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L264",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_avgvolume",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_avgvolume"
     },
     {
       "relation": "contains",
@@ -2041,9 +2842,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L90",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_bb",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_bb"
     },
     {
       "relation": "contains",
@@ -2051,9 +2852,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L117",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_bbwidthpercentile",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_bbwidthpercentile"
     },
     {
       "relation": "contains",
@@ -2061,9 +2862,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L311",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_cvddivergesbearish",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_cvddivergesbearish"
     },
     {
       "relation": "contains",
@@ -2071,9 +2872,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L316",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_cvddivergesbullish",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_cvddivergesbullish"
     },
     {
       "relation": "contains",
@@ -2081,9 +2882,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L9",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_ema",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_ema"
     },
     {
       "relation": "contains",
@@ -2091,9 +2892,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L146",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_emaoffloats",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_emaoffloats"
     },
     {
       "relation": "contains",
@@ -2101,9 +2902,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L22",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_emaslice",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_emaslice"
     },
     {
       "relation": "contains",
@@ -2111,9 +2912,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L160",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_macd",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_macd"
     },
     {
       "relation": "contains",
@@ -2121,9 +2922,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L38",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_rsi",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_rsi"
     },
     {
       "relation": "contains",
@@ -2131,9 +2932,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L232",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_smoothed",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_smoothed"
     },
     {
       "relation": "contains",
@@ -2141,9 +2942,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L279",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_swinghigh",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_swinghigh"
     },
     {
       "relation": "contains",
@@ -2151,9 +2952,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L294",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_swinglow",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_swinglow"
     },
     {
       "relation": "contains",
@@ -2161,9 +2962,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L248",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_indicators_vwap",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_vwap"
     },
     {
       "relation": "contains",
@@ -2171,9 +2972,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L138",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators",
-      "target": "scalpers_macdresult",
-      "confidence_score": 1.0
+      "target": "scalpers_macdresult"
     },
     {
       "relation": "calls",
@@ -2193,9 +2994,9 @@
       "source_location": "L9",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_ema",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "calls",
@@ -2204,9 +3005,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L170",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_macd",
-      "target": "scalpers_indicators_ema",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_ema"
     },
     {
       "relation": "calls",
@@ -2226,9 +3027,9 @@
       "source_location": "L190",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_adx",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2237,9 +3038,9 @@
       "source_location": "L64",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_atr",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2248,9 +3049,9 @@
       "source_location": "L264",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_avgvolume",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2259,9 +3060,9 @@
       "source_location": "L90",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_bb",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2270,9 +3071,9 @@
       "source_location": "L117",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_bbwidthpercentile",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2281,9 +3082,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_emaslice",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2292,9 +3093,9 @@
       "source_location": "L160",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_macd",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2303,9 +3104,9 @@
       "source_location": "L38",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_rsi",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2314,9 +3115,9 @@
       "source_location": "L279",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_swinghigh",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2325,9 +3126,9 @@
       "source_location": "L294",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_swinglow",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "references",
@@ -2336,9 +3137,9 @@
       "source_location": "L248",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_vwap",
-      "target": "engine_internal_strategy_scalpers_indicators_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_indicators_go_candle"
     },
     {
       "relation": "calls",
@@ -2446,9 +3247,9 @@
       "source_location": "L90",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_bb",
-      "target": "scalpers_bollingerbands",
-      "confidence_score": 1.0
+      "target": "scalpers_bollingerbands"
     },
     {
       "relation": "calls",
@@ -2457,9 +3258,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L121",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_bbwidthpercentile",
-      "target": "scalpers_indicators_bb",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_bb"
     },
     {
       "relation": "references",
@@ -2468,9 +3269,9 @@
       "source_location": "L160",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_macd",
-      "target": "scalpers_macdresult",
-      "confidence_score": 1.0
+      "target": "scalpers_macdresult"
     },
     {
       "relation": "calls",
@@ -2479,9 +3280,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L178",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_macd",
-      "target": "scalpers_indicators_emaoffloats",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_emaoffloats"
     },
     {
       "relation": "calls",
@@ -2501,9 +3302,9 @@
       "source_file": "engine/internal/strategy/scalpers/indicators.go",
       "source_location": "L215",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_indicators_adx",
-      "target": "scalpers_indicators_smoothed",
-      "confidence_score": 1.0
+      "target": "scalpers_indicators_smoothed"
     },
     {
       "relation": "calls",
@@ -2576,9 +3377,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L10",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s3_liquidity_sweep_reversal",
-      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv",
-      "confidence_score": 1.0
+      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv"
     },
     {
       "relation": "contains",
@@ -2586,9 +3387,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L20",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s3_liquidity_sweep_reversal",
-      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv",
-      "confidence_score": 1.0
+      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv"
     },
     {
       "relation": "calls",
@@ -2597,9 +3398,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L82",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_liquiditysweepreversal_evaluate",
-      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv",
-      "confidence_score": 1.0
+      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv"
     },
     {
       "relation": "references",
@@ -2608,9 +3409,9 @@
       "source_location": "L10",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbearishdiv",
-      "target": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext"
     },
     {
       "relation": "references",
@@ -2630,9 +3431,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv",
-      "target": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s3_liquidity_sweep_reversal_go_marketcontext"
     },
     {
       "relation": "calls",
@@ -2641,9 +3442,9 @@
       "source_file": "engine/internal/strategy/scalpers/s3_liquidity_sweep_reversal.go",
       "source_location": "L107",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_liquiditysweepreversal_evaluate",
-      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv",
-      "confidence_score": 1.0
+      "target": "scalpers_s3_liquidity_sweep_reversal_sweepcvdbullishdiv"
     },
     {
       "relation": "method",
@@ -2979,9 +3780,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L24",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s7_opening_range_breakout",
-      "target": "scalpers_openingrangebreakout",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout"
     },
     {
       "relation": "references",
@@ -2990,9 +3791,9 @@
       "source_location": "L28",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time"
     },
     {
       "relation": "method",
@@ -3000,9 +3801,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L158",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout",
-      "target": "scalpers_openingrangebreakout_buildor",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_buildor"
     },
     {
       "relation": "method",
@@ -3010,9 +3811,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L37",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout",
-      "target": "scalpers_openingrangebreakout_evaluate",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_evaluate"
     },
     {
       "relation": "method",
@@ -3020,9 +3821,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L31",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout",
-      "target": "scalpers_openingrangebreakout_name",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_name"
     },
     {
       "relation": "method",
@@ -3030,9 +3831,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L33",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout",
-      "target": "scalpers_openingrangebreakout_validregimes",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_validregimes"
     },
     {
       "relation": "references",
@@ -3041,9 +3842,9 @@
       "source_location": "L158",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_buildor",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_time"
     },
     {
       "relation": "calls",
@@ -3052,9 +3853,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L38",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_evaluate",
-      "target": "scalpers_openingrangebreakout_name",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_name"
     },
     {
       "relation": "references",
@@ -3063,9 +3864,9 @@
       "source_location": "L33",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_validregimes",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_regime",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_regime"
     },
     {
       "relation": "references",
@@ -3074,9 +3875,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_evaluate",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_marketcontext",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_marketcontext"
     },
     {
       "relation": "references",
@@ -3085,9 +3886,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_evaluate",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_signal",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_signal"
     },
     {
       "relation": "calls",
@@ -3096,9 +3897,9 @@
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L69",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_evaluate",
-      "target": "scalpers_openingrangebreakout_buildor",
-      "confidence_score": 1.0
+      "target": "scalpers_openingrangebreakout_buildor"
     },
     {
       "relation": "calls",
@@ -3112,26 +3913,15 @@
       "target": "scalpers_types_nosignal"
     },
     {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "INFERRED",
-      "confidence_score": 0.8,
-      "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
-      "source_location": "L160",
-      "weight": 1.0,
-      "source": "scalpers_openingrangebreakout_buildor",
-      "target": "duration"
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "engine/internal/strategy/scalpers/s7_opening_range_breakout.go",
       "source_location": "L158",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_openingrangebreakout_buildor",
-      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_candle",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s7_opening_range_breakout_go_candle"
     },
     {
       "relation": "contains",
@@ -3139,9 +3929,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L21",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s8_funding_rate_fade",
-      "target": "scalpers_fundingratefade",
-      "confidence_score": 1.0
+      "target": "scalpers_fundingratefade"
     },
     {
       "relation": "contains",
@@ -3149,9 +3939,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L128",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s8_funding_rate_fade",
-      "target": "scalpers_s8_funding_rate_fade_abs64",
-      "confidence_score": 1.0
+      "target": "scalpers_s8_funding_rate_fade_abs64"
     },
     {
       "relation": "method",
@@ -3159,9 +3949,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L29",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade",
-      "target": "scalpers_fundingratefade_evaluate",
-      "confidence_score": 1.0
+      "target": "scalpers_fundingratefade_evaluate"
     },
     {
       "relation": "method",
@@ -3169,9 +3959,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade",
-      "target": "scalpers_fundingratefade_name",
-      "confidence_score": 1.0
+      "target": "scalpers_fundingratefade_name"
     },
     {
       "relation": "method",
@@ -3179,9 +3969,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L25",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade",
-      "target": "scalpers_fundingratefade_validregimes",
-      "confidence_score": 1.0
+      "target": "scalpers_fundingratefade_validregimes"
     },
     {
       "relation": "calls",
@@ -3190,9 +3980,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L30",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade_evaluate",
-      "target": "scalpers_fundingratefade_name",
-      "confidence_score": 1.0
+      "target": "scalpers_fundingratefade_name"
     },
     {
       "relation": "references",
@@ -3201,9 +3991,9 @@
       "source_location": "L25",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade_validregimes",
-      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_regime",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_regime"
     },
     {
       "relation": "references",
@@ -3212,9 +4002,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade_evaluate",
-      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_marketcontext",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_marketcontext"
     },
     {
       "relation": "references",
@@ -3223,9 +4013,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade_evaluate",
-      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_signal",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s8_funding_rate_fade_go_signal"
     },
     {
       "relation": "calls",
@@ -3234,9 +4024,9 @@
       "source_file": "engine/internal/strategy/scalpers/s8_funding_rate_fade.go",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_fundingratefade_evaluate",
-      "target": "scalpers_s8_funding_rate_fade_abs64",
-      "confidence_score": 1.0
+      "target": "scalpers_s8_funding_rate_fade_abs64"
     },
     {
       "relation": "calls",
@@ -3255,9 +4045,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L21",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_s9_oi_divergence",
-      "target": "scalpers_oidivergence",
-      "confidence_score": 1.0
+      "target": "scalpers_oidivergence"
     },
     {
       "relation": "method",
@@ -3265,9 +4055,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L29",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence",
-      "target": "scalpers_oidivergence_evaluate",
-      "confidence_score": 1.0
+      "target": "scalpers_oidivergence_evaluate"
     },
     {
       "relation": "method",
@@ -3275,9 +4065,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L23",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence",
-      "target": "scalpers_oidivergence_name",
-      "confidence_score": 1.0
+      "target": "scalpers_oidivergence_name"
     },
     {
       "relation": "method",
@@ -3285,9 +4075,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L25",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence",
-      "target": "scalpers_oidivergence_validregimes",
-      "confidence_score": 1.0
+      "target": "scalpers_oidivergence_validregimes"
     },
     {
       "relation": "calls",
@@ -3296,9 +4086,9 @@
       "source_file": "engine/internal/strategy/scalpers/s9_oi_divergence.go",
       "source_location": "L30",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence_evaluate",
-      "target": "scalpers_oidivergence_name",
-      "confidence_score": 1.0
+      "target": "scalpers_oidivergence_name"
     },
     {
       "relation": "references",
@@ -3307,9 +4097,9 @@
       "source_location": "L25",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence_validregimes",
-      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_regime",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_regime"
     },
     {
       "relation": "references",
@@ -3318,9 +4108,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence_evaluate",
-      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_marketcontext",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_marketcontext"
     },
     {
       "relation": "references",
@@ -3329,9 +4119,9 @@
       "source_location": "L29",
       "weight": 1.0,
       "context": "return_type",
+      "confidence_score": 1.0,
       "source": "scalpers_oidivergence_evaluate",
-      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_signal",
-      "confidence_score": 1.0
+      "target": "engine_internal_strategy_scalpers_s9_oi_divergence_go_signal"
     },
     {
       "relation": "calls",
@@ -3632,9 +4422,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L507",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalers_eval",
-      "target": "trading_scalers_eval_containsany",
-      "confidence_score": 1.0
+      "target": "trading_scalers_eval_containsany"
     },
     {
       "relation": "contains",
@@ -3732,9 +4522,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L491",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalers_eval",
-      "target": "trading_scalers_eval_scalerstrategycooldown",
-      "confidence_score": 1.0
+      "target": "trading_scalers_eval_scalerstrategycooldown"
     },
     {
       "relation": "contains",
@@ -3815,9 +4605,9 @@
       "source_location": "L89",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "mutex",
-      "confidence_score": 1.0
+      "target": "mutex"
     },
     {
       "relation": "references",
@@ -3837,9 +4627,9 @@
       "source_location": "L65",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "registryentry",
-      "confidence_score": 1.0
+      "target": "registryentry"
     },
     {
       "relation": "references",
@@ -3848,9 +4638,9 @@
       "source_location": "L82",
       "weight": 1.0,
       "context": "field",
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "rwmutex",
-      "confidence_score": 1.0
+      "target": "rwmutex"
     },
     {
       "relation": "references",
@@ -3879,9 +4669,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L539",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "trading_scalerbundle_canopendirectionscaler",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_canopendirectionscaler"
     },
     {
       "relation": "method",
@@ -3919,9 +4709,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L521",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "trading_scalerbundle_isstrategyoncooldown",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_isstrategyoncooldown"
     },
     {
       "relation": "method",
@@ -3929,9 +4719,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L560",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "trading_scalerbundle_onscalertradeclose",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_onscalertradeclose"
     },
     {
       "relation": "method",
@@ -3939,9 +4729,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L549",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "trading_scalerbundle_onscalertradeopen",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_onscalertradeopen"
     },
     {
       "relation": "method",
@@ -3989,9 +4779,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L532",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalerbundle",
-      "target": "trading_scalerbundle_recordstrategysignal",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_recordstrategysignal"
     },
     {
       "relation": "method",
@@ -4520,9 +5310,9 @@
       "source_location": "L309",
       "weight": 1.0,
       "context": "parameter_type",
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "context",
-      "confidence_score": 1.0
+      "target": "context"
     },
     {
       "relation": "calls",
@@ -4531,9 +5321,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L417",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "trading_scalerbundle_canopendirectionscaler",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_canopendirectionscaler"
     },
     {
       "relation": "calls",
@@ -4542,9 +5332,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L407",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "trading_scalerbundle_isstrategyoncooldown",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_isstrategyoncooldown"
     },
     {
       "relation": "calls",
@@ -4553,9 +5343,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L486",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "trading_scalerbundle_onscalertradeopen",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_onscalertradeopen"
     },
     {
       "relation": "calls",
@@ -4564,9 +5354,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L445",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "trading_scalerbundle_recordstrategysignal",
-      "confidence_score": 1.0
+      "target": "trading_scalerbundle_recordstrategysignal"
     },
     {
       "relation": "calls",
@@ -4630,20 +5420,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L406",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_orchestrator_evalandexecutescalers",
-      "target": "trading_scalers_eval_scalerstrategycooldown",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "engine/internal/trading/scalers_eval.go",
-      "source_location": "L491",
-      "weight": 1.0,
-      "context": "return_type",
-      "source": "trading_scalers_eval_scalerstrategycooldown",
-      "target": "duration",
-      "confidence_score": 1.0
+      "target": "trading_scalers_eval_scalerstrategycooldown"
     },
     {
       "relation": "calls",
@@ -4652,20 +5431,9 @@
       "source_file": "engine/internal/trading/scalers_eval.go",
       "source_location": "L493",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "trading_scalers_eval_scalerstrategycooldown",
-      "target": "trading_scalers_eval_containsany",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "source_file": "engine/internal/trading/scalers_eval.go",
-      "source_location": "L521",
-      "weight": 1.0,
-      "context": "parameter_type",
-      "source": "trading_scalerbundle_isstrategyoncooldown",
-      "target": "duration",
-      "confidence_score": 1.0
+      "target": "trading_scalers_eval_containsany"
     },
     {
       "relation": "calls",
@@ -5639,5 +6407,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "e705e5e17f56da897601f8c3d99fe67adbe2470b"
+  "built_at_commit": "9600d98c956a0531e21a69d4cada8381d253d1c1"
 }

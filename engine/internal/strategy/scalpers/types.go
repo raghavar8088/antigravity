@@ -38,6 +38,31 @@ type OrderBookSnapshot struct {
 	BidWallSize float64 // total bid liquidity within 0.3% of mid
 	AskWallSize float64 // total ask liquidity within 0.3% of mid
 	Imbalance   float64 // positive = more bids, negative = more asks, range -1..1
+
+	// Per-level bid depth (volume within % of mid)
+	BidDepth01pct float64 // total bid volume within 0.1% of mid price
+	BidDepth05pct float64 // total bid volume within 0.5% of mid price
+	BidDepth1pct  float64 // total bid volume within 1.0% of mid price
+
+	// Per-level ask depth (volume within % of mid)
+	AskDepth01pct float64
+	AskDepth05pct float64
+	AskDepth1pct  float64
+
+	// TradeFlowImbalance: (buy_vol - sell_vol) / (buy_vol + sell_vol) over last 1m
+	// Positive = buy-side aggressive, negative = sell-side aggressive. Range -1..1.
+	TradeFlowImbalance float64
+}
+
+// OrderBookDepthLevels carries optional per-level LOB depth and trade-flow
+// features so strategies can use continuous order-book inputs instead of
+// the binary BidWallSize/AskWallSize gate. Populated via the variadic
+// ScalerBundle.UpdateOrderBook parameter — callers that don't have this data
+// yet can omit it entirely (backward compatible).
+type OrderBookDepthLevels struct {
+	BidDepth01pct, BidDepth05pct, BidDepth1pct float64
+	AskDepth01pct, AskDepth05pct, AskDepth1pct float64
+	TradeFlowImbalance                         float64
 }
 
 // IsPopulated returns true when the snapshot contains real order book data.

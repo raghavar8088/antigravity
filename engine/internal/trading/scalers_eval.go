@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/observability"
 	regimepkg "antigravity-engine/internal/regime"
@@ -42,10 +43,12 @@ type ScalerBundle struct {
 	// 4h synthesis: buffer of 1h candles waiting to be merged
 	pending4h []scalers.Candle
 
-	// CVD approximation from price-direction tick delta
-	cvd           float64
-	cvdPrev       float64
-	lastTickPrice float64
+	// CVD: real taker-side delta from the Binance aggTrade feed when available
+	// (aggTradeFeedActive=true), falling back to a price-direction tick proxy.
+	cvd                float64
+	cvdPrev            float64
+	lastTickPrice      float64
+	aggTradeFeedActive bool
 
 	// CVD ring buffer — last 5 readings (newest at cvdHistoryIdx-1 mod 5)
 	cvdHistory    [5]float64
@@ -64,6 +67,11 @@ type ScalerBundle struct {
 
 	// The curated strategy list (rebuilt once; updated by FilterWinnersOnly)
 	strategies []scalers.RegistryEntry
+
+	// metaLabelFilter scores raw signals on 5 confluence axes between
+	// collection and the aggregator cooldown gate, suppressing low-confluence
+	// entries and scaling Confidence for the rest.
+	metaLabelFilter *MetaLabelFilter
 
 	// Eval telemetry — updated each evalAndExecuteScalers cycle
 	evalCount               int64     // accessed atomically — no mu required
@@ -88,6 +96,13 @@ type ScalerBundle struct {
 	maxOpenLongs   int
 	maxOpenShorts  int
 	dirMu          sync.Mutex
+
+	// lastDataQualityScore is the most recent data-quality score (0-100),
+	// fed from the 1m candle validation gate in loop.go. Used as a Kelly
+	// sizing input. Zero value (unset) reads back as a neutral 80 via
+	// GetDataQuality so Kelly behaves sanely before the first candle validates.
+	lastDataQualityScore float64
+	dqMu                 sync.RWMutex
 }
 
 func newScalerBundle() *ScalerBundle {
@@ -98,6 +113,7 @@ func newScalerBundle() *ScalerBundle {
 		candles1h:            make([]scalers.Candle, 0, maxCandles1h+1),
 		candles4h:            make([]scalers.Candle, 0, maxCandles4h+1),
 		strategies:           scalers.BuildCuratedScalpers(),
+		metaLabelFilter:      NewMetaLabelFilter(),
 		lastSignalByStrategy: make(map[string]time.Time),
 		maxOpenLongs:         3,
 		maxOpenShorts:        3,
@@ -173,6 +189,9 @@ func (b *ScalerBundle) WarmupFromHistory(candles1m, candles5m []marketdata.Candl
 // warmupCVDHistoryLocked pre-populates the 5-slot CVD ring buffer from the
 // warmup 1m candles by computing the net volume delta for each of the last
 // 5 × 15m windows. Caller must hold b.mu.
+// Warmup always uses the price-direction proxy from 1m candles since the
+// aggTrade feed has no historical REST backfill — real aggTrade CVD begins
+// accumulating once BinanceAggTradeClient connects.
 func (b *ScalerBundle) warmupCVDHistoryLocked() {
 	candles := b.candles1m
 	if len(candles) < 75 {
@@ -228,12 +247,19 @@ func (b *ScalerBundle) Push1hCandle(c marketdata.Candle) {
 	}
 }
 
-// UpdateCVD approximates cumulative volume delta from price direction.
-// No side info is available from the Coinbase WebSocket; price move direction
-// is used as a proxy (up tick = buy pressure, down tick = sell pressure).
+// UpdateCVD is the FALLBACK CVD source: it approximates cumulative volume
+// delta from price direction (up tick = buy pressure, down tick = sell
+// pressure) when the real Binance aggTrade feed is unavailable. Less accurate
+// than UpdateCVDFromAggTrade because a price up-tick can be either an
+// aggressive buyer or a passive seller lifted by one — it does not have real
+// taker-side classification. No-ops while the aggTrade feed is active so the
+// two sources never double-count the same volume.
 func (b *ScalerBundle) UpdateCVD(t marketdata.Tick) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.aggTradeFeedActive {
+		return
+	}
 	if b.lastTickPrice == 0 {
 		b.lastTickPrice = t.Price
 		return
@@ -248,6 +274,37 @@ func (b *ScalerBundle) UpdateCVD(t marketdata.Tick) {
 		b.cvd -= delta
 	}
 	b.lastTickPrice = t.Price
+}
+
+// UpdateCVDFromAggTrade is the PRIMARY CVD source: real taker-side
+// classification from the Binance aggTrade stream. IsBuyerMaker=true means
+// the seller was the aggressor (sell delta); false means the buyer was the
+// aggressor (buy delta). Marks the aggTrade feed active so UpdateCVD's
+// price-direction proxy stands down.
+func (b *ScalerBundle) UpdateCVDFromAggTrade(t marketdata.AggTrade) {
+	b.mu.Lock()
+	if t.IsBuyerMaker {
+		b.cvd -= t.Quantity
+	} else {
+		b.cvd += t.Quantity
+	}
+	b.aggTradeFeedActive = true
+	b.mu.Unlock()
+	observability.ScalersCVDSource.Set(1)
+}
+
+// SetAggTradeFeedActive marks the Binance aggTrade CVD feed active or
+// inactive. Called by the orchestrator on connect/disconnect. When set to
+// false, UpdateCVD's price-direction proxy resumes computing CVD.
+func (b *ScalerBundle) SetAggTradeFeedActive(active bool) {
+	b.mu.Lock()
+	b.aggTradeFeedActive = active
+	b.mu.Unlock()
+	v := 0.0
+	if active {
+		v = 1.0
+	}
+	observability.ScalersCVDSource.Set(v)
 }
 
 // UpdateFundingRate stores the latest funding rate (8h rate, e.g. -0.00051)
@@ -273,18 +330,52 @@ func (b *ScalerBundle) UpdateOI(current, prev float64) {
 // UpdateOrderBook converts a raw orderbook analysis into the scalers snapshot format.
 // DepthImbalance from the orderbook package is bid_vol/ask_vol (r > 1 = buy pressure).
 // We normalise to -1..1 using (bids - asks) / (bids + asks) = (r - 1) / (r + 1).
-func (b *ScalerBundle) UpdateOrderBook(bidWall, askWall, depthImbalance float64) {
+// depthLevels is optional (variadic) so existing call sites without per-level
+// LOB/trade-flow features continue to compile unmodified; when provided, only
+// its first element is used.
+func (b *ScalerBundle) UpdateOrderBook(bidWall, askWall, depthImbalance float64, depthLevels ...scalers.OrderBookDepthLevels) {
 	imb := 0.0
 	if depthImbalance > 0 {
 		imb = (depthImbalance - 1) / (depthImbalance + 1)
 	}
-	b.mu.Lock()
-	b.orderBook = scalers.OrderBookSnapshot{
+	snap := scalers.OrderBookSnapshot{
 		BidWallSize: bidWall,
 		AskWallSize: askWall,
 		Imbalance:   imb,
 	}
+	if len(depthLevels) > 0 {
+		dl := depthLevels[0]
+		snap.BidDepth01pct = dl.BidDepth01pct
+		snap.BidDepth05pct = dl.BidDepth05pct
+		snap.BidDepth1pct = dl.BidDepth1pct
+		snap.AskDepth01pct = dl.AskDepth01pct
+		snap.AskDepth05pct = dl.AskDepth05pct
+		snap.AskDepth1pct = dl.AskDepth1pct
+		snap.TradeFlowImbalance = dl.TradeFlowImbalance
+	}
+	b.mu.Lock()
+	b.orderBook = snap
 	b.mu.Unlock()
+}
+
+// UpdateDataQuality stores the latest data-quality score (0-100) for use as a
+// Kelly sizing input. Called from the 1m candle validation gate in loop.go.
+func (b *ScalerBundle) UpdateDataQuality(score float64) {
+	b.dqMu.Lock()
+	b.lastDataQualityScore = score
+	b.dqMu.Unlock()
+}
+
+// GetDataQuality returns the most recent data-quality score (0-100).
+// Returns a neutral 80 if no score has been recorded yet (e.g. at startup,
+// or when DataValidator is not configured).
+func (b *ScalerBundle) GetDataQuality() float64 {
+	b.dqMu.RLock()
+	defer b.dqMu.RUnlock()
+	if b.lastDataQualityScore <= 0 {
+		return 80.0
+	}
+	return b.lastDataQualityScore
 }
 
 // buildContextLocked assembles a MarketContext ready for strategy evaluation.
@@ -349,6 +440,9 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 
 // ── Orchestrator integration ──────────────────────────────────────────────────
 
+// TODO: delta-neutral funding carry — long spot + short perp when fundingRate > 0.0003.
+// Needs its own position manager (not a directional scalper).
+
 // evalAndExecuteScalers is called after every 15m cycle completes.
 // It builds a MarketContext, calls Evaluate() on each curated scalers strategy,
 // and feeds non-none signals through the existing aggregator+risk pipeline.
@@ -406,8 +500,18 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		log.Printf("[SCALERS] WARNING: OIFetcher not configured — OpenInterest unavailable, S9_OI_Divergence suppressed")
 	}
 
-	scalersRegime := mapToScalersRegime(lastRegime)
-	if scalersRegime == scalers.RegimeUnknown && lastRegimeClass != nil {
+	// Single authoritative regime source: o.lastRegimeClass, populated only by
+	// o.deps.RegimeClassifier.Classify() in run15mCycle. This used to also
+	// consult the separate inline classifyMarketRegime() string (via
+	// mapToScalersRegime(lastRegime)) as a first choice — but that classifier
+	// runs independently on tick/1m/5m/1h cycles and can disagree with
+	// RegimeClassifier depending on goroutine timing, so the scalers path
+	// could gate on a different regime than the one its own PositionSizeMult/
+	// AllowNewEntries decisions (above) were just computed from. Falling back
+	// to lastRegimeClass only — never the inline classifier — keeps the
+	// scalers path internally consistent.
+	scalersRegime := scalers.RegimeUnknown
+	if lastRegimeClass != nil {
 		scalersRegime = mapRegimeClassToScalersRegime(lastRegimeClass.Regime)
 	}
 
@@ -452,6 +556,12 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		observability.ScalersOIFeedActive.Set(0)
 	}
 
+	// Feed current volatility to the paper client so entry/exit slippage
+	// scales with ATR instead of using a fixed bps assumption.
+	if o.exec != nil {
+		o.exec.UpdateATR(scalers.ATR(mctx.Candles15m, 14))
+	}
+
 	// Collect non-none signals from all curated scalers
 	var rawAgg []AggregatedSignal
 	rejected := 0
@@ -486,15 +596,73 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		log.Printf("[SCALERS] eval strategy=%s direction=%s confidence=%.2f reason=%s",
 			sig.Strategy, sig.Direction, sig.Confidence, sig.Reason)
 		legacySig := scalerSignalToLegacy(sig, price)
-		// FIX 5: apply regime size multiplier to position size
+
+		// Kelly position sizing — replaces flat fixedTradeCapitalUSD sizing.
+		// Half-Kelly fraction scaled by regime, session, and data-quality
+		// multipliers; probationary strategies (<30 recorded trades) fall back
+		// to a conservative neutral assumption inside kelly.Compute().
+		regimeMult := 1.0
 		if lastRegimeClass != nil && lastRegimeClass.PositionSizeMult > 0 {
-			legacySig.TargetSize *= lastRegimeClass.PositionSizeMult
+			regimeMult = lastRegimeClass.PositionSizeMult
 		}
-		if legacySig.TargetSize < minExecutionSizeBTC {
-			log.Printf("[SCALERS] %s signal skipped: adjusted size %.6f BTC below min after regime mult", sig.Strategy, legacySig.TargetSize)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "quality_gate").Inc() // F (size check is a quality gate)
+		session := kelly.DetectSession(time.Now().UTC())
+		kellyIn := kelly.KellyInputs{
+			PortfolioValue:    o.exec.GetBalanceUSD(),
+			MaxPositionPct:    0.10,
+			RegimeMult:        regimeMult,
+			SessionMult:       kelly.SessionKellyMultiplier(session),
+			DataQualityScore:  o.scalerBundle.GetDataQuality(),
+			MinTradesRequired: 30,
+		}
+		if wfData, hasData := o.walkForward.GetSummary(entry.Name); hasData {
+			kellyIn.TradeCount = wfData.Trades
+			if wfData.Trades >= kellyIn.MinTradesRequired {
+				kellyIn.WinRate = wfData.WinRate
+				kellyIn.AvgWinPct = wfData.AvgWinPct
+				kellyIn.AvgLossPct = wfData.AvgLossPct
+			}
+		}
+		if kellyIn.TradeCount < kellyIn.MinTradesRequired {
+			// Probationary fallback — neutral 2:1 R:R assumption. kelly.Compute
+			// ignores these and applies its own conservative fixed-pct sizing
+			// whenever TradeCount < MinTradesRequired, but they're set for
+			// clarity and so behaviour stays sane if that gate ever changes.
+			kellyIn.WinRate = 0.50
+			kellyIn.AvgWinPct = 0.04
+			kellyIn.AvgLossPct = 0.02
+		}
+
+		kellyResult, kerr := kelly.Compute(kellyIn)
+		if kerr != nil {
+			log.Printf("[KELLY] %s sizing rejected: %v", entry.Name, kerr)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "kelly_error").Inc()
 			rejected++
 			continue
+		}
+		targetBTC := kellyResult.FinalPositionUSD / price
+		if targetBTC < minExecutionSizeBTC {
+			log.Printf("[SCALERS] %s Kelly size %.6f BTC below minimum %.6f BTC — skipping", entry.Name, targetBTC, minExecutionSizeBTC)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "kelly_too_small").Inc()
+			rejected++
+			continue
+		}
+		legacySig.TargetSize = targetBTC
+		observability.ScalersKellyPositionUSD.WithLabelValues(entry.Name).Set(kellyResult.FinalPositionUSD)
+		log.Printf("[KELLY] strategy=%s winRate=%.2f session=%s regimeMult=%.2f sessionMult=%.2f dqScore=%.0f kellyFraction=%.4f finalUSD=%.0f finalBTC=%.4f",
+			entry.Name, kellyIn.WinRate, string(session), kellyIn.RegimeMult, kellyIn.SessionMult, kellyIn.DataQualityScore,
+			kellyResult.RawKelly, kellyResult.FinalPositionUSD, targetBTC)
+
+		// Concentration gate: blocks correlated same-direction exposure across
+		// strategies (e.g. 3 different strategies all going long BTC on the
+		// same trend) on top of the plain trade-count directional cap above.
+		// Sized check, so it runs after Kelly has produced a final BTC size.
+		if o.concentrationGate != nil {
+			if ok, reason := o.concentrationGate.CanOpen(entry.Name, sigDir, targetBTC); !ok {
+				log.Printf("[CONCENTRATION] %s blocked: %s", entry.Name, reason)
+				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "concentration_limit").Inc()
+				rejected++
+				continue
+			}
 		}
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {
@@ -516,6 +684,17 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			FiredAt:      time.Now(),
 		})
 	}
+
+	// Collect WalkForward summaries for meta-labeling
+	wfSummaries := make(map[string]scalers.WalkForwardSummary)
+	if o.walkForward != nil {
+		for _, entry := range o.scalerBundle.strategies {
+			if s, ok := o.walkForward.GetSummary(entry.Name); ok {
+				wfSummaries[entry.Name] = s
+			}
+		}
+	}
+	rawAgg = o.scalerBundle.metaLabelFilter.Filter(rawAgg, mctx, scalersRegime, wfSummaries)
 
 	// Apply existing 15s cooldown gate
 	approved := o.aggregator.FilterSignals(rawAgg)
@@ -551,6 +730,9 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		o.tracker.RecordSignal(agg.StrategyName)
 		// Track directional open for per-direction cap.
 		o.scalerBundle.onScalerTradeOpen(string(sig.Action))
+		if o.concentrationGate != nil {
+			o.concentrationGate.RecordOpen(agg.StrategyName, string(sig.Action), sig.TargetSize)
+		}
 	}
 }
 
@@ -621,6 +803,21 @@ func (b *ScalerBundle) onScalerTradeOpen(dir string) {
 	} else {
 		b.openShortCount++
 	}
+}
+
+// isScalerStrategy reports whether name belongs to the curated scalers
+// roster. Used by processCloseEvents to decide whether a closed position
+// should affect scalers-specific bookkeeping (directional counters,
+// concentration gate) versus a legacy non-scalper strategy's position.
+func (b *ScalerBundle) isScalerStrategy(name string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, entry := range b.strategies {
+		if entry.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // onScalerTradeClose decrements the directional counter when a scaler trade closes.
@@ -704,8 +901,11 @@ func (o *Orchestrator) GetScalersStats() ScalersSnapshot {
 	regime := o.lastRegime
 	regimeClass := o.lastRegimeClass
 	o.mu.RUnlock()
-	scalersRegime := mapToScalersRegime(regime)
-	if scalersRegime == scalers.RegimeUnknown && regimeClass != nil {
+	// Same single authoritative source as evalAndExecuteScalers: lastRegimeClass.
+	// regime (the inline classifier's string) is only used below as a display
+	// label when no classification exists yet — never as a decision input.
+	scalersRegime := scalers.RegimeUnknown
+	if regimeClass != nil {
 		scalersRegime = mapRegimeClassToScalersRegime(regimeClass.Regime)
 	}
 	regimeLabel := string(scalersRegime)
@@ -800,9 +1000,11 @@ func scalerSignalToLegacy(sig scalers.Signal, price float64) strategy.Signal {
 	}
 
 	return strategy.Signal{
-		Symbol:        "BTC-USD",
-		Action:        action,
-		TargetSize:    fixedTradeCapitalUSD / price,
+		Symbol: "BTC-USD",
+		Action: action,
+		// TargetSize is a placeholder — evalAndExecuteScalers overwrites it with
+		// the Kelly-computed size immediately after this call returns.
+		TargetSize:    0,
 		Confidence:    sig.Confidence,
 		StopLossPct:   slPct,
 		TakeProfitPct: tpPct,
@@ -812,22 +1014,9 @@ func scalerSignalToLegacy(sig scalers.Signal, price float64) strategy.Signal {
 	}
 }
 
-// mapToScalersRegime converts the loop's string regime to the scalers.Regime enum.
-func mapToScalersRegime(lastRegime string) scalers.Regime {
-	switch lastRegime {
-	case marketRegimeTrend:
-		return scalers.RegimeTrending
-	case marketRegimeRange:
-		return scalers.RegimeRanging
-	case marketRegimeVolatile:
-		return scalers.RegimeVolatile
-	case marketRegimeMixed:
-		return scalers.RegimeRanging
-	default:
-		return scalers.RegimeUnknown
-	}
-}
-
+// mapRegimeClassToScalersRegime converts the authoritative regime.Classifier
+// output to the scalers.Regime enum. This is now the only regime translation
+// used by the scalers path — see evalAndExecuteScalers and GetScalersStats.
 func mapRegimeClassToScalersRegime(r regimepkg.Regime) scalers.Regime {
 	switch r {
 	case regimepkg.RegimeTrendingBull, regimepkg.RegimeTrendingBear:

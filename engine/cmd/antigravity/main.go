@@ -1159,6 +1159,19 @@ func main() {
 		orchestrator.SetKlineFeedActive("1h", false)
 	})
 
+	// Upgrade 2: Binance aggTrade WebSocket feed for real CVD (taker-side
+	// classification) instead of the price-direction proxy. Falls back to
+	// the proxy automatically on disconnect via SetAggTradeFeedActive(false).
+	aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
+		orchestrator.PushAggTrade(t)
+	})
+	go safeGo("BinanceAggTrade", func() {
+		if err := aggTradeClient.Start(ctx); err != nil {
+			log.Printf("[AGGTRADE] feed error: %v", err)
+		}
+		orchestrator.SetAggTradeFeedActive(false)
+	})
+
 	// ── Reconciliation Authority v2 ───────────────────────────────────────────
 	// Compares ledger OMS projections against:
 	//   1) live position manager runtime (always)

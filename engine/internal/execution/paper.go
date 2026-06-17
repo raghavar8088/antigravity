@@ -25,6 +25,13 @@ type PaperClient struct {
 	shortBTC       float64 // BUG 11: gross short BTC sold
 	lastKnownPrice float64
 	totalFeesUSD   float64 // Cumulative taker fees deducted across all fills.
+
+	// lastATR is the most recent 15m ATR(14), fed by UpdateATR. Used to scale
+	// IOC entry/exit slippage by current volatility instead of a fixed bps
+	// assumption. Zero (unset) degrades slippageModel to its flat base bps,
+	// matching the previous fixed-slippage behaviour exactly.
+	lastATR       float64
+	slippageModel *SlippageModel
 }
 
 // NetPosition returns longBTC - shortBTC (signed net exposure). BUG 11.
@@ -44,7 +51,15 @@ func NewPaperClient(startingUSD float64) *PaperClient {
 		longBTC:        0, // BUG 11
 		shortBTC:       0, // BUG 11
 		lastKnownPrice: 0,
+		slippageModel:  NewSlippageModel(),
 	}
+}
+
+// UpdateATR feeds the current 15m ATR(14) so entry and exit slippage scale
+// with live volatility instead of using a fixed bps assumption. Called from
+// evalAndExecuteScalers after each evaluation cycle.
+func (p *PaperClient) UpdateATR(atr float64) {
+	p.lastATR = atr
 }
 
 func isSupportedBTCSymbol(symbol string) bool {
@@ -72,10 +87,12 @@ func (p *PaperClient) UpdateMarketState(price float64) {
 	p.lastKnownPrice = price
 }
 
-func (p *PaperClient) executionPrice(mode OrderMode, action strategy.Action) float64 {
+func (p *PaperClient) executionPrice(mode OrderMode, action strategy.Action, orderSizeUSD float64) float64 {
 	execPrice := p.lastKnownPrice
 	switch mode {
 	case OrderModePostOnly:
+		// Post-only (maker) fills are not slippage-modelled — by definition
+		// they queue at a passive price rather than crossing the spread.
 		if action == strategy.ActionBuy {
 			return p.lastKnownPrice * 0.99995
 		}
@@ -83,21 +100,26 @@ func (p *PaperClient) executionPrice(mode OrderMode, action strategy.Action) flo
 			return p.lastKnownPrice * 1.00005
 		}
 	case OrderModeIOC:
-		if action == strategy.ActionBuy {
-			return p.lastKnownPrice * 1.00012
-		}
-		if action == strategy.ActionSell {
-			return p.lastKnownPrice * 0.99988
-		}
+		bps := p.ioSlippageBps(orderSizeUSD, 1.2)
+		return ApplyEntry(action == strategy.ActionBuy, p.lastKnownPrice, bps)
 	default:
-		if action == strategy.ActionBuy {
-			return p.lastKnownPrice * 1.0001
-		}
-		if action == strategy.ActionSell {
-			return p.lastKnownPrice * 0.9999
-		}
+		bps := p.ioSlippageBps(orderSizeUSD, 1.0)
+		return ApplyEntry(action == strategy.ActionBuy, p.lastKnownPrice, bps)
 	}
 	return execPrice
+}
+
+// ioSlippageBps computes ATR-scaled slippage for the given order size using
+// the client's SlippageModel and a mode-specific base bps. Falls back to the
+// fixed baseBps if no SlippageModel is configured (e.g. a PaperClient built
+// without NewPaperClient in a test).
+func (p *PaperClient) ioSlippageBps(orderSizeUSD, baseBps float64) float64 {
+	if p.slippageModel == nil {
+		return baseBps
+	}
+	m := *p.slippageModel
+	m.BaseSlippageBps = baseBps
+	return m.ComputeSlippageBps(orderSizeUSD, p.lastATR, p.lastKnownPrice, 0)
 }
 
 // takerFeePct returns 0 for post-only (maker) orders, BinanceFuturesTakerFeePct otherwise.
@@ -144,7 +166,7 @@ func (p *PaperClient) applyFill(sig strategy.Signal, execPrice float64, mode Ord
 
 func (p *PaperClient) ExecuteSignal(sig strategy.Signal, mode OrderMode) (FillResult, error) {
 	requestedPrice := p.lastKnownPrice
-	execPrice := p.executionPrice(mode, sig.Action)
+	execPrice := p.executionPrice(mode, sig.Action, sig.TargetSize*p.lastKnownPrice)
 	if execPrice <= 0 {
 		return FillResult{}, fmt.Errorf("no market price available for execution")
 	}
@@ -213,25 +235,21 @@ func (p *PaperClient) ResetAccount() error {
 	return nil
 }
 
-// exitAdjustedPrice applies adverse slippage to an exit fill price.
-// Exits are always treated as IOC (taker) orders in paper mode: LONG exits
-// (selling BTC) fill slightly below market, SHORT exits (buying back) slightly above.
-// 1.2 bps adverse slippage mirrors the entry model in executionPrice(OrderModeIOC).
-func exitAdjustedPrice(side strategy.Action, price float64) float64 {
-	const slippageFactor = 1.2 / 10000.0 // 1.2 bps
-	if side == strategy.ActionBuy {
-		// Closing LONG = selling BTC → adverse = lower fill price
-		return price * (1 - slippageFactor)
-	}
-	// Closing SHORT = buying BTC back → adverse = higher fill price
-	return price * (1 + slippageFactor)
+// exitAdjustedPrice applies ATR-scaled adverse slippage to an exit fill
+// price, using the same SlippageModel and 1.2 bps base as IOC entries
+// (executionPrice's OrderModeIOC case) — exits are always treated as IOC
+// (taker) orders in paper mode. LONG exits (selling BTC) fill slightly below
+// market, SHORT exits (buying back) slightly above.
+func (p *PaperClient) exitAdjustedPrice(side strategy.Action, size, price float64) float64 {
+	bps := p.ioSlippageBps(size*price, 1.2)
+	return ApplyExit(side == strategy.ActionBuy, price, bps)
 }
 
 // SettlePosition updates the paper balance when a position is closed or
-// partially reduced. Applies both adverse exit slippage (1.2 bps IOC) and
-// taker exit fee (0.05%) — matching the full round-trip cost model.
+// partially reduced. Applies both ATR-scaled adverse exit slippage and taker
+// exit fee (0.05%) — matching the full round-trip cost model.
 func (p *PaperClient) SettlePosition(side strategy.Action, size, exitPrice float64) {
-	adjPrice := exitAdjustedPrice(side, exitPrice)
+	adjPrice := p.exitAdjustedPrice(side, size, exitPrice)
 	exitNotional := size * adjPrice
 	exitFee := exitNotional * BinanceFuturesTakerFeePct
 	p.totalFeesUSD += exitFee

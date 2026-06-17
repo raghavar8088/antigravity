@@ -1,16 +1,16 @@
 # Graph Report - antigravity-main  (2026-06-16)
 
 ## Corpus Check
-- 4626 files · ~26,781,575 words
+- 4626 files · ~26,782,935 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 199 nodes · 343 edges · 14 communities
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 26 edges (avg confidence: 0.8)
+- 221 nodes · 394 edges · 14 communities
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 29 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e705e5e1`
+- Built from commit: `9600d98c`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -36,23 +36,21 @@
 3. `Candle` - 12 edges
 4. `NoSignal()` - 10 edges
 5. `Candle` - 10 edges
-6. `ATR()` - 8 edges
-7. `mdToScalerCandle()` - 7 edges
-8. `appendCapped()` - 7 edges
-9. `Context` - 7 edges
-10. `MACD()` - 6 edges
+6. `recoverOpenPositions()` - 9 edges
+7. `recoverAccountState()` - 8 edges
+8. `ATR()` - 8 edges
+9. `BootstrapJournalFromMongo()` - 7 edges
+10. `RecoveryReport` - 7 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `AvgVolume()` --references--> `Candle`  [EXTRACTED]
-  engine/internal/strategy/scalpers/indicators.go → engine/internal/strategy/scalpers/indicators.go  _Bridges community 8 → community 11_
-- `SwingHigh()` --references--> `Candle`  [EXTRACTED]
-  engine/internal/strategy/scalpers/indicators.go → engine/internal/strategy/scalpers/indicators.go  _Bridges community 8 → community 7_
-- `ScalerBundle` --references--> `Candle`  [EXTRACTED]
-  engine/internal/trading/scalers_eval.go → engine/internal/trading/scalers_eval.go  _Bridges community 10 → community 2_
-- `newScalerBundle()` --references--> `ScalerBundle`  [EXTRACTED]
-  engine/internal/trading/scalers_eval.go → engine/internal/trading/scalers_eval.go  _Bridges community 10 → community 9_
-- `StrategyPerformance` --references--> `Time`  [EXTRACTED]
-  engine/internal/trading/scalers_eval.go → engine/internal/trading/scalers_eval.go  _Bridges community 10 → community 13_
+- `BootstrapJournalFromMongo()` --calls--> `getFloat()`  [INFERRED]
+  engine/internal/paperpersist/journal_bootstrap.go → engine/internal/paperpersist/recovery.go
+- `BootstrapJournalFromMongo()` --calls--> `getString()`  [INFERRED]
+  engine/internal/paperpersist/journal_bootstrap.go → engine/internal/paperpersist/recovery.go
+- `BootstrapJournalFromMongo()` --calls--> `getTime()`  [INFERRED]
+  engine/internal/paperpersist/journal_bootstrap.go → engine/internal/paperpersist/recovery.go
+- `scalerStrategyCooldown()` --references--> `Duration`  [EXTRACTED]
+  engine/internal/trading/scalers_eval.go → engine/internal/paperpersist/recovery.go
 
 ## Import Cycles
 - None detected.
@@ -88,12 +86,12 @@ Cohesion: 0.29
 Nodes (4): MarketContext, Regime, Signal, BollingerMeanReversion
 
 ### Community 7 - "Community 7"
-Cohesion: 0.24
-Nodes (8): MarketContext, Regime, Signal, SwingHigh(), SwingLow(), LiquiditySweepReversal, sweepCVDBearishDiv(), sweepCVDBullishDiv()
+Cohesion: 0.27
+Nodes (7): MarketContext, Regime, Signal, SwingLow(), LiquiditySweepReversal, sweepCVDBearishDiv(), sweepCVDBullishDiv()
 
 ### Community 8 - "Community 8"
-Cohesion: 0.10
-Nodes (22): Candle, MarketContext, Regime, Signal, MarketContext, Regime, Signal, BollingerBands (+14 more)
+Cohesion: 0.07
+Nodes (28): Candle, MarketContext, Regime, Signal, MarketContext, Regime, Signal, MarketContext (+20 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.21
@@ -108,31 +106,31 @@ Cohesion: 0.21
 Nodes (7): Candle, MarketContext, Regime, Signal, Time, AvgVolume(), OpeningRangeBreakout
 
 ### Community 12 - "Community 12"
-Cohesion: 0.28
-Nodes (5): MarketContext, Regime, Signal, FundingRateFade, abs64()
+Cohesion: 0.22
+Nodes (20): Context, MongoManager, Context, MongoManager, M, BootstrapJournalFromMongo(), RecoveredAccountState, RecoveredPosition (+12 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.29
 Nodes (5): Regime, Orchestrator, mapRegimeClassToScalersRegime(), mapToScalersRegime(), StrategyPerformance
 
 ## Knowledge Gaps
-- **41 isolated node(s):** `Regime`, `Signal`, `Regime`, `MarketContext`, `Signal` (+36 more)
+- **44 isolated node(s):** `Context`, `MongoManager`, `TradeJournal`, `Regime`, `Signal` (+39 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Duration` connect `Community 9` to `Community 11`?**
-  _High betweenness centrality (0.304) - this node is a cross-community bridge._
-- **Why does `NoSignal()` connect `Community 3` to `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 11`, `Community 12`?**
-  _High betweenness centrality (0.300) - this node is a cross-community bridge._
-- **Why does `ScalerBundle` connect `Community 10` to `Community 1`, `Community 2`, `Community 13`, `Community 9`?**
-  _High betweenness centrality (0.151) - this node is a cross-community bridge._
+- **Why does `Duration` connect `Community 9` to `Community 11`, `Community 12`?**
+  _High betweenness centrality (0.394) - this node is a cross-community bridge._
+- **Why does `NoSignal()` connect `Community 3` to `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 11`?**
+  _High betweenness centrality (0.287) - this node is a cross-community bridge._
+- **Why does `RecoveryReport` connect `Community 12` to `Community 9`?**
+  _High betweenness centrality (0.142) - this node is a cross-community bridge._
 - **Are the 8 inferred relationships involving `NoSignal()` (e.g. with `.Evaluate()` and `.Evaluate()`) actually correct?**
   _`NoSignal()` has 8 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Regime`, `Signal`, `Regime` to the rest of the system?**
-  _41 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Context`, `MongoManager`, `TradeJournal` to the rest of the system?**
+  _44 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.09841269841269841 - nodes in this community are weakly interconnected._
 - **Should `Community 8` be split into smaller, more focused modules?**
-  _Cohesion score 0.09659090909090909 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07308970099667775 - nodes in this community are weakly interconnected._

@@ -819,6 +819,7 @@ The content is organized as follows:
   execution/paper.go
   execution/routing_test.go
   execution/routing.go
+  execution/slippage.go
   execution/trade_journal.go
   executiongateway/handler.go
   executiongateway/types.go
@@ -892,6 +893,7 @@ The content is organized as follows:
   macro/macro_test.go
   macro/score.go
   macro/types.go
+  marketdata/binance_aggtrade.go
   marketdata/binance_klines.go
   marketdata/candle_test.go
   marketdata/candle.go
@@ -1220,6 +1222,8 @@ The content is organized as follows:
   strategy/scalpers/indicators.go
   strategy/scalpers/registry.go
   strategy/scalpers/s1_ema_ribbon_trend_rider.go
+  strategy/scalpers/s10_smc_order_block_fvg_test.go
+  strategy/scalpers/s10_smc_order_block_fvg.go
   strategy/scalpers/s2_bollinger_mean_reversion.go
   strategy/scalpers/s3_liquidity_sweep_reversal.go
   strategy/scalpers/s4_adx_momentum_breakout.go
@@ -1243,6 +1247,7 @@ The content is organized as follows:
   trading/aggregator_selective.go
   trading/aggregator_v2.go
   trading/aggregator.go
+  trading/concentration_gate.go
   trading/cycle_guard.go
   trading/execintel_expiry_test.go
   trading/execution_watchdog_test.go
@@ -1252,6 +1257,8 @@ The content is organized as follows:
   trading/loop_deps.go
   trading/loop_profit_test.go
   trading/loop.go
+  trading/meta_label_test.go
+  trading/meta_label.go
   trading/paperpersist_hooks.go
   trading/scalers_eval.go
   trading/signal_flow_metrics.go

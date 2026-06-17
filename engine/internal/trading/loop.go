@@ -47,7 +47,10 @@ const (
 	sizeChangeEpsilonBTC      = 1e-9
 	futuresInitialCapitalUSD  = 1000000.0
 	futuresPositionCapitalPct = 0.01 // 1% of paper capital per futures entry (BTC Equity)
-	fixedTradeCapitalUSD      = futuresInitialCapitalUSD * futuresPositionCapitalPct
+	// Deprecated: the scalers path now sizes positions via Kelly (see
+	// evalAndExecuteScalers in scalers_eval.go). Retained for legacy/non-scalper
+	// call sites that have not been migrated to Kelly sizing.
+	fixedTradeCapitalUSD = futuresInitialCapitalUSD * futuresPositionCapitalPct
 
 	// btcPaperAccountID is the canonical account identifier written into every
 	// OMS v3 ledger event so all order and position events for the BTC paper
@@ -276,6 +279,10 @@ type Orchestrator struct {
 	// auto-promoting or demoting strategies from live rotation.
 	walkForward *scalers.WalkForwardValidator
 
+	// concentrationGate limits same-direction BTC exposure across the curated
+	// scalers strategies (e.g. 3 strategies all going long on the same trend).
+	concentrationGate *ConcentrationGate
+
 	// adaptiveFloor raises the minimum confidence threshold during low data
 	// quality periods.
 	adaptiveFloor *AdaptiveConfidenceFloor
@@ -429,6 +436,10 @@ func NewOrchestrator(
 		portfolioLedger:         paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
 		scalerBundle:            newScalerBundle(),
 		walkForward:             scalers.NewWalkForwardValidator(),
+		concentrationGate: NewConcentrationGate(
+			parseIntEnv("MAX_CORRELATED_STRATEGIES", 2),
+			parseFloatEnv("MAX_CORRELATED_BTC", 0.30),
+		),
 		adaptiveFloor:           NewAdaptiveConfidenceFloor(minExecutableConfidence),
 		// BUG 4: directional caps from env
 		maxOpenLongs:            parseIntEnv("MAX_OPEN_LONG_TRADES", 3),
@@ -478,6 +489,24 @@ func (o *Orchestrator) Push1hKlineCandle(c marketdata.Candle) {
 	o.mu.Unlock()
 	if o.scalerBundle != nil {
 		o.scalerBundle.Push1hCandle(c)
+	}
+}
+
+// PushAggTrade delivers a real Binance aggTrade event to the scaler bundle so
+// CVD can be computed from actual taker-side classification instead of the
+// price-direction proxy. Called by BinanceAggTradeClient on every trade.
+func (o *Orchestrator) PushAggTrade(t marketdata.AggTrade) {
+	if o.scalerBundle != nil {
+		o.scalerBundle.UpdateCVDFromAggTrade(t)
+	}
+}
+
+// SetAggTradeFeedActive marks the Binance aggTrade CVD feed active or
+// inactive. Used by BinanceAggTradeClient on reconnect/disconnect; while
+// inactive, ScalerBundle's CVD falls back to the price-direction proxy.
+func (o *Orchestrator) SetAggTradeFeedActive(active bool) {
+	if o.scalerBundle != nil {
+		o.scalerBundle.SetAggTradeFeedActive(active)
 	}
 }
 
@@ -1371,6 +1400,10 @@ func (o *Orchestrator) process1mCandles(ctx context.Context) {
 			// Update adaptive confidence floor with normalized quality (0-1).
 			if o.adaptiveFloor != nil {
 				o.adaptiveFloor.Update(result.QualityScore / 100.0)
+			}
+			// Feed the live data-quality score to the scalers Kelly sizer.
+			if o.scalerBundle != nil {
+				o.scalerBundle.UpdateDataQuality(result.QualityScore)
 			}
 			action := o.deps.DataValidator.GetAction(result.QualityScore)
 			// Change A: reset sizing modifier, then apply per action.
@@ -2579,6 +2612,18 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 					statusVal = 0
 				}
 				observability.ScalersStrategyStatus.WithLabelValues(event.Position.StrategyName).Set(statusVal)
+			}
+
+			// Release scalers-specific bookkeeping for this closed position.
+			// Gated to scalers strategies only: the directional counters and
+			// concentration gate are only ever incremented by the scalers
+			// execution path (evalAndExecuteScalers), so releasing them for a
+			// non-scalers close would decrement an unrelated strategy's slot.
+			if o.scalerBundle != nil && o.scalerBundle.isScalerStrategy(event.Position.StrategyName) {
+				o.scalerBundle.onScalerTradeClose(string(event.Position.Side))
+				if o.concentrationGate != nil {
+					o.concentrationGate.RecordClose(event.Position.StrategyName)
+				}
 			}
 
 			// Update scalers performance registry so FilterWinnersOnly stays current.

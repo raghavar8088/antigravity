@@ -3,12 +3,47 @@ package scalpers
 import (
 	"log"
 	"math"
+	"os"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
 
-const walkForwardWindow = 30
+// walkForwardWindow is the size of one evaluation window, in closed trades.
+// Configurable via WALKFORWARD_MIN_TRADES (default 30).
+var walkForwardWindow = wfEnvInt("WALKFORWARD_MIN_TRADES", 30)
+
+// Promotion/demotion thresholds, configurable via env vars. Promotion now
+// additionally requires walkForwardConsecutiveWindows passing windows in a
+// row (not just one) before a strategy reaches ACTIVE — a single lucky
+// 30-trade window is too small a sample to trust on its own.
+var (
+	walkForwardWinRateThreshold    = wfEnvFloat("WALKFORWARD_WIN_RATE_THRESHOLD", 0.48)
+	walkForwardSharpeThreshold     = wfEnvFloat("WALKFORWARD_SHARPE_THRESHOLD", 0.60)
+	walkForwardMaxDrawdown         = wfEnvFloat("WALKFORWARD_MAX_DRAWDOWN", 0.20) // reserved: this validator does not yet track drawdown
+	walkForwardConsecutiveWindows  = wfEnvInt("WALKFORWARD_CONSECUTIVE_WINDOWS", 2)
+	walkForwardFastDemoteSharpe    = 0.20
+	walkForwardFastDemoteWinRate   = 0.30
+)
+
+func wfEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+func wfEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
 
 // StrategyStatus represents the lifecycle state of a strategy in the walk-forward validator.
 type StrategyStatus string
@@ -27,29 +62,44 @@ type TradeResult struct {
 
 // WalkForwardSummary is the per-strategy snapshot returned by Summary().
 type WalkForwardSummary struct {
-	Status  StrategyStatus `json:"status"`
-	Sharpe  float64        `json:"sharpe"`
-	WinRate float64        `json:"win_rate"`
-	Trades  int            `json:"trades"`
+	Status                StrategyStatus `json:"status"`
+	Sharpe                float64        `json:"sharpe"`
+	WinRate               float64        `json:"win_rate"`
+	Trades                int            `json:"trades"`
+	AvgWinPct             float64        `json:"avg_win_pct"`  // mean PnLPct of winning trades
+	AvgLossPct            float64        `json:"avg_loss_pct"` // mean abs(PnLPct) of losing trades
+	WindowCount           int            `json:"window_count"`             // completed 30-trade windows
+	ConsecutivePassCount  int            `json:"consecutive_pass_count"`   // consecutive windows clearing the promotion bar
+	TradesInCurrentWindow int            `json:"trades_in_current_window"` // progress toward the next window boundary
 }
 
 // WalkForwardValidator tracks rolling 30-trade performance and promotes or demotes
-// strategies based on Sharpe ratio and win rate thresholds.
+// strategies based on Sharpe ratio and win rate thresholds. Promotion requires
+// walkForwardConsecutiveWindows consecutive passing 30-trade windows (not a
+// single window) to avoid promoting on a lucky streak.
 type WalkForwardValidator struct {
-	mu      sync.RWMutex
-	history map[string][]TradeResult
-	status  map[string]StrategyStatus
+	mu              sync.RWMutex
+	history         map[string][]TradeResult
+	status          map[string]StrategyStatus
+	windowCount     map[string]int // completed (non-overlapping) 30-trade windows
+	consecutivePass map[string]int // consecutive windows that cleared the promotion bar
+	tradesInWindow  map[string]int // trades recorded since the last window boundary (0-29)
 }
 
 // NewWalkForwardValidator creates a ready-to-use validator.
 func NewWalkForwardValidator() *WalkForwardValidator {
 	return &WalkForwardValidator{
-		history: make(map[string][]TradeResult),
-		status:  make(map[string]StrategyStatus),
+		history:         make(map[string][]TradeResult),
+		status:          make(map[string]StrategyStatus),
+		windowCount:     make(map[string]int),
+		consecutivePass: make(map[string]int),
+		tradesInWindow:  make(map[string]int),
 	}
 }
 
-// RecordTrade records a closed trade outcome and re-evaluates the strategy status.
+// RecordTrade records a closed trade outcome. Status is only re-evaluated at
+// 30-trade window boundaries (not on every trade) — see the window-boundary
+// comment below for why.
 func (v *WalkForwardValidator) RecordTrade(strategyName string, pnlPct float64) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -59,11 +109,25 @@ func (v *WalkForwardValidator) RecordTrade(strategyName string, pnlPct float64) 
 		hist = hist[len(hist)-walkForwardWindow:]
 	}
 	v.history[strategyName] = hist
+	v.tradesInWindow[strategyName]++
 
 	if len(hist) < walkForwardWindow {
-		v.status[strategyName] = StatusProbationary
+		if v.status[strategyName] == "" {
+			v.status[strategyName] = StatusProbationary
+		}
 		return
 	}
+
+	// hist is a rolling 30-trade buffer, but window evaluation only fires
+	// once per walkForwardWindow trades (a non-overlapping window boundary).
+	// Without this gate, every single trade would re-evaluate the same
+	// sliding window and "consecutive passing windows" would be meaningless
+	// (every trade would count as one more "window").
+	if v.tradesInWindow[strategyName] < walkForwardWindow {
+		return
+	}
+	v.tradesInWindow[strategyName] = 0
+	v.windowCount[strategyName]++
 
 	sharpe := wfComputeSharpe(hist)
 	winRate := wfComputeWinRate(hist)
@@ -73,14 +137,29 @@ func (v *WalkForwardValidator) RecordTrade(strategyName string, pnlPct float64) 
 		current = StatusProbationary
 	}
 
-	var next StrategyStatus
+	next := current
 	switch {
-	case sharpe >= 0.50 && winRate >= 0.45:
-		next = StatusActive
-	case sharpe < 0.30 || winRate < 0.35:
+	case sharpe < walkForwardFastDemoteSharpe || winRate < walkForwardFastDemoteWinRate:
+		// Fast demotion: any strategy whose window craters drops immediately —
+		// it does not get to "spend" a consecutive-pass streak recovering from
+		// a result this bad. Applies regardless of current status: an
+		// already-DEMOTED or still-PROBATIONARY strategy this bad should not
+		// keep accumulating trade history in live rotation either.
 		next = StatusDemoted
+		v.consecutivePass[strategyName] = 0
+	case sharpe >= walkForwardSharpeThreshold && winRate >= walkForwardWinRateThreshold:
+		v.consecutivePass[strategyName]++
+		if v.consecutivePass[strategyName] >= walkForwardConsecutiveWindows {
+			next = StatusActive
+		}
 	default:
-		next = current
+		// Mediocre window: neither a clear pass nor a crater. Resets the
+		// promotion streak. A DEMOTED strategy stays DEMOTED on a merely
+		// so-so window — only a fresh consecutive-pass streak recovers it.
+		v.consecutivePass[strategyName] = 0
+		if current != StatusDemoted {
+			next = StatusProbationary
+		}
 	}
 
 	// Safety rule: never leave 0 active strategies.
@@ -115,11 +194,15 @@ func (v *WalkForwardValidator) RecordTrade(strategyName string, pnlPct float64) 
 	if old != next {
 		switch next {
 		case StatusActive:
-			log.Printf("[WALKFORWARD] Strategy %s promoted to ACTIVE (Sharpe=%.2f, WinRate=%.2f)",
-				strategyName, sharpe, winRate)
+			log.Printf("[WALKFORWARD] Strategy %s promoted to ACTIVE after %d consecutive passing windows (Sharpe=%.2f, WinRate=%.2f)",
+				strategyName, v.consecutivePass[strategyName], sharpe, winRate)
 		case StatusDemoted:
-			log.Printf("[WALKFORWARD] Strategy %s DEMOTED (Sharpe=%.2f, WinRate=%.2f) — removed from live rotation",
-				strategyName, sharpe, winRate)
+			if sharpe < walkForwardFastDemoteSharpe || winRate < walkForwardFastDemoteWinRate {
+				log.Printf("[WALKFORWARD] Strategy %s fast-demoted: Sharpe=%.2f WinRate=%.2f", strategyName, sharpe, winRate)
+			} else {
+				log.Printf("[WALKFORWARD] Strategy %s DEMOTED (Sharpe=%.2f, WinRate=%.2f) — removed from live rotation",
+					strategyName, sharpe, winRate)
+			}
 		}
 	}
 }
@@ -170,17 +253,56 @@ func (v *WalkForwardValidator) Summary() map[string]WalkForwardSummary {
 		hist := v.history[name]
 		sharpe := 0.0
 		winRate := wfComputeWinRate(hist)
+		avgWin, avgLoss := wfComputeAvgWinLoss(hist)
 		if len(hist) >= walkForwardWindow {
 			sharpe = wfComputeSharpe(hist)
 		}
 		out[name] = WalkForwardSummary{
-			Status:  s,
-			Sharpe:  sharpe,
-			WinRate: winRate,
-			Trades:  len(hist),
+			Status:                s,
+			Sharpe:                sharpe,
+			WinRate:               winRate,
+			Trades:                len(hist),
+			AvgWinPct:             avgWin,
+			AvgLossPct:            avgLoss,
+			WindowCount:           v.windowCount[name],
+			ConsecutivePassCount:  v.consecutivePass[name],
+			TradesInCurrentWindow: v.tradesInWindow[name],
 		}
 	}
 	return out
+}
+
+// GetSummary returns the current snapshot for a single strategy and whether
+// any trade history has been recorded for it yet. Used by Kelly sizing to
+// decide between live trade statistics and a conservative probationary
+// fallback (see evalAndExecuteScalers in the trading package).
+func (v *WalkForwardValidator) GetSummary(strategyName string) (WalkForwardSummary, bool) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	hist, ok := v.history[strategyName]
+	if !ok || len(hist) == 0 {
+		return WalkForwardSummary{}, false
+	}
+	s := v.status[strategyName]
+	if s == "" {
+		s = StatusProbationary
+	}
+	sharpe := 0.0
+	if len(hist) >= walkForwardWindow {
+		sharpe = wfComputeSharpe(hist)
+	}
+	avgWin, avgLoss := wfComputeAvgWinLoss(hist)
+	return WalkForwardSummary{
+		Status:                s,
+		Sharpe:                sharpe,
+		WinRate:               wfComputeWinRate(hist),
+		Trades:                len(hist),
+		AvgWinPct:             avgWin,
+		AvgLossPct:            avgLoss,
+		WindowCount:           v.windowCount[strategyName],
+		ConsecutivePassCount:  v.consecutivePass[strategyName],
+		TradesInCurrentWindow: v.tradesInWindow[strategyName],
+	}, true
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────────
@@ -199,6 +321,30 @@ func wfComputeSharpe(hist []TradeResult) float64 {
 		return 0
 	}
 	return (mean / sd) * math.Sqrt(252)
+}
+
+// wfComputeAvgWinLoss returns the mean PnLPct of winning trades and the mean
+// absolute PnLPct of losing trades (always >= 0). Either is 0 if there are
+// no trades of that kind in hist.
+func wfComputeAvgWinLoss(hist []TradeResult) (avgWin, avgLoss float64) {
+	var winSum, lossSum float64
+	var winN, lossN int
+	for _, t := range hist {
+		if t.PnLPct > 0 {
+			winSum += t.PnLPct
+			winN++
+		} else if t.PnLPct < 0 {
+			lossSum += -t.PnLPct
+			lossN++
+		}
+	}
+	if winN > 0 {
+		avgWin = winSum / float64(winN)
+	}
+	if lossN > 0 {
+		avgLoss = lossSum / float64(lossN)
+	}
+	return avgWin, avgLoss
 }
 
 func wfComputeWinRate(hist []TradeResult) float64 {

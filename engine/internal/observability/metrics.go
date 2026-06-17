@@ -890,6 +890,33 @@ var (
 		Name: "trading_scalers_oi_feed_active",
 		Help: "1 if OI data present in last MarketContext, 0 if missing",
 	})
+
+	// ScalersKellyPositionUSD records the Kelly-computed position size (USD) per strategy.
+	ScalersKellyPositionUSD = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_scalers_kelly_position_usd",
+		Help: "Kelly-computed position size in USD per strategy",
+	}, []string{"strategy"})
+
+	// ScalersCVDSource is 1 when CVD is computed from the real Binance aggTrade
+	// feed, 0 when falling back to the price-direction proxy.
+	ScalersCVDSource = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_scalers_cvd_source",
+		Help: "1.0 = real aggTrade feed, 0.0 = price-proxy fallback",
+	})
+
+	// ScalersConcentrationBTC tracks current same-direction BTC exposure across
+	// concurrently open scalers positions, per direction.
+	ScalersConcentrationBTC = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_scalers_concentration_btc",
+		Help: "Current same-direction BTC exposure across open scalers positions",
+	}, []string{"direction"})
+
+	// ScalersMetaLabelSuppressed counts signals suppressed by the meta-labeling
+	// confluence filter, per strategy and failing-axis reason.
+	ScalersMetaLabelSuppressed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_scalers_meta_label_suppressed_total",
+		Help: "Total signals suppressed by the meta-label confluence filter, per strategy and reason",
+	}, []string{"strategy", "reason"})
 )
 
 // ─────────────────────────────────────────────
