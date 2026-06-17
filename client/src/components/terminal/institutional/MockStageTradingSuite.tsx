@@ -673,12 +673,16 @@ function ClosedTradesTable({
   visibleLimit,
   nowMs,
   onShowMore,
+  onClearTrade,
+  clearingTradeId,
 }: {
   trades: MockTrade[];
   analytics: ReturnType<typeof computeAnalytics>;
   visibleLimit: number;
   nowMs: number;
   onShowMore: () => void;
+  onClearTrade: (tradeId: string) => void;
+  clearingTradeId: string | null;
 }) {
   const visibleTrades = trades.slice(0, visibleLimit);
   const hasMore = trades.length > visibleTrades.length;
@@ -725,8 +729,8 @@ function ClosedTradesTable({
           <table style={tableStyle}>
             <thead>
               <tr>
-                {["STRATEGY", "SIDE", "OPENED (IST)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION"].map((header, index) => (
-                  <th key={header} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 || index === 6 ? "left" : "right" }}>
+                {["STRATEGY", "SIDE", "OPENED (IST)", "ENTRY", "EXIT", "PnL", "REASON", "DURATION", ""].map((header, index) => (
+                  <th key={header || "actions"} style={{ ...thStyle, textAlign: index === 0 || index === 1 || index === 2 || index === 6 ? "left" : "right" }}>
                     {header}
                   </th>
                 ))}
@@ -779,6 +783,29 @@ function ClosedTradesTable({
                     </td>
                     <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>
                       {fmtAge(trade.openedAt, trade.closedAt ?? nowMs)}
+                    </td>
+                    <td style={{ ...tdStyle, textAlign: "right", width: 44 }}>
+                      <button
+                        type="button"
+                        title="Remove this closed trade"
+                        aria-label={`Remove closed trade ${trade.strategyName}`}
+                        disabled={clearingTradeId === trade.id}
+                        onClick={() => onClearTrade(trade.id)}
+                        style={{
+                          border: "1px solid var(--border-subtle, var(--border))",
+                          borderRadius: 6,
+                          background: "#fff",
+                          color: "var(--text-muted)",
+                          cursor: clearingTradeId === trade.id ? "wait" : "pointer",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                          opacity: clearingTradeId === trade.id ? 0.6 : 1,
+                          padding: "4px 7px",
+                        }}
+                      >
+                        {clearingTradeId === trade.id ? "…" : "Clear"}
+                      </button>
                     </td>
                   </tr>
                 );
@@ -921,6 +948,8 @@ export function MockStageTradingSuite({
 }: MockStageTradingSuiteProps) {
   const live = useLiveBTCPrice();
   const [closedVisibleLimit, setClosedVisibleLimit] = useState(CLOSED_TRADE_INITIAL_LIMIT);
+  const [clearingTradeId, setClearingTradeId] = useState<string | null>(null);
+  const [clearingAllClosed, setClearingAllClosed] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [scalersStats, setScalersStats] = useState<ScalersStatsState>(UNKNOWN_SCALERS_STATS);
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "config">("overview");
@@ -992,6 +1021,21 @@ export function MockStageTradingSuite({
     setClosedVisibleLimit(CLOSED_TRADE_INITIAL_LIMIT);
   }, [status]);
 
+  const handleClearClosedTrade = (tradeId: string) => {
+    const cleared = engine.deleteClosedTrade(tradeId);
+    if (!cleared) return;
+    setClearingTradeId(tradeId);
+    window.setTimeout(() => setClearingTradeId((current) => (current === tradeId ? null : current)), 400);
+  };
+
+  const handleClearAllClosedTrades = () => {
+    const cleared = engine.clearClosedTrades();
+    if (!cleared) return;
+    setClearingAllClosed(true);
+    setClosedVisibleLimit(CLOSED_TRADE_INITIAL_LIMIT);
+    window.setTimeout(() => setClearingAllClosed(false), 400);
+  };
+
   const leaderboard = useMemo(
     () => rankStrategies({ trades: sourceTrades }).rows.slice(0, LEADERBOARD_LIMIT),
     [sourceTrades],
@@ -1004,7 +1048,8 @@ export function MockStageTradingSuite({
   );
 
   const priceReady = Number.isFinite(live.price) && live.price > 0;
-  const isInitialLoading = engine.loading || engine.persistence.loading || engine.history.loading;
+  const isInitialLoading =
+    engine.persistence.loading && engine.persistence.lastHydratedAt == null;
   const maxOpen = engine.config.maxOpenMockTrades;
   const winRatePct = analytics.winRate * 100;
   const winRateAccent = analytics.closedTrades > 0 && winRatePct > 50 ? "var(--green)" : analytics.closedTrades > 0 && winRatePct < 50 ? "var(--amber)" : "var(--border)";
@@ -1190,6 +1235,29 @@ export function MockStageTradingSuite({
       <TerminalCard
         title="Closed Trades"
         subtitle={`${allClosedTrades.length.toLocaleString()} closed · newest first · table starts with last ${CLOSED_TRADE_INITIAL_LIMIT}`}
+        actions={
+          allClosedTrades.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleClearAllClosedTrades}
+              disabled={clearingAllClosed}
+              style={{
+                border: "1px solid var(--border-subtle, var(--border))",
+                borderRadius: 8,
+                background: "#fff",
+                color: "var(--red, #c0392b)",
+                cursor: clearingAllClosed ? "wait" : "pointer",
+                fontSize: 11,
+                fontWeight: 700,
+                opacity: clearingAllClosed ? 0.65 : 1,
+                padding: "6px 10px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {clearingAllClosed ? "Clearing…" : "Clear all"}
+            </button>
+          ) : null
+        }
       >
         <ClosedTradesTable
           trades={allClosedTrades}
@@ -1199,6 +1267,8 @@ export function MockStageTradingSuite({
           onShowMore={() =>
             setClosedVisibleLimit((current) => Math.min(current + CLOSED_TRADE_LIMIT_STEP, allClosedTrades.length))
           }
+          onClearTrade={handleClearClosedTrade}
+          clearingTradeId={clearingTradeId}
         />
       </TerminalCard>
     </>

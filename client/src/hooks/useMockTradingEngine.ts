@@ -46,6 +46,7 @@ import type { ExecutorDiagnosis } from "@/lib/mockTradingExecutor/diagnoseExecut
 import {
   DEFAULT_MOCK_ACCOUNT_KEY,
   MOCK_RESET_CONFIRMATION,
+  MOCK_CLEAR_CLOSED_CONFIRMATION,
   mergeHydratedMockTrades,
   mergePortfolioTrades,
   type MockAccountSnapshotResponse,
@@ -201,6 +202,10 @@ export interface UseMockTradingEngineResult {
   closeTrade: (tradeId: string) => void;
   /** Clear every trade and log (for analysis resets). */
   reset: () => void;
+  /** Remove all closed trades; open positions and balance are kept. */
+  clearClosedTrades: () => boolean;
+  /** Remove one closed trade by id. */
+  deleteClosedTrade: (tradeId: string) => boolean;
   loading: boolean;
   error: string | null;
   traceAgeSeconds: number | null;
@@ -970,9 +975,6 @@ export function useMockTradingEngine(
         for (const open of json.trades) byId.set(open.id, open);
         return [...byId.values()];
       });
-      if (historyPage === 1) {
-        void loadHistoryPage(1);
-      }
     };
 
     const pollExecutor = async () => {
@@ -1021,8 +1023,6 @@ export function useMockTradingEngine(
     };
   }, [
     executorStatusPollMs,
-    historyPage,
-    loadHistoryPage,
     mockAccountKey,
     persistenceDisabled,
     refetchExecutorStatus,
@@ -1158,6 +1158,60 @@ export function useMockTradingEngine(
     }
   }, [markPersistenceError, markPersistenceOk, mockAccountKey, persistenceDisabled]);
 
+  const removeClosedFromState = useCallback((tradeId?: string) => {
+    const isClosedTarget = (trade: MockTrade) =>
+      trade.status === "CLOSED" && (tradeId == null || trade.id === tradeId);
+    setTrades((prev) => prev.filter((trade) => !isClosedTarget(trade)));
+    setHistoryTrades((prev) => prev.filter((trade) => !isClosedTarget(trade)));
+    setSummaryTrades((prev) => prev.filter((trade) => !isClosedTarget(trade)));
+    setHistoryMeta((prev) => ({
+      ...prev,
+      total: tradeId == null ? 0 : Math.max(0, prev.total - 1),
+    }));
+  }, []);
+
+  const clearClosedTrades = useCallback((): boolean => {
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm("Clear all closed trades from history? Open positions and balance will be kept.");
+    if (!confirmed) return false;
+    removeClosedFromState();
+    if (!persistenceDisabled) {
+      void fetch("/api/mock-trading/trades/closed", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountKey: mockAccountKey, confirmation: MOCK_CLEAR_CLOSED_CONFIRMATION }),
+      }).then((res) => {
+        if (res.ok) markPersistenceOk();
+        else markPersistenceError(`Clear closed trades failed: HTTP ${res.status}`, res.status === 503);
+      }).catch((err: Error) => markPersistenceError(err.message));
+    }
+    return true;
+  }, [markPersistenceError, markPersistenceOk, mockAccountKey, persistenceDisabled, removeClosedFromState]);
+
+  const deleteClosedTrade = useCallback((tradeId: string): boolean => {
+    const exists = [...trades, ...historyTrades, ...summaryTrades].some(
+      (trade) => trade.id === tradeId && trade.status === "CLOSED",
+    );
+    if (!exists) return false;
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm("Remove this closed trade from history?");
+    if (!confirmed) return false;
+    removeClosedFromState(tradeId);
+    if (!persistenceDisabled) {
+      void fetch(`/api/mock-trading/trades/${encodeURIComponent(tradeId)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountKey: mockAccountKey }),
+      }).then((res) => {
+        if (res.ok) markPersistenceOk();
+        else markPersistenceError(`Delete trade failed: HTTP ${res.status}`, res.status === 503);
+      }).catch((err: Error) => markPersistenceError(err.message));
+    }
+    return true;
+  }, [historyTrades, markPersistenceError, markPersistenceOk, mockAccountKey, persistenceDisabled, removeClosedFromState, summaryTrades, trades]);
+
   const basePortfolioTrades = useMemo(
     () => mergePortfolioTrades(trades, summaryTrades.length > 0 ? summaryTrades : historyTrades),
     [trades, summaryTrades, historyTrades],
@@ -1208,6 +1262,8 @@ export function useMockTradingEngine(
     ingestResearchSignals,
     closeTrade,
     reset,
+    clearClosedTrades,
+    deleteClosedTrade,
     loading,
     error,
     traceAgeSeconds,

@@ -1,7 +1,6 @@
 ﻿import { NextResponse } from "next/server";
 import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
-import { getMockTrade, upsertMockTrade } from "@/lib/trading/mockTradingMongo";
-import { mockTradePatchBodySchema } from "@/lib/trading/mockTradingPersistenceTypes";
+import { getMockTrade, deleteClosedMockTrade } from "@/lib/trading/mockTradingMongo";
 import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
 
 export const dynamic = "force-dynamic";
@@ -33,4 +32,44 @@ export async function PATCH() {
     { ok: false, code: "DEPRECATED", error: "Browser trade updates are disabled. The Go engine owns position mark-to-market. Read positions from /api/paper-desk/positions." },
     { status: 410 },
   );
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  if (!id?.trim()) {
+    return NextResponse.json({ ok: false, code: "VALIDATION_FAILED", error: "Trade id required" }, { status: 400 });
+  }
+  if (!isMongoConfigured()) return mongoNotConfigured();
+
+  let accountKey = OWNER_ACCOUNT_KEY;
+  try {
+    const body = await req.json() as { accountKey?: string };
+    if (body.accountKey?.trim()) accountKey = body.accountKey.trim();
+  } catch {
+    // accountKey optional — default to owner key
+  }
+
+  try {
+    const result = await deleteClosedMockTrade(accountKey, id);
+    if (!result.deleted) {
+      return NextResponse.json(
+        { ok: false, code: "NOT_FOUND", error: "Closed mock trade not found" },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ ok: true, storage: "mongo", tradeId: id, deleted: true });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MONGO_WRITE_FAILED",
+        error: "Mongo write failed",
+        detail: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
 }

@@ -10,6 +10,7 @@ import {
 
 export const DEFAULT_MOCK_ACCOUNT_KEY = "mock_trading_main";
 export const MOCK_RESET_CONFIRMATION = "RESET_MOCK_TRADING";
+export const MOCK_CLEAR_CLOSED_CONFIRMATION = "CLEAR_CLOSED_TRADES";
 
 const finiteNumber = z.number().finite();
 const nonNegativeNumber = finiteNumber.min(0);
@@ -276,6 +277,13 @@ export const mockResetBodySchema = z
   .object({
     accountKey: mockAccountKeySchema.default(DEFAULT_MOCK_ACCOUNT_KEY),
     confirmation: z.literal(MOCK_RESET_CONFIRMATION),
+  })
+  .strict();
+
+export const mockClearClosedBodySchema = z
+  .object({
+    accountKey: mockAccountKeySchema.default(DEFAULT_MOCK_ACCOUNT_KEY),
+    confirmation: z.literal(MOCK_CLEAR_CLOSED_CONFIRMATION),
   })
   .strict();
 

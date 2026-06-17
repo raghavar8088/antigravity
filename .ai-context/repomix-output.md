@@ -99,6 +99,8 @@ The content is organized as follows:
   app/api/mock-trading/stream/route.ts
   app/api/mock-trading/trades/[id]/close/route.ts
   app/api/mock-trading/trades/[id]/route.ts
+  app/api/mock-trading/trades/closed/route.test.ts
+  app/api/mock-trading/trades/closed/route.ts
   app/api/mock-trading/trades/export/route.ts
   app/api/mock-trading/trades/route.test.ts
   app/api/mock-trading/trades/route.ts
