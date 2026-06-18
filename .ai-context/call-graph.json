@@ -1,1 +1,1 @@
-{}
+{"client/src/app/api/mock-trading/daily-pnl-summary/route.ts::GET()":["client/src/lib/trading/mockTradingEngine.ts::computeDailyPnl()"]}

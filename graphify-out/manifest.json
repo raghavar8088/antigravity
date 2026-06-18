@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "client/package.json": {
-    "mtime": 1781376935.912426,
-    "ast_hash": "64a85a09b0b54ec81b248871a1343d45",
+    "mtime": 1781707375.410177,
+    "ast_hash": "5d381504873a674df2d75bcede9b40d8",
     "semantic_hash": ""
   },
   "client/postcss.config.mjs": {
@@ -380,8 +380,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/signal-tick/route.ts": {
-    "mtime": 1781458160.496798,
-    "ast_hash": "d7500602259d3e8ec7eda56891eabd04",
+    "mtime": 1781707348.997717,
+    "ast_hash": "3123839e81676259e46fb3454f9a4e16",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/signals/route.ts": {
@@ -400,8 +400,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/trades/[id]/route.ts": {
-    "mtime": 1781376935.9649684,
-    "ast_hash": "3c399a4e6522e7ffddf9726723bfc189",
+    "mtime": 1781712311.8601315,
+    "ast_hash": "543296ba544f5804a81739346d0b7dd2",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/trades/route.test.ts": {
@@ -895,13 +895,13 @@
     "semantic_hash": ""
   },
   "client/src/components/MockTradingDashboard.test.tsx": {
-    "mtime": 1781376936.0452895,
-    "ast_hash": "1acc87183cbde666a6d4fdb87d38f5f2",
+    "mtime": 1781708571.8246777,
+    "ast_hash": "5653a98de3d348350b6826b71d21f450",
     "semantic_hash": ""
   },
   "client/src/components/MockTradingDashboard.tsx": {
-    "mtime": 1781453873.47303,
-    "ast_hash": "22a032e6e76d3dd46cb78e5ba58af92f",
+    "mtime": 1781708154.1369836,
+    "ast_hash": "887f50a20b3b67ed7635ec3c2017b0bf",
     "semantic_hash": ""
   },
   "client/src/components/NotePadPanel.tsx": {
@@ -1275,8 +1275,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/MockStageTradingSuite.tsx": {
-    "mtime": 1781623364.786004,
-    "ast_hash": "8551b1702fa7b394174a0a80fc37cc9e",
+    "mtime": 1781712333.6116145,
+    "ast_hash": "cc8253de5e3dda6e03b6c0ed94542bae",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/NavIcons.tsx": {
@@ -1605,8 +1605,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useMockTradingEngine.ts": {
-    "mtime": 1781548746.7201355,
-    "ast_hash": "55d8615345dd7d2812e4d426cce91083",
+    "mtime": 1781712321.9278548,
+    "ast_hash": "3a5d394a5e4eeb778cfb1119e132c4d3",
     "semantic_hash": ""
   },
   "client/src/hooks/useOptionChain.ts": {
@@ -2780,18 +2780,18 @@
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingMongo.ts": {
-    "mtime": 1781536328.1001117,
-    "ast_hash": "4ad65718356a69574593a0067791e56d",
+    "mtime": 1781715823.4846923,
+    "ast_hash": "03aaee11ffedebc78f63a150af71ed16",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingPersistenceTypes.ts": {
-    "mtime": 1781460063.019457,
-    "ast_hash": "45bf9ba0c4488b5c47efc68addaf7790",
+    "mtime": 1781715289.0680697,
+    "ast_hash": "d28a1e88bdd9fc39463e91d7d69942cb",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingSignalEvaluator.ts": {
-    "mtime": 1781376936.2869117,
-    "ast_hash": "7c02211f7f9e9e30cee599a2ded9ac33",
+    "mtime": 1781710769.6754963,
+    "ast_hash": "d18512d92e7904cfcdeec846ffef1297",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingSnapshotService.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1781580051.4111216,
-    "ast_hash": "f92b829ec03299ec0ff31d8c8c641011",
+    "mtime": 1781633981.2203753,
+    "ast_hash": "4cc4055fec6d6f70786591a8a67abec7",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -3900,8 +3900,8 @@
     "semantic_hash": ""
   },
   "engine/internal/execution/paper.go": {
-    "mtime": 1781624633.9165742,
-    "ast_hash": "46d4ba038563b6a7056df425276c289c",
+    "mtime": 1781634326.8602097,
+    "ast_hash": "62f748f8d790d7b18d7cf856209732cc",
     "semantic_hash": ""
   },
   "engine/internal/execution/paper_balance_test.go": {
@@ -4415,8 +4415,8 @@
     "semantic_hash": ""
   },
   "engine/internal/observability/metrics.go": {
-    "mtime": 1781579816.3637238,
-    "ast_hash": "412036f302e45b4fc325a2118f483e5e",
+    "mtime": 1781634228.3957288,
+    "ast_hash": "ad5d155b8d666606192b0d3ab3c453c6",
     "semantic_hash": ""
   },
   "engine/internal/observability/middleware.go": {
@@ -5915,8 +5915,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/loop.go": {
-    "mtime": 1781624563.0261667,
-    "ast_hash": "81a563e53736bc190254d7a527ca3e7e",
+    "mtime": 1781634173.4529903,
+    "ast_hash": "61eeac219b08973e310614b77c630641",
     "semantic_hash": ""
   },
   "engine/internal/trading/loop_deps.go": {
@@ -21905,8 +21905,8 @@
     "semantic_hash": ""
   },
   "vercel.json": {
-    "mtime": 1781376939.6411984,
-    "ast_hash": "9f5afd1701a281037cfe238d8e9bebb9",
+    "mtime": 1781707377.3100607,
+    "ast_hash": "7047d2fc15c43438d986df172fd72185",
     "semantic_hash": ""
   },
   ".cursor/skills/trading-app-guide/REFERENCE.md": {
@@ -22780,12 +22780,12 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781632978.7362547,
-    "ast_hash": "1d637315957d23e9f52769abb7a045f8",
+    "mtime": 1781715989.0376594,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781632978.7362547,
+    "mtime": 1781715989.0376594,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781632978.7362547,
-    "ast_hash": "9aa1e9d83098035a25b489abb5fb8811",
+    "mtime": 1781715989.0376594,
+    "ast_hash": "6c637b5acb098d5abdc4f00a954370bf",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781632978.7362547,
-    "ast_hash": "2c2eef727fc98ff23cabf53730c3a67d",
+    "mtime": 1781715989.0376594,
+    "ast_hash": "fc2e958be2b4a0f05e18dc519744be69",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781632980.8809342,
-    "ast_hash": "1a0e49f9269d06f41ab58df3a72aad28",
+    "mtime": 1781715990.595459,
+    "ast_hash": "9581cc998163553a65ccf26fab3f2d82",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23060,8 +23060,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/curated_expansion_pack.go": {
-    "mtime": 1781411722.4805171,
-    "ast_hash": "750cbe4bf48666bc4271fb0a7b99e019",
+    "mtime": 1781634420.9624279,
+    "ast_hash": "0669dd3acde9fe18332631a572738fbf",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/curated_registry.go": {
@@ -23125,13 +23125,13 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/types.go": {
-    "mtime": 1781624653.2306795,
-    "ast_hash": "7ff692ba84c430a2e0ed247b0a9cd456",
+    "mtime": 1781634344.387738,
+    "ast_hash": "33fd46226c597a50ef070853e8d1213e",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
-    "mtime": 1781624660.3342996,
-    "ast_hash": "85b37a7f42091f9d93acf399a0bb7c33",
+    "mtime": 1781634455.8949714,
+    "ast_hash": "986489497d3153cad6ed225f5f5d4bd0",
     "semantic_hash": ""
   },
   "engine/internal/strategy/types.go": {
@@ -23145,8 +23145,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1781624676.1235528,
-    "ast_hash": "5e3eaead0af5eeac8beca84c2109ae37",
+    "mtime": 1781634429.7224493,
+    "ast_hash": "024f0810aaa9c887e2515364c9e052a8",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {
@@ -23427,6 +23427,211 @@
   "client/src/lib/killswitch/releaseEngineKillSwitch.ts": {
     "mtime": 1781547505.1022768,
     "ast_hash": "58efea796e9b8e3fc93b274296290c09",
+    "semantic_hash": ""
+  },
+  "engine/internal/execution/slippage.go": {
+    "mtime": 1781634261.308941,
+    "ast_hash": "581a68d614d6f31b2ad37a5658aae621",
+    "semantic_hash": ""
+  },
+  "engine/internal/marketdata/binance_aggtrade.go": {
+    "mtime": 1781633947.7879379,
+    "ast_hash": "3879cb72bcc0762cc99a5f61682b2943",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s10_smc_order_block_fvg.go": {
+    "mtime": 1781634415.6897247,
+    "ast_hash": "6c65c8d233553da315e85b768343eacf",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s10_smc_order_block_fvg_test.go": {
+    "mtime": 1781634560.7095692,
+    "ast_hash": "7d77f561619a53a592434dec005c94e6",
+    "semantic_hash": ""
+  },
+  "engine/internal/trading/concentration_gate.go": {
+    "mtime": 1781634116.686999,
+    "ast_hash": "1ff1cdcb5f1cd105a05b14074b5a9605",
+    "semantic_hash": ""
+  },
+  "engine/internal/trading/meta_label.go": {
+    "mtime": 1781634242.5373344,
+    "ast_hash": "8c50d65ac63b5a7757dfbba809be8509",
+    "semantic_hash": ""
+  },
+  "engine/internal/trading/meta_label_test.go": {
+    "mtime": 1781634316.4204004,
+    "ast_hash": "82accf530ea4b9783510b9edf419580b",
+    "semantic_hash": ""
+  },
+  "client/ecosystem.config.js": {
+    "mtime": 1781707373.9881,
+    "ast_hash": "1d5cd6e0ca281ec0c30913ec1f342c08",
+    "semantic_hash": ""
+  },
+  "client/scripts/fix-corrupt-mock-trades.ts": {
+    "mtime": 1781707374.9537416,
+    "ast_hash": "af8d1bb39fe8d5584df09b7a2e096658",
+    "semantic_hash": ""
+  },
+  "client/scripts/mock-trading-executor-worker.ts": {
+    "mtime": 1781707373.4950812,
+    "ast_hash": "ad8b46ed95f0a7580d613b5fa5df51b6",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/cron/mock-trading-tick/route.ts": {
+    "mtime": 1781707343.5607896,
+    "ast_hash": "da7484011916a2778e8fd928751b4aee",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/executor-status/route.ts": {
+    "mtime": 1781710737.0338368,
+    "ast_hash": "db72a27d88734337e707cbff2f6c7bc9",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/diagnoseExecutor.ts": {
+    "mtime": 1781708526.4276032,
+    "ast_hash": "798d821525069fdf4e2139c92b4ce22e",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/evaluateMockTradingTick.ts": {
+    "mtime": 1781710688.9534495,
+    "ast_hash": "527fc119f9cd7bd1e3dd1f90fb9919b8",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/funnelFromTrace.ts": {
+    "mtime": 1781707473.4380982,
+    "ast_hash": "cd1df54e32a97d159b7813f5cda61e5a",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/persistExecutorState.ts": {
+    "mtime": 1781710696.6240082,
+    "ast_hash": "06ce6bace23075abd53efd9c7a015a18",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/processTrades.ts": {
+    "mtime": 1781707371.439677,
+    "ast_hash": "40fece7037c1ba681fc87fb59c680ca9",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/runMockTradingExecutorCycle.ts": {
+    "mtime": 1781710690.2192957,
+    "ast_hash": "d49e6a1ef0238ec99775fe638428abdd",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/types.ts": {
+    "mtime": 1781707307.4124663,
+    "ast_hash": "67e47c3bc2b1a0e24a411033ea7f0eb8",
+    "semantic_hash": ""
+  },
+  "client/src/lib/tests/mockTradingExecutor.test.ts": {
+    "mtime": 1781708554.174307,
+    "ast_hash": "579f8ae962da3ef449f0a80b1d998d47",
+    "semantic_hash": ""
+  },
+  "client/src/lib/tests/mockTradingExecutorFunnel.test.ts": {
+    "mtime": 1781707382.3583033,
+    "ast_hash": "93f64c7127176b4e95aa606f482433e8",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/cron/mock-trading-executor/route.ts": {
+    "mtime": 1781708184.8563426,
+    "ast_hash": "a822d4625f8d6dae408ab027e08543df",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/diagnostics/health/route.ts": {
+    "mtime": 1781708153.23763,
+    "ast_hash": "1b20301d0e0398a85022f1bc0d06dc76",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/signal-trace/route.ts": {
+    "mtime": 1781708152.2589118,
+    "ast_hash": "92f5bb1495e929cf59e8de976f8d386b",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/diagnosticsHealth.ts": {
+    "mtime": 1781708148.9976392,
+    "ast_hash": "c4a91f0cdb8e104895bb15130c94e9cb",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/healingEngine.ts": {
+    "mtime": 1781708526.7471237,
+    "ast_hash": "656652f3bf61288f1ae7b84b10e784c9",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/signalTraceDiagnostic.ts": {
+    "mtime": 1781708146.8808548,
+    "ast_hash": "ce3dfdc52627eda170110057495bada9",
+    "semantic_hash": ""
+  },
+  "client/src/lib/tests/mockTradingExecutorDiagnostics.test.ts": {
+    "mtime": 1781708558.3136501,
+    "ast_hash": "844569703c9f64ae30947ba757388c8a",
+    "semantic_hash": ""
+  },
+  "GO_LIVE_RUNBOOK.md": {
+    "mtime": 1781708567.6055992,
+    "ast_hash": "03f50f3956b97c79bc2e7acd25908998",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/config/history/route.ts": {
+    "mtime": 1781710699.1825068,
+    "ast_hash": "d40a8694e7e939cb0fdf98a7fa1995c5",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/config/route.ts": {
+    "mtime": 1781710698.769239,
+    "ast_hash": "02ab08a7eef521e9374811bf38e35148",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/signal-impact/route.ts": {
+    "mtime": 1781710700.4996192,
+    "ast_hash": "34802c067310ee49ca0a6b1aa2e47588",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/MockTradingConfigurationPanel.tsx": {
+    "mtime": 1781710774.3546257,
+    "ast_hash": "febc15eff2c99c3d181d22fd8b234a5a",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/executorConfig.ts": {
+    "mtime": 1781710769.5444822,
+    "ast_hash": "46c84ffb8812f301b10045f1e908d046",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/executorConfigConstants.ts": {
+    "mtime": 1781710765.8423996,
+    "ast_hash": "95c8b82135e400b1cad0c662e8f1b330",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/signalImpact.ts": {
+    "mtime": 1781710778.086309,
+    "ast_hash": "736ebd52cd59b50621a2683f238a619e",
+    "semantic_hash": ""
+  },
+  "client/src/lib/mockTradingExecutor/signalImpactTypes.ts": {
+    "mtime": 1781710771.1086857,
+    "ast_hash": "f00cb6731233d627ff45e9618299e1c0",
+    "semantic_hash": ""
+  },
+  "client/src/lib/tests/mockTradingConfigurationPanel.test.ts": {
+    "mtime": 1781710774.902829,
+    "ast_hash": "e64c6db85ffd1186da12c588dc094e79",
+    "semantic_hash": ""
+  },
+  "client/src/lib/tests/mockTradingExecutorConfig.test.ts": {
+    "mtime": 1781710774.7795265,
+    "ast_hash": "d5bdb34c8da11d2f30e5ed9c878ef0df",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/trades/closed/route.test.ts": {
+    "mtime": 1781715824.2102013,
+    "ast_hash": "9b92800a3e6b367ab68d710c6a37b3fc",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/trades/closed/route.ts": {
+    "mtime": 1781712278.0967946,
+    "ast_hash": "47dd3e5adeb281e81bcac11a17f82ae0",
     "semantic_hash": ""
   }
 }

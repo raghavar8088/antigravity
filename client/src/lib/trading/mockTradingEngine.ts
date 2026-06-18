@@ -1488,6 +1488,169 @@ export function computeAnalytics(trades: readonly MockTrade[]): MockTradeAnalyti
   };
 }
 
+// ── Daily PnL ────────────────────────────────────────────────────────────────
+
+const DAILY_PNL_DISPLAY_TIMEZONE = "Asia/Kolkata";
+
+export interface DailyPnlRow {
+  /** UTC calendar date (YYYY-MM-DD) of closedAt for the trades in this bucket. */
+  date: string;
+  /** IST calendar date (YYYY-MM-DD) — the actual grouping key (trading-day boundary). */
+  dateIst: string;
+  realizedPnl: number;
+  tradeCount: number;
+  winCount: number;
+  lossCount: number;
+  /** 0..1 fraction, winCount / tradeCount. */
+  winRate: number;
+  startingEquity: number;
+  endingEquity: number;
+  /** Percent, e.g. 0.359 = 0.359%. */
+  pnlPct: number;
+  bestTrade: number;
+  worstTrade: number;
+  strategies: string[];
+}
+
+export interface DailyPnlSummary {
+  totalDaysTraded: number;
+  bestDayPnl: number;
+  worstDayPnl: number;
+  avgDailyPnl: number;
+  avgDailyPct: number;
+  currentStreak: number;
+  streakType: "winning" | "losing";
+}
+
+export interface DailyPnlResult {
+  /** Newest day first. */
+  days: DailyPnlRow[];
+  summary: DailyPnlSummary | null;
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/** IST (UTC+5:30) calendar date string for a UTC timestamp — used as the daily-bucket key. */
+function istDateKey(ms: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: DAILY_PNL_DISPLAY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(ms);
+}
+
+/**
+ * Buckets closed trades by IST trading day and derives per-day PnL stats plus
+ * a rolling streak summary. startingEquity/endingEquity are computed
+ * cumulatively from startingBalanceUsd (no dependency on equity_curve
+ * snapshot coverage, which can have gaps).
+ */
+export function computeDailyPnl(trades: readonly MockTrade[], startingBalanceUsd: number): DailyPnlResult {
+  const closed = trades
+    .filter((t): t is MockTrade & { closedAt: number } => t.status === "CLOSED" && t.closedAt != null)
+    .sort((a, b) => a.closedAt - b.closedAt);
+
+  if (closed.length === 0) return { days: [], summary: null };
+
+  type Bucket = {
+    dateIst: string;
+    date: string;
+    realizedPnl: number;
+    tradeCount: number;
+    winCount: number;
+    lossCount: number;
+    bestTrade: number;
+    worstTrade: number;
+    strategies: Set<string>;
+  };
+
+  const buckets = new Map<string, Bucket>();
+  for (const t of closed) {
+    const dateIst = istDateKey(t.closedAt);
+    let bucket = buckets.get(dateIst);
+    if (!bucket) {
+      bucket = {
+        dateIst,
+        date: new Date(t.closedAt).toISOString().slice(0, 10),
+        realizedPnl: 0,
+        tradeCount: 0,
+        winCount: 0,
+        lossCount: 0,
+        bestTrade: t.realizedPnl,
+        worstTrade: t.realizedPnl,
+        strategies: new Set(),
+      };
+      buckets.set(dateIst, bucket);
+    }
+    bucket.realizedPnl += t.realizedPnl;
+    bucket.tradeCount += 1;
+    if (t.realizedPnl > 0) bucket.winCount += 1;
+    else bucket.lossCount += 1;
+    if (t.realizedPnl > bucket.bestTrade) bucket.bestTrade = t.realizedPnl;
+    if (t.realizedPnl < bucket.worstTrade) bucket.worstTrade = t.realizedPnl;
+    bucket.strategies.add(t.strategyName);
+  }
+
+  const orderedAsc = [...buckets.values()].sort((a, b) => a.dateIst.localeCompare(b.dateIst));
+
+  let runningEquity = startingBalanceUsd;
+  const daysAsc: DailyPnlRow[] = orderedAsc.map((bucket) => {
+    const startingEquity = runningEquity;
+    const endingEquity = startingEquity + bucket.realizedPnl;
+    runningEquity = endingEquity;
+    return {
+      date: bucket.date,
+      dateIst: bucket.dateIst,
+      realizedPnl: round2(bucket.realizedPnl),
+      tradeCount: bucket.tradeCount,
+      winCount: bucket.winCount,
+      lossCount: bucket.lossCount,
+      winRate: bucket.tradeCount > 0 ? round3(bucket.winCount / bucket.tradeCount) : 0,
+      startingEquity: round2(startingEquity),
+      endingEquity: round2(endingEquity),
+      pnlPct: startingEquity > 0 ? round3((bucket.realizedPnl / startingEquity) * 100) : 0,
+      bestTrade: round2(bucket.bestTrade),
+      worstTrade: round2(bucket.worstTrade),
+      strategies: [...bucket.strategies].sort(),
+    };
+  });
+
+  let currentStreak = 0;
+  let streakType: "winning" | "losing" = "winning";
+  for (let i = daysAsc.length - 1; i >= 0; i--) {
+    const sign: "winning" | "losing" = daysAsc[i].realizedPnl >= 0 ? "winning" : "losing";
+    if (currentStreak === 0) {
+      streakType = sign;
+      currentStreak = 1;
+    } else if (sign === streakType) {
+      currentStreak += 1;
+    } else {
+      break;
+    }
+  }
+
+  const pnls = daysAsc.map((d) => d.realizedPnl);
+  const pcts = daysAsc.map((d) => d.pnlPct);
+  const summary: DailyPnlSummary = {
+    totalDaysTraded: daysAsc.length,
+    bestDayPnl: round2(Math.max(...pnls)),
+    worstDayPnl: round2(Math.min(...pnls)),
+    avgDailyPnl: round2(pnls.reduce((sum, v) => sum + v, 0) / pnls.length),
+    avgDailyPct: round3(pcts.reduce((sum, v) => sum + v, 0) / pcts.length),
+    currentStreak,
+    streakType,
+  };
+
+  return { days: [...daysAsc].reverse(), summary };
+}
+
 // ── Filtering ────────────────────────────────────────────────────────────────
 export interface MockTradeFilter {
   strategyId?: number | null;

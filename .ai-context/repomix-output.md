@@ -83,6 +83,7 @@ The content is organized as follows:
   app/api/mock-trading/analytics/route.ts
   app/api/mock-trading/config/history/route.ts
   app/api/mock-trading/config/route.ts
+  app/api/mock-trading/daily-pnl-summary/route.ts
   app/api/mock-trading/daily-pnl/route.ts
   app/api/mock-trading/equity/route.ts
   app/api/mock-trading/executor-status/route.ts
@@ -183,6 +184,7 @@ The content is organized as follows:
   components/BtcSpotStrip.tsx
   components/CommandCenter.tsx
   components/DailyPnlLedger.tsx
+  components/DailyPnLTable.tsx
   components/DashboardHeader.tsx
   components/DeltaLiveScalper.tsx
   components/DeltaSpotBuy.tsx

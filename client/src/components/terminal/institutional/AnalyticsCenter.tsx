@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
+import { DailyPnLTable } from "@/components/DailyPnLTable";
 import { pct, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
 
@@ -50,6 +51,7 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
             </div>
           )}
         </TerminalCard>
+        <DailyPnLTable />
       </div>
       <div className="space-y-3">
         <TerminalCard title="Rolling Performance" subtitle="Portfolio accounting view">

@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/ui/PageHeader";
+import { DailyPnLTable } from "@/components/DailyPnLTable";
 import { MockStageTradingSuite } from "./MockStageTradingSuite";
 
 export function TradeEngineCenter() {
@@ -43,6 +44,7 @@ export function TradeEngineCenter() {
                 {rightPanel}
               </div>
             </div>
+            <DailyPnLTable className="mt-6" />
           </>
         )}
       />
