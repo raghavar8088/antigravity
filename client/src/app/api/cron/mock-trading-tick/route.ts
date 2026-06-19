@@ -2,8 +2,10 @@
  * GET /api/cron/mock-trading-tick
  *
  * Headless mock-trading execution cycle. Protected by CRON_SECRET.
- * Vercel Hobby allows max 2 crons — schedule is every minute (PM2 worker
- * on Lightsail should run every 5s for production latency).
+ * NOT registered in vercel.json — Vercel Hobby cron jobs are capped at
+ * once-per-day (per-minute requires Pro), so the 1/min fallback cadence
+ * this route needs is driven by an external pinger (UptimeRobot/cron-job.org)
+ * hitting this URL directly. PM2 worker on Lightsail is primary (5s cycles).
  */
 
 import { NextResponse } from "next/server";
