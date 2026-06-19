@@ -17,6 +17,28 @@ import (
 	"antigravity-engine/internal/delta"
 )
 
+// numString unmarshals a JSON value encoded as either a string or a number
+// into a float64. Delta Exchange's REST API returns most numeric fields
+// (balance, size, prices) as JSON strings to preserve precision — this type
+// accepts both forms so a future encoding change in either direction can't
+// silently break reconciliation again (it previously crashed every cycle
+// with "cannot unmarshal string into Go struct field ... of type float64").
+type numString float64
+
+func (n *numString) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(strings.TrimSpace(string(data)), `"`)
+	if s == "" || s == "null" {
+		*n = 0
+		return nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return fmt.Errorf("numString: cannot parse %q: %w", s, err)
+	}
+	*n = numString(f)
+	return nil
+}
+
 // DeltaReconciliationAdapter implements ReconciliationAdapter for Delta Exchange.
 // Uses HMAC-SHA256 authentication on all private endpoints.
 // Docs: https://docs.delta.exchange/
@@ -105,13 +127,13 @@ func (a *DeltaReconciliationAdapter) GetBalances(ctx context.Context) ([]AssetBa
 
 	var resp struct {
 		Result []struct {
-			Asset              string  `json:"asset_symbol"`
-			Balance            float64 `json:"balance"`
-			OrderMargin        float64 `json:"order_margin"`
-			PositionMargin     float64 `json:"position_margin"`
-			UnrealizedFunding  float64 `json:"unrealized_funding_pnl"`
-			UnrealizedPnL      float64 `json:"unrealized_pnl"`
-			AvailableBalance   float64 `json:"available_balance"`
+			Asset             string    `json:"asset_symbol"`
+			Balance           numString `json:"balance"`
+			OrderMargin       numString `json:"order_margin"`
+			PositionMargin    numString `json:"position_margin"`
+			UnrealizedFunding numString `json:"unrealized_funding_pnl"`
+			UnrealizedPnL     numString `json:"unrealized_pnl"`
+			AvailableBalance  numString `json:"available_balance"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -123,41 +145,44 @@ func (a *DeltaReconciliationAdapter) GetBalances(ctx context.Context) ([]AssetBa
 		if b.Balance == 0 {
 			continue
 		}
-		margin := b.OrderMargin + b.PositionMargin
-		equity := b.Balance + b.UnrealizedPnL + b.UnrealizedFunding
+		margin := float64(b.OrderMargin + b.PositionMargin)
+		equity := float64(b.Balance + b.UnrealizedPnL + b.UnrealizedFunding)
 		result = append(result, AssetBalance{
 			Asset:         b.Asset,
-			WalletBalance: b.Balance,
-			Available:     b.AvailableBalance,
+			WalletBalance: float64(b.Balance),
+			Available:     float64(b.AvailableBalance),
 			MarginUsed:    margin,
-			UnrealizedPnL: b.UnrealizedPnL + b.UnrealizedFunding,
+			UnrealizedPnL: float64(b.UnrealizedPnL + b.UnrealizedFunding),
 			EquityUSD:     equity,
 		})
 	}
 	return result, nil
 }
 
-// GetPositions fetches open positions from /v2/positions.
+// GetPositions fetches open margined positions from /v2/positions/margined.
+//
+// /v2/positions (no query) requires a product_id or underlying_asset_symbol
+// filter per-call and 400s without one — unusable for an account-wide sweep.
+// /v2/positions/margined returns all open positions across products in one
+// call, matching what internal/delta.Client.GetPositions already uses for
+// live execution (see internal/delta/client.go).
 func (a *DeltaReconciliationAdapter) GetPositions(ctx context.Context) ([]ExchangePosition, error) {
-	body, err := a.get(ctx, "/v2/positions", "")
+	body, err := a.get(ctx, "/v2/positions/margined", "")
 	if err != nil {
 		return nil, fmt.Errorf("delta recon: get positions: %w", err)
 	}
 
 	var resp struct {
 		Result []struct {
-			ProductID        int     `json:"product_id"`
-			ProductSymbol    string  `json:"product_symbol"`
-			Side             string  `json:"side"`
-			Size             float64 `json:"size"`
-			EntryPrice       float64 `json:"entry_price"`
-			MarkPrice        float64 `json:"mark_price"`
-			LiquidationPrice float64 `json:"liquidation_price"`
-			Leverage         float64 `json:"leverage"`
-			Margin           float64 `json:"margin"`
-			UnrealizedPnL    float64 `json:"unrealized_pnl"`
-			NotionalValue    float64 `json:"notional_value"`
-			UpdatedAt        string  `json:"updated_at"`
+			ProductID     int       `json:"product_id"`
+			ProductSymbol string    `json:"product_symbol"`
+			Symbol        string    `json:"symbol"`
+			Side          string    `json:"side"`
+			Size          numString `json:"size"`
+			EntryPrice    numString `json:"entry_price"`
+			MarkPrice     numString `json:"mark_price"`
+			UnrealizedPnL numString `json:"unrealised_pnl"`
+			Margin        numString `json:"margin"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -170,19 +195,29 @@ func (a *DeltaReconciliationAdapter) GetPositions(ctx context.Context) ([]Exchan
 			continue
 		}
 		side := strings.ToUpper(p.Side)
-		updatedAt, _ := time.Parse(time.RFC3339, p.UpdatedAt)
+		if side == "" {
+			if p.Size < 0 {
+				side = "SHORT"
+			} else {
+				side = "LONG"
+			}
+		}
+		symbol := p.ProductSymbol
+		if symbol == "" {
+			symbol = p.Symbol
+		}
 		result = append(result, ExchangePosition{
-			Symbol:           p.ProductSymbol,
-			Side:             side,
-			Quantity:         p.Size,
-			EntryPrice:       p.EntryPrice,
-			MarkPrice:        p.MarkPrice,
-			LiquidationPrice: p.LiquidationPrice,
-			Leverage:         p.Leverage,
-			NotionalUSD:      p.NotionalValue,
-			MarginUsed:       p.Margin,
-			UnrealizedPnL:    p.UnrealizedPnL,
-			UpdatedAt:        updatedAt,
+			Symbol:        symbol,
+			Side:          side,
+			Quantity:      float64(p.Size),
+			EntryPrice:    float64(p.EntryPrice),
+			MarkPrice:     float64(p.MarkPrice),
+			MarginUsed:    float64(p.Margin),
+			UnrealizedPnL: float64(p.UnrealizedPnL),
+			UpdatedAt:     time.Now().UTC(),
+			// LiquidationPrice, Leverage, NotionalUSD: not returned by the
+			// margined endpoint — left zero. Drift detectors that need them
+			// should be reviewed if they assume these are always populated.
 		})
 	}
 	return result, nil
@@ -215,19 +250,19 @@ func (a *DeltaReconciliationAdapter) fetchDeltaOrders(ctx context.Context, path 
 
 	var resp struct {
 		Result []struct {
-			ID              int64   `json:"id"`
-			ClientOrderID   string  `json:"client_order_id"`
-			ProductSymbol   string  `json:"product_symbol"`
-			Side            string  `json:"side"`
-			State           string  `json:"state"`
-			OrderType       string  `json:"order_type"`
-			Size            float64 `json:"size"`
-			FilledSize      float64 `json:"unfilled_size"`
-			LimitPrice      float64 `json:"limit_price"`
-			AverageFilledPrice float64 `json:"average_fill_price"`
-			PaidCommission  float64 `json:"paid_commission"`
-			CreatedAt       string  `json:"created_at"`
-			UpdatedAt       string  `json:"updated_at"`
+			ID                 int64     `json:"id"`
+			ClientOrderID      string    `json:"client_order_id"`
+			ProductSymbol      string    `json:"product_symbol"`
+			Side               string    `json:"side"`
+			State              string    `json:"state"`
+			OrderType          string    `json:"order_type"`
+			Size               numString `json:"size"`
+			FilledSize         numString `json:"unfilled_size"`
+			LimitPrice         numString `json:"limit_price"`
+			AverageFilledPrice numString `json:"average_fill_price"`
+			PaidCommission     numString `json:"paid_commission"`
+			CreatedAt          string    `json:"created_at"`
+			UpdatedAt          string    `json:"updated_at"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -249,12 +284,12 @@ func (a *DeltaReconciliationAdapter) fetchDeltaOrders(ctx context.Context, path 
 			Side:             strings.ToUpper(o.Side),
 			Status:           strings.ToUpper(o.State),
 			OrderType:        o.OrderType,
-			Quantity:         o.Size,
-			FilledQuantity:   filledQty,
-			RemainingQty:     o.FilledSize,
-			Price:            o.LimitPrice,
-			AverageFillPrice: o.AverageFilledPrice,
-			FeesUSD:          o.PaidCommission,
+			Quantity:         float64(o.Size),
+			FilledQuantity:   float64(filledQty),
+			RemainingQty:     float64(o.FilledSize),
+			Price:            float64(o.LimitPrice),
+			AverageFillPrice: float64(o.AverageFilledPrice),
+			FeesUSD:          float64(o.PaidCommission),
 			CreatedAt:        createdAt,
 			UpdatedAt:        updatedAt,
 		})
@@ -275,15 +310,15 @@ func (a *DeltaReconciliationAdapter) GetFills(ctx context.Context, symbol string
 
 	var resp struct {
 		Result []struct {
-			ID            int64   `json:"id"`
-			OrderID       int64   `json:"order_id"`
-			Symbol        string  `json:"product_symbol"`
-			Side          string  `json:"side"`
-			Price         float64 `json:"fill_price"`
-			Quantity      float64 `json:"size"`
-			Commission    float64 `json:"commission"`
-			RoleType      string  `json:"role"`
-			CreatedAt     string  `json:"created_at"`
+			ID         int64     `json:"id"`
+			OrderID    int64     `json:"order_id"`
+			Symbol     string    `json:"product_symbol"`
+			Side       string    `json:"side"`
+			Price      numString `json:"fill_price"`
+			Quantity   numString `json:"size"`
+			Commission numString `json:"commission"`
+			RoleType   string    `json:"role"`
+			CreatedAt  string    `json:"created_at"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -301,9 +336,9 @@ func (a *DeltaReconciliationAdapter) GetFills(ctx context.Context, symbol string
 			ExchangeOrderID: strconv.FormatInt(f.OrderID, 10),
 			Symbol:          f.Symbol,
 			Side:            strings.ToUpper(f.Side),
-			Price:           f.Price,
-			Quantity:        f.Quantity,
-			FeeUSD:          f.Commission,
+			Price:           float64(f.Price),
+			Quantity:        float64(f.Quantity),
+			FeeUSD:          float64(f.Commission),
 			IsMaker:         f.RoleType == "maker",
 			Timestamp:       ts,
 		})
@@ -329,10 +364,10 @@ func (a *DeltaReconciliationAdapter) GetFunding(ctx context.Context, symbol stri
 
 	var resp struct {
 		Result []struct {
-			Symbol    string  `json:"product_symbol"`
-			Price     float64 `json:"fill_price"`
-			Quantity  float64 `json:"size"`
-			CreatedAt string  `json:"created_at"`
+			Symbol    string    `json:"product_symbol"`
+			Price     numString `json:"fill_price"`
+			Quantity  numString `json:"size"`
+			CreatedAt string    `json:"created_at"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -347,7 +382,7 @@ func (a *DeltaReconciliationAdapter) GetFunding(ctx context.Context, symbol stri
 		}
 		result = append(result, FundingPayment{
 			Symbol:    f.Symbol,
-			AmountUSD: f.Price * f.Quantity,
+			AmountUSD: float64(f.Price) * float64(f.Quantity),
 			PaidAt:    ts,
 		})
 	}

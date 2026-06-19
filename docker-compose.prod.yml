@@ -29,7 +29,9 @@ services:
         soft: 65535
         hard: 65535
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      # Image is FROM scratch — no wget/curl available. The binary does an
+      # in-process self-check instead (see cmd/antigravity/main.go runHealthcheck).
+      test: ["CMD", "/app/antigravity", "--healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 5

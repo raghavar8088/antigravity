@@ -308,7 +308,36 @@ func loadOptionsSellingSnapshot(state *persistence.OptionsSellingState) (options
 	return snapshot, nil
 }
 
+// runHealthcheck is invoked via `antigravity --healthcheck` as the Docker
+// HEALTHCHECK command. The runtime image is built FROM scratch (no shell,
+// no wget/curl — see engine/Dockerfile), so an external-binary healthcheck
+// can never work; this does the same /health GET in-process instead and
+// maps the result to a process exit code Docker understands.
+func runHealthcheck() {
+	port := strings.TrimSpace(os.Getenv("PORT"))
+	if port == "" {
+		port = "8080"
+	}
+	client := &http.Client{Timeout: 4 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/health")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck: request failed:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "healthcheck: HTTP", resp.StatusCode)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--healthcheck" {
+		runHealthcheck()
+		return
+	}
+
 	log.SetOutput(globalLogs)
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   RAIG ENGINE v6.0 — IMMORTAL EDITION                  ║")
@@ -767,23 +796,42 @@ func main() {
 
 	// ── Durable kill switch ledger ────────────────────────────────────────────
 	// Prefer PostgresStore so kill-switch state (trigger, reason, activatedAt)
-	// survives engine restarts. Falls back gracefully to MemoryStore when
-	// DATABASE_URL is absent (local dev, paper-only environments).
+	// survives engine restarts. Falls back to MongoLedgerStore (reusing the
+	// MongoDB connection already established above for trade persistence —
+	// no new infrastructure) when Postgres is unavailable, and only falls
+	// back further to the non-durable in-memory store as a last resort.
+	//
+	// Jun 2026 incident: DATABASE_URL was set but Postgres was unreachable
+	// (never actually provisioned), so this silently ran on MemoryStore in
+	// production — an unbounded in-process store that leaked memory until
+	// the engine got OOM-killed roughly every 24-36 hours, which also wiped
+	// kill-switch state on every restart since it lived only in that memory.
 	var ksLedger ledger.Store = ledger.NewMemoryStore()
-	var durableLedger *ledger.PostgresStore
+	var durableLedger ledger.Store
 	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
 		if pgStore, pgErr := ledger.NewPostgresStore(ctx, dbURL); pgErr != nil {
-			log.Printf("[LEDGER] ⚠️  PostgresStore unavailable (%v) — kill switch state is non-durable", pgErr)
+			log.Printf("[LEDGER] ⚠️  PostgresStore unavailable (%v) — trying MongoDB fallback", pgErr)
+		} else if schemaErr := pgStore.CreateSchema(ctx); schemaErr != nil {
+			log.Printf("[LEDGER] ⚠️  Postgres schema init failed (%v) — trying MongoDB fallback", schemaErr)
 		} else {
-			if schemaErr := pgStore.CreateSchema(ctx); schemaErr != nil {
-				log.Printf("[LEDGER] ⚠️  Schema init warning: %v", schemaErr)
-			}
 			durableLedger = pgStore
 			ksLedger = pgStore
 			log.Println("[LEDGER] ✅ Durable PostgresStore wired — kill switch and PMS state will survive restarts")
 		}
 	} else {
-		log.Println("[LEDGER] ⚠️  DATABASE_URL not set — kill switch ledger is in-memory only")
+		log.Println("[LEDGER] DATABASE_URL not set — trying MongoDB fallback")
+	}
+	if durableLedger == nil && mongoMgr != nil && mongoMgr.IsConnected() {
+		if mongoStore, mongoErr := ledger.NewMongoLedgerStore(ctx, mongoMgr.DB()); mongoErr != nil {
+			log.Printf("[LEDGER] ⚠️  MongoLedgerStore unavailable (%v) — kill switch state is non-durable", mongoErr)
+		} else {
+			durableLedger = mongoStore
+			ksLedger = mongoStore
+			log.Println("[LEDGER] ✅ Durable MongoLedgerStore wired — kill switch and PMS state will survive restarts")
+		}
+	}
+	if durableLedger == nil {
+		log.Println("[LEDGER] ⚠️  No durable store available (Postgres and MongoDB both unavailable) — kill switch ledger is in-memory only")
 	}
 
 	ksSvc := killswitchpkg.NewService(ksLedger, ksExecutor, "btc-paper-1")

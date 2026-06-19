@@ -38,6 +38,13 @@ ENV GOMEMLIMIT=450MiB
 ENV GOGC=70
 ENV PORT=8080
 
+# This image is FROM scratch — no shell, no wget/curl — so a wget-based
+# HEALTHCHECK (as previously used in docker-compose.prod.yml) can never
+# succeed and only produces false "unhealthy" noise. The binary supports
+# `--healthcheck` for an in-process self-check instead (see cmd/antigravity/main.go).
+HEALTHCHECK --interval=30s --timeout=5s --retries=5 --start-period=40s \
+    CMD ["/app/antigravity", "--healthcheck"]
+
 # Secrets are injected at runtime via environment variables or Vault.
 # NEVER bake API keys or passwords into this image.
 

@@ -51,7 +51,14 @@ func NewAuditLog(store ledger.Store, accountID, exchange string, maxEntries int)
 	}
 }
 
-// Record appends an audit entry and persists a RECONCILIATION_COMPLETED event.
+// Record appends an audit entry to the bounded in-memory history (always —
+// this is what Recent/TotalCycles/LastDriftScore/CriticalCount read from)
+// and persists a RECONCILIATION_COMPLETED event to the durable ledger only
+// for cycles that found something worth a permanent record. The overwhelming
+// majority of cycles are "all clear," and persisting every single one to the
+// shared ledger (every 2-60s, forever) was the dominant contributor to an
+// unbounded event store that leaked memory until the engine got OOM-killed
+// roughly every 24-36 hours (Jun 2026 incident).
 func (a *AuditLog) Record(ctx context.Context, entry AuditEntry) {
 	a.mu.Lock()
 	a.entries = append(a.entries, entry)
@@ -60,7 +67,9 @@ func (a *AuditLog) Record(ctx context.Context, entry AuditEntry) {
 	}
 	a.mu.Unlock()
 
-	a.persistCompletedEvent(ctx, entry)
+	if entry.MismatchCount > 0 || entry.RepairCount > 0 || entry.EscalateCount > 0 {
+		a.persistCompletedEvent(ctx, entry)
+	}
 }
 
 // Recent returns the most recent n audit entries (newest first).

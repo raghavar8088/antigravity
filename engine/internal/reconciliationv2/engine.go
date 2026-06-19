@@ -62,9 +62,13 @@ func (e *ReconciliationEngine) RunDomain(ctx context.Context, domain MismatchDom
 	runID := newRunID()
 	start := time.Now()
 
-	if err := e.emitStarted(ctx, runID, domain); err != nil {
-		log.Printf("[RECON-V2] warn: emit started: %v", err)
-	}
+	// Deliberately not persisted to the ledger: a "cycle started" record has
+	// no consumer (nothing replays EventReconciliationStarted) and this
+	// scheduler fires every 2-60s forever — persisting it was the single
+	// largest contributor to an unbounded ledger growing into the hundreds
+	// of thousands of events/day, which leaked memory until the engine got
+	// OOM-killed roughly every 24-36 hours (Jun 2026 incident). See AuditLog
+	// for the bounded, in-memory cycle history that replaces this.
 
 	oms, err := e.omsReader.GetOMSSnapshot(ctx, e.accountID)
 	if err != nil {
@@ -236,31 +240,6 @@ func (e *ReconciliationEngine) runFull(ctx context.Context, oms OMSSnapshot) ([]
 
 // ─── Event emission helpers ───────────────────────────────────────────────────
 
-func (e *ReconciliationEngine) emitStarted(ctx context.Context, runID string, domain MismatchDomain) error {
-	payload := ReconciliationStartedPayload{
-		RunID:     runID,
-		Domain:    domain,
-		Exchange:  e.exchangeName,
-		AccountID: e.accountID,
-		StartedAt: time.Now().UTC(),
-	}
-	ev, err := ledger.NewEvent(ledger.NewEventInput{
-		AggregateType:  ledger.AggregateReconciliation,
-		AggregateID:    fmt.Sprintf("recon-%s-%s", e.accountID, e.exchangeName),
-		EventType:      ledger.EventReconciliationStarted,
-		AccountID:      e.accountID,
-		CorrelationID:  runID,
-		IdempotencyKey: fmt.Sprintf("recon-start-%s", runID),
-		Payload:        payload,
-		Source:         "reconciliation-authority-v2",
-	})
-	if err != nil {
-		return err
-	}
-	_, err = e.store.Append(ctx, ev)
-	return err
-}
-
 func (e *ReconciliationEngine) emitMismatch(ctx context.Context, runID string, m Mismatch) {
 	var eventType ledger.EventType
 	switch m.Domain {
@@ -316,28 +295,13 @@ func (e *ReconciliationEngine) emitMismatch(ctx context.Context, runID string, m
 	}
 }
 
+// emitAuthorityVerified logs (does not persist to the ledger — no consumer
+// ever replays EventExchangeAuthorityVerified, and "everything matches" is
+// the common case at 60s cadence; logging is sufficient operational signal).
 func (e *ReconciliationEngine) emitAuthorityVerified(ctx context.Context, runID string, domain MismatchDomain) {
-	payload := ExchangeAuthorityVerifiedPayload{
-		RunID:      runID,
-		Domain:     domain,
-		Exchange:   e.exchangeName,
-		AccountID:  e.accountID,
-		VerifiedAt: time.Now().UTC(),
-	}
-	ev, err := ledger.NewEvent(ledger.NewEventInput{
-		AggregateType:  ledger.AggregateReconciliation,
-		AggregateID:    fmt.Sprintf("recon-%s-%s", e.accountID, e.exchangeName),
-		EventType:      EventExchangeAuthorityVerified,
-		AccountID:      e.accountID,
-		CorrelationID:  runID,
-		IdempotencyKey: fmt.Sprintf("authority-verified-%s", runID),
-		Payload:        payload,
-		Source:         "reconciliation-authority-v2",
-	})
-	if err != nil {
-		return
-	}
-	e.store.Append(ctx, ev) //nolint — best-effort
+	_ = ctx
+	log.Printf("[RECON-V2] authority verified: exchange=%s account=%s domain=%s run=%s",
+		e.exchangeName, e.accountID, domain, runID)
 }
 
 // AuditLog returns the audit log for external inspection.

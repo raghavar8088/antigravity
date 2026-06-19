@@ -79,10 +79,26 @@ jobs:
             docker pull ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
             docker stop antigravity_engine || true
             docker rm antigravity_engine || true
+            # Resource limits (--memory, --pids-limit, ulimits) must mirror
+            # docker-compose.prod.yml exactly. Without --memory, a leaking
+            # process has no cgroup ceiling and gets killed by the *host*
+            # OOM killer instead of the container's — larger blast radius,
+            # risking other processes on the box (e.g. the PM2 worker).
+            # See Jun 2026 incident: unconstrained run hit 1.5GB before kill;
+            # the 600m-capped container caps each leak episode at 600MB.
             docker run -d \
               --name antigravity_engine \
-              --restart always \
+              --restart unless-stopped \
               -p 80:8080 \
               --env-file /home/ubuntu/antigravity/.env \
               -v /home/ubuntu/antigravity/data:/app/data \
+              --memory 600m \
+              --cpus 1.50 \
+              --pids-limit 512 \
+              --ulimit nofile=65535:65535 \
+              --health-cmd "/app/antigravity --healthcheck" \
+              --health-interval 30s \
+              --health-timeout 5s \
+              --health-retries 5 \
+              --health-start-period 40s \
               ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest

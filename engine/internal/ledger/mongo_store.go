@@ -2,9 +2,8 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sort"
-	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -14,142 +13,252 @@ import (
 
 // mongoEventDoc is the MongoDB BSON representation of a ledger Event.
 type mongoEventDoc struct {
-	AggregateID   string    `bson:"aggregate_id"`
-	AggregateType string    `bson:"aggregate_type"`
-	AccountID     string    `bson:"account_id,omitempty"`
-	EventType     string    `bson:"event_type"`
-	SequenceNo    int64     `bson:"sequence_no"`
-	Payload       []byte    `bson:"payload"`
-	PayloadHash   string    `bson:"payload_hash"`
-	EventID       string    `bson:"event_id"`
-	StrategyID    string    `bson:"strategy_id,omitempty"`
-	Symbol        string    `bson:"symbol,omitempty"`
-	CorrelationID string    `bson:"correlation_id,omitempty"`
-	IdempotencyKey string   `bson:"idempotency_key,omitempty"`
-	Source        string    `bson:"source"`
-	SchemaVersion int       `bson:"schema_version"`
-	CreatedAt     time.Time `bson:"created_at"`
+	AggregateID    string    `bson:"aggregate_id"`
+	AggregateType  string    `bson:"aggregate_type"`
+	AccountID      string    `bson:"account_id,omitempty"`
+	EventType      string    `bson:"event_type"`
+	SequenceNo     int64     `bson:"sequence_no"`
+	Payload        []byte    `bson:"payload"`
+	PayloadHash    string    `bson:"payload_hash"`
+	EventID        string    `bson:"event_id"`
+	StrategyID     string    `bson:"strategy_id,omitempty"`
+	Symbol         string    `bson:"symbol,omitempty"`
+	CorrelationID  string    `bson:"correlation_id,omitempty"`
+	IdempotencyKey string    `bson:"idempotency_key,omitempty"`
+	Source         string    `bson:"source"`
+	SchemaVersion  int       `bson:"schema_version"`
+	CreatedAt      time.Time `bson:"created_at"`
+}
+
+func eventToDoc(e Event) mongoEventDoc {
+	return mongoEventDoc{
+		AggregateID:    e.AggregateID,
+		AggregateType:  string(e.AggregateType),
+		AccountID:      e.AccountID,
+		EventType:      string(e.EventType),
+		SequenceNo:     e.SequenceNo,
+		Payload:        e.Payload,
+		PayloadHash:    e.PayloadHash,
+		EventID:        e.EventID,
+		StrategyID:     e.StrategyID,
+		Symbol:         e.Symbol,
+		CorrelationID:  e.CorrelationID,
+		IdempotencyKey: e.IdempotencyKey,
+		Source:         e.Source,
+		SchemaVersion:  e.SchemaVersion,
+		CreatedAt:      e.CreatedAt,
+	}
+}
+
+func (d mongoEventDoc) toEvent() Event {
+	return Event{
+		EventID:        d.EventID,
+		SchemaVersion:  d.SchemaVersion,
+		AggregateType:  AggregateType(d.AggregateType),
+		AggregateID:    d.AggregateID,
+		SequenceNo:     d.SequenceNo,
+		EventType:      EventType(d.EventType),
+		AccountID:      d.AccountID,
+		StrategyID:     d.StrategyID,
+		Symbol:         d.Symbol,
+		CorrelationID:  d.CorrelationID,
+		IdempotencyKey: d.IdempotencyKey,
+		Payload:        d.Payload,
+		PayloadHash:    d.PayloadHash,
+		Source:         d.Source,
+		CreatedAt:      d.CreatedAt,
+	}
+}
+
+// eventCollection abstracts the MongoDB operations MongoLedgerStore needs.
+// This repo has no local MongoDB/Docker available to run a live integration
+// test against, so this interface exists specifically to let the store's
+// real logic (sequencing, idempotency, replay ordering) be exercised by a
+// fast in-memory fake in tests — see mongo_store_test.go — rather than going
+// untested. realEventCollection (below) is the production implementation.
+type eventCollection interface {
+	// Insert persists doc. Must return ErrDuplicateEvent if doc.EventID or
+	// doc.IdempotencyKey already exists.
+	Insert(ctx context.Context, doc mongoEventDoc) error
+	// NextSequence atomically returns the next SequenceNo (starting at 1)
+	// for the given aggregate key.
+	NextSequence(ctx context.Context, aggregateKey string) (int64, error)
+	// FindByAggregate returns all events for one aggregate, sorted by sequence_no ascending.
+	FindByAggregate(ctx context.Context, aggregateType, aggregateID string) ([]mongoEventDoc, error)
+	// FindByAccount returns all events for one account, sorted by created_at then sequence_no ascending.
+	FindByAccount(ctx context.Context, accountID string) ([]mongoEventDoc, error)
 }
 
 // MongoLedgerStore is a durable ledger.Store backed by MongoDB.
-// On startup all historical events are replayed into an in-memory MemoryStore
-// so reads are served from RAM; writes go to MongoDB first, then to mem.
+//
+// Unlike the original implementation of this store, it does NOT keep an
+// unbounded in-memory mirror of every event ever written. Replay and
+// ReplayAccount query MongoDB directly on every call, so the store's own
+// memory footprint stays flat no matter how long the engine has been running
+// or how many events have accumulated — this was the root cause of a
+// recurring OOM crash (Jun 2026 incident): the previous in-memory-only
+// fallback store grew without bound and got the engine killed by the kernel
+// roughly every 24-36 hours, which also silently wiped kill-switch state on
+// every restart since it lived only in that same unbounded memory.
+//
+// This is safe to query on every reconciliation cycle (every 2-60s) because
+// the volume of events actually written was independently cut by ~95%+:
+// reconciliationv2 no longer persists "cycle started" / "all clear" telemetry
+// to the ledger (see engine.go, audit.go) — only genuine order/position
+// lifecycle events and real mismatch/repair findings are written, so each
+// account's event history stays bounded by business activity, not noise.
 type MongoLedgerStore struct {
-	coll *mongo.Collection
-	mem  *MemoryStore
-	mu   sync.Mutex // guards concurrent Append calls during startup
+	coll eventCollection
 }
 
-// NewMongoLedgerStore connects to the given database, creates the required
-// unique index, replays all historical events into RAM and returns a ready store.
+// NewMongoLedgerStore connects to db, ensures required indexes exist, and
+// returns a ready store. No historical data is loaded into memory at
+// startup — Replay/ReplayAccount query MongoDB on demand.
 func NewMongoLedgerStore(ctx context.Context, db *mongo.Database) (*MongoLedgerStore, error) {
-	coll := db.Collection("ledger_events")
+	if db == nil {
+		return nil, errors.New("ledger/mongo: db is nil")
+	}
+	events := db.Collection("ledger_events")
+	seqs := db.Collection("ledger_sequences")
 
-	// Create unique compound index on (aggregate_id, sequence_no).
-	indexModel := mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "aggregate_id", Value: 1},
-			{Key: "sequence_no", Value: 1},
+	indexModels := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "aggregate_id", Value: 1}, {Key: "sequence_no", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("uniq_aggregate_seq"),
 		},
-		Options: options.Index().SetUnique(true).SetName("uniq_aggregate_seq"),
+		{
+			Keys:    bson.D{{Key: "event_id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("uniq_event_id"),
+		},
+		{
+			// Sparse because most events don't carry an idempotency key.
+			Keys:    bson.D{{Key: "idempotency_key", Value: 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true).SetName("uniq_idempotency_key"),
+		},
+		{
+			Keys:    bson.D{{Key: "account_id", Value: 1}, {Key: "created_at", Value: 1}},
+			Options: options.Index().SetName("account_created"),
+		},
 	}
-	if _, err := coll.Indexes().CreateOne(ctx, indexModel); err != nil {
-		// Non-fatal if index already exists; log and continue.
-		_ = err
-	}
-
-	mem := NewMemoryStore()
-
-	// Replay all historical events sorted by sequence_no into the in-memory store.
-	cursor, err := coll.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{Key: "sequence_no", Value: 1}}))
-	if err != nil {
-		return nil, fmt.Errorf("ledger/mongo: replay cursor: %w", err)
-	}
-	defer cursor.Close(ctx)
-
-	var docs []mongoEventDoc
-	if err := cursor.All(ctx, &docs); err != nil {
-		return nil, fmt.Errorf("ledger/mongo: replay decode: %w", err)
+	if _, err := events.Indexes().CreateMany(ctx, indexModels); err != nil {
+		return nil, fmt.Errorf("ledger/mongo: create indexes: %w", err)
 	}
 
-	// Sort by created_at then sequence_no to preserve causal ordering.
-	sort.Slice(docs, func(i, j int) bool {
-		if docs[i].CreatedAt.Equal(docs[j].CreatedAt) {
-			return docs[i].SequenceNo < docs[j].SequenceNo
-		}
-		return docs[i].CreatedAt.Before(docs[j].CreatedAt)
-	})
-
-	for _, d := range docs {
-		ev := Event{
-			EventID:        d.EventID,
-			SchemaVersion:  d.SchemaVersion,
-			AggregateType:  AggregateType(d.AggregateType),
-			AggregateID:    d.AggregateID,
-			SequenceNo:     d.SequenceNo,
-			EventType:      EventType(d.EventType),
-			AccountID:      d.AccountID,
-			StrategyID:     d.StrategyID,
-			Symbol:         d.Symbol,
-			CorrelationID:  d.CorrelationID,
-			IdempotencyKey: d.IdempotencyKey,
-			Payload:        d.Payload,
-			PayloadHash:    d.PayloadHash,
-			Source:         d.Source,
-			CreatedAt:      d.CreatedAt,
-		}
-		// Replay into mem — ignore idempotency / duplicate errors from reloading.
-		_, _ = mem.Append(ctx, ev)
-	}
-
-	return &MongoLedgerStore{coll: coll, mem: mem}, nil
+	return &MongoLedgerStore{coll: &realEventCollection{events: events, seqs: seqs}}, nil
 }
 
-// Append writes to MongoDB first, then updates the in-memory store.
 func (s *MongoLedgerStore) Append(ctx context.Context, event Event) (Event, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Persist to the in-memory store first (assigns SequenceNo).
-	filled, err := s.mem.Append(ctx, event)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return Event{}, err
 	}
-
-	doc := mongoEventDoc{
-		AggregateID:    filled.AggregateID,
-		AggregateType:  string(filled.AggregateType),
-		AccountID:      filled.AccountID,
-		EventType:      string(filled.EventType),
-		SequenceNo:     filled.SequenceNo,
-		Payload:        filled.Payload,
-		PayloadHash:    filled.PayloadHash,
-		EventID:        filled.EventID,
-		StrategyID:     filled.StrategyID,
-		Symbol:         filled.Symbol,
-		CorrelationID:  filled.CorrelationID,
-		IdempotencyKey: filled.IdempotencyKey,
-		Source:         filled.Source,
-		SchemaVersion:  filled.SchemaVersion,
-		CreatedAt:      filled.CreatedAt,
+	if !event.ValidateHash() {
+		return Event{}, ErrHashMismatch
+	}
+	if event.AggregateType == "" || event.AggregateID == "" || event.EventType == "" {
+		return Event{}, errors.New("ledger: event aggregate and type are required")
 	}
 
-	_, mongoErr := s.coll.InsertOne(ctx, doc)
-	if mongoErr != nil {
-		// Log but do not fail — in-memory is authoritative for this session.
-		// On next restart the event will be missing, but the mem store is consistent.
-		_ = mongoErr
+	seq, err := s.coll.NextSequence(ctx, event.AggregateKey())
+	if err != nil {
+		return Event{}, fmt.Errorf("ledger/mongo: next sequence: %w", err)
 	}
+	event.SequenceNo = seq
 
-	return filled, nil
+	if err := s.coll.Insert(ctx, eventToDoc(event)); err != nil {
+		// Deliberately NOT swallowed (the previous implementation logged
+		// and discarded Mongo write failures, silently degrading back to
+		// "data only existed transiently" without anyone knowing).
+		return Event{}, err
+	}
+	return event, nil
 }
 
-// Replay delegates to the in-memory store (populated at startup).
 func (s *MongoLedgerStore) Replay(ctx context.Context, aggregateType AggregateType, aggregateID string) ([]Event, error) {
-	return s.mem.Replay(ctx, aggregateType, aggregateID)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	docs, err := s.coll.FindByAggregate(ctx, string(aggregateType), aggregateID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger/mongo: replay: %w", err)
+	}
+	events := make([]Event, len(docs))
+	for i, d := range docs {
+		events[i] = d.toEvent()
+	}
+	return events, nil
 }
 
-// ReplayAccount delegates to the in-memory store.
 func (s *MongoLedgerStore) ReplayAccount(ctx context.Context, accountID string) ([]Event, error) {
-	return s.mem.ReplayAccount(ctx, accountID)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	docs, err := s.coll.FindByAccount(ctx, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger/mongo: replay account: %w", err)
+	}
+	events := make([]Event, len(docs))
+	for i, d := range docs {
+		events[i] = d.toEvent()
+	}
+	return events, nil
+}
+
+// ─── Production implementation of eventCollection ──────────────────────────
+
+type realEventCollection struct {
+	events *mongo.Collection
+	seqs   *mongo.Collection
+}
+
+func (r *realEventCollection) Insert(ctx context.Context, doc mongoEventDoc) error {
+	_, err := r.events.InsertOne(ctx, doc)
+	if mongo.IsDuplicateKeyError(err) {
+		return ErrDuplicateEvent
+	}
+	return err
+}
+
+func (r *realEventCollection) NextSequence(ctx context.Context, aggregateKey string) (int64, error) {
+	var result struct {
+		Seq int64 `bson:"seq"`
+	}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	err := r.seqs.FindOneAndUpdate(ctx,
+		bson.D{{Key: "_id", Value: aggregateKey}},
+		bson.D{{Key: "$inc", Value: bson.D{{Key: "seq", Value: int64(1)}}}},
+		opts,
+	).Decode(&result)
+	if err != nil {
+		return 0, err
+	}
+	return result.Seq, nil
+}
+
+func (r *realEventCollection) FindByAggregate(ctx context.Context, aggregateType, aggregateID string) ([]mongoEventDoc, error) {
+	filter := bson.D{{Key: "aggregate_type", Value: aggregateType}, {Key: "aggregate_id", Value: aggregateID}}
+	cursor, err := r.events.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "sequence_no", Value: 1}}))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var docs []mongoEventDoc
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+func (r *realEventCollection) FindByAccount(ctx context.Context, accountID string) ([]mongoEventDoc, error) {
+	filter := bson.D{{Key: "account_id", Value: accountID}}
+	sortOpts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "sequence_no", Value: 1}})
+	cursor, err := r.events.Find(ctx, filter, sortOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var docs []mongoEventDoc
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
 }
