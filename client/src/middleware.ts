@@ -103,6 +103,9 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/killswitch/status",
   "/api/risk-ribbon",
+  // Cron endpoints authenticate via their own CRON_SECRET bearer-token check,
+  // not the raig_session cookie — they're machine-to-machine, not browser pages.
+  "/api/cron",
   // Mock trading is public (browser simulation — no engine required)
   "/mock-trading",
   "/api/mock-trading",
