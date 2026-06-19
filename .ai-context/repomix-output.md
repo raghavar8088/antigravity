@@ -52,6 +52,7 @@ The content is organized as follows:
   app/api/btc/spot-klines/route.ts
   app/api/btc/spot-state/route.ts
   app/api/btc/trade-candles/route.ts
+  app/api/cron/health-check/route.ts
   app/api/cron/mock-trading-executor/route.ts
   app/api/cron/mock-trading-tick/route.ts
   app/api/cron/policy-snapshot/route.ts
@@ -424,6 +425,7 @@ The content is organized as follows:
   lib/aiAppTracker/trackerConstants.ts
   lib/aiAppTracker/types.ts
   lib/aiAppTracker/writeTrackerReport.ts
+  lib/alerts/telegramAlert.ts
   lib/analytics/analyticsReporter.ts
   lib/analytics/DiagnosticsEngine.ts
   lib/analytics/futuresAttribution.ts

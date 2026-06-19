@@ -141,6 +141,16 @@ function fmtAge(startTs: number | null, endTs: number) {
   return `${hours}h ${minutes}m`;
 }
 
+/** Formats raw staleness seconds as "42h 13m" once it's no longer a normal sub-minute number — makes multi-hour outages legible at a glance instead of a six-digit second count. */
+function fmtStaleAge(ageSec: number): string {
+  if (ageSec < 60) return `${ageSec}s`;
+  const totalMinutes = Math.floor(ageSec / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m ${ageSec % 60}s`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
+}
+
 const TRADE_ENTRY_TIMEZONE = "Asia/Kolkata";
 
 /** Entry open time (IST, 12-hour) — when the position was opened (BUY long or SELL short). */
@@ -1180,7 +1190,7 @@ export function MockStageTradingSuite({
           {engine.executor.health ? (
             <p>
               Backend executor: {executorHealthy ? "healthy" : "stale"}
-              {executorAgeSec != null ? ` · last cycle ${executorAgeSec}s ago` : ""}
+              {executorAgeSec != null ? ` · last cycle ${fmtStaleAge(executorAgeSec)} ago` : ""}
               {engine.executor.diagnosis?.dominantBlocker
                 ? ` · blocker ${engine.executor.diagnosis.dominantBlocker}`
                 : engine.executor.health.dominantBlocker
@@ -1207,9 +1217,15 @@ export function MockStageTradingSuite({
                 Status: {engine.executor.diagnosis.status}
                 {" · "}
                 {engine.executor.diagnosis.headline}
+                {executorAgeSec != null ? ` · stale for ${fmtStaleAge(executorAgeSec)}` : ""}
               </p>
               <p style={{ margin: 0 }}>{engine.executor.diagnosis.explanation}</p>
               <p style={{ margin: 0, fontWeight: 600 }}>Recommendation: {engine.executor.diagnosis.nextAction}</p>
+              {engine.executor.diagnosis.status === "EXECUTOR_FAULT" ? (
+                <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
+                  ssh ubuntu@lightsail-host &quot;pm2 restart mock-trading-executor &amp;&amp; pm2 logs mock-trading-executor --lines 30&quot;
+                </p>
+              ) : null}
             </div>
           ) : engine.executor.noTradeReason ? (
             <p style={{ color: "var(--amber)" }}>No-trade diagnosis: {engine.executor.noTradeReason}</p>

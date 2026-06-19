@@ -1215,8 +1215,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/AnalyticsCenter.tsx": {
-    "mtime": 1781459993.5381567,
-    "ast_hash": "66592b944463691e1a9da6a878033212",
+    "mtime": 1781796787.7598217,
+    "ast_hash": "fb149a4f2a1d925c85979197f26def39",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/CandidateQueue.tsx": {
@@ -2770,8 +2770,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingEngine.ts": {
-    "mtime": 1781548747.2425725,
-    "ast_hash": "870159c2c76e96c8bf6bad633ad81de6",
+    "mtime": 1781796522.5135546,
+    "ast_hash": "5f7c8b83cb9a700d966482f741c32771",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingMarketData.ts": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781715989.0376594,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781798109.8651018,
+    "ast_hash": "030854db41cd4f2d9f08224454e4bb54",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781715989.0376594,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781798109.8651018,
+    "ast_hash": "06f46b52ae791d6350f6000aecd1587a",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781715989.0376594,
-    "ast_hash": "6c637b5acb098d5abdc4f00a954370bf",
+    "mtime": 1781798109.8651018,
+    "ast_hash": "dc47eb7f9872a0c5fb1be2833b9b8c6b",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781715989.0376594,
-    "ast_hash": "fc2e958be2b4a0f05e18dc519744be69",
+    "mtime": 1781798109.8651018,
+    "ast_hash": "8ca9fcab5c00321fa33256317137e531",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781715990.595459,
-    "ast_hash": "9581cc998163553a65ccf26fab3f2d82",
+    "mtime": 1781798111.6232872,
+    "ast_hash": "c6633d9741bb628939458bc8397bb267",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23310,8 +23310,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/TradeEngineCenter.tsx": {
-    "mtime": 1781459851.039912,
-    "ast_hash": "ceba0356fb51f231c9fac8d808315fcf",
+    "mtime": 1781796650.2267451,
+    "ast_hash": "c3d59e67a20488ee844f41b5dc0a2fc0",
     "semantic_hash": ""
   },
   "client/src/app/terminal/strategies/page.tsx": {
@@ -23632,6 +23632,16 @@
   "client/src/app/api/mock-trading/trades/closed/route.ts": {
     "mtime": 1781712278.0967946,
     "ast_hash": "47dd3e5adeb281e81bcac11a17f82ae0",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/mock-trading/daily-pnl-summary/route.ts": {
+    "mtime": 1781796574.1946805,
+    "ast_hash": "a406758753c14e154001e905b455754c",
+    "semantic_hash": ""
+  },
+  "client/src/components/DailyPnLTable.tsx": {
+    "mtime": 1781796639.1607337,
+    "ast_hash": "eaddefbc62c6ac8269eb2014f9a90979",
     "semantic_hash": ""
   }
 }

@@ -1,16 +1,16 @@
-# Graph Report - antigravity-main  (2026-06-17)
+# Graph Report - antigravity-main  (2026-06-18)
 
 ## Corpus Check
-- 4667 files · ~26,802,218 words
+- 4669 files · ~26,804,294 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 64 nodes · 119 edges · 8 communities
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
+- 130 nodes · 196 edges · 10 communities (8 shown, 2 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b5d43ea8`
+- Built from commit: `7a224e47`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -22,76 +22,78 @@
 - [[_COMMUNITY_Community 4|Community 4]]
 - [[_COMMUNITY_Community 5|Community 5]]
 - [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `collections()` - 25 edges
-2. `nowIso()` - 13 edges
-3. `upsertMockTrade()` - 7 edges
-4. `paperClosedTradeToMockTrade()` - 5 edges
-5. `listMockTrades()` - 5 edges
-6. `paperPositionToMockTrade()` - 4 edges
-7. `getMockTrade()` - 4 edges
-8. `pnlValue()` - 3 edges
-9. `mockTradeToDoc()` - 3 edges
-10. `timeToMs()` - 3 edges
+1. `evaluateMockTradeOpenRisk()` - 11 edges
+2. `buildMockTradeFromTrace()` - 8 edges
+3. `toPaperSide()` - 7 edges
+4. `computeMockFundingCost()` - 6 edges
+5. `withMockExitFields()` - 6 edges
+6. `applyPriceTickToTrade()` - 6 edges
+7. `finalizeClose()` - 6 edges
+8. `computeDailyPnl()` - 6 edges
+9. `File Summary` - 5 edges
+10. `resolveExit()` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `appendEquityCurvePoint()` --calls--> `collections()`  [EXTRACTED]
-  client/src/lib/trading/mockTradingMongo.ts → client/src/lib/trading/mockTradingMongo.ts  _Bridges community 2 → community 1_
-- `getMockTrade()` --calls--> `collections()`  [EXTRACTED]
-  client/src/lib/trading/mockTradingMongo.ts → client/src/lib/trading/mockTradingMongo.ts  _Bridges community 2 → community 3_
-- `listMockTrades()` --calls--> `collections()`  [EXTRACTED]
-  client/src/lib/trading/mockTradingMongo.ts → client/src/lib/trading/mockTradingMongo.ts  _Bridges community 2 → community 6_
-- `mockLogToDoc()` --calls--> `nowIso()`  [EXTRACTED]
-  client/src/lib/trading/mockTradingMongo.ts → client/src/lib/trading/mockTradingMongo.ts  _Bridges community 1 → community 3_
+- `GET()` --calls--> `computeDailyPnl()`  [INFERRED]
+  client/src/app/api/mock-trading/daily-pnl-summary/route.ts → client/src/lib/trading/mockTradingEngine.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (8 total, 0 thin omitted)
+## Communities (10 total, 2 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.11
-Nodes (17): DailyPnlPoint, EquityCurvePoint, MockAccountSnapshotDoc, MockDailyPnlHistoryDoc, MockEngineConfigDoc, MockEquityCurvePointDoc, MockRegimeSnapshotDoc, MockStrategyAnalyticsDoc (+9 more)
+Cohesion: 0.05
+Nodes (31): DailyPnlResult, DailyPnlRow, DailyPnlSummary, MOCK_REJECTION_CATEGORIES, MOCK_TRADE_SORT_OPTIONS, MockAccountState, MockBlockerAggregate, MockDiagnosticFunnel (+23 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.18
-Nodes (11): appendEquityCurvePoint(), batchUpsertStrategyScores(), deleteClosedMockTrade(), deleteClosedMockTrades(), getMockAnalyticsSummary(), insertMockAccountSnapshot(), insertStrategySignals(), nowIso() (+3 more)
+Cohesion: 0.09
+Nodes (14): DailyPnlApiResponse, DailyPnlRow, DailyPnlSummary, DailyPnLTable(), DailyPnLTableProps, fmtSignedPct(), fmtSignedUsd(), monoCellStyle (+6 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.18
-Nodes (11): collections(), computeAccountFromMongo(), ensureMockIndexes(), getLatestMockAccountSnapshot(), getLatestRegimeSnapshot(), listDailyPnlHistory(), listEquityCurvePoints(), listMockLogs() (+3 more)
+Cohesion: 0.19
+Nodes (19): applyPriceTickToTrade(), blockersFromTraceRow(), buildMockTradeFromResearchSignal(), buildMockTradeFromTrace(), closeMockTrade(), computeMockExitLevels(), computeMockFundingCost(), computeMockNetPnlAtExitMark() (+11 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.33
-Nodes (7): closeMockTradeInMongo(), getMockTrade(), mockLogToDoc(), mockTradeFromDoc(), mockTradeToDoc(), pnlValue(), upsertMockTrade()
+Cohesion: 0.15
+Nodes (16): candidateFamilyKey(), canOpenAdditionalMockTrade(), computeAccountState(), computeAnalytics(), countOpenMockTrades(), countOpenMockTradesBySide(), evaluateMockTradeOpenRisk(), isGradeDiscoveryStage() (+8 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.47
-Nodes (6): paperClosedTradeToMockTrade(), paperExitReasonToMock(), paperPositionToMockTrade(), paperSideToMockSide(), strategyNumericId(), timeToMs()
+Cohesion: 0.32
+Nodes (7): GET(), mongoNotConfigured(), computeDailyPnl(), DEFAULT_MOCK_TRADING_CONFIG, istDateKey(), round2(), round3()
 
 ### Community 5 - "Community 5"
-Cohesion: 0.50
-Nodes (4): addMongoAndCondition(), mockTradeAgeConditionForQuery(), mockTradeAgeDurationMsExpression(), mockTradeMongoFilterForQuery()
+Cohesion: 0.67
+Nodes (3): emptyMockDiagnosticFunnel(), emptyMockRejectionCounts(), emptyMockTradingDiagnostics()
 
 ### Community 6 - "Community 6"
-Cohesion: 0.50
-Nodes (4): listMockTrades(), listPaperPersistTrades(), queryFilterFromMockTradeQuery(), sortForQuery()
+Cohesion: 0.67
+Nodes (3): finiteNonNegative(), mockTradeAgeMinutes(), passesMockTradeAgeFilter()
+
+### Community 9 - "Community 9"
+Cohesion: 0.29
+Nodes (6): Directory Structure, File Format, File Summary, Notes, Purpose, Usage Guidelines
 
 ## Knowledge Gaps
-- **17 isolated node(s):** `MockTradeDoc`, `MockStrategySignalDoc`, `MockRegimeSnapshotDoc`, `MockStrategyScoreDoc`, `MockStrategyScoreHistoryDoc` (+12 more)
+- **46 isolated node(s):** `Purpose`, `File Format`, `Usage Guidelines`, `Notes`, `Directory Structure` (+41 more)
   These have ≤1 connection - possible missing edges or undocumented components.
+- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `collections()` connect `Community 2` to `Community 0`, `Community 1`, `Community 3`, `Community 6`?**
-  _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **Why does `nowIso()` connect `Community 1` to `Community 0`, `Community 3`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **Why does `upsertMockTrade()` connect `Community 3` to `Community 0`, `Community 1`, `Community 2`?**
+- **Why does `computeDailyPnl()` connect `Community 4` to `Community 0`?**
+  _High betweenness centrality (0.006) - this node is a cross-community bridge._
+- **Why does `evaluateMockTradeOpenRisk()` connect `Community 3` to `Community 0`?**
   _High betweenness centrality (0.003) - this node is a cross-community bridge._
-- **What connects `MockTradeDoc`, `MockStrategySignalDoc`, `MockRegimeSnapshotDoc` to the rest of the system?**
-  _17 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Purpose`, `File Format`, `Usage Guidelines` to the rest of the system?**
+  _46 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.10526315789473684 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.046511627906976744 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
+  _Cohesion score 0.08831908831908832 - nodes in this community are weakly interconnected._
