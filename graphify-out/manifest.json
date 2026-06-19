@@ -1275,8 +1275,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/MockStageTradingSuite.tsx": {
-    "mtime": 1781712333.6116145,
-    "ast_hash": "cc8253de5e3dda6e03b6c0ed94542bae",
+    "mtime": 1781882079.5242498,
+    "ast_hash": "282ef3ab608399b965d08dfbb747085b",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/NavIcons.tsx": {
@@ -3030,8 +3030,8 @@
     "semantic_hash": ""
   },
   "client/vercel.json": {
-    "mtime": 1781376936.310687,
-    "ast_hash": "c443b04d0fc26b0a5a4573a78e0082a1",
+    "mtime": 1781884835.1581504,
+    "ast_hash": "db7187c88bb4f62e22c7ebf5a81b41a9",
     "semantic_hash": ""
   },
   "client/vitest.config.ts": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781798109.8651018,
-    "ast_hash": "030854db41cd4f2d9f08224454e4bb54",
+    "mtime": 1781885237.8136108,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781798109.8651018,
-    "ast_hash": "06f46b52ae791d6350f6000aecd1587a",
+    "mtime": 1781885237.8136108,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781798109.8651018,
-    "ast_hash": "dc47eb7f9872a0c5fb1be2833b9b8c6b",
+    "mtime": 1781885237.812372,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781798109.8651018,
-    "ast_hash": "8ca9fcab5c00321fa33256317137e531",
+    "mtime": 1781885237.8136108,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781798111.6232872,
-    "ast_hash": "c6633d9741bb628939458bc8397bb267",
+    "mtime": 1781885238.9651878,
+    "ast_hash": "2ac84c62d58269b07ac352180144985a",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23642,6 +23642,21 @@
   "client/src/components/DailyPnLTable.tsx": {
     "mtime": 1781796639.1607337,
     "ast_hash": "eaddefbc62c6ac8269eb2014f9a90979",
+    "semantic_hash": ""
+  },
+  "client/scripts/pm2-health-check.sh": {
+    "mtime": 1781882053.9865205,
+    "ast_hash": "1a707ed9c02354b28201f0cd74c62b8b",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/cron/health-check/route.ts": {
+    "mtime": 1781882039.3795712,
+    "ast_hash": "23a767cc854873a72e9eaf2bf22166df",
+    "semantic_hash": ""
+  },
+  "client/src/lib/alerts/telegramAlert.ts": {
+    "mtime": 1781882008.868186,
+    "ast_hash": "0595c846ca82d6deddcda2458b817d18",
     "semantic_hash": ""
   }
 }
