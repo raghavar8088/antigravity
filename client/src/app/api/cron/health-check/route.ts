@@ -63,31 +63,42 @@ export async function GET(req: Request): Promise<NextResponse> {
   const accountKey = url.searchParams.get("account_key")?.trim() || DEFAULT_MOCK_ACCOUNT_KEY;
   const now = Date.now();
 
-  const state = await loadExecutorState(accountKey);
-  const health = executorStateHealth(state, now);
-  const staleSeconds = health.ageSeconds;
+  try {
+    const state = await loadExecutorState(accountKey);
+    const health = executorStateHealth(state, now);
+    const staleSeconds = health.ageSeconds;
 
-  const isCriticallyStale = staleSeconds == null || staleSeconds > STALE_THRESHOLD_SECONDS;
+    const isCriticallyStale = staleSeconds == null || staleSeconds > STALE_THRESHOLD_SECONDS;
 
-  if (!isCriticallyStale) {
-    await clearAlertState(accountKey);
-    return NextResponse.json({ status: "healthy", account_key: accountKey, staleSeconds });
-  }
+    if (!isCriticallyStale) {
+      await clearAlertState(accountKey);
+      return NextResponse.json({ status: "healthy", account_key: accountKey, staleSeconds });
+    }
 
-  const alertSent = await shouldSendAlert(accountKey, now);
-  if (alertSent) {
-    const durationLabel =
-      staleSeconds == null
-        ? "no tick has ever been recorded"
-        : `last tick was ${Math.floor(staleSeconds / 3600)}h ${Math.floor((staleSeconds % 3600) / 60)}m ago`;
-    await sendTelegramAlert(
-      `EXECUTOR STALE [${accountKey}]: ${durationLabel}. Expected a tick every 5s (PM2) / 60s (Vercel cron fallback). ` +
-        `Check: pm2 status on Lightsail, and Vercel cron invocation history for /api/cron/mock-trading-tick.`,
+    const alertSent = await shouldSendAlert(accountKey, now);
+    if (alertSent) {
+      const durationLabel =
+        staleSeconds == null
+          ? "no tick has ever been recorded"
+          : `last tick was ${Math.floor(staleSeconds / 3600)}h ${Math.floor((staleSeconds % 3600) / 60)}m ago`;
+      await sendTelegramAlert(
+        `EXECUTOR STALE [${accountKey}]: ${durationLabel}. Expected a tick every 5s (PM2) / 60s (Vercel cron fallback). ` +
+          `Check: pm2 status on Lightsail, and Vercel cron invocation history for /api/cron/mock-trading-tick.`,
+      );
+    }
+
+    return NextResponse.json(
+      { status: "stale", account_key: accountKey, staleSeconds, alertSent },
+      { status: 503 },
+    );
+  } catch (err) {
+    // Surface the real failure (e.g. Mongo connect/timeout) instead of letting
+    // it crash the function with an empty-body 500 that's undebuggable from
+    // cron-job.org's execution log.
+    const message = err instanceof Error ? err.message : "health-check failed";
+    return NextResponse.json(
+      { status: "error", account_key: accountKey, error: message },
+      { status: 502 },
     );
   }
-
-  return NextResponse.json(
-    { status: "stale", account_key: accountKey, staleSeconds, alertSent },
-    { status: 503 },
-  );
 }

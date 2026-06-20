@@ -1,1 +1,1 @@
-{"client-api":{"communities":[0],"files":1,"symbols":2,"top_files":[{"file":"client/src/app/api/cron/mock-trading-tick/route.ts","symbols":2}]}}
+{"client-api":{"communities":[3],"files":1,"symbols":4,"top_files":[{"file":"client/src/app/api/cron/health-check/route.ts","symbols":4}]},"client-lib":{"communities":[0,1,2,3,4],"files":1,"symbols":31,"top_files":[{"file":"client/src/lib/broker/mongoTradesClient.ts","symbols":31}]}}

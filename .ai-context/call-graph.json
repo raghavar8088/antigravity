@@ -1,1 +1,1 @@
-{}
+{"client/src/app/api/cron/health-check/route.ts::clearAlertState()":["client/src/lib/broker/mongoTradesClient.ts::getDb()","client/src/lib/broker/mongoTradesClient.ts::isMongoConfigured()"],"client/src/app/api/cron/health-check/route.ts::shouldSendAlert()":["client/src/lib/broker/mongoTradesClient.ts::getDb()","client/src/lib/broker/mongoTradesClient.ts::isMongoConfigured()"]}
