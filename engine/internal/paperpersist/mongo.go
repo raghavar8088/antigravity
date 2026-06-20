@@ -167,11 +167,27 @@ func (m *MongoManager) connect(ctx context.Context) error {
 		return fmt.Errorf("paperpersist ping: %w", err)
 	}
 
+	// Swap in the new client, capturing any prior client so we can close it.
+	// CRITICAL: reconnect() (driven by RunPingMonitor) calls connect() on every
+	// ping failure. Without disconnecting the previous client, each reconnect
+	// orphans an entire connection pool that stays open server-side. Near the
+	// Atlas M0 500-connection cap this becomes self-amplifying: pings fail →
+	// reconnect → new pool → more connections → more ping failures, pinning the
+	// cluster at 500/500. Closing the old client breaks that loop.
 	m.mu.Lock()
+	old := m.mc
 	m.mc = mc
 	m.db = mc.Database(m.dbName)
 	m.connected = true
 	m.mu.Unlock()
+
+	if old != nil {
+		discCtx, dcancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if derr := old.Disconnect(discCtx); derr != nil {
+			log.Printf("[paperpersist] warn: closing previous client on reconnect: %v", derr)
+		}
+		dcancel()
+	}
 
 	log.Printf("[paperpersist] connected db=%s account_key=%s", m.dbName, AccountKey())
 	return nil
