@@ -1,1 +1,1 @@
-{"client-api":{"communities":[0,1],"files":1,"symbols":5,"top_files":[{"file":"client/src/app/api/auth/login/route.ts","symbols":5}]}}
+{"client-components":{"communities":[0,1,2],"files":3,"symbols":6,"top_files":[{"file":"client/src/components/ui/M3AppShell.tsx","symbols":3},{"file":"client/src/components/terminal/institutional/NavIcons.tsx","symbols":2},{"file":"client/src/components/terminal/institutional/LogoutButton.tsx","symbols":1}]}}

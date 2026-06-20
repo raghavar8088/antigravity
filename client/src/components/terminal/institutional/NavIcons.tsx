@@ -16,7 +16,8 @@ type NavIconName =
   | "menu"
   | "collapse"
   | "light"
-  | "dark";
+  | "dark"
+  | "logout";
 
 export function NavIcon({ name }: { name: NavIconName | string }) {
   const props = {
@@ -54,6 +55,12 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
       return (
         <svg {...props}>
           <path d="M15.5 11.5a6 6 0 0 1-8-8 7 7 0 1 0 8 8z" />
+        </svg>
+      );
+    case "logout":
+      return (
+        <svg {...props}>
+          <path d="M8 17H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M13 14l4-4-4-4M17 10H7" />
         </svg>
       );
     case "Strategy Authority":

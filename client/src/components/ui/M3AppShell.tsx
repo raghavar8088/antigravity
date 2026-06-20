@@ -12,6 +12,7 @@ import { NavIcon } from "@/components/terminal/institutional/NavIcons";
 import { pct, px } from "@/components/terminal/institutional/format";
 import { KillSwitchIndicator } from "@/components/killswitch/KillSwitchIndicator";
 import { KillSwitchPanel } from "@/components/killswitch/KillSwitchPanel";
+import { LogoutButton } from "@/components/terminal/institutional/LogoutButton";
 
 export type M3AppShellProps = {
   children: ReactNode;
@@ -133,6 +134,7 @@ export function M3AppShell({
               </button>
               {pageActions}
               <KillSwitchIndicator />
+              <LogoutButton />
             </div>
           </header>
 

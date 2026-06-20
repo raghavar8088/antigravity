@@ -276,6 +276,7 @@ The content is organized as follows:
   components/terminal/institutional/format.ts
   components/terminal/institutional/GradeStageCenter.tsx
   components/terminal/institutional/HealthCenter.tsx
+  components/terminal/institutional/LogoutButton.tsx
   components/terminal/institutional/MainEngineCenter.tsx
   components/terminal/institutional/MainEngineSurvivors.tsx
   components/terminal/institutional/MockEngineCenter.tsx
