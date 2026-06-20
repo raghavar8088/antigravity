@@ -1,0 +1,17 @@
+{
+  "startingBalance": 1000000,
+  "cashBalance": 999000,
+  "equity": 1000012.87,
+  "realizedPnl": 0,
+  "unrealizedPnl": 12.87,
+  "exposure": 5000,
+  "longExposure": 5000,
+  "shortExposure": 0,
+  "marginUsed": 1000,
+  "availableBalance": 999012.87,
+  "returnPct": 0.0000129,
+  "peakEquity": 1000012.87,
+  "maxDrawdownPct": 0,
+  "openCount": 1,
+  "closedCount": 0
+}

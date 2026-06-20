@@ -2900,8 +2900,8 @@
     "semantic_hash": ""
   },
   "client/src/middleware.ts": {
-    "mtime": 1781458413.424389,
-    "ast_hash": "15264cc58925993b1203549a1648ef52",
+    "mtime": 1781890731.4320843,
+    "ast_hash": "6efe720ee990b1e3a293ee0d3fa780ac",
     "semantic_hash": ""
   },
   "client/src/server/delta/deltaClient.test.ts": {
@@ -3030,8 +3030,8 @@
     "semantic_hash": ""
   },
   "client/vercel.json": {
-    "mtime": 1781884835.1581504,
-    "ast_hash": "db7187c88bb4f62e22c7ebf5a81b41a9",
+    "mtime": 1781887793.8723447,
+    "ast_hash": "a8921817ec770e1b79007159438ea5c0",
     "semantic_hash": ""
   },
   "client/vitest.config.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1781633981.2203753,
-    "ast_hash": "4cc4055fec6d6f70786591a8a67abec7",
+    "mtime": 1781895937.8821032,
+    "ast_hash": "d36917531a069798e72b35aaf3b634e0",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -4945,8 +4945,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/audit.go": {
-    "mtime": 1781376936.609793,
-    "ast_hash": "34db6b4b7508a434329f84a64bb8f5ff",
+    "mtime": 1781895937.884239,
+    "ast_hash": "0ec8bdb4081b41ef80c1e441930e0acf",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/authority.go": {
@@ -4960,8 +4960,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/delta_reconciliation.go": {
-    "mtime": 1781547776.3833473,
-    "ast_hash": "edcaaced1c77b9016e6fd0a1f127eda8",
+    "mtime": 1781895937.885811,
+    "ast_hash": "f84603b59d5f3f20bbd6bc7e18d54a55",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/detectors.go": {
@@ -4975,8 +4975,8 @@
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/engine.go": {
-    "mtime": 1781546243.3291404,
-    "ast_hash": "cbf619b4087a5c65a4da497da6457af3",
+    "mtime": 1781895937.8869443,
+    "ast_hash": "f67d0d8d25b5d6b7393c123b2584929e",
     "semantic_hash": ""
   },
   "engine/internal/reconciliationv2/events.go": {
@@ -21935,8 +21935,8 @@
     "semantic_hash": ""
   },
   ".github/workflows/deploy.yml": {
-    "mtime": 1781376928.656372,
-    "ast_hash": "1896489fa36cd00df1adc50f3a1f6777",
+    "mtime": 1781895937.875806,
+    "ast_hash": "5e144a696a6a6ab454857378a5153fa1",
     "semantic_hash": ""
   },
   ".github/workflows/keep-alive.yml": {
@@ -22015,8 +22015,8 @@
     "semantic_hash": ""
   },
   "docker-compose.prod.yml": {
-    "mtime": 1781406859.6227682,
-    "ast_hash": "9187799222044bcb7520d8b3144be918",
+    "mtime": 1781895937.8773742,
+    "ast_hash": "652884ac40d538dcc8bae63ad70f5f64",
     "semantic_hash": ""
   },
   "docs/api-index.md": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781885237.8136108,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781896362.1332393,
+    "ast_hash": "b9cd911b865e7864920e90a92b00a6bf",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781885237.8136108,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781896362.1332393,
+    "ast_hash": "484486d0aa1708cf1da105507551eac8",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781885237.812372,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781896362.1319351,
+    "ast_hash": "f502f1f0b803088c1492bc749c19fcde",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781885237.8136108,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1781896362.1319351,
+    "ast_hash": "ea0de0aa705b2435e08a5573e60c0f8f",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781885238.9651878,
-    "ast_hash": "2ac84c62d58269b07ac352180144985a",
+    "mtime": 1781896363.4874034,
+    "ast_hash": "1b79f8b20969bc87c7a8881c8284218e",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23375,8 +23375,8 @@
     "semantic_hash": ""
   },
   "engine/internal/ledger/mongo_store.go": {
-    "mtime": 1781535951.9051623,
-    "ast_hash": "28491baf3f201b52436c7093796529cd",
+    "mtime": 1781895937.8831646,
+    "ast_hash": "c9053ee92057e2679729ee58182c8e70",
     "semantic_hash": ""
   },
   "engine/internal/logger/logger.go": {
@@ -23480,8 +23480,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/cron/mock-trading-tick/route.ts": {
-    "mtime": 1781707343.5607896,
-    "ast_hash": "da7484011916a2778e8fd928751b4aee",
+    "mtime": 1781887817.5545843,
+    "ast_hash": "29c269c88df90ba3de807df30e1c3091",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/executor-status/route.ts": {
@@ -23657,6 +23657,16 @@
   "client/src/lib/alerts/telegramAlert.ts": {
     "mtime": 1781882008.868186,
     "ast_hash": "0595c846ca82d6deddcda2458b817d18",
+    "semantic_hash": ""
+  },
+  "engine/internal/ledger/mongo_store_test.go": {
+    "mtime": 1781895938.1092105,
+    "ast_hash": "b180602b59f26edab4b7fc235bdf72ef",
+    "semantic_hash": ""
+  },
+  "engine/internal/reconciliationv2/delta_reconciliation_test.go": {
+    "mtime": 1781895938.1098428,
+    "ast_hash": "c35a6c290eea8ce7d3893c4782fccdd5",
     "semantic_hash": ""
   }
 }

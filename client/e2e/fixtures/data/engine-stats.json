@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "engine": {
+    "status": "ONLINE",
+    "regime": "RANGE",
+    "killSwitchActive": false,
+    "paperBalanceUsd": 1000000,
+    "strategiesLoaded": 9
+  }
+}

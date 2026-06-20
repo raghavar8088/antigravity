@@ -8,6 +8,9 @@
     "start": "node --max-old-space-size=512 ./node_modules/next/dist/bin/next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "replay": "npx tsx scripts/replay-paper-desk.ts",
     "replay:fetch": "npx tsx scripts/replay-fetch.ts",
     "replay:compare": "npx tsx scripts/replay-compare.ts",
@@ -47,6 +50,7 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
