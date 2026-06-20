@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[2,4,6],"files":1,"symbols":24,"top_files":[{"file":"engine/cmd/sep_evidence/datasource.go","symbols":24}]},"engine-mongopersist":{"communities":[1],"files":1,"symbols":13,"top_files":[{"file":"engine/internal/mongopersist/client.go","symbols":13}]},"engine-paperpersist":{"communities":[0,3,4,5],"files":1,"symbols":36,"top_files":[{"file":"engine/internal/paperpersist/mongo.go","symbols":36}]}}
+{}

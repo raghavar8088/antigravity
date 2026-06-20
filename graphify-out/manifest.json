@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "client/package.json": {
-    "mtime": 1781707375.410177,
-    "ast_hash": "5d381504873a674df2d75bcede9b40d8",
+    "mtime": 1781897679.4665082,
+    "ast_hash": "d9cf506d330b34b23f0447c1f7afca6d",
     "semantic_hash": ""
   },
   "client/postcss.config.mjs": {
@@ -2070,8 +2070,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/broker/mongoTradesClient.ts": {
-    "mtime": 1781536256.637693,
-    "ast_hash": "d0b19e365b77609b03b1bc9b02ab7588",
+    "mtime": 1781945958.5547225,
+    "ast_hash": "22262227a1a268c5b5f73aad3d7922c1",
     "semantic_hash": ""
   },
   "client/src/lib/broker/ownerAccountKey.ts": {
@@ -3030,8 +3030,8 @@
     "semantic_hash": ""
   },
   "client/vercel.json": {
-    "mtime": 1781887793.8723447,
-    "ast_hash": "a8921817ec770e1b79007159438ea5c0",
+    "mtime": 1781943418.2285283,
+    "ast_hash": "db7187c88bb4f62e22c7ebf5a81b41a9",
     "semantic_hash": ""
   },
   "client/vitest.config.ts": {
@@ -3080,8 +3080,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/sep_evidence/datasource.go": {
-    "mtime": 1781376936.39634,
-    "ast_hash": "e5d38e24dc565b989fb4300389d22f29",
+    "mtime": 1781956088.5945053,
+    "ast_hash": "3c1d625513772f59f949235a6eece11b",
     "semantic_hash": ""
   },
   "engine/cmd/sep_evidence/main.go": {
@@ -4335,8 +4335,8 @@
     "semantic_hash": ""
   },
   "engine/internal/mongopersist/client.go": {
-    "mtime": 1781458287.2534604,
-    "ast_hash": "7b7f7cf9899c5c6e2eb620d0c470f257",
+    "mtime": 1781956064.7195816,
+    "ast_hash": "a3b19daff97533db7430757a67752985",
     "semantic_hash": ""
   },
   "engine/internal/mongopersist/handler.go": {
@@ -4695,8 +4695,8 @@
     "semantic_hash": ""
   },
   "engine/internal/paperpersist/mongo.go": {
-    "mtime": 1781376936.5754342,
-    "ast_hash": "377ecf213ff6cd2a33f0a319fd702459",
+    "mtime": 1781956069.7660875,
+    "ast_hash": "3d594bc543facbfa4aab46b09e06fa94",
     "semantic_hash": ""
   },
   "engine/internal/paperpersist/order_writer.go": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781896362.1332393,
-    "ast_hash": "b9cd911b865e7864920e90a92b00a6bf",
+    "mtime": 1781956434.3236828,
+    "ast_hash": "f16a0ad9c17cbc0ec7ca14d293ce2a3d",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781896362.1332393,
-    "ast_hash": "484486d0aa1708cf1da105507551eac8",
+    "mtime": 1781956434.3236828,
+    "ast_hash": "4fbd67028d69f0a11d60bb47abd39906",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781896362.1319351,
-    "ast_hash": "f502f1f0b803088c1492bc749c19fcde",
+    "mtime": 1781956434.3236828,
+    "ast_hash": "b4c4af42095e91bc0126b38980288e51",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781896362.1319351,
-    "ast_hash": "ea0de0aa705b2435e08a5573e60c0f8f",
+    "mtime": 1781956434.3236828,
+    "ast_hash": "4fd8176234b375290cc8009348326959",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,7 +22920,7 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781896363.4874034,
+    "mtime": 1781956435.9504838,
     "ast_hash": "1b79f8b20969bc87c7a8881c8284218e",
     "semantic_hash": ""
   },
@@ -23290,8 +23290,8 @@
     "semantic_hash": ""
   },
   "client/next-env.d.ts": {
-    "mtime": 1781458464.8382888,
-    "ast_hash": "b698cdd97fe8e3bd16dcd74899ad7cef",
+    "mtime": 1781933920.5777144,
+    "ast_hash": "29f60a376e12bf72b67d4994fcc84214",
     "semantic_hash": ""
   },
   "client/src/internal/strategy/evaluator.ts": {
@@ -23480,8 +23480,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/cron/mock-trading-tick/route.ts": {
-    "mtime": 1781887817.5545843,
-    "ast_hash": "29c269c88df90ba3de807df30e1c3091",
+    "mtime": 1781943426.0392902,
+    "ast_hash": "1b3ffc99a2e5c7b6020a5c0c51be9f44",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/executor-status/route.ts": {
@@ -23650,8 +23650,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/cron/health-check/route.ts": {
-    "mtime": 1781882039.3795712,
-    "ast_hash": "23a767cc854873a72e9eaf2bf22166df",
+    "mtime": 1781944224.806882,
+    "ast_hash": "dcd384d88e10bab7098633cbf0910616",
     "semantic_hash": ""
   },
   "client/src/lib/alerts/telegramAlert.ts": {
@@ -23667,6 +23667,156 @@
   "engine/internal/reconciliationv2/delta_reconciliation_test.go": {
     "mtime": 1781895938.1098428,
     "ast_hash": "c35a6c290eea8ce7d3893c4782fccdd5",
+    "semantic_hash": ""
+  },
+  "client/e2e/.auth/owner.json": {
+    "mtime": 1781933923.8261352,
+    "ast_hash": "faaba0497c41c7b1720441702772a51f",
+    "semantic_hash": ""
+  },
+  "client/e2e/auth/login.spec.ts": {
+    "mtime": 1781898030.6122656,
+    "ast_hash": "d6da723b6d6988ef24e8afa7aab6f583",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/authedTest.ts": {
+    "mtime": 1781897487.9973545,
+    "ast_hash": "420aa018af9d80e6ac05212f34ab3446",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/data/btc-price.json": {
+    "mtime": 1781897406.7368262,
+    "ast_hash": "e20250a10f6d8854b9d8c6e376966860",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/data/engine-stats.json": {
+    "mtime": 1781897316.7225308,
+    "ast_hash": "ed5c6cdb5e57faddc6407385f8a38c39",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/data/killswitch-status.json": {
+    "mtime": 1781897320.441423,
+    "ast_hash": "8d321619ecd8536030a9155b2224a8de",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/data/mock-account.json": {
+    "mtime": 1781897434.3329458,
+    "ast_hash": "d0fe06b173e0a9b55a5d0e076fbc952b",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/data/mock-open-trade.json": {
+    "mtime": 1781897413.171299,
+    "ast_hash": "f5d23a88c9b563dd3ae9b2abb591250f",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/marketData.ts": {
+    "mtime": 1781897442.209619,
+    "ast_hash": "92ec8791ab9fa8abbf2f4019d2710197",
+    "semantic_hash": ""
+  },
+  "client/e2e/fixtures/mockTrading.ts": {
+    "mtime": 1781897470.5718741,
+    "ast_hash": "a2312d198bf00296d630fedc9b9dfea3",
+    "semantic_hash": ""
+  },
+  "client/e2e/global-setup.ts": {
+    "mtime": 1781897304.318577,
+    "ast_hash": "53aa7369ea62a54f205ad28b0dae27c4",
+    "semantic_hash": ""
+  },
+  "client/e2e/legacy-public/paper-desk.spec.ts": {
+    "mtime": 1781897639.8014305,
+    "ast_hash": "063fe414611830335f58b70b7d3f7581",
+    "semantic_hash": ""
+  },
+  "client/e2e/mobile/mobile-nav.spec.ts": {
+    "mtime": 1781897659.2118242,
+    "ast_hash": "552820ef3b59122a4375bc7b3d566217",
+    "semantic_hash": ""
+  },
+  "client/e2e/mock-trading/close-trade.spec.ts": {
+    "mtime": 1781899689.5063531,
+    "ast_hash": "ad92d8a7070ce019c7c4a93508c83a26",
+    "semantic_hash": ""
+  },
+  "client/e2e/mock-trading/dashboard.spec.ts": {
+    "mtime": 1781897550.193315,
+    "ast_hash": "cd48052b64b2bbf50d3d9268f30cb698",
+    "semantic_hash": ""
+  },
+  "client/e2e/terminal/risk-killswitch.spec.ts": {
+    "mtime": 1781897618.0071998,
+    "ast_hash": "640ad5849baa271d3c9b1b9503764090",
+    "semantic_hash": ""
+  },
+  "client/e2e/terminal/smoke.spec.ts": {
+    "mtime": 1781897570.8667777,
+    "ast_hash": "002e70f40cb0f1575339337789229b38",
+    "semantic_hash": ""
+  },
+  "client/playwright.config.ts": {
+    "mtime": 1781899445.8261275,
+    "ast_hash": "62c350b43160d8e06e28932e91ac6d07",
+    "semantic_hash": ""
+  },
+  "client/test-results/.last-run.json": {
+    "mtime": 1781933954.1776943,
+    "ast_hash": "38cf3e160c990f8eff83843e492d331e",
+    "semantic_hash": ""
+  },
+  ".github/workflows/client-e2e.yml": {
+    "mtime": 1781897688.100233,
+    "ast_hash": "62bfe112a64c8241a325867f0ae271df",
+    "semantic_hash": ""
+  },
+  "client/e2e/README.md": {
+    "mtime": 1781933974.2820745,
+    "ast_hash": "a76fcd2e82823435ca5f0d1b5dcac6fe",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-honors-the-next-redirect-target-after-login-chromium-desktop/error-context.md": {
+    "mtime": 1781933951.4553492,
+    "ast_hash": "e5defb1a6d2b31f6514b09b4bac52817",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signing-o-555f5-d-re-guards-protected-pages-chromium-desktop/error-context.md": {
+    "mtime": 1781933950.495587,
+    "ast_hash": "515db49c3bb0a272d1cfc232900eb436",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signs-in-successfully-and-lands-on-terminal-chromium-desktop/error-context.md": {
+    "mtime": 1781933951.676808,
+    "ast_hash": "8481a4daaf58409c2b4f26580310a813",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-honors-the-next-redirect-target-after-login-chromium-desktop/test-failed-1.png": {
+    "mtime": 1781933951.2303765,
+    "ast_hash": "84bf268cb2a4652794c07a56aa8ba255",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signing-o-555f5-d-re-guards-protected-pages-chromium-desktop/test-failed-1.png": {
+    "mtime": 1781933950.0711043,
+    "ast_hash": "90ed40b4d15ec7a532176012b8c0efa3",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signs-in-successfully-and-lands-on-terminal-chromium-desktop/test-failed-1.png": {
+    "mtime": 1781933951.4433799,
+    "ast_hash": "79c4eb44cd52c12e94622968779a8833",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-honors-the-next-redirect-target-after-login-chromium-desktop/video.webm": {
+    "mtime": 1781933951.403077,
+    "ast_hash": "1fab9a38702df52d19e62899e5b123bb",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signing-o-555f5-d-re-guards-protected-pages-chromium-desktop/video.webm": {
+    "mtime": 1781933950.2474575,
+    "ast_hash": "bb76d531d944b0027a61e3bfcb3a6919",
+    "semantic_hash": ""
+  },
+  "client/test-results/auth-login-login-signs-in-successfully-and-lands-on-terminal-chromium-desktop/video.webm": {
+    "mtime": 1781933951.6382053,
+    "ast_hash": "6e8d0653a02895a4485d596866e07615",
     "semantic_hash": ""
   }
 }
