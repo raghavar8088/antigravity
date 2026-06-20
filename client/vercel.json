@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/mock-trading-tick",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/policy-snapshot",
       "schedule": "5 0 * * *"
     }

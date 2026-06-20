@@ -2,10 +2,9 @@
  * GET /api/cron/mock-trading-tick
  *
  * Headless mock-trading execution cycle. Protected by CRON_SECRET.
- * NOT registered in vercel.json — Vercel Hobby cron jobs are capped at
- * once-per-day (per-minute requires Pro), so the 1/min fallback cadence
- * this route needs is driven by an external pinger (UptimeRobot/cron-job.org)
- * hitting this URL directly. PM2 worker on Lightsail is primary (5s cycles).
+ * Registered in client/vercel.json at 1/min (requires Vercel Pro — Hobby
+ * caps crons at once-per-day). This is the fallback cadence; the PM2 worker
+ * on Lightsail is primary (5s cycles) when it's up.
  */
 
 import { NextResponse } from "next/server";
