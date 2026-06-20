@@ -106,7 +106,11 @@ export async function POST(req: NextRequest) {
   // Successful login — clear rate limit counter and issue session
   clearRateLimit(ip);
 
-  const token = signSession(OWNER_ACCOUNT_KEY, creds.username);
+  // The only configured login is the operator/admin account — grant ADMIN role
+  // so admin-only engine endpoints (e.g. POST /api/admin/reset) are reachable
+  // from the dashboard. Previously this always defaulted to "TRADER" (signSession's
+  // default), making admin-gated engine routes unreachable from any UI session.
+  const token = signSession(OWNER_ACCOUNT_KEY, creds.username, "ADMIN");
   const res = NextResponse.json({
     ok: true,
     user: { id: OWNER_ACCOUNT_KEY, username: creds.username },
