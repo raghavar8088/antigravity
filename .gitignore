@@ -55,3 +55,4 @@ claude-bot/log.txt
 claude-bot/last-reply.txt
 claude-bot/.send.lock
 claude-bot/screenshots/
+.vercel
