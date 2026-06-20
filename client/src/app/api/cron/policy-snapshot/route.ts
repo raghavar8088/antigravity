@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { MongoClient } from "mongodb";
+import { getDb, isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { CORE_BTC_FT_STRATEGY_IDS } from "@/lib/trading/btcFtRoster";
 import {
   btcFtSignalThresholdFromEnv,
@@ -21,9 +21,6 @@ import {
   deskRiskPctOfEquityFromEnv,
   DESK_MAX_OPEN_PER_CLUSTER,
 } from "@/lib/trading/futuresDeskPolicy";
-
-const MONGODB_URI = process.env.MONGODB_URI;
-const MONGODB_DB = process.env.MONGODB_DB || "loop_trades";
 
 export async function GET(req: Request): Promise<NextResponse> {
   // CRON_SECRET is mandatory — fail closed to prevent unauthenticated runs.
@@ -39,14 +36,18 @@ export async function GET(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!MONGODB_URI) {
+  if (!isMongoConfigured()) {
     return NextResponse.json({ ok: false, error: "MONGODB_URI not set" }, { status: 500 });
   }
 
-  const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 10_000 });
   try {
-    await client.connect();
-    const db = client.db(MONGODB_DB);
+    // Reuse the shared, pool-capped global client (mongoTradesClient.ts) instead
+    // of opening a fresh ad-hoc MongoClient here. An ad-hoc client with no
+    // maxPoolSize override defaults to the driver's 100-per-node pool — on a
+    // 3-node Atlas M0 cluster that's up to 300 sockets from a single cron
+    // invocation, a major contributor to the repeated 500/500 connection-cap
+    // outages even though this client was being closed in `finally`.
+    const db = await getDb();
 
     // Pull last 24h trade summary from MongoDB
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -87,7 +88,5 @@ export async function GET(req: Request): Promise<NextResponse> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
-  } finally {
-    await client.close();
   }
 }

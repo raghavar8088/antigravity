@@ -62,14 +62,18 @@ async function connect(): Promise<CachedClient> {
     // PERF 4: Reuse global MongoClient across hot-reloads and lambdas.
     // maxPoolSize kept small and maxIdleTimeMS short because every cold Vercel
     // function instance gets its OWN global (globals don't share across Lambda
-    // containers) — with a 10-connection pool and no idle reaper, concurrent
+    // containers) — with a too-large pool and no idle reaper, concurrent
     // containers accumulate connections that never close, exhausting the M0
-    // free-tier's 500-connection cap (see 2026-06-20 outage: Atlas rejected all
-    // connections with "SSL alert 80" once at capacity).
+    // free-tier's 500-connection cap (recurring outage: Atlas rejected all
+    // connections with "SSL alert 80" once at capacity — most recently
+    // 2026-06-20, twice). Tightened maxPoolSize 3→2 and maxIdleTimeMS 20s→10s
+    // so each container holds fewer sockets and releases them faster, keeping
+    // steady-state usage well under the cap even with many concurrent
+    // containers fanned out under load.
     const opts = {
-      maxPoolSize: 3,
+      maxPoolSize: 2,
       minPoolSize: 0,
-      maxIdleTimeMS: 20_000,
+      maxIdleTimeMS: 10_000,
       serverSelectionTimeoutMS: 5_000,
       connectTimeoutMS: 5_000,
     };

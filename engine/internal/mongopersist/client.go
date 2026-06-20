@@ -76,13 +76,14 @@ func New(ctx context.Context) (*Client, error) {
 
 	// M0 connection-cap guard: the driver default maxPoolSize is 100 and opens a
 	// pool PER replica-set node, so an uncapped client alone can hold ~300 sockets
-	// and exhaust the Atlas M0 500-connection limit. Keep the pool small and reap
-	// idle connections quickly so cold/redeployed engines release sockets fast.
+	// and exhaust the Atlas M0 500-connection limit. Tightened 10→6 for extra
+	// headroom alongside paperpersist's matching cap, and reap idle connections
+	// quickly so cold/redeployed engines release sockets fast.
 	clientOpts := options.Client().
 		ApplyURI(uri).
-		SetMaxPoolSize(10).
+		SetMaxPoolSize(6).
 		SetMinPoolSize(0).
-		SetMaxConnIdleTime(30 * time.Second).
+		SetMaxConnIdleTime(20 * time.Second).
 		SetServerSelectionTimeout(10 * time.Second).
 		SetConnectTimeout(15 * time.Second)
 

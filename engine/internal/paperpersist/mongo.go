@@ -143,15 +143,18 @@ func NewMongoManager(ctx context.Context) (*MongoManager, error) {
 }
 
 func (m *MongoManager) connect(ctx context.Context) error {
-	// M0 connection-cap guard: the pool is opened PER replica-set node, so 20 here
-	// becomes ~60 sockets on a 3-node cluster. Cap small and reap idle connections
-	// in seconds (not 5 minutes) so redeploys/restarts don't pile up stale sockets
-	// against the Atlas M0 500-connection ceiling.
+	// M0 connection-cap guard: the pool is opened PER replica-set node, so 10 here
+	// becomes ~30 sockets on a 3-node cluster. Tightened from 10→6 (≈18 sockets)
+	// for extra headroom — the actual recurring-outage root cause was the
+	// reconnect leak (see connect()'s old-client Disconnect() below), but a
+	// smaller pool means a single misbehaving process contributes less to the
+	// shared 500-connection ceiling. Reap idle connections in seconds (not 5
+	// minutes) so redeploys/restarts don't pile up stale sockets.
 	clientOpts := options.Client().
 		ApplyURI(m.uri).
-		SetMaxPoolSize(10).
+		SetMaxPoolSize(6).
 		SetMinPoolSize(0).
-		SetMaxConnIdleTime(30 * time.Second).
+		SetMaxConnIdleTime(20 * time.Second).
 		SetServerSelectionTimeout(10 * time.Second).
 		SetConnectTimeout(15 * time.Second)
 
