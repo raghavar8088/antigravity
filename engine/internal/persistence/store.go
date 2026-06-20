@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -404,14 +405,31 @@ func (s *Store) SaveOptionsSellingState(ctx context.Context, state *OptionsSelli
 	return err
 }
 
+// resetBalanceUSD returns the configured starting balance to write on reset.
+// Reads the same INITIAL_PAPER_BALANCE_USD env var as the engine's in-memory
+// default (engine/cmd/antigravity) so a reset doesn't write a stale literal
+// that a subsequent boot would treat as "restore $1,000,000 from DB".
+func resetBalanceUSD() float64 {
+	v := os.Getenv("INITIAL_PAPER_BALANCE_USD")
+	if v == "" {
+		return 1000000.0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || f < 100 {
+		return 1000000.0
+	}
+	return f
+}
+
 // ResetState writes a clean default state to the database.
 func (s *Store) ResetState(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	balance := resetBalanceUSD()
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE engine_state SET
-			balance = 1000000,
+			balance = ?,
 			position_btc = 0,
 			total_fees = 0,
 			positions_json = '[]',
@@ -422,11 +440,11 @@ func (s *Store) ResetState(ctx context.Context) error {
 			total_pnl = 0,
 			saved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
 		WHERE id = 1
-	`)
+	`, balance)
 	if err != nil {
 		return fmt.Errorf("failed to reset state: %w", err)
 	}
-	log.Println("[DB] 🔄 Account state reset to factory defaults in database")
+	log.Printf("[DB] 🔄 Account state reset to factory defaults in database (balance=$%.2f)", balance)
 	return nil
 }
 

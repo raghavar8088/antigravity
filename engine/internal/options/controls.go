@@ -7,8 +7,7 @@ import (
 
 const (
 	// Buyer desk: fewer overlapping longs and smaller base tickets vs the selling desk.
-	maxConcurrentPositions   = 4
-	optionTradeAllocationUSD = initialOptionsBalance * 0.002 // 0.20% — low-balance-oriented paper book
+	maxConcurrentPositions = 4
 
 	buyerDailyLossLimitPct = 0.03 // halt new opens after 3% of day-start balance (tighter than generic 5%)
 
@@ -98,8 +97,15 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 		HasShadowPosition: false,
 	}
 }
+// optionTradeAllocationUSD returns the per-strategy ticket size: 0.20% of the
+// configured options paper balance — low-balance-oriented sizing that scales
+// with INITIAL_OPTIONS_BALANCE_USD / INITIAL_PAPER_BALANCE_USD.
+func optionTradeAllocationUSD() float64 {
+	return getInitialOptionsBalanceUSD() * 0.002
+}
+
 func newStrategyState(def StrategyDef) *strategyState {
-	def.PositionUSD = optionTradeAllocationUSD
+	def.PositionUSD = optionTradeAllocationUSD()
 	return &strategyState{
 		def:   def,
 		stats: newStrategyStatus(def),

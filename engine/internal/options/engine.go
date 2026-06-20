@@ -6,11 +6,39 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
 
-const initialOptionsBalance = 1000000.0 // $1,000,000 paper long-options (buy) account
+// getInitialOptionsBalanceUSD returns the configured starting balance for the
+// BTC options-selling paper account. Env: INITIAL_OPTIONS_BALANCE_USD. If
+// unset, falls back to INITIAL_PAPER_BALANCE_USD (kept in sync with the main
+// futures desk by default) — set explicitly only to diverge intentionally.
+// Floors at $100; falls back to $1,000,000 (legacy default) if nothing is
+// configured.
+func getInitialOptionsBalanceUSD() float64 {
+	if v := os.Getenv("INITIAL_OPTIONS_BALANCE_USD"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || f <= 0 {
+			log.Printf("[CONFIG] WARNING: invalid INITIAL_OPTIONS_BALANCE_USD=%q, using default $1,000,000", v)
+			return 1000000.0
+		}
+		if f < 100 {
+			log.Printf("[CONFIG] WARNING: INITIAL_OPTIONS_BALANCE_USD=%.2f below $100 floor, clamping to $100", f)
+			return 100.0
+		}
+		return f
+	}
+	if v := os.Getenv("INITIAL_PAPER_BALANCE_USD"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err == nil && f >= 100 {
+			return f
+		}
+	}
+	return 1000000.0
+}
 
 // strategyState holds the runtime state for a single strategy.
 type strategyState struct {
@@ -68,12 +96,13 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 	}
 
 	now := time.Now().UTC()
+	startingBalance := getInitialOptionsBalanceUSD()
 	engine := &Engine{
 		states:          states,
 		marketProfile:   profile,
-		balance:         initialOptionsBalance,
-		peakBalance:     initialOptionsBalance,
-		dayStartBalance: initialOptionsBalance,
+		balance:         startingBalance,
+		peakBalance:     startingBalance,
+		dayStartBalance: startingBalance,
 		dayStartDate:    int(now.Unix() / 86400),
 		tickEvery:       tickEvery,
 	}
@@ -282,10 +311,11 @@ func (e *Engine) ResetAccount() PersistedState {
 	defer e.mu.Unlock()
 
 	now := time.Now().UTC()
+	startingBalance := getInitialOptionsBalanceUSD()
 	e.trades = nil
-	e.balance = initialOptionsBalance
-	e.peakBalance = initialOptionsBalance
-	e.dayStartBalance = initialOptionsBalance
+	e.balance = startingBalance
+	e.peakBalance = startingBalance
+	e.dayStartBalance = startingBalance
 	e.dayStartDate = int(now.Unix() / 86400)
 	e.lastPrice = 0
 	e.priceHist = nil
@@ -1143,7 +1173,7 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e.ResetAccount()
-	log.Println("[OPTIONS] Options account reset to $1,000,000")
+	log.Printf("[OPTIONS] Options account reset to $%.2f", getInitialOptionsBalanceUSD())
 	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
 }
 

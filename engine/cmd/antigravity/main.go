@@ -91,7 +91,38 @@ func (r *RingLogger) GetLogs() []string {
 
 var globalLogs = &RingLogger{max: 100}
 
-const initialPaperBalanceUSD = 1000000.0
+// getInitialPaperBalanceUSD returns the configured starting balance for the
+// live BTC futures paper account. Env: INITIAL_PAPER_BALANCE_USD. Falls back
+// to $1,000,000 (legacy default) if unset, invalid, or non-positive. Floors
+// at $100 — a paper account below that is not meaningfully tradable given
+// fee/slippage assumptions baked into strategy sizing.
+func getInitialPaperBalanceUSD() float64 {
+	v := os.Getenv("INITIAL_PAPER_BALANCE_USD")
+	if v == "" {
+		return 1000000.0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || f <= 0 {
+		log.Printf("[CONFIG] WARNING: invalid INITIAL_PAPER_BALANCE_USD=%q, using default $1,000,000", v)
+		return 1000000.0
+	}
+	if f < 100 {
+		log.Printf("[CONFIG] WARNING: INITIAL_PAPER_BALANCE_USD=%.2f below $100 floor, clamping to $100", f)
+		return 100.0
+	}
+	return f
+}
+
+// configSource reports whether an env var is explicitly set ("env") or
+// falling back to its built-in default ("default"). Used for startup logging
+// so a misconfigured/missing env var is visible immediately, not discovered
+// later from a balance that doesn't match expectations.
+func configSource(envKey string) string {
+	if os.Getenv(envKey) == "" {
+		return "default"
+	}
+	return "env"
+}
 
 var (
 	deltaProbeClient *marketdata.DeltaTickerClient
@@ -494,7 +525,7 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
 		MaxPositionBTC:  2.0,                    // Max 2 BTC total exposure
-		MaxCapitalUSD:   initialPaperBalanceUSD, // $1,000,000 paper balance
+		MaxCapitalUSD:   getInitialPaperBalanceUSD(), // configured paper balance
 		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($50,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
@@ -506,17 +537,19 @@ func main() {
 	// ═══════════════════════════════════════════════════
 	// 4. Strategy Tracker (Per-Strategy Performance)
 	// ═══════════════════════════════════════════════════
-	tracker := risk.NewStrategyTracker(names, categories, timeframes, initialPaperBalanceUSD)
+	tracker := risk.NewStrategyTracker(names, categories, timeframes, getInitialPaperBalanceUSD())
 
 	// ═══════════════════════════════════════════════════
 	// 5. Paper Executor ($1,000,000 futures paper account)
 	// ═══════════════════════════════════════════════════
-	paperExecute := execution.NewPaperClient(initialPaperBalanceUSD)
+	log.Printf("[CONFIG] Initial paper balance: $%.2f (source: %s)",
+		getInitialPaperBalanceUSD(), configSource("INITIAL_PAPER_BALANCE_USD"))
+	paperExecute := execution.NewPaperClient(getInitialPaperBalanceUSD())
 
 	// ═══════════════════════════════════════════════════
 	// 5b. Paper OMS — canonical execution (Epic 1)
 	// ═══════════════════════════════════════════════════
-	paperOMS := execution.NewPaperOMS(initialPaperBalanceUSD)
+	paperOMS := execution.NewPaperOMS(getInitialPaperBalanceUSD())
 
 	// ═══════════════════════════════════════════════════
 	// 6. Position Manager (Trailing SL/TP)
@@ -583,7 +616,7 @@ func main() {
 
 		// ── Restore ALL state on boot ──
 		state, loadErr := dbStore.LoadState(ctx)
-		if loadErr == nil && state.Balance != initialPaperBalanceUSD {
+		if loadErr == nil && state.Balance != getInitialPaperBalanceUSD() {
 			// 1. Restore paper balance + fees
 			paperExecute.RestoreBalance(state.Balance, state.TotalFees)
 
@@ -675,7 +708,7 @@ func main() {
 				observability.NegativeBalanceRecoveries.Inc()
 				restoredBalance = 0
 			}
-			if restoredBalance != initialPaperBalanceUSD {
+			if restoredBalance != getInitialPaperBalanceUSD() {
 				log.Printf("[Phase31B] ♻️  MongoDB recovery: balance=%.2f age=%s — overriding PostgreSQL state",
 					restoredBalance, recoveryReport.AccountDataAge.Round(time.Second))
 				paperExecute.RestoreBalance(restoredBalance, recoveryReport.AccountState.TotalFees)
@@ -1108,7 +1141,7 @@ func main() {
 		FundingFetcher:   fundingFetcher,
 		OIFetcher:        oiFetcher,
 		DepthSubscriber:  depthSubscriber,
-		PortfolioValue:   initialPaperBalanceUSD,
+		PortfolioValue:   getInitialPaperBalanceUSD(),
 		// Kelly ledger — PortfolioLedger implements kelly.LedgerInterface via
 		// its ClosedTrades() method, which returns the per-trade PnL% ring buffer.
 		// Kelly sizing requires at least 30 closed trades before activating.
@@ -1233,7 +1266,7 @@ func main() {
 		ksSvc,
 		"btc-paper-1",
 		&reconciliationv2.WireProductionConfig{
-			InitialBalanceUSD: initialPaperBalanceUSD,
+			InitialBalanceUSD: getInitialPaperBalanceUSD(),
 			MarkPriceUSD:      paperExecute.GetLastPrice,
 		},
 	); err != nil {
@@ -2258,7 +2291,7 @@ func main() {
 			})
 		}
 
-		const totalCapital = 1_000_000.0
+		totalCapital := getInitialPaperBalanceUSD()
 		v := phase22e.NewValidator(totalCapital)
 		result := v.Run(trades)
 

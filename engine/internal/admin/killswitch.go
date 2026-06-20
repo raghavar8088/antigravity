@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -179,13 +180,14 @@ func (k *KillSwitchController) HandleReset(w http.ResponseWriter, r *http.Reques
 
 	log.Println("[ADMIN] FULL ACCOUNT RESET requested - wiping all state...")
 
-	// 1. Reset in-memory paper trading balance ($1M starting)
+	// 1. Reset in-memory paper trading balance to the configured starting balance
 	if err := k.engine.ResetAccount(); err != nil {
 		log.Printf("[ADMIN] Failed to reset paper engine: %v", err)
 		http.Error(w, "Failed to reset paper engine", http.StatusInternalServerError)
 		return
 	}
-	log.Println("[ADMIN] Paper balance reset to $1,000,000")
+	newBalance := k.engine.GetBalanceUSD()
+	log.Printf("[ADMIN] Paper balance reset to $%.2f", newBalance)
 
 	// 2. Wipe all open positions from memory
 	k.posMgr.Reset()
@@ -217,13 +219,13 @@ func (k *KillSwitchController) HandleReset(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	log.Println("[ADMIN] FULL RESET COMPLETE - Engine running with $1,000,000 fresh account")
+	log.Printf("[ADMIN] FULL RESET COMPLETE - Engine running with $%.2f fresh account", newBalance)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":      "Account Reset",
-		"message":     "All balances, positions, and trade history have been wiped. Starting fresh with $1,000,000.",
-		"newBalance":  1000000.0,
+		"message":     fmt.Sprintf("All balances, positions, and trade history have been wiped. Starting fresh with $%.2f.", newBalance),
+		"newBalance":  newBalance,
 		"openTrades":  0,
 		"totalTrades": 0,
 	})

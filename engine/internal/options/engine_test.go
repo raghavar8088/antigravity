@@ -9,7 +9,7 @@ import (
 func TestAggregateStatsIncludesOpenOptionMarketValueInEquity(t *testing.T) {
 	// Long option: cash pays premium; equity = cash + mark-to-market option value.
 	e := &Engine{
-		balance: initialOptionsBalance - 500, // paid premium to open
+		balance: getInitialOptionsBalanceUSD() - 500, // paid premium to open
 		states: []*strategyState{
 			{
 				stats: StrategyStatus{
@@ -40,15 +40,15 @@ func TestAggregateStatsIncludesOpenOptionMarketValueInEquity(t *testing.T) {
 
 	stats := e.aggregateStatsLocked()
 
-	if stats.Balance != initialOptionsBalance-500 {
-		t.Fatalf("expected balance %.2f, got %.2f", initialOptionsBalance-500, stats.Balance)
+	if stats.Balance != getInitialOptionsBalanceUSD()-500 {
+		t.Fatalf("expected balance %.2f, got %.2f", getInitialOptionsBalanceUSD()-500, stats.Balance)
 	}
 	if stats.UnrealizedPnL != 0 {
 		t.Fatalf("expected unrealized pnl 0, got %.2f", stats.UnrealizedPnL)
 	}
 	// Equity = cash + position MTM = (initial-500) + 500
-	if stats.Equity != initialOptionsBalance {
-		t.Fatalf("expected equity %.2f, got %.2f", initialOptionsBalance, stats.Equity)
+	if stats.Equity != getInitialOptionsBalanceUSD() {
+		t.Fatalf("expected equity %.2f, got %.2f", getInitialOptionsBalanceUSD(), stats.Equity)
 	}
 	if stats.OpenPositions != 1 {
 		t.Fatalf("expected 1 open position, got %d", stats.OpenPositions)
@@ -62,7 +62,7 @@ func TestRestoreStateBringsBackTradesAndOpenPositions(t *testing.T) {
 	strategyName := "MomentumBurst_Bull_Put_Sell"
 
 	snapshot := PersistedState{
-		Balance:    initialOptionsBalance - 250, // cash after paying premium on open position
+		Balance:    getInitialOptionsBalanceUSD() - 250, // cash after paying premium on open position
 		LastPrice:  67100,
 		LastMinute: time.Now().Unix() / 60,
 		TradeSeq:   12,
@@ -267,7 +267,7 @@ func TestLiveSizeMultiplierRewardsProfitableStrategies(t *testing.T) {
 		Name:        "Profitable_Trend_Call",
 		Category:    "Breakout",
 		Type:        Call,
-		PositionUSD: optionTradeAllocationUSD,
+		PositionUSD: optionTradeAllocationUSD(),
 	})
 	state.stats.TotalTrades = 14
 	state.stats.Wins = 9
