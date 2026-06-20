@@ -74,7 +74,19 @@ func New(ctx context.Context) (*Client, error) {
 	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	mc, err := mongo.Connect(options.Client().ApplyURI(uri))
+	// M0 connection-cap guard: the driver default maxPoolSize is 100 and opens a
+	// pool PER replica-set node, so an uncapped client alone can hold ~300 sockets
+	// and exhaust the Atlas M0 500-connection limit. Keep the pool small and reap
+	// idle connections quickly so cold/redeployed engines release sockets fast.
+	clientOpts := options.Client().
+		ApplyURI(uri).
+		SetMaxPoolSize(10).
+		SetMinPoolSize(0).
+		SetMaxConnIdleTime(30 * time.Second).
+		SetServerSelectionTimeout(10 * time.Second).
+		SetConnectTimeout(15 * time.Second)
+
+	mc, err := mongo.Connect(clientOpts)
 	if err != nil {
 		return nil, fmt.Errorf("mongopersist connect: %w", err)
 	}

@@ -35,7 +35,15 @@ func Connect(ctx context.Context) *DataSources {
 		mongoURI = os.Getenv("MONGO_URI")
 	}
 	if mongoURI != "" {
-		opts := options.Client().ApplyURI(mongoURI)
+		// Keep this offline CLI's pool tiny so it never competes with the live
+		// engine for the Atlas M0 500-connection budget.
+		opts := options.Client().
+			ApplyURI(mongoURI).
+			SetMaxPoolSize(5).
+			SetMinPoolSize(0).
+			SetMaxConnIdleTime(30 * time.Second).
+			SetServerSelectionTimeout(10 * time.Second).
+			SetConnectTimeout(15 * time.Second)
 		mc, err := mongo.Connect(opts)
 		if err == nil {
 			pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
