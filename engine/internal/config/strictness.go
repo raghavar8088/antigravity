@@ -80,15 +80,34 @@ var strictnessCatalog = []struct {
 const driftToleranceAbs = 0.001
 
 // BuildStrictnessProfiles returns the full StrictnessProfile list with
-// CurrentValue populated live from the registry (never hardcoded).
+// CurrentValue populated from each threshold's STABLE shipped default.
+//
+// CurrentValue is the dial's "CURRENT" anchor — the value that position 50
+// interpolates to. It MUST be a fixed reference, not the live registry value.
+// Reading it live (the original implementation) made the anchor move every
+// time the dial was applied: after applying dial=18 the registry held the
+// dial-18 values, those values then became the new "CurrentValue", so
+// interpolate(50)==liveValue held again and DetectDialPosition could only ever
+// report 50. It also made the "Custom configuration" drift banner impossible
+// (position 50 always matched) and caused repeated applies to compound off the
+// previous result instead of the baseline.
+//
+// The shipped default (defaultValueOf) is the stable baseline the LOOSE/STRICT
+// endpoints in strictnessCatalog were chosen around, so it is the correct
+// anchor. A live individual edit now correctly shows as drift (no clean dial
+// position), which is exactly what the drift detection feature is for.
 func BuildStrictnessProfiles(reg *ThresholdRegistry) []StrictnessProfile {
 	out := make([]StrictnessProfile, 0, len(strictnessCatalog))
 	for _, e := range strictnessCatalog {
+		baseline := reg.Get(e.Key)
+		if m, ok := reg.GetMeta(e.Key); ok {
+			baseline = defaultValueOf(m)
+		}
 		out = append(out, StrictnessProfile{
 			ThresholdKey: e.Key,
 			Direction:    e.Direction,
 			LooseValue:   e.Loose,
-			CurrentValue: reg.Get(e.Key),
+			CurrentValue: baseline,
 			StrictValue:  e.Strict,
 		})
 	}

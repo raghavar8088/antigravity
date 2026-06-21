@@ -809,6 +809,7 @@ The content is organized as follows:
   config/catalog.go
   config/http.go
   config/registry.go
+  config/strictness_test.go
   config/strictness.go
   dataquality/types.go
   dataquality/validator_test.go

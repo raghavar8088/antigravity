@@ -1,1 +1,1 @@
-{}
+{"engine-config":{"communities":[0,1,2],"files":2,"symbols":19,"top_files":[{"file":"engine/internal/config/strictness.go","symbols":11},{"file":"engine/internal/config/strictness_test.go","symbols":8}]}}
