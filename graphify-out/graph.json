@@ -4,59 +4,188 @@
   "graph": {},
   "nodes": [
     {
-      "label": "catalog.go",
+      "label": "route.ts",
       "file_type": "code",
-      "source_file": "engine/internal/config/catalog.go",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "config_catalog",
+      "id": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_route_ts",
       "community": 0,
-      "norm_label": "catalog.go"
+      "norm_label": "route.ts"
     },
     {
-      "label": "Catalog()",
+      "label": "ENGINE_BASE",
       "file_type": "code",
-      "source_file": "engine/internal/config/catalog.go",
-      "source_location": "L86",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L21",
       "_origin": "ast",
-      "id": "config_catalog_catalog",
+      "id": "config_route_engine_base",
       "community": 0,
-      "norm_label": "catalog()"
+      "norm_label": "engine_base"
     },
     {
-      "label": "Meta",
+      "label": "GET()",
       "file_type": "code",
-      "source_file": "engine/internal/config/catalog.go",
-      "source_location": "L86",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L26",
       "_origin": "ast",
-      "id": "meta",
+      "id": "config_route_get",
       "community": 0,
-      "norm_label": "meta"
+      "norm_label": "get()"
+    },
+    {
+      "label": "SetRequestBody",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L47",
+      "_origin": "ast",
+      "id": "config_route_setrequestbody",
+      "community": 0,
+      "norm_label": "setrequestbody"
+    },
+    {
+      "label": "POST()",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L53",
+      "_origin": "ast",
+      "id": "config_route_post",
+      "community": 0,
+      "norm_label": "post()"
+    },
+    {
+      "label": "route.ts",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_strictness_route_ts",
+      "community": 1,
+      "norm_label": "route.ts"
+    },
+    {
+      "label": "ENGINE_BASE",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "strictness_route_engine_base",
+      "community": 1,
+      "norm_label": "engine_base"
+    },
+    {
+      "label": "GET()",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L24",
+      "_origin": "ast",
+      "id": "strictness_route_get",
+      "community": 1,
+      "norm_label": "get()"
+    },
+    {
+      "label": "SetRequestBody",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L48",
+      "_origin": "ast",
+      "id": "strictness_route_setrequestbody",
+      "community": 1,
+      "norm_label": "setrequestbody"
+    },
+    {
+      "label": "POST()",
+      "file_type": "code",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L50",
+      "_origin": "ast",
+      "id": "strictness_route_post",
+      "community": 1,
+      "norm_label": "post()"
     }
   ],
   "links": [
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "engine/internal/config/catalog.go",
-      "source_location": "L86",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L21",
       "weight": 1.0,
-      "source": "config_catalog",
-      "target": "config_catalog_catalog",
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_route_ts",
+      "target": "config_route_engine_base",
       "confidence_score": 1.0
     },
     {
-      "relation": "references",
+      "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "engine/internal/config/catalog.go",
-      "source_location": "L86",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L26",
       "weight": 1.0,
-      "context": "return_type",
-      "confidence_score": 1.0,
-      "source": "config_catalog_catalog",
-      "target": "meta"
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_route_ts",
+      "target": "config_route_get",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_route_ts",
+      "target": "config_route_post",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/route.ts",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_route_ts",
+      "target": "config_route_setrequestbody",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_strictness_route_ts",
+      "target": "strictness_route_engine_base",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L24",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_strictness_route_ts",
+      "target": "strictness_route_get",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L50",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_strictness_route_ts",
+      "target": "strictness_route_post",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "D:/APPLICATION/antigravity-main/antigravity-main/client/src/app/api/engine/config/strictness/route.ts",
+      "source_location": "L48",
+      "weight": 1.0,
+      "source": "d_application_antigravity_main_antigravity_main_client_src_app_api_engine_config_strictness_route_ts",
+      "target": "strictness_route_setrequestbody",
+      "confidence_score": 1.0
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "fb4c25c4d78329902ba47c6f2bdc025c3bcc4301"
+  "built_at_commit": "75ecb3df9fbf3155c7ac7a796e6821eb979fb289"
 }

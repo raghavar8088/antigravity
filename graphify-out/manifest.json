@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1782054612.7397432,
-    "ast_hash": "4ee069514af361ec6b3f9ef37f370965",
+    "mtime": 1782059047.418208,
+    "ast_hash": "1825f7e43c3c161d459735635d750f16",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1782056280.6057215,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1782059930.620505,
+    "ast_hash": "11255b52ea8d8527a3b947c764aeb0a3",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1782056280.6057215,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1782059930.6171772,
+    "ast_hash": "aec2b4e71df8429c24f7820c64d31ed2",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1782056280.6047137,
-    "ast_hash": "a58ecd3b62536b4569c80590efa6554f",
+    "mtime": 1782059930.6171772,
+    "ast_hash": "22ff503688427a28fbe38d5d0d7fbc1a",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1782056280.6057215,
-    "ast_hash": "76463f69f8dd4a911f0326f479f1d774",
+    "mtime": 1782059930.6171772,
+    "ast_hash": "0f52169cfbdf6fe42b12adcb4e9449b6",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1782056282.428399,
-    "ast_hash": "43407a1fc4341718bd52e6ea91121003",
+    "mtime": 1782059932.551085,
+    "ast_hash": "2dd2de02496056262915c5bb881a9d53",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23990,13 +23990,13 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/ThresholdConfigCenter.tsx": {
-    "mtime": 1782054819.0940309,
-    "ast_hash": "d3dd29267bba356732650d4a3c1ec9ae",
+    "mtime": 1782059192.925134,
+    "ast_hash": "8898aa03cf1ec3849b3192077b6a71f7",
     "semantic_hash": ""
   },
   "client/src/lib/thresholdConfig/types.ts": {
-    "mtime": 1782054713.8103168,
-    "ast_hash": "7b969f1398935f97860f6f4d1fde95a0",
+    "mtime": 1782059086.9387817,
+    "ast_hash": "bc4308f3e9d01c7b98328cebe4cbdd17",
     "semantic_hash": ""
   },
   "engine/internal/config/catalog.go": {
@@ -24005,13 +24005,28 @@
     "semantic_hash": ""
   },
   "engine/internal/config/http.go": {
-    "mtime": 1782054577.6405334,
-    "ast_hash": "70ba7e02109d6266f36d8a18014017d6",
+    "mtime": 1782059246.596596,
+    "ast_hash": "fb6697179f4333f0dbf83e795e2b0665",
     "semantic_hash": ""
   },
   "engine/internal/config/registry.go": {
     "mtime": 1782054223.750029,
     "ast_hash": "4b453982dbf632115169d356208261a2",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/engine/config/strictness/route.ts": {
+    "mtime": 1782059101.08248,
+    "ast_hash": "15b7801a8e4399e9d79fa8a06f081832",
+    "semantic_hash": ""
+  },
+  "client/src/components/StrictnessDial.tsx": {
+    "mtime": 1782059156.1738627,
+    "ast_hash": "04069b4626ed218c78f778d3b1651a77",
+    "semantic_hash": ""
+  },
+  "engine/internal/config/strictness.go": {
+    "mtime": 1782058998.7319677,
+    "ast_hash": "2fdc37fdbb09e8cc787e544a44aff359",
     "semantic_hash": ""
   }
 }

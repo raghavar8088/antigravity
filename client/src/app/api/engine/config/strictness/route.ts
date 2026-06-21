@@ -48,18 +48,16 @@ export async function GET(): Promise<NextResponse> {
 type SetRequestBody = { dialPosition: number };
 
 export async function POST(req: Request): Promise<NextResponse> {
-  const provided = req.headers.get("x-engine-admin-secret") ?? "";
+  // Browser authentication is enforced upstream by src/middleware.ts, which
+  // requires a valid raig_session on every non-public path (this route
+  // included). ENGINE_ADMIN_SECRET is a SERVER-TO-SERVER credential: it is read
+  // from the environment here and forwarded to the Go engine as
+  // X-Engine-Admin-Secret. It is never supplied by — nor exposed to — the
+  // browser, so we must NOT require it on the inbound request (the browser
+  // cannot send it). Same model as /api/killswitch/trigger.
   const expected = process.env.ENGINE_ADMIN_SECRET ?? "";
   if (!expected) {
     return NextResponse.json({ ok: false, error: "ENGINE_ADMIN_SECRET is not configured" }, { status: 503 });
-  }
-  if (provided.length !== expected.length) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
-  }
-  let diff = 0;
-  for (let i = 0; i < provided.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  if (diff !== 0) {
-    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
   let body: SetRequestBody;
