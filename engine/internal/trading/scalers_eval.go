@@ -1434,9 +1434,10 @@ func sanitizeScalerSignal(sig *strategy.Signal, confidenceFloor ...float64) erro
 	if slPct < 0.0025 {
 		return fmt.Errorf("SL %.4f%% too tight (min 0.25%%)", sig.StopLossPct)
 	}
-	// Reject if R:R < 2:1
-	if slPct > 0 && tpPct/slPct < 2.0 {
-		return fmt.Errorf("R:R %.2f below 2:1 (TP=%.4f%% SL=%.4f%%)", tpPct/slPct, sig.TakeProfitPct, sig.StopLossPct)
+	// Reject if R:R below the configured scaler floor (SCALER_RR_MINIMUM, live
+	// from the ThresholdRegistry / Master Strictness Dial; default 2.0).
+	if slPct > 0 && tpPct/slPct < scalerRRMinimum {
+		return fmt.Errorf("R:R %.2f below %.2f:1 (TP=%.4f%% SL=%.4f%%)", tpPct/slPct, scalerRRMinimum, sig.TakeProfitPct, sig.StopLossPct)
 	}
 
 	return nil

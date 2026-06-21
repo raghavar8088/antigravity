@@ -1342,6 +1342,7 @@ The content is organized as follows:
   trading/scalers_eval.go
   trading/signal_flow_metrics.go
   trading/signal_scoring.go
+  trading/strictness_wiring_test.go
   validation/phase22e/alpha.go
   validation/phase22e/certification.go
   validation/phase22e/correlation.go

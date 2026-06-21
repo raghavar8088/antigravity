@@ -65,9 +65,10 @@ const (
 	defaultMinSignalTakeProfitPct      = 0.15
 	defaultMaxSignalStopLossPct        = 1.50
 	defaultSignalStopLossPct           = 0.18 // Safer default SL — reduce micro noise losses
+	defaultMinExecutionWeightToTrade   = 0.50 // Require stronger strategy quality before execution
+	defaultScalerRRMinimum             = 2.00 // Scaler-signal reward:risk floor enforced in sanitizeScalerSignal
 
-	minExecutionWeightToTrade = 0.50 // Require stronger strategy quality before execution
-	marketHistoryMaxSamples   = 320
+	marketHistoryMaxSamples = 320
 
 	marketRegimeUnknown  = "UNKNOWN"
 	marketRegimeTrend    = "TREND"
@@ -84,6 +85,8 @@ var (
 	minRewardToRiskRatio        = defaultMinRewardToRiskRatio
 	minSignalTakeProfitPct      = defaultMinSignalTakeProfitPct
 	maxSignalStopLossPct        = defaultMaxSignalStopLossPct
+	minExecutionWeightToTrade   = defaultMinExecutionWeightToTrade
+	scalerRRMinimum             = defaultScalerRRMinimum
 )
 
 func init() {
@@ -106,6 +109,8 @@ func RefreshThresholdsFromRegistry() {
 	minRewardToRiskRatio = reg.GetWithDefault("MIN_REWARD_TO_RISK_RATIO", defaultMinRewardToRiskRatio)
 	minSignalTakeProfitPct = reg.GetWithDefault("MIN_SIGNAL_TAKE_PROFIT_PCT", defaultMinSignalTakeProfitPct)
 	maxSignalStopLossPct = reg.GetWithDefault("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
+	minExecutionWeightToTrade = reg.GetWithDefault("MIN_EXECUTION_WEIGHT_TO_TRADE", defaultMinExecutionWeightToTrade)
+	scalerRRMinimum = reg.GetWithDefault("SCALER_RR_MINIMUM", defaultScalerRRMinimum)
 }
 
 // parseFloatEnvLazy is the init-time version (before parseFloatEnv is declared).
@@ -2945,10 +2950,13 @@ func (o *Orchestrator) ConfirmSignalFromBridge(ctx context.Context, pendingID st
 	}
 
 	if decision.Confidence > 0 {
-		if decision.Confidence < 0.70 {
+		// MIN_BRIDGE_CONFIDENCE — live from the ThresholdRegistry / Master
+		// Strictness Dial (default 0.65). Previously a hardcoded 0.70 that the
+		// dial could not influence.
+		if decision.Confidence < minBridgeApprovalConfidence {
 			log.Printf("[COMMAND CENTER] ⛔ Bridge signal %s blocked: ChatGPT confidence %.2f below minimum %.2f",
-				pendingID, decision.Confidence, 0.70)
-			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, 0.70)
+				pendingID, decision.Confidence, minBridgeApprovalConfidence)
+			return fmt.Errorf("bridge confidence %.2f below required %.2f", decision.Confidence, minBridgeApprovalConfidence)
 		}
 		p.Signal.Confidence = decision.Confidence
 	}

@@ -18,8 +18,7 @@ import (
 //   - "loosens":  increasing the dial DECREASES the threshold's value,
 //     because a smaller value is the stricter one for this particular
 //     threshold, e.g. MAX_SIGNAL_STOP_LOSS_PCT (a narrower allowed stop
-//     band is more conservative) and WALKFORWARD_MAX_DRAWDOWN (a smaller
-//     tolerated drawdown is more conservative).
+//     band is more conservative).
 type StrictnessProfile struct {
 	ThresholdKey string  `json:"thresholdKey"`
 	Direction    string  `json:"direction"` // "tightens" | "loosens"
@@ -64,10 +63,15 @@ var strictnessCatalog = []struct {
 	{Key: "RISK_CORRELATION_MIN_CONFIDENCE", Direction: "tightens", Loose: 0.65, Strict: 0.90},
 
 	// ── walk_forward ────────────────────────────────────────────────────
+	// Only the two promotion bars that are actually hot-reloaded from the
+	// registry (scalpers.RefreshWalkForwardThresholdsFromRegistry) belong on
+	// the master dial. WALKFORWARD_MAX_DRAWDOWN is a reserved no-op (the
+	// validator does not track drawdown) and WALKFORWARD_CONSECUTIVE_WINDOWS is
+	// read once from env at startup and never refreshed, so neither responded
+	// to the dial — they were removed to keep the dial honest. Both remain
+	// individually editable via the per-threshold config UI.
 	{Key: "WALKFORWARD_WIN_RATE_THRESHOLD", Direction: "tightens", Loose: 0.40, Strict: 0.58},
 	{Key: "WALKFORWARD_SHARPE_THRESHOLD", Direction: "tightens", Loose: 0.40, Strict: 0.95},
-	{Key: "WALKFORWARD_MAX_DRAWDOWN", Direction: "loosens", Loose: 0.32, Strict: 0.12},
-	{Key: "WALKFORWARD_CONSECUTIVE_WINDOWS", Direction: "tightens", Loose: 1, Strict: 3},
 
 	// ── execution ───────────────────────────────────────────────────────
 	{Key: "MIN_EXECUTION_WEIGHT_TO_TRADE", Direction: "tightens", Loose: 0.35, Strict: 0.70},
