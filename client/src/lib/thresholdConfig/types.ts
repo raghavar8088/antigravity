@@ -63,6 +63,11 @@ export type ConfigChangeEntry = {
   changedBy: string;
   requiresRestart: boolean;
   reason?: string;
+  /** Set only for Master Strictness Dial batch applications. */
+  isBatch?: boolean;
+  dialFrom?: number;
+  dialTo?: number;
+  batchDeltas?: ThresholdDelta[];
 };
 
 export type ConfigChangeHistoryResponse = {
@@ -79,6 +84,55 @@ export type SetThresholdResponse = {
   min?: number;
   max?: number;
 };
+
+/**
+ * Master Strictness Dial — mirrors engine/internal/config/strictness.go.
+ * One profile per dial-controlled threshold; CurrentValue is always read
+ * live from the registry server-side, never hardcoded.
+ */
+export type StrictnessDirection = "tightens" | "loosens";
+
+export type StrictnessProfile = {
+  thresholdKey: string;
+  direction: StrictnessDirection;
+  looseValue: number;
+  currentValue: number;
+  strictValue: number;
+};
+
+export type StrictnessGetResponse = {
+  ok: boolean;
+  currentDialPosition: number | null;
+  profiles: StrictnessProfile[];
+  affectedThresholdCount: number;
+  error?: string;
+};
+
+export type ThresholdDelta = {
+  key: string;
+  oldValue: number;
+  newValue: number;
+};
+
+export type StrictnessSetResponse = {
+  ok: boolean;
+  dialPosition?: number;
+  deltas?: ThresholdDelta[];
+  updated?: Record<string, unknown>[];
+  error?: string;
+};
+
+/** Linear interpolation matching ApplyStrictnessDial's Go formula exactly:
+ * 0-50 interpolates LOOSE→CURRENT, 50-100 interpolates CURRENT→STRICT. */
+export function interpolateStrictnessValue(p: StrictnessProfile, dialPosition: number): number {
+  const d = Math.max(0, Math.min(100, dialPosition));
+  if (d <= 50) {
+    const t = d / 50;
+    return p.looseValue + (p.currentValue - p.looseValue) * t;
+  }
+  const t = (d - 50) / 50;
+  return p.currentValue + (p.strictValue - p.currentValue) * t;
+}
 
 export const THRESHOLD_CATEGORIES: { key: ThresholdCategory; label: string }[] = [
   { key: "signal_quality", label: "Signal Quality" },

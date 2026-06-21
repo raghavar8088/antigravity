@@ -1772,6 +1772,23 @@ func main() {
 		}
 	})
 	http.HandleFunc("/api/engine/config/history", tconfig.HandleConfigHistory)
+	// Master Strictness Dial — one 0-100 control that proportionally scales
+	// every signal-quality-relevant threshold at once (see strictness.go).
+	//   GET  /api/engine/config/strictness — live profiles + drift-aware dial position
+	//   POST /api/engine/config/strictness — X-Engine-Admin-Secret required; applies
+	//                                        the dial in one batch, one audit entry
+	http.HandleFunc("/api/engine/config/strictness", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			tconfig.HandleGetStrictness(w, r)
+		case http.MethodPost:
+			tconfig.HandleSetStrictness(w, r)
+		case http.MethodOptions:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)

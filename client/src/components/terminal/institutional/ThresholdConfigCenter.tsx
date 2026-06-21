@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalCard } from "./TerminalCard";
+import { StrictnessDial } from "@/components/StrictnessDial";
 import type {
   ConfigChangeEntry,
   ThresholdCategory,
@@ -13,6 +14,26 @@ import {
   THRESHOLD_CATEGORIES,
   formatThresholdValue,
 } from "@/lib/thresholdConfig/types";
+
+// Threshold keys controlled by the Master Strictness Dial — mirrors
+// strictnessCatalog in engine/internal/config/strictness.go. Used only to
+// append a one-line cross-reference to each affected card's "what happens if
+// I change this" section; the engine remains the source of truth for which
+// keys actually move with the dial.
+const DIAL_CONTROLLED_KEYS = new Set([
+  "MIN_EXECUTABLE_CONFIDENCE",
+  "MIN_BRIDGE_CONFIDENCE",
+  "MIN_REWARD_TO_RISK_RATIO",
+  "MIN_SIGNAL_TAKE_PROFIT_PCT",
+  "MAX_SIGNAL_STOP_LOSS_PCT",
+  "SCALER_RR_MINIMUM",
+  "RISK_CORRELATION_MIN_CONFIDENCE",
+  "WALKFORWARD_WIN_RATE_THRESHOLD",
+  "WALKFORWARD_SHARPE_THRESHOLD",
+  "WALKFORWARD_MAX_DRAWDOWN",
+  "WALKFORWARD_CONSECUTIVE_WINDOWS",
+  "MIN_EXECUTION_WEIGHT_TO_TRADE",
+]);
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -490,6 +511,13 @@ function ThresholdCard({
             Recommended range: {formatThresholdValue(threshold, threshold.recommendedMin)} –{" "}
             {formatThresholdValue(threshold, threshold.recommendedMax)}
           </p>
+          {DIAL_CONTROLLED_KEYS.has(threshold.key) ? (
+            <p style={{ margin: 0, color: "var(--amber)" }}>
+              This threshold is one of {DIAL_CONTROLLED_KEYS.size} controlled by the Overall Signal Strictness dial
+              above. You can adjust it individually here, or move the master dial to adjust it together with related
+              thresholds.
+            </p>
+          ) : null}
           {threshold.lastChangedAt ? (
             <p style={{ margin: 0, color: "var(--text-muted)" }}>
               Last changed: {new Date(threshold.lastChangedAt).toLocaleString()} (source: {threshold.source})
@@ -618,16 +646,46 @@ function ChangeHistorySection() {
                     textAlign: "left",
                   }}
                 >
-                  <span>
-                    <strong>{entry.key}</strong>: {entry.oldValue} → {entry.newValue}
-                    {entry.requiresRestart ? "  (requires restart)" : ""}
-                  </span>
+                  {entry.isBatch ? (
+                    <span>
+                      <strong style={{ color: "var(--amber)" }}>Master Strictness Dial</strong>: {entry.dialFrom?.toFixed(0)} →{" "}
+                      {entry.dialTo?.toFixed(0)} · {entry.batchDeltas?.length ?? 0} thresholds adjusted [expand to view all]
+                    </span>
+                  ) : (
+                    <span>
+                      <strong>{entry.key}</strong>: {entry.oldValue} → {entry.newValue}
+                      {entry.requiresRestart ? "  (requires restart)" : ""}
+                    </span>
+                  )}
                   <span style={{ color: "var(--text-muted)" }}>{new Date(entry.changedAt).toLocaleString()}</span>
                 </button>
                 {expanded ? (
                   <div style={{ marginTop: 8, display: "grid", gap: 4, color: "var(--text-muted)" }}>
                     <p style={{ margin: 0 }}>Changed by: {entry.changedBy}</p>
                     {entry.reason ? <p style={{ margin: 0 }}>Reason: {entry.reason}</p> : null}
+                    {entry.isBatch && entry.batchDeltas ? (
+                      <div style={{ display: "grid", gap: 4, marginTop: 4 }}>
+                        {entry.batchDeltas.map((d) => (
+                          <div
+                            key={d.key}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              background: "var(--surface)",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: 11,
+                            }}
+                          >
+                            <span>{d.key}</span>
+                            <span>
+                              {d.oldValue} → {d.newValue}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -702,6 +760,8 @@ export function ThresholdConfigCenter() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      <StrictnessDial thresholds={thresholds} onApplied={() => void load()} />
+
       <SummaryStats thresholds={thresholds} filter={filter} onFilterChange={setFilter} />
 
       <TerminalCard

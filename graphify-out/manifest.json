@@ -285,8 +285,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/engine/[...path]/route.ts": {
-    "mtime": 1781545260.3187413,
-    "ast_hash": "488dfcd2d2473f691a00d3ec4d940ceb",
+    "mtime": 1782054659.1226285,
+    "ast_hash": "cacac7e9d872914af07016b6a73e0362",
     "semantic_hash": ""
   },
   "client/src/app/api/engine/events/route.ts": {
@@ -1180,8 +1180,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/Sidebar.tsx": {
-    "mtime": 1781460050.0563977,
-    "ast_hash": "55b2e30ba23c0536378b37729323c272",
+    "mtime": 1782054735.9046772,
+    "ast_hash": "3ca0885fdfacb4a6d0e60893d601760d",
     "semantic_hash": ""
   },
   "client/src/components/terminal/TerminalAuthorityGuard.tsx": {
@@ -2865,8 +2865,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/utils/navRoutes.ts": {
-    "mtime": 1781462018.8345554,
-    "ast_hash": "f813912a14f31656a10cb324ecd2ce3c",
+    "mtime": 1782054728.1219893,
+    "ast_hash": "c3ee8906680abf9a0cf65bcd83cc3fa8",
     "semantic_hash": ""
   },
   "client/src/lib/utils/time.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1782035559.9869525,
-    "ast_hash": "bca61b4f6cc944840bdda5d773dc2810",
+    "mtime": 1782054612.7397432,
+    "ast_hash": "4ee069514af361ec6b3f9ef37f370965",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -5075,8 +5075,8 @@
     "semantic_hash": ""
   },
   "engine/internal/regime/classifier.go": {
-    "mtime": 1781376936.6148002,
-    "ast_hash": "7c4bc9ecba5f5278156de6bca8f3fa4f",
+    "mtime": 1782055767.1150255,
+    "ast_hash": "1ed955c47af37753f85c9b91613bb5c2",
     "semantic_hash": ""
   },
   "engine/internal/regime/engine.go": {
@@ -5215,8 +5215,8 @@
     "semantic_hash": ""
   },
   "engine/internal/risk/engine.go": {
-    "mtime": 1781537260.250414,
-    "ast_hash": "216fddf71e18a8b3a3d8b1c350c3ad2b",
+    "mtime": 1782055707.1794143,
+    "ast_hash": "f3eb15fadc54452b3fcfd5413a9f4f27",
     "semantic_hash": ""
   },
   "engine/internal/risk/engine_test.go": {
@@ -5915,8 +5915,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/loop.go": {
-    "mtime": 1781634173.4529903,
-    "ast_hash": "61eeac219b08973e310614b77c630641",
+    "mtime": 1782055730.3109703,
+    "ast_hash": "a5262ad1d693f78062395431b086771c",
     "semantic_hash": ""
   },
   "engine/internal/trading/loop_deps.go": {
@@ -22780,12 +22780,12 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1782045643.1150382,
-    "ast_hash": "b3f4352fa2098a8f2096b93822e5059a",
+    "mtime": 1782056280.6057215,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1782045643.1150382,
+    "mtime": 1782056280.6057215,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1782045643.1090484,
-    "ast_hash": "2f7f87ab3e5c5b02282ba204442387f8",
+    "mtime": 1782056280.6047137,
+    "ast_hash": "a58ecd3b62536b4569c80590efa6554f",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1782045643.1150382,
-    "ast_hash": "fb575c66e41169124b86ab34bab7f81f",
+    "mtime": 1782056280.6057215,
+    "ast_hash": "76463f69f8dd4a911f0326f479f1d774",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1782045644.9093187,
-    "ast_hash": "81601e3be6eeb0666b4605e7629dc27d",
+    "mtime": 1782056282.428399,
+    "ast_hash": "43407a1fc4341718bd52e6ea91121003",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23130,8 +23130,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
-    "mtime": 1781634455.8949714,
-    "ast_hash": "986489497d3153cad6ed225f5f5d4bd0",
+    "mtime": 1782054590.4119165,
+    "ast_hash": "70f02baa387e86124427d0cbce4179db",
     "semantic_hash": ""
   },
   "engine/internal/strategy/types.go": {
@@ -23145,8 +23145,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1782026676.6709175,
-    "ast_hash": "19f4519bbe9dd95073b4f436fed2ffc0",
+    "mtime": 1782055724.514109,
+    "ast_hash": "e33be4ce328bbfef4dd7c7de0bbd1bf8",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {
@@ -23320,13 +23320,13 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/StrategiesCenter.tsx": {
-    "mtime": 1781462919.333931,
-    "ast_hash": "9972a8bbc98e71ca6bab16d7a0b50691",
+    "mtime": 1782053594.146407,
+    "ast_hash": "d92ed6fcbef26ba50c67ff4b546d8433",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/StrategiesCenter.test.ts": {
-    "mtime": 1781462929.1326451,
-    "ast_hash": "32483c510c6483bc785531323460a12e",
+    "mtime": 1782053602.8927062,
+    "ast_hash": "3abc564e536ca8737d6deb672819cb71",
     "semantic_hash": ""
   },
   "client/src/app/api/btc/trade-candles/route.ts": {
@@ -23972,6 +23972,46 @@
   "engine/internal/strategy/scalpers/volatility_family.go": {
     "mtime": 1782025580.0679657,
     "ast_hash": "812c5029bbbd39f7050219f49e2346f9",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/engine/config/history/route.ts": {
+    "mtime": 1782054696.3946733,
+    "ast_hash": "4021d0dec18b67bb8f17aa6df2da1b87",
+    "semantic_hash": ""
+  },
+  "client/src/app/api/engine/config/route.ts": {
+    "mtime": 1782054688.1173606,
+    "ast_hash": "4be1bdc39d0b69b437230ae886eb2006",
+    "semantic_hash": ""
+  },
+  "client/src/app/terminal/strategies/threshold-config/page.tsx": {
+    "mtime": 1782054826.448766,
+    "ast_hash": "c87d44e08da90c4b64ddf92585b30f3a",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/ThresholdConfigCenter.tsx": {
+    "mtime": 1782054819.0940309,
+    "ast_hash": "d3dd29267bba356732650d4a3c1ec9ae",
+    "semantic_hash": ""
+  },
+  "client/src/lib/thresholdConfig/types.ts": {
+    "mtime": 1782054713.8103168,
+    "ast_hash": "7b969f1398935f97860f6f4d1fde95a0",
+    "semantic_hash": ""
+  },
+  "engine/internal/config/catalog.go": {
+    "mtime": 1782056221.5306213,
+    "ast_hash": "90361d581cf3b1edda408797aec4bd40",
+    "semantic_hash": ""
+  },
+  "engine/internal/config/http.go": {
+    "mtime": 1782054577.6405334,
+    "ast_hash": "70ba7e02109d6266f36d8a18014017d6",
+    "semantic_hash": ""
+  },
+  "engine/internal/config/registry.go": {
+    "mtime": 1782054223.750029,
+    "ast_hash": "4b453982dbf632115169d356208261a2",
     "semantic_hash": ""
   }
 }

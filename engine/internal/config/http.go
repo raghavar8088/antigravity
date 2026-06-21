@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -37,6 +38,16 @@ type ConfigChangeEntry struct {
 	ChangedBy       string    `json:"changedBy" bson:"changed_by"`
 	RequiresRestart bool      `json:"requiresRestart" bson:"requires_restart"`
 	Reason          string    `json:"reason,omitempty" bson:"reason,omitempty"`
+
+	// Batch fields — set only for Master Strictness Dial applications, which
+	// write ONE audit entry for the whole dial move instead of one entry per
+	// threshold. IsBatch=false (the zero value) for every ordinary
+	// individual-card edit, so existing audit rows and the existing render
+	// path are completely unaffected.
+	IsBatch     bool             `json:"isBatch,omitempty" bson:"is_batch,omitempty"`
+	DialFrom    float64          `json:"dialFrom,omitempty" bson:"dial_from,omitempty"`
+	DialTo      float64          `json:"dialTo,omitempty" bson:"dial_to,omitempty"`
+	BatchDeltas []ThresholdDelta `json:"batchDeltas,omitempty" bson:"batch_deltas,omitempty"`
 }
 
 // auditStore is the minimal interface the HTTP handlers need for persisting
@@ -356,6 +367,113 @@ func HandleConfigHistory(w http.ResponseWriter, r *http.Request) {
 		entries = []ConfigChangeEntry{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "history": entries})
+}
+
+// ── Master Strictness Dial endpoints ────────────────────────────────────────
+
+// StrictnessGetResponse is the payload for GET /api/engine/config/strictness.
+type StrictnessGetResponse struct {
+	OK                     bool                `json:"ok"`
+	CurrentDialPosition    *float64            `json:"currentDialPosition"` // nil = drifted, no clean position
+	Profiles               []StrictnessProfile `json:"profiles"`
+	AffectedThresholdCount int                 `json:"affectedThresholdCount"`
+}
+
+// HandleGetStrictness serves GET /api/engine/config/strictness — the live
+// StrictnessProfile list (CurrentValue always read fresh from the registry)
+// plus drift-aware detection of whether today's values correspond to a
+// single clean dial position.
+func HandleGetStrictness(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	reg := Default()
+	profiles := BuildStrictnessProfiles(reg)
+	writeJSON(w, http.StatusOK, StrictnessGetResponse{
+		OK:                     true,
+		CurrentDialPosition:    DetectDialPosition(reg),
+		Profiles:               profiles,
+		AffectedThresholdCount: len(profiles),
+	})
+}
+
+// strictnessSetRequestBody is the POST /api/engine/config/strictness payload.
+type strictnessSetRequestBody struct {
+	DialPosition float64 `json:"dialPosition"`
+}
+
+// HandleSetStrictness serves POST /api/engine/config/strictness — applies
+// the dial in one batch via ApplyStrictnessDial and writes a SINGLE audit
+// log entry (IsBatch=true) carrying every threshold's before/after value,
+// rather than one audit row per threshold.
+func HandleSetStrictness(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !checkAdminSecret(r) {
+		writeJSON(w, http.StatusForbidden, map[string]interface{}{"ok": false, "error": "admin secret required"})
+		return
+	}
+
+	var body strictnessSetRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "invalid JSON body"})
+		return
+	}
+	if body.DialPosition < 0 || body.DialPosition > 100 {
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "dialPosition must be between 0 and 100"})
+		return
+	}
+
+	reg := Default()
+	dialFrom := DetectDialPosition(reg)
+	dialFromVal := 50.0
+	if dialFrom != nil {
+		dialFromVal = *dialFrom
+	}
+
+	deltas, updated, err := ApplyStrictnessDial(reg, body.DialPosition)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+
+	changedBy := r.Header.Get("X-Service-Name")
+	if changedBy == "" {
+		changedBy = "operator"
+	}
+	entry := ConfigChangeEntry{
+		Key:         "MASTER_STRICTNESS_DIAL",
+		OldValue:    dialFromVal,
+		NewValue:    body.DialPosition,
+		ChangedAt:   time.Now().UTC(),
+		ChangedBy:   changedBy,
+		Reason:      fmt.Sprintf("Master Strictness Dial set to %.0f — %d thresholds adjusted", body.DialPosition, len(deltas)),
+		IsBatch:     true,
+		DialFrom:    dialFromVal,
+		DialTo:      body.DialPosition,
+		BatchDeltas: deltas,
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	if err := getAuditStore().Append(ctx, entry); err != nil {
+		log.Printf("[CONFIG] WARNING: failed to write audit log entry for strictness dial: %v", err)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":           true,
+		"dialPosition": body.DialPosition,
+		"deltas":       deltas,
+		"updated":      updated,
+	})
 }
 
 // hotReloadHooks are registered by other packages (internal/trading,

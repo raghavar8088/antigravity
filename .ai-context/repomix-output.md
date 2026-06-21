@@ -71,6 +71,7 @@ The content is organized as follows:
   app/api/engine/[...path]/route.ts
   app/api/engine/config/history/route.ts
   app/api/engine/config/route.ts
+  app/api/engine/config/strictness/route.ts
   app/api/engine/events/route.ts
   app/api/engine/reconciliation/route.ts
   app/api/event-center/route.ts
@@ -266,6 +267,7 @@ The content is organized as follows:
   components/StorageHealthPanel.tsx
   components/StrategyLeaderboard.tsx
   components/StrategyRotationPanel.tsx
+  components/StrictnessDial.tsx
   components/terminal/AppShell.tsx
   components/terminal/index.ts
   components/terminal/institutional/AllocationView.tsx
@@ -807,6 +809,7 @@ The content is organized as follows:
   config/catalog.go
   config/http.go
   config/registry.go
+  config/strictness.go
   dataquality/types.go
   dataquality/validator_test.go
   dataquality/validator.go
