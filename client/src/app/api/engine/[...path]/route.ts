@@ -85,6 +85,9 @@ const READ_PATH_PREFIXES = [
   "/api/delta-live/stats",
   // Kill switch status
   "/api/admin/ks/status",
+  // Trade Threshold Configuration — history is read-only at the engine level
+  // (no mutation endpoint at this path), safe to read with session only.
+  "/api/engine/config/history",
   // Health / metrics
   "/health",
   "/ready",

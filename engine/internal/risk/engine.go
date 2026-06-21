@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/ledger"
 	riskv2 "antigravity-engine/internal/risk/v2"
 	"antigravity-engine/internal/strategy"
@@ -115,6 +116,37 @@ func parseFloatEnvRisk(key string, def float64) float64 {
 	return def
 }
 
+// Live, hot-reloadable copies of the correlation guard and intraday drawdown
+// thresholds. Read from internal/config.ThresholdRegistry on every
+// validateLocked/checkIntradayDrawdown call so an operator's edit through the
+// Trade Threshold Configuration UI takes effect on the very next signal —
+// no restart required. Falls back to the profile's value (set at
+// NewRiskEngine time) only if a caller explicitly supplied a non-zero
+// override, which no current caller does.
+var (
+	liveCorrelationExposureThreshold = 0.6
+	liveCorrelationMinConfidence     = 0.8
+	liveIntradayDrawdownPct          = 0.02
+)
+
+func init() {
+	refreshRiskThresholdsFromRegistry()
+	tconfig.RegisterHotReloadHook(refreshRiskThresholdsFromRegistry)
+}
+
+// refreshRiskThresholdsFromRegistry re-reads the correlation guard and
+// intraday drawdown thresholds from the central registry. Called once at
+// package init and again by the /api/engine/config POST handler after every
+// successful Set() (config.RefreshHotReloadHooks), so risk checks immediately
+// reflect operator edits. Does not touch the kill switch or order execution
+// path — only the threshold values validateLocked reads.
+func refreshRiskThresholdsFromRegistry() {
+	reg := tconfig.Default()
+	liveCorrelationExposureThreshold = reg.GetWithDefault("RISK_CORRELATION_EXPOSURE_THRESHOLD", 0.6)
+	liveCorrelationMinConfidence = reg.GetWithDefault("RISK_CORRELATION_MIN_CONFIDENCE", 0.8)
+	liveIntradayDrawdownPct = reg.GetWithDefault("RISK_INTRADAY_DRAWDOWN_PCT", 0.02)
+}
+
 func NewRiskEngine(p RiskProfile) *RiskEngine {
 	limits := DefaultRiskLimits(p.MaxCapitalUSD)
 	if p.MaxCapitalUSD > 0 {
@@ -183,7 +215,8 @@ func (r *RiskEngine) ScheduleDailyReset(ctx context.Context) {
 // Must be called with r.mu read-locked — it acquires a write lock internally only
 // when setting the peak.
 func (r *RiskEngine) checkIntradayDrawdown(currentEquity float64) error {
-	if r.intradayDrawdownPct <= 0 || currentEquity <= 0 {
+	drawdownPct := liveIntradayDrawdownPct
+	if drawdownPct <= 0 || currentEquity <= 0 {
 		return nil
 	}
 	// If we are already in a pause period, check whether it has expired.
@@ -198,7 +231,7 @@ func (r *RiskEngine) checkIntradayDrawdown(currentEquity float64) error {
 		return nil
 	}
 	drawdown := (r.intradayPeakEquity - currentEquity) / r.intradayPeakEquity
-	if drawdown >= r.intradayDrawdownPct {
+	if drawdown >= drawdownPct {
 		return ErrIntradayPaused
 	}
 	return nil
@@ -284,8 +317,8 @@ func (r *RiskEngine) validateLocked(sig strategy.Signal, currentPrice float64) e
 
 	// 5. Correlation guard - if exposure is already > threshold% of max and we are increasing it,
 	// require stronger conviction.
-	exposureThreshold := r.profile.CorrelationExposureThreshold
-	minConf := r.profile.CorrelationMinConfidence
+	exposureThreshold := liveCorrelationExposureThreshold
+	minConf := liveCorrelationMinConfidence
 	exposureRatio := 0.0
 	if r.profile.MaxPositionBTC > 0 {
 		exposureRatio = proposedAbsExposure / r.profile.MaxPositionBTC

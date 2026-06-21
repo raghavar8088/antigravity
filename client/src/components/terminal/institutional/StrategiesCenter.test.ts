@@ -1,41 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { buildTradeEngineStrategyRows } from "./StrategiesCenter";
+import { sortScalerStrategies } from "./StrategiesCenter";
 
-describe("buildTradeEngineStrategyRows", () => {
-  it("renders the Trade Engine roster when analytics are empty", () => {
-    const rows = buildTradeEngineStrategyRows([]);
-
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((row) => row.strategyId === 91 && row.strategyName === "Trend_Continuation_Long")).toBe(true);
-    expect(rows.every((row) => row.total === 0)).toBe(true);
-  });
-
-  it("overlays ledger analytics onto roster rows", () => {
-    const rows = buildTradeEngineStrategyRows([
-      {
-        strategyId: 91,
-        strategyName: "Trend_Continuation_Long",
-        total: 3,
-        open: 1,
-        closed: 2,
-        wins: 1,
-        losses: 1,
-        winRate: 0.5,
-        totalPnl: 42,
-        realizedPnl: 30,
-        unrealizedPnl: 12,
-        exposure: 5000,
-      },
+describe("sortScalerStrategies", () => {
+  it("puts active strategies before demoted ones", () => {
+    const rows = sortScalerStrategies([
+      { name: "Demoted_One", total_trades: 30, wins: 5, win_rate: 0.16, active: false, last_pnl: 100 },
+      { name: "Active_One", total_trades: 5, wins: 2, win_rate: 0.4, active: true, last_pnl: -10 },
     ]);
 
-    const row = rows.find((item) => item.strategyId === 91);
-    expect(row).toMatchObject({
-      total: 3,
-      open: 1,
-      closed: 2,
-      winRate: 0.5,
-      totalPnl: 42,
-      hasAnalytics: true,
-    });
+    expect(rows[0].name).toBe("Active_One");
+    expect(rows[1].name).toBe("Demoted_One");
+  });
+
+  it("ranks active strategies by last PnL, then trade count, then name", () => {
+    const rows = sortScalerStrategies([
+      { name: "Charlie", total_trades: 2, wins: 1, win_rate: 0.5, active: true, last_pnl: 50 },
+      { name: "Alpha", total_trades: 2, wins: 1, win_rate: 0.5, active: true, last_pnl: 50 },
+      { name: "Bravo", total_trades: 10, wins: 6, win_rate: 0.6, active: true, last_pnl: 50 },
+      { name: "Delta", total_trades: 1, wins: 0, win_rate: 0, active: true, last_pnl: 200 },
+    ]);
+
+    expect(rows.map((r) => r.name)).toEqual(["Delta", "Bravo", "Alpha", "Charlie"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const input = [
+      { name: "IV_RV_Spread_Reversion", total_trades: 0, wins: 0, win_rate: 0, active: true, last_pnl: 0 },
+    ];
+    const rows = sortScalerStrategies(input);
+    expect(rows).not.toBe(input);
   });
 });

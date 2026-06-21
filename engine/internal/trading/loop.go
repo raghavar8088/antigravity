@@ -15,6 +15,7 @@ import (
 	"antigravity-engine/internal/alpha"
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/calibration"
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/derivatives"
@@ -86,11 +87,25 @@ var (
 )
 
 func init() {
-	minExecutableConfidence = parseFloatEnvLazy("MIN_EXECUTABLE_CONFIDENCE", defaultMinExecutableConfidence)
-	minBridgeApprovalConfidence = parseFloatEnvLazy("MIN_BRIDGE_CONFIDENCE", defaultMinBridgeApprovalConfidence)
-	minRewardToRiskRatio = parseFloatEnvLazy("MIN_REWARD_TO_RISK_RATIO", defaultMinRewardToRiskRatio)
-	minSignalTakeProfitPct = parseFloatEnvLazy("MIN_SIGNAL_TAKE_PROFIT_PCT", defaultMinSignalTakeProfitPct)
-	maxSignalStopLossPct = parseFloatEnvLazy("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
+	RefreshThresholdsFromRegistry()
+	tconfig.RegisterHotReloadHook(RefreshThresholdsFromRegistry)
+}
+
+// RefreshThresholdsFromRegistry re-reads every hot-reloadable signal-quality
+// threshold from the central config.ThresholdRegistry (config.Default()).
+// Called once at package init and again by the /api/engine/config POST
+// handler immediately after a successful Set(), so an operator's edit takes
+// effect on the very next evaluation cycle without a restart. This is the
+// ThresholdRegistry's hot-reload integration point for the trading package —
+// it does not touch the kill switch or order execution path, only the
+// package-level threshold vars these existing call sites already read.
+func RefreshThresholdsFromRegistry() {
+	reg := tconfig.Default()
+	minExecutableConfidence = reg.GetWithDefault("MIN_EXECUTABLE_CONFIDENCE", defaultMinExecutableConfidence)
+	minBridgeApprovalConfidence = reg.GetWithDefault("MIN_BRIDGE_CONFIDENCE", defaultMinBridgeApprovalConfidence)
+	minRewardToRiskRatio = reg.GetWithDefault("MIN_REWARD_TO_RISK_RATIO", defaultMinRewardToRiskRatio)
+	minSignalTakeProfitPct = reg.GetWithDefault("MIN_SIGNAL_TAKE_PROFIT_PCT", defaultMinSignalTakeProfitPct)
+	maxSignalStopLossPct = reg.GetWithDefault("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
 }
 
 // parseFloatEnvLazy is the init-time version (before parseFloatEnv is declared).
@@ -437,13 +452,17 @@ func NewOrchestrator(
 		scalerBundle:            newScalerBundle(),
 		walkForward:             scalers.NewWalkForwardValidator(),
 		concentrationGate: NewConcentrationGate(
-			parseIntEnv("MAX_CORRELATED_STRATEGIES", 2),
-			parseFloatEnv("MAX_CORRELATED_BTC", 0.30),
+			int(tconfig.Default().GetWithDefault("MAX_CORRELATED_STRATEGIES", 2)),
+			tconfig.Default().GetWithDefault("MAX_CORRELATED_BTC", 0.30),
 		),
 		adaptiveFloor:           NewAdaptiveConfidenceFloor(minExecutableConfidence),
-		// BUG 4: directional caps from env
-		maxOpenLongs:            parseIntEnv("MAX_OPEN_LONG_TRADES", 3),
-		maxOpenShorts:           parseIntEnv("MAX_OPEN_SHORT_TRADES", 3),
+		// BUG 4: directional caps — now sourced from the ThresholdRegistry
+		// (config.Default()) instead of a direct os.Getenv read, so an
+		// operator edit via the Trade Threshold Configuration module takes
+		// effect on the next orchestrator restart without touching this
+		// constructor's call sites elsewhere.
+		maxOpenLongs:            int(tconfig.Default().GetWithDefault("MAX_OPEN_LONG_TRADES", 3)),
+		maxOpenShorts:           int(tconfig.Default().GetWithDefault("MAX_OPEN_SHORT_TRADES", 3)),
 		// BUG 5: per-strategy cooldown map
 		lastTradeByStrategy:     make(map[string]time.Time),
 	}
@@ -2190,7 +2209,7 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 				}
 				kellyIn, kellyErr := kelly.GetKellyInputs(
 					o.deps.Ledger, btcPaperAccountID, 60,
-					o.deps.PortfolioValue, 0.10, regimeMult, dqScore,
+					o.deps.PortfolioValue, tconfig.Default().GetWithDefault("KELLY_MAX_POSITION_PCT", 0.10), regimeMult, dqScore,
 				)
 				if kellyErr == nil {
 					// Session-aware Kelly multiplier.

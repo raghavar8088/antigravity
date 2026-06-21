@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	tconfig "antigravity-engine/internal/config"
 )
 
 // walkForwardWindow is the size of one evaluation window, in closed trades.
@@ -26,6 +28,25 @@ var (
 	walkForwardFastDemoteSharpe    = 0.20
 	walkForwardFastDemoteWinRate   = 0.30
 )
+
+// RefreshWalkForwardThresholdsFromRegistry re-reads the win-rate and Sharpe
+// promotion bars from the central config.ThresholdRegistry so an operator
+// edit via the Trade Threshold Configuration module takes effect on the next
+// window evaluation without a restart. walkForwardWindow and
+// walkForwardConsecutiveWindows are intentionally NOT refreshed here — they
+// affect in-flight window/streak counters (tradesInWindow, consecutivePass)
+// in ways that would corrupt state for any strategy mid-window, so those two
+// remain restart-only (see RequiresRestart in the catalog).
+func RefreshWalkForwardThresholdsFromRegistry() {
+	reg := tconfig.Default()
+	walkForwardWinRateThreshold = reg.GetWithDefault("WALKFORWARD_WIN_RATE_THRESHOLD", 0.48)
+	walkForwardSharpeThreshold = reg.GetWithDefault("WALKFORWARD_SHARPE_THRESHOLD", 0.60)
+	walkForwardMaxDrawdown = reg.GetWithDefault("WALKFORWARD_MAX_DRAWDOWN", 0.20)
+}
+
+func init() {
+	tconfig.RegisterHotReloadHook(RefreshWalkForwardThresholdsFromRegistry)
+}
 
 func wfEnvFloat(key string, def float64) float64 {
 	if v := os.Getenv(key); v != "" {

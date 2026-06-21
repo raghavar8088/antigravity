@@ -69,6 +69,8 @@ The content is organized as follows:
   app/api/desk-worker-events/route.ts
   app/api/diagnostics/health/route.ts
   app/api/engine/[...path]/route.ts
+  app/api/engine/config/history/route.ts
+  app/api/engine/config/route.ts
   app/api/engine/events/route.ts
   app/api/engine/reconciliation/route.ts
   app/api/event-center/route.ts
@@ -173,6 +175,7 @@ The content is organized as follows:
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
   app/terminal/strategies/page.tsx
+  app/terminal/strategies/threshold-config/page.tsx
   app/terminal/trade-engine/page.tsx
   app/terminal/trading/page.tsx
   components/ActivityFeed.tsx
@@ -299,6 +302,7 @@ The content is organized as follows:
   components/terminal/institutional/TerminalCard.tsx
   components/terminal/institutional/TerminalLayoutClient.tsx
   components/terminal/institutional/TerminalShell.tsx
+  components/terminal/institutional/ThresholdConfigCenter.tsx
   components/terminal/institutional/TradeEngineCenter.tsx
   components/terminal/institutional/TradeJournalPro.tsx
   components/terminal/InstitutionalChart.tsx
@@ -589,6 +593,7 @@ The content is organized as follows:
   lib/tests/pr19.test.ts
   lib/tests/pr9pr10.test.ts
   lib/tests/regressionGuard.test.ts
+  lib/thresholdConfig/types.ts
   lib/trading/__tests__/futuresPaperMath.test.ts
   lib/trading/btcFtDeskBuild.ts
   lib/trading/btcFtPremiumStrategies.ts
@@ -799,6 +804,9 @@ The content is organized as follows:
   certification/replay_certification_test.go
   certification/security_certification_test.go
   certification/stress_certification_test.go
+  config/catalog.go
+  config/http.go
+  config/registry.go
   dataquality/types.go
   dataquality/validator_test.go
   dataquality/validator.go

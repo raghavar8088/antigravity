@@ -27,6 +27,7 @@ export const TERMINAL_ROUTES = {
   "retired-strategies": "/terminal/retired-strategies",
   "main-engine": "/terminal/main-engine",
   strategies: "/terminal/strategies",
+  "threshold-config": "/terminal/strategies/threshold-config",
   portfolio: "/terminal/portfolio",
   risk: "/terminal/risk",
   analytics: "/terminal/analytics",
@@ -118,6 +119,7 @@ export type CommandCenterNavItem = {
 export const TRADING_NAV: CommandCenterNavItem[] = [
   { href: TERMINAL_ROUTES["trade-engine"], label: "Trade Engine", section: "trading" },
   { href: TERMINAL_ROUTES.strategies, label: "Strategies", section: "trading" },
+  { href: TERMINAL_ROUTES["threshold-config"], label: "Trade Thresholds", section: "trading" },
 ];
 
 /** MONITOR section — mandatory order. */

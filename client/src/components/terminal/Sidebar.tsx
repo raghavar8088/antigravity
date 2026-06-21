@@ -139,6 +139,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
   "Trade Engine": <IconResearch />,
+  "Trade Thresholds": <IconSettings />,
 };
 
 const NAV_SECTIONS: NavSection[] = [

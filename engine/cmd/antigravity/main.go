@@ -22,6 +22,7 @@ import (
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/alpha/funding"
 	"antigravity-engine/internal/calibration"
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/derivatives"
@@ -1751,6 +1752,27 @@ func main() {
 	http.HandleFunc("/api/option-chain", optionsEngine.HandleOptionChain)
 
 	// Admin endpoints
+	// Trade Threshold Configuration module:
+	//   GET  /api/engine/config          — full ThresholdConfig list (live registry + static metadata)
+	//   POST /api/engine/config          — X-Engine-Admin-Secret required; validates [min,max], applies
+	//                                       immediately via the registry, audit-logs to config_changes
+	//   GET  /api/engine/config/history  — audit trail (optional ?key=, defaults to last 50, all keys)
+	// Initialize the registry eagerly so the first request doesn't pay env-scan latency.
+	_ = tconfig.Default()
+	http.HandleFunc("/api/engine/config", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			tconfig.HandleGetConfig(w, r)
+		case http.MethodPost:
+			tconfig.HandleSetConfig(w, r)
+		case http.MethodOptions:
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	http.HandleFunc("/api/engine/config/history", tconfig.HandleConfigHistory)
+
 	http.HandleFunc("/api/admin/kill", killswitch.HandleTrigger)
 	http.HandleFunc("/api/admin/close-all", killswitch.HandleCloseAll)
 	http.HandleFunc("/api/admin/reset", killswitch.HandleReset)

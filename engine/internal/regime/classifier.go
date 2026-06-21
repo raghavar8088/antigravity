@@ -4,6 +4,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	tconfig "antigravity-engine/internal/config"
 )
 
 // RegimeClassification is the rich output of a Classifier.Classify call.
@@ -42,6 +44,33 @@ type IndicatorSnapshot struct {
 
 const atrHistoryLen = 20
 
+// Live, hot-reloadable copies of the regime classification thresholds. Read
+// from internal/config.ThresholdRegistry at package init and refreshed on
+// every operator edit (config.RefreshHotReloadHooks), so a threshold change
+// made through the Trade Threshold Configuration UI is reflected on the very
+// next Classify() call — no restart required.
+var (
+	liveATRHighVolRatio    = 2.0
+	liveATRExtremeVolRatio = 3.0
+	liveADXTrendThreshold  = 25.0
+	liveADXRangeThreshold  = 20.0
+)
+
+func init() {
+	refreshRegimeThresholdsFromRegistry()
+	tconfig.RegisterHotReloadHook(refreshRegimeThresholdsFromRegistry)
+}
+
+// refreshRegimeThresholdsFromRegistry re-reads the ATR-ratio and ADX
+// classification thresholds from the central registry.
+func refreshRegimeThresholdsFromRegistry() {
+	reg := tconfig.Default()
+	liveATRHighVolRatio = reg.GetWithDefault("REGIME_ATR_HIGH_VOL_RATIO", 2.0)
+	liveATRExtremeVolRatio = reg.GetWithDefault("REGIME_ATR_EXTREME_VOL_RATIO", 3.0)
+	liveADXTrendThreshold = reg.GetWithDefault("REGIME_ADX_TREND_THRESHOLD", 25.0)
+	liveADXRangeThreshold = reg.GetWithDefault("REGIME_ADX_RANGE_THRESHOLD", 20.0)
+}
+
 // Classifier adds position-sizing directives, confidence floors, and ATR-ratio
 // tracking on top of the base Engine. It is the primary interface for the
 // execution layer.
@@ -67,9 +96,9 @@ func (c *Classifier) Classify(snap IndicatorSnapshot) RegimeClassification {
 	ema50vs200 := ema50vsEMA200(snap)
 
 	// ── Rule 1: HIGH_VOLATILITY ───────────────────────────────────────────────
-	if atrRatio > 2.0 {
+	if atrRatio > liveATRHighVolRatio {
 		conf := 80.0
-		if atrRatio > 3.0 {
+		if atrRatio > liveATRExtremeVolRatio {
 			conf = 95.0
 		}
 		return RegimeClassification{
@@ -91,7 +120,7 @@ func (c *Classifier) Classify(snap IndicatorSnapshot) RegimeClassification {
 
 	// ── Rule 2: TRENDING_BULL ─────────────────────────────────────────────────
 	if snap.Price > snap.EMA200 && snap.EMA50 > snap.EMA200 &&
-		snap.ADX > 25 && snap.RSI_1h > 45 && snap.RSI_1h < 75 {
+		snap.ADX > liveADXTrendThreshold && snap.RSI_1h > 45 && snap.RSI_1h < 75 {
 		conf := trendConfidence(snap)
 		return RegimeClassification{
 			Regime:              RegimeTrendingBull,
@@ -112,7 +141,7 @@ func (c *Classifier) Classify(snap IndicatorSnapshot) RegimeClassification {
 
 	// ── Rule 3: TRENDING_BEAR ─────────────────────────────────────────────────
 	if snap.Price < snap.EMA200 && snap.EMA50 < snap.EMA200 &&
-		snap.ADX > 25 && snap.RSI_1h < 55 && snap.RSI_1h > 25 {
+		snap.ADX > liveADXTrendThreshold && snap.RSI_1h < 55 && snap.RSI_1h > 25 {
 		conf := trendConfidence(snap)
 		return RegimeClassification{
 			Regime:              RegimeTrendingBear,
@@ -132,8 +161,8 @@ func (c *Classifier) Classify(snap IndicatorSnapshot) RegimeClassification {
 	}
 
 	// ── Rule 4: RANGING ───────────────────────────────────────────────────────
-	if snap.ADX < 20 && snap.BBWidthAvg > 0 && snap.BBWidth < snap.BBWidthAvg*0.9 {
-		conf := math.Max(0, 70+(20-snap.ADX)*1.5)
+	if snap.ADX < liveADXRangeThreshold && snap.BBWidthAvg > 0 && snap.BBWidth < snap.BBWidthAvg*0.9 {
+		conf := math.Max(0, 70+(liveADXRangeThreshold-snap.ADX)*1.5)
 		return RegimeClassification{
 			Regime:              RegimeRanging,
 			Confidence:          conf,

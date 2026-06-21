@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/marketdata"
@@ -776,7 +777,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		session := kelly.DetectSession(time.Now().UTC())
 		kellyIn := kelly.KellyInputs{
 			PortfolioValue:    o.exec.GetBalanceUSD(),
-			MaxPositionPct:    0.10,
+			MaxPositionPct:    tconfig.Default().GetWithDefault("KELLY_MAX_POSITION_PCT", 0.10),
 			RegimeMult:        regimeMult,
 			SessionMult:       kelly.SessionKellyMultiplier(session),
 			DataQualityScore:  o.scalerBundle.GetDataQuality(),
