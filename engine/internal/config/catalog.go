@@ -177,7 +177,7 @@ func Catalog() []Meta {
 			RiskLevel: "critical",
 			WhatIfIncreased: "Kelly-sized positions can grow larger (up to the hard 10% ceiling), increasing both expected return and variance of the paper account.",
 			WhatIfDecreased: "Caps Kelly sizing more conservatively; reduces variance but also reduces compounding speed when win rate/edge is genuinely favorable.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "KELLY_MIN_TRADES_REQUIRED", Category: CategoryPositionSizing,
@@ -208,7 +208,7 @@ func Catalog() []Meta {
 			RiskLevel: "critical",
 			WhatIfIncreased: "The circuit breaker tolerates deeper intraday losses before halting — more room to recover from a bad stretch, but materially larger worst-case daily loss.",
 			WhatIfDecreased: "Trading pauses sooner on a losing day, capping downside tightly but increasing the chance a normal volatile session triggers an unnecessary full-day pause.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "RISK_CORRELATION_EXPOSURE_THRESHOLD", Category: CategoryRiskManagement,
@@ -218,7 +218,7 @@ func Catalog() []Meta {
 			RiskLevel: "high",
 			WhatIfIncreased: "The stronger-conviction requirement kicks in later (closer to max exposure), allowing more concentrated directional bets before the extra confidence bar applies.",
 			WhatIfDecreased: "The extra confidence requirement applies earlier, throttling concentrated directional exposure sooner.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "RISK_CORRELATION_MIN_CONFIDENCE", Category: CategoryRiskManagement,
@@ -228,7 +228,7 @@ func Catalog() []Meta {
 			RiskLevel: "high",
 			WhatIfIncreased: "Harder to add to an already-concentrated position — reduces risk of over-leveraging into one direction during a strong trend.",
 			WhatIfDecreased: "Easier to add to concentrated exposure on moderate conviction, increasing correlation risk if the trend reverses.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "PMS_MAX_HEAT_PCT", Category: CategoryRiskManagement,
@@ -454,7 +454,7 @@ func Catalog() []Meta {
 			RiskLevel: "critical",
 			WhatIfIncreased: "The engine tolerates more volatility expansion before halting new entries — more trades continue during turbulent moves, raising tail risk.",
 			WhatIfDecreased: "The engine halts new entries earlier during volatility spikes, missing some opportunities but reducing exposure to whipsaw conditions.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "REGIME_ATR_EXTREME_VOL_RATIO", Category: CategoryRegimeClassification,
@@ -464,7 +464,7 @@ func Catalog() []Meta {
 			RiskLevel: "medium",
 			WhatIfIncreased: "Requires more extreme conditions before the highest-confidence volatility-halt classification fires.",
 			WhatIfDecreased: "Reaches maximum volatility-halt confidence sooner during a spike.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "REGIME_ADX_TREND_THRESHOLD", Category: CategoryRegimeClassification,
@@ -474,7 +474,7 @@ func Catalog() []Meta {
 			RiskLevel: "medium",
 			WhatIfIncreased: "Requires a stronger trend before applying trend-favoring position-size multipliers (1.25x bull / 0.75x bear) and directional bias — fewer false trend calls but later entry into genuine trends.",
 			WhatIfDecreased: "Classifies weaker trends as TRENDING sooner, applying directional bias and size multipliers earlier but with more false positives in choppy conditions.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 		{
 			Key: "REGIME_ADX_RANGE_THRESHOLD", Category: CategoryRegimeClassification,
@@ -484,7 +484,7 @@ func Catalog() []Meta {
 			RiskLevel: "medium",
 			WhatIfIncreased: "More conditions get classified as RANGING, applying the conservative 0.5x size multiplier and mean-reversion-only posture more often.",
 			WhatIfDecreased: "Fewer conditions qualify as RANGING, leaving more periods in the default/indeterminate posture (0.75x multiplier) instead of the more conservative ranging treatment.",
-			RequiresRestart: true,
+			RequiresRestart: false,
 		},
 
 		// ── execution ───────────────────────────────────────────────────────
