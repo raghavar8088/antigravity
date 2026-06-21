@@ -1,1 +1,1 @@
-{"engine-config":{"communities":[7],"files":1,"symbols":11,"top_files":[{"file":"engine/internal/config/strictness.go","symbols":11}]},"engine-trading":{"communities":[0,1,2,3,4,5,6,8,9,10,11,12,13,14,15,16,17,18,19,20],"files":3,"symbols":224,"top_files":[{"file":"engine/internal/trading/loop.go","symbols":154},{"file":"engine/internal/trading/scalers_eval.go","symbols":67},{"file":"engine/internal/trading/strictness_wiring_test.go","symbols":3}]}}
+{}
