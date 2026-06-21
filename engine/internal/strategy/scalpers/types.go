@@ -89,19 +89,19 @@ type MarketContext struct {
 	Candles4h  []Candle // last 30 4h candles
 
 	// Order flow
-	CVD            float64   // cumulative volume delta (current)
-	CVDPrev        float64   // CVD from 1 bar ago (divergence check)
-	CVDHistory     []float64 // rolling CVD history (up to 5 readings, newest last)
+	CVD        float64   // cumulative volume delta (current)
+	CVDPrev    float64   // CVD from 1 bar ago (divergence check)
+	CVDHistory []float64 // rolling CVD history (up to 5 readings, newest last)
 	// FundingRate is the raw Binance perpetual funding rate as a decimal.
 	// Example: 0.0001 = 0.01% per 8h funding interval.
 	// Do NOT multiply by 100. Thresholds in strategies use raw decimal values:
 	//   S8 threshold: ±0.0003 = ±0.03% per 8h (crowded positioning signal).
 	//   S3 threshold: ±0.0001 = ±0.01% per 8h (funding spike signal).
-	FundingRate    float64
-	FundingHistory []float64 // last 3 funding readings (newest last); nil = not available
-	OpenInterest   float64   // current OI in BTC-equivalent (USD / price)
-	OpenInterestPrev float64 // OI from previous reading
-	OrderBook      OrderBookSnapshot
+	FundingRate      float64
+	FundingHistory   []float64 // last 3 funding readings (newest last); nil = not available
+	OpenInterest     float64   // current OI in BTC-equivalent (USD / price)
+	OpenInterestPrev float64   // OI from previous reading
+	OrderBook        OrderBookSnapshot
 
 	// Opening Range (NY session) — persisted by ScalerBundle across evaluation cycles
 	ORHigh float64 // NY opening range high (0 if not yet formed)
@@ -110,17 +110,72 @@ type MarketContext struct {
 	// Session
 	SessionName string    // "ASIA" | "LONDON" | "NEW_YORK"
 	Now         time.Time // UTC
+
+	// DVOL is the current Deribit BTC volatility index (30-day forward IV,
+	// analogous to VIX). 0 if the feed has never populated. Strategies that
+	// depend on DVOL must check DVOLPopulated/DVOLHealthy and degrade
+	// gracefully (e.g. fall back to RealizedVol) rather than permanently
+	// returning NoSignal when the feed is down.
+	DVOL          float64
+	DVOLHistory   []float64 // rolling history, up to last 12 readings (1hr @ 5min), oldest first
+	DVOLPopulated bool      // true once the feed has fetched at least one good value
+	DVOLHealthy   bool      // true if the most recent fetch attempt succeeded (not stale)
+
+	// Liquidations — Binance BTCUSDT perpetual forced-liquidation USD notional,
+	// split by the side of the liquidated position, over trailing windows.
+	// Populated from BinanceLiquidationHolder. 0 values if the feed has never
+	// populated; strategies must check LiquidationFeedHealthy and degrade
+	// gracefully (S14) rather than misinterpreting 0 as "no liquidations".
+	LongLiquidationsUSD5m   float64
+	ShortLiquidationsUSD5m  float64
+	LongLiquidationsUSD15m  float64
+	ShortLiquidationsUSD15m float64
+	// Rolling 1-minute liquidation rate (USD/min) by side, and the trailing
+	// 1-hour average rate — used by S14's cascade-spike/deceleration detection.
+	LongLiquidationsRate1m   float64
+	ShortLiquidationsRate1m  float64
+	LongLiquidationsAvg1h    float64
+	ShortLiquidationsAvg1h   float64
+	LiquidationFeedPopulated bool
+	LiquidationFeedHealthy   bool
+
+	// PerpSpotBasis — Binance BTCUSDT perpetual mark price vs Coinbase spot
+	// (ctx.Price), for S16's basis-momentum signal. Populated from
+	// BinancePerpPriceHolder. PerpPrice is 0 if the feed has never populated.
+	PerpPrice          float64
+	PerpPricePopulated bool
+	PerpPriceHealthy   bool
+
+	// Macro cross-asset feed — Nasdaq futures proxy (NQ=F) and US Dollar Index
+	// (DXY), polled from Yahoo Finance's public chart endpoint every 10 min
+	// (see marketdata/macro_feed.go MacroFeedHolder). Feeds S18-S21.
+	NasdaqProxyPrice     float64
+	NasdaqProxyChangePct float64
+	DXYPrice             float64
+	DXYChangePct         float64
+	DXYRollingHigh20     float64 // 20-poll rolling high (breakout reference)
+	DXYRollingLow20      float64 // 20-poll rolling low (breakdown reference)
+	// BTCEquitiesCorrelation30d is an APPROXIMATION of a true 30-day rolling
+	// correlation: true 30-day correlation needs ~720 hourly closes, which is
+	// impractical to bootstrap quickly and exceeds what a 10-min-cadence feed
+	// can usefully retain. This is instead a short-horizon (~2hr, last ~12
+	// macro polls paired against the most recent BTC 1h candle closes)
+	// Pearson correlation. Field name kept aligned to the spec's "30d" ask;
+	// always treat as a short-horizon proxy, not a true monthly statistic.
+	BTCEquitiesCorrelation30d float64
+	MacroFeedPopulated        bool
+	MacroFeedHealthy          bool
 }
 
 // Signal is the output of a strategy evaluation
 type Signal struct {
 	Strategy    string
 	Direction   Direction
-	Confidence  float64   // 0.0–1.0
-	StopLoss    float64   // absolute price
-	TakeProfit  float64   // absolute price (primary)
-	TakeProfit2 float64   // absolute price (secondary, 0 = not set)
-	Reason      string    // human-readable, logged to audit
+	Confidence  float64 // 0.0–1.0
+	StopLoss    float64 // absolute price
+	TakeProfit  float64 // absolute price (primary)
+	TakeProfit2 float64 // absolute price (secondary, 0 = not set)
+	Reason      string  // human-readable, logged to audit
 	Timestamp   time.Time
 }
 

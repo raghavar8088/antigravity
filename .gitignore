@@ -56,3 +56,6 @@ claude-bot/last-reply.txt
 claude-bot/.send.lock
 claude-bot/screenshots/
 .vercel
+
+# Local credential material — never commit
+.application-credentials/

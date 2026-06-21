@@ -305,6 +305,44 @@ func SwingLow(candles []Candle, period int) float64 {
 	return low
 }
 
+// ── Realized Volatility ──────────────────────────────────────────────────────
+
+// RealizedVol computes annualized realized volatility (stdev of log returns)
+// over the last `period` candles. Intended for 1h candles with period=24
+// (1 day lookback) as a substitute/cross-check for Deribit DVOL (implied vol).
+// Annualization assumes 1h bars: sqrt(24*365) periods/year.
+func RealizedVol(candles []Candle, period int) float64 {
+	if len(candles) < period+1 {
+		return 0
+	}
+	tail := candles[len(candles)-(period+1):]
+	logReturns := make([]float64, 0, period)
+	for i := 1; i < len(tail); i++ {
+		if tail[i-1].Close <= 0 || tail[i].Close <= 0 {
+			continue
+		}
+		logReturns = append(logReturns, math.Log(tail[i].Close/tail[i-1].Close))
+	}
+	if len(logReturns) < 2 {
+		return 0
+	}
+	var mean float64
+	for _, r := range logReturns {
+		mean += r
+	}
+	mean /= float64(len(logReturns))
+	var variance float64
+	for _, r := range logReturns {
+		d := r - mean
+		variance += d * d
+	}
+	variance /= float64(len(logReturns) - 1)
+	stdev := math.Sqrt(variance)
+	// Annualize assuming hourly bars: sqrt(24 * 365) periods/year.
+	annualized := stdev * math.Sqrt(24*365) * 100 // expressed as a percentage, comparable to DVOL
+	return annualized
+}
+
 // ── CVD divergence ────────────────────────────────────────────────────────────
 
 // CVDDivergesBearish returns true when price makes a new high but CVD doesn't confirm.
@@ -315,4 +353,190 @@ func CVDDivergesBearish(priceHigh, prevPriceHigh, cvd, prevCVD float64) bool {
 // CVDDivergesBullish returns true when price makes a new low but CVD holds higher.
 func CVDDivergesBullish(priceLow, prevPriceLow, cvd, prevCVD float64) bool {
 	return priceLow < prevPriceLow && cvd > prevCVD
+}
+
+// ── Hurst Exponent (R/S analysis) ───────────────────────────────────────────
+
+// HurstExponent estimates the Hurst exponent via standard rescaled-range (R/S)
+// analysis: Mandelbrot/Wallis (1969) classic method, still the standard
+// textbook approach for regime classification in quant trading (trending
+// H>0.5, mean-reverting H<0.5, random walk H≈0.5). This implementation splits
+// the input window into sub-series of varying length n, computes the mean
+// R/S statistic at each n, then fits log(R/S) vs log(n) via simple linear
+// regression (OLS slope = H). Kept deliberately simple (not the more
+// elaborate detrended/Lo-corrected variants) — sufficient for a fast regime
+// proxy, not academic-grade estimation.
+//
+// Returns 0.5 (neutral/random-walk) if there isn't enough data to form at
+// least 2 distinct sub-period lengths.
+func HurstExponent(candles []Candle, period int) float64 {
+	if period > len(candles) {
+		period = len(candles)
+	}
+	if period < 16 {
+		return 0.5 // insufficient data for any meaningful R/S split
+	}
+	tail := candles[len(candles)-period:]
+
+	// Log returns are the standard input series for R/S analysis (stabilizes
+	// variance vs raw price levels).
+	returns := make([]float64, 0, period-1)
+	for i := 1; i < len(tail); i++ {
+		if tail[i-1].Close <= 0 || tail[i].Close <= 0 {
+			continue
+		}
+		returns = append(returns, math.Log(tail[i].Close/tail[i-1].Close))
+	}
+	if len(returns) < 16 {
+		return 0.5
+	}
+
+	// Sub-period lengths: halve down from the full series length, stop below 8.
+	var lengths []int
+	for n := len(returns); n >= 8; n /= 2 {
+		lengths = append(lengths, n)
+	}
+	if len(lengths) < 2 {
+		return 0.5
+	}
+
+	var logN, logRS []float64
+	for _, n := range lengths {
+		numSegments := len(returns) / n
+		if numSegments < 1 {
+			continue
+		}
+		var rsSum float64
+		var rsCount int
+		for seg := 0; seg < numSegments; seg++ {
+			chunk := returns[seg*n : (seg+1)*n]
+			mean := 0.0
+			for _, r := range chunk {
+				mean += r
+			}
+			mean /= float64(n)
+
+			// Cumulative deviation from mean -> range.
+			cum := 0.0
+			maxC, minC := 0.0, 0.0
+			var variance float64
+			for i, r := range chunk {
+				d := r - mean
+				cum += d
+				if i == 0 || cum > maxC {
+					maxC = cum
+				}
+				if i == 0 || cum < minC {
+					minC = cum
+				}
+				variance += d * d
+			}
+			variance /= float64(n)
+			stdev := math.Sqrt(variance)
+			if stdev == 0 {
+				continue
+			}
+			r := maxC - minC
+			rsSum += r / stdev
+			rsCount++
+		}
+		if rsCount == 0 {
+			continue
+		}
+		avgRS := rsSum / float64(rsCount)
+		if avgRS <= 0 {
+			continue
+		}
+		logN = append(logN, math.Log(float64(n)))
+		logRS = append(logRS, math.Log(avgRS))
+	}
+
+	if len(logN) < 2 {
+		return 0.5
+	}
+
+	// OLS slope of log(R/S) vs log(n) = Hurst exponent estimate.
+	var sumX, sumY, sumXY, sumXX float64
+	k := float64(len(logN))
+	for i := range logN {
+		sumX += logN[i]
+		sumY += logRS[i]
+		sumXY += logN[i] * logRS[i]
+		sumXX += logN[i] * logN[i]
+	}
+	denom := k*sumXX - sumX*sumX
+	if denom == 0 {
+		return 0.5
+	}
+	h := (k*sumXY - sumX*sumY) / denom
+
+	// Clamp to sane bounds — pure R/S can occasionally produce noisy values
+	// outside [0,1] on short/noisy windows.
+	if h < 0 {
+		h = 0
+	}
+	if h > 1 {
+		h = 1
+	}
+	return h
+}
+
+// ── Multi-timeframe Z-Score ─────────────────────────────────────────────────
+
+// smaOf returns the simple moving average of the last `period` closes.
+// Returns 0 if not enough data.
+func smaOf(candles []Candle, period int) float64 {
+	if len(candles) < period {
+		return 0
+	}
+	tail := candles[len(candles)-period:]
+	var sum float64
+	for _, c := range tail {
+		sum += c.Close
+	}
+	return sum / float64(period)
+}
+
+// stdevOf returns the population stdev of the last `period` closes around
+// the given mean. Returns 0 if not enough data.
+func stdevOf(candles []Candle, period int, mean float64) float64 {
+	if len(candles) < period {
+		return 0
+	}
+	tail := candles[len(candles)-period:]
+	var variance float64
+	for _, c := range tail {
+		d := c.Close - mean
+		variance += d * d
+	}
+	return math.Sqrt(variance / float64(period))
+}
+
+// ZScoreMultiTimeframe computes the standard (close - SMA) / stdev z-score
+// independently on 5m, 15m, and 1h candles using a 20-period lookback on
+// each timeframe — a well-established multi-timeframe confluence technique:
+// requiring statistical extremes to align simultaneously across timeframes
+// is a standard high-conviction mean-reversion filter (reduces false
+// positives from single-timeframe noise). Returns 0 for any timeframe with
+// insufficient data.
+func ZScoreMultiTimeframe(candles5m, candles15m, candles1h []Candle) (z5m, z15m, z1h float64) {
+	const lookback = 20
+
+	compute := func(candles []Candle) float64 {
+		mean := smaOf(candles, lookback)
+		if mean == 0 {
+			return 0
+		}
+		sd := stdevOf(candles, lookback, mean)
+		if sd == 0 {
+			return 0
+		}
+		current := candles[len(candles)-1].Close
+		return (current - mean) / sd
+	}
+
+	z5m = compute(candles5m)
+	z15m = compute(candles15m)
+	z1h = compute(candles1h)
+	return
 }

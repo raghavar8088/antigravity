@@ -931,12 +931,16 @@ The content is organized as follows:
   macro/types.go
   marketdata/binance_aggtrade.go
   marketdata/binance_klines.go
+  marketdata/binance_liquidations.go
+  marketdata/binance_perp_price.go
   marketdata/candle_test.go
   marketdata/candle.go
   marketdata/client.go
   marketdata/coinbase.go
   marketdata/db_writer.go
   marketdata/delta.go
+  marketdata/deribit_dvol.go
+  marketdata/macro_feed.go
   marketdata/warmup.go
   ml/prescorer.go
   mongopersist/boot.go
@@ -1256,8 +1260,32 @@ The content is organized as follows:
   strategy/registry.go
   strategy/scalpers/curated_expansion_pack.go
   strategy/scalpers/curated_registry.go
+  strategy/scalpers/event_family.go
   strategy/scalpers/indicators.go
+  strategy/scalpers/macro_family.go
+  strategy/scalpers/microstructure_family.go
   strategy/scalpers/registry.go
+  strategy/scalpers/rollout_phase.go
+  strategy/scalpers/s_btc_equities_correlation_break.go
+  strategy/scalpers/s_cme_gap_fill.go
+  strategy/scalpers/s_dxy_inverse_momentum.go
+  strategy/scalpers/s_eth_btc_relative_strength.go
+  strategy/scalpers/s_fear_gauge_divergence.go
+  strategy/scalpers/s_funding_reset_mean_reversion.go
+  strategy/scalpers/s_hurst_regime_switcher.go
+  strategy/scalpers/s_iv_rv_spread_reversion.go
+  strategy/scalpers/s_liquidation_cascade_fade.go
+  strategy/scalpers/s_macro_calendar_vol_positioning.go
+  strategy/scalpers/s_macro_decoupling_momentum.go
+  strategy/scalpers/s_mtf_zscore_confluence.go
+  strategy/scalpers/s_oi_funding_crowding_composite.go
+  strategy/scalpers/s_orderbook_imbalance_persistence.go
+  strategy/scalpers/s_perp_spot_basis_momentum.go
+  strategy/scalpers/s_risk_on_off_regime_proxy.go
+  strategy/scalpers/s_session_handoff_momentum.go
+  strategy/scalpers/s_vol_crush_fade.go
+  strategy/scalpers/s_vol_regime_breakout.go
+  strategy/scalpers/s_volume_weighted_momentum_factor.go
   strategy/scalpers/s1_ema_ribbon_trend_rider.go
   strategy/scalpers/s10_smc_order_block_fvg_test.go
   strategy/scalpers/s10_smc_order_block_fvg.go
@@ -1269,7 +1297,9 @@ The content is organized as follows:
   strategy/scalpers/s7_opening_range_breakout.go
   strategy/scalpers/s8_funding_rate_fade.go
   strategy/scalpers/s9_oi_divergence.go
+  strategy/scalpers/statistical_family.go
   strategy/scalpers/types.go
+  strategy/scalpers/volatility_family.go
   strategy/scalpers/walkforward.go
   strategy/types.go
   telemetry/metrics.go

@@ -14,6 +14,7 @@ import (
 	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/learning"
 	"antigravity-engine/internal/macro"
+	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/ml"
 	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/regime"
@@ -34,8 +35,23 @@ type LoopDeps struct {
 	FundingFetcher   *derivatives.FundingFetcher
 	OIFetcher        *derivatives.OIFetcher
 	DepthSubscriber  *orderbook.DepthSubscriber
-	Ledger           kelly.LedgerInterface
-	PortfolioValue   float64
+	// DVOLHolder is optional (nil = DVOL-dependent strategies fall back to
+	// RealizedVol). Polled in the background by DeribitDVOLHolder.StartPolling.
+	DVOLHolder *marketdata.DeribitDVOLHolder
+	// LiquidationHolder is optional (nil = S14 Liquidation_Cascade_Fade is
+	// suppressed). Streamed in the background by
+	// BinanceLiquidationHolder.StartStreaming.
+	LiquidationHolder *marketdata.BinanceLiquidationHolder
+	// PerpPriceHolder is optional (nil = S16 Perp_Spot_Basis_Momentum is
+	// suppressed). Polled in the background by
+	// BinancePerpPriceHolder.StartPolling.
+	PerpPriceHolder *marketdata.BinancePerpPriceHolder
+	// MacroFeedHolder is optional (nil = S18-S21 macro family strategies
+	// degrade to NoSignal/reduced confidence). Polled in the background by
+	// MacroFeedHolder.StartPolling (Nasdaq futures proxy + DXY).
+	MacroFeedHolder *marketdata.MacroFeedHolder
+	Ledger          kelly.LedgerInterface
+	PortfolioValue  float64
 
 	// Phase C market signal fetchers (optional — nil = signal skipped, score = 0)
 	ETFFetcher       *etf.ETFFetcher
@@ -51,7 +67,7 @@ type LoopDeps struct {
 
 	// Phase E optional components (nil-safe — engine operates identically without them)
 	EventStore  *eventstore.EventWriter // dual-write audit trail; non-blocking
-	MLPrescorer *ml.MLPrescorer        // local XGBoost pre-filter; skipped when nil
+	MLPrescorer *ml.MLPrescorer         // local XGBoost pre-filter; skipped when nil
 
 	// calibResult holds the most recent confidence calibration result.
 	// Thread-safe via calibMu; updated by ScheduleRecalibration callback in main.go.

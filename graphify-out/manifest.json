@@ -170,8 +170,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/auth/login/route.ts": {
-    "mtime": 1781376935.9435854,
-    "ast_hash": "9f1e501598df3dafe36eff0377035940",
+    "mtime": 1781979044.5342565,
+    "ast_hash": "d37fb8fe6b94445e0f75ad9babf9d287",
     "semantic_hash": ""
   },
   "client/src/app/api/auth/session/route.ts": {
@@ -225,8 +225,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/cron/policy-snapshot/route.ts": {
-    "mtime": 1781376935.9491737,
-    "ast_hash": "cdcf27bbf7ec4279b98a0afa4220c16a",
+    "mtime": 1781966761.802533,
+    "ast_hash": "23818cdca0e93b92879cb8827cae49b8",
     "semantic_hash": ""
   },
   "client/src/app/api/delta/account/route.ts": {
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/NavIcons.tsx": {
-    "mtime": 1781452668.2965274,
-    "ast_hash": "f0a43d15b822ccd3a63c702114fead8c",
+    "mtime": 1781979817.258137,
+    "ast_hash": "983c70920cde1bd5e897879a26ac908c",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/ObservabilityCenter.tsx": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "client/src/components/ui/M3AppShell.tsx": {
-    "mtime": 1781462404.650065,
-    "ast_hash": "edfc84b18ae6946f29f2253a5f3ae758",
+    "mtime": 1781979851.8589458,
+    "ast_hash": "8d121a8f42b92d36a82df659b99758fa",
     "semantic_hash": ""
   },
   "client/src/components/ui/M3Providers.tsx": {
@@ -2070,8 +2070,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/broker/mongoTradesClient.ts": {
-    "mtime": 1781945958.5547225,
-    "ast_hash": "22262227a1a268c5b5f73aad3d7922c1",
+    "mtime": 1781966732.95032,
+    "ast_hash": "31c5412794bbffc268148fbb80a0ff6b",
     "semantic_hash": ""
   },
   "client/src/lib/broker/ownerAccountKey.ts": {
@@ -3030,8 +3030,8 @@
     "semantic_hash": ""
   },
   "client/vercel.json": {
-    "mtime": 1781943418.2285283,
-    "ast_hash": "db7187c88bb4f62e22c7ebf5a81b41a9",
+    "mtime": 1781960650.7713435,
+    "ast_hash": "cba31cc1ead02df23ccb183a76fbb0af",
     "semantic_hash": ""
   },
   "client/vitest.config.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1781895937.8821032,
-    "ast_hash": "d36917531a069798e72b35aaf3b634e0",
+    "mtime": 1781962797.1666849,
+    "ast_hash": "ce382c6e510952cc752cb717743ac226",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -3100,8 +3100,8 @@
     "semantic_hash": ""
   },
   "engine/internal/admin/killswitch.go": {
-    "mtime": 1781376936.399115,
-    "ast_hash": "6f75e985c4188b5f4f5eb8f196f3b325",
+    "mtime": 1781963233.3958888,
+    "ast_hash": "0f85ed5d7b29f2990939dc1b99940783",
     "semantic_hash": ""
   },
   "engine/internal/ai/agents.go": {
@@ -4335,8 +4335,8 @@
     "semantic_hash": ""
   },
   "engine/internal/mongopersist/client.go": {
-    "mtime": 1781956064.7195816,
-    "ast_hash": "a3b19daff97533db7430757a67752985",
+    "mtime": 1781966814.7305822,
+    "ast_hash": "c852b88a3b555185ae068855c08e2abc",
     "semantic_hash": ""
   },
   "engine/internal/mongopersist/handler.go": {
@@ -4545,18 +4545,18 @@
     "semantic_hash": ""
   },
   "engine/internal/options/controls.go": {
-    "mtime": 1781406859.6393745,
-    "ast_hash": "7194bf6adfe0c2d98f71cebe5433cdf5",
+    "mtime": 1781962856.4899485,
+    "ast_hash": "de55559417668bbc8f968f67b6815c9a",
     "semantic_hash": ""
   },
   "engine/internal/options/engine.go": {
-    "mtime": 1781406859.651975,
-    "ast_hash": "fbd1295e8e8f0dc5ccf0770debba3338",
+    "mtime": 1781962815.2466962,
+    "ast_hash": "28896b98e86db2067448a28a5979ee4a",
     "semantic_hash": ""
   },
   "engine/internal/options/engine_test.go": {
-    "mtime": 1781376936.5624218,
-    "ast_hash": "2490ee07951943ffb4a01506eb0e26ef",
+    "mtime": 1781962875.1082401,
+    "ast_hash": "55041adab74ee08524892049c84de578",
     "semantic_hash": ""
   },
   "engine/internal/options/market_profile.go": {
@@ -4695,8 +4695,8 @@
     "semantic_hash": ""
   },
   "engine/internal/paperpersist/mongo.go": {
-    "mtime": 1781956069.7660875,
-    "ast_hash": "3d594bc543facbfa4aab46b09e06fa94",
+    "mtime": 1781966784.8807914,
+    "ast_hash": "9304aad79bb411fc4727b1f7f2acfa7e",
     "semantic_hash": ""
   },
   "engine/internal/paperpersist/order_writer.go": {
@@ -4775,8 +4775,8 @@
     "semantic_hash": ""
   },
   "engine/internal/persistence/store.go": {
-    "mtime": 1781406859.651975,
-    "ast_hash": "5e873483f3fd82e4d8634bd1e3a74a29",
+    "mtime": 1781963202.9660275,
+    "ast_hash": "0de2fe8635d973bd9359590e9d7af752",
     "semantic_hash": ""
   },
   "engine/internal/pilot/aggregate.go": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1781956434.3236828,
-    "ast_hash": "f16a0ad9c17cbc0ec7ca14d293ce2a3d",
+    "mtime": 1781979897.1487,
+    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1781956434.3236828,
-    "ast_hash": "4fbd67028d69f0a11d60bb47abd39906",
+    "mtime": 1781979897.1487,
+    "ast_hash": "50367c012875fc84bbf12afc687ff47b",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1781956434.3236828,
-    "ast_hash": "b4c4af42095e91bc0126b38980288e51",
+    "mtime": 1781979897.1487,
+    "ast_hash": "629c41a511dd94c72c2e75007e8edb9e",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1781956434.3236828,
-    "ast_hash": "4fd8176234b375290cc8009348326959",
+    "mtime": 1781979897.1487,
+    "ast_hash": "c4a23d99d971ce92802ad8640662a1e8",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1781956435.9504838,
-    "ast_hash": "1b79f8b20969bc87c7a8881c8284218e",
+    "mtime": 1781979898.6437776,
+    "ast_hash": "143044d139c299b09619beb559ea52df",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23817,6 +23817,11 @@
   "client/test-results/auth-login-login-signs-in-successfully-and-lands-on-terminal-chromium-desktop/video.webm": {
     "mtime": 1781933951.6382053,
     "ast_hash": "6e8d0653a02895a4485d596866e07615",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/LogoutButton.tsx": {
+    "mtime": 1781979836.9254847,
+    "ast_hash": "26df38d634d2239879ed563f36067cb3",
     "semantic_hash": ""
   }
 }

@@ -21,46 +21,47 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/alpha/funding"
+	"antigravity-engine/internal/calibration"
 	"antigravity-engine/internal/dataquality"
-	"antigravity-engine/internal/derivatives"
-	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/delta"
+	"antigravity-engine/internal/derivatives"
+	"antigravity-engine/internal/dominance"
+	"antigravity-engine/internal/etf"
+	"antigravity-engine/internal/eventstore"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/executiongateway"
 	"antigravity-engine/internal/gateway"
 	killswitchpkg "antigravity-engine/internal/killswitch"
+	"antigravity-engine/internal/learning"
 	"antigravity-engine/internal/ledger"
-	"antigravity-engine/internal/marketdata"
-	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
-	pmspkg "antigravity-engine/internal/pms"
-	"antigravity-engine/internal/observability"
-	"antigravity-engine/internal/dominance"
-	"antigravity-engine/internal/etf"
 	"antigravity-engine/internal/macro"
+	"antigravity-engine/internal/marketdata"
+	"antigravity-engine/internal/ml"
+	"antigravity-engine/internal/mongopersist"
+	"antigravity-engine/internal/observability"
+	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/persistence"
+	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
-	"antigravity-engine/internal/regime"
 	reconciliationv2 "antigravity-engine/internal/reconciliationv2"
+	"antigravity-engine/internal/regime"
 	"antigravity-engine/internal/risk"
 	"antigravity-engine/internal/secrets"
 	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/security/vault"
-	"antigravity-engine/internal/calibration"
-	"antigravity-engine/internal/eventstore"
-	"antigravity-engine/internal/learning"
-	"antigravity-engine/internal/ml"
 	"antigravity-engine/internal/sentiment"
-	"antigravity-engine/internal/tracing"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"antigravity-engine/internal/strategy"
+	"antigravity-engine/internal/strategy/scalpers"
 	"antigravity-engine/internal/temporal"
+	"antigravity-engine/internal/tracing"
 	"antigravity-engine/internal/trading"
 	"antigravity-engine/internal/validation/phase22e"
 	"antigravity-engine/internal/validation/production"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // RingLogger stores the last N log lines in memory
@@ -462,6 +463,8 @@ func main() {
 	for _, e := range allStrategies {
 		observability.ScalersStrategyStatus.WithLabelValues(e.Strategy.Name()).Set(0)
 	}
+	// Record current STRATEGY_ROLLOUT_PHASE for observability.
+	observability.SetStrategyRolloutPhase()
 	if len(allStrategies) > btcEquityStrategyCapacity {
 		log.Printf("[INIT] Loaded %d curated live strategies (capacity %d exceeded; no truncation applied)", len(allStrategies), btcEquityStrategyCapacity)
 	} else {
@@ -524,9 +527,9 @@ func main() {
 	// 3. Risk Engine (configured for the $1,000,000 futures paper account)
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
-		MaxPositionBTC:  2.0,                    // Max 2 BTC total exposure
+		MaxPositionBTC:  2.0,                         // Max 2 BTC total exposure
 		MaxCapitalUSD:   getInitialPaperBalanceUSD(), // configured paper balance
-		MaxDailyLossPct: 0.05,                   // 5% daily loss circuit breaker ($50,000)
+		MaxDailyLossPct: 0.05,                        // 5% daily loss circuit breaker ($50,000)
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
 	// BUG 2: schedule daily P&L reset at midnight UTC so daily-loss circuit breaker
@@ -1071,6 +1074,26 @@ func main() {
 	go oiFetcher.StartPolling(ctx, 15*time.Minute)
 	log.Println("[DEPS] Funding rate + OI fetchers polling every 15m")
 
+	// Wiring 6b: Deribit BTC DVOL volatility index (used by S10-S13 vol family)
+	dvolHolder := marketdata.NewDeribitDVOLHolder()
+	dvolHolder.StartPolling(ctx)
+	log.Println("[DEPS] Deribit BTC DVOL feed polling every 5m")
+
+	// Wiring 6c: Binance BTC perpetual liquidation feed (used by S14)
+	liquidationHolder := marketdata.NewBinanceLiquidationHolder()
+	liquidationHolder.StartStreaming(ctx)
+	log.Println("[DEPS] Binance BTC liquidation feed streaming (!forceOrder@arr)")
+
+	// Wiring 6d: Binance BTC perpetual mark price (used by S16 basis calc)
+	perpPriceHolder := marketdata.NewBinancePerpPriceHolder()
+	perpPriceHolder.StartPolling(ctx)
+	log.Println("[DEPS] Binance BTC perp mark price feed polling every 30s")
+
+	// Wiring 6e: Macro cross-asset feed — Nasdaq futures proxy + DXY (used by S18-S21 macro family)
+	macroFeedHolder := marketdata.NewMacroFeedHolder()
+	macroFeedHolder.StartPolling(ctx)
+	log.Println("[DEPS] Macro cross-asset feed (Nasdaq proxy + DXY) polling every 10m")
+
 	// Wiring 7: L2 order book depth subscriber
 	depthSubscriber := orderbook.NewDepthSubscriber()
 	go safeGo("DepthSubscriber", func() {
@@ -1097,6 +1120,9 @@ func main() {
 	dominanceFetcher := dominance.NewDominanceFetcher(nil)
 	dominanceFetcher.StartPolling(ctx, time.Hour)
 	log.Println("[DEPS] BTC dominance tracker started (1h interval)")
+	// Wire the same dominance fetcher into the scalpers package so S25
+	// (Dominance_Relative_Strength) can read its latest BTC.D reading.
+	scalpers.SetDominanceFetcher(dominanceFetcher)
 
 	// Wiring 10: Macro correlation fetcher (hourly, via Python yfinance script)
 	macroScriptPath := os.Getenv("MACRO_SCRIPT_PATH")
@@ -1132,20 +1158,24 @@ func main() {
 	}
 
 	loopDeps := &trading.LoopDeps{
-		DataValidator:    dataValidator,
-		AsyncScorer:      asyncScorer,
-		FallbackScorer:   fallbackScorer,
-		RegimeClassifier: regimeClassifier,
-		StrategyGate:     strategyGate,
-		CycleGuard:       cycleGuard,
-		FundingFetcher:   fundingFetcher,
-		OIFetcher:        oiFetcher,
-		DepthSubscriber:  depthSubscriber,
-		PortfolioValue:   getInitialPaperBalanceUSD(),
+		DataValidator:     dataValidator,
+		AsyncScorer:       asyncScorer,
+		FallbackScorer:    fallbackScorer,
+		RegimeClassifier:  regimeClassifier,
+		StrategyGate:      strategyGate,
+		CycleGuard:        cycleGuard,
+		FundingFetcher:    fundingFetcher,
+		OIFetcher:         oiFetcher,
+		DepthSubscriber:   depthSubscriber,
+		DVOLHolder:        dvolHolder,
+		LiquidationHolder: liquidationHolder,
+		PerpPriceHolder:   perpPriceHolder,
+		MacroFeedHolder:   macroFeedHolder,
+		PortfolioValue:    getInitialPaperBalanceUSD(),
 		// Kelly ledger — PortfolioLedger implements kelly.LedgerInterface via
 		// its ClosedTrades() method, which returns the per-trade PnL% ring buffer.
 		// Kelly sizing requires at least 30 closed trades before activating.
-		Ledger:           orchestrator.PortfolioLedger(),
+		Ledger: orchestrator.PortfolioLedger(),
 		// Phase C signals (optional — nil = score 0)
 		ETFFetcher:       etfFetcher,
 		DominanceFetcher: dominanceFetcher,
@@ -1750,9 +1780,9 @@ func main() {
 			return
 		}
 		if err := ksSvc.Trigger(r.Context(), killswitchpkg.Activation{
-			Trigger:  killswitchpkg.TriggerManualOperator,
-			Reason:   "manual operator block via /api/admin/ks/block",
-			Actions:  []killswitchpkg.Action{killswitchpkg.ActionBlockNewOrders, killswitchpkg.ActionSendAlerts},
+			Trigger: killswitchpkg.TriggerManualOperator,
+			Reason:  "manual operator block via /api/admin/ks/block",
+			Actions: []killswitchpkg.Action{killswitchpkg.ActionBlockNewOrders, killswitchpkg.ActionSendAlerts},
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -1847,15 +1877,15 @@ func main() {
 				"active": wh.KillSwitchActive,
 				"reason": wh.KillSwitchReason,
 			},
-			"last_tick_at":          formatHealthTime(wh.LastTickAt),
-			"last_signal_at":        formatHealthTime(wh.LastSignalAt),
-			"last_fill_at":          formatHealthTime(wh.LastFillAt),
-			"no_trade_since_fill":   wh.NoTradeSinceFill.String(),
-			"no_trade_alert_level":  wh.NoTradeAlertLevel,
-			"stale_market_data":     wh.StaleMarketData,
-			"account_key":           paperpersist.FrontendAccountKey,
-			"execution_authority":   "go_engine",
-			"timestamp":             time.Now().UTC().Format(time.RFC3339),
+			"last_tick_at":         formatHealthTime(wh.LastTickAt),
+			"last_signal_at":       formatHealthTime(wh.LastSignalAt),
+			"last_fill_at":         formatHealthTime(wh.LastFillAt),
+			"no_trade_since_fill":  wh.NoTradeSinceFill.String(),
+			"no_trade_alert_level": wh.NoTradeAlertLevel,
+			"stale_market_data":    wh.StaleMarketData,
+			"account_key":          paperpersist.FrontendAccountKey,
+			"execution_authority":  "go_engine",
+			"timestamp":            time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 
@@ -1892,13 +1922,13 @@ func main() {
 			regime = rc
 		}
 		body := map[string]interface{}{
-			"status":                "alive",
-			"service":               "btc-pilot-engine",
-			"uptime_seconds":        int64(time.Since(bootStart).Seconds()),
-			"kill_switch_active":    ksActive,
-			"regime":                regime,
+			"status":                 "alive",
+			"service":                "btc-pilot-engine",
+			"uptime_seconds":         int64(time.Since(bootStart).Seconds()),
+			"kill_switch_active":     ksActive,
+			"regime":                 regime,
 			"last_cycle_ago_seconds": lastCycleAgo,
-			"strategies":            len(allStrategies),
+			"strategies":             len(allStrategies),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if ksActive {
@@ -1929,14 +1959,14 @@ func main() {
 			lastCycleAgo = int64(time.Since(lt).Seconds())
 		}
 		body := map[string]interface{}{
-			"status":                    "ready",
-			"mongodb_connected":         mongoOK,
-			"funding_fetcher_ok":        fundingOK,
-			"oi_fetcher_ok":             oiOK,
+			"status":                     "ready",
+			"mongodb_connected":          mongoOK,
+			"funding_fetcher_ok":         fundingOK,
+			"oi_fetcher_ok":              oiOK,
 			"depth_subscriber_connected": depthOK,
-			"data_quality_score":        dqScore,
-			"reconciliation_complete":   reconOK,
-			"last_cycle_ago_seconds":    lastCycleAgo,
+			"data_quality_score":         dqScore,
+			"reconciliation_complete":    reconOK,
+			"last_cycle_ago_seconds":     lastCycleAgo,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		notReady := !mongoOK || dqScore < 60 || !reconOK

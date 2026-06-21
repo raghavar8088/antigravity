@@ -65,6 +65,39 @@ type ScalerBundle struct {
 	// Order book snapshot (populated from DepthSubscriber)
 	orderBook scalers.OrderBookSnapshot
 
+	// Deribit BTC DVOL volatility index — current value, rolling history, and
+	// feed health (populated from DeribitDVOLHolder in the main update loop).
+	dvolCurrent   float64
+	dvolHistory   []float64
+	dvolPopulated bool
+	dvolHealthy   bool
+
+	// Binance BTC perpetual liquidation rolling stats (populated from
+	// BinanceLiquidationHolder in the main update loop) — feeds S14.
+	liqLong5m, liqShort5m         float64
+	liqLong15m, liqShort15m       float64
+	liqLongRate1m, liqShortRate1m float64
+	liqLongAvg1h, liqShortAvg1h   float64
+	liqPopulated, liqHealthy      bool
+
+	// Binance BTC perpetual mark price vs Coinbase spot (populated from
+	// BinancePerpPriceHolder in the main update loop) — feeds S16.
+	perpPrice          float64
+	perpPricePopulated bool
+	perpPriceHealthy   bool
+
+	// Macro cross-asset feed (Nasdaq proxy + DXY, populated from
+	// MacroFeedHolder in the main update loop) — feeds S18-S21.
+	nasdaqPrice               float64
+	nasdaqChangePct           float64
+	dxyPrice                  float64
+	dxyChangePct              float64
+	dxyRollingHigh20          float64
+	dxyRollingLow20           float64
+	btcEquitiesCorrelation30d float64
+	macroPopulated            bool
+	macroHealthy              bool
+
 	// The curated strategy list (rebuilt once; updated by FilterWinnersOnly)
 	strategies []scalers.RegistryEntry
 
@@ -74,12 +107,12 @@ type ScalerBundle struct {
 	metaLabelFilter *MetaLabelFilter
 
 	// Eval telemetry — updated each evalAndExecuteScalers cycle
-	evalCount               int64     // accessed atomically — no mu required
-	lastEvalAt              time.Time // protected by mu
-	rawSignalsLastCycle     int
+	evalCount                int64     // accessed atomically — no mu required
+	lastEvalAt               time.Time // protected by mu
+	rawSignalsLastCycle      int
 	approvedSignalsLastCycle int
 	rejectedSignalsLastCycle int
-	lastSignals             []ScalersSignalSnapshot
+	lastSignals              []ScalersSignalSnapshot
 
 	// Opening Range state — persisted across evaluation cycles for S7
 	orHigh float64
@@ -358,6 +391,80 @@ func (b *ScalerBundle) UpdateOrderBook(bidWall, askWall, depthImbalance float64,
 	b.mu.Unlock()
 }
 
+// UpdateDVOL stores the latest Deribit BTC DVOL reading, rolling history, and
+// feed health flags. Called from the orchestrator's update loop wherever
+// other derivatives feeds (funding, OI) are pulled — see evalAndExecuteScalers.
+func (b *ScalerBundle) UpdateDVOL(current float64, history []float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.dvolCurrent = current
+	b.dvolHistory = append([]float64(nil), history...)
+	b.dvolPopulated = populated
+	b.dvolHealthy = healthy
+	b.mu.Unlock()
+	v := 0.0
+	if healthy && populated {
+		v = 1.0
+	}
+	observability.DVOLFeedActive.Set(v)
+}
+
+// UpdateLiquidations stores the latest Binance BTCUSDT liquidation rolling
+// stats and feed health flags. Called from the orchestrator's update loop
+// alongside UpdateDVOL — see evalAndExecuteScalers.
+func (b *ScalerBundle) UpdateLiquidations(long5m, short5m, long15m, short15m, longRate1m, shortRate1m, longAvg1h, shortAvg1h float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.liqLong5m = long5m
+	b.liqShort5m = short5m
+	b.liqLong15m = long15m
+	b.liqShort15m = short15m
+	b.liqLongRate1m = longRate1m
+	b.liqShortRate1m = shortRate1m
+	b.liqLongAvg1h = longAvg1h
+	b.liqShortAvg1h = shortAvg1h
+	b.liqPopulated = populated
+	b.liqHealthy = healthy
+	b.mu.Unlock()
+	v := 0.0
+	if healthy && populated {
+		v = 1.0
+	}
+	observability.LiquidationFeedActive.Set(v)
+}
+
+// UpdatePerpPrice stores the latest Binance BTCUSDT perpetual mark price and
+// feed health flags. Called from the orchestrator's update loop — feeds S16's
+// perp-vs-spot basis calculation (spot side comes from ctx.Price/Coinbase).
+func (b *ScalerBundle) UpdatePerpPrice(price float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.perpPrice = price
+	b.perpPricePopulated = populated
+	b.perpPriceHealthy = healthy
+	b.mu.Unlock()
+}
+
+// UpdateMacroFeed stores the latest Nasdaq-proxy/DXY readings, derived DXY
+// rolling range, BTC-equities correlation approximation, and feed health
+// flags. Called from the orchestrator's update loop alongside UpdateDVOL/
+// UpdateLiquidations — see evalAndExecuteScalers.
+func (b *ScalerBundle) UpdateMacroFeed(nasdaqPrice, nasdaqChangePct, dxyPrice, dxyChangePct, dxyHigh20, dxyLow20, correlation float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.nasdaqPrice = nasdaqPrice
+	b.nasdaqChangePct = nasdaqChangePct
+	b.dxyPrice = dxyPrice
+	b.dxyChangePct = dxyChangePct
+	b.dxyRollingHigh20 = dxyHigh20
+	b.dxyRollingLow20 = dxyLow20
+	b.btcEquitiesCorrelation30d = correlation
+	b.macroPopulated = populated
+	b.macroHealthy = healthy
+	b.mu.Unlock()
+	v := 0.0
+	if healthy && populated {
+		v = 1.0
+	}
+	observability.MacroFeedActive.Set(v)
+}
+
 // UpdateDataQuality stores the latest data-quality score (0-100) for use as a
 // Kelly sizing input. Called from the 1m candle validation gate in loop.go.
 func (b *ScalerBundle) UpdateDataQuality(score float64) {
@@ -435,6 +542,35 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 		ORLow:            b.orLow,
 		SessionName:      tradingSession(now),
 		Now:              now,
+		DVOL:             b.dvolCurrent,
+		DVOLHistory:      append([]float64(nil), b.dvolHistory...),
+		DVOLPopulated:    b.dvolPopulated,
+		DVOLHealthy:      b.dvolHealthy,
+
+		LongLiquidationsUSD5m:    b.liqLong5m,
+		ShortLiquidationsUSD5m:   b.liqShort5m,
+		LongLiquidationsUSD15m:   b.liqLong15m,
+		ShortLiquidationsUSD15m:  b.liqShort15m,
+		LongLiquidationsRate1m:   b.liqLongRate1m,
+		ShortLiquidationsRate1m:  b.liqShortRate1m,
+		LongLiquidationsAvg1h:    b.liqLongAvg1h,
+		ShortLiquidationsAvg1h:   b.liqShortAvg1h,
+		LiquidationFeedPopulated: b.liqPopulated,
+		LiquidationFeedHealthy:   b.liqHealthy,
+
+		PerpPrice:          b.perpPrice,
+		PerpPricePopulated: b.perpPricePopulated,
+		PerpPriceHealthy:   b.perpPriceHealthy,
+
+		NasdaqProxyPrice:          b.nasdaqPrice,
+		NasdaqProxyChangePct:      b.nasdaqChangePct,
+		DXYPrice:                  b.dxyPrice,
+		DXYChangePct:              b.dxyChangePct,
+		DXYRollingHigh20:          b.dxyRollingHigh20,
+		DXYRollingLow20:           b.dxyRollingLow20,
+		BTCEquitiesCorrelation30d: b.btcEquitiesCorrelation30d,
+		MacroFeedPopulated:        b.macroPopulated,
+		MacroFeedHealthy:          b.macroHealthy,
 	}
 }
 
@@ -498,6 +634,38 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 	} else if o.deps == nil || o.deps.OIFetcher == nil {
 		log.Printf("[SCALERS] WARNING: OIFetcher not configured — OpenInterest unavailable, S9_OI_Divergence suppressed")
+	}
+	if o.deps != nil && o.deps.DVOLHolder != nil {
+		dh := o.deps.DVOLHolder
+		o.scalerBundle.UpdateDVOL(dh.Current(), dh.History(), dh.IsPopulated(), dh.IsHealthy())
+	}
+	if o.deps != nil && o.deps.LiquidationHolder != nil {
+		lh := o.deps.LiquidationHolder
+		long5m, short5m := lh.Rolling5m()
+		long15m, short15m := lh.Rolling15m()
+		longRate1m, shortRate1m := lh.Rolling1mRate()
+		longAvg1h, shortAvg1h := lh.Rolling1hAvgPerMin()
+		o.scalerBundle.UpdateLiquidations(long5m, short5m, long15m, short15m, longRate1m, shortRate1m, longAvg1h, shortAvg1h, lh.IsPopulated(), lh.IsHealthy())
+	}
+	if o.deps != nil && o.deps.PerpPriceHolder != nil {
+		ph := o.deps.PerpPriceHolder
+		o.scalerBundle.UpdatePerpPrice(ph.Current(), ph.IsPopulated(), ph.IsHealthy())
+	}
+	if o.deps != nil && o.deps.MacroFeedHolder != nil {
+		mh := o.deps.MacroFeedHolder
+		o.scalerBundle.mu.Lock()
+		btcCloses := make([]float64, len(o.scalerBundle.candles1h))
+		for i, c := range o.scalerBundle.candles1h {
+			btcCloses[i] = c.Close
+		}
+		o.scalerBundle.mu.Unlock()
+		corr := mh.BTCEquitiesCorrelationApprox(btcCloses)
+		o.scalerBundle.UpdateMacroFeed(
+			mh.NasdaqPrice(), mh.NasdaqChangePct(),
+			mh.DXYPrice(), mh.DXYChangePct(),
+			mh.DXYRollingHigh20(), mh.DXYRollingLow20(),
+			corr, mh.IsPopulated(), mh.IsHealthy(),
+		)
 	}
 
 	// Single authoritative regime source: o.lastRegimeClass, populated only by

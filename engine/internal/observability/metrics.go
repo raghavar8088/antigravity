@@ -4,6 +4,9 @@
 package observability
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -904,6 +907,36 @@ var (
 		Help: "1.0 = real aggTrade feed, 0.0 = price-proxy fallback",
 	})
 
+	// DVOLFeedActive is 1 when the Deribit BTC DVOL feed is healthy/populated,
+	// 0 when it is stale or has never successfully fetched.
+	DVOLFeedActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_dvol_feed_active",
+		Help: "1 if Deribit BTC DVOL feed is healthy/populated, 0 otherwise",
+	})
+
+	// LiquidationFeedActive is 1 when the Binance BTC liquidation WS feed is
+	// healthy/connected and has populated at least one reading, 0 otherwise.
+	LiquidationFeedActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_liquidation_feed_active",
+		Help: "1 if Binance BTC liquidation feed is healthy/populated, 0 otherwise",
+	})
+
+	// MacroFeedActive is 1 when the macro cross-asset feed (Nasdaq proxy + DXY,
+	// see MacroFeedHolder) is healthy/populated, 0 otherwise.
+	MacroFeedActive = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_macro_feed_active",
+		Help: "1 if macro cross-asset feed (Nasdaq proxy + DXY) is healthy/populated, 0 otherwise",
+	})
+
+	// StrategyRolloutPhase reflects the current value of STRATEGY_ROLLOUT_PHASE
+	// (see engine/internal/strategy/scalpers/rollout_phase.go), parsed as an
+	// int (default 1). Set via SetStrategyRolloutPhase below — call at startup
+	// and whenever the env var may have changed.
+	StrategyRolloutPhase = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_strategy_rollout_phase",
+		Help: "Current STRATEGY_ROLLOUT_PHASE value gating phased strategy activation",
+	})
+
 	// ScalersConcentrationBTC tracks current same-direction BTC exposure across
 	// concurrently open scalers positions, per direction.
 	ScalersConcentrationBTC = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -959,3 +992,19 @@ var (
 		Help:      "1 if the local ML pre-scorer model is loaded and active, 0 otherwise.",
 	})
 )
+
+// SetStrategyRolloutPhase reads STRATEGY_ROLLOUT_PHASE from the environment
+// (parsed as int, default 1 if unset/unparseable — mirrors
+// engine/internal/strategy/scalpers/rollout_phase.go's defaultRolloutPhase)
+// and updates the StrategyRolloutPhase gauge. Call at startup and whenever
+// the env var may have changed.
+func SetStrategyRolloutPhase() {
+	const defaultPhase = 1
+	phase := defaultPhase
+	if v := os.Getenv("STRATEGY_ROLLOUT_PHASE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			phase = n
+		}
+	}
+	StrategyRolloutPhase.Set(float64(phase))
+}

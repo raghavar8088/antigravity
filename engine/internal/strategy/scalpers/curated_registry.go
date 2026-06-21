@@ -43,6 +43,16 @@ func BuildCuratedScalpers() []RegistryEntry {
 	all := BuildAllScalpers()
 	expansion := buildExpansionPack()
 	all = append(all, expansion...)
+	volatility := buildVolatilityFamily()
+	all = append(all, volatility...)
+	microstructure := buildMicrostructureFamily()
+	all = append(all, microstructure...)
+	macro := buildMacroFamily()
+	all = append(all, macro...)
+	statistical := buildStatisticalFamily()
+	all = append(all, statistical...)
+	event := buildEventFamily()
+	all = append(all, event...)
 	return FilterWinnersOnly(all)
 }
 
