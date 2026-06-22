@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,6 +56,7 @@ import (
 	"antigravity-engine/internal/security"
 	"antigravity-engine/internal/security/vault"
 	"antigravity-engine/internal/sentiment"
+	"antigravity-engine/internal/shadow"
 	"antigravity-engine/internal/strategy"
 	"antigravity-engine/internal/strategy/scalpers"
 	"antigravity-engine/internal/temporal"
@@ -63,6 +65,7 @@ import (
 	"antigravity-engine/internal/validation/phase22e"
 	"antigravity-engine/internal/validation/production"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // RingLogger stores the last N log lines in memory
@@ -926,6 +929,31 @@ func main() {
 	})
 	orchestrator.SetPMSBudget(pmsBudget)
 	log.Println("[PMS] Portfolio risk budget gate active — btc-paper-1 initialized")
+
+	// ── Shadow Trading (strategy incubation) ─────────────────────────────────
+	// Lets every curated strategy fire real, fully-evaluated signals — those
+	// gated below the current STRATEGY_ROLLOUT_PHASE are routed to a shadow
+	// ledger instead of the live paper OMS, so they accumulate a real
+	// performance track record without risking paper account balance. See
+	// engine/internal/shadow and rollout_phase.go.
+	var shadowDB *mongo.Database
+	if mongoMgr != nil {
+		shadowDB = mongoMgr.DB()
+	}
+	shadowLedger := shadow.NewShadowLedger(shadowDB)
+	if shadowDB != nil {
+		if idxErr := shadowLedger.EnsureIndexes(ctx); idxErr != nil {
+			log.Printf("[SHADOW] index creation warning: %v", idxErr)
+		}
+		recovered, recErr := shadowLedger.RecoverOpenTrades(ctx)
+		if recErr != nil {
+			log.Printf("[SHADOW] recovery warning: %v", recErr)
+		}
+		log.Printf("[SHADOW] Recovered %d open shadow positions", recovered)
+	}
+	shadowPromoter := shadow.NewShadowPromoter(shadowLedger, orchestrator.WalkForwardValidator())
+	orchestrator.SetShadowLedger(shadowLedger, shadowPromoter)
+	log.Printf("[SHADOW] Shadow ledger initialized (mongo_persisted=%v)", shadowDB != nil)
 
 	// Bootstrap portfolio ledger from MongoDB paper_trades (authoritative accounting).
 	if mongoMgr != nil && mongoMgr.IsConnected() {
@@ -2048,6 +2076,118 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(orchestrator.StrategyPerformanceSummary())
+	})
+
+	// ── Shadow Trading endpoints ──────────────────────────────────────────────
+	// Admin-secret protected by the global security gate (same as
+	// /api/admin/ks/status) — no per-handler auth needed here.
+
+	// GET /api/shadow/performance — leaderboard of ALL shadow strategies,
+	// sorted by win rate descending.
+	http.HandleFunc("/api/shadow/performance", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		sl := orchestrator.ShadowLedger()
+		if sl == nil {
+			json.NewEncoder(w).Encode([]shadow.ShadowPerformance{}) //nolint:errcheck
+			return
+		}
+		perfs := sl.AllPerformance()
+		sort.Slice(perfs, func(i, j int) bool { return perfs[i].WinRate > perfs[j].WinRate })
+		json.NewEncoder(w).Encode(perfs) //nolint:errcheck
+	})
+
+	// GET /api/shadow/performance/{strategyName} — single strategy detail
+	// including its closed shadow trades.
+	http.HandleFunc("/api/shadow/performance/", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/api/shadow/performance/")
+		if name == "" {
+			http.Error(w, "strategy name required", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		sl := orchestrator.ShadowLedger()
+		if sl == nil {
+			http.Error(w, "shadow ledger not initialized", http.StatusServiceUnavailable)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+			"performance":   sl.GetPerformance(name),
+			"closed_trades": sl.GetClosedTrades(name, 50),
+		})
+	})
+
+	// POST /api/shadow/promote — body: {"strategyName": "..."}
+	http.HandleFunc("/api/shadow/promote", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			StrategyName string `json:"strategyName"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.StrategyName == "" {
+			http.Error(w, "strategyName required", http.StatusBadRequest)
+			return
+		}
+		promoter := orchestrator.ShadowPromoter()
+		if promoter == nil {
+			http.Error(w, "shadow promoter not initialized", http.StatusServiceUnavailable)
+			return
+		}
+		if err := promoter.Promote(r.Context(), body.StrategyName); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck
+			"status":  "promoted",
+			"message": fmt.Sprintf("%s will trade live from the next 15m eval cycle", body.StrategyName),
+		})
+	})
+
+	// POST /api/shadow/demote — body: {"strategyName": "..."}
+	http.HandleFunc("/api/shadow/demote", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			StrategyName string `json:"strategyName"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.StrategyName == "" {
+			http.Error(w, "strategyName required", http.StatusBadRequest)
+			return
+		}
+		promoter := orchestrator.ShadowPromoter()
+		if promoter == nil {
+			http.Error(w, "shadow promoter not initialized", http.StatusServiceUnavailable)
+			return
+		}
+		if err := promoter.Demote(r.Context(), body.StrategyName); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck
+			"status":  "demoted",
+			"message": fmt.Sprintf("%s moved back to shadow mode", body.StrategyName),
+		})
 	})
 
 	// GET /api/system/confidence-floor — Adaptive confidence floor status

@@ -33,6 +33,7 @@ import (
 	"antigravity-engine/internal/paperpersist"
 	"antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
+	"antigravity-engine/internal/shadow"
 	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/regime"
 	"antigravity-engine/internal/risk"
@@ -311,6 +312,15 @@ type Orchestrator struct {
 	// WebSocket is the active source so the 5m synthesis path can yield.
 	klineFeed15mActive bool
 	klineFeed1hActive  bool
+
+	// shadowLedger tracks hypothetical positions for strategies not yet
+	// cleared for live trading (rollout-phase gated or forced via
+	// SHADOW_STRATEGIES). Nil-safe: shadow routing/tick-checking no-ops if unset.
+	shadowLedger *shadow.ShadowLedger
+
+	// shadowPromoter decides when a shadow strategy has earned live status
+	// and flips STRATEGY_LIVE_OVERRIDE. Nil-safe.
+	shadowPromoter *shadow.ShadowPromoter
 }
 
 // LastCycleTime returns the time of the most recent strategy evaluation cycle.
@@ -486,6 +496,13 @@ func (o *Orchestrator) WalkForwardSummary() map[string]scalers.WalkForwardSummar
 	return o.walkForward.Summary()
 }
 
+// WalkForwardValidator returns the underlying validator so callers (e.g.
+// main.go's shadow.NewShadowPromoter wiring) can pass it as a
+// shadow.WalkForwardLookup. Returns nil if no validator was constructed.
+func (o *Orchestrator) WalkForwardValidator() *scalers.WalkForwardValidator {
+	return o.walkForward
+}
+
 // ConfidenceFloorSnapshot returns the adaptive confidence floor state for the HTTP endpoint.
 func (o *Orchestrator) ConfidenceFloorSnapshot() map[string]float64 {
 	if o.adaptiveFloor == nil {
@@ -569,6 +586,35 @@ func (o *Orchestrator) SetKillSwitch(svc *killswitch.Service) {
 		return
 	}
 	o.killSvc = svc
+}
+
+// SetShadowLedger injects the shadow trading ledger and promoter. Call this
+// from main.go after constructing the Orchestrator (and after the
+// WalkForwardValidator exists, since the promoter checks walk-forward
+// status). Passing nil disables shadow routing entirely — strategies below
+// their rollout phase fall back to NoSignal-equivalent behaviour (their
+// IsShadow=true signals are simply never picked up by anything).
+func (o *Orchestrator) SetShadowLedger(l *shadow.ShadowLedger, p *shadow.ShadowPromoter) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.shadowLedger = l
+	o.shadowPromoter = p
+}
+
+// ShadowLedger returns the wired shadow ledger, or nil if none was set.
+// Used by the HTTP handlers in main.go.
+func (o *Orchestrator) ShadowLedger() *shadow.ShadowLedger {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.shadowLedger
+}
+
+// ShadowPromoter returns the wired shadow promoter, or nil if none was set.
+// Used by the HTTP handlers in main.go.
+func (o *Orchestrator) ShadowPromoter() *shadow.ShadowPromoter {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.shadowPromoter
 }
 
 // SetPMSBudget injects the portfolio-level risk budget manager (P3-A).
@@ -1390,6 +1436,10 @@ func (o *Orchestrator) processTickPipeline(ctx context.Context, t marketdata.Tic
 	// 2. Check SL/TP/trailing on all open positions
 	o.posMgr.CheckStopLossAndTakeProfit(t.Price)
 	o.posMgr.CheckExpiredPositions(t.Price)
+
+	// 2b. Check SL/TP on open shadow positions — same tick-by-tick cadence
+	// as the live position manager, so shadow exit timing is realistic.
+	o.checkShadowPositions(t.Price)
 
 	// 3. Feed tick to candle aggregator (it emits 1m/5m candles on channels)
 	o.candleAgg.Feed(t)

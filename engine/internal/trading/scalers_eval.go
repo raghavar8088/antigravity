@@ -15,6 +15,7 @@ import (
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/observability"
 	regimepkg "antigravity-engine/internal/regime"
+	"antigravity-engine/internal/shadow"
 	"antigravity-engine/internal/strategy"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
@@ -596,6 +597,7 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	price := o.lastPrice
 	lastRegime := o.lastRegime
 	lastRegimeClass := o.lastRegimeClass
+	shadowLedger := o.shadowLedger
 	o.mu.RUnlock()
 
 	if ks != nil && ks.IsActive() {
@@ -730,6 +732,9 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	if o.exec != nil {
 		o.exec.UpdateATR(scalers.ATR(mctx.Candles15m, 14))
 	}
+	if shadowLedger != nil && price > 0 {
+		shadowLedger.UpdateATR(scalers.ATR(mctx.Candles15m, 14) / price)
+	}
 
 	// Collect non-none signals from all curated scalers
 	var rawAgg []AggregatedSignal
@@ -754,9 +759,13 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "no_signal").Inc() // D
 			continue
 		}
-		// Directional cap gate.
+		// Directional cap gate. Shadow signals don't consume real capital or
+		// create real directional exposure, so they bypass this cap — we want
+		// to see how each strategy performs independently, not have shadow
+		// signals artificially blocked because live strategies are already
+		// at the cap.
 		sigDir := string(sig.Direction)
-		if !o.scalerBundle.canOpenDirectionScaler(sigDir) {
+		if !sig.IsShadow && !o.scalerBundle.canOpenDirectionScaler(sigDir) {
 			log.Printf("[SCALERS] %s directional cap reached for %s — skipping", entry.Name, sigDir)
 			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "directional_cap").Inc() // G
 			rejected++
@@ -825,7 +834,9 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		// strategies (e.g. 3 different strategies all going long BTC on the
 		// same trend) on top of the plain trade-count directional cap above.
 		// Sized check, so it runs after Kelly has produced a final BTC size.
-		if o.concentrationGate != nil {
+		// Shadow signals bypass this for the same reason they bypass the
+		// directional cap — they create no real exposure.
+		if !sig.IsShadow && o.concentrationGate != nil {
 			if ok, reason := o.concentrationGate.CanOpen(entry.Name, sigDir, targetBTC); !ok {
 				log.Printf("[CONCENTRATION] %s blocked: %s", entry.Name, reason)
 				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "concentration_limit").Inc()
@@ -844,8 +855,38 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			continue
 		}
 		legacySig.CreatedAt = sig.Timestamp
-		// Record signal for cooldown tracking (after quality gate passes).
+		// Record signal for cooldown tracking (after quality gate passes) —
+		// applies to shadow and live alike, since cooldown reflects the
+		// strategy's own natural signal cadence, not capital constraints.
 		o.scalerBundle.recordStrategySignal(entry.Name)
+
+		// Shadow routing: the signal passed every gate a live signal would
+		// (walk-forward, cooldown, Kelly sizing, R:R/confidence quality gate)
+		// but the strategy isn't cleared for live trading yet. Open a
+		// hypothetical position in the shadow ledger instead of the paper
+		// OMS — never touches the real account balance.
+		if sig.IsShadow {
+			if shadowLedger != nil {
+				shSig := shadow.Signal{
+					Strategy:    sig.Strategy,
+					Direction:   shadow.Direction(sig.Direction),
+					StopLoss:    sig.StopLoss,
+					TakeProfit:  sig.TakeProfit,
+					TakeProfit2: sig.TakeProfit2,
+				}
+				trade, err := shadowLedger.OpenTrade(shSig, price, targetBTC)
+				if err != nil {
+					log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
+				} else {
+					log.Printf("[SHADOW] Shadow trade opened: %s %s @ %.2f SL=%.2f TP=%.2f size=%.4f BTC",
+						sig.Strategy, sig.Direction, trade.EntryPrice, sig.StopLoss, sig.TakeProfit, targetBTC)
+					observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
+					observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
+				}
+			}
+			continue // never falls through to the live paper OMS
+		}
+
 		rawAgg = append(rawAgg, AggregatedSignal{
 			Signal:       legacySig,
 			StrategyName: sig.Strategy,
@@ -902,6 +943,51 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		if o.concentrationGate != nil {
 			o.concentrationGate.RecordOpen(agg.StrategyName, string(sig.Action), sig.TargetSize)
 		}
+	}
+}
+
+// checkShadowPositions evaluates every open shadow position against the
+// current tick price and feeds any closed trades into the walk-forward
+// validator and shadow Prometheus gauges. Called from processTickPipeline on
+// every tick, same cadence as posMgr.CheckStopLossAndTakeProfit for live
+// positions, so shadow exit timing is realistic. No-op if shadow isn't wired.
+func (o *Orchestrator) checkShadowPositions(price float64) {
+	o.mu.RLock()
+	sl := o.shadowLedger
+	wf := o.walkForward
+	o.mu.RUnlock()
+	if sl == nil || price <= 0 {
+		return
+	}
+
+	closed := sl.CheckAndClose(price)
+	for _, t := range closed {
+		entryNotional := t.EntryPrice * t.Size
+		pnlPct := 0.0
+		if entryNotional > 0 {
+			pnlPct = t.NetPnL / entryNotional
+		}
+		// Feed the SAME walk-forward validator live trades feed, so a shadow
+		// strategy's win rate/Sharpe/promotion eligibility is computed
+		// identically to how a live strategy's would be.
+		if wf != nil {
+			wf.RecordTrade(t.StrategyName, pnlPct)
+		}
+		log.Printf("[SHADOW] Shadow trade closed: %s PnL=%.2f (%.2f%%)", t.StrategyName, t.NetPnL, pnlPct*100)
+		observability.ShadowTradesClosed.WithLabelValues(t.StrategyName, t.ExitReason).Inc()
+		observability.ShadowPositionsOpen.WithLabelValues(t.StrategyName).Set(float64(sl.CountOpen(t.StrategyName)))
+
+		perf := sl.GetPerformance(t.StrategyName)
+		observability.ShadowStrategyWinRate.WithLabelValues(t.StrategyName).Set(perf.WinRate)
+		observability.ShadowStrategySharpe.WithLabelValues(t.StrategyName).Set(perf.SharpeRatio)
+		observability.ShadowStrategyNetPnLUSD.WithLabelValues(t.StrategyName).Set(perf.TotalNetPnL)
+	}
+
+	o.mu.RLock()
+	promoter := o.shadowPromoter
+	o.mu.RUnlock()
+	if promoter != nil && len(closed) > 0 {
+		observability.ShadowPromotionEligibleCount.Set(float64(promoter.EligibleCount()))
 	}
 }
 

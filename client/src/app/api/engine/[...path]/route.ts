@@ -85,6 +85,8 @@ const READ_PATH_PREFIXES = [
   "/api/delta-live/stats",
   // Kill switch status
   "/api/admin/ks/status",
+  // Shadow trading — reads only; promote/demote are admin-tier (below)
+  "/api/shadow/performance",
   // Trade Threshold Configuration — history is read-only at the engine level
   // (no mutation endpoint at this path), safe to read with session only.
   "/api/engine/config/history",
@@ -102,6 +104,9 @@ const ADMIN_PATH_PREFIXES = [
   "/api/admin/reset-stats",
   "/api/paper/oms",
   "/api/paper-desk/oms",
+  // Shadow trading — promote/demote mutate live trading status, admin-tier.
+  "/api/shadow/promote",
+  "/api/shadow/demote",
 ];
 
 // Paths that are NEVER proxied via Vercel — must be called directly on engine.

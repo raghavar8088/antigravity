@@ -177,6 +177,15 @@ type Signal struct {
 	TakeProfit2 float64 // absolute price (secondary, 0 = not set)
 	Reason      string  // human-readable, logged to audit
 	Timestamp   time.Time
+
+	// IsShadow is true when this signal was produced by a strategy that is
+	// not yet cleared for live trading (rollout-phase gated, or forced via
+	// SHADOW_STRATEGIES). Shadow signals are fully evaluated — same
+	// Direction/Confidence/SL/TP as a live signal would have — but are
+	// routed to the shadow ledger instead of the paper OMS so the strategy
+	// can accumulate a real performance track record without risking
+	// account balance. See engine/internal/shadow.
+	IsShadow bool
 }
 
 // NoSignal returns a zero signal (no trade)

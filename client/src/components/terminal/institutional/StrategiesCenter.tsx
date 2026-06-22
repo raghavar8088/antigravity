@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
@@ -128,14 +129,22 @@ export function StrategiesCenter() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={loadStats}
-            disabled={loading}
-            className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300 transition-colors hover:border-emerald-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/terminal/strategies/shadow-performance"
+              className="rounded border border-violet-800 bg-violet-950/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-violet-300 transition-colors hover:border-violet-600"
+            >
+              Shadow Leaderboard
+            </Link>
+            <button
+              type="button"
+              onClick={loadStats}
+              disabled={loading}
+              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300 transition-colors hover:border-emerald-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
           {refreshedAt ? <span className="text-[9px] text-zinc-600">Updated {refreshedAt}</span> : null}
         </div>
       </div>

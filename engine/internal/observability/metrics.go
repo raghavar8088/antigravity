@@ -1008,3 +1008,55 @@ func SetStrategyRolloutPhase() {
 	}
 	StrategyRolloutPhase.Set(float64(phase))
 }
+
+// ─────────────────────────────────────────────
+// Shadow Trading Metrics
+// ─────────────────────────────────────────────
+
+var (
+	// ShadowSignalsExecuted counts shadow signals that passed every quality
+	// gate and entered the shadow ledger (i.e. would have executed live).
+	ShadowSignalsExecuted = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_shadow_signals_executed_total",
+		Help: "Total shadow signals routed into the shadow ledger per strategy and direction",
+	}, []string{"strategy", "direction"})
+
+	// ShadowTradesClosed counts shadow trades that closed, per exit reason.
+	ShadowTradesClosed = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "trading_shadow_trades_closed_total",
+		Help: "Total shadow trades closed per strategy and exit reason",
+	}, []string{"strategy", "exit_reason"})
+
+	// ShadowPositionsOpen is the current count of open shadow positions per strategy.
+	ShadowPositionsOpen = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_shadow_positions_open",
+		Help: "Currently open shadow positions per strategy",
+	}, []string{"strategy"})
+
+	// ShadowStrategyWinRate is the rolling shadow win rate per strategy.
+	ShadowStrategyWinRate = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_shadow_strategy_win_rate",
+		Help: "Shadow win rate per strategy (0-1)",
+	}, []string{"strategy"})
+
+	// ShadowStrategySharpe is the rolling shadow Sharpe ratio per strategy.
+	ShadowStrategySharpe = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_shadow_strategy_sharpe",
+		Help: "Shadow Sharpe ratio per strategy",
+	}, []string{"strategy"})
+
+	// ShadowStrategyNetPnLUSD is the cumulative hypothetical net PnL (USD) per
+	// strategy — what it WOULD have made if it had been trading live.
+	ShadowStrategyNetPnLUSD = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "trading_shadow_strategy_net_pnl_usd",
+		Help: "Cumulative hypothetical shadow net PnL in USD per strategy",
+	}, []string{"strategy"})
+
+	// ShadowPromotionEligibleCount is the number of shadow strategies that
+	// currently pass every promotion threshold (trades, win rate, Sharpe,
+	// walk-forward ACTIVE status).
+	ShadowPromotionEligibleCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "trading_shadow_promotion_eligible_count",
+		Help: "Number of shadow strategies currently eligible for promotion to live",
+	})
+)

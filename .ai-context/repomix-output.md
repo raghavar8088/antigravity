@@ -176,6 +176,7 @@ The content is organized as follows:
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
   app/terminal/strategies/page.tsx
+  app/terminal/strategies/shadow-performance/page.tsx
   app/terminal/strategies/threshold-config/page.tsx
   app/terminal/trade-engine/page.tsx
   app/terminal/trading/page.tsx
@@ -298,6 +299,7 @@ The content is organized as follows:
   components/terminal/institutional/ResearchCenter.tsx
   components/terminal/institutional/RetirementCenter.tsx
   components/terminal/institutional/RiskModule.tsx
+  components/terminal/institutional/ShadowPerformanceCenter.tsx
   components/terminal/institutional/StrategiesCenter.test.ts
   components/terminal/institutional/StrategiesCenter.tsx
   components/terminal/institutional/StrategyGenome.tsx
@@ -1245,6 +1247,8 @@ The content is organized as follows:
   sentiment/score.go
   sentiment/sentiment_test.go
   sentiment/types.go
+  shadow/ledger.go
+  shadow/promoter.go
   sor/backtest_integration.go
   sor/best_execution.go
   sor/coordinator.go

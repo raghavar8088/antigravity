@@ -53,6 +53,18 @@ func BuildCuratedScalpers() []RegistryEntry {
 	all = append(all, statistical...)
 	event := buildEventFamily()
 	all = append(all, event...)
+
+	// Strategies registered without withRolloutPhase() (the original S1-S10
+	// roster) never trade live unless SHADOW_STRATEGIES/STRATEGY_LIVE_OVERRIDE
+	// applies. Wrap them so those two operator knobs work uniformly across
+	// every strategy in the curated set, not just the phase-gated ones.
+	for i, e := range all {
+		if _, alreadyGated := e.Strategy.(*phaseGatedStrategy); alreadyGated {
+			continue
+		}
+		all[i].Strategy = withShadowOverride(e.Strategy)
+	}
+
 	return FilterWinnersOnly(all)
 }
 
