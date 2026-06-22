@@ -3,8 +3,40 @@ import { isMongoConfigured } from "@/lib/broker/mongoTradesClient";
 import { resetMockTradingState } from "@/lib/trading/mockTradingMongo";
 import { mockResetBodySchema } from "@/lib/trading/mockTradingPersistenceTypes";
 import { OWNER_ACCOUNT_KEY } from "@/lib/broker/ownerAuth";
+import { getAuthenticatedApiSession } from "@/lib/broker/getAuthenticatedApiSession";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Session-authenticated Trade Engine reset for the in-app "Reset" control.
+ * The DELETE handler is gated by ENGINE_ADMIN_SECRET for programmatic callers;
+ * the dashboard button can't hold that secret, so this POST authorizes via the
+ * signed owner session cookie instead. The account is always the owner account
+ * derived from the session — never from the request body.
+ */
+export async function POST() {
+  const auth = await getAuthenticatedApiSession();
+  if (!auth.ok) return auth.response;
+
+  if (!isMongoConfigured()) {
+    return NextResponse.json({ ok: false, code: "MONGO_NOT_CONFIGURED", error: "MongoDB not configured" }, { status: 503 });
+  }
+
+  try {
+    const result = await resetMockTradingState(OWNER_ACCOUNT_KEY);
+    return NextResponse.json({ ok: true, storage: "mongo", ...result });
+  } catch (err) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MONGO_WRITE_FAILED",
+        error: "Mongo write failed",
+        detail: err instanceof Error ? err.message : "unknown",
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function DELETE(req: Request) {
   // BUG 10: Require admin secret for destructive reset operation.

@@ -17,6 +17,7 @@ type NavIconName =
   | "collapse"
   | "light"
   | "dark"
+  | "reset"
   | "logout";
 
 export function NavIcon({ name }: { name: NavIconName | string }) {
@@ -55,6 +56,13 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
       return (
         <svg {...props}>
           <path d="M15.5 11.5a6 6 0 0 1-8-8 7 7 0 1 0 8 8z" />
+        </svg>
+      );
+    case "reset":
+      return (
+        <svg {...props}>
+          <path d="M15.5 6.5A6 6 0 1 0 16 10" />
+          <path d="M16 3v4h-4" />
         </svg>
       );
     case "logout":

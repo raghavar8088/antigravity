@@ -308,6 +308,7 @@ The content is organized as follows:
   components/terminal/institutional/TerminalShell.tsx
   components/terminal/institutional/ThresholdConfigCenter.tsx
   components/terminal/institutional/TradeEngineCenter.tsx
+  components/terminal/institutional/TradeEngineResetButton.tsx
   components/terminal/institutional/TradeJournalPro.tsx
   components/terminal/InstitutionalChart.tsx
   components/terminal/Sidebar.tsx
