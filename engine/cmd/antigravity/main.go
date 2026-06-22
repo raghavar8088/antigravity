@@ -100,18 +100,18 @@ var globalLogs = &RingLogger{max: 100}
 
 // getInitialPaperBalanceUSD returns the configured starting balance for the
 // live BTC futures paper account. Env: INITIAL_PAPER_BALANCE_USD. Falls back
-// to $1,000,000 (legacy default) if unset, invalid, or non-positive. Floors
-// at $100 — a paper account below that is not meaningfully tradable given
-// fee/slippage assumptions baked into strategy sizing.
+// to $100 (default) if unset, invalid, or non-positive. Floors at $100 — a
+// paper account below that is not meaningfully tradable given fee/slippage
+// assumptions baked into strategy sizing.
 func getInitialPaperBalanceUSD() float64 {
 	v := os.Getenv("INITIAL_PAPER_BALANCE_USD")
 	if v == "" {
-		return 1000000.0
+		return 100.0
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil || f <= 0 {
-		log.Printf("[CONFIG] WARNING: invalid INITIAL_PAPER_BALANCE_USD=%q, using default $1,000,000", v)
-		return 1000000.0
+		log.Printf("[CONFIG] WARNING: invalid INITIAL_PAPER_BALANCE_USD=%q, using default $100", v)
+		return 100.0
 	}
 	if f < 100 {
 		log.Printf("[CONFIG] WARNING: INITIAL_PAPER_BALANCE_USD=%.2f below $100 floor, clamping to $100", f)
@@ -546,12 +546,12 @@ func main() {
 	})
 
 	// ═══════════════════════════════════════════════════
-	// 3. Risk Engine (configured for the $1,000,000 futures paper account)
+	// 3. Risk Engine (configured for the futures paper account; default $100)
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
 		MaxPositionBTC:  2.0,                         // Max 2 BTC total exposure
 		MaxCapitalUSD:   getInitialPaperBalanceUSD(), // configured paper balance
-		MaxDailyLossPct: 0.05,                        // 5% daily loss circuit breaker ($50,000)
+		MaxDailyLossPct: 0.05,                        // 5% daily loss circuit breaker
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
 	// BUG 2: schedule daily P&L reset at midnight UTC so daily-loss circuit breaker
@@ -565,7 +565,7 @@ func main() {
 	tracker := risk.NewStrategyTracker(names, categories, timeframes, getInitialPaperBalanceUSD())
 
 	// ═══════════════════════════════════════════════════
-	// 5. Paper Executor ($1,000,000 futures paper account)
+	// 5. Paper Executor (futures paper account; default $100)
 	// ═══════════════════════════════════════════════════
 	log.Printf("[CONFIG] Initial paper balance: $%.2f (source: %s)",
 		getInitialPaperBalanceUSD(), configSource("INITIAL_PAPER_BALANCE_USD"))
@@ -1351,7 +1351,7 @@ func main() {
 	}
 
 	// ═══════════════════════════════════════════════════
-	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate $1,000,000 paper account
+	// 11c. BTC OPTIONS SCALPER — 50 strategies, separate paper account (default $100)
 	// ═══════════════════════════════════════════════════
 	optionsEngine := options.NewEngine()
 	optionsSellingEngine := options_selling.NewEngine()

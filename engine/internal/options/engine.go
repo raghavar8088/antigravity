@@ -16,14 +16,13 @@ import (
 // BTC options-selling paper account. Env: INITIAL_OPTIONS_BALANCE_USD. If
 // unset, falls back to INITIAL_PAPER_BALANCE_USD (kept in sync with the main
 // futures desk by default) — set explicitly only to diverge intentionally.
-// Floors at $100; falls back to $1,000,000 (legacy default) if nothing is
-// configured.
+// Floors at $100; falls back to $100 (default) if nothing is configured.
 func getInitialOptionsBalanceUSD() float64 {
 	if v := os.Getenv("INITIAL_OPTIONS_BALANCE_USD"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)
 		if err != nil || f <= 0 {
-			log.Printf("[CONFIG] WARNING: invalid INITIAL_OPTIONS_BALANCE_USD=%q, using default $1,000,000", v)
-			return 1000000.0
+			log.Printf("[CONFIG] WARNING: invalid INITIAL_OPTIONS_BALANCE_USD=%q, using default $100", v)
+			return 100.0
 		}
 		if f < 100 {
 			log.Printf("[CONFIG] WARNING: INITIAL_OPTIONS_BALANCE_USD=%.2f below $100 floor, clamping to $100", f)
@@ -37,7 +36,7 @@ func getInitialOptionsBalanceUSD() float64 {
 			return f
 		}
 	}
-	return 1000000.0
+	return 100.0
 }
 
 // strategyState holds the runtime state for a single strategy.
