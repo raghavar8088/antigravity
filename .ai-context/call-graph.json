@@ -1,1 +1,1 @@
-{"engine/internal/strategy/scalpers/curated_registry.go::BuildCuratedScalpers()":["engine/internal/strategy/scalpers/rollout_phase.go::withShadowOverride()"],"engine/internal/trading/loop.go::.processCloseEvents()":["engine/internal/strategy/scalpers/curated_registry.go::UpdatePerformance()"],"engine/internal/trading/loop.go::NewOrchestrator()":["engine/internal/trading/scalers_eval.go::newScalerBundle()"],"engine/internal/trading/scalers_eval.go::newScalerBundle()":["engine/internal/strategy/scalpers/curated_registry.go::BuildCuratedScalpers()"]}
+{}

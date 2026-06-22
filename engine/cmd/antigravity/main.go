@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -154,9 +156,25 @@ func publishOptionsEngineBTCSpot(source string, price float64, ticker string) {
 // loadDotEnv reads a .env file from the repo root and sets any keys that are
 // not already present in the environment. Safe to call on Render (where real
 // env vars take precedence) and does nothing if the file is absent.
+//
+// Resolves the repo root from THIS SOURCE FILE's location (via runtime.Caller)
+// rather than a cwd-relative "../.." path. The old cwd-relative path only
+// resolved correctly if the process happened to be launched with cwd set to
+// engine/cmd/antigravity specifically (three directories below repo root);
+// running `go run ./cmd/antigravity` from engine/ (a natural, expected
+// invocation) left it pointed one level too high and .env was silently never
+// found, so every required env var appeared "missing" despite a correctly
+// populated .env file at the repo root.
 func loadDotEnv() {
-	root := "../.." // relative to engine/cmd/antigravity
-	data, err := os.ReadFile(root + "/.env")
+	_, thisFile, _, ok := runtime.Caller(0)
+	var envPath string
+	if ok {
+		// thisFile = .../engine/cmd/antigravity/main.go — repo root is 3 dirs up.
+		envPath = filepath.Join(filepath.Dir(thisFile), "..", "..", "..", ".env")
+	} else {
+		envPath = "../../../.env" // fallback: only correct if cwd is repo root
+	}
+	data, err := os.ReadFile(envPath)
 	if err != nil {
 		return // no .env file — normal in production
 	}
