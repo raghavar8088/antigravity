@@ -120,6 +120,23 @@ func getInitialPaperBalanceUSD() float64 {
 	return f
 }
 
+// resetPaperBalanceOnBoot reports whether the operator asked the engine to
+// discard the persisted paper balance/positions/trades on boot and start fresh
+// from getInitialPaperBalanceUSD(). Env: RESET_PAPER_BALANCE_ON_BOOT (truthy:
+// "1", "true", "yes", "on"). This is required to actually CHANGE the starting
+// balance of an existing desk — otherwise boot restores the previously saved
+// balance (e.g. a legacy $1,000,000) and the new INITIAL_PAPER_BALANCE_USD is
+// ignored. Set it for ONE boot, then unset it so accumulated paper PnL persists
+// again on subsequent restarts.
+func resetPaperBalanceOnBoot() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("RESET_PAPER_BALANCE_ON_BOOT"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 // configSource reports whether an env var is explicitly set ("env") or
 // falling back to its built-in default ("default"). Used for startup logging
 // so a misconfigured/missing env var is visible immediately, not discovered
@@ -641,7 +658,17 @@ func main() {
 
 		// ── Restore ALL state on boot ──
 		state, loadErr := dbStore.LoadState(ctx)
-		if loadErr == nil && state.Balance != getInitialPaperBalanceUSD() {
+		if resetPaperBalanceOnBoot() {
+			// Operator forced a fresh start: discard persisted balance/positions/
+			// trades and keep the in-memory paperExecute at getInitialPaperBalanceUSD().
+			if loadErr == nil {
+				if rErr := dbStore.ResetState(ctx); rErr != nil {
+					log.Printf("[DB] ⚠️  RESET_PAPER_BALANCE_ON_BOOT: failed to reset persisted state: %v", rErr)
+				}
+			}
+			log.Printf("[DB] 🧹 RESET_PAPER_BALANCE_ON_BOOT set — paper desk starting fresh at $%.2f (persisted balance/positions/trades discarded)",
+				getInitialPaperBalanceUSD())
+		} else if loadErr == nil && state.Balance != getInitialPaperBalanceUSD() {
 			// 1. Restore paper balance + fees
 			paperExecute.RestoreBalance(state.Balance, state.TotalFees)
 
@@ -733,22 +760,28 @@ func main() {
 				observability.NegativeBalanceRecoveries.Inc()
 				restoredBalance = 0
 			}
-			if restoredBalance != getInitialPaperBalanceUSD() {
+			if !resetPaperBalanceOnBoot() && restoredBalance != getInitialPaperBalanceUSD() {
 				log.Printf("[Phase31B] ♻️  MongoDB recovery: balance=%.2f age=%s — overriding PostgreSQL state",
 					restoredBalance, recoveryReport.AccountDataAge.Round(time.Second))
 				paperExecute.RestoreBalance(restoredBalance, recoveryReport.AccountState.TotalFees)
 			}
 		}
+		if resetPaperBalanceOnBoot() {
+			log.Printf("[Phase31B] 🧹 RESET_PAPER_BALANCE_ON_BOOT set — skipping MongoDB balance/journal/position recovery; starting fresh at $%.2f",
+				getInitialPaperBalanceUSD())
+		}
 
 		// Bootstrap in-memory journal from MongoDB paper_trades so strategy health
 		// has trade history immediately after restart (not only after new closes).
-		if booted, bootErr := paperpersist.BootstrapJournalFromMongo(ctx, mongoMgr, journal); bootErr != nil {
-			log.Printf("[Phase31B] journal bootstrap warning: %v", bootErr)
-		} else if booted > 0 {
-			log.Printf("[Phase31B] bootstrapped %d trades from paper_trades into journal", booted)
+		if !resetPaperBalanceOnBoot() {
+			if booted, bootErr := paperpersist.BootstrapJournalFromMongo(ctx, mongoMgr, journal); bootErr != nil {
+				log.Printf("[Phase31B] journal bootstrap warning: %v", bootErr)
+			} else if booted > 0 {
+				log.Printf("[Phase31B] bootstrapped %d trades from paper_trades into journal", booted)
+			}
 		}
 		// Restore open positions from MongoDB if PostgreSQL didn't restore any.
-		if len(recoveryReport.OpenPositions) > 0 && posMgr.GetPositionCount() == 0 {
+		if !resetPaperBalanceOnBoot() && len(recoveryReport.OpenPositions) > 0 && posMgr.GetPositionCount() == 0 {
 			log.Printf("[Phase31B] restoring %d open positions from MongoDB", len(recoveryReport.OpenPositions))
 			var mongoPositions []positions.Position
 			for _, rp := range recoveryReport.OpenPositions {

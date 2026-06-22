@@ -1230,9 +1230,20 @@ export function useMockTradingEngine(
     [portfolioTrades, config],
   );
   const account = useMemo(() => {
-    if (portfolioTrades.length === 0 && hydratedAccount) return hydratedAccount;
+    // Only fall back to a persisted snapshot while the live cache is empty AND
+    // the snapshot's starting balance still matches the configured starting
+    // capital. A legacy snapshot (e.g. a $1,000,000 balance written before the
+    // desk was reconfigured to a smaller account) must never override the
+    // configured starting balance — otherwise the UI shows a stale equity.
+    if (
+      portfolioTrades.length === 0 &&
+      hydratedAccount &&
+      hydratedAccount.startingBalance === config.startingBalanceUsd
+    ) {
+      return hydratedAccount;
+    }
     return computedAccount;
-  }, [computedAccount, hydratedAccount, portfolioTrades.length]);
+  }, [computedAccount, hydratedAccount, portfolioTrades.length, config.startingBalanceUsd]);
   const analytics = useMemo(() => computeAnalytics(portfolioTrades), [portfolioTrades]);
   const traceAgeSeconds = lastFetchAt != null ? Math.floor((Date.now() - lastFetchAt) / 1000) : null;
 
