@@ -17,6 +17,12 @@ type FillResult struct {
 	OrderMode     OrderMode
 	ClientOrderID string // set by executeThroughInstitutionalPath
 
+	// Quantity is the final, risk-floor-adjusted order size that was actually
+	// filled. Callers must use this (not the pre-risk-floor signal size) when
+	// recording position size, since Risk V2's execution floor can scale the
+	// requested size up or down before fill.
+	Quantity float64
+
 	// RequestedPrice is the decision-time reference price (mark price at order
 	// submission). SlippageBps is the signed slippage of ExecPrice versus
 	// RequestedPrice expressed in basis points (positive = adverse). Both are

@@ -1100,6 +1100,7 @@ func (o *Orchestrator) submitInstitutionalOrder(
 		FillSize:       sig.TargetSize,
 	})
 	fill.ClientOrderID = clientOrderID
+	fill.Quantity = sig.TargetSize
 	o.recordWatchdogFill()
 	return fill, nil
 }
@@ -1191,6 +1192,12 @@ func stopLossFromSignal(sig strategy.Signal, entry float64) float64 {
 // to the OMS v3 ledger. This is the single call-site for all position opens so
 // the mapping is never missed regardless of execution path (strategy, AI, bridge).
 func (o *Orchestrator) openAndTrackPosition(ctx context.Context, sig strategy.Signal, fill execution.FillResult, stratName string) {
+	// fill.Quantity is the post-risk-floor size actually filled; sig.TargetSize
+	// here is the caller's pre-resize copy and would otherwise leave pos.Size
+	// out of sync with the quantity that was actually executed/settled.
+	if fill.Quantity > 0 {
+		sig.TargetSize = fill.Quantity
+	}
 	pos, err := o.posMgr.OpenPosition(sig, fill.ExecPrice, stratName)
 	if err != nil {
 		log.Printf("[POSITION OPEN REJECTED] %s: %v", stratName, err)

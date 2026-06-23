@@ -1,1 +1,1 @@
-{}
+{"engine-execution":{"communities":[4],"files":1,"symbols":3,"top_files":[{"file":"engine/internal/execution/routing.go","symbols":3}]},"engine-trading":{"communities":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],"files":1,"symbols":160,"top_files":[{"file":"engine/internal/trading/loop.go","symbols":160}]}}
