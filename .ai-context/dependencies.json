@@ -1,1 +1,1 @@
-{}
+{"client/src/components/MockTradingDashboard.tsx":{"imports":["client/src/lib/trading/mockTradingEngine.ts"]},"client/src/lib/trading/mockTradingPersistenceTypes.ts":{"imports":["client/src/lib/trading/mockTradingEngine.ts"]}}

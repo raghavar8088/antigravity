@@ -59,3 +59,9 @@ claude-bot/screenshots/
 
 # Local credential material — never commit
 .application-credentials/
+
+# AWS SSH deploy config (contains host + key path)
+scripts/aws-deploy.env
+
+# Vercel deploy config (contains API token)
+scripts/vercel-deploy.env

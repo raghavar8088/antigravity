@@ -34,7 +34,7 @@ import type { StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 export type MockTradeStatus = "OPEN" | "CLOSED";
 export type MockSide = "BUY" | "SELL";
 export type MockExitReason = "TAKE_PROFIT" | "STOP_LOSS" | "MAX_HOLD" | "MANUAL";
-export type MockSizingMode = "fixed_pct_equity" | "fixed_notional" | "risk_pct_equity";
+export type MockSizingMode = "fixed_btc" | "fixed_pct_equity" | "fixed_notional" | "risk_pct_equity";
 export const DEFAULT_MAX_OPEN_MOCK_TRADES = 5;
 export const DEFAULT_MAX_OPEN_MOCK_LONG_TRADES = 3;
 export const DEFAULT_MAX_OPEN_MOCK_SHORT_TRADES = 3;
@@ -155,6 +155,13 @@ export interface MockTradingConfig {
   startingBalanceUsd: number;
   /** Sizing strategy. */
   sizingMode: MockSizingMode;
+  /**
+   * Fixed BTC size per trade for "fixed_btc" mode. EQUAL FOOTING: every
+   * strategy opens exactly this many BTC regardless of win rate, confidence,
+   * regime, or session, so PnL is directly comparable across strategies.
+   * Mirrors the Go engine's FIXED_TRADE_SIZE_BTC threshold (default 0.1 BTC).
+   */
+  fixedSizeBtc: number;
   /** % of current equity for "fixed_pct_equity" mode (1 = 1%). */
   fixedPctOfEquity: number;
   /** USD notional for "fixed_notional" mode. */
@@ -212,7 +219,12 @@ export function isGradeDiscoveryStage(config: MockTradingConfig): boolean {
 
 export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
   startingBalanceUsd: 1_000_000,
-  sizingMode: "risk_pct_equity",
+  // EQUAL FOOTING: every strategy opens the same fixed BTC size so MTF_Trend_Align
+  // and all other strategies are directly comparable (mirrors the Go engine's
+  // FIXED_TRADE_SIZE_BTC). Previously "risk_pct_equity", which sized MTF at
+  // ~$500k (~8.7 BTC) — a 100× gap vs new probationary strategies.
+  sizingMode: "fixed_btc",
+  fixedSizeBtc: 0.1,
   fixedPctOfEquity: 1,
   fixedNotionalUsd: 10_000,
   riskPctOfEquity: 0.25,
@@ -425,6 +437,9 @@ function resolveExit(
  * Compute the notional in USD for a new mock trade given the current equity
  * and config. Mirrors the production sizing helpers in `futuresPaperMath`.
  *
+ * "fixed_btc":        notional = `fixedSizeBtc * price` — EQUAL FOOTING: every
+ *                     strategy opens exactly this many BTC regardless of win
+ *                     rate, confidence, regime, or session. Requires `price`.
  * "fixed_pct_equity": `equity * fixedPctOfEquity / 100`
  * "fixed_notional":   `fixedNotionalUsd`
  * "risk_pct_equity":  budget = `equity * riskPctOfEquity / 100`,
@@ -435,6 +450,8 @@ export function computeMockNotional(args: {
   config: MockTradingConfig;
   equity: number;
   slPct?: number;
+  /** Live mark price — required for "fixed_btc" sizing. */
+  price?: number;
 }): number {
   const { config, equity } = args;
   const eq = Number.isFinite(equity) && equity > 0 ? equity : config.startingBalanceUsd;
@@ -442,6 +459,14 @@ export function computeMockNotional(args: {
   const maxNotional = Math.max(minNotional, eq * 10); // cap at 10× equity for sanity
   let raw = 0;
   switch (config.sizingMode) {
+    case "fixed_btc": {
+      const px = Number.isFinite(args.price) && (args.price ?? 0) > 0 ? (args.price as number) : 0;
+      const btc = Number.isFinite(config.fixedSizeBtc) && config.fixedSizeBtc > 0
+        ? config.fixedSizeBtc
+        : DEFAULT_MOCK_TRADING_CONFIG.fixedSizeBtc;
+      raw = px > 0 ? btc * px : 0;
+      break;
+    }
     case "fixed_pct_equity":
       raw = eq * (config.fixedPctOfEquity / 100);
       break;
@@ -705,6 +730,7 @@ export function buildMockTradeFromTrace(args: {
     config,
     equity,
     slPct: exit.stopLossPct,
+    price: currentPrice,
   });
   const lev = Math.max(1, Math.min(125, Math.floor(config.leverage)));
   const marginUsed = paperMarginRequired(notional, lev);
@@ -789,6 +815,7 @@ export function buildMockTradeFromResearchSignal(args: {
     config,
     equity,
     slPct: exit.stopLossPct,
+    price: currentPrice,
   });
   const lev = Math.max(1, Math.min(125, Math.floor(config.leverage)));
   const marginUsed = paperMarginRequired(notional, lev);
@@ -1834,7 +1861,14 @@ export function isValidMockConfig(value: unknown): value is MockTradingConfig {
   const c = value as Record<string, unknown>;
   const num = (v: unknown) => typeof v === "number" && Number.isFinite(v);
   if (!num(c.startingBalanceUsd) || (c.startingBalanceUsd as number) <= 0) return false;
-  if (c.sizingMode !== "fixed_pct_equity" && c.sizingMode !== "fixed_notional" && c.sizingMode !== "risk_pct_equity") return false;
+  if (
+    c.sizingMode !== "fixed_btc" &&
+    c.sizingMode !== "fixed_pct_equity" &&
+    c.sizingMode !== "fixed_notional" &&
+    c.sizingMode !== "risk_pct_equity"
+  ) {
+    return false;
+  }
   return (
     num(c.fixedPctOfEquity) &&
     num(c.fixedNotionalUsd) &&
@@ -1880,7 +1914,8 @@ export function normalizeMockTradingConfig(value: unknown): MockTradingConfig {
     if (positive && v <= 0) return fallback;
     return v;
   };
-  const sizingMode = source.sizingMode === "fixed_pct_equity" ||
+  const sizingMode = source.sizingMode === "fixed_btc" ||
+    source.sizingMode === "fixed_pct_equity" ||
     source.sizingMode === "fixed_notional" ||
     source.sizingMode === "risk_pct_equity"
     ? source.sizingMode
@@ -1888,6 +1923,7 @@ export function normalizeMockTradingConfig(value: unknown): MockTradingConfig {
   const next: MockTradingConfig = {
     startingBalanceUsd: num(source.startingBalanceUsd, DEFAULT_MOCK_TRADING_CONFIG.startingBalanceUsd, true),
     sizingMode,
+    fixedSizeBtc: Math.max(0, num(source.fixedSizeBtc, DEFAULT_MOCK_TRADING_CONFIG.fixedSizeBtc)),
     fixedPctOfEquity: Math.max(0, num(source.fixedPctOfEquity, DEFAULT_MOCK_TRADING_CONFIG.fixedPctOfEquity)),
     fixedNotionalUsd: Math.max(0, num(source.fixedNotionalUsd, DEFAULT_MOCK_TRADING_CONFIG.fixedNotionalUsd)),
     riskPctOfEquity: Math.max(0, num(source.riskPctOfEquity, DEFAULT_MOCK_TRADING_CONFIG.riskPctOfEquity)),

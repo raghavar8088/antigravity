@@ -34,7 +34,6 @@ import (
 	"antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/shadow"
-	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/regime"
 	"antigravity-engine/internal/risk"
 	riskgate "antigravity-engine/internal/risk/gate"
@@ -2176,71 +2175,18 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 			})
 		}
 
-		// Change C — Kelly position sizing.
-		// Apply after Monte Carlo so position size incorporates both MC and Kelly.
-		{
-			o.mu.RLock()
-			sizingMod := o.currentSizingModifier
-			regimeClass := o.lastRegimeClass
-			o.mu.RUnlock()
-			if sizingMod <= 0 {
-				sizingMod = 1.0
-			}
-			regimeMult := 1.0
-			if regimeClass != nil {
-				regimeMult = regimeClass.PositionSizeMult
-			}
-			if o.deps != nil && o.deps.Ledger != nil {
-				// Collect data quality score for Kelly input.
-				dqScore := 100.0
-				if o.deps.DataValidator != nil {
-					// Use a neutral score if no recent candle has been validated.
-					dqScore = 80.0
-				}
-				kellyIn, kellyErr := kelly.GetKellyInputs(
-					o.deps.Ledger, btcPaperAccountID, 60,
-					o.deps.PortfolioValue, tconfig.Default().GetWithDefault("KELLY_MAX_POSITION_PCT", 0.10), regimeMult, dqScore,
-				)
-				if kellyErr == nil {
-					// Session-aware Kelly multiplier.
-					sess := kelly.DetectSession(time.Now().UTC())
-					kellyIn.SessionMult = kelly.SessionKellyMultiplier(sess)
-					log.Printf("[KELLY] Session=%s mult=%.2f", sess, kellyIn.SessionMult)
-				}
-				if kellyErr == nil && kellyIn.TradeCount >= 30 {
-					kellyResult, kerr := kelly.Compute(kellyIn)
-					if kerr == nil && kellyResult.FinalPositionUSD > 0 {
-						// Convert Kelly USD to BTC.
-						if currentPrice > 0 {
-							kellySizeBTC := (kellyResult.FinalPositionUSD * sizingMod) / currentPrice
-							if kellySizeBTC < sig.TargetSize {
-								log.Printf("[KELLY] %s size reduced %.4f→%.4f BTC (kelly_pct=%.2f%% raw=%.4f session_mult=%.2f was_constrained=%v)",
-									aggSig.StrategyName, sig.TargetSize, kellySizeBTC,
-									kellyResult.FinalPositionPct*100, kellyResult.RawKelly,
-									kellyIn.SessionMult, kellyResult.WasConstrained)
-								sig.TargetSize = kellySizeBTC
-							}
-						}
-						observability.KellySizeRatio.Observe(kellyResult.FinalPositionPct)
-					}
-				}
-		} else if sizingMod < 1.0 {
-			// No ledger available — at least apply data quality size modifier.
-			sig.TargetSize *= sizingMod
-			log.Printf("[KELLY] %s no ledger — applying data quality modifier %.2f size=%.4f BTC",
-				aggSig.StrategyName, sizingMod, sig.TargetSize)
-		}
-
-		// Post-Kelly execution floor: Kelly can reduce size below the minimum
-		// executable threshold. Reject here rather than letting it propagate to
-		// the risk V2 floor where the rejection log is less informative.
+		// FLAT EQUAL SIZING — Kelly sizing has been removed from this path so
+		// every strategy trades the identical fixed size set by
+		// targetSizeForCapital (FIXED_TRADE_SIZE_BTC) above. Win rate, trade
+		// history, regime, session, and data-quality multipliers no longer
+		// resize positions; all strategies compete on equal footing. We only
+		// enforce the absolute minimum execution floor here.
 		if sig.TargetSize < minExecutionSizeBTC {
-			log.Printf("[KELLY FLOOR] %s post-Kelly size %.4f BTC is below minimum %.4f BTC — skipping",
+			log.Printf("[SIZE FLOOR] %s size %.4f BTC is below minimum %.4f BTC — skipping",
 				aggSig.StrategyName, sig.TargetSize, minExecutionSizeBTC)
-			o.execIntel.RecordRejection(sigID, "post_kelly_size_below_floor")
+			o.execIntel.RecordRejection(sigID, "size_below_floor")
 			continue
 		}
-	}
 
 	err := o.risk.Validate(sig, currentPrice)
 		if err != nil {
@@ -3351,11 +3297,14 @@ func (o *Orchestrator) syncPMSState(ctx context.Context) {
 	)
 }
 
+// targetSizeForCapital returns the flat, equal position size (in BTC) used by
+// the legacy non-scalers execution path. Under the equal-footing sizing model
+// this is the SAME fixed BTC size every strategy uses (see fixedTradeSizeBTC),
+// replacing the prior fixedTradeCapitalUSD/price formula. currentPrice is
+// retained in the signature for call-site compatibility but is no longer used.
 func targetSizeForCapital(currentPrice float64) float64 {
-	if currentPrice <= 0 {
-		return 0
-	}
-	return fixedTradeCapitalUSD / currentPrice
+	_ = currentPrice
+	return fixedTradeSizeBTC()
 }
 
 // buildRiskV2MarketState assembles live market inputs for Risk V2 from the

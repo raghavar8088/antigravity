@@ -35,6 +35,7 @@ var metaDefaults = map[string]float64{
 	"SCALER_SL_LOWER_BOUND_PCT":      0.25,
 
 	// position_sizing
+	"FIXED_TRADE_SIZE_BTC":           0.1, // flat equal size for ALL strategies (overrides Kelly)
 	"MIN_EXECUTION_SIZE_BTC":         0.00001, // was 0.0001 (flood: clear Kelly floor on small balances)
 	"FUTURES_POSITION_CAPITAL_PCT":   0.01,
 	"KELLY_MAX_POSITION_PCT":         0.10,
@@ -152,6 +153,16 @@ func Catalog() []Meta {
 		},
 
 		// ── position_sizing ─────────────────────────────────────────────────
+		{
+			Key: "FIXED_TRADE_SIZE_BTC", Category: CategoryPositionSizing,
+			Label: "Fixed Trade Size (BTC)", EnvVar: "FIXED_TRADE_SIZE_BTC",
+			Description: "Every strategy opens exactly this many BTC per trade, regardless of win rate, confidence, regime, or session. All strategies compete on equal footing — this REPLACES Kelly sizing on both the scalers path (scalers_eval.go) and the legacy non-scalers path (loop.go targetSizeForCapital), and is also applied to shadow trades so shadow PnL is directly comparable to live PnL. Increase to amplify all PnL (and losses); decrease to reduce total exposure.",
+			DataType: "decimal", Unit: "BTC", Min: 0.001, Max: 1.0, RecommendedMin: 0.05, RecommendedMax: 0.25,
+			RiskLevel: "medium",
+			WhatIfIncreased: "All strategies open larger positions. At 1.0 BTC with 100 strategies: 100 BTC total exposure = ~$6M at current price. Only increase for paper-trading research — not for live trading.",
+			WhatIfDecreased: "All strategies open smaller positions. PnL magnitudes decrease proportionally but win rates are unaffected. Use smaller sizes when you want to compare strategy performance with minimal capital at risk.",
+			RequiresRestart: false,
+		},
 		{
 			Key: "MIN_EXECUTION_SIZE_BTC", Category: CategoryPositionSizing,
 			Label: "Minimum Execution Size", EnvVar: "MIN_EXECUTION_SIZE_BTC",

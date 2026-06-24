@@ -1,1 +1,1 @@
-{}
+{"client/src/components/MockTradingDashboard.tsx::addCounts()":["client/src/lib/trading/mockTradingEngine.ts::emptyMockRejectionCounts()"],"client/src/components/MockTradingDashboard.tsx::fmtTradeAge()":["client/src/lib/trading/mockTradingEngine.ts::mockTradeAgeMinutes()"],"engine/internal/trading/loop.go::NewOrchestrator()":["engine/internal/trading/scalers_eval.go::newScalerBundle()"],"engine/internal/trading/loop.go::targetSizeForCapital()":["engine/internal/trading/scalers_eval.go::fixedTradeSizeBTC()"]}

@@ -11,7 +11,6 @@ import (
 
 	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/execution"
-	"antigravity-engine/internal/kelly"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/observability"
 	regimepkg "antigravity-engine/internal/regime"
@@ -29,6 +28,24 @@ const (
 	maxCandles1h  = 72 // ≥55 required by S1 EMA Ribbon (needs EMA50 on 1h + warmup bars)
 	maxCandles4h  = 30
 )
+
+// fixedSizingLogOnce guards the one-time [SIZING] startup banner emitted from
+// the first scalers evaluation cycle (where a live BTC price is available).
+var fixedSizingLogOnce sync.Once
+
+// fixedTradeSizeBTC returns the flat, equal position size (in BTC) that EVERY
+// strategy opens, regardless of win rate, trade count, confidence, regime, or
+// session. This is the single source of truth for the "equal footing" sizing
+// model that replaced Kelly. It is sourced from the FIXED_TRADE_SIZE_BTC
+// threshold (env var at startup, hot-reloadable via the Trade Threshold
+// Configuration module) and falls back to 0.1 BTC if unset or invalid.
+func fixedTradeSizeBTC() float64 {
+	v := tconfig.Default().GetWithDefault("FIXED_TRADE_SIZE_BTC", 0.1)
+	if v <= 0 {
+		return 0.1
+	}
+	return v
+}
 
 // ScalerBundle accumulates candle history and market state needed to build a
 // scalers.MarketContext on every 15m evaluation cycle.
@@ -721,6 +738,14 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		return
 	}
 
+	// One-time equal-footing sizing banner (logged on the first cycle with a
+	// live price so the USD figures are accurate).
+	fixedSizingLogOnce.Do(func() {
+		fs := fixedTradeSizeBTC()
+		log.Printf("[SIZING] Fixed trade size: %.4f BTC per strategy (~$%.0f at BTC=%.0f)", fs, fs*price, price)
+		log.Printf("[SIZING] Max theoretical exposure (100 strategies): %.1f BTC (~$%.0f)", 100*fs, 100*fs*price)
+	})
+
 	// Pull latest funding rate + order book + OI (no lock needed — their own methods lock)
 	if o.deps != nil && o.deps.FundingFetcher != nil {
 		if fd := o.deps.FundingFetcher.GetLatest(); fd != nil {
@@ -849,51 +874,20 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			sig.Strategy, sig.Direction, sig.Confidence, sig.Reason)
 		legacySig := scalerSignalToLegacy(sig, price)
 
-		// Kelly position sizing — replaces flat fixedTradeCapitalUSD sizing.
-		// Half-Kelly fraction scaled by regime, session, and data-quality
-		// multipliers; probationary strategies (<30 recorded trades) fall back
-		// to a conservative neutral assumption inside kelly.Compute().
-		regimeMult := 1.0
-		if lastRegimeClass != nil && lastRegimeClass.PositionSizeMult > 0 {
-			regimeMult = lastRegimeClass.PositionSizeMult
-		}
-		session := kelly.DetectSession(time.Now().UTC())
-		kellyIn := kelly.KellyInputs{
-			PortfolioValue:    o.exec.GetBalanceUSD(),
-			MaxPositionPct:    tconfig.Default().GetWithDefault("KELLY_MAX_POSITION_PCT", 0.10),
-			RegimeMult:        regimeMult,
-			SessionMult:       kelly.SessionKellyMultiplier(session),
-			DataQualityScore:  o.scalerBundle.GetDataQuality(),
-			MinTradesRequired: 30,
-		}
-		if wfData, hasData := o.walkForward.GetSummary(entry.Name); hasData {
-			kellyIn.TradeCount = wfData.Trades
-			if wfData.Trades >= kellyIn.MinTradesRequired {
-				kellyIn.WinRate = wfData.WinRate
-				kellyIn.AvgWinPct = wfData.AvgWinPct
-				kellyIn.AvgLossPct = wfData.AvgLossPct
-			}
-		}
-		if kellyIn.TradeCount < kellyIn.MinTradesRequired {
-			// Probationary fallback — neutral 2:1 R:R assumption. kelly.Compute
-			// ignores these and applies its own conservative fixed-pct sizing
-			// whenever TradeCount < MinTradesRequired, but they're set for
-			// clarity and so behaviour stays sane if that gate ever changes.
-			kellyIn.WinRate = 0.50
-			kellyIn.AvgWinPct = 0.04
-			kellyIn.AvgLossPct = 0.02
+		// FLAT EQUAL SIZING — every strategy opens the identical fixed position
+		// size, regardless of win rate, trade count, confidence, regime, or
+		// session. This REPLACES the previous half-Kelly sizing so all
+		// strategies compete on equal footing and results are directly
+		// comparable. The walk-forward validator still tracks per-strategy
+		// performance (see wfSummaries below); it just no longer drives sizing.
+		targetBTC := fixedTradeSizeBTC()
+		if targetBTC < minExecutionSizeBTC {
+			targetBTC = minExecutionSizeBTC
 		}
 
-		kellyResult, kerr := kelly.Compute(kellyIn)
-		if kerr != nil {
-			log.Printf("[KELLY] %s sizing rejected: %v", entry.Name, kerr)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "kelly_error").Inc()
-			rejected++
-			continue
-		}
-		targetBTC := kellyResult.FinalPositionUSD / price
-
-		// Shadow ledger recording (does not block live execution).
+		// Shadow ledger recording (does not block live execution). Shadow trades
+		// use the SAME fixed size as live trades so shadow PnL is directly
+		// comparable to live PnL.
 		if sig.IsShadow && shadowLedger != nil {
 			shadowSize := targetBTC
 			if shadowSize < minExecutionSizeBTC {
@@ -919,16 +913,14 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 
 		// Enforce the execution size floor.
 		if targetBTC < minExecutionSizeBTC {
-			log.Printf("[SCALERS] %s Kelly size %.6f BTC below minimum %.6f BTC — skipping", entry.Name, targetBTC, minExecutionSizeBTC)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "kelly_too_small").Inc()
+			log.Printf("[SCALERS] %s fixed size %.6f BTC below minimum %.6f BTC — skipping", entry.Name, targetBTC, minExecutionSizeBTC)
+			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "size_too_small").Inc()
 			rejected++
 			continue
 		}
 		legacySig.TargetSize = targetBTC
-		observability.ScalersKellyPositionUSD.WithLabelValues(entry.Name).Set(kellyResult.FinalPositionUSD)
-		log.Printf("[KELLY] strategy=%s winRate=%.2f session=%s regimeMult=%.2f sessionMult=%.2f dqScore=%.0f kellyFraction=%.4f finalUSD=%.0f finalBTC=%.4f",
-			entry.Name, kellyIn.WinRate, string(session), kellyIn.RegimeMult, kellyIn.SessionMult, kellyIn.DataQualityScore,
-			kellyResult.RawKelly, kellyResult.FinalPositionUSD, targetBTC)
+		observability.ScalersKellyPositionUSD.WithLabelValues(entry.Name).Set(targetBTC * price)
+		log.Printf("[SIZING] strategy=%s fixedBTC=%.4f (~$%.0f) equal-footing", entry.Name, targetBTC, targetBTC*price)
 
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {

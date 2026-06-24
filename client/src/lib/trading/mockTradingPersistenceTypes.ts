@@ -34,7 +34,8 @@ export const mockTradeBlockerSchema = z
 export const mockTradingConfigSchema = z
   .object({
     startingBalanceUsd: finiteNumber.positive(),
-    sizingMode: z.enum(["fixed_pct_equity", "fixed_notional", "risk_pct_equity"]),
+    sizingMode: z.enum(["fixed_btc", "fixed_pct_equity", "fixed_notional", "risk_pct_equity"]),
+    fixedSizeBtc: nonNegativeNumber.default(DEFAULT_MOCK_TRADING_CONFIG.fixedSizeBtc),
     fixedPctOfEquity: nonNegativeNumber,
     fixedNotionalUsd: nonNegativeNumber,
     riskPctOfEquity: nonNegativeNumber,

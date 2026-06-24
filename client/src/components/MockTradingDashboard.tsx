@@ -761,12 +761,21 @@ function MockConfigCard({
           label="Sizing mode"
           value={config.sizingMode}
           options={[
+            { value: "fixed_btc", label: "Fixed BTC (equal)" },
             { value: "fixed_pct_equity", label: "Fixed %" },
             { value: "fixed_notional", label: "Fixed $" },
             { value: "risk_pct_equity", label: "Risk %" },
           ]}
           onChange={(v) => onChange({ ...config, sizingMode: v as MockSizingMode })}
         />
+        {config.sizingMode === "fixed_btc" && (
+          <ConfigNumber
+            label="Fixed size (BTC)"
+            value={config.fixedSizeBtc}
+            step={0.01}
+            onChange={(v) => onChange({ ...config, fixedSizeBtc: Math.max(0.001, Math.min(1, v)) })}
+          />
+        )}
         <ConfigNumber
           label="Leverage (×)"
           value={config.leverage}
