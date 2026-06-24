@@ -70,6 +70,12 @@ func BuildCuratedScalpers() []RegistryEntry {
 	family5 := buildFamily5DerivativesMacro()
 	all = append(all, family5...)
 
+	// S80-S99: IMMORTAL EDITION — 20 research-backed strategies, live immediately.
+	// No withRolloutPhase() wrapper — these evaluate and trade on the live paper
+	// OMS from the first cycle. withShadowOverride() is applied uniformly below.
+	immortal := buildImmortalEditionPack()
+	all = append(all, immortal...)
+
 	// Strategies registered without withRolloutPhase() (the original S1-S10
 	// roster) never trade live unless SHADOW_STRATEGIES/STRATEGY_LIVE_OVERRIDE
 	// applies. Wrap them so those two operator knobs work uniformly across

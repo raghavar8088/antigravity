@@ -1370,7 +1370,28 @@ The content is organized as follows:
   strategy/scalpers/s78_stablecoin_supply_flow.go
   strategy/scalpers/s79_fear_greed_contrarian.go
   strategy/scalpers/s8_funding_rate_fade.go
+  strategy/scalpers/s80_elder_triple_screen.go
+  strategy/scalpers/s80_s99_immortal_edition.go
+  strategy/scalpers/s81_coppock_curve_momentum.go
+  strategy/scalpers/s82_chande_momentum_oscillator.go
+  strategy/scalpers/s83_know_sure_thing_momentum.go
+  strategy/scalpers/s84_aroon_trend_confirmation.go
+  strategy/scalpers/s85_nr4_nr7_volatility_compression.go
+  strategy/scalpers/s86_volatility_ratio_breakout.go
+  strategy/scalpers/s87_inside_bar_momentum.go
+  strategy/scalpers/s88_squeeze_momentum_breakout.go
+  strategy/scalpers/s89_historical_vol_percentile_breakout.go
   strategy/scalpers/s9_oi_divergence.go
+  strategy/scalpers/s90_three_bar_reversal.go
+  strategy/scalpers/s91_trend_continuation_pullback.go
+  strategy/scalpers/s92_engulfing_bar_reversal.go
+  strategy/scalpers/s93_pin_bar_reversal.go
+  strategy/scalpers/s94_morning_evening_star.go
+  strategy/scalpers/s95_volume_profile_poc_magnet.go
+  strategy/scalpers/s96_obv_divergence.go
+  strategy/scalpers/s97_chaikin_money_flow_signal.go
+  strategy/scalpers/s98_multi_indicator_consensus.go
+  strategy/scalpers/s99_adaptive_trend_following.go
   strategy/scalpers/statistical_family.go
   strategy/scalpers/types.go
   strategy/scalpers/volatility_family.go

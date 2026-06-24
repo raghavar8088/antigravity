@@ -540,3 +540,352 @@ func ZScoreMultiTimeframe(candles5m, candles15m, candles1h []Candle) (z5m, z15m,
 	z1h = compute(candles1h)
 	return
 }
+
+// ── Coppock Curve (S81) ──────────────────────────────────────────────────────
+
+// CoppockCurve computes Edwin Coppock's momentum oscillator (Barron's, 1962):
+// a weighted moving average of the sum of two rate-of-change values.
+// WMA(ROC(roc1) + ROC(roc2), wmaLen). Returns 0 if insufficient data.
+func CoppockCurve(candles []Candle, roc1, roc2, wmaLen int) float64 {
+	needed := roc1 + wmaLen + 1
+	if roc1 < roc2 {
+		needed = roc2 + wmaLen + 1
+	}
+	if len(candles) < needed {
+		return 0
+	}
+	rocSum := make([]float64, wmaLen)
+	for i := 0; i < wmaLen; i++ {
+		offset := len(candles) - wmaLen + i
+		if offset < roc1 || offset < roc2 {
+			return 0
+		}
+		slice1 := candles[:offset+1]
+		slice2 := candles[:offset+1]
+		r1 := 0.0
+		if len(slice1) > roc1 && slice1[len(slice1)-roc1-1].Close != 0 {
+			r1 = (slice1[len(slice1)-1].Close/slice1[len(slice1)-roc1-1].Close - 1) * 100
+		}
+		r2 := 0.0
+		if len(slice2) > roc2 && slice2[len(slice2)-roc2-1].Close != 0 {
+			r2 = (slice2[len(slice2)-1].Close/slice2[len(slice2)-roc2-1].Close - 1) * 100
+		}
+		rocSum[i] = r1 + r2
+	}
+	// Weighted moving average: weight = position index + 1
+	var weightedSum, weightSum float64
+	for i, v := range rocSum {
+		w := float64(i + 1)
+		weightedSum += v * w
+		weightSum += w
+	}
+	if weightSum == 0 {
+		return 0
+	}
+	return weightedSum / weightSum
+}
+
+// ── Chande Momentum Oscillator (S82) ────────────────────────────────────────
+
+// CMO computes Tushar Chande's Momentum Oscillator ("The New Technical Trader", 1994).
+// CMO = 100 * (sumUp - sumDown) / (sumUp + sumDown) over `period` bars. Range -100..+100.
+func CMO(candles []Candle, period int) float64 {
+	if len(candles) < period+1 {
+		return 0
+	}
+	tail := candles[len(candles)-(period+1):]
+	var sumUp, sumDown float64
+	for i := 1; i < len(tail); i++ {
+		diff := tail[i].Close - tail[i-1].Close
+		if diff > 0 {
+			sumUp += diff
+		} else {
+			sumDown += -diff
+		}
+	}
+	denom := sumUp + sumDown
+	if denom == 0 {
+		return 0
+	}
+	return 100 * (sumUp - sumDown) / denom
+}
+
+// ── KST — Know Sure Thing (S83) ─────────────────────────────────────────────
+
+// KSTResult holds the KST oscillator value and its signal line.
+type KSTResult struct {
+	KST    float64
+	Signal float64
+}
+
+// rocN returns the simple rate-of-change for `period` bars as a percentage.
+func rocN(candles []Candle, period int) float64 {
+	if len(candles) < period+1 {
+		return 0
+	}
+	base := candles[len(candles)-period-1].Close
+	if base == 0 {
+		return 0
+	}
+	return (candles[len(candles)-1].Close/base - 1) * 100
+}
+
+// KST computes Martin Pring's Know Sure Thing indicator ("Market Momentum", 1993).
+// Uses standard Pring parameters: ROC(10,10), ROC(15,10), ROC(20,10), ROC(30,15)
+// with weights 1, 2, 3, 4. Signal = EMA(KST, 9).
+func KST(candles []Candle) KSTResult {
+	// Need enough candles: largest ROC period (30) + largest EMA smoothing (15) + signal EMA (9) + buffer
+	if len(candles) < 60 {
+		return KSTResult{}
+	}
+	// Build KST series for last 9+1 bars (enough for signal EMA)
+	kstVals := make([]float64, 0, 12)
+	for i := 9; i >= 0; i-- {
+		offset := len(candles) - i
+		if offset < 45 {
+			continue
+		}
+		sub := candles[:offset]
+		// Each RCMA = EMA(ROC(n), smoothPeriod)
+		// We approximate by computing ROC at the current point then smoothing
+		// Simplified: compute KST as weighted sum of 4 ROC-EMA composites using trailing slices
+		rcma1 := emaOfFloats(rocSlice(sub, 10, 10), 10)
+		rcma2 := emaOfFloats(rocSlice(sub, 15, 10), 10)
+		rcma3 := emaOfFloats(rocSlice(sub, 20, 10), 10)
+		rcma4 := emaOfFloats(rocSlice(sub, 30, 15), 15)
+		kstVals = append(kstVals, rcma1*1+rcma2*2+rcma3*3+rcma4*4)
+	}
+	if len(kstVals) < 2 {
+		return KSTResult{}
+	}
+	current := kstVals[len(kstVals)-1]
+	signal := emaOfFloats(kstVals, 9)
+	return KSTResult{KST: current, Signal: signal}
+}
+
+// rocSlice builds a slice of ROC(period) values for the last `count` positions.
+func rocSlice(candles []Candle, period, count int) []float64 {
+	if len(candles) < period+count {
+		return nil
+	}
+	out := make([]float64, count)
+	for i := 0; i < count; i++ {
+		offset := len(candles) - count + i
+		sub := candles[:offset+1]
+		out[i] = rocN(sub, period)
+	}
+	return out
+}
+
+// ── Aroon Indicator (S84) ───────────────────────────────────────────────────
+
+// AroonResult holds Aroon Up and Aroon Down values (range 0–100).
+type AroonResult struct {
+	Up   float64
+	Down float64
+}
+
+// Aroon computes Tushar Chande's Aroon indicator (Stocks & Commodities, 1995).
+// AroonUp = (period - bars since period-bar high) / period * 100.
+// AroonDown = (period - bars since period-bar low) / period * 100.
+func Aroon(candles []Candle, period int) AroonResult {
+	if len(candles) < period+1 {
+		return AroonResult{}
+	}
+	tail := candles[len(candles)-(period+1):]
+	highIdx, lowIdx := 0, 0
+	for i := 1; i < len(tail); i++ {
+		if tail[i].High >= tail[highIdx].High {
+			highIdx = i
+		}
+		if tail[i].Low <= tail[lowIdx].Low {
+			lowIdx = i
+		}
+	}
+	barsSinceHigh := len(tail) - 1 - highIdx
+	barsSinceLow := len(tail) - 1 - lowIdx
+	up := float64(period-barsSinceHigh) / float64(period) * 100
+	down := float64(period-barsSinceLow) / float64(period) * 100
+	return AroonResult{Up: up, Down: down}
+}
+
+// ── Narrow Range N (S85) ────────────────────────────────────────────────────
+
+// NarrowRangeN returns true if the last candle's range (high-low) is the
+// narrowest of the last n candles. Crabel "Day Trading with Short Term Price
+// Patterns" (1990).
+func NarrowRangeN(candles []Candle, n int) bool {
+	if len(candles) < n {
+		return false
+	}
+	tail := candles[len(candles)-n:]
+	last := tail[len(tail)-1]
+	lastRange := last.High - last.Low
+	for _, c := range tail[:len(tail)-1] {
+		if c.High-c.Low <= lastRange {
+			return false
+		}
+	}
+	return true
+}
+
+// ── Squeeze Momentum Detector (S88) ─────────────────────────────────────────
+
+// SqueezeResult reports whether a Bollinger Band / Keltner Channel squeeze is
+// active or just fired, plus the current momentum direction.
+type SqueezeResult struct {
+	Active   bool    // BB is inside Keltner (squeeze on)
+	Fired    bool    // BB just expanded outside Keltner (squeeze off, expansion begins)
+	Momentum float64 // positive = bullish, negative = bearish
+}
+
+// SqueezeDetector implements John Carter's Squeeze Momentum indicator
+// ("Mastering the Trade", 2006). BB(20,2) inside Keltner(EMA20, 1.5×ATR14)
+// = squeeze on. Momentum = close - midpoint of (highest high + lowest low / 2 + SMA20) / 2.
+func SqueezeDetector(candles []Candle) SqueezeResult {
+	if len(candles) < 22 {
+		return SqueezeResult{}
+	}
+	bb := BB(candles, 20)
+	atr14 := ATR(candles, 14)
+	ema20 := EMA(candles, 20)
+	if atr14 == 0 || ema20 == 0 {
+		return SqueezeResult{}
+	}
+	kUpper := ema20 + 1.5*atr14
+	kLower := ema20 - 1.5*atr14
+
+	activeNow := bb.Upper < kUpper && bb.Lower > kLower
+
+	// Check if squeeze was active on prior bar
+	var activePrev bool
+	if len(candles) >= 23 {
+		bbPrev := BB(candles[:len(candles)-1], 20)
+		atrPrev := ATR(candles[:len(candles)-1], 14)
+		emaPrev := EMA(candles[:len(candles)-1], 20)
+		if atrPrev > 0 && emaPrev > 0 {
+			kUpPrev := emaPrev + 1.5*atrPrev
+			kLoPrev := emaPrev - 1.5*atrPrev
+			activePrev = bbPrev.Upper < kUpPrev && bbPrev.Lower > kLoPrev
+		}
+	}
+
+	fired := activePrev && !activeNow
+
+	// Momentum = close - midpoint of the combined channel
+	tail20 := candles[len(candles)-20:]
+	hi20, lo20 := tail20[0].High, tail20[0].Low
+	for _, c := range tail20 {
+		if c.High > hi20 {
+			hi20 = c.High
+		}
+		if c.Low < lo20 {
+			lo20 = c.Low
+		}
+	}
+	midpoint := (hi20+lo20)/2 + bb.Middle
+	momentum := candles[len(candles)-1].Close - midpoint/2
+
+	return SqueezeResult{Active: activeNow, Fired: fired, Momentum: momentum}
+}
+
+// ── Fibonacci Retracement Levels (S91) ───────────────────────────────────────
+
+// FibRetracement computes Fibonacci retracement price levels between high and
+// low for the given ratios (default 0.382, 0.5, 0.618 if none provided).
+// Carney "Harmonic Trading" (2010).
+func FibRetracement(high, low float64, levels ...float64) []float64 {
+	if len(levels) == 0 {
+		levels = []float64{0.382, 0.500, 0.618}
+	}
+	rang := high - low
+	out := make([]float64, len(levels))
+	for i, l := range levels {
+		out[i] = high - l*rang
+	}
+	return out
+}
+
+// ── Volume Profile POC (S95) ─────────────────────────────────────────────────
+
+// VolumeProfilePOC computes a simplified Point of Control (highest-volume price
+// level) from the provided candles. Steidlmayer "Markets and Market Logic" (1986).
+// Price levels are rounded to the nearest $100. Returns 0 if no volume data.
+func VolumeProfilePOC(candles []Candle) float64 {
+	if len(candles) == 0 {
+		return 0
+	}
+	bucket := make(map[int]float64)
+	for _, c := range candles {
+		// Distribute volume evenly across the candle's price range
+		hi := int(math.Round(c.High/100)) * 100
+		lo := int(math.Round(c.Low/100)) * 100
+		if hi == lo {
+			bucket[hi] += c.Volume
+			continue
+		}
+		steps := (hi - lo) / 100
+		if steps <= 0 {
+			steps = 1
+		}
+		volPerLevel := c.Volume / float64(steps)
+		for p := lo; p <= hi; p += 100 {
+			bucket[p] += volPerLevel
+		}
+	}
+	var pocPrice int
+	var maxVol float64
+	for price, vol := range bucket {
+		if vol > maxVol {
+			maxVol = vol
+			pocPrice = price
+		}
+	}
+	return float64(pocPrice)
+}
+
+// ── On Balance Volume (S96) ──────────────────────────────────────────────────
+
+// OBV computes Joseph Granville's On Balance Volume ("New Key to Stock Market
+// Profits", 1963). Cumulative sum: add volume on up days, subtract on down days.
+func OBV(candles []Candle) float64 {
+	if len(candles) < 2 {
+		return 0
+	}
+	var obv float64
+	for i := 1; i < len(candles); i++ {
+		if candles[i].Close > candles[i-1].Close {
+			obv += candles[i].Volume
+		} else if candles[i].Close < candles[i-1].Close {
+			obv -= candles[i].Volume
+		}
+	}
+	return obv
+}
+
+// ── Chaikin Money Flow (S97) ─────────────────────────────────────────────────
+
+// ChaikinMoneyFlow computes Marc Chaikin's Money Flow indicator.
+// CMF = sum(MFV, period) / sum(volume, period)
+// MFV = ((close - low) - (high - close)) / (high - low) * volume
+// Returns 0 if insufficient data or zero volume.
+func ChaikinMoneyFlow(candles []Candle, period int) float64 {
+	if len(candles) < period {
+		return 0
+	}
+	tail := candles[len(candles)-period:]
+	var mfvSum, volSum float64
+	for _, c := range tail {
+		hl := c.High - c.Low
+		if hl == 0 {
+			continue
+		}
+		mfv := ((c.Close - c.Low) - (c.High - c.Close)) / hl * c.Volume
+		mfvSum += mfv
+		volSum += c.Volume
+	}
+	if volSum == 0 {
+		return 0
+	}
+	return mfvSum / volSum
+}
