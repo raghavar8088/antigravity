@@ -225,6 +225,35 @@ func requireEnv(key string) string {
 	return val
 }
 
+// validatePortfolioViability warns at startup if the configured paper balance is
+// too small to produce positions above the execution size floor. This is a soft
+// warning — trading is not halted — but it surfaces the mismatch immediately.
+func validatePortfolioViability() {
+	balance := getInitialPaperBalanceUSD()
+	minSizeBTC := 0.0001
+	if v := os.Getenv("MIN_EXECUTION_SIZE_BTC"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			minSizeBTC = f
+		}
+	}
+	// Approximate BTC price; if env not set we use a conservative $50,000.
+	btcPriceUSD := 50000.0
+	kellyProbationary := 0.05 // 5% of portfolio — worst case (all strategies probationary)
+	smallestPositionUSD := balance * kellyProbationary
+	smallestPositionBTC := smallestPositionUSD / btcPriceUSD
+	if smallestPositionBTC < minSizeBTC {
+		log.Printf("[STARTUP] WARNING: portfolio viability check FAIL — balance=%.2f USD, "+
+			"smallest Kelly position=%.6f BTC (5%% × %.2f / %.0f), "+
+			"minExecutionSizeBTC=%.6f — ALL live signals will be rejected by size floor. "+
+			"Raise INITIAL_PAPER_BALANCE_USD or lower MIN_EXECUTION_SIZE_BTC.",
+			balance, smallestPositionBTC, balance, btcPriceUSD, minSizeBTC)
+	} else {
+		log.Printf("[STARTUP] Portfolio viability check PASS — balance=%.2f USD, "+
+			"smallest Kelly position=%.6f BTC >= floor=%.6f BTC",
+			balance, smallestPositionBTC, minSizeBTC)
+	}
+}
+
 // validateRequiredEnv checks all required environment variables in a single pass
 // so operators see every missing variable at once instead of restarting for each one.
 func validateRequiredEnv() {
@@ -421,6 +450,7 @@ func main() {
 	// A missing variable here is the #1 cause of exit status 0xffffffff on Windows
 	// because the process panics deep in a driver before logging anything useful.
 	validateRequiredEnv()
+	validatePortfolioViability()
 
 	// Log key env config at startup so misconfiguration is immediately visible.
 	log.Printf("[CONFIG] SQLITE_ENABLED=%s OTEL_ENABLED=%s ML_SCORER_ENDPOINT=%s MAX_POSITION_BTC=%s MAX_DAILY_LOSS_PCT=%s",
@@ -2149,6 +2179,21 @@ func main() {
 		perfs := sl.AllPerformance()
 		sort.Slice(perfs, func(i, j int) bool { return perfs[i].WinRate > perfs[j].WinRate })
 		json.NewEncoder(w).Encode(perfs) //nolint:errcheck
+	})
+
+	// GET /api/shadow/open — all currently open (not yet closed) shadow positions.
+	http.HandleFunc("/api/shadow/open", func(w http.ResponseWriter, r *http.Request) {
+		setCORS(w)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		sl := orchestrator.ShadowLedger()
+		if sl == nil {
+			json.NewEncoder(w).Encode([]interface{}{}) //nolint:errcheck
+			return
+		}
+		json.NewEncoder(w).Encode(sl.AllOpenTrades()) //nolint:errcheck
 	})
 
 	// GET /api/shadow/performance/{strategyName} — single strategy detail

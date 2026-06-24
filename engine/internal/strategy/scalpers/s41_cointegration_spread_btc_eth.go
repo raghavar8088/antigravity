@@ -43,7 +43,7 @@ func (s *CointegrationSpreadBTCETH) ValidRegimes() []Regime {
 func (s *CointegrationSpreadBTCETH) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.ETHPricePopulated || !ctx.ETHPriceHealthy || ctx.ETHPrice <= 0 {

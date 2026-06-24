@@ -42,7 +42,7 @@ func (s *PerpSpotBasisMomentum) ValidRegimes() []Regime {
 func (s *PerpSpotBasisMomentum) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.PerpPricePopulated || !ctx.PerpPriceHealthy {

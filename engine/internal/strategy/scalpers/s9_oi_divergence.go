@@ -29,7 +29,7 @@ func (s *OIDivergence) ValidRegimes() []Regime {
 func (s *OIDivergence) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime == RegimeVolatile || ctx.Regime == RegimeUnknown {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 15 {

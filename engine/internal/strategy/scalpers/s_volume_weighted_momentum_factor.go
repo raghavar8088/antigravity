@@ -76,7 +76,7 @@ func computeVWMFactor(candles []Candle, i int) (float64, bool) {
 func (s *VolumeWeightedMomentumFactor) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	candles := ctx.Candles15m

@@ -13,8 +13,8 @@ import (
 //             International Financial Markets, Institutions and Money.
 // Regime:     RANGING + TRENDING
 // Timeframes: 15m
-// Logic:      Bearish engulfing at 20-bar high + RSI>65 + CVD declining = SHORT.
-//             Bullish engulfing at 20-bar low + RSI<35 + CVD rising = LONG.
+// Logic:      Bearish engulfing at 20-bar high + RSI>60 + CVD declining = SHORT.
+//             Bullish engulfing at 20-bar low + RSI<40 + CVD rising = LONG.
 //             Second bar body must completely engulf first bar body.
 
 type EngulfingBarReversal struct{}
@@ -69,7 +69,7 @@ func (s *EngulfingBarReversal) Evaluate(ctx MarketContext) Signal {
 	nearSwingHigh := swing20High > 0 && math.Abs(price-swing20High)/swing20High < 0.005
 	nearSwingLow := swing20Low > 0 && math.Abs(price-swing20Low)/swing20Low < 0.005
 
-	if bullishEngulf && nearSwingLow && rsi < 35 && cvdRising {
+	if bullishEngulf && nearSwingLow && rsi < 40 && cvdRising {
 		minSL := math.Max(1.0*atr, 0.003*price)
 		sl := bar2.Low - 0.2*atr
 		if price-sl < minSL {
@@ -96,7 +96,7 @@ func (s *EngulfingBarReversal) Evaluate(ctx MarketContext) Signal {
 		}
 	}
 
-	if bearishEngulf && nearSwingHigh && rsi > 65 && cvdFalling {
+	if bearishEngulf && nearSwingHigh && rsi > 60 && cvdFalling {
 		minSL := math.Max(1.0*atr, 0.003*price)
 		sl := bar2.High + 0.2*atr
 		if sl-price < minSL {

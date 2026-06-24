@@ -37,7 +37,7 @@ func (s *LargeTradeImpactFollow) ValidRegimes() []Regime {
 func (s *LargeTradeImpactFollow) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1m) < 22 || len(ctx.Candles5m) < 22 {

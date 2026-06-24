@@ -21,7 +21,7 @@ func (s *BollingerMeanReversion) ValidRegimes() []Regime {
 func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 60 || len(ctx.Candles5m) < 25 {
@@ -44,7 +44,7 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 	ob := ctx.OrderBook
 
 	atLowerBand := price <= bb5m.Lower+0.1*atr5m
-	rsiOversold := rsi5m < 35
+	rsiOversold := rsi5m < 40
 	bidWallPresent := ob.BidWallSize > ob.AskWallSize*1.5
 	cvdExhaustedSell := ctx.CVD >= ctx.CVDPrev
 	obPopulated := ob.IsPopulated()
@@ -83,7 +83,7 @@ func (s *BollingerMeanReversion) Evaluate(ctx MarketContext) Signal {
 	}
 
 	atUpperBand := price >= bb5m.Upper-0.1*atr5m
-	rsiOverbought := rsi5m > 65
+	rsiOverbought := rsi5m > 60
 	askWallPresent := ob.AskWallSize > ob.BidWallSize*1.5
 	cvdExhaustedBuy := ctx.CVD <= ctx.CVDPrev
 	shortOBOK := (obPopulated && askWallPresent) || (!obPopulated && cvdExhaustedBuy)

@@ -39,7 +39,7 @@ func (s *MarketDepthGradient) ValidRegimes() []Regime {
 func (s *MarketDepthGradient) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 

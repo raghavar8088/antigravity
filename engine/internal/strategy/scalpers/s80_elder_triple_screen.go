@@ -28,7 +28,7 @@ func (s *ElderTripleScreen) ValidRegimes() []Regime {
 func (s *ElderTripleScreen) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles4h) < 10 || len(ctx.Candles1h) < 20 || len(ctx.Candles15m) < 20 {

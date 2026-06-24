@@ -3,6 +3,7 @@ package trading
 import (
 	"log"
 
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/observability"
 	"antigravity-engine/internal/strategy"
 	scalers "antigravity-engine/internal/strategy/scalpers"
@@ -10,36 +11,38 @@ import (
 
 // TODO: BTC/ETH stat-arb pairs — needs ETH feed wired into MarketContext (OI + price).
 
-// defaultMetaLabelThreshold is the minimum composite confluence score (out of
-// 5.0) a signal must reach to survive MetaLabelFilter.Filter.
-const defaultMetaLabelThreshold = 3.0
+// defaultMetaLabelMinFraction is the minimum FRACTION of *evaluable* confluence
+// axes a signal must satisfy to survive MetaLabelFilter.Filter.
+//
+// FLOOD MODE: this is a fraction (0.0-1.0) of the axes that actually had data
+// to score this cycle — NOT a fixed absolute out of 5.0. The previous design
+// used a hard 3.0/5.0 cut, which was systemically unreachable: axes 3/4/5
+// (funding / OI / order book) are SKIPPED when those feeds are thin or zero,
+// so the maximum attainable score collapsed to 2.0 and every scalers signal
+// was suppressed regardless of quality. Scaling the bar to the number of
+// evaluable axes fixes that. Default 0.0 = pass everything (flood); raise
+// META_LABEL_MIN_FRACTION in the ThresholdRegistry to re-introduce selectivity.
+const defaultMetaLabelMinFraction = 0.0
 
-// MetaLabelFilter scores each raw scaler signal against five independent
-// confluence axes — cross-strategy direction vote, CVD alignment, funding
-// alignment, OI confirmation, and order-book pressure — and suppresses
-// signals whose composite score falls below Threshold. Surviving signals
-// have Confidence scaled by score/5.0 so downstream Kelly sizing naturally
-// de-risks low-confluence entries instead of treating every approved signal
-// as equally confident.
+// MetaLabelFilter scores each raw scaler signal against independent confluence
+// axes — CVD alignment, funding alignment, OI confirmation, and order-book
+// pressure — and suppresses signals that satisfy fewer than MinFraction of the
+// axes that were actually evaluable this cycle. The old cross-strategy
+// direction-vote axis was removed: it required ≥2 strategies firing the SAME
+// direction in the SAME cycle, an unsatisfiable chicken-and-egg for sparse
+// signal batches. Surviving signals keep their Confidence (scaled only gently
+// by confluence) so downstream quality floors are not re-tripped.
 type MetaLabelFilter struct {
-	// Threshold is the minimum composite score (0.0-5.0) required to pass.
-	// Zero/unset falls back to defaultMetaLabelThreshold.
-	Threshold float64
-
-	// directionVotes is transient per-Filter-call state: direction -> count
-	// of signals in the current batch carrying that direction. Filter
-	// populates it before scoring so Score can read cross-strategy
-	// confluence (axis 1) without widening its fixed signature. Filter is
-	// invoked once per 15m evaluation cycle from a single goroutine
-	// (evalAndExecuteScalers) — this struct is not safe for concurrent
-	// Filter calls.
-	directionVotes map[scalers.Direction]int
+	// MinFraction is the minimum fraction (0.0-1.0) of evaluable axes a signal
+	// must satisfy to pass. Zero = pass everything (flood mode).
+	MinFraction float64
 }
 
-// NewMetaLabelFilter returns a MetaLabelFilter using the default 3.0/5.0
-// suppression threshold.
+// NewMetaLabelFilter returns a MetaLabelFilter using the flood-mode default
+// minimum-fraction threshold (overridable via META_LABEL_MIN_FRACTION).
 func NewMetaLabelFilter() *MetaLabelFilter {
-	return &MetaLabelFilter{Threshold: defaultMetaLabelThreshold}
+	frac := tconfig.Default().GetWithDefault("META_LABEL_MIN_FRACTION", defaultMetaLabelMinFraction)
+	return &MetaLabelFilter{MinFraction: frac}
 }
 
 // signalDirection maps an AggregatedSignal's legacy BUY/SELL action back to
@@ -51,92 +54,87 @@ func signalDirection(sig AggregatedSignal) scalers.Direction {
 	return scalers.DirectionShort
 }
 
-// Score evaluates sig against the five confluence axes and returns the
-// composite score (0.0-5.0) plus the reason codes for every axis that did
-// NOT contribute a point (used for suppression logging/metrics).
-func (f *MetaLabelFilter) Score(sig AggregatedSignal, ctx scalers.MarketContext, regime scalers.Regime, summary map[string]scalers.WalkForwardSummary) (float64, []string) {
+// Score evaluates sig against the confluence axes and returns the number of
+// axes satisfied (score), the number of axes that were actually evaluable this
+// cycle (maxScore — axes whose feeds had no data are not counted), and the
+// reason codes for every evaluable axis that did NOT contribute a point.
+//
+// Counting maxScore as the number of EVALUABLE axes (rather than a fixed 5) is
+// the core fix: a signal is judged only against the confluence checks for which
+// data actually exists, so a missing funding/OI/order-book feed can never push
+// the attainable score below the pass bar.
+func (f *MetaLabelFilter) Score(sig AggregatedSignal, ctx scalers.MarketContext, regime scalers.Regime, summary map[string]scalers.WalkForwardSummary) (score, maxScore float64, reasons []string) {
 	dir := signalDirection(sig)
-	score := 0.0
-	var reasons []string
 
-	// Axis 1 — cross-strategy direction vote: at least one OTHER strategy in
-	// the same batch signalling the same direction.
-	others := 0
-	if f.directionVotes != nil {
-		others = f.directionVotes[dir] - 1 // exclude this signal's own vote
-	}
-	if others >= 1 {
-		score++
-	} else {
-		reasons = append(reasons, "axis1_no_confluence")
-	}
-
-	// Axis 2 — CVD alignment with signal direction.
+	// Axis — CVD alignment with signal direction. Always evaluable (CVD is
+	// derived from the candle/aggTrade feed which is always present).
+	maxScore++
 	switch dir {
 	case scalers.DirectionLong:
 		if ctx.CVD > ctx.CVDPrev {
 			score++
 		} else {
-			reasons = append(reasons, "axis2_cvd_misaligned")
+			reasons = append(reasons, "cvd_misaligned")
 		}
 	default: // SHORT
 		if ctx.CVD < ctx.CVDPrev {
 			score++
 		} else {
-			reasons = append(reasons, "axis2_cvd_misaligned")
+			reasons = append(reasons, "cvd_misaligned")
 		}
 	}
 
-	// Axis 3 — funding rate alignment. Skipped (no penalty) when funding
-	// history is too thin to be meaningful.
+	// Axis — funding rate alignment. Only evaluable when funding history is
+	// thick enough to be meaningful.
 	if len(ctx.FundingHistory) >= 2 {
+		maxScore++
 		switch dir {
 		case scalers.DirectionLong:
 			if ctx.FundingRate < 0.0001 {
 				score++
 			} else {
-				reasons = append(reasons, "axis3_funding_misaligned")
+				reasons = append(reasons, "funding_misaligned")
 			}
 		default: // SHORT
 			if ctx.FundingRate > -0.0001 {
 				score++
 			} else {
-				reasons = append(reasons, "axis3_funding_misaligned")
+				reasons = append(reasons, "funding_misaligned")
 			}
 		}
 	}
 
-	// Axis 4 — open interest confirmation. Rising OI confirms trend
-	// participation in either direction. Skipped (no penalty) when either OI
-	// reading is unavailable (zero).
+	// Axis — open interest confirmation. Rising OI confirms participation in
+	// either direction. Only evaluable when both OI readings are present.
 	if ctx.OpenInterest != 0 && ctx.OpenInterestPrev != 0 {
+		maxScore++
 		if ctx.OpenInterest > ctx.OpenInterestPrev {
 			score++
 		} else {
-			reasons = append(reasons, "axis4_oi_not_confirming")
+			reasons = append(reasons, "oi_not_confirming")
 		}
 	}
 
-	// Axis 5 — order book pressure. Skipped (no penalty) when the order book
-	// snapshot isn't populated yet.
+	// Axis — order book pressure. Only evaluable when the snapshot is populated.
 	if ctx.OrderBook.IsPopulated() {
+		maxScore++
 		switch dir {
 		case scalers.DirectionLong:
 			if ctx.OrderBook.Imbalance > 0.15 {
 				score++
 			} else {
-				reasons = append(reasons, "axis5_ob_misaligned")
+				reasons = append(reasons, "ob_misaligned")
 			}
 		default: // SHORT
 			if ctx.OrderBook.Imbalance < -0.15 {
 				score++
 			} else {
-				reasons = append(reasons, "axis5_ob_misaligned")
+				reasons = append(reasons, "ob_misaligned")
 			}
 		}
 	}
 
-	return score, reasons
+	return score, maxScore, reasons
 }
 
 // Filter scores every signal in sigs and drops those whose composite score
@@ -148,34 +146,36 @@ func (f *MetaLabelFilter) Filter(sigs []AggregatedSignal, ctx scalers.MarketCont
 		return sigs
 	}
 
-	threshold := f.Threshold
-	if threshold <= 0 {
-		threshold = defaultMetaLabelThreshold
+	minFraction := f.MinFraction
+	if minFraction < 0 {
+		minFraction = 0
 	}
-
-	// Build the cross-strategy direction vote map once per cycle so axis 1
-	// can be computed inside Score without changing its signature.
-	votes := make(map[scalers.Direction]int, 2)
-	for _, s := range sigs {
-		votes[signalDirection(s)]++
-	}
-	f.directionVotes = votes
-	defer func() { f.directionVotes = nil }()
 
 	out := make([]AggregatedSignal, 0, len(sigs))
 	for _, s := range sigs {
-		score, reasons := f.Score(s, ctx, regime, summary)
-		if score < threshold {
+		score, maxScore, reasons := f.Score(s, ctx, regime, summary)
+		// Pass bar scales with the number of evaluable axes, so missing feeds
+		// can never make the bar unreachable. With minFraction 0 (flood) every
+		// signal passes; raise META_LABEL_MIN_FRACTION to re-introduce a cut.
+		required := minFraction * maxScore
+		if score < required {
 			if len(reasons) == 0 {
 				reasons = []string{"low_confluence"}
 			}
 			for _, reason := range reasons {
 				observability.ScalersMetaLabelSuppressed.WithLabelValues(s.StrategyName, reason).Inc()
 			}
-			log.Printf("[META_LABEL] suppressed strategy=%s score=%.1f/5 reasons=%v", s.StrategyName, score, reasons)
+			log.Printf("[META_LABEL] suppressed strategy=%s score=%.0f/%.0f need=%.1f reasons=%v", s.StrategyName, score, maxScore, required, reasons)
 			continue
 		}
-		s.Signal.Confidence *= score / 5.0
+		// Gentle confidence scaling by confluence ratio — bounded to [0.90,1.0]
+		// so a low-confluence-but-passing signal is not crushed below the
+		// downstream execution floors. maxScore is always ≥1 (CVD axis).
+		ratio := 1.0
+		if maxScore > 0 {
+			ratio = score / maxScore
+		}
+		s.Signal.Confidence *= 0.90 + 0.10*ratio
 		out = append(out, s)
 	}
 	return out

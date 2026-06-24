@@ -69,7 +69,7 @@ func (s *OrderbookImbalancePersistence) ValidRegimes() []Regime {
 func (s *OrderbookImbalancePersistence) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 

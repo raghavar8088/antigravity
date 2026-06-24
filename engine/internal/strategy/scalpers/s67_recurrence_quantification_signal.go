@@ -95,7 +95,7 @@ func nextWindowDirection(candles []Candle, windowEnd, windowLen int) int {
 func (s *RecurrenceQuantificationSignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 

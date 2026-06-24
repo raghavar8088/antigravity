@@ -14,7 +14,7 @@ import (
 // Regime:     RANGING (reversals work best in non-trending markets)
 // Timeframes: 15m
 // Logic:      Bullish: two consecutive down bars, third closes above bar-2 high.
-//             RSI < 30 on third bar confirms exhaustion. Bearish: mirrored.
+//             RSI < 40 on third bar confirms exhaustion. Bearish: mirrored.
 
 type ThreeBarReversal struct{}
 
@@ -27,7 +27,7 @@ func (s *ThreeBarReversal) ValidRegimes() []Regime {
 func (s *ThreeBarReversal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 20 {
@@ -54,7 +54,7 @@ func (s *ThreeBarReversal) Evaluate(ctx MarketContext) Signal {
 	bar2Down := bar2.Close < bar2.Open
 	bar3BullClose := bar3.Close > bar2.High
 
-	if bar1Down && bar2Down && bar3BullClose && rsi < 35 {
+	if bar1Down && bar2Down && bar3BullClose && rsi < 40 {
 		minSL := math.Max(1.0*atr, 0.003*price)
 		sl := bar2.Low - 0.2*atr
 		if price-sl < minSL {
@@ -86,7 +86,7 @@ func (s *ThreeBarReversal) Evaluate(ctx MarketContext) Signal {
 	bar2Up := bar2.Close > bar2.Open
 	bar3BearClose := bar3.Close < bar2.Low
 
-	if bar1Up && bar2Up && bar3BearClose && rsi > 65 {
+	if bar1Up && bar2Up && bar3BearClose && rsi > 60 {
 		minSL := math.Max(1.0*atr, 0.003*price)
 		sl := bar2.High + 0.2*atr
 		if sl-price < minSL {

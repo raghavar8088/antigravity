@@ -60,7 +60,7 @@ const (
 func (s *OptionsSkewDirectionSignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.DVOLPopulated || !ctx.DVOLHealthy || ctx.DVOL <= 0 {

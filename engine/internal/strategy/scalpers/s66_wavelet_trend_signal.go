@@ -37,7 +37,7 @@ func (s *WaveletTrendSignal) ValidRegimes() []Regime {
 func (s *WaveletTrendSignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 32 {

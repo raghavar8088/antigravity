@@ -43,7 +43,7 @@ const mtfZScoreConfirmBars = 3
 func (s *MTFZScoreConfluence) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 21 || len(ctx.Candles15m) < 21 || len(ctx.Candles1h) < 21 {

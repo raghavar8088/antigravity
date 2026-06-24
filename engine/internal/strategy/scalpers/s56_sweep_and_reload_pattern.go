@@ -44,7 +44,7 @@ func (s *SweepAndReloadPattern) ValidRegimes() []Regime {
 func (s *SweepAndReloadPattern) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	c5 := ctx.Candles5m

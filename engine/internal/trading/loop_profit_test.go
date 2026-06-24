@@ -10,11 +10,11 @@ import (
 const signalTolerance = 1e-9
 
 func TestSanitizeSignalForProfitRejectsLowConfidence(t *testing.T) {
-	// 0.65 sits below the Phase 22A floor of 0.68 and must be rejected.
-	// (Previously tested 0.70 against the old floor of 0.74; updated to keep
-	// a value that is genuinely below the current threshold.)
+	// A confidence below the live executable floor must be rejected. Derived from
+	// minExecutableConfidence (lowered to 0.50 in flood mode) rather than a hard
+	// constant, so the test tracks the threshold instead of drifting out of sync.
 	_, _, allowed := sanitizeSignalForProfit(strategy.Signal{
-		Confidence:    0.65,
+		Confidence:    minExecutableConfidence - 0.10,
 		StopLossPct:   0.30,
 		TakeProfitPct: 0.80,
 	})
@@ -47,10 +47,17 @@ func TestSanitizeSignalForProfitAppliesDefaults(t *testing.T) {
 	if math.Abs(sanitized.StopLossPct-0.10) > signalTolerance {
 		t.Fatalf("expected default stop loss %.2f, got %.4f", 0.10, sanitized.StopLossPct)
 	}
-	// TP is the higher of: (SL × R:R) or the absolute floor minSignalTakeProfitPct
-	expectedTakeProfit := 0.10 * 2.40
-	if expectedTakeProfit < 0.50 {
-		expectedTakeProfit = 0.50
+	// TP (no explicit TP supplied) = max(minSignalTakeProfitPct, SL × minRewardToRiskRatio),
+	// then floored at the absolute 0.10 TP floor in sanitizeSignalForProfit. Computed
+	// from the LIVE thresholds so the test tracks flood-mode (or any) registry values
+	// instead of a hardcoded R:R that drifts out of sync with the defaults.
+	const defaultSL = 0.10
+	expectedTakeProfit := minSignalTakeProfitPct
+	if byRR := defaultSL * minRewardToRiskRatio; byRR > expectedTakeProfit {
+		expectedTakeProfit = byRR
+	}
+	if expectedTakeProfit < 0.10 {
+		expectedTakeProfit = 0.10
 	}
 	if math.Abs(sanitized.TakeProfitPct-expectedTakeProfit) > signalTolerance {
 		t.Fatalf("expected default take profit %.4f, got %.4f", expectedTakeProfit, sanitized.TakeProfitPct)

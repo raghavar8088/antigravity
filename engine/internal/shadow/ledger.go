@@ -455,6 +455,25 @@ func (l *ShadowLedger) performanceLocked(strategyName string) ShadowPerformance 
 	return out
 }
 
+// AllOpenTrades returns a snapshot of all currently open shadow positions,
+// sorted oldest-first. Safe for concurrent reads.
+func (l *ShadowLedger) AllOpenTrades() []*ShadowTrade {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := make([]*ShadowTrade, 0, len(l.openTrades))
+	for _, t := range l.openTrades {
+		cp := *t
+		out = append(out, &cp)
+	}
+	// Sort oldest-first for stable display order.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].OpenedAt.Before(out[j-1].OpenedAt); j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
+}
+
 // AllPerformance returns ShadowPerformance for every strategy with at least
 // one closed shadow trade.
 func (l *ShadowLedger) AllPerformance() []ShadowPerformance {

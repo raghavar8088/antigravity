@@ -31,7 +31,7 @@ func (s *DualMomentumTrend) ValidRegimes() []Regime {
 func (s *DualMomentumTrend) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 13 || len(ctx.Candles15m) < 25 || len(ctx.Candles5m) < 21 {

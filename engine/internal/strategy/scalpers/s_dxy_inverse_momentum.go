@@ -33,7 +33,7 @@ const dxyMomentumMinChangePct = 0.15 // % move required alongside the breakout t
 func (s *DXYInverseMomentum) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.MacroFeedPopulated || !ctx.MacroFeedHealthy {

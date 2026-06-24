@@ -48,7 +48,7 @@ func (s *CrossCorrelationLeadLag) ValidRegimes() []Regime {
 func (s *CrossCorrelationLeadLag) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.ETHPricePopulated || ctx.ETHPrice <= 0 {

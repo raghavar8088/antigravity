@@ -33,7 +33,7 @@ func (s *TimeSeriesMomentumRebalance) ValidRegimes() []Regime {
 func (s *TimeSeriesMomentumRebalance) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 25 || len(ctx.Candles4h) < 5 {

@@ -70,7 +70,7 @@ func rocAndMomentumSign(candles []Candle, period int) (int, int) {
 func (s *GradientBoostingFeatureSignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 10 || len(ctx.Candles15m) < 10 || len(ctx.Candles1h) < 10 {

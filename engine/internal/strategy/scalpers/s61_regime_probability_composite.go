@@ -39,7 +39,7 @@ func (s *RegimeProbabilityComposite) ValidRegimes() []Regime {
 func (s *RegimeProbabilityComposite) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 40 || len(ctx.Candles1h) < 20 {

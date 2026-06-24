@@ -50,7 +50,7 @@ func (s *FearGaugeDivergence) ValidRegimes() []Regime {
 func (s *FearGaugeDivergence) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	// No RV substitute makes sense for this strategy — if DVOL is down, stay dormant.

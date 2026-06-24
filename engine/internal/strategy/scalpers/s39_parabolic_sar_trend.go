@@ -32,7 +32,7 @@ func (s *ParabolicSARTrend) ValidRegimes() []Regime {
 func (s *ParabolicSARTrend) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 10 || len(ctx.Candles1h) < 22 {

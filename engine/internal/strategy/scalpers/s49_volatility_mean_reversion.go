@@ -60,7 +60,7 @@ func meanFloats(vals []float64) float64 {
 func (s *VolatilityMeanReversion) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 22 {

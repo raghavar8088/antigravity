@@ -39,7 +39,7 @@ func (s *AutocorrelationPattern) ValidRegimes() []Regime {
 func (s *AutocorrelationPattern) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 

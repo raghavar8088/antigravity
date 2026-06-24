@@ -47,7 +47,7 @@ const (
 func (s *RiskOnOffRegimeProxy) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.MacroFeedPopulated || !ctx.MacroFeedHealthy {
@@ -91,7 +91,7 @@ func (s *RiskOnOffRegimeProxy) Evaluate(ctx MarketContext) Signal {
 	if riskOn {
 		// Entry trigger: BTC short-term trend agrees (EMA9>EMA21) and RSI not
 		// already overbought (>75) — avoid chasing an exhausted move.
-		if ema9 <= ema21 || rsi > 75 {
+		if ema9 <= ema21 || rsi > 60 {
 			return NoSignal(name)
 		}
 		sl := price - math.Max(1.0*atr1h, 0.003*price)
@@ -119,7 +119,7 @@ func (s *RiskOnOffRegimeProxy) Evaluate(ctx MarketContext) Signal {
 	}
 
 	// riskOff
-	if ema9 >= ema21 || rsi < 25 {
+	if ema9 >= ema21 || rsi < 40 {
 		return NoSignal(name)
 	}
 	sl := price + math.Max(1.0*atr1h, 0.003*price)

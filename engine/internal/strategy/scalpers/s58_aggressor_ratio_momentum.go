@@ -39,7 +39,7 @@ func (s *AggressorRatioMomentum) ValidRegimes() []Regime {
 func (s *AggressorRatioMomentum) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 20 {

@@ -33,7 +33,7 @@ func (s *SuperTrendMomentum) ValidRegimes() []Regime {
 func (s *SuperTrendMomentum) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 22 || len(ctx.Candles1h) < 22 {

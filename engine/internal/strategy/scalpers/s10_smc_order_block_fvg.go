@@ -165,7 +165,7 @@ func obStackedAboveFVG(obLow, obHigh, fvgLow, fvgHigh, atr float64) bool {
 func (s *SMCOrderBlockFVG) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 25 {

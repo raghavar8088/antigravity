@@ -41,7 +41,7 @@ func (s *VPINToxicitySignal) ValidRegimes() []Regime {
 func (s *VPINToxicitySignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 15 || len(ctx.CVDHistory) < 3 {

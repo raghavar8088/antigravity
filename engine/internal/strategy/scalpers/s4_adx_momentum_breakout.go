@@ -21,7 +21,7 @@ func (s *ADXMomentumBreakout) ValidRegimes() []Regime {
 func (s *ADXMomentumBreakout) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles4h) < 30 || len(ctx.Candles15m) < 25 {

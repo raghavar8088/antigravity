@@ -24,17 +24,18 @@ const (
 // used when the env var is unset or invalid. Kept separate from Meta so the
 // catalog table below stays readable.
 var metaDefaults = map[string]float64{
-	// signal_quality
-	"MIN_EXECUTABLE_CONFIDENCE":      0.68,
-	"MIN_BRIDGE_CONFIDENCE":          0.65,
-	"MIN_REWARD_TO_RISK_RATIO":       2.40,
+	// signal_quality — FLOOD MODE defaults (env vars still override). Restore the
+	// commented "was" values to re-tighten signal quality.
+	"MIN_EXECUTABLE_CONFIDENCE":      0.50, // was 0.68
+	"MIN_BRIDGE_CONFIDENCE":          0.50, // was 0.65
+	"MIN_REWARD_TO_RISK_RATIO":       1.20, // was 2.40
 	"MIN_SIGNAL_TAKE_PROFIT_PCT":     0.15,
 	"MAX_SIGNAL_STOP_LOSS_PCT":       1.50,
-	"SCALER_RR_MINIMUM":              2.00,
+	"SCALER_RR_MINIMUM":              1.20, // was 2.00
 	"SCALER_SL_LOWER_BOUND_PCT":      0.25,
 
 	// position_sizing
-	"MIN_EXECUTION_SIZE_BTC":         0.01,
+	"MIN_EXECUTION_SIZE_BTC":         0.00001, // was 0.0001 (flood: clear Kelly floor on small balances)
 	"FUTURES_POSITION_CAPITAL_PCT":   0.01,
 	"KELLY_MAX_POSITION_PCT":         0.10,
 	"KELLY_MIN_TRADES_REQUIRED":      30,
@@ -79,7 +80,7 @@ var metaDefaults = map[string]float64{
 	"REGIME_ADX_RANGE_THRESHOLD":  20,
 
 	// execution
-	"MIN_EXECUTION_WEIGHT_TO_TRADE": 0.50,
+	"MIN_EXECUTION_WEIGHT_TO_TRADE": 0.30, // was 0.50 (flood)
 }
 
 // Catalog returns the full static metadata for every tunable threshold.
@@ -154,10 +155,10 @@ func Catalog() []Meta {
 		{
 			Key: "MIN_EXECUTION_SIZE_BTC", Category: CategoryPositionSizing,
 			Label: "Minimum Execution Size", EnvVar: "MIN_EXECUTION_SIZE_BTC",
-			Description: "Smallest BTC size the engine will submit as an order; sizes below this are treated as a no-trade.",
-			DataType: "decimal", Unit: "BTC", Min: 0.001, Max: 0.05, RecommendedMin: 0.005, RecommendedMax: 0.02,
+			Description: "Smallest BTC size the engine will execute for LIVE signals. Default 0.0001 BTC — compatible with $100-$1000 paper portfolios (Kelly 5% of $100 = $5 / $100k BTC = 0.00005 BTC). Shadow signals are not blocked by this floor — they clamp up to this value so the shadow ledger always gets a meaningful position. Set higher on real accounts to avoid micro-lot fee drag.",
+			DataType: "decimal", Unit: "BTC", Min: 0.0001, Max: 0.05, RecommendedMin: 0.0001, RecommendedMax: 0.005,
 			RiskLevel: "low",
-			WhatIfIncreased: "Smaller, marginal-conviction signals are skipped entirely instead of executing at a tiny size — reduces fee drag from micro-trades.",
+			WhatIfIncreased: "Smaller Kelly-sized signals are skipped — reduces fee drag from micro-trades but can prevent the engine from trading at all on low-balance paper accounts.",
 			WhatIfDecreased: "Allows smaller positions through, increasing trade count but raising the share of PnL eaten by fees/slippage on each tiny fill.",
 		},
 		{

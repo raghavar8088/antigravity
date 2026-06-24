@@ -44,7 +44,7 @@ func (s *LiquiditySweepReversal) ValidRegimes() []Regime {
 func (s *LiquiditySweepReversal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1m) < 30 || len(ctx.Candles5m) < 25 {

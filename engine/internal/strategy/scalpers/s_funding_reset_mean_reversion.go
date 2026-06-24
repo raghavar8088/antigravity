@@ -69,7 +69,7 @@ func minutesToNearestSettlement(hour, minute int) int {
 func (s *FundingResetMeanReversion) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 12 || len(ctx.Candles1m) < 10 {

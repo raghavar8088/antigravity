@@ -91,7 +91,7 @@ func rsiBullishDiv3Bar(candles []Candle, period int) bool {
 func (s *RSIDivergenceMultiframe) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime == RegimeUnknown || ctx.Regime == RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 20 || len(ctx.Candles15m) < 20 {

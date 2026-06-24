@@ -71,7 +71,7 @@ func excessReturn(candles []Candle) (excess float64, ok bool) {
 func (s *ExcessReturnMomentum) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 15 || len(ctx.Candles1h) < 15 || len(ctx.Candles4h) < 15 {

@@ -53,7 +53,7 @@ func (s *LiquidationCascadeFade) ValidRegimes() []Regime {
 func (s *LiquidationCascadeFade) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if !ctx.LiquidationFeedPopulated {

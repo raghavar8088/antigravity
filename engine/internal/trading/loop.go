@@ -47,7 +47,7 @@ import (
 // minExecutionSizeBTC is loaded from the ThresholdRegistry (MIN_EXECUTION_SIZE_BTC)
 // so it can be adjusted without a restart. Default 0.0001 BTC works with a $100
 // paper portfolio: $100 × 5% kelly = $5 / $100k BTC = 0.00005 BTC — just above floor.
-var minExecutionSizeBTC = tconfig.Default().GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.0001)
+var minExecutionSizeBTC = tconfig.Default().GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.00001)
 
 const (
 	sizeChangeEpsilonBTC      = 1e-9
@@ -64,14 +64,17 @@ const (
 	btcPaperAccountID = "btc-paper-1"
 
 	// FEAT 9: base defaults — all overridable via env vars at runtime.
-	defaultMinExecutableConfidence     = 0.68
-	defaultMinBridgeApprovalConfidence = 0.65
-	defaultMinRewardToRiskRatio        = 2.40
+	// FLOOD MODE: signal-quality floors lowered so all 80 scalers strategies can
+	// reach execution simultaneously. Raise these (code default or the matching
+	// env/ThresholdRegistry key) to restore selectivity.
+	defaultMinExecutableConfidence     = 0.50 // was 0.68
+	defaultMinBridgeApprovalConfidence = 0.50 // was 0.65
+	defaultMinRewardToRiskRatio        = 1.20 // was 2.40
 	defaultMinSignalTakeProfitPct      = 0.15
 	defaultMaxSignalStopLossPct        = 1.50
 	defaultSignalStopLossPct           = 0.18 // Safer default SL — reduce micro noise losses
-	defaultMinExecutionWeightToTrade   = 0.50 // Require stronger strategy quality before execution
-	defaultScalerRRMinimum             = 2.00 // Scaler-signal reward:risk floor enforced in sanitizeScalerSignal
+	defaultMinExecutionWeightToTrade   = 0.30 // was 0.50
+	defaultScalerRRMinimum             = 1.20 // was 2.00 — Scaler reward:risk floor in sanitizeScalerSignal
 
 	marketHistoryMaxSamples = 320
 
@@ -116,7 +119,7 @@ func RefreshThresholdsFromRegistry() {
 	maxSignalStopLossPct = reg.GetWithDefault("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
 	minExecutionWeightToTrade = reg.GetWithDefault("MIN_EXECUTION_WEIGHT_TO_TRADE", defaultMinExecutionWeightToTrade)
 	scalerRRMinimum = reg.GetWithDefault("SCALER_RR_MINIMUM", defaultScalerRRMinimum)
-	minExecutionSizeBTC = reg.GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.0001)
+	minExecutionSizeBTC = reg.GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.00001)
 	log.Printf("[CONFIG] minExecutionSizeBTC=%.6f", minExecutionSizeBTC)
 }
 

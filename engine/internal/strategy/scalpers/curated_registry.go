@@ -1,6 +1,9 @@
 package scalpers
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 // performanceRegistry holds live performance stats for each scalper strategy.
 // Updated by UpdatePerformance() after each trade closes.
@@ -87,7 +90,9 @@ func BuildCuratedScalpers() []RegistryEntry {
 		all[i].Strategy = withShadowOverride(e.Strategy)
 	}
 
-	return FilterWinnersOnly(all)
+	filtered := FilterWinnersOnly(all)
+	log.Printf("[REGISTRY] BuildCuratedScalpers returned %d strategies (pre-filter %d)", len(filtered), len(all))
+	return filtered
 }
 
 // FilterWinnersOnly removes strategies that have >= 30 trades AND are marked

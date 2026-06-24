@@ -53,7 +53,7 @@ func williamsPercentR(candles []Candle, period int) float64 {
 func (s *WilliamsPercentRReversion) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 17 {

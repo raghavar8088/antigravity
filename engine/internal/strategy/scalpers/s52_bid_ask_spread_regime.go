@@ -38,7 +38,7 @@ func (s *BidAskSpreadRegime) ValidRegimes() []Regime {
 func (s *BidAskSpreadRegime) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 15 {

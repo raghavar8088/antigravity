@@ -46,7 +46,7 @@ func (s *VolCrushFade) ValidRegimes() []Regime {
 func (s *VolCrushFade) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles15m) < 25 {
@@ -115,7 +115,7 @@ func (s *VolCrushFade) Evaluate(ctx MarketContext) Signal {
 
 	slDist := max64(1.0*atr15m, 0.003*price)
 
-	if lowerTouches >= 3 && rsi < 35 {
+	if lowerTouches >= 3 && rsi < 40 {
 		sl := price - slDist
 		tp1 := bb.Middle
 		// Enforce R:R >= 2:1 — if BB midline target doesn't reach 2x SL distance,
@@ -138,7 +138,7 @@ func (s *VolCrushFade) Evaluate(ctx MarketContext) Signal {
 		}
 	}
 
-	if upperTouches >= 3 && rsi > 65 {
+	if upperTouches >= 3 && rsi > 60 {
 		sl := price + slDist
 		tp1 := bb.Middle
 		if price-tp1 < 2.0*slDist {

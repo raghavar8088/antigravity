@@ -37,7 +37,7 @@ func (s *VolRegimeBreakout) ValidRegimes() []Regime {
 func (s *VolRegimeBreakout) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeVolatile && ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < volBreakoutLookback+25 || len(ctx.Candles15m) < 5 {

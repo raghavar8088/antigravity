@@ -129,7 +129,7 @@ func (s *HurstRegimeSwitcher) Evaluate(ctx MarketContext) Signal {
 		atLower := price <= bb.Lower+0.1*atr15m
 		atUpper := price >= bb.Upper-0.1*atr15m
 
-		if atLower && rsi15m < 35 {
+		if atLower && rsi15m < 40 {
 			sl := bb.Lower - maxF(1.0*atr15m, 0.003*price)
 			risk := price - sl
 			tp := price + 2.2*risk
@@ -148,7 +148,7 @@ func (s *HurstRegimeSwitcher) Evaluate(ctx MarketContext) Signal {
 				),
 			}
 		}
-		if atUpper && rsi15m > 65 {
+		if atUpper && rsi15m > 60 {
 			sl := bb.Upper + maxF(1.0*atr15m, 0.003*price)
 			risk := sl - price
 			tp := price - 2.2*risk

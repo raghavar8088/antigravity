@@ -37,7 +37,7 @@ func (s *AbsorptionPatternSignal) ValidRegimes() []Regime {
 func (s *AbsorptionPatternSignal) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles5m) < 4 || len(ctx.Candles15m) < 15 {

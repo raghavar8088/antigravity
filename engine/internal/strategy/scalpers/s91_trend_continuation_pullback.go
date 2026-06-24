@@ -27,7 +27,7 @@ func (s *TrendContinuationPullback) ValidRegimes() []Regime {
 func (s *TrendContinuationPullback) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 20 {

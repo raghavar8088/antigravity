@@ -285,8 +285,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/engine/[...path]/route.ts": {
-    "mtime": 1782140886.3174863,
-    "ast_hash": "6197e494120c9904891a3f8f26cdc0f8",
+    "mtime": 1782234709.5677269,
+    "ast_hash": "7933c92a03a34b15b5fb8783b5ace239",
     "semantic_hash": ""
   },
   "client/src/app/api/engine/events/route.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1782151611.8725305,
-    "ast_hash": "fc9b2fd1f0bdf272a8d4636ca5672b88",
+    "mtime": 1782291965.2887814,
+    "ast_hash": "42f18d6d820e227cc77f20ea1f2afe3d",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -4130,8 +4130,8 @@
     "semantic_hash": ""
   },
   "engine/internal/kelly/kelly.go": {
-    "mtime": 1781432816.0279448,
-    "ast_hash": "88d708a9d914cf1ae24e455a0fd2a162",
+    "mtime": 1782304747.771478,
+    "ast_hash": "283ab7f95f1f292272f6b6886e97187e",
     "semantic_hash": ""
   },
   "engine/internal/kelly/kelly_test.go": {
@@ -5600,8 +5600,8 @@
     "semantic_hash": ""
   },
   "engine/internal/security/auth.go": {
-    "mtime": 1781376936.696478,
-    "ast_hash": "43abf102962a43947c06e8dc0d2c0e5b",
+    "mtime": 1782234693.0343757,
+    "ast_hash": "a7dcf01e0d632866d34d79ad33a9f5b0",
     "semantic_hash": ""
   },
   "engine/internal/security/authorization.go": {
@@ -5915,8 +5915,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/loop.go": {
-    "mtime": 1782231624.569691,
-    "ast_hash": "5c5e64c4353aede2d893a1664f1a9a57",
+    "mtime": 1782304670.9999874,
+    "ast_hash": "778aae7f643f5972b95154253cca901b",
     "semantic_hash": ""
   },
   "engine/internal/trading/loop_deps.go": {
@@ -22780,12 +22780,12 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1782232140.7405748,
-    "ast_hash": "350d755648bc00a98713b3c423f027d5",
+    "mtime": 1782322911.6208265,
+    "ast_hash": "d0204824e874e1aefc34700ceaf920a1",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1782232140.7405748,
+    "mtime": 1782322911.6208265,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1782232140.7405748,
-    "ast_hash": "93ea34c5e05d0059c103127c6ff0c476",
+    "mtime": 1782322911.6208265,
+    "ast_hash": "21f3412beed699d45af1b6b643412f83",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1782232140.7405748,
-    "ast_hash": "1a4ec188e63c47650656437ec8ac36b0",
+    "mtime": 1782322911.6208265,
+    "ast_hash": "eaf1e166d39957e1a36b02694c3da5d0",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1782232142.0503356,
-    "ast_hash": "1c33ea69ec1ec93c1442e6cd1408e204",
+    "mtime": 1782322913.1709278,
+    "ast_hash": "36a34befb8d09e575b2599e96089628d",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23065,13 +23065,13 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/curated_registry.go": {
-    "mtime": 1782140391.980906,
-    "ast_hash": "a5b15870914013238ecdc2c2db16b989",
+    "mtime": 1782322489.8479705,
+    "ast_hash": "b3c9c11023d90f9ccfdc15ef20415534",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/indicators.go": {
-    "mtime": 1782033037.8074133,
-    "ast_hash": "1800b3b2802d87eaec845b1889928aef",
+    "mtime": 1782321462.1738975,
+    "ast_hash": "c78e337d45b8ac863ce1b0d8b9429104",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/registry.go": {
@@ -23080,8 +23080,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s1_ema_ribbon_trend_rider.go": {
-    "mtime": 1781576820.4651067,
-    "ast_hash": "36b4c022c54acc1974a08af105249a1d",
+    "mtime": 1782304757.4253626,
+    "ast_hash": "a13d2a75660efabddbced9142c57cbfa",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s2_bollinger_mean_reversion.go": {
@@ -23095,8 +23095,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s4_adx_momentum_breakout.go": {
-    "mtime": 1781412361.4954314,
-    "ast_hash": "ad92bc9dd5b54a03efe6d155e06de76b",
+    "mtime": 1782304764.2417388,
+    "ast_hash": "6191261e52c3cd93347d766c51de73fa",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s5_vwap_institutional_fade.go": {
@@ -23125,8 +23125,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/types.go": {
-    "mtime": 1782140358.8125446,
-    "ast_hash": "45a7790c7dd3e51673301503dc61fcb8",
+    "mtime": 1782240402.7340147,
+    "ast_hash": "2a626c4127de93449e6188a04c490e61",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
@@ -23140,13 +23140,13 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/adaptive_confidence.go": {
-    "mtime": 1781432771.5580394,
-    "ast_hash": "fa6f568ba70f972b2fc5e8486810d386",
+    "mtime": 1782304704.7182772,
+    "ast_hash": "c63f2780714932a3b60f75fead9d6619",
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1782150958.0409362,
-    "ast_hash": "001d241b89280574874490e9c40ffc1c",
+    "mtime": 1782304584.5495033,
+    "ast_hash": "124f0f3aa12504170c8dd068ec8b5999",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {
@@ -23290,8 +23290,8 @@
     "semantic_hash": ""
   },
   "client/next-env.d.ts": {
-    "mtime": 1781933920.5777144,
-    "ast_hash": "29f60a376e12bf72b67d4994fcc84214",
+    "mtime": 1782234431.2281494,
+    "ast_hash": "b698cdd97fe8e3bd16dcd74899ad7cef",
     "semantic_hash": ""
   },
   "client/src/internal/strategy/evaluator.ts": {
@@ -23450,8 +23450,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/concentration_gate.go": {
-    "mtime": 1781634116.686999,
-    "ast_hash": "1ff1cdcb5f1cd105a05b14074b5a9605",
+    "mtime": 1782304724.1728244,
+    "ast_hash": "2f5d1daa3b0f9bea34f2c9e46b9d3a2f",
     "semantic_hash": ""
   },
   "engine/internal/trading/meta_label.go": {
@@ -23860,8 +23860,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/rollout_phase.go": {
-    "mtime": 1782140380.3386931,
-    "ast_hash": "591a8b192f4edb1123eebe82e44bd84b",
+    "mtime": 1782304734.3202868,
+    "ast_hash": "159995d3b35d9189b0e64561814d7a1c",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s_btc_equities_correlation_break.go": {
@@ -24000,8 +24000,8 @@
     "semantic_hash": ""
   },
   "engine/internal/config/catalog.go": {
-    "mtime": 1782056221.5306213,
-    "ast_hash": "90361d581cf3b1edda408797aec4bd40",
+    "mtime": 1782287059.2151241,
+    "ast_hash": "4740c20f7bb2b473592745f59bafb3fc",
     "semantic_hash": ""
   },
   "engine/internal/config/http.go": {
@@ -24025,7 +24025,7 @@
     "semantic_hash": ""
   },
   "engine/internal/config/strictness.go": {
-    "mtime": 1782150958.0409362,
+    "mtime": 1782280985.5002139,
     "ast_hash": "74e52fa8aa4670e4e0e3fb1388f74093",
     "semantic_hash": ""
   },
@@ -24050,8 +24050,8 @@
     "semantic_hash": ""
   },
   "engine/internal/shadow/ledger.go": {
-    "mtime": 1782140634.5547976,
-    "ast_hash": "0a3cadf20bb6492c84be8e3ed5164d2c",
+    "mtime": 1782291954.4338207,
+    "ast_hash": "2fd7dfbcad3688ad4a680cee65d81bcf",
     "semantic_hash": ""
   },
   "engine/internal/shadow/promoter.go": {
@@ -24062,6 +24062,396 @@
   "client/src/components/terminal/institutional/TradeEngineResetButton.tsx": {
     "mtime": 1782149802.2088487,
     "ast_hash": "d4042fcaba9bc12aa5c6271c529868a9",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/family1_momentum.go": {
+    "mtime": 1782240742.4323404,
+    "ast_hash": "6ad428adc3d63de621a2d9aad463174a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/family2_mean_reversion.go": {
+    "mtime": 1782240793.0318933,
+    "ast_hash": "8a99d23648babbbfbd909efd2902d301",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/family3_orderflow.go": {
+    "mtime": 1782240880.5640821,
+    "ast_hash": "1b554085b0a53dc62aa6725576404556",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/family4_ml_proxy.go": {
+    "mtime": 1782240952.6447632,
+    "ast_hash": "95b173ad0e6ea05279c44eb25662d58e",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/family5_derivatives_macro.go": {
+    "mtime": 1782240956.1418853,
+    "ast_hash": "3abd174c2899a495ae46095388273021",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/indicators_s30_s79.go": {
+    "mtime": 1782240491.2253156,
+    "ast_hash": "3dc71575aa7cf9d997427b60220dcf80",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s30_dual_momentum_trend.go": {
+    "mtime": 1782240627.2337356,
+    "ast_hash": "3d1788530337122db5d2dd2f1be90c4f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s30_s79_registry_shadow_test.go": {
+    "mtime": 1782241062.7306712,
+    "ast_hash": "a0a8e8db91ae4a5c4ba6a2c075a1a89f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s31_time_series_momentum.go": {
+    "mtime": 1782240639.6001449,
+    "ast_hash": "4e8f91436be570ea2a3fb9ef7842fd83",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s32_kalman_filter_trend.go": {
+    "mtime": 1782240650.1629496,
+    "ast_hash": "0af3c165d95c51117673d81778429179",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s33_adaptive_moving_average_trend.go": {
+    "mtime": 1782240659.2736886,
+    "ast_hash": "c60f801185b04d17bfa910189cf677ac",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s34_triple_barrier_momentum.go": {
+    "mtime": 1782240675.2439842,
+    "ast_hash": "5ba74a77be114e6415886ca3637a1b7e",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s35_fractal_breakout.go": {
+    "mtime": 1782240689.0622394,
+    "ast_hash": "2211a8cea8b0f59a46cb598dc12ca39a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s36_supertrend_momentum.go": {
+    "mtime": 1782240698.901208,
+    "ast_hash": "0ccc97ef2ac466bc0fbf02e0a287ab67",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s37_ichimoku_cloud_breakout.go": {
+    "mtime": 1782240710.231685,
+    "ast_hash": "d5a3e8535d6455e451facede25d745c3",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s38_donchian_channel_breakout.go": {
+    "mtime": 1782240719.6580987,
+    "ast_hash": "40eb670b8e5f2752ad3d8f11a8ee7739",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s39_parabolic_sar_trend.go": {
+    "mtime": 1782240729.1027682,
+    "ast_hash": "3834422a32aa6d7d570410c7970d26ef",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s40_ornstein_uhlenbeck_reversion.go": {
+    "mtime": 1782240647.930922,
+    "ast_hash": "0898d0a58e8e881f544f0e74ff60efc0",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s41_cointegration_spread_btc_eth.go": {
+    "mtime": 1782240666.1105075,
+    "ast_hash": "27d89090f78a5bae7335db2f99554521",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s42_rsi_divergence_multiframe.go": {
+    "mtime": 1782240683.9357305,
+    "ast_hash": "ef20c0004ea1c130750d0a64ac3f6f8f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s43_stochastic_oscillator_reversion.go": {
+    "mtime": 1782240694.4750364,
+    "ast_hash": "d6237ba0ab8860e1333e556c24a77464",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s44_williams_percent_r_reversion.go": {
+    "mtime": 1782240706.4909773,
+    "ast_hash": "2ea743984b2e48d660aacc6c27764372",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s45_commodity_channel_index_reversion.go": {
+    "mtime": 1782240716.6683505,
+    "ast_hash": "b733f268e79777ca95f0a86a111944eb",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s46_price_channel_mean_reversion.go": {
+    "mtime": 1782240729.3642147,
+    "ast_hash": "92c30304ba4a97cdfa7db2fdce53845d",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s47_linear_regression_channel_fade.go": {
+    "mtime": 1782240740.69799,
+    "ast_hash": "b31952924c0aa4add2088af9118d7906",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s48_pivot_point_reversion.go": {
+    "mtime": 1782240757.3145878,
+    "ast_hash": "d6b170c1667c0f48eca90dc38425ec30",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s49_volatility_mean_reversion.go": {
+    "mtime": 1782240775.2377522,
+    "ast_hash": "1c7cc0712d20cd990293675e2541e032",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s50_trade_intensity_burst.go": {
+    "mtime": 1782240705.3304896,
+    "ast_hash": "477045c8cd796773067f7b618a4e1e9c",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s51_large_trade_impact_follow.go": {
+    "mtime": 1782240722.4142916,
+    "ast_hash": "bec933a8dd02351f6ba958ae5498456c",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s52_bid_ask_spread_regime.go": {
+    "mtime": 1782240736.233572,
+    "ast_hash": "a2db1a0e6d6404e9e5bee7f776946f9d",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s53_vpin_toxicity_signal.go": {
+    "mtime": 1782240750.7697988,
+    "ast_hash": "72e88405add54efae0697b95fee34281",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s54_order_book_depth_imbalance_persistence.go": {
+    "mtime": 1782240765.7327716,
+    "ast_hash": "094b6a28d2ac30e956e01d3aa819ce11",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s55_absorption_pattern_signal.go": {
+    "mtime": 1782240782.855599,
+    "ast_hash": "fc982227e3ea99eb6df58c63e9078a2a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s56_sweep_and_reload_pattern.go": {
+    "mtime": 1782240859.4640825,
+    "ast_hash": "43b66424caa0acd8591336dd2e1d0095",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s57_market_depth_gradient.go": {
+    "mtime": 1782240820.6791897,
+    "ast_hash": "7f37ab5976ddb0965824051194519730",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s58_aggressor_ratio_momentum.go": {
+    "mtime": 1782240835.943992,
+    "ast_hash": "d830d0d00e1ae782f308113aee7be0a4",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s59_hidden_liquidity_detection.go": {
+    "mtime": 1782240853.681008,
+    "ast_hash": "724adf1255f418b642310be084ae820a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s60_feature_confluence_score.go": {
+    "mtime": 1782240738.224022,
+    "ast_hash": "9255fe038b72a6d07f4e7bed8d846eb8",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s61_regime_probability_composite.go": {
+    "mtime": 1782240764.62819,
+    "ast_hash": "fb696f19b8cd61d2947fd9a0567a3104",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s62_gradient_boosting_feature_signal.go": {
+    "mtime": 1782240782.1272027,
+    "ast_hash": "4e3232066ca922ba570ba740c1a07836",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s63_autocorrelation_pattern.go": {
+    "mtime": 1782240805.6636002,
+    "ast_hash": "c0c4f362cf0736d05ffcb3f4596f7ab3",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s64_shannon_entropy_regime.go": {
+    "mtime": 1782240822.5132413,
+    "ast_hash": "2c8a3602b2b2e5906b0c3915aa3b7991",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s65_cross_correlation_lead_lag.go": {
+    "mtime": 1782240841.1522026,
+    "ast_hash": "6c32fd9333b1672211f106d6519fb100",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s66_wavelet_trend_signal.go": {
+    "mtime": 1782240856.1378033,
+    "ast_hash": "eb0242f1fd1fcb80d9f6fb4fbb1582ad",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s67_recurrence_quantification_signal.go": {
+    "mtime": 1782240882.479938,
+    "ast_hash": "f92e2b0577cc69ca420d9b7e40bec970",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s68_excess_return_momentum.go": {
+    "mtime": 1782240913.0789433,
+    "ast_hash": "6e5dd98da0e48d1a802977f4f4127f4b",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s69_structural_break_detection.go": {
+    "mtime": 1782240929.3027365,
+    "ast_hash": "7345c0b855b20811db841845cb8c6f44",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s70_options_skew_direction_signal.go": {
+    "mtime": 1782240984.6748564,
+    "ast_hash": "642be18e1d2299d8355abd9281861cb8",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s71_gamma_exposure_magnet.go": {
+    "mtime": 1782240984.6748564,
+    "ast_hash": "6ff0014aadc555b2a4b94a42307b69c6",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s72_perpetual_funding_basis_composite.go": {
+    "mtime": 1782240984.6754172,
+    "ast_hash": "abc4318d38873911e6e126023f209138",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s73_long_short_ratio_contrarian.go": {
+    "mtime": 1782240984.6748564,
+    "ast_hash": "d26bc9a0052e05b831fefb9a9c796491",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s74_taker_buy_sell_volume_ratio.go": {
+    "mtime": 1782240984.6760938,
+    "ast_hash": "27942c3f5dec4c83dd8d522c38a4430a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s75_open_interest_velocity.go": {
+    "mtime": 1782240984.6766307,
+    "ast_hash": "4dceb1dbf9dea11c88bc33681c953f0e",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s76_exchange_netflow_signal.go": {
+    "mtime": 1782240984.6754172,
+    "ast_hash": "a7f50082c41b3bf6023672d4b353a7a3",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s77_miner_hash_rate_momentum.go": {
+    "mtime": 1782240984.6766307,
+    "ast_hash": "17608a42873af86d5c6311ee9a229007",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s78_stablecoin_supply_flow.go": {
+    "mtime": 1782240984.6766307,
+    "ast_hash": "cb29be616979b4fb44ca36ea77941d0e",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s79_fear_greed_contrarian.go": {
+    "mtime": 1782240984.6766307,
+    "ast_hash": "68c865568eaba6b0c9a540f1bb1ed9e3",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s80_elder_triple_screen.go": {
+    "mtime": 1782321498.8289797,
+    "ast_hash": "efe146f7a2203bac8d8c09e9ceb53804",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s80_s99_immortal_edition.go": {
+    "mtime": 1782322481.3632727,
+    "ast_hash": "c7f4761df2052546267a20d468700473",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s81_coppock_curve_momentum.go": {
+    "mtime": 1782321510.834007,
+    "ast_hash": "51753c9b8389c753592be439c80d8e7f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s82_chande_momentum_oscillator.go": {
+    "mtime": 1782321523.3140442,
+    "ast_hash": "017816e5b3f34fb2eef8d5790f1c367f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s83_know_sure_thing_momentum.go": {
+    "mtime": 1782321536.1926665,
+    "ast_hash": "834c758a52f3908edbcacec654ca724a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s84_aroon_trend_confirmation.go": {
+    "mtime": 1782321547.885475,
+    "ast_hash": "7b3634ba3a474b7182249ff04e3b6bb4",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s85_nr4_nr7_volatility_compression.go": {
+    "mtime": 1782321581.6012957,
+    "ast_hash": "88b892d9823b8cba5a1ae2f13fe23df9",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s86_volatility_ratio_breakout.go": {
+    "mtime": 1782321594.2763464,
+    "ast_hash": "6c78486ad79e20c7214fa00df9d459fe",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s87_inside_bar_momentum.go": {
+    "mtime": 1782321609.1184068,
+    "ast_hash": "3fcb5940d83cacafdc61544eeba3f3df",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s88_squeeze_momentum_breakout.go": {
+    "mtime": 1782322181.3233905,
+    "ast_hash": "b65a330a1739b8bcb4ae2cfefbbe6b8d",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s89_historical_vol_percentile_breakout.go": {
+    "mtime": 1782322195.8720667,
+    "ast_hash": "0b55e51156a44cd006d9869d31778e88",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s90_three_bar_reversal.go": {
+    "mtime": 1782322223.7684488,
+    "ast_hash": "11beab3db875ff231d740c76d9ff3808",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s91_trend_continuation_pullback.go": {
+    "mtime": 1782322246.859339,
+    "ast_hash": "2d405539c7f30ad40ae0470cfbe4cce4",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s92_engulfing_bar_reversal.go": {
+    "mtime": 1782322264.2751162,
+    "ast_hash": "8fb7f2fb24ee0d6c39dba0fd98ad7b9c",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s93_pin_bar_reversal.go": {
+    "mtime": 1782322283.1575997,
+    "ast_hash": "6483417213024d87b47a7f631558b76f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s94_morning_evening_star.go": {
+    "mtime": 1782322301.733116,
+    "ast_hash": "835877d799ffbe6c7e1889d88372a46f",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s95_volume_profile_poc_magnet.go": {
+    "mtime": 1782322331.8307326,
+    "ast_hash": "12d9ec12409a3b2d061ba1a5ba767477",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s96_obv_divergence.go": {
+    "mtime": 1782322348.9090645,
+    "ast_hash": "039ea831ea0446f85aacd2300e5752b5",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s97_chaikin_money_flow_signal.go": {
+    "mtime": 1782322361.004038,
+    "ast_hash": "b0574e5134e93d606a0b110eb023f39a",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s98_multi_indicator_consensus.go": {
+    "mtime": 1782322398.398807,
+    "ast_hash": "07e2a6ad3454f85b789267ae1a49598d",
+    "semantic_hash": ""
+  },
+  "engine/internal/strategy/scalpers/s99_adaptive_trend_following.go": {
+    "mtime": 1782322424.3230574,
+    "ast_hash": "cd42d3cfb5a044deae9eb62507a1b28c",
     "semantic_hash": ""
   }
 }

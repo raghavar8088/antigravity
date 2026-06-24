@@ -77,7 +77,7 @@ func clusterTouchesHigh(candles []Candle, level float64) int {
 func (s *HiddenLiquidityDetection) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeVolatile {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	c5 := ctx.Candles5m

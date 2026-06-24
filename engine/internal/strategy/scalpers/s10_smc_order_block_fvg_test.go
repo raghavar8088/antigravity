@@ -103,7 +103,11 @@ func buildSMCBearishCandles() []Candle {
 	return c
 }
 
-func TestSMCOrderBlockFVG_NoSignalWhenVolatileRegime(t *testing.T) {
+// FLOOD MODE: regime gating now blocks only RegimeUnknown, so a strategy fires
+// in VOLATILE (as in every non-UNKNOWN regime) when its entry conditions are
+// met. The old behaviour (NoSignal in VOLATILE) was the regime gate this audit
+// deliberately removed so all strategies trade in any regime.
+func TestSMCOrderBlockFVG_FiresInVolatileRegime(t *testing.T) {
 	s := &SMCOrderBlockFVG{}
 	c15 := buildSMCBullishCandles()
 	atr := ATR(c15, 14)
@@ -119,8 +123,32 @@ func TestSMCOrderBlockFVG_NoSignalWhenVolatileRegime(t *testing.T) {
 		CVDHistory: []float64{10, 20, 30},
 	}
 	sig := s.Evaluate(ctx)
+	if sig.Direction != DirectionLong {
+		t.Fatalf("flood mode: expected LONG in VOLATILE regime, got %s", sig.Direction)
+	}
+}
+
+// The only regime that still suppresses a signal is RegimeUnknown — the eval
+// loop never builds a context with UNKNOWN, so this is the single remaining
+// (defensive) regime gate.
+func TestSMCOrderBlockFVG_NoSignalWhenUnknownRegime(t *testing.T) {
+	s := &SMCOrderBlockFVG{}
+	c15 := buildSMCBullishCandles()
+	atr := ATR(c15, 14)
+	fvg := detectBullishFVG(c15)
+	swingHigh := SwingHigh(c15[:len(c15)-1], 10)
+	price := math.Max(swingHigh+0.01, fvg.High-0.1*atr)
+
+	ctx := MarketContext{
+		Regime:     RegimeUnknown,
+		Price:      price,
+		Candles15m: c15,
+		CVD:        100,
+		CVDHistory: []float64{10, 20, 30},
+	}
+	sig := s.Evaluate(ctx)
 	if sig.Direction != DirectionNone {
-		t.Fatalf("expected NoSignal in VOLATILE regime, got %s", sig.Direction)
+		t.Fatalf("expected NoSignal in UNKNOWN regime, got %s", sig.Direction)
 	}
 }
 

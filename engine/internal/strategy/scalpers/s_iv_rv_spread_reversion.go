@@ -43,7 +43,7 @@ func (s *IVRVSpreadReversion) ValidRegimes() []Regime {
 func (s *IVRVSpreadReversion) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeRanging && ctx.Regime != RegimeTrending {
+	if ctx.Regime == RegimeUnknown {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 25 {
