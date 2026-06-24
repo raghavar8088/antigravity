@@ -1,7 +1,6 @@
 package trading
 
 import (
-	"log"
 	"sync"
 	"time"
 
@@ -35,39 +34,13 @@ func NewAdaptiveConfidenceFloor(base float64) *AdaptiveConfidenceFloor {
 	return a
 }
 
-// Update recalculates the floor based on a 0.0–1.0 data quality score.
-// Call this every time a candle is validated by the data quality engine.
+// Update is a no-op — the confidence floor is fixed at baseFloor regardless
+// of data quality score. Dynamic elevation is disabled so valid signals are
+// never blocked by transient data quality fluctuations.
 func (a *AdaptiveConfidenceFloor) Update(dataQuality float64) {
-	var newFloor float64
-	switch {
-	case dataQuality >= 0.90:
-		newFloor = a.baseFloor
-	case dataQuality >= 0.75:
-		newFloor = 0.72
-	case dataQuality >= 0.60:
-		newFloor = 0.78
-	case dataQuality >= 0.40:
-		newFloor = 0.90
-	default:
-		newFloor = 1.01 // effective lockout — no trades pass
-	}
-
-	// Never go below the base floor.
-	if newFloor < a.baseFloor {
-		newFloor = a.baseFloor
-	}
-
 	a.mu.Lock()
-	old := a.currentFloor
-	a.currentFloor = newFloor
-	a.lastUpdated = time.Now()
 	a.lastQuality = dataQuality
 	a.mu.Unlock()
-
-	if old != newFloor {
-		log.Printf("[CONFIDENCE] Floor adjusted %.2f → %.2f (data quality=%.2f)", old, newFloor, dataQuality)
-	}
-	tradingConfidenceFloor.Set(newFloor)
 }
 
 // Floor returns the current minimum executable confidence threshold.

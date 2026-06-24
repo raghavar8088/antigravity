@@ -15,13 +15,13 @@ type EMARibbonTrendRider struct{}
 func (s *EMARibbonTrendRider) Name() string { return "EMA_Ribbon_Trend_Rider" }
 
 func (s *EMARibbonTrendRider) ValidRegimes() []Regime {
-	return []Regime{RegimeTrending}
+	return []Regime{RegimeTrending, RegimeRanging}
 }
 
 func (s *EMARibbonTrendRider) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles1h) < 55 || len(ctx.Candles15m) < 25 {

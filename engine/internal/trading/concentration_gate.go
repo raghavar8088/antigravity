@@ -1,7 +1,6 @@
 package trading
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -50,33 +49,9 @@ func normalizeConcentrationDirection(dir string) string {
 	return "SHORT"
 }
 
-// CanOpen reports whether a new position of the given direction and size may
-// open without breaching the same-direction count or correlated-BTC limits.
-// On rejection it returns a human-readable reason suitable for logging and
-// Prometheus rejection labels.
+// CanOpen always returns (true, "") — concentration gating is disabled so all
+// strategies may fire simultaneously regardless of directional correlation.
 func (g *ConcentrationGate) CanOpen(strategyName, direction string, sizeBTC float64) (bool, string) {
-	dir := normalizeConcentrationDirection(direction)
-
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	sameDirCount := 0
-	sameDirBTC := 0.0
-	for _, p := range g.openPositions {
-		if p.Direction == dir {
-			sameDirCount++
-			sameDirBTC += p.SizeBTC
-		}
-	}
-
-	if g.maxSameDirection > 0 && sameDirCount >= g.maxSameDirection {
-		return false, fmt.Sprintf("concentration_limit: %d/%d same-direction positions open", sameDirCount, g.maxSameDirection)
-	}
-
-	if g.maxCorrelatedBTC > 0 && sameDirBTC+sizeBTC > g.maxCorrelatedBTC {
-		return false, fmt.Sprintf("btc_concentration_limit: %.4f+%.4f > %.4f BTC", sameDirBTC, sizeBTC, g.maxCorrelatedBTC)
-	}
-
 	return true, ""
 }
 

@@ -9,8 +9,9 @@ package kelly
 import "fmt"
 
 // hardMaxPositionPct is the absolute ceiling enforced regardless of any config.
-// This protects against config errors that might set MaxPositionPct too high.
-const hardMaxPositionPct = 0.10 // 10%
+// Reduced from 10% to 2% to account for up to 80 strategies trading simultaneously.
+// 80 strategies × 2% = 160% max theoretical exposure (bounded by Kelly math below this).
+const hardMaxPositionPct = 0.02 // 2%
 
 // KellyInputs carries all inputs required for one sizing computation.
 type KellyInputs struct {
@@ -51,7 +52,7 @@ func Compute(inputs KellyInputs) (KellyResult, error) {
 
 	// ── Step 1: Minimum trade count ───────────────────────────────────────────
 	if inputs.TradeCount < min {
-		pct := clamp(0.05, 0, effectiveMax(inputs))
+		pct := clamp(0.005, 0, effectiveMax(inputs))
 		return KellyResult{
 			FinalPositionPct: pct,
 			FinalPositionUSD: pct * inputs.PortfolioValue,

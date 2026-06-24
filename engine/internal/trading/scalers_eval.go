@@ -152,17 +152,6 @@ type ScalerBundle struct {
 	orLow  float64
 	orDate string // YYYY-MM-DD UTC date the OR was formed for
 
-	// Per-strategy cooldown tracking
-	lastSignalByStrategy map[string]time.Time
-	signalMu             sync.RWMutex
-
-	// Directional cap for scalers path
-	openLongCount  int
-	openShortCount int
-	maxOpenLongs   int
-	maxOpenShorts  int
-	dirMu          sync.Mutex
-
 	// lastDataQualityScore is the most recent data-quality score (0-100),
 	// fed from the 1m candle validation gate in loop.go. Used as a Kelly
 	// sizing input. Zero value (unset) reads back as a neutral 80 via
@@ -173,16 +162,13 @@ type ScalerBundle struct {
 
 func newScalerBundle() *ScalerBundle {
 	return &ScalerBundle{
-		candles1m:            make([]scalers.Candle, 0, maxCandles1m+1),
-		candles5m:            make([]scalers.Candle, 0, maxCandles5m+1),
-		candles15m:           make([]scalers.Candle, 0, maxCandles15m+1),
-		candles1h:            make([]scalers.Candle, 0, maxCandles1h+1),
-		candles4h:            make([]scalers.Candle, 0, maxCandles4h+1),
-		strategies:           scalers.BuildCuratedScalpers(),
-		metaLabelFilter:      NewMetaLabelFilter(),
-		lastSignalByStrategy: make(map[string]time.Time),
-		maxOpenLongs:         3,
-		maxOpenShorts:        3,
+		candles1m:       make([]scalers.Candle, 0, maxCandles1m+1),
+		candles5m:       make([]scalers.Candle, 0, maxCandles5m+1),
+		candles15m:      make([]scalers.Candle, 0, maxCandles15m+1),
+		candles1h:       make([]scalers.Candle, 0, maxCandles1h+1),
+		candles4h:       make([]scalers.Candle, 0, maxCandles4h+1),
+		strategies:      scalers.BuildCuratedScalpers(),
+		metaLabelFilter: NewMetaLabelFilter(),
 	}
 }
 
@@ -817,18 +803,6 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		return
 	}
 
-	// FIX 5: Block all entries if regime classifier says no new entries allowed
-	if lastRegimeClass != nil && !lastRegimeClass.AllowNewEntries {
-		log.Printf("[SCALERS] cycle skipped reason=regime_no_new_entries regime=%s", lastRegimeClass.Regime)
-		// B: emit per-strategy rejection for regime block
-		if o.scalerBundle != nil {
-			for _, entry := range o.scalerBundle.strategies {
-				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "regime_blocked").Inc()
-			}
-		}
-		return
-	}
-
 	// Increment eval cycle counter (only counts real evaluation cycles, not unknown-regime skips)
 	newCount := atomic.AddInt64(&o.scalerBundle.evalCount, 1)
 	o.scalerBundle.mu.Lock()
@@ -865,35 +839,10 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	var rawAgg []AggregatedSignal
 	rejected := 0
 	for _, entry := range o.scalerBundle.strategies {
-		// Walk-forward gate: skip DEMOTED strategies.
-		if o.walkForward != nil && !o.walkForward.IsActive(entry.Name) {
-			log.Printf("[SCALERS] %s DEMOTED by walk-forward validator — skipping", entry.Name)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "walkforward_demoted").Inc() // C
-			continue
-		}
-		// Per-strategy cooldown gate.
-		cooldown := scalerStrategyCooldown(entry.Name)
-		if o.scalerBundle.isStrategyOnCooldown(entry.Name, cooldown) {
-			log.Printf("[SCALERS] %s on cooldown (%.0fs) — skipping", entry.Name, cooldown.Seconds())
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "cooldown").Inc() // E
-			continue
-		}
 		sig := entry.Strategy.Evaluate(mctx)
 		observability.ScalersSignalsEvaluated.WithLabelValues(entry.Name).Inc() // A
 		if sig.Direction == scalers.DirectionNone {
 			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "no_signal").Inc() // D
-			continue
-		}
-		// Directional cap gate. Shadow signals don't consume real capital or
-		// create real directional exposure, so they bypass this cap — we want
-		// to see how each strategy performs independently, not have shadow
-		// signals artificially blocked because live strategies are already
-		// at the cap.
-		sigDir := string(sig.Direction)
-		if !sig.IsShadow && !o.scalerBundle.canOpenDirectionScaler(sigDir) {
-			log.Printf("[SCALERS] %s directional cap reached for %s — skipping", entry.Name, sigDir)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "directional_cap").Inc() // G
-			rejected++
 			continue
 		}
 		log.Printf("[SCALERS] eval strategy=%s direction=%s confidence=%.2f reason=%s",
@@ -943,6 +892,32 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			continue
 		}
 		targetBTC := kellyResult.FinalPositionUSD / price
+
+		// Shadow ledger recording (does not block live execution).
+		if sig.IsShadow && shadowLedger != nil {
+			shadowSize := targetBTC
+			if shadowSize < minExecutionSizeBTC {
+				shadowSize = minExecutionSizeBTC
+			}
+			shSig := shadow.Signal{
+				Strategy:    sig.Strategy,
+				Direction:   shadow.Direction(sig.Direction),
+				StopLoss:    sig.StopLoss,
+				TakeProfit:  sig.TakeProfit,
+				TakeProfit2: sig.TakeProfit2,
+			}
+			if trade, err := shadowLedger.OpenTrade(shSig, price, shadowSize); err != nil {
+				log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
+			} else {
+				log.Printf("[SHADOW] Shadow trade recorded: %s %s @ %.2f size=%.4f BTC",
+					sig.Strategy, sig.Direction, trade.EntryPrice, shadowSize)
+				observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
+				observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
+			}
+			// Fall through to live paper OMS — shadow flag no longer blocks execution.
+		}
+
+		// Enforce the execution size floor.
 		if targetBTC < minExecutionSizeBTC {
 			log.Printf("[SCALERS] %s Kelly size %.6f BTC below minimum %.6f BTC — skipping", entry.Name, targetBTC, minExecutionSizeBTC)
 			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "kelly_too_small").Inc()
@@ -955,20 +930,6 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			entry.Name, kellyIn.WinRate, string(session), kellyIn.RegimeMult, kellyIn.SessionMult, kellyIn.DataQualityScore,
 			kellyResult.RawKelly, kellyResult.FinalPositionUSD, targetBTC)
 
-		// Concentration gate: blocks correlated same-direction exposure across
-		// strategies (e.g. 3 different strategies all going long BTC on the
-		// same trend) on top of the plain trade-count directional cap above.
-		// Sized check, so it runs after Kelly has produced a final BTC size.
-		// Shadow signals bypass this for the same reason they bypass the
-		// directional cap — they create no real exposure.
-		if !sig.IsShadow && o.concentrationGate != nil {
-			if ok, reason := o.concentrationGate.CanOpen(entry.Name, sigDir, targetBTC); !ok {
-				log.Printf("[CONCENTRATION] %s blocked: %s", entry.Name, reason)
-				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "concentration_limit").Inc()
-				rejected++
-				continue
-			}
-		}
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {
 			adaptiveFloor = o.adaptiveFloor.Floor()
@@ -980,37 +941,6 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			continue
 		}
 		legacySig.CreatedAt = sig.Timestamp
-		// Record signal for cooldown tracking (after quality gate passes) —
-		// applies to shadow and live alike, since cooldown reflects the
-		// strategy's own natural signal cadence, not capital constraints.
-		o.scalerBundle.recordStrategySignal(entry.Name)
-
-		// Shadow routing: the signal passed every gate a live signal would
-		// (walk-forward, cooldown, Kelly sizing, R:R/confidence quality gate)
-		// but the strategy isn't cleared for live trading yet. Open a
-		// hypothetical position in the shadow ledger instead of the paper
-		// OMS — never touches the real account balance.
-		if sig.IsShadow {
-			if shadowLedger != nil {
-				shSig := shadow.Signal{
-					Strategy:    sig.Strategy,
-					Direction:   shadow.Direction(sig.Direction),
-					StopLoss:    sig.StopLoss,
-					TakeProfit:  sig.TakeProfit,
-					TakeProfit2: sig.TakeProfit2,
-				}
-				trade, err := shadowLedger.OpenTrade(shSig, price, targetBTC)
-				if err != nil {
-					log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
-				} else {
-					log.Printf("[SHADOW] Shadow trade opened: %s %s @ %.2f SL=%.2f TP=%.2f size=%.4f BTC",
-						sig.Strategy, sig.Direction, trade.EntryPrice, sig.StopLoss, sig.TakeProfit, targetBTC)
-					observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
-					observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
-				}
-			}
-			continue // never falls through to the live paper OMS
-		}
 
 		rawAgg = append(rawAgg, AggregatedSignal{
 			Signal:       legacySig,
@@ -1063,11 +993,6 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		o.risk.NotifyFill(sig)
 		o.openAndTrackPosition(ctx, sig, fill, agg.StrategyName)
 		o.tracker.RecordSignal(agg.StrategyName)
-		// Track directional open for per-direction cap.
-		o.scalerBundle.onScalerTradeOpen(string(sig.Action))
-		if o.concentrationGate != nil {
-			o.concentrationGate.RecordOpen(agg.StrategyName, string(sig.Action), sig.TargetSize)
-		}
 	}
 }
 
@@ -1117,78 +1042,8 @@ func (o *Orchestrator) checkShadowPositions(price float64) {
 }
 
 // scalerStrategyCooldown returns the cooldown duration for a strategy by name.
-func scalerStrategyCooldown(name string) time.Duration {
-	switch {
-	case containsAny(name, "Sniper", "Sweep", "Reversion"):
-		return 30 * time.Second
-	case containsAny(name, "Trend", "Fade", "VWAP"):
-		return 3 * time.Minute
-	case containsAny(name, "Breakout", "Funding", "OI"):
-		return 10 * time.Minute
-	case containsAny(name, "ADX", "Momentum"):
-		return 30 * time.Minute
-	default:
-		return 30 * time.Second
-	}
-}
-
-// containsAny returns true if s contains any of the given substrings.
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if len(sub) > 0 && len(s) >= len(sub) {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// isStrategyOnCooldown returns true if the strategy has fired within its cooldown window.
-func (b *ScalerBundle) isStrategyOnCooldown(name string, cooldown time.Duration) bool {
-	b.signalMu.RLock()
-	last, ok := b.lastSignalByStrategy[name]
-	b.signalMu.RUnlock()
-	if !ok {
-		return false
-	}
-	return time.Since(last) < cooldown
-}
-
-// recordStrategySignal records that a strategy just fired.
-func (b *ScalerBundle) recordStrategySignal(name string) {
-	b.signalMu.Lock()
-	b.lastSignalByStrategy[name] = time.Now().UTC()
-	b.signalMu.Unlock()
-}
-
-// canOpenDirectionScaler returns true if a new trade can be opened in the given direction.
-func (b *ScalerBundle) canOpenDirectionScaler(dir string) bool {
-	b.dirMu.Lock()
-	defer b.dirMu.Unlock()
-	if dir == "LONG" || dir == "BUY" {
-		return b.maxOpenLongs <= 0 || b.openLongCount < b.maxOpenLongs
-	}
-	return b.maxOpenShorts <= 0 || b.openShortCount < b.maxOpenShorts
-}
-
-// onScalerTradeOpen increments the directional counter when a scaler trade opens.
-func (b *ScalerBundle) onScalerTradeOpen(dir string) {
-	b.dirMu.Lock()
-	defer b.dirMu.Unlock()
-	if dir == "LONG" || dir == "BUY" {
-		b.openLongCount++
-	} else {
-		b.openShortCount++
-	}
-}
-
-// isScalerStrategy reports whether name belongs to the curated scalers
-// roster. Used by processCloseEvents to decide whether a closed position
-// should affect scalers-specific bookkeeping (directional counters,
-// concentration gate) versus a legacy non-scalper strategy's position.
+// isScalerStrategy reports whether name belongs to the curated scalers roster.
+// Used by processCloseEvents to identify scalers positions.
 func (b *ScalerBundle) isScalerStrategy(name string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -1198,21 +1053,6 @@ func (b *ScalerBundle) isScalerStrategy(name string) bool {
 		}
 	}
 	return false
-}
-
-// onScalerTradeClose decrements the directional counter when a scaler trade closes.
-func (b *ScalerBundle) onScalerTradeClose(dir string) {
-	b.dirMu.Lock()
-	defer b.dirMu.Unlock()
-	if dir == "LONG" || dir == "BUY" {
-		if b.openLongCount > 0 {
-			b.openLongCount--
-		}
-	} else {
-		if b.openShortCount > 0 {
-			b.openShortCount--
-		}
-	}
 }
 
 // GetCVD returns the current cumulative volume delta snapshot.

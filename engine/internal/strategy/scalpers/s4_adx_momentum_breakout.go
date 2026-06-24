@@ -15,13 +15,13 @@ type ADXMomentumBreakout struct{}
 func (s *ADXMomentumBreakout) Name() string { return "ADX_Momentum_Breakout" }
 
 func (s *ADXMomentumBreakout) ValidRegimes() []Regime {
-	return []Regime{RegimeTrending}
+	return []Regime{RegimeTrending, RegimeRanging}
 }
 
 func (s *ADXMomentumBreakout) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 
-	if ctx.Regime != RegimeTrending {
+	if ctx.Regime != RegimeTrending && ctx.Regime != RegimeRanging {
 		return NoSignal(name)
 	}
 	if len(ctx.Candles4h) < 30 || len(ctx.Candles15m) < 25 {

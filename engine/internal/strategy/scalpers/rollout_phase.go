@@ -93,15 +93,13 @@ func (p *phaseGatedStrategy) Evaluate(ctx MarketContext) Signal {
 	if result.Direction == DirectionNone {
 		return result
 	}
-
+	// Phase gate removed — all strategies trade live regardless of rollout phase.
+	// SHADOW_STRATEGIES env var can still force individual strategies to shadow mode.
 	name := p.inner.Name()
-	if isLiveOverride(name) {
-		// Explicit promotion wins over both the phase gate and a forced-shadow flag.
-		result.IsShadow = false
-		return result
-	}
-	if currentRolloutPhase() < p.phase || isForcedShadow(name) {
+	if isForcedShadow(name) {
 		result.IsShadow = true
+	} else {
+		result.IsShadow = false
 	}
 	return result
 }

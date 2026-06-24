@@ -44,8 +44,12 @@ import (
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
+// minExecutionSizeBTC is loaded from the ThresholdRegistry (MIN_EXECUTION_SIZE_BTC)
+// so it can be adjusted without a restart. Default 0.0001 BTC works with a $100
+// paper portfolio: $100 × 5% kelly = $5 / $100k BTC = 0.00005 BTC — just above floor.
+var minExecutionSizeBTC = tconfig.Default().GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.0001)
+
 const (
-	minExecutionSizeBTC       = 0.01
 	sizeChangeEpsilonBTC      = 1e-9
 	futuresInitialCapitalUSD  = 1000000.0
 	futuresPositionCapitalPct = 0.01 // 1% of paper capital per futures entry (BTC Equity)
@@ -112,6 +116,8 @@ func RefreshThresholdsFromRegistry() {
 	maxSignalStopLossPct = reg.GetWithDefault("MAX_SIGNAL_STOP_LOSS_PCT", defaultMaxSignalStopLossPct)
 	minExecutionWeightToTrade = reg.GetWithDefault("MIN_EXECUTION_WEIGHT_TO_TRADE", defaultMinExecutionWeightToTrade)
 	scalerRRMinimum = reg.GetWithDefault("SCALER_RR_MINIMUM", defaultScalerRRMinimum)
+	minExecutionSizeBTC = reg.GetWithDefault("MIN_EXECUTION_SIZE_BTC", 0.0001)
+	log.Printf("[CONFIG] minExecutionSizeBTC=%.6f", minExecutionSizeBTC)
 }
 
 // parseFloatEnvLazy is the init-time version (before parseFloatEnv is declared).
@@ -263,16 +269,6 @@ type Orchestrator struct {
 	// execWatchdog tracks tick/signal/fill activity for stale-trading alerts.
 	execWatchdog *ExecutionWatchdog
 
-	// BUG 4: directional trade caps
-	openLongCount  int
-	openShortCount int
-	maxOpenLongs   int
-	maxOpenShorts  int
-
-	// BUG 5: per-strategy trade cooldown
-	lastTradeByStrategy map[string]time.Time
-	strategyMu          sync.RWMutex
-
 	mu sync.RWMutex
 
 	// deps carries all Phase 1–5 upgrade dependencies (data quality, regime,
@@ -299,10 +295,6 @@ type Orchestrator struct {
 	// walkForward tracks rolling 30-trade Sharpe and win rate per strategy,
 	// auto-promoting or demoting strategies from live rotation.
 	walkForward *scalers.WalkForwardValidator
-
-	// concentrationGate limits same-direction BTC exposure across the curated
-	// scalers strategies (e.g. 3 strategies all going long on the same trend).
-	concentrationGate *ConcentrationGate
 
 	// adaptiveFloor raises the minimum confidence threshold during low data
 	// quality periods.
@@ -331,60 +323,6 @@ func (o *Orchestrator) LastCycleTime() time.Time {
 	return o.lastCycleAt
 }
 
-// canOpenDirectional returns true when a new order for the given side ("BUY"/"SELL")
-// would not exceed the configured max-open-long or max-open-short cap. BUG 4.
-func (o *Orchestrator) canOpenDirectional(side string) bool {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
-		return o.maxOpenLongs <= 0 || o.openLongCount < o.maxOpenLongs
-	}
-	return o.maxOpenShorts <= 0 || o.openShortCount < o.maxOpenShorts
-}
-
-// recordDirectionalOpen increments the appropriate directional counter. BUG 4.
-func (o *Orchestrator) recordDirectionalOpen(side string) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
-		o.openLongCount++
-	} else {
-		o.openShortCount++
-	}
-}
-
-// recordDirectionalClose decrements the appropriate directional counter. BUG 4.
-func (o *Orchestrator) recordDirectionalClose(side string) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if strings.EqualFold(side, "BUY") || strings.EqualFold(side, "LONG") {
-		if o.openLongCount > 0 {
-			o.openLongCount--
-		}
-	} else {
-		if o.openShortCount > 0 {
-			o.openShortCount--
-		}
-	}
-}
-
-// isOnCooldown returns true if the strategy has traded within the cooldown window. BUG 5.
-func (o *Orchestrator) isOnCooldown(strategyName string, cooldown time.Duration) bool {
-	if cooldown <= 0 {
-		return false
-	}
-	o.strategyMu.RLock()
-	last, ok := o.lastTradeByStrategy[strategyName]
-	o.strategyMu.RUnlock()
-	return ok && time.Since(last) < cooldown
-}
-
-// recordStrategyTrade marks the current time as the last trade time for a strategy. BUG 5.
-func (o *Orchestrator) recordStrategyTrade(strategyName string) {
-	o.strategyMu.Lock()
-	o.lastTradeByStrategy[strategyName] = time.Now().UTC()
-	o.strategyMu.Unlock()
-}
 
 // CurrentRegime returns the most recently classified market regime string.
 func (o *Orchestrator) CurrentRegime() string {
@@ -466,20 +404,7 @@ func NewOrchestrator(
 		portfolioLedger:         paperpersist.NewPortfolioLedger(futuresInitialCapitalUSD),
 		scalerBundle:            newScalerBundle(),
 		walkForward:             scalers.NewWalkForwardValidator(),
-		concentrationGate: NewConcentrationGate(
-			int(tconfig.Default().GetWithDefault("MAX_CORRELATED_STRATEGIES", 2)),
-			tconfig.Default().GetWithDefault("MAX_CORRELATED_BTC", 0.30),
-		),
-		adaptiveFloor:           NewAdaptiveConfidenceFloor(minExecutableConfidence),
-		// BUG 4: directional caps — now sourced from the ThresholdRegistry
-		// (config.Default()) instead of a direct os.Getenv read, so an
-		// operator edit via the Trade Threshold Configuration module takes
-		// effect on the next orchestrator restart without touching this
-		// constructor's call sites elsewhere.
-		maxOpenLongs:            int(tconfig.Default().GetWithDefault("MAX_OPEN_LONG_TRADES", 3)),
-		maxOpenShorts:           int(tconfig.Default().GetWithDefault("MAX_OPEN_SHORT_TRADES", 3)),
-		// BUG 5: per-strategy cooldown map
-		lastTradeByStrategy:     make(map[string]time.Time),
+		adaptiveFloor: NewAdaptiveConfidenceFloor(minExecutableConfidence),
 	}
 }
 
@@ -2395,29 +2320,6 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		}
 
 		// ══════════════════════════════════════════════════════════════════════
-		// 12b. BUG 4 — Directional Trade Caps
-		// ══════════════════════════════════════════════════════════════════════
-		if !o.canOpenDirectional(string(sig.Action)) {
-			log.Printf("[DIRECTIONAL CAP] %s rejected — max open %s positions reached", aggSig.StrategyName, sig.Action)
-			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
-			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "directional_cap", aggSig.Category)
-			o.execIntel.RecordRejection(sigID, "directional_cap")
-			continue
-		}
-
-		// ══════════════════════════════════════════════════════════════════════
-		// 12c. BUG 5 — Per-Strategy Cooldown
-		// ══════════════════════════════════════════════════════════════════════
-		const strategyCooldown = 15 * time.Minute
-		if o.isOnCooldown(aggSig.StrategyName, strategyCooldown) {
-			log.Printf("[COOLDOWN] %s rejected — strategy on cooldown", aggSig.StrategyName)
-			o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 0)
-			o.aggregator.RecordSignalFlowRejection(SignalStageExecution, "strategy_cooldown", aggSig.Category)
-			o.execIntel.RecordRejection(sigID, "strategy_cooldown")
-			continue
-		}
-
-		// ══════════════════════════════════════════════════════════════════════
 		// 13. EXECUTION — Fill via Coinbase Advanced Trad (Live/Paper)
 		// ══════════════════════════════════════════════════════════════════════
 		o.execIntel.Record(sigID, execintel.StateOrderSubmitted, string(orderMode))
@@ -2431,9 +2333,6 @@ func (o *Orchestrator) processStrategyGroup(ctx context.Context, entries []strat
 		}
 		o.aggregator.RecordSignalFlowStage(SignalStageExecution, 1, 1)
 		o.aggregator.RecordStrategyExecution(aggSig.StrategyName)
-		// BUG 4/5: record successful fill for directional cap and cooldown tracking
-		o.recordDirectionalOpen(string(sig.Action))
-		o.recordStrategyTrade(aggSig.StrategyName)
 		execPrice := fill.ExecPrice
 
 		// Phase 22D lifecycle: order acknowledged + filled.
@@ -2693,18 +2592,6 @@ func (o *Orchestrator) processCloseEvents(ctx context.Context) {
 					statusVal = 0
 				}
 				observability.ScalersStrategyStatus.WithLabelValues(event.Position.StrategyName).Set(statusVal)
-			}
-
-			// Release scalers-specific bookkeeping for this closed position.
-			// Gated to scalers strategies only: the directional counters and
-			// concentration gate are only ever incremented by the scalers
-			// execution path (evalAndExecuteScalers), so releasing them for a
-			// non-scalers close would decrement an unrelated strategy's slot.
-			if o.scalerBundle != nil && o.scalerBundle.isScalerStrategy(event.Position.StrategyName) {
-				o.scalerBundle.onScalerTradeClose(string(event.Position.Side))
-				if o.concentrationGate != nil {
-					o.concentrationGate.RecordClose(event.Position.StrategyName)
-				}
 			}
 
 			// Update scalers performance registry so FilterWinnersOnly stays current.
