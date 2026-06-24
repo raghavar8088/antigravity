@@ -54,6 +54,22 @@ func BuildCuratedScalpers() []RegistryEntry {
 	event := buildEventFamily()
 	all = append(all, event...)
 
+	// S30-S79: 50 shadow-only strategy families (research-backed, phase-99
+	// gated — see rollout_phase.go). These ALWAYS evaluate every cycle so
+	// they accumulate a real walk-forward track record, but never trade live
+	// until an operator explicitly promotes them via STRATEGY_LIVE_OVERRIDE
+	// or ShadowPromoter.Promote().
+	family1 := buildFamily1Momentum()
+	all = append(all, family1...)
+	family2 := buildFamily2MeanReversion()
+	all = append(all, family2...)
+	family3 := buildFamily3OrderFlow()
+	all = append(all, family3...)
+	family4 := buildFamily4MLProxy()
+	all = append(all, family4...)
+	family5 := buildFamily5DerivativesMacro()
+	all = append(all, family5...)
+
 	// Strategies registered without withRolloutPhase() (the original S1-S10
 	// roster) never trade live unless SHADOW_STRATEGIES/STRATEGY_LIVE_OVERRIDE
 	// applies. Wrap them so those two operator knobs work uniformly across

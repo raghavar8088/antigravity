@@ -1278,6 +1278,12 @@ The content is organized as follows:
   strategy/scalpers/curated_expansion_pack.go
   strategy/scalpers/curated_registry.go
   strategy/scalpers/event_family.go
+  strategy/scalpers/family1_momentum.go
+  strategy/scalpers/family2_mean_reversion.go
+  strategy/scalpers/family3_orderflow.go
+  strategy/scalpers/family4_ml_proxy.go
+  strategy/scalpers/family5_derivatives_macro.go
+  strategy/scalpers/indicators_s30_s79.go
   strategy/scalpers/indicators.go
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
@@ -1308,10 +1314,61 @@ The content is organized as follows:
   strategy/scalpers/s10_smc_order_block_fvg.go
   strategy/scalpers/s2_bollinger_mean_reversion.go
   strategy/scalpers/s3_liquidity_sweep_reversal.go
+  strategy/scalpers/s30_dual_momentum_trend.go
+  strategy/scalpers/s30_s79_registry_shadow_test.go
+  strategy/scalpers/s31_time_series_momentum.go
+  strategy/scalpers/s32_kalman_filter_trend.go
+  strategy/scalpers/s33_adaptive_moving_average_trend.go
+  strategy/scalpers/s34_triple_barrier_momentum.go
+  strategy/scalpers/s35_fractal_breakout.go
+  strategy/scalpers/s36_supertrend_momentum.go
+  strategy/scalpers/s37_ichimoku_cloud_breakout.go
+  strategy/scalpers/s38_donchian_channel_breakout.go
+  strategy/scalpers/s39_parabolic_sar_trend.go
   strategy/scalpers/s4_adx_momentum_breakout.go
+  strategy/scalpers/s40_ornstein_uhlenbeck_reversion.go
+  strategy/scalpers/s41_cointegration_spread_btc_eth.go
+  strategy/scalpers/s42_rsi_divergence_multiframe.go
+  strategy/scalpers/s43_stochastic_oscillator_reversion.go
+  strategy/scalpers/s44_williams_percent_r_reversion.go
+  strategy/scalpers/s45_commodity_channel_index_reversion.go
+  strategy/scalpers/s46_price_channel_mean_reversion.go
+  strategy/scalpers/s47_linear_regression_channel_fade.go
+  strategy/scalpers/s48_pivot_point_reversion.go
+  strategy/scalpers/s49_volatility_mean_reversion.go
   strategy/scalpers/s5_vwap_institutional_fade.go
+  strategy/scalpers/s50_trade_intensity_burst.go
+  strategy/scalpers/s51_large_trade_impact_follow.go
+  strategy/scalpers/s52_bid_ask_spread_regime.go
+  strategy/scalpers/s53_vpin_toxicity_signal.go
+  strategy/scalpers/s54_order_book_depth_imbalance_persistence.go
+  strategy/scalpers/s55_absorption_pattern_signal.go
+  strategy/scalpers/s56_sweep_and_reload_pattern.go
+  strategy/scalpers/s57_market_depth_gradient.go
+  strategy/scalpers/s58_aggressor_ratio_momentum.go
+  strategy/scalpers/s59_hidden_liquidity_detection.go
   strategy/scalpers/s6_cvd_divergence_sniper.go
+  strategy/scalpers/s60_feature_confluence_score.go
+  strategy/scalpers/s61_regime_probability_composite.go
+  strategy/scalpers/s62_gradient_boosting_feature_signal.go
+  strategy/scalpers/s63_autocorrelation_pattern.go
+  strategy/scalpers/s64_shannon_entropy_regime.go
+  strategy/scalpers/s65_cross_correlation_lead_lag.go
+  strategy/scalpers/s66_wavelet_trend_signal.go
+  strategy/scalpers/s67_recurrence_quantification_signal.go
+  strategy/scalpers/s68_excess_return_momentum.go
+  strategy/scalpers/s69_structural_break_detection.go
   strategy/scalpers/s7_opening_range_breakout.go
+  strategy/scalpers/s70_options_skew_direction_signal.go
+  strategy/scalpers/s71_gamma_exposure_magnet.go
+  strategy/scalpers/s72_perpetual_funding_basis_composite.go
+  strategy/scalpers/s73_long_short_ratio_contrarian.go
+  strategy/scalpers/s74_taker_buy_sell_volume_ratio.go
+  strategy/scalpers/s75_open_interest_velocity.go
+  strategy/scalpers/s76_exchange_netflow_signal.go
+  strategy/scalpers/s77_miner_hash_rate_momentum.go
+  strategy/scalpers/s78_stablecoin_supply_flow.go
+  strategy/scalpers/s79_fear_greed_contrarian.go
   strategy/scalpers/s8_funding_rate_fade.go
   strategy/scalpers/s9_oi_divergence.go
   strategy/scalpers/statistical_family.go

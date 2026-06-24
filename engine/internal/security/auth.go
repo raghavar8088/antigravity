@@ -26,7 +26,13 @@ func NewAuthenticator(policy SecurityPolicy, monitor *SecurityMonitor) *Authenti
 // A nil error does NOT mean the principal has permission — call Authorize separately.
 func (a *Authenticator) Authenticate(r *http.Request) (Principal, error) {
 	// 1. Service auth (inter-service calls from Next.js or internal workers).
-	if r.Header.Get(ServiceNameHeader) != "" {
+	// Gate on the signature header, not mere presence of X-Service-Name: the
+	// Next.js proxy sets X-Service-Name unconditionally as an audit-log label
+	// on every request (including normal browser-session calls that only carry
+	// a cookie/Bearer JWT, no HMAC signature) — gating on the name alone would
+	// short-circuit those into a guaranteed-failing service-auth check instead
+	// of falling through to JWT validation below.
+	if r.Header.Get(ServiceAuthHeader) != "" {
 		p, err := a.svcAuth.Authenticate(r)
 		if err != nil {
 			a.monitor.recordFailure(IncidentBadServiceAuth, clientIP(r), r.URL.Path)

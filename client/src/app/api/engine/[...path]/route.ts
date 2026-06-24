@@ -146,6 +146,7 @@ async function proxyToEngine(
   req: NextRequest,
   segments: string[],
   forwardAdminSecret: boolean,
+  sessionToken: string,
 ): Promise<Response> {
   const path = segments.length ? `/${segments.join("/")}` : "/";
   const target = `${upstreamBase()}${path}${req.nextUrl.search}`;
@@ -153,9 +154,14 @@ async function proxyToEngine(
   const headers = new Headers();
   const ct = req.headers.get("content-type");
   if (ct) headers.set("content-type", ct);
-  // Service identity for engine audit log
+  // Service identity for engine audit log only (NOT an auth mechanism — the
+  // engine's Authenticate() only treats this as a service call when a real
+  // X-Service-Auth HMAC signature is also present, which this proxy does not
+  // send). Actual authentication is the already-verified session below,
+  // forwarded as a Bearer token so the engine independently re-validates it.
   headers.set("X-Service-Name", "vercel-proxy");
   headers.set("X-Service-Timestamp", String(Date.now()));
+  if (sessionToken) headers.set("Authorization", `Bearer ${sessionToken}`);
   if (forwardAdminSecret && process.env.ENGINE_ADMIN_SECRET) {
     headers.set("X-Engine-Admin-Secret", process.env.ENGINE_ADMIN_SECRET);
   }
@@ -230,7 +236,7 @@ async function handle(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
 
   // 5. Proxy to engine.
   try {
-    const upstream = await proxyToEngine(req, path ?? [], tier === "admin");
+    const upstream = await proxyToEngine(req, path ?? [], tier === "admin", token);
     return passthrough(upstream);
   } catch (e) {
     const message = e instanceof Error ? e.message : "proxy failed";

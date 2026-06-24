@@ -100,6 +100,37 @@ type ScalerBundle struct {
 	macroPopulated            bool
 	macroHealthy              bool
 
+	// S30-S79 shadow family feeds
+	oiHistory []float64
+
+	ethPrice          float64
+	ethPricePopulated bool
+	ethPriceHealthy   bool
+
+	topTraderLSRatio     float64
+	topTraderLSHistory   []float64
+	takerRatio           float64
+	takerRatioHistory    []float64
+	positioningPopulated bool
+	positioningHealthy   bool
+
+	fearGreed          float64
+	fearGreedHistory   []float64
+	fearGreedPopulated bool
+
+	stablecoinSupplyChange7d float64
+	stablecoinPopulated      bool
+	hashRateTrend30d         float64
+	hashRatePopulated        bool
+
+	tradeCountPerMin        float64
+	tradeCountAvg20m        float64
+	lastTradeSizeRatio      float64
+	aggressorBuyRatio100    float64
+	effSpread               float64
+	effSpreadAvg            float64
+	microstructurePopulated bool
+
 	// The curated strategy list (rebuilt once; updated by FilterWinnersOnly)
 	strategies []scalers.RegistryEntry
 
@@ -359,6 +390,70 @@ func (b *ScalerBundle) UpdateOI(current, prev float64) {
 	b.mu.Lock()
 	b.oiCurrent = current
 	b.oiPrev = prev
+	b.oiHistory = append(b.oiHistory, current)
+	if len(b.oiHistory) > 8 {
+		b.oiHistory = b.oiHistory[len(b.oiHistory)-8:]
+	}
+	b.mu.Unlock()
+}
+
+// UpdateETHPrice stores the latest ETHUSDT price for the S30-S79 family
+// strategies that need a second asset (S41 cointegration, S65 lead-lag).
+func (b *ScalerBundle) UpdateETHPrice(price float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.ethPrice = price
+	b.ethPricePopulated = populated
+	b.ethPriceHealthy = healthy
+	b.mu.Unlock()
+}
+
+// UpdatePositioningFeed stores Binance top-trader long/short ratio and taker
+// buy/sell ratio readings (S73, S74).
+func (b *ScalerBundle) UpdatePositioningFeed(lsRatio float64, lsHistory []float64, takerRatio float64, takerHistory []float64, populated, healthy bool) {
+	b.mu.Lock()
+	b.topTraderLSRatio = lsRatio
+	b.topTraderLSHistory = append([]float64(nil), lsHistory...)
+	b.takerRatio = takerRatio
+	b.takerRatioHistory = append([]float64(nil), takerHistory...)
+	b.positioningPopulated = populated
+	b.positioningHealthy = healthy
+	b.mu.Unlock()
+}
+
+// UpdateFearGreed stores the latest alternative.me Fear & Greed Index reading
+// (S79). Fetched daily — this is a slow-moving sentiment indicator.
+func (b *ScalerBundle) UpdateFearGreed(current float64, history []float64, populated bool) {
+	b.mu.Lock()
+	b.fearGreed = current
+	b.fearGreedHistory = append([]float64(nil), history...)
+	b.fearGreedPopulated = populated
+	b.mu.Unlock()
+}
+
+// UpdateOnChainProxies stores the stablecoin-supply and miner-hashrate trend
+// proxies used as conviction modifiers by S77/S78 (S76-78: see strategy
+// file headers for DONE/PROXY/INFEASIBLE data-source notes).
+func (b *ScalerBundle) UpdateOnChainProxies(stablecoinChange7dPct float64, stablecoinPopulated bool, hashRateChange30dPct float64, hashRatePopulated bool) {
+	b.mu.Lock()
+	b.stablecoinSupplyChange7d = stablecoinChange7dPct
+	b.stablecoinPopulated = stablecoinPopulated
+	b.hashRateTrend30d = hashRateChange30dPct
+	b.hashRatePopulated = hashRatePopulated
+	b.mu.Unlock()
+}
+
+// UpdateMicrostructure stores order-flow microstructure features derived
+// from the aggTrade stream (S50-S59): trade-arrival intensity, last-trade
+// size ratio, rolling aggressor-buy ratio, and effective spread.
+func (b *ScalerBundle) UpdateMicrostructure(tradeCountPerMin, tradeCountAvg20m, lastTradeSizeRatio, aggressorBuyRatio100, effSpread, effSpreadAvg float64, populated bool) {
+	b.mu.Lock()
+	b.tradeCountPerMin = tradeCountPerMin
+	b.tradeCountAvg20m = tradeCountAvg20m
+	b.lastTradeSizeRatio = lastTradeSizeRatio
+	b.aggressorBuyRatio100 = aggressorBuyRatio100
+	b.effSpread = effSpread
+	b.effSpreadAvg = effSpreadAvg
+	b.microstructurePopulated = populated
 	b.mu.Unlock()
 }
 
@@ -573,6 +668,36 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 		BTCEquitiesCorrelation30d: b.btcEquitiesCorrelation30d,
 		MacroFeedPopulated:        b.macroPopulated,
 		MacroFeedHealthy:          b.macroHealthy,
+
+		OIHistory: append([]float64(nil), b.oiHistory...),
+
+		ETHPrice:          b.ethPrice,
+		ETHPricePopulated: b.ethPricePopulated,
+		ETHPriceHealthy:   b.ethPriceHealthy,
+
+		TopTraderLongShortRatio:  b.topTraderLSRatio,
+		TopTraderLSRatioHistory:  append([]float64(nil), b.topTraderLSHistory...),
+		TakerBuySellRatio:        b.takerRatio,
+		TakerBuySellRatioHistory: append([]float64(nil), b.takerRatioHistory...),
+		PositioningFeedPopulated: b.positioningPopulated,
+		PositioningFeedHealthy:   b.positioningHealthy,
+
+		FearGreedIndex:     b.fearGreed,
+		FearGreedHistory:   append([]float64(nil), b.fearGreedHistory...),
+		FearGreedPopulated: b.fearGreedPopulated,
+
+		StablecoinSupplyChange7dPct: b.stablecoinSupplyChange7d,
+		StablecoinSupplyPopulated:   b.stablecoinPopulated,
+		HashRateTrend30dPct:         b.hashRateTrend30d,
+		HashRatePopulated:           b.hashRatePopulated,
+
+		TradeCountPerMin1m:      b.tradeCountPerMin,
+		TradeCountAvg20m:        b.tradeCountAvg20m,
+		LastTradeSizeRatio:      b.lastTradeSizeRatio,
+		AggressorBuyRatio100:    b.aggressorBuyRatio100,
+		EffectiveSpread:         b.effSpread,
+		EffectiveSpreadAvg:      b.effSpreadAvg,
+		MicrostructurePopulated: b.microstructurePopulated,
 	}
 }
 

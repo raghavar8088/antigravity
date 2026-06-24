@@ -285,8 +285,8 @@
     "semantic_hash": ""
   },
   "client/src/app/api/engine/[...path]/route.ts": {
-    "mtime": 1782054659.1226285,
-    "ast_hash": "cacac7e9d872914af07016b6a73e0362",
+    "mtime": 1782140886.3174863,
+    "ast_hash": "6197e494120c9904891a3f8f26cdc0f8",
     "semantic_hash": ""
   },
   "client/src/app/api/engine/events/route.ts": {
@@ -365,13 +365,13 @@
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/reset/route.test.ts": {
-    "mtime": 1781460198.5307832,
-    "ast_hash": "7282fdfa3ff97984e3ace59dc63541db",
+    "mtime": 1782149900.1002445,
+    "ast_hash": "b72af9a82438fbf06919926948ac6fdf",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/reset/route.ts": {
-    "mtime": 1781536263.5549612,
-    "ast_hash": "ffb7c4c7b268b10d60c7a544ef488e52",
+    "mtime": 1782149776.5969553,
+    "ast_hash": "edda307c90ca2f03e4aee593d25af480",
     "semantic_hash": ""
   },
   "client/src/app/api/mock-trading/scores/route.ts": {
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/NavIcons.tsx": {
-    "mtime": 1781979817.258137,
-    "ast_hash": "983c70920cde1bd5e897879a26ac908c",
+    "mtime": 1782149789.8139386,
+    "ast_hash": "bda4a75a4c995a1a7363e3a6e677e234",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/ObservabilityCenter.tsx": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "client/src/components/ui/M3AppShell.tsx": {
-    "mtime": 1781979851.8589458,
-    "ast_hash": "8d121a8f42b92d36a82df659b99758fa",
+    "mtime": 1782149811.6471844,
+    "ast_hash": "da3a69642ef10feecd94572bd43cd2ee",
     "semantic_hash": ""
   },
   "client/src/components/ui/M3Providers.tsx": {
@@ -1605,8 +1605,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useMockTradingEngine.ts": {
-    "mtime": 1781712321.9278548,
-    "ast_hash": "3a5d394a5e4eeb778cfb1119e132c4d3",
+    "mtime": 1782151374.178123,
+    "ast_hash": "fc8b69a8b3bd5499fe0f03673aae6ad7",
     "semantic_hash": ""
   },
   "client/src/hooks/useOptionChain.ts": {
@@ -3055,8 +3055,8 @@
     "semantic_hash": ""
   },
   "engine/cmd/antigravity/main.go": {
-    "mtime": 1782059047.418208,
-    "ast_hash": "1825f7e43c3c161d459735635d750f16",
+    "mtime": 1782151611.8725305,
+    "ast_hash": "fc9b2fd1f0bdf272a8d4636ca5672b88",
     "semantic_hash": ""
   },
   "engine/cmd/backtest/main.go": {
@@ -3940,8 +3940,8 @@
     "semantic_hash": ""
   },
   "engine/internal/execution/routing.go": {
-    "mtime": 1781376936.4921577,
-    "ast_hash": "488e674d6b0b34bd94dbebbdef282701",
+    "mtime": 1782231612.8150167,
+    "ast_hash": "5805cdbbf416554f0cf165d069b2417a",
     "semantic_hash": ""
   },
   "engine/internal/execution/routing_test.go": {
@@ -4415,8 +4415,8 @@
     "semantic_hash": ""
   },
   "engine/internal/observability/metrics.go": {
-    "mtime": 1782035549.6523075,
-    "ast_hash": "3779c610bc24cc8d1c892cead381ade9",
+    "mtime": 1782140535.5904741,
+    "ast_hash": "33b13c6f88527f1f3d2f3f651c993709",
     "semantic_hash": ""
   },
   "engine/internal/observability/middleware.go": {
@@ -4550,8 +4550,8 @@
     "semantic_hash": ""
   },
   "engine/internal/options/engine.go": {
-    "mtime": 1781962815.2466962,
-    "ast_hash": "28896b98e86db2067448a28a5979ee4a",
+    "mtime": 1782148951.0613334,
+    "ast_hash": "07f2ddb8ce3e04090821df2474777ec0",
     "semantic_hash": ""
   },
   "engine/internal/options/engine_test.go": {
@@ -4775,8 +4775,8 @@
     "semantic_hash": ""
   },
   "engine/internal/persistence/store.go": {
-    "mtime": 1781963202.9660275,
-    "ast_hash": "0de2fe8635d973bd9359590e9d7af752",
+    "mtime": 1782148927.2991428,
+    "ast_hash": "83b0c0685bd87cd3e7b561378b6be129",
     "semantic_hash": ""
   },
   "engine/internal/pilot/aggregate.go": {
@@ -5915,8 +5915,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/loop.go": {
-    "mtime": 1782064095.5160415,
-    "ast_hash": "74293d71995c917327fc4528acd078e0",
+    "mtime": 1782231624.569691,
+    "ast_hash": "5c5e64c4353aede2d893a1664f1a9a57",
     "semantic_hash": ""
   },
   "engine/internal/trading/loop_deps.go": {
@@ -21935,8 +21935,8 @@
     "semantic_hash": ""
   },
   ".github/workflows/deploy.yml": {
-    "mtime": 1781895937.875806,
-    "ast_hash": "5e144a696a6a6ab454857378a5153fa1",
+    "mtime": 1782230884.2832942,
+    "ast_hash": "9b23fd600f95aba8b6fcee7ff7a8f20b",
     "semantic_hash": ""
   },
   ".github/workflows/keep-alive.yml": {
@@ -22780,12 +22780,12 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1782064599.1352684,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1782232140.7405748,
+    "ast_hash": "350d755648bc00a98713b3c423f027d5",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1782064599.1352684,
+    "mtime": 1782232140.7405748,
     "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
     "semantic_hash": ""
   },
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1782064599.1352684,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1782232140.7405748,
+    "ast_hash": "93ea34c5e05d0059c103127c6ff0c476",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1782064599.1352684,
-    "ast_hash": "99914b932bd37a50b983c5e7c90ae93b",
+    "mtime": 1782232140.7405748,
+    "ast_hash": "1a4ec188e63c47650656437ec8ac36b0",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,8 +22920,8 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1782064600.8699856,
-    "ast_hash": "1b73c64a1f747de4a35ccb381204b935",
+    "mtime": 1782232142.0503356,
+    "ast_hash": "1c33ea69ec1ec93c1442e6cd1408e204",
     "semantic_hash": ""
   },
   ".ai-context/repository-summary.md": {
@@ -23065,8 +23065,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/curated_registry.go": {
-    "mtime": 1782035498.4198964,
-    "ast_hash": "c133536c1f9c0c51f6ec3ffaeb00d049",
+    "mtime": 1782140391.980906,
+    "ast_hash": "a5b15870914013238ecdc2c2db16b989",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/indicators.go": {
@@ -23125,8 +23125,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/types.go": {
-    "mtime": 1782026660.208789,
-    "ast_hash": "6b9447a7e754278df4e38b183fa3ed86",
+    "mtime": 1782140358.8125446,
+    "ast_hash": "45a7790c7dd3e51673301503dc61fcb8",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/walkforward.go": {
@@ -23145,8 +23145,8 @@
     "semantic_hash": ""
   },
   "engine/internal/trading/scalers_eval.go": {
-    "mtime": 1782064095.52196,
-    "ast_hash": "c0890b9c09770ccf26e3e0d4f680c7f1",
+    "mtime": 1782150958.0409362,
+    "ast_hash": "001d241b89280574874490e9c40ffc1c",
     "semantic_hash": ""
   },
   "strategy/curated_expansion_pack.go": {
@@ -23265,8 +23265,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/strategyAuthority/gradeStageMockConfig.ts": {
-    "mtime": 1781453256.3689039,
-    "ast_hash": "785b99ca372911ae643eae1c342ec7ca",
+    "mtime": 1782148899.773139,
+    "ast_hash": "8ae3c8a1008d9acb31f3e9de98cc7b62",
     "semantic_hash": ""
   },
   "client/src/lib/trading/futuresStrategyDiagnostics.ts": {
@@ -23320,8 +23320,8 @@
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/StrategiesCenter.tsx": {
-    "mtime": 1782053594.146407,
-    "ast_hash": "d92ed6fcbef26ba50c67ff4b546d8433",
+    "mtime": 1782140989.4767716,
+    "ast_hash": "42348a9315e3a89e01f0788ba69ce11c",
     "semantic_hash": ""
   },
   "client/src/components/terminal/institutional/StrategiesCenter.test.ts": {
@@ -23860,8 +23860,8 @@
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/rollout_phase.go": {
-    "mtime": 1782025425.7845964,
-    "ast_hash": "8b29e3979a3958b3d2507c2d73f44ed6",
+    "mtime": 1782140380.3386931,
+    "ast_hash": "591a8b192f4edb1123eebe82e44bd84b",
     "semantic_hash": ""
   },
   "engine/internal/strategy/scalpers/s_btc_equities_correlation_break.go": {
@@ -24025,7 +24025,7 @@
     "semantic_hash": ""
   },
   "engine/internal/config/strictness.go": {
-    "mtime": 1782064095.5160415,
+    "mtime": 1782150958.0409362,
     "ast_hash": "74e52fa8aa4670e4e0e3fb1388f74093",
     "semantic_hash": ""
   },
@@ -24037,6 +24037,31 @@
   "engine/internal/trading/strictness_wiring_test.go": {
     "mtime": 1782064186.8313534,
     "ast_hash": "8e64d898ccbc2e2708323afb015ca14d",
+    "semantic_hash": ""
+  },
+  "client/src/app/terminal/strategies/shadow-performance/page.tsx": {
+    "mtime": 1782140970.853294,
+    "ast_hash": "f1af85fbb8fd720e16542a381c1a4ad1",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/ShadowPerformanceCenter.tsx": {
+    "mtime": 1782140963.5248947,
+    "ast_hash": "9dca76f86906bca6d96a4fc12950e458",
+    "semantic_hash": ""
+  },
+  "engine/internal/shadow/ledger.go": {
+    "mtime": 1782140634.5547976,
+    "ast_hash": "0a3cadf20bb6492c84be8e3ed5164d2c",
+    "semantic_hash": ""
+  },
+  "engine/internal/shadow/promoter.go": {
+    "mtime": 1782140509.302323,
+    "ast_hash": "c37b7dba70a74cf194098038a3eef2aa",
+    "semantic_hash": ""
+  },
+  "client/src/components/terminal/institutional/TradeEngineResetButton.tsx": {
+    "mtime": 1782149802.2088487,
+    "ast_hash": "d4042fcaba9bc12aa5c6271c529868a9",
     "semantic_hash": ""
   }
 }
