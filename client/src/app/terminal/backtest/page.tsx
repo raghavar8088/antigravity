@@ -41,18 +41,32 @@ interface StrategyInfo {
 
 const ENGINE = "/api/engine";
 
+async function safeJson(r: Response) {
+  const text = await r.text();
+  try {
+    const data = JSON.parse(text);
+    if (!r.ok) throw new Error(data?.error ?? data?.message ?? `HTTP ${r.status}`);
+    return data;
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      throw new Error(`Engine returned non-JSON (HTTP ${r.status}): ${text.slice(0, 120)}`);
+    }
+    throw e;
+  }
+}
+
 async function apiPost(path: string, body: unknown) {
   const r = await fetch(`${ENGINE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return r.json();
+  return safeJson(r);
 }
 
 async function apiGet(path: string) {
   const r = await fetch(`${ENGINE}${path}`, { cache: "no-store" });
-  return r.json();
+  return safeJson(r);
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
