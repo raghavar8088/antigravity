@@ -41,10 +41,12 @@ func OpenResultsStore(path string) (*ResultsStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("ResultsStore mkdir: %w", err)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=10000")
 	if err != nil {
 		return nil, fmt.Errorf("ResultsStore open: %w", err)
 	}
+	// Serialize all writes to avoid SQLITE_IOERR_LOCK under parallel goroutines.
+	db.SetMaxOpenConns(1)
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("ResultsStore migrate: %w", err)
 	}
