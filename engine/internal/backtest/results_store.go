@@ -41,11 +41,14 @@ func OpenResultsStore(path string) (*ResultsStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("ResultsStore mkdir: %w", err)
 	}
-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=10000")
+	// Use URI syntax so SQLite params apply. EXCLUSIVE locking avoids
+	// SQLITE_IOERR_LOCK (6410) on Docker volume file-lock syscalls.
+	dsn := "file:" + path + "?_journal_mode=WAL&_busy_timeout=10000&_locking_mode=EXCLUSIVE"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("ResultsStore open: %w", err)
 	}
-	// Serialize all writes to avoid SQLITE_IOERR_LOCK under parallel goroutines.
+	// Serialize all writes — single writer avoids WAL checkpointing contention.
 	db.SetMaxOpenConns(1)
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("ResultsStore migrate: %w", err)
