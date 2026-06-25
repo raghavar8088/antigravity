@@ -3,6 +3,8 @@ package backtest
 import (
 	"fmt"
 	"math"
+	"runtime"
+	"sync"
 	"time"
 
 	"antigravity-engine/internal/marketdata"
@@ -111,28 +113,67 @@ func NewBatchRunner(ds marketdata.MTFDataset, cfg RunConfig, entries []scalers.R
 	return &BatchRunner{ds: ds, cfg: cfg, entries: entries}
 }
 
-// RunAll runs each strategy and returns all results (errors are embedded in DemoteReason).
+// RunAll runs all strategies in parallel (worker pool = NumCPU) and returns results.
+// Errors are embedded in DemoteReason. onProgress is called after each strategy completes.
 func (b *BatchRunner) RunAll(onProgress func(done, total int, name string)) []StrategyResult {
-	results := make([]StrategyResult, 0, len(b.entries))
-	r := NewRunner(b.ds, b.cfg)
-	for i, entry := range b.entries {
-		if onProgress != nil {
-			onProgress(i, len(b.entries), entry.Name)
-		}
-		sr, err := r.Run(entry)
-		if err != nil {
-			sr = StrategyResult{
-				StrategyName: entry.Name,
-				Symbol:       b.cfg.Symbol,
-				From:         b.ds.From,
-				To:           b.ds.To,
-				DemoteReason: fmt.Sprintf("run error: %v", err),
-			}
-		}
-		results = append(results, sr)
+	total := len(b.entries)
+	results := make([]StrategyResult, total)
+
+	workers := runtime.NumCPU()
+	if workers < 1 {
+		workers = 1
 	}
+	// Cap at 4 to avoid OOM on small Lightsail instances (1.5 CPU / 600 MB limit)
+	if workers > 4 {
+		workers = 4
+	}
+
+	type work struct {
+		idx   int
+		entry scalers.RegistryEntry
+	}
+
+	jobs := make(chan work, total)
+	for i, e := range b.entries {
+		jobs <- work{i, e}
+	}
+	close(jobs)
+
+	var mu sync.Mutex
+	done := 0
+	var wg sync.WaitGroup
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r := NewRunner(b.ds, b.cfg)
+			for job := range jobs {
+				sr, err := r.Run(job.entry)
+				if err != nil {
+					sr = StrategyResult{
+						StrategyName: job.entry.Name,
+						Symbol:       b.cfg.Symbol,
+						From:         b.ds.From,
+						To:           b.ds.To,
+						DemoteReason: fmt.Sprintf("run error: %v", err),
+					}
+				}
+				mu.Lock()
+				results[job.idx] = sr
+				done++
+				d := done
+				mu.Unlock()
+				if onProgress != nil {
+					onProgress(d, total, job.entry.Name)
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 	if onProgress != nil {
-		onProgress(len(b.entries), len(b.entries), "")
+		onProgress(total, total, "")
 	}
 	return results
 }

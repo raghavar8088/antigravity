@@ -1,6 +1,7 @@
 package backtest
 
 import (
+	"sort"
 	"time"
 
 	"antigravity-engine/internal/marketdata"
@@ -144,21 +145,14 @@ func toScalerCandles(hc []marketdata.HistoricalCandle) []scalers.Candle {
 	return out
 }
 
+// toScalerCandlesBefore returns candles with OpenTime < before.
+// Uses binary search — O(log N) instead of O(N) — critical for 3.4M 1m bars.
 func toScalerCandlesBefore(hc []marketdata.HistoricalCandle, before time.Time) []scalers.Candle {
-	out := make([]scalers.Candle, 0, len(hc))
-	for _, c := range hc {
-		if c.OpenTime.Before(before) {
-			out = append(out, scalers.Candle{
-				OpenTime: c.OpenTime,
-				Open:     c.Open,
-				High:     c.High,
-				Low:      c.Low,
-				Close:    c.Close,
-				Volume:   c.Volume,
-			})
-		}
-	}
-	return out
+	// Binary search: find first index where OpenTime >= before
+	n := sort.Search(len(hc), func(i int) bool {
+		return !hc[i].OpenTime.Before(before)
+	})
+	return toScalerCandles(hc[:n])
 }
 
 func tail[T any](s []T, n int) []T {
