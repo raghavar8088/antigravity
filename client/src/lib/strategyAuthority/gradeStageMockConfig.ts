@@ -21,7 +21,13 @@ export function tradeEngineStartingBalanceUsd(): number {
 /** Single Trade Engine config — all active strategies use this. */
 export const TRADE_ENGINE_CONFIG: Partial<MockTradingConfig> = {
   startingBalanceUsd: tradeEngineStartingBalanceUsd(),
-  maxOpenMockTrades: 20,
+  // High ceiling so list/cache fetch limits scale when every strategy trades
+  // simultaneously (uncapped mode bypasses this as a hard gate — see
+  // mockTradingUncapped / evaluateMockTradeOpenRisk).
+  maxOpenMockTrades: 500,
+  maxOpenLongTrades: 500,
+  maxOpenShortTrades: 500,
+  maxSignalsPerBatch: 500,
   fixedNotionalUsd: 5000,
   takeProfitPct: 1.5,
   stopLossPct: 0.4,

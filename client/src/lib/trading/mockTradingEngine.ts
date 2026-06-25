@@ -626,64 +626,75 @@ export function evaluateMockTradeOpenRisk(args: {
   if (isGradeDiscoveryStage(config)) {
     return { allowed: true };
   }
-  const minScore = Number.isFinite(config.minSignalScore) ? config.minSignalScore : DEFAULT_MOCK_TRADING_CONFIG.minSignalScore;
-  if (!Number.isFinite(trade.signalScore) || trade.signalScore < minScore) {
-    return { allowed: false, code: "SIGNAL_SCORE", message: `signal score ${trade.signalScore.toFixed(1)} below ${minScore.toFixed(1)}` };
+  // UNCAPPED MODE — bypass ALL stops (concurrency/quality re-gates, loss &
+  // drawdown circuit-breakers, and margin) so every generated signal trades and
+  // all strategies run simultaneously with no limit.
+  const uncapped = mockTradingUncapped();
+  if (!uncapped) {
+    const minScore = Number.isFinite(config.minSignalScore) ? config.minSignalScore : DEFAULT_MOCK_TRADING_CONFIG.minSignalScore;
+    if (!Number.isFinite(trade.signalScore) || trade.signalScore < minScore) {
+      return { allowed: false, code: "SIGNAL_SCORE", message: `signal score ${trade.signalScore.toFixed(1)} below ${minScore.toFixed(1)}` };
+    }
   }
   if (trade.takeProfitUsd <= 0 || trade.stopLossUsd <= 0) {
     return { allowed: false, code: "MISSING_EXIT", message: "mandatory TP/SL estimate missing" };
   }
-  const minRr = Number.isFinite(config.minRiskRewardRatio) && config.minRiskRewardRatio > 0
-    ? config.minRiskRewardRatio
-    : DEFAULT_MOCK_MIN_RISK_REWARD_RATIO;
-  if (!Number.isFinite(trade.riskRewardRatio) || trade.riskRewardRatio < minRr) {
-    return { allowed: false, code: "RISK_REWARD", message: `risk/reward ${trade.riskRewardRatio.toFixed(2)} below ${minRr.toFixed(2)}` };
+  if (!uncapped) {
+    const minRr = Number.isFinite(config.minRiskRewardRatio) && config.minRiskRewardRatio > 0
+      ? config.minRiskRewardRatio
+      : DEFAULT_MOCK_MIN_RISK_REWARD_RATIO;
+    if (!Number.isFinite(trade.riskRewardRatio) || trade.riskRewardRatio < minRr) {
+      return { allowed: false, code: "RISK_REWARD", message: `risk/reward ${trade.riskRewardRatio.toFixed(2)} below ${minRr.toFixed(2)}` };
+    }
   }
 
-  const account = computeAccountState(args.existingTrades, config);
-  const starting = account.startingBalance;
-  const dailyLimit = Math.max(0, config.dailyLossLimitPct) / 100;
-  if (dailyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 24 * 60 * 60 * 1000) <= -starting * dailyLimit) {
-    return { allowed: false, code: "DAILY_LOSS", message: `rolling daily loss limit ${config.dailyLossLimitPct}% breached` };
-  }
-  const weeklyLimit = Math.max(0, config.weeklyLossLimitPct) / 100;
-  if (weeklyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 7 * 24 * 60 * 60 * 1000) <= -starting * weeklyLimit) {
-    return { allowed: false, code: "WEEKLY_LOSS", message: `rolling weekly loss limit ${config.weeklyLossLimitPct}% breached` };
-  }
-  const maxDrawdown = Math.max(0, config.maxDrawdownPct) / 100;
-  if (maxDrawdown > 0 && account.maxDrawdownPct >= maxDrawdown) {
-    return { allowed: false, code: "MAX_DRAWDOWN", message: `max drawdown ${config.maxDrawdownPct}% breached` };
-  }
+  if (!uncapped) {
+    const account = computeAccountState(args.existingTrades, config);
+    const starting = account.startingBalance;
+    const dailyLimit = Math.max(0, config.dailyLossLimitPct) / 100;
+    if (dailyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 24 * 60 * 60 * 1000) <= -starting * dailyLimit) {
+      return { allowed: false, code: "DAILY_LOSS", message: `rolling daily loss limit ${config.dailyLossLimitPct}% breached` };
+    }
+    const weeklyLimit = Math.max(0, config.weeklyLossLimitPct) / 100;
+    if (weeklyLimit > 0 && rollingRealizedPnl(args.existingTrades, args.now, 7 * 24 * 60 * 60 * 1000) <= -starting * weeklyLimit) {
+      return { allowed: false, code: "WEEKLY_LOSS", message: `rolling weekly loss limit ${config.weeklyLossLimitPct}% breached` };
+    }
+    const maxDrawdown = Math.max(0, config.maxDrawdownPct) / 100;
+    if (maxDrawdown > 0 && account.maxDrawdownPct >= maxDrawdown) {
+      return { allowed: false, code: "MAX_DRAWDOWN", message: `max drawdown ${config.maxDrawdownPct}% breached` };
+    }
 
-  if (countOpenMockTrades(portfolio) >= maxOpenMockTradesFromConfig(config)) {
-    return { allowed: false, code: "MAX_OPEN", message: `max open positions ${maxOpenMockTradesFromConfig(config)} reached` };
-  }
-  const sideLimit = trade.side === "BUY" ? maxOpenLongTradesFromConfig(config) : maxOpenShortTradesFromConfig(config);
-  if (countOpenMockTradesBySide(portfolio, trade.side) >= sideLimit) {
-    return { allowed: false, code: "MAX_SIDE", message: `${trade.side === "BUY" ? "long" : "short"} position cap ${sideLimit} reached` };
-  }
+    if (countOpenMockTrades(portfolio) >= maxOpenMockTradesFromConfig(config)) {
+      return { allowed: false, code: "MAX_OPEN", message: `max open positions ${maxOpenMockTradesFromConfig(config)} reached` };
+    }
+    const sideLimit = trade.side === "BUY" ? maxOpenLongTradesFromConfig(config) : maxOpenShortTradesFromConfig(config);
+    if (countOpenMockTradesBySide(portfolio, trade.side) >= sideLimit) {
+      return { allowed: false, code: "MAX_SIDE", message: `${trade.side === "BUY" ? "long" : "short"} position cap ${sideLimit} reached` };
+    }
 
-  const family = candidateFamilyKey(trade);
-  const oppositeSide: MockSide = trade.side === "BUY" ? "SELL" : "BUY";
-  const hasOppositeFamilyOpen = portfolio.some(
-    (openTrade) =>
-      openTrade.status === "OPEN" &&
-      openTrade.side === oppositeSide &&
-      mockTradeFamilyKey(openTrade) === family,
-  );
-  if (hasOppositeFamilyOpen) {
-    return { allowed: false, code: "FAMILY_CONFLICT", message: `opposite ${family} position already open` };
-  }
+    const family = candidateFamilyKey(trade);
+    const oppositeSide: MockSide = trade.side === "BUY" ? "SELL" : "BUY";
+    const hasOppositeFamilyOpen = portfolio.some(
+      (openTrade) =>
+        openTrade.status === "OPEN" &&
+        openTrade.side === oppositeSide &&
+        mockTradeFamilyKey(openTrade) === family,
+    );
+    if (hasOppositeFamilyOpen) {
+      return { allowed: false, code: "FAMILY_CONFLICT", message: `opposite ${family} position already open` };
+    }
 
-  const cooldown = isGradeDiscoveryStage(config)
-    ? Math.max(0, config.tradeCooldownMinutes)
-    : Math.max(DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES, config.tradeCooldownMinutes);
-  const minutes = minutesSinceLastStrategyEntry({ strategyId: trade.strategyId, trades: portfolio, now: args.now });
-  if (minutes != null && minutes < cooldown) {
-    return { allowed: false, code: "COOLDOWN", message: `strategy cooldown ${cooldown}m active (${minutes.toFixed(1)}m elapsed)` };
-  }
-  if (trade.marginUsed > account.availableBalance) {
-    return { allowed: false, code: "MARGIN", message: "insufficient simulated margin" };
+    const cooldown = isGradeDiscoveryStage(config)
+      ? Math.max(0, config.tradeCooldownMinutes)
+      : Math.max(DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES, config.tradeCooldownMinutes);
+    const minutes = minutesSinceLastStrategyEntry({ strategyId: trade.strategyId, trades: portfolio, now: args.now });
+    if (minutes != null && minutes < cooldown) {
+      return { allowed: false, code: "COOLDOWN", message: `strategy cooldown ${cooldown}m active (${minutes.toFixed(1)}m elapsed)` };
+    }
+
+    if (trade.marginUsed > account.availableBalance) {
+      return { allowed: false, code: "MARGIN", message: "insufficient simulated margin" };
+    }
   }
   return { allowed: true };
 }
@@ -699,7 +710,28 @@ export function scoreMockResearchSignal(signal: MockResearchSignalInput): number
   return Math.max(0, Math.min(100, signal.confidenceScore));
 }
 
+/**
+ * UNCAPPED MODE — when enabled, NOTHING stops a strategy from trading: the
+ * per-batch cap, max-open / per-side caps, re-entry cooldown, family-conflict,
+ * R:R floor, min-signal-score re-gate, daily-loss, weekly-loss, drawdown, and
+ * margin checks are ALL bypassed. Every generated signal trades and every
+ * strategy can hold positions simultaneously with no limit. The only remaining
+ * guards are signal validity (a TP/SL must exist and the row must not carry an
+ * explicit blocker) — these keep trades functional, they are not limits.
+ *
+ * Defaults to ON so it takes effect even when a stored Mongo config still
+ * carries the old low caps. Set MOCK_TRADE_UNCAPPED=0 (or "false") to restore
+ * the configured caps and safety limits.
+ */
+export function mockTradingUncapped(): boolean {
+  const v = process.env.MOCK_TRADE_UNCAPPED ?? process.env.NEXT_PUBLIC_MOCK_TRADE_UNCAPPED;
+  if (v == null || v.trim() === "") return true;
+  const s = v.trim().toLowerCase();
+  return s !== "0" && s !== "false" && s !== "off" && s !== "no";
+}
+
 export function maxSignalsPerBatchFromConfig(config: MockTradingConfig): number {
+  if (mockTradingUncapped()) return Number.MAX_SAFE_INTEGER;
   const raw = config.maxSignalsPerBatch;
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_MOCK_MAX_SIGNALS_PER_BATCH;
   return Math.max(1, Math.floor(raw));

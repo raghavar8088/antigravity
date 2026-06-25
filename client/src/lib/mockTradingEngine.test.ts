@@ -12,7 +12,7 @@
  *   - Persistence validators reject corrupt trade rows.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createTraceRow, type SignalTraceGate, type StrategySignalTraceRow } from "@/lib/ai/strategySignalTrace";
 import {
   applyPriceTickToTrade,
@@ -105,9 +105,9 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
   it("uses 25× leverage (matching BTC FT)", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.leverage).toBe(25);
   });
-  it("defaults to risk-% of equity sizing", () => {
-    expect(DEFAULT_MOCK_TRADING_CONFIG.sizingMode).toBe("risk_pct_equity");
-    expect(DEFAULT_MOCK_TRADING_CONFIG.riskPctOfEquity).toBeGreaterThan(0);
+  it("defaults to fixed-BTC equal sizing so every strategy trades the same size", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.sizingMode).toBe("fixed_btc");
+    expect(DEFAULT_MOCK_TRADING_CONFIG.fixedSizeBtc).toBeGreaterThan(0);
   });
   it("applies a non-zero taker fee + slippage", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.takerFeePct).toBeGreaterThan(0);
@@ -129,10 +129,15 @@ describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
 
 // ── Sizing reflects $1M account ──────────────────────────────────────────────
 describe("computeMockNotional with $1M account", () => {
-  it("at default risk-% sizing derives notional from equity and stop distance", () => {
-    const n = computeMockNotional({ config: baseConfig, equity: 1_000_000 });
+  it("under risk-% sizing derives notional from equity and stop distance", () => {
+    const riskCfg = { ...baseConfig, sizingMode: "risk_pct_equity" as const };
+    const n = computeMockNotional({ config: riskCfg, equity: 1_000_000 });
     expect(n).toBeGreaterThan(100_000);
     expect(n).toBeLessThan(1_000_000);
+  });
+  it("under fixed-BTC sizing derives notional from the fixed BTC size and price", () => {
+    const n = computeMockNotional({ config: baseConfig, equity: 1_000_000, price: 60_000 });
+    expect(n).toBeCloseTo(DEFAULT_MOCK_TRADING_CONFIG.fixedSizeBtc * 60_000, 6);
   });
   it("respects fixed_notional override", () => {
     const cfg = { ...baseConfig, sizingMode: "fixed_notional" as const, fixedNotionalUsd: 25_000 };
@@ -229,6 +234,18 @@ describe("opening a mock trade updates exposure and reserved margin", () => {
 
 // ── Portfolio risk controls ──────────────────────────────────────────────────
 describe("portfolio risk controls", () => {
+  // These tests validate the configured caps/limits, which only apply when
+  // uncapped mode is OFF. Production defaults uncapped ON (every strategy
+  // trades with no limit), so force capped mode here to exercise the gates.
+  const prevUncapped = process.env.MOCK_TRADE_UNCAPPED;
+  beforeAll(() => {
+    process.env.MOCK_TRADE_UNCAPPED = "0";
+  });
+  afterAll(() => {
+    if (prevUncapped === undefined) delete process.env.MOCK_TRADE_UNCAPPED;
+    else process.env.MOCK_TRADE_UNCAPPED = prevUncapped;
+  });
+
   it("aggregates exposure across open trades", () => {
     const trades: MockTrade[] = [];
     for (let i = 0; i < 50; i++) {
@@ -244,7 +261,9 @@ describe("portfolio risk controls", () => {
     const acct = computeAccountState(trades, baseConfig);
     expect(acct.openCount).toBe(50);
     expect(acct.exposure).toBeGreaterThan(0);
-    expect(acct.exposure).toBeGreaterThan(10_000_000);
+    // Under fixed-BTC equal sizing every trade is the same notional, so 50
+    // open trades aggregate to 50 × fixedSizeBtc × price of exposure.
+    expect(acct.exposure).toBeGreaterThan(200_000);
   });
 
   it("rejects the 6th open position at the default portfolio cap", () => {
