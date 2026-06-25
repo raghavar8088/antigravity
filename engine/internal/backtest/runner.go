@@ -58,45 +58,45 @@ func DefaultRunConfig(symbol string) RunConfig {
 }
 
 // Runner orchestrates a backtest for one strategy against a dataset.
+// cb is a shared, read-only ContextBuilder — safe for concurrent callers.
 type Runner struct {
-	ds  marketdata.MTFDataset
-	cfg RunConfig
+	ds   marketdata.MTFDataset
+	cfg  RunConfig
+	cb   *ContextBuilder
+	tick []marketdata.Tick
+	fr   []btExecution.FundingRate
 }
 
-// NewRunner creates a Runner.
-func NewRunner(ds marketdata.MTFDataset, cfg RunConfig) *Runner {
-	return &Runner{ds: ds, cfg: cfg}
+// NewRunner creates a Runner with a pre-built shared ContextBuilder.
+// Pass ticks and funding rates pre-computed once for the whole batch.
+func NewRunner(ds marketdata.MTFDataset, cfg RunConfig, cb *ContextBuilder, ticks []marketdata.Tick, fr []btExecution.FundingRate) *Runner {
+	return &Runner{ds: ds, cfg: cfg, cb: cb, tick: ticks, fr: fr}
 }
 
 // Run executes the backtest and returns a StrategyResult.
 func (r *Runner) Run(entry scalers.RegistryEntry) (StrategyResult, error) {
-	cb := NewContextBuilder(r.ds)
+	if len(r.tick) == 0 {
+		return StrategyResult{}, fmt.Errorf("no ticks in dataset for %s", r.cfg.Symbol)
+	}
 
-	// Use RegimeTrending for strategies that specify it; otherwise use the config regime.
 	regime := r.cfg.Regime
 	if len(entry.Regimes) > 0 {
 		regime = entry.Regimes[0]
 	}
 
-	adapter := NewScalerV3Adapter(entry.Strategy, cb, regime, r.cfg.Symbol, r.cfg.SizeBTC)
-
-	ticks := DatasetToTicks(r.ds)
-	if len(ticks) == 0 {
-		return StrategyResult{}, fmt.Errorf("no ticks in dataset for %s", r.cfg.Symbol)
-	}
+	adapter := NewScalerV3Adapter(entry.Strategy, r.cb, regime, r.cfg.Symbol, r.cfg.SizeBTC)
 
 	// HARD CONSTRAINT: always pass nil bridge — never the production OMSBridge.
-	result, err := v3.NewEngine(r.cfg.V3Config, toFundingRates(r.ds), nil).Run(v3.V3Input{
+	result, err := v3.NewEngine(r.cfg.V3Config, r.fr, nil).Run(v3.V3Input{
 		Config:   r.cfg.V3Config,
-		Ticks:    ticks,
+		Ticks:    r.tick,
 		Strategy: adapter,
 	})
 	if err != nil {
 		return StrategyResult{}, fmt.Errorf("v3 engine: %w", err)
 	}
 
-	sr := buildStrategyResult(entry.Name, r.cfg.Symbol, r.ds.From, r.ds.To, result)
-	return sr, nil
+	return buildStrategyResult(entry.Name, r.cfg.Symbol, r.ds.From, r.ds.To, result), nil
 }
 
 // ── BatchRunner ───────────────────────────────────────────────────────────────
@@ -139,6 +139,11 @@ func (b *BatchRunner) RunAll(onProgress func(done, total int, name string)) []St
 	}
 	close(jobs)
 
+	// Build shared read-only resources once — avoids 4× memory copies.
+	cb := NewContextBuilder(b.ds)
+	ticks := DatasetToTicks(b.ds)
+	fr := toFundingRates(b.ds)
+
 	var mu sync.Mutex
 	done := 0
 	var wg sync.WaitGroup
@@ -147,7 +152,7 @@ func (b *BatchRunner) RunAll(onProgress func(done, total int, name string)) []St
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r := NewRunner(b.ds, b.cfg)
+			r := NewRunner(b.ds, b.cfg, cb, ticks, fr)
 			for job := range jobs {
 				sr, err := r.Run(job.entry)
 				if err != nil {
