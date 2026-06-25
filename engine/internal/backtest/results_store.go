@@ -41,15 +41,21 @@ func OpenResultsStore(path string) (*ResultsStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("ResultsStore mkdir: %w", err)
 	}
-	// Use URI syntax so SQLite params apply. EXCLUSIVE locking avoids
-	// SQLITE_IOERR_LOCK (6410) on Docker volume file-lock syscalls.
-	dsn := "file:" + path + "?_journal_mode=WAL&_busy_timeout=10000&_locking_mode=EXCLUSIVE"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("ResultsStore open: %w", err)
 	}
-	// Serialize all writes — single writer avoids WAL checkpointing contention.
+	// FROM-scratch containers have no /tmp; SQLITE_IOERR_GETTEMPPATH (6410)
+	// fires whenever SQLite needs a temp file. Keep everything in memory.
+	// Single connection serializes all writes — no WAL checkpointing contention.
 	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`
+		PRAGMA temp_store=MEMORY;
+		PRAGMA journal_mode=MEMORY;
+		PRAGMA busy_timeout=10000;
+	`); err != nil {
+		return nil, fmt.Errorf("ResultsStore pragma: %w", err)
+	}
 	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("ResultsStore migrate: %w", err)
 	}
