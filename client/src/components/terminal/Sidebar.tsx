@@ -126,6 +126,16 @@ function IconSettings() {
   );
 }
 
+function IconBacktest() {
+  return (
+    <svg className="sidebar-nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1,12 4,7 7,9 10,4 13,6 15,3" />
+      <polyline points="11,3 15,3 15,7" />
+      <line x1="1" y1="14.5" x2="15" y2="14.5" />
+    </svg>
+  );
+}
+
 const ICONS: Record<string, React.ReactNode> = {
   "Command Center": <IconCommand />,
   Execution: <IconExecution />,
@@ -139,6 +149,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
   "Trade Engine": <IconResearch />,
+  "Backtest Lab": <IconBacktest />,
   "Trade Thresholds": <IconSettings />,
 };
 
