@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { TerminalCard } from "@/components/terminal/institutional/TerminalCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,26 @@ async function apiGet(path: string) {
   return safeJson(r);
 }
 
+// ── Status badge ──────────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const modifier =
+    status === "done"
+      ? "m3-status-chip--success"
+      : status === "running"
+      ? "m3-status-chip--info"
+      : status === "error"
+      ? "m3-status-chip--error"
+      : "m3-status-chip--warning";
+
+  return (
+    <span className={`m3-status-chip ${modifier}`}>
+      <span className="m3-status-chip__dot" />
+      {status}
+    </span>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type Tab = "run" | "jobs" | "leaderboard" | "strategies";
@@ -77,37 +98,27 @@ export default function BacktestLabPage() {
   const [tab, setTab] = useState<Tab>("run");
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-1">Backtest Lab</h1>
-        <p className="text-gray-400 text-sm mb-6">
-          Run 5-year multi-strategy backtests via the v3 institutional engine.
-        </p>
+    <div className="m3-page-stack">
+      <div className="m3-tabs__list">
+        {(["run", "jobs", "leaderboard", "strategies"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className="m3-tabs__trigger"
+            data-state={tab === t ? "active" : "inactive"}
+          >
+            {t === "run"
+              ? "Run Backtest"
+              : t === "jobs"
+              ? "Jobs"
+              : t === "leaderboard"
+              ? "Leaderboard"
+              : "All Strategies"}
+          </button>
+        ))}
+      </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 mb-6 border-b border-gray-800">
-          {(["run", "jobs", "leaderboard", "strategies"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={[
-                "px-4 py-2 text-sm font-medium rounded-t transition-colors",
-                tab === t
-                  ? "bg-gray-800 text-white border-b-2 border-blue-500"
-                  : "text-gray-400 hover:text-white",
-              ].join(" ")}
-            >
-              {t === "run"
-                ? "Run Backtest"
-                : t === "jobs"
-                  ? "Jobs"
-                  : t === "leaderboard"
-                    ? "Leaderboard"
-                    : "All Strategies"}
-            </button>
-          ))}
-        </div>
-
+      <div className="m3-tabs__content">
         {tab === "run" && <RunTab />}
         {tab === "jobs" && <JobsTab />}
         {tab === "leaderboard" && <LeaderboardTab />}
@@ -142,51 +153,57 @@ function RunTab() {
   }, [symbol, from, to]);
 
   return (
-    <div className="max-w-lg">
-      <div className="bg-gray-900 rounded-lg p-6 space-y-4">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">Symbol</label>
+    <TerminalCard
+      title="Run Backtest"
+      subtitle="Run all ported strategies (S101–S150) against a date range via the v3 institutional engine"
+    >
+      <div style={{ maxWidth: 480, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="m3-field">
+          <label className="m3-field__label">Symbol</label>
           <input
             value={symbol}
             onChange={(e) => setSymbol(e.target.value)}
-            className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
+            className="m3-field__input"
           />
         </div>
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">From</label>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div className="m3-field" style={{ flex: 1 }}>
+            <label className="m3-field__label">From</label>
             <input
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
+              className="m3-field__input"
             />
           </div>
-          <div className="flex-1">
-            <label className="block text-xs text-gray-400 mb-1">To</label>
+          <div className="m3-field" style={{ flex: 1 }}>
+            <label className="m3-field__label">To</label>
             <input
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
+              className="m3-field__input"
             />
           </div>
         </div>
-        <p className="text-xs text-gray-500">
-          Runs all 50 ported strategies (S101–S150) against the selected date range. Requires
-          pre-cached historical data in the engine data directory.
+        <p className="m3-field__hint">
+          Requires pre-cached historical data in the engine data directory.
         </p>
         <button
           onClick={submit}
           disabled={loading}
-          className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-medium transition-colors"
+          className="m3-btn m3-btn--filled"
         >
           {loading ? "Submitting…" : "Run All Strategies"}
         </button>
-        {result && <p className="text-green-400 text-sm">{result}</p>}
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {result && (
+          <p style={{ fontSize: 13, color: "var(--m3-profit)" }}>{result}</p>
+        )}
+        {error && (
+          <p style={{ fontSize: 13, color: "var(--m3-loss)" }}>{error}</p>
+        )}
       </div>
-    </div>
+    </TerminalCard>
   );
 }
 
@@ -209,60 +226,76 @@ function JobsTab() {
   }, [refresh]);
 
   if (jobs.length === 0) {
-    return <p className="text-gray-500 text-sm">No backtest jobs yet. Run one from the Run tab.</p>;
+    return (
+      <TerminalCard title="Jobs">
+        <p className="m3-field__hint">No backtest jobs yet. Run one from the Run tab.</p>
+      </TerminalCard>
+    );
   }
 
   return (
-    <div className="space-y-3">
-      {jobs.map((job) => (
-        <div key={job.id} className="bg-gray-900 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-mono text-xs text-gray-400">{job.id}</span>
-            <StatusBadge status={job.status} />
-          </div>
-          <div className="flex gap-4 text-sm text-gray-300 mt-1">
-            <span>{job.symbol}</span>
-            <span>{job.fromDate?.slice(0, 10)} → {job.toDate?.slice(0, 10)}</span>
-            <span className="text-gray-500">run: {job.runId}</span>
-          </div>
-          {job.status === "running" && (
-            <div className="mt-2 h-1.5 bg-gray-800 rounded overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all"
-                style={{ width: `${job.progress}%` }}
-              />
+    <TerminalCard title="Jobs" subtitle="Auto-refreshes every 5 seconds">
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {jobs.map((job) => (
+          <div
+            key={job.id}
+            style={{
+              padding: "12px 14px",
+              borderRadius: "var(--m3-radius-md)",
+              border: "1px solid var(--m3-outline-variant)",
+              background: "var(--m3-surface-container)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontFamily: "var(--m3-font-mono)", fontSize: 11, color: "var(--m3-on-surface-variant)" }}>
+                {job.id}
+              </span>
+              <StatusBadge status={job.status} />
             </div>
-          )}
-          {job.error && <p className="text-red-400 text-xs mt-1">{job.error}</p>}
-          {job.status === "done" && (
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                navigator.clipboard.writeText(job.runId);
-              }}
-              className="text-blue-400 text-xs mt-1 inline-block hover:underline"
-            >
-              Copy run ID for Leaderboard →
-            </a>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    pending: "bg-yellow-900 text-yellow-300",
-    running: "bg-blue-900 text-blue-300",
-    done: "bg-green-900 text-green-300",
-    error: "bg-red-900 text-red-300",
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-gray-800 text-gray-400"}`}>
-      {status}
-    </span>
+            <div style={{ display: "flex", gap: 16, fontSize: 13, color: "var(--m3-on-surface)" }}>
+              <span>{job.symbol}</span>
+              <span style={{ color: "var(--m3-on-surface-variant)" }}>
+                {job.fromDate?.slice(0, 10)} → {job.toDate?.slice(0, 10)}
+              </span>
+              <span style={{ color: "var(--m3-on-surface-variant)" }}>run: {job.runId}</span>
+            </div>
+            {job.status === "running" && (
+              <div
+                style={{
+                  marginTop: 8,
+                  height: 4,
+                  borderRadius: 2,
+                  background: "var(--m3-outline-variant)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${job.progress}%`,
+                    background: "var(--m3-primary)",
+                    transition: "width 0.3s ease",
+                    borderRadius: 2,
+                  }}
+                />
+              </div>
+            )}
+            {job.error && (
+              <p style={{ fontSize: 11, color: "var(--m3-loss)", marginTop: 4 }}>{job.error}</p>
+            )}
+            {job.status === "done" && (
+              <button
+                onClick={() => navigator.clipboard.writeText(job.runId)}
+                className="m3-btn m3-btn--text"
+                style={{ fontSize: 11, padding: "2px 0", marginTop: 4 }}
+              >
+                Copy run ID for Leaderboard →
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </TerminalCard>
   );
 }
 
@@ -276,7 +309,7 @@ function LeaderboardTab() {
   const [error, setError] = useState<string | null>(null);
   const [promoting, setPromoting] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
+  const loadLeaderboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -291,7 +324,7 @@ function LeaderboardTab() {
     }
   }, [runId, symbol]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { loadLeaderboard(); }, [loadLeaderboard]);
 
   const promote = useCallback(async (name: string) => {
     setPromoting(name);
@@ -305,109 +338,135 @@ function LeaderboardTab() {
     }
   }, []);
 
+  const eligibleCount = rows.filter(
+    (r) => r.sharpe >= 1.0 && r.winRate >= 0.45 && r.maxDrawdown <= 20 && r.profitFactor >= 1.3 && r.totalTrades >= 50,
+  ).length;
+
   return (
-    <div>
-      <div className="flex gap-3 mb-4">
+    <TerminalCard
+      title="Leaderboard"
+      subtitle={rows.length > 0 ? `${rows.length} strategies · ${eligibleCount} eligible for promotion` : undefined}
+    >
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
         <input
           placeholder="Run ID (optional — leave blank for latest)"
           value={runId}
           onChange={(e) => setRunId(e.target.value)}
-          className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+          className="m3-field__input"
+          style={{ flex: 1 }}
         />
         <input
           value={symbol}
           onChange={(e) => setSymbol(e.target.value)}
-          className="w-32 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+          className="m3-field__input"
+          style={{ width: 120 }}
         />
         <button
-          onClick={fetch}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
+          onClick={loadLeaderboard}
+          disabled={loading}
+          className="m3-btn m3-btn--outlined"
         >
           {loading ? "…" : "Load"}
         </button>
       </div>
 
-      {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+      {error && (
+        <p style={{ fontSize: 13, color: "var(--m3-loss)", marginBottom: 12 }}>{error}</p>
+      )}
 
       {rows.length === 0 ? (
-        <p className="text-gray-500 text-sm">No results. Run a backtest first.</p>
+        <p className="m3-field__hint">No results. Run a backtest first.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-gray-800 text-xs">
-                <th className="pb-2 pr-4">Strategy</th>
-                <th className="pb-2 pr-4 text-right">Trades</th>
-                <th className="pb-2 pr-4 text-right">Win%</th>
-                <th className="pb-2 pr-4 text-right">Sharpe</th>
-                <th className="pb-2 pr-4 text-right">MaxDD%</th>
-                <th className="pb-2 pr-4 text-right">PF</th>
-                <th className="pb-2 pr-4 text-right">Return%</th>
-                <th className="pb-2 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const eligible =
-                  row.sharpe >= 1.0 &&
-                  row.winRate >= 0.45 &&
-                  row.maxDrawdown <= 20 &&
-                  row.profitFactor >= 1.3 &&
-                  row.totalTrades >= 50;
-                return (
-                  <tr key={row.id} className="border-b border-gray-800/50 hover:bg-gray-900/50">
-                    <td className="py-2 pr-4">
-                      <span className={eligible ? "text-green-400 font-medium" : "text-gray-300"}>
-                        {row.strategyName}
-                      </span>
-                      {eligible && (
-                        <span className="ml-2 text-xs bg-green-900 text-green-300 px-1.5 py-0.5 rounded">
-                          eligible
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-4 text-right text-gray-400">{row.totalTrades}</td>
-                    <td className="py-2 pr-4 text-right">{(row.winRate * 100).toFixed(1)}%</td>
-                    <td className="py-2 pr-4 text-right">
-                      <span className={row.sharpe >= 1 ? "text-green-400" : "text-gray-300"}>
-                        {row.sharpe.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      <span className={row.maxDrawdown > 20 ? "text-red-400" : "text-gray-300"}>
-                        {row.maxDrawdown.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      <span className={row.profitFactor >= 1.3 ? "text-green-400" : "text-gray-300"}>
-                        {row.profitFactor.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 text-right">
-                      <span className={row.totalReturn >= 0 ? "text-green-400" : "text-red-400"}>
-                        {row.totalReturn >= 0 ? "+" : ""}
-                        {row.totalReturn.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-2 text-right">
-                      {eligible && (
-                        <button
-                          onClick={() => promote(row.strategyName)}
-                          disabled={promoting === row.strategyName}
-                          className="px-2 py-0.5 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-40 rounded transition-colors"
+        <div className="m3-data-table">
+          <div className="m3-data-table__scroll">
+            <table>
+              <thead className="m3-data-table__head--sticky">
+                <tr>
+                  <th>Strategy</th>
+                  <th style={{ textAlign: "right" }}>Trades</th>
+                  <th style={{ textAlign: "right" }}>Win%</th>
+                  <th style={{ textAlign: "right" }}>Sharpe</th>
+                  <th style={{ textAlign: "right" }}>MaxDD%</th>
+                  <th style={{ textAlign: "right" }}>PF</th>
+                  <th style={{ textAlign: "right" }}>Return%</th>
+                  <th style={{ textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const eligible =
+                    row.sharpe >= 1.0 &&
+                    row.winRate >= 0.45 &&
+                    row.maxDrawdown <= 20 &&
+                    row.profitFactor >= 1.3 &&
+                    row.totalTrades >= 50;
+                  return (
+                    <tr key={row.id} className="m3-data-table__row">
+                      <td>
+                        <span
+                          style={{
+                            color: eligible ? "var(--m3-profit)" : "var(--m3-on-surface)",
+                            fontWeight: eligible ? 600 : 400,
+                          }}
                         >
-                          {promoting === row.strategyName ? "…" : "Promote"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          {row.strategyName}
+                        </span>
+                        {eligible && (
+                          <span
+                            className="m3-status-chip m3-status-chip--success"
+                            style={{ marginLeft: 8, fontSize: 10 }}
+                          >
+                            eligible
+                          </span>
+                        )}
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right", color: "var(--m3-on-surface-variant)" }}>
+                        {row.totalTrades}
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right" }}>
+                        {(row.winRate * 100).toFixed(1)}%
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right" }}>
+                        <span style={{ color: row.sharpe >= 1 ? "var(--m3-profit)" : "var(--m3-on-surface)" }}>
+                          {row.sharpe.toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right" }}>
+                        <span style={{ color: row.maxDrawdown > 20 ? "var(--m3-loss)" : "var(--m3-on-surface)" }}>
+                          {row.maxDrawdown.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right" }}>
+                        <span style={{ color: row.profitFactor >= 1.3 ? "var(--m3-profit)" : "var(--m3-on-surface)" }}>
+                          {row.profitFactor.toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="m3-data-table__cell--tabular" style={{ textAlign: "right" }}>
+                        <span style={{ color: row.totalReturn >= 0 ? "var(--m3-profit)" : "var(--m3-loss)" }}>
+                          {row.totalReturn >= 0 ? "+" : ""}{row.totalReturn.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {eligible && (
+                          <button
+                            onClick={() => promote(row.strategyName)}
+                            disabled={promoting === row.strategyName}
+                            className="m3-btn m3-btn--tonal"
+                            style={{ fontSize: 11, padding: "3px 10px" }}
+                          >
+                            {promoting === row.strategyName ? "…" : "Promote"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-    </div>
+    </TerminalCard>
   );
 }
 
@@ -433,43 +492,54 @@ function StrategiesTab() {
   );
 
   return (
-    <div>
-      <div className="flex gap-3 mb-4">
+    <TerminalCard title="All Strategies" subtitle={`${visible.length} / ${strategies.length} strategies`}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <input
           placeholder="Filter strategies…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+          className="m3-field__input"
+          style={{ maxWidth: 360 }}
         />
-        <span className="text-gray-500 text-sm self-center">
-          {visible.length} / {strategies.length}
-        </span>
+        <span className="m3-data-table__count">{visible.length} / {strategies.length}</span>
       </div>
 
       {loading ? (
-        <p className="text-gray-500 text-sm">Loading…</p>
+        <p className="m3-field__hint">Loading…</p>
       ) : visible.length === 0 ? (
-        <p className="text-gray-500 text-sm">No strategies found.</p>
+        <p className="m3-field__hint">No strategies found.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 10,
+          }}
+        >
           {visible.map((s) => (
-            <div key={s.name} className="bg-gray-900 rounded-lg p-4">
-              <div className="font-medium text-white text-sm mb-1">{s.name}</div>
-              <p className="text-gray-400 text-xs mb-2">{s.description}</p>
-              <div className="flex flex-wrap gap-1">
+            <div
+              key={s.name}
+              style={{
+                padding: "12px 14px",
+                borderRadius: "var(--m3-radius-md)",
+                border: "1px solid var(--m3-outline-variant)",
+                background: "var(--m3-surface-container)",
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 13, color: "var(--m3-on-surface)", marginBottom: 4 }}>
+                {s.name}
+              </div>
+              <p style={{ fontSize: 11, color: "var(--m3-on-surface-variant)", marginBottom: 8, lineHeight: 1.5 }}>
+                {s.description}
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {s.regimes.map((r) => (
-                  <span
-                    key={r}
-                    className="text-xs px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300"
-                  >
+                  <span key={r} className="m3-chip m3-chip--selected" style={{ fontSize: 10 }}>
                     {r}
                   </span>
                 ))}
                 {s.timeframes.map((tf) => (
-                  <span
-                    key={tf}
-                    className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400"
-                  >
+                  <span key={tf} className="m3-chip" style={{ fontSize: 10 }}>
                     {tf}
                   </span>
                 ))}
@@ -478,6 +548,6 @@ function StrategiesTab() {
           ))}
         </div>
       )}
-    </div>
+    </TerminalCard>
   );
 }
