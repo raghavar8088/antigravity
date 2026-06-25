@@ -20,20 +20,20 @@ type ResultsStore struct {
 
 // StoredResult is a single row from the results table.
 type StoredResult struct {
-	ID           int64
-	RunID        string
-	StrategyName string
-	Symbol       string
-	From         time.Time
-	To           time.Time
-	RanAt        time.Time
-	TotalTrades  int
-	WinRate      float64
-	Sharpe       float64
-	MaxDrawdown  float64
-	ProfitFactor float64
-	TotalReturn  float64
-	ResultJSON   string
+	ID           int64     `json:"id"`
+	RunID        string    `json:"runId"`
+	StrategyName string    `json:"strategyName"`
+	Symbol       string    `json:"symbol"`
+	From         time.Time `json:"from"`
+	To           time.Time `json:"to"`
+	RanAt        time.Time `json:"ranAt"`
+	TotalTrades  int       `json:"totalTrades"`
+	WinRate      float64   `json:"winRate"`
+	Sharpe       float64   `json:"sharpe"`
+	MaxDrawdown  float64   `json:"maxDrawdown"`
+	ProfitFactor float64   `json:"profitFactor"`
+	TotalReturn  float64   `json:"totalReturn"`
+	ResultJSON   string    `json:"resultJson,omitempty"`
 }
 
 // OpenResultsStore opens (or creates) the SQLite database at the given path.
