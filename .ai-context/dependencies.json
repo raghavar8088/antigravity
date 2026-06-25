@@ -1,1 +1,1 @@
-{}
+{"engine/cmd/antigravity/main.go":{"references":["engine/internal/backtest/http_handlers.go","engine/internal/trading/scalers_eval.go"]}}

@@ -739,6 +739,7 @@ The content is organized as follows:
   alpha/session/session_engine.go
   alpha/types.go
   alpha/volumeprofile/volume_profile.go
+  backtest/context_builder.go
   backtest/engine.go
   backtest/execution/execution_model_test.go
   backtest/execution/fills.go
@@ -751,7 +752,13 @@ The content is organized as follows:
   backtest/execution/slippage_engine.go
   backtest/execution/slippage.go
   backtest/execution/spread.go
+  backtest/http_handlers.go
+  backtest/job_store.go
   backtest/metrics.go
+  backtest/promotion.go
+  backtest/results_store.go
+  backtest/runner.go
+  backtest/scaler_v3_adapter.go
   backtest/v2/benchmark.go
   backtest/v2/bias_detector.go
   backtest/v2/dashboard.go
@@ -955,6 +962,9 @@ The content is organized as follows:
   marketdata/db_writer.go
   marketdata/delta.go
   marketdata/deribit_dvol.go
+  marketdata/historical_fetcher_test.go
+  marketdata/historical_fetcher.go
+  marketdata/historical_loader.go
   marketdata/macro_feed.go
   marketdata/warmup.go
   ml/prescorer.go
@@ -1312,6 +1322,11 @@ The content is organized as follows:
   strategy/scalpers/s1_ema_ribbon_trend_rider.go
   strategy/scalpers/s10_smc_order_block_fvg_test.go
   strategy/scalpers/s10_smc_order_block_fvg.go
+  strategy/scalpers/s101_s110_scalping.go
+  strategy/scalpers/s111_s120_mixed.go
+  strategy/scalpers/s121_s130_swing.go
+  strategy/scalpers/s131_s140_futures_macro.go
+  strategy/scalpers/s141_s150_cross_asset.go
   strategy/scalpers/s2_bollinger_mean_reversion.go
   strategy/scalpers/s3_liquidity_sweep_reversal.go
   strategy/scalpers/s30_dual_momentum_trend.go
@@ -1555,6 +1570,7 @@ The content is organized as follows:
 [cmd]/
   antigravity/main.go
   backtest/main.go
+  fetch_historical/main.go
   perfbench/main.go
   seed_db/main.go
   sep_evidence/analytics.go

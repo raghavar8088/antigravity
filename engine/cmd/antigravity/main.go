@@ -48,6 +48,7 @@ import (
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/paperpersist"
+	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/persistence"
 	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
@@ -1832,6 +1833,27 @@ func main() {
 	// Institutional execution gateway — sole human-facing execution API on the engine.
 	execGatewayHandler := executiongateway.NewHandler(orchestrator)
 	http.Handle("/api/execution/request", execGatewayHandler)
+
+	// ── Backtest API (Tasks 5–9) ──────────────────────────────────────────────
+	{
+		btDataDir := os.Getenv("ENGINE_DATA_DIR")
+		if btDataDir == "" {
+			btDataDir = "./data"
+		}
+		btStore, btErr := btpkg.OpenResultsStore(btpkg.DBPath(btDataDir))
+		if btErr != nil {
+			log.Printf("[BACKTEST] WARNING: could not open results store: %v — backtest endpoints disabled", btErr)
+		} else {
+			var promoteFn func(string)
+			if orchestrator != nil && orchestrator.ScalerBundle() != nil {
+				sb := orchestrator.ScalerBundle()
+				promoteFn = sb.RequestPromotion
+			}
+			btAPI := btpkg.NewBacktestAPI(btStore, btDataDir+"/historical", promoteFn)
+			btAPI.Register()
+			log.Printf("[BACKTEST] API registered (DB: %s)", btpkg.DBPath(btDataDir))
+		}
+	}
 
 	// Health check — used by load balancers, Docker HEALTHCHECK, and uptime monitors
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {

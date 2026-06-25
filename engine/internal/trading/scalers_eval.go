@@ -53,6 +53,10 @@ func fixedTradeSizeBTC() float64 {
 type ScalerBundle struct {
 	mu sync.Mutex
 
+	// promotionCh receives strategy names to promote to live on the next eval cycle.
+	// Drained at the top of evalAndExecuteScalers before strategy evaluation.
+	promotionCh chan string
+
 	candles1m  []scalers.Candle
 	candles5m  []scalers.Candle
 	candles15m []scalers.Candle
@@ -179,6 +183,7 @@ type ScalerBundle struct {
 
 func newScalerBundle() *ScalerBundle {
 	return &ScalerBundle{
+		promotionCh:     make(chan string, 64),
 		candles1m:       make([]scalers.Candle, 0, maxCandles1m+1),
 		candles5m:       make([]scalers.Candle, 0, maxCandles5m+1),
 		candles15m:      make([]scalers.Candle, 0, maxCandles15m+1),
@@ -186,6 +191,25 @@ func newScalerBundle() *ScalerBundle {
 		candles4h:       make([]scalers.Candle, 0, maxCandles4h+1),
 		strategies:      scalers.BuildCuratedScalpers(),
 		metaLabelFilter: NewMetaLabelFilter(),
+	}
+}
+
+// ScalerBundle returns the Orchestrator's ScalerBundle, or nil if not initialized.
+// Used by HTTP handlers to access RequestPromotion without exposing the field.
+func (o *Orchestrator) ScalerBundle() *ScalerBundle {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	return o.scalerBundle
+}
+
+// RequestPromotion enqueues a strategy name for hot-promotion to live on the
+// next evalAndExecuteScalers cycle. Non-blocking: drops the request if the
+// channel is full (capacity 64) to never block callers.
+func (b *ScalerBundle) RequestPromotion(strategyName string) {
+	select {
+	case b.promotionCh <- strategyName:
+	default:
+		log.Printf("[PROMOTION] channel full, dropping promote request for %s", strategyName)
 	}
 }
 
@@ -715,6 +739,26 @@ func (b *ScalerBundle) buildContextLocked(price float64, regime scalers.Regime) 
 func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdata.Tick) {
 	if o.scalerBundle == nil {
 		return
+	}
+
+	// Drain hot-promotion channel: update performance registry for any strategies
+	// that were promoted via POST /api/backtest/promote/{name} since last cycle.
+	if o.scalerBundle != nil {
+		for {
+			select {
+			case name := <-o.scalerBundle.promotionCh:
+				p, exists := scalers.GetPerformance(name)
+				if !exists {
+					p = scalers.Performance{StrategyName: name}
+				}
+				p.Active = true
+				scalers.UpdatePerformance(p)
+				log.Printf("[HOT-PROMOTE] %s set Active=true at cycle start", name)
+			default:
+				goto drainDone
+			}
+		}
+	drainDone:
 	}
 
 	// Kill switch overrides everything — abort before any strategy evaluation or

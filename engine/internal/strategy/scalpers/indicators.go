@@ -889,3 +889,346 @@ func ChaikinMoneyFlow(candles []Candle, period int) float64 {
 	}
 	return mfvSum / volSum
 }
+
+// ── WMA — Weighted Moving Average ─────────────────────────────────────────────
+
+// WMA computes the linearly-weighted moving average over the last `period` closes.
+// Weight of bar i (0=oldest) is (i+1); most-recent bar has highest weight.
+func WMA(candles []Candle, period int) float64 {
+	if len(candles) < period || period <= 0 {
+		return 0
+	}
+	tail := candles[len(candles)-period:]
+	var weightedSum, weightSum float64
+	for i, c := range tail {
+		w := float64(i + 1)
+		weightedSum += c.Close * w
+		weightSum += w
+	}
+	if weightSum == 0 {
+		return 0
+	}
+	return weightedSum / weightSum
+}
+
+// ── ZLEMA — Zero-Lag EMA (Ehlers 1999) ───────────────────────────────────────
+
+// ZLEMA computes the zero-lag EMA by adjusting each close for the EMA lag.
+// lag = (period-1)/2; adjusted_close = close + (close - close[lag]).
+func ZLEMA(candles []Candle, period int) float64 {
+	lag := (period - 1) / 2
+	if len(candles) < period+lag || period <= 0 {
+		return 0
+	}
+	adjusted := make([]Candle, len(candles))
+	copy(adjusted, candles)
+	for i := lag; i < len(candles); i++ {
+		adjusted[i].Close = candles[i].Close + (candles[i].Close - candles[i-lag].Close)
+	}
+	return EMA(adjusted[lag:], period)
+}
+
+// ── Williams %R ───────────────────────────────────────────────────────────────
+
+// WilliamsR computes Williams %R over `period` bars. Range: -100 to 0.
+// -100 = most oversold (close at period low), 0 = most overbought.
+func WilliamsR(candles []Candle, period int) float64 {
+	if len(candles) < period || period <= 0 {
+		return -50
+	}
+	hi := SwingHigh(candles, period)
+	lo := SwingLow(candles, period)
+	if hi == lo {
+		return -50
+	}
+	close := candles[len(candles)-1].Close
+	return (hi - close) / (hi - lo) * -100
+}
+
+// ── HMA — Hull Moving Average (Alan Hull 2005) ────────────────────────────────
+
+// HMA computes the Hull MA: WMA(2×WMA(n/2) - WMA(n), sqrt(n)).
+// Significantly reduces lag compared to EMA while remaining smooth.
+func HMA(candles []Candle, period int) float64 {
+	if len(candles) < period || period < 4 {
+		return 0
+	}
+	half := period / 2
+	sqrtN := int(math.Sqrt(float64(period)))
+	if sqrtN < 1 {
+		sqrtN = 1
+	}
+	fastWMA := WMA(candles, half)
+	fullWMA := WMA(candles, period)
+	diff := 2*fastWMA - fullWMA
+
+	// Build a synthetic candle slice using the diff value as close for the last sqrtN bars.
+	if len(candles) < sqrtN {
+		return diff
+	}
+	synthetic := make([]Candle, sqrtN)
+	for i := range synthetic {
+		synthetic[i] = candles[len(candles)-sqrtN+i]
+	}
+	synthetic[sqrtN-1].Close = diff
+	return WMA(synthetic, sqrtN)
+}
+
+// ── Supertrend ────────────────────────────────────────────────────────────────
+
+// SupertrendResult holds the trend direction and trailing stop level.
+type SupertrendResult struct {
+	Direction int     // +1 = bullish trend, -1 = bearish trend
+	Level     float64 // the stop / trail level
+}
+
+// Supertrend computes the classic supertrend indicator.
+// Direction +1 = price above the band (bull); -1 = price below (bear).
+func Supertrend(candles []Candle, period int, multiplier float64) SupertrendResult {
+	if len(candles) < period+2 {
+		return SupertrendResult{}
+	}
+	atr := ATR(candles, period)
+	last := candles[len(candles)-1]
+	prev := candles[len(candles)-2]
+	hl2 := (last.High + last.Low) / 2
+	upperBand := hl2 + multiplier*atr
+	lowerBand := hl2 - multiplier*atr
+
+	if last.Close > upperBand {
+		return SupertrendResult{Direction: 1, Level: lowerBand}
+	}
+	if last.Close < lowerBand {
+		return SupertrendResult{Direction: -1, Level: upperBand}
+	}
+	// No flip: continue prior direction using prev close as proxy
+	if prev.Close > upperBand {
+		return SupertrendResult{Direction: 1, Level: lowerBand}
+	}
+	return SupertrendResult{Direction: -1, Level: upperBand}
+}
+
+// ── StochRSI ──────────────────────────────────────────────────────────────────
+
+// StochRSI computes the Stochastic RSI. Returns K and D lines (0–100).
+// smoothK and smoothD are SMA periods for K and D respectively (typically 3).
+func StochRSI(candles []Candle, rsiPeriod, stochPeriod, smoothK, smoothD int) (k, d float64) {
+	needed := rsiPeriod + stochPeriod + smoothK + smoothD
+	if len(candles) < needed || rsiPeriod < 2 || stochPeriod < 2 {
+		return 50, 50
+	}
+	rsiVals := make([]float64, stochPeriod+smoothK+smoothD)
+	for i := range rsiVals {
+		sub := candles[:len(candles)-len(rsiVals)+i+1]
+		rsiVals[i] = RSI(sub, rsiPeriod)
+	}
+	// Stochastic of RSI
+	stochVals := make([]float64, smoothK+smoothD)
+	for i := range stochVals {
+		window := rsiVals[i : i+stochPeriod]
+		hi, lo := window[0], window[0]
+		for _, v := range window {
+			if v > hi {
+				hi = v
+			}
+			if v < lo {
+				lo = v
+			}
+		}
+		if hi == lo {
+			stochVals[i] = 50
+		} else {
+			stochVals[i] = (rsiVals[i+stochPeriod-1] - lo) / (hi - lo) * 100
+		}
+	}
+	// Smooth K
+	kVals := make([]float64, smoothD)
+	for i := range kVals {
+		window := stochVals[i : i+smoothK]
+		var sum float64
+		for _, v := range window {
+			sum += v
+		}
+		kVals[i] = sum / float64(smoothK)
+	}
+	// D = SMA(K, smoothD)
+	var dSum float64
+	for _, v := range kVals {
+		dSum += v
+	}
+	k = kVals[len(kVals)-1]
+	d = dSum / float64(len(kVals))
+	return
+}
+
+// ── PSAR — Parabolic SAR ──────────────────────────────────────────────────────
+
+// PSARValue computes a simplified Parabolic SAR level and trend direction.
+// Returns the SAR value and true if the trend is bullish (price above SAR).
+func PSARValue(candles []Candle, step, maxStep float64) (value float64, bullish bool) {
+	if len(candles) < 5 || step <= 0 || maxStep <= step {
+		return 0, true
+	}
+	atr := ATR(candles, 14)
+	last := candles[len(candles)-1]
+	hi5 := SwingHigh(candles, 5)
+	lo5 := SwingLow(candles, 5)
+
+	// Determine trend from simple comparison
+	prevClose := candles[len(candles)-2].Close
+	if last.Close >= prevClose {
+		// Bullish: SAR is below price (trailing stop below)
+		sar := lo5 - step*atr
+		return sar, true
+	}
+	// Bearish: SAR is above price
+	sar := hi5 + step*atr
+	return sar, false
+}
+
+// ── Fisher Transform (Ehlers 2002) ───────────────────────────────────────────
+
+// FisherTransform normalizes price into a Gaussian distribution.
+// Values > 2.5 or < -2.5 indicate extreme conditions.
+func FisherTransform(candles []Candle, period int) float64 {
+	if len(candles) < period || period < 2 {
+		return 0
+	}
+	hi := SwingHigh(candles, period)
+	lo := SwingLow(candles, period)
+	if hi == lo {
+		return 0
+	}
+	close := candles[len(candles)-1].Close
+	value := 2*((close-lo)/(hi-lo)) - 1
+	// Clamp to avoid log(0)
+	if value >= 1 {
+		value = 0.9999
+	}
+	if value <= -1 {
+		value = -0.9999
+	}
+	return 0.5 * math.Log((1+value)/(1-value))
+}
+
+// IchimokuResult and Ichimoku() are declared in indicators_s30_s79.go.
+
+// ── Chandelier Exit ───────────────────────────────────────────────────────────
+
+// ChandelierExit computes long and short stop levels.
+// LongStop = highest high over period - multiplier×ATR.
+// ShortStop = lowest low over period + multiplier×ATR.
+func ChandelierExit(candles []Candle, period int, multiplier float64) (longStop, shortStop float64) {
+	if len(candles) < period+1 {
+		return 0, 0
+	}
+	atr := ATR(candles, period)
+	hi := SwingHigh(candles, period)
+	lo := SwingLow(candles, period)
+	return hi - multiplier*atr, lo + multiplier*atr
+}
+
+// ── Elder Force Index ─────────────────────────────────────────────────────────
+
+// ElderForceIndex computes Alexander Elder's Force Index: EMA(close_change × volume, period).
+// Positive = bullish force, negative = bearish force.
+func ElderForceIndex(candles []Candle, period int) float64 {
+	if len(candles) < period+2 || period < 1 {
+		return 0
+	}
+	fiValues := make([]float64, period)
+	tail := candles[len(candles)-(period+1):]
+	for i := 1; i <= period; i++ {
+		fi := (tail[i].Close - tail[i-1].Close) * tail[i].Volume
+		fiValues[i-1] = fi
+	}
+	return emaOfFloats(fiValues, period)
+}
+
+// ── Donchian Channel ──────────────────────────────────────────────────────────
+
+// DonchianResult holds the upper, lower, and mid Donchian channel levels.
+type DonchianResult struct {
+	Upper float64
+	Lower float64
+	Mid   float64
+}
+
+// Donchian computes the Donchian channel over the last `period` candles.
+func Donchian(candles []Candle, period int) DonchianResult {
+	if len(candles) < period || period < 1 {
+		return DonchianResult{}
+	}
+	hi := SwingHigh(candles, period)
+	lo := SwingLow(candles, period)
+	return DonchianResult{Upper: hi, Lower: lo, Mid: (hi + lo) / 2}
+}
+
+// ── DEMA — Double Exponential Moving Average (Mulloy 1994) ───────────────────
+
+// DEMA reduces EMA lag: DEMA = 2×EMA(n) - EMA(EMA(n)).
+func DEMA(candles []Candle, period int) float64 {
+	if len(candles) < period*2 || period < 2 {
+		return 0
+	}
+	e1Slice := EMASlice(candles, period)
+	// Convert e1 values to Candle slice for second EMA
+	synthetic := make([]Candle, len(e1Slice))
+	for i, v := range e1Slice {
+		synthetic[i].Close = v
+	}
+	e1 := e1Slice[len(e1Slice)-1]
+	e2 := EMA(synthetic, period)
+	return 2*e1 - e2
+}
+
+// PivotPoints(prev) is declared in indicators_s30_s79.go as PivotPoints() returning PivotLevels.
+// Pivots is a thin alias for strategies that prefer the Pivots() name.
+func Pivots(prev Candle) PivotLevels {
+	return PivotPoints(prev)
+}
+
+// ── Keltner Channel ───────────────────────────────────────────────────────────
+
+// KeltnerResult holds the upper, mid (EMA), and lower Keltner channel bands.
+type KeltnerResult struct {
+	Upper float64
+	Mid   float64
+	Lower float64
+}
+
+// KeltnerChannel computes the Keltner channel: EMA ± mult×ATR.
+func KeltnerChannel(candles []Candle, emaPeriod, atrPeriod int, mult float64) KeltnerResult {
+	if len(candles) < emaPeriod || len(candles) < atrPeriod+1 {
+		return KeltnerResult{}
+	}
+	ema := EMA(candles, emaPeriod)
+	atr := ATR(candles, atrPeriod)
+	return KeltnerResult{
+		Upper: ema + mult*atr,
+		Mid:   ema,
+		Lower: ema - mult*atr,
+	}
+}
+
+// ── OBV Slice ─────────────────────────────────────────────────────────────────
+
+// OBVSlice computes On-Balance Volume for every bar and returns the full slice.
+// The last element is the current OBV value. Use OBV() for just the current value.
+func OBVSlice(candles []Candle) []float64 {
+	if len(candles) < 2 {
+		return nil
+	}
+	out := make([]float64, len(candles))
+	out[0] = candles[0].Volume
+	for i := 1; i < len(candles); i++ {
+		if candles[i].Close > candles[i-1].Close {
+			out[i] = out[i-1] + candles[i].Volume
+		} else if candles[i].Close < candles[i-1].Close {
+			out[i] = out[i-1] - candles[i].Volume
+		} else {
+			out[i] = out[i-1]
+		}
+	}
+	return out
+}

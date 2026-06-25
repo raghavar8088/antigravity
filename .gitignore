@@ -70,3 +70,7 @@ scripts/vercel-deploy.env
 .env
 scripts/aws-engine.env
 scripts/vercel-frontend.env
+
+# External integration/research repos (shallow clones, not part of this repo)
+integrations/**/
+!integrations/README.md

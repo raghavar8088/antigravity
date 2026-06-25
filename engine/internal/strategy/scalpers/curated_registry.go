@@ -79,6 +79,10 @@ func BuildCuratedScalpers() []RegistryEntry {
 	immortal := buildImmortalEditionPack()
 	all = append(all, immortal...)
 
+	// S101-S150: Ported open-source strategies, shadow-only until promoted.
+	ported := BuildPortedStrategies()
+	all = append(all, ported...)
+
 	// Strategies registered without withRolloutPhase() (the original S1-S10
 	// roster) never trade live unless SHADOW_STRATEGIES/STRATEGY_LIVE_OVERRIDE
 	// applies. Wrap them so those two operator knobs work uniformly across

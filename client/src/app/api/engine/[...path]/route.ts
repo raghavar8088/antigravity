@@ -87,6 +87,13 @@ const READ_PATH_PREFIXES = [
   "/api/admin/ks/status",
   // Shadow trading — reads only; promote/demote are admin-tier (below)
   "/api/shadow/performance",
+  // Backtest API — read-tier (run, status, jobs, results, leaderboard, strategies)
+  "/api/backtest/run",
+  "/api/backtest/status",
+  "/api/backtest/jobs",
+  "/api/backtest/results",
+  "/api/backtest/leaderboard",
+  "/api/backtest/strategies",
   // Trade Threshold Configuration — history is read-only at the engine level
   // (no mutation endpoint at this path), safe to read with session only.
   "/api/engine/config/history",
@@ -107,6 +114,8 @@ const ADMIN_PATH_PREFIXES = [
   // Shadow trading — promote/demote mutate live trading status, admin-tier.
   "/api/shadow/promote",
   "/api/shadow/demote",
+  // Backtest promotion — mutates live trading status, admin-tier.
+  "/api/backtest/promote",
 ];
 
 // Paths that are NEVER proxied via Vercel — must be called directly on engine.

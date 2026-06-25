@@ -1,342 +1,469 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { PnlValue } from "@/components/ui/PnlValue";
-import { GaugeBar } from "@/components/ui/GaugeBar";
-import { Badge } from "@/components/ui/Badge";
-import { Sparkline } from "@/components/ui/Sparkline";
-import { cn } from "@/components/ui/cn";
+import { useCallback, useEffect, useState } from "react";
 
-interface BacktestConfig {
-  strategyId: string;
-  from: string;
-  to: string;
-  capitalUsdt: number;
-  slippageModel: "none" | "fixed_bps" | "realistic";
-  slippageBps: number;
-  commission: "none" | "fixed" | "percentage";
-  commissionValue: number;
-  exchange: string;
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Job {
+  id: string;
+  runId: string;
+  symbol: string;
+  fromDate: string;
+  toDate: string;
+  strategies: string[];
+  status: "pending" | "running" | "done" | "error";
+  error?: string;
+  createdAt: string;
+  finishedAt?: string;
+  progress: number;
 }
 
-interface BacktestResult {
-  totalReturnPct: number;
-  annualizedReturnPct: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
-  maxDrawdownPct: number;
-  maxDrawdownDurationDays: number;
-  winRatePct: number;
-  profitFactor: number;
-  avgTradeDurationMs: number;
+interface LeaderboardRow {
+  id: number;
+  strategyName: string;
+  symbol: string;
   totalTrades: number;
-  equityCurve: Array<{ date: string; value: number }>;
-  monthlyReturns: Array<{ year: number; month: number; returnPct: number }>;
-  trades: Array<{
-    tradeId: string; entryAt: string; exitAt: string; symbol: string;
-    direction: "LONG" | "SHORT"; entryPrice: number; exitPrice: number;
-    quantity: number; pnl: number; returnPct: number; exitReason: string;
-  }>;
+  winRate: number;
+  sharpe: number;
+  maxDrawdown: number;
+  profitFactor: number;
+  totalReturn: number;
 }
 
-interface JobStatus {
-  jobId: string;
-  status: "queued" | "running" | "complete" | "failed";
-  progressPct: number;
-  barsProcessed: number;
-  totalBars: number;
-  error: string | null;
-  result?: BacktestResult;
+interface StrategyInfo {
+  name: string;
+  description: string;
+  regimes: string[];
+  timeframes: string[];
 }
 
-const PRESETS = [
-  { label: "1M",  from: () => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().split("T")[0]; } },
-  { label: "3M",  from: () => { const d = new Date(); d.setMonth(d.getMonth()-3); return d.toISOString().split("T")[0]; } },
-  { label: "6M",  from: () => { const d = new Date(); d.setMonth(d.getMonth()-6); return d.toISOString().split("T")[0]; } },
-  { label: "1Y",  from: () => { const d = new Date(); d.setFullYear(d.getFullYear()-1); return d.toISOString().split("T")[0]; } },
-];
+// ── API helpers ───────────────────────────────────────────────────────────────
 
-const today = new Date().toISOString().split("T")[0];
+const ENGINE = "/api/engine";
 
-function MetricCard({ label, value, positive }: { label: string; value: string; positive?: boolean }) {
+async function apiPost(path: string, body: unknown) {
+  const r = await fetch(`${ENGINE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function apiGet(path: string) {
+  const r = await fetch(`${ENGINE}${path}`, { cache: "no-store" });
+  return r.json();
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+type Tab = "run" | "jobs" | "leaderboard" | "strategies";
+
+export default function BacktestLabPage() {
+  const [tab, setTab] = useState<Tab>("run");
+
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3">
-      <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide mb-1">{label}</div>
-      <div className={cn("text-[18px] font-mono tnum font-semibold",
-        positive === true ? "text-[var(--color-profit)]" : positive === false ? "text-[var(--color-loss)]" : "text-[var(--color-text-primary)]",
-      )}>{value}</div>
+    <div className="min-h-screen bg-gray-950 text-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-2xl font-bold text-white mb-1">Backtest Lab</h1>
+        <p className="text-gray-400 text-sm mb-6">
+          Run 5-year multi-strategy backtests via the v3 institutional engine.
+        </p>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 mb-6 border-b border-gray-800">
+          {(["run", "jobs", "leaderboard", "strategies"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={[
+                "px-4 py-2 text-sm font-medium rounded-t transition-colors",
+                tab === t
+                  ? "bg-gray-800 text-white border-b-2 border-blue-500"
+                  : "text-gray-400 hover:text-white",
+              ].join(" ")}
+            >
+              {t === "run"
+                ? "Run Backtest"
+                : t === "jobs"
+                  ? "Jobs"
+                  : t === "leaderboard"
+                    ? "Leaderboard"
+                    : "All Strategies"}
+            </button>
+          ))}
+        </div>
+
+        {tab === "run" && <RunTab />}
+        {tab === "jobs" && <JobsTab />}
+        {tab === "leaderboard" && <LeaderboardTab />}
+        {tab === "strategies" && <StrategiesTab />}
+      </div>
     </div>
   );
 }
 
-function monthReturnColor(pct: number): string {
-  if (pct > 5)  return "bg-[rgba(34,197,94,0.6)]";
-  if (pct > 0)  return "bg-[rgba(34,197,94,0.25)]";
-  if (pct === 0) return "bg-[var(--color-bg-elevated)]";
-  if (pct > -5) return "bg-[rgba(239,68,68,0.25)]";
-  return "bg-[rgba(239,68,68,0.6)]";
-}
+// ── Run Tab ───────────────────────────────────────────────────────────────────
 
-export default function BacktestPage() {
-  const [config, setConfig] = useState<BacktestConfig>({
-    strategyId: "", from: PRESETS[1].from(), to: today,
-    capitalUsdt: 10000, slippageModel: "realistic",
-    slippageBps: 5, commission: "percentage", commissionValue: 0.05,
-    exchange: "BINANCE",
-  });
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<JobStatus | null>(null);
-  const [running, setRunning] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+function RunTab() {
+  const [symbol, setSymbol] = useState("BTCUSDT");
+  const [from, setFrom] = useState("2020-01-01");
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function set<K extends keyof BacktestConfig>(k: K, v: BacktestConfig[K]) {
-    setConfig((c) => ({ ...c, [k]: v }));
-  }
-
-  const pollStatus = useCallback(async (id: string) => {
+  const submit = useCallback(async () => {
+    setLoading(true);
+    setResult(null);
+    setError(null);
     try {
-      const res = await fetch(`/api/backtest/status/${id}`, { cache: "no-store" });
-      const data: JobStatus = await res.json();
-      setJob(data);
-      if (data.status === "complete" || data.status === "failed") {
-        setRunning(false);
-        if (pollRef.current) clearInterval(pollRef.current);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  async function runBacktest() {
-    if (!config.strategyId.trim()) return;
-    setRunning(true);
-    setJob(null);
-    try {
-      const res = await fetch("/api/backtest/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      const data = await res.json();
-      if (data.jobId) {
-        setJobId(data.jobId);
-        pollRef.current = setInterval(() => pollStatus(data.jobId), 2000);
-      }
-    } catch {
-      setRunning(false);
+      const data = await apiPost("/api/backtest/run", { symbol, from, to });
+      setResult(`Job created: ${data.id} (run ID: ${data.runId})`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
     }
-  }
-
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
-
-  const result = job?.result;
-  const equityValues = result?.equityCurve.map((p) => p.value) ?? [];
-
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const years = result ? [...new Set(result.monthlyReturns.map((r) => r.year))].sort() : [];
+  }, [symbol, from, to]);
 
   return (
-    <div className="flex h-[calc(100vh-96px)] gap-0">
-      {/* Left sidebar — configurator */}
-      <aside className="w-[300px] shrink-0 border-r border-[var(--color-border)] overflow-y-auto p-4 space-y-4">
-        <h2 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Backtest Configurator</h2>
-
+    <div className="max-w-lg">
+      <div className="bg-gray-900 rounded-lg p-6 space-y-4">
         <div>
-          <label className="text-[11px] text-[var(--color-text-muted)] block mb-1">Strategy ID</label>
+          <label className="block text-xs text-gray-400 mb-1">Symbol</label>
           <input
-            type="text"
-            value={config.strategyId}
-            onChange={(e) => set("strategyId", e.target.value)}
-            placeholder="e.g. ema_cross_15"
-            className="w-full text-[12px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-border-focus)]"
+            value={symbol}
+            onChange={(e) => setSymbol(e.target.value)}
+            className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
           />
         </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] text-[var(--color-text-muted)]">Date Range</label>
-            <div className="flex gap-1">
-              {PRESETS.map((p) => (
-                <button key={p.label} type="button" onClick={() => set("from", p.from())}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-                  {p.label}
-                </button>
-              ))}
-            </div>
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-400 mb-1">From</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
+            />
           </div>
-          <div className="flex gap-2">
-            <input type="date" value={config.from} onChange={(e) => set("from", e.target.value)}
-              className="flex-1 text-[12px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] outline-none" />
-            <input type="date" value={config.to} onChange={(e) => set("to", e.target.value)}
-              className="flex-1 text-[12px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] outline-none" />
+          <div className="flex-1">
+            <label className="block text-xs text-gray-400 mb-1">To</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm"
+            />
           </div>
         </div>
-
-        <div>
-          <label className="text-[11px] text-[var(--color-text-muted)] block mb-1">Capital (USDT)</label>
-          <input type="number" value={config.capitalUsdt} onChange={(e) => set("capitalUsdt", Number(e.target.value))}
-            className="w-full text-[12px] px-3 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] outline-none" />
-        </div>
-
-        <div>
-          <label className="text-[11px] text-[var(--color-text-muted)] block mb-1">Slippage Model</label>
-          <select value={config.slippageModel} onChange={(e) => set("slippageModel", e.target.value as BacktestConfig["slippageModel"])}
-            className="w-full text-[12px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] outline-none">
-            <option value="none">None</option>
-            <option value="fixed_bps">Fixed BPS</option>
-            <option value="realistic">Realistic (spread model)</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="text-[11px] text-[var(--color-text-muted)] block mb-1">Exchange</label>
-          <select value={config.exchange} onChange={(e) => set("exchange", e.target.value)}
-            className="w-full text-[12px] px-2 py-1.5 rounded border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] outline-none">
-            {["BINANCE","DELTA","COINBASE"].map((ex) => <option key={ex} value={ex}>{ex}</option>)}
-          </select>
-        </div>
-
+        <p className="text-xs text-gray-500">
+          Runs all 50 ported strategies (S101–S150) against the selected date range. Requires
+          pre-cached historical data in the engine data directory.
+        </p>
         <button
-          type="button"
-          onClick={runBacktest}
-          disabled={running || !config.strategyId.trim()}
-          className={cn(
-            "w-full py-2 rounded text-[13px] font-semibold transition-colors",
-            running || !config.strategyId.trim()
-              ? "bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] cursor-not-allowed"
-              : "bg-[var(--color-info)] text-white hover:bg-[rgba(59,130,246,0.85)]",
-          )}
+          onClick={submit}
+          disabled={loading}
+          className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-medium transition-colors"
         >
-          {running ? "Running…" : "▶ Run Backtest"}
+          {loading ? "Submitting…" : "Run All Strategies"}
         </button>
+        {result && <p className="text-green-400 text-sm">{result}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+      </div>
+    </div>
+  );
+}
 
-        {/* Progress */}
-        {running && job && (
-          <div>
-            <GaugeBar value={job.progressPct} label={`Processing ${job.barsProcessed.toLocaleString()} / ${job.totalBars.toLocaleString()} bars`} />
+// ── Jobs Tab ──────────────────────────────────────────────────────────────────
+
+function JobsTab() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await apiGet("/api/backtest/jobs");
+      if (Array.isArray(data)) setJobs(data);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const iv = setInterval(refresh, 5000);
+    return () => clearInterval(iv);
+  }, [refresh]);
+
+  if (jobs.length === 0) {
+    return <p className="text-gray-500 text-sm">No backtest jobs yet. Run one from the Run tab.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {jobs.map((job) => (
+        <div key={job.id} className="bg-gray-900 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-mono text-xs text-gray-400">{job.id}</span>
+            <StatusBadge status={job.status} />
           </div>
-        )}
-      </aside>
-
-      {/* Right — results */}
-      <main className="flex-1 overflow-y-auto p-4">
-        {!result && !running && (
-          <div className="flex items-center justify-center h-full text-[13px] text-[var(--color-text-muted)]">
-            Configure a strategy above and click Run Backtest
+          <div className="flex gap-4 text-sm text-gray-300 mt-1">
+            <span>{job.symbol}</span>
+            <span>{job.fromDate?.slice(0, 10)} → {job.toDate?.slice(0, 10)}</span>
+            <span className="text-gray-500">run: {job.runId}</span>
           </div>
-        )}
-
-        {running && !result && (
-          <div className="flex items-center justify-center h-full flex-col gap-3">
-            <div className="text-[13px] text-[var(--color-text-secondary)]">Running backtest…</div>
-            {job && <GaugeBar value={job.progressPct} className="w-64" />}
-          </div>
-        )}
-
-        {result && (
-          <div className="space-y-6">
-            {/* Equity curve */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4">
-              <div className="text-[11px] font-medium text-[var(--color-text-secondary)] mb-3 uppercase tracking-wide">Equity Curve</div>
-              <Sparkline data={equityValues} width={Math.min(900, equityValues.length * 3)} height={120} strokeWidth={2} />
+          {job.status === "running" && (
+            <div className="mt-2 h-1.5 bg-gray-800 rounded overflow-hidden">
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${job.progress}%` }}
+              />
             </div>
+          )}
+          {job.error && <p className="text-red-400 text-xs mt-1">{job.error}</p>}
+          {job.status === "done" && (
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                navigator.clipboard.writeText(job.runId);
+              }}
+              className="text-blue-400 text-xs mt-1 inline-block hover:underline"
+            >
+              Copy run ID for Leaderboard →
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-            {/* Performance metrics */}
-            <div className="grid grid-cols-5 gap-2">
-              <MetricCard label="Total Return" value={`${result.totalReturnPct >= 0 ? "+" : ""}${result.totalReturnPct.toFixed(2)}%`} positive={result.totalReturnPct >= 0} />
-              <MetricCard label="Ann. Return" value={`${result.annualizedReturnPct >= 0 ? "+" : ""}${result.annualizedReturnPct.toFixed(2)}%`} positive={result.annualizedReturnPct >= 0} />
-              <MetricCard label="Sharpe" value={result.sharpeRatio.toFixed(2)} positive={result.sharpeRatio > 1} />
-              <MetricCard label="Max DD" value={`-${result.maxDrawdownPct.toFixed(2)}%`} positive={false} />
-              <MetricCard label="Win Rate" value={`${result.winRatePct.toFixed(1)}%`} positive={result.winRatePct >= 50} />
-              <MetricCard label="Sortino" value={result.sortinoRatio.toFixed(2)} positive={result.sortinoRatio > 1.5} />
-              <MetricCard label="Profit Factor" value={result.profitFactor.toFixed(2)} positive={result.profitFactor > 1.5} />
-              <MetricCard label="Max DD Days" value={`${result.maxDrawdownDurationDays}d`} />
-              <MetricCard label="Avg Duration" value={(() => { const m = Math.floor(result.avgTradeDurationMs / 60000); return m < 60 ? `${m}m` : `${Math.floor(m/60)}h`; })()} />
-              <MetricCard label="Total Trades" value={result.totalTrades.toLocaleString()} />
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, string> = {
+    pending: "bg-yellow-900 text-yellow-300",
+    running: "bg-blue-900 text-blue-300",
+    done: "bg-green-900 text-green-300",
+    error: "bg-red-900 text-red-300",
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colors[status] ?? "bg-gray-800 text-gray-400"}`}>
+      {status}
+    </span>
+  );
+}
+
+// ── Leaderboard Tab ───────────────────────────────────────────────────────────
+
+function LeaderboardTab() {
+  const [runId, setRunId] = useState("");
+  const [symbol, setSymbol] = useState("BTCUSDT");
+  const [rows, setRows] = useState<LeaderboardRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [promoting, setPromoting] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const query = runId ? `?run_id=${encodeURIComponent(runId)}&symbol=${symbol}` : `?symbol=${symbol}`;
+      const data = await apiGet(`/api/backtest/leaderboard${query}`);
+      if (Array.isArray(data)) setRows(data);
+      else setError(data?.error ?? "unknown error");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [runId, symbol]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const promote = useCallback(async (name: string) => {
+    setPromoting(name);
+    try {
+      await apiPost(`/api/backtest/promote/${encodeURIComponent(name)}`, {});
+      alert(`${name} promoted to live trading.`);
+    } catch (e) {
+      alert(`Promotion failed: ${e}`);
+    } finally {
+      setPromoting(null);
+    }
+  }, []);
+
+  return (
+    <div>
+      <div className="flex gap-3 mb-4">
+        <input
+          placeholder="Run ID (optional — leave blank for latest)"
+          value={runId}
+          onChange={(e) => setRunId(e.target.value)}
+          className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+        />
+        <input
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+          className="w-32 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+        />
+        <button
+          onClick={fetch}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium"
+        >
+          {loading ? "…" : "Load"}
+        </button>
+      </div>
+
+      {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+
+      {rows.length === 0 ? (
+        <p className="text-gray-500 text-sm">No results. Run a backtest first.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500 border-b border-gray-800 text-xs">
+                <th className="pb-2 pr-4">Strategy</th>
+                <th className="pb-2 pr-4 text-right">Trades</th>
+                <th className="pb-2 pr-4 text-right">Win%</th>
+                <th className="pb-2 pr-4 text-right">Sharpe</th>
+                <th className="pb-2 pr-4 text-right">MaxDD%</th>
+                <th className="pb-2 pr-4 text-right">PF</th>
+                <th className="pb-2 pr-4 text-right">Return%</th>
+                <th className="pb-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const eligible =
+                  row.sharpe >= 1.0 &&
+                  row.winRate >= 0.45 &&
+                  row.maxDrawdown <= 20 &&
+                  row.profitFactor >= 1.3 &&
+                  row.totalTrades >= 50;
+                return (
+                  <tr key={row.id} className="border-b border-gray-800/50 hover:bg-gray-900/50">
+                    <td className="py-2 pr-4">
+                      <span className={eligible ? "text-green-400 font-medium" : "text-gray-300"}>
+                        {row.strategyName}
+                      </span>
+                      {eligible && (
+                        <span className="ml-2 text-xs bg-green-900 text-green-300 px-1.5 py-0.5 rounded">
+                          eligible
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 text-right text-gray-400">{row.totalTrades}</td>
+                    <td className="py-2 pr-4 text-right">{(row.winRate * 100).toFixed(1)}%</td>
+                    <td className="py-2 pr-4 text-right">
+                      <span className={row.sharpe >= 1 ? "text-green-400" : "text-gray-300"}>
+                        {row.sharpe.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      <span className={row.maxDrawdown > 20 ? "text-red-400" : "text-gray-300"}>
+                        {row.maxDrawdown.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      <span className={row.profitFactor >= 1.3 ? "text-green-400" : "text-gray-300"}>
+                        {row.profitFactor.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 text-right">
+                      <span className={row.totalReturn >= 0 ? "text-green-400" : "text-red-400"}>
+                        {row.totalReturn >= 0 ? "+" : ""}
+                        {row.totalReturn.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">
+                      {eligible && (
+                        <button
+                          onClick={() => promote(row.strategyName)}
+                          disabled={promoting === row.strategyName}
+                          className="px-2 py-0.5 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-40 rounded transition-colors"
+                        >
+                          {promoting === row.strategyName ? "…" : "Promote"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── All Strategies Tab ────────────────────────────────────────────────────────
+
+function StrategiesTab() {
+  const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
+  const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiGet("/api/backtest/strategies")
+      .then((data) => { if (Array.isArray(data)) setStrategies(data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const visible = strategies.filter(
+    (s) =>
+      filter === "" ||
+      s.name.toLowerCase().includes(filter.toLowerCase()) ||
+      s.description.toLowerCase().includes(filter.toLowerCase()),
+  );
+
+  return (
+    <div>
+      <div className="flex gap-3 mb-4">
+        <input
+          placeholder="Filter strategies…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="flex-1 bg-gray-800 text-white rounded px-3 py-2 text-sm"
+        />
+        <span className="text-gray-500 text-sm self-center">
+          {visible.length} / {strategies.length}
+        </span>
+      </div>
+
+      {loading ? (
+        <p className="text-gray-500 text-sm">Loading…</p>
+      ) : visible.length === 0 ? (
+        <p className="text-gray-500 text-sm">No strategies found.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {visible.map((s) => (
+            <div key={s.name} className="bg-gray-900 rounded-lg p-4">
+              <div className="font-medium text-white text-sm mb-1">{s.name}</div>
+              <p className="text-gray-400 text-xs mb-2">{s.description}</p>
+              <div className="flex flex-wrap gap-1">
+                {s.regimes.map((r) => (
+                  <span
+                    key={r}
+                    className="text-xs px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300"
+                  >
+                    {r}
+                  </span>
+                ))}
+                {s.timeframes.map((tf) => (
+                  <span
+                    key={tf}
+                    className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400"
+                  >
+                    {tf}
+                  </span>
+                ))}
+              </div>
             </div>
-
-            {/* Monthly returns heatmap */}
-            {years.length > 0 && (
-              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4">
-                <div className="text-[11px] font-medium text-[var(--color-text-secondary)] mb-3 uppercase tracking-wide">Monthly Returns</div>
-                <table role="table" className="text-[10px]">
-                  <thead>
-                    <tr>
-                      <th className="pr-2 text-left text-[var(--color-text-muted)] font-medium">Year</th>
-                      {MONTHS.map((m) => <th key={m} className="px-1 text-center text-[var(--color-text-muted)] font-medium w-10">{m}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {years.map((yr) => (
-                      <tr key={yr}>
-                        <td className="pr-2 font-mono tnum text-[var(--color-text-secondary)]">{yr}</td>
-                        {Array.from({ length: 12 }, (_, mo) => {
-                          const entry = result.monthlyReturns.find((r) => r.year === yr && r.month === mo + 1);
-                          return (
-                            <td key={mo} className="px-0.5 py-0.5">
-                              {entry ? (
-                                <div className={cn("rounded text-center w-10 py-0.5 font-mono tnum", monthReturnColor(entry.returnPct))}>
-                                  {entry.returnPct >= 0 ? "+" : ""}{entry.returnPct.toFixed(1)}%
-                                </div>
-                              ) : (
-                                <div className="w-10 py-0.5 text-center text-[var(--color-text-muted)]">—</div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Trade log */}
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
-              <div className="px-4 py-3 border-b border-[var(--color-border)]">
-                <span className="text-[11px] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  Trade Log ({result.trades.length.toLocaleString()} trades)
-                </span>
-              </div>
-              <div className="overflow-auto max-h-80">
-                <table className="w-full" role="table">
-                  <thead className="sticky top-0 bg-[var(--color-bg-surface)]">
-                    <tr className="text-[10px] text-[var(--color-text-muted)]">
-                      {["Entry","Exit","Symbol","Dir","Entry Px","Exit Px","Qty","P&L","Return","Exit Reason"].map((h) => (
-                        <th key={h} className="px-2 py-1.5 text-left font-medium whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.trades.slice(0, 500).map((t) => (
-                      <tr key={t.tradeId} className="border-b border-[var(--color-border)] hover:bg-[var(--color-bg-elevated)] text-[10px]">
-                        <td className="px-2 py-1 font-mono text-[var(--color-text-muted)]">
-                          {new Date(t.entryAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
-                        </td>
-                        <td className="px-2 py-1 font-mono text-[var(--color-text-muted)]">
-                          {new Date(t.exitAt).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
-                        </td>
-                        <td className="px-2 py-1 font-mono text-[var(--color-text-primary)]">{t.symbol}</td>
-                        <td className="px-2 py-1">
-                          <Badge variant={t.direction === "LONG" ? "profit" : "loss"} size="sm">{t.direction}</Badge>
-                        </td>
-                        <td className="px-2 py-1 font-mono tnum text-right text-[var(--color-text-secondary)]">
-                          {t.entryPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-2 py-1 font-mono tnum text-right text-[var(--color-text-secondary)]">
-                          {t.exitPrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-2 py-1 font-mono tnum text-right text-[var(--color-text-secondary)]">{t.quantity}</td>
-                        <td className="px-2 py-1 text-right"><PnlValue value={t.pnl} showSign size="xs" /></td>
-                        <td className="px-2 py-1 text-right"><PnlValue value={t.returnPct} showSign size="xs" format={(v) => `${Math.abs(v).toFixed(2)}%`} /></td>
-                        <td className="px-2 py-1 text-[var(--color-text-muted)]">{t.exitReason}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
