@@ -18,17 +18,17 @@ const (
 
 // Job represents a single backtest run job.
 type Job struct {
-	ID         string
-	RunID      string
-	Symbol     string
-	FromDate   time.Time
-	ToDate     time.Time
-	Strategies []string // empty = all ported strategies
-	Status     JobStatus
-	Error      string
-	CreatedAt  time.Time
-	FinishedAt time.Time
-	Progress   int // 0–100
+	ID         string    `json:"id"`
+	RunID      string    `json:"runId"`
+	Symbol     string    `json:"symbol"`
+	FromDate   time.Time `json:"fromDate"`
+	ToDate     time.Time `json:"toDate"`
+	Strategies []string  `json:"strategies"`
+	Status     JobStatus `json:"status"`
+	Error      string    `json:"error,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	FinishedAt time.Time `json:"finishedAt,omitempty"`
+	Progress   int       `json:"progress"`
 }
 
 // JobStore is an in-memory store for backtest jobs.
