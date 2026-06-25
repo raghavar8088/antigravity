@@ -1605,8 +1605,8 @@
     "semantic_hash": ""
   },
   "client/src/hooks/useMockTradingEngine.ts": {
-    "mtime": 1782151374.178123,
-    "ast_hash": "fc8b69a8b3bd5499fe0f03673aae6ad7",
+    "mtime": 1782376182.1736844,
+    "ast_hash": "8add85c30e5e4d14d61513ec12863e1c",
     "semantic_hash": ""
   },
   "client/src/hooks/useOptionChain.ts": {
@@ -2215,8 +2215,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/mockTradingEngine.test.ts": {
-    "mtime": 1781548754.810905,
-    "ast_hash": "42ae09ae0728718260e93df06a8ea1b2",
+    "mtime": 1782376233.6274805,
+    "ast_hash": "4e7ef82810ec0a18491f9a5635e72f91",
     "semantic_hash": ""
   },
   "client/src/lib/mockTradingMongo.test.ts": {
@@ -2770,8 +2770,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingEngine.ts": {
-    "mtime": 1782327058.5515337,
-    "ast_hash": "9a72fbd835827ceba13207530ad614a8",
+    "mtime": 1782376145.0067968,
+    "ast_hash": "bf7c013e6dce9310440d7eea6347466b",
     "semantic_hash": ""
   },
   "client/src/lib/trading/mockTradingMarketData.ts": {
@@ -21900,8 +21900,8 @@
     "semantic_hash": ""
   },
   "scripts/update-aws-engine.sh": {
-    "mtime": 1781376939.6411984,
-    "ast_hash": "1fe9221f30e7c433c71277f976206eab",
+    "mtime": 1782376527.185661,
+    "ast_hash": "6d1c3e866a0e835ebd492a6d43291cce",
     "semantic_hash": ""
   },
   "vercel.json": {
@@ -22780,13 +22780,13 @@
     "semantic_hash": ""
   },
   ".ai-context/call-graph.json": {
-    "mtime": 1782328156.3509717,
-    "ast_hash": "83d3fc229da6c6e9736c71d8a39bef76",
+    "mtime": 1782376739.4443624,
+    "ast_hash": "d34faf14f4914ff3bb74ea61516f82e2",
     "semantic_hash": ""
   },
   ".ai-context/dependencies.json": {
-    "mtime": 1782328156.350473,
-    "ast_hash": "c2a3fd1a72e7685109d35dc99650d406",
+    "mtime": 1782376739.4443624,
+    "ast_hash": "785d001eb1a477fe981fd99801e4c43b",
     "semantic_hash": ""
   },
   ".ai-context/owners.json": {
@@ -22795,13 +22795,13 @@
     "semantic_hash": ""
   },
   ".ai-context/repo-map.json": {
-    "mtime": 1782328156.345455,
-    "ast_hash": "d7bb56345bd06d1a7296c8cdad91646d",
+    "mtime": 1782376739.436337,
+    "ast_hash": "765e4dae1fbc59cdfca15f4ee8f183ee",
     "semantic_hash": ""
   },
   ".ai-context/symbols.json": {
-    "mtime": 1782328156.350473,
-    "ast_hash": "bb0041185261bf73bec0c45b240defab",
+    "mtime": 1782376739.443753,
+    "ast_hash": "6b7781f28e9408d6e10700568b03263d",
     "semantic_hash": ""
   },
   ".ai-context/system-manifest.json": {
@@ -22920,7 +22920,7 @@
     "semantic_hash": ""
   },
   ".ai-context/repomix-output.md": {
-    "mtime": 1782328157.9139593,
+    "mtime": 1782376741.20605,
     "ast_hash": "36a34befb8d09e575b2599e96089628d",
     "semantic_hash": ""
   },
@@ -23265,8 +23265,8 @@
     "semantic_hash": ""
   },
   "client/src/lib/strategyAuthority/gradeStageMockConfig.ts": {
-    "mtime": 1782148899.773139,
-    "ast_hash": "8ae3c8a1008d9acb31f3e9de98cc7b62",
+    "mtime": 1782376164.8185077,
+    "ast_hash": "bfee769898dbcb354d72712d37f2b884",
     "semantic_hash": ""
   },
   "client/src/lib/trading/futuresStrategyDiagnostics.ts": {
@@ -24462,6 +24462,11 @@
   "scripts/deploy-aws.sh": {
     "mtime": 1782326791.5742338,
     "ast_hash": "7ae7a034d747550eb1ac2a541f803f26",
+    "semantic_hash": ""
+  },
+  "scripts/vercel-push-env.sh": {
+    "mtime": 1782376551.0458443,
+    "ast_hash": "1cac066fe7ce9dddddaf31729ab380ee",
     "semantic_hash": ""
   }
 }

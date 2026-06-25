@@ -1,1 +1,1 @@
-{"client/src/lib/mockTradingEngine.test.ts::build()":["client/src/lib/trading/mockTradingEngine.ts::buildMockTradeFromTrace()"],"engine/cmd/antigravity/main.go::handleDeltaBTCProbe()":["engine/internal/persistence/store.go::Context"],"engine/cmd/antigravity/main.go::main()":["engine/internal/persistence/store.go::Context"]}
+{}
