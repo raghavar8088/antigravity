@@ -16,6 +16,7 @@ services:
       - .env
     environment:
       - SQLITE_PATH=/app/data/engine.db
+      - ENGINE_DATA_DIR=/app/data
       - GOMEMLIMIT=450MiB
       - GOGC=70
       - PORT=8080
