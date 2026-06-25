@@ -26,9 +26,15 @@ type BacktestAPI struct {
 }
 
 // NewBacktestAPI creates the API with a pre-opened ResultsStore.
+// Jobs are persisted to the same SQLite DB so they survive engine restarts.
 func NewBacktestAPI(store *ResultsStore, cacheDir string, promotionFn func(string)) *BacktestAPI {
+	js, err := NewJobStoreWithDB(store.db)
+	if err != nil {
+		// fall back to in-memory only
+		js = NewJobStore()
+	}
 	return &BacktestAPI{
-		jobs:        NewJobStore(),
+		jobs:        js,
 		store:       store,
 		cacheDir:    cacheDir,
 		promotionFn: promotionFn,
