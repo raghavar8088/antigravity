@@ -97,10 +97,10 @@ function build(opts: Partial<{
   return trade;
 }
 
-// ── Defaults: $1,000,000 starting balance ────────────────────────────────────
+// ── Defaults: $1,000 starting balance ────────────────────────────────────────
 describe("DEFAULT_MOCK_TRADING_CONFIG", () => {
-  it("uses a $1,000,000 starting balance", () => {
-    expect(DEFAULT_MOCK_TRADING_CONFIG.startingBalanceUsd).toBe(1_000_000);
+  it("uses a $1,000 starting balance", () => {
+    expect(DEFAULT_MOCK_TRADING_CONFIG.startingBalanceUsd).toBe(1_000);
   });
   it("uses 25× leverage (matching BTC FT)", () => {
     expect(DEFAULT_MOCK_TRADING_CONFIG.leverage).toBe(25);
@@ -148,6 +148,51 @@ describe("computeMockNotional with $1M account", () => {
     const small = computeMockNotional({ config: cfg, equity: 1_000_000, slPct: 0.5 });
     const big = computeMockNotional({ config: cfg, equity: 1_000_000, slPct: 2 });
     expect(small).toBeGreaterThan(big);
+  });
+});
+
+// ── EQUAL FOOTING: 0.1 BTC is the standard size for every strategy ───────────
+describe("fixed_btc equal-footing sizing (0.1 BTC standard)", () => {
+  const PRICE = 60_000;
+
+  it("yields exactly fixedSizeBtc * price regardless of (tiny) account equity", () => {
+    const cfg = { ...baseConfig, sizingMode: "fixed_btc" as const, fixedSizeBtc: 0.1 };
+    // A $100 paper desk previously clamped this to eq*10 = $1,000 (~0.017 BTC).
+    const small = computeMockNotional({ config: cfg, equity: 100, price: PRICE });
+    const large = computeMockNotional({ config: cfg, equity: 1_000_000, price: PRICE });
+    expect(small).toBeCloseTo(0.1 * PRICE, 6);
+    expect(large).toBeCloseTo(0.1 * PRICE, 6);
+    expect(small).toBe(large);
+  });
+
+  it("sizes every strategy identically regardless of stop-loss distance", () => {
+    const cfg = { ...baseConfig, sizingMode: "fixed_btc" as const, fixedSizeBtc: 0.1 };
+    const tightSl = computeMockNotional({ config: cfg, equity: 100, price: PRICE, slPct: 0.26 });
+    const wideSl = computeMockNotional({ config: cfg, equity: 100, price: PRICE, slPct: 2.0 });
+    expect(tightSl).toBe(wideSl);
+    expect(tightSl).toBeCloseTo(0.1 * PRICE, 6);
+  });
+
+  it("builds equal-quantity trades for MTF_Trend_Align and a probationary strategy", () => {
+    const cfg = { ...baseConfig, sizingMode: "fixed_btc" as const, fixedSizeBtc: 0.1 };
+    const mtf = buildMockTradeFromTrace({
+      row: traceRow({ strategyId: 111, strategyName: "MTF_Trend_Align_Long" }),
+      currentPrice: PRICE,
+      config: cfg,
+      now: T0,
+      equity: 100,
+    });
+    const probationary = buildMockTradeFromTrace({
+      row: traceRow({ strategyId: 901, strategyName: "Volume_Profile_POC_Magnet" }),
+      currentPrice: PRICE,
+      config: cfg,
+      now: T0,
+      equity: 100,
+    });
+    expect(mtf).not.toBeNull();
+    expect(probationary).not.toBeNull();
+    expect(mtf?.quantity).toBeCloseTo(probationary?.quantity ?? -1, 6);
+    expect(mtf?.quantity).toBeCloseTo(0.1, 3);
   });
 });
 
@@ -211,9 +256,9 @@ describe("isStrategySignalRaised", () => {
 describe("computeAccountState on an empty book", () => {
   it("equity equals startingBalance when no trades are open", () => {
     const acct = computeAccountState([], baseConfig);
-    expect(acct.startingBalance).toBe(1_000_000);
-    expect(acct.equity).toBe(1_000_000);
-    expect(acct.cashBalance).toBe(1_000_000);
+    expect(acct.startingBalance).toBe(1_000);
+    expect(acct.equity).toBe(1_000);
+    expect(acct.cashBalance).toBe(1_000);
     expect(acct.exposure).toBe(0);
     expect(acct.marginUsed).toBe(0);
     expect(acct.openCount).toBe(0);

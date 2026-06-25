@@ -1,5 +1,5 @@
 ﻿/**
- * Mock Trading Engine — analysis-only $1,000,000 paper account that mirrors
+ * Mock Trading Engine — analysis-only $1,000 paper account that mirrors
  * the production BTC FT desk's sizing, fees, slippage, and PnL math but
  * keeps the strategy gate results intact so mock fills are only created for
  * executable signals that would have survived the desk's blocker pipeline.
@@ -38,6 +38,14 @@ export type MockSizingMode = "fixed_btc" | "fixed_pct_equity" | "fixed_notional"
 export const DEFAULT_MAX_OPEN_MOCK_TRADES = 5;
 export const DEFAULT_MAX_OPEN_MOCK_LONG_TRADES = 3;
 export const DEFAULT_MAX_OPEN_MOCK_SHORT_TRADES = 3;
+/**
+ * EQUAL FOOTING — the single canonical position size, in BTC, that EVERY
+ * strategy opens per trade (mirrors the Go engine's FIXED_TRADE_SIZE_BTC). This
+ * is the one knob that defines "0.1 BTC for all strategies"; every config path
+ * (default, Trade Engine, and persisted-config hydration) is pinned to it so no
+ * single strategy (e.g. MTF_Trend_Align) can drift to a larger size.
+ */
+export const STANDARD_FIXED_TRADE_SIZE_BTC = 0.1;
 export const DEFAULT_MOCK_TRADE_COOLDOWN_MINUTES = 15;
 export const DEFAULT_MOCK_MIN_RISK_REWARD_RATIO = 1.5;
 export const DEFAULT_MOCK_MAX_SIGNALS_PER_BATCH = 3;
@@ -218,13 +226,13 @@ export function isGradeDiscoveryStage(config: MockTradingConfig): boolean {
 }
 
 export const DEFAULT_MOCK_TRADING_CONFIG: MockTradingConfig = {
-  startingBalanceUsd: 1_000_000,
+  startingBalanceUsd: 1_000,
   // EQUAL FOOTING: every strategy opens the same fixed BTC size so MTF_Trend_Align
   // and all other strategies are directly comparable (mirrors the Go engine's
   // FIXED_TRADE_SIZE_BTC). Previously "risk_pct_equity", which sized MTF at
   // ~$500k (~8.7 BTC) — a 100× gap vs new probationary strategies.
   sizingMode: "fixed_btc",
-  fixedSizeBtc: 0.1,
+  fixedSizeBtc: STANDARD_FIXED_TRADE_SIZE_BTC,
   fixedPctOfEquity: 1,
   fixedNotionalUsd: 10_000,
   riskPctOfEquity: 0.25,
@@ -482,6 +490,15 @@ export function computeMockNotional(args: {
     }
   }
   if (!Number.isFinite(raw) || raw <= 0) return minNotional;
+  // EQUAL FOOTING: fixed-BTC sizing must yield EXACTLY `fixedSizeBtc * price`
+  // for every strategy, independent of the (often tiny) paper-account equity.
+  // The `eq * 10` sanity cap is an equity/risk-relative concept — applying it
+  // to fixed_btc would silently shrink the standard 0.1 BTC down on a small
+  // account (e.g. ~0.017 BTC on a $100 desk), reintroducing per-strategy size
+  // drift. Only floor it at the absolute minimum notional.
+  if (config.sizingMode === "fixed_btc") {
+    return Math.max(minNotional, raw);
+  }
   return Math.min(maxNotional, Math.max(minNotional, raw));
 }
 

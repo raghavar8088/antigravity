@@ -27,6 +27,7 @@ import {
   rejectionCategoryFromTraceGate,
   scoreMockResearchSignal,
   scoreMockTraceRow,
+  STANDARD_FIXED_TRADE_SIZE_BTC,
   type MockDiagnosticFunnel,
   type MockRejectionCategory,
   type MockRejectionCounts,
@@ -495,11 +496,19 @@ export function useMockTradingEngine(
           error: null,
         });
         if (accountJson.ok && accountJson.config) {
-          setConfigState(
-            pipelineStage
-              ? getMockConfigForPipelineStage(pipelineStage)
-              : normalizeMockTradingConfig(accountJson.config),
-          );
+          const hydratedConfig = pipelineStage
+            ? getMockConfigForPipelineStage(pipelineStage)
+            : normalizeMockTradingConfig(accountJson.config);
+          // EQUAL FOOTING: a persisted account may still carry a legacy sizing
+          // mode (e.g. risk_pct_equity that sized MTF_Trend_Align at ~$500k /
+          // ~7.5 BTC while newer strategies traded ~0.017 BTC). Always pin the
+          // hydrated config back to the 0.1 BTC standard so every strategy is
+          // sized identically regardless of what was saved.
+          setConfigState({
+            ...hydratedConfig,
+            sizingMode: "fixed_btc",
+            fixedSizeBtc: STANDARD_FIXED_TRADE_SIZE_BTC,
+          });
         }
         setLogs(logsJson.ok ? logsJson.logs.slice(0, LOG_RING_CAP) : []);
         seenTraceIdsRef.current = new Set(merged.map((t) => t.traceId));

@@ -409,14 +409,17 @@ func (s *Store) SaveOptionsSellingState(ctx context.Context, state *OptionsSelli
 // Reads the same INITIAL_PAPER_BALANCE_USD env var as the engine's in-memory
 // default (engine/cmd/antigravity) so a reset doesn't write a stale literal
 // that a subsequent boot would treat as "restore the legacy balance from DB".
-// Defaults to $100 when unset, matching getInitialPaperBalanceUSD.
+// Defaults to $1000 when unset, matching getInitialPaperBalanceUSD.
 func resetBalanceUSD() float64 {
 	v := os.Getenv("INITIAL_PAPER_BALANCE_USD")
 	if v == "" {
-		return 100.0
+		return 1000.0
 	}
 	f, err := strconv.ParseFloat(v, 64)
-	if err != nil || f < 100 {
+	if err != nil {
+		return 1000.0
+	}
+	if f < 100 {
 		return 100.0
 	}
 	return f

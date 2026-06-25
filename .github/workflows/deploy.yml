@@ -92,7 +92,7 @@ jobs:
               --restart unless-stopped \
               -p 80:8080 \
               --env-file /home/ubuntu/antigravity/.env \
-              -e INITIAL_PAPER_BALANCE_USD=100 \
+              -e INITIAL_PAPER_BALANCE_USD=1000 \
               -v /home/ubuntu/antigravity/data:/app/data \
               --memory 600m \
               --cpus 1.50 \

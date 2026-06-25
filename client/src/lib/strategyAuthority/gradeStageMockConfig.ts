@@ -1,6 +1,7 @@
 import type { StrategyStatus } from "./types";
 import {
   DEFAULT_MOCK_TRADING_CONFIG,
+  STANDARD_FIXED_TRADE_SIZE_BTC,
   type MockTradingConfig,
 } from "@/lib/trading/mockTradingEngine";
 
@@ -8,19 +9,26 @@ import {
  * Trade Engine paper-account starting balance in USD. Mirrors the Go engine's
  * `INITIAL_PAPER_BALANCE_USD` so the dashboard equity matches the backend desk.
  * Env: `NEXT_PUBLIC_INITIAL_PAPER_BALANCE_USD`. Floors at $100 (same as the
- * engine) and defaults to $100 when unset.
+ * engine) and defaults to $1000 when unset.
  */
 export function tradeEngineStartingBalanceUsd(): number {
   const raw = process.env.NEXT_PUBLIC_INITIAL_PAPER_BALANCE_USD;
-  if (raw === undefined || raw.trim() === "") return 100;
+  if (raw === undefined || raw.trim() === "") return 1000;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 100) return 100;
+  if (!Number.isFinite(n)) return 1000;
+  if (n < 100) return 100;
   return n;
 }
 
 /** Single Trade Engine config — all active strategies use this. */
 export const TRADE_ENGINE_CONFIG: Partial<MockTradingConfig> = {
   startingBalanceUsd: tradeEngineStartingBalanceUsd(),
+  // EQUAL FOOTING: pin every strategy to the same 0.1 BTC fixed size. Set
+  // explicitly (not just inherited from DEFAULT_MOCK_TRADING_CONFIG) so the
+  // Trade Engine can never silently fall back to equity/risk-relative sizing
+  // that lets one strategy (e.g. MTF_Trend_Align) balloon vs the rest.
+  sizingMode: "fixed_btc",
+  fixedSizeBtc: STANDARD_FIXED_TRADE_SIZE_BTC,
   // High ceiling so list/cache fetch limits scale when every strategy trades
   // simultaneously (uncapped mode bypasses this as a hard gate — see
   // mockTradingUncapped / evaluateMockTradeOpenRisk).

@@ -100,18 +100,18 @@ var globalLogs = &RingLogger{max: 100}
 
 // getInitialPaperBalanceUSD returns the configured starting balance for the
 // live BTC futures paper account. Env: INITIAL_PAPER_BALANCE_USD. Falls back
-// to $100 (default) if unset, invalid, or non-positive. Floors at $100 — a
+// to $1000 (default) if unset, invalid, or non-positive. Floors at $100 — a
 // paper account below that is not meaningfully tradable given fee/slippage
 // assumptions baked into strategy sizing.
 func getInitialPaperBalanceUSD() float64 {
 	v := os.Getenv("INITIAL_PAPER_BALANCE_USD")
 	if v == "" {
-		return 100.0
+		return 1000.0
 	}
 	f, err := strconv.ParseFloat(v, 64)
 	if err != nil || f <= 0 {
-		log.Printf("[CONFIG] WARNING: invalid INITIAL_PAPER_BALANCE_USD=%q, using default $100", v)
-		return 100.0
+		log.Printf("[CONFIG] WARNING: invalid INITIAL_PAPER_BALANCE_USD=%q, using default $1000", v)
+		return 1000.0
 	}
 	if f < 100 {
 		log.Printf("[CONFIG] WARNING: INITIAL_PAPER_BALANCE_USD=%.2f below $100 floor, clamping to $100", f)
