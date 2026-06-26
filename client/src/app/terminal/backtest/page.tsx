@@ -260,24 +260,31 @@ function JobsTab() {
               <span style={{ color: "var(--m3-on-surface-variant)" }}>run: {job.runId}</span>
             </div>
             {job.status === "running" && (
-              <div
-                style={{
-                  marginTop: 8,
-                  height: 4,
-                  borderRadius: 2,
-                  background: "var(--m3-outline-variant)",
-                  overflow: "hidden",
-                }}
-              >
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, color: "var(--m3-on-surface-variant)" }}>Progress</span>
+                  <span style={{ fontFamily: "var(--m3-font-mono)", fontSize: 12, fontWeight: 600, color: "var(--m3-primary)" }}>
+                    {job.progress}%
+                  </span>
+                </div>
                 <div
                   style={{
-                    height: "100%",
-                    width: `${job.progress}%`,
-                    background: "var(--m3-primary)",
-                    transition: "width 0.3s ease",
-                    borderRadius: 2,
+                    height: 6,
+                    borderRadius: 3,
+                    background: "var(--m3-outline-variant)",
+                    overflow: "hidden",
                   }}
-                />
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${job.progress}%`,
+                      background: "var(--m3-primary)",
+                      transition: "width 0.3s ease",
+                      borderRadius: 3,
+                    }}
+                  />
+                </div>
               </div>
             )}
             {job.error && (

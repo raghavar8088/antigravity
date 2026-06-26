@@ -1,1 +1,1 @@
-{"engine-backtest":{"communities":[0,1,2,3],"files":1,"symbols":21,"top_files":[{"file":"engine/internal/backtest/runner.go","symbols":21}]}}
+{"other":{"communities":[0,1],"files":1,"symbols":13,"top_files":[{"file":"client/src/app/terminal/backtest/page.tsx","symbols":13}]}}
