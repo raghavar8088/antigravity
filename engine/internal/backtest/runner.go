@@ -43,12 +43,16 @@ type RunConfig struct {
 	V3Config    v3.Config
 }
 
-// DefaultRunConfig returns sensible defaults for a 5-year backtest.
+// DefaultRunConfig returns sensible defaults for a batch backtest.
+// Monte Carlo is disabled (Paths=-1) to prevent OOM on small instances —
+// 5000 paths × 50 strategies exceeds Lightsail 600MB limit.
 func DefaultRunConfig(symbol string) RunConfig {
 	cfg := v3.DefaultConfig()
 	cfg.WarmupBars = 60
 	cfg.MaxOpenPositions = 1
 	cfg.AllowShorts = true
+	cfg.MonteCarloConfig.Paths = 1                    // minimal — 5000 paths OOMs Lightsail
+	cfg.MonteCarloConfig.BootstrapWithReplacement = false // no resampling needed
 	return RunConfig{
 		Symbol:   symbol,
 		Regime:   scalers.RegimeTrending,
