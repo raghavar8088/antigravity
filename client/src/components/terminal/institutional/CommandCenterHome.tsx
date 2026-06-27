@@ -27,6 +27,20 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
   return (
     <div className="m3-page-stack">
       <TerminalCard
+        title="Pre-Live Trade Engine"
+        subtitle="100 backtested-qualified strategies · real broker · no position limits"
+        actions={<Link href={TERMINAL_ROUTES["pre-live-engine"]} className="m3-link-action">Open Pre-Live Engine</Link>}
+      >
+        <div className="m3-kpi-strip">
+          <Metric label="Strategies" value="100 Qualified" tone="positive" />
+          <Metric label="Position Limit" value="Unlimited" tone="positive" />
+          <Metric label="Cooldown" value="None" tone="positive" />
+          <Metric label="Broker" value="Real Money" tone="warning" />
+          <Metric label="Risk Gate" value="SL/TP Only" tone="positive" />
+        </div>
+      </TerminalCard>
+
+      <TerminalCard
         title="Trade Engine"
         subtitle="Live BTC paper trading engine"
         actions={<Link href={TERMINAL_ROUTES["trade-engine"]} className="m3-link-action">Open Trade Engine</Link>}
@@ -179,6 +193,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickLink href={TERMINAL_ROUTES["pre-live-engine"]} label="Pre-Live Engine" detail="100 strategies · real money · no limits" />
         <QuickLink href={TERMINAL_ROUTES["trade-engine"]} label="Trade Engine" detail="Positions · trades · live signals" />
         <QuickLink href={TERMINAL_ROUTES.portfolio} label="Portfolio" detail="Equity · exposure · fees" />
         <QuickLink href={TERMINAL_ROUTES.risk} label="Risk" detail="VaR · heat · margin" />

@@ -253,6 +253,9 @@ type RegistryEntry struct {
 	Regimes      []Regime
 	Timeframes   []string // e.g. ["15m","1h"]
 	MaxPositions int      // how many simultaneous positions this strategy can hold
+	// OHLCVCompatible marks whether this strategy works on OHLCV-only historical data.
+	// Strategies requiring CVD, live OI, ETH feeds, DVOL, or options IV must be false.
+	OHLCVCompatible bool
 }
 
 // Performance tracks live stats per strategy — used by FilterWinnersOnly

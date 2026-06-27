@@ -28,6 +28,25 @@ func FilterWinnersOnly(entries []RegistryEntry) []RegistryEntry {
 	return entries
 }
 
+// BuildPreLiveStrategies returns the 100 backtested-qualified strategies for the
+// Pre-Live Trade Engine as top-level RegistryEntry values.
+func BuildPreLiveStrategies() []RegistryEntry {
+	raw := scalpers.BuildPreLiveStrategies()
+	out := make([]RegistryEntry, len(raw))
+	for i, e := range raw {
+		primaryTF := "15m"
+		if len(e.Timeframes) > 0 {
+			primaryTF = e.Timeframes[0]
+		}
+		out[i] = RegistryEntry{
+			Strategy:  &scalerAdapter{inner: e.Strategy},
+			Category:  "PreLive",
+			Timeframe: primaryTF,
+		}
+	}
+	return out
+}
+
 // BuildCuratedScalpers returns the active scalper strategies (7 base + expansion)
 // as top-level RegistryEntry values so trackers, startup logs, and the fatal guard
 // in main.go see a non-empty list. Actual execution happens via ScalerBundle.

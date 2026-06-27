@@ -52,14 +52,18 @@ describe("paperDeskHref", () => {
 });
 
 describe("ICC-NRP navigation registry", () => {
-  it("lists trade engine first in trading section", () => {
-    expect(TRADING_NAV[0]?.href).toBe(TERMINAL_ROUTES["trade-engine"]);
-    expect(TRADING_NAV[0]?.label).toBe("Trade Engine");
+  it("lists pre-live engine first in trading section", () => {
+    expect(TRADING_NAV[0]?.href).toBe(TERMINAL_ROUTES["pre-live-engine"]);
+    expect(TRADING_NAV[0]?.label).toBe("Pre-Live Engine");
   });
 
-  it("lists the strategies module after trade engine", () => {
-    expect(TRADING_NAV.map((i) => i.label)).toEqual(["Trade Engine", "Strategies"]);
-    expect(TRADING_NAV[1]?.href).toBe(TERMINAL_ROUTES.strategies);
+  it("lists trade engine second in trading section", () => {
+    expect(TRADING_NAV[1]?.href).toBe(TERMINAL_ROUTES["trade-engine"]);
+    expect(TRADING_NAV[1]?.label).toBe("Trade Engine");
+  });
+
+  it("lists the strategies module after trade engines", () => {
+    expect(TRADING_NAV.map((i) => i.label)).toEqual(["Pre-Live Engine", "Trade Engine", "Backtest Lab", "Strategies", "Trade Thresholds"]);
   });
 
   it("has monitor items in mandatory order", () => {

@@ -110,6 +110,7 @@ The content is organized as follows:
   app/api/mock-trading/trades/route.test.ts
   app/api/mock-trading/trades/route.ts
   app/api/options/paper-snapshot/route.ts
+  app/api/pre-live/[...path]/route.ts
   app/api/probe/delta-btc/route.ts
   app/api/replay-walkforward/route.ts
   app/api/research-edge-report/route.ts
@@ -172,6 +173,7 @@ The content is organized as follows:
   app/terminal/page.tsx
   app/terminal/portfolio-intelligence/page.tsx
   app/terminal/portfolio/page.tsx
+  app/terminal/pre-live-engine/page.tsx
   app/terminal/research/page.tsx
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
@@ -292,6 +294,7 @@ The content is organized as follows:
   components/terminal/institutional/ObservabilityCenter.tsx
   components/terminal/institutional/PortfolioConstruction.tsx
   components/terminal/institutional/PortfolioIntelligenceCenter.tsx
+  components/terminal/institutional/PreLiveEngineCenter.tsx
   components/terminal/institutional/PromotionFeed.tsx
   components/terminal/institutional/PromotionProgressCard.tsx
   components/terminal/institutional/PromotionTower.tsx
@@ -1293,10 +1296,24 @@ The content is organized as follows:
   strategy/scalpers/family3_orderflow.go
   strategy/scalpers/family4_ml_proxy.go
   strategy/scalpers/family5_derivatives_macro.go
+  strategy/scalpers/hw_strategies_v10.go
+  strategy/scalpers/hw_strategies_v11.go
+  strategy/scalpers/hw_strategies_v12.go
+  strategy/scalpers/hw_strategies_v13.go
+  strategy/scalpers/hw_strategies_v2.go
+  strategy/scalpers/hw_strategies_v3.go
+  strategy/scalpers/hw_strategies_v4.go
+  strategy/scalpers/hw_strategies_v5.go
+  strategy/scalpers/hw_strategies_v6.go
+  strategy/scalpers/hw_strategies_v7.go
+  strategy/scalpers/hw_strategies_v8.go
+  strategy/scalpers/hw_strategies_v9.go
+  strategy/scalpers/hw_strategies.go
   strategy/scalpers/indicators_s30_s79.go
   strategy/scalpers/indicators.go
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
+  strategy/scalpers/pre_live_registry.go
   strategy/scalpers/registry.go
   strategy/scalpers/rollout_phase.go
   strategy/scalpers/s_btc_equities_correlation_break.go
@@ -1572,6 +1589,8 @@ The content is organized as follows:
   backtest/main.go
   fetch_historical/main.go
   perfbench/main.go
+  pre_live/main.go
+  run_backtest/main.go
   seed_db/main.go
   sep_evidence/analytics.go
   sep_evidence/datasource.go
