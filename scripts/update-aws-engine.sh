@@ -25,11 +25,11 @@ if grep -q "__SET_ME__" .env; then
 fi
 
 echo "==> remove stale container (fixes name conflict from old docker run)"
-docker rm -f antigravity_engine 2>/dev/null || true
+docker rm -f antigravity_engine antigravity_prelive 2>/dev/null || true
 docker-compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
 
 echo "==> build + start"
-docker-compose -f docker-compose.prod.yml build --pull engine
+docker-compose -f docker-compose.prod.yml build --pull engine pre_live
 docker-compose -f docker-compose.prod.yml up -d --force-recreate --remove-orphans
 
 echo "==> wait for health"

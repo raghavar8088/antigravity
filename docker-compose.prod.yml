@@ -37,3 +37,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  pre_live:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile.prelive
+    container_name: antigravity_prelive
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    environment:
+      - PRE_LIVE_PORT=8082
+      - PRE_LIVE_INITIAL_BALANCE_USD=100
+      - GOMEMLIMIT=300MiB
+      - GOGC=80
+    mem_limit: 400m
+    cpus: 1.0
+    pids_limit: 256

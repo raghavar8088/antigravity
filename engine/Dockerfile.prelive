@@ -1,0 +1,32 @@
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+RUN apk --no-cache add ca-certificates tzdata git
+
+COPY go.mod ./
+COPY cmd/pre_live ./cmd/pre_live
+COPY internal ./internal
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -mod=mod \
+    -ldflags="-s -w -extldflags=-static" \
+    -trimpath \
+    -o /bin/pre_live ./cmd/pre_live
+
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /bin/pre_live /app/pre_live
+
+USER 10001:10001
+
+EXPOSE 8082
+
+ENV GOMEMLIMIT=300MiB
+ENV GOGC=80
+ENV PRE_LIVE_PORT=8082
+ENV PRE_LIVE_INITIAL_BALANCE_USD=100
+
+ENTRYPOINT ["/app/pre_live"]
