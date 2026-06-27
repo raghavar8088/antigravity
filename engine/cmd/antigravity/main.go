@@ -2665,12 +2665,16 @@ func main() {
 	// ── Pre-Live Engine transparent proxy (/prelive/* → localhost:8082/*) ────────
 	// Port 8082 is internal-only; this route exposes it through port 80 so
 	// Vercel can reach the pre-live engine without opening a second firewall port.
+	preLiveHost := os.Getenv("PRE_LIVE_HOST")
+	if preLiveHost == "" {
+		preLiveHost = "127.0.0.1"
+	}
 	preLivePort := os.Getenv("PRE_LIVE_PORT")
 	if preLivePort == "" {
 		preLivePort = "8082"
 	}
 	http.HandleFunc("/prelive/", func(w http.ResponseWriter, r *http.Request) {
-		target := "http://127.0.0.1:" + preLivePort + r.URL.RequestURI()[len("/prelive"):]
+		target := "http://" + preLiveHost + ":" + preLivePort + r.URL.RequestURI()[len("/prelive"):]
 		req, err := http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
 		if err != nil {
 			http.Error(w, "proxy error: "+err.Error(), http.StatusBadGateway)

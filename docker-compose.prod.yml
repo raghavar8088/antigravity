@@ -20,6 +20,8 @@ services:
       - GOMEMLIMIT=450MiB
       - GOGC=70
       - PORT=8080
+      - PRE_LIVE_HOST=antigravity_prelive
+      - PRE_LIVE_PORT=8082
     volumes:
       - ./data:/app/data
     mem_limit: 600m
