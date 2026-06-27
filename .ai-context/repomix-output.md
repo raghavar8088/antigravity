@@ -174,6 +174,7 @@ The content is organized as follows:
   app/terminal/portfolio-intelligence/page.tsx
   app/terminal/portfolio/page.tsx
   app/terminal/pre-live-engine/page.tsx
+  app/terminal/pre-live-strategies/page.tsx
   app/terminal/research/page.tsx
   app/terminal/risk/page.tsx
   app/terminal/settings/page.tsx
@@ -295,6 +296,7 @@ The content is organized as follows:
   components/terminal/institutional/PortfolioConstruction.tsx
   components/terminal/institutional/PortfolioIntelligenceCenter.tsx
   components/terminal/institutional/PreLiveEngineCenter.tsx
+  components/terminal/institutional/PreLiveStrategiesCenter.tsx
   components/terminal/institutional/PromotionFeed.tsx
   components/terminal/institutional/PromotionProgressCard.tsx
   components/terminal/institutional/PromotionTower.tsx

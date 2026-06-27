@@ -256,6 +256,31 @@ func main() {
 		json.NewEncoder(w).Encode(rows) //nolint:errcheck
 	})
 
+	handle("/api/strategies/stats", func(w http.ResponseWriter, r *http.Request) {
+		allStats := tracker.GetAllStats()
+		rows := make([]map[string]interface{}, 0, len(qualified))
+		for _, e := range qualified {
+			name := e.Strategy.Name()
+			s := allStats[name]
+			var winRate float64
+			if s.TotalTrades > 0 {
+				winRate = float64(s.Wins) / float64(s.TotalTrades) * 100
+			}
+			rows = append(rows, map[string]interface{}{
+				"name":          name,
+				"category":      e.Category,
+				"timeframe":     e.Timeframe,
+				"trades":        s.TotalTrades,
+				"wins":          s.Wins,
+				"losses":        s.Losses,
+				"winRate":       winRate,
+				"pnl":           s.TotalPnL,
+				"signalsFired":  s.SignalsFired,
+			})
+		}
+		json.NewEncoder(w).Encode(rows) //nolint:errcheck
+	})
+
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      mux,
@@ -284,12 +309,12 @@ func main() {
 func preLiveBalance() float64 {
 	v := os.Getenv("PRE_LIVE_INITIAL_BALANCE_USD")
 	if v == "" {
-		return 10000
+		return 100
 	}
 	var f float64
 	fmt.Sscanf(v, "%f", &f)
 	if f <= 0 {
-		return 10000
+		return 100
 	}
 	return f
 }

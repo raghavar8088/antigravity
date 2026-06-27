@@ -8,11 +8,12 @@ import (
 
 // StrategyStats holds per-strategy lifetime performance counters.
 type StrategyStats struct {
-	TotalTrades int
-	Wins        int
-	Losses      int
-	TotalPnL    float64
-	Category    string
+	TotalTrades  int
+	Wins         int
+	Losses       int
+	TotalPnL     float64
+	Category     string
+	SignalsFired int
 }
 
 // StrategyTracker tracks per-strategy signals, trade results, and execution
@@ -140,8 +141,12 @@ func (t *StrategyTracker) GetAllStats() map[string]StrategyStats {
 }
 
 // RecordSignal records that a strategy generated a signal this cycle.
-func (t *StrategyTracker) RecordSignal(_ string) {
-	// No-op at this level; signal flow metrics are tracked in the aggregator.
+func (t *StrategyTracker) RecordSignal(name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if s, ok := t.stats[name]; ok {
+		s.SignalsFired++
+	}
 }
 
 // Reset clears all per-strategy state so the tracker starts fresh after a full account reset.

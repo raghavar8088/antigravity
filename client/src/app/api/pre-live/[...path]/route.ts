@@ -49,6 +49,7 @@ const ALLOWED_PATHS = [
   "/api/scalers/stats",
   "/api/regime",
   "/api/strategies",
+  "/api/strategies/stats",
 ];
 
 function isAllowed(pathname: string): boolean {

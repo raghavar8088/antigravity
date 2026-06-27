@@ -9,6 +9,7 @@ export const MOCK_TRADING_PATH = "/mock-trading";
 export const TERMINAL_ROUTES = {
   home: "/terminal",
   "pre-live-engine": "/terminal/pre-live-engine",
+  "pre-live-strategies": "/terminal/pre-live-strategies",
   "trade-engine": "/terminal/trade-engine",
   /** @deprecated Old route redirects to /terminal/trade-engine. */
   "mock-engine": "/terminal/mock-engine",
@@ -119,6 +120,7 @@ export type CommandCenterNavItem = {
 /** Institutional strategy pipeline — TRADING section (mandatory order). */
 export const TRADING_NAV: CommandCenterNavItem[] = [
   { href: TERMINAL_ROUTES["pre-live-engine"], label: "Pre-Live Engine", section: "trading" },
+  { href: TERMINAL_ROUTES["pre-live-strategies"], label: "Pre-Live Strategies", section: "trading" },
   { href: TERMINAL_ROUTES["trade-engine"], label: "Trade Engine", section: "trading" },
   { href: TERMINAL_ROUTES.backtest, label: "Backtest Lab", section: "trading" },
   { href: TERMINAL_ROUTES.strategies, label: "Strategies", section: "trading" },
