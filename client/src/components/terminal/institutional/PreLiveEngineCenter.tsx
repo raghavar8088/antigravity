@@ -15,17 +15,19 @@ const SIGNALS_POLL_MS = 3_000;
 const PRE_LIVE_STRATEGIES = 100;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+// Field names match the Go engine JSON output from /api/positions and /api/trades
 type OpenPosition = {
   id: string;
   strategyName: string;
-  side: "LONG" | "SHORT";
-  openedAt: number;
-  quantity: number;
+  side: "BUY" | "SELL" | "LONG" | "SHORT";
+  openedAt: string | number;   // ISO string from engine
+  size: number;                // engine uses "size" not "quantity"
   entryPrice: number;
-  currentPrice: number;
-  unrealizedPnl: number;
-  stopLossPrice: number;
-  takeProfitPrice: number;
+  stopLoss: number;            // engine uses "stopLoss" not "stopLossPrice"
+  takeProfit: number;          // engine uses "takeProfit" not "takeProfitPrice"
+  stopLossPct: number;
+  takeProfitPct: number;
+  // unrealizedPnl not returned by engine; computed from live price
 };
 
 type ClosedTrade = {
@@ -35,8 +37,9 @@ type ClosedTrade = {
   entryPrice: number;
   exitPrice: number;
   netPnl: number;
-  entryTime: number;
-  exitTime: number;
+  entryTime: string | number;  // ISO string from engine
+  exitTime: string | number;   // ISO string from engine
+  duration: number;            // nanoseconds
   reason: string;
 };
 
@@ -111,18 +114,35 @@ function fmtPrice(v: number) {
 function fmtPct(v: number) { return Number.isFinite(v) ? `${v.toFixed(1)}%` : "—"; }
 function pnlColor(v: number) { return v > 0 ? "var(--green)" : v < 0 ? "var(--red)" : "var(--text-muted)"; }
 function sideColor(s: string) { return s === "BUY" || s === "LONG" ? "var(--green)" : "var(--red)"; }
-function fmtAge(startMs: number, endMs: number) {
+// Convert ISO string or ms number to ms timestamp
+function toMs(ts: string | number | undefined | null): number {
+  if (!ts) return NaN;
+  if (typeof ts === "number") return ts < 1e12 ? ts * 1000 : ts;
+  const ms = Date.parse(ts);
+  return isNaN(ms) ? NaN : ms;
+}
+function fmtAge(start: string | number, end: string | number | null | undefined) {
+  const startMs = toMs(start);
+  const endMs = end != null ? toMs(end) : Date.now();
+  if (isNaN(startMs) || isNaN(endMs)) return "—";
   const mins = Math.max(0, Math.floor((endMs - startMs) / 60_000));
   if (mins < 60) return `${mins}m`;
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
-function fmtTime(ts: number) {
-  if (!Number.isFinite(ts)) return "—";
+function fmtDuration(ns: number | undefined) {
+  if (!ns || !Number.isFinite(ns)) return "—";
+  const mins = Math.floor(ns / 60_000_000_000);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+function fmtTime(ts: string | number | undefined | null) {
+  const ms = toMs(ts);
+  if (isNaN(ms)) return "—";
   return new Intl.DateTimeFormat("en-IN", {
-    month: "short", day: "2-digit", year: "numeric",
+    month: "short", day: "2-digit",
     hour: "numeric", minute: "2-digit", hour12: true,
     timeZone: "Asia/Kolkata",
-  }).format(ts) + " IST";
+  }).format(ms) + " IST";
 }
 
 // ── Fetchers ──────────────────────────────────────────────────────────────────
@@ -164,13 +184,13 @@ function OpenPositionsTable({ positions, nowMs }: { positions: OpenPosition[]; n
               </td>
               <td style={{ ...tdStyle, color: sideColor(p.side), fontWeight: 700 }}>{p.side}</td>
               <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(p.openedAt)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.quantity) ? `${p.quantity.toFixed(5)} BTC` : "—"}</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.size) ? `${p.size.toFixed(4)} BTC` : "—"}</td>
               <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.entryPrice)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.currentPrice)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: pnlColor(p.unrealizedPnl), fontWeight: 600 }}>{fmtUsd(p.unrealizedPnl)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLossPrice)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfitPrice)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, nowMs)}</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-muted)" }}>—</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-muted)" }}>—</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLoss)}</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfit)}</td>
+              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, null)}</td>
             </tr>
           ))}
         </tbody>
@@ -210,7 +230,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
                   <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.strategyName}</div>
                 </td>
                 <td style={{ ...tdStyle, color: sideColor(t.side), fontWeight: 700 }}>{t.side}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(t.entryTime)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(t.entryTime as string)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(t.entryPrice)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(t.exitPrice)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: pnlColor(t.netPnl), fontWeight: 700 }}>{fmtUsd(t.netPnl)}</td>
@@ -224,7 +244,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
                     {t.reason === "TAKE_PROFIT" ? "TP" : t.reason === "STOP_LOSS" ? "SL" : t.reason ?? "—"}
                   </span>
                 </td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(t.entryTime, t.exitTime ?? nowMs)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtDuration(t.duration)}</td>
               </tr>
             ))}
           </tbody>
@@ -419,7 +439,7 @@ export function PreLiveEngineCenter() {
   const closedTrades = trades.filter((t) => t.exitTime);
 
   const realizedPnl = stats?.aggregate?.realizedPnl ?? closedTrades.reduce((s, t) => s + (t.netPnl ?? 0), 0);
-  const unrealizedPnl = stats?.aggregate?.unrealizedPnl ?? openTrades.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0);
+  const unrealizedPnl = stats?.aggregate?.unrealizedPnl ?? 0;
   const equity = stats?.equity ?? (stats?.balance ?? 0) + unrealizedPnl;
   const totalTrades = stats?.aggregate?.totalTrades ?? closedTrades.length;
   const winRate = stats?.aggregate?.winRate ?? 0;
@@ -427,7 +447,7 @@ export function PreLiveEngineCenter() {
   const equityHistory = useMemo(() => {
     let eq = equity - realizedPnl - unrealizedPnl;
     const vals = [eq];
-    for (const t of [...closedTrades].sort((a, b) => a.exitTime - b.exitTime)) {
+    for (const t of [...closedTrades].sort((a, b) => toMs(a.exitTime) - toMs(b.exitTime))) {
       eq += t.netPnl ?? 0;
       vals.push(eq);
     }
