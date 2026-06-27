@@ -1,1 +1,1 @@
-{"engine-risk":{"communities":[0,1],"files":1,"symbols":5,"top_files":[{"file":"engine/internal/risk/v2/sizing.go","symbols":5}]}}
+{"client-components":{"communities":[0,1],"files":1,"symbols":25,"top_files":[{"file":"client/src/components/terminal/institutional/PreLiveEngineCenter.tsx","symbols":25}]}}

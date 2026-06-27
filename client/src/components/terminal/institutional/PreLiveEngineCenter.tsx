@@ -3,7 +3,7 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useLiveBTCPrice from "@/hooks/useLiveBTCPrice";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { DailyPnLTable } from "@/components/DailyPnLTable";
+
 import { Sparkline } from "@/components/ui/Sparkline";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
@@ -283,6 +283,87 @@ function StageStat({ label, value, accent, tone = "neutral", size = "md", childr
   );
 }
 
+// ── Pre-Live Daily PnL (computed from pre-live closed trades only) ─────────────
+function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: number }) {
+  const rows = useMemo(() => {
+    const byDay = new Map<string, { pnl: number; wins: number; losses: number; best: number; worst: number }>();
+    for (const t of trades) {
+      if (!t.exitTime) continue;
+      const d = new Date(typeof t.exitTime === "number" && t.exitTime < 1e12 ? t.exitTime * 1000 : t.exitTime);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const row = byDay.get(key) ?? { pnl: 0, wins: 0, losses: 0, best: -Infinity, worst: Infinity };
+      row.pnl += t.netPnl ?? 0;
+      if ((t.netPnl ?? 0) >= 0) row.wins++; else row.losses++;
+      row.best = Math.max(row.best, t.netPnl ?? 0);
+      row.worst = Math.min(row.worst, t.netPnl ?? 0);
+      byDay.set(key, row);
+    }
+    return [...byDay.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, row]) => ({ date, ...row, best: isFinite(row.best) ? row.best : 0, worst: isFinite(row.worst) ? row.worst : 0 }));
+  }, [trades]);
+
+  const fmt = (v: number) => {
+    const sign = v > 0 ? "+" : "";
+    return `${sign}$${Math.abs(v).toFixed(2)}`;
+  };
+  const fmtPct = (v: number, bal: number) => {
+    const pct = bal > 0 ? (v / bal) * 100 : 0;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+  };
+  const labelDate = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${parseInt(d)} ${months[parseInt(m) - 1]}`;
+  };
+
+  if (rows.length === 0) return (
+    <div className="mt-6" style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 28px" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 8 }}>Daily PnL</div>
+      <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No closed trades yet — daily breakdown will appear here once trades close.</div>
+    </div>
+  );
+
+  return (
+    <div className="mt-6" style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 28px" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 16 }}>
+        Daily PnL <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-tertiary)", marginLeft: 8 }}>{rows.length} day{rows.length !== 1 ? "s" : ""} traded · pre-live engine only</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
+          <thead>
+            <tr>
+              {["Date","PnL ($)","PnL (%)","Trades","W / L","Best / Worst"].map(h => (
+                <th key={h} style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "var(--surface-2)", whiteSpace: "nowrap", textAlign: h === "Date" ? "left" : "right" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.date}>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", color: "var(--text-secondary)" }}>{labelDate(r.date)}</td>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", textAlign: "right", fontFamily: "var(--font-mono)", color: r.pnl >= 0 ? "var(--green)" : "var(--red)" }}>{fmt(r.pnl)}</td>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", textAlign: "right", fontFamily: "var(--font-mono)", color: r.pnl >= 0 ? "var(--green)" : "var(--red)" }}>{fmtPct(r.pnl, balance)}</td>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", textAlign: "right", color: "var(--text-secondary)" }}>{r.wins + r.losses} trades</td>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                  <span style={{ color: "var(--green)" }}>{r.wins}W</span>
+                  <span style={{ color: "var(--text-muted)", margin: "0 4px" }}>/</span>
+                  <span style={{ color: "var(--red)" }}>{r.losses}L</span>
+                </td>
+                <td style={{ padding: "13px 12px", borderBottom: "1px solid var(--border)", textAlign: "right", fontFamily: "var(--font-mono)" }}>
+                  <span style={{ color: "var(--green)" }}>{fmt(r.best)}</span>
+                  <span style={{ color: "var(--text-muted)", margin: "0 4px" }}>/</span>
+                  <span style={{ color: "var(--red)" }}>{fmt(r.worst)}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 export function PreLiveEngineCenter() {
   const live = useLiveBTCPrice();
@@ -454,7 +535,7 @@ export function PreLiveEngineCenter() {
         <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{leftPanel}</div>
         <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{rightPanel}</div>
       </div>
-      <DailyPnLTable className="mt-6" />
+      <PreLiveDailyPnL trades={trades} balance={stats?.balance ?? 100} />
     </div>
   );
 }
