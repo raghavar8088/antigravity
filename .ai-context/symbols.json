@@ -1,1 +1,1 @@
-{}
+{"engine/internal/risk/v2/sizing.go":[{"community":1,"kind":"type","location":"L10","name":"SizingScale"},{"community":0,"kind":"function","location":"L26","name":"executionFloor()"},{"community":0,"kind":"type","location":"L35","name":"SizingDecisionLog"},{"community":1,"kind":"function","location":"L43","name":"scaleFromMultiplier()"},{"community":0,"kind":"function","location":"L63","name":"EnforceExecutionFloor()"}]}
