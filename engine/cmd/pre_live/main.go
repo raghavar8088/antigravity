@@ -41,6 +41,33 @@ import (
 	"antigravity-engine/internal/trading"
 )
 
+// warmupCandles fetches the last 200 1h candles from Binance REST and pushes
+// them into the orchestrator so 4h synthetic candles are available immediately
+// (4h candles are built by accumulating 4×1h bars). Without this, strategies
+// that require 4h indicators would be silent for the first 4+ hours.
+func warmupCandles(orch *trading.Orchestrator) {
+	fetcher := marketdata.NewBinanceHistoricalFetcher(os.TempDir())
+	endMs := time.Now().UnixMilli()
+	startMs := endMs - int64(200*time.Hour/time.Millisecond)
+	candles, err := fetcher.FetchKlines("BTCUSDT", "1h", startMs, endMs)
+	if err != nil {
+		log.Printf("[PRE-LIVE] warmup fetch failed (will wait for live 1h bars): %v", err)
+		return
+	}
+	for _, c := range candles {
+		orch.Push1hKlineCandle(marketdata.Candle{
+			OpenTime:  c.OpenTime,
+			CloseTime: c.CloseTime,
+			Open:      c.Open,
+			High:      c.High,
+			Low:       c.Low,
+			Close:     c.Close,
+			Volume:    c.Volume,
+		})
+	}
+	log.Printf("[PRE-LIVE] warmup complete: pushed %d 1h candles → ~%d synthetic 4h candles ready", len(candles), len(candles)/4)
+}
+
 func main() {
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   PRE-LIVE TRADE ENGINE — 100 Qualified Strategies       ║")
@@ -174,7 +201,9 @@ func main() {
 		orch.SetAggTradeFeedActive(false)
 	}()
 
-	// ── 9. Start trading loop ─────────────────────────────────────────────────
+	// ── 9. Pre-warm 4h candles then start trading loop ───────────────────────
+	// Fetch 200 historical 1h bars so 4h synthetic candles are ready immediately.
+	warmupCandles(orch)
 	go orch.Run(ctx)
 	log.Printf("[PRE-LIVE] Trading loop started with %d strategies (no limits)", len(qualified))
 

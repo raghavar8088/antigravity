@@ -51,6 +51,7 @@ services:
     environment:
       - PRE_LIVE_PORT=8082
       - PRE_LIVE_INITIAL_BALANCE_USD=100
+      - FIXED_TRADE_SIZE_BTC=0.001
       - GOMEMLIMIT=300MiB
       - GOGC=80
     mem_limit: 400m

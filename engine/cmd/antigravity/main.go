@@ -2662,6 +2662,36 @@ func main() {
 		}
 	})
 
+	// ── Pre-Live Engine transparent proxy (/prelive/* → localhost:8082/*) ────────
+	// Port 8082 is internal-only; this route exposes it through port 80 so
+	// Vercel can reach the pre-live engine without opening a second firewall port.
+	preLivePort := os.Getenv("PRE_LIVE_PORT")
+	if preLivePort == "" {
+		preLivePort = "8082"
+	}
+	http.HandleFunc("/prelive/", func(w http.ResponseWriter, r *http.Request) {
+		target := "http://127.0.0.1:" + preLivePort + r.URL.RequestURI()[len("/prelive"):]
+		req, err := http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
+		if err != nil {
+			http.Error(w, "proxy error: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		req.Header = r.Header.Clone()
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			http.Error(w, "pre-live engine unreachable: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		for k, vs := range resp.Header {
+			for _, v := range vs {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body) //nolint:errcheck
+	})
+
 	// Use PORT env var so the server and keepAlive both bind to the same port.
 	// Render sets PORT=10000; locally defaults to 8080.
 	httpPort := os.Getenv("PORT")
