@@ -7,6 +7,7 @@ RUN apk --no-cache add ca-certificates tzdata git
 COPY go.mod ./
 COPY cmd/pre_live ./cmd/pre_live
 COPY internal ./internal
+COPY data/backtest_results.json ./data/backtest_results.json
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -mod=mod \
@@ -19,6 +20,7 @@ FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /bin/pre_live /app/pre_live
+COPY --from=builder /app/data/backtest_results.json /app/data/backtest_results.json
 
 USER 10001:10001
 
@@ -28,5 +30,6 @@ ENV GOMEMLIMIT=300MiB
 ENV GOGC=80
 ENV PRE_LIVE_PORT=8082
 ENV PRE_LIVE_INITIAL_BALANCE_USD=100
+ENV BACKTEST_RESULTS_PATH=/app/data/backtest_results.json
 
 ENTRYPOINT ["/app/pre_live"]

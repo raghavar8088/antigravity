@@ -76,6 +76,10 @@ func main() {
 
 	loadDotEnv()
 
+	// Set pre-live account key before any paperpersist calls so MongoDB data is
+	// segregated from the main paper desk (account_key="pre_live_engine").
+	applyPreLiveAccountKey()
+
 	port := os.Getenv("PRE_LIVE_PORT")
 	if port == "" {
 		port = "8082"
@@ -207,7 +211,14 @@ func main() {
 	go orch.Run(ctx)
 	log.Printf("[PRE-LIVE] Trading loop started with %d strategies (no limits)", len(qualified))
 
-	// ── 10. HTTP API ──────────────────────────────────────────────────────────
+	// ── 10. MongoDB persistence ───────────────────────────────────────────────
+	// Wire all paperpersist collections (trades, positions, equity, health, etc.)
+	// and seed backtest_results.json into pre_live_strategies.
+	// Runs in-memory only when MONGODB_URI is not configured (graceful degradation).
+	qualifiedNames := names // reuse the names slice built at step 2
+	mongoBundle := initPreLiveMongo(ctx, orch, journal, preLiveBalance(), qualifiedNames)
+
+	// ── 11. HTTP API ──────────────────────────────────────────────────────────
 	mux := http.NewServeMux()
 
 	setCORS := func(w http.ResponseWriter) {
@@ -229,9 +240,24 @@ func main() {
 
 	handle("/health", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
-			"status":     "ok",
-			"engine":     "pre-live",
-			"strategies": len(qualified),
+			"status":            "ok",
+			"engine":            "pre-live",
+			"strategies":        len(qualified),
+			"mongodb_connected": mongoBundle.IsConnected(),
+		})
+	})
+
+	handle("/ready", func(w http.ResponseWriter, r *http.Request) {
+		mongoOK := mongoBundle.IsConnected()
+		status := "ready"
+		if !mongoOK {
+			status = "degraded"
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+			"status":            status,
+			"engine":            "pre-live",
+			"mongodb_connected": mongoOK,
+			"strategies":        len(qualified),
 		})
 	})
 

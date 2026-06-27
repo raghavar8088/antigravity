@@ -43,6 +43,7 @@ async function verifySessionToken(token: string): Promise<boolean> {
 
 const ALLOWED_PATHS = [
   "/health",
+  "/ready",
   "/api/positions",
   "/api/trades",
   "/api/stats",

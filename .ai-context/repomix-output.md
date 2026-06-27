@@ -1592,6 +1592,7 @@ The content is organized as follows:
   fetch_historical/main.go
   perfbench/main.go
   pre_live/main.go
+  pre_live/mongo.go
   run_backtest/main.go
   seed_db/main.go
   sep_evidence/analytics.go
