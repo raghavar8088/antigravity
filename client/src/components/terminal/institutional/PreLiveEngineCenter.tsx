@@ -247,14 +247,20 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(t.exitPrice)}</td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: pnlColor(t.netPnl), fontWeight: 700 }}>{fmtUsd(t.netPnl)}</td>
                 <td style={tdStyle}>
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", borderRadius: 999,
-                    background: t.reason === "TAKE_PROFIT" || t.reason === "TP" ? "var(--green-dim)" : t.reason === "STOP_LOSS" || t.reason === "SL" ? "var(--red-dim)" : "var(--amber-dim)",
-                    color: t.reason === "TAKE_PROFIT" || t.reason === "TP" ? "var(--green)" : t.reason === "STOP_LOSS" || t.reason === "SL" ? "var(--red)" : "var(--amber)",
-                    fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", padding: "2px 7px", textTransform: "uppercase",
-                  }}>
-                    {t.reason === "TAKE_PROFIT" ? "TP" : t.reason === "STOP_LOSS" ? "SL" : t.reason ?? "—"}
-                  </span>
+                  {(() => {
+                    const r = t.reason ?? "";
+                    const isTP = r === "TAKE_PROFIT" || r === "TP";
+                    const isSL = r === "STOP_LOSS" || r === "SL";
+                    const isExpired = r === "EXPIRED" || r === "MANUAL";
+                    const bg = isTP ? "var(--green-dim)" : isSL ? "var(--red-dim)" : isExpired ? "color-mix(in srgb, var(--text-muted) 15%, transparent)" : "var(--amber-dim)";
+                    const fg = isTP ? "var(--green)" : isSL ? "var(--red)" : isExpired ? "var(--text-muted)" : "var(--amber)";
+                    const label = isTP ? "TP" : isSL ? "SL" : isExpired ? "EXPIRED" : (r || "—");
+                    return (
+                      <span style={{ display: "inline-flex", alignItems: "center", borderRadius: 999, background: bg, color: fg, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", padding: "2px 7px", textTransform: "uppercase" }}>
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtDuration(t.duration)}</td>
               </tr>

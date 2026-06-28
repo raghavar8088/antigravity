@@ -43,6 +43,7 @@ const (
 	ReasonTakeProfit   CloseReason = "TAKE_PROFIT"
 	ReasonTrailingStop CloseReason = "TRAILING_STOP" // Legacy reason kept for older records; no longer emitted for new trades.
 	ReasonManual       CloseReason = "MANUAL"
+	ReasonExpired      CloseReason = "EXPIRED" // Position exceeded MaxPositionAgeMins and was auto-closed.
 )
 
 // CloseEvent is emitted when a position closes.
@@ -318,7 +319,7 @@ func (m *Manager) CheckExpiredPositions(currentPrice float64) {
 		pos.Status = "EXPIRED"
 		log.Printf("[EXPIRED] %s | %s open for %.0fm | Exit @ $%.2f | PnL: $%.4f",
 			id, pos.StrategyName, now.Sub(pos.OpenedAt).Minutes(), currentPrice, pnl)
-		m.emitClose(pos, ReasonManual, currentPrice, pnl)
+		m.emitClose(pos, ReasonExpired, currentPrice, pnl)
 		delete(m.positions, id)
 	}
 }
