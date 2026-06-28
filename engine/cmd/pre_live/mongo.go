@@ -41,8 +41,10 @@ import (
 // inside shared MongoDB collections (all docs are keyed by account_key).
 const preLiveAccountKey = "pre_live_engine"
 
-// applyPreLiveAccountKey sets OWNER_ACCOUNT_KEY to preLiveAccountKey before
-// any paperpersist call unless the caller has already overridden it via env.
+// applyPreLiveAccountKey forces OWNER_ACCOUNT_KEY to preLiveAccountKey so that
+// all paperpersist reads/writes (journal bootstrap, crash recovery, trade writes)
+// are scoped exclusively to pre-live data, even when the shared .env already
+// has OWNER_ACCOUNT_KEY set to the main paper-desk key ("mock_trading_main").
 // Must be called once, immediately after loadDotEnv().
 func applyPreLiveAccountKey() {
 	// PRE_LIVE_OWNER_ACCOUNT_KEY lets operators override the key explicitly.
@@ -51,11 +53,13 @@ func applyPreLiveAccountKey() {
 		log.Printf("[PRE-LIVE/mongo] account_key=%s (from PRE_LIVE_OWNER_ACCOUNT_KEY)", v)
 		return
 	}
-	// Only set if not already overridden by a top-level OWNER_ACCOUNT_KEY in .env.
-	if os.Getenv("OWNER_ACCOUNT_KEY") == "" {
-		os.Setenv("OWNER_ACCOUNT_KEY", preLiveAccountKey) //nolint:errcheck
+	// Always override OWNER_ACCOUNT_KEY with the pre-live key — never inherit
+	// the main engine's key from the shared .env file.
+	if prev := os.Getenv("OWNER_ACCOUNT_KEY"); prev != "" && prev != preLiveAccountKey {
+		log.Printf("[PRE-LIVE/mongo] overriding inherited OWNER_ACCOUNT_KEY=%q → %q", prev, preLiveAccountKey)
 	}
-	log.Printf("[PRE-LIVE/mongo] account_key=%s", os.Getenv("OWNER_ACCOUNT_KEY"))
+	os.Setenv("OWNER_ACCOUNT_KEY", preLiveAccountKey) //nolint:errcheck
+	log.Printf("[PRE-LIVE/mongo] account_key=%s", preLiveAccountKey)
 }
 
 // preLiveMongoBundle holds all live MongoDB handles for the pre-live engine.

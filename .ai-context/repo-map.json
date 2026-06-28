@@ -1,1 +1,1 @@
-{"client-lib":{"communities":[0],"files":1,"symbols":4,"top_files":[{"file":"client/src/lib/utils/commandPaletteItems.ts","symbols":4}]}}
+{"engine-cmd":{"communities":[0,1,2],"files":1,"symbols":17,"top_files":[{"file":"engine/cmd/pre_live/mongo.go","symbols":17}]}}
