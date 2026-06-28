@@ -285,6 +285,7 @@ func main() {
 			"balance":        exec.GetBalanceUSD(),
 			"equity":         exec.GetEquityUSD(),
 			"cashBalance":    exec.GetBalanceUSD(),
+			"initialBalance": preLiveBalance(),
 			"exposure":       riskEngine.GetAbsoluteExposure(),
 			"netPosition":    riskEngine.GetExposure(),
 			"dailyPnl":       riskEngine.GetDailyPnL(),

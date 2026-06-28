@@ -47,6 +47,7 @@ type ClosedTrade = {
 type Stats = {
   balance: number;
   equity: number;
+  initialBalance?: number;
   dailyPnl: number;
   openPositions: number;
   strategies: number;
@@ -106,7 +107,9 @@ function rowBg(i: number) { return i % 2 === 1 ? "#fbfdff" : "#ffffff"; }
 function fmtUsd(v: number) {
   if (!Number.isFinite(v)) return "—";
   const sign = v > 0 ? "+" : v < 0 ? "-" : "";
-  return `${sign}$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  const abs = Math.abs(v);
+  const decimals = abs > 0 && abs < 0.01 ? 4 : 2;
+  return `${sign}$${abs.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 }
 function fmtPrice(v: number) {
   if (!Number.isFinite(v)) return "—";
@@ -447,21 +450,34 @@ export function PreLiveEngineCenter() {
   const openTrades = positions;
   const closedTrades = trades.filter((t) => t.exitTime);
 
+  const initialBalance = stats?.initialBalance ?? 100;
   const realizedPnl = stats?.aggregate?.realizedPnl ?? closedTrades.reduce((s, t) => s + (t.netPnl ?? 0), 0);
-  const unrealizedPnl = stats?.aggregate?.unrealizedPnl ?? 0;
-  const equity = stats?.equity ?? (stats?.balance ?? 0) + unrealizedPnl;
+
+  // Compute unrealized PnL from live positions × current price × leverage (journal never stores this)
+  const unrealizedPnl = useMemo(() => {
+    if (!Number.isFinite(live.price) || live.price <= 0 || openTrades.length === 0) return 0;
+    return openTrades.reduce((sum, p) => {
+      if (!Number.isFinite(p.size) || !Number.isFinite(p.entryPrice)) return sum;
+      const isLong = p.side === "BUY" || p.side === "LONG";
+      const diff = isLong ? live.price - p.entryPrice : p.entryPrice - live.price;
+      return sum + diff * p.size * LEVERAGE;
+    }, 0);
+  }, [openTrades, live.price]);
+
+  // Equity = starting margin + leveraged realized PnL + leveraged unrealized PnL
+  const equity = initialBalance + realizedPnl + unrealizedPnl;
   const totalTrades = stats?.aggregate?.totalTrades ?? closedTrades.length;
   const winRate = stats?.aggregate?.winRate ?? 0;
 
   const equityHistory = useMemo(() => {
-    let eq = equity - realizedPnl - unrealizedPnl;
+    let eq = initialBalance;
     const vals = [eq];
     for (const t of [...closedTrades].sort((a, b) => toMs(a.exitTime) - toMs(b.exitTime))) {
       eq += t.netPnl ?? 0;
       vals.push(eq);
     }
     return vals;
-  }, [closedTrades, equity, realizedPnl, unrealizedPnl]);
+  }, [closedTrades, initialBalance]);
 
   const winRatePct = winRate <= 1 ? winRate * 100 : winRate;
   const priceReady = Number.isFinite(live.price) && live.price > 0;
@@ -573,7 +589,7 @@ export function PreLiveEngineCenter() {
         <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{leftPanel}</div>
         <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{rightPanel}</div>
       </div>
-      <PreLiveDailyPnL trades={trades} balance={stats?.balance ?? 100} />
+      <PreLiveDailyPnL trades={trades} balance={initialBalance} />
     </div>
   );
 }
