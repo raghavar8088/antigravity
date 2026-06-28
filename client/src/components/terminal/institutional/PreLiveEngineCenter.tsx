@@ -508,8 +508,7 @@ export function PreLiveEngineCenter() {
   const priceReady = Number.isFinite(live.price) && live.price > 0;
 
   const summaryStrip = (
-    <section aria-label="Pre-Live Engine summary" style={{
-      overflowX: "auto",
+    <section aria-label="Pre-Live Engine summary" className="pre-live-scroll-table" style={{
       border: "1px solid var(--card-border, var(--border))",
       borderRadius: "var(--radius-card)",
       background: "var(--card-bg, var(--surface))",
