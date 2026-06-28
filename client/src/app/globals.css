@@ -2090,6 +2090,30 @@ textarea:focus-visible {
   color: var(--text-muted);
 }
 
+/* Scrollable table containers in Pre-Live Engine — always-visible styled scrollbar */
+.pre-live-scroll-table {
+  overflow-x: scroll;
+  overflow-y: visible;
+  padding-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #c8d3e0 #f0f4f8;
+}
+.pre-live-scroll-table::-webkit-scrollbar {
+  height: 8px;
+}
+.pre-live-scroll-table::-webkit-scrollbar-track {
+  background: #f0f4f8;
+  border-radius: 4px;
+}
+.pre-live-scroll-table::-webkit-scrollbar-thumb {
+  background: #b0bec8;
+  border-radius: 4px;
+  min-width: 40px;
+}
+.pre-live-scroll-table::-webkit-scrollbar-thumb:hover {
+  background: #8a9bb0;
+}
+
 .m3-equity-chart,
 .chart-container {
   border-color: var(--card-border);

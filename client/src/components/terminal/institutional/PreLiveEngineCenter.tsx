@@ -181,7 +181,7 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
   const hasLivePrice = Number.isFinite(markPrice) && markPrice > 0;
   return (
     <>
-      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
+      <div className="pre-live-scroll-table">
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -237,7 +237,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
           </button>
         )}
       </div>
-      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
+      <div className="pre-live-scroll-table">
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -379,7 +379,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
       <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 14 }}>
         Daily PnL <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-tertiary)", marginLeft: 8 }}>{rows.length} day{rows.length !== 1 ? "s" : ""} traded · pre-live engine only</span>
       </div>
-      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4, scrollbarWidth: "thin" }}>
+      <div className="pre-live-scroll-table">
         <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
