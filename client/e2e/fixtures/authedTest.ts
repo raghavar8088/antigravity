@@ -1,4 +1,5 @@
 import { test as base, expect } from "./marketData";
+import { type Page } from "@playwright/test";
 import { AUTH_STORAGE_STATE } from "../global-setup";
 
 // Reuses the session captured once in global-setup.ts instead of driving the
@@ -8,4 +9,4 @@ export const test = base.extend({
   storageState: AUTH_STORAGE_STATE,
 });
 
-export { expect };
+export { expect, type Page };

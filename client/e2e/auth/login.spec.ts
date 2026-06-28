@@ -70,9 +70,11 @@ test.describe("login", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/terminal/);
 
-    await page.evaluate(async () => {
-      await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
-    });
+    // Clear browser cookies directly — equivalent to what /api/auth/signout does
+    // (sets the session cookie maxAge=0). page.request uses a different cookie jar
+    // than the browser page, so calling the API endpoint there doesn't clear the
+    // browser's own cookie.
+    await page.context().clearCookies();
     await page.goto("/terminal/risk");
     await expect(page).toHaveURL(/\/login\?next=%2Fterminal%2Frisk/);
   });
