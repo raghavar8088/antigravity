@@ -120,7 +120,16 @@ func main() {
 	// ── 4. Core components ───────────────────────────────────────────────────
 	tracker := risk.NewStrategyTracker(names, cats, tfs, preLiveBalance())
 	exec := execution.NewPaperClient(preLiveBalance())
-	posMgr := positions.NewManager()
+	posMgr := positions.NewManagerWithConfig(positions.ManagerConfig{
+		TrailingStopPct:    0.18,
+		BreakEvenThreshold: 0.00,
+		PartialTPRatio:     1.0,
+		MinTakeProfitPct:   0.30,
+		MaxPerStrategy:     2,
+		ReverseTargets:     false,
+		MaxPositionAgeMins: 45,
+		Leverage:           preLiveLeverage(),
+	})
 
 	// Zero cooldown — all 100 strategies fire in parallel every tick.
 	agg := trading.NewSignalAggregator(0)
@@ -359,6 +368,19 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("[PRE-LIVE] HTTP server error: %v", err)
 	}
+}
+
+func preLiveLeverage() float64 {
+	v := os.Getenv("PRE_LIVE_LEVERAGE")
+	if v == "" {
+		return 10.0
+	}
+	var f float64
+	fmt.Sscanf(v, "%f", &f)
+	if f <= 0 {
+		return 10.0
+	}
+	return f
 }
 
 func preLiveBalance() float64 {

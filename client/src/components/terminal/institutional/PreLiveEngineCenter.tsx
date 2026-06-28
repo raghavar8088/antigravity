@@ -13,6 +13,7 @@ import { RegimeBadge } from "./MockStageTradingSuite";
 const POLL_MS = 5_000;
 const SIGNALS_POLL_MS = 3_000;
 const PRE_LIVE_STRATEGIES = 100;
+const LEVERAGE = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 // Field names match the Go engine JSON output from /api/positions and /api/trades
@@ -164,8 +165,9 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-function OpenPositionsTable({ positions, nowMs }: { positions: OpenPosition[]; nowMs: number }) {
+function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPosition[]; nowMs: number; markPrice: number }) {
   if (positions.length === 0) return <EmptyState label="No open positions" />;
+  const hasLivePrice = Number.isFinite(markPrice) && markPrice > 0;
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={tableStyle}>
@@ -177,22 +179,29 @@ function OpenPositionsTable({ positions, nowMs }: { positions: OpenPosition[]; n
           </tr>
         </thead>
         <tbody>
-          {positions.map((p, i) => (
-            <tr key={p.id} style={{ background: rowBg(i) }}>
-              <td style={{ ...tdStyle, maxWidth: 210, color: "var(--text-primary)", fontWeight: 600 }}>
-                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.strategyName}</div>
-              </td>
-              <td style={{ ...tdStyle, color: sideColor(p.side), fontWeight: 700 }}>{p.side}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(p.openedAt)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.size) ? `${p.size.toFixed(4)} BTC` : "—"}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.entryPrice)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-muted)" }}>—</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-muted)" }}>—</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLoss)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfit)}</td>
-              <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, null)}</td>
-            </tr>
-          ))}
+          {positions.map((p, i) => {
+            const mark = hasLivePrice ? markPrice : p.entryPrice;
+            const isLong = p.side === "BUY" || p.side === "LONG";
+            const unrealizedPnl = Number.isFinite(p.size) && Number.isFinite(p.entryPrice)
+              ? (isLong ? mark - p.entryPrice : p.entryPrice - mark) * p.size * LEVERAGE
+              : NaN;
+            return (
+              <tr key={p.id} style={{ background: rowBg(i) }}>
+                <td style={{ ...tdStyle, maxWidth: 210, color: "var(--text-primary)", fontWeight: 600 }}>
+                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.strategyName}</div>
+                </td>
+                <td style={{ ...tdStyle, color: sideColor(p.side), fontWeight: 700 }}>{p.side}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(p.openedAt)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.size) ? `${p.size.toFixed(4)} BTC` : "—"}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.entryPrice)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-primary)" }}>{fmtPrice(mark)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", fontWeight: 700, color: pnlColor(unrealizedPnl) }}>{fmtUsd(unrealizedPnl)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLoss)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfit)}</td>
+                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, null)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -480,6 +489,14 @@ export function PreLiveEngineCenter() {
           }}>
             REAL MONEY · {PRE_LIVE_STRATEGIES} STRATEGIES · NO LIMITS
           </span>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px",
+            borderRadius: 999, background: "color-mix(in srgb, var(--red, #ef4444) 15%, transparent)",
+            border: "1px solid var(--red, #ef4444)", fontSize: 12, fontWeight: 800,
+            letterSpacing: "0.06em", color: "var(--red, #ef4444)", textTransform: "uppercase",
+          }}>
+            {LEVERAGE}× LEVERAGE
+          </span>
         </div>
       </div>
 
@@ -513,7 +530,7 @@ export function PreLiveEngineCenter() {
   const leftPanel = (
     <>
       <TerminalCard title="Open Positions" subtitle={`${openTrades.length.toLocaleString()} open · no position limit · TP/SL live`}>
-        <OpenPositionsTable positions={openTrades} nowMs={nowMs} />
+        <OpenPositionsTable positions={openTrades} nowMs={nowMs} markPrice={live.price} />
       </TerminalCard>
       <TerminalCard title="Closed Trades" subtitle={`${closedTrades.length.toLocaleString()} closed · newest first`}>
         <ClosedTradesTable trades={closedTrades} nowMs={nowMs} />
@@ -530,6 +547,7 @@ export function PreLiveEngineCenter() {
         <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
           {[
             { label: "Strategy Pool", value: `${PRE_LIVE_STRATEGIES} qualified strategies` },
+            { label: "Leverage", value: `${LEVERAGE}× (Delta Exchange futures)` },
             { label: "Qualifying Criteria", value: "Sharpe≥1.0 · WR≥45% · DD≤20% · PF≥1.30 · Trades≥50" },
             { label: "Position Limit", value: "Unlimited (all 100 fire in parallel)" },
             { label: "Cooldown", value: "None — all strategies evaluate every tick" },

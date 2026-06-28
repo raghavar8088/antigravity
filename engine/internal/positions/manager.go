@@ -62,6 +62,7 @@ type ManagerConfig struct {
 	MaxPerStrategy     int     // Max concurrent positions per strategy
 	ReverseTargets     bool    // Swap incoming TP and SL distances for all strategies
 	MaxPositionAgeMins float64 // Auto-expire positions older than this (0 = disabled)
+	Leverage           float64 // Leverage multiplier applied to PnL (1.0 = no leverage, 10.0 = 10x)
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -76,21 +77,30 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
-	mgr := &Manager{
-		positions: make(map[string]*Position),
-		nextID:    1,
-		config: ManagerConfig{
-			TrailingStopPct:    0.18,  // Trail activates after 0.18% profit — moves SL to breakeven, locks partial gains
-			BreakEvenThreshold: 0.00,  // Break-even exits handled by trailing
-			PartialTPRatio:     1.0,   // Close FULL position at TP
-			MinTakeProfitPct:   0.30,  // Floor TP at 0.30% — enough room to profit after fees
-			MaxPerStrategy:     2,     // Max 2 positions per strategy — prevent pile-up
-			ReverseTargets:     false, // Profit mode default: keep TP/SL in normal direction
-			MaxPositionAgeMins: 45,    // Auto-close stale scalps after 45 min — free up capital
-		},
+	return NewManagerWithConfig(ManagerConfig{
+		TrailingStopPct:    0.18,
+		BreakEvenThreshold: 0.00,
+		PartialTPRatio:     1.0,
+		MinTakeProfitPct:   0.30,
+		MaxPerStrategy:     2,
+		ReverseTargets:     false,
+		MaxPositionAgeMins: 45,
+		Leverage:           1.0,
+	})
+}
+
+// NewManagerWithConfig creates a Manager with a fully specified config.
+// Use this when you need non-default settings (e.g. leverage for the pre-live engine).
+func NewManagerWithConfig(cfg ManagerConfig) *Manager {
+	if cfg.Leverage <= 0 {
+		cfg.Leverage = 1.0
+	}
+	return &Manager{
+		positions:  make(map[string]*Position),
+		nextID:     1,
+		config:     cfg,
 		closeQueue: newCloseQueue(),
 	}
-	return mgr
 }
 
 // CloseEvents exposes the receive side of the guaranteed close queue.
@@ -259,10 +269,13 @@ func (m *Manager) checkShortPosition(id string, pos *Position, price float64) {
 }
 
 func (m *Manager) calculatePnL(pos *Position, exitPrice float64) float64 {
+	var raw float64
 	if pos.Side == strategy.ActionBuy {
-		return (exitPrice - pos.EntryPrice) * pos.Size
+		raw = (exitPrice - pos.EntryPrice) * pos.Size
+	} else {
+		raw = (pos.EntryPrice - exitPrice) * pos.Size
 	}
-	return (pos.EntryPrice - exitPrice) * pos.Size
+	return raw * m.config.Leverage
 }
 
 func (m *Manager) emitClose(pos *Position, reason CloseReason, exitPrice, pnl float64) {
