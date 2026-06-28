@@ -435,6 +435,22 @@ export function PreLiveEngineCenter() {
     if (data) setScalers(data);
   }, []);
 
+  const [resetting, setResetting] = useState(false);
+  const resetEngine = useCallback(async () => {
+    if (!window.confirm("Reset the pre-live engine? This will close all positions and clear all trade history.")) return;
+    setResetting(true);
+    try {
+      const r = await fetch("/api/pre-live/api/admin/reset", { method: "POST", cache: "no-store" });
+      if (!r.ok) { alert("Reset failed: " + (await r.text())); return; }
+      setPositions([]);
+      setTrades([]);
+      setStats(null);
+      await fetchAll();
+    } finally {
+      setResetting(false);
+    }
+  }, [fetchAll]);
+
   useEffect(() => {
     void fetchAll();
     const id = window.setInterval(() => void fetchAll(), POLL_MS);
@@ -514,6 +530,19 @@ export function PreLiveEngineCenter() {
             {LEVERAGE}× LEVERAGE
           </span>
         </div>
+        <button
+          type="button"
+          onClick={() => void resetEngine()}
+          disabled={resetting}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px",
+            borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)",
+            color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, cursor: resetting ? "not-allowed" : "pointer",
+            opacity: resetting ? 0.6 : 1, whiteSpace: "nowrap",
+          }}
+        >
+          {resetting ? "Resetting…" : "↺ Reset Engine"}
+        </button>
       </div>
 
       {loading ? (

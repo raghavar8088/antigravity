@@ -51,6 +51,7 @@ const ALLOWED_PATHS = [
   "/api/regime",
   "/api/strategies",
   "/api/strategies/stats",
+  "/api/admin/reset",
 ];
 
 function isAllowed(pathname: string): boolean {

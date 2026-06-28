@@ -301,6 +301,32 @@ func main() {
 		json.NewEncoder(w).Encode(orch.GetScalersStats()) //nolint:errcheck
 	})
 
+	// POST /api/admin/reset — wipe all trade history and restore starting balance.
+	// Forces all open positions closed at the last known price first.
+	handle("/api/admin/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		lastPrice := exec.GetLastPrice()
+		if lastPrice <= 0 {
+			http.Error(w, "no price available — cannot close positions", http.StatusServiceUnavailable)
+			return
+		}
+		posMgr.CloseAllPositions(lastPrice)
+		journal.Reset()
+		if err := exec.ResetAccount(); err != nil {
+			http.Error(w, "reset failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Printf("[PRE-LIVE RESET] account reset at price $%.2f — fresh start", lastPrice)
+		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+			"ok":             true,
+			"message":        "pre-live engine reset — balance restored, all trades cleared",
+			"initialBalance": preLiveBalance(),
+		})
+	})
+
 	handle("/api/regime", func(w http.ResponseWriter, r *http.Request) {
 		reg := orch.GetScalersStats().Regime
 		if reg == "" {
