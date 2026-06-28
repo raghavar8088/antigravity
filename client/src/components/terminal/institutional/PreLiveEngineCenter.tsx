@@ -336,7 +336,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
   }, [trades]);
 
   const fmt = (v: number) => {
-    const sign = v > 0 ? "+" : "";
+    const sign = v > 0 ? "+" : v < 0 ? "-" : "";
     return `${sign}$${Math.abs(v).toFixed(2)}`;
   };
   const fmtPct = (v: number, bal: number) => {
