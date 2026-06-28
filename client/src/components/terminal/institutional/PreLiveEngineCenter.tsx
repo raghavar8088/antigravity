@@ -161,9 +161,17 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 // ── Sub-components ────────────────────────────────────────────────────────────
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="google-empty-state" role="status">
+    <div className="google-empty-state" role="status" style={{ minHeight: 72, padding: "16px 16px" }}>
       <p className="m3-empty-state__title">{label}</p>
       <p className="m3-empty-state__subtitle">Updates automatically when Pre-Live Engine activity is available.</p>
+    </div>
+  );
+}
+
+function ScrollHint() {
+  return (
+    <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-muted)", marginTop: 5, letterSpacing: "0.05em", userSelect: "none", pointerEvents: "none" }}>
+      ← swipe to scroll →
     </div>
   );
 }
@@ -172,42 +180,45 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
   if (positions.length === 0) return <EmptyState label="No open positions" />;
   const hasLivePrice = Number.isFinite(markPrice) && markPrice > 0;
   return (
-    <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((h, i) => (
-              <th key={h} style={{ ...thStyle, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {positions.map((p, i) => {
-            const mark = hasLivePrice ? markPrice : p.entryPrice;
-            const isLong = p.side === "BUY" || p.side === "LONG";
-            const unrealizedPnl = Number.isFinite(p.size) && Number.isFinite(p.entryPrice)
-              ? (isLong ? mark - p.entryPrice : p.entryPrice - mark) * p.size * LEVERAGE
-              : NaN;
-            return (
-              <tr key={p.id} style={{ background: rowBg(i) }}>
-                <td style={{ ...tdStyle, maxWidth: 210, color: "var(--text-primary)", fontWeight: 600 }}>
-                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.strategyName}</div>
-                </td>
-                <td style={{ ...tdStyle, color: sideColor(p.side), fontWeight: 700 }}>{p.side}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(p.openedAt)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.size) ? `${p.size.toFixed(4)} BTC` : "—"}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.entryPrice)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-primary)" }}>{fmtPrice(mark)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", fontWeight: 700, color: pnlColor(unrealizedPnl) }}>{fmtUsd(unrealizedPnl)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLoss)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfit)}</td>
-                <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, null)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              {["STRATEGY", "SIDE", "OPENED (IST)", "SIZE", "ENTRY", "MARK", "UNREALIZED PnL", "SL", "TP", "AGE"].map((h, i) => (
+                <th key={h} style={{ ...thStyle, textAlign: i >= 3 ? "right" : "left" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {positions.map((p, i) => {
+              const mark = hasLivePrice ? markPrice : p.entryPrice;
+              const isLong = p.side === "BUY" || p.side === "LONG";
+              const unrealizedPnl = Number.isFinite(p.size) && Number.isFinite(p.entryPrice)
+                ? (isLong ? mark - p.entryPrice : p.entryPrice - mark) * p.size * LEVERAGE
+                : NaN;
+              return (
+                <tr key={p.id} style={{ background: rowBg(i) }}>
+                  <td style={{ ...tdStyle, maxWidth: 210, color: "var(--text-primary)", fontWeight: 600 }}>
+                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.strategyName}</div>
+                  </td>
+                  <td style={{ ...tdStyle, color: sideColor(p.side), fontWeight: 700 }}>{p.side}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, fontSize: 12 }}>{fmtTime(p.openedAt)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{Number.isFinite(p.size) ? `${p.size.toFixed(4)} BTC` : "—"}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.entryPrice)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", color: "var(--text-primary)" }}>{fmtPrice(mark)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right", fontWeight: 700, color: pnlColor(unrealizedPnl) }}>{fmtUsd(unrealizedPnl)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.stopLoss)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtPrice(p.takeProfit)}</td>
+                  <td style={{ ...tdStyle, ...monoCellStyle, textAlign: "right" }}>{fmtAge(p.openedAt, null)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <ScrollHint />
+    </>
   );
 }
 
@@ -268,6 +279,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
           </tbody>
         </table>
       </div>
+      <ScrollHint />
     </div>
   );
 }
@@ -276,7 +288,7 @@ function LiveSignalsPanel({ scalers }: { scalers: ScalersStats }) {
   const signals = scalers.recentSignals ?? [];
   if (signals.length === 0) {
     return (
-      <div className="m3-terminal-empty-state">
+      <div className="m3-terminal-empty-state" style={{ minHeight: 72, padding: "16px 16px" }}>
         <div className="m3-terminal-empty-state__title">No live signals</div>
         <div className="m3-terminal-empty-state__subtitle">Waiting for pre-live signal telemetry.</div>
       </div>
@@ -367,7 +379,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
       <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 14 }}>
         Daily PnL <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-tertiary)", marginLeft: 8 }}>{rows.length} day{rows.length !== 1 ? "s" : ""} traded · pre-live engine only</span>
       </div>
-      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
+      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4, scrollbarWidth: "thin" }}>
         <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
@@ -398,6 +410,7 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
           </tbody>
         </table>
       </div>
+      <ScrollHint />
     </div>
   );
 }
