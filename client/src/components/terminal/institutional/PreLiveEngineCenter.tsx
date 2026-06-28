@@ -168,13 +168,6 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-function ScrollHint() {
-  return (
-    <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-muted)", marginTop: 5, letterSpacing: "0.05em", userSelect: "none", pointerEvents: "none" }}>
-      ← swipe to scroll →
-    </div>
-  );
-}
 
 function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPosition[]; nowMs: number; markPrice: number }) {
   if (positions.length === 0) return <EmptyState label="No open positions" />;
@@ -217,7 +210,6 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
           </tbody>
         </table>
       </div>
-      <ScrollHint />
     </>
   );
 }
@@ -279,7 +271,6 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
           </tbody>
         </table>
       </div>
-      <ScrollHint />
     </div>
   );
 }
@@ -410,7 +401,6 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
           </tbody>
         </table>
       </div>
-      <ScrollHint />
     </div>
   );
 }
