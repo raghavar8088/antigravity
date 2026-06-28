@@ -1,1 +1,1 @@
-{"client-components":{"communities":[0,5,6],"files":1,"symbols":27,"top_files":[{"file":"client/src/components/terminal/institutional/PreLiveEngineCenter.tsx","symbols":27}]},"engine-positions":{"communities":[1,2,3,4,7,8],"files":1,"symbols":32,"top_files":[{"file":"engine/internal/positions/manager.go","symbols":32}]}}
+{"client-components":{"communities":[0,1,2],"files":1,"symbols":27,"top_files":[{"file":"client/src/components/terminal/institutional/PreLiveEngineCenter.tsx","symbols":27}]}}

@@ -172,7 +172,7 @@ function OpenPositionsTable({ positions, nowMs, markPrice }: { positions: OpenPo
   if (positions.length === 0) return <EmptyState label="No open positions" />;
   const hasLivePrice = Number.isFinite(markPrice) && markPrice > 0;
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
       <table style={tableStyle}>
         <thead>
           <tr>
@@ -226,7 +226,7 @@ function ClosedTradesTable({ trades, nowMs }: { trades: ClosedTrade[]; nowMs: nu
           </button>
         )}
       </div>
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -356,18 +356,18 @@ function PreLiveDailyPnL({ trades, balance }: { trades: ClosedTrade[]; balance: 
   };
 
   if (rows.length === 0) return (
-    <div className="mt-6" style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 28px" }}>
+    <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 22px" }}>
       <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 8 }}>Daily PnL</div>
       <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No closed trades yet — daily breakdown will appear here once trades close.</div>
     </div>
   );
 
   return (
-    <div className="mt-6" style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "24px 28px" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 16 }}>
+    <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 12, padding: "20px 22px" }}>
+      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)", marginBottom: 14 }}>
         Daily PnL <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-tertiary)", marginLeft: 8 }}>{rows.length} day{rows.length !== 1 ? "s" : ""} traded · pre-live engine only</span>
       </div>
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: "scroll", overflowY: "visible", paddingBottom: 4 }}>
         <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 13, minWidth: 700 }}>
           <thead>
             <tr>
@@ -617,12 +617,12 @@ export function PreLiveEngineCenter() {
   );
 
   return (
-    <div className="google-page">
+    <div className="google-page" style={{ gap: 16 }}>
       <PageHeader title="Pre-Live Trade Engine" subtitle="100 Backtested-Qualified Strategies — Real Broker, No Limits" />
       {summaryStrip}
-      <div className="icc-trade-engine-grid" style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 18, minHeight: 0, marginTop: 18 }}>
-        <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{leftPanel}</div>
-        <div style={{ display: "grid", alignContent: "start", gap: 18, minHeight: 0 }}>{rightPanel}</div>
+      <div className="icc-trade-engine-grid" style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, minHeight: 0 }}>
+        <div style={{ display: "grid", alignContent: "start", gap: 16, minHeight: 0 }}>{leftPanel}</div>
+        <div style={{ display: "grid", alignContent: "start", gap: 16, minHeight: 0 }}>{rightPanel}</div>
       </div>
       <PreLiveDailyPnL trades={trades} balance={initialBalance} />
     </div>
