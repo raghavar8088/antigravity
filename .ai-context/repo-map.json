@@ -1,1 +1,1 @@
-{"client-components":{"communities":[0,2,4],"files":1,"symbols":27,"top_files":[{"file":"client/src/components/terminal/institutional/PreLiveEngineCenter.tsx","symbols":27}]},"engine-cmd":{"communities":[1,3],"files":1,"symbols":10,"top_files":[{"file":"engine/cmd/pre_live/main.go","symbols":10}]}}
+{"client-components":{"communities":[0],"files":1,"symbols":5,"top_files":[{"file":"client/src/components/ui/M3AppShell.tsx","symbols":5}]}}

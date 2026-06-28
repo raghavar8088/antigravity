@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 import { CommandPaletteProvider, CommandPaletteTrigger } from "@/components/ui/CommandPalette";
 import { useThemeToggle } from "@/components/ui/ThemeProvider";
@@ -134,6 +134,7 @@ export function M3AppShell({
                 <NavIcon name={theme === "dark" ? "light" : "dark"} />
               </button>
               {pageActions}
+              <MobileViewButton />
               <KillSwitchIndicator />
               <TradeEngineResetButton />
               <LogoutButton />
@@ -146,6 +147,36 @@ export function M3AppShell({
         </div>
       </div>
     </CommandPaletteProvider>
+  );
+}
+
+const mobileButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 12px",
+  borderRadius: 20,
+  border: "1px solid var(--border)",
+  background: "var(--surface-2)",
+  color: "var(--text-secondary)",
+  fontSize: 12,
+  fontWeight: 600,
+  letterSpacing: "0.03em",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  transition: "background 0.15s, color 0.15s",
+};
+
+function MobileViewButton() {
+  return (
+    <Link href="/mobile" target="_blank" rel="noopener noreferrer" style={mobileButtonStyle} title="Open Mobile Emergency View">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+        <line x1="12" y1="18" x2="12" y2="18.01" strokeWidth="3" />
+      </svg>
+      Mobile
+    </Link>
   );
 }
 
