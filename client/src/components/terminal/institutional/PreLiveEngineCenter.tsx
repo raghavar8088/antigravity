@@ -542,14 +542,20 @@ export function PreLiveEngineCenter() {
           type="button"
           onClick={() => void resetEngine()}
           disabled={resetting}
+          title="Close all positions, clear all trades and equity — cannot be undone"
           style={{
-            display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px",
-            borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)",
-            color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, cursor: resetting ? "not-allowed" : "pointer",
-            opacity: resetting ? 0.6 : 1, whiteSpace: "nowrap",
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 16px",
+            borderRadius: 8,
+            border: "1px solid var(--red, #ef4444)",
+            background: resetting ? "color-mix(in srgb, var(--red,#ef4444) 8%, transparent)" : "color-mix(in srgb, var(--red,#ef4444) 12%, transparent)",
+            color: "var(--red, #ef4444)", fontSize: 12, fontWeight: 700,
+            cursor: resetting ? "not-allowed" : "pointer",
+            opacity: resetting ? 0.55 : 1, whiteSpace: "nowrap",
+            letterSpacing: "0.02em", transition: "opacity 0.15s",
           }}
         >
-          {resetting ? "Resetting…" : "↺ Reset Engine"}
+          <span style={{ fontSize: 14, lineHeight: 1 }}>{resetting ? "⟳" : "↺"}</span>
+          {resetting ? "Resetting…" : "Reset Engine"}
         </button>
       </div>
 

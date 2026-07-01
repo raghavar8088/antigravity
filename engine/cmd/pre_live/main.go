@@ -347,7 +347,9 @@ func main() {
 	})
 
 	// POST /api/admin/reset — wipe all trade history and restore starting balance.
-	// Forces all open positions closed at the last known price first.
+	// Forces all open positions closed at the last known price first, then deletes
+	// all MongoDB documents for the pre-live account key so data doesn't reappear
+	// on the next page refresh or engine restart.
 	handle("/api/admin/reset", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -360,9 +362,14 @@ func main() {
 		}
 		posMgr.CloseAllPositions(lastPrice)
 		journal.Reset()
+		regimePnL = newRegimePnLTracker() // reset in-memory regime PnL tracker
 		if err := exec.ResetAccount(); err != nil {
 			http.Error(w, "reset failed: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+		// Wipe MongoDB so trades/positions don't come back on next load.
+		if wipeErr := mongoBundle.WipePreLiveData(r.Context()); wipeErr != nil {
+			log.Printf("[PRE-LIVE RESET] mongo wipe warn: %v", wipeErr)
 		}
 		log.Printf("[PRE-LIVE RESET] account reset at price $%.2f — fresh start", lastPrice)
 		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck

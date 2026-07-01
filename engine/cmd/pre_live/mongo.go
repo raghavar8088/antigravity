@@ -21,10 +21,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -71,6 +73,43 @@ type preLiveMongoBundle struct {
 // IsConnected returns true when the MongoDB manager is live.
 func (b *preLiveMongoBundle) IsConnected() bool {
 	return b != nil && b.mgr != nil && b.mgr.IsConnected()
+}
+
+// WipePreLiveData deletes every document belonging to the pre-live account key
+// from all persistence collections. Called during /api/admin/reset so the data
+// does not come back on the next page refresh or engine restart.
+// Safe to call when MongoDB is unavailable (no-op, returns nil).
+func (b *preLiveMongoBundle) WipePreLiveData(ctx context.Context) error {
+	if b == nil || b.mgr == nil || !b.mgr.IsConnected() {
+		return nil
+	}
+	filter := bson.M{"account_key": preLiveAccountKey}
+	collections := []string{
+		"paper_trades",
+		"paper_positions",
+		"paper_orders",
+		"paper_state",
+		"equity_curve",
+		"daily_pnl_history",
+		"strategy_scores",
+		"strategy_health",
+		"portfolio_metrics",
+	}
+	wipeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var errs []string
+	for _, col := range collections {
+		res, err := b.mgr.Col(col).DeleteMany(wipeCtx, filter)
+		if err != nil {
+			errs = append(errs, col+": "+err.Error())
+			continue
+		}
+		log.Printf("[PRE-LIVE RESET] wiped %d docs from %s", res.DeletedCount, col)
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("mongo wipe partial errors: %s", strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 // initPreLiveMongo connects to MongoDB, runs crash recovery, wires persistence
