@@ -2,6 +2,7 @@ package trading
 
 import (
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -47,6 +48,10 @@ type SignalAggregator struct {
 	strategyCooldowns map[string]time.Duration // strategyName -> cooldown override
 	lastSignal        map[string]time.Time     // strategyName -> last signal time
 
+	// maxPerCycle caps the number of signals passed to the OMS per evaluation
+	// cycle, selected by highest confidence. 0 = unlimited.
+	maxPerCycle int
+
 	// Stats tracking for logging
 	totalSignals    int64
 	filteredSignals int64
@@ -60,6 +65,14 @@ func NewSignalAggregator(defaultSeconds int) *SignalAggregator {
 		lastSignal:        make(map[string]time.Time),
 		flowMetrics:       NewSignalFlowMetrics(),
 	}
+}
+
+// SetMaxPerCycle caps the number of signals approved per evaluation cycle to n,
+// ranked by descending confidence. 0 (default) means unlimited.
+func (a *SignalAggregator) SetMaxPerCycle(n int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.maxPerCycle = n
 }
 
 // SetStrategyCooldown registers a per-strategy cooldown override.
@@ -108,6 +121,15 @@ func (a *SignalAggregator) FilterSignals(rawSignals []AggregatedSignal) []Aggreg
 
 		log.Printf("[AGGREGATOR] APPROVED: %s → %s %.4f %s",
 			sig.StrategyName, sig.Signal.Action, sig.Signal.TargetSize, sig.Signal.Symbol)
+	}
+
+	// Cap to maxPerCycle signals ranked by highest confidence.
+	if a.maxPerCycle > 0 && len(approved) > a.maxPerCycle {
+		sort.Slice(approved, func(i, j int) bool {
+			return approved[i].Signal.Confidence > approved[j].Signal.Confidence
+		})
+		a.filteredSignals += int64(len(approved) - a.maxPerCycle)
+		approved = approved[:a.maxPerCycle]
 	}
 
 	return approved

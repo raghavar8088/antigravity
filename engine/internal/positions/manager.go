@@ -64,6 +64,12 @@ type ManagerConfig struct {
 	ReverseTargets     bool    // Swap incoming TP and SL distances for all strategies
 	MaxPositionAgeMins float64 // Auto-expire positions older than this (0 = disabled)
 	Leverage           float64 // Leverage multiplier applied to PnL (1.0 = no leverage, 10.0 = 10x)
+	// FeeRatePct is the one-way taker fee as a decimal (e.g. 0.0005 for 0.05%).
+	// Applied twice per round-trip (open + close). 0 = no fee deduction.
+	FeeRatePct float64
+	// OnClose is called synchronously after each position close, outside the hot path.
+	// Signature: func(pos, reason, exitPrice, grossPnL). Optional; nil is safe.
+	OnClose func(pos *Position, reason CloseReason, exitPrice, pnl float64)
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -276,7 +282,14 @@ func (m *Manager) calculatePnL(pos *Position, exitPrice float64) float64 {
 	} else {
 		raw = (pos.EntryPrice - exitPrice) * pos.Size
 	}
-	return raw * m.config.Leverage
+	grossPnL := raw * m.config.Leverage
+	if m.config.FeeRatePct > 0 {
+		entryNotional := pos.EntryPrice * pos.Size
+		exitNotional := exitPrice * pos.Size
+		fees := (entryNotional + exitNotional) * m.config.FeeRatePct
+		grossPnL -= fees
+	}
+	return grossPnL
 }
 
 func (m *Manager) emitClose(pos *Position, reason CloseReason, exitPrice, pnl float64) {
@@ -286,6 +299,17 @@ func (m *Manager) emitClose(pos *Position, reason CloseReason, exitPrice, pnl fl
 		ExitPrice: exitPrice,
 		PnL:       pnl,
 	})
+	if m.config.OnClose != nil {
+		m.config.OnClose(pos, reason, exitPrice, pnl)
+	}
+}
+
+// SetOnCloseCallback sets or replaces the OnClose hook after construction.
+// Safe to call at any time; the hook is invoked on every close event.
+func (m *Manager) SetOnCloseCallback(fn func(pos *Position, reason CloseReason, exitPrice, pnl float64)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.config.OnClose = fn
 }
 
 func (m *Manager) emitPartialTakeProfit(pos *Position, partialSize, exitPrice, pnl float64) {

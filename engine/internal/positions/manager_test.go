@@ -215,8 +215,8 @@ func TestCheckExpiredPositionsClosesStalePosition(t *testing.T) {
 
 	select {
 	case event := <-mgr.CloseEvents():
-		if event.Reason != ReasonManual {
-			t.Fatalf("expected MANUAL close reason for expiry, got %s", event.Reason)
+		if event.Reason != ReasonExpired {
+			t.Fatalf("expected EXPIRED close reason for expiry, got %s", event.Reason)
 		}
 	default:
 		t.Fatal("expected a close event for the expired position")
@@ -239,6 +239,59 @@ func TestCheckExpiredPositionsSkipsYoungPosition(t *testing.T) {
 
 	if len(mgr.GetOpenPositions()) != 1 {
 		t.Fatal("expected young position to survive expiry check")
+	}
+}
+
+func TestCalculatePnLWithFees(t *testing.T) {
+	// LONG 0.001 BTC @ $60,000 — flat exit (price unchanged).
+	// With FeeRatePct=0.0005: entry notional=$60, exit notional=$60.
+	// Round-trip fee = ($60 + $60) × 0.0005 = $0.06. No price move → PnL = −$0.06.
+	baseConfig := ManagerConfig{
+		MinTakeProfitPct:   0.01,
+		MaxPerStrategy:     99,
+		MaxPositionAgeMins: 60,
+		Leverage:           1.0,
+	}
+	sig := strategy.Signal{
+		Symbol:        "BTC-USD",
+		Action:        strategy.ActionBuy,
+		TargetSize:    0.001,
+		StopLossPct:   5,
+		TakeProfitPct: 5,
+	}
+
+	// --- with fees: flat exit should be a loss of $0.06 ---
+	cfg := baseConfig
+	cfg.FeeRatePct = 0.0005
+	mgr := NewManagerWithConfig(cfg)
+	pos := mustOpen(t, mgr, sig, 60000, "FeeTest")
+	// Force-close at same price (no price move).
+	// Use an internal helper: close at 60000 via checkLongPosition.
+	// Patch TakeProfit to be exactly the current price so the TP branch fires.
+	mgr.mu.Lock()
+	mgr.positions[pos.ID].TakeProfit = 60000
+	mgr.mu.Unlock()
+	mgr.CheckStopLossAndTakeProfit(60000)
+
+	ev := <-mgr.CloseEvents()
+	want := -0.06
+	if math.Abs(ev.PnL-want) > 1e-6 {
+		t.Fatalf("with fees: expected PnL %.6f, got %.6f", want, ev.PnL)
+	}
+
+	// --- without fees: flat exit should be exactly zero ---
+	cfg2 := baseConfig
+	cfg2.FeeRatePct = 0
+	mgr2 := NewManagerWithConfig(cfg2)
+	pos2 := mustOpen(t, mgr2, sig, 60000, "NoFeeTest")
+	mgr2.mu.Lock()
+	mgr2.positions[pos2.ID].TakeProfit = 60000
+	mgr2.mu.Unlock()
+	mgr2.CheckStopLossAndTakeProfit(60000)
+
+	ev2 := <-mgr2.CloseEvents()
+	if math.Abs(ev2.PnL) > 1e-9 {
+		t.Fatalf("without fees: expected PnL 0, got %.9f", ev2.PnL)
 	}
 }
 

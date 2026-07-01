@@ -908,6 +908,26 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 	var rawAgg []AggregatedSignal
 	rejected := 0
 	for _, entry := range o.scalerBundle.strategies {
+		// ── Regime pre-filter ────────────────────────────────────────────────
+		// Skip strategies whose declared valid regimes don't include the current
+		// regime. Saves CPU and prevents directional strategies from generating
+		// false signals in adverse regimes (e.g. trending-only strats in RANGING).
+		// Entries with empty Regimes slice pass through (unconditional).
+		if len(entry.Regimes) > 0 {
+			regimeMatch := false
+			for _, r := range entry.Regimes {
+				if r == scalersRegime {
+					regimeMatch = true
+					break
+				}
+			}
+			if !regimeMatch {
+				observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "regime_mismatch").Inc()
+				continue
+			}
+		}
+		// ── End regime pre-filter ────────────────────────────────────────────
+
 		sig := entry.Strategy.Evaluate(mctx)
 		observability.ScalersSignalsEvaluated.WithLabelValues(entry.Name).Inc() // A
 		if sig.Direction == scalers.DirectionNone {

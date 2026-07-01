@@ -31,7 +31,7 @@ var DemotionCriteria = struct {
 	MaxWinRate   float64
 }{
 	MinTrades:  30,
-	MaxWinRate: 0.35,
+	MaxWinRate: 0.40, // raised from 0.35 — 41.1% live WR sat in dead zone above old floor
 }
 
 // EvaluatePromotion checks whether a StrategyResult meets promotion criteria

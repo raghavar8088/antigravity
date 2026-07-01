@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"antigravity-engine/internal/aiscoring"
+	"antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/derivatives"
 	"antigravity-engine/internal/execution"
@@ -75,6 +76,16 @@ func main() {
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	loadDotEnv()
+
+	// RC6: Raise signal-level TP floor so incoming signals already target ≥0.50%.
+	// MIN_SIGNAL_TAKE_PROFIT_PCT is read by trading.RefreshThresholdsFromRegistry
+	// via ThresholdRegistry; setting it before NewOrchestrator ensures it takes
+	// effect on the first evaluation cycle. The ManagerConfig.MinTakeProfitPct
+	// below provides the same floor at position-open time as a second guard.
+	// Note: the default SL (0.18%) is a constant in loop.go — not env-configurable.
+	if os.Getenv("MIN_SIGNAL_TAKE_PROFIT_PCT") == "" {
+		os.Setenv("MIN_SIGNAL_TAKE_PROFIT_PCT", "0.50") //nolint:errcheck  wider TP floor: 0.15→0.50
+	}
 
 	// Set pre-live account key before any paperpersist calls so MongoDB data is
 	// segregated from the main paper desk (account_key="pre_live_engine").
@@ -124,15 +135,17 @@ func main() {
 		TrailingStopPct:    0.18,
 		BreakEvenThreshold: 0.00,
 		PartialTPRatio:     1.0,
-		MinTakeProfitPct:   0.30,
+		MinTakeProfitPct:   0.50,  // RC6: raised from 0.30 — widens R:R vs fee-adjusted breakeven
 		MaxPerStrategy:     2,
 		ReverseTargets:     false,
-		MaxPositionAgeMins: 45,
+		MaxPositionAgeMins: 20,    // RC4: reduced from 45 — shorter expiry limits drift losses in ranging
 		Leverage:           preLiveLeverage(),
+		FeeRatePct:         0.00050, // RC1: Binance futures taker 0.05% per leg
 	})
 
-	// Zero cooldown — all 100 strategies fire in parallel every tick.
-	agg := trading.NewSignalAggregator(0)
+	// RC5: 30s per-strategy cooldown prevents herd piling on same false breakout.
+	agg := trading.NewSignalAggregator(30)
+	agg.SetMaxPerCycle(5) // RC5: at most 5 highest-confidence signals per eval cycle
 
 	journal := execution.NewTradeJournal(10000)
 	candleAgg := marketdata.NewCandleAggregator()
@@ -182,6 +195,38 @@ func main() {
 		log.Fatalf("[PRE-LIVE] LoopDeps invalid: %v", err)
 	}
 	orch.SetDeps(loopDeps)
+
+	// ── RC2: Auto-demotion ticker (DemotionCriteria.MaxWinRate now 0.40) ─────
+	go func() {
+		tick := time.NewTicker(15 * time.Minute)
+		defer tick.Stop()
+		for {
+			select {
+			case <-tick.C:
+				backtest.ApplyAutoDemotion()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// ── Task 7: Regime-aware PnL tracker ────────────────────────────────────
+	regimePnL := newRegimePnLTracker()
+
+	// RC4 + Task 7: Wire OnClose callback — captures regime at close time.
+	// Safe: o.mu is not held when CheckStopLossAndTakeProfit/CheckExpiredPositions
+	// call emitClose, so orch.CurrentRegime() (which takes o.mu.RLock) is deadlock-free.
+	posMgr.SetOnCloseCallback(func(pos *positions.Position, reason positions.CloseReason, exitPrice, pnl float64) {
+		regime := orch.CurrentRegime()
+		feeDrag := 0.0
+		if 0.00050 > 0 {
+			feeDrag = (pos.EntryPrice + exitPrice) * pos.Size * 0.00050
+		}
+		regimePnL.record(regime, reason, pnl, feeDrag)
+		if reason == positions.ReasonExpired {
+			log.Printf("[EXPIRED-REGIME] strategy=%s pnl=%.4f regime=%s", pos.StrategyName, pnl, regime)
+		}
+	})
 
 	// ── 7. Binance kline feed for 15m/1h candles ─────────────────────────────
 	klineClient := marketdata.NewBinanceKlineClient([]string{"15m", "1h"})
@@ -335,6 +380,14 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]interface{}{"regime": reg}) //nolint:errcheck
 	})
 
+	handle("/api/regime-pnl", func(w http.ResponseWriter, r *http.Request) {
+		current := orch.CurrentRegime()
+		if current == "" {
+			current = "UNKNOWN"
+		}
+		json.NewEncoder(w).Encode(regimePnL.snapshot(current)) //nolint:errcheck
+	})
+
 	handle("/api/strategies", func(w http.ResponseWriter, r *http.Request) {
 		rows := make([]map[string]interface{}, 0, len(qualified))
 		for _, e := range qualified {
@@ -451,6 +504,85 @@ func loadDotEnv() {
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val) //nolint:errcheck
 		}
+	}
+}
+
+// ── Task 7: Regime-aware PnL tracker ─────────────────────────────────────────
+
+type regimeBucket struct {
+	Trades  int     `json:"trades"`
+	Wins    int     `json:"wins"`
+	Losses  int     `json:"losses"`
+	WinRate float64 `json:"win_rate"`
+	NetPnL  float64 `json:"net_pnl"`
+}
+
+type regimePnLSnapshot struct {
+	CurrentRegime string                   `json:"current_regime"`
+	Breakdown     map[string]*regimeBucket `json:"breakdown"`
+	TotalTrades   int                      `json:"total_trades"`
+	TotalPnL      float64                  `json:"total_pnl"`
+	ExpiredPnL    float64                  `json:"expired_pnl"`
+	FeeDrag       float64                  `json:"fee_drag"`
+}
+
+type regimePnLTracker struct {
+	mu         sync.Mutex
+	buckets    map[string]*regimeBucket
+	expiredPnL float64
+	feeDrag    float64
+}
+
+func newRegimePnLTracker() *regimePnLTracker {
+	return &regimePnLTracker{buckets: make(map[string]*regimeBucket)}
+}
+
+func (r *regimePnLTracker) record(reg string, reason positions.CloseReason, pnl, feeDrag float64) {
+	if reg == "" {
+		reg = "UNKNOWN"
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	b, ok := r.buckets[reg]
+	if !ok {
+		b = &regimeBucket{}
+		r.buckets[reg] = b
+	}
+	b.Trades++
+	b.NetPnL += pnl
+	if pnl > 0 {
+		b.Wins++
+	} else {
+		b.Losses++
+	}
+	if b.Trades > 0 {
+		b.WinRate = float64(b.Wins) / float64(b.Trades)
+	}
+	if reason == positions.ReasonExpired {
+		r.expiredPnL += pnl
+	}
+	r.feeDrag += feeDrag
+}
+
+func (r *regimePnLTracker) snapshot(currentRegime string) regimePnLSnapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	total := 0
+	totalPnL := 0.0
+	bd := make(map[string]*regimeBucket, len(r.buckets))
+	for k, v := range r.buckets {
+		cp := *v
+		bd[k] = &cp
+		total += v.Trades
+		totalPnL += v.NetPnL
+	}
+	return regimePnLSnapshot{
+		CurrentRegime: currentRegime,
+		Breakdown:     bd,
+		TotalTrades:   total,
+		TotalPnL:      totalPnL,
+		ExpiredPnL:    r.expiredPnL,
+		FeeDrag:       r.feeDrag,
 	}
 }
 
