@@ -131,6 +131,12 @@ func main() {
 	// ── 4. Core components ───────────────────────────────────────────────────
 	tracker := risk.NewStrategyTracker(names, cats, tfs, preLiveBalance())
 	exec := execution.NewPaperClient(preLiveBalance())
+
+	// Seed the v2 drawdown high-water mark from the actual current equity so the
+	// 10% drawdown circuit breaker measures from today's starting balance, not from
+	// the original configured capital. Without this, any cumulative loss that already
+	// exceeded 10% of initial capital would permanently halt all trading on restart.
+	riskEngine.V2().ResetHighWatermark(exec.GetEquityUSD())
 	posMgr := positions.NewManagerWithConfig(positions.ManagerConfig{
 		TrailingStopPct:    0.18,
 		BreakEvenThreshold: 0.00,

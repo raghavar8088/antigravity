@@ -285,6 +285,21 @@ func (e *Engine) SyncEquity(equityUSD float64) {
 	}
 }
 
+// ResetHighWatermark sets both the current equity and the drawdown high-water
+// mark to equityUSD. Call this once at startup (after loading actual account
+// balance from the paper executor) so the drawdown circuit breaker measures
+// from the current session's starting equity — not from the original initial
+// capital configured at engine construction time.
+func (e *Engine) ResetHighWatermark(equityUSD float64) {
+	if equityUSD <= 0 {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.portfolio.Account.EquityUSD = equityUSD
+	e.portfolio.Account.HighWatermarkUSD = equityUSD
+}
+
 func (e *Engine) AddPosition(pos Position) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -131,7 +131,8 @@ func (r *EquityRecorder) recordEquitySnap(ctx context.Context) error {
 	pt.TS = time.Now().UTC()
 
 	doc := baseDoc(pt.TS)
-	doc["ts"] = pt.TS // TTL field — must match index key name exactly
+	doc["ts"] = pt.TS           // TTL index field
+	doc["timestamp"] = pt.TS   // unique index key: (account_key, timestamp)
 	doc["equity"] = pt.Equity
 	doc["balance"] = pt.Balance
 	doc["unrealized_pnl"] = pt.UnrealizedPnL
