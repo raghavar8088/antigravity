@@ -1317,6 +1317,12 @@ The content is organized as follows:
   strategy/scalpers/microstructure_family.go
   strategy/scalpers/pre_live_registry.go
   strategy/scalpers/registry.go
+  strategy/scalpers/research_registry.go
+  strategy/scalpers/research_strategies_a.go
+  strategy/scalpers/research_strategies_b.go
+  strategy/scalpers/research_strategies_c.go
+  strategy/scalpers/research_strategies_d.go
+  strategy/scalpers/research_strategies_e.go
   strategy/scalpers/rollout_phase.go
   strategy/scalpers/s_btc_equities_correlation_break.go
   strategy/scalpers/s_cme_gap_fill.go

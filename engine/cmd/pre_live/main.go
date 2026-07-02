@@ -1,4 +1,4 @@
-// Pre-Live Trade Engine — 100 Backtested-Qualified Strategies
+// Pre-Live Trade Engine — Backtested-Qualified Strategies
 //
 // Connects to real brokers (Coinbase price feed, Binance klines, Delta Exchange
 // for live order execution). Enforces ONLY the strategy-level SL/TP thresholds
@@ -29,6 +29,7 @@ import (
 
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/backtest"
+	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/derivatives"
 	"antigravity-engine/internal/execution"
@@ -71,21 +72,45 @@ func warmupCandles(orch *trading.Orchestrator) {
 
 func main() {
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║   PRE-LIVE TRADE ENGINE — 100 Qualified Strategies       ║")
-	fmt.Println("║   Real Broker · Real Money · No Position Limits          ║")
+	fmt.Println("║   PRE-LIVE TRADE ENGINE — Qualified Strategies           ║")
+	fmt.Println("║   Real Broker · Paper Money · Validated Whitelist Only   ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
 	loadDotEnv()
 
-	// RC6: Raise signal-level TP floor so incoming signals already target ≥0.50%.
-	// MIN_SIGNAL_TAKE_PROFIT_PCT is read by trading.RefreshThresholdsFromRegistry
-	// via ThresholdRegistry; setting it before NewOrchestrator ensures it takes
-	// effect on the first evaluation cycle. The ManagerConfig.MinTakeProfitPct
-	// below provides the same floor at position-open time as a second guard.
-	// Note: the default SL (0.18%) is a constant in loop.go — not env-configurable.
-	if os.Getenv("MIN_SIGNAL_TAKE_PROFIT_PCT") == "" {
-		os.Setenv("MIN_SIGNAL_TAKE_PROFIT_PCT", "0.50") //nolint:errcheck  wider TP floor: 0.15→0.50
+	// ── Threshold overrides: applied to the ThresholdRegistry BEFORE
+	// trading.init() runs its RefreshThresholdsFromRegistry call.
+	// Because Go package init() has already run by this point, we call
+	// trading.RefreshThresholdsFromRegistry() again after setting all keys
+	// so the package-level vars pick up the pre-live values.
+	//
+	// RC-5 fix: MIN_SIGNAL_TAKE_PROFIT_PCT — the env var approach is a no-op
+	// because loop.go's init() has already read the default 0.15 before main()
+	// runs. We set it directly in the ThresholdRegistry instead.
+	//
+	// RC-3 fix: SCALER_RR_MINIMUM raised to 2.5 so that at SL=0.25% the TP
+	// floor becomes 0.625%, making breakeven 40% instead of 63.6%.
+	//
+	// RC-2 fix: FIXED_TRADE_SIZE_BTC reduced to 0.001 BTC (~$100 notional at
+	// $100k BTC) so it fits within the $100 default starting balance.
+	reg := tconfig.Default()
+	if reg.GetWithDefault("MIN_SIGNAL_TAKE_PROFIT_PCT", 0.0) < 0.50 {
+		reg.Set("MIN_SIGNAL_TAKE_PROFIT_PCT", 0.50, "pre_live_rc5") //nolint:errcheck
 	}
+	if reg.GetWithDefault("SCALER_RR_MINIMUM", 0.0) < 2.5 {
+		reg.Set("SCALER_RR_MINIMUM", 2.5, "pre_live_rc3") //nolint:errcheck
+	}
+	if os.Getenv("FIXED_TRADE_SIZE_BTC") == "" {
+		reg.Set("FIXED_TRADE_SIZE_BTC", 0.001, "pre_live_rc2") //nolint:errcheck
+	}
+	// Re-read all thresholds now that the registry has the pre-live values.
+	// This overwrites the defaults set during package init().
+	trading.RefreshThresholdsFromRegistry()
+	log.Printf("[PRE-LIVE] Thresholds applied: MIN_SIGNAL_TAKE_PROFIT_PCT=%.2f%% SCALER_RR_MINIMUM=%.1f FIXED_TRADE_SIZE_BTC=%.4f",
+		reg.GetWithDefault("MIN_SIGNAL_TAKE_PROFIT_PCT", 0.50),
+		reg.GetWithDefault("SCALER_RR_MINIMUM", 2.5),
+		reg.GetWithDefault("FIXED_TRADE_SIZE_BTC", 0.001),
+	)
 
 	// Set pre-live account key before any paperpersist calls so MongoDB data is
 	// segregated from the main paper desk (account_key="pre_live_engine").
@@ -107,9 +132,16 @@ func main() {
 		}
 	}()
 
-	// ── 2. Load 100 qualified strategies (no shadow overlay, no winners filter) ──
+	// ── 2. Load qualified strategies (no shadow overlay, no winners filter) ──
 	qualified := strategy.BuildPreLiveStrategies()
 	log.Printf("[PRE-LIVE] Loaded %d qualified strategies", len(qualified))
+	// RC-4 assertion: warn if the whitelist has more names than strategies found
+	// in the source pool. Silent drops here indicate a naming mismatch between
+	// the whitelist and the builder functions (the dropped names never trade).
+	if wl := strategy.PreLiveWhitelistSize(); wl > len(qualified) {
+		log.Printf("[PRE-LIVE] WARNING: whitelist has %d entries but only %d strategies found in source pool — %d names are unmatched and will never trade",
+			wl, len(qualified), wl-len(qualified))
+	}
 
 	names := make([]string, len(qualified))
 	cats := make([]string, len(qualified))
@@ -141,17 +173,39 @@ func main() {
 		TrailingStopPct:    0.18,
 		BreakEvenThreshold: 0.00,
 		PartialTPRatio:     1.0,
-		MinTakeProfitPct:   0.50,  // RC6: raised from 0.30 — widens R:R vs fee-adjusted breakeven
+		MinTakeProfitPct:   0.625, // RC-3: raised from 0.50 to match SCALER_RR_MINIMUM=2.5 × SL_floor(0.25%)
 		MaxPerStrategy:     2,
 		ReverseTargets:     false,
-		MaxPositionAgeMins: 20,    // RC4: reduced from 45 — shorter expiry limits drift losses in ranging
+		// RC-13 fix: raised from 20 to 90 minutes.
+		// The old 20-minute hard expiry was cutting 1h-timeframe strategies
+		// before they reached their TP, locking in guaranteed fee-drag losses
+		// (every EXPIRED exit costs 0.10% in fees with zero price movement).
+		// 90 minutes allows up to three 15m evaluation cycles for 15m strategies
+		// and gives 1h strategies one full bar to play out.
+		MaxPositionAgeMins: 90,
 		Leverage:           preLiveLeverage(),
-		FeeRatePct:         0.00050, // RC1: Binance futures taker 0.05% per leg
+		FeeRatePct:         0.00050, // Binance futures taker 0.05% per leg
 	})
 
-	// RC5: 30s per-strategy cooldown prevents herd piling on same false breakout.
-	agg := trading.NewSignalAggregator(30)
-	agg.SetMaxPerCycle(5) // RC5: at most 5 highest-confidence signals per eval cycle
+	// RC-8 fix: Use per-strategy timeframe-based cooldowns so 15m signals get
+	// the 5-minute cooldown that CooldownForTimeframe("15m") prescribes, rather
+	// than the 30-second default. The constructor default is only the fallback
+	// for strategies where SetStrategyCooldown is not called.
+	agg := trading.NewSignalAggregator(300) // 5-minute default (matches 15m timeframe floor)
+	for _, e := range qualified {
+		cd := trading.CooldownForTimeframe(e.Timeframe)
+		agg.SetStrategyCooldown(e.Strategy.Name(), cd)
+	}
+
+	// RC-7 fix: raise cap from 5 to 20 (≈10% of 42 validated strategies, 2026-07-02 rebuild).
+	// 5 was too low: correlated strategies always claimed all 5 slots, destroying
+	// diversification. 20 allows more signal variety while still preventing floods.
+	maxPerCycle := 20
+	if n := len(qualified); n < 20 {
+		maxPerCycle = n
+	}
+	agg.SetMaxPerCycle(maxPerCycle)
+	log.Printf("[PRE-LIVE] Aggregator: maxPerCycle=%d per-strategy cooldowns wired for %d strategies", maxPerCycle, len(qualified))
 
 	journal := execution.NewTradeJournal(10000)
 	candleAgg := marketdata.NewCandleAggregator()
@@ -479,12 +533,17 @@ func preLiveLeverage() float64 {
 func preLiveBalance() float64 {
 	v := os.Getenv("PRE_LIVE_INITIAL_BALANCE_USD")
 	if v == "" {
-		return 100
+		// RC-2 fix: raised default from $100 to $10,000.
+		// At FIXED_TRADE_SIZE_BTC=0.001 (~$100 notional) the round-trip fee is
+		// ~$0.10, which is 0.001% of $10,000 — a viable fee-to-balance ratio.
+		// The old $100 default with 0.1 BTC trades caused every BUY to fail
+		// with INSUFFICIENT FUNDS before the first position could open.
+		return 10000
 	}
 	var f float64
 	fmt.Sscanf(v, "%f", &f)
 	if f <= 0 {
-		return 100
+		return 10000
 	}
 	return f
 }
