@@ -28,7 +28,13 @@ func FilterWinnersOnly(entries []RegistryEntry) []RegistryEntry {
 	return entries
 }
 
-// BuildPreLiveStrategies returns the 100 backtested-qualified strategies for the
+// PreLiveWhitelistSize returns the number of names in the pre-live whitelist.
+// Used at startup to detect silent strategy-name mismatches.
+func PreLiveWhitelistSize() int {
+	return scalpers.PreLiveWhitelistSize()
+}
+
+// BuildPreLiveStrategies returns the backtested-qualified strategies for the
 // Pre-Live Trade Engine as top-level RegistryEntry values.
 func BuildPreLiveStrategies() []RegistryEntry {
 	raw := scalpers.BuildPreLiveStrategies()
