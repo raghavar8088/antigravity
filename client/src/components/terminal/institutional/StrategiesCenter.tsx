@@ -121,9 +121,9 @@ export function StrategiesCenter() {
     <div className="m3-page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-emerald-500">BTC Scalper Engine</div>
-          <h1 className="text-xl font-bold text-zinc-100">Strategies</h1>
-          <p className="mt-1 max-w-2xl text-xs text-zinc-500">
+          <div className="text-[10px] uppercase tracking-widest text-emerald-600">BTC Scalper Engine</div>
+          <h1 className="text-xl font-bold text-[var(--text-primary)]">Strategies</h1>
+          <p className="mt-1 max-w-2xl text-xs text-[var(--text-secondary)]">
             Live roster from the curated BTC scalper registry (S1-S29 + SMC expansion) — regime, evaluation cycle
             telemetry, per-strategy win rate, and last realized PnL, sourced directly from the Go trading engine.
           </p>
@@ -140,12 +140,12 @@ export function StrategiesCenter() {
               type="button"
               onClick={loadStats}
               disabled={loading}
-              className="rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-300 transition-colors hover:border-emerald-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] transition-colors hover:border-emerald-600 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Refreshing..." : "Refresh"}
             </button>
           </div>
-          {refreshedAt ? <span className="text-[9px] text-zinc-600">Updated {refreshedAt}</span> : null}
+          {refreshedAt ? <span className="text-[9px] text-[var(--text-muted)]">Updated {refreshedAt}</span> : null}
         </div>
       </div>
 
@@ -179,13 +179,13 @@ export function StrategiesCenter() {
         subtitle="Active strategies first, ranked by last realized PnL then trade count"
         actions={
           <div className="flex items-center gap-2">
-            <span className="text-[9px] uppercase tracking-wider text-zinc-600">{activeStrategies} active</span>
+            <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">{activeStrategies} active</span>
             {loading ? <span className="text-[9px] uppercase tracking-wider text-amber-500">refreshing</span> : null}
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search strategy"
-              className="w-44 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-[10px] text-zinc-300 outline-none transition-colors placeholder:text-zinc-700 focus:border-emerald-800"
+              className="w-44 rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1 text-[10px] text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-emerald-600"
             />
           </div>
         }
@@ -194,43 +194,45 @@ export function StrategiesCenter() {
           <TerminalNoData label={query ? "No matching strategies" : "No scalper strategies reported by engine"} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-xs">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
-                <tr className="border-b border-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-500">
-                  <th className="px-2 py-2">#</th>
-                  <th className="px-2 py-2">Strategy</th>
-                  <th className="px-2 py-2 text-right">Status</th>
-                  <th className="px-2 py-2 text-right">Trades</th>
-                  <th className="px-2 py-2 text-right">Wins</th>
-                  <th className="px-2 py-2 text-right">Win Rate</th>
-                  <th className="px-2 py-2 text-right">Last PnL</th>
+                <tr className="border-b border-[var(--border-subtle)] text-left text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
+                  <th className="px-3 py-2">#</th>
+                  <th className="px-3 py-2">Strategy</th>
+                  <th className="px-3 py-2 text-right">Status</th>
+                  <th className="px-3 py-2 text-right">Trades</th>
+                  <th className="px-3 py-2 text-right">Wins</th>
+                  <th className="px-3 py-2 text-right">Win Rate</th>
+                  <th className="px-3 py-2 text-right">Last PnL</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStrategies.map((strategy, index) => (
-                  <tr key={strategy.name} className="border-t border-zinc-900 transition-colors hover:bg-zinc-900/40">
-                    <td className="px-2 py-2 text-[10px] tabular-nums text-zinc-600">{index + 1}</td>
-                    <td className="px-2 py-2">
-                      <div className="font-semibold text-zinc-200">{strategy.name}</div>
-                      <div className="text-[10px] text-zinc-600">
+                  <tr key={strategy.name} className="border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--surface-hover,#f8fbff)]">
+                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--text-muted)]">{index + 1}</td>
+                    <td className="px-3 py-2.5">
+                      <div className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
+                        {strategy.name.replace(/_/g, " ")}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-muted)]">
                         {strategy.total_trades > 0 ? "Trading history" : "Probationary (no trades yet)"}
                       </div>
                     </td>
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-3 py-2.5 text-right">
                       <span
                         className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                          strategy.active ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800 text-zinc-500"
+                          strategy.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-600"
                         }`}
                       >
                         {strategy.active ? "Active" : "Demoted"}
                       </span>
                     </td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-300">{int(strategy.total_trades)}</td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-400">{int(strategy.wins)}</td>
-                    <td className={`px-2 py-2 text-right font-mono tabular-nums ${strategy.total_trades > 0 && strategy.win_rate >= 0.5 ? "text-emerald-400" : "text-zinc-400"}`}>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-primary)]">{int(strategy.total_trades)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-secondary)]">{int(strategy.wins)}</td>
+                    <td className={`px-3 py-2.5 text-right font-mono tabular-nums ${strategy.total_trades > 0 && strategy.win_rate >= 0.5 ? "font-semibold text-emerald-600" : "text-[var(--text-secondary)]"}`}>
                       {strategy.total_trades > 0 ? rate(strategy.win_rate) : "-"}
                     </td>
-                    <td className={`px-2 py-2 text-right font-mono font-semibold tabular-nums ${pnlClass(strategy.last_pnl)}`}>
+                    <td className={`px-3 py-2.5 text-right font-mono font-semibold tabular-nums ${strategy.last_pnl > 0 ? "text-emerald-600" : strategy.last_pnl < 0 ? "text-rose-600" : "text-[var(--text-secondary)]"}`}>
                       {usd(strategy.last_pnl, { signed: true, compact: true })}
                     </td>
                   </tr>
@@ -246,7 +248,7 @@ export function StrategiesCenter() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-xs">
               <thead>
-                <tr className="border-b border-zinc-800 text-left text-[9px] uppercase tracking-wider text-zinc-500">
+                <tr className="border-b border-[var(--border-subtle)] text-left text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
                   <th className="px-2 py-2">Strategy</th>
                   <th className="px-2 py-2">Side</th>
                   <th className="px-2 py-2 text-right">Confidence</th>
@@ -256,14 +258,14 @@ export function StrategiesCenter() {
               </thead>
               <tbody>
                 {stats.recent_signals.map((signal) => (
-                  <tr key={signal.id} className="border-t border-zinc-900">
-                    <td className="px-2 py-2 text-zinc-300">{signal.strategy}</td>
+                  <tr key={signal.id} className="border-t border-[var(--border-subtle)]">
+                    <td className="px-2 py-2 font-semibold text-[var(--text-primary)]">{signal.strategy.replace(/_/g, " ")}</td>
                     <td className="px-2 py-2">
-                      <span className={signal.side === "LONG" ? "text-emerald-400" : "text-rose-400"}>{signal.side}</span>
+                      <span className={signal.side === "LONG" ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"}>{signal.side}</span>
                     </td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-400">{rate(signal.confidence)}</td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-zinc-400">{usd(signal.price, { compact: true })}</td>
-                    <td className="px-2 py-2 text-right text-[10px] text-zinc-600">{relativeTime(signal.timestamp)}</td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">{rate(signal.confidence)}</td>
+                    <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">{usd(signal.price, { compact: true })}</td>
+                    <td className="px-2 py-2 text-right text-[10px] text-[var(--text-muted)]">{relativeTime(signal.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>
