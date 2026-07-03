@@ -1242,7 +1242,7 @@ export async function resetMockTradingState(accountKey: string): Promise<{
   analyticsDeleted: number;
   logsDeleted: number;
 }> {
-  const { trades, snapshots, analytics, logs, config, signals, regimes, scores, scoreHistory, equity, dailyPnl } = await collections();
+  const { trades, snapshots, analytics, logs, config, signals, regimes, scores, scoreHistory, equity, dailyPnl, paperPositions, paperTrades } = await collections();
   const [tradeRes, snapshotRes, analyticsRes, logRes] = await Promise.all([
     trades.deleteMany({ account_key: accountKey }),
     snapshots.deleteMany({ account_key: accountKey }),
@@ -1255,6 +1255,8 @@ export async function resetMockTradingState(accountKey: string): Promise<{
     scoreHistory.deleteMany({ account_key: accountKey }),
     equity.deleteMany({ account_key: accountKey }),
     dailyPnl.deleteMany({ account_key: accountKey }),
+    paperPositions.deleteMany({ account_key: accountKey }),
+    paperTrades.deleteMany({ account_key: accountKey }),
   ]);
   await logs.insertOne({
     account_key: accountKey,

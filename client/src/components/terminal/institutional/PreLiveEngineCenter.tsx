@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
-import { RegimeBadge } from "./MockStageTradingSuite";
+import { RegimeBadge, LeaderboardTable } from "./MockStageTradingSuite";
+import { rankStrategies, type RankableTrade } from "@/lib/ai/mockStrategyRankingEngine";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const POLL_MS = 5_000;

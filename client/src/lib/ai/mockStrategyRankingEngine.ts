@@ -5,9 +5,16 @@
  * Pure computation, no I/O or React.
  */
 
-import type { MockTrade } from "@/lib/trading/mockTradingEngine";
-
 export type RankClassification = "ACTIVE" | "WATCHLIST" | "DISABLED";
+
+/** Minimal trade shape needed to compute a leaderboard — MockTrade satisfies this structurally. */
+export interface RankableTrade {
+  strategyId: number;
+  strategyName: string;
+  status: "OPEN" | "CLOSED";
+  realizedPnl: number;
+  closedAt: number | null;
+}
 
 export interface StrategyRankRow {
   rank: number;
@@ -55,10 +62,10 @@ function classifyFromMetrics(
 }
 
 export function rankStrategies(args: {
-  trades: readonly MockTrade[];
+  trades: readonly RankableTrade[];
   topN?: number;
 }): RankStrategiesResult {
-  const byStrategy = new Map<number, MockTrade[]>();
+  const byStrategy = new Map<number, RankableTrade[]>();
 
   for (const t of args.trades) {
     const arr = byStrategy.get(t.strategyId) ?? [];

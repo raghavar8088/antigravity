@@ -835,7 +835,7 @@ function rankBadgeColor(rank: number) {
   return "var(--text-muted)";
 }
 
-function LeaderboardTable({ rows }: { rows: StrategyRankRow[] }) {
+export function LeaderboardTable({ rows }: { rows: StrategyRankRow[] }) {
   if (rows.length === 0) {
     return (
       <TerminalEmptyState
