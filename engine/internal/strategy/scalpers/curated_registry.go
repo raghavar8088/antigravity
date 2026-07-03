@@ -39,6 +39,52 @@ func AllPerformance() []Performance {
 	return out
 }
 
+// tradeEngineEnabled is the operator-selected whitelist for the main Trade
+// Engine. Only these strategies are registered; everything else is disabled.
+// Selected from the Strategy Leadership Board (composite score) on 2026-07-03.
+var tradeEngineEnabled = map[string]bool{
+	"Sweep_And_Reload_Pattern":           true,
+	"Volume_Profile_POC_Magnet":          true,
+	"Coppock_Curve_Momentum":             true,
+	"Historical_Vol_Percentile_Breakout": true,
+	"Ornstein_Uhlenbeck_Reversion":       true,
+	"Structural_Break_Detection":         true,
+	"Hidden_Liquidity_Detection":         true,
+	"DEMA_Pullback":                      true,
+	"Recurrence_Quantification_Signal":   true,
+	"ZLEMA_1h_Cross":                     true,
+	"Absorption_Pattern_Signal":          true,
+	"HMA_Slope_Shift":                    true,
+	"Bid_Ask_Spread_Regime":              true,
+	"Orderbook_Imbalance_Persistence":    true,
+	"Hull_MA_Scalp":                      true,
+	"Volatility_Squeeze_Entry":           true,
+	"CMF_BB_Touch":                       true,
+	"Fisher_Transform_Signal":            true,
+	"Options_Skew_Direction_Signal":      true,
+	"Morning_Evening_Star":               true,
+	"Funding_OI_Confirm":                 true,
+}
+
+// filterTradeEngineEnabled keeps only whitelisted strategies and logs any
+// whitelist names that matched nothing (catches renames/typos at startup).
+func filterTradeEngineEnabled(entries []RegistryEntry) []RegistryEntry {
+	seen := make(map[string]bool, len(tradeEngineEnabled))
+	out := make([]RegistryEntry, 0, len(tradeEngineEnabled))
+	for _, e := range entries {
+		if tradeEngineEnabled[e.Name] {
+			out = append(out, e)
+			seen[e.Name] = true
+		}
+	}
+	for name := range tradeEngineEnabled {
+		if !seen[name] {
+			log.Printf("[REGISTRY] WARNING: trade-engine whitelist name %q matched no registered strategy", name)
+		}
+	}
+	return out
+}
+
 // BuildCuratedScalpers returns the active set of scalpers, filtered by
 // FilterWinnersOnly. New strategies (no performance record yet) are always
 // included so they can accumulate their first 30 trades.
@@ -93,6 +139,8 @@ func BuildCuratedScalpers() []RegistryEntry {
 		}
 		all[i].Strategy = withShadowOverride(e.Strategy)
 	}
+
+	all = filterTradeEngineEnabled(all)
 
 	filtered := FilterWinnersOnly(all)
 	log.Printf("[REGISTRY] BuildCuratedScalpers returned %d strategies (pre-filter %d)", len(filtered), len(all))

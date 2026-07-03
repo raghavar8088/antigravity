@@ -1,1 +1,1 @@
-{}
+{"engine/internal/strategy/scalpers/s30_s79_registry_shadow_test.go::TestCuratedRegistryMatchesTradeEngineWhitelist()":["engine/internal/strategy/scalpers/curated_registry.go::BuildCuratedScalpers()"]}

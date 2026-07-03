@@ -1,1 +1,1 @@
-{}
+{"engine-strategy":{"communities":[0,1,2],"files":2,"symbols":10,"top_files":[{"file":"engine/internal/strategy/scalpers/curated_registry.go","symbols":8},{"file":"engine/internal/strategy/scalpers/s30_s79_registry_shadow_test.go","symbols":2}]}}
