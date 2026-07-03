@@ -508,6 +508,33 @@ export function PreLiveEngineCenter() {
   const winRatePct = winRate <= 1 ? winRate * 100 : winRate;
   const priceReady = Number.isFinite(live.price) && live.price > 0;
 
+  // Stable numeric id per strategy name, for the shared ranking engine (grouping key only).
+  const strategyIdOf = useCallback((name: string) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+    return h;
+  }, []);
+
+  const leaderboard = useMemo(() => {
+    const rankable: RankableTrade[] = [
+      ...openTrades.map((p) => ({
+        strategyId: strategyIdOf(p.strategyName),
+        strategyName: p.strategyName,
+        status: "OPEN" as const,
+        realizedPnl: 0,
+        closedAt: null,
+      })),
+      ...trades.map((t) => ({
+        strategyId: strategyIdOf(t.strategyName),
+        strategyName: t.strategyName,
+        status: "CLOSED" as const,
+        realizedPnl: t.netPnl ?? 0,
+        closedAt: toMs(t.exitTime),
+      })),
+    ];
+    return rankStrategies({ trades: rankable }).rows;
+  }, [openTrades, trades, strategyIdOf]);
+
   const summaryStrip = (
     <section aria-label="Pre-Live Engine summary" className="pre-live-scroll-table" style={{
       border: "1px solid var(--card-border, var(--border))",
@@ -602,6 +629,9 @@ export function PreLiveEngineCenter() {
     <>
       <TerminalCard title="Live Signals" subtitle="Pre-live feed · last 10 signals · 3s refresh">
         <LiveSignalsPanel scalers={scalers} />
+      </TerminalCard>
+      <TerminalCard title="Strategy Leadership Board" subtitle="Composite score · win rate · profit factor · net PnL">
+        <LeaderboardTable rows={leaderboard} />
       </TerminalCard>
       <TerminalCard title="Engine Info" subtitle="100 backtested-qualified strategies · real broker">
         <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
