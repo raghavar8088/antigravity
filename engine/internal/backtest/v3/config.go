@@ -1,6 +1,8 @@
 package v3
 
 import (
+	"time"
+
 	btExecution "antigravity-engine/internal/backtest/execution"
 )
 
@@ -27,6 +29,28 @@ type Config struct {
 
 	// Commission
 	CommissionTier VolumeTier // 30-day trading volume tier
+
+	// Spread — base spread in basis points fed into the fill model (default 1.5 bps)
+	SpreadBaseBps float64
+
+	// Trade frequency cap — max entries per strategy per calendar day (0 = unlimited)
+	MaxTradesPerDay int
+
+	// Capital floor — halt strategy when equity falls below this fraction of initial capital (0 = disabled)
+	CapitalFloorPct float64
+
+	// MaxHoldDuration caps how long a position can be held before forced exit.
+	// Default 0 means use the engine's built-in default (45 min for scalpers).
+	// Set to e.g. 7*24*time.Hour for swing-trade strategies.
+	MaxHoldDuration time.Duration
+
+	// OHLCVMode disables the vol-driven spread widening in the fill model.
+	// The RealizedVolPct computed from OHLCV O→H→L→C ticks is artificially large
+	// (the L→H jump within a candle looks like a huge price spike), which drives
+	// the spread model to 500%+ vol → 900+ bps spread, making every trade a loser.
+	// When true, VolatilityPct in fill contexts is fixed to a small constant (1.0)
+	// so only BaseBps + liquidity premium determine the spread.
+	OHLCVMode bool
 
 	// Liquidity
 	LiquidityScenario LiquidityScenario
@@ -57,6 +81,9 @@ func DefaultConfig() Config {
 		AllowShorts:       true,
 		MaxOpenPositions:  10,
 		CommissionTier:    TierStandard,
+		SpreadBaseBps:     1.5,
+		MaxTradesPerDay:   0,
+		CapitalFloorPct:   0,
 		LiquidityScenario: ScenarioNormal,
 		MonteCarloConfig: MonteCarloV3Config{
 			Paths:          5000,

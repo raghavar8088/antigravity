@@ -99,7 +99,7 @@ func (c *ContextBuilder) BuildAt(i int, regime scalers.Regime) (scalers.MarketCo
 	c5m := tailS(c.sc5m[:n5m], 100)
 	c15m := tailS(c.sc15m[:i], 60)
 	c1h := tailS(c.sc1h[:n1h], 72)
-	c4h := tailS(c.sc4h[:n4h], 30)
+	c4h := tailS(c.sc4h[:n4h], 100)
 
 	// Funding rate — binary search
 	fundingRate, fundingHistory := c.lookupFunding(barUnix)

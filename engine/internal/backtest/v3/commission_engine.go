@@ -21,6 +21,7 @@ var feeSchedules = map[Exchange]ExchangeFeeTable{
 			TierTier2:    {MakerBps: 1.4, TakerBps: 3.5},   // >$5M
 			TierTier3:    {MakerBps: 1.2, TakerBps: 3.2},   // >$25M
 			TierVIP:      {MakerBps: 0.8, TakerBps: 2.0},   // >$100M
+			TierMaker:    {MakerBps: 2.0, TakerBps: 2.0},   // post-only both legs
 		},
 	},
 	ExchangeBybit: {

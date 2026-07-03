@@ -27,6 +27,7 @@ const (
 	TierTier2    VolumeTier = "TIER2"  // >$5M
 	TierTier3    VolumeTier = "TIER3"  // >$25M
 	TierVIP      VolumeTier = "VIP"    // >$100M
+	TierMaker    VolumeTier = "MAKER"  // assumes both legs post-only (0.02% each side)
 )
 
 // LiquidityScenario selects the market environment for simulation.
@@ -86,6 +87,10 @@ type V3Trade struct {
 	CommissionUSD  float64
 	LatencyCostUSD float64
 	NetPnL         float64
+
+	// Risk parameters from signal
+	StopLossPct   float64 // from strategy signal, 0 = use engine default
+	TakeProfitPct float64 // from strategy signal, 0 = use engine default
 
 	// Execution quality
 	FillRatio          float64

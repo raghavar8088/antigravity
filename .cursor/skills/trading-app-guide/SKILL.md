@@ -1,60 +1,83 @@
 ---
 name: trading-app-guide
-description: Helps agents work on this BTC futures trading app, including the paper desk, signal trace, paper worker, replay, PnL math, strategy policy, and Next.js client. Use when debugging or changing BTC Future Trading, paper-desk execution, strategy gates, closed trades, worker/cron behavior, or UI display.
+description: Helps agents work on this BTC futures trading app — paper desk, signal trace, paper worker, replay, PnL math, strategy policy, kill switch, Go engine, and Next.js client. Use when debugging or changing BTC futures trading, paper-desk execution, strategy gates, closed trades, worker/cron behavior, UI display, backtest engine, or risk/OMS modules.
 ---
 
 # Trading App Guide
 
-## Quick Context
+## What This Repo Is
 
-This repo is a BTC futures trading application. The main app is under `client/`.
+Institutional-grade algo trading platform. BTC futures paper trading + live Indian equity (AngelOne/NSE).
 
-Stack:
-- Next 16
-- React 19
-- TypeScript 5
-- Vitest
-- MongoDB-backed paper state and trade history
+| Layer | Tech | Root |
+|---|---|---|
+| Frontend + API | Next.js 16 + React 19 + TypeScript | `client/` |
+| Execution Engine | Go | `engine/` |
+| AI/Strategy Brain | Python | `brain/` |
 
-There is no root `package.json`. Run app commands from `client/`.
-
-Default validation:
+Run all client commands from `client/`. There is no root `package.json`.
 
 ```bash
-cd client
-npm run test
-npm run build
+cd client && npm run test   # targeted tests first
+cd client && npm run build  # type + build check
 ```
 
-Avoid rereading the whole repo. Start from the file map below and follow imports only when needed.
+---
 
-For deeper details on gate order, worker/browser parity, PnL formulas, env vars, and debugging paths, read [REFERENCE.md](REFERENCE.md).
+## Step 1 — Before Opening Any Source File
 
-## Fast File Map
+Always consult these first. Each costs far fewer tokens than raw source reads:
 
-Core:
-- `client/package.json` - scripts, dependencies, versions.
-- `client/src/components/BTCFuturesScalper.tsx` - BTC Future Trading UI, stats, tables, controls.
-- `client/src/hooks/useBTCFuturesScalperEngine.ts` - browser paper engine loop and position lifecycle.
+```bash
+# Broad question
+npm run graphify:query -- "how does X connect to Y?"
 
-Policy and math:
-- `client/src/lib/futuresDeskPolicy.ts` - desk constants, env parsing, gates, strategy build policy.
-- `client/src/lib/futuresPaperMath.ts` - PnL, fees, funding, margin, liquidation, slippage, price move math.
-- `client/src/lib/futuresSignals.ts` - signal input building, signal evaluation, confirmation, regime classification.
-- `client/src/lib/futuresStrategies.ts` - strategy definitions and category metadata.
+# Subsystem question
+python scripts/graphify_workflow.py query --scope client "where is gate X enforced?"
+python scripts/graphify_workflow.py query --scope engine-internal "how does risk gate connect to OMS?"
 
-Worker and cron:
-- `client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts` - headless worker tick path.
-- `client/scripts/btc-ft-paper-worker.ts` - long-running paper worker process.
-- `client/src/app/api/cron/paper-desk-tick/route.ts` - cron/failover tick endpoint.
+# Dependency path
+graphify path "SymbolA" "SymbolB"
 
-Diagnostics:
-- `client/src/lib/strategySignalTrace.ts` - signal trace rows and summaries.
-- `client/src/lib/noTradeRootCause.ts` - no-trade diagnosis.
-- `client/src/components/SignalTracePanel.tsx` - signal trace UI.
-- `client/src/app/api/strategy-signal-trace/route.ts` - signal trace API.
+# Single symbol
+graphify explain "functionName"
+```
 
-Important tests:
+Session state (read these before source):
+- `.ai-context/session/current-work.md`
+- `.ai-context/session/recent-decisions.md`
+- `.ai-context/session/known-issues.md`
+- `.ai-context/README_FOR_AI.md`
+
+Protected modules (require explicit approval to change):
+- `.ai-context/protected-modules.md`
+
+---
+
+## Fast File Map — Client
+
+**Core UI + engine loop:**
+- `client/src/components/BTCFuturesScalper.tsx` — BTC desk UI, stats, tables, controls
+- `client/src/hooks/useBTCFuturesScalperEngine.ts` — browser paper engine, position lifecycle
+
+**Policy and math (pure logic — no React):**
+- `client/src/lib/futuresDeskPolicy.ts` — desk constants, env parsing, gates, strategy build policy
+- `client/src/lib/futuresPaperMath.ts` — PnL, fees, funding, margin, liquidation, slippage
+- `client/src/lib/futuresSignals.ts` — signal input building, evaluation, confirmation, regime
+- `client/src/lib/futuresStrategies.ts` — strategy definitions and category metadata
+
+**Worker and cron:**
+- `client/src/lib/paperDeskWorker/runPaperDeskPollTick.ts` — headless worker tick
+- `client/scripts/btc-ft-paper-worker.ts` — long-running worker process
+- `client/src/app/api/cron/paper-desk-tick/route.ts` — cron / failover tick endpoint
+
+**Diagnostics:**
+- `client/src/lib/strategySignalTrace.ts` — signal trace rows and gate summaries
+- `client/src/lib/noTradeRootCause.ts` — no-trade diagnosis
+- `client/src/components/SignalTracePanel.tsx` — signal trace UI
+- `client/src/app/api/strategy-signal-trace/route.ts` — signal trace API
+
+**Tests (run these first for any change):**
 - `client/src/lib/futuresDeskPolicy.test.ts`
 - `client/src/lib/futuresPaperMath.test.ts`
 - `client/src/lib/futuresSignals.test.ts`
@@ -63,71 +86,132 @@ Important tests:
 - `client/src/lib/tests/noTradeRootCause.test.ts`
 - `client/src/lib/tests/regressionGuard.test.ts`
 
-## Debug flow for desk bugs
+---
 
-Trace in this order:
+## Fast File Map — Go Engine
 
-1. Signal
-2. Gate/policy
-3. Open position
-4. Mark/update/exit
-5. Paper math booking
-6. UI table display
+**Entry points:**
+- `engine/cmd/antigravity/main.go` — main engine (600+ strategies, BTC + NIFTY paper, AI, risk, kill switch)
+- `engine/cmd/backtest/main.go` — offline backtesting
+- `engine/cmd/perfbench/main.go` — performance benchmarking
 
-Usual path:
-`futuresSignals.ts` -> `futuresDeskPolicy.ts` -> `useBTCFuturesScalperEngine.ts` or `runPaperDeskPollTick.ts` -> `futuresPaperMath.ts` -> `BTCFuturesScalper.tsx`.
+**Critical internal modules:**
+- `engine/internal/killswitch/` — kill switch (must stay wired in all prod paths)
+- `engine/internal/risk/gate/` — risk gates (must precede execution)
+- `engine/internal/omsv3/` — OMS v3
+- `engine/internal/ledger/` — ledger
+- `engine/internal/reconciliation/` — reconciliation
+- `engine/internal/strategy/` — 600+ strategies, curated_registry.go, scalpers/
+- `engine/internal/backtest/` — backtest engine (v3, commission, context builder, scaler)
 
-For UI issues, start with `BTCFuturesScalper.tsx` and nearby components.
+**Execution data flow:**
+```
+Market Data → Strategy Registry → Risk Gate → OMS v3 → Execution
+→ Fill → Position → Ledger → Reconciliation → Kill Switch check
+→ Persistence → Next.js API → Dashboard
+```
 
-For worker/cron issues, start with `runPaperDeskPollTick.ts`, `btc-ft-paper-worker.ts`, and `/api/cron/paper-desk-tick`.
+---
 
-## Invariants
+## Debug Flow for Desk Bugs
 
-Do not change these unless the user explicitly asks:
+Trace in this exact order — stop at the first failing step:
 
-- Funding accrual semantics.
-- `lastFundingAppliedAt` behavior.
-- Liquidation only on true cross.
-- Taker fee and round-trip fee accounting.
-- `paperNetPnlOnClose` booking math.
-- Entry/exit price consistency between booked PnL and displayed trade rows.
-- No synthetic PnL bumps.
-- No preemptive liquidation exits.
-- Existing widen/skip, fake-diversity, hold-multiplier, regime, same-dir, and min-move gate semantics.
-- `MAX_OPEN_POSITIONS` unless explicitly requested.
+1. **Signal** — `futuresSignals.ts`
+2. **Gate/policy** — `futuresDeskPolicy.ts`
+3. **Open position** — `useBTCFuturesScalperEngine.ts` or `runPaperDeskPollTick.ts`
+4. **Mark/update/exit** — same files above
+5. **Paper math booking** — `futuresPaperMath.ts`
+6. **UI display** — `BTCFuturesScalper.tsx`
 
-When changing display labels, keep booking math unchanged unless the task is explicitly about accounting.
+**Entry gate order** (see REFERENCE.md for full list):
+`DATA → DISABLED → SUSPENDED → ROTATION → COOLDOWN → OCCUPIED → REGIME → SIGNAL → CONFIRM → QUALITY → MTF → ATR_FEES → SPREAD → SESSION → CATEGORY → SAME_SIDE → MARGIN → MAX_OPEN → OPENED`
+
+**No trades?** → Check Signal Trace summary for dominant rejected gate → inspect that gate's file only.
+
+**Wrong PnL/return?** → See PnL formulas in REFERENCE.md. Distinguish price-move% from return-on-margin.
+
+**Worker/cron mismatch?** → Start at `runPaperDeskPollTick.ts`, compare state shape with browser engine.
+
+**UI data mismatch?** → Start at `BTCFuturesScalper.tsx`, determine data source before editing.
+
+---
+
+## Hard Invariants — Never Change Without Explicit User Approval
+
+- Funding accrual and `lastFundingAppliedAt` semantics
+- Liquidation only on true modeled cross — no preemptive exits
+- Taker fee and round-trip fee accounting
+- `paperNetPnlOnClose` booking math
+- Entry/exit price consistency between booked PnL and trade row display
+- No synthetic PnL bumps
+- Existing widen/skip, fake-diversity, hold-multiplier, regime, same-dir, min-move gate semantics
+- `MAX_OPEN_POSITIONS` cap
+- Kill switch wiring in all prod paths
+- Risk gates before execution (never bypass)
+- WINNERS_ONLY gate — do not re-add losing strategies
+- NSE/BSE strategies must be gated by market session
+
+---
+
+## PnL Quick Reference
+
+```text
+LONG  gross = ((exitPrice - entryPrice) / entryPrice) * notional
+SHORT gross = ((entryPrice - exitPrice) / entryPrice) * notional
+fees        = notional * takerFeePct * 2   (round-trip taker)
+netPnl      = grossPnl - fees - fundingCosts
+netPnlPct   = (netPnl / marginUsed) * 100  (leverage-amplified)
+```
+
+Full formulas, funding scaling, and ATR-fee gate math → see [REFERENCE.md](REFERENCE.md).
+
+---
+
+## Strategy Registry
+
+- Location: `engine/internal/strategy/curated_registry.go`
+- Count: 600+ live strategies
+- Pre-live registry: `engine/internal/strategy/scalpers/pre_live_registry.go`
+- Research strategies: `engine/internal/strategy/scalpers/research_registry.go` + `research_strategies_*.go`
+- Families: EMA Cross, RSI threshold/slope, Bollinger Band, Funding/CVD, Delta absorption, Liquidity sweep, FVG retest, Order block, MSS continuation, Microstructure, Volume profile
+
+---
+
+## Deployment
+
+| Target | Platform |
+|---|---|
+| `client/` | Vercel |
+| `engine/` | AWS Lightsail |
+| MongoDB Atlas, PostgreSQL Neon, Redis | Cloud-managed |
+
+Max **2 Vercel cron jobs** (Hobby plan). Count before adding any new cron.
+
+---
 
 ## Testing Checklist
 
-Use targeted tests first, then full checks:
-
 ```bash
 cd client
-npm run test
+npm run test    # run targeted test file first, then all
 npm run build
 ```
 
-For PnL/fees bugs:
-- Add or update `futuresPaperMath.test.ts`.
-- Include hand-calculated gross, fees, net, and return cases.
+- PnL/fee bug → update `futuresPaperMath.test.ts` with hand-calculated cases
+- Policy/gate bug → update `futuresDeskPolicy.test.ts`
+- Worker/cron bug → update `paperDeskWorker.test.ts`
+- Signal trace / no-trade → update `strategySignalTrace.test.ts` / `noTradeRootCause.test.ts`
 
-For policy/gate bugs:
-- Add or update `futuresDeskPolicy.test.ts`.
-
-For worker/cron bugs:
-- Add or update `client/src/lib/tests/paperDeskWorker.test.ts`.
-- Confirm browser and worker paths use the same helpers where possible.
-
-For signal trace or no-trade bugs:
-- Add or update `strategySignalTrace.test.ts`.
-- Add or update `noTradeRootCause.test.ts`.
+---
 
 ## Conventions
 
-- Keep changes narrow.
-- Prefer existing helpers and local patterns over new abstractions.
-- Pure logic belongs in `client/src/lib/`; React state belongs in hooks/components.
-- Client-visible env vars use `NEXT_PUBLIC_*`; server secrets must stay server-side.
-- If a bug looks like a UI issue, first confirm whether it is display-only, booking/math, exit price mismatch, replay/worker fork, or stale persisted state.
-- Document root cause clearly in PR-style summaries.
+- Pure logic → `client/src/lib/`. React state → hooks/components. Never mix.
+- Client env vars use `NEXT_PUBLIC_*`. Server secrets stay server-side only.
+- Prefer existing helpers over new abstractions.
+- Keep changes narrow. One concern per PR.
+- For UI label changes: fix display only, do not touch booking math unless explicitly asked.
+- After source changes: `npm run graphify:update` (small) or `npm run graphify:rebuild` (broad structural).
+
+For deeper details on env vars, gate order, browser vs worker comparison, and common debugging paths → [REFERENCE.md](REFERENCE.md).

@@ -57,7 +57,14 @@ type FillModel struct {
 }
 
 func NewFillModel() FillModel {
-	return FillModel{Spread: NewSpreadModel(1.5), Slippage: NewSlippageEngine(), Impact: ImpactModel{}, Latency: LatencyEngine{}}
+	return NewFillModelWithSpread(1.5)
+}
+
+func NewFillModelWithSpread(baseBps float64) FillModel {
+	if baseBps <= 0 {
+		baseBps = 1.5
+	}
+	return FillModel{Spread: NewSpreadModel(baseBps), Slippage: NewSlippageEngine(), Impact: ImpactModel{}, Latency: LatencyEngine{}}
 }
 
 func (m FillModel) Execute(order Order, ctx MarketContext) Fill {

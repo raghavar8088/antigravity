@@ -31,8 +31,12 @@ type Engine struct {
 // NewEngine constructs a V3 engine from a Config.
 // Pass a non-nil OMSBridge to emit ledger events during simulation.
 func NewEngine(cfg Config, fundingRates []btExecution.FundingRate, bridge *OMSBridge) *Engine {
+	spreadBps := cfg.SpreadBaseBps
+	if spreadBps <= 0 {
+		spreadBps = 1.5
+	}
 	return &Engine{
-		fill:       btExecution.NewFillModel(),
+		fill:       btExecution.NewFillModelWithSpread(spreadBps),
 		queue:      NewQueuePositionEngine(),
 		commission: NewCommissionEngine(cfg.Exchange, cfg.CommissionTier),
 		funding:    NewFundingSimulator(cfg.Exchange, fundingRates),
@@ -61,7 +65,19 @@ func (e *Engine) Run(input V3Input) (V3Result, error) {
 	portfolio := newV3Portfolio(cfg.InitialCapitalUSD)
 	events := make([]V3Event, 0, len(input.Ticks)/10)
 
+	// Trade frequency cap: strategyName -> "YYYY-MM-DD" -> count
+	tradeCounts := make(map[string]map[string]int)
+	capitalFloor := 0.0
+	if cfg.CapitalFloorPct > 0 {
+		capitalFloor = cfg.InitialCapitalUSD * cfg.CapitalFloorPct
+	}
+
 	for _, tick := range input.Ticks {
+		// Capital floor: stop simulation if equity breached floor.
+		if capitalFloor > 0 && portfolio.balance < capitalFloor {
+			events = append(events, V3Event{Type: EventV3StressInjected, Message: "capital floor breached — halting strategy", Timestamp: tickTimestamp(tick)})
+			break
+		}
 		ts := tickTimestamp(tick)
 		e.midHistory.Add(tick.Price)
 
@@ -88,7 +104,7 @@ func (e *Engine) Run(input V3Input) (V3Result, error) {
 
 		// Check SL/TP on open positions.
 		for _, pos := range portfolio.openPositions {
-			if shouldCloseV3(pos, effectivePrice, ts) {
+			if shouldCloseV3(pos, effectivePrice, ts, cfg) {
 				e.closePosition(ctx, pos, tick, effectivePrice, book, cfg, portfolio, &events)
 			}
 		}
@@ -118,6 +134,17 @@ func (e *Engine) Run(input V3Input) (V3Result, error) {
 				}
 				if portfolio.openCount() >= cfg.MaxOpenPositions {
 					continue
+				}
+				// Trade frequency cap: skip if strategy already hit daily limit.
+				if cfg.MaxTradesPerDay > 0 {
+					day := ts.UTC().Format("2006-01-02")
+					if tradeCounts[strat.Name()] == nil {
+						tradeCounts[strat.Name()] = make(map[string]int)
+					}
+					if tradeCounts[strat.Name()][day] >= cfg.MaxTradesPerDay {
+						continue
+					}
+					tradeCounts[strat.Name()][day]++
 				}
 				sig = normalizeSignalV3(sig, effectivePrice, cfg)
 				orderID := fmt.Sprintf("V3-%s-%d", strat.Name(), len(events)+1)
@@ -185,6 +212,10 @@ func (e *Engine) executeEntry(
 
 	// Compute rolling volatility.
 	vol := clampF(e.midHistory.RealizedVolPct()/100, 0.001, 5)
+	volPctEntry := vol * 100
+	if cfg.OHLCVMode {
+		volPctEntry = 1.0 // OHLCV ticks produce artificially large vol; use a small fixed value
+	}
 
 	// Build market context with dynamic vol and book-derived liquidity.
 	liqScore := book.LiquidityScore()
@@ -208,7 +239,7 @@ func (e *Engine) executeEntry(
 
 	mktCtx := btExecution.MarketContext{
 		MidPrice:       effectivePrice,
-		VolatilityPct:  vol * 100,
+		VolatilityPct:  volPctEntry,
 		LiquidityScore: liqScore,
 		ADVNotionalUSD: adv,
 		BookDepthUSD:   bookDepth,
@@ -298,15 +329,14 @@ func (e *Engine) executeEntry(
 		QueueMetrics: queueResult,
 		PartialFillEvents:  queueResult.PartialFills,
 		SimulatedLatencyMs: float64(fill.Latency.EntryLatency.Milliseconds()),
-		SpreadCostUSD:  fill.SpreadCostUSD,
+		SpreadCostUSD:   fill.SpreadCostUSD,
 		SlippageCostUSD: fill.SlippageCostUSD,
-		ImpactCostUSD:  fill.ImpactCostUSD + bookFill.PriceImpactBps*notional/10_000,
-		CommissionUSD:  commResult.FeeUSD,
-		// StopLoss/TakeProfit tracked in portfolio for exit trigger.
-		ExitReason: "",
+		ImpactCostUSD:   fill.ImpactCostUSD + bookFill.PriceImpactBps*notional/10_000,
+		CommissionUSD:   commResult.FeeUSD,
+		StopLossPct:     sig.StopLossPct,
+		TakeProfitPct:   sig.TakeProfitPct,
+		ExitReason:      "",
 	}
-
-	// Store TP/SL for position management (packed into trade for portfolio).
 	trade.GrossPnL = 0 // set on close
 
 	// OMS bridge: position opened.
@@ -335,6 +365,10 @@ func (e *Engine) closePosition(
 	}
 
 	vol := clampF(e.midHistory.RealizedVolPct()/100, 0.001, 5)
+	volPct := vol * 100
+	if cfg.OHLCVMode {
+		volPct = 1.0 // OHLCV ticks produce artificially large vol; use a small fixed value
+	}
 	liqScore := book.LiquidityScore()
 	exitLatency := btExecution.LatencyInput{
 		Tier:          cfg.LatencyTier,
@@ -342,7 +376,7 @@ func (e *Engine) closePosition(
 	}
 	mktCtx := btExecution.MarketContext{
 		MidPrice:       effectivePrice,
-		VolatilityPct:  vol * 100,
+		VolatilityPct:  volPct,
 		LiquidityScore: liqScore,
 		ADVNotionalUSD: effectivePrice * 5000,
 		BookDepthUSD:   book.TotalBidDepthUSD(5),
@@ -382,14 +416,11 @@ func (e *Engine) closePosition(
 		grossPnL = (exitFill.FillPrice - pos.trade.EntryPrice) * pos.trade.Size
 	}
 
-	// Net P&L = gross - all costs.
-	totalCosts := pos.trade.SpreadCostUSD +
-		pos.trade.SlippageCostUSD +
-		pos.trade.ImpactCostUSD +
-		pos.trade.CommissionUSD +
-		exitFill.SpreadCostUSD +
-		exitFill.SlippageCostUSD +
-		exitFill.ImpactCostUSD +
+	// Net P&L = gross (already net of spread/slippage/impact via fill prices) minus
+	// commission and funding, which are NOT embedded in fill prices.
+	// Spread, slippage, and impact are already baked into EntryPrice and ExitFill.FillPrice,
+	// so subtracting them again would double-count.
+	totalCosts := pos.trade.CommissionUSD +
 		exitComm.FeeUSD +
 		math.Abs(fundingResult.FundingPaidUSD-fundingResult.FundingReceivedUSD)
 
@@ -445,11 +476,19 @@ func newV3Portfolio(capital float64) *v3Portfolio {
 }
 
 func (p *v3Portfolio) openPosition(t V3Trade) {
+	sl := t.StopLossPct
+	if sl <= 0 {
+		sl = 0.35
+	}
+	tp := t.TakeProfitPct
+	if tp <= 0 {
+		tp = 0.70
+	}
 	p.balance -= t.EntryPrice * t.Size
 	p.openPositions = append(p.openPositions, &v3Position{
 		trade:         t,
-		stopLossPct:   0.35,
-		takeProfitPct: 0.70,
+		stopLossPct:   sl,
+		takeProfitPct: tp,
 	})
 }
 
@@ -491,7 +530,7 @@ func (p *v3Portfolio) equity(mark float64) float64 {
 
 // ── Utility helpers ──────────────────────────────────────────────────────────
 
-func shouldCloseV3(pos *v3Position, currentPrice float64, ts time.Time) bool {
+func shouldCloseV3(pos *v3Position, currentPrice float64, ts time.Time, cfg Config) bool {
 	entry := pos.trade.EntryPrice
 	sl := pos.stopLossPct / 100
 	tp := pos.takeProfitPct / 100
@@ -516,8 +555,12 @@ func shouldCloseV3(pos *v3Position, currentPrice float64, ts time.Time) bool {
 		}
 	}
 
-	// Maximum hold: 45 minutes.
-	if ts.Sub(pos.trade.OpenedAt) >= 45*time.Minute {
+	// Maximum hold time: use config value, fall back to 45 minutes for scalpers.
+	maxHold := cfg.MaxHoldDuration
+	if maxHold <= 0 {
+		maxHold = 45 * time.Minute
+	}
+	if ts.Sub(pos.trade.OpenedAt) >= maxHold {
 		pos.exitReason = "TIME"
 		return true
 	}

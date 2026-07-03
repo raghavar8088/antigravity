@@ -51,8 +51,15 @@ func DefaultRunConfig(symbol string) RunConfig {
 	cfg.WarmupBars = 60
 	cfg.MaxOpenPositions = 1
 	cfg.AllowShorts = true
-	cfg.MonteCarloConfig.Paths = 1                    // minimal — 5000 paths OOMs Lightsail
+	cfg.MonteCarloConfig.Paths = 1                       // minimal — 5000 paths OOMs Lightsail
 	cfg.MonteCarloConfig.BootstrapWithReplacement = false // no resampling needed
+	// Backtest cost model: maker pricing + tighter spread assumption
+	cfg.CommissionTier = v3.TierMaker
+	cfg.SpreadBaseBps = 0.5  // 0.05% half-spread vs 0.15% institutional default
+	cfg.MaxTradesPerDay = 5  // prevent overtrading — max 5 entries per strategy per day
+	cfg.CapitalFloorPct = 0.5 // halt strategy if equity drops below 50% of initial capital
+	cfg.OHLCVMode = true     // disables OHLCV-artifact vol inflation in spread model
+	cfg.MaxHoldDuration = 7 * 24 * time.Hour // swing trades need days to reach TP
 	return RunConfig{
 		Symbol:   symbol,
 		Regime:   scalers.RegimeTrending,
