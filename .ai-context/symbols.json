@@ -1,1 +1,1 @@
-{}
+{"engine/internal/paperpersist/journal_bootstrap.go":[{"community":0,"kind":"function","location":"L21","name":"BootstrapJournalFromMongo()"},{"community":0,"kind":"type","location":"L21","name":"Context"},{"community":0,"kind":"type","location":"L21","name":"MongoManager"},{"community":0,"kind":"type","location":"L21","name":"TradeJournal"}]}

@@ -71,6 +71,9 @@ func BootstrapJournalFromMongo(ctx context.Context, mgr *MongoManager, journal *
 		if t := getTime(raw, "exit_at"); !t.IsZero() {
 			entry.ExitTime = t
 		}
+		if !entry.EntryTime.IsZero() && !entry.ExitTime.IsZero() {
+			entry.Duration = entry.ExitTime.Sub(entry.EntryTime)
+		}
 		if entry.ID == "" || entry.StrategyName == "" {
 			continue
 		}
