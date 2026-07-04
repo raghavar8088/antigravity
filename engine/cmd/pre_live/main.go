@@ -176,13 +176,12 @@ func main() {
 		MinTakeProfitPct:   0.625, // RC-3: raised from 0.50 to match SCALER_RR_MINIMUM=2.5 × SL_floor(0.25%)
 		MaxPerStrategy:     2,
 		ReverseTargets:     false,
-		// RC-13 fix: raised from 20 to 90 minutes.
+		// RC-13 fix: raised from 20 to 90 minutes, then to 240 (4h).
 		// The old 20-minute hard expiry was cutting 1h-timeframe strategies
 		// before they reached their TP, locking in guaranteed fee-drag losses
 		// (every EXPIRED exit costs 0.10% in fees with zero price movement).
-		// 90 minutes allows up to three 15m evaluation cycles for 15m strategies
-		// and gives 1h strategies one full bar to play out.
-		MaxPositionAgeMins: 90,
+		// 240 minutes gives 1h-timeframe strategies up to four full bars to play out.
+		MaxPositionAgeMins: 240,
 		Leverage:           preLiveLeverage(),
 		FeeRatePct:         0.00050, // Binance futures taker 0.05% per leg
 	})

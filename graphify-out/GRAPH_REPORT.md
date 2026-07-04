@@ -1,16 +1,16 @@
 # Graph Report - antigravity-main  (2026-07-03)
 
 ## Corpus Check
-- 4904 files · ~27,062,988 words
+- 4904 files · ~27,063,181 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 12 nodes · 17 edges · 3 communities (2 shown, 1 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.8)
+- 28 nodes · 32 edges · 3 communities
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b272aae3`
+- Built from commit: `89ccd93e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -20,45 +20,49 @@
 - [[_COMMUNITY_Community 2|Community 2]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `BuildCuratedScalpers()` - 5 edges
-2. `Performance` - 3 edges
-3. `filterTradeEngineEnabled()` - 3 edges
-4. `RegistryEntry` - 3 edges
-5. `FilterWinnersOnly()` - 3 edges
-6. `TestCuratedRegistryMatchesTradeEngineWhitelist()` - 3 edges
-7. `UpdatePerformance()` - 2 edges
-8. `GetPerformance()` - 2 edges
-9. `AllPerformance()` - 2 edges
-10. `T` - 1 edges
+1. `PreLiveEngineCenter()` - 4 edges
+2. `toMs()` - 3 edges
+3. `fmtUsd()` - 2 edges
+4. `fmtPrice()` - 2 edges
+5. `fmtPct()` - 2 edges
+6. `fmtAge()` - 2 edges
+7. `fmtTime()` - 2 edges
+8. `OpenPosition` - 1 edges
+9. `ClosedTrade` - 1 edges
+10. `Stats` - 1 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `TestCuratedRegistryMatchesTradeEngineWhitelist()` --calls--> `BuildCuratedScalpers()`  [INFERRED]
-  engine/internal/strategy/scalpers/s30_s79_registry_shadow_test.go → engine/internal/strategy/scalpers/curated_registry.go
+- None detected - all connections are within the same source files.
 
 ## Import Cycles
 - None detected.
 
-## Communities (3 total, 1 thin omitted)
+## Communities (3 total, 0 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.60
-Nodes (4): Performance, AllPerformance(), GetPerformance(), UpdatePerformance()
+Cohesion: 0.10
+Nodes (9): ClosedTrade, monoCellStyle, OpenPosition, ScalersStats, Signal, Stats, tableStyle, tdStyle (+1 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.83
-Nodes (4): RegistryEntry, BuildCuratedScalpers(), filterTradeEngineEnabled(), FilterWinnersOnly()
+Cohesion: 0.50
+Nodes (4): fmtPct(), fmtPrice(), fmtUsd(), PreLiveEngineCenter()
+
+### Community 2 - "Community 2"
+Cohesion: 0.67
+Nodes (3): fmtAge(), fmtTime(), toMs()
 
 ## Knowledge Gaps
-- **1 isolated node(s):** `T`
+- **9 isolated node(s):** `OpenPosition`, `ClosedTrade`, `Stats`, `Signal`, `ScalersStats` (+4 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `BuildCuratedScalpers()` connect `Community 1` to `Community 0`, `Community 2`?**
-  _High betweenness centrality (0.473) - this node is a cross-community bridge._
-- **Why does `TestCuratedRegistryMatchesTradeEngineWhitelist()` connect `Community 2` to `Community 1`?**
-  _High betweenness centrality (0.345) - this node is a cross-community bridge._
-- **What connects `T` to the rest of the system?**
-  _1 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `PreLiveEngineCenter()` connect `Community 1` to `Community 0`?**
+  _High betweenness centrality (0.004) - this node is a cross-community bridge._
+- **Why does `toMs()` connect `Community 2` to `Community 0`?**
+  _High betweenness centrality (0.001) - this node is a cross-community bridge._
+- **What connects `OpenPosition`, `ClosedTrade`, `Stats` to the rest of the system?**
+  _9 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.09523809523809523 - nodes in this community are weakly interconnected._

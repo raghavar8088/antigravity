@@ -3,7 +3,7 @@ package scalpers
 // BuildAllScalpers returns every strategy in the scalpers pack as a RegistryEntry.
 // Used for backtesting, monitoring dashboards, and the curated selector.
 func BuildAllScalpers() []RegistryEntry {
-	return []RegistryEntry{
+	entries := []RegistryEntry{
 		{
 			Strategy:        &EMARibbonTrendRider{},
 			Name:            "EMA_Ribbon_Trend_Rider",
@@ -86,6 +86,8 @@ func BuildAllScalpers() []RegistryEntry {
 			OHLCVCompatible: false, // requires historical OI (unavailable >30 days on Binance)
 		},
 	}
+	entries = append(entries, buildNewStrategiesBatch10()...)
+	return entries
 }
 
 // buildPortedStrategiesBase returns RegistryEntry wrappers for the base ported strategies (S101–S150).

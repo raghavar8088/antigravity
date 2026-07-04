@@ -28,10 +28,10 @@ var metaDefaults = map[string]float64{
 	// commented "was" values to re-tighten signal quality.
 	"MIN_EXECUTABLE_CONFIDENCE":      0.50, // was 0.68
 	"MIN_BRIDGE_CONFIDENCE":          0.50, // was 0.65
-	"MIN_REWARD_TO_RISK_RATIO":       1.20, // was 2.40
+	"MIN_REWARD_TO_RISK_RATIO":       1.40, // was 2.40, flood-mode 1.20
 	"MIN_SIGNAL_TAKE_PROFIT_PCT":     0.15,
 	"MAX_SIGNAL_STOP_LOSS_PCT":       1.50,
-	"SCALER_RR_MINIMUM":              1.20, // was 2.00
+	"SCALER_RR_MINIMUM":              1.40, // was 2.00, flood-mode 1.20
 	"SCALER_SL_LOWER_BOUND_PCT":      0.25,
 
 	// position_sizing

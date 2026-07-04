@@ -91,7 +91,7 @@ func NewManager() *Manager {
 		MinTakeProfitPct:   0.30,
 		MaxPerStrategy:     2,
 		ReverseTargets:     false,
-		MaxPositionAgeMins: 45,
+		MaxPositionAgeMins: 240,
 		Leverage:           1.0,
 	})
 }
