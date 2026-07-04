@@ -1,1 +1,1 @@
-{"engine-paperpersist":{"communities":[0],"files":1,"symbols":4,"top_files":[{"file":"engine/internal/paperpersist/journal_bootstrap.go","symbols":4}]}}
+{"engine-strategy":{"communities":[0,1,2,4,5,6,7,8,9],"files":2,"symbols":49,"top_files":[{"file":"engine/internal/strategy/scalpers/new10_batch2.go","symbols":45},{"file":"engine/internal/strategy/scalpers/registry.go","symbols":4}]},"other":{"communities":[3],"files":1,"symbols":5,"top_files":[{"file":"client/src/app/layout.tsx","symbols":5}]}}

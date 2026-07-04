@@ -1316,6 +1316,7 @@ The content is organized as follows:
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
   strategy/scalpers/new10_batch.go
+  strategy/scalpers/new10_batch2.go
   strategy/scalpers/pre_live_registry.go
   strategy/scalpers/registry.go
   strategy/scalpers/research_registry.go

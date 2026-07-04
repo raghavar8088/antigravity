@@ -50,11 +50,11 @@
   --m3-btc-accent: #f7931a;
 
   /* ── Typography Scale (Google Product Sans / Roboto rhythm) ────────────── */
-  --m3-font-display: var(--font-roboto, "Roboto", "Google Sans", system-ui, sans-serif);
-  --m3-font-body: var(--font-roboto, "Roboto", system-ui, sans-serif);
-  --m3-font-mono: var(--font-roboto-mono, "Roboto Mono", ui-monospace, monospace);
-  --font-inter: var(--font-roboto, "Roboto", system-ui, sans-serif);
-  --font-mono-var: var(--font-roboto-mono, "Roboto Mono", ui-monospace, monospace);
+  --m3-font-display: var(--font-sora, "Sora", system-ui, sans-serif);
+  --m3-font-body: var(--font-manrope, "Manrope", system-ui, sans-serif);
+  --m3-font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
+  --font-inter: var(--font-manrope, "Manrope", system-ui, sans-serif);
+  --font-mono-var: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, monospace);
 
   --m3-display-lg: 700 2.8125rem/3.25rem var(--m3-font-display);
   --m3-display-md: 700 2.25rem/2.75rem var(--m3-font-display);
@@ -144,55 +144,56 @@
 }
 
 [data-theme="light"] {
-  --m3-primary: #1a73e8;
-  --m3-on-primary: #ffffff;
-  --m3-primary-container: #e8f0fe;
-  --m3-on-primary-container: #174ea6;
+  /* JioFinance/Groww aesthetic — gold primary (money actions), purple secondary (nav/links) */
+  --m3-primary: #c8933f;
+  --m3-on-primary: #17151f;
+  --m3-primary-container: rgba(200, 147, 63, 0.12);
+  --m3-on-primary-container: #b57f2e;
 
-  --m3-secondary: #5f6368;
+  --m3-secondary: #7d34dc;
   --m3-on-secondary: #ffffff;
-  --m3-secondary-container: #f1f3f4;
-  --m3-on-secondary-container: #3c4043;
+  --m3-secondary-container: rgba(125, 52, 220, 0.1);
+  --m3-on-secondary-container: #7d34dc;
 
-  --m3-tertiary: #188038;
+  --m3-tertiary: #0e9f6e;
   --m3-on-tertiary: #ffffff;
-  --m3-tertiary-container: #e6f4ea;
-  --m3-on-tertiary-container: #137333;
+  --m3-tertiary-container: #e6f7ef;
+  --m3-on-tertiary-container: #0e9f6e;
 
-  --m3-error: #d93025;
+  --m3-error: #d92d3f;
   --m3-on-error: #ffffff;
   --m3-error-container: #fce8e6;
-  --m3-on-error-container: #c5221f;
+  --m3-on-error-container: #d92d3f;
 
   --m3-surface: #ffffff;
-  --m3-surface-dim: #f8f9fa;
+  --m3-surface-dim: #f7f5fb;
   --m3-surface-bright: #ffffff;
   --m3-surface-container-lowest: #ffffff;
-  --m3-surface-container-low: #f1f3f4;
-  --m3-surface-container: #f8f9fa;
-  --m3-surface-container-high: #e8eaed;
-  --m3-surface-container-highest: #dadce0;
+  --m3-surface-container-low: #f7f5fb;
+  --m3-surface-container: #ffffff;
+  --m3-surface-container-high: #f1eef9;
+  --m3-surface-container-highest: #e8e5ef;
 
-  --m3-on-surface: #202124;
-  --m3-on-surface-variant: #5f6368;
-  --m3-outline: #747775;
-  --m3-outline-variant: #c4c7c5;
+  --m3-on-surface: #17151f;
+  --m3-on-surface-variant: #63606f;
+  --m3-outline: #9e9aab;
+  --m3-outline-variant: #e8e5ef;
 
-  --m3-profit: #188038;
-  --m3-profit-container: #e6f4ea;
-  --m3-loss: #d93025;
+  --m3-profit: #0e9f6e;
+  --m3-profit-container: #e6f7ef;
+  --m3-loss: #d92d3f;
   --m3-loss-container: #fce8e6;
-  --m3-warning: #e37400;
-  --m3-warning-container: #fef7e0;
+  --m3-warning: #b9770e;
+  --m3-warning-container: #fff7e6;
 
-  --m3-elevation-1: 0 1px 2px rgba(60, 64, 67, 0.16), 0 1px 3px rgba(60, 64, 67, 0.08);
-  --m3-elevation-2: 0 2px 6px rgba(60, 64, 67, 0.14);
-  --m3-elevation-3: 0 4px 12px rgba(60, 64, 67, 0.12);
-  --m3-elevation-4: 0 8px 24px rgba(60, 64, 67, 0.14);
+  --m3-elevation-1: 0 1px 3px rgba(125, 52, 220, 0.06), 0 1px 2px rgba(23, 21, 31, 0.05);
+  --m3-elevation-2: 0 2px 8px rgba(125, 52, 220, 0.08);
+  --m3-elevation-3: 0 4px 16px rgba(125, 52, 220, 0.1);
+  --m3-elevation-4: 0 8px 24px rgba(125, 52, 220, 0.12);
 
-  --m3-state-hover: rgba(32, 33, 36, 0.04);
-  --m3-state-focus: rgba(26, 115, 232, 0.12);
-  --m3-state-pressed: rgba(32, 33, 36, 0.08);
+  --m3-state-hover: rgba(125, 52, 220, 0.05);
+  --m3-state-focus: rgba(125, 52, 220, 0.12);
+  --m3-state-pressed: rgba(125, 52, 220, 0.1);
 }
 
 /* desk-* aliases → m3 (canonical bridge) */

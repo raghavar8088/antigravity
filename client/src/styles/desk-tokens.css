@@ -69,36 +69,39 @@ body.combat-mode {
   --desk-page-max:      1800px;
 }
 
-/* Light theme override (if ever needed) */
+/* Light theme override — JioFinance/Groww aesthetic: gold primary, purple secondary */
 [data-theme="light"] {
-  --desk-primary:                #2962ff;
-  --desk-on-primary:             #ffffff;
-  --desk-primary-container:      rgba(41, 98, 255, 0.1);
-  --desk-on-primary-container:   #2962ff;
+  --desk-primary:                #c8933f;
+  --desk-on-primary:             #17151f;
+  --desk-primary-container:      rgba(200, 147, 63, 0.12);
+  --desk-on-primary-container:   #b57f2e;
+
+  --desk-secondary:              #7d34dc;
+  --desk-secondary-container:    rgba(125, 52, 220, 0.1);
 
   --desk-surface:                    #ffffff;
-  --desk-surface-dim:                #f6f8fa;
-  --desk-surface-container:          #f0f2f4;
-  --desk-surface-container-high:     #e8eaed;
-  --desk-surface-container-highest:  #dde0e4;
+  --desk-surface-dim:                #f7f5fb;
+  --desk-surface-container:          #f7f5fb;
+  --desk-surface-container-high:     #f1eef9;
+  --desk-surface-container-highest:  #e8e5ef;
 
-  --desk-on-surface:         #1a1d27;
-  --desk-on-surface-variant: #5a6070;
+  --desk-on-surface:         #17151f;
+  --desk-on-surface-variant: #63606f;
 
-  --desk-outline:         #d0d6dd;
-  --desk-outline-variant: #e8eaed;
+  --desk-outline:         #e8e5ef;
+  --desk-outline-variant: #f1eef9;
 
-  --desk-error:              #d32f2f;
-  --desk-error-container:    rgba(211, 47, 47, 0.08);
-  --desk-success:            #00897b;
-  --desk-success-container:  rgba(0, 137, 123, 0.08);
-  --desk-warning:            #f57c00;
-  --desk-warning-container:  rgba(245, 124, 0, 0.08);
+  --desk-error:              #d92d3f;
+  --desk-error-container:    rgba(217, 45, 63, 0.08);
+  --desk-success:            #0e9f6e;
+  --desk-success-container:  rgba(14, 159, 110, 0.08);
+  --desk-warning:            #b9770e;
+  --desk-warning-container:  rgba(185, 119, 14, 0.08);
 
   --desk-elevation-0: none;
-  --desk-elevation-1: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
-  --desk-elevation-2: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
-  --desk-elevation-3: 0 4px 16px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
+  --desk-elevation-1: 0 1px 3px rgba(125, 52, 220, 0.06), 0 1px 2px rgba(23, 21, 31, 0.05);
+  --desk-elevation-2: 0 4px 12px rgba(125, 52, 220, 0.08), 0 1px 3px rgba(23, 21, 31, 0.05);
+  --desk-elevation-3: 0 8px 24px rgba(125, 52, 220, 0.1), 0 2px 6px rgba(23, 21, 31, 0.05);
 }
 
 /* ─── Typography Scale ───────────────────────────────────────────────────── */
