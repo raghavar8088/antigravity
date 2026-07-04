@@ -51,27 +51,10 @@ export function M3AppShell({
         >
           <div className="m3-nav-rail__brand">
             <Link href={TERMINAL_ROUTES.home} className="m3-nav-rail__brand-link">
-              <div
-                aria-hidden
-                style={{
-                  color: "var(--accent)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.15em",
-                  textTransform: "uppercase",
-                }}
-              >
-                BTC
-              </div>
-              <div
-                className="m3-nav-rail__brand-text"
-                style={{
-                  color: "var(--text-secondary)",
-                  fontSize: 11,
-                  lineHeight: 1.3,
-                }}
-              >
-                BTC-PILOT<br />SOVEREIGN
+              <div className="m3-nav-rail__logo" aria-hidden="true">₿</div>
+              <div className="m3-nav-rail__brand-text">
+                <span className="m3-nav-rail__brand-name">BTC-PILOT</span>
+                <span className="m3-nav-rail__brand-sub">Sovereign</span>
               </div>
             </Link>
           </div>

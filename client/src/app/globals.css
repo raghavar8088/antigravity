@@ -1940,7 +1940,7 @@ textarea:focus-visible {
   width: var(--m3-nav-rail-expanded);
   background: rgba(255, 255, 255, 0.96);
   border-right: 1px solid var(--card-border);
-  box-shadow: 4px 0 20px rgba(60, 64, 67, 0.04);
+  box-shadow: 4px 0 20px rgba(125, 52, 220, 0.05);
 }
 
 .m3-nav-rail--collapsed {
@@ -1961,13 +1961,42 @@ textarea:focus-visible {
 }
 
 .m3-nav-rail__brand-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border-radius: 18px;
+  text-decoration: none;
 }
 
-.m3-nav-section-label {
+.m3-nav-rail__logo {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--gold-accent, var(--gold)) 0%, #ff6b35 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  box-shadow: 0 6px 16px -4px rgba(200, 147, 63, 0.45);
+}
+
+.m3-nav-rail__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+}
+
+.m3-nav-rail__brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.m3-nav-rail__brand-sub {
+  font-size: 10px;
   color: var(--text-muted);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
 }
 
 .m3-nav-item {
@@ -1981,9 +2010,9 @@ textarea:focus-visible {
 }
 
 .m3-nav-item--active {
-  background: #f3ecfb;
-  color: var(--brand-blue);
-  box-shadow: inset 3px 0 0 var(--brand-blue);
+  background: var(--purple-dim, #f3ecfb);
+  color: var(--purple, var(--brand-blue));
+  font-weight: 700;
 }
 
 .m3-top-app-bar {

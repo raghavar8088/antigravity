@@ -326,8 +326,8 @@
 
 .m3-nav-item__icon {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .m3-nav-item__count {
@@ -521,9 +521,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--m3-radius-sm);
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9px;
   background: var(--m3-primary-container);
   color: var(--m3-on-primary-container);
   font: 700 0.75rem/1 var(--m3-font-mono);
@@ -547,8 +548,8 @@
 }
 
 .m3-nav-svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .m3-top-app-bar__metrics {
