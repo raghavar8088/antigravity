@@ -6,6 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SkeletonCard } from "@/components/ui/Skeleton";
+import { Sparkline } from "@/components/ui/Sparkline";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import type { JournalTrade, TerminalPosition } from "@/lib/terminal/terminalTypes";
@@ -83,9 +84,6 @@ export default function PortfolioAnalyticsDashboard() {
   }
 
   const sparkPoints = curve.slice(-50);
-  const sparkMin = sparkPoints.length ? Math.min(...sparkPoints.map((p) => p.equity)) : 0;
-  const sparkMax = sparkPoints.length ? Math.max(...sparkPoints.map((p) => p.equity)) : 1;
-  const sparkRange = sparkMax - sparkMin || 1;
 
   const positionColumns: DataTableColumn<TerminalPosition>[] = [
     { id: "strategy", header: "Strategy", cell: (p) => p.strategy, sortable: true, sortValue: (p) => p.strategy },
@@ -172,14 +170,13 @@ export default function PortfolioAnalyticsDashboard() {
             <TerminalNoData label="No equity curve data" />
           ) : (
             <div className="m3-chart-theme m3-equity-chart">
-              <svg viewBox={`0 0 ${Math.max(sparkPoints.length, 2)} 60`} preserveAspectRatio="none" role="img" aria-label="Equity curve">
-                <polyline
-                  fill="none"
-                  stroke="var(--chart-line, var(--m3-primary))"
-                  strokeWidth="1.5"
-                  points={sparkPoints.map((p, i) => `${i},${60 - ((p.equity - sparkMin) / sparkRange) * 56}`).join(" ")}
-                />
-              </svg>
+              <Sparkline
+                data={sparkPoints.map((p) => p.equity)}
+                width={Math.max(sparkPoints.length, 2) * 10}
+                height={60}
+                color="var(--chart-line, var(--m3-primary))"
+                stretch
+              />
               <div className="m3-equity-chart__axis">
                 <span>{dateLabel(sparkPoints[0]?.time) || "Start"}</span>
                 <span>{dateLabel(sparkPoints[sparkPoints.length - 1]?.time) || "Latest"}</span>

@@ -341,6 +341,7 @@ The content is organized as follows:
   components/ui/DensityProvider.tsx
   components/ui/Dialog.tsx
   components/ui/EmptyState.tsx
+  components/ui/ErrorBanner.tsx
   components/ui/ErrorBoundary.tsx
   components/ui/FormControls.tsx
   components/ui/GaugeBar.tsx
@@ -817,6 +818,7 @@ The content is organized as follows:
   certification/dr_certification_test.go
   certification/exchange_failure_test.go
   certification/flow_certification_test.go
+  certification/main_test.go
   certification/reconciliation_certification_test.go
   certification/replay_certification_test.go
   certification/security_certification_test.go
@@ -888,6 +890,7 @@ The content is organized as follows:
   fundops/audit_export_engine.go
   fundops/capital_flow_engine.go
   fundops/certification/fundops_cert_test.go
+  fundops/certification/main_test.go
   fundops/compliance_engine.go
   fundops/fee_engine.go
   fundops/fund_aggregate.go
@@ -1120,6 +1123,7 @@ The content is organized as follows:
   reconciliationv2/ledger_oms_reader_test.go
   reconciliationv2/ledger_oms_reader.go
   reconciliationv2/ledger_repair_target.go
+  reconciliationv2/main_test.go
   reconciliationv2/metrics.go
   reconciliationv2/paper_reconciliation.go
   reconciliationv2/position_manager_adapter.go

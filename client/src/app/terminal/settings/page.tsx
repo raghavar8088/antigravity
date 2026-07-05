@@ -66,6 +66,7 @@ export default function SettingsPage() {
               ]}
               value={density}
               onValueChange={(v) => setDensity(v as typeof density)}
+              variant="pill"
             />
           </Card>
 

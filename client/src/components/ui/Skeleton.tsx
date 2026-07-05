@@ -6,14 +6,16 @@ type SkeletonProps = {
   className?: string;
   width?: string | number;
   height?: string | number;
-  rounded?: boolean;
+  /** true = default rounded class; false = square; number = explicit border-radius in px. */
+  rounded?: boolean | number;
 };
 
 export function Skeleton({ className, width, height = 16, rounded = true }: SkeletonProps) {
+  const numericRadius = typeof rounded === "number" ? rounded : undefined;
   return (
     <div
-      className={cn("m3-skeleton", rounded && "m3-skeleton--rounded", className)}
-      style={{ width, height }}
+      className={cn("m3-skeleton", rounded === true && "m3-skeleton--rounded", className)}
+      style={{ width, height, borderRadius: numericRadius }}
       aria-hidden
     />
   );

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Metric, TerminalCard } from "@/components/terminal/institutional/TerminalCard";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusChip } from "@/components/ui/StatusChip";
 
 type HealthCheck = {
   name: string;
@@ -74,7 +76,21 @@ export function HealthCenter() {
   }
 
   return (
-    <div className="grid gap-3 xl:grid-cols-2">
+    <div className="m3-page-stack">
+      <PageHeader
+        title="Health"
+        subtitle="System health checks and OMS reconciliation chain"
+        actions={
+          data ? (
+            <StatusChip
+              label={data.status ?? "unknown"}
+              tone={data.status === "operational" ? "gain" : data.status === "degraded" ? "warn" : "loss"}
+              pulse={data.status === "operational"}
+            />
+          ) : undefined
+        }
+      />
+      <div className="grid gap-3 xl:grid-cols-2">
       <TerminalCard title="System Health" subtitle="/api/system/health · 15s poll">
         {error && !data ? (
           <TerminalNoData label={error.toUpperCase()} />
@@ -94,6 +110,7 @@ export function HealthCenter() {
           <p>All fills originate from engine OMS v3 and reconciliation checks run continuously.</p>
         </div>
       </TerminalCard>
+      </div>
     </div>
   );
 }

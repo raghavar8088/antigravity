@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Metric, TerminalCard } from "@/components/terminal/institutional/TerminalCard";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type DiagnosticsPayload = {
   ok?: boolean;
@@ -38,7 +39,9 @@ export function DiagnosticsCenter() {
     : "";
 
   return (
-    <div className="grid gap-3 xl:grid-cols-2">
+    <div className="m3-page-stack">
+      <PageHeader title="Diagnostics" subtitle="Trade Engine state snapshot and environment validation" />
+      <div className="grid gap-3 xl:grid-cols-2">
       <TerminalCard title="Trade Engine State" subtitle="Live snapshot preview">
         {!mockDiag ? (
           <TerminalNoData label="Loading diagnostics" />
@@ -61,6 +64,7 @@ export function DiagnosticsCenter() {
           </p>
         </div>
       </TerminalCard>
+      </div>
     </div>
   );
 }

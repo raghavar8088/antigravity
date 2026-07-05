@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { DailyPnLTable } from "@/components/DailyPnLTable";
-import { pct, usd } from "./format";
+import { pct, pnlClass, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   const curve = snapshot.analytics.equityCurve;
@@ -13,17 +14,19 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   const maxR = Math.max(1, ...snapshot.analytics.rMultipleBuckets.map((b) => b.count));
 
   return (
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="m3-page-stack">
+      <PageHeader title="Analytics" subtitle="Equity curve · R-multiple distribution · rolling performance" />
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-3">
         <TerminalCard title="Equity Curve" subtitle="MongoDB authority · equity curve">
           {!hasCurve ? (
             <TerminalNoData label="No equity curve data" />
           ) : (
-            <div className="h-72 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+            <div className="h-72 rounded-lg border p-3" style={{ borderColor: "var(--card-border, var(--border))", background: "var(--canvas-soft, var(--surface-2))" }}>
               <svg viewBox="0 0 700 240" className="h-full w-full" role="img" aria-label="Equity curve">
                 <polyline
                   fill="none"
-                  stroke="rgb(52 211 153)"
+                  stroke="var(--green)"
                   strokeWidth="3"
                   points={curve.map((p, i) => {
                     const minEq = Math.min(...curve.map((c) => c.equity));
@@ -43,9 +46,15 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
             <div className="grid grid-cols-5 items-end gap-2">
               {snapshot.analytics.rMultipleBuckets.map((bucket) => (
                 <div key={bucket.bucket} className="text-center">
-                  <div className="mx-auto w-full rounded-t bg-sky-400/70" style={{ height: `${Math.max(18, (bucket.count / maxR) * 150)}px` }} />
-                  <div className="mt-2 text-[10px] text-zinc-500">{bucket.bucket}</div>
-                  <div className="font-mono text-xs text-zinc-300">{bucket.count}</div>
+                  <div
+                    className="mx-auto w-full rounded-t"
+                    style={{
+                      height: `${Math.max(18, (bucket.count / maxR) * 150)}px`,
+                      background: bucket.bucket.trim().startsWith("-") ? "var(--red)" : "var(--green)",
+                    }}
+                  />
+                  <div className="mt-2 text-[10px]" style={{ color: "var(--text-muted)" }}>{bucket.bucket}</div>
+                  <div className="font-mono text-xs" style={{ color: "var(--text-primary)" }}>{bucket.count}</div>
                 </div>
               ))}
             </div>
@@ -65,6 +74,7 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
           <Metric label="Fee Drag" value={usd(-(snapshot.analytics.feeDragUsd ?? 0))} tone="negative" />
         </TerminalCard>
         <RegimeBreakdown />
+      </div>
       </div>
     </div>
   );
@@ -91,7 +101,7 @@ function RegimeBreakdown() {
           {rows.map((r) => (
             <div key={r.regime} className="flex items-center justify-between rounded-lg bg-zinc-950/40 px-3 py-2 text-xs">
               <span className="text-zinc-300">{r.regime}</span>
-              <span className="font-mono text-emerald-300">{usd(r.net_pnl, { signed: true })} · {pct(r.win_rate * 100, 0)} · {r.trades}t</span>
+              <span className={`font-mono ${pnlClass(r.net_pnl)}`}>{usd(r.net_pnl, { signed: true })} · {pct(r.win_rate * 100, 0)} · {r.trades}t</span>
             </div>
           ))}
         </div>

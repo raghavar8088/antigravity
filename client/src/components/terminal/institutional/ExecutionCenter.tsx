@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { InstitutionalChart } from "@/components/terminal/InstitutionalChart";
-import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
+import type { TerminalSnapshot, TerminalPosition } from "@/lib/terminal/terminalTypes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { pct, pnlClass, px, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Badge } from "@/components/ui/StatusChip";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 
 export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   const maxDepth = Math.max(
@@ -16,8 +19,28 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   const hasBook = snapshot.bids.length > 0 || snapshot.asks.length > 0;
   const hasPrice = snapshot.price > 0;
 
+  const positionColumns: DataTableColumn<TerminalPosition>[] = [
+    { id: "side", header: "Side", width: "70px", cell: (p) => <Badge variant={p.side === "LONG" ? "profit" : "loss"} size="sm">{p.side}</Badge> },
+    { id: "strategy", header: "Strategy", sortable: true, sortValue: (p) => p.strategy, cell: (p) => p.strategy },
+    { id: "entry", header: "Entry", align: "right", cell: (p) => px(p.entryPrice) },
+    { id: "mark", header: "Mark", align: "right", cell: (p) => px(p.markPrice) },
+    { id: "liq", header: "Liq", align: "right", cell: (p) => <span style={{ color: "var(--amber)" }}>{px(p.liquidationPrice)}</span> },
+    { id: "size", header: "Size", align: "right", sortable: true, sortValue: (p) => p.sizeBtc, cell: (p) => p.sizeBtc.toFixed(4) },
+    { id: "funding", header: "Funding", align: "right", cell: (p) => pct(p.fundingRate * 100, 4) },
+    {
+      id: "pnl",
+      header: "Live PnL",
+      align: "right",
+      sortable: true,
+      sortValue: (p) => p.unrealizedPnl,
+      cell: (p) => <span className={`font-semibold ${pnlClass(p.unrealizedPnl)}`}>{usd(p.unrealizedPnl, { signed: true })}</span>,
+    },
+  ];
+
   return (
-    <div className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+    <div className="m3-page-stack">
+      <PageHeader title="Execution" subtitle="Order book · live chart · positions · alert tape" />
+      <div className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
       <div className="space-y-3">
         <TerminalCard title="Order Book" subtitle="Live depth — requires WS feed">
           {!hasBook ? (
@@ -65,36 +88,7 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
           {snapshot.positions.length === 0 ? (
             <TerminalNoData label="No open positions" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
-                <thead className="text-left text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                  <tr>
-                    <th className="py-2">Side</th>
-                    <th>Strategy</th>
-                    <th className="text-right">Entry</th>
-                    <th className="text-right">Mark</th>
-                    <th className="text-right">Liq</th>
-                    <th className="text-right">Size</th>
-                    <th className="text-right">Funding</th>
-                    <th className="text-right">Live PnL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshot.positions.map((p) => (
-                    <tr key={p.id} className="border-t border-zinc-800 font-mono">
-                      <td className={p.side === "LONG" ? "py-2 text-emerald-300" : "py-2 text-rose-300"}>{p.side}</td>
-                      <td className="max-w-[220px] truncate text-zinc-300">{p.strategy}</td>
-                      <td className="text-right text-zinc-400">{px(p.entryPrice)}</td>
-                      <td className="text-right text-zinc-100">{px(p.markPrice)}</td>
-                      <td className="text-right text-amber-300">{px(p.liquidationPrice)}</td>
-                      <td className="text-right text-zinc-300">{p.sizeBtc.toFixed(4)}</td>
-                      <td className="text-right text-zinc-400">{pct(p.fundingRate * 100, 4)}</td>
-                      <td className={`text-right font-semibold ${pnlClass(p.unrealizedPnl)}`}>{usd(p.unrealizedPnl, { signed: true })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable columns={positionColumns} rows={snapshot.positions} getRowKey={(p) => p.id} density="compact" />
           )}
         </TerminalCard>
       </div>
@@ -115,8 +109,9 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
             <div className="space-y-2">
               {snapshot.alerts.map((alert) => (
                 <div key={alert.id} className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
-                  <div className={alert.severity === "CRITICAL" ? "text-xs font-semibold text-rose-300" : alert.severity === "WARNING" ? "text-xs font-semibold text-amber-300" : "text-xs font-semibold text-sky-300"}>
-                    {alert.severity} · {alert.title}
+                  <div className="flex items-center gap-2">
+                    <Badge variant={alert.severity === "CRITICAL" ? "loss" : alert.severity === "WARNING" ? "warning" : "info"} size="sm">{alert.severity}</Badge>
+                    <span className="text-xs font-semibold text-zinc-200">{alert.title}</span>
                   </div>
                   <p className="mt-1 text-xs text-zinc-400">{alert.message}</p>
                 </div>
@@ -124,6 +119,7 @@ export function ExecutionCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
             </div>
           )}
         </TerminalCard>
+      </div>
       </div>
     </div>
   );

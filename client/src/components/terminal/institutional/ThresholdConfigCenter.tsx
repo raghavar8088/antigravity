@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TerminalCard } from "./TerminalCard";
 import { StrictnessDial } from "@/components/StrictnessDial";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { Badge } from "@/components/ui/StatusChip";
 import type {
   ConfigChangeEntry,
   ThresholdCategory,
   ThresholdConfigDTO,
 } from "@/lib/thresholdConfig/types";
 import {
-  RISK_LEVEL_COLOR_VAR,
   RISK_LEVEL_LABEL,
   THRESHOLD_CATEGORIES,
   formatThresholdValue,
@@ -40,44 +42,17 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 // ── small shared building blocks ────────────────────────────────────────────
 
 function RiskBadge({ level }: { level: ThresholdConfigDTO["riskLevel"] }) {
-  const color = RISK_LEVEL_COLOR_VAR[level];
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.04em",
-        color,
-        border: `1px solid ${color}`,
-        background: level === "critical" ? "color-mix(in srgb, var(--red) 12%, transparent)" : "transparent",
-      }}
-    >
+    <Badge variant={level === "critical" ? "loss" : level === "high" ? "warning" : level === "medium" ? "caution" : "neutral"} size="sm">
       {RISK_LEVEL_LABEL[level]}
-    </span>
+    </Badge>
   );
 }
 
 function RestartBadge() {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "2px 8px",
-        borderRadius: 999,
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: "0.03em",
-        color: "var(--amber)",
-        border: "1px solid var(--amber)",
-      }}
-      title="This change is written immediately but only takes effect after the engine restarts."
-    >
-      REQUIRES RESTART
+    <span title="This change is written immediately but only takes effect after the engine restarts.">
+      <Badge variant="warning" size="sm">Requires Restart</Badge>
     </span>
   );
 }
@@ -752,14 +727,26 @@ export function ThresholdConfigCenter() {
   }, [thresholds]);
 
   if (loading) {
-    return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading threshold configuration…</p>;
+    return (
+      <div className="m3-page-stack">
+        <PageHeader title="Trade Thresholds" subtitle="Live risk/signal threshold configuration for the trading engine" />
+        <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading threshold configuration…</p>
+      </div>
+    );
   }
   if (errorMsg && thresholds.length === 0) {
-    return <p style={{ fontSize: 12, color: "var(--red)" }}>{errorMsg}</p>;
+    return (
+      <div className="m3-page-stack">
+        <PageHeader title="Trade Thresholds" subtitle="Live risk/signal threshold configuration for the trading engine" />
+        <ErrorBanner message={errorMsg} onRetry={load} />
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="m3-page-stack">
+      <PageHeader title="Trade Thresholds" subtitle="Live risk/signal threshold configuration for the trading engine" />
+      <div style={{ display: "grid", gap: 16 }}>
       <StrictnessDial thresholds={thresholds} onApplied={() => void load()} />
 
       <SummaryStats thresholds={thresholds} filter={filter} onFilterChange={setFilter} />
@@ -804,6 +791,7 @@ export function ThresholdConfigCenter() {
       </TerminalCard>
 
       <ChangeHistorySection />
+      </div>
     </div>
   );
 }

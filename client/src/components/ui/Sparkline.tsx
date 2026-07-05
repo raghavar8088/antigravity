@@ -8,9 +8,11 @@ export interface SparklineProps {
   color?: string;
   strokeWidth?: number;
   className?: string;
+  /** Render at 100% container width (viewBox coordinate space still uses `width`), for full-bleed chart cards rather than small inline tiles. */
+  stretch?: boolean;
 }
 
-export function Sparkline({ data, width = 80, height = 24, color, strokeWidth = 1.5, className }: SparklineProps) {
+export function Sparkline({ data, width = 80, height = 24, color, strokeWidth = 1.5, className, stretch = false }: SparklineProps) {
   if (data.length < 2) return null;
 
   const min = Math.min(...data);
@@ -35,9 +37,10 @@ export function Sparkline({ data, width = 80, height = 24, color, strokeWidth = 
 
   return (
     <svg
-      width={width}
+      width={stretch ? "100%" : width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio={stretch ? "none" : undefined}
       className={className}
       aria-hidden
     >

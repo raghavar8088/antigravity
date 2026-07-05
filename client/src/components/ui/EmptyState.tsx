@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Skeleton } from "./Skeleton";
 
 type EmptyStateProps = {
   title: string;
@@ -26,19 +27,7 @@ export function EmptyState({ title, subtitle, action, icon }: EmptyStateProps) {
   );
 }
 
+/** @deprecated Consolidated onto the shared Skeleton component — this is now a thin wrapper. */
 export function SkeletonBlock({ width = "100%", height = 16, rounded = 4 }: SkeletonBlockProps) {
-  return (
-    <div
-      aria-hidden
-      style={{
-        width,
-        height,
-        borderRadius: rounded,
-        background:
-          "linear-gradient(90deg, var(--surface-3) 25%, var(--surface-4) 50%, var(--surface-3) 75%)",
-        backgroundSize: "200% 100%",
-        animation: "skeleton-shimmer 1.5s infinite",
-      }}
-    />
-  );
+  return <Skeleton width={width} height={height} rounded={rounded} />;
 }

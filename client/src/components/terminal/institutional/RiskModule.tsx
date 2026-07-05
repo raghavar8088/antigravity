@@ -5,6 +5,8 @@ import type { TerminalSnapshot } from "@/lib/terminal/terminalTypes";
 import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { pct, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Badge } from "@/components/ui/StatusChip";
 
 type CorrelationMatrix = {
   labels: string[];
@@ -29,9 +31,13 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
   }, []);
 
   const hasRisk = snapshot.risk.drawdownPct !== 0 || snapshot.risk.grossExposureUsd > 0;
+  const heatColor =
+    snapshot.risk.heatPct > 70 ? "var(--red)" : snapshot.risk.heatPct > 40 ? "var(--amber)" : "var(--green)";
 
   return (
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="m3-page-stack">
+      <PageHeader title="Risk" subtitle="VaR · exposure · portfolio heat · reconciliation" />
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="space-y-3">
         <div className="grid gap-3 md:grid-cols-4">
           <Metric label="VaR 95" value={usd(-snapshot.risk.var95Usd)} tone="warning" />
@@ -44,8 +50,11 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
             <TerminalNoData />
           ) : (
             <>
-              <div className="h-5 overflow-hidden rounded-full bg-zinc-950">
-                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, snapshot.risk.heatPct * 10)}%` }} />
+              <div className="h-5 overflow-hidden rounded-full" style={{ background: "var(--canvas-soft, var(--surface-2))" }}>
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${Math.min(100, snapshot.risk.heatPct * 10)}%`, background: heatColor, transition: "width 0.35s ease, background 0.2s ease" }}
+                />
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-4">
                 <Metric label="Current Heat" value={`${snapshot.risk.heatPct.toFixed(1)}%`} />
@@ -72,14 +81,21 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
                   {correlation.matrix.map((row, i) => (
                     <tr key={correlation.labels[i] ?? i}>
                       <td className="truncate text-left text-zinc-500">{correlation.labels[i]?.slice(0, 8)}</td>
-                      {row.map((v, j) => (
-                        <td
-                          key={`${i}-${j}`}
-                          className={`rounded px-1 py-2 ${v > 0.7 ? "bg-rose-500/20 text-rose-200" : v > 0.45 ? "bg-amber-500/15 text-amber-200" : "bg-emerald-500/10 text-emerald-200"}`}
-                        >
-                          {v.toFixed(2)}
-                        </td>
-                      ))}
+                      {row.map((v, j) => {
+                        const tone = v > 0.7 ? "red" : v > 0.45 ? "amber" : "green";
+                        return (
+                          <td
+                            key={`${i}-${j}`}
+                            className="rounded px-1 py-2"
+                            style={{
+                              background: `var(--${tone}-dim)`,
+                              color: `var(--${tone})`,
+                            }}
+                          >
+                            {v.toFixed(2)}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -110,6 +126,7 @@ export function RiskModule({ snapshot }: { snapshot: TerminalSnapshot }) {
           )}
         </TerminalCard>
       </div>
+      </div>
     </div>
   );
 }
@@ -133,11 +150,12 @@ function ReconciliationPanel() {
       ) : (
         <div className="space-y-2 text-xs">
           {events.map((e, i) => (
-            <div key={`${e.ts}-${i}`} className="flex justify-between rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
+            <div key={`${e.ts}-${i}`} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
               <span className="text-zinc-400">{safeDateTime(e.ts)}</span>
               <span className="font-mono text-zinc-200">{e.action}</span>
-              <span className={e.kill_switch_triggered ? "text-rose-300" : "text-emerald-300"}>
-                drift {e.drift_amount.toFixed(4)}{e.kill_switch_triggered ? " · KS" : ""}
+              <span className="flex items-center gap-2 font-mono">
+                drift {e.drift_amount.toFixed(4)}
+                {e.kill_switch_triggered ? <Badge variant="loss" size="sm">KS</Badge> : null}
               </span>
             </div>
           ))}

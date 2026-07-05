@@ -7,6 +7,10 @@ import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pct, pnlClass, usd } from "./format";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatusChip, Badge } from "@/components/ui/StatusChip";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import type { TerminalPosition } from "@/lib/terminal/terminalTypes";
 
 export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthorityState }) {
   const equity =
@@ -24,8 +28,27 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
   const realizedPnl = snapshot.journal.reduce((sum, trade) => sum + trade.netPnl, 0);
   const riskState = snapshot.risk.heatPct > 70 ? "Reduce risk" : snapshot.risk.heatPct > 40 ? "Watch" : "Normal";
 
+  const positionColumns: DataTableColumn<TerminalPosition>[] = [
+    { id: "strategy", header: "Strategy", cell: (p) => p.strategy, sortable: true, sortValue: (p) => p.strategy },
+    { id: "side", header: "Side", width: "70px", cell: (p) => <Badge variant={p.side === "LONG" ? "profit" : "loss"} size="sm">{p.side}</Badge> },
+    {
+      id: "pnl",
+      header: "PnL",
+      align: "right",
+      cell: (p) => <span className={pnlClass(p.unrealizedPnl)}>{usd(p.unrealizedPnl, { signed: true })}</span>,
+      sortable: true,
+      sortValue: (p) => p.unrealizedPnl,
+    },
+  ];
+
   return (
     <div className="m3-page-stack">
+      <PageHeader
+        title="Command Center"
+        subtitle="Live overview — Trade Engine authority, portfolio, risk, and recent events"
+        actions={<StatusChip label={hasAuthority ? "Live" : "Stale"} tone={hasAuthority ? "gain" : "loss"} pulse={hasAuthority} />}
+      />
+
       <TerminalCard
         title="Pre-Live Trade Engine"
         subtitle="100 backtested-qualified strategies · real broker · no position limits"
@@ -95,7 +118,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
               {snapshot.strategies.slice(0, 6).map((s) => (
                 <div key={s.name} className="flex items-center justify-between rounded border border-zinc-800 px-2 py-1.5 text-xs">
                   <span className="truncate text-zinc-300">{s.name}</span>
-                  <span className={s.health === "ACTIVE" ? "text-emerald-400" : s.health === "WATCHLIST" ? "text-amber-400" : "text-rose-400"}>{s.health}</span>
+                  <Badge variant={s.health === "ACTIVE" ? "profit" : s.health === "WATCHLIST" ? "warning" : "loss"} size="sm">{s.health}</Badge>
                 </div>
               ))}
             </div>
@@ -151,9 +174,9 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
           ) : (
             <div className="max-h-48 space-y-1 overflow-y-auto">
               {snapshot.alerts.slice(0, 8).map((a) => (
-                <div key={a.id} className="rounded border border-zinc-800 px-2 py-1.5 text-xs">
-                  <span className={a.severity === "CRITICAL" ? "text-rose-400" : a.severity === "WARNING" ? "text-amber-400" : "text-sky-400"}>{a.severity}</span>
-                  <span className="ml-2 text-zinc-300">{a.title}</span>
+                <div key={a.id} className="flex items-center gap-2 rounded border border-zinc-800 px-2 py-1.5 text-xs">
+                  <Badge variant={a.severity === "CRITICAL" ? "loss" : a.severity === "WARNING" ? "warning" : "info"} size="sm">{a.severity}</Badge>
+                  <span className="text-zinc-300">{a.title}</span>
                 </div>
               ))}
             </div>
@@ -168,26 +191,12 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
           {snapshot.positions.length === 0 ? (
             <TerminalNoData label="No open positions" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="text-left text-[10px] uppercase tracking-wider text-zinc-500">
-                  <tr>
-                    <th className="py-1">Strategy</th>
-                    <th>Side</th>
-                    <th className="text-right">PnL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshot.positions.slice(0, 6).map((p) => (
-                    <tr key={p.id} className="border-t border-zinc-800 font-mono">
-                      <td className="max-w-[140px] truncate py-1 text-zinc-300">{p.strategy}</td>
-                      <td className={p.side === "LONG" ? "text-emerald-400" : "text-rose-400"}>{p.side}</td>
-                      <td className={`text-right ${pnlClass(p.unrealizedPnl)}`}>{usd(p.unrealizedPnl, { signed: true })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={positionColumns}
+              rows={snapshot.positions.slice(0, 6)}
+              getRowKey={(p) => p.id}
+              density="compact"
+            />
           )}
         </TerminalCard>
       </div>

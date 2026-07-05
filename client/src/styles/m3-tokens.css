@@ -5,16 +5,16 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── M3 Color Roles (Dark — default institutional) ─────────────────────── */
-  --m3-primary: #8ab4f8;
-  --m3-on-primary: #062e6f;
-  --m3-primary-container: rgba(138, 180, 248, 0.16);
-  --m3-on-primary-container: #d3e3fd;
+  /* ── M3 Color Roles (Dark — gold primary / purple secondary) ────────────── */
+  --m3-primary: #e0ac57;
+  --m3-on-primary: #2b1a05;
+  --m3-primary-container: rgba(224, 172, 87, 0.16);
+  --m3-on-primary-container: #f0be6d;
 
-  --m3-secondary: #a8c7fa;
-  --m3-on-secondary: #062e6f;
-  --m3-secondary-container: rgba(168, 199, 250, 0.12);
-  --m3-on-secondary-container: #c2d7ff;
+  --m3-secondary: #b794f6;
+  --m3-on-secondary: #2b1147;
+  --m3-secondary-container: rgba(183, 148, 246, 0.14);
+  --m3-on-secondary-container: #d4bbfb;
 
   --m3-tertiary: #6dd58c;
   --m3-on-tertiary: #0a3818;
@@ -88,12 +88,12 @@
   --m3-easing-standard: cubic-bezier(0.2, 0, 0, 1);
   --m3-easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
-  /* ── Elevation (M3 dark) ─────────────────────────────────────────────────── */
+  /* ── Elevation (M3 dark, lavender-tinted to match the light theme's shadow recipe) ── */
   --m3-elevation-0: none;
-  --m3-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.15);
-  --m3-elevation-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --m3-elevation-3: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.25);
-  --m3-elevation-4: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 8px rgba(0, 0, 0, 0.3);
+  --m3-elevation-1: 0 1px 2px rgba(125, 52, 220, 0.12), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --m3-elevation-2: 0 2px 6px rgba(125, 52, 220, 0.14), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --m3-elevation-3: 0 4px 12px rgba(125, 52, 220, 0.16), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --m3-elevation-4: 0 8px 24px rgba(125, 52, 220, 0.18), 0 4px 8px rgba(0, 0, 0, 0.4);
 
   /* ── Geometry ───────────────────────────────────────────────────────────── */
   --m3-radius-xs: 4px;
@@ -112,7 +112,7 @@
 
   /* ── State layers ───────────────────────────────────────────────────────── */
   --m3-state-hover: rgba(227, 227, 227, 0.08);
-  --m3-state-focus: rgba(138, 180, 248, 0.12);
+  --m3-state-focus: rgba(183, 148, 246, 0.14);
   --m3-state-pressed: rgba(227, 227, 227, 0.12);
 
   /* ── Legacy aliases (globals.css :root compatibility) ───────────────────── */
@@ -412,6 +412,11 @@
 .m3-surface-card--tone-negative { border-left-color: var(--red); }
 .m3-surface-card--tone-warning { border-left-color: var(--amber); }
 
+.m3-surface-card--tint-lavender {
+  background: var(--canvas-edge, var(--m3-surface-container-high));
+  border-color: transparent;
+}
+
 .m3-surface-card__header {
   display: flex;
   align-items: center;
@@ -690,6 +695,15 @@
   background: currentColor;
 }
 
+.m3-status-chip__dot--pulse {
+  animation: m3-status-chip-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes m3-status-chip-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.72); }
+}
+
 .m3-status-chip--success {
   border-color: var(--green);
   background: var(--green-dim);
@@ -741,11 +755,30 @@
 
 .m3-badge {
   display: inline-flex;
+  align-items: center;
+  gap: 5px;
   min-width: 20px;
-  padding: 2px 6px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
   border-radius: var(--m3-radius-full);
   font: var(--m3-label-sm);
+  font-weight: 600;
+  white-space: nowrap;
   background: var(--m3-surface-container-highest);
+}
+
+.m3-badge--sm {
+  padding: 2px 6px;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.m3-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .m3-empty-state {
@@ -1102,6 +1135,28 @@ body {
 .m3-tabs__trigger[data-state="active"] { color: var(--m3-primary); border-bottom-color: var(--m3-primary); }
 .m3-tabs__content { padding: var(--m3-space-2) 0; }
 
+/* Pill variant — matches the reference design system's rounded tab switcher (purple active state) */
+.m3-tabs__list--pill {
+  border-bottom: none;
+  gap: var(--m3-space-2);
+  margin-bottom: var(--m3-space-4);
+}
+.m3-tabs__trigger--pill {
+  padding: 8px 16px;
+  border-radius: var(--m3-radius-full);
+  background: var(--canvas-soft, var(--m3-surface-container-high));
+  border: 1px solid var(--m3-outline-variant);
+  color: var(--text-muted, var(--m3-on-surface-variant));
+  margin-bottom: 0;
+}
+.m3-tabs__trigger--pill[data-state="active"] {
+  background: var(--purple-dim);
+  border-color: rgba(125, 52, 220, 0.3);
+  color: var(--purple);
+  border-bottom-color: transparent;
+  font-weight: 700;
+}
+
 /* ── Dialog ─────────────────────────────────────────────────────────────── */
 .m3-dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; }
 .m3-dialog-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 101; width: min(480px, calc(100vw - 32px)); padding: var(--m3-space-5); border-radius: var(--m3-radius-md); background: var(--m3-surface-container); box-shadow: var(--m3-elevation-4); }
@@ -1143,6 +1198,28 @@ body {
 .m3-event-list-wrap { max-height: 520px; overflow: auto; }
 .m3-banner { padding: var(--m3-space-3); border-radius: var(--m3-radius-sm); font: var(--m3-body-md); }
 .m3-banner--error { background: var(--m3-error-container); color: var(--m3-loss); border: 1px solid var(--m3-loss); }
+
+.m3-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.m3-error-banner__retry {
+  flex-shrink: 0;
+  border: 1px solid var(--m3-loss);
+  border-radius: var(--m3-radius-full);
+  background: var(--m3-surface);
+  color: var(--m3-loss);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--m3-duration-short) var(--m3-easing-standard);
+}
+.m3-error-banner__retry:hover {
+  background: var(--m3-error-container);
+}
 
 /* ── Design system preview ──────────────────────────────────────────────── */
 .m3-ds-swatches { display: flex; flex-wrap: wrap; gap: var(--m3-space-4); }

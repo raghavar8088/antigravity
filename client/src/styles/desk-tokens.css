@@ -9,11 +9,13 @@ body.combat-mode {
   /* ── Brand ─────────────────────────────────────────────────────────────── */
   --desk-btc-accent: #f7931a;
 
-  /* ── Primary / Accent ──────────────────────────────────────────────────── */
-  --desk-primary:                #4d7cfe;
-  --desk-on-primary:             #ffffff;
-  --desk-primary-container:      rgba(41, 98, 255, 0.15);
-  --desk-on-primary-container:   #93b4fd;
+  /* ── Primary / Accent — gold primary, purple secondary ──────────────────── */
+  --desk-primary:                #e0ac57;
+  --desk-on-primary:             #2b1a05;
+  --desk-primary-container:      rgba(224, 172, 87, 0.16);
+  --desk-on-primary-container:   #f0be6d;
+  --desk-secondary:              #b794f6;
+  --desk-secondary-container:    rgba(183, 148, 246, 0.14);
 
   /* ── Surface Layers ────────────────────────────────────────────────────── */
   --desk-surface:                    #161b22;
@@ -39,11 +41,11 @@ body.combat-mode {
   --desk-warning:            #ffb300;
   --desk-warning-container:  rgba(255, 179, 0, 0.12);
 
-  /* ── Elevation (dark) ──────────────────────────────────────────────────── */
+  /* ── Elevation (dark, lavender-tinted) ───────────────────────────────────── */
   --desk-elevation-0: none;
-  --desk-elevation-1: 0 2px 6px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.35);
-  --desk-elevation-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.35);
-  --desk-elevation-3: 0 8px 24px rgba(0, 0, 0, 0.5), 0 4px 8px rgba(0, 0, 0, 0.4);
+  --desk-elevation-1: 0 2px 6px rgba(125, 52, 220, 0.14), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --desk-elevation-2: 0 4px 12px rgba(125, 52, 220, 0.16), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --desk-elevation-3: 0 8px 24px rgba(125, 52, 220, 0.18), 0 4px 8px rgba(0, 0, 0, 0.4);
 
   /* ── Spacing ───────────────────────────────────────────────────────────── */
   --desk-space-1: 4px;

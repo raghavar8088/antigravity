@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TerminalNoData } from "@/components/terminal/TerminalAuthorityGuard";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { pnlClass, usd } from "./format";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { Badge } from "@/components/ui/StatusChip";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 
 // Mirrors engine/internal/trading/scalers_eval.go: ScalersStrategyStats /
 // ScalersSnapshot — the REAL curated scalper registry (BuildCuratedScalpers,
@@ -76,7 +79,6 @@ export function StrategiesCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
 
   const loadStats = useCallback(async () => {
     setLoading(true);
@@ -104,12 +106,6 @@ export function StrategiesCenter() {
 
   const strategies = useMemo(() => sortScalerStrategies(stats?.strategies ?? []), [stats]);
 
-  const filteredStrategies = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return strategies;
-    return strategies.filter((strategy) => strategy.name.toLowerCase().includes(q));
-  }, [query, strategies]);
-
   const totalTrades = strategies.reduce((sum, s) => sum + s.total_trades, 0);
   const totalWins = strategies.reduce((sum, s) => sum + s.wins, 0);
   const overallWinRate = totalTrades > 0 ? totalWins / totalTrades : 0;
@@ -117,44 +113,83 @@ export function StrategiesCenter() {
   const activeStrategies = strategies.filter((s) => s.active).length;
   const winningStrategies = strategies.filter((s) => s.last_pnl > 0).length;
 
+  const strategyColumns: DataTableColumn<ScalerStrategyStat>[] = [
+    {
+      id: "name",
+      header: "Strategy",
+      sortable: true,
+      sortValue: (s) => s.name,
+      cell: (s) => (
+        <div>
+          <div className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">{s.name.replace(/_/g, " ")}</div>
+          <div className="text-[11px] text-[var(--text-muted)]">{s.total_trades > 0 ? "Trading history" : "Probationary (no trades yet)"}</div>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      align: "right",
+      cell: (s) => <Badge variant={s.active ? "profit" : "neutral"} size="sm">{s.active ? "Active" : "Demoted"}</Badge>,
+    },
+    { id: "trades", header: "Trades", align: "right", sortable: true, sortValue: (s) => s.total_trades, cell: (s) => int(s.total_trades) },
+    { id: "wins", header: "Wins", align: "right", sortable: true, sortValue: (s) => s.wins, cell: (s) => int(s.wins) },
+    {
+      id: "winRate",
+      header: "Win Rate",
+      align: "right",
+      sortable: true,
+      sortValue: (s) => s.win_rate,
+      cell: (s) => <span className={s.total_trades > 0 && s.win_rate >= 0.5 ? "font-semibold text-emerald-600" : ""}>{s.total_trades > 0 ? rate(s.win_rate) : "-"}</span>,
+    },
+    {
+      id: "lastPnl",
+      header: "Last PnL",
+      align: "right",
+      sortable: true,
+      sortValue: (s) => s.last_pnl,
+      cell: (s) => <span className={`font-semibold ${pnlClass(s.last_pnl)}`}>{usd(s.last_pnl, { signed: true, compact: true })}</span>,
+    },
+  ];
+
+  const signalColumns: DataTableColumn<ScalerSignalSnapshot>[] = [
+    { id: "strategy", header: "Strategy", sortable: true, sortValue: (s) => s.strategy, cell: (s) => <span className="font-semibold text-[var(--text-primary)]">{s.strategy.replace(/_/g, " ")}</span> },
+    { id: "side", header: "Side", cell: (s) => <Badge variant={s.side === "LONG" ? "profit" : "loss"} size="sm">{s.side}</Badge> },
+    { id: "confidence", header: "Confidence", align: "right", sortable: true, sortValue: (s) => s.confidence, cell: (s) => rate(s.confidence) },
+    { id: "price", header: "Price", align: "right", sortable: true, sortValue: (s) => s.price, cell: (s) => usd(s.price, { compact: true }) },
+    { id: "time", header: "Time", align: "right", cell: (s) => relativeTime(s.timestamp) },
+  ];
+
   return (
     <div className="m3-page-stack">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-emerald-600">BTC Scalper Engine</div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">Strategies</h1>
-          <p className="mt-1 max-w-2xl text-xs text-[var(--text-secondary)]">
-            Live roster from the curated BTC scalper registry (S1-S29 + SMC expansion) — regime, evaluation cycle
-            telemetry, per-strategy win rate, and last realized PnL, sourced directly from the Go trading engine.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/terminal/strategies/shadow-performance"
-              className="rounded border border-violet-800 bg-violet-950/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-violet-300 transition-colors hover:border-violet-600"
-            >
-              Shadow Leaderboard
-            </Link>
-            <button
-              type="button"
-              onClick={loadStats}
-              disabled={loading}
-              className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] transition-colors hover:border-emerald-600 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
+      <PageHeader
+        title="Strategies"
+        breadcrumb="BTC Scalper Engine"
+        subtitle="Live roster from the curated BTC scalper registry (S1-S29 + SMC expansion) — regime, evaluation cycle telemetry, per-strategy win rate, and last realized PnL, sourced directly from the Go trading engine."
+        actions={
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <Link
+                href="/terminal/strategies/shadow-performance"
+                className="rounded border border-violet-800 bg-violet-950/30 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-violet-300 transition-colors hover:border-violet-600"
+              >
+                Shadow Leaderboard
+              </Link>
+              <button
+                type="button"
+                onClick={loadStats}
+                disabled={loading}
+                className="rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)] transition-colors hover:border-emerald-600 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+            {refreshedAt ? <span className="text-[9px] text-[var(--text-muted)]">Updated {refreshedAt}</span> : null}
           </div>
-          {refreshedAt ? <span className="text-[9px] text-[var(--text-muted)]">Updated {refreshedAt}</span> : null}
-        </div>
-      </div>
+        }
+      />
 
-      {error ? (
-        <div className="rounded border border-rose-900/60 bg-rose-950/20 px-4 py-3 text-xs text-rose-300" role="alert">
-          <span className="font-bold">Scalper engine stats unavailable.</span>{" "}
-          <span className="text-rose-200/80">{error}</span>
-        </div>
-      ) : null}
+      {error ? <ErrorBanner message={`Scalper engine stats unavailable: ${error}`} onRetry={loadStats} /> : null}
 
       <div className="m3-kpi-strip">
         <Metric label="Strategies" value={int(strategies.length)} tone={strategies.length > 0 ? "positive" : "neutral"} />
@@ -181,96 +216,29 @@ export function StrategiesCenter() {
           <div className="flex items-center gap-2">
             <span className="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">{activeStrategies} active</span>
             {loading ? <span className="text-[9px] uppercase tracking-wider text-amber-500">refreshing</span> : null}
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search strategy"
-              className="w-44 rounded border border-[var(--card-border)] bg-[var(--card-bg)] px-2 py-1 text-[10px] text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-emerald-600"
-            />
           </div>
         }
       >
-        {filteredStrategies.length === 0 ? (
-          <TerminalNoData label={query ? "No matching strategies" : "No scalper strategies reported by engine"} />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-subtle)] text-left text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                  <th className="px-3 py-2">#</th>
-                  <th className="px-3 py-2">Strategy</th>
-                  <th className="px-3 py-2 text-right">Status</th>
-                  <th className="px-3 py-2 text-right">Trades</th>
-                  <th className="px-3 py-2 text-right">Wins</th>
-                  <th className="px-3 py-2 text-right">Win Rate</th>
-                  <th className="px-3 py-2 text-right">Last PnL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStrategies.map((strategy, index) => (
-                  <tr key={strategy.name} className="border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--surface-hover,#f8fbff)]">
-                    <td className="px-3 py-2.5 text-xs tabular-nums text-[var(--text-muted)]">{index + 1}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
-                        {strategy.name.replace(/_/g, " ")}
-                      </div>
-                      <div className="text-[11px] text-[var(--text-muted)]">
-                        {strategy.total_trades > 0 ? "Trading history" : "Probationary (no trades yet)"}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <span
-                        className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                          strategy.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-600"
-                        }`}
-                      >
-                        {strategy.active ? "Active" : "Demoted"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-primary)]">{int(strategy.total_trades)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-[var(--text-secondary)]">{int(strategy.wins)}</td>
-                    <td className={`px-3 py-2.5 text-right font-mono tabular-nums ${strategy.total_trades > 0 && strategy.win_rate >= 0.5 ? "font-semibold text-emerald-600" : "text-[var(--text-secondary)]"}`}>
-                      {strategy.total_trades > 0 ? rate(strategy.win_rate) : "-"}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right font-mono font-semibold tabular-nums ${strategy.last_pnl > 0 ? "text-emerald-600" : strategy.last_pnl < 0 ? "text-rose-600" : "text-[var(--text-secondary)]"}`}>
-                      {usd(strategy.last_pnl, { signed: true, compact: true })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={strategyColumns}
+          rows={strategies}
+          getRowKey={(s) => s.name}
+          searchable
+          searchPlaceholder="Search strategy"
+          searchFilter={(s, q) => s.name.toLowerCase().includes(q)}
+          emptyTitle="No scalper strategies reported by engine"
+          density="compact"
+        />
       </TerminalCard>
 
       {stats?.recent_signals && stats.recent_signals.length > 0 ? (
         <TerminalCard title="Recent Signals" subtitle="Most recent signals evaluated by the scalper engine">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-xs">
-              <thead>
-                <tr className="border-b border-[var(--border-subtle)] text-left text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-                  <th className="px-2 py-2">Strategy</th>
-                  <th className="px-2 py-2">Side</th>
-                  <th className="px-2 py-2 text-right">Confidence</th>
-                  <th className="px-2 py-2 text-right">Price</th>
-                  <th className="px-2 py-2 text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recent_signals.map((signal) => (
-                  <tr key={signal.id} className="border-t border-[var(--border-subtle)]">
-                    <td className="px-2 py-2 font-semibold text-[var(--text-primary)]">{signal.strategy.replace(/_/g, " ")}</td>
-                    <td className="px-2 py-2">
-                      <span className={signal.side === "LONG" ? "font-semibold text-emerald-600" : "font-semibold text-rose-600"}>{signal.side}</span>
-                    </td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">{rate(signal.confidence)}</td>
-                    <td className="px-2 py-2 text-right font-mono tabular-nums text-[var(--text-secondary)]">{usd(signal.price, { compact: true })}</td>
-                    <td className="px-2 py-2 text-right text-[10px] text-[var(--text-muted)]">{relativeTime(signal.timestamp)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={signalColumns}
+            rows={stats.recent_signals}
+            getRowKey={(s) => s.id}
+            density="compact"
+          />
         </TerminalCard>
       ) : null}
     </div>

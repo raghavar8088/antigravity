@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/StatusChip";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select, Switch, TextField } from "@/components/ui/FormControls";
 import { StatusChip } from "@/components/ui/StatusChip";
@@ -133,11 +134,7 @@ export default function EventCenter() {
         }
       />
 
-      {error ? (
-        <div className="m3-banner m3-banner--error" role="alert">
-          Backend authority unavailable: {error}
-        </div>
-      ) : null}
+      {error ? <ErrorBanner message={`Backend authority unavailable: ${error}`} /> : null}
 
       <Card title="Filters" subtitle="Search and filter events">
         <div className="m3-event-filters">
