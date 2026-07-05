@@ -53,9 +53,12 @@ func DefaultRunConfig(symbol string) RunConfig {
 	cfg.AllowShorts = true
 	cfg.MonteCarloConfig.Paths = 1                       // minimal — 5000 paths OOMs Lightsail
 	cfg.MonteCarloConfig.BootstrapWithReplacement = false // no resampling needed
-	// Backtest cost model: maker pricing + tighter spread assumption
-	cfg.CommissionTier = v3.TierMaker
-	cfg.SpreadBaseBps = 0.5  // 0.05% half-spread vs 0.15% institutional default
+	// Backtest cost model must match live execution: the paper OMS and live
+	// engine send MARKET orders (taker both legs). TierStandard charges Binance
+	// taker 4 bps per leg (8 bps round trip) vs the old TierMaker 2+2 bps,
+	// which assumed post-only fills the live engine never uses.
+	cfg.CommissionTier = v3.TierStandard
+	cfg.SpreadBaseBps = 1.5  // v3 institutional default half-spread
 	cfg.MaxTradesPerDay = 5  // prevent overtrading — max 5 entries per strategy per day
 	cfg.CapitalFloorPct = 0.5 // halt strategy if equity drops below 50% of initial capital
 	cfg.OHLCVMode = true     // disables OHLCV-artifact vol inflation in spread model
@@ -259,7 +262,8 @@ func buildStrategyResult(name, symbol string, from, to time.Time, r v3.V3Result)
 	}
 
 	totalReturn := (r.FinalCapitalUSD - r.InitialCapitalUSD) / r.InitialCapitalUSD * 100
-	sharpe := calcSharpe(returns)
+	years := to.Sub(from).Hours() / (24 * 365.25)
+	sharpe := calcSharpe(returns, years)
 
 	return StrategyResult{
 		StrategyName:   name,
@@ -278,9 +282,14 @@ func buildStrategyResult(name, symbol string, from, to time.Time, r v3.V3Result)
 	}
 }
 
-func calcSharpe(returns []float64) float64 {
+// calcSharpe annualises per-trade returns by the strategy's actual trade
+// frequency (trades per year over the tested window). The previous version
+// annualised with √35040 as if every trade were a 15-minute bar return, which
+// inflated Sharpe by an order of magnitude (values of 20–45) and made the
+// promotion gate (Sharpe ≥ 1.0) pass nearly any strategy with a positive mean.
+func calcSharpe(returns []float64, years float64) float64 {
 	n := len(returns)
-	if n < 2 {
+	if n < 2 || years <= 0 {
 		return 0
 	}
 	mean := 0.0
@@ -298,8 +307,8 @@ func calcSharpe(returns []float64) float64 {
 	if std == 0 {
 		return 0
 	}
-	// annualise assuming 15m bars ≈ 35040 bars/year
-	return mean / std * math.Sqrt(35040)
+	tradesPerYear := float64(n) / years
+	return mean / std * math.Sqrt(tradesPerYear)
 }
 
 func toFundingRates(ds marketdata.MTFDataset) []btExecution.FundingRate {

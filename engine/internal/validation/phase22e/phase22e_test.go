@@ -250,7 +250,9 @@ func TestMonteCarlo_StableStrategy(t *testing.T) {
 }
 
 func TestMonteCarlo_LosingStrategy(t *testing.T) {
-	trades := syntheticTrades(200, 0.30, 50, 120, "loser", "Loser", "RSI")
+	// Expected total: 200 × (0.30×200 − 0.70×600) = −$72k on $100k NAV —
+	// deep enough that bootstrap paths cross the −50% path-ruin threshold.
+	trades := syntheticTrades(200, 0.30, 200, 600, "loser", "Loser", "RSI")
 	mc := RunMonteCarlo(trades, 100_000, 100)
 	if mc.ProbabilityRuin <= 0 {
 		t.Error("losing strategy should have non-zero ruin probability")

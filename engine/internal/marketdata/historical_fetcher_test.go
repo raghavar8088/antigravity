@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -36,10 +37,11 @@ func TestFetchKlinesSinglePage(t *testing.T) {
 	f.httpClient = srv.Client()
 	// Replace the base URL by overriding the HTTP client's transport
 	f.httpClient.Transport = urlRewriteTransport(srv.URL)
-	f.rateLimiter = make(chan time.Time, 10)
+	rl := make(chan time.Time, 10)
 	for i := 0; i < 10; i++ {
-		f.rateLimiter.(chan time.Time) <- time.Now()
+		rl <- time.Now()
 	}
+	f.rateLimiter = rl
 
 	candles, err := f.FetchKlines("BTCUSDT", "1m", 0, 0)
 	if err != nil {
@@ -58,7 +60,8 @@ func TestPaginatedFetchTwoPages(t *testing.T) {
 		if calls == 1 {
 			w.Write(makeFakePage(1_700_000_000_000, 1000, 60_000))
 		} else {
-			w.Write(makeFakePage(1_700_000_060_000_000, 50, 60_000))
+			// Page 2 starts right after page 1's 1000 one-minute bars.
+			w.Write(makeFakePage(1_700_000_000_000+1000*60_000, 50, 60_000))
 		}
 	}))
 	defer srv.Close()

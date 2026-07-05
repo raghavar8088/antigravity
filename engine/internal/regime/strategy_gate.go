@@ -58,8 +58,14 @@ func (g *StrategyGate) GetPositionSizeMultiplier(rc RegimeClassification) float6
 }
 
 // IsStrategyAllowed returns true if the strategy is permitted to trade in the given regime.
-// When no explicit allowlist is set for the regime, all strategies are permitted.
+// A classification with AllowNewEntries=false suspends every strategy — the same
+// rule the trading loop enforces by skipping the cycle; encoded here too so any
+// caller of the gate gets consistent policy. When no explicit allowlist is set
+// for the regime, all strategies are permitted.
 func (g *StrategyGate) IsStrategyAllowed(strategyName string, rc RegimeClassification) bool {
+	if !rc.AllowNewEntries {
+		return false
+	}
 	allowed := g.perRegime[string(rc.Regime)]
 	if len(allowed) == 0 {
 		// No explicit list — allow all strategies in this regime.

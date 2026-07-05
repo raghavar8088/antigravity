@@ -9,7 +9,10 @@ import (
 	"antigravity-engine/internal/killswitch"
 )
 
-const reconKillSwitchGracePeriod = 90 * time.Second
+// reconKillSwitchGracePeriod suppresses kill-switch triggers right after hook
+// creation so stale reconciliation state at boot cannot storm the switch.
+// var (not const) so tests can zero it to exercise the trigger paths.
+var reconKillSwitchGracePeriod = 90 * time.Second
 
 // CriticalDriftKillSwitchHook returns a cycle hook that triggers the institutional
 // kill switch when reconciliation detects CRITICAL drift or manual escalation.

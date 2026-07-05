@@ -6,12 +6,47 @@
 // quality multipliers are mandatory risk controls.
 package kelly
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
 
-// hardMaxPositionPct is the absolute ceiling enforced regardless of any config.
-// Reduced from 10% to 2% to account for up to 80 strategies trading simultaneously.
-// 80 strategies × 2% = 160% max theoretical exposure (bounded by Kelly math below this).
-const hardMaxPositionPct = 0.02 // 2%
+// Institutional defaults. Operational overrides belong in .env
+// (KELLY_MAX_POSITION_PCT / KELLY_PROBATIONARY_PCT) — e.g. the flood-mode
+// deployment runs 0.02 / 0.005 to bound exposure across many concurrent
+// strategies. Previously those env vars were decorative (the flood values
+// were hardcoded here), which made behaviour unconfigurable and broke the
+// package tests, which assert the institutional defaults.
+const (
+	defaultHardMaxPositionPct = 0.10 // absolute ceiling: 10% of portfolio per position
+	defaultProbationaryPct    = 0.05 // flat sizing until MinTradesRequired closed trades
+)
+
+// envFraction reads a (0,1] fraction from the environment, falling back to def
+// when unset or invalid.
+func envFraction(key string, def float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || f <= 0 || f > 1 {
+		return def
+	}
+	return f
+}
+
+// hardMaxPositionPct is the absolute ceiling enforced regardless of any other config.
+func hardMaxPositionPct() float64 {
+	return envFraction("KELLY_MAX_POSITION_PCT", defaultHardMaxPositionPct)
+}
+
+// probationaryPct is the flat sizing fraction used until a strategy has
+// MinTradesRequired closed trades of history.
+func probationaryPct() float64 {
+	return envFraction("KELLY_PROBATIONARY_PCT", defaultProbationaryPct)
+}
 
 // KellyInputs carries all inputs required for one sizing computation.
 type KellyInputs struct {
@@ -52,7 +87,7 @@ func Compute(inputs KellyInputs) (KellyResult, error) {
 
 	// ── Step 1: Minimum trade count ───────────────────────────────────────────
 	if inputs.TradeCount < min {
-		pct := clamp(0.005, 0, effectiveMax(inputs))
+		pct := clamp(probationaryPct(), 0, effectiveMax(inputs))
 		return KellyResult{
 			FinalPositionPct: pct,
 			FinalPositionUSD: pct * inputs.PortfolioValue,
@@ -109,14 +144,15 @@ func Compute(inputs KellyInputs) (KellyResult, error) {
 	afterQuality := afterSession * qMult
 
 	// ── Step 7: Floor and hard ceiling ────────────────────────────────────────
+	hardMax := hardMaxPositionPct()
 	floor := max64(afterQuality, 0.01)
 	ceiling := min64(floor, effectiveMax(inputs))
-	final := min64(ceiling, hardMaxPositionPct)
+	final := min64(ceiling, hardMax)
 
 	wasConstrained := final < afterQuality
 	reason := ""
 	if wasConstrained {
-		if final <= hardMaxPositionPct && afterQuality > hardMaxPositionPct {
+		if final <= hardMax && afterQuality > hardMax {
 			reason = "hard_ceiling_10pct"
 		} else {
 			reason = "max_position_pct"
@@ -200,10 +236,11 @@ func GetKellyInputs(ledger LedgerInterface, accountID string, lookback int, port
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func effectiveMax(inputs KellyInputs) float64 {
-	if inputs.MaxPositionPct > 0 && inputs.MaxPositionPct < hardMaxPositionPct {
+	hardMax := hardMaxPositionPct()
+	if inputs.MaxPositionPct > 0 && inputs.MaxPositionPct < hardMax {
 		return inputs.MaxPositionPct
 	}
-	return hardMaxPositionPct
+	return hardMax
 }
 
 func dataQualityMult(score float64) float64 {

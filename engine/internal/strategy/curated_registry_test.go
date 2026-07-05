@@ -2,14 +2,14 @@ package strategy
 
 import "testing"
 
-func TestBuildCuratedScalpersIsEmpty(t *testing.T) {
-	if got := len(BuildCuratedScalpers()); got != 0 {
-		t.Fatalf("expected no curated strategies, got %d", got)
-	}
-}
-
-func TestBuildExpansionPackIsEmpty(t *testing.T) {
-	if got := len(buildExpansionPack()); got != 0 {
-		t.Fatalf("expected no expansion strategies, got %d", got)
+// The curated registry is two-tier gated (tradeEngineEnabled live whitelist +
+// tradeEngineShadow ledger tier in scalpers/curated_registry.go). It must be
+// non-empty — an empty registry means the trade engine boots with zero
+// strategies and silently never trades (the May 2026 "Winners Only Gate"
+// incident). The exact membership is asserted in
+// scalpers.TestCuratedRegistryMatchesTradeEngineWhitelist.
+func TestBuildCuratedScalpersNotEmpty(t *testing.T) {
+	if got := len(BuildCuratedScalpers()); got == 0 {
+		t.Fatal("BuildCuratedScalpers returned 0 strategies — trade engine would boot with nothing to trade")
 	}
 }

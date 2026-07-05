@@ -126,7 +126,7 @@ func TestShouldCloseV3_SLBuy(t *testing.T) {
 		takeProfitPct: 0.70,
 	}
 	// Price drops to SL.
-	if !shouldCloseV3(pos, 50000*(1-0.0035)-1, time.Now()) {
+	if !shouldCloseV3(pos, 50000*(1-0.0035)-1, time.Now(), DefaultConfig()) {
 		t.Fatal("position should close on SL hit for long")
 	}
 }
@@ -142,7 +142,7 @@ func TestShouldCloseV3_TPBuy(t *testing.T) {
 		takeProfitPct: 0.70,
 	}
 	// Price rises to TP.
-	if !shouldCloseV3(pos, 50000*(1+0.0070)+1, time.Now()) {
+	if !shouldCloseV3(pos, 50000*(1+0.0070)+1, time.Now(), DefaultConfig()) {
 		t.Fatal("position should close on TP hit for long")
 	}
 }
@@ -158,7 +158,7 @@ func TestShouldCloseV3_TPSell(t *testing.T) {
 		takeProfitPct: 0.70,
 	}
 	// Price drops to short TP.
-	if !shouldCloseV3(pos, 50000*(1-0.0070)-1, time.Now()) {
+	if !shouldCloseV3(pos, 50000*(1-0.0070)-1, time.Now(), DefaultConfig()) {
 		t.Fatal("position should close on TP hit for short")
 	}
 }
@@ -173,7 +173,7 @@ func TestShouldCloseV3_TimeExit(t *testing.T) {
 		stopLossPct:   0.35,
 		takeProfitPct: 0.70,
 	}
-	if !shouldCloseV3(pos, 50000, time.Now()) {
+	if !shouldCloseV3(pos, 50000, time.Now(), DefaultConfig()) {
 		t.Fatal("position should close on 45-minute time limit")
 	}
 }

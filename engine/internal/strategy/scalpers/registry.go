@@ -87,6 +87,7 @@ func BuildAllScalpers() []RegistryEntry {
 		},
 	}
 	entries = append(entries, buildNewStrategiesBatch10()...)
+	entries = append(entries, buildNewStrategiesBatch10v2()...)
 	return entries
 }
 

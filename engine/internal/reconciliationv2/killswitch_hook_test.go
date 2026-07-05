@@ -9,7 +9,17 @@ import (
 	"antigravity-engine/internal/ledger"
 )
 
+// zeroGracePeriod disables the boot grace period so hook filter/trigger logic
+// (not the startup suppression) is what each test exercises.
+func zeroGracePeriod(t *testing.T) {
+	t.Helper()
+	prev := reconKillSwitchGracePeriod
+	reconKillSwitchGracePeriod = 0
+	t.Cleanup(func() { reconKillSwitchGracePeriod = prev })
+}
+
 func TestKillSwitchHook_SkipsBalanceEquityDrift(t *testing.T) {
+	zeroGracePeriod(t)
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
 	ks.SetEnabled(true)
@@ -35,6 +45,7 @@ func TestKillSwitchHook_SkipsBalanceEquityDrift(t *testing.T) {
 }
 
 func TestKillSwitchHook_SkipsBalanceEquityDriftOnFullAudit(t *testing.T) {
+	zeroGracePeriod(t)
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
 	ks.SetEnabled(true)
@@ -60,6 +71,7 @@ func TestKillSwitchHook_SkipsBalanceEquityDriftOnFullAudit(t *testing.T) {
 }
 
 func TestKillSwitchHook_TriggersOnCriticalPositionDrift(t *testing.T) {
+	zeroGracePeriod(t)
 	store := ledger.NewMemoryStore()
 	ks := killswitch.NewService(store, nil, "btc-paper-1")
 	ks.SetEnabled(true)

@@ -54,7 +54,7 @@ func TestKelly_HardCeilingAlwaysEnforced(t *testing.T) {
 	in.MaxPositionPct = 0.50
 	result, err := Compute(in)
 	require.NoError(t, err)
-	assert.LessOrEqual(t, result.FinalPositionPct, hardMaxPositionPct)
+	assert.LessOrEqual(t, result.FinalPositionPct, hardMaxPositionPct())
 }
 
 func TestKelly_NegativeKelly_ReturnsZero(t *testing.T) {

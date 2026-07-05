@@ -103,14 +103,12 @@ func TestFullSignalPipeline_HappyPath(t *testing.T) {
 	rc := classifier.Classify(snap)
 	assert.NotEqual(t, regime.RegimeHighVol, rc.Regime, "must not be HIGH_VOL")
 
-	// Step 3: Strategy gate.
+	// Step 3: Strategy gate — explicit per-regime allowlist contract.
 	gate := regime.NewStrategyGate(classifier, nil)
-	switch rc.Regime {
-	case regime.RegimeRanging:
-		assert.False(t, gate.IsStrategyAllowed("EMACross", rc))
-	default:
-		assert.True(t, gate.IsStrategyAllowed("EMACross", rc))
-	}
+	assert.True(t, gate.IsStrategyAllowed("EMACross", rc), "no allowlist configured — all strategies pass")
+	gate.SetRegimeStrategies(string(rc.Regime), []string{"BBBounce"})
+	assert.False(t, gate.IsStrategyAllowed("EMACross", rc), "EMACross not on the regime allowlist")
+	assert.True(t, gate.IsStrategyAllowed("BBBounce", rc), "BBBounce is on the regime allowlist")
 
 	// Step 4: Async scorer — cache miss on first call, SubmitForScoring non-blocking.
 	mockAI := &mocks.MockAIClient{Confidence: 75, Direction: "BUY"}
@@ -217,7 +215,12 @@ func TestRegimeGating_TrendBlockedInRanging(t *testing.T) {
 		Regime: regime.RegimeRanging, AllowNewEntries: true, PositionSizeMult: 0.50,
 	}
 
-	// Trend families blocked (names must contain EMA/MACD/DONCHIAN keywords).
+	// The gate's contract is an explicit per-regime allowlist (no built-in
+	// name-keyword policy): configure the mean-reversion/price-action set for
+	// RANGING; trend families are simply absent from it.
+	gate.SetRegimeStrategies(string(regime.RegimeRanging), []string{"BBBounce", "RSIOversold", "Hammer", "BullEng"})
+
+	// Trend families blocked (not on the RANGING allowlist).
 	assert.False(t, gate.IsStrategyAllowed("EMACross", ranging), "EMACross blocked")
 	assert.False(t, gate.IsStrategyAllowed("MACDMomentum", ranging), "MACDMomentum blocked")
 

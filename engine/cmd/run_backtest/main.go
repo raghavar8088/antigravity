@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"time"
@@ -310,7 +311,7 @@ func main() {
 }
 
 func round2(f float64) float64 {
-	return float64(int(f*100+0.5)) / 100
+	return math.Round(f*100) / 100
 }
 
 func truncate(s string, n int) string {

@@ -39,10 +39,38 @@ func AllPerformance() []Performance {
 	return out
 }
 
-// tradeEngineEnabled is the operator-selected whitelist for the main Trade
-// Engine. Only these strategies are registered; everything else is disabled.
-// Selected from the Strategy Leadership Board (composite score) on 2026-07-03.
+// tradeEngineEnabled is the LIVE whitelist for the main Trade Engine.
+// Rebuilt 2026-07-05 from the honest backtest pipeline (taker-fee cost model +
+// trade-frequency Sharpe annualisation): a strategy trades live only if it
+// fully met promotion criteria in the train window (2021-06-26 → 2024-06-30)
+// AND confirmed out-of-sample in the validation window (2024-07-01 → 2026-06-26).
+// Of 303 backtested strategies, exactly these survived. See BACKTEST.md §5b.
+//
+// The previous 21-name list (picked from the short-window live Leadership
+// Board on 2026-07-03) was removed: its 6 backtestable members were among the
+// worst strategies in the 5-year backtest (combined −32%), and the other 15
+// had no offline evidence at all — they now live in tradeEngineShadow below.
 var tradeEngineEnabled = map[string]bool{
+	"BB_Squeeze_EFI_ADX_Short": true, // train: sh 1.18 pf 1.46 n=276 | val: sh 1.00 pf 1.35 n=210
+	"WMA_Bear_Cross_Short":     true, // train: sh 1.24 pf 2.39 n=59  | val: sh 1.52 pf 2.88 n=30
+}
+
+// tradeEngineShadow is the SHADOW tier: these strategies evaluate every cycle
+// and record to the shadow ledger (engine/internal/shadow) but never reach the
+// live OMS — withForcedShadow() pins IsShadow=true. Promotion path: accumulate
+// a shadow track record that clears ShadowPromoter.CanPromote, then move the
+// name to tradeEngineEnabled (or set STRATEGY_LIVE_OVERRIDE for a no-deploy
+// promotion). Two groups:
+//
+//	(a) Feed-dependent strategies (orderbook/options/funding/liquidity) that
+//	    cannot be backtested offline — the shadow ledger is their only way to
+//	    build evidence. These were on the old live whitelist with zero
+//	    validation; they keep evaluating here instead.
+//	(b) Train-window qualifiers that FAILED out-of-sample confirmation —
+//	    live shadow data will show whether the failure was regime-specific
+//	    or terminal.
+var tradeEngineShadow = map[string]bool{
+	// (a) feed-dependent, no offline backtest possible
 	"Sweep_And_Reload_Pattern":           true,
 	"Volume_Profile_POC_Magnet":          true,
 	"Coppock_Curve_Momentum":             true,
@@ -50,29 +78,48 @@ var tradeEngineEnabled = map[string]bool{
 	"Ornstein_Uhlenbeck_Reversion":       true,
 	"Structural_Break_Detection":         true,
 	"Hidden_Liquidity_Detection":         true,
-	"DEMA_Pullback":                      true,
 	"Recurrence_Quantification_Signal":   true,
-	"ZLEMA_1h_Cross":                     true,
 	"Absorption_Pattern_Signal":          true,
-	"HMA_Slope_Shift":                    true,
 	"Bid_Ask_Spread_Regime":              true,
 	"Orderbook_Imbalance_Persistence":    true,
 	"Hull_MA_Scalp":                      true,
-	"Volatility_Squeeze_Entry":           true,
-	"CMF_BB_Touch":                       true,
-	"Fisher_Transform_Signal":            true,
 	"Options_Skew_Direction_Signal":      true,
 	"Morning_Evening_Star":               true,
 	"Funding_OI_Confirm":                 true,
+	// (b) qualified in train window, failed OOS confirmation
+	"CMF_OBV_Confluence_Bear_Short":  true,
+	"WMA5_Cross_WMA21_EFI_ADX_Short": true,
+	"WR_Mid_EFI_ADX_Short":           true,
+	"WR_Mid_Cross_Bear_Short":        true,
+	"Fisher_Zero_Cross_Short":        true,
+	"WR_RSI_Bear_Confirm_Short":      true,
+	"Big_Bear_Candle_Short":          true,
+	"WMA_EFI_Bear_Short":             true,
+	"BB_Width_Expand_Bear_Short":     true,
+	"HTF_Aligned_Pullback_Short":     true,
+	"WMA_CMF_Bear_Short":             true,
+	"WMA5_Cross_EMA13_EFI_ADX_Short": true,
+	"Big_Bear_Candle_ADX_Short":      true,
+	"Donchian_Breakdown_Short":       true,
+	"MACD_Double_Bearish_Short":      true,
+	"MACD_Signal_Cross_Short":        true,
+	"CMF_Zero_Bear_Short":            true,
 }
 
-// filterTradeEngineEnabled keeps only whitelisted strategies and logs any
-// whitelist names that matched nothing (catches renames/typos at startup).
+// filterTradeEngineEnabled keeps live-whitelisted strategies as-is, keeps
+// shadow-tier strategies wrapped in withForcedShadow (they evaluate and record
+// to the shadow ledger but never trade live), drops everything else, and logs
+// any configured names that matched nothing (catches renames/typos at startup).
 func filterTradeEngineEnabled(entries []RegistryEntry) []RegistryEntry {
-	seen := make(map[string]bool, len(tradeEngineEnabled))
-	out := make([]RegistryEntry, 0, len(tradeEngineEnabled))
+	seen := make(map[string]bool, len(tradeEngineEnabled)+len(tradeEngineShadow))
+	out := make([]RegistryEntry, 0, len(tradeEngineEnabled)+len(tradeEngineShadow))
 	for _, e := range entries {
-		if tradeEngineEnabled[e.Name] {
+		switch {
+		case tradeEngineEnabled[e.Name]:
+			out = append(out, e)
+			seen[e.Name] = true
+		case tradeEngineShadow[e.Name]:
+			e.Strategy = withForcedShadow(e.Strategy)
 			out = append(out, e)
 			seen[e.Name] = true
 		}
@@ -80,6 +127,11 @@ func filterTradeEngineEnabled(entries []RegistryEntry) []RegistryEntry {
 	for name := range tradeEngineEnabled {
 		if !seen[name] {
 			log.Printf("[REGISTRY] WARNING: trade-engine whitelist name %q matched no registered strategy", name)
+		}
+	}
+	for name := range tradeEngineShadow {
+		if !seen[name] {
+			log.Printf("[REGISTRY] WARNING: trade-engine shadow-tier name %q matched no registered strategy", name)
 		}
 	}
 	return out

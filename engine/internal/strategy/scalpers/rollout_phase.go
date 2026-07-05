@@ -145,3 +145,35 @@ func (s *shadowOverrideStrategy) Evaluate(ctx MarketContext) Signal {
 func withShadowOverride(s Strategy) Strategy {
 	return &shadowOverrideStrategy{inner: s}
 }
+
+// forcedShadowStrategy pins a strategy to shadow mode at the code level.
+// Used for the trade-engine shadow tier (tradeEngineShadow in
+// curated_registry.go): strategies that cannot be backtested offline (they
+// need live orderbook/options/funding feeds) evaluate every cycle and record
+// to the shadow ledger, but never reach the live OMS until they earn
+// promotion. STRATEGY_LIVE_OVERRIDE still wins so an operator can promote a
+// strategy without a deploy once its shadow track record clears the bar.
+type forcedShadowStrategy struct {
+	inner Strategy
+}
+
+func (f *forcedShadowStrategy) Name() string           { return f.inner.Name() }
+func (f *forcedShadowStrategy) ValidRegimes() []Regime { return f.inner.ValidRegimes() }
+
+func (f *forcedShadowStrategy) Evaluate(ctx MarketContext) Signal {
+	result := f.inner.Evaluate(ctx)
+	if result.Direction == DirectionNone {
+		return result
+	}
+	if isLiveOverride(f.inner.Name()) {
+		result.IsShadow = false
+		return result
+	}
+	result.IsShadow = true
+	return result
+}
+
+// withForcedShadow pins a strategy to the shadow ledger (see forcedShadowStrategy).
+func withForcedShadow(s Strategy) Strategy {
+	return &forcedShadowStrategy{inner: s}
+}
