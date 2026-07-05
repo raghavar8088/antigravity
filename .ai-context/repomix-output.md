@@ -334,6 +334,10 @@ The content is organized as follows:
   components/ui/Badge.tsx
   components/ui/Button.tsx
   components/ui/Card.tsx
+  components/ui/charts/Histogram.tsx
+  components/ui/charts/LineChart.tsx
+  components/ui/charts/MonthlyHeatmap.tsx
+  components/ui/charts/PayoffChart.tsx
   components/ui/cn.ts
   components/ui/CommandPalette.tsx
   components/ui/ConfirmModal.tsx

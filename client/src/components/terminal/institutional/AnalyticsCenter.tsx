@@ -7,6 +7,7 @@ import { DailyPnLTable } from "@/components/DailyPnLTable";
 import { pct, pnlClass, usd } from "./format";
 import { Metric, TerminalCard } from "./TerminalCard";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LineChart } from "@/components/ui/charts/LineChart";
 
 export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
   const curve = snapshot.analytics.equityCurve;
@@ -22,21 +23,12 @@ export function AnalyticsCenter({ snapshot }: { snapshot: TerminalSnapshot }) {
           {!hasCurve ? (
             <TerminalNoData label="No equity curve data" />
           ) : (
-            <div className="h-72 rounded-lg border p-3" style={{ borderColor: "var(--card-border, var(--border))", background: "var(--canvas-soft, var(--surface-2))" }}>
-              <svg viewBox="0 0 700 240" className="h-full w-full" role="img" aria-label="Equity curve">
-                <polyline
-                  fill="none"
-                  stroke="var(--green)"
-                  strokeWidth="3"
-                  points={curve.map((p, i) => {
-                    const minEq = Math.min(...curve.map((c) => c.equity));
-                    const maxEq = Math.max(...curve.map((c) => c.equity));
-                    const range = maxEq - minEq || 1;
-                    return `${40 + i * (660 / Math.max(1, curve.length - 1))},${210 - ((p.equity - minEq) / range) * 180}`;
-                  }).join(" ")}
-                />
-              </svg>
-            </div>
+            <LineChart
+              points={curve.map((p) => ({ ts: new Date(p.time).getTime(), value: p.equity }))}
+              color="var(--green)"
+              height={240}
+              formatValue={(v) => usd(v, { compact: true })}
+            />
           )}
         </TerminalCard>
         <TerminalCard title="R-Multiple Distribution">
