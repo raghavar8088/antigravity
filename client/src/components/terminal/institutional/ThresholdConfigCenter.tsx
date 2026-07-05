@@ -63,7 +63,7 @@ function pillButtonStyle(active: boolean): React.CSSProperties {
     borderRadius: 8,
     border: "1px solid var(--border)",
     background: active ? "var(--amber)" : "var(--surface)",
-    color: active ? "#111" : "var(--text-primary)",
+    color: active ? "var(--text)" : "var(--text-primary)",
     fontWeight: 700,
     fontSize: 12,
     cursor: "pointer",
@@ -307,7 +307,7 @@ function SaveConfirmModal({
               borderRadius: 8,
               border: "none",
               background: confirmRequired ? "var(--green)" : "var(--border)",
-              color: confirmRequired ? "#111" : "var(--text-muted)",
+              color: confirmRequired ? "var(--text)" : "var(--text-muted)",
               fontWeight: 800,
               cursor: busy || !confirmRequired ? "not-allowed" : "pointer",
             }}
@@ -511,7 +511,7 @@ function ThresholdCard({
             borderRadius: 8,
             border: "none",
             background: dirty ? "var(--green)" : "var(--border)",
-            color: dirty ? "#111" : "var(--text-muted)",
+            color: dirty ? "var(--text)" : "var(--text-muted)",
             fontWeight: 800,
             cursor: dirty && status !== "saving" ? "pointer" : "not-allowed",
           }}
