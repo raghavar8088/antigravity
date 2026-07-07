@@ -760,7 +760,19 @@ func main() {
 
 	var ppBundle *trading.PaperPersistBundle
 	var recoveryReport paperpersist.RecoveryReport
+	// Bounded retry: a transient Atlas hiccup at boot (e.g. ReplicaSetNoPrimary
+	// during a primary election, observed 2026-07-07) must not condemn the whole
+	// run to in-memory-only persistence — the engine never reconnects mid-run.
 	mongoMgr, mongoErr := paperpersist.NewMongoManager(ctx)
+	for attempt := 2; mongoErr != nil && attempt <= 4; attempt++ {
+		log.Printf("[Phase31B] MongoDB connect failed (attempt %d/4 in 15s): %v", attempt-1, mongoErr)
+		select {
+		case <-ctx.Done():
+			attempt = 5
+		case <-time.After(15 * time.Second):
+			mongoMgr, mongoErr = paperpersist.NewMongoManager(ctx)
+		}
+	}
 	if mongoErr != nil {
 		log.Printf("[Phase31B] ❌  MongoDB connect failed — running without MongoDB persistence: %v", mongoErr)
 		log.Printf("[Phase31B]     Account key : %s", envReport.AccountKey)
@@ -800,6 +812,11 @@ func main() {
 		if resetPaperBalanceOnBoot() {
 			log.Printf("[Phase31B] 🧹 RESET_PAPER_BALANCE_ON_BOOT set — skipping MongoDB balance/journal/position recovery; starting fresh at $%.2f",
 				getInitialPaperBalanceUSD())
+			// Purge persisted engine state so discarded open positions cannot be
+			// resurrected as zombies on the next normal (non-reset) boot.
+			if purgeErr := paperpersist.PurgeEngineState(ctx, mongoMgr); purgeErr != nil {
+				log.Printf("[Phase31B] ⚠️  reset purge failed (stale positions may reappear next boot): %v", purgeErr)
+			}
 		}
 
 		// Bootstrap in-memory journal from MongoDB paper_trades so strategy health
@@ -944,7 +961,10 @@ func main() {
 		log.Println("[LEDGER] DATABASE_URL not set — trying MongoDB fallback")
 	}
 	if durableLedger == nil && mongoMgr != nil && mongoMgr.IsConnected() {
-		if mongoStore, mongoErr := ledger.NewMongoLedgerStore(ctx, mongoMgr.DB()); mongoErr != nil {
+		// Pass mongoMgr.DB (the method value, NOT mongoMgr.DB()) so the ledger
+		// resolves the LIVE database on every op and survives reconnects that
+		// swap the client. See NewMongoLedgerStore's doc comment.
+		if mongoStore, mongoErr := ledger.NewMongoLedgerStore(ctx, mongoMgr.DB); mongoErr != nil {
 			log.Printf("[LEDGER] ⚠️  MongoLedgerStore unavailable (%v) — kill switch state is non-durable", mongoErr)
 		} else {
 			durableLedger = mongoStore
@@ -1018,12 +1038,17 @@ func main() {
 	// ledger instead of the live paper OMS, so they accumulate a real
 	// performance track record without risking paper account balance. See
 	// engine/internal/shadow and rollout_phase.go.
-	var shadowDB *mongo.Database
+	// Pass mongoMgr.DB (the method value, resolved live per call) so shadow
+	// persistence survives reconnects; a snapshot handle would silently stop
+	// persisting after an Atlas primary election. getDB stays nil when there is
+	// no manager, keeping in-memory-only mode.
+	var shadowGetDB func() *mongo.Database
 	if mongoMgr != nil {
-		shadowDB = mongoMgr.DB()
+		shadowGetDB = mongoMgr.DB
 	}
-	shadowLedger := shadow.NewShadowLedger(shadowDB)
-	if shadowDB != nil {
+	shadowLedger := shadow.NewShadowLedger(shadowGetDB)
+	shadowPersisted := shadowGetDB != nil && shadowGetDB() != nil
+	if shadowPersisted {
 		if idxErr := shadowLedger.EnsureIndexes(ctx); idxErr != nil {
 			log.Printf("[SHADOW] index creation warning: %v", idxErr)
 		}
@@ -1035,7 +1060,7 @@ func main() {
 	}
 	shadowPromoter := shadow.NewShadowPromoter(shadowLedger, orchestrator.WalkForwardValidator())
 	orchestrator.SetShadowLedger(shadowLedger, shadowPromoter)
-	log.Printf("[SHADOW] Shadow ledger initialized (mongo_persisted=%v)", shadowDB != nil)
+	log.Printf("[SHADOW] Shadow ledger initialized (mongo_persisted=%v)", shadowPersisted)
 
 	// Bootstrap portfolio ledger from MongoDB paper_trades (authoritative accounting).
 	if mongoMgr != nil && mongoMgr.IsConnected() {

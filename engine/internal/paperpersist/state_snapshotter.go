@@ -115,7 +115,7 @@ func (s *StateSnapshotter) SnapNow(ctx context.Context) error {
 }
 
 func (s *StateSnapshotter) snap(ctx context.Context) error {
-	col := s.mgr.Col(ColPaperState)
+	col := s.mgr.Col(ColEnginePaperState)
 	if col == nil {
 		return nil // degrade silently when not connected
 	}

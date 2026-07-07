@@ -62,6 +62,13 @@ const (
 	ColPaperPositions   = "paper_positions"
 	ColPaperOrders      = "paper_orders"
 	ColPaperState       = "paper_state"
+	// ColEnginePaperState is the Go engine's OWN account snapshot singleton.
+	// paper_state is shared with the frontend mock-trading desk, whose worker
+	// upserts its own `balance` into the same account_key doc and silently
+	// clobbers the engine's snapshot (observed 2026-07-07: engine restored
+	// balance=$0 written by the remote desk worker). Same collision the
+	// strategy_scores/strategy_health collections solved with a `source` key.
+	ColEnginePaperState = "engine_paper_state"
 	ColEquityCurve      = "equity_curve"
 	ColDailyPnL         = "daily_pnl_history"
 	ColStrategyScores   = "strategy_scores"
@@ -238,6 +245,11 @@ func (m *MongoManager) EnsureIndexes(ctx context.Context) error {
 		// paper_state — singleton per account (upserted on account_key)
 		{ColPaperState, bson.D{{Key: "account_key", Value: 1}}, true, false, 0},
 		{ColPaperState, bson.D{{Key: "snapped_at", Value: -1}}, false, false, 0},
+
+		// engine_paper_state — engine-owned account snapshot (never touched by
+		// the frontend desk worker)
+		{ColEnginePaperState, bson.D{{Key: "account_key", Value: 1}}, true, false, 0},
+		{ColEnginePaperState, bson.D{{Key: "snapped_at", Value: -1}}, false, false, 0},
 
 		// equity_curve — TTL 90 days
 		{ColEquityCurve, bson.D{{Key: "account_key", Value: 1}, {Key: "ts", Value: -1}}, false, false, 0},

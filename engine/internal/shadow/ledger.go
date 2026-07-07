@@ -84,9 +84,28 @@ type ShadowLedger struct {
 	closedTrades []*ShadowTrade          // most recent first, capped
 	perf         map[string]*runningPerf // per-strategy running aggregates
 
-	db            *mongo.Collection
+	// getDB returns the CURRENT live *mongo.Database (or nil when not connected).
+	// The shadow collection is resolved from it per call so the ledger survives a
+	// reconnect that swaps the client — a snapshot handle would silently stop
+	// persisting after an Atlas primary election (same class of bug that broke
+	// the durable ledger, see ledger.NewMongoLedgerStore). Never cache col().
+	getDB         func() *mongo.Database
 	atrPct        float64 // last known ATR/price ratio, fed by UpdateATR — same as PaperClient
 	slippageModel *execution.SlippageModel
+}
+
+// col resolves the live shadow collection, or nil when Mongo is unavailable
+// (in-memory-only mode, or mid-reconnect). Callers keep their existing nil
+// guards, so a transient nil simply degrades that one persist to in-memory.
+func (l *ShadowLedger) col() *mongo.Collection {
+	if l.getDB == nil {
+		return nil
+	}
+	d := l.getDB()
+	if d == nil {
+		return nil
+	}
+	return d.Collection(ShadowCollection)
 }
 
 const maxClosedTradesInMemory = 5000
@@ -108,32 +127,32 @@ type runningPerf struct {
 
 const maxPnLHistoryPerStrategy = 500
 
-// NewShadowLedger creates a ShadowLedger. db may be nil (in-memory only —
-// shadow positions will not survive a restart, but the system still
-// functions for the current process lifetime).
-func NewShadowLedger(db *mongo.Database) *ShadowLedger {
-	l := &ShadowLedger{
-		openTrades: make(map[string]*ShadowTrade),
-		perf:       make(map[string]*runningPerf),
+// NewShadowLedger creates a ShadowLedger. getDB may be nil, or may return nil
+// (in-memory only — shadow positions will not survive a restart, but the system
+// still functions for the current process lifetime). getDB MUST return the
+// live *mongo.Database on every call (pass mongoMgr.DB, the method value) so
+// persistence survives reconnects.
+func NewShadowLedger(getDB func() *mongo.Database) *ShadowLedger {
+	return &ShadowLedger{
+		openTrades:    make(map[string]*ShadowTrade),
+		perf:          make(map[string]*runningPerf),
 		slippageModel: execution.NewSlippageModel(),
+		getDB:         getDB,
 	}
-	if db != nil {
-		l.db = db.Collection(ShadowCollection)
-	}
-	return l
 }
 
 // EnsureIndexes creates the indexes documented in the shadow trading spec.
 // Safe to call repeatedly; duplicate creation is a no-op.
 func (l *ShadowLedger) EnsureIndexes(ctx context.Context) error {
-	if l.db == nil {
+	col := l.col()
+	if col == nil {
 		return nil
 	}
 	specs := []mongo.IndexModel{
 		{Keys: bson.D{{Key: "strategy_name", Value: 1}, {Key: "status", Value: 1}, {Key: "opened_at", Value: -1}}},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "stop_loss", Value: 1}, {Key: "take_profit", Value: 1}}},
 	}
-	_, err := l.db.Indexes().CreateMany(ctx, specs)
+	_, err := col.Indexes().CreateMany(ctx, specs)
 	if err != nil {
 		log.Printf("[SHADOW] index creation warning: %v", err)
 	}
@@ -191,10 +210,10 @@ func (l *ShadowLedger) OpenTrade(sig Signal, midPrice float64, sizeBTC float64) 
 	l.openTrades[trade.ID] = trade
 	l.mu.Unlock()
 
-	if l.db != nil {
+	if col := l.col(); col != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if _, err := l.db.InsertOne(ctx, trade); err != nil {
+		if _, err := col.InsertOne(ctx, trade); err != nil {
 			log.Printf("[SHADOW] mongo insert failed for %s: %v", trade.ID, err)
 		}
 	}
@@ -252,11 +271,11 @@ func (l *ShadowLedger) CheckAndClose(currentPrice float64) []*ShadowTrade {
 	}
 	l.mu.Unlock()
 
-	if l.db != nil {
+	if col := l.col(); col != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		for _, t := range toClose {
-			_, err := l.db.UpdateOne(ctx,
+			_, err := col.UpdateOne(ctx,
 				bson.D{{Key: "_id", Value: t.ID}},
 				bson.D{{Key: "$set", Value: t}},
 			)
@@ -536,10 +555,11 @@ func sharpeFromPctHistory(hist []float64) float64 {
 // startup, mirroring the live paper OMS recovery pattern, so shadow
 // positions survive an engine restart instead of silently vanishing.
 func (l *ShadowLedger) RecoverOpenTrades(ctx context.Context) (int, error) {
-	if l.db == nil {
+	col := l.col()
+	if col == nil {
 		return 0, nil
 	}
-	cur, err := l.db.Find(ctx, bson.D{{Key: "status", Value: "OPEN"}}, options.Find().SetLimit(10000))
+	cur, err := col.Find(ctx, bson.D{{Key: "status", Value: "OPEN"}}, options.Find().SetLimit(10000))
 	if err != nil {
 		return 0, fmt.Errorf("shadow: recovery query failed: %w", err)
 	}

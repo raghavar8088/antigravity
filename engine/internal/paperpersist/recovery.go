@@ -155,10 +155,49 @@ func Recover(ctx context.Context, mgr *MongoManager) RecoveryReport {
 	return report
 }
 
+// PurgeEngineState wipes the engine-owned persisted account state for the
+// current account: the engine_paper_state snapshot doc and any still-OPEN
+// paper_positions rows. Called when RESET_PAPER_BALANCE_ON_BOOT is set —
+// without this, discarded open positions stay status=OPEN in MongoDB and are
+// resurrected as zombie positions on the NEXT normal boot.
+// Closed paper_trades history is intentionally left untouched (audit trail).
+func PurgeEngineState(ctx context.Context, mgr *MongoManager) error {
+	if mgr == nil {
+		return nil
+	}
+	if col := mgr.Col(ColEnginePaperState); col != nil {
+		if _, err := col.DeleteMany(ctx, bson.M{"account_key": AccountKey()}); err != nil {
+			return fmt.Errorf("delete engine_paper_state: %w", err)
+		}
+	}
+	if col := mgr.Col(ColPaperPositions); col != nil {
+		res, err := col.UpdateMany(ctx,
+			bson.M{"account_key": AccountKey(), "status": "OPEN"},
+			bson.M{"$set": bson.M{
+				"status":      "RESET",
+				"exit_reason": "RESET_PAPER_BALANCE_ON_BOOT",
+				"closed_at":   time.Now(),
+			}},
+		)
+		if err != nil {
+			return fmt.Errorf("void open paper_positions: %w", err)
+		}
+		if res.ModifiedCount > 0 {
+			log.Printf("[paperpersist/reset] voided %d stale OPEN positions", res.ModifiedCount)
+		}
+	}
+	return nil
+}
+
 // ── Internal query functions ──────────────────────────────────────────────────
 
 func recoverAccountState(ctx context.Context, mgr *MongoManager) (RecoveredAccountState, error) {
-	col := mgr.Col(ColPaperState)
+	// Read ONLY the engine-owned snapshot collection. The legacy shared
+	// paper_state doc is co-written by the frontend desk worker and its
+	// `balance` field is NOT the engine account's balance — recovering from it
+	// destroyed the engine balance on every restart. No doc here means fresh
+	// start at the configured initial balance, never a fallback to paper_state.
+	col := mgr.Col(ColEnginePaperState)
 	if col == nil {
 		return RecoveredAccountState{}, fmt.Errorf("collection unavailable")
 	}
@@ -169,9 +208,9 @@ func recoverAccountState(ctx context.Context, mgr *MongoManager) (RecoveredAccou
 	var raw bson.M
 	if err := col.FindOne(ctx, filter, opts).Decode(&raw); err != nil {
 		if err == mongo.ErrNoDocuments {
-			return RecoveredAccountState{}, fmt.Errorf("no paper_state document for account_key=%s", AccountKey())
+			return RecoveredAccountState{}, fmt.Errorf("no engine_paper_state document for account_key=%s", AccountKey())
 		}
-		return RecoveredAccountState{}, fmt.Errorf("FindOne paper_state: %w", err)
+		return RecoveredAccountState{}, fmt.Errorf("FindOne engine_paper_state: %w", err)
 	}
 
 	acct := RecoveredAccountState{}

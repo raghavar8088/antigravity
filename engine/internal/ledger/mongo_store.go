@@ -111,15 +111,28 @@ type MongoLedgerStore struct {
 	coll eventCollection
 }
 
-// NewMongoLedgerStore connects to db, ensures required indexes exist, and
-// returns a ready store. No historical data is loaded into memory at
-// startup — Replay/ReplayAccount query MongoDB on demand.
-func NewMongoLedgerStore(ctx context.Context, db *mongo.Database) (*MongoLedgerStore, error) {
+// NewMongoLedgerStore ensures required indexes exist and returns a ready store.
+// No historical data is loaded into memory at startup — Replay/ReplayAccount
+// query MongoDB on demand.
+//
+// getDB MUST return the CURRENT live *mongo.Database on every call, never a
+// snapshot captured at boot. paperpersist's ping monitor transparently
+// reconnects on Atlas primary elections by building a brand-new *mongo.Client
+// and calling Disconnect() on the old one. A collection handle captured once at
+// startup stays bound to that now-disconnected client, so every later operation
+// fails forever with "client is disconnected" (observed 2026-07-05: a primary
+// election permanently broke RECON-V2's ledger reads for 6+ hours while the
+// paperpersist writers — which fetch collections live — recovered on their own).
+// Resolving collections through getDB() per call makes the ledger reconnect-safe.
+func NewMongoLedgerStore(ctx context.Context, getDB func() *mongo.Database) (*MongoLedgerStore, error) {
+	if getDB == nil {
+		return nil, errors.New("ledger/mongo: getDB is nil")
+	}
+	db := getDB()
 	if db == nil {
 		return nil, errors.New("ledger/mongo: db is nil")
 	}
 	events := db.Collection("ledger_events")
-	seqs := db.Collection("ledger_sequences")
 
 	indexModels := []mongo.IndexModel{
 		{
@@ -144,7 +157,7 @@ func NewMongoLedgerStore(ctx context.Context, db *mongo.Database) (*MongoLedgerS
 		return nil, fmt.Errorf("ledger/mongo: create indexes: %w", err)
 	}
 
-	return &MongoLedgerStore{coll: &realEventCollection{events: events, seqs: seqs}}, nil
+	return &MongoLedgerStore{coll: &realEventCollection{getDB: getDB}}, nil
 }
 
 func (s *MongoLedgerStore) Append(ctx context.Context, event Event) (Event, error) {
@@ -206,12 +219,39 @@ func (s *MongoLedgerStore) ReplayAccount(ctx context.Context, accountID string) 
 // ─── Production implementation of eventCollection ──────────────────────────
 
 type realEventCollection struct {
-	events *mongo.Collection
-	seqs   *mongo.Collection
+	// getDB returns the live *mongo.Database; collections are resolved from it
+	// per call so the store survives a reconnect that swaps the client (see
+	// NewMongoLedgerStore). Never cache the returned *mongo.Collection.
+	getDB func() *mongo.Database
+}
+
+// errDisconnected is returned when the manager currently has no live database
+// (e.g. mid-reconnect during an Atlas primary election). The caller (RECON-V2)
+// treats this as a transient cycle error and retries on the next tick.
+var errDisconnected = errors.New("ledger/mongo: no live database connection")
+
+func (r *realEventCollection) events() (*mongo.Collection, error) {
+	db := r.getDB()
+	if db == nil {
+		return nil, errDisconnected
+	}
+	return db.Collection("ledger_events"), nil
+}
+
+func (r *realEventCollection) seqs() (*mongo.Collection, error) {
+	db := r.getDB()
+	if db == nil {
+		return nil, errDisconnected
+	}
+	return db.Collection("ledger_sequences"), nil
 }
 
 func (r *realEventCollection) Insert(ctx context.Context, doc mongoEventDoc) error {
-	_, err := r.events.InsertOne(ctx, doc)
+	events, err := r.events()
+	if err != nil {
+		return err
+	}
+	_, err = events.InsertOne(ctx, doc)
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrDuplicateEvent
 	}
@@ -219,11 +259,15 @@ func (r *realEventCollection) Insert(ctx context.Context, doc mongoEventDoc) err
 }
 
 func (r *realEventCollection) NextSequence(ctx context.Context, aggregateKey string) (int64, error) {
+	seqs, err := r.seqs()
+	if err != nil {
+		return 0, err
+	}
 	var result struct {
 		Seq int64 `bson:"seq"`
 	}
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
-	err := r.seqs.FindOneAndUpdate(ctx,
+	err = seqs.FindOneAndUpdate(ctx,
 		bson.D{{Key: "_id", Value: aggregateKey}},
 		bson.D{{Key: "$inc", Value: bson.D{{Key: "seq", Value: int64(1)}}}},
 		opts,
@@ -235,8 +279,12 @@ func (r *realEventCollection) NextSequence(ctx context.Context, aggregateKey str
 }
 
 func (r *realEventCollection) FindByAggregate(ctx context.Context, aggregateType, aggregateID string) ([]mongoEventDoc, error) {
+	events, err := r.events()
+	if err != nil {
+		return nil, err
+	}
 	filter := bson.D{{Key: "aggregate_type", Value: aggregateType}, {Key: "aggregate_id", Value: aggregateID}}
-	cursor, err := r.events.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "sequence_no", Value: 1}}))
+	cursor, err := events.Find(ctx, filter, options.Find().SetSort(bson.D{{Key: "sequence_no", Value: 1}}))
 	if err != nil {
 		return nil, err
 	}
@@ -249,9 +297,13 @@ func (r *realEventCollection) FindByAggregate(ctx context.Context, aggregateType
 }
 
 func (r *realEventCollection) FindByAccount(ctx context.Context, accountID string) ([]mongoEventDoc, error) {
+	events, err := r.events()
+	if err != nil {
+		return nil, err
+	}
 	filter := bson.D{{Key: "account_id", Value: accountID}}
 	sortOpts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "sequence_no", Value: 1}})
-	cursor, err := r.events.Find(ctx, filter, sortOpts)
+	cursor, err := events.Find(ctx, filter, sortOpts)
 	if err != nil {
 		return nil, err
 	}

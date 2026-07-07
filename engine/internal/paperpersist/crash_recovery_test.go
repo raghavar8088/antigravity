@@ -1,20 +1,20 @@
-package paperpersist
+﻿package paperpersist
 
-// crash_recovery_test.go — Phase 31B automated test suite.
+// crash_recovery_test.go â€” Phase 31B automated test suite.
 //
 // Tests run against a real in-process MongoManager backed by the
 // MONGODB_URI env variable. If the env variable is absent, tests that
 // require a live connection are skipped gracefully.
 //
 // Scenarios:
-//   TEST 1 — Single order lifecycle (NEW → ACCEPTED → SIMULATED_FILL → POSITION_OPENED → POSITION_CLOSED)
-//   TEST 2 — Position open and close round-trip
-//   TEST 3 — Recovery after cold start (no paper_state)
-//   TEST 4 — Recovery restores balance from paper_state
-//   TEST 5 — Duplicate order transition is idempotent (no duplicate document)
-//   TEST 6 — Duplicate position open is idempotent
-//   TEST 7 — Duplicate trade write is idempotent
-//   TEST 8 — Partial write failure does not corrupt state
+//   TEST 1 â€” Single order lifecycle (NEW â†’ ACCEPTED â†’ SIMULATED_FILL â†’ POSITION_OPENED â†’ POSITION_CLOSED)
+//   TEST 2 â€” Position open and close round-trip
+//   TEST 3 â€” Recovery after cold start (no paper_state)
+//   TEST 4 â€” Recovery restores balance from paper_state
+//   TEST 5 â€” Duplicate order transition is idempotent (no duplicate document)
+//   TEST 6 â€” Duplicate position open is idempotent
+//   TEST 7 â€” Duplicate trade write is idempotent
+//   TEST 8 â€” Partial write failure does not corrupt state
 
 import (
 	"context"
@@ -24,13 +24,13 @@ import (
 	"time"
 )
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // requireMongo skips the test if MONGODB_URI is not set or the connection fails.
 func requireMongo(t *testing.T) *MongoManager {
 	t.Helper()
 	if os.Getenv("MONGODB_URI") == "" {
-		t.Skip("MONGODB_URI not set — skipping MongoDB integration test")
+		t.Skip("MONGODB_URI not set â€” skipping MongoDB integration test")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -51,7 +51,7 @@ func uniqueID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
 
-// ── TEST 1: single order lifecycle ───────────────────────────────────────────
+// â”€â”€ TEST 1: single order lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestSingleOrderLifecycle(t *testing.T) {
 	mgr := requireMongo(t)
@@ -87,7 +87,7 @@ func TestSingleOrderLifecycle(t *testing.T) {
 
 	for i, tr := range transitions {
 		if err := ow.RecordTransition(ctx, tr); err != nil {
-			t.Fatalf("transition[%d] %s→%s: %v", i, tr.TransitionFrom, tr.TransitionTo, err)
+			t.Fatalf("transition[%d] %sâ†’%s: %v", i, tr.TransitionFrom, tr.TransitionTo, err)
 		}
 	}
 
@@ -103,7 +103,7 @@ func TestSingleOrderLifecycle(t *testing.T) {
 	t.Logf("TEST 1 PASS: %d order transitions persisted for order %s", count, orderID)
 }
 
-// ── TEST 2: position open and close ──────────────────────────────────────────
+// â”€â”€ TEST 2: position open and close â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestPositionOpenAndClose(t *testing.T) {
 	mgr := requireMongo(t)
@@ -155,7 +155,7 @@ func TestPositionOpenAndClose(t *testing.T) {
 	t.Logf("TEST 2 PASS: position %s opened and closed cleanly", posID)
 }
 
-// ── TEST 3: recovery with no prior state (cold start) ────────────────────────
+// â”€â”€ TEST 3: recovery with no prior state (cold start) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestRecoveryColdStart(t *testing.T) {
 	mgr := requireMongo(t)
@@ -170,11 +170,11 @@ func TestRecoveryColdStart(t *testing.T) {
 		// Success=false is only valid when MongoDB is unreachable.
 		t.Errorf("Recover returned Success=false but MongoDB is connected: %s", report.Message)
 	}
-	t.Logf("TEST 3 PASS: cold start recovery — success=%v account_restored=%v positions=%d",
+	t.Logf("TEST 3 PASS: cold start recovery â€” success=%v account_restored=%v positions=%d",
 		report.Success, report.AccountRestored, report.PositionsRestored)
 }
 
-// ── TEST 4: recovery restores balance from paper_state ───────────────────────
+// â”€â”€ TEST 4: recovery restores balance from paper_state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestRecoveryRestoresBalance(t *testing.T) {
 	mgr := requireMongo(t)
@@ -193,7 +193,7 @@ func TestRecoveryRestoresBalance(t *testing.T) {
 		SessionStart: time.Now().Add(-2 * time.Hour),
 		SnappedAt:    time.Now(),
 	}
-	col := mgr.Col(ColPaperState)
+	col := mgr.Col(ColEnginePaperState)
 	now := time.Now()
 	doc := baseDoc(now)
 	doc["balance"] = snap.Balance
@@ -233,7 +233,7 @@ func TestRecoveryRestoresBalance(t *testing.T) {
 		report.AccountState.Balance, report.AccountDataAge.Round(time.Second))
 }
 
-// ── TEST 5: duplicate order transition is idempotent ─────────────────────────
+// â”€â”€ TEST 5: duplicate order transition is idempotent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestDuplicateOrderTransitionIdempotent(t *testing.T) {
 	mgr := requireMongo(t)
@@ -266,7 +266,7 @@ func TestDuplicateOrderTransitionIdempotent(t *testing.T) {
 	t.Logf("TEST 5 PASS: duplicate OMS transition safely deduped (1 doc)")
 }
 
-// ── TEST 6: duplicate position open is idempotent ────────────────────────────
+// â”€â”€ TEST 6: duplicate position open is idempotent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestDuplicatePositionOpenIdempotent(t *testing.T) {
 	mgr := requireMongo(t)
@@ -296,7 +296,7 @@ func TestDuplicatePositionOpenIdempotent(t *testing.T) {
 	t.Logf("TEST 6 PASS: duplicate PersistOpenPosition safely deduped (1 doc)")
 }
 
-// ── TEST 7: duplicate trade write is idempotent ───────────────────────────────
+// â”€â”€ TEST 7: duplicate trade write is idempotent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestDuplicateTradeWriteIdempotent(t *testing.T) {
 	mgr := requireMongo(t)
@@ -341,14 +341,14 @@ func TestDuplicateTradeWriteIdempotent(t *testing.T) {
 	t.Logf("TEST 7 PASS: duplicate ClosedTrade safely deduped (1 doc)")
 }
 
-// ── TEST 8: state snapshotter write is idempotent ────────────────────────────
+// â”€â”€ TEST 8: state snapshotter write is idempotent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestStateSnapshotterIdempotent(t *testing.T) {
 	mgr := requireMongo(t)
 	ctx := context.Background()
 
 	// Manually upsert paper_state twice with the same account_key.
-	col := mgr.Col(ColPaperState)
+	col := mgr.Col(ColEnginePaperState)
 	now := time.Now()
 
 	for i := 0; i < 3; i++ {
@@ -378,7 +378,7 @@ func TestStateSnapshotterIdempotent(t *testing.T) {
 	t.Logf("TEST 8 PASS: paper_state singleton maintained after 3 upserts, count=%d", count)
 }
 
-// ── TEST 9: recover with open positions ──────────────────────────────────────
+// â”€â”€ TEST 9: recover with open positions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestRecoverOpenPositions(t *testing.T) {
 	mgr := requireMongo(t)
@@ -407,7 +407,7 @@ func TestRecoverOpenPositions(t *testing.T) {
 	t.Logf("TEST 9 PASS: %d open positions in RecoveryReport", report.PositionsRestored)
 }
 
-// ── TEST 10: MongoDB reconnect resilience ─────────────────────────────────────
+// â”€â”€ TEST 10: MongoDB reconnect resilience â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 func TestIsConnectedAfterPing(t *testing.T) {
 	mgr := requireMongo(t)

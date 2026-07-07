@@ -949,30 +949,33 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 			targetBTC = minExecutionSizeBTC
 		}
 
-		// Shadow ledger recording (does not block live execution). Shadow trades
-		// use the SAME fixed size as live trades so shadow PnL is directly
-		// comparable to live PnL.
-		if sig.IsShadow && shadowLedger != nil {
-			shadowSize := targetBTC
-			if shadowSize < minExecutionSizeBTC {
-				shadowSize = minExecutionSizeBTC
+		// Shadow-tier routing: shadow trades use the SAME fixed size as live
+		// trades so shadow PnL is directly comparable to live PnL, but they must
+		// NEVER reach the live paper OMS — the live book is reserved for
+		// strategies that passed the two-window OOS backtest (BACKTEST.md §4/§5b).
+		if sig.IsShadow {
+			if shadowLedger != nil {
+				shadowSize := targetBTC
+				if shadowSize < minExecutionSizeBTC {
+					shadowSize = minExecutionSizeBTC
+				}
+				shSig := shadow.Signal{
+					Strategy:    sig.Strategy,
+					Direction:   shadow.Direction(sig.Direction),
+					StopLoss:    sig.StopLoss,
+					TakeProfit:  sig.TakeProfit,
+					TakeProfit2: sig.TakeProfit2,
+				}
+				if trade, err := shadowLedger.OpenTrade(shSig, price, shadowSize); err != nil {
+					log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
+				} else {
+					log.Printf("[SHADOW] Shadow trade recorded: %s %s @ %.2f size=%.4f BTC",
+						sig.Strategy, sig.Direction, trade.EntryPrice, shadowSize)
+					observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
+					observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
+				}
 			}
-			shSig := shadow.Signal{
-				Strategy:    sig.Strategy,
-				Direction:   shadow.Direction(sig.Direction),
-				StopLoss:    sig.StopLoss,
-				TakeProfit:  sig.TakeProfit,
-				TakeProfit2: sig.TakeProfit2,
-			}
-			if trade, err := shadowLedger.OpenTrade(shSig, price, shadowSize); err != nil {
-				log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
-			} else {
-				log.Printf("[SHADOW] Shadow trade recorded: %s %s @ %.2f size=%.4f BTC",
-					sig.Strategy, sig.Direction, trade.EntryPrice, shadowSize)
-				observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
-				observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
-			}
-			// Fall through to live paper OMS — shadow flag no longer blocks execution.
+			continue // shadow tier stops here — live OMS is whitelist-only
 		}
 
 		// Enforce the execution size floor.
