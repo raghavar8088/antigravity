@@ -194,7 +194,7 @@ func TestDR_KillSwitchSurvivesRestart(t *testing.T) {
 	}
 
 	// Simulate restart: reconstruct service from persisted ledger.
-	events, err := store.Replay(ctx, ledger.AggregateSystem, accountID)
+	events, err := store.ReplayAccount(ctx, accountID)
 	if err != nil {
 		t.Fatalf("replay system events: %v", err)
 	}
@@ -228,16 +228,22 @@ func TestDR_ProjectionRebuildAfterRestart(t *testing.T) {
 
 	for i := 0; i < numOrders; i++ {
 		oid := fmt.Sprintf("PROJ_ORD_%05d", i)
-		// Even orders: FILLED; odd orders: CANCELLED.
-		finalET := ledger.EventOrderFilled
-		finalState := omsv3.StateFilled
+		// Even orders: FILLED (full New->Validated->RiskApproved->Submitted->Accepted->Filled
+		// chain — FILLED is not reachable directly from VALIDATED); odd orders: CANCELLED
+		// (valid directly from VALIDATED).
+		var events []ledger.EventType
+		var finalState omsv3.OrderState
 		if i%2 == 1 {
-			finalET = ledger.EventOrderCancelled
+			events = []ledger.EventType{ledger.EventOrderCreated, ledger.EventOrderValidated, ledger.EventOrderCancelled}
 			finalState = omsv3.StateCancelled
+		} else {
+			events = []ledger.EventType{
+				ledger.EventOrderCreated, ledger.EventOrderValidated, ledger.EventRiskApproved,
+				ledger.EventOrderSubmitted, ledger.EventOrderAccepted, ledger.EventOrderFilled,
+			}
+			finalState = omsv3.StateFilled
 		}
-		for _, et := range []ledger.EventType{
-			ledger.EventOrderCreated, ledger.EventOrderValidated, finalET,
-		} {
+		for _, et := range events {
 			ev := newOrderEvent(t, accountID, oid, et)
 			mustAppend(t, store, ev)
 		}

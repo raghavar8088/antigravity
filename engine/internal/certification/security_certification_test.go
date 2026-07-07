@@ -143,7 +143,7 @@ func TestSecurity_KillSwitchAuditTrailImmutable(t *testing.T) {
 		t.Fatalf("trigger: %v", err)
 	}
 
-	events1, _ := store.Replay(context.Background(), ledger.AggregateSystem, accountID)
+	events1, _ := store.ReplayAccount(context.Background(), accountID)
 	initialCount := len(events1)
 
 	_ = ks.Trigger(context.Background(), killswitch.Activation{
@@ -152,7 +152,7 @@ func TestSecurity_KillSwitchAuditTrailImmutable(t *testing.T) {
 		Actions: []killswitch.Action{killswitch.ActionBlockNewOrders},
 	})
 
-	events2, _ := store.Replay(context.Background(), ledger.AggregateSystem, accountID)
+	events2, _ := store.ReplayAccount(context.Background(), accountID)
 	if len(events2) < initialCount {
 		t.Errorf("FAIL: audit trail shrank from %d to %d events — immutability violated",
 			initialCount, len(events2))

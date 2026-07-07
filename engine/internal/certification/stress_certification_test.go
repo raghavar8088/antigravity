@@ -130,7 +130,7 @@ func TestStress_KillSwitchActivatesUnderCrash(t *testing.T) {
 			}
 
 			// Verify audit trail.
-			events, err := store.Replay(context.Background(), ledger.AggregateSystem, accountID)
+			events, err := store.ReplayAccount(context.Background(), accountID)
 			if err != nil {
 				t.Fatalf("Replay audit trail: %v", err)
 			}

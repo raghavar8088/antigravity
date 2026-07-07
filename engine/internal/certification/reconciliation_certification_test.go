@@ -157,13 +157,18 @@ func TestReconciliation_PositionDrift(t *testing.T) {
 	t.Logf("position drift detected: %.4f BTC — PASS", result.DriftScore)
 }
 
-// TestReconciliation_AuditEventsPersistedToLedger verifies every run emits an audit event.
+// TestReconciliation_AuditEventsPersistedToLedger verifies every run with a
+// detected mismatch persists an audit event to the ledger. Cycles with zero
+// drift correctly emit nothing to the ledger (see the "not persisted" comment
+// on RunDomain — an unconditional per-cycle ledger write was the Jun 2026 OOM
+// incident), so this test must actually produce drift across all 3 cycles to
+// exercise the real invariant.
 func TestReconciliation_AuditEventsPersistedToLedger(t *testing.T) {
 	store := ledger.NewMemoryStore()
 	metrics := reconciliationv2.NewMetrics("test")
 	repair := &noopRepairTarget{}
 	accountID := "RECON_CERT_004"
-	adapter := &inMemoryExchangeAdapter{name: "binance-paper", equityUSD: 1_000_000}
+	adapter := &inMemoryExchangeAdapter{name: "binance-paper", equityUSD: 990_000}
 	omsReader := &inMemoryOMSReader{equityUSD: 1_000_000}
 	engine := reconciliationv2.NewReconciliationEngine(adapter, omsReader, store, repair, metrics, accountID)
 
@@ -173,7 +178,7 @@ func TestReconciliation_AuditEventsPersistedToLedger(t *testing.T) {
 		}
 	}
 
-	events, err := store.Replay(context.Background(), ledger.AggregateReconciliation, accountID)
+	events, err := store.ReplayAccount(context.Background(), accountID)
 	if err != nil {
 		t.Fatalf("Replay: %v", err)
 	}
@@ -182,9 +187,16 @@ func TestReconciliation_AuditEventsPersistedToLedger(t *testing.T) {
 	}
 }
 
-// TestReconciliation_RepairTriggeredOnDrift verifies repair is invoked when drift detected.
+// TestReconciliation_RepairTriggeredOnDrift verifies balance drift is escalated
+// for manual intervention rather than silently auto-rebuilt. Auto-rebuilding a
+// projection can't fix a real exchange/ledger balance disagreement — it would
+// just paper over a genuine discrepancy — so RepairEngine correctly routes
+// balance-domain mismatches to RepairTypeManualIntervention (see the
+// "MANUAL INTERVENTION REQUIRED" log line in engine.go) instead of calling
+// RepairTarget.Rebuild*. This asserts that escalation, not the rebuild-call
+// counter the original version of this test checked.
 func TestReconciliation_RepairTriggeredOnDrift(t *testing.T) {
-	engine, repair := newEngine(990_000, 1_000_000, nil, nil, "RECON_CERT_005")
+	engine, _ := newEngine(990_000, 1_000_000, nil, nil, "RECON_CERT_005")
 	result, err := engine.RunDomain(context.Background(), reconciliationv2.DomainBalance)
 	if err != nil {
 		t.Fatalf("RunDomain: %v", err)
@@ -192,10 +204,10 @@ func TestReconciliation_RepairTriggeredOnDrift(t *testing.T) {
 	if !(result.MismatchCount > 0) {
 		t.Fatal("FAIL: drift not detected")
 	}
-	if repair.rebuildCalls == 0 {
-		t.Error("FAIL: repair not invoked after drift detection — auto-repair broken")
+	if result.EscalateCount == 0 {
+		t.Error("FAIL: drift detected but not escalated for manual intervention")
 	}
-	t.Logf("auto-repair invoked %d times for %.2f USDT drift", repair.rebuildCalls, result.DriftScore)
+	t.Logf("escalated %d mismatches for manual intervention on %.2f USDT drift", result.EscalateCount, result.DriftScore)
 }
 
 // TestReconciliation_MultipleExchanges verifies independent engines produce independent results.

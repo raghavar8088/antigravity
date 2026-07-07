@@ -57,7 +57,7 @@ func TestExchangeFailure_OutagePreventsDualExecution(t *testing.T) {
 	}{
 		{ledger.EventOrderCreated, omsv3.StateNew},
 		{ledger.EventOrderValidated, omsv3.StateValidated},
-		{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+		{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 	} {
 		ev := newOrderEvent(t, accountID, orderID, step.et)
@@ -107,7 +107,7 @@ func TestExchangeFailure_TimeoutNoOrphan(t *testing.T) {
 	}{
 		{ledger.EventOrderCreated, omsv3.StateNew},
 		{ledger.EventOrderValidated, omsv3.StateValidated},
-		{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+		{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 	} {
 		ev := newOrderEvent(t, accountID, orderID, step.et)
@@ -160,7 +160,7 @@ func TestExchangeFailure_RejectStorm(t *testing.T) {
 		}{
 			{ledger.EventOrderCreated, omsv3.StateNew},
 			{ledger.EventOrderValidated, omsv3.StateValidated},
-			{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+			{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 			{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 		} {
 			ev := newOrderEvent(t, accountID, orderID, step.et)
@@ -209,7 +209,7 @@ func TestExchangeFailure_DuplicateExchangeMessage(t *testing.T) {
 	}{
 		{ledger.EventOrderCreated, omsv3.StateNew},
 		{ledger.EventOrderValidated, omsv3.StateValidated},
-		{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+		{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 		{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 		{ledger.EventOrderAcked, omsv3.StateAcknowledged},
 	} {
@@ -277,7 +277,7 @@ func TestExchangeFailure_WebsocketReconnectNoGhostPosition(t *testing.T) {
 		}{
 			{ledger.EventOrderCreated, omsv3.StateNew},
 			{ledger.EventOrderValidated, omsv3.StateValidated},
-			{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+			{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 			{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 			{ledger.EventOrderAcked, omsv3.StateAcknowledged},
 			{ledger.EventOrderFilled, omsv3.StateFilled},

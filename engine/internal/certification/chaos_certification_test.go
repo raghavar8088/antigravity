@@ -163,7 +163,7 @@ func TestChaos_OMSv3_ConcurrentOrderProcessing(t *testing.T) {
 			}{
 				{ledger.EventOrderCreated, omsv3.StateNew},
 				{ledger.EventOrderValidated, omsv3.StateValidated},
-				{ledger.EventOrderAccepted, omsv3.StateRiskApproved},
+				{ledger.EventRiskApproved, omsv3.StateRiskApproved},
 				{ledger.EventOrderSubmitted, omsv3.StateSubmitted},
 				{ledger.EventOrderAcked, omsv3.StateAcknowledged},
 				{ledger.EventOrderFilled, omsv3.StateFilled},
