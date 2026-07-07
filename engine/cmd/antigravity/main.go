@@ -121,6 +121,28 @@ func getInitialPaperBalanceUSD() float64 {
 	return f
 }
 
+// getMaxPositionBTC returns the aggregate net BTC exposure ceiling for the
+// futures paper account (RiskEngine.Validate rejects any order that would push
+// |net exposure| above this). Sourced from MAX_POSITION_BTC (documented in
+// CLAUDE.md, previously unwired) with a default of 5.0 BTC. The default was
+// raised from the legacy 2.0 on 2026-07-07: with only two OOS-validated live
+// strategies (down from ~100) FIXED_TRADE_SIZE_BTC was raised to 2.5 to use the
+// risk budget, and a 5.0 cap lets both live shorts hold one position each
+// (~$300k peak on a $1M book, the "moderate" sizing profile) while rejecting a
+// third — keeping aggregate drawdown a small fraction of the 20% backtest limit.
+func getMaxPositionBTC() float64 {
+	v := os.Getenv("MAX_POSITION_BTC")
+	if v == "" {
+		return 5.0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil || f <= 0 {
+		log.Printf("[CONFIG] WARNING: invalid MAX_POSITION_BTC=%q, using default 5.0 BTC", v)
+		return 5.0
+	}
+	return f
+}
+
 // resetPaperBalanceOnBoot reports whether the operator asked the engine to
 // discard the persisted paper balance/positions/trades on boot and start fresh
 // from getInitialPaperBalanceUSD(). Env: RESET_PAPER_BALANCE_ON_BOOT (truthy:
@@ -597,7 +619,7 @@ func main() {
 	// 3. Risk Engine (configured for the futures paper account; default $100)
 	// ═══════════════════════════════════════════════════
 	riskProfile := risk.RiskProfile{
-		MaxPositionBTC:  2.0,                         // Max 2 BTC total exposure
+		MaxPositionBTC:  getMaxPositionBTC(),         // aggregate net BTC exposure cap (env MAX_POSITION_BTC, default 5.0)
 		MaxCapitalUSD:   getInitialPaperBalanceUSD(), // configured paper balance
 		MaxDailyLossPct: 0.05,                        // 5% daily loss circuit breaker
 	}

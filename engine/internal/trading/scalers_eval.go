@@ -1042,6 +1042,21 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		sig := agg.Signal
 		log.Printf("[SCALERS] %s → %s conf=%.2f", agg.StrategyName, sig.Action, sig.Confidence)
 
+		// Per-strategy position cap. The offline backtest (BACKTEST.md §4) that
+		// qualified these strategies enters a new position only when flat — one
+		// at a time — so its measured drawdown assumes at most posMgr.MaxPerStrategy
+		// concurrent positions per strategy. Without this guard the scalers path
+		// (unlike processStrategyGroup, which already checks CanOpenPosition) could
+		// stack a fresh position every eval cycle, making live exposure — and
+		// therefore drawdown — diverge from the evidence the whitelist is built on.
+		// This was harmless at 0.1 BTC sizing but material once FIXED_TRADE_SIZE_BTC
+		// was raised to actually use the risk budget.
+		if !o.posMgr.CanOpenPosition(agg.StrategyName) {
+			log.Printf("[SCALERS] %s at per-strategy position limit — skipping", agg.StrategyName)
+			observability.ScalersSignalsRejected.WithLabelValues(agg.StrategyName, "position_limit").Inc()
+			continue
+		}
+
 		fill, err := o.executeThroughInstitutionalPath(ctx, sig, agg.StrategyName, price, execution.OrderModeIOC)
 		if err != nil {
 			log.Printf("[SCALERS] %s execution failed: %v", agg.StrategyName, err)
