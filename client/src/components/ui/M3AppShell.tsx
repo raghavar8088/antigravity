@@ -44,7 +44,6 @@ export function M3AppShell({
   return (
     <CommandPaletteProvider>
       <div className="m3-app-shell">
-        <KillSwitchPanel />
         <aside
           className={`m3-nav-rail ${railCollapsed ? "m3-nav-rail--collapsed" : ""} ${mobileNavOpen ? "m3-nav-rail--mobile-open" : ""}`}
           aria-label="Main navigation"
@@ -91,6 +90,7 @@ export function M3AppShell({
         ) : null}
 
         <div className={`m3-main-column ${railCollapsed ? "m3-main-column--collapsed" : ""}`}>
+          <KillSwitchPanel />
           <header className="m3-top-app-bar" role="banner">
             <button type="button" className="m3-icon-btn m3-mobile-menu-btn" aria-label="Open navigation menu" onClick={() => setMobileNavOpen(true)}>
               <NavIcon name="menu" />

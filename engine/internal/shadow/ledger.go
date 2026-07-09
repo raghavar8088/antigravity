@@ -39,6 +39,19 @@ const (
 // ShadowCollection is the MongoDB collection name for shadow trades.
 const ShadowCollection = "shadow_trades"
 
+// CurrentPipelineVersion tags every trade with the gate/accounting pipeline
+// that produced it, so promotion evidence can be scoped to trades opened
+// under the current rules. Version history:
+//
+//	0 (absent) — pre-2026-07-07: opened before the quality gates, with no
+//	  per-strategy cap (stacked correlated duplicates), no TIME exit, and
+//	  NetPnL missing the entry-fee leg. NOT valid promotion evidence.
+//	2 — gates/cap/TIME-exit/canonical-fee pipeline.
+//
+// RecoverOpenTrades stale-closes open trades below the current version, and
+// RebuildPerformance only counts closed trades at the current version.
+const CurrentPipelineVersion = 2
+
 // ShadowTrade is a single hypothetical position opened by a strategy that is
 // not yet cleared for live trading. It is sized, filled, and closed using
 // the exact same fee/slippage model as a live paper trade, but never
@@ -63,6 +76,8 @@ type ShadowTrade struct {
 	ExitSlippageBps  float64 `bson:"exit_slippage_bps,omitempty" json:"exit_slippage_bps,omitempty"`
 	Status       string    `bson:"status" json:"status"` // "OPEN" | "CLOSED"
 	IsShadow     bool      `bson:"is_shadow" json:"is_shadow"`
+	// PipelineVersion — see CurrentPipelineVersion. Zero for legacy trades.
+	PipelineVersion int `bson:"pipeline_version,omitempty" json:"pipeline_version,omitempty"`
 }
 
 // Signal is the minimal set of fields the ledger needs from a strategy
@@ -92,6 +107,23 @@ type ShadowLedger struct {
 	getDB         func() *mongo.Database
 	atrPct        float64 // last known ATR/price ratio, fed by UpdateATR — same as PaperClient
 	slippageModel *execution.SlippageModel
+
+	// maxOpenPerStrategy and maxAgeMins mirror the live position manager's
+	// defaults (positions.NewManager: MaxPerStrategy=2, MaxPositionAgeMins=240)
+	// so a strategy's shadow track record is built under the same concurrency
+	// and holding-time constraints it would face live. Without the cap, a
+	// signal that persists across 15m eval cycles stacks correlated
+	// near-duplicate positions that inflate the trade count toward the
+	// promotion bar; without the age limit, losers that never hit SL ride
+	// forever and never count against the stats.
+	maxOpenPerStrategy int
+	maxAgeMins         float64
+
+	// seq disambiguates trade IDs opened within the same clock tick.
+	// UnixNano alone collides on coarse-resolution clocks (observed on
+	// Windows), and a colliding ID silently overwrites the earlier trade in
+	// openTrades. Guarded by mu.
+	seq int64
 }
 
 // col resolves the live shadow collection, or nil when Mongo is unavailable
@@ -138,7 +170,27 @@ func NewShadowLedger(getDB func() *mongo.Database) *ShadowLedger {
 		perf:          make(map[string]*runningPerf),
 		slippageModel: execution.NewSlippageModel(),
 		getDB:         getDB,
+		// Mirror positions.NewManager defaults — keep in sync (see field docs).
+		maxOpenPerStrategy: 2,
+		maxAgeMins:         240,
 	}
+}
+
+// CanOpen reports whether strategyName is below its concurrent shadow
+// position cap — the shadow-side equivalent of positions.Manager.CanOpenPosition.
+func (l *ShadowLedger) CanOpen(strategyName string) bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.maxOpenPerStrategy <= 0 {
+		return true
+	}
+	n := 0
+	for _, t := range l.openTrades {
+		if t.StrategyName == strategyName {
+			n++
+		}
+	}
+	return n < l.maxOpenPerStrategy
 }
 
 // EnsureIndexes creates the indexes documented in the shadow trading spec.
@@ -191,7 +243,6 @@ func (l *ShadowLedger) OpenTrade(sig Signal, midPrice float64, sizeBTC float64) 
 	entryFee := notional * execution.BinanceFuturesTakerFeePct
 
 	trade := &ShadowTrade{
-		ID:               fmt.Sprintf("shadow-%s-%d", sig.Strategy, time.Now().UnixNano()),
 		StrategyName:     sig.Strategy,
 		Direction:        sig.Direction,
 		EntryPrice:       fillPrice,
@@ -204,9 +255,24 @@ func (l *ShadowLedger) OpenTrade(sig Signal, midPrice float64, sizeBTC float64) 
 		EntrySlippageBps: slippageBps,
 		Status:           "OPEN",
 		IsShadow:         true,
+		PipelineVersion:  CurrentPipelineVersion,
 	}
 
 	l.mu.Lock()
+	if l.maxOpenPerStrategy > 0 {
+		n := 0
+		for _, t := range l.openTrades {
+			if t.StrategyName == sig.Strategy {
+				n++
+			}
+		}
+		if n >= l.maxOpenPerStrategy {
+			l.mu.Unlock()
+			return nil, fmt.Errorf("shadow: %s at max %d open positions", sig.Strategy, l.maxOpenPerStrategy)
+		}
+	}
+	l.seq++
+	trade.ID = fmt.Sprintf("shadow-%s-%d-%d", sig.Strategy, time.Now().UnixNano(), l.seq)
 	l.openTrades[trade.ID] = trade
 	l.mu.Unlock()
 
@@ -232,12 +298,16 @@ func (l *ShadowLedger) entrySlippageBps(notionalUSD, atrPct, price float64) floa
 // CheckAndClose evaluates every open shadow position against currentPrice
 // using the same TP/SL precedence as the live position manager (SL checked
 // first to avoid optimistic bias, then TP2, then TP) and closes any that
-// have hit a level. Returns the trades that closed this call.
+// have hit a level. Positions older than maxAgeMins are force-closed with
+// reason "TIME", mirroring the live manager's CheckExpiredPositions, so a
+// shadow loser that never reaches SL cannot ride (and stay uncounted)
+// forever. Returns the trades that closed this call.
 func (l *ShadowLedger) CheckAndClose(currentPrice float64) []*ShadowTrade {
 	if currentPrice <= 0 {
 		return nil
 	}
 
+	now := time.Now().UTC()
 	l.mu.Lock()
 	var toClose []*ShadowTrade
 	for id, t := range l.openTrades {
@@ -261,6 +331,9 @@ func (l *ShadowLedger) CheckAndClose(currentPrice float64) []*ShadowTrade {
 			case t.TakeProfit > 0 && currentPrice <= t.TakeProfit:
 				reason = "TP"
 			}
+		}
+		if reason == "" && l.maxAgeMins > 0 && now.Sub(t.OpenedAt) >= time.Duration(l.maxAgeMins*float64(time.Minute)) {
+			reason = "TIME"
 		}
 		if reason == "" {
 			continue
@@ -306,8 +379,13 @@ func (l *ShadowLedger) closeTradeLocked(t *ShadowTrade, currentPrice float64, re
 	} else {
 		grossPnL = entryNotional - exitNotional
 	}
+	// NetPnL = GrossPnL − EntryFee − ExitFee, matching the canonical fee model
+	// (execution.CanonicalNetPnL) used for live trades in processCloseEvents.
+	// t.Fees holds the entry fee tallied at open; it was never subtracted from
+	// any PnL figure, so it must come out here or every shadow trade overstates
+	// its result by one fee leg vs the identical live trade.
 	totalFees := t.Fees + exitFee
-	netPnL := grossPnL - exitFee // entry fee already deducted from t.Fees, exit fee deducted now
+	netPnL := grossPnL - totalFees
 
 	t.ClosedAt = time.Now().UTC()
 	t.ExitPrice = exitPrice

@@ -167,6 +167,7 @@ The content is organized as follows:
   app/terminal/health/page.tsx
   app/terminal/journal/page.tsx
   app/terminal/layout.tsx
+  app/terminal/live-engine/page.tsx
   app/terminal/main-engine/page.tsx
   app/terminal/mock-engine/page.tsx
   app/terminal/observability/page.tsx
@@ -285,6 +286,7 @@ The content is organized as follows:
   components/terminal/institutional/format.ts
   components/terminal/institutional/GradeStageCenter.tsx
   components/terminal/institutional/HealthCenter.tsx
+  components/terminal/institutional/LiveEngineCenter.tsx
   components/terminal/institutional/LogoutButton.tsx
   components/terminal/institutional/MainEngineCenter.tsx
   components/terminal/institutional/MainEngineSurvivors.tsx
@@ -958,6 +960,8 @@ The content is organized as follows:
   live/live_test.go
   live/orphan_detector.go
   live/parity_checker.go
+  livemirror/mirror_test.go
+  livemirror/mirror.go
   logger/logger.go
   macro/fetcher.go
   macro/macro_test.go
@@ -1271,6 +1275,7 @@ The content is organized as follows:
   sentiment/score.go
   sentiment/sentiment_test.go
   sentiment/types.go
+  shadow/ledger_test.go
   shadow/ledger.go
   shadow/promoter.go
   sor/backtest_integration.go

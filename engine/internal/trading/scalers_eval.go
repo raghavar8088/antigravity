@@ -904,8 +904,13 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		shadowLedger.UpdateATR(scalers.ATR(mctx.Candles15m, 14) / price)
 	}
 
-	// Collect non-none signals from all curated scalers
+	// Collect non-none signals from all curated scalers.
+	// shadowOriginals carries each shadow signal's original absolute SL/TP
+	// levels (lost in the legacy percent conversion) to the approved loop,
+	// and doubles as the shadow-routing marker — strategy names are unique
+	// per cycle (each registry entry evaluates exactly once).
 	var rawAgg []AggregatedSignal
+	shadowOriginals := make(map[string]scalers.Signal)
 	rejected := 0
 	for _, entry := range o.scalerBundle.strategies {
 		// ── Regime pre-filter ────────────────────────────────────────────────
@@ -948,46 +953,27 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		if targetBTC < minExecutionSizeBTC {
 			targetBTC = minExecutionSizeBTC
 		}
-
-		// Shadow-tier routing: shadow trades use the SAME fixed size as live
-		// trades so shadow PnL is directly comparable to live PnL, but they must
-		// NEVER reach the live paper OMS — the live book is reserved for
-		// strategies that passed the two-window OOS backtest (BACKTEST.md §4/§5b).
-		if sig.IsShadow {
-			if shadowLedger != nil {
-				shadowSize := targetBTC
-				if shadowSize < minExecutionSizeBTC {
-					shadowSize = minExecutionSizeBTC
-				}
-				shSig := shadow.Signal{
-					Strategy:    sig.Strategy,
-					Direction:   shadow.Direction(sig.Direction),
-					StopLoss:    sig.StopLoss,
-					TakeProfit:  sig.TakeProfit,
-					TakeProfit2: sig.TakeProfit2,
-				}
-				if trade, err := shadowLedger.OpenTrade(shSig, price, shadowSize); err != nil {
-					log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", sig.Strategy, err)
-				} else {
-					log.Printf("[SHADOW] Shadow trade recorded: %s %s @ %.2f size=%.4f BTC",
-						sig.Strategy, sig.Direction, trade.EntryPrice, shadowSize)
-					observability.ShadowSignalsExecuted.WithLabelValues(sig.Strategy, string(sig.Direction)).Inc()
-					observability.ShadowPositionsOpen.WithLabelValues(sig.Strategy).Set(float64(shadowLedger.CountOpen(sig.Strategy)))
-				}
-			}
-			continue // shadow tier stops here — live OMS is whitelist-only
-		}
-
-		// Enforce the execution size floor.
-		if targetBTC < minExecutionSizeBTC {
-			log.Printf("[SCALERS] %s fixed size %.6f BTC below minimum %.6f BTC — skipping", entry.Name, targetBTC, minExecutionSizeBTC)
-			observability.ScalersSignalsRejected.WithLabelValues(entry.Name, "size_too_small").Inc()
-			rejected++
-			continue
-		}
 		legacySig.TargetSize = targetBTC
-		observability.ScalersKellyPositionUSD.WithLabelValues(entry.Name).Set(targetBTC * price)
-		log.Printf("[SIZING] strategy=%s fixedBTC=%.4f (~$%.0f) equal-footing", entry.Name, targetBTC, targetBTC*price)
+
+		// Shadow-tier signals flow through the IDENTICAL gate sequence as live
+		// signals from here on — fixed sizing (above), quality gate
+		// (sanitizeScalerSignal), meta-label confluence filter, and the
+		// aggregator cooldown — so a shadow track record is built from exactly
+		// the trades the strategy would have taken live, and the promotion
+		// thresholds (ShadowPromoter.CanPromote) judge like-for-like evidence.
+		// Routing to the shadow ledger instead of the live OMS happens at the
+		// END of the pipeline (approved loop below); the live paper book stays
+		// whitelist-only. With no shadow ledger wired (e.g. pre-live engine),
+		// shadow signals stop here — same no-op as before.
+		if sig.IsShadow {
+			if shadowLedger == nil {
+				continue
+			}
+			shadowOriginals[sig.Strategy] = sig
+		} else {
+			observability.ScalersKellyPositionUSD.WithLabelValues(entry.Name).Set(targetBTC * price)
+			log.Printf("[SIZING] strategy=%s fixedBTC=%.4f (~$%.0f) equal-footing", entry.Name, targetBTC, targetBTC*price)
+		}
 
 		adaptiveFloor := minExecutableConfidence
 		if o.adaptiveFloor != nil {
@@ -1001,10 +987,14 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		}
 		legacySig.CreatedAt = sig.Timestamp
 
+		category := "SCALERS"
+		if sig.IsShadow {
+			category = "SCALERS_SHADOW"
+		}
 		rawAgg = append(rawAgg, AggregatedSignal{
 			Signal:       legacySig,
 			StrategyName: sig.Strategy,
-			Category:     "SCALERS",
+			Category:     category,
 			FiredAt:      time.Now(),
 		})
 	}
@@ -1040,6 +1030,37 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 
 	for _, agg := range approved {
 		sig := agg.Signal
+
+		// Shadow-tier routing — the ONLY divergence from the live path, and it
+		// comes after every shared gate. The live paper OMS stays whitelist-only
+		// (BACKTEST.md §4/§5b). ShadowLedger.CanOpen mirrors the live
+		// per-strategy position cap checked below for live signals, so shadow
+		// trade-count and drawdown evidence can't be inflated by stacking a
+		// fresh correlated position every eval cycle a signal persists.
+		if orig, isShadow := shadowOriginals[agg.StrategyName]; isShadow {
+			if !shadowLedger.CanOpen(agg.StrategyName) {
+				log.Printf("[SHADOW] %s at per-strategy shadow position limit — skipping", agg.StrategyName)
+				observability.ScalersSignalsRejected.WithLabelValues(agg.StrategyName, "position_limit").Inc()
+				continue
+			}
+			shSig := shadow.Signal{
+				Strategy:    orig.Strategy,
+				Direction:   shadow.Direction(orig.Direction),
+				StopLoss:    orig.StopLoss,
+				TakeProfit:  orig.TakeProfit,
+				TakeProfit2: orig.TakeProfit2,
+			}
+			if trade, err := shadowLedger.OpenTrade(shSig, price, sig.TargetSize); err != nil {
+				log.Printf("[SHADOW] Failed to open shadow trade for %s: %v", agg.StrategyName, err)
+			} else {
+				log.Printf("[SHADOW] Shadow trade recorded: %s %s @ %.2f size=%.4f BTC",
+					agg.StrategyName, orig.Direction, trade.EntryPrice, sig.TargetSize)
+				observability.ShadowSignalsExecuted.WithLabelValues(agg.StrategyName, string(orig.Direction)).Inc()
+				observability.ShadowPositionsOpen.WithLabelValues(agg.StrategyName).Set(float64(shadowLedger.CountOpen(agg.StrategyName)))
+			}
+			continue // shadow tier ends here — live OMS is whitelist-only
+		}
+
 		log.Printf("[SCALERS] %s → %s conf=%.2f", agg.StrategyName, sig.Action, sig.Confidence)
 
 		// Per-strategy position cap. The offline backtest (BACKTEST.md §4) that
