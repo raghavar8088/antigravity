@@ -99,6 +99,13 @@ func NewClient() (*Client, error) {
 	if strings.TrimSpace(os.Getenv("DELTA_TESTNET")) == "true" {
 		baseURL = testnetBaseURL
 	}
+	// DELTA_BASE_URL overrides the API host entirely — e.g. set
+	// https://api.delta.exchange when the account/keys live on Delta global
+	// rather than Delta India, or https://api.india.delta.exchange if the CDN
+	// host misbehaves. Takes precedence over DELTA_TESTNET.
+	if v := strings.TrimSpace(os.Getenv("DELTA_BASE_URL")); v != "" {
+		baseURL = strings.TrimRight(v, "/")
+	}
 
 	timeout := 10 * time.Second
 	httpClient := &http.Client{Timeout: timeout}
