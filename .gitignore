@@ -80,3 +80,6 @@ scripts/vercel-frontend.env
 # External integration/research repos (shallow clones, not part of this repo)
 integrations/**/
 !integrations/README.md
+
+# SSH private keys — never commit
+*.pem
