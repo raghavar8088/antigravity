@@ -36,9 +36,11 @@ for k in DELTA_API_KEY DELTA_API_SECRET DELTA_TESTNET DELTA_PROXY_URL DELTA_BASE
   echo "  set $k"
 done
 rm -f /tmp/delta.props
-docker-compose -f docker-compose.prod.yml restart pre_live 2>/dev/null \
-  || docker compose -f docker-compose.prod.yml restart pre_live
-echo "  pre_live restarted"
+# NOTE: `restart` reuses the old container env — .env changes only apply on
+# recreate, so force-recreate the pre_live container.
+docker-compose -f docker-compose.prod.yml up -d --force-recreate pre_live 2>/dev/null \
+  || docker compose -f docker-compose.prod.yml up -d --force-recreate pre_live
+echo "  pre_live recreated with fresh .env"
 REMOTE
 
 echo "==> verifying Live Engine status"
