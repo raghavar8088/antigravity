@@ -78,6 +78,7 @@ Key domains:
 - **NIFTY Options**: `/api/nifty-options/*` and `/api/nifty-options-selling/*`
 - **NIFTY Stocks**: `/api/nifty-stocks/*`
 - **Delta Live**: `/api/delta-live/*` (stats, trades, enable, mode, manual order)
+- **Live Engine**: `/api/pre-live/api/live/*` (stats, trades, enable, close-all) — proxied to the pre-live process, which hosts the Delta Exchange trade-cloning mirror (`engine/internal/livemirror`)
 - **AngelOne**: `/api/angelone/*` (order, cancel, funds) + `/api/angel-proxy`
 - **Engine proxy**: `/api/engine/[...path]` → catches all and forwards to Go at `INTERNAL_API_URL`
 - **Cron/Admin**: `/api/cron/paper-desk-tick`, `/api/admin/kill`, `/api/admin/reset`
@@ -113,6 +114,13 @@ GROQ_API_KEY  ← free tier, used as fallback
 DATABASE_URL         ← PostgreSQL Neon
 REDIS_URL
 MONGODB_URI / MONGODB_DB
+
+# Live Engine (Delta trade cloning inside cmd/pre_live)
+LIVE_ENGINE_SYMBOL           ← perp symbol (default BTCUSD)
+LIVE_ENGINE_AUTO_ENABLE      ← arm on boot (default false; arm via POST /api/live/enable)
+LIVE_ENGINE_MAX_CONTRACTS    ← per-order cap (default 5; 1 contract = 0.001 BTC)
+LIVE_ENGINE_FIXED_CONTRACTS  ← constant order size override
+LIVE_ENGINE_LEVERAGE         ← default 10
 
 # Engine
 INTERNAL_API_URL     ← Next.js → Go engine calls

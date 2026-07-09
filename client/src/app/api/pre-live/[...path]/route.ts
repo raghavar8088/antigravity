@@ -52,6 +52,11 @@ const ALLOWED_PATHS = [
   "/api/strategies",
   "/api/strategies/stats",
   "/api/admin/reset",
+  // LIVE ENGINE — Delta Exchange trade cloning (runs inside the pre-live process)
+  "/api/live/stats",
+  "/api/live/trades",
+  "/api/live/enable",
+  "/api/live/close-all",
 ];
 
 function isAllowed(pathname: string): boolean {

@@ -1,5 +1,6 @@
 type NavIconName =
   | "Trade Engine"
+  | "Live Engine"
   | "Pre-Live Engine"
   | "Pre-Live Strategies"
   | "Backtest Lab"
@@ -155,6 +156,12 @@ export function NavIcon({ name }: { name: NavIconName | string }) {
           <rect x="3" y="4" width="14" height="12" rx="2" />
           <path d="M7 9h6M7 12h4" />
           <circle cx="14" cy="7" r="2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "Live Engine":
+      return (
+        <svg {...props}>
+          <path d="M11 2L4 11h4.5L9 18l7-9h-4.5L11 2z" />
         </svg>
       );
     case "Pre-Live Engine":

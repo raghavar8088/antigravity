@@ -85,8 +85,12 @@ export const PAGE_TITLES: Record<string, string> = {
   "/terminal/design-system": "Design System",
   "/mock-trading": "Trade Engine",
   [TERMINAL_ROUTES.backtest]: "Backtest Lab",
+  [TERMINAL_ROUTES["live-engine"]]: "Live Engine",
   [TERMINAL_ROUTES["pre-live-engine"]]: "Pre-Live Engine",
   [TERMINAL_ROUTES["pre-live-strategies"]]: "Pre-Live Strategies",
+  [TERMINAL_ROUTES["threshold-config"]]: "Trade Thresholds",
+  [TERMINAL_ROUTES.trading]: "Trading",
+  [TERMINAL_ROUTES["strategy-ops"]]: "Strategy Ops",
 };
 
 export function resolvePageTitle(pathname: string): string {

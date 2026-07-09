@@ -70,6 +70,11 @@ type ManagerConfig struct {
 	// OnClose is called synchronously after each position close, outside the hot path.
 	// Signature: func(pos, reason, exitPrice, grossPnL). Optional; nil is safe.
 	OnClose func(pos *Position, reason CloseReason, exitPrice, pnl float64)
+	// OnOpen is called after each successful position open, AFTER the manager
+	// lock is released (safe to call back into the Manager). It receives a copy
+	// of the position. Optional; nil is safe. Must not block: hooks that do I/O
+	// (e.g. live order mirroring) should enqueue and return.
+	OnOpen func(pos Position)
 }
 
 // Manager tracks all open positions and checks SL/TP on every price tick.
@@ -145,6 +150,17 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 		return nil, fmt.Errorf("open position rejected for %s: %w", stratName, err)
 	}
 
+	pos, onOpen := m.openPositionLocked(sig, entryPrice, stratName)
+	if onOpen != nil {
+		onOpen(*pos) // invoked outside the lock with a copy
+	}
+	return pos, nil
+}
+
+// openPositionLocked creates the position under m.mu and returns it together
+// with the OnOpen hook (read under the same lock) so the caller can invoke the
+// hook after the lock is released.
+func (m *Manager) openPositionLocked(sig strategy.Signal, entryPrice float64, stratName string) (*Position, func(Position)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -201,7 +217,15 @@ func (m *Manager) OpenPosition(sig strategy.Signal, entryPrice float64, stratNam
 		stopLoss, stopLossPct,
 		takeProfit, takeProfitPct, stratName)
 
-	return pos, nil
+	return pos, m.config.OnOpen
+}
+
+// SetOnOpenCallback sets or replaces the OnOpen hook after construction.
+// The hook fires after every successful open, outside the manager lock.
+func (m *Manager) SetOnOpenCallback(fn func(pos Position)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.config.OnOpen = fn
 }
 
 // CheckStopLossAndTakeProfit evaluates all open positions against the current live price.

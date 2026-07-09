@@ -202,6 +202,7 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickLink href={TERMINAL_ROUTES["live-engine"]} label="Live Engine" detail="Clones pre-live trades to Delta Exchange" />
         <QuickLink href={TERMINAL_ROUTES["pre-live-engine"]} label="Pre-Live Engine" detail="100 strategies · real money · no limits" />
         <QuickLink href={TERMINAL_ROUTES["trade-engine"]} label="Trade Engine" detail="Positions · trades · live signals" />
         <QuickLink href={TERMINAL_ROUTES.portfolio} label="Portfolio" detail="Equity · exposure · fees" />

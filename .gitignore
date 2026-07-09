@@ -15,6 +15,9 @@ build/
 .env
 .env.local
 
+# Broker credentials (Live Engine) — never commit
+.application.properties/
+
 # Raw historical market data (large, regenerable)
 engine/data/historical/
 

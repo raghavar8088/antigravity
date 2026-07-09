@@ -126,6 +126,14 @@ function IconSettings() {
   );
 }
 
+function IconLiveEngine() {
+  return (
+    <svg className="sidebar-nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 1.5L3.5 9H7l-.5 5.5L12 7H8.5L9 1.5z" />
+    </svg>
+  );
+}
+
 function IconBacktest() {
   return (
     <svg className="sidebar-nav-item-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -148,6 +156,7 @@ const ICONS: Record<string, React.ReactNode> = {
   Health: <IconHealth />,
   Diagnostics: <IconDiagnostics />,
   Settings: <IconSettings />,
+  "Live Engine": <IconLiveEngine />,
   "Trade Engine": <IconResearch />,
   "Backtest Lab": <IconBacktest />,
   "Trade Thresholds": <IconSettings />,

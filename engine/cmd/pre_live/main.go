@@ -1,9 +1,17 @@
 // Pre-Live Trade Engine — Backtested-Qualified Strategies
 //
-// Connects to real brokers (Coinbase price feed, Binance klines, Delta Exchange
-// for live order execution). Enforces ONLY the strategy-level SL/TP thresholds
-// baked into each strategy. No position count limits, no max-trades-per-strategy,
-// no daily-loss circuit breaker, no correlation gate.
+// Consumes real market data (Coinbase price feed, Binance klines/aggTrades) but
+// executes on a PAPER account (execution.NewPaperClient) — no real broker orders
+// are sent from this process. It is a validation harness: it trades the honest
+// OOS-confirmed whitelist (see pre_live_registry.go) and records a paper track
+// record so promotion decisions rest on out-of-sample evidence.
+//
+// Institutional guards (wired 2026-07-07 — previously absent):
+//   - Kill switch (internal/killswitch): blocks new orders when active; armed
+//     via KILL_SWITCH_ENABLED (defaulted on here so the guard functions).
+//   - PMS portfolio gate (internal/pms): heat / VaR / drawdown (10%) /
+//     daily-loss (3%) caps, enforced in the institutional execution path.
+//   - RiskEngine intraday drawdown + daily-loss reset.
 //
 // Run:
 //
@@ -33,8 +41,12 @@ import (
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/derivatives"
 	"antigravity-engine/internal/execution"
+	"antigravity-engine/internal/killswitch"
+	"antigravity-engine/internal/ledger"
+	"antigravity-engine/internal/livemirror"
 	"antigravity-engine/internal/marketdata"
 	"antigravity-engine/internal/orderbook"
+	"antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
 	"antigravity-engine/internal/regime"
 	"antigravity-engine/internal/risk"
@@ -73,9 +85,12 @@ func warmupCandles(orch *trading.Orchestrator) {
 func main() {
 	fmt.Println("╔══════════════════════════════════════════════════════════╗")
 	fmt.Println("║   PRE-LIVE TRADE ENGINE — Qualified Strategies           ║")
-	fmt.Println("║   Real Broker · Paper Money · Validated Whitelist Only   ║")
+	fmt.Println("║   Real Data · Paper Money · OOS-Validated Whitelist      ║")
 	fmt.Println("╚══════════════════════════════════════════════════════════╝")
 
+	// Credentials folder first so it wins over .env (real env vars win over both):
+	// .application.properties/*.properties holds Delta Exchange keys + LIVE_ENGINE_* config.
+	loadApplicationProperties()
 	loadDotEnv()
 
 	// ── Threshold overrides: applied to the ThresholdRegistry BEFORE
@@ -152,13 +167,19 @@ func main() {
 		tfs[i] = e.Timeframe
 	}
 
-	// ── 3. Risk engine — unlimited positions, no daily loss circuit breaker ──
+	// ── 3. Risk engine ───────────────────────────────────────────────────────
+	// MaxDailyLossPct is a FRACTION (used as MaxCapitalUSD × MaxDailyLossPct in
+	// risk.validateLocked). The old value of 0 was NOT "disabled": maxLoss=0 makes
+	// |dailyPnL| >= 0 trip on ANY loss, so any code path routing through
+	// risk.Validate would block after the first losing moment. Default 5%, with a
+	// daily reset scheduled below so it measures per-day, not cumulative-since-boot.
 	riskProfile := risk.RiskProfile{
 		MaxPositionBTC:  99999,
 		MaxCapitalUSD:   preLiveBalance(),
-		MaxDailyLossPct: 0,
+		MaxDailyLossPct: preLiveMaxDailyLossFraction(),
 	}
 	riskEngine := risk.NewRiskEngine(riskProfile)
+	riskEngine.ScheduleDailyReset(ctx)
 
 	// ── 4. Core components ───────────────────────────────────────────────────
 	tracker := risk.NewStrategyTracker(names, cats, tfs, preLiveBalance())
@@ -255,6 +276,58 @@ func main() {
 	}
 	orch.SetDeps(loopDeps)
 
+	// ── Institutional guards: kill switch + PMS portfolio gate ───────────────
+	// Previously the pre-live engine wired NEITHER, so the only active guard was
+	// the Risk V2 intraday-drawdown breaker. The scalers execution path checks
+	// o.killSvc (cycle top + PreTradeRiskPipeline) and o.pmsBudget (portfolio
+	// gate) only when they are set — wire both here to match the main engine.
+	//
+	// Paper account → an in-memory ledger is sufficient (no restart durability
+	// needed; a fresh paper session starts un-halted by design).
+	if killswitch.EnabledFromEnv() {
+		log.Println("[PRE-LIVE][KILL SWITCH] armed via KILL_SWITCH_ENABLED")
+	} else {
+		// Default-arm so the guard actually functions on the pre-live engine.
+		// Without this, Trigger() is a silent no-op and IsActive() is always false.
+		os.Setenv("KILL_SWITCH_ENABLED", "true") //nolint:errcheck
+		log.Println("[PRE-LIVE][KILL SWITCH] KILL_SWITCH_ENABLED was unset — defaulting to armed for the pre-live guard")
+	}
+	ksLedger := ledger.NewMemoryStore()
+	ksExecutor := trading.NewKillSwitchExecutor(exec, posMgr)
+	ksSvc := killswitch.NewService(ksLedger, ksExecutor, "btc-paper-1")
+	orch.SetKillSwitch(ksSvc)
+	orch.SetEventLedger(ksLedger)
+	ksExecutor.SetOrchestrator(orch)
+	log.Println("[PRE-LIVE][KILL SWITCH] wired — new orders gated by IsActive()")
+
+	pmsBudget := pms.NewPortfolioRiskBudget(ledger.NewMemoryStore())
+	pmsBudget.InitPortfolio("btc-paper-1", pms.RiskBudget{
+		MaxHeatPct:      8,
+		MaxVaR95Pct:     6,
+		MaxCVaR95Pct:    9,
+		MaxDrawdownPct:  10,
+		MaxDailyLossPct: 3,
+		MaxGrossExpPct:  250,
+		MaxNetExpPct:    150,
+	})
+	orch.SetPMSBudget(pmsBudget)
+	log.Println("[PRE-LIVE][PMS] portfolio gate active — daily-loss 3% / drawdown 10% / heat 8%")
+
+	// ── LIVE ENGINE: clone pre-live trades to Delta Exchange ─────────────────
+	// Every position the pre-live engine opens/closes is mirrored 1:1 as a real
+	// BTC perpetual futures order on Delta Exchange. Starts DISARMED unless
+	// LIVE_ENGINE_AUTO_ENABLE=true; armed/disarmed at runtime via /api/live/enable.
+	liveMirror := livemirror.New(livemirror.ConfigFromEnv())
+	liveMirror.SetKillCheck(func(ctx context.Context) error {
+		if ksSvc.IsActive() {
+			return fmt.Errorf("kill switch active: %s", ksSvc.Reason())
+		}
+		return nil
+	})
+	liveMirror.Start(ctx)
+	posMgr.SetOnOpenCallback(liveMirror.OnPaperOpen)
+	log.Println("[LIVE ENGINE] wired to pre-live position events — API at /api/live/*")
+
 	// ── RC2: Auto-demotion ticker (DemotionCriteria.MaxWinRate now 0.40) ─────
 	go func() {
 		tick := time.NewTicker(15 * time.Minute)
@@ -285,6 +358,8 @@ func main() {
 		if reason == positions.ReasonExpired {
 			log.Printf("[EXPIRED-REGIME] strategy=%s pnl=%.4f regime=%s", pos.StrategyName, pnl, regime)
 		}
+		// LIVE ENGINE: mirror the close to Delta Exchange (enqueue only — no I/O here).
+		liveMirror.OnPaperClose(*pos, string(reason), exitPrice)
 	})
 
 	// ── 7. Binance kline feed for 15m/1h candles ─────────────────────────────
@@ -322,7 +397,7 @@ func main() {
 	// Fetch 200 historical 1h bars so 4h synthetic candles are ready immediately.
 	warmupCandles(orch)
 	go orch.Run(ctx)
-	log.Printf("[PRE-LIVE] Trading loop started with %d strategies (no limits)", len(qualified))
+	log.Printf("[PRE-LIVE] Trading loop started with %d strategies (kill switch + PMS daily-loss/drawdown gates active)", len(qualified))
 
 	// ── 10. MongoDB persistence ───────────────────────────────────────────────
 	// Wire all paperpersist collections (trades, positions, equity, health, etc.)
@@ -438,6 +513,59 @@ func main() {
 		})
 	})
 
+	// POST /api/admin/kill — manual kill switch: block new orders + cancel open
+	// orders. Idempotent. No-op with active=false if the switch is disarmed.
+	handle("/api/admin/kill", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		err := ksSvc.Trigger(r.Context(), killswitch.Activation{
+			Trigger: killswitch.TriggerManualOperator,
+			Reason:  "manual operator kill via /api/admin/kill",
+			Actions: []killswitch.Action{
+				killswitch.ActionCancelOpenOrders,
+				killswitch.ActionBlockNewOrders,
+				killswitch.ActionSendAlerts,
+			},
+		})
+		resp := map[string]interface{}{
+			"enabled": ksSvc.IsEnabled(),
+			"active":  ksSvc.IsActive(),
+			"reason":  ksSvc.Reason(),
+		}
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+		log.Printf("[PRE-LIVE][KILL SWITCH] manual kill requested — active=%v", ksSvc.IsActive())
+		json.NewEncoder(w).Encode(resp) //nolint:errcheck
+	})
+
+	// POST /api/admin/ks/release — resume trading after a manual/auto kill.
+	handle("/api/admin/ks/release", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		err := ksSvc.Release(r.Context(), killswitch.TriggerManualOperator, "operator", "manual release via /api/admin/ks/release")
+		resp := map[string]interface{}{"enabled": ksSvc.IsEnabled(), "active": ksSvc.IsActive()}
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+		log.Printf("[PRE-LIVE][KILL SWITCH] release requested — active=%v", ksSvc.IsActive())
+		json.NewEncoder(w).Encode(resp) //nolint:errcheck
+	})
+
+	// GET /api/admin/ks/status — current kill switch state.
+	handle("/api/admin/ks/status", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]interface{}{ //nolint:errcheck
+			"enabled":     ksSvc.IsEnabled(),
+			"active":      ksSvc.IsActive(),
+			"reason":      ksSvc.Reason(),
+			"activatedAt": ksSvc.ActivatedAt(),
+		})
+	})
+
 	handle("/api/regime", func(w http.ResponseWriter, r *http.Request) {
 		reg := orch.GetScalersStats().Regime
 		if reg == "" {
@@ -491,6 +619,58 @@ func main() {
 		json.NewEncoder(w).Encode(rows) //nolint:errcheck
 	})
 
+	// ── LIVE ENGINE endpoints (Delta Exchange trade cloning) ─────────────────
+
+	// GET /api/live/stats — mirror status + live Delta wallet/positions/orders.
+	handle("/api/live/stats", func(w http.ResponseWriter, r *http.Request) {
+		sctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+		json.NewEncoder(w).Encode(liveMirror.GetStats(sctx)) //nolint:errcheck
+	})
+
+	// GET /api/live/trades — mirrored live trades, newest first.
+	handle("/api/live/trades", func(w http.ResponseWriter, r *http.Request) {
+		trades := liveMirror.Trades()
+		if trades == nil {
+			trades = []livemirror.Trade{}
+		}
+		json.NewEncoder(w).Encode(trades) //nolint:errcheck
+	})
+
+	// POST /api/live/enable — arm/disarm cloning. Body: {"enabled": true|false}
+	handle("/api/live/enable", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid body — expected {\"enabled\": true|false}", http.StatusBadRequest)
+			return
+		}
+		if err := liveMirror.SetEnabled(body.Enabled); err != nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": err.Error(), "enabled": liveMirror.IsEnabled()}) //nolint:errcheck
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "enabled": liveMirror.IsEnabled()}) //nolint:errcheck
+	})
+
+	// POST /api/live/close-all — flatten all mirrored + residual Delta positions.
+	handle("/api/live/close-all", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		cctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+		defer cancel()
+		result := liveMirror.CloseAll(cctx)
+		result["ok"] = true
+		json.NewEncoder(w).Encode(result) //nolint:errcheck
+	})
+
 	srv := &http.Server{
 		Addr:         ":" + port,
 		Handler:      mux,
@@ -514,6 +694,22 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("[PRE-LIVE] HTTP server error: %v", err)
 	}
+}
+
+// preLiveMaxDailyLossFraction returns the daily-loss circuit-breaker limit as a
+// FRACTION of MaxCapitalUSD (risk.validateLocked multiplies the two). The env var
+// PRE_LIVE_MAX_DAILY_LOSS_PCT is expressed in percent (e.g. "5" → 0.05). Default 5%.
+func preLiveMaxDailyLossFraction() float64 {
+	v := os.Getenv("PRE_LIVE_MAX_DAILY_LOSS_PCT")
+	if v == "" {
+		return 0.05
+	}
+	var pct float64
+	fmt.Sscanf(v, "%f", &pct)
+	if pct <= 0 {
+		return 0.05
+	}
+	return pct / 100.0
 }
 
 func preLiveLeverage() float64 {
@@ -547,20 +743,25 @@ func preLiveBalance() float64 {
 	return f
 }
 
-// loadDotEnv reads the .env at the repo root and injects any missing env vars.
-func loadDotEnv() {
+// repoRoot resolves the repository root from this source file's location
+// (engine/cmd/pre_live/main.go → 3 dirs up).
+func repoRoot() string {
 	_, thisFile, _, ok := runtime.Caller(0)
-	var envPath string
 	if ok {
-		// thisFile = .../engine/cmd/pre_live/main.go — repo root is 3 dirs up.
-		envPath = filepath.Join(filepath.Dir(thisFile), "..", "..", "..", ".env")
-	} else {
-		envPath = "../../../.env"
+		return filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
 	}
-	data, err := os.ReadFile(envPath)
+	return "../../.."
+}
+
+// applyEnvFile parses a key=value file (.env / .properties format) and injects
+// each pair into the environment unless the variable is already set. Returns
+// the number of variables applied.
+func applyEnvFile(path string) int {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return
+		return 0
 	}
+	applied := 0
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -572,10 +773,36 @@ func loadDotEnv() {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
+		if key == "" || val == "" {
+			continue // blank values (e.g. template placeholders) never override
+		}
 		if os.Getenv(key) == "" {
 			os.Setenv(key, val) //nolint:errcheck
+			applied++
 		}
 	}
+	return applied
+}
+
+// loadApplicationProperties reads every *.properties file in the repo-root
+// .application.properties/ folder (broker credentials for the Live Engine).
+// Called before loadDotEnv so these values take precedence over .env.
+func loadApplicationProperties() {
+	dir := filepath.Join(repoRoot(), ".application.properties")
+	matches, err := filepath.Glob(filepath.Join(dir, "*.properties"))
+	if err != nil || len(matches) == 0 {
+		return
+	}
+	for _, f := range matches {
+		if n := applyEnvFile(f); n > 0 {
+			log.Printf("[PRE-LIVE] loaded %d vars from %s", n, filepath.Base(f))
+		}
+	}
+}
+
+// loadDotEnv reads the .env at the repo root and injects any missing env vars.
+func loadDotEnv() {
+	applyEnvFile(filepath.Join(repoRoot(), ".env"))
 }
 
 // ── Task 7: Regime-aware PnL tracker ─────────────────────────────────────────

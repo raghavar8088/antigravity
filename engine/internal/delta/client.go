@@ -516,6 +516,55 @@ func (c *Client) FindProductBySymbol(ctx context.Context, symbol string) (Option
 	return OptionContractInfo{}, fmt.Errorf("product %q not found", symbol)
 }
 
+// PerpProductInfo describes a perpetual futures contract on Delta Exchange.
+type PerpProductInfo struct {
+	ProductID     int     `json:"productId"`
+	Symbol        string  `json:"symbol"`
+	ContractValue float64 `json:"contractValue"` // underlying units per contract (BTCUSD perp: 0.001 BTC)
+	ContractUnit  string  `json:"contractUnit"`  // e.g. "BTC"
+}
+
+// FindPerpProduct resolves a perpetual futures product (e.g. "BTCUSD") to its
+// product ID and contract size. Used by the live mirror to size futures orders.
+func (c *Client) FindPerpProduct(ctx context.Context, symbol string) (PerpProductInfo, error) {
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?contract_types=perpetual_futures&page_size=200", nil)
+	if err != nil {
+		return PerpProductInfo{}, err
+	}
+	if status != http.StatusOK {
+		return PerpProductInfo{}, fmt.Errorf("perp products list failed (HTTP %d): %s", status, truncate(string(data), 200))
+	}
+	var resp struct {
+		Success bool `json:"success"`
+		Result  []struct {
+			ID                int    `json:"id"`
+			Symbol            string `json:"symbol"`
+			ContractValue     string `json:"contract_value"`
+			ContractUnitCurr  string `json:"contract_unit_currency"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return PerpProductInfo{}, fmt.Errorf("decode perp products: %w", err)
+	}
+	want := strings.ToUpper(strings.TrimSpace(symbol))
+	for _, p := range resp.Result {
+		if strings.ToUpper(p.Symbol) != want {
+			continue
+		}
+		cv, _ := strconv.ParseFloat(p.ContractValue, 64)
+		if cv <= 0 {
+			return PerpProductInfo{}, fmt.Errorf("perp %s has invalid contract_value %q", p.Symbol, p.ContractValue)
+		}
+		return PerpProductInfo{
+			ProductID:     p.ID,
+			Symbol:        p.Symbol,
+			ContractValue: cv,
+			ContractUnit:  p.ContractUnitCurr,
+		}, nil
+	}
+	return PerpProductInfo{}, fmt.Errorf("perpetual product %q not found on %s", symbol, c.baseURL)
+}
+
 func abs(x float64) float64 {
 	if x < 0 {
 		return -x
