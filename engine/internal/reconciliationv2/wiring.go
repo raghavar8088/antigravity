@@ -3,6 +3,7 @@ package reconciliationv2
 import (
 	"context"
 	"log"
+	"time"
 
 	"antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/ledger"
@@ -50,7 +51,20 @@ func WireProduction(
 	}
 	omsReader := NewLedgerOMSStateReader(store, accountID, readerCfg)
 	repairTarget := NewLedgerRepairTarget(store)
-	schedCfg := DefaultScheduleConfig()
+	// Production cadence (2026-07-10): every domain cycle does a FULL account
+	// replay from the Mongo ledger. The Phase 15E defaults (orders 2s,
+	// positions 5s, balances/exposure 10s, full 60s) × two authorities
+	// (runtime + Delta) ≈ 1.85 replays/sec — enough sustained load to throttle
+	// the Atlas M0 into multi-second RTTs, which broke ledger reads and
+	// tripped the kill switch on phantom drift. Paper-book reconciliation at
+	// minute-level cadence still satisfies the RPO<5min recovery posture.
+	schedCfg := ScheduleConfig{
+		OrdersInterval:    60 * time.Second,
+		PositionsInterval: 2 * time.Minute,
+		BalancesInterval:  5 * time.Minute,
+		ExposureInterval:  5 * time.Minute,
+		FullAuditInterval: 15 * time.Minute,
+	}
 	ksHook := CriticalDriftKillSwitchHook(ks)
 
 	out := &WiredAuthorities{}

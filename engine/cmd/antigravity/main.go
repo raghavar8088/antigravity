@@ -1104,14 +1104,17 @@ func main() {
 	// Phase 31B: attach MongoDB persistence bundle + start state snapshotter.
 	if ppBundle != nil {
 		orchestrator.SetPaperPersist(ppBundle)
-		snapshotter := paperpersist.NewStateSnapshotter(ppBundle.Mgr(), orchestrator, 10*time.Second)
+		// Atlas M0 write-pressure note (2026-07-10): 10s snapshots + 1m equity
+		// contributed to free-tier throttling. 60s snapshots keep RPO<5min
+		// (Phase 14 recovery spec) at 1/6th the write volume.
+		snapshotter := paperpersist.NewStateSnapshotter(ppBundle.Mgr(), orchestrator, 60*time.Second)
 		go snapshotter.Run(ctx)
-		log.Printf("[Phase31B] StateSnapshotter started (10s interval)")
+		log.Printf("[Phase31B] StateSnapshotter started (60s interval)")
 
-		// Phase 31D: EquityRecorder — 1-minute equity curve snapshots + daily PnL seal.
-		equityRecorder := paperpersist.NewEquityRecorder(ppBundle.Mgr(), orchestrator, orchestrator, time.Minute)
+		// Phase 31D: EquityRecorder — 5-minute equity curve snapshots + daily PnL seal.
+		equityRecorder := paperpersist.NewEquityRecorder(ppBundle.Mgr(), orchestrator, orchestrator, 5*time.Minute)
 		go safeGo("EquityRecorder", func() { equityRecorder.Run(ctx) })
-		log.Printf("[Phase31D] EquityRecorder started (1m interval)")
+		log.Printf("[Phase31D] EquityRecorder started (5m interval)")
 
 		// Portfolio metrics writer — persists authoritative snapshot every 30 minutes.
 		go safeGo("PortfolioMetricsWriter", func() {
