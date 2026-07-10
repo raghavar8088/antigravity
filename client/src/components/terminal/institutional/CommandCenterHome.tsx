@@ -51,15 +51,15 @@ export function CommandCenterHome({ snapshot }: { snapshot: TerminalAuthoritySta
 
       <TerminalCard
         title="Pre-Live Trade Engine"
-        subtitle="100 backtested-qualified strategies · real broker · no position limits"
+        subtitle="OOS-validated strategies · real data · paper validation · clones to Delta via Live Engine"
         actions={<Link href={TERMINAL_ROUTES["pre-live-engine"]} className="m3-link-action">Open Pre-Live Engine</Link>}
       >
         <div className="m3-kpi-strip">
-          <Metric label="Strategies" value="100 Qualified" tone="positive" />
-          <Metric label="Position Limit" value="Unlimited" tone="positive" />
-          <Metric label="Cooldown" value="None" tone="positive" />
-          <Metric label="Broker" value="Real Money" tone="warning" />
-          <Metric label="Risk Gate" value="SL/TP Only" tone="positive" />
+          <Metric label="Strategies" value="OOS Survivors" tone="positive" />
+          <Metric label="Data" value="Real Market" tone="positive" />
+          <Metric label="Account" value="Paper $100" tone="warning" />
+          <Metric label="Live Cloning" value="Delta Exchange" tone="positive" />
+          <Metric label="Risk Gate" value="KS + PMS + SL/TP" tone="positive" />
         </div>
       </TerminalCard>
 

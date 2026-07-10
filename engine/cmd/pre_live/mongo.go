@@ -196,16 +196,22 @@ func initPreLiveMongo(
 	// Ping monitor: reconnects MongoDB on transient Atlas failures.
 	go mongoMgr.RunPingMonitor(ctx, 30*time.Second)
 
-	// State snapshotter → paper_state every 10 s (crash-recovery source of truth).
-	snapshotter := paperpersist.NewStateSnapshotter(mongoMgr, orch, 10*time.Second)
+	// Write-pressure note (2026-07-10 outage): this Atlas M0 free-tier cluster
+	// gets throttled hard when hammered (multi-second heartbeat RTTs, wedged
+	// pools, ReplicaSetNoPrimary for hours). The pre-live harness trades a
+	// handful of times per week — sub-minute telemetry granularity is pure
+	// cost. Intervals below are deliberately calm.
+
+	// State snapshotter → paper_state every 30 s (crash-recovery source of truth).
+	snapshotter := paperpersist.NewStateSnapshotter(mongoMgr, orch, 30*time.Second)
 	go snapshotter.Run(ctx)
 
-	// Equity recorder → equity_curve every 1 m + midnight daily_pnl_history seal.
-	equityRecorder := paperpersist.NewEquityRecorder(mongoMgr, orch, orch, time.Minute)
+	// Equity recorder → equity_curve every 5 m + midnight daily_pnl_history seal.
+	equityRecorder := paperpersist.NewEquityRecorder(mongoMgr, orch, orch, 5*time.Minute)
 	go equityRecorder.Run(ctx)
 
-	// Strategy health monitor → strategy_health + strategy_scores every 15 m.
-	healthMonitor := paperpersist.NewStrategyHealthMonitor(mongoMgr, orch, 15*time.Minute)
+	// Strategy health monitor → strategy_health + strategy_scores every 30 m.
+	healthMonitor := paperpersist.NewStrategyHealthMonitor(mongoMgr, orch, 30*time.Minute)
 	go healthMonitor.Run(ctx)
 
 	// Portfolio metrics → portfolio_metrics every 30 s.
@@ -221,9 +227,12 @@ func initPreLiveMongo(
 	return &preLiveMongoBundle{mgr: mongoMgr, bundle: ppBundle}
 }
 
-// runPortfolioMetrics upserts portfolio-level metrics to portfolio_metrics every 30 s.
+// runPortfolioMetrics upserts portfolio-level metrics to portfolio_metrics every 5 m.
+// Each write carries its own deadline: the 2026-07-10 outage showed that a write
+// with the engine-lifetime ctx hangs forever on a throttled Atlas node, pinning a
+// pool connection and starving pings/reconnects.
 func runPortfolioMetrics(ctx context.Context, mgr *paperpersist.MongoManager, orch *trading.Orchestrator) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
@@ -231,7 +240,8 @@ func runPortfolioMetrics(ctx context.Context, mgr *paperpersist.MongoManager, or
 			return
 		case <-ticker.C:
 			snap := orch.GetAccountSnapshot()
-			_ = paperpersist.WritePortfolioMetrics(ctx, mgr, paperpersist.PortfolioMetricsDoc{
+			opCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			_ = paperpersist.WritePortfolioMetrics(opCtx, mgr, paperpersist.PortfolioMetricsDoc{
 				RealizedPnL:      snap.RealizedPnL,
 				UnrealizedPnL:    snap.UnrealizedPnL,
 				GrossPnL:         snap.RealizedPnL + snap.UnrealizedPnL,
@@ -247,6 +257,7 @@ func runPortfolioMetrics(ctx context.Context, mgr *paperpersist.MongoManager, or
 				GrossExposureBTC: snap.TotalExposureBTC,
 				OpenPositions:    snap.OpenPositionCount,
 			})
+			cancel()
 		}
 	}
 }

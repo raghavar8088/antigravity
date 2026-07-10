@@ -13,7 +13,6 @@ import { rankStrategies, type RankableTrade } from "@/lib/ai/mockStrategyRanking
 // ── Constants ─────────────────────────────────────────────────────────────────
 const POLL_MS = 5_000;
 const SIGNALS_POLL_MS = 3_000;
-const PRE_LIVE_STRATEGIES = 100;
 const LEVERAGE = 10;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -555,7 +554,7 @@ export function PreLiveEngineCenter() {
             border: "1px solid var(--gold)", fontSize: 12, fontWeight: 700,
             letterSpacing: "0.06em", color: "var(--gold)", textTransform: "uppercase",
           }}>
-            REAL MONEY · {PRE_LIVE_STRATEGIES} STRATEGIES · NO LIMITS
+            PAPER VALIDATION · {stats?.strategies ?? "—"} OOS STRATEGIES
           </span>
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 10px",
@@ -608,7 +607,7 @@ export function PreLiveEngineCenter() {
           <StageStat label="Win Rate" value={fmtPct(winRatePct)} accent={winRatePct > 50 ? "var(--green)" : totalTrades > 0 ? "var(--amber)" : "var(--border)"} tone={winRatePct > 50 ? "positive" : totalTrades > 0 ? "warning" : "neutral"} size="md" />
           <StageStat label="Realized PnL" value={fmtUsd(realizedPnl)} accent={realizedPnl >= 0 ? "var(--green)" : "var(--red)"} tone={realizedPnl >= 0 ? "positive" : "negative"} size="md" />
           <StageStat label="Unrealized PnL" value={fmtUsd(unrealizedPnl)} accent={unrealizedPnl >= 0 ? "var(--green)" : "var(--red)"} tone={unrealizedPnl >= 0 ? "positive" : "negative"} size="md" />
-          <StageStat label="Strategies Active" value={`${PRE_LIVE_STRATEGIES} / ${PRE_LIVE_STRATEGIES}`} accent="var(--gold)" tone="positive" size="sm" />
+          <StageStat label="Strategies Active" value={stats?.strategies != null ? `${stats.strategies} / ${stats.strategies}` : "—"} accent="var(--gold)" tone="positive" size="sm" />
         </div>
       )}
     </section>
@@ -633,17 +632,15 @@ export function PreLiveEngineCenter() {
       <TerminalCard title="Strategy Leadership Board" subtitle="Composite score · win rate · profit factor · net PnL">
         <LeaderboardTable rows={leaderboard} />
       </TerminalCard>
-      <TerminalCard title="Engine Info" subtitle="100 backtested-qualified strategies · real broker">
+      <TerminalCard title="Engine Info" subtitle="OOS-validated whitelist · paper validation harness">
         <div style={{ display: "grid", gap: 10, fontSize: 13 }}>
           {[
-            { label: "Strategy Pool", value: `${PRE_LIVE_STRATEGIES} qualified strategies` },
-            { label: "Leverage", value: `${LEVERAGE}× (Delta Exchange futures)` },
-            { label: "Qualifying Criteria", value: "Sharpe≥1.0 · WR≥45% · DD≤20% · PF≥1.30 · Trades≥50" },
-            { label: "Position Limit", value: "Unlimited (all 100 fire in parallel)" },
-            { label: "Cooldown", value: "None — all strategies evaluate every tick" },
-            { label: "Risk Gate", value: "Strategy SL/TP only (no circuit breaker)" },
-            { label: "Execution", value: "Delta Exchange (real money)" },
-            { label: "Price Feed", value: "Coinbase WS + Binance Klines (15m/1h)" },
+            { label: "Strategy Pool", value: `${stats?.strategies ?? "—"} OOS-validated strategies (honest two-window backtest)` },
+            { label: "Leverage", value: `${LEVERAGE}× (paper PnL model)` },
+            { label: "Qualifying Criteria", value: "Sharpe≥1.0 · WR≥45% · DD≤20% · PF≥1.30 · Trades≥50 · OOS-confirmed" },
+            { label: "Execution", value: "Paper account — real orders go via the Live Engine (Delta clone)" },
+            { label: "Risk Gate", value: "Kill switch + PMS (daily-loss 3% / drawdown 10%) + SL/TP" },
+            { label: "Price Feed", value: "Coinbase WS + Binance Klines (15m/1h/4h synthetic)" },
           ].map(({ label, value }) => (
             <div key={label} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border-subtle, var(--border))" }}>
               <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>{label}</span>
@@ -657,7 +654,7 @@ export function PreLiveEngineCenter() {
 
   return (
     <div className="google-page" style={{ gap: 16 }}>
-      <PageHeader title="Pre-Live Trade Engine" subtitle="100 Backtested-Qualified Strategies — Real Broker, No Limits" />
+      <PageHeader title="Pre-Live Trade Engine" subtitle="OOS-Validated Strategies — Real Data, Paper Money, Live-Engine Cloning" />
       {summaryStrip}
       <div className="icc-trade-engine-grid" style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, minHeight: 0 }}>
         <div style={{ display: "grid", alignContent: "start", gap: 16, minHeight: 0 }}>{leftPanel}</div>
