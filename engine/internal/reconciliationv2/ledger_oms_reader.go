@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"sync"
 	"time"
 
 	"antigravity-engine/internal/ledger"
@@ -20,13 +22,37 @@ type LedgerOMSReaderConfig struct {
 	MarkPriceUSD func() float64
 }
 
+// incrementalOverlap is subtracted from the cache cursor when fetching new
+// events, so events written slightly out of created_at order are never missed.
+// Duplicates are filtered by EventID.
+const incrementalOverlap = 5 * time.Second
+
+// incrementalCacheCap bounds the in-memory event cache. Above it the reader
+// falls back to full replays (the pre-cache behaviour) rather than growing
+// without bound — see the Jun 2026 OOM incident on unbounded ledger mirrors.
+const incrementalCacheCap = 200_000
+
 // LedgerOMSStateReader builds reconciliation OMSSnapshot views by replaying the
 // durable event ledger. This is the internal OMS truth used when comparing against
 // exchange REST snapshots or the live position manager runtime.
+//
+// When the store supports ledger.AccountSinceReplayer, the reader keeps an
+// in-memory event cache and fetches only NEW events each cycle. Before this,
+// every domain cycle re-read the full account history from MongoDB — the
+// dominant Mongo load on the box and the op that kept timing out while Atlas
+// was throttled (2026-07-10 outage).
 type LedgerOMSStateReader struct {
 	store     ledger.Store
 	accountID string
 	cfg       LedgerOMSReaderConfig
+
+	// Incremental cache. Guarded by mu — one reader is shared by the runtime
+	// and Delta reconciliation authorities.
+	mu        sync.Mutex
+	cache     []ledger.Event
+	seen      map[string]struct{}
+	cursor    time.Time // max CreatedAt seen so far
+	cacheInit bool
 }
 
 // NewLedgerOMSStateReader creates a reader backed by the shared ledger store.
@@ -40,6 +66,62 @@ func NewLedgerOMSStateReader(store ledger.Store, accountID string, cfg LedgerOMS
 	return &LedgerOMSStateReader{store: store, accountID: accountID, cfg: cfg}
 }
 
+// loadEvents returns the full event history for the account, incrementally
+// when the store supports it. The returned slice must not be mutated.
+func (r *LedgerOMSStateReader) loadEvents(ctx context.Context, accountID string) ([]ledger.Event, error) {
+	sinceStore, ok := r.store.(ledger.AccountSinceReplayer)
+	if !ok || accountID != r.accountID {
+		// No incremental capability (or a different account than the cached
+		// one) — plain full replay, no caching.
+		return r.store.ReplayAccount(ctx, accountID)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.cacheInit {
+		events, err := r.store.ReplayAccount(ctx, accountID)
+		if err != nil {
+			return nil, err
+		}
+		r.cache = events
+		r.seen = make(map[string]struct{}, len(events))
+		for _, ev := range events {
+			r.seen[ev.EventID] = struct{}{}
+			if ev.CreatedAt.After(r.cursor) {
+				r.cursor = ev.CreatedAt
+			}
+		}
+		r.cacheInit = true
+		log.Printf("[RECON-V2] ledger reader cache primed: %d events account=%s", len(events), accountID)
+		return r.cache, nil
+	}
+
+	since := r.cursor.Add(-incrementalOverlap)
+	fresh, err := sinceStore.ReplayAccountSince(ctx, accountID, since)
+	if err != nil {
+		return nil, err
+	}
+	for _, ev := range fresh {
+		if _, dup := r.seen[ev.EventID]; dup {
+			continue
+		}
+		r.cache = append(r.cache, ev)
+		r.seen[ev.EventID] = struct{}{}
+		if ev.CreatedAt.After(r.cursor) {
+			r.cursor = ev.CreatedAt
+		}
+	}
+	if len(r.cache) > incrementalCacheCap {
+		log.Printf("[RECON-V2] ledger reader cache exceeded %d events — reverting to full replays", incrementalCacheCap)
+		r.cache = nil
+		r.seen = nil
+		r.cacheInit = false
+		return r.store.ReplayAccount(ctx, accountID)
+	}
+	return r.cache, nil
+}
+
 // GetOMSSnapshot implements OMSStateReader.
 func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID string) (OMSSnapshot, error) {
 	if r.store == nil {
@@ -49,7 +131,7 @@ func (r *LedgerOMSStateReader) GetOMSSnapshot(ctx context.Context, accountID str
 		accountID = r.accountID
 	}
 
-	events, err := r.store.ReplayAccount(ctx, accountID)
+	events, err := r.loadEvents(ctx, accountID)
 	if err != nil {
 		return OMSSnapshot{}, fmt.Errorf("ledger oms reader: replay account: %w", err)
 	}

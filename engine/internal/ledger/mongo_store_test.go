@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 )
 
 // fakeEventCollection is an in-memory implementation of eventCollection used
@@ -91,6 +92,20 @@ func (f *fakeEventCollection) FindByAccount(ctx context.Context, accountID strin
 		}
 		return out[i].CreatedAt.Before(out[j].CreatedAt)
 	})
+	return out, nil
+}
+
+func (f *fakeEventCollection) FindByAccountSince(ctx context.Context, accountID string, since time.Time) ([]mongoEventDoc, error) {
+	all, err := f.FindByAccount(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	var out []mongoEventDoc
+	for _, d := range all {
+		if !d.CreatedAt.Before(since) {
+			out = append(out, d)
+		}
+	}
 	return out, nil
 }
 

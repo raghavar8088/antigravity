@@ -87,6 +87,9 @@ type eventCollection interface {
 	FindByAggregate(ctx context.Context, aggregateType, aggregateID string) ([]mongoEventDoc, error)
 	// FindByAccount returns all events for one account, sorted by created_at then sequence_no ascending.
 	FindByAccount(ctx context.Context, accountID string) ([]mongoEventDoc, error)
+	// FindByAccountSince returns the account's events with created_at >= since,
+	// sorted by created_at then sequence_no ascending (uses the account_created index).
+	FindByAccountSince(ctx context.Context, accountID string, since time.Time) ([]mongoEventDoc, error)
 }
 
 // MongoLedgerStore is a durable ledger.Store backed by MongoDB.
@@ -216,6 +219,24 @@ func (s *MongoLedgerStore) ReplayAccount(ctx context.Context, accountID string) 
 	return events, nil
 }
 
+// ReplayAccountSince implements AccountSinceReplayer: only events created at or
+// after `since` are read (indexed on account_id + created_at), so incremental
+// callers avoid re-reading the full account history every reconciliation cycle.
+func (s *MongoLedgerStore) ReplayAccountSince(ctx context.Context, accountID string, since time.Time) ([]Event, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	docs, err := s.coll.FindByAccountSince(ctx, accountID, since)
+	if err != nil {
+		return nil, fmt.Errorf("ledger/mongo: replay account since: %w", err)
+	}
+	events := make([]Event, len(docs))
+	for i, d := range docs {
+		events[i] = d.toEvent()
+	}
+	return events, nil
+}
+
 // ─── Production implementation of eventCollection ──────────────────────────
 
 type realEventCollection struct {
@@ -302,6 +323,28 @@ func (r *realEventCollection) FindByAccount(ctx context.Context, accountID strin
 		return nil, err
 	}
 	filter := bson.D{{Key: "account_id", Value: accountID}}
+	sortOpts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "sequence_no", Value: 1}})
+	cursor, err := events.Find(ctx, filter, sortOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var docs []mongoEventDoc
+	if err := cursor.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+func (r *realEventCollection) FindByAccountSince(ctx context.Context, accountID string, since time.Time) ([]mongoEventDoc, error) {
+	events, err := r.events()
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.D{
+		{Key: "account_id", Value: accountID},
+		{Key: "created_at", Value: bson.D{{Key: "$gte", Value: since}}},
+	}
 	sortOpts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "sequence_no", Value: 1}})
 	cursor, err := events.Find(ctx, filter, sortOpts)
 	if err != nil {

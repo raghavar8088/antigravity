@@ -91,10 +91,13 @@ func (s *ReconciliationScheduler) runTicker(ctx context.Context, name string, do
 }
 
 func (s *ReconciliationScheduler) runCycle(ctx context.Context, domain MismatchDomain) {
-	// Use a timeout per cycle to prevent a single stuck cycle from blocking the ticker slot.
-	timeout := 8 * time.Second
+	// Use a timeout per cycle to prevent a single stuck cycle from blocking the
+	// ticker slot. 20s (was 8s) tolerates a degraded/throttled Atlas: the first
+	// cycle after boot primes the incremental ledger cache with a full replay,
+	// which can legitimately take >8s against a slow cluster.
+	timeout := 20 * time.Second
 	if domain == DomainFull {
-		timeout = 30 * time.Second
+		timeout = 45 * time.Second
 	}
 
 	cycleCtx, cancel := context.WithTimeout(ctx, timeout)

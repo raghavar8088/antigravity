@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 var (
@@ -17,6 +18,16 @@ type Store interface {
 	Append(ctx context.Context, event Event) (Event, error)
 	Replay(ctx context.Context, aggregateType AggregateType, aggregateID string) ([]Event, error)
 	ReplayAccount(ctx context.Context, accountID string) ([]Event, error)
+}
+
+// AccountSinceReplayer is an optional Store capability: fetch only the events
+// for an account created at or after `since`. Callers that maintain an
+// incremental projection (e.g. RECON-V2's ledger OMS reader) use this to avoid
+// re-reading the full account history on every cycle. Implementations return
+// events sorted by (created_at, sequence_no) ascending; callers must dedupe by
+// EventID because `since` is typically passed with an overlap window.
+type AccountSinceReplayer interface {
+	ReplayAccountSince(ctx context.Context, accountID string, since time.Time) ([]Event, error)
 }
 
 type MemoryStore struct {
@@ -88,6 +99,28 @@ func (s *MemoryStore) ReplayAccount(ctx context.Context, accountID string) ([]Ev
 	out := make([]Event, 0, len(s.events))
 	for _, event := range s.events {
 		if event.AccountID == accountID {
+			out = append(out, event)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].SequenceNo < out[j].SequenceNo
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return cloneEvents(out), nil
+}
+
+// ReplayAccountSince implements AccountSinceReplayer for the in-memory store.
+func (s *MemoryStore) ReplayAccountSince(ctx context.Context, accountID string, since time.Time) ([]Event, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Event, 0)
+	for _, event := range s.events {
+		if event.AccountID == accountID && !event.CreatedAt.Before(since) {
 			out = append(out, event)
 		}
 	}
