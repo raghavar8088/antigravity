@@ -1,5 +1,12 @@
 package scalpers
 
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"sync"
+)
+
 // preLiveQualified is the set of strategies loaded into the Pre-Live Trade
 // Engine. Only these trade (on the pre-live paper account).
 //
@@ -27,11 +34,53 @@ var preLiveQualified = map[string]bool{
 	"WMA_Bear_Cross_Short":     true, // train: sh 1.24 pf 2.39 n=59  | val: sh 1.52 pf 2.88 n=30
 }
 
-// PreLiveWhitelistSize returns the number of names in the preLiveQualified
-// whitelist. Used at startup to detect silent strategy-name mismatches between
+// PRE_LIVE_WHITELIST_FILE optionally replaces the built-in preLiveQualified
+// whitelist with names loaded from a qualification-run JSON (the
+// {"whitelist":[...]} shape written by cmd/btc_qualify_25). This is what lets a
+// SECOND pre_live instance (the BTC Pre-Live Engine, Phase 3) trade its own
+// qualified basket without forking this binary or touching the default
+// instance, whose behavior is unchanged when the env var is unset.
+var (
+	whitelistOnce   sync.Once
+	activeWhitelist map[string]bool
+)
+
+func effectiveWhitelist() map[string]bool {
+	whitelistOnce.Do(func() {
+		activeWhitelist = preLiveQualified
+		path := os.Getenv("PRE_LIVE_WHITELIST_FILE")
+		if path == "" {
+			return
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			// Fail LOUD and hard: a missing whitelist file must never silently
+			// fall back to the 2-name default — the operator explicitly asked
+			// for a different basket.
+			log.Fatalf("[PRE-LIVE] PRE_LIVE_WHITELIST_FILE=%s could not be read: %v", path, err)
+		}
+		var parsed struct {
+			Whitelist []string `json:"whitelist"`
+		}
+		if err := json.Unmarshal(data, &parsed); err != nil || len(parsed.Whitelist) == 0 {
+			log.Fatalf("[PRE-LIVE] PRE_LIVE_WHITELIST_FILE=%s has no usable {\"whitelist\":[...]} array (err=%v)", path, err)
+		}
+		wl := make(map[string]bool, len(parsed.Whitelist))
+		for _, name := range parsed.Whitelist {
+			wl[name] = true
+		}
+		activeWhitelist = wl
+		log.Printf("[PRE-LIVE] whitelist loaded from %s: %d strategies (replaces built-in %d)",
+			path, len(wl), len(preLiveQualified))
+	})
+	return activeWhitelist
+}
+
+// PreLiveWhitelistSize returns the number of names in the active whitelist.
+// Used at startup to detect silent strategy-name mismatches between
 // the whitelist and the strategy builder functions.
 func PreLiveWhitelistSize() int {
-	return len(preLiveQualified)
+	return len(effectiveWhitelist())
 }
 
 // BuildPreLiveStrategies returns the backtested-qualified strategies for the
@@ -59,10 +108,11 @@ func BuildPreLiveStrategies() []RegistryEntry {
 		deduped = append(deduped, e)
 	}
 
-	// Filter to the qualifying whitelist.
+	// Filter to the qualifying whitelist (built-in, or PRE_LIVE_WHITELIST_FILE).
+	wl := effectiveWhitelist()
 	var result []RegistryEntry
 	for _, e := range deduped {
-		if preLiveQualified[e.Strategy.Name()] {
+		if wl[e.Strategy.Name()] {
 			result = append(result, e)
 		}
 	}

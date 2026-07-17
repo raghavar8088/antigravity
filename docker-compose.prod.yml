@@ -61,3 +61,33 @@ services:
     mem_limit: 400m
     cpus: 1.0
     pids_limit: 256
+
+  # BTC Pre-Live Engine (Phase 3) — SECOND instance of the same pre_live binary:
+  # $1,000 paper account, 49-strategy qualified whitelist, own Mongo account_key.
+  # Fully isolated from the default pre_live instance above. The Delta real-money
+  # mirror is explicitly disarmed (LIVE_ENGINE_AUTO_ENABLE=false, set here in
+  # environment: so it wins over anything inherited from .env) until Phase 4.
+  btc_pre_live:
+    build:
+      context: ./engine
+      dockerfile: Dockerfile.prelive
+    container_name: antigravity_btc_prelive
+    restart: unless-stopped
+    ports:
+      - "8092:8092"
+    env_file:
+      - .env
+    environment:
+      - PRE_LIVE_PORT=8092
+      - PRE_LIVE_OWNER_ACCOUNT_KEY=btc_pre_live_engine
+      - PRE_LIVE_INITIAL_BALANCE_USD=1000
+      - PRE_LIVE_WHITELIST_FILE=/app/data/btc_prelive_whitelist.json
+      - PRE_LIVE_LEVERAGE=10
+      - FIXED_TRADE_SIZE_BTC=0.001
+      - MIN_EXECUTION_SIZE_BTC=0.0001
+      - LIVE_ENGINE_AUTO_ENABLE=false
+      - GOMEMLIMIT=300MiB
+      - GOGC=80
+    mem_limit: 400m
+    cpus: 1.0
+    pids_limit: 256

@@ -46,6 +46,8 @@ The content is organized as follows:
   app/api/auth/signout/route.ts
   app/api/backtest/run/route.ts
   app/api/backtest/status/[jobId]/route.ts
+  app/api/btc-prelive/candles/route.ts
+  app/api/btc-prelive/desk/[...path]/route.ts
   app/api/btc/futures-klines/route.ts
   app/api/btc/option-chain/route.ts
   app/api/btc/price/route.ts
@@ -142,6 +144,7 @@ The content is organized as follows:
   app/api/verification-track/summary/route.ts
   app/auth/callback/route.ts
   app/btc-future-trading/page.tsx
+  app/btc-pre-live/page.tsx
   app/favicon.ico
   app/globals.css
   app/layout.tsx
@@ -189,6 +192,9 @@ The content is organized as follows:
   components/AIInsightPanel.tsx
   components/AppBrandBar.tsx
   components/AttributionPanel.tsx
+  components/btc-prelive/BTCPaperDesk.tsx
+  components/btc-prelive/BTCPreLiveChart.tsx
+  components/btc-prelive/QualificationBoard.tsx
   components/BTCLiveChart.tsx
   components/BTCSpotScalper.tsx
   components/BtcSpotStrip.tsx
@@ -976,6 +982,7 @@ The content is organized as follows:
   marketdata/client.go
   marketdata/coinbase.go
   marketdata/db_writer.go
+  marketdata/delta_history.go
   marketdata/delta.go
   marketdata/deribit_dvol.go
   marketdata/historical_fetcher_test.go
@@ -1330,7 +1337,11 @@ The content is organized as follows:
   strategy/scalpers/microstructure_family.go
   strategy/scalpers/new10_batch.go
   strategy/scalpers/new10_batch2.go
+  strategy/scalpers/overfit_demo_thisweek_widerr.go
+  strategy/scalpers/overfit_demo_yesterday.go
   strategy/scalpers/pre_live_registry.go
+  strategy/scalpers/qualify_batch10.go
+  strategy/scalpers/qualify_batch18_research.go
   strategy/scalpers/registry.go
   strategy/scalpers/research_registry.go
   strategy/scalpers/research_strategies_a.go
@@ -1610,6 +1621,12 @@ The content is organized as follows:
 [cmd]/
   antigravity/main.go
   backtest/main.go
+  btc_qualify_25/main.go
+  delta_correlation/main.go
+  delta_day_backtest/main.go
+  delta_fetch_history/main.go
+  delta_full_qualify/main.go
+  delta_week_backtest/main.go
   fetch_historical/main.go
   perfbench/main.go
   pre_live/main.go

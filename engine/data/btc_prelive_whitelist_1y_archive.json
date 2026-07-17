@@ -1,0 +1,7925 @@
+{
+  "all_rows": [
+    {
+      "strategy": "EMA_Ribbon_Trend_Rider",
+      "train": {
+        "trades": 262,
+        "win_rate_pct": 44.27,
+        "sharpe": -1.62,
+        "profit_factor": 0.81,
+        "return_pct": -1.95,
+        "max_dd_pct": 2.28
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Bollinger_Mean_Reversion",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ADX_Momentum_Breakout",
+      "train": {
+        "trades": 292,
+        "win_rate_pct": 35.96,
+        "sharpe": -4.04,
+        "profit_factor": 0.59,
+        "return_pct": -5.08,
+        "max_dd_pct": 5.44
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "VWAP_Institutional_Fade",
+      "train": {
+        "trades": 257,
+        "win_rate_pct": 25.68,
+        "sharpe": -3.22,
+        "profit_factor": 0.64,
+        "return_pct": -5.32,
+        "max_dd_pct": 5.42
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Opening_Range_Breakout",
+      "train": {
+        "trades": 174,
+        "win_rate_pct": 31.61,
+        "sharpe": -2.74,
+        "profit_factor": 0.61,
+        "return_pct": -4.35,
+        "max_dd_pct": 4.96
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Funding_Rate_Fade",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_EMA21_Fisher_ADX_Long",
+      "train": {
+        "trades": 18,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.5,
+        "profit_factor": 1.27,
+        "return_pct": 0.23,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": -0.34,
+        "profit_factor": 0.76,
+        "return_pct": -0.07,
+        "max_dd_pct": 0.28
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EMA8_Cross_WMA21_EFI_ADX_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 2.42,
+        "profit_factor": 6.24,
+        "return_pct": 0.87,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 1,
+        "win_rate_pct": 100,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0.13,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA9_CMF_ADX_Long",
+      "train": {
+        "trades": 9,
+        "win_rate_pct": 66.67,
+        "sharpe": 0.32,
+        "profit_factor": 1.24,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.35
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_Zero_CMF_ADX_Short",
+      "train": {
+        "trades": 130,
+        "win_rate_pct": 80,
+        "sharpe": 2.05,
+        "profit_factor": 1.52,
+        "return_pct": 2.9,
+        "max_dd_pct": 1.39
+      },
+      "validate": {
+        "trades": 41,
+        "win_rate_pct": 90.24,
+        "sharpe": 4.09,
+        "profit_factor": 2.55,
+        "return_pct": 1.2,
+        "max_dd_pct": 0.38
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "EMA9_Cross_EFI_ADX_Long",
+      "train": {
+        "trades": 7,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.05,
+        "profit_factor": 0.96,
+        "return_pct": -0.02,
+        "max_dd_pct": 0.54
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_Cross_WMA21_MACD_ADX_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 80,
+        "sharpe": 1.46,
+        "profit_factor": 2.62,
+        "return_pct": 0.62,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 100,
+        "sharpe": 6.8,
+        "profit_factor": 0,
+        "return_pct": 0.32,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "EMA21_Cross_WMA55_CMF_ADX_Long",
+      "train": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.16,
+        "profit_factor": 0.84,
+        "return_pct": -0.03,
+        "max_dd_pct": 0.21
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_Deep_Mid_Cross_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 53.85,
+        "sharpe": -0.62,
+        "profit_factor": 0.67,
+        "return_pct": -0.49,
+        "max_dd_pct": 0.95
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA8_Cross_WMA13_Fisher_ADX_Long",
+      "train": {
+        "trades": 26,
+        "win_rate_pct": 76.92,
+        "sharpe": 0.79,
+        "profit_factor": 1.38,
+        "return_pct": 0.44,
+        "max_dd_pct": 0.59
+      },
+      "validate": {
+        "trades": 14,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.67,
+        "profit_factor": 0.78,
+        "return_pct": -0.18,
+        "max_dd_pct": 0.42
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Chandelier_Bull_Break_Long",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 84.21,
+        "sharpe": -0.07,
+        "profit_factor": 0.96,
+        "return_pct": -0.03,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA13_Cross_WMA34_CMF_ADX_Long",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 76.92,
+        "sharpe": 0.2,
+        "profit_factor": 1.12,
+        "return_pct": 0.07,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 100,
+        "sharpe": 8.17,
+        "profit_factor": 0,
+        "return_pct": 0.38,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA5_Cross_EMA13_EFI_ADX_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 80,
+        "sharpe": 2.03,
+        "profit_factor": 3.75,
+        "return_pct": 0.93,
+        "max_dd_pct": 0.32
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": 0.57,
+        "profit_factor": 1.41,
+        "return_pct": 0.11,
+        "max_dd_pct": 0.27
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "EMA9_Cross_WMA34_Fisher_ADX_Long",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 80,
+        "sharpe": 0.83,
+        "profit_factor": 1.53,
+        "return_pct": 0.37,
+        "max_dd_pct": 0.47
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": 1.44,
+        "profit_factor": 2.44,
+        "return_pct": 0.15,
+        "max_dd_pct": 0.1
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "WMA13_Cross_EMA55_CMF_ADX_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 2.38,
+        "profit_factor": 3.94,
+        "return_pct": 1.33,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": -0.62,
+        "profit_factor": 0.59,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.33
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EMA20_Cross_WMA34_CMF_ADX_Long",
+      "train": {
+        "trades": 9,
+        "win_rate_pct": 77.78,
+        "sharpe": 0,
+        "profit_factor": 1,
+        "return_pct": 0,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA5_Cross_WMA21_EFI_ADX_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 92.86,
+        "sharpe": 2.09,
+        "profit_factor": 4.05,
+        "return_pct": 0.77,
+        "max_dd_pct": 0.25
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": 0.54,
+        "profit_factor": 1.39,
+        "return_pct": 0.11,
+        "max_dd_pct": 0.27
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "EMA13_Cross_EMA55_Fisher_ADX_Long",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 86.67,
+        "sharpe": 4.39,
+        "profit_factor": 59.86,
+        "return_pct": 1.03,
+        "max_dd_pct": 0.02
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 100,
+        "sharpe": 5,
+        "profit_factor": 0,
+        "return_pct": 0.27,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA9_Cross_EMA13_CMF_ADX_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 2.11,
+        "profit_factor": 5,
+        "return_pct": 0.72,
+        "max_dd_pct": 0.18
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA8_Cross_WMA34_CMF_ADX_Long",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 72.73,
+        "sharpe": -0.3,
+        "profit_factor": 0.82,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA21_Cross_EMA55_EFI_ADX_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 60,
+        "sharpe": -0.39,
+        "profit_factor": 0.77,
+        "return_pct": -0.21,
+        "max_dd_pct": 0.84
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI55_CMF_ADX_Bear_V2_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 70,
+        "sharpe": 0.24,
+        "profit_factor": 1.19,
+        "return_pct": 0.12,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_ADX_CMF_Bear_Short",
+      "train": {
+        "trades": 126,
+        "win_rate_pct": 81.75,
+        "sharpe": 2.06,
+        "profit_factor": 1.57,
+        "return_pct": 2.83,
+        "max_dd_pct": 1.12
+      },
+      "validate": {
+        "trades": 23,
+        "win_rate_pct": 69.57,
+        "sharpe": -0.27,
+        "profit_factor": 0.92,
+        "return_pct": -0.09,
+        "max_dd_pct": 0.4
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Donchian_ADX_CMF_Bear_Short",
+      "train": {
+        "trades": 55,
+        "win_rate_pct": 89.09,
+        "sharpe": 3.5,
+        "profit_factor": 3.53,
+        "return_pct": 2.39,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": -0.37,
+        "profit_factor": 0.76,
+        "return_pct": -0.08,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Keltner_ADX_CMF_Bear_Short",
+      "train": {
+        "trades": 47,
+        "win_rate_pct": 76.6,
+        "sharpe": 0.57,
+        "profit_factor": 1.24,
+        "return_pct": 0.53,
+        "max_dd_pct": 0.78
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 1.04,
+        "profit_factor": 1.69,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Fisher_ADX_OBV_Bear_Short",
+      "train": {
+        "trades": 102,
+        "win_rate_pct": 84.31,
+        "sharpe": 2.25,
+        "profit_factor": 1.7,
+        "return_pct": 2.59,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 48,
+        "win_rate_pct": 79.17,
+        "sharpe": -1.59,
+        "profit_factor": 0.66,
+        "return_pct": -0.58,
+        "max_dd_pct": 0.82
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA_ADX_OBV_Bear_Short",
+      "train": {
+        "trades": 61,
+        "win_rate_pct": 72.13,
+        "sharpe": 0.71,
+        "profit_factor": 1.25,
+        "return_pct": 0.7,
+        "max_dd_pct": 0.64
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 74.07,
+        "sharpe": -0.24,
+        "profit_factor": 0.93,
+        "return_pct": -0.06,
+        "max_dd_pct": 0.48
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EFI_ADX_CMF_Bear_V2_Short",
+      "train": {
+        "trades": 61,
+        "win_rate_pct": 78.69,
+        "sharpe": 1.26,
+        "profit_factor": 1.46,
+        "return_pct": 1.09,
+        "max_dd_pct": 0.7
+      },
+      "validate": {
+        "trades": 19,
+        "win_rate_pct": 78.95,
+        "sharpe": 0.24,
+        "profit_factor": 1.08,
+        "return_pct": 0.07,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "StochRSI_ADX_CMF_Bear_V2_Short",
+      "train": {
+        "trades": 66,
+        "win_rate_pct": 77.27,
+        "sharpe": 0.94,
+        "profit_factor": 1.35,
+        "return_pct": 0.91,
+        "max_dd_pct": 0.52
+      },
+      "validate": {
+        "trades": 9,
+        "win_rate_pct": 66.67,
+        "sharpe": 0.41,
+        "profit_factor": 1.19,
+        "return_pct": 0.06,
+        "max_dd_pct": 0.17
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_ADX_CMF_Bear_Short",
+      "train": {
+        "trades": 42,
+        "win_rate_pct": 80.95,
+        "sharpe": 0.63,
+        "profit_factor": 1.3,
+        "return_pct": 0.47,
+        "max_dd_pct": 0.57
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.3,
+        "profit_factor": 1.14,
+        "return_pct": 0.07,
+        "max_dd_pct": 0.39
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Mid_ADX_CMF_Bear_V2_Short",
+      "train": {
+        "trades": 44,
+        "win_rate_pct": 81.82,
+        "sharpe": 0.7,
+        "profit_factor": 1.33,
+        "return_pct": 0.61,
+        "max_dd_pct": 1.13
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 0.97,
+        "profit_factor": 1.64,
+        "return_pct": 0.21,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Fisher_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 50,
+        "win_rate_pct": 84,
+        "sharpe": 3.54,
+        "profit_factor": 3.09,
+        "return_pct": 2.47,
+        "max_dd_pct": 0.38
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.17,
+        "profit_factor": 1.08,
+        "return_pct": 0.04,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "StochRSI_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 31,
+        "win_rate_pct": 87.1,
+        "sharpe": 3.61,
+        "profit_factor": 6.12,
+        "return_pct": 2.23,
+        "max_dd_pct": 0.36
+      },
+      "validate": {
+        "trades": 7,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.65,
+        "profit_factor": 2.44,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.13
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "HMA_Slope_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 92,
+        "win_rate_pct": 80.43,
+        "sharpe": 2.07,
+        "profit_factor": 1.64,
+        "return_pct": 2.43,
+        "max_dd_pct": 0.73
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.67,
+        "profit_factor": 1.21,
+        "return_pct": 0.2,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Donchian_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 29,
+        "win_rate_pct": 93.1,
+        "sharpe": 3.71,
+        "profit_factor": 4.6,
+        "return_pct": 2.42,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 83.33,
+        "sharpe": -0.41,
+        "profit_factor": 0.74,
+        "return_pct": -0.08,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Keltner_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 24,
+        "win_rate_pct": 87.5,
+        "sharpe": 2.79,
+        "profit_factor": 3.45,
+        "return_pct": 1.68,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.01,
+        "profit_factor": 1,
+        "return_pct": 0,
+        "max_dd_pct": 0.53
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "OBV_Decline_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 208,
+        "win_rate_pct": 76.92,
+        "sharpe": 1.89,
+        "profit_factor": 1.36,
+        "return_pct": 3.41,
+        "max_dd_pct": 1.23
+      },
+      "validate": {
+        "trades": 77,
+        "win_rate_pct": 80.52,
+        "sharpe": 0.41,
+        "profit_factor": 1.08,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.89
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA_Cross_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 90,
+        "sharpe": 3.34,
+        "profit_factor": 4.55,
+        "return_pct": 1.52,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": 0.2,
+        "profit_factor": 1.15,
+        "return_pct": 0.03,
+        "max_dd_pct": 0.22
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "RSI55_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 7,
+        "win_rate_pct": 71.43,
+        "sharpe": 0.33,
+        "profit_factor": 1.35,
+        "return_pct": 0.14,
+        "max_dd_pct": 0.41
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EFI_Zero_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 37,
+        "win_rate_pct": 72.97,
+        "sharpe": 1.25,
+        "profit_factor": 1.53,
+        "return_pct": 1.02,
+        "max_dd_pct": 1
+      },
+      "validate": {
+        "trades": 17,
+        "win_rate_pct": 70.59,
+        "sharpe": -0.07,
+        "profit_factor": 0.98,
+        "return_pct": -0.02,
+        "max_dd_pct": 0.6
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Two_Lower_Highs_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 162,
+        "win_rate_pct": 74.07,
+        "sharpe": 0.96,
+        "profit_factor": 1.19,
+        "return_pct": 1.47,
+        "max_dd_pct": 1.18
+      },
+      "validate": {
+        "trades": 56,
+        "win_rate_pct": 71.43,
+        "sharpe": -1.44,
+        "profit_factor": 0.75,
+        "return_pct": -0.6,
+        "max_dd_pct": 1.12
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "EMA_MACD_CMF_Bull_Long",
+      "train": {
+        "trades": 21,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.32,
+        "profit_factor": 0.86,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.41
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_Slope_EMA_MACD_Bull_Long",
+      "train": {
+        "trades": 87,
+        "win_rate_pct": 71.26,
+        "sharpe": -0.8,
+        "profit_factor": 0.81,
+        "return_pct": -0.95,
+        "max_dd_pct": 1.23
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Three_Bull_Candles_Long",
+      "train": {
+        "trades": 81,
+        "win_rate_pct": 71.6,
+        "sharpe": -0.78,
+        "profit_factor": 0.81,
+        "return_pct": -0.73,
+        "max_dd_pct": 1.11
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Higher_Low_Confirm_Long",
+      "train": {
+        "trades": 155,
+        "win_rate_pct": 61.94,
+        "sharpe": -2.72,
+        "profit_factor": 0.59,
+        "return_pct": -4.06,
+        "max_dd_pct": 4.11
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Close_High_Range_ADX_Long",
+      "train": {
+        "trades": 146,
+        "win_rate_pct": 79.45,
+        "sharpe": 0.49,
+        "profit_factor": 1.11,
+        "return_pct": 0.7,
+        "max_dd_pct": 1.65
+      },
+      "validate": {
+        "trades": 61,
+        "win_rate_pct": 77.05,
+        "sharpe": -0.66,
+        "profit_factor": 0.86,
+        "return_pct": -0.31,
+        "max_dd_pct": 0.57
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_Three_Bear_Candles_Short",
+      "train": {
+        "trades": 209,
+        "win_rate_pct": 70.33,
+        "sharpe": 0.1,
+        "profit_factor": 1.01,
+        "return_pct": 0.15,
+        "max_dd_pct": 2.29
+      },
+      "validate": {
+        "trades": 73,
+        "win_rate_pct": 69.86,
+        "sharpe": -0.41,
+        "profit_factor": 0.93,
+        "return_pct": -0.2,
+        "max_dd_pct": 1.01
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_CMF_Cross_EMA_MACD_Bear_Short",
+      "train": {
+        "trades": 93,
+        "win_rate_pct": 58.06,
+        "sharpe": -0.66,
+        "profit_factor": 0.87,
+        "return_pct": -0.8,
+        "max_dd_pct": 1.79
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_Close_Low_Range_Short",
+      "train": {
+        "trades": 243,
+        "win_rate_pct": 70.78,
+        "sharpe": 0.39,
+        "profit_factor": 1.06,
+        "return_pct": 0.7,
+        "max_dd_pct": 2.13
+      },
+      "validate": {
+        "trades": 113,
+        "win_rate_pct": 69.03,
+        "sharpe": -2.04,
+        "profit_factor": 0.75,
+        "return_pct": -1.15,
+        "max_dd_pct": 1.37
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Yesterday_Fit_RSI_Short_CURVEFIT_DEMO",
+      "train": {
+        "trades": 215,
+        "win_rate_pct": 66.98,
+        "sharpe": -0.5,
+        "profit_factor": 0.92,
+        "return_pct": -0.92,
+        "max_dd_pct": 3.38
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Big_Down_Break_Wide_RR_Short_CURVEFIT_DEMO",
+      "train": {
+        "trades": 38,
+        "win_rate_pct": 36.84,
+        "sharpe": 0.04,
+        "profit_factor": 1.01,
+        "return_pct": 0.05,
+        "max_dd_pct": 1.82
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Big_Up_Break_Wide_RR_Long_CURVEFIT_DEMO",
+      "train": {
+        "trades": 27,
+        "win_rate_pct": 29.63,
+        "sharpe": -1.54,
+        "profit_factor": 0.57,
+        "return_pct": -2.46,
+        "max_dd_pct": 3.69
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ZLEMA_Momentum_Scalp",
+      "train": {
+        "trades": 762,
+        "win_rate_pct": 36.22,
+        "sharpe": -7.58,
+        "profit_factor": 0.54,
+        "return_pct": -18.39,
+        "max_dd_pct": 18.74
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WilliamsR_Hammer",
+      "train": {
+        "trades": 467,
+        "win_rate_pct": 28.05,
+        "sharpe": -8.48,
+        "profit_factor": 0.41,
+        "return_pct": -13.19,
+        "max_dd_pct": 13.19
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_Transform_Signal",
+      "train": {
+        "trades": 278,
+        "win_rate_pct": 36.33,
+        "sharpe": -3.45,
+        "profit_factor": 0.61,
+        "return_pct": -4.46,
+        "max_dd_pct": 4.96
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "StochRSI_Cross",
+      "train": {
+        "trades": 643,
+        "win_rate_pct": 37.33,
+        "sharpe": -6.68,
+        "profit_factor": 0.56,
+        "return_pct": -12.73,
+        "max_dd_pct": 12.93
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Volatility_Squeeze_Entry",
+      "train": {
+        "trades": 800,
+        "win_rate_pct": 35.75,
+        "sharpe": -8.14,
+        "profit_factor": 0.51,
+        "return_pct": -17.35,
+        "max_dd_pct": 17.35
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Narrow_Range_Breakout",
+      "train": {
+        "trades": 34,
+        "win_rate_pct": 32.35,
+        "sharpe": -2.52,
+        "profit_factor": 0.31,
+        "return_pct": -1.09,
+        "max_dd_pct": 1.32
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "CMF_BB_Touch",
+      "train": {
+        "trades": 836,
+        "win_rate_pct": 35.29,
+        "sharpe": -9.05,
+        "profit_factor": 0.48,
+        "return_pct": -19.62,
+        "max_dd_pct": 19.88
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Multi_TF_ZScore_Long",
+      "train": {
+        "trades": 75,
+        "win_rate_pct": 24,
+        "sharpe": -3.11,
+        "profit_factor": 0.45,
+        "return_pct": -2.66,
+        "max_dd_pct": 2.66
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Multi_TF_ZScore_Short",
+      "train": {
+        "trades": 61,
+        "win_rate_pct": 29.51,
+        "sharpe": -1.56,
+        "profit_factor": 0.65,
+        "return_pct": -1.1,
+        "max_dd_pct": 1.3
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Supertrend_Rider",
+      "train": {
+        "trades": 812,
+        "win_rate_pct": 39.9,
+        "sharpe": -4.52,
+        "profit_factor": 0.69,
+        "return_pct": -11.89,
+        "max_dd_pct": 12.24
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Chandelier_Follow",
+      "train": {
+        "trades": 663,
+        "win_rate_pct": 41.93,
+        "sharpe": -5.36,
+        "profit_factor": 0.62,
+        "return_pct": -13.98,
+        "max_dd_pct": 14.05
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "PSAR_Trend",
+      "train": {
+        "trades": 652,
+        "win_rate_pct": 41.56,
+        "sharpe": -5.95,
+        "profit_factor": 0.59,
+        "return_pct": -15.6,
+        "max_dd_pct": 16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "DEMA_Pullback",
+      "train": {
+        "trades": 684,
+        "win_rate_pct": 32.16,
+        "sharpe": -7.7,
+        "profit_factor": 0.51,
+        "return_pct": -20.09,
+        "max_dd_pct": 20.35
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Keltner_Breakout",
+      "train": {
+        "trades": 549,
+        "win_rate_pct": 49.36,
+        "sharpe": -3.97,
+        "profit_factor": 0.66,
+        "return_pct": -8.56,
+        "max_dd_pct": 8.93
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Pivot_Level_Break",
+      "train": {
+        "trades": 372,
+        "win_rate_pct": 49.19,
+        "sharpe": -2.17,
+        "profit_factor": 0.77,
+        "return_pct": -4.21,
+        "max_dd_pct": 5.19
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EFI_Momentum",
+      "train": {
+        "trades": 614,
+        "win_rate_pct": 44.63,
+        "sharpe": -4.43,
+        "profit_factor": 0.66,
+        "return_pct": -11.39,
+        "max_dd_pct": 11.95
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Donchian_Squeeze",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "OBV_Divergence_1h",
+      "train": {
+        "trades": 220,
+        "win_rate_pct": 32.73,
+        "sharpe": -1.82,
+        "profit_factor": 0.77,
+        "return_pct": -4.42,
+        "max_dd_pct": 5.27
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WilliamsR_Swing",
+      "train": {
+        "trades": 370,
+        "win_rate_pct": 12.7,
+        "sharpe": -6.67,
+        "profit_factor": 0.45,
+        "return_pct": -16.41,
+        "max_dd_pct": 16.87
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "4H_Momentum_Burst",
+      "train": {
+        "trades": 639,
+        "win_rate_pct": 33.65,
+        "sharpe": -4.22,
+        "profit_factor": 0.68,
+        "return_pct": -9.67,
+        "max_dd_pct": 10.25
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Ichimoku_Cloud_Break",
+      "train": {
+        "trades": 507,
+        "win_rate_pct": 43.98,
+        "sharpe": -2.68,
+        "profit_factor": 0.74,
+        "return_pct": -6.46,
+        "max_dd_pct": 7.21
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_Slope_Shift",
+      "train": {
+        "trades": 724,
+        "win_rate_pct": 43.51,
+        "sharpe": -7.21,
+        "profit_factor": 0.55,
+        "return_pct": -18.7,
+        "max_dd_pct": 19.04
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "StochRSI_1h_Reversal",
+      "train": {
+        "trades": 268,
+        "win_rate_pct": 31.72,
+        "sharpe": -3.75,
+        "profit_factor": 0.61,
+        "return_pct": -9.23,
+        "max_dd_pct": 9.65
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ZLEMA_1h_Cross",
+      "train": {
+        "trades": 701,
+        "win_rate_pct": 32.81,
+        "sharpe": -7.31,
+        "profit_factor": 0.53,
+        "return_pct": -20.04,
+        "max_dd_pct": 20.24
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Multi_TF_Supertrend_Cascade",
+      "train": {
+        "trades": 562,
+        "win_rate_pct": 37.37,
+        "sharpe": -4.04,
+        "profit_factor": 0.68,
+        "return_pct": -11.33,
+        "max_dd_pct": 11.39
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Funding_Rate_Extreme_Long",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Funding_Rate_Extreme_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Multi_Signal_Confluence_Long",
+      "train": {
+        "trades": 470,
+        "win_rate_pct": 32.98,
+        "sharpe": -6.71,
+        "profit_factor": 0.5,
+        "return_pct": -14.23,
+        "max_dd_pct": 14.23
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Multi_Signal_Confluence_Short",
+      "train": {
+        "trades": 520,
+        "win_rate_pct": 39.62,
+        "sharpe": -3.63,
+        "profit_factor": 0.71,
+        "return_pct": -8.22,
+        "max_dd_pct": 8.49
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Volatility_Regime_Shift",
+      "train": {
+        "trades": 236,
+        "win_rate_pct": 39.83,
+        "sharpe": -1.78,
+        "profit_factor": 0.77,
+        "return_pct": -3.21,
+        "max_dd_pct": 3.97
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HTF_Aligned_Pullback_Long",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": 2.09,
+        "profit_factor": 62.18,
+        "return_pct": 0.27,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HTF_Aligned_Pullback_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 86.36,
+        "sharpe": 0.48,
+        "profit_factor": 1.28,
+        "return_pct": 0.27,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 80,
+        "sharpe": 0.3,
+        "profit_factor": 1.18,
+        "return_pct": 0.06,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Squeeze_Breakout_Long",
+      "train": {
+        "trades": 17,
+        "win_rate_pct": 76.47,
+        "sharpe": 0.47,
+        "profit_factor": 1.25,
+        "return_pct": 0.23,
+        "max_dd_pct": 0.47
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": -1.34,
+        "profit_factor": 0.22,
+        "return_pct": -0.23,
+        "max_dd_pct": 0.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Squeeze_Breakout_Short",
+      "train": {
+        "trades": 17,
+        "win_rate_pct": 94.12,
+        "sharpe": 6.74,
+        "profit_factor": 103.48,
+        "return_pct": 1.41,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 50,
+        "sharpe": -1.72,
+        "profit_factor": 0.29,
+        "return_pct": -0.33,
+        "max_dd_pct": 0.41
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Dual_RSI_Oversold_Long",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 84.21,
+        "sharpe": 0.17,
+        "profit_factor": 1.11,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.45
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.44,
+        "profit_factor": 1.25,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Dual_RSI_Overbought_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 68.75,
+        "sharpe": 0.41,
+        "profit_factor": 1.29,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.46
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 60,
+        "sharpe": -1.46,
+        "profit_factor": 0.4,
+        "return_pct": -0.28,
+        "max_dd_pct": 0.4
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Zero_Cross_Trend_Long",
+      "train": {
+        "trades": 9,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.64,
+        "profit_factor": 1.71,
+        "return_pct": 0.21,
+        "max_dd_pct": 0.29
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MACD_Zero_Cross_Trend_Short",
+      "train": {
+        "trades": 34,
+        "win_rate_pct": 73.53,
+        "sharpe": -0.26,
+        "profit_factor": 0.89,
+        "return_pct": -0.22,
+        "max_dd_pct": 0.83
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Funding_Extreme_Contrarian_Long",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Funding_Extreme_Contrarian_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Supertrend_Flip_Long",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Supertrend_Flip_Short",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 73.68,
+        "sharpe": -0.38,
+        "profit_factor": 0.81,
+        "return_pct": -0.17,
+        "max_dd_pct": 0.46
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Stoch_Bear_Cross_Short",
+      "train": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": 0.15,
+        "profit_factor": 1.17,
+        "return_pct": 0.06,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MACD_Hist_Expansion_Short",
+      "train": {
+        "trades": 111,
+        "win_rate_pct": 78.38,
+        "sharpe": 1.85,
+        "profit_factor": 1.52,
+        "return_pct": 2.19,
+        "max_dd_pct": 0.76
+      },
+      "validate": {
+        "trades": 46,
+        "win_rate_pct": 71.74,
+        "sharpe": -2.7,
+        "profit_factor": 0.53,
+        "return_pct": -1.17,
+        "max_dd_pct": 1.33
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "StochRSI_4h_Oversold_Long",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 58.33,
+        "sharpe": -1.12,
+        "profit_factor": 0.47,
+        "return_pct": -0.39,
+        "max_dd_pct": 0.61
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "StochRSI_4h_Overbought_Short",
+      "train": {
+        "trades": 7,
+        "win_rate_pct": 85.71,
+        "sharpe": 2.15,
+        "profit_factor": 4.28,
+        "return_pct": 0.23,
+        "max_dd_pct": 0.07
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Squeeze_Fired_Long",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 68.42,
+        "sharpe": -0.29,
+        "profit_factor": 0.86,
+        "return_pct": -0.15,
+        "max_dd_pct": 0.56
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Squeeze_Fired_Short",
+      "train": {
+        "trades": 30,
+        "win_rate_pct": 53.33,
+        "sharpe": -0.6,
+        "profit_factor": 0.79,
+        "return_pct": -0.42,
+        "max_dd_pct": 1.37
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WilliamsR_Oversold_Long",
+      "train": {
+        "trades": 4,
+        "win_rate_pct": 100,
+        "sharpe": 4.59,
+        "profit_factor": 0,
+        "return_pct": 0.13,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WilliamsR_Overbought_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 77.27,
+        "sharpe": -0.8,
+        "profit_factor": 0.59,
+        "return_pct": -0.36,
+        "max_dd_pct": 0.6
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_Extreme_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 84.62,
+        "sharpe": -0.6,
+        "profit_factor": 0.61,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.46
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "BB_Lower_Break_Short",
+      "train": {
+        "trades": 65,
+        "win_rate_pct": 80,
+        "sharpe": 0.71,
+        "profit_factor": 1.23,
+        "return_pct": 0.72,
+        "max_dd_pct": 1.07
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 69.23,
+        "sharpe": -1.41,
+        "profit_factor": 0.55,
+        "return_pct": -0.43,
+        "max_dd_pct": 0.72
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "CMF_Cross_Bullish_Long",
+      "train": {
+        "trades": 39,
+        "win_rate_pct": 87.18,
+        "sharpe": 1.62,
+        "profit_factor": 2.12,
+        "return_pct": 0.7,
+        "max_dd_pct": 0.36
+      },
+      "validate": {
+        "trades": 31,
+        "win_rate_pct": 83.87,
+        "sharpe": 0.91,
+        "profit_factor": 1.32,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "CMF_Cross_Bearish_Short",
+      "train": {
+        "trades": 28,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.61,
+        "profit_factor": 2.01,
+        "return_pct": 0.94,
+        "max_dd_pct": 0.67
+      },
+      "validate": {
+        "trades": 16,
+        "win_rate_pct": 62.5,
+        "sharpe": -1.63,
+        "profit_factor": 0.52,
+        "return_pct": -0.46,
+        "max_dd_pct": 0.53
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Aroon_Crossover_Bull_Long",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 75,
+        "sharpe": 0.08,
+        "profit_factor": 1.06,
+        "return_pct": 0.03,
+        "max_dd_pct": 0.27
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Aroon_Crossover_Bear_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 81.25,
+        "sharpe": 0.81,
+        "profit_factor": 1.53,
+        "return_pct": 0.39,
+        "max_dd_pct": 0.62
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 45.45,
+        "sharpe": -2.79,
+        "profit_factor": 0.29,
+        "return_pct": -0.6,
+        "max_dd_pct": 0.6
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Donchian_Breakout_Long",
+      "train": {
+        "trades": 51,
+        "win_rate_pct": 76.47,
+        "sharpe": 2.07,
+        "profit_factor": 1.94,
+        "return_pct": 1.29,
+        "max_dd_pct": 0.35
+      },
+      "validate": {
+        "trades": 21,
+        "win_rate_pct": 52.38,
+        "sharpe": -3.55,
+        "profit_factor": 0.28,
+        "return_pct": -1.35,
+        "max_dd_pct": 1.51
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Donchian_Breakdown_Short",
+      "train": {
+        "trades": 66,
+        "win_rate_pct": 80.3,
+        "sharpe": 1.02,
+        "profit_factor": 1.33,
+        "return_pct": 1.15,
+        "max_dd_pct": 0.82
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 80.77,
+        "sharpe": -0.4,
+        "profit_factor": 0.88,
+        "return_pct": -0.13,
+        "max_dd_pct": 0.71
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "KST_Bearish_Cross_Short",
+      "train": {
+        "trades": 23,
+        "win_rate_pct": 65.22,
+        "sharpe": -0.49,
+        "profit_factor": 0.8,
+        "return_pct": -0.34,
+        "max_dd_pct": 1.05
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "OBV_Breakout_Long",
+      "train": {
+        "trades": 48,
+        "win_rate_pct": 81.25,
+        "sharpe": 0.33,
+        "profit_factor": 1.14,
+        "return_pct": 0.29,
+        "max_dd_pct": 1.26
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 81.48,
+        "sharpe": -0.83,
+        "profit_factor": 0.77,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.55
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "OBV_Breakdown_Short",
+      "train": {
+        "trades": 92,
+        "win_rate_pct": 77.17,
+        "sharpe": -0.44,
+        "profit_factor": 0.89,
+        "return_pct": -0.56,
+        "max_dd_pct": 1.62
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MACD_Hist_Expansion_Long",
+      "train": {
+        "trades": 80,
+        "win_rate_pct": 70,
+        "sharpe": -1.09,
+        "profit_factor": 0.75,
+        "return_pct": -1.11,
+        "max_dd_pct": 1.42
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "KST_Bullish_Cross_Long",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 65,
+        "sharpe": -0.8,
+        "profit_factor": 0.63,
+        "return_pct": -0.38,
+        "max_dd_pct": 0.81
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EFI_Bullish_Cross_Long",
+      "train": {
+        "trades": 31,
+        "win_rate_pct": 74.19,
+        "sharpe": -0.32,
+        "profit_factor": 0.85,
+        "return_pct": -0.22,
+        "max_dd_pct": 0.87
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EFI_Bearish_Cross_Short",
+      "train": {
+        "trades": 52,
+        "win_rate_pct": 75,
+        "sharpe": 0.03,
+        "profit_factor": 1.01,
+        "return_pct": 0.02,
+        "max_dd_pct": 0.87
+      },
+      "validate": {
+        "trades": 18,
+        "win_rate_pct": 61.11,
+        "sharpe": -2.16,
+        "profit_factor": 0.49,
+        "return_pct": -0.65,
+        "max_dd_pct": 0.65
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "PSAR_4h_Flip_Long",
+      "train": {
+        "trades": 111,
+        "win_rate_pct": 72.97,
+        "sharpe": -0.75,
+        "profit_factor": 0.83,
+        "return_pct": -0.84,
+        "max_dd_pct": 1.88
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "PSAR_4h_Flip_Short",
+      "train": {
+        "trades": 279,
+        "win_rate_pct": 75.63,
+        "sharpe": 0.96,
+        "profit_factor": 1.15,
+        "return_pct": 1.91,
+        "max_dd_pct": 2.73
+      },
+      "validate": {
+        "trades": 104,
+        "win_rate_pct": 73.08,
+        "sharpe": -2.37,
+        "profit_factor": 0.69,
+        "return_pct": -1.42,
+        "max_dd_pct": 1.64
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "DEMA_4h_Golden_Cross_Long",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 60,
+        "sharpe": 1.04,
+        "profit_factor": 2.37,
+        "return_pct": 0.32,
+        "max_dd_pct": 0.23
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 84.62,
+        "sharpe": -0.27,
+        "profit_factor": 0.88,
+        "return_pct": -0.08,
+        "max_dd_pct": 0.36
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "DEMA_4h_Death_Cross_Short",
+      "train": {
+        "trades": 56,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.64,
+        "profit_factor": 0.82,
+        "return_pct": -0.63,
+        "max_dd_pct": 1.63
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_4h_Momentum_Short",
+      "train": {
+        "trades": 32,
+        "win_rate_pct": 84.38,
+        "sharpe": 0.91,
+        "profit_factor": 1.45,
+        "return_pct": 0.71,
+        "max_dd_pct": 0.65
+      },
+      "validate": {
+        "trades": 20,
+        "win_rate_pct": 50,
+        "sharpe": -3.86,
+        "profit_factor": 0.32,
+        "return_pct": -1.28,
+        "max_dd_pct": 1.28
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Chandelier_Break_Short",
+      "train": {
+        "trades": 2,
+        "win_rate_pct": 100,
+        "sharpe": 5.26,
+        "profit_factor": 0,
+        "return_pct": 0.12,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Coppock_Cross_Long",
+      "train": {
+        "trades": 44,
+        "win_rate_pct": 72.73,
+        "sharpe": -0.09,
+        "profit_factor": 0.97,
+        "return_pct": -0.07,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA9_Cross_EMA21_Long",
+      "train": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": 0.11,
+        "profit_factor": 1.12,
+        "return_pct": 0.03,
+        "max_dd_pct": 0.27
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA9_Cross_EMA21_Short",
+      "train": {
+        "trades": 18,
+        "win_rate_pct": 88.89,
+        "sharpe": 4.29,
+        "profit_factor": 8.18,
+        "return_pct": 1.25,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 60,
+        "sharpe": -1.72,
+        "profit_factor": 0.41,
+        "return_pct": -0.39,
+        "max_dd_pct": 0.47
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Triple_EMA_Bull_Long",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 69.23,
+        "sharpe": -0.49,
+        "profit_factor": 0.72,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.3
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Triple_EMA_Bear_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 85.71,
+        "sharpe": 0.05,
+        "profit_factor": 1.03,
+        "return_pct": 0.02,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 50,
+        "sharpe": -1.5,
+        "profit_factor": 0.34,
+        "return_pct": -0.23,
+        "max_dd_pct": 0.23
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ADX_Surge_Breakout_Long",
+      "train": {
+        "trades": 33,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.56,
+        "profit_factor": 0.79,
+        "return_pct": -0.36,
+        "max_dd_pct": 1.03
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ADX_Surge_Breakout_Short",
+      "train": {
+        "trades": 37,
+        "win_rate_pct": 81.08,
+        "sharpe": 2.43,
+        "profit_factor": 2.21,
+        "return_pct": 1.7,
+        "max_dd_pct": 0.63
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 69.23,
+        "sharpe": -2.42,
+        "profit_factor": 0.49,
+        "return_pct": -0.96,
+        "max_dd_pct": 1.34
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Double_Bearish_Short",
+      "train": {
+        "trades": 29,
+        "win_rate_pct": 79.31,
+        "sharpe": -0.01,
+        "profit_factor": 0.99,
+        "return_pct": -0.01,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_4h_Direction_Short",
+      "train": {
+        "trades": 79,
+        "win_rate_pct": 75.95,
+        "sharpe": 0.35,
+        "profit_factor": 1.09,
+        "return_pct": 0.36,
+        "max_dd_pct": 1.49
+      },
+      "validate": {
+        "trades": 23,
+        "win_rate_pct": 56.52,
+        "sharpe": -2.47,
+        "profit_factor": 0.46,
+        "return_pct": -0.84,
+        "max_dd_pct": 1.01
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Signal_Cross_Short",
+      "train": {
+        "trades": 28,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.64,
+        "profit_factor": 2.14,
+        "return_pct": 0.91,
+        "max_dd_pct": 0.45
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.01,
+        "profit_factor": 1,
+        "return_pct": 0,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Signal_Cross_Long",
+      "train": {
+        "trades": 6,
+        "win_rate_pct": 100,
+        "sharpe": 3.73,
+        "profit_factor": 0,
+        "return_pct": 0.35,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_Mid_Cross_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_Mid_Cross_Long",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 100,
+        "sharpe": 5.59,
+        "profit_factor": 0,
+        "return_pct": 0.65,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Three_EMA_Cascade_Short",
+      "train": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.42,
+        "profit_factor": 0.55,
+        "return_pct": -0.2,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA8_Cross_EMA50_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 70,
+        "sharpe": 1.29,
+        "profit_factor": 2.03,
+        "return_pct": 0.74,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 50,
+        "sharpe": -2.17,
+        "profit_factor": 0.13,
+        "return_pct": -0.37,
+        "max_dd_pct": 0.37
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Bearish_Momentum_Candle_Short",
+      "train": {
+        "trades": 51,
+        "win_rate_pct": 86.27,
+        "sharpe": 3.16,
+        "profit_factor": 2.59,
+        "return_pct": 2.95,
+        "max_dd_pct": 0.78
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": -0.84,
+        "profit_factor": 0.69,
+        "return_pct": -0.28,
+        "max_dd_pct": 0.64
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Bearish_Engulfing_Short",
+      "train": {
+        "trades": 36,
+        "win_rate_pct": 88.89,
+        "sharpe": 1.13,
+        "profit_factor": 1.71,
+        "return_pct": 0.76,
+        "max_dd_pct": 0.62
+      },
+      "validate": {
+        "trades": 9,
+        "win_rate_pct": 88.89,
+        "sharpe": 0.81,
+        "profit_factor": 1.58,
+        "return_pct": 0.12,
+        "max_dd_pct": 0.2
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "BB_Upper_Rejection_Short",
+      "train": {
+        "trades": 2,
+        "win_rate_pct": 50,
+        "sharpe": -0.89,
+        "profit_factor": 0.15,
+        "return_pct": -0.23,
+        "max_dd_pct": 0.27
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Price_EMA21_Breakdown_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 1.68,
+        "profit_factor": 3.04,
+        "return_pct": 0.56,
+        "max_dd_pct": 0.26
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.91,
+        "profit_factor": 0.4,
+        "return_pct": -0.19,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Bearish_Pin_Bar_Short",
+      "train": {
+        "trades": 3,
+        "win_rate_pct": 33.33,
+        "sharpe": -1.7,
+        "profit_factor": 0.03,
+        "return_pct": -0.33,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Bullish_Hammer_Long",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 62.5,
+        "sharpe": -0.44,
+        "profit_factor": 0.68,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.39
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_Zero_Cross_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 78.57,
+        "sharpe": 0.31,
+        "profit_factor": 1.2,
+        "return_pct": 0.18,
+        "max_dd_pct": 0.71
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Hist_Sign_Flip_Short",
+      "train": {
+        "trades": 24,
+        "win_rate_pct": 83.33,
+        "sharpe": 1.25,
+        "profit_factor": 1.86,
+        "return_pct": 0.69,
+        "max_dd_pct": 0.45
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 81.82,
+        "sharpe": -0.16,
+        "profit_factor": 0.92,
+        "return_pct": -0.04,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "CMF_Extreme_Bear_Short",
+      "train": {
+        "trades": 49,
+        "win_rate_pct": 83.67,
+        "sharpe": 1.94,
+        "profit_factor": 1.91,
+        "return_pct": 1.61,
+        "max_dd_pct": 0.52
+      },
+      "validate": {
+        "trades": 20,
+        "win_rate_pct": 85,
+        "sharpe": 0.89,
+        "profit_factor": 1.46,
+        "return_pct": 0.27,
+        "max_dd_pct": 0.47
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "WR_OB_Exit_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "StochRSI_KD_OB_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 87.5,
+        "sharpe": 4.56,
+        "profit_factor": 7.92,
+        "return_pct": 0.53,
+        "max_dd_pct": 0.07
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.59,
+        "profit_factor": 1.42,
+        "return_pct": 0.06,
+        "max_dd_pct": 0.13
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "CMF_Zero_Bear_Short",
+      "train": {
+        "trades": 43,
+        "win_rate_pct": 88.37,
+        "sharpe": 3.59,
+        "profit_factor": 4.05,
+        "return_pct": 2.37,
+        "max_dd_pct": 0.41
+      },
+      "validate": {
+        "trades": 14,
+        "win_rate_pct": 71.43,
+        "sharpe": -1.04,
+        "profit_factor": 0.66,
+        "return_pct": -0.28,
+        "max_dd_pct": 0.74
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "KST_Signal_Cross_Bear_Short",
+      "train": {
+        "trades": 30,
+        "win_rate_pct": 63.33,
+        "sharpe": -0.96,
+        "profit_factor": 0.7,
+        "return_pct": -0.84,
+        "max_dd_pct": 1.59
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EFI_Zero_Cross_Bear_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 68.18,
+        "sharpe": 0.14,
+        "profit_factor": 1.06,
+        "return_pct": 0.1,
+        "max_dd_pct": 0.84
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 76.92,
+        "sharpe": 0.09,
+        "profit_factor": 1.04,
+        "return_pct": 0.02,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Mid_Break_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 3.92,
+        "profit_factor": 67.4,
+        "return_pct": 0.91,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.91,
+        "profit_factor": 0.4,
+        "return_pct": -0.19,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EMA21_EMA50_Death_Cross_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.45,
+        "profit_factor": 1.35,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": -1.47,
+        "profit_factor": 0.36,
+        "return_pct": -0.23,
+        "max_dd_pct": 0.24
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Donchian_Mid_Break_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": -0.26,
+        "profit_factor": 0.83,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_High_Exit_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_60_Break_Short",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 100,
+        "sharpe": 5.7,
+        "profit_factor": 0,
+        "return_pct": 0.22,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_Slope_Turn_Short",
+      "train": {
+        "trades": 66,
+        "win_rate_pct": 78.79,
+        "sharpe": 1.18,
+        "profit_factor": 1.4,
+        "return_pct": 1.28,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 16,
+        "win_rate_pct": 75,
+        "sharpe": 0.92,
+        "profit_factor": 1.41,
+        "return_pct": 0.24,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Coppock_Zero_Bear_Short",
+      "train": {
+        "trades": 23,
+        "win_rate_pct": 65.22,
+        "sharpe": -0.33,
+        "profit_factor": 0.86,
+        "return_pct": -0.22,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "DEMA_Death_Cross_Short",
+      "train": {
+        "trades": 46,
+        "win_rate_pct": 71.74,
+        "sharpe": -0.57,
+        "profit_factor": 0.81,
+        "return_pct": -0.46,
+        "max_dd_pct": 1.36
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Keltner_Lower_Break_Short",
+      "train": {
+        "trades": 72,
+        "win_rate_pct": 80.56,
+        "sharpe": 1.21,
+        "profit_factor": 1.41,
+        "return_pct": 1.15,
+        "max_dd_pct": 1
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 73.08,
+        "sharpe": -0.95,
+        "profit_factor": 0.73,
+        "return_pct": -0.32,
+        "max_dd_pct": 0.55
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "OBV_Slope_Bear_Short",
+      "train": {
+        "trades": 27,
+        "win_rate_pct": 92.59,
+        "sharpe": 1.5,
+        "profit_factor": 2.24,
+        "return_pct": 0.83,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 100,
+        "sharpe": 8.43,
+        "profit_factor": 0,
+        "return_pct": 0.27,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "ZLEMA_Bear_Cross_Short",
+      "train": {
+        "trades": 38,
+        "win_rate_pct": 78.95,
+        "sharpe": 0.55,
+        "profit_factor": 1.24,
+        "return_pct": 0.46,
+        "max_dd_pct": 0.69
+      },
+      "validate": {
+        "trades": 17,
+        "win_rate_pct": 70.59,
+        "sharpe": 0.13,
+        "profit_factor": 1.04,
+        "return_pct": 0.03,
+        "max_dd_pct": 0.41
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA_Bear_Cross_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.42,
+        "profit_factor": 4.4,
+        "return_pct": 0.55,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_65_Break_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Chandelier_Bear_Break_Short",
+      "train": {
+        "trades": 25,
+        "win_rate_pct": 84,
+        "sharpe": 3.62,
+        "profit_factor": 4.35,
+        "return_pct": 1.46,
+        "max_dd_pct": 0.23
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 81.82,
+        "sharpe": -0.68,
+        "profit_factor": 0.7,
+        "return_pct": -0.15,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Width_Expand_Bear_Short",
+      "train": {
+        "trades": 117,
+        "win_rate_pct": 83.76,
+        "sharpe": 2.81,
+        "profit_factor": 1.87,
+        "return_pct": 3.33,
+        "max_dd_pct": 0.78
+      },
+      "validate": {
+        "trades": 49,
+        "win_rate_pct": 73.47,
+        "sharpe": -2.28,
+        "profit_factor": 0.6,
+        "return_pct": -1.05,
+        "max_dd_pct": 1.34
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Three_Bear_Candles_Short",
+      "train": {
+        "trades": 81,
+        "win_rate_pct": 83.95,
+        "sharpe": 2.15,
+        "profit_factor": 1.81,
+        "return_pct": 1.98,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 83.78,
+        "sharpe": 2.22,
+        "profit_factor": 1.82,
+        "return_pct": 0.6,
+        "max_dd_pct": 0.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "Two_Bar_Bear_Reversal_Short",
+      "train": {
+        "trades": 72,
+        "win_rate_pct": 87.5,
+        "sharpe": 3.2,
+        "profit_factor": 2.38,
+        "return_pct": 3.24,
+        "max_dd_pct": 0.78
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.61,
+        "profit_factor": 1.2,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Lower_High_Confirm_Short",
+      "train": {
+        "trades": 107,
+        "win_rate_pct": 85.98,
+        "sharpe": 3.63,
+        "profit_factor": 2.41,
+        "return_pct": 3.42,
+        "max_dd_pct": 0.4
+      },
+      "validate": {
+        "trades": 43,
+        "win_rate_pct": 67.44,
+        "sharpe": -1.79,
+        "profit_factor": 0.66,
+        "return_pct": -0.7,
+        "max_dd_pct": 1.05
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Big_Bear_Candle_Short",
+      "train": {
+        "trades": 31,
+        "win_rate_pct": 77.42,
+        "sharpe": 1.01,
+        "profit_factor": 1.45,
+        "return_pct": 1.01,
+        "max_dd_pct": 0.94
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": -0.74,
+        "profit_factor": 0.73,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MACD_Line_Zero_Cross_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 2.23,
+        "profit_factor": 4.91,
+        "return_pct": 0.7,
+        "max_dd_pct": 0.18
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 100,
+        "sharpe": 6.43,
+        "profit_factor": 0,
+        "return_pct": 0.14,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "BB_Upper_Walk_Fail_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ATR_Spike_Bear_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Price_Below_All_EMAs_Short",
+      "train": {
+        "trades": 122,
+        "win_rate_pct": 79.51,
+        "sharpe": 0.62,
+        "profit_factor": 1.14,
+        "return_pct": 0.98,
+        "max_dd_pct": 1.34
+      },
+      "validate": {
+        "trades": 43,
+        "win_rate_pct": 81.4,
+        "sharpe": 1.67,
+        "profit_factor": 1.47,
+        "return_pct": 0.58,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "PSAR_ADX_Strong_Short",
+      "train": {
+        "trades": 118,
+        "win_rate_pct": 83.05,
+        "sharpe": 2.79,
+        "profit_factor": 1.83,
+        "return_pct": 3.24,
+        "max_dd_pct": 1.06
+      },
+      "validate": {
+        "trades": 44,
+        "win_rate_pct": 75,
+        "sharpe": -1.42,
+        "profit_factor": 0.71,
+        "return_pct": -0.7,
+        "max_dd_pct": 0.92
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "StochRSI_50_Cross_Bear_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 78.57,
+        "sharpe": 1.33,
+        "profit_factor": 3.43,
+        "return_pct": 0.47,
+        "max_dd_pct": 0.18
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": 1.57,
+        "profit_factor": 4.13,
+        "return_pct": 0.03,
+        "max_dd_pct": 0.01
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "WR_Mid_Cross_Bear_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 78.57,
+        "sharpe": 0.31,
+        "profit_factor": 1.2,
+        "return_pct": 0.18,
+        "max_dd_pct": 0.71
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "CMF_Deep_Bear_Short",
+      "train": {
+        "trades": 33,
+        "win_rate_pct": 84.85,
+        "sharpe": 1.99,
+        "profit_factor": 2.12,
+        "return_pct": 1.58,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 92.31,
+        "sharpe": 8.14,
+        "profit_factor": 1519.09,
+        "return_pct": 0.76,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "ADX_Strong_Trend_Bear_Short",
+      "train": {
+        "trades": 26,
+        "win_rate_pct": 84.62,
+        "sharpe": 3.99,
+        "profit_factor": 4.52,
+        "return_pct": 2.21,
+        "max_dd_pct": 0.25
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 1.87,
+        "profit_factor": 2.37,
+        "return_pct": 0.3,
+        "max_dd_pct": 0.22
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Multi_EMA_Full_Cascade_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_Bear_Slope_Short",
+      "train": {
+        "trades": 93,
+        "win_rate_pct": 79.57,
+        "sharpe": 1.17,
+        "profit_factor": 1.33,
+        "return_pct": 1.28,
+        "max_dd_pct": 1.03
+      },
+      "validate": {
+        "trades": 40,
+        "win_rate_pct": 77.5,
+        "sharpe": 0.47,
+        "profit_factor": 1.13,
+        "return_pct": 0.14,
+        "max_dd_pct": 0.57
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "KST_Below_Zero_Bear_Short",
+      "train": {
+        "trades": 28,
+        "win_rate_pct": 78.57,
+        "sharpe": 1.51,
+        "profit_factor": 1.88,
+        "return_pct": 0.95,
+        "max_dd_pct": 0.6
+      },
+      "validate": {
+        "trades": 9,
+        "win_rate_pct": 55.56,
+        "sharpe": -3.05,
+        "profit_factor": 0.17,
+        "return_pct": -0.7,
+        "max_dd_pct": 0.75
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Aroon_Bear_Strong_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 81.82,
+        "sharpe": 0.59,
+        "profit_factor": 1.32,
+        "return_pct": 0.39,
+        "max_dd_pct": 0.96
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 80,
+        "sharpe": -0.56,
+        "profit_factor": 0.75,
+        "return_pct": -0.13,
+        "max_dd_pct": 0.39
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EFI_Bear_Cross_Short",
+      "train": {
+        "trades": 23,
+        "win_rate_pct": 65.22,
+        "sharpe": -0.53,
+        "profit_factor": 0.79,
+        "return_pct": -0.37,
+        "max_dd_pct": 0.92
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_Deep_Bear_Short",
+      "train": {
+        "trades": 102,
+        "win_rate_pct": 88.24,
+        "sharpe": 4.23,
+        "profit_factor": 2.72,
+        "return_pct": 4.58,
+        "max_dd_pct": 0.74
+      },
+      "validate": {
+        "trades": 40,
+        "win_rate_pct": 75,
+        "sharpe": -1.85,
+        "profit_factor": 0.63,
+        "return_pct": -0.79,
+        "max_dd_pct": 1.04
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Close_Low_Range_Bear_Short",
+      "train": {
+        "trades": 101,
+        "win_rate_pct": 84.16,
+        "sharpe": 1.81,
+        "profit_factor": 1.56,
+        "return_pct": 2.03,
+        "max_dd_pct": 0.89
+      },
+      "validate": {
+        "trades": 35,
+        "win_rate_pct": 80,
+        "sharpe": 0.19,
+        "profit_factor": 1.05,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.8
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "MTF_RSI_Dual_Bear_Short",
+      "train": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": 0.61,
+        "profit_factor": 1.91,
+        "return_pct": 0.39,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MTF_EMA_Confirm_Bear_Short",
+      "train": {
+        "trades": 30,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.49,
+        "profit_factor": 1.25,
+        "return_pct": 0.33,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 81.82,
+        "sharpe": -0.1,
+        "profit_factor": 0.95,
+        "return_pct": -0.02,
+        "max_dd_pct": 0.27
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_MACD_Cross_Bear_Short",
+      "train": {
+        "trades": 69,
+        "win_rate_pct": 73.91,
+        "sharpe": 1.55,
+        "profit_factor": 1.52,
+        "return_pct": 1.62,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 25,
+        "win_rate_pct": 76,
+        "sharpe": 1.3,
+        "profit_factor": 1.54,
+        "return_pct": 0.41,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_RSI_60_Break_Bear_Short",
+      "train": {
+        "trades": 49,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.21,
+        "profit_factor": 0.94,
+        "return_pct": -0.2,
+        "max_dd_pct": 1.06
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_EMA_Death_Cross_Bear_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 80,
+        "sharpe": 1.15,
+        "profit_factor": 1.79,
+        "return_pct": 0.63,
+        "max_dd_pct": 0.59
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": -1.49,
+        "profit_factor": 0.36,
+        "return_pct": -0.36,
+        "max_dd_pct": 0.56
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "MTF_CMF_Both_Neg_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 100,
+        "sharpe": 5.31,
+        "profit_factor": 0,
+        "return_pct": 0.94,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_Fisher_Zero_Cross_Short",
+      "train": {
+        "trades": 88,
+        "win_rate_pct": 78.41,
+        "sharpe": 2.27,
+        "profit_factor": 1.74,
+        "return_pct": 2.62,
+        "max_dd_pct": 1.06
+      },
+      "validate": {
+        "trades": 30,
+        "win_rate_pct": 70,
+        "sharpe": -0.8,
+        "profit_factor": 0.81,
+        "return_pct": -0.28,
+        "max_dd_pct": 0.67
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_WR_OB_Cross_Bear_Short",
+      "train": {
+        "trades": 61,
+        "win_rate_pct": 67.21,
+        "sharpe": -0.49,
+        "profit_factor": 0.87,
+        "return_pct": -0.52,
+        "max_dd_pct": 1.07
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MTF_MACD_Both_Neg_Short",
+      "train": {
+        "trades": 69,
+        "win_rate_pct": 73.91,
+        "sharpe": 1.55,
+        "profit_factor": 1.52,
+        "return_pct": 1.62,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 25,
+        "win_rate_pct": 76,
+        "sharpe": 1.3,
+        "profit_factor": 1.54,
+        "return_pct": 0.41,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_CMF_Zero_Cross_Bear_Short",
+      "train": {
+        "trades": 78,
+        "win_rate_pct": 73.08,
+        "sharpe": 1.21,
+        "profit_factor": 1.37,
+        "return_pct": 1.36,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 23,
+        "win_rate_pct": 69.57,
+        "sharpe": -0.44,
+        "profit_factor": 0.85,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.6
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_StochRSI_OB_Cross_Bear_Short",
+      "train": {
+        "trades": 89,
+        "win_rate_pct": 60.67,
+        "sharpe": -0.12,
+        "profit_factor": 0.97,
+        "return_pct": -0.14,
+        "max_dd_pct": 1.46
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MTF_RSI_Cross_Confirm_Short",
+      "train": {
+        "trades": 3,
+        "win_rate_pct": 100,
+        "sharpe": 2.9,
+        "profit_factor": 0,
+        "return_pct": 0.82,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_BB_Mid_Break_Bear_Short",
+      "train": {
+        "trades": 65,
+        "win_rate_pct": 78.46,
+        "sharpe": 1.52,
+        "profit_factor": 1.51,
+        "return_pct": 1.63,
+        "max_dd_pct": 1.23
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 69.23,
+        "sharpe": 1.05,
+        "profit_factor": 1.32,
+        "return_pct": 0.25,
+        "max_dd_pct": 0.45
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_Supertrend_Bear_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_EFI_Zero_Cross_Bear_Short",
+      "train": {
+        "trades": 92,
+        "win_rate_pct": 72.83,
+        "sharpe": 1.02,
+        "profit_factor": 1.25,
+        "return_pct": 1.43,
+        "max_dd_pct": 1.07
+      },
+      "validate": {
+        "trades": 40,
+        "win_rate_pct": 72.5,
+        "sharpe": -1.39,
+        "profit_factor": 0.71,
+        "return_pct": -0.63,
+        "max_dd_pct": 0.99
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_RSI_Mid_Bear_Cross_Short",
+      "train": {
+        "trades": 63,
+        "win_rate_pct": 74.6,
+        "sharpe": 1.37,
+        "profit_factor": 1.47,
+        "return_pct": 1.45,
+        "max_dd_pct": 1.02
+      },
+      "validate": {
+        "trades": 32,
+        "win_rate_pct": 65.63,
+        "sharpe": -1.13,
+        "profit_factor": 0.74,
+        "return_pct": -0.41,
+        "max_dd_pct": 0.72
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_OBV_Bear_SMA_Cross_Short",
+      "train": {
+        "trades": 88,
+        "win_rate_pct": 73.86,
+        "sharpe": 1.9,
+        "profit_factor": 1.58,
+        "return_pct": 2.27,
+        "max_dd_pct": 0.9
+      },
+      "validate": {
+        "trades": 42,
+        "win_rate_pct": 66.67,
+        "sharpe": 0.14,
+        "profit_factor": 1.03,
+        "return_pct": 0.04,
+        "max_dd_pct": 0.48
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_Keltner_Break_Bear_Short",
+      "train": {
+        "trades": 110,
+        "win_rate_pct": 80.91,
+        "sharpe": 1.65,
+        "profit_factor": 1.5,
+        "return_pct": 2.27,
+        "max_dd_pct": 0.91
+      },
+      "validate": {
+        "trades": 41,
+        "win_rate_pct": 65.85,
+        "sharpe": -1.76,
+        "profit_factor": 0.66,
+        "return_pct": -0.74,
+        "max_dd_pct": 1.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_Donchian_Break_Bear_Short",
+      "train": {
+        "trades": 78,
+        "win_rate_pct": 71.79,
+        "sharpe": 0.63,
+        "profit_factor": 1.18,
+        "return_pct": 0.77,
+        "max_dd_pct": 1.7
+      },
+      "validate": {
+        "trades": 32,
+        "win_rate_pct": 75,
+        "sharpe": -0.46,
+        "profit_factor": 0.88,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.89
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1d_MACD_Neg_4h_Entry_Short",
+      "train": {
+        "trades": 1,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": -0.2,
+        "max_dd_pct": 0.2
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_MACD_KST_Bear_Short",
+      "train": {
+        "trades": 33,
+        "win_rate_pct": 60.61,
+        "sharpe": -0.89,
+        "profit_factor": 0.72,
+        "return_pct": -0.78,
+        "max_dd_pct": 1.59
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "CMF_OBV_Confluence_Bear_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 100,
+        "sharpe": 5.58,
+        "profit_factor": 0,
+        "return_pct": 0.78,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_CMF_Confirm_Bear_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 0.8,
+        "profit_factor": 1.88,
+        "return_pct": 0.32,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "StochRSI_CMF_Bear_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 86.36,
+        "sharpe": 5.81,
+        "profit_factor": 12.21,
+        "return_pct": 0.91,
+        "max_dd_pct": 0.07
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": 0.87,
+        "profit_factor": 1.78,
+        "return_pct": 0.1,
+        "max_dd_pct": 0.13
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "WR_RSI_Bear_Confirm_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 78.57,
+        "sharpe": 0.31,
+        "profit_factor": 1.2,
+        "return_pct": 0.18,
+        "max_dd_pct": 0.71
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Aroon_CMF_Bear_Dual_Short",
+      "train": {
+        "trades": 101,
+        "win_rate_pct": 80.2,
+        "sharpe": 2.83,
+        "profit_factor": 1.89,
+        "return_pct": 3.21,
+        "max_dd_pct": 0.82
+      },
+      "validate": {
+        "trades": 35,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.98,
+        "profit_factor": 1.67,
+        "return_pct": 0.58,
+        "max_dd_pct": 0.38
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "BB_RSI_Double_Bear_Short",
+      "train": {
+        "trades": 1,
+        "win_rate_pct": 100,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0.22,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "KST_EFI_Bear_Short",
+      "train": {
+        "trades": 27,
+        "win_rate_pct": 62.96,
+        "sharpe": -1.07,
+        "profit_factor": 0.65,
+        "return_pct": -0.88,
+        "max_dd_pct": 1.34
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "HMA_CMF_Bear_Short",
+      "train": {
+        "trades": 134,
+        "win_rate_pct": 80.6,
+        "sharpe": 2.87,
+        "profit_factor": 1.8,
+        "return_pct": 3.84,
+        "max_dd_pct": 0.91
+      },
+      "validate": {
+        "trades": 49,
+        "win_rate_pct": 87.76,
+        "sharpe": 2.43,
+        "profit_factor": 1.73,
+        "return_pct": 0.86,
+        "max_dd_pct": 0.44
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "DEMA_RSI_Bear_Short",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": 0.67,
+        "profit_factor": 1.92,
+        "return_pct": 0.4,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ZLEMA_EFI_Bear_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 86.36,
+        "sharpe": 1.83,
+        "profit_factor": 2.45,
+        "return_pct": 0.83,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 72.73,
+        "sharpe": 1,
+        "profit_factor": 1.49,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.19
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Donchian_CMF_Bear_Short",
+      "train": {
+        "trades": 80,
+        "win_rate_pct": 82.5,
+        "sharpe": 1.98,
+        "profit_factor": 1.71,
+        "return_pct": 2.02,
+        "max_dd_pct": 0.51
+      },
+      "validate": {
+        "trades": 38,
+        "win_rate_pct": 89.47,
+        "sharpe": 2.5,
+        "profit_factor": 1.91,
+        "return_pct": 0.77,
+        "max_dd_pct": 0.41
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "Keltner_CMF_Bear_Short",
+      "train": {
+        "trades": 68,
+        "win_rate_pct": 85.29,
+        "sharpe": 2.7,
+        "profit_factor": 2.3,
+        "return_pct": 2.48,
+        "max_dd_pct": 0.47
+      },
+      "validate": {
+        "trades": 19,
+        "win_rate_pct": 78.95,
+        "sharpe": -0.29,
+        "profit_factor": 0.9,
+        "return_pct": -0.08,
+        "max_dd_pct": 0.29
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "StochRSI_ADX_Bear_Short",
+      "train": {
+        "trades": 62,
+        "win_rate_pct": 77.42,
+        "sharpe": 1,
+        "profit_factor": 1.34,
+        "return_pct": 0.87,
+        "max_dd_pct": 0.7
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 69.23,
+        "sharpe": 0.05,
+        "profit_factor": 1.02,
+        "return_pct": 0.01,
+        "max_dd_pct": 0.53
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Five_Indicator_Bear_Short",
+      "train": {
+        "trades": 2,
+        "win_rate_pct": 100,
+        "sharpe": 6.25,
+        "profit_factor": 0,
+        "return_pct": 0.24,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Supertrend_CMF_Bear_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA_CMF_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.24,
+        "profit_factor": 4.05,
+        "return_pct": 0.49,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ATR_CMF_Expand_Bear_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 87.5,
+        "sharpe": 2.48,
+        "profit_factor": 3.98,
+        "return_pct": 0.78,
+        "max_dd_pct": 0.26
+      },
+      "validate": {
+        "trades": 2,
+        "win_rate_pct": 50,
+        "sharpe": -1.35,
+        "profit_factor": 0.15,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.29
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI_Fisher_Bear_Short",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": 0.67,
+        "profit_factor": 1.92,
+        "return_pct": 0.4,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Coppock_KST_Bear_Short",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": -0.45,
+        "profit_factor": 0.65,
+        "return_pct": -0.22,
+        "max_dd_pct": 0.47
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA5_WMA13_Bear_Cross_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 92.31,
+        "sharpe": 2.73,
+        "profit_factor": 4.69,
+        "return_pct": 0.78,
+        "max_dd_pct": 0.21
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -1.15,
+        "profit_factor": 0.28,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.22
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA13_WMA34_Bear_Cross_Short",
+      "train": {
+        "trades": 21,
+        "win_rate_pct": 76.19,
+        "sharpe": 1.78,
+        "profit_factor": 2.33,
+        "return_pct": 1.04,
+        "max_dd_pct": 0.56
+      },
+      "validate": {
+        "trades": 14,
+        "win_rate_pct": 64.29,
+        "sharpe": -2.38,
+        "profit_factor": 0.39,
+        "return_pct": -0.62,
+        "max_dd_pct": 0.72
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "ATR_Expand_EFI_Bear_Short",
+      "train": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": 1.73,
+        "profit_factor": 7.38,
+        "return_pct": 0.11,
+        "max_dd_pct": 0.02
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ATR_Expand_Fisher_Bear_Short",
+      "train": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.13,
+        "profit_factor": 0.84,
+        "return_pct": -0.06,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ATR_Expand_WR_Bear_Short",
+      "train": {
+        "trades": 2,
+        "win_rate_pct": 50,
+        "sharpe": -0.61,
+        "profit_factor": 0.32,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_CMF_Deep_Bear_Short",
+      "train": {
+        "trades": 6,
+        "win_rate_pct": 100,
+        "sharpe": 3.4,
+        "profit_factor": 0,
+        "return_pct": 0.39,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA5_CMF_Bear_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 100,
+        "sharpe": 6.04,
+        "profit_factor": 0,
+        "return_pct": 0.88,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA13_CMF_Bear_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 80,
+        "sharpe": 2.9,
+        "profit_factor": 5.15,
+        "return_pct": 0.89,
+        "max_dd_pct": 0.2
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 100,
+        "sharpe": 4.66,
+        "profit_factor": 0,
+        "return_pct": 0.09,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA_EFI_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.42,
+        "profit_factor": 4.4,
+        "return_pct": 0.55,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA_Fisher_Bear_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 85,
+        "sharpe": 1.85,
+        "profit_factor": 2.37,
+        "return_pct": 0.77,
+        "max_dd_pct": 0.56
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 100,
+        "sharpe": 6.36,
+        "profit_factor": 0,
+        "return_pct": 0.18,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "WMA_RSI_Bear_Short",
+      "train": {
+        "trades": 9,
+        "win_rate_pct": 77.78,
+        "sharpe": 1.27,
+        "profit_factor": 2.27,
+        "return_pct": 0.44,
+        "max_dd_pct": 0.34
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA_ADX_Strong_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.42,
+        "profit_factor": 4.4,
+        "return_pct": 0.55,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA_KST_Bear_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 100,
+        "sharpe": 4.88,
+        "profit_factor": 0,
+        "return_pct": 0.65,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "ZLEMA_CMF_Bear_Short",
+      "train": {
+        "trades": 29,
+        "win_rate_pct": 82.76,
+        "sharpe": 1.59,
+        "profit_factor": 1.89,
+        "return_pct": 0.93,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 72.73,
+        "sharpe": 1,
+        "profit_factor": 1.49,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.19
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "DEMA_CMF_Bear_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 81.25,
+        "sharpe": 1.15,
+        "profit_factor": 2.25,
+        "return_pct": 0.43,
+        "max_dd_pct": 0.34
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 0.07,
+        "profit_factor": 1.04,
+        "return_pct": 0.01,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Fisher_WR_Bear_Short",
+      "train": {
+        "trades": 40,
+        "win_rate_pct": 80,
+        "sharpe": 1.87,
+        "profit_factor": 1.99,
+        "return_pct": 1.34,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 81.82,
+        "sharpe": -0.05,
+        "profit_factor": 0.98,
+        "return_pct": -0.01,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Coppock_CMF_Bear_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 75,
+        "sharpe": 3.14,
+        "profit_factor": 42.2,
+        "return_pct": 0.49,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA8_EMA50_CMF_Bear_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 84.62,
+        "sharpe": 3.12,
+        "profit_factor": 267.27,
+        "return_pct": 1.21,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.84,
+        "profit_factor": 0.42,
+        "return_pct": -0.07,
+        "max_dd_pct": 0.13
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_WMA_Bear_CMF_Short",
+      "train": {
+        "trades": 25,
+        "win_rate_pct": 72,
+        "sharpe": 1.06,
+        "profit_factor": 1.64,
+        "return_pct": 0.77,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 62.5,
+        "sharpe": -0.92,
+        "profit_factor": 0.63,
+        "return_pct": -0.19,
+        "max_dd_pct": 0.42
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_WMA_EFI_Bear_Short",
+      "train": {
+        "trades": 44,
+        "win_rate_pct": 72.73,
+        "sharpe": 1.05,
+        "profit_factor": 1.43,
+        "return_pct": 0.95,
+        "max_dd_pct": 0.85
+      },
+      "validate": {
+        "trades": 18,
+        "win_rate_pct": 61.11,
+        "sharpe": -1.02,
+        "profit_factor": 0.67,
+        "return_pct": -0.27,
+        "max_dd_pct": 0.56
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA5_WMA13_ADX_Bear_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 1.87,
+        "profit_factor": 3.29,
+        "return_pct": 0.48,
+        "max_dd_pct": 0.21
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -1.15,
+        "profit_factor": 0.28,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.22
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA5_WMA13_EFI_Bear_Short",
+      "train": {
+        "trades": 17,
+        "win_rate_pct": 88.24,
+        "sharpe": 2.55,
+        "profit_factor": 3.38,
+        "return_pct": 1.02,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -1.15,
+        "profit_factor": 0.28,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.22
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA13_WMA34_ADX_Bear_Short",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 73.68,
+        "sharpe": 1.12,
+        "profit_factor": 1.78,
+        "return_pct": 0.6,
+        "max_dd_pct": 0.56
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 63.64,
+        "sharpe": -1.83,
+        "profit_factor": 0.45,
+        "return_pct": -0.45,
+        "max_dd_pct": 0.54
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA13_WMA34_EFI_Bear_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 80,
+        "sharpe": 2.3,
+        "profit_factor": 3.16,
+        "return_pct": 1.24,
+        "max_dd_pct": 0.55
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 69.23,
+        "sharpe": -1.72,
+        "profit_factor": 0.48,
+        "return_pct": -0.42,
+        "max_dd_pct": 0.63
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "WMA13_WMA34_CMF_Deep_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": 0.5,
+        "profit_factor": 1.33,
+        "return_pct": 0.23,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 1,
+        "win_rate_pct": 100,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0.05,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "ZLEMA_ADX_Bear_Short",
+      "train": {
+        "trades": 24,
+        "win_rate_pct": 87.5,
+        "sharpe": 2.13,
+        "profit_factor": 2.68,
+        "return_pct": 0.97,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 80,
+        "sharpe": 2.3,
+        "profit_factor": 2.63,
+        "return_pct": 0.4,
+        "max_dd_pct": 0.13
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "ZLEMA_Fisher_Bear_Short",
+      "train": {
+        "trades": 24,
+        "win_rate_pct": 87.5,
+        "sharpe": 2.13,
+        "profit_factor": 2.68,
+        "return_pct": 0.97,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 11,
+        "win_rate_pct": 72.73,
+        "sharpe": 1,
+        "profit_factor": 1.49,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.19
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "DEMA_ADX_Strong_Bear_Short",
+      "train": {
+        "trades": 21,
+        "win_rate_pct": 95.24,
+        "sharpe": 2.44,
+        "profit_factor": 3.74,
+        "return_pct": 0.92,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 0.5,
+        "profit_factor": 1.32,
+        "return_pct": 0.1,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "DEMA_EFI_Bear_Short",
+      "train": {
+        "trades": 28,
+        "win_rate_pct": 82.14,
+        "sharpe": 1.31,
+        "profit_factor": 1.74,
+        "return_pct": 0.8,
+        "max_dd_pct": 0.86
+      },
+      "validate": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 0.5,
+        "profit_factor": 1.32,
+        "return_pct": 0.1,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_WMA9_WMA21_ADX_Bear_Short",
+      "train": {
+        "trades": 29,
+        "win_rate_pct": 65.52,
+        "sharpe": -0.45,
+        "profit_factor": 0.83,
+        "return_pct": -0.34,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_ZLEMA_CMF_Bear_Short",
+      "train": {
+        "trades": 46,
+        "win_rate_pct": 80.43,
+        "sharpe": 1.6,
+        "profit_factor": 1.72,
+        "return_pct": 1.49,
+        "max_dd_pct": 0.87
+      },
+      "validate": {
+        "trades": 20,
+        "win_rate_pct": 65,
+        "sharpe": -1.3,
+        "profit_factor": 0.67,
+        "return_pct": -0.34,
+        "max_dd_pct": 0.67
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_Fisher_CMF_Confirm_Short",
+      "train": {
+        "trades": 73,
+        "win_rate_pct": 73.97,
+        "sharpe": 0.91,
+        "profit_factor": 1.27,
+        "return_pct": 1.05,
+        "max_dd_pct": 1.11
+      },
+      "validate": {
+        "trades": 19,
+        "win_rate_pct": 63.16,
+        "sharpe": -1.43,
+        "profit_factor": 0.64,
+        "return_pct": -0.49,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_WMA5_WMA13_Bear_Short",
+      "train": {
+        "trades": 46,
+        "win_rate_pct": 76.09,
+        "sharpe": 0.75,
+        "profit_factor": 1.29,
+        "return_pct": 0.74,
+        "max_dd_pct": 0.9
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 46.15,
+        "sharpe": -3.2,
+        "profit_factor": 0.33,
+        "return_pct": -0.68,
+        "max_dd_pct": 0.68
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_WR_CMF_Bear_Short",
+      "train": {
+        "trades": 49,
+        "win_rate_pct": 79.59,
+        "sharpe": 0.99,
+        "profit_factor": 1.38,
+        "return_pct": 1.03,
+        "max_dd_pct": 0.89
+      },
+      "validate": {
+        "trades": 15,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.8,
+        "profit_factor": 0.74,
+        "return_pct": -0.24,
+        "max_dd_pct": 0.61
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_RSI_CMF_Bear_Short",
+      "train": {
+        "trades": 36,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.81,
+        "profit_factor": 1.33,
+        "return_pct": 0.72,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 14,
+        "win_rate_pct": 64.29,
+        "sharpe": -1.41,
+        "profit_factor": 0.58,
+        "return_pct": -0.43,
+        "max_dd_pct": 0.7
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_EFI_CMF_Bear_Short",
+      "train": {
+        "trades": 58,
+        "win_rate_pct": 72.41,
+        "sharpe": -0.05,
+        "profit_factor": 0.98,
+        "return_pct": -0.06,
+        "max_dd_pct": 1.03
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_DEMA_CMF_Bear_Short",
+      "train": {
+        "trades": 41,
+        "win_rate_pct": 78.05,
+        "sharpe": 1.76,
+        "profit_factor": 1.83,
+        "return_pct": 1.64,
+        "max_dd_pct": 0.56
+      },
+      "validate": {
+        "trades": 15,
+        "win_rate_pct": 86.67,
+        "sharpe": 3.41,
+        "profit_factor": 3.73,
+        "return_pct": 0.68,
+        "max_dd_pct": 0.14
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_BB_Mid_CMF_Bear_Short",
+      "train": {
+        "trades": 31,
+        "win_rate_pct": 80.65,
+        "sharpe": 1.29,
+        "profit_factor": 1.66,
+        "return_pct": 0.96,
+        "max_dd_pct": 0.53
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 75,
+        "sharpe": 1.02,
+        "profit_factor": 1.62,
+        "return_pct": 0.17,
+        "max_dd_pct": 0.28
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_KST_CMF_Bear_Short",
+      "train": {
+        "trades": 40,
+        "win_rate_pct": 62.5,
+        "sharpe": -0.81,
+        "profit_factor": 0.76,
+        "return_pct": -0.81,
+        "max_dd_pct": 1.79
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_StochRSI_CMF_Bear_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 73.33,
+        "sharpe": -0.18,
+        "profit_factor": 0.91,
+        "return_pct": -0.08,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_Aroon_Bear_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 100,
+        "sharpe": 5.23,
+        "profit_factor": 0,
+        "return_pct": 0.59,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_Donchian_Bear_Short",
+      "train": {
+        "trades": 16,
+        "win_rate_pct": 62.5,
+        "sharpe": -1.03,
+        "profit_factor": 0.49,
+        "return_pct": -0.53,
+        "max_dd_pct": 0.77
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "EMA9_ADX_Strong_Bear_Short",
+      "train": {
+        "trades": 19,
+        "win_rate_pct": 89.47,
+        "sharpe": 2.24,
+        "profit_factor": 3.39,
+        "return_pct": 1.06,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": -0.99,
+        "profit_factor": 0.54,
+        "return_pct": -0.21,
+        "max_dd_pct": 0.29
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EMA9_EFI_Bear_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 86.67,
+        "sharpe": 3.35,
+        "profit_factor": 6.43,
+        "return_pct": 0.95,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 1,
+        "win_rate_pct": 100,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0.05,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Mid_ADX_Bear_Short",
+      "train": {
+        "trades": 9,
+        "win_rate_pct": 88.89,
+        "sharpe": 3.78,
+        "profit_factor": 48.43,
+        "return_pct": 0.65,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Keltner_ADX_Bear_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 4.02,
+        "profit_factor": 51.62,
+        "return_pct": 0.7,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.91,
+        "profit_factor": 0.4,
+        "return_pct": -0.19,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Donchian_ADX_Bear_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 75,
+        "sharpe": -0.65,
+        "profit_factor": 0.53,
+        "return_pct": -0.27,
+        "max_dd_pct": 0.51
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI55_Break_ADX_Short",
+      "train": {
+        "trades": 1,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": -0.2,
+        "max_dd_pct": 0.2
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MACD_Hist_Flip_ADX_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 85.71,
+        "sharpe": 0.21,
+        "profit_factor": 1.15,
+        "return_pct": 0.1,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 0.07,
+        "profit_factor": 1.04,
+        "return_pct": 0.01,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Supertrend_CMF_ADX_Bear_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_Fisher_Aroon_Bear_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 100,
+        "sharpe": 5.48,
+        "profit_factor": 0,
+        "return_pct": 0.78,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_EFI_ADX_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.42,
+        "profit_factor": 4.4,
+        "return_pct": 0.55,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_CMF_ADX_Bear_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 2,
+        "profit_factor": 3.74,
+        "return_pct": 0.44,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_WMA9_ADX_EFI_Bear_Short",
+      "train": {
+        "trades": 26,
+        "win_rate_pct": 65.38,
+        "sharpe": -0.37,
+        "profit_factor": 0.85,
+        "return_pct": -0.28,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_EMA9_CMF_Bear_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 72.73,
+        "sharpe": -0.22,
+        "profit_factor": 0.84,
+        "return_pct": -0.09,
+        "max_dd_pct": 0.42
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_EMA9_EFI_Bear_Short",
+      "train": {
+        "trades": 18,
+        "win_rate_pct": 77.78,
+        "sharpe": 1.02,
+        "profit_factor": 1.73,
+        "return_pct": 0.57,
+        "max_dd_pct": 0.59
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 50,
+        "sharpe": -1.75,
+        "profit_factor": 0.28,
+        "return_pct": -0.41,
+        "max_dd_pct": 0.56
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Fisher_ADX_Bear_Short",
+      "train": {
+        "trades": 29,
+        "win_rate_pct": 72.41,
+        "sharpe": 0.34,
+        "profit_factor": 1.16,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 7,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.64,
+        "profit_factor": 0.68,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EFI_CMF_Bear_Dual_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 1.34,
+        "profit_factor": 2.61,
+        "return_pct": 0.53,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WR_CMF_Bear_Short",
+      "train": {
+        "trades": 10,
+        "win_rate_pct": 90,
+        "sharpe": 0.8,
+        "profit_factor": 1.88,
+        "return_pct": 0.32,
+        "max_dd_pct": 0.37
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "OBV_Bear_CMF_Short",
+      "train": {
+        "trades": 60,
+        "win_rate_pct": 85,
+        "sharpe": 2.39,
+        "profit_factor": 2.11,
+        "return_pct": 2.04,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 31,
+        "win_rate_pct": 90.32,
+        "sharpe": 4.01,
+        "profit_factor": 2.87,
+        "return_pct": 0.8,
+        "max_dd_pct": 0.33
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "Aroon_CMF_Bear_V_Short",
+      "train": {
+        "trades": 107,
+        "win_rate_pct": 84.11,
+        "sharpe": 3.79,
+        "profit_factor": 2.35,
+        "return_pct": 4.58,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 30,
+        "win_rate_pct": 83.33,
+        "sharpe": 1.15,
+        "profit_factor": 1.37,
+        "return_pct": 0.31,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "Aroon_EFI_Bear_Short",
+      "train": {
+        "trades": 141,
+        "win_rate_pct": 77.3,
+        "sharpe": 2.18,
+        "profit_factor": 1.54,
+        "return_pct": 3.12,
+        "max_dd_pct": 1.2
+      },
+      "validate": {
+        "trades": 44,
+        "win_rate_pct": 77.27,
+        "sharpe": 0.49,
+        "profit_factor": 1.12,
+        "return_pct": 0.17,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "Donchian_EFI_Bear_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 76.92,
+        "sharpe": 0.15,
+        "profit_factor": 1.1,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 80,
+        "sharpe": -0.64,
+        "profit_factor": 0.6,
+        "return_pct": -0.13,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "BB_Mid_EFI_Bear_Short",
+      "train": {
+        "trades": 11,
+        "win_rate_pct": 90.91,
+        "sharpe": 4.44,
+        "profit_factor": 83.34,
+        "return_pct": 1.13,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 4,
+        "win_rate_pct": 75,
+        "sharpe": -0.76,
+        "profit_factor": 0.51,
+        "return_pct": -0.16,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Keltner_Mid_EFI_Bear_Short",
+      "train": {
+        "trades": 17,
+        "win_rate_pct": 88.24,
+        "sharpe": 3.34,
+        "profit_factor": 6.2,
+        "return_pct": 1.33,
+        "max_dd_pct": 0.24
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": -0.14,
+        "profit_factor": 0.91,
+        "return_pct": -0.03,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "KST_ADX_Bear_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": -0.19,
+        "profit_factor": 0.89,
+        "return_pct": -0.1,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "KST_EFI_Bear_V_Short",
+      "train": {
+        "trades": 27,
+        "win_rate_pct": 62.96,
+        "sharpe": -1.07,
+        "profit_factor": 0.65,
+        "return_pct": -0.88,
+        "max_dd_pct": 1.34
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Coppock_ADX_Bear_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 64.29,
+        "sharpe": -0.08,
+        "profit_factor": 0.95,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.52
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Coppock_EFI_Bear_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 70,
+        "sharpe": 0.14,
+        "profit_factor": 1.07,
+        "return_pct": 0.08,
+        "max_dd_pct": 0.59
+      },
+      "validate": {
+        "trades": 17,
+        "win_rate_pct": 82.35,
+        "sharpe": 2.65,
+        "profit_factor": 2.8,
+        "return_pct": 0.34,
+        "max_dd_pct": 0.18
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Lower_High_CMF_Bear_Short",
+      "train": {
+        "trades": 83,
+        "win_rate_pct": 89.16,
+        "sharpe": 4.93,
+        "profit_factor": 3.86,
+        "return_pct": 3.8,
+        "max_dd_pct": 0.3
+      },
+      "validate": {
+        "trades": 35,
+        "win_rate_pct": 80,
+        "sharpe": 0.78,
+        "profit_factor": 1.22,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.57
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "Big_Bear_Candle_ADX_Short",
+      "train": {
+        "trades": 28,
+        "win_rate_pct": 75,
+        "sharpe": 0.17,
+        "profit_factor": 1.07,
+        "return_pct": 0.15,
+        "max_dd_pct": 0.95
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 75,
+        "sharpe": -0.74,
+        "profit_factor": 0.73,
+        "return_pct": -0.25,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Three_Bear_Candles_ADX_Short",
+      "train": {
+        "trades": 81,
+        "win_rate_pct": 83.95,
+        "sharpe": 2.15,
+        "profit_factor": 1.81,
+        "return_pct": 1.98,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 28,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.67,
+        "profit_factor": 1.61,
+        "return_pct": 0.45,
+        "max_dd_pct": 0.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_MACD_Zero_EFI_Short",
+      "train": {
+        "trades": 15,
+        "win_rate_pct": 53.33,
+        "sharpe": -0.89,
+        "profit_factor": 0.56,
+        "return_pct": -0.44,
+        "max_dd_pct": 0.85
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "1h_RSI45_Break_CMF_Short",
+      "train": {
+        "trades": 65,
+        "win_rate_pct": 73.85,
+        "sharpe": 0.69,
+        "profit_factor": 1.21,
+        "return_pct": 0.78,
+        "max_dd_pct": 1.54
+      },
+      "validate": {
+        "trades": 25,
+        "win_rate_pct": 68,
+        "sharpe": -1.04,
+        "profit_factor": 0.74,
+        "return_pct": -0.36,
+        "max_dd_pct": 0.49
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_Fisher_EFI_Bear_Short",
+      "train": {
+        "trades": 77,
+        "win_rate_pct": 75.32,
+        "sharpe": 0.9,
+        "profit_factor": 1.25,
+        "return_pct": 1.05,
+        "max_dd_pct": 1.02
+      },
+      "validate": {
+        "trades": 20,
+        "win_rate_pct": 55,
+        "sharpe": -2.91,
+        "profit_factor": 0.41,
+        "return_pct": -0.97,
+        "max_dd_pct": 0.97
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_WMA13_CMF_Bear_Short",
+      "train": {
+        "trades": 22,
+        "win_rate_pct": 68.18,
+        "sharpe": 0.42,
+        "profit_factor": 1.22,
+        "return_pct": 0.31,
+        "max_dd_pct": 1.02
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.41,
+        "profit_factor": 0.79,
+        "return_pct": -0.1,
+        "max_dd_pct": 0.5
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "1h_Donchian_CMF_Bear_Short",
+      "train": {
+        "trades": 42,
+        "win_rate_pct": 83.33,
+        "sharpe": 2.24,
+        "profit_factor": 2.16,
+        "return_pct": 1.9,
+        "max_dd_pct": 0.58
+      },
+      "validate": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 3.07,
+        "profit_factor": 4.06,
+        "return_pct": 0.44,
+        "max_dd_pct": 0.14
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "RSI48_Break_CMF_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 100,
+        "sharpe": 4.78,
+        "profit_factor": 0,
+        "return_pct": 1.38,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "RSI48_Break_EFI_Short",
+      "train": {
+        "trades": 17,
+        "win_rate_pct": 82.35,
+        "sharpe": 1.38,
+        "profit_factor": 2.08,
+        "return_pct": 0.91,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 3,
+        "win_rate_pct": 33.33,
+        "sharpe": -1.83,
+        "profit_factor": 0.25,
+        "return_pct": -0.24,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "Two_Bar_Bear_Reversal_ADX_Short",
+      "train": {
+        "trades": 71,
+        "win_rate_pct": 84.51,
+        "sharpe": 1.65,
+        "profit_factor": 1.57,
+        "return_pct": 1.64,
+        "max_dd_pct": 1.02
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.61,
+        "profit_factor": 1.2,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Close_Low_Range_ADX_Short",
+      "train": {
+        "trades": 121,
+        "win_rate_pct": 85.95,
+        "sharpe": 2.8,
+        "profit_factor": 1.89,
+        "return_pct": 3.14,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 41,
+        "win_rate_pct": 80.49,
+        "sharpe": 0.57,
+        "profit_factor": 1.15,
+        "return_pct": 0.24,
+        "max_dd_pct": 0.8
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_MACD_Hist_Flip_CMF_Short",
+      "train": {
+        "trades": 44,
+        "win_rate_pct": 77.27,
+        "sharpe": 1.37,
+        "profit_factor": 1.58,
+        "return_pct": 1.28,
+        "max_dd_pct": 0.74
+      },
+      "validate": {
+        "trades": 14,
+        "win_rate_pct": 78.57,
+        "sharpe": 1.14,
+        "profit_factor": 1.59,
+        "return_pct": 0.27,
+        "max_dd_pct": 0.35
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "1h_BB_Width_CMF_Bear_Short",
+      "train": {
+        "trades": 101,
+        "win_rate_pct": 73.27,
+        "sharpe": 1.46,
+        "profit_factor": 1.4,
+        "return_pct": 1.78,
+        "max_dd_pct": 1.85
+      },
+      "validate": {
+        "trades": 32,
+        "win_rate_pct": 78.13,
+        "sharpe": 0.92,
+        "profit_factor": 1.31,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.69
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "1h_Aroon_CMF_Bear_Short",
+      "train": {
+        "trades": 144,
+        "win_rate_pct": 77.78,
+        "sharpe": 1.63,
+        "profit_factor": 1.37,
+        "return_pct": 2.46,
+        "max_dd_pct": 1.22
+      },
+      "validate": {
+        "trades": 47,
+        "win_rate_pct": 70.21,
+        "sharpe": -1.29,
+        "profit_factor": 0.74,
+        "return_pct": -0.48,
+        "max_dd_pct": 0.61
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 2
+    },
+    {
+      "strategy": "1h_KST_EFI_Bear_Short",
+      "train": {
+        "trades": 57,
+        "win_rate_pct": 64.91,
+        "sharpe": -0.56,
+        "profit_factor": 0.85,
+        "return_pct": -0.63,
+        "max_dd_pct": 1.75
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "MACD_Signal_EFI_ADX_Short",
+      "train": {
+        "trades": 24,
+        "win_rate_pct": 87.5,
+        "sharpe": 0.21,
+        "profit_factor": 1.12,
+        "return_pct": 0.13,
+        "max_dd_pct": 0.66
+      },
+      "validate": {
+        "trades": 12,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.01,
+        "profit_factor": 1,
+        "return_pct": 0,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Stoch_Bear_EFI_ADX_Short",
+      "train": {
+        "trades": 47,
+        "win_rate_pct": 72.34,
+        "sharpe": 0,
+        "profit_factor": 1,
+        "return_pct": -0.01,
+        "max_dd_pct": 0.94
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "OBV_Slope_EFI_ADX_Short",
+      "train": {
+        "trades": 115,
+        "win_rate_pct": 86.09,
+        "sharpe": 3.59,
+        "profit_factor": 2.34,
+        "return_pct": 3.74,
+        "max_dd_pct": 0.49
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 81.08,
+        "sharpe": 0.6,
+        "profit_factor": 1.16,
+        "return_pct": 0.18,
+        "max_dd_pct": 0.66
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "BB_Squeeze_EFI_ADX_Short",
+      "train": {
+        "trades": 74,
+        "win_rate_pct": 86.49,
+        "sharpe": 3.08,
+        "profit_factor": 2.36,
+        "return_pct": 2.91,
+        "max_dd_pct": 0.87
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 83.78,
+        "sharpe": 0.8,
+        "profit_factor": 1.23,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.56
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "strategy": "EMA8_Cross_EFI_ADX_Short",
+      "train": {
+        "trades": 20,
+        "win_rate_pct": 85,
+        "sharpe": 1.68,
+        "profit_factor": 2.42,
+        "return_pct": 0.84,
+        "max_dd_pct": 0.43
+      },
+      "validate": {
+        "trades": 5,
+        "win_rate_pct": 60,
+        "sharpe": -1.62,
+        "profit_factor": 0.32,
+        "return_pct": -0.31,
+        "max_dd_pct": 0.44
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EMA8_Cross_CMF_ADX_Short",
+      "train": {
+        "trades": 14,
+        "win_rate_pct": 92.86,
+        "sharpe": 5.54,
+        "profit_factor": 81.4,
+        "return_pct": 1.11,
+        "max_dd_pct": 0.01
+      },
+      "validate": {
+        "trades": 1,
+        "win_rate_pct": 100,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0.05,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Fisher_Zero_EFI_ADX_Short",
+      "train": {
+        "trades": 30,
+        "win_rate_pct": 73.33,
+        "sharpe": 0.71,
+        "profit_factor": 1.35,
+        "return_pct": 0.48,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 7,
+        "win_rate_pct": 71.43,
+        "sharpe": -0.64,
+        "profit_factor": 0.68,
+        "return_pct": -0.14,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Donchian_Lower_EFI_ADX_Short",
+      "train": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_CMF_Deep_EFI_Short",
+      "train": {
+        "trades": 8,
+        "win_rate_pct": 87.5,
+        "sharpe": 0.9,
+        "profit_factor": 2.12,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.19
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WR_Mid_EFI_ADX_Short",
+      "train": {
+        "trades": 13,
+        "win_rate_pct": 76.92,
+        "sharpe": 0.11,
+        "profit_factor": 1.07,
+        "return_pct": 0.06,
+        "max_dd_pct": 0.71
+      },
+      "validate": {
+        "trades": 6,
+        "win_rate_pct": 66.67,
+        "sharpe": -0.2,
+        "profit_factor": 0.89,
+        "return_pct": -0.05,
+        "max_dd_pct": 0.32
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "CMF_Cross_EFI_ADX_Short",
+      "train": {
+        "trades": 36,
+        "win_rate_pct": 88.89,
+        "sharpe": 3.28,
+        "profit_factor": 3.79,
+        "return_pct": 2.15,
+        "max_dd_pct": 0.41
+      },
+      "validate": {
+        "trades": 13,
+        "win_rate_pct": 69.23,
+        "sharpe": -1.41,
+        "profit_factor": 0.55,
+        "return_pct": -0.37,
+        "max_dd_pct": 0.74
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Keltner_Lower_EFI_ADX_Short",
+      "train": {
+        "trades": 72,
+        "win_rate_pct": 80.56,
+        "sharpe": 1.21,
+        "profit_factor": 1.41,
+        "return_pct": 1.15,
+        "max_dd_pct": 1
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 73.08,
+        "sharpe": -0.95,
+        "profit_factor": 0.73,
+        "return_pct": -0.32,
+        "max_dd_pct": 0.55
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "Bearish_Engulf_EFI_ADX_Short",
+      "train": {
+        "trades": 36,
+        "win_rate_pct": 88.89,
+        "sharpe": 1.13,
+        "profit_factor": 1.72,
+        "return_pct": 0.76,
+        "max_dd_pct": 0.62
+      },
+      "validate": {
+        "trades": 9,
+        "win_rate_pct": 88.89,
+        "sharpe": 0.81,
+        "profit_factor": 1.58,
+        "return_pct": 0.12,
+        "max_dd_pct": 0.2
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "strategy": "Bearish_Momentum_EFI_ADX_Short",
+      "train": {
+        "trades": 72,
+        "win_rate_pct": 86.11,
+        "sharpe": 3.11,
+        "profit_factor": 2.41,
+        "return_pct": 2.74,
+        "max_dd_pct": 0.76
+      },
+      "validate": {
+        "trades": 21,
+        "win_rate_pct": 71.43,
+        "sharpe": -1.25,
+        "profit_factor": 0.67,
+        "return_pct": -0.49,
+        "max_dd_pct": 0.8
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "HMA9_Slope_EFI_ADX_Short",
+      "train": {
+        "trades": 67,
+        "win_rate_pct": 76.12,
+        "sharpe": 0.06,
+        "profit_factor": 1.02,
+        "return_pct": 0.06,
+        "max_dd_pct": 1.06
+      },
+      "validate": {
+        "trades": 18,
+        "win_rate_pct": 72.22,
+        "sharpe": 0.5,
+        "profit_factor": 1.18,
+        "return_pct": 0.14,
+        "max_dd_pct": 0.33
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 1
+    },
+    {
+      "strategy": "EFI_Cross_Zero_ADX_CMF_Short",
+      "train": {
+        "trades": 6,
+        "win_rate_pct": 83.33,
+        "sharpe": 0.61,
+        "profit_factor": 1.71,
+        "return_pct": 0.23,
+        "max_dd_pct": 0.33
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "WMA9_Fisher_ADX_Short",
+      "train": {
+        "trades": 12,
+        "win_rate_pct": 91.67,
+        "sharpe": 2.42,
+        "profit_factor": 4.4,
+        "return_pct": 0.55,
+        "max_dd_pct": 0.16
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    }
+  ],
+  "candidates_tested": 334,
+  "data_end": "2026-07-17",
+  "data_source": "delta_exchange_cached_phase1",
+  "data_start": "2025-07-17",
+  "module": "btc_pre_live_engine",
+  "ran_at": "2026-07-17T17:01:25Z",
+  "ranking_rule": "Tier A strict passers by OOS win rate (PF, Sharpe tie-breaks); Tier B 3-of-4 near-misses fill to target only if needed",
+  "selected": [
+    {
+      "rank": 1,
+      "strategy": "OBV_Bear_CMF_Short",
+      "tier": "A",
+      "train": {
+        "trades": 60,
+        "win_rate_pct": 85,
+        "sharpe": 2.39,
+        "profit_factor": 2.11,
+        "return_pct": 2.04,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 31,
+        "win_rate_pct": 90.32,
+        "sharpe": 4.01,
+        "profit_factor": 2.87,
+        "return_pct": 0.8,
+        "max_dd_pct": 0.33
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 2,
+      "strategy": "Fisher_Zero_CMF_ADX_Short",
+      "tier": "A",
+      "train": {
+        "trades": 130,
+        "win_rate_pct": 80,
+        "sharpe": 2.05,
+        "profit_factor": 1.52,
+        "return_pct": 2.9,
+        "max_dd_pct": 1.39
+      },
+      "validate": {
+        "trades": 41,
+        "win_rate_pct": 90.24,
+        "sharpe": 4.09,
+        "profit_factor": 2.55,
+        "return_pct": 1.2,
+        "max_dd_pct": 0.38
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 3,
+      "strategy": "Donchian_CMF_Bear_Short",
+      "tier": "A",
+      "train": {
+        "trades": 80,
+        "win_rate_pct": 82.5,
+        "sharpe": 1.98,
+        "profit_factor": 1.71,
+        "return_pct": 2.02,
+        "max_dd_pct": 0.51
+      },
+      "validate": {
+        "trades": 38,
+        "win_rate_pct": 89.47,
+        "sharpe": 2.5,
+        "profit_factor": 1.91,
+        "return_pct": 0.77,
+        "max_dd_pct": 0.41
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 4,
+      "strategy": "HMA_CMF_Bear_Short",
+      "tier": "A",
+      "train": {
+        "trades": 134,
+        "win_rate_pct": 80.6,
+        "sharpe": 2.87,
+        "profit_factor": 1.8,
+        "return_pct": 3.84,
+        "max_dd_pct": 0.91
+      },
+      "validate": {
+        "trades": 49,
+        "win_rate_pct": 87.76,
+        "sharpe": 2.43,
+        "profit_factor": 1.73,
+        "return_pct": 0.86,
+        "max_dd_pct": 0.44
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 5,
+      "strategy": "Aroon_CMF_Bear_Dual_Short",
+      "tier": "A",
+      "train": {
+        "trades": 101,
+        "win_rate_pct": 80.2,
+        "sharpe": 2.83,
+        "profit_factor": 1.89,
+        "return_pct": 3.21,
+        "max_dd_pct": 0.82
+      },
+      "validate": {
+        "trades": 35,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.98,
+        "profit_factor": 1.67,
+        "return_pct": 0.58,
+        "max_dd_pct": 0.38
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 6,
+      "strategy": "CMF_Cross_Bullish_Long",
+      "tier": "A",
+      "train": {
+        "trades": 39,
+        "win_rate_pct": 87.18,
+        "sharpe": 1.62,
+        "profit_factor": 2.12,
+        "return_pct": 0.7,
+        "max_dd_pct": 0.36
+      },
+      "validate": {
+        "trades": 31,
+        "win_rate_pct": 83.87,
+        "sharpe": 0.91,
+        "profit_factor": 1.32,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 7,
+      "strategy": "Three_Bear_Candles_Short",
+      "tier": "A",
+      "train": {
+        "trades": 81,
+        "win_rate_pct": 83.95,
+        "sharpe": 2.15,
+        "profit_factor": 1.81,
+        "return_pct": 1.98,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 83.78,
+        "sharpe": 2.22,
+        "profit_factor": 1.82,
+        "return_pct": 0.6,
+        "max_dd_pct": 0.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 8,
+      "strategy": "BB_Squeeze_EFI_ADX_Short",
+      "tier": "A",
+      "train": {
+        "trades": 74,
+        "win_rate_pct": 86.49,
+        "sharpe": 3.08,
+        "profit_factor": 2.36,
+        "return_pct": 2.91,
+        "max_dd_pct": 0.87
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 83.78,
+        "sharpe": 0.8,
+        "profit_factor": 1.23,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.56
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 9,
+      "strategy": "Aroon_CMF_Bear_V_Short",
+      "tier": "A",
+      "train": {
+        "trades": 107,
+        "win_rate_pct": 84.11,
+        "sharpe": 3.79,
+        "profit_factor": 2.35,
+        "return_pct": 4.58,
+        "max_dd_pct": 0.72
+      },
+      "validate": {
+        "trades": 30,
+        "win_rate_pct": 83.33,
+        "sharpe": 1.15,
+        "profit_factor": 1.37,
+        "return_pct": 0.31,
+        "max_dd_pct": 0.62
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 10,
+      "strategy": "Price_Below_All_EMAs_Short",
+      "tier": "A",
+      "train": {
+        "trades": 122,
+        "win_rate_pct": 79.51,
+        "sharpe": 0.62,
+        "profit_factor": 1.14,
+        "return_pct": 0.98,
+        "max_dd_pct": 1.34
+      },
+      "validate": {
+        "trades": 43,
+        "win_rate_pct": 81.4,
+        "sharpe": 1.67,
+        "profit_factor": 1.47,
+        "return_pct": 0.58,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 11,
+      "strategy": "Lower_High_CMF_Bear_Short",
+      "tier": "A",
+      "train": {
+        "trades": 83,
+        "win_rate_pct": 89.16,
+        "sharpe": 4.93,
+        "profit_factor": 3.86,
+        "return_pct": 3.8,
+        "max_dd_pct": 0.3
+      },
+      "validate": {
+        "trades": 35,
+        "win_rate_pct": 80,
+        "sharpe": 0.78,
+        "profit_factor": 1.22,
+        "return_pct": 0.22,
+        "max_dd_pct": 0.57
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 12,
+      "strategy": "1h_BB_Width_CMF_Bear_Short",
+      "tier": "A",
+      "train": {
+        "trades": 101,
+        "win_rate_pct": 73.27,
+        "sharpe": 1.46,
+        "profit_factor": 1.4,
+        "return_pct": 1.78,
+        "max_dd_pct": 1.85
+      },
+      "validate": {
+        "trades": 32,
+        "win_rate_pct": 78.13,
+        "sharpe": 0.92,
+        "profit_factor": 1.31,
+        "return_pct": 0.29,
+        "max_dd_pct": 0.69
+      },
+      "train_promising": true,
+      "strict_oos_pass": true,
+      "criteria_met": 4
+    },
+    {
+      "rank": 13,
+      "strategy": "Three_Bear_Candles_ADX_Short",
+      "tier": "B",
+      "train": {
+        "trades": 81,
+        "win_rate_pct": 83.95,
+        "sharpe": 2.15,
+        "profit_factor": 1.81,
+        "return_pct": 1.98,
+        "max_dd_pct": 0.44
+      },
+      "validate": {
+        "trades": 28,
+        "win_rate_pct": 85.71,
+        "sharpe": 1.67,
+        "profit_factor": 1.61,
+        "return_pct": 0.45,
+        "max_dd_pct": 0.3
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 14,
+      "strategy": "CMF_Extreme_Bear_Short",
+      "tier": "B",
+      "train": {
+        "trades": 49,
+        "win_rate_pct": 83.67,
+        "sharpe": 1.94,
+        "profit_factor": 1.91,
+        "return_pct": 1.61,
+        "max_dd_pct": 0.52
+      },
+      "validate": {
+        "trades": 20,
+        "win_rate_pct": 85,
+        "sharpe": 0.89,
+        "profit_factor": 1.46,
+        "return_pct": 0.27,
+        "max_dd_pct": 0.47
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 15,
+      "strategy": "OBV_Slope_EFI_ADX_Short",
+      "tier": "B",
+      "train": {
+        "trades": 115,
+        "win_rate_pct": 86.09,
+        "sharpe": 3.59,
+        "profit_factor": 2.34,
+        "return_pct": 3.74,
+        "max_dd_pct": 0.49
+      },
+      "validate": {
+        "trades": 37,
+        "win_rate_pct": 81.08,
+        "sharpe": 0.6,
+        "profit_factor": 1.16,
+        "return_pct": 0.18,
+        "max_dd_pct": 0.66
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 16,
+      "strategy": "Close_Low_Range_ADX_Short",
+      "tier": "B",
+      "train": {
+        "trades": 121,
+        "win_rate_pct": 85.95,
+        "sharpe": 2.8,
+        "profit_factor": 1.89,
+        "return_pct": 3.14,
+        "max_dd_pct": 0.79
+      },
+      "validate": {
+        "trades": 41,
+        "win_rate_pct": 80.49,
+        "sharpe": 0.57,
+        "profit_factor": 1.15,
+        "return_pct": 0.24,
+        "max_dd_pct": 0.8
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 17,
+      "strategy": "HMA_Slope_EMA_MACD_Bear_Short",
+      "tier": "B",
+      "train": {
+        "trades": 92,
+        "win_rate_pct": 80.43,
+        "sharpe": 2.07,
+        "profit_factor": 1.64,
+        "return_pct": 2.43,
+        "max_dd_pct": 0.73
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.67,
+        "profit_factor": 1.21,
+        "return_pct": 0.2,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 18,
+      "strategy": "Two_Bar_Bear_Reversal_Short",
+      "tier": "B",
+      "train": {
+        "trades": 72,
+        "win_rate_pct": 87.5,
+        "sharpe": 3.2,
+        "profit_factor": 2.38,
+        "return_pct": 3.24,
+        "max_dd_pct": 0.78
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.61,
+        "profit_factor": 1.2,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 19,
+      "strategy": "Two_Bar_Bear_Reversal_ADX_Short",
+      "tier": "B",
+      "train": {
+        "trades": 71,
+        "win_rate_pct": 84.51,
+        "sharpe": 1.65,
+        "profit_factor": 1.57,
+        "return_pct": 1.64,
+        "max_dd_pct": 1.02
+      },
+      "validate": {
+        "trades": 27,
+        "win_rate_pct": 77.78,
+        "sharpe": 0.61,
+        "profit_factor": 1.2,
+        "return_pct": 0.19,
+        "max_dd_pct": 0.43
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 20,
+      "strategy": "1h_MACD_Cross_Bear_Short",
+      "tier": "B",
+      "train": {
+        "trades": 69,
+        "win_rate_pct": 73.91,
+        "sharpe": 1.55,
+        "profit_factor": 1.52,
+        "return_pct": 1.62,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 25,
+        "win_rate_pct": 76,
+        "sharpe": 1.3,
+        "profit_factor": 1.54,
+        "return_pct": 0.41,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 21,
+      "strategy": "MTF_MACD_Both_Neg_Short",
+      "tier": "B",
+      "train": {
+        "trades": 69,
+        "win_rate_pct": 73.91,
+        "sharpe": 1.55,
+        "profit_factor": 1.52,
+        "return_pct": 1.62,
+        "max_dd_pct": 1.01
+      },
+      "validate": {
+        "trades": 25,
+        "win_rate_pct": 76,
+        "sharpe": 1.3,
+        "profit_factor": 1.54,
+        "return_pct": 0.41,
+        "max_dd_pct": 0.52
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    },
+    {
+      "rank": 22,
+      "strategy": "1h_BB_Mid_Break_Bear_Short",
+      "tier": "B",
+      "train": {
+        "trades": 65,
+        "win_rate_pct": 78.46,
+        "sharpe": 1.52,
+        "profit_factor": 1.51,
+        "return_pct": 1.63,
+        "max_dd_pct": 1.23
+      },
+      "validate": {
+        "trades": 26,
+        "win_rate_pct": 69.23,
+        "sharpe": 1.05,
+        "profit_factor": 1.32,
+        "return_pct": 0.25,
+        "max_dd_pct": 0.45
+      },
+      "train_promising": true,
+      "strict_oos_pass": false,
+      "criteria_met": 3
+    }
+  ],
+  "strict_bar": "VALIDATE: win_rate\u003e50%, profit_factor\u003e=1.2, sharpe\u003e0.5, trades\u003e=30",
+  "symbol": "BTCUSD",
+  "tier_a_count": 12,
+  "tier_b_available": 10,
+  "train_window": [
+    "2025-07-17",
+    "2026-03-30"
+  ],
+  "validate_window": [
+    "2026-03-30",
+    "2026-07-17"
+  ],
+  "whitelist": [
+    "OBV_Bear_CMF_Short",
+    "Fisher_Zero_CMF_ADX_Short",
+    "Donchian_CMF_Bear_Short",
+    "HMA_CMF_Bear_Short",
+    "Aroon_CMF_Bear_Dual_Short",
+    "CMF_Cross_Bullish_Long",
+    "Three_Bear_Candles_Short",
+    "BB_Squeeze_EFI_ADX_Short",
+    "Aroon_CMF_Bear_V_Short",
+    "Price_Below_All_EMAs_Short",
+    "Lower_High_CMF_Bear_Short",
+    "1h_BB_Width_CMF_Bear_Short",
+    "Three_Bear_Candles_ADX_Short",
+    "CMF_Extreme_Bear_Short",
+    "OBV_Slope_EFI_ADX_Short",
+    "Close_Low_Range_ADX_Short",
+    "HMA_Slope_EMA_MACD_Bear_Short",
+    "Two_Bar_Bear_Reversal_Short",
+    "Two_Bar_Bear_Reversal_ADX_Short",
+    "1h_MACD_Cross_Bear_Short",
+    "MTF_MACD_Both_Neg_Short",
+    "1h_BB_Mid_Break_Bear_Short"
+  ]
+}

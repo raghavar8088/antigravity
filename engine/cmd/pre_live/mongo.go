@@ -83,7 +83,15 @@ func (b *preLiveMongoBundle) WipePreLiveData(ctx context.Context) error {
 	if b == nil || b.mgr == nil || !b.mgr.IsConnected() {
 		return nil
 	}
-	filter := bson.M{"account_key": preLiveAccountKey}
+	// Use the EFFECTIVE account key (set by applyPreLiveAccountKey, possibly
+	// overridden via PRE_LIVE_OWNER_ACCOUNT_KEY), not the constant — otherwise a
+	// second instance (e.g. the BTC Pre-Live Engine) resetting itself would wipe
+	// the default instance's data instead of its own.
+	key := os.Getenv("OWNER_ACCOUNT_KEY")
+	if key == "" {
+		key = preLiveAccountKey
+	}
+	filter := bson.M{"account_key": key}
 	collections := []string{
 		"paper_trades",
 		"paper_positions",
