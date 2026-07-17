@@ -82,6 +82,9 @@ services:
       - PRE_LIVE_OWNER_ACCOUNT_KEY=btc_pre_live_engine
       - PRE_LIVE_INITIAL_BALANCE_USD=1000
       - PRE_LIVE_WHITELIST_FILE=/app/data/btc_prelive_whitelist.json
+      # 600h ≈ 150 synthetic 4h candles so all 49 strategies (some need ≥40 4h
+      # bars of history) are armed from startup, not trickling in over ~2 days.
+      - PRE_LIVE_WARMUP_HOURS=600
       - PRE_LIVE_LEVERAGE=10
       - FIXED_TRADE_SIZE_BTC=0.001
       - MIN_EXECUTION_SIZE_BTC=0.0001

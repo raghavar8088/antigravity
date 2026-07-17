@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -56,14 +57,26 @@ import (
 	"antigravity-engine/internal/trading"
 )
 
-// warmupCandles fetches the last 200 1h candles from Binance REST and pushes
-// them into the orchestrator so 4h synthetic candles are available immediately
+// warmupCandles fetches recent 1h candles from Binance REST and pushes them
+// into the orchestrator so 4h synthetic candles are available immediately
 // (4h candles are built by accumulating 4×1h bars). Without this, strategies
 // that require 4h indicators would be silent for the first 4+ hours.
+//
+// Depth is PRE_LIVE_WARMUP_HOURS (default 200 — unchanged for the existing
+// instance). A larger basket like the BTC pre-live desk's 49 strategies needs
+// more: several require ≥40 4h candles of history before they emit any signal,
+// and 200h only yields ~30 4h candles, leaving those strategies dormant for the
+// first ~2 days. Setting this to e.g. 600 arms every strategy from hour one.
 func warmupCandles(orch *trading.Orchestrator) {
+	hours := 200
+	if v := os.Getenv("PRE_LIVE_WARMUP_HOURS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
 	fetcher := marketdata.NewBinanceHistoricalFetcher(os.TempDir())
 	endMs := time.Now().UnixMilli()
-	startMs := endMs - int64(200*time.Hour/time.Millisecond)
+	startMs := endMs - int64(time.Duration(hours)*time.Hour/time.Millisecond)
 	candles, err := fetcher.FetchKlines("BTCUSDT", "1h", startMs, endMs)
 	if err != nil {
 		log.Printf("[PRE-LIVE] warmup fetch failed (will wait for live 1h bars): %v", err)
