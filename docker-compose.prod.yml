@@ -86,6 +86,15 @@ services:
       - FIXED_TRADE_SIZE_BTC=0.001
       - MIN_EXECUTION_SIZE_BTC=0.0001
       - LIVE_ENGINE_AUTO_ENABLE=false
+      # Port 8092 is internet-exposed for the Vercel dashboard, and the pre_live
+      # HTTP API is only token-gated — so this PAPER-ONLY instance gets NO broker
+      # keys at all (explicit blanks override the shared .env): even a successful
+      # /api/live/enable call can arm nothing. Phase 4 revisits this deliberately.
+      - DELTA_API_KEY=
+      - DELTA_API_SECRET=
+      # Shared secret required on every /api/* request (except /health).
+      # Set the real value in .env on the server as BTC_PRE_LIVE_API_TOKEN.
+      - PRE_LIVE_API_TOKEN=${BTC_PRE_LIVE_API_TOKEN}
       - GOMEMLIMIT=300MiB
       - GOGC=80
     mem_limit: 400m

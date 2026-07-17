@@ -93,7 +93,11 @@ async function handle(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
     const headers = new Headers();
     const ct = req.headers.get("content-type");
     if (ct) headers.set("content-type", ct);
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    // The BTC desk's port is internet-exposed, so its API requires a shared
+    // secret (PRE_LIVE_API_TOKEN on the engine side). The browser session was
+    // already verified above — this header authenticates the PROXY to the desk.
+    const apiToken = process.env.BTC_PRE_LIVE_API_TOKEN?.trim();
+    if (apiToken) headers.set("Authorization", `Bearer ${apiToken}`);
 
     const init: RequestInit = {
       method: req.method,

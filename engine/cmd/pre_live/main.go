@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -415,11 +416,27 @@ func main() {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	}
 
+	// PRE_LIVE_API_TOKEN: when set, every route except /health requires
+	// "Authorization: Bearer <token>". Added for instances whose port is opened
+	// in the firewall for a dashboard (the BTC pre-live desk) — this API was
+	// designed to sit behind the engine's authenticated port-80 gateway and has
+	// no auth of its own, which would otherwise expose /api/admin/reset and
+	// /api/live/enable to the internet. Unset (the default instance) = no change.
+	apiToken := os.Getenv("PRE_LIVE_API_TOKEN")
+
 	handle := func(pattern string, fn func(http.ResponseWriter, *http.Request)) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			setCORS(w)
 			if r.Method == http.MethodOptions {
 				return
+			}
+			if apiToken != "" && pattern != "/health" {
+				if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+apiToken)) != 1 {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"}) //nolint:errcheck
+					return
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			fn(w, r)
