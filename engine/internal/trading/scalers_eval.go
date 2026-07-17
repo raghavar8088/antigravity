@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,8 +28,23 @@ const (
 	maxCandles5m  = 100
 	maxCandles15m = 60
 	maxCandles1h  = 72 // ≥55 required by S1 EMA Ribbon (needs EMA50 on 1h + warmup bars)
-	maxCandles4h  = 30
 )
+
+// maxCandles4h is the rolling 4h-context depth. Default 30 (unchanged for the
+// main engine and the default pre-live instance). A curated basket can require
+// deeper 4h history than 30 — e.g. the BTC pre-live desk's whitelist has
+// strategies that gate on up to 65 4h candles (Coppock_ADX_Bear_Short) and
+// would otherwise NEVER fire live despite qualifying on full backtest history.
+// SCALERS_MAX_CANDLES_4H raises the cap for such an instance without touching
+// the others. Read once at package init.
+var maxCandles4h = func() int {
+	if v := os.Getenv("SCALERS_MAX_CANDLES_4H"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 30 {
+			return n
+		}
+	}
+	return 30
+}()
 
 // fixedSizingLogOnce guards the one-time [SIZING] startup banner emitted from
 // the first scalers evaluation cycle (where a live BTC price is available).

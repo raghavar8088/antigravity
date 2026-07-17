@@ -85,6 +85,10 @@ services:
       # 600h ≈ 150 synthetic 4h candles so all 49 strategies (some need ≥40 4h
       # bars of history) are armed from startup, not trickling in over ~2 days.
       - PRE_LIVE_WARMUP_HOURS=600
+      # Raise the 4h rolling-context cap above its 30 default: 13 whitelisted
+      # strategies gate on >30 4h candles (up to 65) and would never fire live
+      # otherwise, despite qualifying. 80 covers the deepest with margin.
+      - SCALERS_MAX_CANDLES_4H=80
       - PRE_LIVE_LEVERAGE=10
       - FIXED_TRADE_SIZE_BTC=0.001
       - MIN_EXECUTION_SIZE_BTC=0.0001
