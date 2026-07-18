@@ -1334,6 +1334,7 @@ The content is organized as follows:
   strategy/scalpers/hw_strategies.go
   strategy/scalpers/indicators_s30_s79.go
   strategy/scalpers/indicators.go
+  strategy/scalpers/m1_pack.go
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
   strategy/scalpers/new10_batch.go

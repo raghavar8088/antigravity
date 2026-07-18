@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"antigravity-engine/internal/backtest"
@@ -158,6 +159,7 @@ func main() {
 	windowYears := flag.Float64("window-years", 0, "if >0, restrict to the LAST N years of the cache (0 = full cache)")
 	trainFrac := flag.Float64("train-frac", 0.70, "fraction of history used for TRAIN")
 	topN := flag.Int("top", 25, "whitelist size")
+	prefix := flag.String("prefix", "", "if set, restrict candidates to names starting with this prefix (smoke runs)")
 	outFile := flag.String("out", "data/btc_prelive_whitelist.json", "output JSON path")
 	flag.Parse()
 	symbol = *symbolFlag
@@ -199,11 +201,16 @@ func main() {
 
 	raw := append(scalers.BuildAllScalpers(), scalers.BuildPortedStrategies()...)
 	raw = append(raw, scalers.BuildDelta20Pack()...)
+	raw = append(raw, scalers.BuildM1Pack()...)
 	var entries []scalers.RegistryEntry
 	for _, e := range raw {
-		if e.OHLCVCompatible {
-			entries = append(entries, e)
+		if !e.OHLCVCompatible {
+			continue
 		}
+		if *prefix != "" && !strings.HasPrefix(e.Name, *prefix) {
+			continue
+		}
+		entries = append(entries, e)
 	}
 	fmt.Printf("Candidate strategies (OHLCV-compatible): %d\n\n", len(entries))
 
