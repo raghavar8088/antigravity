@@ -7347,20 +7347,392 @@
       "train_promising": true,
       "strict_oos_pass": false,
       "criteria_met": 3
+    },
+    {
+      "strategy": "D20_SMA_Cross_20_50",
+      "train": {
+        "trades": 738,
+        "win_rate_pct": 64.23,
+        "sharpe": -1.45,
+        "profit_factor": 0.75,
+        "return_pct": -5.87,
+        "max_dd_pct": 7.22
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_EMA_Cross_9_21",
+      "train": {
+        "trades": 946,
+        "win_rate_pct": 65.22,
+        "sharpe": -1.74,
+        "profit_factor": 0.72,
+        "return_pct": -8.72,
+        "max_dd_pct": 9.95
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_MACD_Cross",
+      "train": {
+        "trades": 1367,
+        "win_rate_pct": 65.91,
+        "sharpe": -1.73,
+        "profit_factor": 0.77,
+        "return_pct": -10.28,
+        "max_dd_pct": 10.95
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_RSI_Reversion",
+      "train": {
+        "trades": 1523,
+        "win_rate_pct": 46.03,
+        "sharpe": -3.56,
+        "profit_factor": 0.62,
+        "return_pct": -19.93,
+        "max_dd_pct": 19.93
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_BB_Reversion",
+      "train": {
+        "trades": 1689,
+        "win_rate_pct": 38.01,
+        "sharpe": -3.75,
+        "profit_factor": 0.62,
+        "return_pct": -21.23,
+        "max_dd_pct": 21.23
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_BB_Squeeze_Breakout",
+      "train": {
+        "trades": 867,
+        "win_rate_pct": 68.4,
+        "sharpe": -0.53,
+        "profit_factor": 0.9,
+        "return_pct": -2.23,
+        "max_dd_pct": 4.45
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Donchian_Breakout",
+      "train": {
+        "trades": 1307,
+        "win_rate_pct": 69.93,
+        "sharpe": -1.12,
+        "profit_factor": 0.83,
+        "return_pct": -6.38,
+        "max_dd_pct": 7.73
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Keltner_Breakout",
+      "train": {
+        "trades": 1050,
+        "win_rate_pct": 70.38,
+        "sharpe": -0.66,
+        "profit_factor": 0.89,
+        "return_pct": -3.52,
+        "max_dd_pct": 4.65
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Supertrend_Flip",
+      "train": {
+        "trades": 2,
+        "win_rate_pct": 100,
+        "sharpe": 0.67,
+        "profit_factor": 0,
+        "return_pct": 0.03,
+        "max_dd_pct": 0
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_HeikinAshi_Flip",
+      "train": {
+        "trades": 1951,
+        "win_rate_pct": 59.87,
+        "sharpe": -2.06,
+        "profit_factor": 0.76,
+        "return_pct": -15.4,
+        "max_dd_pct": 15.54
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_ADX_DI_Cross",
+      "train": {
+        "trades": 549,
+        "win_rate_pct": 63.02,
+        "sharpe": -1.25,
+        "profit_factor": 0.74,
+        "return_pct": -4.48,
+        "max_dd_pct": 5.19
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Stoch_Cross",
+      "train": {
+        "trades": 1203,
+        "win_rate_pct": 56.94,
+        "sharpe": -2.52,
+        "profit_factor": 0.67,
+        "return_pct": -13.04,
+        "max_dd_pct": 13.82
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_VWAP_Reversion",
+      "train": {
+        "trades": 1576,
+        "win_rate_pct": 54.95,
+        "sharpe": -2.68,
+        "profit_factor": 0.68,
+        "return_pct": -16.53,
+        "max_dd_pct": 16.66
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_ZScore_Reversion",
+      "train": {
+        "trades": 1052,
+        "win_rate_pct": 37.07,
+        "sharpe": -3.5,
+        "profit_factor": 0.56,
+        "return_pct": -15.29,
+        "max_dd_pct": 15.43
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Momentum_ROC",
+      "train": {
+        "trades": 1439,
+        "win_rate_pct": 63.72,
+        "sharpe": -2.18,
+        "profit_factor": 0.72,
+        "return_pct": -13.37,
+        "max_dd_pct": 14.29
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Opening_Range_Breakout",
+      "train": {
+        "trades": 1659,
+        "win_rate_pct": 61.48,
+        "sharpe": -2.13,
+        "profit_factor": 0.75,
+        "return_pct": -13.93,
+        "max_dd_pct": 14.18
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
+    },
+    {
+      "strategy": "D20_Volume_Breakout",
+      "train": {
+        "trades": 1086,
+        "win_rate_pct": 69.8,
+        "sharpe": -0.9,
+        "profit_factor": 0.85,
+        "return_pct": -4.77,
+        "max_dd_pct": 6.63
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false,
+      "criteria_met": 0
     }
   ],
-  "candidates_tested": 334,
+  "candidates_tested": 351,
   "data_end": "2026-07-17",
-  "data_source": "binance_spot_cached_5y",
+  "data_source": "binance_spot_cached",
   "data_start": "2021-07-18",
   "module": "btc_pre_live_engine",
-  "ran_at": "2026-07-17T17:13:14Z",
+  "ran_at": "2026-07-18T16:18:26Z",
   "ranking_rule": "Tier A strict passers by OOS win rate (PF, Sharpe tie-breaks); Tier B 3-of-4 near-misses fill to target only if needed",
   "selected": [
     {
-      "rank": 1,
       "strategy": "OBV_Slope_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 87,
         "win_rate_pct": 80.46,
@@ -7379,12 +7751,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 1
     },
     {
-      "rank": 2,
       "strategy": "Lower_High_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 401,
         "win_rate_pct": 78.8,
@@ -7403,12 +7775,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 2
     },
     {
-      "rank": 3,
       "strategy": "OBV_Bear_CMF_Short",
-      "tier": "A",
       "train": {
         "trades": 250,
         "win_rate_pct": 80.4,
@@ -7427,12 +7799,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 3
     },
     {
-      "rank": 4,
       "strategy": "Donchian_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 266,
         "win_rate_pct": 82.33,
@@ -7451,12 +7823,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 4
     },
     {
-      "rank": 5,
       "strategy": "ADX_Strong_Trend_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 122,
         "win_rate_pct": 72.95,
@@ -7475,12 +7847,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 5
     },
     {
-      "rank": 6,
       "strategy": "Bearish_Engulfing_Short",
-      "tier": "A",
       "train": {
         "trades": 121,
         "win_rate_pct": 78.51,
@@ -7499,12 +7871,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 6
     },
     {
-      "rank": 7,
       "strategy": "Bearish_Engulf_EFI_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 115,
         "win_rate_pct": 78.26,
@@ -7523,12 +7895,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 7
     },
     {
-      "rank": 8,
       "strategy": "Close_Low_Range_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 494,
         "win_rate_pct": 82.59,
@@ -7547,12 +7919,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 8
     },
     {
-      "rank": 9,
       "strategy": "Lower_High_Confirm_Short",
-      "tier": "A",
       "train": {
         "trades": 530,
         "win_rate_pct": 77.36,
@@ -7571,12 +7943,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 9
     },
     {
-      "rank": 10,
       "strategy": "BB_Squeeze_EFI_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 335,
         "win_rate_pct": 83.58,
@@ -7595,12 +7967,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 10
     },
     {
-      "rank": 11,
       "strategy": "Chandelier_Bear_Break_Short",
-      "tier": "A",
       "train": {
         "trades": 106,
         "win_rate_pct": 79.25,
@@ -7619,12 +7991,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 11
     },
     {
-      "rank": 12,
       "strategy": "OBV_Slope_EFI_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 405,
         "win_rate_pct": 77.53,
@@ -7643,12 +8015,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 12
     },
     {
-      "rank": 13,
       "strategy": "Close_Low_Range_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 409,
         "win_rate_pct": 83.62,
@@ -7667,12 +8039,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 13
     },
     {
-      "rank": 14,
       "strategy": "WMA13_WMA34_EFI_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 122,
         "win_rate_pct": 80.33,
@@ -7691,12 +8063,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 14
     },
     {
-      "rank": 15,
       "strategy": "WR_Mid_EFI_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 74,
         "win_rate_pct": 85.14,
@@ -7715,12 +8087,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 15
     },
     {
-      "rank": 16,
       "strategy": "CMF_Extreme_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 199,
         "win_rate_pct": 77.39,
@@ -7739,12 +8111,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 16
     },
     {
-      "rank": 17,
       "strategy": "HMA_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 507,
         "win_rate_pct": 76.73,
@@ -7763,12 +8135,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 17
     },
     {
-      "rank": 18,
       "strategy": "CMF_Cross_Bullish_Long",
-      "tier": "A",
       "train": {
         "trades": 192,
         "win_rate_pct": 77.6,
@@ -7787,12 +8159,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 18
     },
     {
-      "rank": 19,
       "strategy": "Three_Bear_Candles_Short",
-      "tier": "A",
       "train": {
         "trades": 358,
         "win_rate_pct": 81.84,
@@ -7811,12 +8183,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 19
     },
     {
-      "rank": 20,
       "strategy": "Three_Bear_Candles_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 345,
         "win_rate_pct": 81.74,
@@ -7835,12 +8207,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 20
     },
     {
-      "rank": 21,
       "strategy": "Bearish_Momentum_EFI_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 283,
         "win_rate_pct": 80.92,
@@ -7859,12 +8231,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 21
     },
     {
-      "rank": 22,
       "strategy": "Fisher_Deep_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 433,
         "win_rate_pct": 81.52,
@@ -7883,12 +8255,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 22
     },
     {
-      "rank": 23,
       "strategy": "EMA9_EFI_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 66,
         "win_rate_pct": 77.27,
@@ -7907,12 +8279,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 23
     },
     {
-      "rank": 24,
       "strategy": "Price_EMA21_Breakdown_Short",
-      "tier": "A",
       "train": {
         "trades": 56,
         "win_rate_pct": 76.79,
@@ -7931,12 +8303,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 24
     },
     {
-      "rank": 25,
       "strategy": "WMA13_WMA34_ADX_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 106,
         "win_rate_pct": 77.36,
@@ -7955,12 +8327,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 25
     },
     {
-      "rank": 26,
       "strategy": "Two_Bar_Bear_Reversal_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 388,
         "win_rate_pct": 81.19,
@@ -7979,12 +8351,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 26
     },
     {
-      "rank": 27,
       "strategy": "BB_Squeeze_Breakout_Short",
-      "tier": "A",
       "train": {
         "trades": 101,
         "win_rate_pct": 75.25,
@@ -8003,12 +8375,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 27
     },
     {
-      "rank": 28,
       "strategy": "DEMA_EFI_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 144,
         "win_rate_pct": 75,
@@ -8027,12 +8399,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 28
     },
     {
-      "rank": 29,
       "strategy": "Keltner_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 260,
         "win_rate_pct": 83.08,
@@ -8051,12 +8423,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 29
     },
     {
-      "rank": 30,
       "strategy": "HMA_Slope_Turn_Short",
-      "tier": "A",
       "train": {
         "trades": 208,
         "win_rate_pct": 75.48,
@@ -8075,12 +8447,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 30
     },
     {
-      "rank": 31,
       "strategy": "MTF_CMF_Both_Neg_Short",
-      "tier": "A",
       "train": {
         "trades": 62,
         "win_rate_pct": 79.03,
@@ -8099,12 +8471,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 31
     },
     {
-      "rank": 32,
       "strategy": "CMF_Cross_Bearish_Short",
-      "tier": "A",
       "train": {
         "trades": 197,
         "win_rate_pct": 81.22,
@@ -8123,12 +8495,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 32
     },
     {
-      "rank": 33,
       "strategy": "CMF_Deep_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 106,
         "win_rate_pct": 83.96,
@@ -8147,12 +8519,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 33
     },
     {
-      "rank": 34,
       "strategy": "ZLEMA_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 132,
         "win_rate_pct": 79.55,
@@ -8171,12 +8543,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 34
     },
     {
-      "rank": 35,
       "strategy": "Two_Bar_Bear_Reversal_Short",
-      "tier": "A",
       "train": {
         "trades": 399,
         "win_rate_pct": 82.21,
@@ -8195,12 +8567,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 35
     },
     {
-      "rank": 37,
       "strategy": "Fisher_Zero_CMF_ADX_Short",
-      "tier": "A",
       "train": {
         "trades": 511,
         "win_rate_pct": 71.23,
@@ -8219,12 +8591,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 36
     },
     {
-      "rank": 38,
       "strategy": "Coppock_ADX_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 82,
         "win_rate_pct": 71.95,
@@ -8243,12 +8615,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 37
     },
     {
-      "rank": 39,
       "strategy": "DEMA_CMF_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 76,
         "win_rate_pct": 77.63,
@@ -8267,12 +8639,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 38
     },
     {
-      "rank": 40,
       "strategy": "1h_Fisher_Zero_Cross_Short",
-      "tier": "A",
       "train": {
         "trades": 445,
         "win_rate_pct": 73.26,
@@ -8291,12 +8663,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 39
     },
     {
-      "rank": 41,
       "strategy": "WMA_Fisher_Bear_Short",
-      "tier": "A",
       "train": {
         "trades": 110,
         "win_rate_pct": 71.82,
@@ -8315,12 +8687,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 40
     },
     {
-      "rank": 42,
       "strategy": "WMA13_WMA34_Bear_Cross_Short",
-      "tier": "A",
       "train": {
         "trades": 124,
         "win_rate_pct": 80.65,
@@ -8339,12 +8711,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 41
     },
     {
-      "rank": 43,
       "strategy": "EMA9_Cross_EMA21_Short",
-      "tier": "A",
       "train": {
         "trades": 121,
         "win_rate_pct": 75.21,
@@ -8363,12 +8735,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 42
     },
     {
-      "rank": 44,
       "strategy": "EMA8_Cross_EMA50_Short",
-      "tier": "A",
       "train": {
         "trades": 98,
         "win_rate_pct": 72.45,
@@ -8387,12 +8759,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": true,
-      "criteria_met": 4
+      "criteria_met": 4,
+      "tier": "A",
+      "rank": 43
     },
     {
-      "rank": 45,
       "strategy": "WMA13_CMF_Bear_Short",
-      "tier": "B",
       "train": {
         "trades": 50,
         "win_rate_pct": 74,
@@ -8411,12 +8783,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 44
     },
     {
-      "rank": 46,
       "strategy": "ATR_CMF_Expand_Bear_Short",
-      "tier": "B",
       "train": {
         "trades": 49,
         "win_rate_pct": 83.67,
@@ -8435,12 +8807,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 45
     },
     {
-      "rank": 47,
       "strategy": "EMA8_Cross_CMF_ADX_Short",
-      "tier": "B",
       "train": {
         "trades": 45,
         "win_rate_pct": 77.78,
@@ -8459,12 +8831,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 46
     },
     {
-      "rank": 48,
       "strategy": "EMA8_Cross_WMA21_EFI_ADX_Short",
-      "tier": "B",
       "train": {
         "trades": 42,
         "win_rate_pct": 78.57,
@@ -8483,12 +8855,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 47
     },
     {
-      "rank": 49,
       "strategy": "EMA21_EMA50_Death_Cross_Short",
-      "tier": "B",
       "train": {
         "trades": 111,
         "win_rate_pct": 74.77,
@@ -8507,12 +8879,12 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 48
     },
     {
-      "rank": 50,
       "strategy": "WMA9_EFI_ADX_Bear_Short",
-      "tier": "B",
       "train": {
         "trades": 37,
         "win_rate_pct": 78.38,
@@ -8531,7 +8903,9 @@
       },
       "train_promising": true,
       "strict_oos_pass": false,
-      "criteria_met": 3
+      "criteria_met": 3,
+      "tier": "B",
+      "rank": 49
     }
   ],
   "strict_bar": "VALIDATE: win_rate>50%, profit_factor>=1.2, sharpe>0.5, trades>=30",
@@ -8597,11 +8971,11 @@
     "EMA21_EMA50_Death_Cross_Short",
     "WMA9_EFI_ADX_Bear_Short"
   ],
-  "source_note": "Delta Exchange history only begins 2023-12-29, so the 5-year window uses Binance BTCUSDT spot candles (the repo-standard long-history source; see cmd/delta_correlation for the Delta<->Binance validation). Live trading in Phase 3+ uses Delta prices.",
   "excluded": [
     {
       "strategy": "MACD_ADX_CMF_Bear_Short",
       "reason": "defined only in uncommitted parallel work (qualify_batch10.go); excluded from the deployed whitelist until that lands — re-add by re-running btc_qualify_25 after commit"
     }
-  ]
+  ],
+  "merge_note": "Merged whitelist: the original 49 qualified strategies plus every Delta20-pack strategy that passed the same strict OOS bar in the identical 5y/70-30 run. D20 non-passers are excluded regardless of origin."
 }

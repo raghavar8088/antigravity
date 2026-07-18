@@ -1312,6 +1312,7 @@ The content is organized as follows:
   strategy/registry.go
   strategy/scalpers/curated_expansion_pack.go
   strategy/scalpers/curated_registry.go
+  strategy/scalpers/delta20_pack.go
   strategy/scalpers/event_family.go
   strategy/scalpers/family1_momentum.go
   strategy/scalpers/family2_mean_reversion.go

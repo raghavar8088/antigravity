@@ -95,6 +95,7 @@ func BuildPreLiveStrategies() []RegistryEntry {
 	all = append(all, buildExpansionPack()...)
 	all = append(all, buildImmortalEditionPack()...)
 	all = append(all, buildResearchStrategies()...)
+	all = append(all, BuildDelta20Pack()...)
 
 	// Deduplicate by name (ported strategies may also appear in curated).
 	seen := make(map[string]bool, len(all))

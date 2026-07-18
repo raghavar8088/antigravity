@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2],"files":1,"symbols":8,"top_files":[{"file":"engine/cmd/btc_signal_probe/main.go","symbols":8}]}}
+{"engine-cmd":{"communities":[0],"files":1,"symbols":20,"top_files":[{"file":"engine/cmd/btc_qualify_25/main.go","symbols":20}]},"engine-strategy":{"communities":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],"files":2,"symbols":87,"top_files":[{"file":"engine/internal/strategy/scalpers/delta20_pack.go","symbols":83},{"file":"engine/internal/strategy/scalpers/pre_live_registry.go","symbols":4}]}}

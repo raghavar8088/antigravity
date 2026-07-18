@@ -198,6 +198,7 @@ func main() {
 	fmt.Printf("VALIDATE candles— 1m:%d 5m:%d 15m:%d 1h:%d 4h:%d\n\n", len(validDS.Candles1m), len(validDS.Candles5m), len(validDS.Candles15m), len(validDS.Candles1h), len(validDS.Candles4h))
 
 	raw := append(scalers.BuildAllScalpers(), scalers.BuildPortedStrategies()...)
+	raw = append(raw, scalers.BuildDelta20Pack()...)
 	var entries []scalers.RegistryEntry
 	for _, e := range raw {
 		if e.OHLCVCompatible {
