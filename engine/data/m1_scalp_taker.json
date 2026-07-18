@@ -1,0 +1,1664 @@
+{
+  "config": "{takerFee:0.0005 makerFee:0.0002 entrySlip:0.0001 stopSlip:0.0002 slATR:2.5 tpATR:3.5 slMin:0.0015 slMax:0.0045 tpMin:0.0025 tpMax:0.0065 ttlBars:45 fillWindow:3 cooldownBars:5 maker:false}",
+  "mode": "taker",
+  "pass_count": 0,
+  "ran_at": "2026-07-18T17:02:23Z",
+  "rows": [
+    {
+      "strategy": "M1_Engulf_V15_T20_Long",
+      "train": {
+        "name": "M1_Engulf_V15_T20_Long",
+        "trades": 1501,
+        "missed_fills": 0,
+        "win_rate_pct": 34.98,
+        "profit_factor": 0.37,
+        "sharpe": -14.4,
+        "return_pct": -80.61,
+        "max_dd_pct": 80.8
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Engulf_V15_T20_Short",
+      "train": {
+        "name": "M1_Engulf_V15_T20_Short",
+        "trades": 1478,
+        "missed_fills": 0,
+        "win_rate_pct": 34.51,
+        "profit_factor": 0.36,
+        "sharpe": -13.04,
+        "return_pct": -82.53,
+        "max_dd_pct": 82.58
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Engulf_V20_T50_Long",
+      "train": {
+        "name": "M1_Engulf_V20_T50_Long",
+        "trades": 863,
+        "missed_fills": 0,
+        "win_rate_pct": 34.76,
+        "profit_factor": 0.37,
+        "sharpe": -10.97,
+        "return_pct": -60.33,
+        "max_dd_pct": 60.44
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Engulf_V20_T50_Short",
+      "train": {
+        "name": "M1_Engulf_V20_T50_Short",
+        "trades": 867,
+        "missed_fills": 0,
+        "win_rate_pct": 35.64,
+        "profit_factor": 0.38,
+        "sharpe": -9.67,
+        "return_pct": -62.02,
+        "max_dd_pct": 62.69
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_PinBar_W2_Long",
+      "train": {
+        "name": "M1_PinBar_W2_Long",
+        "trades": 4842,
+        "missed_fills": 0,
+        "win_rate_pct": 33.71,
+        "profit_factor": 0.34,
+        "sharpe": -25.87,
+        "return_pct": -99.73,
+        "max_dd_pct": 99.73
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_PinBar_W2_Short",
+      "train": {
+        "name": "M1_PinBar_W2_Short",
+        "trades": 4453,
+        "missed_fills": 0,
+        "win_rate_pct": 35.53,
+        "profit_factor": 0.38,
+        "sharpe": -22.1,
+        "return_pct": -99.26,
+        "max_dd_pct": 99.26
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_PinBar_W3_Long",
+      "train": {
+        "name": "M1_PinBar_W3_Long",
+        "trades": 3362,
+        "missed_fills": 0,
+        "win_rate_pct": 34.27,
+        "profit_factor": 0.34,
+        "sharpe": -21.21,
+        "return_pct": -98.23,
+        "max_dd_pct": 98.23
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_PinBar_W3_Short",
+      "train": {
+        "name": "M1_PinBar_W3_Short",
+        "trades": 3132,
+        "missed_fills": 0,
+        "win_rate_pct": 34.93,
+        "profit_factor": 0.37,
+        "sharpe": -19.63,
+        "return_pct": -96.88,
+        "max_dd_pct": 96.88
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_ThreeSoldiers_Long",
+      "train": {
+        "name": "M1_ThreeSoldiers_Long",
+        "trades": 7553,
+        "missed_fills": 0,
+        "win_rate_pct": 32.41,
+        "profit_factor": 0.33,
+        "sharpe": -34.58,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_ThreeCrows_Short",
+      "train": {
+        "name": "M1_ThreeCrows_Short",
+        "trades": 7320,
+        "missed_fills": 0,
+        "win_rate_pct": 33.84,
+        "profit_factor": 0.36,
+        "sharpe": -30.86,
+        "return_pct": -99.98,
+        "max_dd_pct": 99.98
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_InsideBar_V12_Long",
+      "train": {
+        "name": "M1_InsideBar_V12_Long",
+        "trades": 7673,
+        "missed_fills": 0,
+        "win_rate_pct": 30.95,
+        "profit_factor": 0.3,
+        "sharpe": -36.31,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_InsideBar_V12_Short",
+      "train": {
+        "name": "M1_InsideBar_V12_Short",
+        "trades": 7952,
+        "missed_fills": 0,
+        "win_rate_pct": 31.25,
+        "profit_factor": 0.31,
+        "sharpe": -36.14,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_InsideBar_V20_Long",
+      "train": {
+        "name": "M1_InsideBar_V20_Long",
+        "trades": 3764,
+        "missed_fills": 0,
+        "win_rate_pct": 30.37,
+        "profit_factor": 0.29,
+        "sharpe": -24.67,
+        "return_pct": -98.77,
+        "max_dd_pct": 98.77
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_InsideBar_V20_Short",
+      "train": {
+        "name": "M1_InsideBar_V20_Short",
+        "trades": 3993,
+        "missed_fills": 0,
+        "win_rate_pct": 28.9,
+        "profit_factor": 0.28,
+        "sharpe": -25.6,
+        "return_pct": -99.32,
+        "max_dd_pct": 99.32
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_NR7_Expand_T20_Long",
+      "train": {
+        "name": "M1_NR7_Expand_T20_Long",
+        "trades": 7813,
+        "missed_fills": 0,
+        "win_rate_pct": 31.92,
+        "profit_factor": 0.31,
+        "sharpe": -36.48,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_NR7_Expand_T20_Short",
+      "train": {
+        "name": "M1_NR7_Expand_T20_Short",
+        "trades": 7355,
+        "missed_fills": 0,
+        "win_rate_pct": 33.26,
+        "profit_factor": 0.36,
+        "sharpe": -31.93,
+        "return_pct": -99.98,
+        "max_dd_pct": 99.98
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_NR7_Expand_T50_Long",
+      "train": {
+        "name": "M1_NR7_Expand_T50_Long",
+        "trades": 7739,
+        "missed_fills": 0,
+        "win_rate_pct": 32.47,
+        "profit_factor": 0.32,
+        "sharpe": -31.82,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_NR7_Expand_T50_Short",
+      "train": {
+        "name": "M1_NR7_Expand_T50_Short",
+        "trades": 7135,
+        "missed_fills": 0,
+        "win_rate_pct": 33.57,
+        "profit_factor": 0.36,
+        "sharpe": -28.97,
+        "return_pct": -99.98,
+        "max_dd_pct": 99.98
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_DoubleBottom_10bp_Long",
+      "train": {
+        "name": "M1_DoubleBottom_10bp_Long",
+        "trades": 9434,
+        "missed_fills": 0,
+        "win_rate_pct": 32.29,
+        "profit_factor": 0.32,
+        "sharpe": -39.88,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_DoubleTop_10bp_Short",
+      "train": {
+        "name": "M1_DoubleTop_10bp_Short",
+        "trades": 9607,
+        "missed_fills": 0,
+        "win_rate_pct": 32.34,
+        "profit_factor": 0.32,
+        "sharpe": -41.63,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_DoubleBottom_20bp_Long",
+      "train": {
+        "name": "M1_DoubleBottom_20bp_Long",
+        "trades": 11432,
+        "missed_fills": 0,
+        "win_rate_pct": 32.74,
+        "profit_factor": 0.32,
+        "sharpe": -46.12,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_DoubleTop_20bp_Short",
+      "train": {
+        "name": "M1_DoubleTop_20bp_Short",
+        "trades": 11705,
+        "missed_fills": 0,
+        "win_rate_pct": 32.87,
+        "profit_factor": 0.33,
+        "sharpe": -45.4,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Break_D30_T20_Long",
+      "train": {
+        "name": "M1_Break_D30_T20_Long",
+        "trades": 5927,
+        "missed_fills": 0,
+        "win_rate_pct": 32.5,
+        "profit_factor": 0.33,
+        "sharpe": -28.78,
+        "return_pct": -99.93,
+        "max_dd_pct": 99.93
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Break_D30_T20_Short",
+      "train": {
+        "name": "M1_Break_D30_T20_Short",
+        "trades": 5724,
+        "missed_fills": 0,
+        "win_rate_pct": 33.04,
+        "profit_factor": 0.36,
+        "sharpe": -27.12,
+        "return_pct": -99.92,
+        "max_dd_pct": 99.92
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Break_D60_T50_Long",
+      "train": {
+        "name": "M1_Break_D60_T50_Long",
+        "trades": 4173,
+        "missed_fills": 0,
+        "win_rate_pct": 33.69,
+        "profit_factor": 0.35,
+        "sharpe": -22.07,
+        "return_pct": -99.33,
+        "max_dd_pct": 99.34
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Break_D60_T50_Short",
+      "train": {
+        "name": "M1_Break_D60_T50_Short",
+        "trades": 3996,
+        "missed_fills": 0,
+        "win_rate_pct": 32.78,
+        "profit_factor": 0.36,
+        "sharpe": -21.09,
+        "return_pct": -99.51,
+        "max_dd_pct": 99.51
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_FailedBreak_30_Long",
+      "train": {
+        "name": "M1_FailedBreak_30_Long",
+        "trades": 7880,
+        "missed_fills": 0,
+        "win_rate_pct": 34.44,
+        "profit_factor": 0.37,
+        "sharpe": -27.6,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_FailedBreak_30_Short",
+      "train": {
+        "name": "M1_FailedBreak_30_Short",
+        "trades": 7738,
+        "missed_fills": 0,
+        "win_rate_pct": 35.35,
+        "profit_factor": 0.38,
+        "sharpe": -30.04,
+        "return_pct": -99.99,
+        "max_dd_pct": 99.99
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_FailedBreak_60_Long",
+      "train": {
+        "name": "M1_FailedBreak_60_Long",
+        "trades": 5413,
+        "missed_fills": 0,
+        "win_rate_pct": 34.36,
+        "profit_factor": 0.38,
+        "sharpe": -22.12,
+        "return_pct": -99.87,
+        "max_dd_pct": 99.87
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_FailedBreak_60_Short",
+      "train": {
+        "name": "M1_FailedBreak_60_Short",
+        "trades": 5381,
+        "missed_fills": 0,
+        "win_rate_pct": 35.77,
+        "profit_factor": 0.39,
+        "sharpe": -23.65,
+        "return_pct": -99.74,
+        "max_dd_pct": 99.74
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Doji_Long",
+      "train": {
+        "name": "M1_VWAP_Doji_Long",
+        "trades": 2824,
+        "missed_fills": 0,
+        "win_rate_pct": 34.45,
+        "profit_factor": 0.36,
+        "sharpe": -17.59,
+        "return_pct": -97.11,
+        "max_dd_pct": 97.12
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Doji_Short",
+      "train": {
+        "name": "M1_VWAP_Doji_Short",
+        "trades": 2927,
+        "missed_fills": 0,
+        "win_rate_pct": 34.64,
+        "profit_factor": 0.39,
+        "sharpe": -17.85,
+        "return_pct": -97,
+        "max_dd_pct": 97.01
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Burst_K4_Long",
+      "train": {
+        "name": "M1_Burst_K4_Long",
+        "trades": 3352,
+        "missed_fills": 0,
+        "win_rate_pct": 32.73,
+        "profit_factor": 0.33,
+        "sharpe": -22.43,
+        "return_pct": -98.51,
+        "max_dd_pct": 98.55
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Burst_K4_Short",
+      "train": {
+        "name": "M1_Burst_K4_Short",
+        "trades": 3359,
+        "missed_fills": 0,
+        "win_rate_pct": 32.9,
+        "profit_factor": 0.35,
+        "sharpe": -20.77,
+        "return_pct": -98.68,
+        "max_dd_pct": 98.68
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Burst_K6_Long",
+      "train": {
+        "name": "M1_Burst_K6_Long",
+        "trades": 1109,
+        "missed_fills": 0,
+        "win_rate_pct": 30.93,
+        "profit_factor": 0.32,
+        "sharpe": -12.77,
+        "return_pct": -77.43,
+        "max_dd_pct": 77.55
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Burst_K6_Short",
+      "train": {
+        "name": "M1_Burst_K6_Short",
+        "trades": 1107,
+        "missed_fills": 0,
+        "win_rate_pct": 30.26,
+        "profit_factor": 0.31,
+        "sharpe": -12.98,
+        "return_pct": -79.94,
+        "max_dd_pct": 80.09
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI2_5_95_T50_Long",
+      "train": {
+        "name": "M1_RSI2_5_95_T50_Long",
+        "trades": 13122,
+        "missed_fills": 0,
+        "win_rate_pct": 33.67,
+        "profit_factor": 0.35,
+        "sharpe": -39.22,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI2_5_95_T50_Short",
+      "train": {
+        "name": "M1_RSI2_5_95_T50_Short",
+        "trades": 12383,
+        "missed_fills": 0,
+        "win_rate_pct": 35.26,
+        "profit_factor": 0.41,
+        "sharpe": -34.95,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI2_10_90_T20_Long",
+      "train": {
+        "name": "M1_RSI2_10_90_T20_Long",
+        "trades": 13707,
+        "missed_fills": 0,
+        "win_rate_pct": 33.36,
+        "profit_factor": 0.35,
+        "sharpe": -47.85,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI2_10_90_T20_Short",
+      "train": {
+        "name": "M1_RSI2_10_90_T20_Short",
+        "trades": 13009,
+        "missed_fills": 0,
+        "win_rate_pct": 34.85,
+        "profit_factor": 0.4,
+        "sharpe": -43,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI_Div_Long",
+      "train": {
+        "name": "M1_RSI_Div_Long",
+        "trades": 9866,
+        "missed_fills": 0,
+        "win_rate_pct": 34,
+        "profit_factor": 0.37,
+        "sharpe": -30.92,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_RSI_Div_Short",
+      "train": {
+        "name": "M1_RSI_Div_Short",
+        "trades": 9818,
+        "missed_fills": 0,
+        "win_rate_pct": 34.42,
+        "profit_factor": 0.36,
+        "sharpe": -33.39,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_EMA_Cross_T20_Long",
+      "train": {
+        "name": "M1_EMA_Cross_T20_Long",
+        "trades": 5539,
+        "missed_fills": 0,
+        "win_rate_pct": 32.95,
+        "profit_factor": 0.32,
+        "sharpe": -27.73,
+        "return_pct": -99.87,
+        "max_dd_pct": 99.87
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_EMA_Cross_T20_Short",
+      "train": {
+        "name": "M1_EMA_Cross_T20_Short",
+        "trades": 5116,
+        "missed_fills": 0,
+        "win_rate_pct": 34.21,
+        "profit_factor": 0.37,
+        "sharpe": -24.06,
+        "return_pct": -99.74,
+        "max_dd_pct": 99.74
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_EMA_Cross_T50_Long",
+      "train": {
+        "name": "M1_EMA_Cross_T50_Long",
+        "trades": 5952,
+        "missed_fills": 0,
+        "win_rate_pct": 33.42,
+        "profit_factor": 0.33,
+        "sharpe": -25.38,
+        "return_pct": -99.9,
+        "max_dd_pct": 99.9
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_EMA_Cross_T50_Short",
+      "train": {
+        "name": "M1_EMA_Cross_T50_Short",
+        "trades": 5424,
+        "missed_fills": 0,
+        "win_rate_pct": 34.49,
+        "profit_factor": 0.37,
+        "sharpe": -22.57,
+        "return_pct": -99.8,
+        "max_dd_pct": 99.8
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_BB_Rev_CMF0_Long",
+      "train": {
+        "name": "M1_BB_Rev_CMF0_Long",
+        "trades": 5599,
+        "missed_fills": 0,
+        "win_rate_pct": 33.68,
+        "profit_factor": 0.34,
+        "sharpe": -26.33,
+        "return_pct": -99.91,
+        "max_dd_pct": 99.91
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_BB_Rev_CMF0_Short",
+      "train": {
+        "name": "M1_BB_Rev_CMF0_Short",
+        "trades": 5307,
+        "missed_fills": 0,
+        "win_rate_pct": 34.14,
+        "profit_factor": 0.35,
+        "sharpe": -24.78,
+        "return_pct": -99.8,
+        "max_dd_pct": 99.8
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_BB_Rev_CMF5_Long",
+      "train": {
+        "name": "M1_BB_Rev_CMF5_Long",
+        "trades": 4246,
+        "missed_fills": 0,
+        "win_rate_pct": 33.47,
+        "profit_factor": 0.33,
+        "sharpe": -24.49,
+        "return_pct": -99.51,
+        "max_dd_pct": 99.51
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_BB_Rev_CMF5_Short",
+      "train": {
+        "name": "M1_BB_Rev_CMF5_Short",
+        "trades": 4088,
+        "missed_fills": 0,
+        "win_rate_pct": 33.86,
+        "profit_factor": 0.35,
+        "sharpe": -22.79,
+        "return_pct": -99.19,
+        "max_dd_pct": 99.19
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Rev_40bp_Long",
+      "train": {
+        "name": "M1_VWAP_Rev_40bp_Long",
+        "trades": 3918,
+        "missed_fills": 0,
+        "win_rate_pct": 39.13,
+        "profit_factor": 0.49,
+        "sharpe": -12.16,
+        "return_pct": -99.11,
+        "max_dd_pct": 99.12
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Rev_40bp_Short",
+      "train": {
+        "name": "M1_VWAP_Rev_40bp_Short",
+        "trades": 4034,
+        "missed_fills": 0,
+        "win_rate_pct": 40.46,
+        "profit_factor": 0.52,
+        "sharpe": -12.81,
+        "return_pct": -98.48,
+        "max_dd_pct": 98.49
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Rev_70bp_Long",
+      "train": {
+        "name": "M1_VWAP_Rev_70bp_Long",
+        "trades": 1424,
+        "missed_fills": 0,
+        "win_rate_pct": 39.96,
+        "profit_factor": 0.58,
+        "sharpe": -6.26,
+        "return_pct": -82.5,
+        "max_dd_pct": 82.56
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_VWAP_Rev_70bp_Short",
+      "train": {
+        "name": "M1_VWAP_Rev_70bp_Short",
+        "trades": 1408,
+        "missed_fills": 0,
+        "win_rate_pct": 42.54,
+        "profit_factor": 0.62,
+        "sharpe": -6.24,
+        "return_pct": -74.43,
+        "max_dd_pct": 74.68
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_OBV_Flat_Break_Long",
+      "train": {
+        "name": "M1_OBV_Flat_Break_Long",
+        "trades": 5246,
+        "missed_fills": 0,
+        "win_rate_pct": 28.86,
+        "profit_factor": 0.24,
+        "sharpe": -27.65,
+        "return_pct": -99.8,
+        "max_dd_pct": 99.8
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_OBV_Flat_Break_Short",
+      "train": {
+        "name": "M1_OBV_Flat_Break_Short",
+        "trades": 5290,
+        "missed_fills": 0,
+        "win_rate_pct": 28.98,
+        "profit_factor": 0.24,
+        "sharpe": -27.04,
+        "return_pct": -99.8,
+        "max_dd_pct": 99.8
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Stoch_X_Long",
+      "train": {
+        "name": "M1_Stoch_X_Long",
+        "trades": 6036,
+        "missed_fills": 0,
+        "win_rate_pct": 33.05,
+        "profit_factor": 0.34,
+        "sharpe": -35.03,
+        "return_pct": -99.92,
+        "max_dd_pct": 99.92
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_Stoch_X_Short",
+      "train": {
+        "name": "M1_Stoch_X_Short",
+        "trades": 5705,
+        "missed_fills": 0,
+        "win_rate_pct": 34.79,
+        "profit_factor": 0.39,
+        "sharpe": -27.44,
+        "return_pct": -99.82,
+        "max_dd_pct": 99.82
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_CMF_Flip_Long",
+      "train": {
+        "name": "M1_CMF_Flip_Long",
+        "trades": 6528,
+        "missed_fills": 0,
+        "win_rate_pct": 32.46,
+        "profit_factor": 0.32,
+        "sharpe": -32.82,
+        "return_pct": -99.96,
+        "max_dd_pct": 99.96
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_CMF_Flip_Short",
+      "train": {
+        "name": "M1_CMF_Flip_Short",
+        "trades": 6280,
+        "missed_fills": 0,
+        "win_rate_pct": 32.52,
+        "profit_factor": 0.33,
+        "sharpe": -30.93,
+        "return_pct": -99.95,
+        "max_dd_pct": 99.95
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_MACD_Align_Long",
+      "train": {
+        "name": "M1_MACD_Align_Long",
+        "trades": 8908,
+        "missed_fills": 0,
+        "win_rate_pct": 33.88,
+        "profit_factor": 0.35,
+        "sharpe": -32.93,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_MACD_Align_Short",
+      "train": {
+        "name": "M1_MACD_Align_Short",
+        "trades": 9023,
+        "missed_fills": 0,
+        "win_rate_pct": 34.79,
+        "profit_factor": 0.38,
+        "sharpe": -30.12,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_HMA21_Flip_Long",
+      "train": {
+        "name": "M1_HMA21_Flip_Long",
+        "trades": 9771,
+        "missed_fills": 0,
+        "win_rate_pct": 31.99,
+        "profit_factor": 0.32,
+        "sharpe": -42.55,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_HMA21_Flip_Short",
+      "train": {
+        "name": "M1_HMA21_Flip_Short",
+        "trades": 10101,
+        "missed_fills": 0,
+        "win_rate_pct": 33.19,
+        "profit_factor": 0.34,
+        "sharpe": -38.2,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_HMA34_Flip_Long",
+      "train": {
+        "name": "M1_HMA34_Flip_Long",
+        "trades": 8991,
+        "missed_fills": 0,
+        "win_rate_pct": 32.57,
+        "profit_factor": 0.33,
+        "sharpe": -39.53,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    },
+    {
+      "strategy": "M1_HMA34_Flip_Short",
+      "train": {
+        "name": "M1_HMA34_Flip_Short",
+        "trades": 9362,
+        "missed_fills": 0,
+        "win_rate_pct": 33.21,
+        "profit_factor": 0.34,
+        "sharpe": -38.76,
+        "return_pct": -100,
+        "max_dd_pct": 100
+      },
+      "validate": {
+        "name": "",
+        "trades": 0,
+        "missed_fills": 0,
+        "win_rate_pct": 0,
+        "profit_factor": 0,
+        "sharpe": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    }
+  ],
+  "strict_bar": "OOS: WR\u003e50%, PF\u003e=1.2, Sharpe\u003e0.5, trades\u003e=200",
+  "train_end": "2025-12-10",
+  "window": [
+    "2024-07-17",
+    "2026-07-17"
+  ]
+}

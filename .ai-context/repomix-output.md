@@ -1631,6 +1631,7 @@ The content is organized as follows:
   delta_full_qualify/main.go
   delta_week_backtest/main.go
   fetch_historical/main.go
+  m1_scalp_qualify/main.go
   perfbench/main.go
   pre_live/main.go
   pre_live/mongo.go
