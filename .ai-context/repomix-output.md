@@ -1622,6 +1622,7 @@ The content is organized as follows:
   antigravity/main.go
   backtest/main.go
   btc_qualify_25/main.go
+  btc_signal_probe/main.go
   delta_correlation/main.go
   delta_day_backtest/main.go
   delta_fetch_history/main.go
