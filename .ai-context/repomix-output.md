@@ -76,6 +76,7 @@ The content is organized as follows:
   app/api/engine/config/strictness/route.ts
   app/api/engine/events/route.ts
   app/api/engine/reconciliation/route.ts
+  app/api/eth-prelive/desk/[...path]/route.ts
   app/api/event-center/route.ts
   app/api/execution/request/route.ts
   app/api/health/storage/route.ts
@@ -121,6 +122,7 @@ The content is organized as follows:
   app/api/risk/positions/route.ts
   app/api/risk/summary/route.ts
   app/api/scalers/stats/route.ts
+  app/api/scalp/[...path]/route.ts
   app/api/sep/bottom/route.ts
   app/api/sep/rankings/route.ts
   app/api/sep/retirement-candidates/route.ts
@@ -1335,6 +1337,8 @@ The content is organized as follows:
   strategy/scalpers/indicators_s30_s79.go
   strategy/scalpers/indicators.go
   strategy/scalpers/m1_pack.go
+  strategy/scalpers/m1x_pack.go
+  strategy/scalpers/m1xb_pack.go
   strategy/scalpers/macro_family.go
   strategy/scalpers/microstructure_family.go
   strategy/scalpers/new10_batch.go
@@ -1636,6 +1640,7 @@ The content is organized as follows:
   pre_live/main.go
   pre_live/mongo.go
   run_backtest/main.go
+  scalp_prelive/main.go
   seed_db/main.go
   sep_evidence/analytics.go
   sep_evidence/datasource.go

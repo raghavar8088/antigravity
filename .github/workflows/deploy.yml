@@ -69,6 +69,14 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
 
+      - name: Build and push scalp desk image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./engine
+          file: ./engine/Dockerfile.scalp
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/antigravity-scalp:latest
+
       - name: Deploy to Lightsail
         uses: appleboy/ssh-action@v1
         with:
@@ -104,3 +112,25 @@ jobs:
               --health-retries 5 \
               --health-start-period 40s \
               ghcr.io/${{ github.repository_owner }}/antigravity-engine:latest
+
+            # ── scalp_prelive: 100-strategy 1m PAPER falsification desk ──
+            # Paper only (no broker keys in env). Port 8094 (8092 = BTC
+            # pre-live, 8093 = reserved for the ETH pre-live rollout).
+            # State persisted on the host so restarts keep the live record.
+            docker pull ghcr.io/${{ github.repository_owner }}/antigravity-scalp:latest
+            docker stop antigravity_scalp_prelive || true
+            docker rm antigravity_scalp_prelive || true
+            mkdir -p /home/ubuntu/antigravity/data/scalp_prelive
+            sudo chown -R 10001:10001 /home/ubuntu/antigravity/data/scalp_prelive || true
+            SCALP_TOKEN=$(grep '^BTC_PRE_LIVE_API_TOKEN=' /home/ubuntu/antigravity/.env | cut -d= -f2-)
+            docker run -d \
+              --name antigravity_scalp_prelive \
+              --restart unless-stopped \
+              -p 8094:8094 \
+              -e SCALP_API_TOKEN="$SCALP_TOKEN" \
+              -v /home/ubuntu/antigravity/data/scalp_prelive:/app/data/scalp_prelive \
+              --memory 300m \
+              --cpus 0.50 \
+              --pids-limit 128 \
+              --ulimit nofile=8192:8192 \
+              ghcr.io/${{ github.repository_owner }}/antigravity-scalp:latest
