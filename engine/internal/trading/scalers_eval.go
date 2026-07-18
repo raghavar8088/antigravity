@@ -80,6 +80,10 @@ type ScalerBundle struct {
 	candles1h  []scalers.Candle
 	candles4h  []scalers.Candle
 
+	// regimePrefilterOff disables the live regime pre-filter (whitelist-file
+	// mode only — see newScalerBundle for the backtest-parity rationale).
+	regimePrefilterOff bool
+
 	// 4h synthesis: buffer of 1h candles waiting to be merged
 	pending4h []scalers.Candle
 
@@ -198,16 +202,43 @@ type ScalerBundle struct {
 	dqMu                 sync.RWMutex
 }
 
+// bundleStrategies picks the EXECUTING strategy set. Default: the curated
+// scalpers (live whitelist + forced-shadow tier) — unchanged for the main
+// engine and the default pre-live instance.
+//
+// PRE_LIVE_WHITELIST_FILE mode (the BTC pre-live desk): execute exactly the
+// whitelist-qualified strategies instead. Without this, the file-based
+// whitelist only reached the tracker/logging layer while THIS hardcoded
+// curated set kept executing — so 47 of the BTC desk's 49 qualified
+// strategies were never even evaluated, and its paper week would have
+// silently tested the wrong basket.
+func bundleStrategies() []scalers.RegistryEntry {
+	if os.Getenv("PRE_LIVE_WHITELIST_FILE") != "" {
+		entries := scalers.BuildPreLiveStrategies()
+		log.Printf("[SCALERS] whitelist-file mode: executing %d qualified strategies (curated set bypassed)", len(entries))
+		return entries
+	}
+	return scalers.BuildCuratedScalpers()
+}
+
 func newScalerBundle() *ScalerBundle {
 	return &ScalerBundle{
-		promotionCh:     make(chan string, 64),
-		candles1m:       make([]scalers.Candle, 0, maxCandles1m+1),
-		candles5m:       make([]scalers.Candle, 0, maxCandles5m+1),
-		candles15m:      make([]scalers.Candle, 0, maxCandles15m+1),
-		candles1h:       make([]scalers.Candle, 0, maxCandles1h+1),
-		candles4h:       make([]scalers.Candle, 0, maxCandles4h+1),
-		strategies:      scalers.BuildCuratedScalpers(),
-		metaLabelFilter: NewMetaLabelFilter(),
+		promotionCh: make(chan string, 64),
+		candles1m:   make([]scalers.Candle, 0, maxCandles1m+1),
+		candles5m:   make([]scalers.Candle, 0, maxCandles5m+1),
+		candles15m:  make([]scalers.Candle, 0, maxCandles15m+1),
+		candles1h:   make([]scalers.Candle, 0, maxCandles1h+1),
+		candles4h:   make([]scalers.Candle, 0, maxCandles4h+1),
+		strategies:  bundleStrategies(),
+		// Backtest parity (whitelist-file mode): the qualification harness pins
+		// each strategy's declared regime (backtest/runner.go uses
+		// entry.Regimes[0]) and never gates on a live regime classification, so
+		// the live regime pre-filter must not gate either — otherwise
+		// RegimeTrending-declared strategies are skipped whenever the live
+		// classifier says RANGING, and the desk tests a different system than
+		// the one that qualified.
+		regimePrefilterOff: os.Getenv("PRE_LIVE_WHITELIST_FILE") != "",
+		metaLabelFilter:    NewMetaLabelFilter(),
 	}
 }
 
@@ -935,7 +966,9 @@ func (o *Orchestrator) evalAndExecuteScalers(ctx context.Context, tick marketdat
 		// regime. Saves CPU and prevents directional strategies from generating
 		// false signals in adverse regimes (e.g. trending-only strats in RANGING).
 		// Entries with empty Regimes slice pass through (unconditional).
-		if len(entry.Regimes) > 0 {
+		// Disabled in whitelist-file mode: the qualification backtest pins each
+		// strategy's declared regime and never live-gates (backtest parity).
+		if len(entry.Regimes) > 0 && !o.scalerBundle.regimePrefilterOff {
 			regimeMatch := false
 			for _, r := range entry.Regimes {
 				if r == scalersRegime {
