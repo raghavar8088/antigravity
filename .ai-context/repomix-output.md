@@ -157,6 +157,7 @@ The content is organized as follows:
   app/page.tsx
   app/paper-desk/page.tsx
   app/paperdesk/page.tsx
+  app/scalp-desk/page.tsx
   app/sign-in/page.tsx
   app/terminal/analytics/page.tsx
   app/terminal/backtest/page.tsx
