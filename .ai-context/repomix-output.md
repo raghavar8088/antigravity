@@ -194,6 +194,7 @@ The content is organized as follows:
   components/AiAppTrackerPanel.tsx
   components/AIInsightPanel.tsx
   components/AppBrandBar.tsx
+  components/AppShell.tsx
   components/AttributionPanel.tsx
   components/btc-prelive/BTCPaperDesk.tsx
   components/btc-prelive/BTCPreLiveChart.tsx
@@ -257,7 +258,6 @@ The content is organized as follows:
   components/MockStrategyLeaderboardPanel.tsx
   components/MockTradingDashboard.test.tsx
   components/MockTradingDashboard.tsx
-  components/ModuleNav.tsx
   components/MTFConfluencePanel.tsx
   components/NotePadPanel.tsx
   components/observability/GrafanaEmbed.tsx

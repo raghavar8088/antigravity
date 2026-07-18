@@ -66,7 +66,7 @@ function tsLabel(v: string | number): string {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-export default function BTCPaperDesk() {
+export default function BTCPaperDesk({ basePath = "/api/btc-prelive/desk" }: { basePath?: string } = {}) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [positions, setPositions] = useState<OpenPosition[]>([]);
   const [trades, setTrades] = useState<ClosedTrade[]>([]);
@@ -75,12 +75,12 @@ export default function BTCPaperDesk() {
   const poll = useCallback(async () => {
     try {
       const [sRes, pRes, tRes] = await Promise.all([
-        fetch("/api/btc-prelive/desk/api/stats", { cache: "no-store" }),
-        fetch("/api/btc-prelive/desk/api/positions", { cache: "no-store" }),
-        fetch("/api/btc-prelive/desk/api/trades", { cache: "no-store" }),
+        fetch(`${basePath}/api/stats`, { cache: "no-store" }),
+        fetch(`${basePath}/api/positions`, { cache: "no-store" }),
+        fetch(`${basePath}/api/trades`, { cache: "no-store" }),
       ]);
       if (!sRes.ok) {
-        setError(`desk unreachable (HTTP ${sRes.status}) — is the BTC pre-live container running?`);
+        setError(`desk unreachable (HTTP ${sRes.status}) — is the pre-live container running?`);
         return;
       }
       setStats((await sRes.json()) as Stats);
@@ -90,7 +90,7 @@ export default function BTCPaperDesk() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "poll failed");
     }
-  }, []);
+  }, [basePath]);
 
   useEffect(() => {
     void poll();

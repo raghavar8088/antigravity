@@ -1,1 +1,1 @@
-{"client-components":{"communities":[1],"files":1,"symbols":4,"top_files":[{"file":"client/src/components/ModuleNav.tsx","symbols":4}]},"other":{"communities":[0],"files":1,"symbols":5,"top_files":[{"file":"client/src/app/layout.tsx","symbols":5}]}}
+{"client-components":{"communities":[1],"files":1,"symbols":6,"top_files":[{"file":"client/src/components/AppShell.tsx","symbols":6}]},"other":{"communities":[0,2,3],"files":2,"symbols":16,"top_files":[{"file":"client/src/app/scalp-desk/page.tsx","symbols":11},{"file":"client/src/app/layout.tsx","symbols":5}]}}

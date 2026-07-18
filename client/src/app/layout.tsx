@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Sora, Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { GlobalRiskRibbon } from "@/components/GlobalRiskRibbon";
-import ModuleNav from "@/components/ModuleNav";
+import AppShell from "@/components/AppShell";
 import { M3Providers } from "@/components/ui/M3Providers";
 import { SessionProvider } from "@/context/SessionContext";
 
@@ -51,9 +51,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={manrope.className}>
         <SessionProvider>
           <M3Providers>
-            <GlobalRiskRibbon />
-            <ModuleNav />
-            {children}
+            <AppShell>
+              <GlobalRiskRibbon />
+              {children}
+            </AppShell>
           </M3Providers>
         </SessionProvider>
       </body>
