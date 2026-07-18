@@ -257,6 +257,7 @@ The content is organized as follows:
   components/MockStrategyLeaderboardPanel.tsx
   components/MockTradingDashboard.test.tsx
   components/MockTradingDashboard.tsx
+  components/ModuleNav.tsx
   components/MTFConfluencePanel.tsx
   components/NotePadPanel.tsx
   components/observability/GrafanaEmbed.tsx
