@@ -34,6 +34,10 @@ type Trade = {
 
 const SYMBOLS = ["ALL", "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "AVAXUSDT"];
 const GATE_RULES = ["≥ 200 live trades", "PF ≥ 1.2", "max DD ≤ 25%", "both halves net-positive"];
+const MIN_N_OPTS = [0, 5, 20, 50, 100, 200];
+
+type SortKey = "n" | "wr_pct" | "pf" | "net_usd" | "max_dd_pct" | "missed";
+type Side = "ALL" | "LONG" | "SHORT";
 
 const sora = { fontFamily: "var(--font-sora), system-ui, sans-serif" };
 const mono = { fontFamily: "var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace" };
@@ -83,13 +87,46 @@ function CardHead({ title, right }: { title: string; right?: React.ReactNode }) 
   );
 }
 
+const pillBase =
+  "cursor-pointer rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors";
+const selectPill =
+  "cursor-pointer rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-[12px] font-semibold text-zinc-700 hover:border-zinc-300";
+
+function SortTh({
+  label, k, sortKey, sortDir, onSort,
+}: {
+  label: string; k: SortKey; sortKey: SortKey; sortDir: "asc" | "desc"; onSort: (k: SortKey) => void;
+}) {
+  const active = sortKey === k;
+  return (
+    <th className="px-3 py-3 text-right font-bold">
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={`ml-auto inline-flex items-center gap-1 uppercase tracking-[0.08em] transition-colors ${
+          active ? "text-violet-600" : "text-zinc-400 hover:text-zinc-700"
+        }`}
+      >
+        {label}
+        <span className="text-[8px] leading-none">{active ? (sortDir === "desc" ? "▼" : "▲") : "▲▼"}</span>
+      </button>
+    </th>
+  );
+}
+
 export default function ScalpDeskPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [rows, setRows] = useState<LbRow[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [symbol, setSymbol] = useState<string>("ALL");
-  const [minTrades, setMinTrades] = useState<boolean>(false);
+  const [query, setQuery] = useState<string>("");
+  const [side, setSide] = useState<Side>("ALL");
+  const [minN, setMinN] = useState<number>(0);
+  const [gateOnly, setGateOnly] = useState<boolean>(false);
+  const [profitOnly, setProfitOnly] = useState<boolean>(false);
+  const [sortKey, setSortKey] = useState<SortKey>("net_usd");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [error, setError] = useState<string>("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
 
@@ -123,9 +160,38 @@ export default function ScalpDeskPage() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  const q = query.trim().toLowerCase();
   const filtered = rows
     .filter((r) => symbol === "ALL" || r.symbol === symbol)
-    .filter((r) => !minTrades || r.n >= 20);
+    .filter((r) => r.n >= minN)
+    .filter((r) => !gateOnly || r.gate_pass)
+    .filter((r) => !profitOnly || r.net_usd > 0)
+    .filter((r) =>
+      side === "ALL" ? true : side === "LONG" ? r.strategy.endsWith("_Long") : r.strategy.endsWith("_Short"),
+    )
+    .filter((r) => q === "" || r.strategy.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q))
+    .slice()
+    .sort((a, b) => {
+      const d = a[sortKey] - b[sortKey];
+      return sortDir === "desc" ? -d : d;
+    });
+  const filtersActive =
+    symbol !== "ALL" || q !== "" || side !== "ALL" || minN !== 0 || gateOnly || profitOnly;
+  const resetFilters = () => {
+    setSymbol("ALL");
+    setQuery("");
+    setSide("ALL");
+    setMinN(0);
+    setGateOnly(false);
+    setProfitOnly(false);
+  };
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else {
+      setSortKey(k);
+      setSortDir("desc");
+    }
+  };
   const gatePassers = rows.filter((r) => r.gate_pass);
   const winRate = stats && stats.trades > 0 ? (100 * stats.wins) / stats.trades : null;
   const fillRate =
@@ -243,36 +309,102 @@ export default function ScalpDeskPage() {
         <CardHead
           title="Strategy Leaderboard"
           right={
-            <div className="flex items-center gap-2.5">
-              <label className="flex cursor-pointer items-center gap-2 rounded-full border border-zinc-200 px-3.5 py-1.5 text-[12px] font-semibold text-zinc-600 hover:border-zinc-300">
-                <input type="checkbox" checked={minTrades} onChange={(e) => setMinTrades(e.target.checked)} className="h-3.5 w-3.5 accent-violet-600" />
-                ≥ 20 trades
-              </label>
-              <select
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value)}
-                className="cursor-pointer rounded-full border border-zinc-200 bg-white px-3.5 py-1.5 text-[12px] font-semibold text-zinc-700 hover:border-zinc-300"
-              >
-                {SYMBOLS.map((s) => (
-                  <option key={s} value={s}>{s === "ALL" ? "All symbols" : s.replace("USDT", "")}</option>
-                ))}
-              </select>
-              <span className="text-[12px] font-medium text-zinc-400" style={mono}>{filtered.length}</span>
-            </div>
+            <span className="text-[12px] font-medium text-zinc-400" style={mono}>
+              {filtered.length} of {rows.length} streams
+            </span>
           }
         />
+
+        {/* Filter toolbar */}
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-zinc-100 px-6 py-3.5">
+          <div className="relative">
+            <svg
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search strategy…"
+              className="w-[190px] rounded-full border border-zinc-200 bg-white py-1.5 pl-9 pr-3 text-[12px] font-medium text-zinc-700 placeholder:text-zinc-400 focus:border-violet-400 focus:outline-none"
+            />
+          </div>
+
+          <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className={selectPill}>
+            {SYMBOLS.map((s) => (
+              <option key={s} value={s}>{s === "ALL" ? "All symbols" : s.replace("USDT", "")}</option>
+            ))}
+          </select>
+
+          {/* Direction segmented control */}
+          <div className="inline-flex rounded-full border border-zinc-200 p-0.5">
+            {(["ALL", "LONG", "SHORT"] as Side[]).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSide(s)}
+                className={`rounded-full px-3 py-1 text-[11.5px] font-bold transition-colors ${
+                  side === s
+                    ? s === "LONG"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : s === "SHORT"
+                        ? "bg-red-100 text-red-700"
+                        : "bg-violet-100 text-violet-700"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                {s === "ALL" ? "Both" : s === "LONG" ? "Long" : "Short"}
+              </button>
+            ))}
+          </div>
+
+          <select value={minN} onChange={(e) => setMinN(Number(e.target.value))} className={selectPill}>
+            {MIN_N_OPTS.map((n) => (
+              <option key={n} value={n}>{n === 0 ? "Any trades" : `≥ ${n} trades`}</option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setGateOnly((v) => !v)}
+            className={`${pillBase} ${gateOnly ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"}`}
+          >
+            Gate pass only
+          </button>
+          <button
+            type="button"
+            onClick={() => setProfitOnly((v) => !v)}
+            className={`${pillBase} ${profitOnly ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"}`}
+          >
+            Profitable only
+          </button>
+
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto rounded-full px-3 py-1.5 text-[12px] font-semibold text-violet-600 hover:text-violet-800"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-zinc-100 text-left text-[10.5px] uppercase tracking-[0.08em] text-zinc-400">
                 <th className="px-6 py-3 font-bold">Strategy</th>
                 <th className="px-3 py-3 font-bold">Symbol</th>
-                <th className="px-3 py-3 text-right font-bold">Trades</th>
-                <th className="px-3 py-3 text-right font-bold">WR %</th>
-                <th className="px-3 py-3 text-right font-bold">PF</th>
-                <th className="px-3 py-3 text-right font-bold">Net $</th>
-                <th className="px-3 py-3 text-right font-bold">Max DD %</th>
-                <th className="px-3 py-3 text-right font-bold">Missed</th>
+                <SortTh label="Trades" k="n" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortTh label="WR %" k="wr_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortTh label="PF" k="pf" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortTh label="Net $" k="net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortTh label="Max DD %" k="max_dd_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortTh label="Missed" k="missed" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <th className="px-6 py-3 text-right font-bold">Gate</th>
               </tr>
             </thead>
@@ -280,11 +412,13 @@ export default function ScalpDeskPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-6 py-12 text-center font-sans text-[13.5px] text-zinc-400">
-                    No closed trades yet on these filters — the desk trades 24/7; check back soon.
+                    {rows.length === 0
+                      ? "No closed trades yet — the desk trades 24/7; check back soon."
+                      : "No streams match these filters."}
                   </td>
                 </tr>
               )}
-              {filtered.slice(0, 100).map((r) => (
+              {filtered.slice(0, 150).map((r) => (
                 <tr key={`${r.strategy}|${r.symbol}`} className="border-b border-zinc-50 transition-colors hover:bg-zinc-50">
                   <td className="px-6 py-2.5 font-sans font-semibold text-zinc-800">{r.strategy}</td>
                   <td className="px-3 py-2.5 text-zinc-500">{r.symbol.replace("USDT", "")}</td>
