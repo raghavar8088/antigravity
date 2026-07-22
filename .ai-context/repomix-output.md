@@ -112,6 +112,8 @@ The content is organized as follows:
   app/api/mock-trading/trades/export/route.ts
   app/api/mock-trading/trades/route.test.ts
   app/api/mock-trading/trades/route.ts
+  app/api/options-buying/[...path]/route.ts
+  app/api/options-selling/[...path]/route.ts
   app/api/options/paper-snapshot/route.ts
   app/api/pre-live/[...path]/route.ts
   app/api/probe/delta-btc/route.ts
@@ -154,6 +156,8 @@ The content is organized as follows:
   app/mobile/page.tsx
   app/mock-trading/error.tsx
   app/mock-trading/page.tsx
+  app/options-buying-desk/page.tsx
+  app/options-selling-desk/page.tsx
   app/page.tsx
   app/paper-desk/page.tsx
   app/paperdesk/page.tsx

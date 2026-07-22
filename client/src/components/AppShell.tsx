@@ -50,6 +50,16 @@ const ic = {
       <rect x="5" y="2" width="14" height="20" rx="2" /><path d="M12 18h.01" />
     </svg>
   ),
+  shield: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
+  target: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" />
+    </svg>
+  ),
 };
 
 const SECTIONS: NavSection[] = [
@@ -59,6 +69,8 @@ const SECTIONS: NavSection[] = [
       { href: "/terminal", label: "Command Center", icon: ic.monitor },
       { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
       { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
+      { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },
+      { href: "/options-buying-desk", label: "Crypto Options Buying", icon: ic.target },
       { href: "/mock-trading", label: "Mock Trading", icon: ic.layers },
     ],
   },
@@ -69,6 +81,24 @@ const SECTIONS: NavSection[] = [
       { href: "/api/scalp/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/trades?n=100", label: "Recent Trades JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/health", label: "Engine Health JSON", icon: ic.code, external: true },
+    ],
+  },
+  {
+    title: "Options Selling · API",
+    items: [
+      { href: "/api/options-selling/strategies", label: "Strategies JSON", icon: ic.code, external: true },
+      { href: "/api/options-selling/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
+      { href: "/api/options-selling/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-selling/positions", label: "Open Positions JSON", icon: ic.code, external: true },
+    ],
+  },
+  {
+    title: "Options Buying · API",
+    items: [
+      { href: "/api/options-buying/strategies", label: "Strategies JSON", icon: ic.code, external: true },
+      { href: "/api/options-buying/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
+      { href: "/api/options-buying/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-buying/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },
   {
