@@ -97,11 +97,14 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 		HasShadowPosition: false,
 	}
 }
-// optionTradeAllocationUSD returns the per-strategy ticket size: 0.20% of the
-// configured options paper balance — low-balance-oriented sizing that scales
-// with INITIAL_OPTIONS_BALANCE_USD / INITIAL_PAPER_BALANCE_USD.
+// optionTradeAllocationPct is the share of the account committed per ticket.
+const optionTradeAllocationPct = 0.002
+
+// optionTradeAllocationUSD is the seed ticket size used before the account
+// balance is restored. Live sizing uses Engine.tradeAllocationUSD instead, which
+// tracks the real balance — this only scales with the configured seed.
 func optionTradeAllocationUSD() float64 {
-	return getInitialOptionsBalanceUSD() * 0.002
+	return getInitialOptionsBalanceUSD() * optionTradeAllocationPct
 }
 
 func newStrategyState(def StrategyDef) *strategyState {

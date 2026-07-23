@@ -546,6 +546,18 @@ func (e *Engine) dailyLossBreached() bool {
 	return loss >= buyerDailyLossLimitPct
 }
 
+// tradeAllocationUSD is the capital committed per ticket: a fixed share of the
+// live account. Sizing must track the real balance — pegging it to the seed
+// constant left a $1M desk trading $2 tickets whenever the env was unset.
+// Caller must hold e.mu.
+func (e *Engine) tradeAllocationUSD() float64 {
+	balance := e.balance
+	if balance <= 0 {
+		balance = getInitialOptionsBalanceUSD()
+	}
+	return balance * optionTradeAllocationPct
+}
+
 func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
