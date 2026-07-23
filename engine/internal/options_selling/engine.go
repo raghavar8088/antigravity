@@ -209,18 +209,7 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// A desk that never traded carries only its seed funding; adopting that stale
-	// figure would pin the account to the old balance after a funding change.
-	hasHistory := len(state.Trades) > 0
-	if !hasHistory {
-		for _, s := range state.Strategies {
-			if s.Position != nil {
-				hasHistory = true
-				break
-			}
-		}
-	}
-	if state.Balance > 0 && hasHistory {
+	if state.Balance > 0 {
 		e.balance = state.Balance
 	}
 	// Restore daily loss tracking fields
