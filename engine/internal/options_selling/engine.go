@@ -647,7 +647,7 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	*openCount++
 	e.schedulePersistLocked(e.exportStateLocked())
 
-	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.0f | Notional: $%.2f | Fees: $%.2f | Margin: $%.2f | Balance: $%.0f",
+	log.Printf("[OPTIONS SELLING] 📉 OPEN SELL %s %s | Strike: $%.0f | Premium: $%.2f | Qty: %.4f BTC | Notional: $%.2f | Fees: $%.2f | Margin: $%.2f | Balance: $%.0f",
 		s.def.Name, s.def.Type, pos.Strike, pos.EntryPremium, pos.Quantity, notional, fees, marginRequired, e.balance)
 
 	// Fire Delta live bridge hook (non-blocking, outside lock)
@@ -861,10 +861,16 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		}
 	}
 
-	// Enforce minimum $2 net PnL floor
+	// Enforce minimum net PnL floor. A short option can never earn more than the
+	// premium collected, so the floor must not manufacture a gain larger than what
+	// was actually at stake — losses may still exceed it.
+	floor := MIN_ABS_NET_PNL_USD
+	if maxGain := pos.EntryPremium * pos.Quantity; rawSign > 0 && floor > maxGain {
+		floor = maxGain
+	}
 	netPnL := grossPnL
-	if math.Abs(netPnL) < MIN_ABS_NET_PNL_USD {
-		netPnL = rawSign * MIN_ABS_NET_PNL_USD
+	if math.Abs(netPnL) < floor {
+		netPnL = rawSign * floor
 	}
 
 	returnPct := 0.0
