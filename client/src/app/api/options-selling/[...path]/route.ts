@@ -85,8 +85,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
 
   const target = `${upstreamBase()}${pathname}${req.nextUrl.search}`;
   try {
+    const headers = new Headers();
+    headers.set("X-Service-Name", "vercel-proxy");
+    headers.set("X-Service-Timestamp", String(Date.now()));
+    headers.set("Authorization", `Bearer ${session}`);
     const upstream = await fetch(target, {
       method: "GET",
+      headers,
       cache: "no-store",
       signal: AbortSignal.timeout(30_000),
     });
