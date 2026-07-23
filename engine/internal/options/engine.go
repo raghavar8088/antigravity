@@ -546,18 +546,6 @@ func (e *Engine) dailyLossBreached() bool {
 	return loss >= buyerDailyLossLimitPct
 }
 
-// tradeAllocationUSD is the capital committed per ticket: a fixed share of the
-// live account. Sizing must track the real balance — pegging it to the seed
-// constant left a $1M desk trading $2 tickets whenever the env was unset.
-// Caller must hold e.mu.
-func (e *Engine) tradeAllocationUSD() float64 {
-	balance := e.balance
-	if balance <= 0 {
-		balance = getInitialOptionsBalanceUSD()
-	}
-	return balance * optionTradeAllocationPct
-}
-
 func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -808,8 +796,23 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
-	quantity := positionUSD / pr.Premium
-	if quantity <= 0 {
+	// Size by contracts like the selling desk so both desks take the same BTC
+	// exposure per ticket. A fixed dollar ticket divided by the premium bought
+	// enormous quantities of cheap far-OTM options, so a routine -50% move on a
+	// $1 premium became a four-figure loss.
+	contracts := float64(DELTA_BASE_QUANTITY)
+	if def.PositionUSD > 0 {
+		contracts *= positionUSD / def.PositionUSD
+	}
+	if contracts < DELTA_MIN_QUANTITY {
+		contracts = DELTA_MIN_QUANTITY
+	}
+	if contracts > DELTA_MAX_QUANTITY {
+		contracts = DELTA_MAX_QUANTITY
+	}
+	quantity := contracts * DELTA_CONTRACT_SIZE_BTC
+	costBasis := pr.Premium * quantity
+	if quantity <= 0 || costBasis <= 0 || costBasis > e.balance {
 		return nil
 	}
 
@@ -833,7 +836,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		EntryPremium:   pr.Premium,
 		CurrentPremium: pr.Premium,
 		Quantity:       quantity,
-		CostBasis:      positionUSD,
+		CostBasis:      costBasis,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
 		IV:             iv,

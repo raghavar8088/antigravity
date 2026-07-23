@@ -97,15 +97,24 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 		HasShadowPosition: false,
 	}
 }
-// optionTradeAllocationPct is the share of the account committed per ticket.
-const optionTradeAllocationPct = 0.002
-
-// optionTradeAllocationUSD is the seed ticket size used before the account
-// balance is restored. Live sizing uses Engine.tradeAllocationUSD instead, which
-// tracks the real balance — this only scales with the configured seed.
+// optionTradeAllocationUSD is the nominal per-strategy ticket. Like the selling
+// desk it only sets the ratio that drives the size multiplier — real exposure is
+// the contract count below.
 func optionTradeAllocationUSD() float64 {
-	return getInitialOptionsBalanceUSD() * optionTradeAllocationPct
+	return getInitialOptionsBalanceUSD() * 0.002
 }
+
+const (
+	// Delta Exchange BTC option contract size. One contract controls 0.001 BTC,
+	// so contract counts are converted to BTC exposure before any money math.
+	DELTA_CONTRACT_SIZE_BTC = 0.001
+
+	// Delta Exchange retail position limits — mirrors the selling desk so both
+	// desks take the same BTC exposure per ticket.
+	DELTA_BASE_QUANTITY = 200
+	DELTA_MAX_QUANTITY  = 500
+	DELTA_MIN_QUANTITY  = 50
+)
 
 func newStrategyState(def StrategyDef) *strategyState {
 	def.PositionUSD = optionTradeAllocationUSD()
