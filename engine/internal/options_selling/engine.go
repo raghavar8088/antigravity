@@ -6,11 +6,35 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
 
-const initialOptionsBalance = 1000.0 // $1,000 paper account
+const initialOptionsBalance = 1000.0 // default paper account, overridable by env
+
+// initialSellingBalanceUSD returns the starting balance for the option-selling
+// paper account, read from the same env vars as the buying desk so both desks
+// are funded identically. Falls back to initialOptionsBalance when unset.
+func initialSellingBalanceUSD() float64 {
+	for _, key := range []string{"INITIAL_OPTIONS_BALANCE_USD", "INITIAL_PAPER_BALANCE_USD"} {
+		raw := os.Getenv(key)
+		if raw == "" {
+			continue
+		}
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil || f <= 0 {
+			log.Printf("[OPTIONS SELLING] WARNING: invalid %s=%q, using $%.0f", key, raw, initialOptionsBalance)
+			continue
+		}
+		if f < 100 {
+			return 100.0
+		}
+		return f
+	}
+	return initialOptionsBalance
+}
 
 // strategyState holds the runtime state for a single strategy.
 type strategyState struct {
@@ -66,11 +90,12 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 	}
 
 	now := time.Now().UTC()
+	startingBalance := initialSellingBalanceUSD()
 	engine := &Engine{
 		states:          states,
 		marketProfile:   profile,
-		balance:         initialOptionsBalance,
-		dayStartBalance: initialOptionsBalance,
+		balance:         startingBalance,
+		dayStartBalance: startingBalance,
 		dayStartDate:    int(now.Unix() / 86400),
 		tickEvery:       tickEvery,
 	}
@@ -184,7 +209,18 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if state.Balance > 0 {
+	// A desk that never traded carries only its seed funding; adopting that stale
+	// figure would pin the account to the old balance after a funding change.
+	hasHistory := len(state.Trades) > 0
+	if !hasHistory {
+		for _, s := range state.Strategies {
+			if s.Position != nil {
+				hasHistory = true
+				break
+			}
+		}
+	}
+	if state.Balance > 0 && hasHistory {
 		e.balance = state.Balance
 	}
 	// Restore daily loss tracking fields
@@ -298,7 +334,7 @@ func (e *Engine) ResetAccount() PersistedState {
 	defer e.mu.Unlock()
 
 	e.trades = nil
-	e.balance = initialOptionsBalance
+	e.balance = initialSellingBalanceUSD()
 	e.lastPrice = 0
 	e.priceHist = nil
 	e.minuteBars = nil
@@ -713,8 +749,12 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		quantity = DELTA_MAX_QUANTITY
 	}
 
+	// Contracts are 0.001 BTC on Delta; convert to BTC exposure so margin,
+	// premium credit and PnL are all denominated in the same units.
+	btcQuantity := quantity * DELTA_CONTRACT_SIZE_BTC
+
 	// Check margin requirement (20% of strike value)
-	marginRequired := strike * quantity * DELTA_MARGIN_PCT
+	marginRequired := strike * btcQuantity * DELTA_MARGIN_PCT
 	if marginRequired > e.balance {
 		return nil // insufficient margin
 	}
@@ -735,7 +775,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		ExpiryTime:     expiry,
 		EntryPremium:   pr.Premium,
 		CurrentPremium: pr.Premium,
-		Quantity:       quantity,
+		Quantity:       btcQuantity,
 		CostBasis:      positionUSD,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,

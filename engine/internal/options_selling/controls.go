@@ -59,6 +59,10 @@ const (
 	// Round-trip fee on notional (conservative for short options)
 	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
 
+	// Delta Exchange BTC option contract size. One contract controls 0.001 BTC,
+	// so contract counts are converted to BTC exposure before any money math.
+	DELTA_CONTRACT_SIZE_BTC = 0.001
+
 	// Delta Exchange margin requirement simulation (conservative)
 	// Short options require ~15-20% of strike value as margin
 	DELTA_MARGIN_PCT = 0.20 // 20% of strike value
