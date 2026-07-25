@@ -978,6 +978,8 @@ The content is organized as follows:
   live/parity_checker.go
   liveengine/controller_test.go
   liveengine/controller.go
+  liveengine/http_test.go
+  liveengine/http.go
   liveengine/roster_test.go
   liveengine/roster.go
   livemirror/mirror_test.go
