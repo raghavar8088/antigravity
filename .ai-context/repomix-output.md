@@ -83,6 +83,7 @@ The content is organized as follows:
   app/api/killswitch/resume/route.ts
   app/api/killswitch/status/route.ts
   app/api/killswitch/trigger/route.ts
+  app/api/live-engine/[...path]/route.ts
   app/api/mock-trading/account/latest/route.ts
   app/api/mock-trading/account/route.ts
   app/api/mock-trading/analytics/correlation/route.ts
@@ -152,6 +153,7 @@ The content is organized as follows:
   app/favicon.ico
   app/globals.css
   app/layout.tsx
+  app/live-engine/page.tsx
   app/login/page.tsx
   app/mobile/page.tsx
   app/mock-trading/error.tsx

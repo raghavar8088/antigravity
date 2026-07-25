@@ -11,6 +11,17 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
+// realOptionPremiumUSD returns the real per-contract option premium in USD, and
+// whether it is trustworthy. Delta's exact USD-per-contract option quoting unit
+// is an unresolved testnet open item (see LIVE_ENGINE_PHASE0_FEASIBILITY.md), so
+// this deliberately returns (0,false) until that unit is confirmed on testnet.
+// A guessed unit in a real-money sizing path is the one thing to avoid; callers
+// treat "not available" as fail-closed. This is the single seam where the live
+// quote is wired once the unit is confirmed.
+func realOptionPremiumUSD() (float64, bool) {
+	return 0, false
+}
+
 // ProcessExecutionRequest is the single orchestrator entry for external execution intents.
 func (o *Orchestrator) ProcessExecutionRequest(ctx context.Context, req executiongateway.Request) (executiongateway.Response, error) {
 	if o.killSvc != nil && o.killSvc.IsActive() {
@@ -204,7 +215,28 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 			captured = result
 			return execution.FillResult{ExecPrice: result.Price, OrderMode: execution.OrderModeMarket}, nil
 		}
-		if _, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, open.StrategyName, price, execution.OrderModeMarket, fillFn); err != nil {
+		var pathOpts []InstitutionalPathOpts
+		if bridge.IsBuyingMode() {
+			// Live-money buys carry the budget backstop at the post-gate choke
+			// point. Premium comes from a real quote; until Delta's USD-per-contract
+			// option unit is confirmed on testnet, the quote is unavailable and
+			// AssertBuyWithinBudget fails closed — the buy is rejected rather than
+			// sized on a guessed unit.
+			pathOpts = append(pathOpts, InstitutionalPathOpts{
+				PreSubmitAssert: func() error {
+					bal, werr := bridge.Client().GetWallet(ctx)
+					if werr != nil {
+						return werr
+					}
+					premium, ok := realOptionPremiumUSD()
+					if !ok {
+						premium = 0 // unresolved unit ⇒ fail closed in AssertBuyWithinBudget
+					}
+					return delta.AssertBuyWithinBudget(bal, premium, 1)
+				},
+			})
+		}
+		if _, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, open.StrategyName, price, execution.OrderModeMarket, fillFn, pathOpts...); err != nil {
 			return err
 		}
 		bridge.UpdateTradeAfterFill(tradeID, captured, productID, contracts, open.Strike, open.ExpiryTime)

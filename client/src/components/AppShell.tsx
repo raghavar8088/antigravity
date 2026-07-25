@@ -60,10 +60,16 @@ const ic = {
       <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" />
     </svg>
   ),
+  live: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2v8" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+    </svg>
+  ),
 };
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
+  { href: "/live-engine", label: "Live Engine", icon: ic.live },
   { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
   { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
   { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },

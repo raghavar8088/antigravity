@@ -1,0 +1,505 @@
+"use client";
+
+/**
+ * Live Engine — REAL-MONEY option-buying control plane.
+ *
+ * Reads and mutates only through the session-gated /api/live-engine proxy. This
+ * module trades real capital on Delta BTC options (long premium only), capped at
+ * a $100 server-enforced ceiling. It ships DISARMED; arming requires typing the
+ * exact confirmation phrase. Built on the shared desk primitives so it matches
+ * the Options Buying desk, but carries persistent, unmissable REAL MONEY
+ * differentiation so it can never be mistaken for a paper desk.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  DeskBanner,
+  DeskButton,
+  DeskCard,
+  DeskChip,
+  DeskDataTable,
+  DeskLinearProgress,
+  DeskMetricTile,
+  DeskSectionHeader,
+  type DeskColumn,
+} from "@/components/desk/ui";
+
+const ARM_PHRASE = "ARM LIVE $100";
+const CEILING = 100;
+
+type LiveState = {
+  state: "ARMED" | "DISARMED";
+  armed: boolean;
+  armedBy?: string;
+  armedAt?: string;
+  lastDisarmReason?: string;
+  lastDisarmAt?: string;
+  consecutiveRejects: number;
+  maxConsecutiveRejects: number;
+  ceilingUsd: number;
+  configured: boolean;
+  killSwitchActive: boolean;
+};
+
+type Account = {
+  equityUsd: number;
+  tradableUsd: number;
+  ceilingUsd: number;
+  availableUsd: number;
+  marginUsedUsd: number;
+  openRiskUsd: number;
+  realizedTodayUsd: number;
+  distanceToBreakerPct: number;
+  source: string;
+  asOf: string;
+  stale: boolean;
+};
+
+type Position = {
+  symbol: string;
+  side: string;
+  size: number;
+  entryPrice: number;
+  markPrice: number;
+  unrealizedPnl: number;
+  marginUsd: number;
+  liquidationPrice: string;
+  strategy: string;
+};
+
+type Order = {
+  id: string;
+  strategy: string;
+  optionType: string;
+  strike: number;
+  symbol: string;
+  contracts: number;
+  side: string;
+  premiumUsd: number;
+  fillPrice: number;
+  status: string;
+  deltaOrderId: string;
+  openedAt: string;
+  rejectReason?: string;
+};
+
+type Gate = { name: string; pass: boolean; requirement: string; actual: string };
+type Eligibility = { strategy: string; live: boolean; reason: string; gates: Gate[] };
+
+type Recon = {
+  matched: boolean;
+  enginePositions: number;
+  deltaPositions: number;
+  mismatches?: string[];
+  asOf: string;
+  error?: string;
+};
+
+type AuditEntry = { at: string; actor: string; action: string; reason?: string; detail?: string };
+
+function fmtUSD(v: number | undefined): string {
+  if (v === undefined || Number.isNaN(v)) return "—";
+  return `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(2)}`;
+}
+function pnlTone(v: number): string {
+  return v > 0 ? "desk-pnl-positive" : v < 0 ? "desk-pnl-negative" : "desk-pnl-neutral";
+}
+function ageLabel(iso?: string): string {
+  if (!iso) return "no data";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms)) return "no data";
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s ago`;
+  return `${Math.round(s / 60)}m ago`;
+}
+
+export default function LiveEnginePage() {
+  const [state, setState] = useState<LiveState | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [roster, setRoster] = useState<Eligibility[]>([]);
+  const [recon, setRecon] = useState<Recon | null>(null);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [busy, setBusy] = useState<boolean>(false);
+  const [actionMsg, setActionMsg] = useState<string>("");
+
+  // Arm confirmation modal
+  const [armOpen, setArmOpen] = useState<boolean>(false);
+  const [armText, setArmText] = useState<string>("");
+
+  const refresh = useCallback(async () => {
+    try {
+      const [st, ac, po, or, ro, rc, au] = await Promise.all([
+        fetch("/api/live-engine/state", { cache: "no-store" }),
+        fetch("/api/live-engine/account", { cache: "no-store" }),
+        fetch("/api/live-engine/positions", { cache: "no-store" }),
+        fetch("/api/live-engine/orders", { cache: "no-store" }),
+        fetch("/api/live-engine/roster", { cache: "no-store" }),
+        fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
+        fetch("/api/live-engine/audit", { cache: "no-store" }),
+      ]);
+      if (!st.ok) {
+        setError(`control plane unreachable (HTTP ${st.status})`);
+        return;
+      }
+      setState(await st.json());
+      if (ac.ok) setAccount(await ac.json());
+      if (po.ok) setPositions((await po.json()) as Position[]);
+      if (or.ok) setOrders((await or.json()) as Order[]);
+      if (ro.ok) setRoster((await ro.json()) as Eligibility[]);
+      if (rc.ok) setRecon(await rc.json());
+      if (au.ok) setAudit(((await au.json()) as { entries: AuditEntry[] }).entries ?? []);
+      setError("");
+    } catch {
+      setError("control plane unreachable");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const t = setInterval(() => void refresh(), 15_000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const mutate = useCallback(
+    async (action: string, body: Record<string, unknown>) => {
+      setBusy(true);
+      setActionMsg("");
+      try {
+        const res = await fetch(`/api/live-engine/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json()) as { ok?: boolean; error?: string; result?: unknown };
+        if (!res.ok || data.ok === false) {
+          setActionMsg(data.error ?? `HTTP ${res.status}`);
+        } else {
+          setActionMsg(`${action} ok`);
+        }
+        await refresh();
+      } catch (e) {
+        setActionMsg(e instanceof Error ? e.message : "request failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh],
+  );
+
+  const armed = state?.armed ?? false;
+  const canArm = armText === ARM_PHRASE && !busy;
+
+  const positionColumns: DeskColumn<Position>[] = useMemo(
+    () => [
+      { id: "sym", header: "Symbol", cell: (p) => p.symbol },
+      { id: "side", header: "Side", cell: (p) => <DeskChip tone={p.side.toUpperCase() === "BUY" ? "success" : "default"}>{p.side}</DeskChip> },
+      { id: "size", align: "right", header: "Size", cell: (p) => p.size },
+      { id: "entry", align: "right", header: "Entry", cell: (p) => p.entryPrice.toFixed(2) },
+      { id: "mark", align: "right", header: "Mark", cell: (p) => p.markPrice.toFixed(2) },
+      { id: "upnl", align: "right", header: "Unrealized", cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span> },
+      { id: "margin", align: "right", header: "Margin", cell: (p) => fmtUSD(p.marginUsd) },
+      { id: "liq", align: "right", header: "Liquidation", cell: (p) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{p.liquidationPrice}</span> },
+      { id: "strat", header: "Strategy", cell: (p) => p.strategy || "—" },
+    ],
+    [],
+  );
+
+  const orderColumns: DeskColumn<Order>[] = useMemo(
+    () => [
+      { id: "strat", header: "Strategy", cell: (o) => o.strategy || "—" },
+      { id: "type", header: "Type", cell: (o) => <DeskChip tone={o.optionType === "CALL" ? "success" : "primary"}>{o.optionType}</DeskChip> },
+      { id: "sym", header: "Symbol", cell: (o) => o.symbol || "—" },
+      { id: "ct", align: "right", header: "Contracts", cell: (o) => o.contracts },
+      { id: "prem", align: "right", header: "Premium", cell: (o) => fmtUSD(o.premiumUsd) },
+      {
+        id: "status",
+        header: "Status",
+        cell: (o) => (
+          <DeskChip tone={o.status === "OPEN" ? "success" : o.status === "FAILED" ? "error" : "default"}>{o.status}</DeskChip>
+        ),
+      },
+      { id: "reject", header: "Reject reason", cell: (o) => <span style={{ color: "var(--desk-error)" }}>{o.rejectReason ?? ""}</span> },
+    ],
+    [],
+  );
+
+  const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
+    () => [
+      { id: "strat", header: "Strategy", cell: (e) => e.strategy },
+      { id: "live", header: "Live", cell: (e) => <DeskChip tone={e.live ? "success" : "default"}>{e.live ? "LIVE" : "NOT LIVE"}</DeskChip> },
+      { id: "reason", header: "Reason", cell: (e) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{e.reason}</span> },
+      {
+        id: "gates",
+        header: "Gates",
+        cell: (e) => (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {e.gates.map((g) => (
+              <DeskChip key={g.name} tone={g.pass ? "success" : "error"} title={`${g.requirement} — have ${g.actual}`}>
+                {g.name}
+              </DeskChip>
+            ))}
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const auditColumns: DeskColumn<AuditEntry>[] = useMemo(
+    () => [
+      { id: "at", header: "Time (UTC)", cell: (a) => new Date(a.at).toISOString().slice(5, 19).replace("T", " ") },
+      { id: "actor", header: "Actor", cell: (a) => a.actor },
+      { id: "action", header: "Action", cell: (a) => <DeskChip tone={a.action.includes("DISARM") ? "warning" : a.action === "ARM" ? "error" : "default"}>{a.action}</DeskChip> },
+      { id: "reason", header: "Reason", cell: (a) => a.reason ?? "" },
+      { id: "detail", header: "Detail", cell: (a) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{a.detail ?? ""}</span> },
+    ],
+    [],
+  );
+
+  const reconMismatch = recon ? !recon.matched : false;
+
+  return (
+    <div
+      style={{ minHeight: "100%", background: "var(--desk-surface-dim)" }}
+      data-testid="live-engine-root"
+      data-armed={armed ? "true" : "false"}
+    >
+      <DeskLinearProgress visible={loading} />
+      <main className="desk-page">
+        {/* Header + persistent REAL MONEY differentiation */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem" }}>
+            <Link href="/terminal" className="desk-label-md" style={{ fontWeight: 400, textDecoration: "none" }}>Home</Link>
+            <span style={{ color: "var(--desk-outline)" }}>›</span>
+            <span className="desk-body-md" style={{ fontWeight: 500 }}>Live Engine</span>
+          </div>
+          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+            <h1 className="desk-display-lg" style={{ fontSize: "2rem" }}>Live Engine</h1>
+            <span
+              data-testid="real-money-badge"
+              className="desk-mono"
+              style={{
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                letterSpacing: "0.06em",
+                padding: "4px 10px",
+                borderRadius: 6,
+                color: "var(--desk-on-error, #fff)",
+                background: "var(--desk-error)",
+              }}
+            >
+              REAL MONEY · ${CEILING}
+            </span>
+          </div>
+          <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
+            Real-money option <strong>buying</strong> on Delta BTC options (long premium only), capped at a
+            ${CEILING} server-enforced ceiling. Ships disarmed; arming requires typing the exact confirmation phrase.
+            Naked selling is excluded by decision. 10× is inert on long options — buying pays the premium in full, with
+            no borrow and no liquidation price.
+          </p>
+        </div>
+
+        {error && <DeskBanner variant="warning">{error} — retrying every 15s</DeskBanner>}
+        {actionMsg && <DeskBanner variant={actionMsg.endsWith("ok") ? "success" : "error"}>{actionMsg}</DeskBanner>}
+
+        {/* Armed/disarmed state — visible without scrolling */}
+        <DeskBanner
+          variant={armed ? "error" : "info"}
+          title={armed ? "● ARMED — LIVE ORDERS ENABLED" : "○ DISARMED — no live orders"}
+        >
+          <span data-testid="armed-state">
+            {armed
+              ? `Armed by ${state?.armedBy ?? "?"} · ${ageLabel(state?.armedAt)}. Live orders can be placed against real capital.`
+              : `Disarmed${state?.lastDisarmReason ? ` · last reason: ${state.lastDisarmReason}` : ""}. No live orders will be placed.`}
+            {state?.killSwitchActive ? " · KILL SWITCH ACTIVE" : ""}
+            {state && !state.configured ? " · broker not configured" : ""}
+          </span>
+        </DeskBanner>
+
+        {/* SECTION 1 — Arm / Disarm / Close All */}
+        <DeskCard>
+          <DeskSectionHeader
+            title="Control"
+            subtitle="Arming is a human action requiring the exact typed confirmation. Auto-disarm is one-way."
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: "0 4px 4px" }}>
+            {!armed ? (
+              <DeskButton data-testid="arm-open" variant="filled" disabled={busy} onClick={() => { setArmText(""); setArmOpen(true); }}>
+                Arm live trading
+              </DeskButton>
+            ) : (
+              <DeskButton data-testid="disarm" variant="tonal" disabled={busy} onClick={() => void mutate("disarm", { reason: "manual disarm from UI" })}>
+                Disarm
+              </DeskButton>
+            )}
+            <DeskButton data-testid="close-all" variant="outlined" disabled={busy} onClick={() => void mutate("close-all", {})}>
+              Panic — CLOSE ALL
+            </DeskButton>
+            <div style={{ marginLeft: "auto", alignSelf: "center" }} className="desk-label-md">
+              Consecutive rejects: {state?.consecutiveRejects ?? 0} / {state?.maxConsecutiveRejects ?? 3} → auto-disarm
+            </div>
+          </div>
+        </DeskCard>
+
+        {/* SECTION 2 — Live account strip */}
+        <DeskCard>
+          <DeskSectionHeader
+            title="Live Account"
+            subtitle={account ? `${account.source} · ${ageLabel(account.asOf)}${account.stale ? " · STALE" : ""}` : "—"}
+          />
+          <div className="desk-metrics-row">
+            <DeskMetricTile label="Real Equity" value={account ? fmtUSD(account.equityUsd) : "—"} sub={account?.stale ? "stale — see source" : "delta wallet"} highlight />
+            <DeskMetricTile label={`Tradable (≤ $${CEILING})`} value={account ? fmtUSD(account.tradableUsd) : "—"} sub="ceiling enforced server-side" />
+            <DeskMetricTile label="Available" value={account ? fmtUSD(account.availableUsd) : "—"} sub="equity − margin" />
+            <DeskMetricTile label="Margin Used" value={account ? fmtUSD(account.marginUsedUsd) : "—"} sub="delta positions" />
+            <DeskMetricTile label="Open Risk" value={account ? fmtUSD(account.openRiskUsd) : "—"} sub="premium at risk (long)" />
+            <DeskMetricTile label="Realized Today" value={account ? fmtUSD(account.realizedTodayUsd) : "—"} valueClassName={account ? pnlTone(account.realizedTodayUsd) : undefined} sub="to daily breaker" />
+          </div>
+        </DeskCard>
+
+        {/* SECTION 6 (surfaced high) — Reconciliation, shown loudly on mismatch */}
+        {reconMismatch ? (
+          <DeskBanner variant="error" title="⚠ RECONCILIATION MISMATCH — engine state vs Delta truth">
+            <span data-testid="recon-status">
+              engine {recon?.enginePositions} open · Delta {recon?.deltaPositions} positions.
+              {(recon?.mismatches ?? []).map((m) => ` ${m}.`)}
+              {recon?.error ? ` error: ${recon.error}` : ""} An armed engine auto-disarms on this.
+            </span>
+          </DeskBanner>
+        ) : (
+          <DeskCard>
+            <DeskSectionHeader title="Reconciliation" subtitle={recon ? `${ageLabel(recon.asOf)}` : "—"} />
+            <div className="desk-metrics-row">
+              <DeskMetricTile compact label="Engine open" value={recon?.enginePositions ?? "—"} />
+              <DeskMetricTile compact label="Delta positions" value={recon?.deltaPositions ?? "—"} />
+              <DeskMetricTile compact label="Status" value={<span data-testid="recon-status">{recon ? (recon.matched ? "MATCHED" : "MISMATCH") : "—"}</span>} subColor={recon?.matched ? "profit" : "loss"} sub={recon?.error ?? ""} />
+            </div>
+          </DeskCard>
+        )}
+
+        {/* SECTION 3 — Live positions */}
+        <DeskCard padding="md">
+          <DeskSectionHeader title="Live Positions" subtitle={`${positions.length} open`} />
+          <DeskDataTable
+            columns={positionColumns}
+            rows={positions}
+            getRowKey={(p, i) => `${p.symbol}-${i}`}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live positions.</span>}
+          />
+        </DeskCard>
+
+        {/* SECTION 4 — Orders / fills */}
+        <DeskCard padding="md">
+          <DeskSectionHeader title="Orders & Fills" subtitle={`${orders.length} recent`} />
+          <DeskDataTable
+            columns={orderColumns}
+            rows={orders.slice(0, 100)}
+            getRowKey={(o) => o.id}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live orders yet.</span>}
+          />
+        </DeskCard>
+
+        {/* SECTION 5 — Live roster with gate status */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Live Roster"
+            subtitle="Long-premium only · a strategy is live only with a real-fill record; synthetic performance never qualifies"
+          />
+          <DeskDataTable
+            columns={rosterColumns}
+            rows={roster}
+            getRowKey={(e) => e.strategy}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No strategies.</span>}
+          />
+        </DeskCard>
+
+        {/* Cost transparency — the live-edge question, impossible to overlook */}
+        <DeskCard>
+          <DeskSectionHeader title="Cost — round-trip fee as % of premium" subtitle="Delta charges 0.03% of notional per side, capped at 10% of premium. This ratio does not improve with account size." />
+          <div className="desk-metrics-row">
+            <DeskMetricTile compact label="$1.78 premium" value="≈ 2%" sub="round-trip" subColor="profit" />
+            <DeskMetricTile compact label="$0.45 premium" value="≈ 9%" sub="round-trip" subColor="neutral" />
+            <DeskMetricTile compact label="$0.30 premium" value="≈ 13%" sub="round-trip" subColor="loss" />
+            <DeskMetricTile compact label="$0.19 premium" value="≈ 20%" sub="cap binds" subColor="loss" />
+          </div>
+          <p className="desk-body-md" style={{ padding: "0 4px", color: "var(--desk-on-surface-variant)" }}>
+            Per-contract cost against the strategy&apos;s real selected premium is populated from live Delta quotes at the
+            testnet stage — the fee % of premium, not the account size, is the live-edge question.
+          </p>
+        </DeskCard>
+
+        {/* SECTION 7 — Audit log */}
+        <DeskCard padding="md">
+          <DeskSectionHeader title="Audit Log" subtitle="Every arm, disarm, auto-disarm, close-all and roster change — actor + timestamp" />
+          <DeskDataTable
+            columns={auditColumns}
+            rows={[...audit].reverse().slice(0, 100)}
+            getRowKey={(a, i) => `${a.at}-${i}`}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No audit entries yet.</span>}
+          />
+        </DeskCard>
+
+        <p className="desk-label-md" style={{ textAlign: "center", padding: "8px 0 24px", color: "var(--desk-on-surface-variant)" }}>
+          Real money · $100 ceiling enforced in the engine · long premium only · every order passes the risk gate, OMS,
+          and kill switch · auto-disarm is one-way
+        </p>
+      </main>
+
+      {/* Typed-confirmation ARM modal */}
+      {armOpen && (
+        <div
+          data-testid="arm-modal"
+          role="dialog"
+          aria-modal="true"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+          onClick={() => setArmOpen(false)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, width: "100%" }}>
+            <DeskCard>
+              <DeskSectionHeader title="Arm live trading — REAL MONEY" />
+              <div style={{ padding: "0 4px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
+                <DeskBanner variant="error">
+                  This arms real orders against real capital, capped at ${CEILING}. Type the phrase exactly to confirm.
+                </DeskBanner>
+                <div className="desk-mono" style={{ fontWeight: 700 }}>{ARM_PHRASE}</div>
+                <input
+                  data-testid="arm-input"
+                  autoFocus
+                  value={armText}
+                  onChange={(e) => setArmText(e.target.value)}
+                  placeholder="Type the confirmation phrase"
+                  style={{
+                    width: "100%", padding: "8px 12px", borderRadius: 8, fontFamily: "var(--font-jetbrains-mono, monospace)",
+                    border: "1px solid var(--desk-outline)", background: "var(--desk-surface)", color: "var(--desk-on-surface)",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <DeskButton variant="text" onClick={() => setArmOpen(false)}>Cancel</DeskButton>
+                  <DeskButton
+                    data-testid="arm-confirm"
+                    variant="filled"
+                    disabled={!canArm}
+                    onClick={async () => { setArmOpen(false); await mutate("arm", { confirmation: armText }); }}
+                  >
+                    Arm now
+                  </DeskButton>
+                </div>
+              </div>
+            </DeskCard>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
