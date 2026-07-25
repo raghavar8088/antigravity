@@ -111,12 +111,15 @@ function SidebarBody({ pathname }: { pathname: string }) {
   return (
     <>
       <Link href="/terminal" className="flex items-center gap-3 px-6 pb-7 pt-6">
-        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-sm">
+        <span
+          className="flex h-10 w-10 items-center justify-center rounded-2xl shadow-sm"
+          style={{ background: "var(--desk-primary)", color: "var(--desk-on-primary)" }}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M22 7l-8.5 8.5-5-5L2 17" /><path d="M16 7h6v6" />
           </svg>
         </span>
-        <span className="text-[19px] font-extrabold tracking-tight text-zinc-900" style={sora}>
+        <span className="text-[19px] font-extrabold tracking-tight" style={{ ...sora, color: "var(--desk-on-surface)" }}>
           Antigravity
         </span>
       </Link>
@@ -124,28 +127,35 @@ function SidebarBody({ pathname }: { pathname: string }) {
       <nav className="flex-1 overflow-y-auto px-4 pb-4">
         {SECTIONS.map((sec) => (
           <div key={sec.title} className="mb-6">
-            <div className="px-3 pb-2 text-[10.5px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+            <div
+              className="px-3 pb-2 text-[10.5px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: "var(--desk-on-surface-variant)" }}
+            >
               {sec.title}
             </div>
             <ul className="flex flex-col gap-0.5">
               {sec.items.map((item) => {
                 const active = !item.external && pathname.startsWith(item.href);
                 const cls = `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold transition-colors ${
-                  active ? "bg-violet-50 text-violet-700" : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                  active ? "" : "app-shell-nav-link"
                 }`;
+                const style = active
+                  ? { background: "var(--desk-primary-container)", color: "var(--desk-on-primary-container)" }
+                  : { color: "var(--desk-on-surface-variant)" };
+                const iconStyle = { color: active ? "var(--desk-primary)" : "var(--desk-on-surface-variant)", opacity: active ? 1 : 0.7 };
                 const body = (
                   <>
-                    <span className={active ? "text-violet-600" : "text-zinc-400"}>{item.icon}</span>
+                    <span style={iconStyle}>{item.icon}</span>
                     <span className="flex-1">{item.label}</span>
-                    {item.external && <span className="text-[10px] font-bold text-zinc-300">↗</span>}
+                    {item.external && <span className="text-[10px] font-bold" style={{ color: "var(--desk-on-surface-variant)" }}>↗</span>}
                   </>
                 );
                 return (
                   <li key={item.href}>
                     {item.external ? (
-                      <a href={item.href} target="_blank" rel="noreferrer" className={cls}>{body}</a>
+                      <a href={item.href} target="_blank" rel="noreferrer" className={cls} style={style}>{body}</a>
                     ) : (
-                      <Link href={item.href} className={cls}>{body}</Link>
+                      <Link href={item.href} className={cls} style={style}>{body}</Link>
                     )}
                   </li>
                 );
@@ -155,9 +165,12 @@ function SidebarBody({ pathname }: { pathname: string }) {
         ))}
       </nav>
 
-      <div className="mx-4 mb-5 rounded-2xl bg-zinc-50 px-4 py-3.5 text-[10.5px] leading-relaxed text-zinc-500">
-        <span className="font-bold text-zinc-700">Paper only.</span> Real money requires the pre-registered gate —
-        never leaderboard position alone.
+      <div
+        className="mx-4 mb-5 rounded-2xl px-4 py-3.5 text-[10.5px] leading-relaxed"
+        style={{ background: "var(--desk-surface-container)", color: "var(--desk-on-surface-variant)" }}
+      >
+        <span className="font-bold" style={{ color: "var(--desk-on-surface)" }}>Paper only.</span> Real money requires
+        the pre-registered gate — never leaderboard position alone.
       </div>
     </>
   );
@@ -178,9 +191,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   if (pathname === "/login" || pathname === "/sign-in") return <>{children}</>;
 
   return (
-    <div className="flex min-h-screen bg-zinc-50/50">
+    <div className="flex min-h-screen" style={{ background: "var(--desk-surface-dim)" }}>
       {/* Desktop: sticky sidebar as a flex item — cannot overlap content */}
-      <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col border-r border-zinc-200 bg-white lg:flex">
+      <aside
+        className="app-shell-sidebar sticky top-0 hidden h-screen w-[250px] shrink-0 flex-col lg:flex"
+        style={{ borderRight: "1px solid var(--desk-outline)", background: "var(--desk-surface)" }}
+      >
         <SidebarBody pathname={pathname} />
       </aside>
 
@@ -189,7 +205,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         type="button"
         aria-label="Open module menu"
         onClick={() => setOpen(true)}
-        className="fixed left-3 top-3 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow-md lg:hidden"
+        className="fixed left-3 top-3 z-40 flex h-10 w-10 items-center justify-center rounded-full shadow-md lg:hidden"
+        style={{ border: "1px solid var(--desk-outline)", background: "var(--desk-surface)", color: "var(--desk-on-surface-variant)" }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -201,9 +218,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
             type="button"
             aria-label="Close module menu"
             onClick={() => setOpen(false)}
-            className="absolute inset-0 h-full w-full cursor-default bg-zinc-900/40"
+            className="absolute inset-0 h-full w-full cursor-default"
+            style={{ background: "rgba(0,0,0,0.4)" }}
           />
-          <aside className="absolute left-0 top-0 flex h-full w-[280px] flex-col overflow-y-auto border-r border-zinc-200 bg-white shadow-2xl">
+          <aside
+            className="app-shell-sidebar absolute left-0 top-0 flex h-full w-[280px] flex-col overflow-y-auto shadow-2xl"
+            style={{ borderRight: "1px solid var(--desk-outline)", background: "var(--desk-surface)" }}
+          >
             <SidebarBody pathname={pathname} />
           </aside>
         </div>

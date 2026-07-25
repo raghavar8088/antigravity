@@ -55,6 +55,12 @@
   align-items: center;
 }
 
+/* ─── App shell sidebar (components/AppShell.tsx) ────────────────────────── */
+.app-shell-nav-link:hover {
+  background: var(--desk-surface-container);
+  color: var(--desk-on-surface) !important;
+}
+
 /* ─── App bar upgrade ─────────────────────────────────────────────────────── */
 .desk-app-bar--trading {
   background: color-mix(in srgb, var(--desk-surface) 92%, transparent) !important;

@@ -44,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="color-scheme" content="light dark" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("m3-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);else document.documentElement.setAttribute("data-theme",d?"dark":"light");}catch(e){document.documentElement.setAttribute("data-theme","light");}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("m3-theme");document.documentElement.setAttribute("data-theme",t==="light"||t==="dark"?t:"light");}catch(e){document.documentElement.setAttribute("data-theme","light");}})();`,
           }}
         />
       </head>
