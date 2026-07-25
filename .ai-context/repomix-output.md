@@ -976,6 +976,10 @@ The content is organized as follows:
   live/live_test.go
   live/orphan_detector.go
   live/parity_checker.go
+  liveengine/controller_test.go
+  liveengine/controller.go
+  liveengine/roster_test.go
+  liveengine/roster.go
   livemirror/mirror_test.go
   livemirror/mirror.go
   logger/logger.go
@@ -1502,6 +1506,7 @@ The content is organized as follows:
   trading/meta_label_test.go
   trading/meta_label.go
   trading/paperpersist_hooks.go
+  trading/presubmit_assert_test.go
   trading/scalers_eval.go
   trading/signal_flow_metrics.go
   trading/signal_scoring.go
