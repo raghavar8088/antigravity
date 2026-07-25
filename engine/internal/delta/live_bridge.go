@@ -79,6 +79,10 @@ type Bridge struct {
 
 	// killCheck blocks broker submission when the institutional kill switch is active.
 	killCheck func(context.Context) error
+
+	// submitResultHook, when set, is notified of every opening-order outcome so
+	// the Live Engine can track consecutive broker rejects.
+	submitResultHook func(err error)
 }
 
 // NewBridge creates a Bridge. If Delta keys are not set it starts in a disabled/unconfigured state.
@@ -113,6 +117,15 @@ func (b *Bridge) SetKillCheck(fn func(context.Context) error) {
 	b.killCheck = fn
 }
 
+// SetSubmitResultHook registers a callback invoked after every opening-order
+// submission with its outcome (nil on success). The Live Engine uses it to track
+// consecutive broker rejects for its auto-disarm trigger.
+func (b *Bridge) SetSubmitResultHook(fn func(err error)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.submitResultHook = fn
+}
+
 // SetInstitutionalOpenHandler routes OnOpen through the engine institutional execution stack.
 func (b *Bridge) SetInstitutionalOpenHandler(fn func(context.Context, OpenSignal, string) error) {
 	b.mu.Lock()
@@ -137,13 +150,20 @@ func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide,
 	if b.client == nil {
 		return PlaceOrderResult{}, fmt.Errorf("delta client not configured")
 	}
-	return b.client.PlaceOrder(ctx, PlaceOrderRequest{
+	res, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
 		ProductID: productID,
 		Size:      contracts,
 		Side:      side,
 		OrderType: TypeMarket,
 		Leverage:  10,
 	})
+	b.mu.RLock()
+	hook := b.submitResultHook
+	b.mu.RUnlock()
+	if hook != nil {
+		hook(err)
+	}
+	return res, err
 }
 
 // SubmitReduceOnlyOrder closes a live position. Same structural guard as
@@ -375,6 +395,58 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 		log.Printf("[DELTA BRIDGE] ✅ INSTITUTIONAL CLOSE %s | %s | Exit: %s",
 			tradeCopy.ID, tradeCopy.DeltaSymbol, sig.ExitReason)
 	}()
+}
+
+// CloseAll flattens every open live trade, driving each through the institutional
+// close path (risk gate + reduce-only). It runs synchronously and independently
+// of the strategy loop, so the panic button works even if the loop is wedged.
+// Reduce-only closes are permitted while the kill switch is active.
+func (b *Bridge) CloseAll(ctx context.Context) (map[string]any, error) {
+	b.mu.RLock()
+	handler := b.institutionalClose
+	open := make([]LiveTrade, 0)
+	for _, t := range b.trades {
+		if t.Status == "OPEN" {
+			open = append(open, t)
+		}
+	}
+	b.mu.RUnlock()
+
+	if handler == nil {
+		return nil, fmt.Errorf("institutional close handler not wired — cannot close-all")
+	}
+
+	closed, failed := 0, 0
+	errs := make([]string, 0)
+	for _, t := range open {
+		sig := CloseSignal{
+			PaperTradeID: t.PaperTradeID,
+			StrategyID:   t.StrategyID,
+			OptionType:   t.OptionType,
+			Strike:       t.Strike,
+			ExitReason:   "CLOSE_ALL",
+		}
+		if err := handler(ctx, sig, t); err != nil {
+			failed++
+			errs = append(errs, fmt.Sprintf("%s: %v", t.ID, err))
+			continue
+		}
+		now := time.Now().UTC()
+		b.updateTrade(t.ID, func(x *LiveTrade) {
+			x.Status = "CLOSED"
+			x.ClosedAt = &now
+		})
+		b.mu.Lock()
+		delete(b.openByPaperID, t.PaperTradeID)
+		b.mu.Unlock()
+		closed++
+	}
+
+	res := map[string]any{"attempted": len(open), "closed": closed, "failed": failed}
+	if len(errs) > 0 {
+		res["errors"] = errs
+	}
+	return res, nil
 }
 
 // Trades returns a snapshot of all live trades (most recent first).

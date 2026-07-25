@@ -1,1 +1,1 @@
-{"engine/internal/liveengine/http_test.go::TestHTTP_AccountAppliesCeiling()":["engine/internal/liveengine/http.go::NewHandler()"],"engine/internal/liveengine/http_test.go::newTestHandler()":["engine/internal/liveengine/http.go::Authorizer","engine/internal/liveengine/http.go::NewHandler()"]}
+{"engine/cmd/antigravity/main.go::main()":["engine/cmd/antigravity/liveengine_wiring.go::wireLiveEngine()"],"engine/internal/delta/live_bridge.go::nextWeeklyFriday()":["engine/internal/options/engine.go::Duration"]}

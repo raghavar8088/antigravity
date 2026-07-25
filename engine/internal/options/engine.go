@@ -1108,14 +1108,11 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
-	setCORSOptions(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
+// StrategyStatuses returns a snapshot of every strategy's runtime status. Used
+// by the Live Engine roster provider to evaluate live eligibility in-process.
+func (e *Engine) StrategyStatuses() []StrategyStatus {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-
 	statuses := make([]StrategyStatus, len(e.states))
 	for i, s := range e.states {
 		statuses[i] = s.stats
@@ -1123,7 +1120,15 @@ func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 			statuses[i].StrategyID = s.def.ID
 		}
 	}
-	json.NewEncoder(w).Encode(statuses)
+	return statuses
+}
+
+func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
+	setCORSOptions(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	json.NewEncoder(w).Encode(e.StrategyStatuses())
 }
 
 func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {

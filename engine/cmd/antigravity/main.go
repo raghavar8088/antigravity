@@ -1475,6 +1475,10 @@ func main() {
 	deltaBridge := delta.NewBridge()
 	orchestrator.WireDeltaBridge(deltaBridge)
 	deltaBridge.StartMonitor(ctx)
+
+	// Live Engine control plane (real-money option BUYING module). Ships DISARMED
+	// with a $100 server-enforced ceiling; arming is a human action only.
+	wireLiveEngine(ctx, deltaBridge, ksSvc, optionsEngine)
 	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
 			PaperTradeID: posID,

@@ -1640,6 +1640,7 @@ The content is organized as follows:
   validation/production/gate.go
 
 [cmd]/
+  antigravity/liveengine_wiring.go
   antigravity/main.go
   backtest/main.go
   btc_qualify_25/main.go
