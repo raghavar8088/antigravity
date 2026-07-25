@@ -70,9 +70,6 @@ const (
 	// Daily loss limit: halt new opens after 3% of day-start balance (like buyer module)
 	sellerDailyLossLimitPct = 0.03
 
-	// Minimum absolute net PnL per trade (enforced at close) - $2 minimum win or loss
-	MIN_ABS_NET_PNL_USD = 2.0
-
 	optionLossStreakPenalty       = 0.10
 	optionAvgPnLBoost             = 0.22
 	optionAvgPnLPenalty           = 0.12

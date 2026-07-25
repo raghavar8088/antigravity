@@ -516,7 +516,7 @@ export default function OptionsSellingDeskPage() {
                       t.exitReason === "TP" ? "bg-emerald-50 text-emerald-700" : t.exitReason === "SL" ? "bg-red-50 text-red-700" : "bg-zinc-100 text-zinc-500"
                     }`}>{t.exitReason}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">{(t.returnPct * 100).toFixed(1)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500">{t.returnPct.toFixed(1)}</td>
                   <td className={`px-6 py-2.5 text-right font-semibold tabular-nums ${pnlClass(t.netPnl)}`}>{fmtUSD(t.netPnl)}</td>
                 </tr>
               ))}

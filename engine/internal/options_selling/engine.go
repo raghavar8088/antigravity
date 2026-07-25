@@ -844,46 +844,23 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
-	// Calculate PnL - fees already deducted at open, so this is gross PnL
+	// Realized PnL for a short option: premium collected minus buy-back cost, less
+	// the round-trip fee taken at open. No artificial floor — a far-OTM short only
+	// ever risks and earns the premium at stake, so both wins and losses are the
+	// true cents-scale amounts, not a fixed $2.
 	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
-
-	// Determine raw sign from PnL or exit reason
-	rawSign := 1.0
-	if grossPnL < 0 {
-		rawSign = -1.0
-	} else if grossPnL == 0 {
-		// Use exit reason to determine sign when PnL is zero
-		switch reason {
-		case ExitSL, ExitStrikePressure:
-			rawSign = -1.0
-		default:
-			rawSign = 1.0
-		}
-	}
-
-	// Enforce minimum net PnL floor. A short option can never earn more than the
-	// premium collected, so the floor must not manufacture a gain larger than what
-	// was actually at stake — losses may still exceed it.
-	floor := MIN_ABS_NET_PNL_USD
-	if maxGain := pos.EntryPremium * pos.Quantity; rawSign > 0 && floor > maxGain {
-		floor = maxGain
-	}
-	netPnL := grossPnL
-	if math.Abs(netPnL) < floor {
-		netPnL = rawSign * floor
-	}
+	entryFees := pos.EntryPremium * pos.Quantity * ROUND_TRIP_FEE_PCT
+	netPnL := grossPnL - entryFees
 
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.EntryPremium - pos.CurrentPremium) / pos.EntryPremium * 100
 	}
 
-	// DELTA CLOSE: Buy back to close with PnL adjustment
-	// If we enforced minimum PnL, adjust balance accordingly
+	// DELTA CLOSE: buy back to close. Premium (net of fees) was credited at open,
+	// so the balance only pays the exit cost now; margin releases with the position.
 	exitCost := pos.CurrentPremium * pos.Quantity
-	pnlAdjustment := netPnL - grossPnL // Difference if minimum was enforced
-	e.balance -= exitCost - pnlAdjustment
-	// Margin is now released (implicitly, since position is gone)
+	e.balance -= exitCost
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
