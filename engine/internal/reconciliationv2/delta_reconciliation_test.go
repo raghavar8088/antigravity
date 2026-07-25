@@ -98,7 +98,7 @@ func TestGetPositions_UsesMarginedEndpointAndParsesStringFields(t *testing.T) {
 			t.Fatalf("expected /v2/positions/margined, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"result":[{"product_id":27,"product_symbol":"BTCUSD","side":"buy","size":"0.5","entry_price":"63000.00","mark_price":"63250.00","unrealised_pnl":"125.00","margin":"500.00"}]}`))
+		w.Write([]byte(`{"success":true,"result":[{"product_id":27,"product_symbol":"BTCUSD","side":"buy","size":"0.5","entry_price":"63000.00","mark_price":"63250.00","unrealised_pnl":"125.00","margin":"500.00"}]}`))
 	}))
 	defer srv.Close()
 
@@ -122,7 +122,7 @@ func TestGetPositions_UsesMarginedEndpointAndParsesStringFields(t *testing.T) {
 func TestGetPositions_SkipsZeroSize(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"result":[{"product_symbol":"BTCUSD","side":"buy","size":"0"}]}`))
+		w.Write([]byte(`{"success":true,"result":[{"product_symbol":"BTCUSD","side":"buy","size":"0"}]}`))
 	}))
 	defer srv.Close()
 
@@ -133,5 +133,79 @@ func TestGetPositions_SkipsZeroSize(t *testing.T) {
 	}
 	if len(positions) != 0 {
 		t.Fatalf("got %d positions, want 0 (zero-size should be filtered)", len(positions))
+	}
+}
+
+// A control that cannot fail is not a control. Reconciliation must never read a
+// non-position response as "zero positions = reconciled". These lock the
+// silent-false-green paths: a Delta error envelope, an unrecognized body, an
+// HTTP error, and unparseable JSON must all surface as errors — only a genuine
+// success:true payload may be trusted (including a genuinely empty position set).
+
+func TestGetPositions_ErrorEnvelopeIsNotSilentlyEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Delta returns HTTP 200 with success:false on auth/permission failures.
+		w.Write([]byte(`{"success":false,"error":{"code":"unauthorized"}}`))
+	}))
+	defer srv.Close()
+
+	positions, err := newTestAdapter(srv.URL).GetPositions(context.Background())
+	if err == nil {
+		t.Fatalf("expected error on success:false envelope, got nil with %d positions", len(positions))
+	}
+}
+
+func TestGetPositions_UnrecognizedBodyIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Parses as JSON but is not a positions payload (no success flag).
+		w.Write([]byte(`{"foo":"bar"}`))
+	}))
+	defer srv.Close()
+
+	positions, err := newTestAdapter(srv.URL).GetPositions(context.Background())
+	if err == nil {
+		t.Fatalf("expected error on body missing success flag, got nil with %d positions", len(positions))
+	}
+}
+
+func TestGetPositions_HTTPErrorIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"success":false}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestAdapter(srv.URL).GetPositions(context.Background()); err == nil {
+		t.Fatal("expected error on HTTP 401, got nil")
+	}
+}
+
+func TestGetPositions_UnparseableBodyIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`<html>gateway timeout</html>`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestAdapter(srv.URL).GetPositions(context.Background()); err == nil {
+		t.Fatal("expected error on unparseable body, got nil")
+	}
+}
+
+func TestGetPositions_EmptyButSuccessfulIsTrusted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"result":[]}`))
+	}))
+	defer srv.Close()
+
+	positions, err := newTestAdapter(srv.URL).GetPositions(context.Background())
+	if err != nil {
+		t.Fatalf("genuine empty position set must be trusted, got error: %v", err)
+	}
+	if len(positions) != 0 {
+		t.Fatalf("got %d positions, want 0", len(positions))
 	}
 }

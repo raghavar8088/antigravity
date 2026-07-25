@@ -127,8 +127,13 @@ func (b *Bridge) SetInstitutionalCloseHandler(fn func(context.Context, CloseSign
 	b.institutionalClose = fn
 }
 
-// SubmitOrder places an order on Delta — callable only from institutional fill callbacks.
+// SubmitOrder places an order on Delta. Structurally callable only from the
+// institutional fill path: it rejects any context lacking risk-gate provenance
+// and re-checks the kill switch before touching the network.
 func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide, contracts int) (PlaceOrderResult, error) {
+	if err := b.guardEffector(ctx, true); err != nil {
+		return PlaceOrderResult{}, err
+	}
 	if b.client == nil {
 		return PlaceOrderResult{}, fmt.Errorf("delta client not configured")
 	}
@@ -141,8 +146,12 @@ func (b *Bridge) SubmitOrder(ctx context.Context, productID int, side OrderSide,
 	})
 }
 
-// SubmitReduceOnlyOrder closes a live position — callable only from institutional fill callbacks.
+// SubmitReduceOnlyOrder closes a live position. Same structural guard as
+// SubmitOrder: risk-gate provenance + kill-switch recheck before any network call.
 func (b *Bridge) SubmitReduceOnlyOrder(ctx context.Context, productID int, side OrderSide, contracts int) (PlaceOrderResult, error) {
+	if err := b.guardEffector(ctx, false); err != nil {
+		return PlaceOrderResult{}, err
+	}
 	if b.client == nil {
 		return PlaceOrderResult{}, fmt.Errorf("delta client not configured")
 	}

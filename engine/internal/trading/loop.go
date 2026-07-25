@@ -978,7 +978,11 @@ func (o *Orchestrator) submitInstitutionalOrder(
 		return execution.FillResult{}, err
 	}
 
-	fill, err := fillFn(ctx, sig, clientOrderID)
+	// Stamp risk-gate provenance onto the context at this single choke point,
+	// reached only after the pre-trade pipeline (or the authenticated emergency
+	// flatten) has approved the order. The Delta effectors reject any context
+	// without this marker, so no broker order can bypass the gate.
+	fill, err := fillFn(delta.MarkInstitutionalExecution(ctx), sig, clientOrderID)
 	if err != nil {
 		rejectEvent, newEventErr := ledger.NewEvent(ledger.NewEventInput{
 			AggregateType: ledger.AggregateOrder,

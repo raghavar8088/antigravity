@@ -173,7 +173,8 @@ func (a *DeltaReconciliationAdapter) GetPositions(ctx context.Context) ([]Exchan
 	}
 
 	var resp struct {
-		Result []struct {
+		Success *bool `json:"success"`
+		Result  []struct {
 			ProductID     int       `json:"product_id"`
 			ProductSymbol string    `json:"product_symbol"`
 			Symbol        string    `json:"symbol"`
@@ -187,6 +188,18 @@ func (a *DeltaReconciliationAdapter) GetPositions(ctx context.Context) ([]Exchan
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("delta recon: unmarshal positions: %w", err)
+	}
+	// A control that cannot fail is not a control. Delta wraps every response in
+	// {"success":bool,"result":...}. An error envelope (success:false) or a body
+	// that is not a recognizable positions payload (success absent) both unmarshal
+	// into an empty Result — which reconciliation would otherwise read as "zero
+	// positions = reconciled", a silent false-green after a crash. Require an
+	// explicit success:true before trusting the (possibly empty) position set.
+	if resp.Success == nil {
+		return nil, fmt.Errorf("delta recon: positions response missing success flag (unrecognized body: %s)", truncate(string(body), 200))
+	}
+	if !*resp.Success {
+		return nil, fmt.Errorf("delta recon: positions request unsuccessful: %s", truncate(string(body), 200))
 	}
 
 	var result []ExchangePosition

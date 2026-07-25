@@ -851,8 +851,11 @@ The content is organized as follows:
   dataquality/types.go
   dataquality/validator_test.go
   dataquality/validator.go
+  delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
   delta/client.go
+  delta/execution_guard_test.go
+  delta/execution_guard.go
   delta/live_bridge.go
   derivatives/derivatives_test.go
   derivatives/funding.go
@@ -888,7 +891,6 @@ The content is organized as follows:
   execintel/tracker.go
   execution/binance_adapter.go
   execution/binance_live.go
-  execution/delta_adapter.go
   execution/exchange_adapter.go
   execution/fees_test.go
   execution/fees.go
