@@ -62,20 +62,22 @@ const ic = {
   ),
 };
 
-const SECTIONS: NavSection[] = [
+const PRIMARY_NAV: NavItem[] = [
+  { href: "/terminal", label: "Command Center", icon: ic.monitor },
+  { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
+  { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
+  { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },
+  { href: "/options-buying-desk", label: "Crypto Options Buying", icon: ic.target },
+  { href: "/mock-trading", label: "Mock Trading", icon: ic.layers },
+];
+
+const SYSTEM_NAV: NavItem[] = [{ href: "/mobile", label: "Mobile Emergency", icon: ic.phone }];
+
+/** Raw JSON debug endpoints — grouped into collapsed disclosures so they
+ * don't outweigh the six real nav destinations above. */
+const API_GROUPS: NavSection[] = [
   {
-    title: "Trading",
-    items: [
-      { href: "/terminal", label: "Command Center", icon: ic.monitor },
-      { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
-      { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
-      { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },
-      { href: "/options-buying-desk", label: "Crypto Options Buying", icon: ic.target },
-      { href: "/mock-trading", label: "Mock Trading", icon: ic.layers },
-    ],
-  },
-  {
-    title: "Scalp Lab · API",
+    title: "Scalp Lab",
     items: [
       { href: "/api/scalp/scalp/leaderboard", label: "Leaderboard JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
@@ -84,7 +86,7 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Options Selling · API",
+    title: "Options Selling",
     items: [
       { href: "/api/options-selling/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-selling/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
@@ -93,7 +95,7 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Options Buying · API",
+    title: "Options Buying",
     items: [
       { href: "/api/options-buying/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-buying/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
@@ -101,16 +103,116 @@ const SECTIONS: NavSection[] = [
       { href: "/api/options-buying/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },
-  {
-    title: "System",
-    items: [{ href: "/mobile", label: "Mobile Emergency", icon: ic.phone }],
-  },
 ];
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="px-3 pb-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.16em]"
+      style={{ color: "var(--desk-on-surface-variant)", opacity: 0.75 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+  const cls = `app-shell-nav-row flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-colors ${
+    active ? "" : "app-shell-nav-link"
+  }`;
+  const style: React.CSSProperties = active
+    ? {
+        background: "var(--desk-primary-container)",
+        color: "var(--desk-on-primary-container)",
+        boxShadow: "inset 3px 0 0 var(--desk-primary)",
+      }
+    : { color: "var(--desk-on-surface-variant)" };
+  const iconWrapStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    flexShrink: 0,
+    color: active ? "var(--desk-primary)" : "var(--desk-on-surface-variant)",
+    background: active ? "var(--desk-surface)" : "transparent",
+    opacity: active ? 1 : 0.75,
+  };
+  const body = (
+    <>
+      <span style={iconWrapStyle}>{item.icon}</span>
+      <span className="flex-1 truncate">{item.label}</span>
+      {item.external && (
+        <span aria-hidden style={{ fontSize: 10, fontWeight: 700, color: "var(--desk-on-surface-variant)", opacity: 0.6 }}>
+          ↗
+        </span>
+      )}
+    </>
+  );
+  return (
+    <li>
+      {item.external ? (
+        <a href={item.href} target="_blank" rel="noreferrer" className={cls} style={style}>{body}</a>
+      ) : (
+        <Link href={item.href} className={cls} style={style}>{body}</Link>
+      )}
+    </li>
+  );
+}
+
+function ApiGroup({ title, items }: NavSection) {
+  return (
+    <details className="app-shell-api-group">
+      <summary
+        className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-[11.5px] font-bold"
+        style={{ color: "var(--desk-on-surface-variant)" }}
+      >
+        <svg
+          className="app-shell-api-group__chevron"
+          width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          style={{ flexShrink: 0, transition: "transform 0.15s ease" }}
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        <span className="flex-1 truncate">{title}</span>
+        <span
+          className="desk-mono"
+          style={{ fontSize: 10, fontWeight: 700, opacity: 0.6, padding: "1px 6px", borderRadius: 999, background: "var(--desk-surface-container)" }}
+        >
+          {items.length}
+        </span>
+      </summary>
+      <ul className="flex flex-col gap-0.5 py-1 pl-2">
+        {items.map((item) => (
+          <li key={item.href}>
+            <a
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              className="app-shell-nav-link flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12.5px] font-medium"
+              style={{ color: "var(--desk-on-surface-variant)" }}
+            >
+              <span style={{ opacity: 0.6, display: "flex" }}>{item.icon}</span>
+              <span className="flex-1 truncate">{item.label}</span>
+              <span aria-hidden style={{ fontSize: 10, fontWeight: 700, opacity: 0.5 }}>↗</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function SidebarBody({ pathname }: { pathname: string }) {
   return (
     <>
-      <Link href="/terminal" className="flex items-center gap-3 px-6 pb-7 pt-6">
+      <Link
+        href="/terminal"
+        className="flex items-center gap-3 px-6 pb-5 pt-6"
+        style={{ borderBottom: "1px solid var(--desk-outline-variant)" }}
+      >
         <span
           className="flex h-10 w-10 items-center justify-center rounded-2xl shadow-sm"
           style={{ background: "var(--desk-primary)", color: "var(--desk-on-primary)" }}
@@ -124,45 +226,31 @@ function SidebarBody({ pathname }: { pathname: string }) {
         </span>
       </Link>
 
-      <nav className="flex-1 overflow-y-auto px-4 pb-4">
-        {SECTIONS.map((sec) => (
-          <div key={sec.title} className="mb-6">
-            <div
-              className="px-3 pb-2 text-[10.5px] font-bold uppercase tracking-[0.16em]"
-              style={{ color: "var(--desk-on-surface-variant)" }}
-            >
-              {sec.title}
-            </div>
-            <ul className="flex flex-col gap-0.5">
-              {sec.items.map((item) => {
-                const active = !item.external && pathname.startsWith(item.href);
-                const cls = `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-semibold transition-colors ${
-                  active ? "" : "app-shell-nav-link"
-                }`;
-                const style = active
-                  ? { background: "var(--desk-primary-container)", color: "var(--desk-on-primary-container)" }
-                  : { color: "var(--desk-on-surface-variant)" };
-                const iconStyle = { color: active ? "var(--desk-primary)" : "var(--desk-on-surface-variant)", opacity: active ? 1 : 0.7 };
-                const body = (
-                  <>
-                    <span style={iconStyle}>{item.icon}</span>
-                    <span className="flex-1">{item.label}</span>
-                    {item.external && <span className="text-[10px] font-bold" style={{ color: "var(--desk-on-surface-variant)" }}>↗</span>}
-                  </>
-                );
-                return (
-                  <li key={item.href}>
-                    {item.external ? (
-                      <a href={item.href} target="_blank" rel="noreferrer" className={cls} style={style}>{body}</a>
-                    ) : (
-                      <Link href={item.href} className={cls} style={style}>{body}</Link>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+      <nav className="flex-1 overflow-y-auto px-4 pb-4 pt-4">
+        <SectionLabel>Trading</SectionLabel>
+        <ul className="flex flex-col gap-0.5">
+          {PRIMARY_NAV.map((item) => (
+            <NavRow key={item.href} item={item} active={pathname.startsWith(item.href)} />
+          ))}
+        </ul>
+
+        <div className="my-4" style={{ borderTop: "1px solid var(--desk-outline-variant)" }} />
+
+        <SectionLabel>Developer · Raw JSON</SectionLabel>
+        <div className="flex flex-col gap-0.5">
+          {API_GROUPS.map((sec) => (
+            <ApiGroup key={sec.title} title={sec.title} items={sec.items} />
+          ))}
+        </div>
+
+        <div className="my-4" style={{ borderTop: "1px solid var(--desk-outline-variant)" }} />
+
+        <SectionLabel>System</SectionLabel>
+        <ul className="flex flex-col gap-0.5">
+          {SYSTEM_NAV.map((item) => (
+            <NavRow key={item.href} item={item} active={pathname.startsWith(item.href)} />
+          ))}
+        </ul>
       </nav>
 
       <div

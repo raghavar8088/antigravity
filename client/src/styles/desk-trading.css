@@ -61,6 +61,27 @@
   color: var(--desk-on-surface) !important;
 }
 
+.app-shell-nav-row {
+  outline: none;
+}
+
+.app-shell-api-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-shell-api-group summary:hover {
+  background: var(--desk-surface-container);
+  color: var(--desk-on-surface) !important;
+}
+
+.app-shell-api-group[open] > summary .app-shell-api-group__chevron {
+  transform: rotate(90deg);
+}
+
+.app-shell-api-group + .app-shell-api-group {
+  margin-top: 2px;
+}
+
 /* ─── App bar upgrade ─────────────────────────────────────────────────────── */
 .desk-app-bar--trading {
   background: color-mix(in srgb, var(--desk-surface) 92%, transparent) !important;
