@@ -54,9 +54,25 @@ func CriticalDriftKillSwitchHook(ks *killswitch.Service) CycleHook {
 			}
 			return
 		}
-		if entry.EscalateCount > 0 && domain != DomainBalance && domain != DomainExposure && domain != DomainPnL {
+		// Escalation path. The cycle `domain` can be "full" (all domains), which
+		// would bypass the balance/exposure/PnL exclusion above — so filter on each
+		// mismatch's own domain/type instead of the cycle domain. Balance drift
+		// (real Delta wallet vs the paper OMS / $100 ceiling) is expected and must
+		// never halt trading; only position/order integrity escalations do.
+		worthyEscalations := 0
+		for _, m := range entry.Mismatches {
+			if isKnownFalsePositiveMismatch(m) || !isKillSwitchWorthyMismatch(m) {
+				continue
+			}
+			worthyEscalations++
+		}
+		if entry.EscalateCount > 0 && worthyEscalations == 0 {
+			log.Printf("[RECON-V2] %d escalation(s) are all non-halting drift (balance/exposure/pnl) — not tripping kill switch", entry.EscalateCount)
+			return
+		}
+		if worthyEscalations > 0 {
 			reason := fmt.Sprintf("reconciliation escalation required (%s): %d mismatches need manual intervention",
-				domain, entry.EscalateCount)
+				domain, worthyEscalations)
 			if err := ks.Trigger(ctx, killswitch.Activation{
 				Trigger: killswitch.TriggerOMSDesync,
 				Reason:  reason,

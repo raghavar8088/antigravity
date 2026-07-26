@@ -297,7 +297,7 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 				continue
 			}
 			if ks.IsActive() {
-				ctrl.OnDailyLossBreaker("kill switch active: " + ks.Reason())
+				ctrl.AutoDisarm("kill_switch_active", ks.Reason())
 				continue
 			}
 			client := bridge.Client()
