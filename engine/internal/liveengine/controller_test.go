@@ -172,6 +172,72 @@ func TestController_StaleDataWithinBoundDoesNotDisarm(t *testing.T) {
 	}
 }
 
+func TestController_DailyLossBreakerAutoDisarms(t *testing.T) {
+	t.Setenv("LIVE_ENGINE_MAX_DAILY_LOSS_USD", "")
+	equity := 100.0
+	c := New(Hooks{
+		IsConfigured:       func() bool { return true },
+		SetEffectorEnabled: func(bool) {},
+		AccountEquityUSD:   func(context.Context) (float64, error) { return equity, nil },
+	})
+	if err := c.Arm("operator", ArmConfirmationPhrase); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+	now := time.Now().UTC()
+
+	// Down $19 — under the $20 default limit, stays armed.
+	if tripped := c.CheckDailyLoss(81, now); tripped || !c.IsArmed() {
+		t.Fatalf("should not trip at -$19 (tripped=%v armed=%v)", tripped, c.IsArmed())
+	}
+	// Down $20 — hits the limit, auto-disarms.
+	if tripped := c.CheckDailyLoss(80, now); !tripped {
+		t.Fatal("expected daily-loss breaker to trip at -$20")
+	}
+	if c.IsArmed() {
+		t.Fatal("must be disarmed after the daily-loss breaker trips")
+	}
+	if c.Snapshot().LastDisarmReason != "daily_loss_breaker" {
+		t.Fatalf("unexpected reason: %s", c.Snapshot().LastDisarmReason)
+	}
+}
+
+func TestController_DailyLossLimitConfigurable(t *testing.T) {
+	t.Setenv("LIVE_ENGINE_MAX_DAILY_LOSS_USD", "5")
+	c := New(Hooks{
+		IsConfigured:       func() bool { return true },
+		SetEffectorEnabled: func(bool) {},
+		AccountEquityUSD:   func(context.Context) (float64, error) { return 100, nil },
+	})
+	_ = c.Arm("operator", ArmConfirmationPhrase)
+	now := time.Now().UTC()
+	if tripped := c.CheckDailyLoss(96, now); tripped {
+		t.Fatal("should not trip at -$4 with a $5 limit")
+	}
+	if tripped := c.CheckDailyLoss(95, now); !tripped {
+		t.Fatal("expected trip at -$5 with a $5 limit")
+	}
+}
+
+func TestController_DailyLossRollsOverAtMidnight(t *testing.T) {
+	c := New(Hooks{
+		IsConfigured:       func() bool { return true },
+		SetEffectorEnabled: func(bool) {},
+		AccountEquityUSD:   func(context.Context) (float64, error) { return 100, nil },
+	})
+	_ = c.Arm("operator", ArmConfirmationPhrase)
+	day1 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
+	// New day re-baselines to the current equity, so prior losses don't carry.
+	if tripped := c.CheckDailyLoss(70, day2); tripped {
+		t.Fatal("new day must re-baseline, not trip on yesterday's drawdown")
+	}
+	_ = day1
+	// Same (new) day, another -$20 from the new baseline trips.
+	if tripped := c.CheckDailyLoss(50, day2); !tripped {
+		t.Fatal("expected trip -$20 below the new day's baseline")
+	}
+}
+
 func TestController_CloseAllAuditsAndInvokesHook(t *testing.T) {
 	called := false
 	c := New(Hooks{

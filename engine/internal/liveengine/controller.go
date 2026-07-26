@@ -13,6 +13,8 @@ package liveengine
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -21,6 +23,22 @@ import (
 // Engine. The UI cannot raise it; equity above it is not tradeable. This is a
 // limit, not a default.
 const MaxTradableUSD = 100.0
+
+// defaultMaxDailyLossUSD is the daily realized-loss limit. When the account is
+// down this much versus the day's starting equity, the engine auto-disarms and
+// closes all. Override with LIVE_ENGINE_MAX_DAILY_LOSS_USD.
+const defaultMaxDailyLossUSD = 20.0
+
+func maxDailyLossFromEnv() float64 {
+	if v := os.Getenv("LIVE_ENGINE_MAX_DAILY_LOSS_USD"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			return f
+		}
+	}
+	return defaultMaxDailyLossUSD
+}
+
+func utcDay(t time.Time) int { return int(t.UTC().Unix() / 86400) }
 
 // ArmConfirmationPhrase is the exact text an operator must type to arm live
 // trading. A bare toggle or a URL can never arm the engine — only this phrase,
@@ -84,6 +102,9 @@ type Hooks struct {
 	// CloseAll flattens every live position. Must work even if the strategy loop
 	// is wedged, so it is called directly, not through the loop.
 	CloseAll func(ctx context.Context) (map[string]any, error)
+	// AccountEquityUSD reads the real broker equity. Used to snapshot the day's
+	// starting equity at arm time for the daily-loss breaker.
+	AccountEquityUSD func(ctx context.Context) (float64, error)
 	// Now allows tests to control time; defaults to time.Now.
 	Now func() time.Time
 }
@@ -101,6 +122,11 @@ type Controller struct {
 	consecutiveRejects    int
 	maxConsecutiveRejects int
 
+	maxDailyLossUSD float64
+	dayStartEquity  float64
+	dayStartDate    int
+	dayStartKnown   bool
+
 	audit    []AuditEntry
 	maxAudit int
 
@@ -116,6 +142,7 @@ func New(hooks Hooks) *Controller {
 	return &Controller{
 		state:                 StateDisarmed,
 		maxConsecutiveRejects: defaultMaxConsecutiveRejects,
+		maxDailyLossUSD:       maxDailyLossFromEnv(),
 		maxAudit:              500,
 		hooks:                 hooks,
 	}
@@ -165,11 +192,57 @@ func (c *Controller) Arm(actor, confirmation string) error {
 	c.armedBy = actor
 	c.armedAt = c.now()
 	c.consecutiveRejects = 0
+
+	// Snapshot the day's starting equity for the daily-loss breaker.
+	c.dayStartKnown = false
+	if c.hooks.AccountEquityUSD != nil {
+		if eq, err := c.hooks.AccountEquityUSD(context.Background()); err == nil && eq > 0 {
+			c.dayStartEquity = eq
+			c.dayStartDate = utcDay(c.now())
+			c.dayStartKnown = true
+		}
+	}
+
 	if c.hooks.SetEffectorEnabled != nil {
 		c.hooks.SetEffectorEnabled(true)
 	}
-	c.appendAuditLocked(actor, ActionArm, "", fmt.Sprintf("ceiling=$%.0f", MaxTradableUSD))
+	c.appendAuditLocked(actor, ActionArm, "", fmt.Sprintf("ceiling=$%.0f dailyLossStop=$%.0f", MaxTradableUSD, c.maxDailyLossUSD))
 	return nil
+}
+
+// CheckDailyLoss compares current equity against the day's starting equity and
+// auto-disarms when the loss reaches the daily limit. It rolls the baseline over
+// at UTC midnight. Returns true when it tripped, so the caller flattens. Call it
+// on every monitor tick with the freshest real equity.
+func (c *Controller) CheckDailyLoss(currentEquityUSD float64, now time.Time) (tripped bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	day := utcDay(now)
+	if !c.dayStartKnown || day != c.dayStartDate {
+		c.dayStartEquity = currentEquityUSD
+		c.dayStartDate = day
+		c.dayStartKnown = true
+		return false
+	}
+	if c.state != StateArmed {
+		return false
+	}
+	loss := c.dayStartEquity - currentEquityUSD
+	if loss >= c.maxDailyLossUSD {
+		c.disarmLocked("system", ActionAutoDisarm, "daily_loss_breaker",
+			fmt.Sprintf("daily loss $%.2f ≥ $%.2f limit (day start $%.2f → now $%.2f)",
+				loss, c.maxDailyLossUSD, c.dayStartEquity, currentEquityUSD))
+		return true
+	}
+	return false
+}
+
+// DailyLossStatus reports the loss limit and today's loss so far (0 if unknown).
+func (c *Controller) DailyLossStatus() (limitUSD, lossTodayUSD, dayStartEquityUSD float64, known bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.maxDailyLossUSD, 0, c.dayStartEquity, c.dayStartKnown
 }
 
 // Disarm is a manual, human disarm. Always allowed; always audited.
@@ -294,6 +367,8 @@ type StateSnapshot struct {
 	ConsecutiveRejects    int       `json:"consecutiveRejects"`
 	MaxConsecutiveRejects int       `json:"maxConsecutiveRejects"`
 	CeilingUSD            float64   `json:"ceilingUsd"`
+	MaxDailyLossUSD       float64   `json:"maxDailyLossUsd"`
+	DayStartEquityUSD     float64   `json:"dayStartEquityUsd"`
 	Configured            bool      `json:"configured"`
 	KillSwitchActive      bool      `json:"killSwitchActive"`
 }
@@ -320,6 +395,8 @@ func (c *Controller) Snapshot() StateSnapshot {
 		ConsecutiveRejects:    c.consecutiveRejects,
 		MaxConsecutiveRejects: c.maxConsecutiveRejects,
 		CeilingUSD:            MaxTradableUSD,
+		MaxDailyLossUSD:       c.maxDailyLossUSD,
+		DayStartEquityUSD:     c.dayStartEquity,
 		Configured:            configured,
 		KillSwitchActive:      kill,
 	}

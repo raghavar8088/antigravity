@@ -496,6 +496,63 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 	return OptionContractInfo{ProductID: bestID, Symbol: bestSymbol}, nil
 }
 
+// OptionContractSizeBTC is the underlying per Delta BTC option contract,
+// confirmed from the live product spec (contract_value = 0.001 BTC). A per-lot
+// USD premium is the option's USD-per-BTC mark price times this.
+const OptionContractSizeBTC = 0.001
+
+func deltaTickerBaseURL() string {
+	if IsTestnet() {
+		return "https://testnet-api.india.delta.exchange"
+	}
+	return "https://api.india.delta.exchange"
+}
+
+// OptionMarkPricePerBTC returns the option's mark price in USD per unit of
+// underlying (per BTC), from the public ticker endpoint. Confirmed against a
+// deep-ITM intrinsic check: for a call, mark ≈ (spot-strike) + time value in
+// USD/BTC, so the per-contract USD premium is mark × OptionContractSizeBTC.
+// Public data — no signing required.
+func (c *Client) OptionMarkPricePerBTC(ctx context.Context, symbol string) (float64, error) {
+	url := deltaTickerBaseURL() + "/v2/tickers/" + symbol
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("delta ticker %s: HTTP %d", symbol, resp.StatusCode)
+	}
+	var out struct {
+		Result struct {
+			MarkPrice json.Number `json:"mark_price"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return 0, err
+	}
+	mark, err := out.Result.MarkPrice.Float64()
+	if err != nil || mark <= 0 {
+		return 0, fmt.Errorf("delta ticker %s: no usable mark price", symbol)
+	}
+	return mark, nil
+}
+
+// OptionPremiumPerContractUSD returns the USD premium to buy one contract of the
+// given option symbol: mark(USD/BTC) × contract size(0.001 BTC).
+func (c *Client) OptionPremiumPerContractUSD(ctx context.Context, symbol string) (float64, error) {
+	mark, err := c.OptionMarkPricePerBTC(ctx, symbol)
+	if err != nil {
+		return 0, err
+	}
+	return mark * OptionContractSizeBTC, nil
+}
+
 // FindProductBySymbol looks up a product by its exact symbol (e.g. "C-BTC-76000-290426").
 func (c *Client) FindProductBySymbol(ctx context.Context, symbol string) (OptionContractInfo, error) {
 	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?page_size=500", nil)

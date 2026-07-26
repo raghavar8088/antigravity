@@ -11,17 +11,6 @@ import (
 	"antigravity-engine/internal/strategy"
 )
 
-// realOptionPremiumUSD returns the real per-contract option premium in USD, and
-// whether it is trustworthy. Delta's exact USD-per-contract option quoting unit
-// is an unresolved testnet open item (see LIVE_ENGINE_PHASE0_FEASIBILITY.md), so
-// this deliberately returns (0,false) until that unit is confirmed on testnet.
-// A guessed unit in a real-money sizing path is the one thing to avoid; callers
-// treat "not available" as fail-closed. This is the single seam where the live
-// quote is wired once the unit is confirmed.
-func realOptionPremiumUSD() (float64, bool) {
-	return 0, false
-}
-
 // ProcessExecutionRequest is the single orchestrator entry for external execution intents.
 func (o *Orchestrator) ProcessExecutionRequest(ctx context.Context, req executiongateway.Request) (executiongateway.Response, error) {
 	if o.killSvc != nil && o.killSvc.IsActive() {
@@ -188,12 +177,26 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 		var captured delta.PlaceOrderResult
 		var productID int
 		var contracts int
-		fillFn := func(c context.Context, _ strategy.Signal, _ string) (execution.FillResult, error) {
-			info, err := bridge.Client().FindOptionProduct(c, open.Strike, open.ExpiryTime, open.OptionType)
-			if err != nil {
-				return execution.FillResult{}, err
-			}
+		var premiumPerContractUSD float64
+
+		// Resolve the option product and its real per-contract premium up front so
+		// the post-gate budget assertion can price the order. The premium unit is
+		// confirmed from Delta's live spec: USD/contract = mark(USD/BTC) × 0.001.
+		if info, rerr := bridge.Client().FindOptionProduct(ctx, open.Strike, open.ExpiryTime, open.OptionType); rerr == nil {
 			productID = info.ProductID
+			if p, perr := bridge.Client().OptionPremiumPerContractUSD(ctx, info.Symbol); perr == nil {
+				premiumPerContractUSD = p
+			}
+		}
+
+		fillFn := func(c context.Context, _ strategy.Signal, _ string) (execution.FillResult, error) {
+			if productID == 0 {
+				info, err := bridge.Client().FindOptionProduct(c, open.Strike, open.ExpiryTime, open.OptionType)
+				if err != nil {
+					return execution.FillResult{}, err
+				}
+				productID = info.ProductID
+			}
 			contracts = int(open.PremiumUSD / 100)
 			if contracts < 1 {
 				contracts = 1
@@ -218,19 +221,15 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 		var pathOpts []InstitutionalPathOpts
 		if bridge.IsBuyingMode() {
 			// Live-money buys carry the budget backstop at the post-gate choke
-			// point. Premium comes from a real quote; until Delta's USD-per-contract
-			// option unit is confirmed on testnet, the quote is unavailable and
-			// AssertBuyWithinBudget fails closed — the buy is rejected rather than
-			// sized on a guessed unit.
+			// point, priced with the real per-contract premium. If the quote was
+			// unavailable (premiumPerContractUSD == 0), AssertBuyWithinBudget fails
+			// closed — the buy is rejected rather than sized blind.
+			premium := premiumPerContractUSD
 			pathOpts = append(pathOpts, InstitutionalPathOpts{
 				PreSubmitAssert: func() error {
 					bal, werr := bridge.Client().GetWallet(ctx)
 					if werr != nil {
 						return werr
-					}
-					premium, ok := realOptionPremiumUSD()
-					if !ok {
-						premium = 0 // unresolved unit ⇒ fail closed in AssertBuyWithinBudget
 					}
 					return delta.AssertBuyWithinBudget(bal, premium, 1)
 				},

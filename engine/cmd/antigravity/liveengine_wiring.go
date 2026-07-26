@@ -29,6 +29,12 @@ func wireLiveEngine(
 		IsConfigured:       bridge.IsConfigured,
 		KillSwitchActive:   ks.IsActive,
 		CloseAll:           bridge.CloseAll,
+		AccountEquityUSD: func(ctx context.Context) (float64, error) {
+			if bridge.Client() == nil {
+				return 0, nil
+			}
+			return bridge.Client().GetWallet(ctx)
+		},
 	})
 
 	data := liveengine.DataProviders{
@@ -250,6 +256,15 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 			client := bridge.Client()
 			if client == nil {
 				continue
+			}
+			// Daily-loss breaker: disarm + flatten when down the daily limit.
+			if equity, eqErr := client.GetWallet(ctx); eqErr == nil {
+				if ctrl.CheckDailyLoss(equity, time.Now()) {
+					if _, cErr := bridge.CloseAll(ctx); cErr != nil {
+						log.Printf("[LIVE ENGINE] daily-loss close-all error: %v", cErr)
+					}
+					continue
+				}
 			}
 			positions, err := client.GetPositions(ctx)
 			if err != nil {
