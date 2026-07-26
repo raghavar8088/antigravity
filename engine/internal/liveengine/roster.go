@@ -51,6 +51,10 @@ type StrategyEligibility struct {
 	Live     bool         `json:"live"`
 	Reason   string       `json:"reason"`
 	Gates    []GateResult `json:"gates"`
+	// Allowed reflects the operator's live allow-list toggle for this strategy —
+	// independent of the gate verdict. Only allow-listed strategies place live
+	// orders; the owner enables/disables this reversibly.
+	Allowed bool `json:"allowed"`
 }
 
 // isLongPremium reports whether the strategy is a bought (long) option. The

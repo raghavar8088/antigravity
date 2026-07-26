@@ -85,7 +85,7 @@ type Order = {
 };
 
 type Gate = { name: string; pass: boolean; requirement: string; actual: string };
-type Eligibility = { strategy: string; live: boolean; reason: string; gates: Gate[] };
+type Eligibility = { strategy: string; live: boolean; reason: string; gates: Gate[]; allowed: boolean };
 
 type Recon = {
   matched: boolean;
@@ -233,7 +233,21 @@ export default function LiveEnginePage() {
   const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
     () => [
       { id: "strat", header: "Strategy", cell: (e) => e.strategy },
-      { id: "live", header: "Live", cell: (e) => <DeskChip tone={e.live ? "success" : "default"}>{e.live ? "LIVE" : "NOT LIVE"}</DeskChip> },
+      {
+        id: "enabled",
+        header: "Live-enabled",
+        cell: (e) => (
+          <DeskButton
+            data-testid={`toggle-${e.strategy}`}
+            variant={e.allowed ? "tonal" : "outlined"}
+            disabled={busy}
+            onClick={() => void mutate("strategy", { strategy: e.strategy, enabled: !e.allowed })}
+          >
+            {e.allowed ? "ENABLED" : "disabled"}
+          </DeskButton>
+        ),
+      },
+      { id: "live", header: "Gate", cell: (e) => <DeskChip tone={e.live ? "success" : "default"}>{e.live ? "LIVE" : "NOT LIVE"}</DeskChip> },
       { id: "reason", header: "Reason", cell: (e) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{e.reason}</span> },
       {
         id: "gates",
@@ -249,7 +263,7 @@ export default function LiveEnginePage() {
         ),
       },
     ],
-    [],
+    [busy, mutate],
   );
 
   const auditColumns: DeskColumn<AuditEntry>[] = useMemo(
@@ -412,7 +426,7 @@ export default function LiveEnginePage() {
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Live Roster"
-            subtitle="Long-premium only · a strategy is live only with a real-fill record; synthetic performance never qualifies"
+            subtitle="Long-premium only · toggle Live-enabled to add/remove a strategy from live capital (reversible). Only ENABLED strategies place real orders."
           />
           <DeskDataTable
             columns={rosterColumns}

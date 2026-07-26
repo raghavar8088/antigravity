@@ -1479,7 +1479,12 @@ func main() {
 	// Live Engine control plane (real-money option BUYING module). Ships DISARMED
 	// with a $100 server-enforced ceiling; arming is a human action only.
 	wireLiveEngine(ctx, deltaBridge, ksSvc, optionsEngine)
-	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
+	// LIVE ENGINE is buying-only: real orders are mirrored from the BUYING engine
+	// (long calls/puts, bounded risk), NOT the selling engine (naked shorts). The
+	// bridge is forced to buying+native mode and gated by a per-strategy allow-list
+	// in wireLiveEngine. The selling desk stays paper-only — it no longer feeds
+	// live orders.
+	optionsEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
 			PaperTradeID: posID,
 			StrategyID:   stratID,
@@ -1491,7 +1496,7 @@ func main() {
 			BTCPrice:     btcSpot,
 		})
 	})
-	optionsSellingEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
+	optionsEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
 		deltaBridge.OnClose(delta.CloseSignal{
 			PaperTradeID: posID,
 			StrategyID:   stratID,

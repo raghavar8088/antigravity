@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +15,33 @@ import (
 	"antigravity-engine/internal/options"
 )
 
+// defaultLiveStrategyNames is the owner-selected set of BUYING strategies allowed
+// to place live orders. Overridable via LIVE_ENGINE_STRATEGIES (comma-separated)
+// and adjustable at runtime via the Live Engine roster API.
+var defaultLiveStrategyNames = []string{
+	"Intraday_PutBuy_RSIOverboughtExtreme_150m",
+	"Swing_CallBuy_OverextensionFadeDown_600m",
+	"Swing_PutBuy_OverextensionFadeUp_600m",
+	"Intraday_PutBuy_SharpReversalDown_150m",
+	"Intraday_CallBuy_CapitulationRecovery_180m",
+}
+
+func defaultLiveStrategies() []string {
+	if raw := strings.TrimSpace(os.Getenv("LIVE_ENGINE_STRATEGIES")); raw != "" {
+		parts := strings.Split(raw, ",")
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if s := strings.TrimSpace(p); s != "" {
+				out = append(out, s)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return defaultLiveStrategyNames
+}
+
 // wireLiveEngine constructs the Live Engine control plane, wires its hooks to the
 // real Delta bridge + kill switch, registers the /api/live-engine HTTP surface,
 // and starts the auto-disarm monitor. It ships DISARMED and never arms here —
@@ -24,6 +52,13 @@ func wireLiveEngine(
 	ks *killswitchpkg.Service,
 	buyEngine *options.Engine,
 ) *liveengine.Controller {
+	// Buying-only, native long signals: the bridge BUYS the exact option the
+	// buying engine opened (bounded risk = premium paid), never inverts, never
+	// sells. Gated to the per-strategy allow-list below.
+	bridge.SetBuyingMode(true)
+	bridge.SetNativeBuyMode(true)
+	bridge.SetLiveAllowList(defaultLiveStrategies())
+
 	ctrl := liveengine.New(liveengine.Hooks{
 		SetEffectorEnabled: func(enabled bool) { bridge.SetEnabled(enabled) },
 		IsConfigured:       bridge.IsConfigured,
@@ -41,8 +76,14 @@ func wireLiveEngine(
 		Account:        liveEngineAccountProvider(bridge, ctrl),
 		Positions:      liveEnginePositionsProvider(bridge),
 		Orders:         liveEngineOrdersProvider(bridge),
-		Roster:         liveEngineRosterProvider(buyEngine),
+		Roster:         liveEngineRosterProvider(buyEngine, bridge),
 		Reconciliation: liveEngineReconciliationProvider(bridge),
+		AllowList:      bridge.LiveAllowList,
+		SetAllowList: func(names []string) error {
+			bridge.SetLiveAllowList(names)
+			ctrl.RecordRosterChange("operator", fmt.Sprintf("live allow-list set to %d strategies", len(names)))
+			return nil
+		},
 	}
 
 	// Track consecutive broker rejects for the auto-disarm trigger.
@@ -179,24 +220,30 @@ func liveEngineOrdersProvider(bridge *delta.Bridge) func(context.Context) ([]map
 	}
 }
 
-func liveEngineRosterProvider(buyEngine *options.Engine) func(context.Context) ([]liveengine.StrategyEligibility, error) {
+func liveEngineRosterProvider(buyEngine *options.Engine, bridge *delta.Bridge) func(context.Context) ([]liveengine.StrategyEligibility, error) {
 	return func(ctx context.Context) ([]liveengine.StrategyEligibility, error) {
 		out := make([]liveengine.StrategyEligibility, 0)
 		if buyEngine == nil {
 			return out, nil
 		}
+		allowed := map[string]bool{}
+		for _, n := range bridge.LiveAllowList() {
+			allowed[n] = true
+		}
 		for _, s := range buyEngine.StrategyStatuses() {
 			// Real-fill counts are zero until the desk trades live capital; the
 			// synthetic Black-Scholes record does not qualify for real money, so
 			// every strategy is correctly not-live with an inspectable reason.
-			out = append(out, liveengine.EvaluateEligibility(liveengine.StrategyInput{
+			e := liveengine.EvaluateEligibility(liveengine.StrategyInput{
 				Strategy:        s.Name,
 				OptionType:      string(s.OptionType),
 				SyntheticTrades: s.TotalTrades,
 				SyntheticPnL:    s.TotalPnL,
 				RealFills:       0,
 				RealDays:        0,
-			}))
+			})
+			e.Allowed = allowed[s.Name]
+			out = append(out, e)
 		}
 		return out, nil
 	}

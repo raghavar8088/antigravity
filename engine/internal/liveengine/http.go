@@ -43,6 +43,10 @@ type DataProviders struct {
 	Orders         func(ctx context.Context) ([]map[string]any, error)
 	Roster         func(ctx context.Context) ([]StrategyEligibility, error)
 	Reconciliation func(ctx context.Context) (ReconciliationView, error)
+	// AllowList returns the current live-enabled strategy names; SetAllowList
+	// replaces it. Both optional; when nil the strategy toggle is unavailable.
+	AllowList    func() []string
+	SetAllowList func(names []string) error
 }
 
 // Authorizer returns the acting principal and whether the request may perform a
@@ -92,6 +96,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.requireGet(w, r, func() { h.serveRoster(w, r) })
 	case "reconciliation":
 		h.requireGet(w, r, func() { h.serveReconciliation(w, r) })
+	case "strategy":
+		h.serveStrategyToggle(w, r)
 	case "arm":
 		h.serveArm(w, r)
 	case "disarm":
@@ -127,6 +133,46 @@ func (h *Handler) authorizeMutation(w http.ResponseWriter, r *http.Request) (str
 		return "", false
 	}
 	return actor, true
+}
+
+// serveStrategyToggle enables/disables one strategy in the live allow-list.
+// POST { "strategy": "<name>", "enabled": true|false }. Authorized mutation.
+func (h *Handler) serveStrategyToggle(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authorizeMutation(w, r); !ok {
+		return
+	}
+	if h.data.AllowList == nil || h.data.SetAllowList == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "strategy allow-list not configurable on this deployment"})
+		return
+	}
+	var body struct {
+		Strategy string `json:"strategy"`
+		Enabled  bool   `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Strategy == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "need {strategy, enabled}"})
+		return
+	}
+	current := h.data.AllowList()
+	next := make([]string, 0, len(current)+1)
+	seen := false
+	for _, n := range current {
+		if n == body.Strategy {
+			seen = true
+			if !body.Enabled {
+				continue // drop it
+			}
+		}
+		next = append(next, n)
+	}
+	if body.Enabled && !seen {
+		next = append(next, body.Strategy)
+	}
+	if err := h.data.SetAllowList(next); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "allowList": next})
 }
 
 func (h *Handler) serveArm(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 	"sync"
 	"time"
 )
@@ -83,6 +84,16 @@ type Bridge struct {
 	// submitResultHook, when set, is notified of every opening-order outcome so
 	// the Live Engine can track consecutive broker rejects.
 	submitResultHook func(err error)
+
+	// nativeBuy is true when the signal source is already long-side (the option
+	// BUYING engine), so OnOpen must NOT invert the option type. The legacy path
+	// (mirroring the selling engine) inverts; a native buy source does not.
+	nativeBuy bool
+
+	// liveAllow, when non-nil, restricts live mirroring to exactly these strategy
+	// names — the Live Engine's per-strategy allow-list. nil = allow all (legacy);
+	// non-nil (even empty) = only the listed strategies may place live orders.
+	liveAllow map[string]bool
 }
 
 // NewBridge creates a Bridge. If Delta keys are not set it starts in a disabled/unconfigured state.
@@ -259,6 +270,53 @@ func (b *Bridge) SetBuyingMode(v bool) {
 	}
 }
 
+// SetNativeBuyMode marks the signal source as already long-side (the buying
+// engine). When set, OnOpen does not invert the option type.
+func (b *Bridge) SetNativeBuyMode(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.nativeBuy = v
+}
+
+// SetLiveAllowList restricts live mirroring to exactly these strategy names.
+// Passing a non-nil slice (even empty) enables the allow-list; only listed
+// strategies may place live orders. This is the Live Engine's reversible
+// per-strategy enable/disable.
+func (b *Bridge) SetLiveAllowList(names []string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	m := make(map[string]bool, len(names))
+	for _, n := range names {
+		if n != "" {
+			m[n] = true
+		}
+	}
+	b.liveAllow = m
+	log.Printf("[DELTA BRIDGE] live allow-list set to %d strateg(ies): %v", len(m), names)
+}
+
+// LiveAllowList returns the current allow-list (sorted). Empty slice when the
+// allow-list is active but empty; nil-vs-set is not distinguished here.
+func (b *Bridge) LiveAllowList() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	out := make([]string, 0, len(b.liveAllow))
+	for n := range b.liveAllow {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// strategyAllowedLocked reports whether a strategy may place a live order. nil
+// allow-list = allow all (legacy); non-nil = only listed. Caller holds b.mu.
+func (b *Bridge) strategyAllowedLocked(name string) bool {
+	if b.liveAllow == nil {
+		return true
+	}
+	return b.liveAllow[name]
+}
+
 // SetEnabled enables or disables live order mirroring.
 func (b *Bridge) SetEnabled(v bool) {
 	b.mu.Lock()
@@ -275,6 +333,30 @@ func (b *Bridge) SetEnabled(v bool) {
 	}
 }
 
+// resolveLiveOptionSide decides the option type and side for a live order.
+//   - Sell mode: sell the signal's exact type (legacy naked-short path).
+//   - Buy mode, native source (buying engine): BUY the signal's exact type —
+//     the signal is already long-side, so never invert.
+//   - Buy mode, legacy source (mirroring the selling engine): invert the type
+//     (paper sells a PUT on a bull view → we BUY a CALL to hold the same view).
+//
+// Getting this wrong buys the opposite option, so it is unit-tested directly.
+func resolveLiveOptionSide(sigType string, buying, nativeBuy bool) (optType, side string) {
+	optType = sigType
+	side = "sell"
+	if buying {
+		side = "buy"
+		if !nativeBuy {
+			if sigType == "PUT" {
+				optType = "CALL"
+			} else {
+				optType = "PUT"
+			}
+		}
+	}
+	return optType, side
+}
+
 // OnOpen is called when the paper engine opens a new position.
 // In selling mode: sells the option (requires large margin).
 // In buying mode: buys the opposite option type (cheap premium, fits small balance).
@@ -286,23 +368,16 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 		return
 	}
 
+	// Live allow-list: only explicitly enabled strategies may place live orders.
+	if !b.strategyAllowedLocked(sig.StrategyName) {
+		log.Printf("[DELTA BRIDGE] ⏭️  skip live open — strategy %q not in live allow-list", sig.StrategyName)
+		return
+	}
+
 	b.seq++
 	id := fmt.Sprintf("DLT-%04d", b.seq)
-	buying := b.buyingMode
 
-	// In buying mode, invert the option type:
-	// Paper bull signal sells a PUT → we BUY a CALL (profit if BTC rises)
-	// Paper bear signal sells a CALL → we BUY a PUT (profit if BTC falls)
-	optType := sig.OptionType
-	side := "sell"
-	if buying {
-		if sig.OptionType == "PUT" {
-			optType = "CALL"
-		} else {
-			optType = "PUT"
-		}
-		side = "buy"
-	}
+	optType, side := resolveLiveOptionSide(sig.OptionType, b.buyingMode, b.nativeBuy)
 
 	trade := LiveTrade{
 		ID:           id,
