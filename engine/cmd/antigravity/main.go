@@ -1474,6 +1474,20 @@ func main() {
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
 	orchestrator.WireDeltaBridge(deltaBridge)
+	// Custody: reload positions this app opened before the restart, then adopt any
+	// untracked real option position on the exchange. A position the app opened
+	// stays the app's responsibility until SL/TP/expiry closes it — it must never
+	// be orphaned by a restart or a disarm.
+	deltaBridge.RestoreTrades()
+	go func() {
+		adoptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if n, err := deltaBridge.AdoptUntrackedPositions(adoptCtx); err != nil {
+			log.Printf("[DELTA BRIDGE] custody: adoption sweep failed: %v", err)
+		} else if n > 0 {
+			log.Printf("[DELTA BRIDGE] custody: adopted %d untracked live position(s) into SL/TP management", n)
+		}
+	}()
 	deltaBridge.StartMonitor(ctx)
 
 	// Live Engine control plane (real-money option BUYING module). Ships DISARMED

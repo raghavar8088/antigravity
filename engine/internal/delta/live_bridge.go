@@ -440,6 +440,7 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 	if len(b.trades) > 500 {
 		b.trades = b.trades[:500]
 	}
+	b.persistTradesLocked()
 }
 
 // OnClose is called when the paper engine closes a position.
@@ -447,7 +448,10 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if !b.enabled || !b.configured {
+	// Closing is risk-reducing and must work while DISARMED — otherwise an open
+	// real position could never be taken off after a disarm/auto-disarm. Only
+	// broker configuration is required here; new opens remain gated by `enabled`.
+	if !b.configured {
 		return
 	}
 
@@ -681,7 +685,11 @@ func (b *Bridge) StartMonitor(ctx context.Context) {
 
 func (b *Bridge) monitorPositions(ctx context.Context) {
 	b.mu.RLock()
-	if !b.enabled || !b.configured || !b.buyingMode {
+	// Custody rule: a position this app opened must be managed to SL/TP even when
+	// the engine is DISARMED. Disarming stops NEW orders; it must never abandon an
+	// open real position. Previously this returned early when !enabled, so
+	// disarming (or an auto-disarm, or a restart) left real money unmanaged.
+	if !b.configured || !b.buyingMode {
 		b.mu.RUnlock()
 		return
 	}
@@ -766,6 +774,9 @@ func (b *Bridge) updateTrade(id string, fn func(*LiveTrade)) {
 	for i := range b.trades {
 		if b.trades[i].ID == id {
 			fn(&b.trades[i])
+			// Custody must survive a restart: persist on every state change so a
+			// position opened moments before a crash is still managed afterwards.
+			b.persistTradesLocked()
 			return
 		}
 	}
