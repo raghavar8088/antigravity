@@ -280,6 +280,13 @@ func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map
 			if t.Status != "CLOSED" {
 				continue
 			}
+			// Recompute realised PnL from entry/exit rather than trusting the
+			// stored value: trades closed before the contract-size fix persisted a
+			// 1000x-overstated number, and a stale field would keep displaying it.
+			realized := t.RealizedPnl
+			if t.FillPrice > 0 && t.CloseFillPrice > 0 && t.Contracts != 0 {
+				realized = (t.CloseFillPrice - t.FillPrice) * float64(t.Contracts) * delta.OptionContractSizeBTC
+			}
 			row := map[string]any{
 				"id":          t.ID,
 				"strategy":    t.StrategyName,
@@ -288,7 +295,7 @@ func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map
 				"contracts":   t.Contracts,
 				"entryPrice":  t.FillPrice,
 				"exitPrice":   t.CloseFillPrice,
-				"realizedPnl": t.RealizedPnl,
+				"realizedPnl": realized,
 				"openedAt":    t.OpenedAt,
 				// Why it closed: take-profit, stop-loss, near-expiry or expiry.
 				"exitReason": firstNonEmpty(t.ExitReason, t.FailureReason),
