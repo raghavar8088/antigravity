@@ -43,6 +43,9 @@ type DataProviders struct {
 	Orders         func(ctx context.Context) ([]map[string]any, error)
 	Roster         func(ctx context.Context) ([]StrategyEligibility, error)
 	Reconciliation func(ctx context.Context) (ReconciliationView, error)
+	// ClosedPositions returns positions this engine opened and has since closed
+	// (SL/TP/expiry), with their realised outcome.
+	ClosedPositions func(ctx context.Context) ([]map[string]any, error)
 	// AllowList returns the current live-enabled strategy names; SetAllowList
 	// replaces it. Both optional; when nil the strategy toggle is unavailable.
 	AllowList    func() []string
@@ -90,6 +93,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.requireGet(w, r, func() { h.serveAccount(w, r) })
 	case "positions":
 		h.requireGet(w, r, func() { h.serveList(w, r, h.data.Positions) })
+	case "closed-positions":
+		h.requireGet(w, r, func() { h.serveList(w, r, h.data.ClosedPositions) })
 	case "orders":
 		h.requireGet(w, r, func() { h.serveList(w, r, h.data.Orders) })
 	case "roster":

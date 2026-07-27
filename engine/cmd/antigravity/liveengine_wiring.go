@@ -91,8 +91,9 @@ func wireLiveEngine(
 		Account:        liveEngineAccountProvider(bridge, ctrl),
 		Positions:      liveEnginePositionsProvider(bridge),
 		Orders:         liveEngineOrdersProvider(bridge),
-		Roster:         liveEngineRosterProvider(buyEngine, bridge),
-		Reconciliation: liveEngineReconciliationProvider(bridge),
+		ClosedPositions: liveEngineClosedProvider(bridge),
+		Roster:          liveEngineRosterProvider(buyEngine, bridge),
+		Reconciliation:  liveEngineReconciliationProvider(bridge),
 		AllowList:      bridge.LiveAllowList,
 		SetAllowList: func(names []string) error {
 			bridge.SetLiveAllowList(names)
@@ -270,6 +271,40 @@ func liveEngineOrdersProvider(bridge *delta.Bridge) func(context.Context) ([]map
 	}
 }
 
+// liveEngineClosedProvider lists positions the engine opened and has since
+// closed (SL/TP/expiry), newest first, with the realised outcome.
+func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map[string]any, error) {
+	return func(ctx context.Context) ([]map[string]any, error) {
+		out := make([]map[string]any, 0)
+		for _, t := range bridge.Trades() {
+			if t.Status != "CLOSED" {
+				continue
+			}
+			row := map[string]any{
+				"id":          t.ID,
+				"strategy":    t.StrategyName,
+				"optionType":  t.OptionType,
+				"symbol":      t.DeltaSymbol,
+				"contracts":   t.Contracts,
+				"entryPrice":  t.FillPrice,
+				"exitPrice":   t.CloseFillPrice,
+				"realizedPnl": t.RealizedPnl,
+				"openedAt":    t.OpenedAt,
+				// Why it closed: take-profit, stop-loss, near-expiry or expiry.
+				"exitReason": firstNonEmpty(t.ExitReason, t.FailureReason),
+			}
+			if t.ClosedAt != nil {
+				row["closedAt"] = *t.ClosedAt
+			}
+			out = append(out, row)
+			if len(out) >= 100 {
+				break
+			}
+		}
+		return out, nil
+	}
+}
+
 func liveEngineRosterProvider(buyEngine *options.Engine, bridge *delta.Bridge) func(context.Context) ([]liveengine.StrategyEligibility, error) {
 	return func(ctx context.Context) ([]liveengine.StrategyEligibility, error) {
 		out := make([]liveengine.StrategyEligibility, 0)
@@ -380,6 +415,15 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 			}
 		}
 	}
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func itoa(n int) string {

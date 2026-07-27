@@ -75,6 +75,20 @@ type Position = {
   strategy: string;
 };
 
+type ClosedPosition = {
+  id: string;
+  strategy: string;
+  optionType: string;
+  symbol: string;
+  contracts: number;
+  entryPrice: number;
+  exitPrice: number;
+  realizedPnl: number;
+  exitReason: string;
+  openedAt: string;
+  closedAt?: string;
+};
+
 type Order = {
   id: string;
   strategy: string;
@@ -128,6 +142,7 @@ export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [closed, setClosed] = useState<ClosedPosition[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [roster, setRoster] = useState<Eligibility[]>([]);
   const [recon, setRecon] = useState<Recon | null>(null);
@@ -140,10 +155,11 @@ export default function LiveEnginePage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, ac, po, or, ro, rc, au] = await Promise.all([
+      const [st, ac, po, cp, or, ro, rc, au] = await Promise.all([
         fetch("/api/live-engine/state", { cache: "no-store" }),
         fetch("/api/live-engine/account", { cache: "no-store" }),
         fetch("/api/live-engine/positions", { cache: "no-store" }),
+        fetch("/api/live-engine/closed-positions", { cache: "no-store" }),
         fetch("/api/live-engine/orders", { cache: "no-store" }),
         fetch("/api/live-engine/roster", { cache: "no-store" }),
         fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
@@ -156,6 +172,7 @@ export default function LiveEnginePage() {
       setState(await st.json());
       if (ac.ok) setAccount(await ac.json());
       if (po.ok) setPositions((await po.json()) as Position[]);
+      if (cp.ok) setClosed((await cp.json()) as ClosedPosition[]);
       if (or.ok) setOrders((await or.json()) as Order[]);
       if (ro.ok) setRoster((await ro.json()) as Eligibility[]);
       if (rc.ok) setRecon(await rc.json());
@@ -239,6 +256,37 @@ export default function LiveEnginePage() {
       { id: "margin", align: "right", header: "Margin", cell: (p) => fmtUSD(p.marginUsd) },
       { id: "liq", align: "right", header: "Liquidation", cell: (p) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{p.liquidationPrice}</span> },
       { id: "strat", header: "Strategy", cell: (p) => p.strategy || "—" },
+    ],
+    [],
+  );
+
+  const closedColumns: DeskColumn<ClosedPosition>[] = useMemo(
+    () => [
+      {
+        id: "closedAt",
+        header: "Closed (UTC)",
+        cell: (c) => (c.closedAt ? new Date(c.closedAt).toISOString().slice(5, 16).replace("T", " ") : "—"),
+      },
+      { id: "sym", header: "Symbol", cell: (c) => c.symbol || "—" },
+      { id: "strat", header: "Strategy", cell: (c) => c.strategy || "—" },
+      { id: "ct", align: "right", header: "Contracts", cell: (c) => c.contracts },
+      { id: "entry", align: "right", header: "Entry", cell: (c) => (c.entryPrice ? c.entryPrice.toFixed(2) : "—") },
+      { id: "exit", align: "right", header: "Exit", cell: (c) => (c.exitPrice ? c.exitPrice.toFixed(2) : "—") },
+      {
+        id: "why",
+        header: "Exit reason",
+        cell: (c) => {
+          const r = c.exitReason || "";
+          const tone = r.includes("take_profit") ? "success" : r.includes("stop_loss") ? "error" : "default";
+          return r ? <DeskChip tone={tone}>{r}</DeskChip> : "—";
+        },
+      },
+      {
+        id: "pnl",
+        align: "right",
+        header: "Realized P&L",
+        cell: (c) => <span className={pnlTone(c.realizedPnl)} style={{ fontWeight: 600 }}>{fmtUSD(c.realizedPnl)}</span>,
+      },
     ],
     [],
   );
@@ -337,8 +385,9 @@ export default function LiveEnginePage() {
                 letterSpacing: "0.06em",
                 padding: "4px 10px",
                 borderRadius: 6,
-                color: "var(--desk-on-error, #fff)",
-                background: "var(--desk-error)",
+                color: "#fff",
+                // Green while the Delta Engine is on, red when it is off.
+                background: armed ? "var(--desk-success)" : "var(--desk-error)",
               }}
             >
               REAL MONEY · ${CEILING}
@@ -346,7 +395,7 @@ export default function LiveEnginePage() {
           </div>
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
             Real-money option <strong>buying</strong> on Delta BTC options (long premium only), capped at a
-            ${CEILING} server-enforced ceiling. Ships disarmed; arming requires typing the exact confirmation phrase.
+            ${CEILING} server-enforced ceiling. Starts off; turning the Delta Engine on places real orders immediately.
             Naked selling is excluded by decision. 10× is inert on long options — buying pays the premium in full, with
             no borrow and no liquidation price.
           </p>
@@ -355,16 +404,16 @@ export default function LiveEnginePage() {
         {error && <DeskBanner variant="warning">{error} — retrying every 15s</DeskBanner>}
         {actionMsg && <DeskBanner variant={actionMsg.endsWith("ok") ? "success" : "error"}>{actionMsg}</DeskBanner>}
 
-        {/* Armed/disarmed state — visible without scrolling */}
+        {/* Engine on/off state — visible without scrolling. Green when on. */}
         <DeskBanner
-          variant={armed ? "error" : "info"}
-          title={armed ? "● ARMED — LIVE ORDERS ENABLED" : "○ DISARMED — no live orders"}
+          variant={armed ? "success" : "info"}
+          title={armed ? "● DELTA ENGINE ON — LIVE ORDERS ENABLED" : "○ DELTA ENGINE OFF — no live orders"}
         >
           <span data-testid="armed-state">
             {armed
-              ? `Armed by ${state?.armedBy ?? "?"} · ${ageLabel(state?.armedAt)}. Live orders can be placed against real capital.`
-              : `Disarmed${state?.lastDisarmReason ? ` · last reason: ${state.lastDisarmReason}` : ""}. No live orders will be placed.`}
-            {state?.killSwitchActive ? " · KILL SWITCH ACTIVE" : ""}
+              ? `On since ${ageLabel(state?.armedAt)}. Live orders can be placed against real capital.`
+              : `Off${state?.lastDisarmReason ? ` · last reason: ${state.lastDisarmReason}` : ""}. No live orders will be placed.`}
+            {state?.killSwitchActive ? " · KILL SWITCH ON" : ""}
             {state && !state.configured ? " · broker not configured" : ""}
           </span>
         </DeskBanner>
@@ -474,6 +523,25 @@ export default function LiveEnginePage() {
             getRowKey={(p, i) => `${p.symbol}-${i}`}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live positions.</span>}
+          />
+        </DeskCard>
+
+        {/* Closed positions — what SL/TP/expiry actually took off, and its result */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Closed Positions"
+            subtitle={
+              closed.length
+                ? `${closed.length} closed · realized ${fmtUSD(closed.reduce((s, c) => s + (c.realizedPnl || 0), 0))}`
+                : "closed by take-profit, stop-loss or expiry"
+            }
+          />
+          <DeskDataTable
+            columns={closedColumns}
+            rows={closed}
+            getRowKey={(c) => c.id}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed positions yet.</span>}
           />
         </DeskCard>
 

@@ -33,6 +33,10 @@ type LiveTrade struct {
 	CloseFillPrice float64  `json:"closeFillPrice,omitempty"`
 	RealizedPnl   float64   `json:"realizedPnl,omitempty"`
 	FailureReason string    `json:"failureReason,omitempty"`
+	// ExitReason records WHY the position closed (take_profit_80pct,
+	// stop_loss_50pct, near_expiry_30min, CLOSE_ALL, ...). Previously the reason
+	// was only logged, so a closed position could not show what triggered it.
+	ExitReason string `json:"exitReason,omitempty"`
 }
 
 // OpenSignal is the event fired when a paper position opens.
@@ -205,10 +209,14 @@ func (b *Bridge) UpdateTradeAfterClose(tradeID string, result PlaceOrderResult, 
 		t.CloseOrderID = result.OrderID
 		t.CloseFillPrice = result.Price
 		t.ClosedAt = &now
+		// Premiums are quoted USD per BTC and a contract is 0.001 BTC, so realised
+		// PnL must include the contract size. Without it this overstated every
+		// close by 1000x (a $0.05 result would have been reported as $50).
+		btc := float64(t.Contracts) * OptionContractSizeBTC
 		if buying {
-			t.RealizedPnl = (result.Price - t.FillPrice) * float64(t.Contracts)
+			t.RealizedPnl = (result.Price - t.FillPrice) * btc
 		} else {
-			t.RealizedPnl = (t.FillPrice - result.Price) * float64(t.Contracts)
+			t.RealizedPnl = (t.FillPrice - result.Price) * btc
 		}
 	})
 }
@@ -464,6 +472,12 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 		return
 	}
 	delete(b.openByPaperID, sig.PaperTradeID)
+
+	// Record why this position is closing so the closed list can show it.
+	if sig.ExitReason != "" {
+		b.trades[idx].ExitReason = sig.ExitReason
+		trade.ExitReason = sig.ExitReason
+	}
 
 	tradeCopy := trade
 
