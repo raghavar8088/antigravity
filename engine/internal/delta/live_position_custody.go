@@ -28,6 +28,51 @@ import (
 
 const liveTradesFileName = "delta_live_trades.json"
 
+// Exit thresholds the position monitor enforces on live long-option positions,
+// as a fraction of the entry premium. Exported so the UI shows the same numbers
+// the engine actually acts on — one source of truth, no drift between the
+// displayed TP/SL and the levels that trigger a close.
+const (
+	LiveTakeProfitPct = 0.80 // close at +80% of premium paid
+	LiveStopLossPct   = 0.50 // close at -50% of premium paid
+)
+
+// PositionExit describes where a long option position exits and what that is
+// worth in USD, given the entry premium the monitor measures against.
+type PositionExit struct {
+	TakeProfitPrice float64 // premium level (USD/BTC) that triggers the TP close
+	StopLossPrice   float64
+	TakeProfitUSD   float64 // realised P&L in USD if TP is touched
+	StopLossUSD     float64 // negative — realised P&L in USD if SL is touched
+}
+
+// ExitLevelsFor computes TP/SL levels and their USD outcomes for a long option.
+// entryPremium is quoted in USD per BTC; contracts are 0.001 BTC each.
+func ExitLevelsFor(entryPremium float64, contracts int) PositionExit {
+	if entryPremium <= 0 || contracts == 0 {
+		return PositionExit{}
+	}
+	btc := float64(contracts) * OptionContractSizeBTC
+	tp := entryPremium * (1 + LiveTakeProfitPct)
+	sl := entryPremium * (1 - LiveStopLossPct)
+	return PositionExit{
+		TakeProfitPrice: tp,
+		StopLossPrice:   sl,
+		TakeProfitUSD:   (tp - entryPremium) * btc,
+		StopLossUSD:     (sl - entryPremium) * btc,
+	}
+}
+
+// UnrealizedUSD is the mark-to-market P&L of a long option in USD. Delta's
+// margined endpoint reports unrealised_pnl as 0 for these option positions, so
+// the engine computes it from mark vs entry rather than showing a false zero.
+func UnrealizedUSD(entryPremium, markPremium float64, contracts int) float64 {
+	if entryPremium <= 0 || contracts == 0 {
+		return 0
+	}
+	return (markPremium - entryPremium) * float64(contracts) * OptionContractSizeBTC
+}
+
 // liveTradesPath returns the durable path for live trade custody. ENGINE_DATA_DIR
 // is a mounted volume in production, so this survives redeploys.
 func liveTradesPath() string {

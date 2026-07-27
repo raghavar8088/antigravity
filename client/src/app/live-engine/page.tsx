@@ -67,6 +67,10 @@ type Position = {
   markPrice: number;
   unrealizedPnl: number;
   marginUsd: number;
+  takeProfitPrice: number;
+  stopLossPrice: number;
+  takeProfitUsd: number;
+  stopLossUsd: number;
   liquidationPrice: string;
   strategy: string;
 };
@@ -103,7 +107,10 @@ type AuditEntry = { at: string; actor: string; action: string; reason?: string; 
 
 function fmtUSD(v: number | undefined): string {
   if (v === undefined || Number.isNaN(v)) return "—";
-  return `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(2)}`;
+  const abs = Math.abs(v);
+  // Option premiums here are cents-scale; 2dp would round a real move to $0.00.
+  const dp = abs > 0 && abs < 1 ? 4 : 2;
+  return `${v < 0 ? "-" : ""}$${abs.toFixed(dp)}`;
 }
 function pnlTone(v: number): string {
   return v > 0 ? "desk-pnl-positive" : v < 0 ? "desk-pnl-negative" : "desk-pnl-neutral";
@@ -205,6 +212,32 @@ export default function LiveEnginePage() {
       { id: "side", header: "Side", cell: (p) => <DeskChip tone={p.side.toUpperCase() === "BUY" ? "success" : "default"}>{p.side}</DeskChip> },
       { id: "size", align: "right", header: "Size", cell: (p) => p.size },
       { id: "entry", align: "right", header: "Entry", cell: (p) => p.entryPrice.toFixed(2) },
+      {
+        id: "tp",
+        align: "right",
+        header: "TP (+80%)",
+        cell: (p) => (
+          <span title="Premium level that triggers the take-profit close, and the USD gain if touched">
+            {p.takeProfitPrice ? p.takeProfitPrice.toFixed(2) : "—"}
+            <span className="desk-pnl-positive" style={{ marginLeft: 6 }}>
+              {p.takeProfitUsd ? fmtUSD(p.takeProfitUsd) : ""}
+            </span>
+          </span>
+        ),
+      },
+      {
+        id: "sl",
+        align: "right",
+        header: "SL (−50%)",
+        cell: (p) => (
+          <span title="Premium level that triggers the stop-loss close, and the USD loss if touched">
+            {p.stopLossPrice ? p.stopLossPrice.toFixed(2) : "—"}
+            <span className="desk-pnl-negative" style={{ marginLeft: 6 }}>
+              {p.stopLossUsd ? fmtUSD(p.stopLossUsd) : ""}
+            </span>
+          </span>
+        ),
+      },
       { id: "mark", align: "right", header: "Mark", cell: (p) => p.markPrice.toFixed(2) },
       { id: "upnl", align: "right", header: "Unrealized", cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span> },
       { id: "margin", align: "right", header: "Margin", cell: (p) => fmtUSD(p.marginUsd) },

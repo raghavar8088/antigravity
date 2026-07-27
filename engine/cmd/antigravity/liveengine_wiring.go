@@ -183,25 +183,60 @@ func liveEnginePositionsProvider(bridge *delta.Bridge) func(context.Context) ([]
 		if err != nil {
 			return out, err
 		}
-		// Best-effort strategy attribution from open bridge trades by symbol.
-		strategyBySymbol := map[string]string{}
+		// Attribute to the tracked trade so TP/SL are measured against the entry
+		// premium the monitor actually uses (FillPrice), not a display value.
+		type tracked struct {
+			strategy string
+			fill     float64
+			contracts int
+		}
+		bySymbol := map[string]tracked{}
 		for _, t := range bridge.OpenTrades() {
 			if t.DeltaSymbol != "" {
-				strategyBySymbol[t.DeltaSymbol] = t.StrategyName
+				bySymbol[t.DeltaSymbol] = tracked{t.StrategyName, t.FillPrice, t.Contracts}
 			}
 		}
 		for _, p := range positions {
+			contracts := int(p.Size)
+			if contracts < 0 {
+				contracts = -contracts
+			}
+			entry := p.EntryPrice
+			strategy := ""
+			if tr, ok := bySymbol[p.Symbol]; ok {
+				strategy = tr.strategy
+				if tr.fill > 0 {
+					entry = tr.fill // the basis the monitor closes against
+				}
+				if tr.contracts > 0 {
+					contracts = tr.contracts
+				}
+			}
+
+			// Delta reports unrealised_pnl as 0 for these options; compute it from
+			// mark vs entry so the UI never shows a false zero on a real position.
+			unrealized := p.UnrealisedPnl
+			if unrealized == 0 {
+				unrealized = delta.UnrealizedUSD(entry, p.MarkPrice, contracts)
+			}
+			exit := delta.ExitLevelsFor(entry, contracts)
+
 			out = append(out, map[string]any{
 				"symbol":        p.Symbol,
 				"side":          p.Side,
 				"size":          p.Size,
-				"entryPrice":    p.EntryPrice,
+				"entryPrice":    entry,
 				"markPrice":     p.MarkPrice,
-				"unrealizedPnl": p.UnrealisedPnl,
+				"unrealizedPnl": unrealized,
 				"marginUsd":     p.Margin,
+				// Exit plan the monitor enforces (+80% TP / -50% SL of premium).
+				"takeProfitPrice": exit.TakeProfitPrice,
+				"stopLossPrice":   exit.StopLossPrice,
+				"takeProfitUsd":   exit.TakeProfitUSD,
+				"stopLossUsd":     exit.StopLossUSD,
 				// Long options have no liquidation price — 10x is inert on longs.
 				"liquidationPrice": "N/A (long option)",
-				"strategy":         strategyBySymbol[p.Symbol],
+				"strategy":         strategy,
 			})
 		}
 		return out, nil

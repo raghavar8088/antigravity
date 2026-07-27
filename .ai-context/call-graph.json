@@ -1,1 +1,1 @@
-{}
+{"engine/internal/delta/exit_levels_test.go::TestExitLevelsFor()":["engine/internal/delta/live_position_custody.go::ExitLevelsFor()"],"engine/internal/delta/exit_levels_test.go::TestExitLevelsFor_ZeroInputsAreSafe()":["engine/internal/delta/live_position_custody.go::ExitLevelsFor()"],"engine/internal/delta/exit_levels_test.go::TestUnrealizedUSD()":["engine/internal/delta/live_position_custody.go::UnrealizedUSD()"]}

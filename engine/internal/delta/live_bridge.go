@@ -739,9 +739,9 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 
 		reason := ""
 		switch {
-		case pnlPct >= 0.80:
+		case pnlPct >= LiveTakeProfitPct:
 			reason = "take_profit_80pct"
-		case pnlPct <= -0.50:
+		case pnlPct <= -LiveStopLossPct:
 			reason = "stop_loss_50pct"
 		case !trade.ExpiryTime.IsZero() && now.After(trade.ExpiryTime.Add(-30*time.Minute)):
 			reason = "near_expiry_30min"
