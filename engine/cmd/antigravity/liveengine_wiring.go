@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,6 +93,7 @@ func wireLiveEngine(
 		Positions:      liveEnginePositionsProvider(bridge),
 		Orders:         liveEngineOrdersProvider(bridge),
 		ClosedPositions: liveEngineClosedProvider(bridge),
+		DailyPnl:        liveEngineDailyPnlProvider(bridge),
 		Roster:          liveEngineRosterProvider(buyEngine, bridge),
 		Reconciliation:  liveEngineReconciliationProvider(bridge),
 		AllowList:      bridge.LiveAllowList,
@@ -317,6 +319,78 @@ func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map
 			if len(out) >= 100 {
 				break
 			}
+		}
+		return out, nil
+	}
+}
+
+// liveEngineDailyPnlProvider aggregates closed live positions by UTC day:
+// capital actually deployed (premium paid), realised PnL, ROI on that capital,
+// trade count and win rate. Newest day first.
+func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]map[string]any, error) {
+	return func(ctx context.Context) ([]map[string]any, error) {
+		type agg struct {
+			capital float64
+			pnl     float64
+			trades  int
+			wins    int
+		}
+		byDay := map[string]*agg{}
+		for _, t := range bridge.Trades() {
+			if t.Status != "CLOSED" || t.ClosedAt == nil {
+				continue
+			}
+			day := t.ClosedAt.UTC().Format("2006-01-02")
+			a := byDay[day]
+			if a == nil {
+				a = &agg{}
+				byDay[day] = a
+			}
+			contracts := t.Contracts
+			if contracts < 0 {
+				contracts = -contracts
+			}
+			// Capital deployed = premium actually paid to open.
+			a.capital += t.FillPrice * float64(contracts) * delta.OptionContractSizeBTC
+			// Recompute realised PnL (see closed provider: stored values from
+			// before the contract-size fix are 1000x off).
+			pnl := t.RealizedPnl
+			if t.FillPrice > 0 && t.CloseFillPrice > 0 && contracts != 0 {
+				pnl = (t.CloseFillPrice - t.FillPrice) * float64(contracts) * delta.OptionContractSizeBTC
+			}
+			a.pnl += pnl
+			a.trades++
+			if pnl > 0 {
+				a.wins++
+			}
+		}
+
+		days := make([]string, 0, len(byDay))
+		for d := range byDay {
+			days = append(days, d)
+		}
+		sort.Sort(sort.Reverse(sort.StringSlice(days)))
+
+		out := make([]map[string]any, 0, len(days))
+		for _, d := range days {
+			a := byDay[d]
+			roi := 0.0
+			if a.capital > 0 {
+				roi = 100 * a.pnl / a.capital
+			}
+			winPct := 0.0
+			if a.trades > 0 {
+				winPct = 100 * float64(a.wins) / float64(a.trades)
+			}
+			out = append(out, map[string]any{
+				"date":        d,
+				"capitalUsd":  a.capital,
+				"pnlUsd":      a.pnl,
+				"roiPct":      roi,
+				"trades":      a.trades,
+				"wins":        a.wins,
+				"winRatePct":  winPct,
+			})
 		}
 		return out, nil
 	}

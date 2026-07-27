@@ -89,6 +89,16 @@ type ClosedPosition = {
   closedAt?: string;
 };
 
+type DailyPnl = {
+  date: string;
+  capitalUsd: number;
+  pnlUsd: number;
+  roiPct: number;
+  trades: number;
+  wins: number;
+  winRatePct: number;
+};
+
 type Order = {
   id: string;
   strategy: string;
@@ -143,6 +153,7 @@ export default function LiveEnginePage() {
   const [account, setAccount] = useState<Account | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [closed, setClosed] = useState<ClosedPosition[]>([]);
+  const [daily, setDaily] = useState<DailyPnl[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [roster, setRoster] = useState<Eligibility[]>([]);
   const [recon, setRecon] = useState<Recon | null>(null);
@@ -155,11 +166,12 @@ export default function LiveEnginePage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, ac, po, cp, or, ro, rc, au] = await Promise.all([
+      const [st, ac, po, cp, dp, or, ro, rc, au] = await Promise.all([
         fetch("/api/live-engine/state", { cache: "no-store" }),
         fetch("/api/live-engine/account", { cache: "no-store" }),
         fetch("/api/live-engine/positions", { cache: "no-store" }),
         fetch("/api/live-engine/closed-positions", { cache: "no-store" }),
+        fetch("/api/live-engine/daily-pnl", { cache: "no-store" }),
         fetch("/api/live-engine/orders", { cache: "no-store" }),
         fetch("/api/live-engine/roster", { cache: "no-store" }),
         fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
@@ -173,6 +185,7 @@ export default function LiveEnginePage() {
       if (ac.ok) setAccount(await ac.json());
       if (po.ok) setPositions((await po.json()) as Position[]);
       if (cp.ok) setClosed((await cp.json()) as ClosedPosition[]);
+      if (dp.ok) setDaily((await dp.json()) as DailyPnl[]);
       if (or.ok) setOrders((await or.json()) as Order[]);
       if (ro.ok) setRoster((await ro.json()) as Eligibility[]);
       if (rc.ok) setRecon(await rc.json());
@@ -256,6 +269,27 @@ export default function LiveEnginePage() {
       { id: "margin", align: "right", header: "Margin", cell: (p) => fmtUSD(p.marginUsd) },
       { id: "liq", align: "right", header: "Liquidation", cell: (p) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{p.liquidationPrice}</span> },
       { id: "strat", header: "Strategy", cell: (p) => p.strategy || "—" },
+    ],
+    [],
+  );
+
+  const dailyColumns: DeskColumn<DailyPnl>[] = useMemo(
+    () => [
+      { id: "date", header: "Date (UTC)", cell: (d) => d.date },
+      { id: "cap", align: "right", header: "Capital used", cell: (d) => fmtUSD(d.capitalUsd) },
+      {
+        id: "roi", align: "right", header: "ROI",
+        cell: (d) => <span className={pnlTone(d.roiPct)} style={{ fontWeight: 600 }}>{d.roiPct.toFixed(1)}%</span>,
+      },
+      { id: "trades", align: "right", header: "Trades", cell: (d) => d.trades },
+      {
+        id: "pnl", align: "right", header: "P&L",
+        cell: (d) => <span className={pnlTone(d.pnlUsd)} style={{ fontWeight: 600 }}>{fmtUSD(d.pnlUsd)}</span>,
+      },
+      {
+        id: "win", align: "right", header: "Win %",
+        cell: (d) => `${d.winRatePct.toFixed(0)}% (${d.wins}/${d.trades})`,
+      },
     ],
     [],
   );
@@ -542,6 +576,25 @@ export default function LiveEnginePage() {
             getRowKey={(c) => c.id}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed positions yet.</span>}
+          />
+        </DeskCard>
+
+        {/* Daily P&L — realised results per UTC day */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Daily P&L"
+            subtitle={
+              daily.length
+                ? `${daily.length} day(s) · total realized ${fmtUSD(daily.reduce((s2, d) => s2 + (d.pnlUsd || 0), 0))}`
+                : "realised results per UTC day, from closed positions"
+            }
+          />
+          <DeskDataTable
+            columns={dailyColumns}
+            rows={daily}
+            getRowKey={(d) => d.date}
+            stickyHeader
+            empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed trades yet.</span>}
           />
         </DeskCard>
 
