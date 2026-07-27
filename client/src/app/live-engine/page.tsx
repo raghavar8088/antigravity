@@ -5,8 +5,8 @@
  *
  * Reads and mutates only through the session-gated /api/live-engine proxy. This
  * module trades real capital on Delta BTC options (long premium only), capped at
- * a $100 server-enforced ceiling. It ships DISARMED; arming requires typing the
- * exact confirmation phrase. Built on the shared desk primitives so it matches
+ * a $100 server-enforced ceiling. It ships DISARMED; the Delta Engine toggle
+ * turns live trading on immediately. Built on the shared desk primitives so it matches
  * the Options Buying desk, but carries persistent, unmissable REAL MONEY
  * differentiation so it can never be mistaken for a paper desk.
  */
@@ -137,9 +137,6 @@ export default function LiveEnginePage() {
   const [busy, setBusy] = useState<boolean>(false);
   const [actionMsg, setActionMsg] = useState<string>("");
 
-  // Arm confirmation modal
-  const [armOpen, setArmOpen] = useState<boolean>(false);
-  const [armText, setArmText] = useState<string>("");
 
   const refresh = useCallback(async () => {
     try {
@@ -204,7 +201,6 @@ export default function LiveEnginePage() {
   );
 
   const armed = state?.armed ?? false;
-  const canArm = armText === ARM_PHRASE && !busy;
 
   const positionColumns: DeskColumn<Position>[] = useMemo(
     () => [
@@ -377,44 +373,49 @@ export default function LiveEnginePage() {
         <DeskCard>
           <DeskSectionHeader
             title="Control"
-            subtitle="Arming still requires the exact typed confirmation — the toggle opens it, it can never arm on its own. Auto-disarm is one-way."
+            subtitle="Delta Engine on places real orders immediately. Auto-disarm is one-way."
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", padding: "0 4px 8px" }}>
-            {/* ARM toggle — ON opens the typed-confirm modal; OFF disarms at once. */}
+            {/* Delta Engine — green on, red off. Toggling on goes live at once. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <DeskSwitch
                 id="arm-toggle"
                 checked={armed}
                 disabled={busy}
-                ariaLabel="Arm live trading"
-                label={armed ? "ARMED — live orders enabled" : "Disarmed — no live orders"}
+                ariaLabel="Delta Engine"
+                label={armed ? "Delta Engine on" : "Delta Engine off"}
+                onColor="var(--desk-success)"
+                offColor="var(--desk-error)"
                 onChange={(next) => {
                   if (next) {
-                    setArmText("");
-                    setArmOpen(true); // typed confirmation required
+                    void mutate("arm", { confirmation: ARM_PHRASE });
                   } else {
-                    void mutate("disarm", { reason: "manual disarm from UI toggle" });
+                    void mutate("disarm", { reason: "Delta Engine turned off from UI" });
                   }
                 }}
               />
               <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
-                {armed ? `armed by ${state?.armedBy ?? "?"} · ${ageLabel(state?.armedAt)}` : "toggle on to confirm and arm"}
+                {armed
+                  ? `live orders enabled · ${ageLabel(state?.armedAt)}`
+                  : "off — no live orders will be placed"}
               </span>
             </div>
 
-            {/* KILL SWITCH toggle — ON halts everything (and disarms); OFF resumes. */}
+            {/* Kill switch — red on (halted), green off (trading allowed). */}
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <DeskSwitch
                 id="kill-switch-toggle"
                 checked={state?.killSwitchActive ?? false}
                 disabled={busy || state?.killSwitchControllable === false}
                 ariaLabel="Kill switch"
-                label={state?.killSwitchActive ? "KILL SWITCH ON — trading halted" : "Kill switch off — trading allowed"}
+                label={state?.killSwitchActive ? "Kill switch on — trading halted" : "Kill switch off — trading allowed"}
+                onColor="var(--desk-error)"
+                offColor="var(--desk-success)"
                 onChange={(next) => void mutate("kill-switch", { active: next })}
               />
               <span className="desk-label-md" style={{ color: state?.killSwitchActive ? "var(--desk-error)" : "var(--desk-on-surface-variant)" }}>
                 {state?.killSwitchActive
-                  ? (state?.killSwitchReason || "halted — blocks new orders and disarms")
+                  ? (state?.killSwitchReason || "halted — blocks new orders and turns the engine off")
                   : "toggle on to halt all new orders immediately"}
               </span>
             </div>
@@ -536,50 +537,6 @@ export default function LiveEnginePage() {
         </p>
       </main>
 
-      {/* Typed-confirmation ARM modal */}
-      {armOpen && (
-        <div
-          data-testid="arm-modal"
-          role="dialog"
-          aria-modal="true"
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
-          onClick={() => setArmOpen(false)}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, width: "100%" }}>
-            <DeskCard>
-              <DeskSectionHeader title="Arm live trading — REAL MONEY" />
-              <div style={{ padding: "0 4px 8px", display: "flex", flexDirection: "column", gap: 12 }}>
-                <DeskBanner variant="error">
-                  This arms real orders against real capital, capped at ${CEILING}. Type the phrase exactly to confirm.
-                </DeskBanner>
-                <div className="desk-mono" style={{ fontWeight: 700 }}>{ARM_PHRASE}</div>
-                <input
-                  data-testid="arm-input"
-                  autoFocus
-                  value={armText}
-                  onChange={(e) => setArmText(e.target.value)}
-                  placeholder="Type the confirmation phrase"
-                  style={{
-                    width: "100%", padding: "8px 12px", borderRadius: 8, fontFamily: "var(--font-jetbrains-mono, monospace)",
-                    border: "1px solid var(--desk-outline)", background: "var(--desk-surface)", color: "var(--desk-on-surface)",
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <DeskButton variant="text" onClick={() => setArmOpen(false)}>Cancel</DeskButton>
-                  <DeskButton
-                    data-testid="arm-confirm"
-                    variant="filled"
-                    disabled={!canArm}
-                    onClick={async () => { setArmOpen(false); await mutate("arm", { confirmation: armText }); }}
-                  >
-                    Arm now
-                  </DeskButton>
-                </div>
-              </div>
-            </DeskCard>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

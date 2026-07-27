@@ -2,12 +2,12 @@ import { test, expect } from "../fixtures/authedTest";
 
 /**
  * Live Engine — real-money module UI. These assert the safety-critical UX:
- * unmistakable real-money differentiation, arm gated behind an exact typed
- * confirmation, disarm/close-all reachable. They skip gracefully when the dev
- * server or backend is unavailable (resource-constrained CI).
+ * unmistakable real-money differentiation, the Delta Engine and kill-switch
+ * toggles reflecting live state, and close-all reachable. Toggles are never
+ * flipped here — turning the engine on places real orders. They skip gracefully
+ * when the dev server or backend is unavailable (resource-constrained CI).
  */
 
-const ARM_PHRASE = "ARM LIVE $100";
 
 test.describe("Live Engine (real money)", () => {
   test.describe.configure({ mode: "serial" });
@@ -44,31 +44,16 @@ test.describe("Live Engine (real money)", () => {
     await expect(page.getByTestId("armed-state")).toBeVisible();
   });
 
-  test("arm toggle cannot arm on its own — it opens the typed confirmation", async ({ page }) => {
+  test("Delta Engine toggle reflects live state and is labelled on/off", async ({ page }) => {
     const armToggle = page.locator("#arm-toggle");
     if (!(await armToggle.isVisible().catch(() => false))) {
-      test.skip(true, "arm toggle not rendered — backend unavailable");
+      test.skip(true, "Delta Engine toggle not rendered — backend unavailable");
       return;
     }
-    if (await armToggle.isChecked().catch(() => false)) {
-      test.skip(true, "engine already armed in this environment");
-      return;
-    }
-    // Flipping the toggle must NOT arm; it must open the confirmation modal.
-    await armToggle.click();
-    await expect(page.getByTestId("arm-modal")).toBeVisible();
-
-    const confirm = page.getByTestId("arm-confirm");
-    await expect(confirm).toBeDisabled();
-
-    await page.getByTestId("arm-input").fill("not the phrase");
-    await expect(confirm).toBeDisabled();
-
-    await page.getByTestId("arm-input").fill(ARM_PHRASE);
-    await expect(confirm).toBeEnabled();
-
-    // Do not actually arm real money in a test — close the modal.
-    await page.keyboard.press("Escape").catch(() => {});
+    // Never flip it in a test: toggling on now places real orders immediately.
+    const checked = await armToggle.isChecked();
+    expect(typeof checked).toBe("boolean");
+    await expect(page.getByText(checked ? "Delta Engine on" : "Delta Engine off")).toBeVisible();
   });
 
   test("panic CLOSE ALL is reachable", async ({ page }) => {
