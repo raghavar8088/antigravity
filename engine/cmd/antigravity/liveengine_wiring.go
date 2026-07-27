@@ -116,7 +116,17 @@ func wireLiveEngine(
 
 	go liveEngineAutoDisarmMonitor(ctx, ctrl, bridge, ks)
 
-	log.Printf("[LIVE ENGINE] control plane wired — DISARMED, ceiling $%.0f, buying-only", liveengine.MaxTradableUSD)
+	// Resume a deliberate human ON across restarts, so a deploy does not silently
+	// stop live trading. Guarded inside RestoreArmState: never resumes after a
+	// safety stop, a manual off, an active kill switch, or a stale state. Run off
+	// the boot path — it reads broker equity and must not block startup.
+	go func() {
+		rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		ctrl.RestoreArmState(rctx)
+	}()
+
+	log.Printf("[LIVE ENGINE] control plane wired — ceiling $%.0f, buying-only (ON state resumes only if it was deliberately on)", liveengine.MaxTradableUSD)
 	return ctrl
 }
 

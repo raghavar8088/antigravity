@@ -72,6 +72,8 @@ const (
 	// Operator-driven kill switch from the Live Engine toggle.
 	ActionKillSwitchOn  AuditAction = "KILL_SWITCH_ON"
 	ActionKillSwitchOff AuditAction = "KILL_SWITCH_OFF"
+	// ActionArmRestored records a restart resuming a deliberate human ON state.
+	ActionArmRestored AuditAction = "ARM_RESTORED"
 )
 
 // AuditEntry is one immutable record in the audit trail.
@@ -215,7 +217,10 @@ func (c *Controller) Arm(actor, confirmation string) error {
 	if c.hooks.SetEffectorEnabled != nil {
 		c.hooks.SetEffectorEnabled(true)
 	}
+	// A human turned it on: clear any prior stop reason so a restart may resume.
+	c.lastDisarmReason = ""
 	c.appendAuditLocked(actor, ActionArm, "", fmt.Sprintf("ceiling=$%.0f dailyLossStop=$%.0f", MaxTradableUSD, c.maxDailyLossUSD))
+	c.persistArmStateLocked()
 	return nil
 }
 
@@ -282,6 +287,9 @@ func (c *Controller) disarmLocked(actor string, action AuditAction, reason, deta
 		c.hooks.SetEffectorEnabled(false)
 	}
 	c.appendAuditLocked(actor, action, reason, detail)
+	// Persist OFF (with its reason) so a restart cannot resurrect a stopped
+	// engine — especially one stopped by a safety trigger.
+	c.persistArmStateLocked()
 }
 
 // IsArmed reports whether live orders are currently permitted.

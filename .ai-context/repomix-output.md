@@ -984,6 +984,8 @@ The content is organized as follows:
   live/live_test.go
   live/orphan_detector.go
   live/parity_checker.go
+  liveengine/arm_persistence_test.go
+  liveengine/arm_persistence.go
   liveengine/controller_test.go
   liveengine/controller.go
   liveengine/http_test.go
