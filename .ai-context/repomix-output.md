@@ -858,6 +858,7 @@ The content is organized as follows:
   delta/client.go
   delta/execution_guard_test.go
   delta/execution_guard.go
+  delta/flexnum_test.go
   delta/live_bridge_test.go
   delta/live_bridge.go
   derivatives/derivatives_test.go
@@ -1152,6 +1153,7 @@ The content is organized as follows:
   reconciliationv2/events.go
   reconciliationv2/exchange_adapter_test.go
   reconciliationv2/exchange_adapter.go
+  reconciliationv2/ghost_option_test.go
   reconciliationv2/killswitch_hook_test.go
   reconciliationv2/killswitch_hook.go
   reconciliationv2/ledger_oms_reader_test.go

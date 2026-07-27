@@ -341,14 +341,14 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			Symbol        string `json:"symbol"`
-			ProductID     int    `json:"product_id"`
-			Size          string `json:"size"`
-			EntryPrice    string `json:"entry_price"`
-			MarkPrice     string `json:"mark_price"`
-			UnrealisedPnl string `json:"unrealised_pnl"`
-			RealisedPnl   string `json:"realised_pnl"`
-			Margin        string `json:"margin"`
+			Symbol        string  `json:"symbol"`
+			ProductID     int     `json:"product_id"`
+			Size          flexNum `json:"size"`
+			EntryPrice    flexNum `json:"entry_price"`
+			MarkPrice     flexNum `json:"mark_price"`
+			UnrealisedPnl flexNum `json:"unrealised_pnl"`
+			RealisedPnl   flexNum `json:"realised_pnl"`
+			Margin        flexNum `json:"margin"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
@@ -356,15 +356,10 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 	}
 	var positions []LivePosition
 	for _, p := range resp.Result {
-		size, _ := strconv.ParseFloat(p.Size, 64)
+		size := float64(p.Size)
 		if size == 0 {
 			continue
 		}
-		entry, _ := strconv.ParseFloat(p.EntryPrice, 64)
-		mark, _ := strconv.ParseFloat(p.MarkPrice, 64)
-		upnl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
-		rpnl, _ := strconv.ParseFloat(p.RealisedPnl, 64)
-		margin, _ := strconv.ParseFloat(p.Margin, 64)
 		side := "LONG"
 		if size < 0 {
 			side = "SHORT"
@@ -373,15 +368,34 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 			Symbol:        p.Symbol,
 			ProductID:     p.ProductID,
 			Size:          size,
-			EntryPrice:    entry,
-			MarkPrice:     mark,
-			UnrealisedPnl: upnl,
-			RealisedPnl:   rpnl,
-			Margin:        margin,
+			EntryPrice:    float64(p.EntryPrice),
+			MarkPrice:     float64(p.MarkPrice),
+			UnrealisedPnl: float64(p.UnrealisedPnl),
+			RealisedPnl:   float64(p.RealisedPnl),
+			Margin:        float64(p.Margin),
 			Side:          side,
 		})
 	}
 	return positions, nil
+}
+
+// flexNum unmarshals a JSON number OR a quoted numeric string. Delta's
+// /v2/positions/margined returns option `size` as a number while prices come as
+// strings; this tolerates both so a real option position never fails to parse.
+type flexNum float64
+
+func (n *flexNum) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(strings.TrimSpace(string(b)), `"`)
+	if s == "" || s == "null" {
+		*n = 0
+		return nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return err
+	}
+	*n = flexNum(f)
+	return nil
 }
 
 // OpenOrder is an active order on Delta Exchange.

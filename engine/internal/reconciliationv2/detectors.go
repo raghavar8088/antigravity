@@ -3,8 +3,19 @@ package reconciliationv2
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
+
+// isDeltaOptionSymbol reports whether a Delta symbol is a BTC/ETH option
+// (e.g. C-BTC-64800-290726, P-BTC-...). These belong to the Live Engine's
+// real-money option-buying module and are reconciled there, not against the
+// paper perp/spot OMS — so this detector must ignore them.
+func isDeltaOptionSymbol(symbol string) bool {
+	s := strings.ToUpper(symbol)
+	return strings.HasPrefix(s, "C-BTC-") || strings.HasPrefix(s, "P-BTC-") ||
+		strings.HasPrefix(s, "C-ETH-") || strings.HasPrefix(s, "P-ETH-")
+}
 
 // Mismatch is a single detected discrepancy between exchange state and internal state.
 type Mismatch struct {
@@ -167,6 +178,13 @@ func (d *PositionDriftDetector) Detect(
 	for _, ep := range exchangePositions {
 		if ep.Quantity == 0 {
 			continue // zero-size position = closed on exchange
+		}
+		if isDeltaOptionSymbol(ep.Symbol) {
+			// Real BTC/ETH option positions belong to the Live Engine (buying-only
+			// module), not this paper OMS which trades perps/spot. They are
+			// reconciled by the Live Engine itself; treating them as ghosts here
+			// halted the engine on every real fill. Skip them.
+			continue
 		}
 		key := positionSideKey(ep.Symbol, ep.Side)
 		seenKeys[key] = true
