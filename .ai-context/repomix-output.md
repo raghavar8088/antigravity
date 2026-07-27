@@ -861,6 +861,7 @@ The content is organized as follows:
   delta/flexnum_test.go
   delta/live_bridge_test.go
   delta/live_bridge.go
+  delta/trade_status_test.go
   derivatives/derivatives_test.go
   derivatives/funding.go
   derivatives/oi.go

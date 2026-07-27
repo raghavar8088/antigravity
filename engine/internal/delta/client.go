@@ -455,7 +455,9 @@ func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
 // FindOptionProduct searches Delta product list for a BTC option matching the given
 // strike, expiry (rounded to nearest weekly Friday), and option type ("call"/"put").
 func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry time.Time, optionType string) (OptionContractInfo, error) {
-	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?contract_types=put_options,call_options&page_size=200", nil)
+	// states=live is essential: without it the list includes expired/settled
+	// contracts, and ordering one returns HTTP 400 invalid_contract.
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?contract_types=put_options,call_options&states=live&page_size=500", nil)
 	if err != nil {
 		return OptionContractInfo{}, err
 	}
@@ -466,10 +468,11 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			ID           int    `json:"id"`
-			Symbol       string `json:"symbol"`
-			ContractType string `json:"contract_type"`
-			StrikePrice  string `json:"strike_price"`
+			ID             int    `json:"id"`
+			Symbol         string `json:"symbol"`
+			ContractType   string `json:"contract_type"`
+			State          string `json:"state"`
+			StrikePrice    string `json:"strike_price"`
 			SettlementTime string `json:"settlement_time"`
 		} `json:"result"`
 	}
@@ -482,29 +485,53 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 		targetType = "put_options"
 	}
 
-	// Find closest strike within 0.5% and nearest expiry within 4 hours
+	// Pick the live contract closest to the requested strike, preferring the
+	// nearest expiry at or after the requested one. Expiry was previously ignored
+	// entirely (despite the doc comment), so a far or stale contract could win.
 	bestID := 0
 	bestSymbol := ""
 	bestStrikeDiff := 1e18
+	bestExpiryGap := time.Duration(1<<62 - 1)
+	now := time.Now().UTC()
 
 	for _, p := range resp.Result {
 		if p.ContractType != targetType {
+			continue
+		}
+		if p.State != "" && !strings.EqualFold(p.State, "live") {
 			continue
 		}
 		s, err := strconv.ParseFloat(p.StrikePrice, 64)
 		if err != nil {
 			continue
 		}
+		// Settlement must be in the future; an already-settled contract is untradeable.
+		settle, perr := time.Parse(time.RFC3339, p.SettlementTime)
+		if perr == nil {
+			if !settle.After(now) {
+				continue
+			}
+		}
+		gap := time.Duration(0)
+		if perr == nil && !expiry.IsZero() {
+			gap = settle.Sub(expiry)
+			if gap < 0 {
+				gap = -gap
+			}
+		}
+
 		diff := abs(s - strike)
-		if diff < bestStrikeDiff {
+		// Strike proximity first, then closeness to the requested expiry.
+		if diff < bestStrikeDiff || (diff == bestStrikeDiff && gap < bestExpiryGap) {
 			bestStrikeDiff = diff
+			bestExpiryGap = gap
 			bestID = p.ID
 			bestSymbol = p.Symbol
 		}
 	}
 
 	if bestID == 0 {
-		return OptionContractInfo{}, fmt.Errorf("no matching %s option found near strike %.0f", optionType, strike)
+		return OptionContractInfo{}, fmt.Errorf("no live %s option found near strike %.0f", optionType, strike)
 	}
 
 	return OptionContractInfo{ProductID: bestID, Symbol: bestSymbol}, nil

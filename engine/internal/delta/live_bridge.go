@@ -216,6 +216,22 @@ func (b *Bridge) UpdateTradeAfterClose(tradeID string, result PlaceOrderResult, 
 // UpdateTradeAfterFill updates live trade state after institutional fill.
 func (b *Bridge) UpdateTradeAfterFill(tradeID string, result PlaceOrderResult, productID int, contracts int, strike float64, expiry time.Time) {
 	b.updateTrade(tradeID, func(t *LiveTrade) {
+		// Never resurrect a trade the broker rejected. This ran unconditionally
+		// after the institutional path, stamping OPEN over a FAILED status, so a
+		// rejected order (e.g. invalid_contract) counted as an open live trade —
+		// producing a permanent engine-vs-Delta position mismatch that
+		// auto-disarmed the Live Engine on every arm.
+		if t.Status == "FAILED" || t.Status == "CANCELLED" {
+			return
+		}
+		// A genuine fill has a broker order id; without one there is nothing open.
+		if result.OrderID == "" {
+			t.Status = "FAILED"
+			if t.FailureReason == "" {
+				t.FailureReason = "no broker order id returned — treated as not filled"
+			}
+			return
+		}
 		t.DeltaOrderID = result.OrderID
 		t.DeltaSymbol = result.Symbol
 		t.ProductID = productID
@@ -231,6 +247,11 @@ func (b *Bridge) RegisterOpenMapping(paperTradeID, tradeID string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if idx := b.indexOfID(tradeID); idx >= 0 {
+		// Only track trades that are actually open; a rejected order must not be
+		// registered as an open live position.
+		if b.trades[idx].Status != "OPEN" {
+			return
+		}
 		b.openByPaperID[paperTradeID] = idx
 	}
 }
