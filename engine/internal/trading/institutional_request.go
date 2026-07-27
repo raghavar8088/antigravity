@@ -226,6 +226,11 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 			// closed — the buy is rejected rather than sized blind.
 			premium := premiumPerContractUSD
 			pathOpts = append(pathOpts, InstitutionalPathOpts{
+				// A long option buy is 1 exchange contract (0.001 BTC), not a
+				// BTC-denominated futures position, so the 0.01 BTC execution floor
+				// does not apply. Size stays bounded by the fixed contract count and
+				// the budget assertion below.
+				FixedContractInstrument: true,
 				PreSubmitAssert: func() error {
 					bal, werr := bridge.Client().GetWallet(ctx)
 					if werr != nil {

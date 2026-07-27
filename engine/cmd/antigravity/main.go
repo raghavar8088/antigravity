@@ -1511,12 +1511,16 @@ func main() {
 		})
 	})
 	optionsEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
+		// Mark the source: this exit is the STRATEGY's decision, measured on the
+		// synthetic paper chain, not the real position's own risk levels. The two
+		// can disagree — a paper "SL" has closed a real leg that was in profit —
+		// so labelling it plainly avoids reading a strategy exit as a real stop.
 		deltaBridge.OnClose(delta.CloseSignal{
 			PaperTradeID: posID,
 			StrategyID:   stratID,
 			OptionType:   optType,
 			Strike:       strike,
-			ExitReason:   exitReason,
+			ExitReason:   "strategy_" + exitReason,
 		})
 	})
 	var btcBuy persistence.OptionsBuyPaperPersistence

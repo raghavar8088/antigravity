@@ -604,6 +604,21 @@ type InstitutionalPathOpts struct {
 	// assertion fails is rejected and never reaches the broker. Returning an
 	// error here aborts the submit.
 	PreSubmitAssert func() error
+
+	// FixedContractInstrument marks an order whose size is a fixed number of
+	// exchange contracts, not a BTC-denominated futures position — currently only
+	// the Live Engine's long-option buys (1 contract = 0.001 BTC).
+	//
+	// It skips ONLY riskv2.EnforceExecutionFloor, which asserts a minimum
+	// 0.01 BTC (~$650) futures position. Applying that to a $0.10 option purchase
+	// is a category error: it rejects every legitimate order without bounding any
+	// real risk. Size on this path is bounded independently and more tightly by
+	// the fixed 1-contract quantity, AssertBuyWithinBudget (premium must fit the
+	// risk budget), the $100 server-enforced ceiling and the daily-loss breaker.
+	//
+	// Every other control still runs: kill switch, PMS portfolio gate, the
+	// pre-trade risk pipeline, provenance, ledger/OMS events and reconciliation.
+	FixedContractInstrument bool
 }
 
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
@@ -900,13 +915,19 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	}
 
 	// Risk V2 sizing floor — authoritative rejection via sizing.go (P1-A).
+	// Skipped only for fixed-contract instruments (Live Engine option buys),
+	// where a 0.01 BTC futures floor does not apply — see FixedContractInstrument.
 	rec := riskDecision.RiskDecision.RecommendedSizeBTC
-	if _, err := riskv2.EnforceExecutionFloor(
-		strategyName,
-		rec,
-		riskDecision.RiskDecision.Kelly.SelectedFraction,
-		riskDecision.RiskDecision.DynamicSizing.Multiplier,
-	); err != nil {
+	floorErr := error(nil)
+	if !pathOpts.FixedContractInstrument {
+		_, floorErr = riskv2.EnforceExecutionFloor(
+			strategyName,
+			rec,
+			riskDecision.RiskDecision.Kelly.SelectedFraction,
+			riskDecision.RiskDecision.DynamicSizing.Multiplier,
+		)
+	}
+	if err := floorErr; err != nil {
 		rejReason := err.Error()
 		logDecisionFunnel(
 			strategyName, stratCategory, string(stratMeta.Family), o.lastRegime,

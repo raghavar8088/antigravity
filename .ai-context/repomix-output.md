@@ -1241,6 +1241,7 @@ The content is organized as follows:
   risk/v2/dynamic_sizing.go
   risk/v2/engine_test.go
   risk/v2/engine.go
+  risk/v2/execution_floor_scope_test.go
   risk/v2/exposure.go
   risk/v2/family_risk.go
   risk/v2/forecast.go

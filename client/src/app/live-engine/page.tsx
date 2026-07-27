@@ -311,8 +311,14 @@ export default function LiveEnginePage() {
         header: "Exit reason",
         cell: (c) => {
           const r = c.exitReason || "";
-          const tone = r.includes("take_profit") ? "success" : r.includes("stop_loss") ? "error" : "default";
-          return r ? <DeskChip tone={tone}>{r}</DeskChip> : "—";
+          // Colour by the real outcome, not the label: a strategy-driven "SL" can
+          // close a real leg that is in profit, and showing that red would lie.
+          const tone = c.realizedPnl > 0 ? "success" : c.realizedPnl < 0 ? "error" : "default";
+          return r ? (
+            <DeskChip tone={tone} title={r.startsWith("strategy_") ? "Strategy exit (decided on the paper chain)" : "Real risk exit (measured on the live position)"}>
+              {r}
+            </DeskChip>
+          ) : "—";
         },
       },
       {
