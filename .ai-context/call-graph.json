@@ -1,1 +1,1 @@
-{"engine/internal/delta/live_position_custody_test.go::TestIsOptionSymbol_OnlyAdoptsOptions()":["engine/internal/delta/live_position_custody.go::IsOptionSymbol()"],"engine/internal/delta/live_position_custody_test.go::TestOptionTypeFromSymbol()":["engine/internal/delta/live_position_custody.go::optionTypeFromSymbol()"]}
+{}

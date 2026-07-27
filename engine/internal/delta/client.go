@@ -341,6 +341,11 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
+			// /v2/positions/margined returns the instrument as product_symbol;
+			// `symbol` is often absent. Reading only `symbol` left it empty, which
+			// blanked the positions UI and made option positions unadoptable
+			// (custody could not recognise them as options).
+			ProductSymbol string  `json:"product_symbol"`
 			Symbol        string  `json:"symbol"`
 			ProductID     int     `json:"product_id"`
 			Size          flexNum `json:"size"`
@@ -364,8 +369,12 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 		if size < 0 {
 			side = "SHORT"
 		}
+		symbol := p.ProductSymbol
+		if symbol == "" {
+			symbol = p.Symbol
+		}
 		positions = append(positions, LivePosition{
-			Symbol:        p.Symbol,
+			Symbol:        symbol,
 			ProductID:     p.ProductID,
 			Size:          size,
 			EntryPrice:    float64(p.EntryPrice),
