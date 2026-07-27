@@ -98,6 +98,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.requireGet(w, r, func() { h.serveReconciliation(w, r) })
 	case "strategy":
 		h.serveStrategyToggle(w, r)
+	case "kill-switch":
+		h.serveKillSwitchToggle(w, r)
 	case "arm":
 		h.serveArm(w, r)
 	case "disarm":
@@ -173,6 +175,29 @@ func (h *Handler) serveStrategyToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "allowList": next})
+}
+
+// serveKillSwitchToggle halts or resumes trading via the institutional kill
+// switch. POST { "active": true|false, "reason": "..." }. Authorized mutation.
+// Halting is always permitted; it also disarms the Live Engine.
+func (h *Handler) serveKillSwitchToggle(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.authorizeMutation(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Active bool   `json:"active"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "need {active}"})
+		return
+	}
+	if err := h.ctrl.SetKillSwitch(r.Context(), body.Active, actor, body.Reason); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error(), "state": h.ctrl.Snapshot()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "state": h.ctrl.Snapshot()})
 }
 
 func (h *Handler) serveArm(w http.ResponseWriter, r *http.Request) {

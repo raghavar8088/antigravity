@@ -22,6 +22,7 @@ import {
   DeskLinearProgress,
   DeskMetricTile,
   DeskSectionHeader,
+  DeskSwitch,
   type DeskColumn,
 } from "@/components/desk/ui";
 
@@ -40,6 +41,8 @@ type LiveState = {
   ceilingUsd: number;
   configured: boolean;
   killSwitchActive: boolean;
+  killSwitchReason?: string;
+  killSwitchControllable?: boolean;
 };
 
 type Account = {
@@ -341,18 +344,48 @@ export default function LiveEnginePage() {
         <DeskCard>
           <DeskSectionHeader
             title="Control"
-            subtitle="Arming is a human action requiring the exact typed confirmation. Auto-disarm is one-way."
+            subtitle="Arming still requires the exact typed confirmation — the toggle opens it, it can never arm on its own. Auto-disarm is one-way."
           />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: "0 4px 4px" }}>
-            {!armed ? (
-              <DeskButton data-testid="arm-open" variant="filled" disabled={busy} onClick={() => { setArmText(""); setArmOpen(true); }}>
-                Arm live trading
-              </DeskButton>
-            ) : (
-              <DeskButton data-testid="disarm" variant="tonal" disabled={busy} onClick={() => void mutate("disarm", { reason: "manual disarm from UI" })}>
-                Disarm
-              </DeskButton>
-            )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", padding: "0 4px 8px" }}>
+            {/* ARM toggle — ON opens the typed-confirm modal; OFF disarms at once. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <DeskSwitch
+                id="arm-toggle"
+                checked={armed}
+                disabled={busy}
+                ariaLabel="Arm live trading"
+                label={armed ? "ARMED — live orders enabled" : "Disarmed — no live orders"}
+                onChange={(next) => {
+                  if (next) {
+                    setArmText("");
+                    setArmOpen(true); // typed confirmation required
+                  } else {
+                    void mutate("disarm", { reason: "manual disarm from UI toggle" });
+                  }
+                }}
+              />
+              <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+                {armed ? `armed by ${state?.armedBy ?? "?"} · ${ageLabel(state?.armedAt)}` : "toggle on to confirm and arm"}
+              </span>
+            </div>
+
+            {/* KILL SWITCH toggle — ON halts everything (and disarms); OFF resumes. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <DeskSwitch
+                id="kill-switch-toggle"
+                checked={state?.killSwitchActive ?? false}
+                disabled={busy || state?.killSwitchControllable === false}
+                ariaLabel="Kill switch"
+                label={state?.killSwitchActive ? "KILL SWITCH ON — trading halted" : "Kill switch off — trading allowed"}
+                onChange={(next) => void mutate("kill-switch", { active: next })}
+              />
+              <span className="desk-label-md" style={{ color: state?.killSwitchActive ? "var(--desk-error)" : "var(--desk-on-surface-variant)" }}>
+                {state?.killSwitchActive
+                  ? (state?.killSwitchReason || "halted — blocks new orders and disarms")
+                  : "toggle on to halt all new orders immediately"}
+              </span>
+            </div>
+
             <DeskButton data-testid="close-all" variant="outlined" disabled={busy} onClick={() => void mutate("close-all", {})}>
               Panic — CLOSE ALL
             </DeskButton>

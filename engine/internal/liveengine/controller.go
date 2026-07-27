@@ -69,6 +69,9 @@ const (
 	ActionRosterChange AuditAction = "ROSTER_CHANGE"
 	ActionRejectStreak AuditAction = "REJECT_STREAK"
 	ActionArmRejected  AuditAction = "ARM_REJECTED"
+	// Operator-driven kill switch from the Live Engine toggle.
+	ActionKillSwitchOn  AuditAction = "KILL_SWITCH_ON"
+	ActionKillSwitchOff AuditAction = "KILL_SWITCH_OFF"
 )
 
 // AuditEntry is one immutable record in the audit trail.
@@ -99,6 +102,12 @@ type Hooks struct {
 	IsConfigured func() bool
 	// KillSwitchActive reports whether the institutional kill switch is active.
 	KillSwitchActive func() bool
+	// KillSwitchReason describes why the kill switch is active (empty when clear).
+	KillSwitchReason func() string
+	// SetKillSwitch activates (halt) or releases (resume) the institutional kill
+	// switch on the operator's behalf. Optional; when nil the UI toggle is
+	// unavailable and the switch must be driven from the admin surface.
+	SetKillSwitch func(ctx context.Context, active bool, actor, reason string) error
 	// CloseAll flattens every live position. Must work even if the strategy loop
 	// is wedged, so it is called directly, not through the loop.
 	CloseAll func(ctx context.Context) (map[string]any, error)
@@ -349,6 +358,42 @@ func (c *Controller) CloseAll(ctx context.Context, actor string) (map[string]any
 	return closeAll(ctx)
 }
 
+// SetKillSwitch halts (active=true) or resumes (active=false) trading via the
+// institutional kill switch, auditing the action. Halting also disarms the Live
+// Engine immediately — an armed engine must never sit behind an active halt.
+func (c *Controller) SetKillSwitch(ctx context.Context, active bool, actor, reason string) error {
+	c.mu.RLock()
+	fn := c.hooks.SetKillSwitch
+	c.mu.RUnlock()
+	if fn == nil {
+		return fmt.Errorf("liveengine: kill switch control not wired")
+	}
+	if reason == "" {
+		if active {
+			reason = "manual halt from Live Engine"
+		} else {
+			reason = "manual resume from Live Engine"
+		}
+	}
+	if err := fn(ctx, active, actor, reason); err != nil {
+		return err
+	}
+	if active {
+		// Halting must not leave the engine armed.
+		c.mu.Lock()
+		if c.state == StateArmed {
+			c.disarmLocked(actor, ActionAutoDisarm, "kill_switch_active", reason)
+		}
+		c.appendAuditLocked(actor, ActionKillSwitchOn, reason, "")
+		c.mu.Unlock()
+		return nil
+	}
+	c.mu.Lock()
+	c.appendAuditLocked(actor, ActionKillSwitchOff, reason, "")
+	c.mu.Unlock()
+	return nil
+}
+
 // RecordRosterChange audits a roster eligibility change with actor and timestamp.
 func (c *Controller) RecordRosterChange(actor, detail string) {
 	c.mu.Lock()
@@ -371,6 +416,9 @@ type StateSnapshot struct {
 	DayStartEquityUSD     float64   `json:"dayStartEquityUsd"`
 	Configured            bool      `json:"configured"`
 	KillSwitchActive      bool      `json:"killSwitchActive"`
+	KillSwitchReason      string    `json:"killSwitchReason,omitempty"`
+	// KillSwitchControllable is true when the UI may toggle the kill switch.
+	KillSwitchControllable bool `json:"killSwitchControllable"`
 }
 
 // Snapshot returns the current state for display.
@@ -385,6 +433,10 @@ func (c *Controller) Snapshot() StateSnapshot {
 	if c.hooks.KillSwitchActive != nil {
 		kill = c.hooks.KillSwitchActive()
 	}
+	killReason := ""
+	if kill && c.hooks.KillSwitchReason != nil {
+		killReason = c.hooks.KillSwitchReason()
+	}
 	return StateSnapshot{
 		State:                 c.state,
 		Armed:                 c.state == StateArmed,
@@ -397,8 +449,10 @@ func (c *Controller) Snapshot() StateSnapshot {
 		CeilingUSD:            MaxTradableUSD,
 		MaxDailyLossUSD:       c.maxDailyLossUSD,
 		DayStartEquityUSD:     c.dayStartEquity,
-		Configured:            configured,
-		KillSwitchActive:      kill,
+		Configured:             configured,
+		KillSwitchActive:       kill,
+		KillSwitchReason:       killReason,
+		KillSwitchControllable: c.hooks.SetKillSwitch != nil,
 	}
 }
 

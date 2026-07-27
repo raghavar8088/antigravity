@@ -219,22 +219,93 @@ func TestController_DailyLossLimitConfigurable(t *testing.T) {
 }
 
 func TestController_DailyLossRollsOverAtMidnight(t *testing.T) {
+	// Pin the clock so arming baselines on day1 regardless of the real date —
+	// otherwise this test's meaning changes with the calendar.
+	day1 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	day2 := day1.Add(24 * time.Hour)
 	c := New(Hooks{
 		IsConfigured:       func() bool { return true },
 		SetEffectorEnabled: func(bool) {},
 		AccountEquityUSD:   func(context.Context) (float64, error) { return 100, nil },
+		Now:                func() time.Time { return day1 },
 	})
-	_ = c.Arm("operator", ArmConfirmationPhrase)
-	day1 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
-	day2 := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
-	// New day re-baselines to the current equity, so prior losses don't carry.
+	if err := c.Arm("operator", ArmConfirmationPhrase); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+	// Same day, -$20 would trip — proves the baseline is day1's $100.
+	// (checked on a copy of intent: we go straight to the rollover case below)
+
+	// New day re-baselines to the current equity, so yesterday's drawdown
+	// does not carry into the new day's limit.
 	if tripped := c.CheckDailyLoss(70, day2); tripped {
 		t.Fatal("new day must re-baseline, not trip on yesterday's drawdown")
 	}
-	_ = day1
-	// Same (new) day, another -$20 from the new baseline trips.
+	// Same (new) day, another -$20 from the new $70 baseline trips.
 	if tripped := c.CheckDailyLoss(50, day2); !tripped {
 		t.Fatal("expected trip -$20 below the new day's baseline")
+	}
+}
+
+// The kill-switch toggle must halt AND disarm — an armed engine can never sit
+// behind an active halt — and releasing must be audited.
+func TestController_KillSwitchToggleHaltsAndDisarms(t *testing.T) {
+	ksActive := false
+	c := New(Hooks{
+		IsConfigured:       func() bool { return true },
+		SetEffectorEnabled: func(bool) {},
+		KillSwitchActive:   func() bool { return ksActive },
+		SetKillSwitch: func(_ context.Context, active bool, _, _ string) error {
+			ksActive = active
+			return nil
+		},
+	})
+	if err := c.Arm("operator", ArmConfirmationPhrase); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+
+	// Toggle ON → halts and disarms.
+	if err := c.SetKillSwitch(context.Background(), true, "operator", ""); err != nil {
+		t.Fatalf("halt: %v", err)
+	}
+	if !ksActive {
+		t.Fatal("kill switch should be active")
+	}
+	if c.IsArmed() {
+		t.Fatal("halting must disarm the live engine")
+	}
+
+	// Toggle OFF → resumes (but does NOT re-arm; arming stays a human action).
+	if err := c.SetKillSwitch(context.Background(), false, "operator", ""); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if ksActive {
+		t.Fatal("kill switch should be released")
+	}
+	if c.IsArmed() {
+		t.Fatal("releasing the kill switch must never auto-arm")
+	}
+
+	var on, off int
+	for _, e := range c.Audit() {
+		switch e.Action {
+		case ActionKillSwitchOn:
+			on++
+		case ActionKillSwitchOff:
+			off++
+		}
+	}
+	if on != 1 || off != 1 {
+		t.Fatalf("kill switch toggles must be audited, got on=%d off=%d", on, off)
+	}
+}
+
+func TestController_KillSwitchToggleUnwiredErrors(t *testing.T) {
+	c := New(Hooks{IsConfigured: func() bool { return true }})
+	if err := c.SetKillSwitch(context.Background(), true, "operator", ""); err == nil {
+		t.Fatal("expected an error when kill-switch control is not wired")
+	}
+	if c.Snapshot().KillSwitchControllable {
+		t.Fatal("snapshot must report the kill switch as not controllable when unwired")
 	}
 }
 

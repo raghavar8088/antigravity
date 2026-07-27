@@ -63,7 +63,22 @@ func wireLiveEngine(
 		SetEffectorEnabled: func(enabled bool) { bridge.SetEnabled(enabled) },
 		IsConfigured:       bridge.IsConfigured,
 		KillSwitchActive:   ks.IsActive,
-		CloseAll:           bridge.CloseAll,
+		KillSwitchReason:   ks.Reason,
+		SetKillSwitch: func(ctx context.Context, active bool, actor, reason string) error {
+			if active {
+				return ks.Trigger(ctx, killswitchpkg.Activation{
+					Trigger:    killswitchpkg.TriggerManualOperator,
+					Reason:     reason,
+					OperatorID: actor,
+					Actions: []killswitchpkg.Action{
+						killswitchpkg.ActionBlockNewOrders,
+						killswitchpkg.ActionSendAlerts,
+					},
+				})
+			}
+			return ks.Release(ctx, killswitchpkg.TriggerManualOperator, actor, reason)
+		},
+		CloseAll: bridge.CloseAll,
 		AccountEquityUSD: func(ctx context.Context) (float64, error) {
 			if bridge.Client() == nil {
 				return 0, nil

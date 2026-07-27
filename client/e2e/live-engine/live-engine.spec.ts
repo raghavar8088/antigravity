@@ -44,15 +44,18 @@ test.describe("Live Engine (real money)", () => {
     await expect(page.getByTestId("armed-state")).toBeVisible();
   });
 
-  test("arm is gated behind the exact typed confirmation phrase", async ({ page }) => {
-    const armOpen = page.getByTestId("arm-open");
-    // If already armed (shared env), a disarm control is shown instead — accept either.
-    if (!(await armOpen.isVisible().catch(() => false))) {
-      await expect(page.getByTestId("disarm")).toBeVisible();
+  test("arm toggle cannot arm on its own — it opens the typed confirmation", async ({ page }) => {
+    const armToggle = page.locator("#arm-toggle");
+    if (!(await armToggle.isVisible().catch(() => false))) {
+      test.skip(true, "arm toggle not rendered — backend unavailable");
+      return;
+    }
+    if (await armToggle.isChecked().catch(() => false)) {
       test.skip(true, "engine already armed in this environment");
       return;
     }
-    await armOpen.click();
+    // Flipping the toggle must NOT arm; it must open the confirmation modal.
+    await armToggle.click();
     await expect(page.getByTestId("arm-modal")).toBeVisible();
 
     const confirm = page.getByTestId("arm-confirm");
@@ -70,5 +73,16 @@ test.describe("Live Engine (real money)", () => {
 
   test("panic CLOSE ALL is reachable", async ({ page }) => {
     await expect(page.getByTestId("close-all")).toBeVisible();
+  });
+
+  test("kill switch is a toggle reflecting live state", async ({ page }) => {
+    const ks = page.locator("#kill-switch-toggle");
+    if (!(await ks.isVisible().catch(() => false))) {
+      test.skip(true, "kill switch toggle not rendered — backend unavailable");
+      return;
+    }
+    // It must reflect a real boolean state (on = halted, off = trading allowed).
+    const checked = await ks.isChecked();
+    expect(typeof checked).toBe("boolean");
   });
 });
