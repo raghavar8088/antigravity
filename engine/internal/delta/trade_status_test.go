@@ -8,7 +8,7 @@ import "testing"
 // trade made the engine count 2 open trades while Delta reported 1 position,
 // which auto-disarmed the Live Engine with reconciliation_mismatch on every arm.
 func TestUpdateTradeAfterFill_DoesNotResurrectFailedTrade(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]int{}}
+	b := &Bridge{openByPaperID: map[string]string{}}
 	b.trades = []LiveTrade{{
 		ID:            "DLT-0001",
 		PaperTradeID:  "paper-1",
@@ -35,7 +35,7 @@ func TestUpdateTradeAfterFill_DoesNotResurrectFailedTrade(t *testing.T) {
 
 // No broker order id means nothing actually filled — treat as FAILED, not OPEN.
 func TestUpdateTradeAfterFill_NoOrderIDIsNotOpen(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]int{}}
+	b := &Bridge{openByPaperID: map[string]string{}}
 	b.trades = []LiveTrade{{ID: "DLT-0002", Status: "OPEN"}}
 
 	b.UpdateTradeAfterFill("DLT-0002", PlaceOrderResult{OrderID: ""}, 1, 1, 100, b.trades[0].ExpiryTime)
@@ -47,7 +47,7 @@ func TestUpdateTradeAfterFill_NoOrderIDIsNotOpen(t *testing.T) {
 
 // A genuine fill (real broker order id) still records as OPEN with its details.
 func TestUpdateTradeAfterFill_RealFillRecordsOpen(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]int{}}
+	b := &Bridge{openByPaperID: map[string]string{}}
 	b.trades = []LiveTrade{{ID: "DLT-0003", PaperTradeID: "paper-3", Status: "PENDING"}}
 
 	b.UpdateTradeAfterFill("DLT-0003", PlaceOrderResult{

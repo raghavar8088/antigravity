@@ -10,7 +10,7 @@ import (
 func TestCustody_TradesSurviveRestart(t *testing.T) {
 	t.Setenv("ENGINE_DATA_DIR", t.TempDir())
 
-	b1 := &Bridge{openByPaperID: map[string]int{}}
+	b1 := &Bridge{openByPaperID: map[string]string{}}
 	b1.trades = []LiveTrade{{
 		ID: "DLT-0007", PaperTradeID: "paper-7", Status: "OPEN",
 		DeltaSymbol: "P-BTC-64800-290726", ProductID: 4242, Contracts: 1,
@@ -19,7 +19,7 @@ func TestCustody_TradesSurviveRestart(t *testing.T) {
 	b1.PersistTrades()
 
 	// A fresh process (empty memory) restores custody from disk.
-	b2 := &Bridge{openByPaperID: map[string]int{}}
+	b2 := &Bridge{openByPaperID: map[string]string{}}
 	b2.RestoreTrades()
 
 	if len(b2.OpenTrades()) != 1 {
@@ -41,7 +41,7 @@ func TestCustody_TradesSurviveRestart(t *testing.T) {
 
 func TestCustody_RestoreWithNoFileIsSafe(t *testing.T) {
 	t.Setenv("ENGINE_DATA_DIR", t.TempDir())
-	b := &Bridge{openByPaperID: map[string]int{}}
+	b := &Bridge{openByPaperID: map[string]string{}}
 	b.RestoreTrades() // must not panic on a fresh install
 	if len(b.OpenTrades()) != 0 {
 		t.Fatal("no custody file means no open trades")

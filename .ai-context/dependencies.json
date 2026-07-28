@@ -1,1 +1,1 @@
-{"engine/cmd/antigravity/main.go":{"references":["engine/internal/trading/institutional_request.go","engine/internal/trading/loop.go"]}}
+{"engine/cmd/antigravity/liveengine_wiring.go":{"references":["engine/internal/trading/institutional_request.go"]}}

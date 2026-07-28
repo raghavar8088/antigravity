@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -33,6 +36,10 @@ type LiveTrade struct {
 	CloseFillPrice float64  `json:"closeFillPrice,omitempty"`
 	RealizedPnl   float64   `json:"realizedPnl,omitempty"`
 	FailureReason string    `json:"failureReason,omitempty"`
+	// LastMarkPrice is the most recent mark seen by the monitor. Used to value an
+	// expiry close, which has no fill price of its own — without it an expired
+	// position reported $0 P&L even though the premium was really lost or won.
+	LastMarkPrice float64 `json:"lastMarkPrice,omitempty"`
 	// ExitReason records WHY the position closed (take_profit_80pct,
 	// stop_loss_50pct, near_expiry_30min, CLOSE_ALL, ...). Previously the reason
 	// was only logged, so a closed position could not show what triggered it.
@@ -73,8 +80,12 @@ type Bridge struct {
 	trades      []LiveTrade
 	seq         int
 
-	// openByPaperID maps paper position ID → live trade index for fast lookup on close.
-	openByPaperID map[string]int
+	// openByPaperID maps paper position ID → live trade ID (NOT a slice index).
+	// It previously stored an index, but trades are PREPENDED on every open and
+	// adoption, which shifted every element and invalidated every stored index —
+	// closes then silently no-opped (leaving real positions unmanaged) or could
+	// resolve to the wrong trade. Trade IDs are stable, so they cannot go stale.
+	openByPaperID map[string]string
 
 	// institutionalOpen, when set, replaces direct broker placement in OnOpen.
 	institutionalOpen func(context.Context, OpenSignal, string) error
@@ -103,7 +114,7 @@ type Bridge struct {
 // NewBridge creates a Bridge. If Delta keys are not set it starts in a disabled/unconfigured state.
 func NewBridge() *Bridge {
 	b := &Bridge{
-		openByPaperID: make(map[string]int),
+		openByPaperID: make(map[string]string),
 	}
 
 	client, err := NewClient()
@@ -260,8 +271,27 @@ func (b *Bridge) RegisterOpenMapping(paperTradeID, tradeID string) {
 		if b.trades[idx].Status != "OPEN" {
 			return
 		}
-		b.openByPaperID[paperTradeID] = idx
+		b.openByPaperID[paperTradeID] = tradeID
 	}
+}
+
+// openIndexForPaperID resolves a paper position ID to the index of its OPEN live
+// trade. It prefers the mapping, then falls back to a scan by PaperTradeID so a
+// restored or adopted trade with a missing mapping can still be closed — a real
+// position must never become uncloseable because a lookup failed.
+// Caller holds b.mu.
+func (b *Bridge) openIndexForPaperID(paperID string) int {
+	if tradeID, ok := b.openByPaperID[paperID]; ok {
+		if idx := b.indexOfID(tradeID); idx >= 0 && b.trades[idx].Status == "OPEN" {
+			return idx
+		}
+	}
+	for i := range b.trades {
+		if b.trades[i].PaperTradeID == paperID && b.trades[i].Status == "OPEN" {
+			return i
+		}
+	}
+	return -1
 }
 
 // Client exposes the underlying Delta REST client for institutional fill planning.
@@ -360,6 +390,17 @@ func (b *Bridge) SetEnabled(v bool) {
 	} else {
 		log.Printf("[DELTA BRIDGE] ⏸️  Live order mirroring disabled")
 	}
+}
+
+// monitorInterval is how often open live positions are checked against their
+// SL/TP levels. Default 30s; override with LIVE_MONITOR_INTERVAL_SECONDS.
+func monitorInterval() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("LIVE_MONITOR_INTERVAL_SECONDS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 5 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 30 * time.Second
 }
 
 // resolveLiveOptionSide decides the option type and side for a live order.
@@ -463,14 +504,17 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 		return
 	}
 
-	idx, ok := b.openByPaperID[sig.PaperTradeID]
-	if !ok || idx < 0 || idx >= len(b.trades) {
+	idx := b.openIndexForPaperID(sig.PaperTradeID)
+	if idx < 0 {
+		// Loud, not silent: this used to return quietly, so a close that could not
+		// find its trade left a REAL position open with nothing managing it while
+		// the monitor retried forever. If this ever fires, the position needs
+		// manual attention.
+		log.Printf("[DELTA BRIDGE] ⚠️  close requested for unknown/!open paper trade %q (reason=%s) — no live trade matched; check for an unmanaged position",
+			sig.PaperTradeID, sig.ExitReason)
 		return
 	}
 	trade := b.trades[idx]
-	if trade.Status != "OPEN" {
-		return
-	}
 	delete(b.openByPaperID, sig.PaperTradeID)
 
 	// Record why this position is closing so the closed list can show it.
@@ -684,7 +728,11 @@ func (b *Bridge) Stats(ctx context.Context) BridgeStats {
 // Only active in buying mode. Call once after bridge is created.
 func (b *Bridge) StartMonitor(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		// SL/TP is enforced by polling, so the interval bounds how far price can
+		// run past a stop before anything reacts. 5 minutes was far too slack for
+		// a -50% stop on a volatile option; 30s is the practical floor without
+		// hammering Delta's rate limits. Tune with LIVE_MONITOR_INTERVAL_SECONDS.
+		ticker := time.NewTicker(monitorInterval())
 		defer ticker.Stop()
 		for {
 			select {
@@ -739,6 +787,11 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 					t.Status = "CLOSED"
 					nowCopy := now
 					t.ClosedAt = &nowCopy
+					// Value the expiry from the last mark we saw rather than
+					// leaving it 0, which reported every expiry as flat P&L.
+					t.CloseFillPrice = t.LastMarkPrice
+					t.RealizedPnl = (t.LastMarkPrice - t.FillPrice) * float64(t.Contracts) * OptionContractSizeBTC
+					t.ExitReason = "expired"
 					t.FailureReason = "expired"
 				})
 			}
@@ -748,6 +801,8 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 		if trade.FillPrice <= 0 {
 			continue
 		}
+		// Remember the latest mark so an expiry close can be valued honestly.
+		b.updateTrade(trade.ID, func(t *LiveTrade) { t.LastMarkPrice = pos.MarkPrice })
 
 		pnlPct := (pos.MarkPrice - trade.FillPrice) / trade.FillPrice
 

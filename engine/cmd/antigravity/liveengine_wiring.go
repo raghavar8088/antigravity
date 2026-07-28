@@ -204,9 +204,16 @@ func liveEnginePositionsProvider(bridge *delta.Bridge) func(context.Context) ([]
 			contracts int
 		}
 		bySymbol := map[string]tracked{}
+		byProduct := map[int]tracked{}
 		for _, t := range bridge.OpenTrades() {
+			tr := tracked{t.StrategyName, t.FillPrice, t.Contracts}
 			if t.DeltaSymbol != "" {
-				bySymbol[t.DeltaSymbol] = tracked{t.StrategyName, t.FillPrice, t.Contracts}
+				bySymbol[t.DeltaSymbol] = tr
+			}
+			// ProductID is always present on a real fill even when Delta omits the
+			// symbol, so it is the reliable key for attribution.
+			if t.ProductID != 0 {
+				byProduct[t.ProductID] = tr
 			}
 		}
 		for _, p := range positions {
@@ -216,7 +223,11 @@ func liveEnginePositionsProvider(bridge *delta.Bridge) func(context.Context) ([]
 			}
 			entry := p.EntryPrice
 			strategy := ""
-			if tr, ok := bySymbol[p.Symbol]; ok {
+			tr, ok := byProduct[p.ProductID]
+			if !ok {
+				tr, ok = bySymbol[p.Symbol]
+			}
+			if ok {
 				strategy = tr.strategy
 				if tr.fill > 0 {
 					entry = tr.fill // the basis the monitor closes against
@@ -481,7 +492,11 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 				continue
 			}
 			// Daily-loss breaker: disarm + flatten when down the daily limit.
-			if equity, eqErr := client.GetWallet(ctx); eqErr == nil {
+			// Use TRUE equity = available balance + mark value of open options.
+			// Available balance alone drops the moment premium is paid, so
+			// deploying capital looked like a loss and could trip the $20 stop
+			// with no losses at all.
+			if equity, eqErr := liveEngineTotalEquity(ctx, bridge); eqErr == nil {
 				if ctrl.CheckDailyLoss(equity, time.Now()) {
 					if _, cErr := bridge.CloseAll(ctx); cErr != nil {
 						log.Printf("[LIVE ENGINE] daily-loss close-all error: %v", cErr)
@@ -489,6 +504,12 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 					continue
 				}
 			}
+			// Adopt any position that appeared since the last sweep, so a new
+			// untracked position does not sit unmanaged until the next restart.
+			if n, aerr := bridge.AdoptUntrackedPositions(ctx); aerr == nil && n > 0 {
+				log.Printf("[LIVE ENGINE] custody: adopted %d position(s) during periodic sweep", n)
+			}
+
 			positions, err := client.GetPositions(ctx)
 			if err != nil {
 				// Broker/feed unreachable while armed — treat as feed loss.
@@ -506,6 +527,35 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 			}
 		}
 	}
+}
+
+// liveEngineTotalEquity is available balance plus the mark value of open option
+// positions — the account's true worth. Premium paid leaves the available
+// balance but is still held as position value, so the daily-loss breaker must
+// count it or it mistakes capital deployment for losses.
+func liveEngineTotalEquity(ctx context.Context, bridge *delta.Bridge) (float64, error) {
+	client := bridge.Client()
+	if client == nil {
+		return 0, fmt.Errorf("delta client not configured")
+	}
+	avail, err := client.GetWallet(ctx)
+	if err != nil {
+		return 0, err
+	}
+	positions, perr := client.GetPositions(ctx)
+	if perr != nil {
+		// Fall back to available balance rather than blocking the breaker.
+		return avail, nil
+	}
+	openValue := 0.0
+	for _, p := range positions {
+		size := p.Size
+		if size < 0 {
+			size = -size
+		}
+		openValue += p.MarkPrice * size * delta.OptionContractSizeBTC
+	}
+	return avail + openValue, nil
 }
 
 func firstNonEmpty(vals ...string) string {

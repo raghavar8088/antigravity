@@ -134,14 +134,14 @@ func (b *Bridge) RestoreTrades() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.trades = trades
-	b.openByPaperID = make(map[string]int, len(trades))
+	b.openByPaperID = make(map[string]string, len(trades))
 	open := 0
 	maxSeq := 0
-	for i, t := range trades {
+	for _, t := range trades {
 		if t.Status == "OPEN" {
 			open++
 			if t.PaperTradeID != "" {
-				b.openByPaperID[t.PaperTradeID] = i
+				b.openByPaperID[t.PaperTradeID] = t.ID
 			}
 		}
 		var n int
@@ -176,11 +176,21 @@ func (b *Bridge) AdoptUntrackedPositions(ctx context.Context) (adopted int, err 
 	defer b.mu.Unlock()
 
 	tracked := make(map[int]bool)
+	// knownProduct = a product this engine has traded at some point (any status).
+	// Adoption is limited to these: the owner may hold their OWN manual option
+	// positions on the same account, and the engine must never take those over
+	// and close them on its SL/TP. Set LIVE_ADOPT_UNKNOWN=true to also adopt
+	// positions the engine has no record of (e.g. after losing custody state).
+	knownProduct := make(map[int]bool)
 	for _, t := range b.trades {
+		if t.ProductID != 0 {
+			knownProduct[t.ProductID] = true
+		}
 		if t.Status == "OPEN" && t.ProductID != 0 {
 			tracked[t.ProductID] = true
 		}
 	}
+	adoptUnknown := strings.EqualFold(strings.TrimSpace(os.Getenv("LIVE_ADOPT_UNKNOWN")), "true")
 
 	now := time.Now().UTC()
 	for _, p := range positions {
@@ -191,6 +201,11 @@ func (b *Bridge) AdoptUntrackedPositions(ctx context.Context) (adopted int, err 
 			continue // only the Live Engine's instrument
 		}
 		if tracked[p.ProductID] {
+			continue
+		}
+		if !knownProduct[p.ProductID] && !adoptUnknown {
+			log.Printf("[DELTA BRIDGE] custody: NOT adopting %s (product=%d) — no record this engine opened it; leaving it alone (set LIVE_ADOPT_UNKNOWN=true to override)",
+				p.Symbol, p.ProductID)
 			continue
 		}
 		b.seq++
@@ -224,10 +239,10 @@ func (b *Bridge) AdoptUntrackedPositions(ctx context.Context) (adopted int, err 
 
 	if adopted > 0 {
 		// Rebuild the open index after prepending.
-		b.openByPaperID = make(map[string]int, len(b.trades))
-		for i, t := range b.trades {
+		b.openByPaperID = make(map[string]string, len(b.trades))
+		for _, t := range b.trades {
 			if t.Status == "OPEN" && t.PaperTradeID != "" {
-				b.openByPaperID[t.PaperTradeID] = i
+				b.openByPaperID[t.PaperTradeID] = t.ID
 			}
 		}
 		b.persistTradesLocked()

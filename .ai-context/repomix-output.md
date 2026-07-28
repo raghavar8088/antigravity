@@ -853,9 +853,11 @@ The content is organized as follows:
   dataquality/types.go
   dataquality/validator_test.go
   dataquality/validator.go
+  delta/adoption_scope_test.go
   delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
   delta/client.go
+  delta/close_lookup_test.go
   delta/execution_guard_test.go
   delta/execution_guard.go
   delta/exit_levels_test.go
@@ -864,6 +866,7 @@ The content is organized as follows:
   delta/live_bridge.go
   delta/live_position_custody_test.go
   delta/live_position_custody.go
+  delta/monitor_interval_test.go
   delta/trade_status_test.go
   derivatives/derivatives_test.go
   derivatives/funding.go
