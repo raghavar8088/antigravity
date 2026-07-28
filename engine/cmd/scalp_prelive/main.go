@@ -11,8 +11,8 @@
 //     through the level within 3 bars (missed fills counted), TP rests as a
 //     maker limit, SL/time-stop exits pay taker + stop slippage, SL wins
 //     intrabar ties, per-strategy exit profiles (scalp/revert/runner),
-//     5-bar cooldown. Paper only: $100 notional per trade, no order routing,
-//     no API keys, no real-money code path in this binary.
+//     5-bar cooldown. Paper only: $1,000 notional per trade, no order
+//     routing, no API keys, no real-money code path in this binary.
 //
 // PRE-REGISTERED PROMOTION GATE (set before the first live trade; the only
 // route out of paper): a strategy×symbol stream qualifies for a go-live
@@ -48,8 +48,18 @@ import (
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
-// ── execution profiles (EXACT copies of the S1 harness numbers) ──────────────
-
+// ── execution profiles ────────────────────────────────────────────────────────
+//
+// SL/TP are ATR-scaled distances clamped into a [Min,Max] band expressed as a
+// fraction of price (see clamp() below) — the floor guarantees a minimum
+// stop/target width regardless of how quiet the market is; the ceiling lets a
+// genuinely volatile bar widen it further. At defaultNotionalUSD, the floor
+// of each band is the dollar risk/reward actually requested for this desk:
+// SL floor ≈ -$10 on every profile (never tighter — the old 0.15%-0.20% floor
+// let normal 1m noise stop trades out before the setup had room to work), TP
+// floor scales with the profile's holding-period ambition for a real 1:2 /
+// 1:3 / 1:5 reward-to-risk instead of the old ~1:1.4-2.6 on pocket-change
+// distances: scalp $20, revert $30, runner $50.
 type profileCfg struct {
 	SLATR, TPATR float64
 	SLMin, SLMax float64
@@ -58,9 +68,10 @@ type profileCfg struct {
 }
 
 var profiles = map[string]profileCfg{
-	"scalp":  {2.5, 3.5, 0.0015, 0.0045, 0.0025, 0.0065, 45},
-	"revert": {3.0, 2.0, 0.0020, 0.0050, 0.0018, 0.0040, 30},
-	"runner": {2.5, 6.0, 0.0015, 0.0045, 0.0040, 0.0120, 90},
+	// name     SLATR TPATR  SLMin   SLMax   TPMin   TPMax   TTLBars
+	"scalp":  {2.5, 3.5, 0.0100, 0.0150, 0.0200, 0.0260, 45}, // SL $10-15, TP $20-26 (1:2)
+	"revert": {3.0, 2.0, 0.0100, 0.0150, 0.0300, 0.0390, 30}, // SL $10-15, TP $30-39 (1:3)
+	"runner": {2.5, 6.0, 0.0100, 0.0150, 0.0500, 0.0650, 90}, // SL $10-15, TP $50-65 (1:5)
 }
 
 const (
@@ -73,8 +84,9 @@ const (
 
 // defaultNotionalUSD is the per-trade notional the desk starts on. It moved from
 // a const to a desk field so the desk can be re-based via /scalp/reset without a
-// redeploy — every read and write happens under d.mu.
-const defaultNotionalUSD = 100.0
+// redeploy — every read and write happens under d.mu. Raised 100 -> 1,000 so the
+// profile SL/TP bands above translate into real dollars instead of dimes.
+const defaultNotionalUSD = 1000.0
 
 // ── state ────────────────────────────────────────────────────────────────────
 
@@ -566,8 +578,8 @@ func (d *desk) serve(port int) {
 		writeJSON(w, map[string]interface{}{
 			"trades": n, "wins": wins, "missed_fills": missed,
 			"open_positions": open, "pending_orders": pend,
-			"net_pnl_usd_at_100_notional": math.Round(net*d.notionalUSD*100) / 100,
-			"trades_per_symbol":           perSym,
+			"net_pnl_usd_at_1000_notional": math.Round(net*d.notionalUSD*100) / 100,
+			"trades_per_symbol":            perSym,
 			"gate":                        gateDesc,
 		})
 	}))

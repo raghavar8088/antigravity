@@ -35,7 +35,7 @@ type Stats = {
   missed_fills: number;
   open_positions: number;
   pending_orders: number;
-  net_pnl_usd_at_100_notional: number;
+  net_pnl_usd_at_1000_notional: number;
   trades_per_symbol: Record<string, number>;
 };
 type Health = { ok: boolean; uptime_min: number; bars_processed: number; strategies: number; streams: number };
@@ -254,9 +254,9 @@ export default function ScalpDeskPage() {
         <div className="desk-metrics-row">
           <DeskMetricTile
             label="Net P&L"
-            value={stats ? fmtUSD(stats.net_pnl_usd_at_100_notional) : "—"}
-            valueClassName={stats ? pnlToneClass(stats.net_pnl_usd_at_100_notional) : undefined}
-            sub="$100 notional per trade"
+            value={stats ? fmtUSD(stats.net_pnl_usd_at_1000_notional) : "—"}
+            valueClassName={stats ? pnlToneClass(stats.net_pnl_usd_at_1000_notional) : undefined}
+            sub="$1,000 notional per trade"
             highlight
           />
           <DeskMetricTile
@@ -420,13 +420,14 @@ export default function ScalpDeskPage() {
           resetPath="/api/scalp/scalp/reset"
           clearPath="/api/scalp/scalp/clear-trades"
           capitalLabel="Notional per trade (USD)"
-          capitalPlaceholder="100"
+          capitalPlaceholder="1000"
           onDone={() => void refresh()}
         />
 
         <p className="desk-label-md" style={{ textAlign: "center", fontWeight: 400, paddingBottom: 8 }}>
-          Paper trading only · $100 notional per trade · maker post-only fill model with missed fills counted · state
-          persists on the engine host
+          Paper trading only · $1,000 notional per trade · SL floor -$10, TP floor $20/$30/$50 by profile
+          (scalp/revert/runner, ~1:2 to 1:5 reward-to-risk) · maker post-only fill model with missed fills counted ·
+          state persists on the engine host
         </p>
       </main>
     </div>
