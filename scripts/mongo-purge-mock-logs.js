@@ -28,9 +28,21 @@ var targets = [
 
 function stamp() { return new Date().toISOString(); }
 
-var s = d.stats();
-print("[" + stamp() + "] purge start — dataMB=" + (s.dataSize / 1048576).toFixed(1) +
-  " diskMB=" + ((s.storageSize + s.indexSize) / 1048576).toFixed(1));
+// Disk is summed from collStats on the target collections. db.stats() returns an
+// unscaled storageSize/indexSize on Atlas shared tiers, which logged a nonsense
+// 91,835,945 MB — per-collection stats are the figure that actually matters here.
+function targetDiskMB() {
+  var mb = 0;
+  targets.forEach(function (t) {
+    try {
+      var s = d.runCommand({ collStats: t.c });
+      mb += ((s.storageSize || 0) + (s.totalIndexSize || 0)) / 1048576;
+    } catch (e) { }
+  });
+  return mb;
+}
+
+print("[" + stamp() + "] purge start — mock log disk " + targetDiskMB().toFixed(1) + " MB");
 
 targets.forEach(function (t) {
   var q = {}; q[t.f] = { $lt: cutoff };
@@ -45,8 +57,6 @@ targets.forEach(function (t) {
     "  remaining " + d[t.c].countDocuments({}));
 });
 
-var a = d.stats();
-print("[" + stamp() + "] purge done  — dataMB=" + (a.dataSize / 1048576).toFixed(1) +
-  " diskMB=" + ((a.storageSize + a.indexSize) / 1048576).toFixed(1) +
-  "  ledger_events=" + d.ledger_events.countDocuments({}) +
+print("[" + stamp() + "] purge done  — mock log disk " + targetDiskMB().toFixed(1) +
+  " MB  |  ledger_events=" + d.ledger_events.countDocuments({}) +
   " ledger_sequences=" + d.ledger_sequences.countDocuments({}));
