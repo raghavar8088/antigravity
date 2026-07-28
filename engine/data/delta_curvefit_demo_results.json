@@ -1,0 +1,39 @@
+{
+  "candidates_tested": 1,
+  "ran_at": "2026-07-12T03:36:35Z",
+  "real_data_end": "2026-07-12",
+  "real_data_start": "2023-12-29",
+  "rows": [
+    {
+      "strategy": "Yesterday_Fit_RSI_Short_CURVEFIT_DEMO",
+      "train": {
+        "trades": 539,
+        "win_rate_pct": 65.31,
+        "sharpe": -1.6,
+        "profit_factor": 0.78,
+        "return_pct": -7.12,
+        "max_dd_pct": 7.62
+      },
+      "validate": {
+        "trades": 0,
+        "win_rate_pct": 0,
+        "sharpe": 0,
+        "profit_factor": 0,
+        "return_pct": 0,
+        "max_dd_pct": 0
+      },
+      "train_promising": false,
+      "strict_oos_pass": false
+    }
+  ],
+  "strict_pass_count": 0,
+  "symbol": "BTCUSD",
+  "train_window": [
+    "2023-12-29",
+    "2025-10-07"
+  ],
+  "validate_window": [
+    "2025-10-07",
+    "2026-07-13"
+  ]
+}

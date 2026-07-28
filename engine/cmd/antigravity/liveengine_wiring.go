@@ -89,14 +89,14 @@ func wireLiveEngine(
 	})
 
 	data := liveengine.DataProviders{
-		Account:        liveEngineAccountProvider(bridge, ctrl),
-		Positions:      liveEnginePositionsProvider(bridge),
-		Orders:         liveEngineOrdersProvider(bridge),
+		Account:         liveEngineAccountProvider(bridge, ctrl),
+		Positions:       liveEnginePositionsProvider(bridge),
+		Orders:          liveEngineOrdersProvider(bridge),
 		ClosedPositions: liveEngineClosedProvider(bridge),
 		DailyPnl:        liveEngineDailyPnlProvider(bridge),
 		Roster:          liveEngineRosterProvider(buyEngine, bridge),
 		Reconciliation:  liveEngineReconciliationProvider(bridge),
-		AllowList:      bridge.LiveAllowList,
+		AllowList:       bridge.LiveAllowList,
 		SetAllowList: func(names []string) error {
 			bridge.SetLiveAllowList(names)
 			ctrl.RecordRosterChange("operator", fmt.Sprintf("live allow-list set to %d strategies", len(names)))
@@ -127,6 +127,11 @@ func wireLiveEngine(
 		defer cancel()
 		ctrl.RestoreArmState(rctx)
 	}()
+
+	// Keep the saved ON state fresh while armed, so its age reflects downtime
+	// rather than time-since-arming. Without this a long-running armed engine
+	// aged past armStateMaxAge and refused to resume after a routine redeploy.
+	ctrl.StartArmStateHeartbeat(ctx)
 
 	log.Printf("[LIVE ENGINE] control plane wired — ceiling $%.0f, buying-only (ON state resumes only if it was deliberately on)", liveengine.MaxTradableUSD)
 	return ctrl
@@ -199,8 +204,8 @@ func liveEnginePositionsProvider(bridge *delta.Bridge) func(context.Context) ([]
 		// Attribute to the tracked trade so TP/SL are measured against the entry
 		// premium the monitor actually uses (FillPrice), not a display value.
 		type tracked struct {
-			strategy string
-			fill     float64
+			strategy  string
+			fill      float64
 			contracts int
 		}
 		bySymbol := map[string]tracked{}
@@ -394,13 +399,13 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 				winPct = 100 * float64(a.wins) / float64(a.trades)
 			}
 			out = append(out, map[string]any{
-				"date":        d,
-				"capitalUsd":  a.capital,
-				"pnlUsd":      a.pnl,
-				"roiPct":      roi,
-				"trades":      a.trades,
-				"wins":        a.wins,
-				"winRatePct":  winPct,
+				"date":       d,
+				"capitalUsd": a.capital,
+				"pnlUsd":     a.pnl,
+				"roiPct":     roi,
+				"trades":     a.trades,
+				"wins":       a.wins,
+				"winRatePct": winPct,
 			})
 		}
 		return out, nil

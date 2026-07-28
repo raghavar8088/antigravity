@@ -23,8 +23,8 @@ func TestEligibility_NakedShortIsExcluded(t *testing.T) {
 func TestEligibility_ZeroRealFillsNotLive(t *testing.T) {
 	// Great synthetic numbers, zero real fills → not live, with a clear reason.
 	e := EvaluateEligibility(StrategyInput{
-		Strategy:   "Intraday_PutBuy_RSIOverboughtExtreme_150m",
-		OptionType: "PUT",
+		Strategy:        "Intraday_PutBuy_RSIOverboughtExtreme_150m",
+		OptionType:      "PUT",
 		SyntheticTrades: 500, SyntheticPnL: 2000,
 		RealFills: 0, RealDays: 0,
 	})

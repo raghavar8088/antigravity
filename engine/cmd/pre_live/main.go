@@ -74,10 +74,16 @@ func warmupCandles(orch *trading.Orchestrator) {
 			hours = parsed
 		}
 	}
+	// PRE_LIVE_WARMUP_SYMBOL: Binance symbol for warmup klines (default BTCUSDT
+	// — unchanged for existing instances; an ETH desk sets ETHUSDT).
+	warmupSymbol := os.Getenv("PRE_LIVE_WARMUP_SYMBOL")
+	if warmupSymbol == "" {
+		warmupSymbol = "BTCUSDT"
+	}
 	fetcher := marketdata.NewBinanceHistoricalFetcher(os.TempDir())
 	endMs := time.Now().UnixMilli()
 	startMs := endMs - int64(time.Duration(hours)*time.Hour/time.Millisecond)
-	candles, err := fetcher.FetchKlines("BTCUSDT", "1h", startMs, endMs)
+	candles, err := fetcher.FetchKlines(warmupSymbol, "1h", startMs, endMs)
 	if err != nil {
 		log.Printf("[PRE-LIVE] warmup fetch failed (will wait for live 1h bars): %v", err)
 		return
@@ -154,9 +160,15 @@ func main() {
 	defer cancel()
 
 	// ── 1. Market data feeds ─────────────────────────────────────────────────
+	// PRE_LIVE_FEED_SYMBOL: Coinbase product for the live tick stream (default
+	// BTC-USD — unchanged for existing instances; an ETH desk sets ETH-USD).
+	feedSymbol := os.Getenv("PRE_LIVE_FEED_SYMBOL")
+	if feedSymbol == "" {
+		feedSymbol = "BTC-USD"
+	}
 	coinbase := marketdata.NewCoinbaseClient()
 	go func() {
-		if err := coinbase.Connect(ctx, []string{"BTC-USD"}); err != nil {
+		if err := coinbase.Connect(ctx, []string{feedSymbol}); err != nil {
 			log.Fatalf("[PRE-LIVE] Coinbase feed error: %v", err)
 		}
 	}()

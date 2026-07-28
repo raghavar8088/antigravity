@@ -38,6 +38,17 @@ const armStateFileName = "live_engine_arm_state.json"
 // Beyond this a human must turn it back on.
 const armStateMaxAge = 6 * time.Hour
 
+// armStateHeartbeat re-saves the ON state on a timer so SavedAt tracks "last
+// known alive", not "when a human armed it".
+//
+// Without the heartbeat the freshness guard measured the wrong thing: an engine
+// armed 12h ago and running continuously ever since would refuse to resume after
+// a 60-second redeploy, because SavedAt was only written on arm/disarm. That is
+// the opposite of the guard's intent — it exists to stop a box that has been DOWN
+// for hours from waking up on stale intent. With the heartbeat, now-SavedAt is
+// the actual downtime, so the check finally means what it says.
+const armStateHeartbeat = 5 * time.Minute
+
 type persistedArmState struct {
 	Armed          bool      `json:"armed"`
 	ArmedBy        string    `json:"armedBy"`
@@ -87,6 +98,29 @@ func (c *Controller) persistArmStateLocked() {
 	if err := os.Rename(tmp, path); err != nil {
 		log.Printf("[LIVE ENGINE] arm-state: rename failed: %v", err)
 	}
+}
+
+// StartArmStateHeartbeat keeps the saved ON state fresh while the engine is
+// armed, so a redeploy resumes trading but a long outage still does not. It only
+// rewrites an ARMED state: an OFF state must stay off, and a state that a safety
+// trigger wrote must keep its DisarmReason and its original timestamp.
+func (c *Controller) StartArmStateHeartbeat(ctx context.Context) {
+	go func() {
+		t := time.NewTicker(armStateHeartbeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				c.mu.Lock()
+				if c.state == StateArmed {
+					c.persistArmStateLocked()
+				}
+				c.mu.Unlock()
+			}
+		}
+	}()
 }
 
 // RestoreArmState re-enables live trading after a restart when — and only when —

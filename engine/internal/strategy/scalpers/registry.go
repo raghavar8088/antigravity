@@ -88,6 +88,10 @@ func BuildAllScalpers() []RegistryEntry {
 	}
 	entries = append(entries, buildNewStrategiesBatch10()...)
 	entries = append(entries, buildNewStrategiesBatch10v2()...)
+	entries = append(entries, buildQualifyBatch10()...)
+	entries = append(entries, buildQualifyBatch18Research()...)
+	entries = append(entries, buildOverfitDemoYesterday()...)
+	entries = append(entries, buildOverfitDemoThisWeekWideRR()...)
 	return entries
 }
 

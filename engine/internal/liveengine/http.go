@@ -12,27 +12,27 @@ import (
 // every value labeled with its source and age so the UI never shows a stale
 // number as if it were fresh.
 type AccountView struct {
-	EquityUSD        float64   `json:"equityUsd"`
-	TradableUSD      float64   `json:"tradableUsd"` // min(equity, ceiling)
-	CeilingUSD       float64   `json:"ceilingUsd"`
-	AvailableUSD     float64   `json:"availableUsd"`
-	MarginUsedUSD    float64   `json:"marginUsedUsd"`
-	OpenRiskUSD      float64   `json:"openRiskUsd"`
-	RealizedTodayUSD float64   `json:"realizedTodayUsd"`
-	DistanceToBreaker float64  `json:"distanceToBreakerPct"`
-	Source           string    `json:"source"`
-	AsOf             time.Time `json:"asOf"`
-	Stale            bool      `json:"stale"`
+	EquityUSD         float64   `json:"equityUsd"`
+	TradableUSD       float64   `json:"tradableUsd"` // min(equity, ceiling)
+	CeilingUSD        float64   `json:"ceilingUsd"`
+	AvailableUSD      float64   `json:"availableUsd"`
+	MarginUsedUSD     float64   `json:"marginUsedUsd"`
+	OpenRiskUSD       float64   `json:"openRiskUsd"`
+	RealizedTodayUSD  float64   `json:"realizedTodayUsd"`
+	DistanceToBreaker float64   `json:"distanceToBreakerPct"`
+	Source            string    `json:"source"`
+	AsOf              time.Time `json:"asOf"`
+	Stale             bool      `json:"stale"`
 }
 
 // ReconciliationView reports engine state vs. Delta truth. Mismatch is shown loudly.
 type ReconciliationView struct {
-	Matched      bool      `json:"matched"`
-	EnginePositions int    `json:"enginePositions"`
-	DeltaPositions  int    `json:"deltaPositions"`
-	Mismatches   []string  `json:"mismatches"`
-	AsOf         time.Time `json:"asOf"`
-	Error        string    `json:"error,omitempty"`
+	Matched         bool      `json:"matched"`
+	EnginePositions int       `json:"enginePositions"`
+	DeltaPositions  int       `json:"deltaPositions"`
+	Mismatches      []string  `json:"mismatches"`
+	AsOf            time.Time `json:"asOf"`
+	Error           string    `json:"error,omitempty"`
 }
 
 // DataProviders supply the read-model the handler serves. Each is optional; a nil
