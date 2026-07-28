@@ -858,6 +858,7 @@ The content is organized as follows:
   delta/bridge_buy_sizing.go
   delta/client.go
   delta/close_lookup_test.go
+  delta/custody_owns_upside_test.go
   delta/execution_guard_test.go
   delta/execution_guard.go
   delta/exit_levels_test.go

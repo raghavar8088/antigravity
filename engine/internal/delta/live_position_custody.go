@@ -37,6 +37,40 @@ const (
 	LiveStopLossPct   = 0.50 // close at -50% of premium paid
 )
 
+// MinTimeToExpiryForNewEntry blocks live entries that are already too close to
+// expiry to work. Positions opened inside this window could not reach the +80%
+// target before the monitor force-closed them at near_expiry_30min, so the trade
+// was structurally a theta donation: the first three such closes went 0-for-3.
+// The paper engine still takes these signals; only the live mirror declines.
+const MinTimeToExpiryForNewEntry = 2 * time.Hour
+
+// strategyProfitCapExits are paper-strategy exit reasons that close a winner
+// early. They are measured on the synthetic paper chain and fire far below the
+// live +80% target, which is why take_profit_80pct had never once triggered in
+// the first 20 live trades while stop_loss_50pct fired seven times: the upside
+// was clipped at roughly +15% while the downside ran the full -50%. That
+// asymmetry demanded an ~82% win rate to break even. Suppressing these hands the
+// upside back to the custody monitor.
+//
+// Loss-cutting exits (SL, STRIKE_PRESSURE) are deliberately NOT in this set. A
+// strategy stop that exits at ~-12% is strictly better than riding to the -50%
+// custody stop, so it stays as the first line of defence with -50% as backstop.
+// LATE_EXIT is ambiguous — it fires both on theta bleed (protective) and on late
+// profit (capping) — and is kept, because holding a long option deep into its
+// life is the more expensive mistake.
+var strategyProfitCapExits = map[string]bool{
+	"strategy_TP":          true,
+	"strategy_TRAIL_STOP":  true,
+	"strategy_PROFIT_LOCK": true,
+}
+
+// IsStrategyProfitCapExit reports whether a close reason is a paper-strategy
+// profit-taking exit that the live custody layer should ignore, leaving the
+// position to run to its own +80% take-profit or -50% stop.
+func IsStrategyProfitCapExit(reason string) bool {
+	return strategyProfitCapExits[reason]
+}
+
 // PositionExit describes where a long option position exits and what that is
 // worth in USD, given the entry premium the monitor measures against.
 type PositionExit struct {

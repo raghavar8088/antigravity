@@ -15,27 +15,27 @@ import (
 
 // LiveTrade records a real Delta Exchange order that was mirrored from a paper signal.
 type LiveTrade struct {
-	ID            string    `json:"id"`
-	PaperTradeID  string    `json:"paperTradeId"`
-	StrategyID    int       `json:"strategyId"`
-	StrategyName  string    `json:"strategyName"`
-	OptionType    string    `json:"optionType"` // "CALL" or "PUT"
-	Strike        float64   `json:"strike"`
-	ExpiryTime    time.Time `json:"expiryTime"`
-	Side          string    `json:"side"`    // "sell" (we sell options) or "buy" (to close)
-	DeltaOrderID  string    `json:"deltaOrderId"`
-	DeltaSymbol   string    `json:"deltaSymbol"`
-	ProductID     int       `json:"productId"`
-	Contracts     int       `json:"contracts"`
-	FillPrice     float64   `json:"fillPrice"`
-	PremiumUSD    float64   `json:"premiumUsd"`
-	Status        string    `json:"status"` // "OPEN","CLOSED","FAILED","CANCELLED"
-	OpenedAt      time.Time `json:"openedAt"`
-	ClosedAt      *time.Time `json:"closedAt,omitempty"`
-	CloseOrderID  string    `json:"closeOrderId,omitempty"`
-	CloseFillPrice float64  `json:"closeFillPrice,omitempty"`
-	RealizedPnl   float64   `json:"realizedPnl,omitempty"`
-	FailureReason string    `json:"failureReason,omitempty"`
+	ID             string     `json:"id"`
+	PaperTradeID   string     `json:"paperTradeId"`
+	StrategyID     int        `json:"strategyId"`
+	StrategyName   string     `json:"strategyName"`
+	OptionType     string     `json:"optionType"` // "CALL" or "PUT"
+	Strike         float64    `json:"strike"`
+	ExpiryTime     time.Time  `json:"expiryTime"`
+	Side           string     `json:"side"` // "sell" (we sell options) or "buy" (to close)
+	DeltaOrderID   string     `json:"deltaOrderId"`
+	DeltaSymbol    string     `json:"deltaSymbol"`
+	ProductID      int        `json:"productId"`
+	Contracts      int        `json:"contracts"`
+	FillPrice      float64    `json:"fillPrice"`
+	PremiumUSD     float64    `json:"premiumUsd"`
+	Status         string     `json:"status"` // "OPEN","CLOSED","FAILED","CANCELLED"
+	OpenedAt       time.Time  `json:"openedAt"`
+	ClosedAt       *time.Time `json:"closedAt,omitempty"`
+	CloseOrderID   string     `json:"closeOrderId,omitempty"`
+	CloseFillPrice float64    `json:"closeFillPrice,omitempty"`
+	RealizedPnl    float64    `json:"realizedPnl,omitempty"`
+	FailureReason  string     `json:"failureReason,omitempty"`
 	// LastMarkPrice is the most recent mark seen by the monitor. Used to value an
 	// expiry close, which has no fill price of its own — without it an expired
 	// position reported $0 P&L even though the premium was really lost or won.
@@ -51,7 +51,7 @@ type OpenSignal struct {
 	PaperTradeID string
 	StrategyID   int
 	StrategyName string
-	OptionType   string  // "CALL" or "PUT"
+	OptionType   string // "CALL" or "PUT"
 	Strike       float64
 	ExpiryTime   time.Time
 	PremiumUSD   float64
@@ -72,13 +72,13 @@ type CloseSignal struct {
 // In selling mode (default) it sells options — requires large margin.
 // In buying mode it buys options — costs only the premium (~$0.50/lot).
 type Bridge struct {
-	mu          sync.RWMutex
-	client      *Client
-	enabled     bool
-	configured  bool
-	buyingMode  bool // when true: BUY options instead of SELL
-	trades      []LiveTrade
-	seq         int
+	mu         sync.RWMutex
+	client     *Client
+	enabled    bool
+	configured bool
+	buyingMode bool // when true: BUY options instead of SELL
+	trades     []LiveTrade
+	seq        int
 
 	// openByPaperID maps paper position ID → live trade ID (NOT a slice index).
 	// It previously stored an index, but trades are PREPENDED on every open and
@@ -280,6 +280,17 @@ func (b *Bridge) RegisterOpenMapping(paperTradeID, tradeID string) {
 // restored or adopted trade with a missing mapping can still be closed — a real
 // position must never become uncloseable because a lookup failed.
 // Caller holds b.mu.
+// openLiveTradeForStrategyLocked returns the ID of an already-open live trade for
+// this strategy, or "" if the strategy has no live position. Callers hold b.mu.
+func (b *Bridge) openLiveTradeForStrategyLocked(strategyID int) string {
+	for i := range b.trades {
+		if b.trades[i].StrategyID == strategyID && b.trades[i].Status == "OPEN" {
+			return b.trades[i].ID
+		}
+	}
+	return ""
+}
+
 func (b *Bridge) openIndexForPaperID(paperID string) int {
 	if tradeID, ok := b.openByPaperID[paperID]; ok {
 		if idx := b.indexOfID(tradeID); idx >= 0 && b.trades[idx].Status == "OPEN" {
@@ -444,6 +455,27 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 		return
 	}
 
+	// Expiry floor: a position opened inside this window cannot reach the +80%
+	// target before the monitor force-closes it near expiry, so it is a losing
+	// trade by construction rather than by outcome. Paper still takes the signal.
+	if !sig.ExpiryTime.IsZero() {
+		if ttl := time.Until(sig.ExpiryTime); ttl < MinTimeToExpiryForNewEntry {
+			log.Printf("[DELTA BRIDGE] ⏭️  skip live open %q — %.0fm to expiry, under the %.0fm floor",
+				sig.StrategyName, ttl.Minutes(), MinTimeToExpiryForNewEntry.Minutes())
+			return
+		}
+	}
+
+	// One live position per strategy. Paper closes its leg on a profit-take that
+	// the live side now declines (see OnClose), so the strategy can legitimately
+	// open a fresh paper position while the live leg is still running. Without
+	// this guard that would stack a second real position on the same strategy.
+	if openID := b.openLiveTradeForStrategyLocked(sig.StrategyID); openID != "" {
+		log.Printf("[DELTA BRIDGE] ⏭️  skip live open %q — %s already open for this strategy",
+			sig.StrategyName, openID)
+		return
+	}
+
 	b.seq++
 	id := fmt.Sprintf("DLT-%04d", b.seq)
 
@@ -514,6 +546,22 @@ func (b *Bridge) OnClose(sig CloseSignal) {
 			sig.PaperTradeID, sig.ExitReason)
 		return
 	}
+
+	// Custody owns the upside. A paper profit-take is a signal about the synthetic
+	// chain, not about this real position, and it fires well below the live +80%
+	// target — so honouring it capped every live winner. Decline it and leave the
+	// position under the monitor, which still holds both the +80% take-profit and
+	// the -50% stop. The paper leg closes either way; only the live leg runs on.
+	//
+	// The mapping and ExitReason are intentionally left untouched: this position is
+	// still open, and the monitor closes it later via this same path with a custody
+	// reason (take_profit_80pct / stop_loss_50pct / near_expiry_30min).
+	if IsStrategyProfitCapExit(sig.ExitReason) {
+		log.Printf("[DELTA BRIDGE] 🎯 holding %s through paper %s — live position runs to +%.0f%% TP / -%.0f%% SL",
+			b.trades[idx].ID, sig.ExitReason, LiveTakeProfitPct*100, LiveStopLossPct*100)
+		return
+	}
+
 	trade := b.trades[idx]
 	delete(b.openByPaperID, sig.PaperTradeID)
 
@@ -651,11 +699,11 @@ type BridgeStats struct {
 	TotalPnl    float64 `json:"totalPnl"`
 	WalletUSDT  float64 `json:"walletUsdt"`
 	// Low-balance live BUY profile (buyingMode + wallet snapshot).
-	LowBalanceProfile   bool    `json:"lowBalanceProfile,omitempty"`
-	BuyRiskPct          float64 `json:"buyRiskPct,omitempty"`
-	BuyMaxContracts     int     `json:"buyMaxContracts,omitempty"`
-	MinWalletUSD        float64 `json:"minWalletUsd,omitempty"`
-	BuyEstPremiumUSD    float64 `json:"buyEstPremiumUsd,omitempty"`
+	LowBalanceProfile bool    `json:"lowBalanceProfile,omitempty"`
+	BuyRiskPct        float64 `json:"buyRiskPct,omitempty"`
+	BuyMaxContracts   int     `json:"buyMaxContracts,omitempty"`
+	MinWalletUSD      float64 `json:"minWalletUsd,omitempty"`
+	BuyEstPremiumUSD  float64 `json:"buyEstPremiumUsd,omitempty"`
 	// Live account data
 	Account *AccountInfo `json:"account,omitempty"`
 }

@@ -1,1 +1,1 @@
-{}
+{"engine/internal/delta/custody_owns_upside_test.go::TestIsStrategyProfitCapExit_ClassifiesExits()":["engine/internal/delta/live_position_custody.go::IsStrategyProfitCapExit()"],"engine/internal/delta/live_bridge.go::.OnClose()":["engine/internal/delta/live_position_custody.go::IsStrategyProfitCapExit()"]}
