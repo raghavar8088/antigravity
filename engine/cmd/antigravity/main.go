@@ -24,6 +24,7 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/alpha/funding"
+	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/calibration"
 	tconfig "antigravity-engine/internal/config"
 	"antigravity-engine/internal/dataquality"
@@ -48,7 +49,6 @@ import (
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/paperpersist"
-	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/persistence"
 	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
@@ -1012,7 +1012,20 @@ func main() {
 		})
 		log.Println("[KILL SWITCH] Reconciler wired — OMS_DESYNC auto-release validates trade reconciliation")
 	}
-	wasHalted := ksSvc.RestoreStateOnStartup(ctx)
+	// Bound the ledger replay. RestoreStateOnStartup reads every risk event for
+	// the account, and on a degraded shared-tier Mongo that read can hang
+	// indefinitely — which wedged the whole boot before the HTTP server ever
+	// started listening, so the engine looked "Up" while serving nothing.
+	//
+	// The error path already degrades to "start normally", so a timeout changes
+	// only how long we wait, not what happens on failure. Note that failure is
+	// fail-OPEN on the kill switch: an unreadable ledger means a prior halt is
+	// not restored. That is pre-existing behaviour, and it is preferable to an
+	// engine that cannot boot at all, but it is why the timeout is generous
+	// rather than aggressive.
+	ksRestoreCtx, ksRestoreCancel := context.WithTimeout(ctx, 30*time.Second)
+	wasHalted := ksSvc.RestoreStateOnStartup(ksRestoreCtx)
+	ksRestoreCancel()
 	if !ksSvc.IsEnabled() {
 		log.Println("[KILL SWITCH] DISABLED — trading will not halt. Set KILL_SWITCH_ENABLED=true on engine to re-arm.")
 		if err := ksSvc.DisableAndRelease(ctx); err != nil {
@@ -1498,16 +1511,17 @@ func main() {
 	// bridge is forced to buying+native mode and gated by a per-strategy allow-list
 	// in wireLiveEngine. The selling desk stays paper-only — it no longer feeds
 	// live orders.
-	optionsEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
+	optionsEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
-			PaperTradeID: posID,
-			StrategyID:   stratID,
-			StrategyName: stratName,
-			OptionType:   optType,
-			Strike:       strike,
-			ExpiryTime:   expiry,
-			PremiumUSD:   premiumUSD,
-			BTCPrice:     btcSpot,
+			PaperTradeID:  posID,
+			StrategyID:    stratID,
+			StrategyName:  stratName,
+			OptionType:    optType,
+			Strike:        strike,
+			ExpiryTime:    expiry,
+			PremiumUSD:    premiumUSD,
+			PremiumPerBTC: premiumPerBTC,
+			BTCPrice:      btcSpot,
 		})
 	})
 	optionsEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {

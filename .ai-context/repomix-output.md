@@ -863,9 +863,12 @@ The content is organized as follows:
   delta/execution_guard_test.go
   delta/execution_guard.go
   delta/exit_levels_test.go
+  delta/fees_test.go
+  delta/fees.go
   delta/flexnum_test.go
   delta/live_bridge_test.go
   delta/live_bridge.go
+  delta/live_exit_policy_test.go
   delta/live_position_custody_test.go
   delta/live_position_custody.go
   delta/monitor_interval_test.go
@@ -1661,6 +1664,7 @@ The content is organized as follows:
   validation/production/gate.go
 
 [cmd]/
+  antigravity/liveengine_result_test.go
   antigravity/liveengine_wiring.go
   antigravity/main.go
   backtest/main.go
