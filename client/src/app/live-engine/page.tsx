@@ -162,6 +162,8 @@ export default function LiveEnginePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
   const [actionMsg, setActionMsg] = useState<string>("");
+  const [showAllOrders, setShowAllOrders] = useState<boolean>(false);
+  const [showAllClosed, setShowAllClosed] = useState<boolean>(false);
 
 
   const refresh = useCallback(async () => {
@@ -578,7 +580,7 @@ export default function LiveEnginePage() {
           />
           <DeskDataTable
             columns={closedColumns}
-            rows={closed}
+            rows={showAllClosed ? closed : closed.slice(0, 100)}
             getRowKey={(c) => c.id}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed positions yet.</span>}
@@ -606,10 +608,20 @@ export default function LiveEnginePage() {
 
         {/* SECTION 4 — Orders / fills */}
         <DeskCard padding="md">
-          <DeskSectionHeader title="Orders & Fills" subtitle={`${orders.length} recent`} />
+          <DeskSectionHeader
+            title="Order History"
+            subtitle={showAllOrders ? `all ${orders.length}` : `showing ${Math.min(100, orders.length)} of ${orders.length}`}
+            actions={
+              orders.length > 100 ? (
+                <DeskButton variant="text" onClick={() => setShowAllOrders((v) => !v)}>
+                  {showAllOrders ? "Show less" : "View all order history"}
+                </DeskButton>
+              ) : undefined
+            }
+          />
           <DeskDataTable
             columns={orderColumns}
-            rows={orders.slice(0, 100)}
+            rows={showAllOrders ? orders : orders.slice(0, 100)}
             getRowKey={(o) => o.id}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live orders yet.</span>}

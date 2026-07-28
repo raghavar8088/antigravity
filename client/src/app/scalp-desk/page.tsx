@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   DeskBanner,
+  DeskButton,
   DeskCard,
   DeskChip,
   DeskDataTable,
@@ -110,6 +111,7 @@ export default function ScalpDeskPage() {
   const [error, setError] = useState<string>("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+  const [showAllTrades, setShowAllTrades] = useState<boolean>(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -117,7 +119,7 @@ export default function ScalpDeskPage() {
         fetch("/api/scalp/scalp/health", { cache: "no-store" }),
         fetch("/api/scalp/scalp/stats", { cache: "no-store" }),
         fetch("/api/scalp/scalp/leaderboard", { cache: "no-store" }),
-        fetch("/api/scalp/scalp/trades?n=50", { cache: "no-store" }),
+        fetch(`/api/scalp/scalp/trades?n=${showAllTrades ? 5000 : 50}`, { cache: "no-store" }),
       ]);
       if (!h.ok || !s.ok || !lb.ok || !tr.ok) {
         const bad = [h, s, lb, tr].find((r) => !r.ok);
@@ -135,7 +137,7 @@ export default function ScalpDeskPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showAllTrades]);
 
   useEffect(() => {
     void refresh();
@@ -373,7 +375,7 @@ export default function ScalpDeskPage() {
 
           <DeskDataTable
             columns={leaderboardColumns}
-            rows={filtered.slice(0, 150)}
+            rows={showAllTrades ? filtered : filtered.slice(0, 150)}
             getRowKey={(r) => `${r.strategy}|${r.symbol}`}
             minWidth={860}
             empty={
@@ -387,7 +389,23 @@ export default function ScalpDeskPage() {
 
         {/* Recent trades */}
         <DeskCard padding="md">
-          <DeskSectionHeader title="Recent Trades" actions={<span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>last {trades.length}</span>} />
+          <DeskSectionHeader
+            title="Trade History"
+            actions={
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                  {showAllTrades
+                    ? `all ${filtered.length}`
+                    : `last ${Math.min(150, filtered.length)} of ${filtered.length}`}
+                </span>
+                {filtered.length > 150 && (
+                  <DeskButton variant="text" onClick={() => setShowAllTrades((v) => !v)}>
+                    {showAllTrades ? "Show less" : "View all trade history"}
+                  </DeskButton>
+                )}
+              </div>
+            }
+          />
           <DeskDataTable
             columns={tradeColumns}
             rows={[...trades].reverse()}

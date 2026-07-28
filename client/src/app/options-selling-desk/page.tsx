@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   DeskBanner,
+  DeskButton,
   DeskCard,
   DeskChip,
   DeskDataTable,
@@ -164,6 +165,7 @@ export default function OptionsSellingDeskPage() {
   const [error, setError] = useState<string>("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+  const [showAllTrades, setShowAllTrades] = useState<boolean>(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -457,10 +459,26 @@ export default function OptionsSellingDeskPage() {
 
         {/* Recent trades */}
         <DeskCard padding="md">
-          <DeskSectionHeader title="Recent Trades" actions={<span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>last {trades.length}</span>} />
+          <DeskSectionHeader
+            title="Trade History"
+            actions={
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                  {showAllTrades
+                    ? `all ${trades.length}`
+                    : `last ${Math.min(150, trades.length)} of ${trades.length}`}
+                </span>
+                {trades.length > 150 && (
+                  <DeskButton variant="text" onClick={() => setShowAllTrades((v) => !v)}>
+                    {showAllTrades ? "Show less" : "View all trade history"}
+                  </DeskButton>
+                )}
+              </div>
+            }
+          />
           <DeskDataTable
             columns={tradeColumns}
-            rows={trades.slice(0, 150)}
+            rows={showAllTrades ? trades : trades.slice(0, 150)}
             getRowKey={(t) => t.id}
             minWidth={860}
             empty={<DeskEmptyState title="No closed trades" subtitle="No closed trades yet — the desk trades 24/7; check back soon." />}

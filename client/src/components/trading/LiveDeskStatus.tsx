@@ -308,10 +308,10 @@ export function LiveDeskStatus() {
         )}
       </div>
 
-      {/* Recent Trades */}
+      {/* Trade History */}
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-          Recent Trades
+          Trade History
         </div>
         {status.recentTrades.length === 0 ? (
           <div style={{ padding: "16px 12px", textAlign: "center", color: "#6b7280", fontSize: 12,

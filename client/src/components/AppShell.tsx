@@ -87,7 +87,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/scalp/scalp/leaderboard", label: "Leaderboard JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/scalp/scalp/trades?n=100", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/scalp/scalp/trades?n=100", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/health", label: "Engine Health JSON", icon: ic.code, external: true },
     ],
   },
@@ -96,7 +96,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/options-selling/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-selling/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/options-selling/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-selling/trades", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/options-selling/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },
@@ -105,7 +105,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/options-buying/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-buying/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/options-buying/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-buying/trades", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/options-buying/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },
