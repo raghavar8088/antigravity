@@ -33,9 +33,69 @@ const liveTradesFileName = "delta_live_trades.json"
 // the engine actually acts on — one source of truth, no drift between the
 // displayed TP/SL and the levels that trigger a close.
 const (
-	LiveTakeProfitPct = 0.80 // close at +80% of premium paid
+	// LiveTakeProfitPct is the REFERENCE target, not a hard exit any more. It
+	// still prices the fee round trip and drives the displayed TP level, but the
+	// trailing exit below decides when a winner is actually banked.
+	//
+	// A fixed +80% cap was the wrong shape for a long-option book. Buying options
+	// is a negative-drift trade paid for entirely by the fat right tail; capping
+	// every winner at +80% while losers ran to -50% (and expiries to -110% after
+	// the entry fee) removed the only part of the distribution that pays. After
+	// fees that geometry was +52% against -65% — 0.8:1, needing a 55.6% win rate
+	// from a book running at 11%.
+	LiveTakeProfitPct = 0.80
 	LiveStopLossPct   = 0.50 // close at -50% of premium paid
+
+	// LiveTrailArmPct is the gain at which the trailing exit arms. Below it the
+	// hard stop is the only protection, so small winners are not shaken out by
+	// ordinary option noise.
+	LiveTrailArmPct = 0.40
+	// LiveTrailGivebackPct closes the position once it surrenders this share of
+	// its PEAK mark. Measured off the peak rather than off entry, so the exit
+	// rises with the trade and the tail stays open.
+	LiveTrailGivebackPct = 0.30
+	// LiveHardTakeProfitPct is a backstop for a runaway winner, far enough out
+	// that it does not clip the tail the trail exists to capture.
+	LiveHardTakeProfitPct = 3.00
 )
+
+// ExitDecision is the custody monitor's verdict for one open long option.
+type ExitDecision struct {
+	GainPct     float64 // mark vs entry premium
+	PeakGainPct float64 // best mark seen vs entry premium
+	GivebackPct float64 // how far the mark has fallen from its peak
+	TrailArmed  bool
+	Reason      string // "" = hold
+}
+
+// EvaluateExit applies the live exit policy: hard stop, trailing exit once armed,
+// and a far backstop. Pure, so the policy is testable without a broker.
+func EvaluateExit(entryPremium, markPremium, peakPremium float64) ExitDecision {
+	if entryPremium <= 0 {
+		return ExitDecision{}
+	}
+	if peakPremium < markPremium {
+		peakPremium = markPremium
+	}
+	d := ExitDecision{
+		GainPct:     (markPremium - entryPremium) / entryPremium,
+		PeakGainPct: (peakPremium - entryPremium) / entryPremium,
+	}
+	if peakPremium > 0 {
+		d.GivebackPct = (peakPremium - markPremium) / peakPremium
+	}
+	d.TrailArmed = d.PeakGainPct >= LiveTrailArmPct
+
+	switch {
+	case d.GainPct >= LiveHardTakeProfitPct:
+		d.Reason = "take_profit_hard_cap"
+	case d.GainPct <= -LiveStopLossPct:
+		d.Reason = "stop_loss_50pct"
+	case d.TrailArmed && d.GivebackPct >= LiveTrailGivebackPct:
+		d.Reason = "trailing_exit"
+	}
+	return d
+}
 
 // MinTimeToExpiryForNewEntry blocks live entries that are already too close to
 // expiry to work. Positions opened inside this window could not reach the +80%

@@ -36,10 +36,28 @@ type LiveTrade struct {
 	CloseFillPrice float64    `json:"closeFillPrice,omitempty"`
 	RealizedPnl    float64    `json:"realizedPnl,omitempty"`
 	FailureReason  string     `json:"failureReason,omitempty"`
+	// EntryBTCPrice is spot at the moment the signal fired. Fees are charged on
+	// underlying notional, so pricing a round trip needs it; without it the fee
+	// falls back to the 10%-of-premium cap alone.
+	EntryBTCPrice float64 `json:"entryBtcPrice,omitempty"`
+	// EntryFeeUSD / ExitFeeUSD are the real Delta fees for each leg, and GrossPnl
+	// is the pre-fee result. RealizedPnl is NET of both legs.
+	//
+	// These exist because the live path previously modelled no fee whatsoever:
+	// RealizedPnl was (exit-entry)×size, so every strategy statistic the desk
+	// promoted on — expectancy, profit factor, win contribution — was computed
+	// gross while real capital paid ~28% of premium per round trip.
+	EntryFeeUSD float64 `json:"entryFeeUsd,omitempty"`
+	ExitFeeUSD  float64 `json:"exitFeeUsd,omitempty"`
+	GrossPnl    float64 `json:"grossPnl,omitempty"`
 	// LastMarkPrice is the most recent mark seen by the monitor. Used to value an
 	// expiry close, which has no fill price of its own — without it an expired
 	// position reported $0 P&L even though the premium was really lost or won.
 	LastMarkPrice float64 `json:"lastMarkPrice,omitempty"`
+	// PeakMarkPrice is the highest mark seen since entry. It drives the trailing
+	// exit that replaced the fixed take-profit: a long option's only structural
+	// edge is its unbounded upside, and a hard +80% cap amputated exactly that.
+	PeakMarkPrice float64 `json:"peakMarkPrice,omitempty"`
 	// ExitReason records WHY the position closed (take_profit_80pct,
 	// stop_loss_50pct, near_expiry_30min, CLOSE_ALL, ...). Previously the reason
 	// was only logged, so a closed position could not show what triggered it.
@@ -54,8 +72,13 @@ type OpenSignal struct {
 	OptionType   string // "CALL" or "PUT"
 	Strike       float64
 	ExpiryTime   time.Time
-	PremiumUSD   float64
-	BTCPrice     float64
+	// PremiumUSD is the paper leg's cash cost basis; PremiumPerBTC is the quoted
+	// premium (USD per BTC) for one BTC of underlying. Fee economics need the
+	// quote — read against BTCPrice — because the fee is a share of notional
+	// capped at a share of premium, and only their ratio decides which binds.
+	PremiumUSD    float64
+	PremiumPerBTC float64
+	BTCPrice      float64
 }
 
 // CloseSignal is the event fired when a paper position closes.
@@ -99,6 +122,15 @@ type Bridge struct {
 	// submitResultHook, when set, is notified of every opening-order outcome so
 	// the Live Engine can track consecutive broker rejects.
 	submitResultHook func(err error)
+
+	// liveEligibility answers whether a strategy has earned real capital, injected
+	// from the wiring layer so the bridge does not import the roster (and the
+	// roster stays free to evolve its gates independently). Nil means "unknown",
+	// which is treated as not-eligible so a missing wiring cannot silently open
+	// the gate. enforceGate decides whether a failing verdict blocks the order or
+	// is only reported — see LIVE_ENGINE_ENFORCE_GATE.
+	liveEligibility func(strategyName string) (bool, string)
+	enforceGate     bool
 
 	// nativeBuy is true when the signal source is already long-side (the option
 	// BUYING engine), so OnOpen must NOT invert the option type. The legacy path
@@ -225,10 +257,15 @@ func (b *Bridge) UpdateTradeAfterClose(tradeID string, result PlaceOrderResult, 
 		// close by 1000x (a $0.05 result would have been reported as $50).
 		btc := float64(t.Contracts) * OptionContractSizeBTC
 		if buying {
-			t.RealizedPnl = (result.Price - t.FillPrice) * btc
+			t.GrossPnl = (result.Price - t.FillPrice) * btc
 		} else {
-			t.RealizedPnl = (t.FillPrice - result.Price) * btc
+			t.GrossPnl = (t.FillPrice - result.Price) * btc
 		}
+		// Net of both fee legs. The entry fee was booked at fill; the exit leg is
+		// priced at the closing premium, which is why a winning close costs more
+		// in fees than the entry did.
+		t.ExitFeeUSD = OptionFeeUSD(result.Price, t.EntryBTCPrice, t.Contracts)
+		t.RealizedPnl = t.GrossPnl - t.EntryFeeUSD - t.ExitFeeUSD
 	})
 }
 
@@ -259,6 +296,11 @@ func (b *Bridge) UpdateTradeAfterFill(tradeID string, result PlaceOrderResult, p
 		t.Strike = strike
 		t.ExpiryTime = expiry
 		t.Status = "OPEN"
+		// Book the entry fee against the real fill, not the signal's estimate, and
+		// seed the trailing-exit peak so a position that only ever falls still has
+		// a sane reference.
+		t.EntryFeeUSD = OptionFeeUSD(result.Price, t.EntryBTCPrice, contracts)
+		t.PeakMarkPrice = result.Price
 	})
 }
 
@@ -378,6 +420,128 @@ func (b *Bridge) LiveAllowList() []string {
 	return out
 }
 
+// SetLiveEligibility injects the go-live evidence test. The bridge calls it for
+// every prospective open; returning false with a reason means the strategy has
+// not earned real capital yet.
+func (b *Bridge) SetLiveEligibility(fn func(strategyName string) (bool, string)) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.liveEligibility = fn
+}
+
+// SetGateEnforcement decides whether a failing go-live verdict BLOCKS the order
+// (true) or is merely logged (false).
+//
+// It defaults to false deliberately. Enforcing immediately would halt the desk
+// outright, because the gate requires a real-fill record that a desk trading on
+// unenforced gates never accumulated. Report-only lets the record build under
+// honest accounting; flip this on once the numbers exist to gate on.
+func (b *Bridge) SetGateEnforcement(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.enforceGate = v
+	if v {
+		log.Printf("[DELTA BRIDGE] 🔒 go-live gate ENFORCED — strategies without a qualifying record cannot open")
+	} else {
+		log.Printf("[DELTA BRIDGE] 🔓 go-live gate REPORT-ONLY — failing strategies are logged, not blocked")
+	}
+}
+
+// GateEnforced reports whether the go-live gate currently blocks orders.
+func (b *Bridge) GateEnforced() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.enforceGate
+}
+
+// liveEligibilityLocked runs the injected evidence test. A missing test is
+// treated as NOT eligible: an unwired gate must fail closed, never open.
+// Caller holds b.mu.
+func (b *Bridge) liveEligibilityLocked(name string) (bool, string) {
+	if b.liveEligibility == nil {
+		return false, "eligibility provider not wired"
+	}
+	return b.liveEligibility(name)
+}
+
+// StrategyRecord is the real-fill track record for one strategy, computed from
+// closed live trades only. This is what the go-live gate is supposed to read;
+// it previously read hardcoded zeros, so no strategy could ever qualify and the
+// verdict was decorative.
+type StrategyRecord struct {
+	Strategy        string
+	Fills           int
+	Days            int
+	Expectancy      float64 // mean NET pnl per closed trade, USD
+	ProfitFactor    float64
+	FeePctOfPremium float64 // round-trip fees as a share of premium deployed
+	NetPnl          float64
+	GrossPnl        float64
+	Fees            float64
+	Wins            int
+	Losses          int
+}
+
+// LiveStrategyRecord computes the real track record for one strategy from closed
+// live trades. Expectancy and profit factor are NET of fees — a gross profit
+// factor is exactly the number that let this desk believe it had an edge.
+func (b *Bridge) LiveStrategyRecord(name string) StrategyRecord {
+	b.mu.RLock()
+	trades := make([]LiveTrade, len(b.trades))
+	copy(trades, b.trades)
+	b.mu.RUnlock()
+
+	rec := StrategyRecord{Strategy: name}
+	var grossWins, grossLosses float64
+	var first, last time.Time
+	var premiumDeployed float64
+
+	for _, t := range trades {
+		if t.StrategyName != name || t.Status != "CLOSED" {
+			continue
+		}
+		rec.Fills++
+		rec.NetPnl += t.RealizedPnl
+		rec.GrossPnl += t.GrossPnl
+		rec.Fees += t.EntryFeeUSD + t.ExitFeeUSD
+		premiumDeployed += OptionPremiumUSD(t.FillPrice, t.Contracts)
+
+		if t.RealizedPnl >= 0 {
+			rec.Wins++
+			grossWins += t.RealizedPnl
+		} else {
+			rec.Losses++
+			grossLosses += -t.RealizedPnl
+		}
+		if first.IsZero() || t.OpenedAt.Before(first) {
+			first = t.OpenedAt
+		}
+		if t.ClosedAt != nil && t.ClosedAt.After(last) {
+			last = *t.ClosedAt
+		}
+	}
+
+	if rec.Fills == 0 {
+		return rec
+	}
+	rec.Expectancy = rec.NetPnl / float64(rec.Fills)
+	if !first.IsZero() && !last.IsZero() && last.After(first) {
+		rec.Days = int(last.Sub(first).Hours()/24) + 1
+	} else {
+		rec.Days = 1
+	}
+	switch {
+	case grossLosses > 0:
+		rec.ProfitFactor = grossWins / grossLosses
+	case grossWins > 0:
+		rec.ProfitFactor = 999 // no losing trade yet — unbounded, reported as very high
+	}
+	if premiumDeployed > 0 {
+		rec.FeePctOfPremium = rec.Fees / premiumDeployed * 100
+	}
+	return rec
+}
+
 // strategyAllowedLocked reports whether a strategy may place a live order. nil
 // allow-list = allow all (legacy); non-nil = only listed. Caller holds b.mu.
 func (b *Bridge) strategyAllowedLocked(name string) bool {
@@ -455,6 +619,32 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 		return
 	}
 
+	// Go-live gate. The allow-list is an operator switch; this is the evidence
+	// test (real fills, real days, positive expectancy, PF, fee bound). The two
+	// were never connected: the roster computed a verdict for the UI while the
+	// allow-list alone decided what traded, so strategies with a zero-fill record
+	// placed real orders. Enforcement is off by default — a desk with no real
+	// track record would halt entirely — and is flipped on via
+	// LIVE_ENGINE_ENFORCE_GATE once a record exists to gate on.
+	if eligible, reason := b.liveEligibilityLocked(sig.StrategyName); !eligible {
+		if b.enforceGate {
+			log.Printf("[DELTA BRIDGE] ⛔ BLOCK live open %q — go-live gate: %s", sig.StrategyName, reason)
+			return
+		}
+		log.Printf("[DELTA BRIDGE] ⚠️  gate REPORT-ONLY: %q would be blocked — %s", sig.StrategyName, reason)
+	}
+
+	// Entry economics. Delta caps its option fee at 10% of premium per side, so
+	// an option cheap enough for the cap to bind costs a flat ~28% of premium to
+	// round-trip — a tax that demands a ~56% win rate from a long-option book.
+	// Direction is irrelevant if the instrument cannot pay for itself.
+	// The fee percentage is scale-invariant — premium and notional both scale with
+	// contracts, so the ratio cancels — which is why one contract prices it.
+	if econ := EvaluateEntryEconomics(sig.PremiumPerBTC, sig.BTCPrice, 1, LiveTakeProfitPct); !econ.Acceptable {
+		log.Printf("[DELTA BRIDGE] ⏭️  skip live open %q — %s", sig.StrategyName, econ.Reason)
+		return
+	}
+
 	// Expiry floor: a position opened inside this window cannot reach the +80%
 	// target before the monitor force-closes it near expiry, so it is a losing
 	// trade by construction rather than by outcome. Paper still takes the signal.
@@ -482,17 +672,18 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 	optType, side := resolveLiveOptionSide(sig.OptionType, b.buyingMode, b.nativeBuy)
 
 	trade := LiveTrade{
-		ID:           id,
-		PaperTradeID: sig.PaperTradeID,
-		StrategyID:   sig.StrategyID,
-		StrategyName: sig.StrategyName,
-		OptionType:   optType,
-		Strike:       sig.Strike,
-		ExpiryTime:   sig.ExpiryTime,
-		Side:         side,
-		PremiumUSD:   sig.PremiumUSD,
-		Status:       "OPEN",
-		OpenedAt:     time.Now().UTC(),
+		ID:            id,
+		PaperTradeID:  sig.PaperTradeID,
+		StrategyID:    sig.StrategyID,
+		StrategyName:  sig.StrategyName,
+		OptionType:    optType,
+		Strike:        sig.Strike,
+		ExpiryTime:    sig.ExpiryTime,
+		Side:          side,
+		PremiumUSD:    sig.PremiumUSD,
+		EntryBTCPrice: sig.BTCPrice,
+		Status:        "OPEN",
+		OpenedAt:      time.Now().UTC(),
 	}
 
 	go func() {
@@ -838,7 +1029,13 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 					// Value the expiry from the last mark we saw rather than
 					// leaving it 0, which reported every expiry as flat P&L.
 					t.CloseFillPrice = t.LastMarkPrice
-					t.RealizedPnl = (t.LastMarkPrice - t.FillPrice) * float64(t.Contracts) * OptionContractSizeBTC
+					t.GrossPnl = (t.LastMarkPrice - t.FillPrice) * float64(t.Contracts) * OptionContractSizeBTC
+					// An expiry has no closing trade, so there is no exit fee — but
+					// the entry fee was still paid. That is why a worthless expiry
+					// loses MORE than the premium: -100% of premium, minus the fee
+					// that bought it.
+					t.ExitFeeUSD = 0
+					t.RealizedPnl = t.GrossPnl - t.EntryFeeUSD
 					t.ExitReason = "expired"
 					t.FailureReason = "expired"
 				})
@@ -849,20 +1046,28 @@ func (b *Bridge) monitorPositions(ctx context.Context) {
 		if trade.FillPrice <= 0 {
 			continue
 		}
-		// Remember the latest mark so an expiry close can be valued honestly.
-		b.updateTrade(trade.ID, func(t *LiveTrade) { t.LastMarkPrice = pos.MarkPrice })
+		// Remember the latest mark so an expiry close can be valued honestly, and
+		// track the running peak the trailing exit measures against.
+		peak := trade.PeakMarkPrice
+		if pos.MarkPrice > peak {
+			peak = pos.MarkPrice
+		}
+		peakCopy := peak
+		b.updateTrade(trade.ID, func(t *LiveTrade) {
+			t.LastMarkPrice = pos.MarkPrice
+			t.PeakMarkPrice = peakCopy
+		})
 
-		pnlPct := (pos.MarkPrice - trade.FillPrice) / trade.FillPrice
+		ex := EvaluateExit(trade.FillPrice, pos.MarkPrice, peak)
 
 		reason := ""
 		switch {
-		case pnlPct >= LiveTakeProfitPct:
-			reason = "take_profit_80pct"
-		case pnlPct <= -LiveStopLossPct:
-			reason = "stop_loss_50pct"
+		case ex.Reason != "":
+			reason = ex.Reason
 		case !trade.ExpiryTime.IsZero() && now.After(trade.ExpiryTime.Add(-30*time.Minute)):
 			reason = "near_expiry_30min"
 		}
+		pnlPct := ex.GainPct
 
 		if reason != "" {
 			log.Printf("[DELTA BRIDGE] 🔔 Auto-close %s | %s | PnL: %.1f%%", trade.ID, reason, pnlPct*100)

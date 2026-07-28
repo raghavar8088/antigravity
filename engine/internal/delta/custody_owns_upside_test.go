@@ -73,27 +73,47 @@ func TestOnClose_StopStillClosesLivePosition(t *testing.T) {
 	}
 }
 
+// pricedSignal builds an OpenSignal whose fee economics pass, so tests of other
+// entry gates are not silently blocked by the entry-economics guard. The premium
+// is rich enough that Delta's 10%-of-premium cap does not bind.
+func pricedSignal(paperID, strategy string, strategyID int, expiry time.Time) OpenSignal {
+	return OpenSignal{
+		PaperTradeID:  paperID,
+		StrategyID:    strategyID,
+		StrategyName:  strategy,
+		ExpiryTime:    expiry,
+		PremiumPerBTC: testRichQuote,
+		BTCPrice:      testSpot,
+	}
+}
+
 // Entries inside the expiry floor lose by construction: they cannot reach +80%
 // before near_expiry_30min force-closes them. Live went 0-for-3 on these.
 func TestOnOpen_RejectsEntryTooCloseToExpiry(t *testing.T) {
 	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
 
-	b.OnOpen(OpenSignal{
-		PaperTradeID: "paper-late",
-		StrategyName: "any",
-		ExpiryTime:   time.Now().Add(45 * time.Minute),
-	})
+	b.OnOpen(pricedSignal("paper-late", "any", 0, time.Now().Add(45*time.Minute)))
 	if len(b.trades) != 0 {
 		t.Fatalf("entry 45m from expiry must be declined, got %d live trade(s)", len(b.trades))
 	}
 
-	b.OnOpen(OpenSignal{
-		PaperTradeID: "paper-ok",
-		StrategyName: "any",
-		ExpiryTime:   time.Now().Add(6 * time.Hour),
-	})
+	b.OnOpen(pricedSignal("paper-ok", "any", 0, time.Now().Add(6*time.Hour)))
 	if len(b.trades) != 1 {
 		t.Fatalf("entry 6h from expiry must be accepted, got %d live trade(s)", len(b.trades))
+	}
+}
+
+// The entry-economics guard is an independent reason to decline: an option too
+// cheap to round-trip profitably is refused even when every other gate passes.
+func TestOnOpen_RejectsFeeToxicPremium(t *testing.T) {
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+
+	sig := pricedSignal("paper-cheap", "any", 0, time.Now().Add(6*time.Hour))
+	sig.PremiumPerBTC = testCheapQuote // what the desk was actually buying
+	b.OnOpen(sig)
+
+	if len(b.trades) != 0 {
+		t.Fatalf("a 28%%-round-trip-fee option must be declined, got %d live trade(s)", len(b.trades))
 	}
 }
 
@@ -104,20 +124,20 @@ func TestOnOpen_OneLivePositionPerStrategy(t *testing.T) {
 	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
 	expiry := time.Now().Add(8 * time.Hour)
 
-	b.OnOpen(OpenSignal{PaperTradeID: "paper-1", StrategyID: 7, StrategyName: "s7", ExpiryTime: expiry})
-	b.OnOpen(OpenSignal{PaperTradeID: "paper-2", StrategyID: 7, StrategyName: "s7", ExpiryTime: expiry})
+	b.OnOpen(pricedSignal("paper-1", "s7", 7, expiry))
+	b.OnOpen(pricedSignal("paper-2", "s7", 7, expiry))
 
 	if len(b.trades) != 1 {
 		t.Fatalf("strategy 7 must hold at most one live position, got %d", len(b.trades))
 	}
 	// A different strategy is unaffected.
-	b.OnOpen(OpenSignal{PaperTradeID: "paper-3", StrategyID: 8, StrategyName: "s8", ExpiryTime: expiry})
+	b.OnOpen(pricedSignal("paper-3", "s8", 8, expiry))
 	if len(b.trades) != 2 {
 		t.Fatalf("a second strategy must still be able to open, got %d", len(b.trades))
 	}
 	// Once the live leg closes, the strategy may open again.
 	b.trades[0].Status = "CLOSED"
-	b.OnOpen(OpenSignal{PaperTradeID: "paper-4", StrategyID: 8, StrategyName: "s8", ExpiryTime: expiry})
+	b.OnOpen(pricedSignal("paper-4", "s8", 8, expiry))
 	if len(b.trades) != 3 {
 		t.Fatalf("strategy 8 must reopen after its live leg closed, got %d", len(b.trades))
 	}

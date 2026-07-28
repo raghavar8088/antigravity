@@ -72,7 +72,7 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
-	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration // trading loop interval; BTC paper uses a short interval
 }
@@ -126,7 +126,7 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 
 // SetOnOpenHook registers a callback fired every time a live long position is opened.
 // Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD, btcSpot.
-func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)) {
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onOpenHook = fn
@@ -742,7 +742,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		strike := pos.Strike
 		expiry := pos.ExpiryTime
 		premium := pos.CostBasis
-		go hook(posID, stratID, stratName, optType, strike, expiry, premium, e.lastPrice)
+		// The quoted premium (USD per BTC) travels alongside the cash cost basis.
+		// Fees are charged against underlying notional, so only the quote — read
+		// against spot — reveals whether Delta's 10%-of-premium cap is binding.
+		premiumPerBTC := pos.EntryPremium
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium, premiumPerBTC, e.lastPrice)
 	}
 }
 

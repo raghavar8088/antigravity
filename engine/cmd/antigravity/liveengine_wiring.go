@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,22 @@ var defaultLiveStrategyNames = []string{
 	"Swing_PutBuy_OverextensionFadeUp_600m",
 	"Intraday_PutBuy_SharpReversalDown_150m",
 	"Intraday_CallBuy_CapitulationRecovery_180m",
+}
+
+// parseEnvBoolDefault reads a boolean env var, falling back to def when unset or
+// unparseable. Used for switches whose safe state is the default, so a typo can
+// never silently enable a stricter or looser live-trading policy.
+func parseEnvBoolDefault(key string, def bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		log.Printf("[LIVE ENGINE] %s=%q is not a boolean — using default %v", key, raw, def)
+		return def
+	}
+	return v
 }
 
 func defaultLiveStrategies() []string {
@@ -59,6 +76,35 @@ func wireLiveEngine(
 	bridge.SetBuyingMode(true)
 	bridge.SetNativeBuyMode(true)
 	bridge.SetLiveAllowList(defaultLiveStrategies())
+
+	// Connect the go-live gate to the order path. The allow-list says a strategy
+	// is PERMITTED; this says it has EARNED it. Both must hold once enforcement is
+	// on. Enforcement defaults off because no strategy has a qualifying real-fill
+	// record yet — turning it on now would stop the desk rather than improve it —
+	// and flips via LIVE_ENGINE_ENFORCE_GATE once the record exists.
+	bridge.SetLiveEligibility(func(name string) (bool, string) {
+		rec := bridge.LiveStrategyRecord(name)
+		var optionType string
+		if buyEngine != nil {
+			for _, s := range buyEngine.StrategyStatuses() {
+				if s.Name == name {
+					optionType = string(s.OptionType)
+					break
+				}
+			}
+		}
+		v := liveengine.EvaluateEligibility(liveengine.StrategyInput{
+			Strategy:       name,
+			OptionType:     optionType,
+			RealFills:      rec.Fills,
+			RealDays:       rec.Days,
+			RealExpectancy: rec.Expectancy,
+			RealPF:         rec.ProfitFactor,
+			RealFeePct:     rec.FeePctOfPremium,
+		})
+		return v.Live, v.Reason
+	})
+	bridge.SetGateEnforcement(parseEnvBoolDefault("LIVE_ENGINE_ENFORCE_GATE", false))
 
 	ctrl := liveengine.New(liveengine.Hooks{
 		SetEffectorEnabled: func(enabled bool) { bridge.SetEnabled(enabled) },
@@ -299,6 +345,51 @@ func liveEngineOrdersProvider(bridge *delta.Bridge) func(context.Context) ([]map
 	}
 }
 
+// tradeResult restates one closed live trade honestly: gross P&L, the two fee
+// legs, and the net the account actually kept.
+//
+// Fees are BACKFILLED when the stored trade predates the fee model, so the
+// existing order history is restated rather than left flattering. Before this,
+// both the closed-positions and daily-P&L views recomputed P&L as
+// (exit-entry)×size and reported it as "realised" — a gross number the account
+// never received, on a venue charging up to 28% of premium per round trip.
+type tradeResult struct {
+	Gross    float64
+	EntryFee float64
+	ExitFee  float64
+	Net      float64
+}
+
+func resultOf(t delta.LiveTrade) tradeResult {
+	contracts := t.Contracts
+	if contracts < 0 {
+		contracts = -contracts
+	}
+
+	r := tradeResult{Gross: t.GrossPnl, EntryFee: t.EntryFeeUSD, ExitFee: t.ExitFeeUSD}
+
+	// Recompute gross from entry/exit rather than trusting the stored value:
+	// trades closed before the contract-size fix persisted a 1000x-overstated
+	// number, and a stale field would keep displaying it.
+	if t.FillPrice > 0 && t.CloseFillPrice > 0 && contracts != 0 {
+		r.Gross = (t.CloseFillPrice - t.FillPrice) * float64(contracts) * delta.OptionContractSizeBTC
+	} else if r.Gross == 0 {
+		r.Gross = t.RealizedPnl
+	}
+
+	// Backfill either leg that was never recorded. An expiry has no closing
+	// trade, so a zero exit fee there is correct, not missing.
+	if r.EntryFee == 0 && t.FillPrice > 0 {
+		r.EntryFee = delta.OptionFeeUSD(t.FillPrice, t.EntryBTCPrice, contracts)
+	}
+	if r.ExitFee == 0 && t.CloseFillPrice > 0 {
+		r.ExitFee = delta.OptionFeeUSD(t.CloseFillPrice, t.EntryBTCPrice, contracts)
+	}
+
+	r.Net = r.Gross - r.EntryFee - r.ExitFee
+	return r
+}
+
 // liveEngineClosedProvider lists positions the engine opened and has since
 // closed (SL/TP/expiry), newest first, with the realised outcome.
 func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map[string]any, error) {
@@ -308,22 +399,21 @@ func liveEngineClosedProvider(bridge *delta.Bridge) func(context.Context) ([]map
 			if t.Status != "CLOSED" {
 				continue
 			}
-			// Recompute realised PnL from entry/exit rather than trusting the
-			// stored value: trades closed before the contract-size fix persisted a
-			// 1000x-overstated number, and a stale field would keep displaying it.
-			realized := t.RealizedPnl
-			if t.FillPrice > 0 && t.CloseFillPrice > 0 && t.Contracts != 0 {
-				realized = (t.CloseFillPrice - t.FillPrice) * float64(t.Contracts) * delta.OptionContractSizeBTC
-			}
+			res := resultOf(t)
 			row := map[string]any{
-				"id":          t.ID,
-				"strategy":    t.StrategyName,
-				"optionType":  t.OptionType,
-				"symbol":      t.DeltaSymbol,
-				"contracts":   t.Contracts,
-				"entryPrice":  t.FillPrice,
-				"exitPrice":   t.CloseFillPrice,
-				"realizedPnl": realized,
+				"id":         t.ID,
+				"strategy":   t.StrategyName,
+				"optionType": t.OptionType,
+				"symbol":     t.DeltaSymbol,
+				"contracts":  t.Contracts,
+				"entryPrice": t.FillPrice,
+				"exitPrice":  t.CloseFillPrice,
+				// realizedPnl is NET of both fee legs — what the account kept.
+				// grossPnl and feesUsd are shown alongside so the cost of trading
+				// is visible rather than inferred.
+				"realizedPnl": res.Net,
+				"grossPnl":    res.Gross,
+				"feesUsd":     res.EntryFee + res.ExitFee,
 				"openedAt":    t.OpenedAt,
 				// Why it closed: take-profit, stop-loss, near-expiry or expiry.
 				"exitReason": firstNonEmpty(t.ExitReason, t.FailureReason),
@@ -348,6 +438,8 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 		type agg struct {
 			capital float64
 			pnl     float64
+			gross   float64
+			fees    float64
 			trades  int
 			wins    int
 		}
@@ -368,15 +460,14 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 			}
 			// Capital deployed = premium actually paid to open.
 			a.capital += t.FillPrice * float64(contracts) * delta.OptionContractSizeBTC
-			// Recompute realised PnL (see closed provider: stored values from
-			// before the contract-size fix are 1000x off).
-			pnl := t.RealizedPnl
-			if t.FillPrice > 0 && t.CloseFillPrice > 0 && contracts != 0 {
-				pnl = (t.CloseFillPrice - t.FillPrice) * float64(contracts) * delta.OptionContractSizeBTC
-			}
-			a.pnl += pnl
+			res := resultOf(t)
+			a.pnl += res.Net
+			a.gross += res.Gross
+			a.fees += res.EntryFee + res.ExitFee
 			a.trades++
-			if pnl > 0 {
+			// A "win" is a trade that made money after costs. Counting gross wins
+			// is how a book can report a respectable win rate while shrinking.
+			if res.Net > 0 {
 				a.wins++
 			}
 		}
@@ -398,10 +489,19 @@ func liveEngineDailyPnlProvider(bridge *delta.Bridge) func(context.Context) ([]m
 			if a.trades > 0 {
 				winPct = 100 * float64(a.wins) / float64(a.trades)
 			}
+			feeDrag := 0.0
+			if a.capital > 0 {
+				feeDrag = 100 * a.fees / a.capital
+			}
 			out = append(out, map[string]any{
-				"date":       d,
-				"capitalUsd": a.capital,
-				"pnlUsd":     a.pnl,
+				"date":        d,
+				"capitalUsd":  a.capital,
+				"pnlUsd":      a.pnl, // net
+				"grossPnlUsd": a.gross,
+				"feesUsd":     a.fees,
+				// What fees cost as a share of the premium deployed that day —
+				// the single number that shows whether the instrument is viable.
+				"feeDragPct": feeDrag,
 				"roiPct":     roi,
 				"trades":     a.trades,
 				"wins":       a.wins,
@@ -423,16 +523,21 @@ func liveEngineRosterProvider(buyEngine *options.Engine, bridge *delta.Bridge) f
 			allowed[n] = true
 		}
 		for _, s := range buyEngine.StrategyStatuses() {
-			// Real-fill counts are zero until the desk trades live capital; the
-			// synthetic Black-Scholes record does not qualify for real money, so
-			// every strategy is correctly not-live with an inspectable reason.
+			// The real-fill record comes from closed LIVE trades, net of fees.
+			// These were hardcoded to zero, which made every verdict "not live"
+			// for a reason that could never change — so the gate was decorative
+			// and the allow-list alone decided what traded with real money.
+			rec := bridge.LiveStrategyRecord(s.Name)
 			e := liveengine.EvaluateEligibility(liveengine.StrategyInput{
 				Strategy:        s.Name,
 				OptionType:      string(s.OptionType),
 				SyntheticTrades: s.TotalTrades,
 				SyntheticPnL:    s.TotalPnL,
-				RealFills:       0,
-				RealDays:        0,
+				RealFills:       rec.Fills,
+				RealDays:        rec.Days,
+				RealExpectancy:  rec.Expectancy,
+				RealPF:          rec.ProfitFactor,
+				RealFeePct:      rec.FeePctOfPremium,
 			})
 			e.Allowed = allowed[s.Name]
 			out = append(out, e)
