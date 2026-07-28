@@ -3,6 +3,7 @@ package options
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -51,7 +52,6 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-
 // Engine is the BTC long-options (buy) paper desk: pays premium, profits when
 // mark-to-market premium rises. Optimized for small-book risk (tight daily stop,
 // limited concurrency, conservatively scaled tickets).
@@ -61,9 +61,9 @@ type Engine struct {
 	trades           []OptionTrade
 	marketProfile    MarketProfile
 	balance          float64
-	peakBalance      float64   // highest balance ever reached — used for drawdown calc
-	dayStartBalance  float64   // balance at the beginning of the current UTC day
-	dayStartDate     int       // UTC day number (unix-day) when dayStartBalance was set
+	peakBalance      float64 // highest balance ever reached — used for drawdown calc
+	dayStartBalance  float64 // balance at the beginning of the current UTC day
+	dayStartDate     int     // UTC day number (unix-day) when dayStartBalance was set
 	lastPrice        float64
 	priceHist        []float64 // raw tick prices (for current price + IV)
 	minuteBars       []float64 // 1-minute sampled prices (for indicators)
@@ -304,13 +304,24 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
-// ResetAccount wipes the options account in memory and returns the new snapshot.
+// ResetAccount wipes the options account in memory and returns the new snapshot,
+// restoring the environment-configured starting balance.
 func (e *Engine) ResetAccount() PersistedState {
+	return e.ResetAccountWith(0)
+}
+
+// ResetAccountWith wipes the account and restarts it on a caller-chosen starting
+// balance, so the desk can be re-based without a redeploy. A non-positive value
+// falls back to the environment default, which keeps ResetAccount's old
+// behaviour exactly.
+func (e *Engine) ResetAccountWith(startingBalance float64) PersistedState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	now := time.Now().UTC()
-	startingBalance := getInitialOptionsBalanceUSD()
+	if startingBalance <= 0 {
+		startingBalance = getInitialOptionsBalanceUSD()
+	}
 	e.trades = nil
 	e.balance = startingBalance
 	e.peakBalance = startingBalance
@@ -588,7 +599,6 @@ func (e *Engine) tick() {
 		e.manageStrategyRuntimeWithHalt(s, ctx, regime, iv, nowUTC, &openCount, dailyHalt)
 	}
 }
-
 
 func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int, dailyHalt bool) {
 	// Always manage open positions (mark-to-market + close on TP/SL/expiry).
@@ -1191,9 +1201,34 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	e.ResetAccount()
-	log.Printf("[OPTIONS] Options account reset to $%.2f", getInitialOptionsBalanceUSD())
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	// Optional body: {"initialCapital": 5000}. Absent, malformed or non-positive
+	// falls back to the environment default, so an empty POST behaves as before.
+	capital := parseRequestedCapital(r)
+	snap := e.ResetAccountWith(capital)
+	log.Printf("[OPTIONS] Options account reset to $%.2f", snap.Balance)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "reset",
+		"balance": snap.Balance,
+	})
+}
+
+// parseRequestedCapital reads an optional starting balance from the request body.
+// It never fails the request: a bad body means "use the default", because a reset
+// that errors out is worse than a reset that uses the configured balance.
+func parseRequestedCapital(r *http.Request) float64 {
+	if r.Body == nil {
+		return 0
+	}
+	var body struct {
+		InitialCapital float64 `json:"initialCapital"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+		return 0
+	}
+	if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+		return 0
+	}
+	return body.InitialCapital
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {

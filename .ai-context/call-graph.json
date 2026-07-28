@@ -1,1 +1,1 @@
-{}
+{"engine/internal/options/reset_capital_test.go::TestResetAccountWith_NonPositiveFallsBackToDefault()":["engine/internal/options/engine.go::getInitialOptionsBalanceUSD()"],"engine/internal/options_selling/reset_capital_test.go::TestResetAccountWith_NonPositiveFallsBackToDefault()":["engine/internal/options_selling/engine.go::initialSellingBalanceUSD()"]}

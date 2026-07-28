@@ -3,6 +3,7 @@ package options_selling
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -318,12 +319,24 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
+// ResetAccount wipes the selling account and restores the environment-configured
+// starting balance.
 func (e *Engine) ResetAccount() PersistedState {
+	return e.ResetAccountWith(0)
+}
+
+// ResetAccountWith wipes the account and restarts it on a caller-chosen starting
+// balance, so the desk can be re-based without a redeploy. A non-positive value
+// falls back to the environment default, preserving ResetAccount's behaviour.
+func (e *Engine) ResetAccountWith(startingBalance float64) PersistedState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if startingBalance <= 0 {
+		startingBalance = initialSellingBalanceUSD()
+	}
 	e.trades = nil
-	e.balance = initialSellingBalanceUSD()
+	e.balance = startingBalance
 	e.lastPrice = 0
 	e.priceHist = nil
 	e.minuteBars = nil
@@ -1124,8 +1137,33 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	e.ResetAccount()
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	// Optional body: {"initialCapital": 5000}. Absent, malformed or non-positive
+	// falls back to the environment default, so an empty POST behaves as before.
+	snap := e.ResetAccountWith(parseRequestedCapital(r))
+	log.Printf("[OPTIONS-SELL] account reset to $%.2f", snap.Balance)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "reset",
+		"balance": snap.Balance,
+	})
+}
+
+// parseRequestedCapital reads an optional starting balance from the request body.
+// It never fails the request: a bad body means "use the default", because a reset
+// that errors out is worse than a reset that uses the configured balance.
+func parseRequestedCapital(r *http.Request) float64 {
+	if r.Body == nil {
+		return 0
+	}
+	var body struct {
+		InitialCapital float64 `json:"initialCapital"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+		return 0
+	}
+	if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+		return 0
+	}
+	return body.InitialCapital
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {

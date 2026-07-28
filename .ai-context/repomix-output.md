@@ -214,6 +214,7 @@ The content is organized as follows:
   components/DashboardHeader.tsx
   components/DeltaLiveScalper.tsx
   components/DeltaSpotBuy.tsx
+  components/desk/DeskAdminControls.tsx
   components/desk/DeskHeroStrip.tsx
   components/desk/DeskModuleChrome.tsx
   components/desk/DeskThemeToggle.tsx
@@ -1071,6 +1072,7 @@ The content is organized as follows:
   options_selling/engine.go
   options_selling/market_profile.go
   options_selling/pricer.go
+  options_selling/reset_capital_test.go
   options_selling/roster.go
   options_selling/signals.go
   options_selling/strategies.go
@@ -1082,6 +1084,7 @@ The content is organized as follows:
   options/engine.go
   options/market_profile.go
   options/pricer.go
+  options/reset_capital_test.go
   options/roster.go
   options/signals.go
   options/strategies_test.go

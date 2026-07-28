@@ -27,6 +27,7 @@ import {
   type DeskColumn,
   type DeskEngineStatus,
 } from "@/components/desk/ui";
+import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
 
 type Stats = {
   trades: number;
@@ -414,6 +415,14 @@ export default function ScalpDeskPage() {
             empty={<DeskEmptyState title="No closed trades" subtitle="No closed trades yet — the desk trades 24/7; check back soon." />}
           />
         </DeskCard>
+
+        <DeskAdminControls
+          resetPath="/api/scalp/scalp/reset"
+          clearPath="/api/scalp/scalp/clear-trades"
+          capitalLabel="Notional per trade (USD)"
+          capitalPlaceholder="100"
+          onDone={() => void refresh()}
+        />
 
         <p className="desk-label-md" style={{ textAlign: "center", fontWeight: 400, paddingBottom: 8 }}>
           Paper trading only · $100 notional per trade · maker post-only fill model with missed fills counted · state

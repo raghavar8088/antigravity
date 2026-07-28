@@ -17,8 +17,10 @@
 // PRE-REGISTERED PROMOTION GATE (set before the first live trade; the only
 // route out of paper): a strategy×symbol stream qualifies for a go-live
 // DISCUSSION only when its LIVE record shows
-//     trades >= 200  AND  PF >= 1.2  AND  maxDD <= 25%
-//     AND net > 0 in BOTH calendar halves of its live window.
+//
+//	trades >= 200  AND  PF >= 1.2  AND  maxDD <= 25%
+//	AND net > 0 in BOTH calendar halves of its live window.
+//
 // Rationale: all 100 strategies failed offline qualification on all 8
 // symbols (0/400). Under the null hypothesis (no edge), with 800 streams a
 // few days of trading is EXPECTED to produce dozens of profitable-looking
@@ -49,10 +51,10 @@ import (
 // ── execution profiles (EXACT copies of the S1 harness numbers) ──────────────
 
 type profileCfg struct {
-	SLATR, TPATR           float64
-	SLMin, SLMax           float64
-	TPMin, TPMax           float64
-	TTLBars                int
+	SLATR, TPATR float64
+	SLMin, SLMax float64
+	TPMin, TPMax float64
+	TTLBars      int
 }
 
 var profiles = map[string]profileCfg{
@@ -67,8 +69,12 @@ const (
 	stopSlip     = 0.0002
 	fillWindow   = 3
 	cooldownBars = 5
-	notionalUSD  = 100.0
 )
+
+// defaultNotionalUSD is the per-trade notional the desk starts on. It moved from
+// a const to a desk field so the desk can be re-based via /scalp/reset without a
+// redeploy — every read and write happens under d.mu.
+const defaultNotionalUSD = 100.0
 
 // ── state ────────────────────────────────────────────────────────────────────
 
@@ -92,11 +98,11 @@ type pending struct {
 }
 
 type comboState struct {
-	N      int `json:"-"`
-	Wins   int `json:"-"`
-	Missed int `json:"-"`
-	GrossW, GrossL float64 `json:"-"`
-	NetSum         float64 `json:"net_sum"`
+	N               int                `json:"-"`
+	Wins            int                `json:"-"`
+	Missed          int                `json:"-"`
+	GrossW, GrossL  float64            `json:"-"`
+	NetSum          float64            `json:"net_sum"`
 	Eq, Peak, MaxDD float64            `json:"-"`
 	DayNet          map[string]float64 `json:"day_net"`
 	Pos             *position          `json:"pos,omitempty"`
@@ -143,6 +149,9 @@ type desk struct {
 	stateDir string
 	started  time.Time
 	barsSeen int64
+	// notionalUSD is the per-trade notional. Guarded by mu; re-basable via
+	// /scalp/reset so the desk can be restarted on a different size.
+	notionalUSD float64
 }
 
 func comboKey(strategy, symbol string) string { return strategy + "|" + symbol }
@@ -272,7 +281,7 @@ func (d *desk) closeTrade(cs *comboState, strategy, symbol string, pos *position
 	ct := closedTrade{
 		Time: bar.OpenTime.Add(time.Minute), Symbol: symbol, Strategy: strategy,
 		Dir: pos.Dir, Entry: pos.Entry, Exit: exitPx, Reason: reason,
-		RetNet: net, PnlUSD: notionalUSD * net, Profile: pos.Profile,
+		RetNet: net, PnlUSD: d.notionalUSD * net, Profile: pos.Profile,
 		HoldMin: barIdx - pos.EntryBar,
 	}
 	d.recent = append(d.recent, ct)
@@ -557,9 +566,9 @@ func (d *desk) serve(port int) {
 		writeJSON(w, map[string]interface{}{
 			"trades": n, "wins": wins, "missed_fills": missed,
 			"open_positions": open, "pending_orders": pend,
-			"net_pnl_usd_at_100_notional": math.Round(net*notionalUSD*100) / 100,
-			"trades_per_symbol": perSym,
-			"gate": gateDesc,
+			"net_pnl_usd_at_100_notional": math.Round(net*d.notionalUSD*100) / 100,
+			"trades_per_symbol":           perSym,
+			"gate":                        gateDesc,
 		})
 	}))
 	http.HandleFunc("/scalp/leaderboard", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -591,8 +600,8 @@ func (d *desk) serve(port int) {
 			rows = append(rows, lbRow{
 				Strategy: parts[0], Symbol: parts[1], N: cs.N,
 				WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
-				PF:      pf, NetUSD: math.Round(cs.NetSum*notionalUSD*100) / 100,
-				MaxDD:   math.Round(cs.MaxDD * 10000) / 100, Missed: cs.Missed,
+				PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
+				MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
 				GatePass: d.gatePass(cs),
 			})
 		}
@@ -614,7 +623,118 @@ func (d *desk) serve(port int) {
 		}
 		writeJSON(w, d.recent[start:])
 	}))
-	log.Printf("scalp_prelive HTTP on :%d (/scalp/health /scalp/stats /scalp/leaderboard /scalp/trades)", port)
+	// ── mutations ────────────────────────────────────────────────────────────
+	// Both are token-gated like every other non-health endpoint, and POST-only so
+	// a stray GET (a crawler, a prefetch, a mistyped URL) can never wipe the desk.
+	// This binary is paper-only — it holds no keys and has no order routing — so
+	// these reset paper statistics and nothing else.
+
+	// requestedCapital reads an optional {"initialCapital": N} body. A bad or
+	// absent body means "keep the current notional" rather than failing the reset.
+	requestedCapital := func(r *http.Request) float64 {
+		if r.Body == nil {
+			return 0
+		}
+		var body struct {
+			InitialCapital float64 `json:"initialCapital"`
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body) != nil {
+			return 0
+		}
+		if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+			return 0
+		}
+		return body.InitialCapital
+	}
+
+	// truncateTradesLocked empties trades.jsonl. Caller holds d.mu.
+	truncateTradesLocked := func() error {
+		if d.tradesF == nil {
+			return nil
+		}
+		if err := d.tradesF.Truncate(0); err != nil {
+			return err
+		}
+		_, err := d.tradesF.Seek(0, 0)
+		return err
+	}
+
+	postOnly := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, `{"error":"POST only"}`, http.StatusMethodNotAllowed)
+				return
+			}
+			h(w, r)
+		}
+	}
+
+	// /scalp/reset — full re-base: every stream back to zero, optionally on a new
+	// per-trade notional. Open positions and pending orders are dropped too,
+	// because keeping them would carry P&L priced at the OLD notional into the
+	// new account and quietly corrupt the very numbers the reset exists to clear.
+	http.HandleFunc("/scalp/reset", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		capital := requestedCapital(r)
+
+		d.mu.Lock()
+		if capital > 0 {
+			d.notionalUSD = capital
+		}
+		cleared := len(d.combos)
+		d.combos = map[string]*comboState{}
+		d.recent = nil
+		d.barsSeen = 0
+		d.started = time.Now().UTC()
+		truncErr := truncateTradesLocked()
+		notional := d.notionalUSD
+		d.mu.Unlock()
+
+		// Persist the cleared state so a restart cannot restore the old snapshot.
+		d.save()
+
+		if truncErr != nil {
+			log.Printf("[SCALP] reset: trades.jsonl truncate failed: %v", truncErr)
+		}
+		log.Printf("[SCALP] desk reset — %d combo states cleared, notional now $%.2f", cleared, notional)
+		writeJSON(w, map[string]interface{}{
+			"status":         "reset",
+			"streams_reset":  cleared,
+			"notional_usd":   notional,
+			"trades_cleared": truncErr == nil,
+		})
+	})))
+
+	// /scalp/clear-trades — wipe the trade record and the statistics derived from
+	// it, but leave open positions and pendings running. Same split the options
+	// desks already use: clear-history forgets the past, reset restarts the account.
+	http.HandleFunc("/scalp/clear-trades", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		d.mu.Lock()
+		n := len(d.recent)
+		d.recent = nil
+		for _, cs := range d.combos {
+			cs.N, cs.Wins, cs.Missed = 0, 0, 0
+			cs.GrossW, cs.GrossL, cs.NetSum = 0, 0, 0
+			cs.Eq, cs.Peak, cs.MaxDD = 1, 1, 0
+			cs.DayNet = map[string]float64{}
+			// Pos / Pend deliberately preserved — this clears history, not state.
+		}
+		truncErr := truncateTradesLocked()
+		d.mu.Unlock()
+
+		d.save()
+
+		if truncErr != nil {
+			log.Printf("[SCALP] clear-trades: trades.jsonl truncate failed: %v", truncErr)
+		}
+		log.Printf("[SCALP] trade history cleared (%d recent records); open positions kept", n)
+		writeJSON(w, map[string]interface{}{
+			"status":         "cleared",
+			"recent_cleared": n,
+			"trades_cleared": truncErr == nil,
+		})
+	})))
+
+	log.Printf("scalp_prelive HTTP on :%d (/scalp/health /scalp/stats /scalp/leaderboard /scalp/trades /scalp/reset /scalp/clear-trades)", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 
@@ -635,11 +755,12 @@ func main() {
 	}
 
 	d := &desk{
-		entries:  scalers.BuildScalp100(),
-		combos:   map[string]*comboState{},
-		tradesF:  tradesF,
-		stateDir: *stateDir,
-		started:  time.Now().UTC(),
+		entries:     scalers.BuildScalp100(),
+		combos:      map[string]*comboState{},
+		tradesF:     tradesF,
+		stateDir:    *stateDir,
+		started:     time.Now().UTC(),
+		notionalUSD: defaultNotionalUSD,
 	}
 	log.Printf("Scalp100 pack: %d strategies", len(d.entries))
 	if len(d.entries) != 100 {

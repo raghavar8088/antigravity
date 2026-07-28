@@ -28,6 +28,7 @@ import {
   type DeskColumn,
   type DeskEngineStatus,
 } from "@/components/desk/ui";
+import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
 
 type StrategyStatus = {
   strategyId: number;
@@ -484,6 +485,13 @@ export default function OptionsSellingDeskPage() {
             empty={<DeskEmptyState title="No closed trades" subtitle="No closed trades yet — the desk trades 24/7; check back soon." />}
           />
         </DeskCard>
+
+        <DeskAdminControls
+          resetPath="/api/options-selling/reset"
+          clearPath="/api/options-selling/clear-history"
+          capitalLabel="Starting balance (USD)"
+          onDone={() => void refresh()}
+        />
 
         <p className="desk-label-md" style={{ textAlign: "center", fontWeight: 400, paddingBottom: 8 }}>
           Paper trading only · short premium against synthetic BTC option chain · 13 of 50 strategies rotated live at a

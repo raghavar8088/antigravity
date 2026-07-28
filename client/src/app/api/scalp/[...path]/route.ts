@@ -5,10 +5,12 @@
  * desk (100 x 1m scalp strategies x 8 symbols, live falsification lane) on
  * SCALP_ENGINE_URL (default: the Lightsail box, port 8094).
  *
- * The desk is paper-only and read-only over HTTP — this proxy exposes GET
- * endpoints only. Upstream endpoints (except /scalp/health) are gated by
- * SCALP_API_TOKEN on the engine side; the proxy injects the token
- * server-side so it never reaches the browser.
+ * The desk is paper-only: it holds no keys and has no order-routing path. This
+ * proxy exposes GET for reads, plus POST for the two desk-management mutations
+ * (/scalp/reset, /scalp/clear-trades) which reset paper statistics only.
+ * Upstream endpoints (except /scalp/health) are gated by SCALP_API_TOKEN on the
+ * engine side; the proxy injects the token server-side so it never reaches the
+ * browser.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -52,9 +54,21 @@ const ALLOWED_PATHS = [
   "/scalp/trades",
 ];
 
+/**
+ * Desk-management mutations reachable by POST. Exact-match, so a mutation can
+ * never be hit by a GET and a read path can never be POSTed to. Paper only —
+ * these clear simulated statistics; the upstream binary has no order routing.
+ */
+const MUTATION_PATHS = ["/scalp/reset", "/scalp/clear-trades"];
+
 function isAllowed(pathname: string): boolean {
   const clean = pathname.replace(/\/+$/, "").toLowerCase();
   return ALLOWED_PATHS.some((p) => clean === p || clean.startsWith(p + "/"));
+}
+
+function isMutation(pathname: string): boolean {
+  const clean = pathname.replace(/\/+$/, "").toLowerCase();
+  return MUTATION_PATHS.includes(clean);
 }
 
 function upstreamBase(): string {
@@ -93,6 +107,48 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
     const upstream = await fetch(target, {
       method: "GET",
       headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
+    const out = new Headers(upstream.headers);
+    out.delete("transfer-encoding");
+    return new NextResponse(upstream.body, { status: upstream.status, headers: out });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "proxy failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 502 });
+  }
+}
+
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
+  const { path } = await ctx.params;
+  const pathname = path?.length ? `/${path.join("/")}` : "/";
+
+  if (!isMutation(pathname)) {
+    return NextResponse.json(
+      { ok: false, error: `${pathname} is not a POST endpoint on the scalp proxy` },
+      { status: 403 },
+    );
+  }
+
+  const cookieStore = await cookies();
+  const session = cookieStore.get("raig_session")?.value ?? "";
+  if (!(await verifySessionToken(session))) {
+    return NextResponse.json({ ok: false, error: "Valid session required" }, { status: 401 });
+  }
+
+  const target = `${upstreamBase()}${pathname}`;
+  try {
+    const headers = new Headers();
+    const apiToken =
+      process.env.SCALP_API_TOKEN?.trim() ?? process.env.BTC_PRE_LIVE_API_TOKEN?.trim();
+    if (apiToken) headers.set("X-API-Token", apiToken);
+    headers.set("Content-Type", "application/json");
+
+    const body = await req.text();
+    const upstream = await fetch(target, {
+      method: "POST",
+      headers,
+      body: body || "{}",
       cache: "no-store",
       signal: AbortSignal.timeout(30_000),
     });
