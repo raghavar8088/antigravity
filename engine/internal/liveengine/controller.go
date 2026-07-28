@@ -74,6 +74,9 @@ const (
 	ActionKillSwitchOff AuditAction = "KILL_SWITCH_OFF"
 	// ActionArmRestored records a restart resuming a deliberate human ON state.
 	ActionArmRestored AuditAction = "ARM_RESTORED"
+	// ActionReconMismatch records an engine-vs-Delta divergence that was observed
+	// and surfaced but deliberately did NOT stop the engine.
+	ActionReconMismatch AuditAction = "RECON_MISMATCH"
 )
 
 // AuditEntry is one immutable record in the audit trail.
@@ -330,7 +333,27 @@ func (c *Controller) RecordFillOK() {
 	c.consecutiveRejects = 0
 }
 
+// NoteReconciliationMismatch records a divergence between engine state and Delta
+// truth WITHOUT stopping the engine.
+//
+// A count mismatch is usually transient rather than dangerous: the adoption
+// sweep pulls untracked positions into custody on the next tick, and an order
+// filling between the two API reads produces a false positive. Halting on it
+// stopped live trading repeatedly for benign reasons. The divergence is still
+// surfaced loudly — logged, audited, and shown in red on the module — so it can
+// never pass unnoticed; it simply no longer disarms by itself.
+//
+// The other safety stops are unchanged and still one-way: daily-loss breaker,
+// consecutive broker rejects, stale market data, price-feed loss, kill switch.
+func (c *Controller) NoteReconciliationMismatch(detail string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.appendAuditLocked("system", ActionReconMismatch, "reconciliation_mismatch", detail)
+}
+
 // OnReconciliationMismatch auto-disarms: engine state and Delta truth diverged.
+// Retained for callers that explicitly want a halt; the live monitor uses
+// NoteReconciliationMismatch instead.
 func (c *Controller) OnReconciliationMismatch(detail string) {
 	c.AutoDisarm("reconciliation_mismatch", detail)
 }

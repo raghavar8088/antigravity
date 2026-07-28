@@ -523,7 +523,13 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 				}
 			}
 			if engineOpen := len(bridge.OpenTrades()); engineOpen != deltaOpen {
-				ctrl.OnReconciliationMismatch("engine=" + itoa(engineOpen) + " delta=" + itoa(deltaOpen))
+				// Surface loudly but do NOT stop the engine: the adoption sweep
+				// above usually resolves this on the next tick, and a fill landing
+				// between the two reads is a false positive. Halting on it stopped
+				// live trading repeatedly for benign reasons.
+				detail := "engine=" + itoa(engineOpen) + " delta=" + itoa(deltaOpen)
+				log.Printf("[LIVE ENGINE] ⚠️  reconciliation mismatch (%s) — surfaced, NOT halting; adoption should reconcile it", detail)
+				ctrl.NoteReconciliationMismatch(detail)
 			}
 		}
 	}

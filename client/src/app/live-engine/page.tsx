@@ -540,7 +540,7 @@ export default function LiveEnginePage() {
             <span data-testid="recon-status">
               engine {recon?.enginePositions} open · Delta {recon?.deltaPositions} positions.
               {(recon?.mismatches ?? []).map((m) => ` ${m}.`)}
-              {recon?.error ? ` error: ${recon.error}` : ""} An armed engine auto-disarms on this.
+              {recon?.error ? ` error: ${recon.error}` : ""} Surfaced only — this does not stop the engine; the adoption sweep normally reconciles it.
             </span>
           </DeskBanner>
         ) : (
