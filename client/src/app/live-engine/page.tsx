@@ -83,7 +83,11 @@ type ClosedPosition = {
   contracts: number;
   entryPrice: number;
   exitPrice: number;
+  /** NET of both Delta fee legs — what the account actually kept. */
   realizedPnl: number;
+  /** Pre-fee result, shown alongside so the cost of trading is visible. */
+  grossPnl?: number;
+  feesUsd?: number;
   exitReason: string;
   openedAt: string;
   closedAt?: string;
@@ -92,7 +96,12 @@ type ClosedPosition = {
 type DailyPnl = {
   date: string;
   capitalUsd: number;
+  /** NET of fees. grossPnlUsd is the pre-fee figure this used to report. */
   pnlUsd: number;
+  grossPnlUsd?: number;
+  feesUsd?: number;
+  /** Fees as a share of the premium deployed that day. */
+  feeDragPct?: number;
   roiPct: number;
   trades: number;
   wins: number;
@@ -285,8 +294,36 @@ export default function LiveEnginePage() {
       },
       { id: "trades", align: "right", header: "Trades", cell: (d) => d.trades },
       {
-        id: "pnl", align: "right", header: "P&L",
-        cell: (d) => <span className={pnlTone(d.pnlUsd)} style={{ fontWeight: 600 }}>{fmtUSD(d.pnlUsd)}</span>,
+        id: "fees",
+        align: "right",
+        header: "Fees",
+        cell: (d) =>
+          d.feesUsd === undefined ? "—" : (
+            <span
+              title={
+                d.feeDragPct !== undefined
+                  ? `${d.feeDragPct.toFixed(1)}% of the premium deployed that day`
+                  : undefined
+              }
+            >
+              {fmtUSD(d.feesUsd)}
+              {d.feeDragPct !== undefined && (
+                <span style={{ opacity: 0.6 }}> ({d.feeDragPct.toFixed(0)}%)</span>
+              )}
+            </span>
+          ),
+      },
+      {
+        id: "pnl", align: "right", header: "P&L (net)",
+        cell: (d) => (
+          <span
+            className={pnlTone(d.pnlUsd)}
+            style={{ fontWeight: 600 }}
+            title={d.grossPnlUsd !== undefined ? `Gross ${fmtUSD(d.grossPnlUsd)} before fees` : undefined}
+          >
+            {fmtUSD(d.pnlUsd)}
+          </span>
+        ),
       },
       {
         id: "win", align: "right", header: "Win %",
@@ -326,8 +363,20 @@ export default function LiveEnginePage() {
       {
         id: "pnl",
         align: "right",
-        header: "Realized P&L",
-        cell: (c) => <span className={pnlTone(c.realizedPnl)} style={{ fontWeight: 600 }}>{fmtUSD(c.realizedPnl)}</span>,
+        header: "Realized P&L (net)",
+        cell: (c) => (
+          <span
+            className={pnlTone(c.realizedPnl)}
+            style={{ fontWeight: 600 }}
+            title={
+              c.grossPnl !== undefined && c.feesUsd !== undefined
+                ? `Gross ${fmtUSD(c.grossPnl)} − fees ${fmtUSD(c.feesUsd)}`
+                : undefined
+            }
+          >
+            {fmtUSD(c.realizedPnl)}
+          </span>
+        ),
       },
     ],
     [],
@@ -576,6 +625,18 @@ export default function LiveEnginePage() {
               closed.length
                 ? `${closed.length} closed · realized ${fmtUSD(closed.reduce((s, c) => s + (c.realizedPnl || 0), 0))}`
                 : "closed by take-profit, stop-loss or expiry"
+            }
+            actions={
+              closed.length > 100 ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                    {showAllClosed ? `all ${closed.length}` : `last 100 of ${closed.length}`}
+                  </span>
+                  <DeskButton variant="text" onClick={() => setShowAllClosed((v) => !v)}>
+                    {showAllClosed ? "Show less" : "View all"}
+                  </DeskButton>
+                </div>
+              ) : undefined
             }
           />
           <DeskDataTable
