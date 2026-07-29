@@ -955,6 +955,13 @@ The content is organized as follows:
   ha/recovery_engine.go
   ha/redis_failover.go
   ha/vault_recovery.go
+  hunt/account.go
+  hunt/desk_adapters.go
+  hunt/gate.go
+  hunt/http.go
+  hunt/hunt_test.go
+  hunt/promotion_test.go
+  hunt/promotion.go
   integration/e2e_test.go
   integration/mocks/mock_ai_client.go
   integration/mocks/mock_broker.go

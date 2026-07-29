@@ -36,6 +36,7 @@ import (
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/executiongateway"
 	"antigravity-engine/internal/gateway"
+	"antigravity-engine/internal/hunt"
 	killswitchpkg "antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/learning"
 	"antigravity-engine/internal/ledger"
@@ -45,6 +46,7 @@ import (
 	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/observability"
 	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
+	"antigravity-engine/internal/optionchain"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/orderbook"
@@ -1486,6 +1488,49 @@ func main() {
 	// Delta Exchange live bridge — mirrors BTC option signals to Delta when enabled.
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
+
+	// ── Strategy hunt: real Delta pricing for both option desks ───────────────
+	//
+	// Both desks priced against a synthetic Black-Scholes chain that could quote
+	// any strike at any expiry with no spread. Delta lists ~457 live BTC
+	// contracts and nothing else, and quotes a real bid/ask. Pricing against the
+	// venue is what makes a paper result transferable to the Live Engine, which
+	// executes on that same book.
+	//
+	// One cache serves BOTH desks (~100 strategies): two upstream requests per
+	// refresh regardless of strategy count. Enabled by default; set
+	// OPTIONS_REAL_CHAIN=false to fall back to the model for an A/B comparison.
+	if deltaBridge.Client() != nil && parseEnvBoolDefault("OPTIONS_REAL_CHAIN", true) {
+		chainCache := optionchain.New(deltaBridge.Client(), "BTC", time.Minute, 5*time.Minute)
+		chainCache.Start(ctx)
+		optionsEngine.SetChainPricer(optionchain.ForBuying(chainCache, optionchain.DefaultTolerance))
+		optionsSellingEngine.SetChainPricer(optionchain.ForSelling(chainCache, optionchain.DefaultTolerance))
+		log.Printf("[OPTIONS] real Delta chain pricing ENABLED for both desks (synthetic chain disabled)")
+
+		http.HandleFunc("/api/options/chain-health", func(w http.ResponseWriter, r *http.Request) {
+			contracts, quoted, takenAt, lastErr := chainCache.Stats()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"contracts": contracts, "quoted": quoted,
+				"takenAt": takenAt, "stale": chainCache.Stale(), "lastError": lastErr,
+				"buyingSkips":  optionsEngine.ChainSkips(),
+				"sellingSkips": optionsSellingEngine.ChainSkips(),
+			})
+		})
+	} else {
+		log.Printf("[OPTIONS] real chain pricing OFF — desks remain on the synthetic Black-Scholes chain")
+	}
+
+	// Strategy hunt leaderboard: every strategy on its own $1,000 account,
+	// ranked by growth, with the PRE-REGISTERED gate deciding eligibility.
+	// Read-only — nothing here moves capital.
+	huntSvc := hunt.NewService(hunt.DefaultGate,
+		hunt.BuyingDesk{Engine: optionsEngine, Capital: hunt.DefaultStartingCapital},
+		hunt.SellingDesk{Engine: optionsSellingEngine, Capital: hunt.DefaultStartingCapital},
+	)
+	http.Handle("/api/hunt/", huntSvc.Handler())
+	log.Printf("[HUNT] leaderboard wired — $%.0f per strategy, gate: >=%d trades, >=%.0fd, PF>=%.1f net",
+		hunt.DefaultStartingCapital, hunt.DefaultGate.MinTrades, hunt.DefaultGate.MinDays, hunt.DefaultGate.MinPF)
 	orchestrator.WireDeltaBridge(deltaBridge)
 	// Custody: reload positions this app opened before the restart, then adopt any
 	// untracked real option position on the exchange. A position the app opened
