@@ -2,8 +2,9 @@
 // It is used to mirror paper-traded BTC option SELL signals to real live orders.
 //
 // Required environment variables:
-//   DELTA_API_KEY    — your Delta Exchange API key
-//   DELTA_API_SECRET — your Delta Exchange API secret
+//
+//	DELTA_API_KEY    — your Delta Exchange API key
+//	DELTA_API_SECRET — your Delta Exchange API secret
 //
 // Set DELTA_TESTNET=true to point at the testnet (https://testnet-api.india.delta.exchange).
 package delta
@@ -49,15 +50,15 @@ const (
 // PlaceOrderRequest mirrors Delta Exchange POST /v2/orders payload.
 type PlaceOrderRequest struct {
 	ProductID            int       `json:"product_id"`
-	Size                 int       `json:"size"`        // number of contracts
-	Side                 OrderSide `json:"side"`        // "buy" or "sell"
+	Size                 int       `json:"size"` // number of contracts
+	Side                 OrderSide `json:"side"` // "buy" or "sell"
 	OrderType            OrderType `json:"order_type"`
 	Leverage             int       `json:"leverage,omitempty"` // e.g. 10 for 10x leverage
 	LimitPrice           string    `json:"limit_price,omitempty"`
 	TimeInForce          string    `json:"time_in_force,omitempty"` // "gtc", "ioc", "fok"
 	PostOnly             bool      `json:"post_only,omitempty"`
 	ReduceOnly           bool      `json:"reduce_only,omitempty"`            // required for closing positions
-	CancelOrdersAccepted string   `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
+	CancelOrdersAccepted string    `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
 }
 
 // PlaceOrderResult is a simplified view of Delta's order response.
@@ -203,13 +204,13 @@ func (c *Client) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (PlaceOr
 	var resp struct {
 		Success bool `json:"success"`
 		Result  struct {
-			ID        int64   `json:"id"`
-			Symbol    string  `json:"symbol"`
-			Side      string  `json:"side"`
-			Size      float64 `json:"size"`
-			LimitPrice string `json:"limit_price"`
-			AvgPrice  string  `json:"average_fill_price"`
-			State     string  `json:"state"`
+			ID         int64   `json:"id"`
+			Symbol     string  `json:"symbol"`
+			Side       string  `json:"side"`
+			Size       float64 `json:"size"`
+			LimitPrice string  `json:"limit_price"`
+			AvgPrice   string  `json:"average_fill_price"`
+			State      string  `json:"state"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
@@ -431,13 +432,13 @@ func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
 		Success bool `json:"success"`
 		Result  struct {
 			Data []struct {
-				ID        int64  `json:"id"`
-				Symbol    string `json:"symbol"`
-				Side      string `json:"side"`
-				Size      string `json:"size"`
+				ID         int64  `json:"id"`
+				Symbol     string `json:"symbol"`
+				Side       string `json:"side"`
+				Size       string `json:"size"`
 				LimitPrice string `json:"limit_price"`
-				State     string `json:"state"`
-				CreatedAt string `json:"created_at"`
+				State      string `json:"state"`
+				CreatedAt  string `json:"created_at"`
 			} `json:"data"`
 		} `json:"result"`
 	}
@@ -651,10 +652,10 @@ func (c *Client) FindPerpProduct(ctx context.Context, symbol string) (PerpProduc
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			ID                int    `json:"id"`
-			Symbol            string `json:"symbol"`
-			ContractValue     string `json:"contract_value"`
-			ContractUnitCurr  string `json:"contract_unit_currency"`
+			ID               int    `json:"id"`
+			Symbol           string `json:"symbol"`
+			ContractValue    string `json:"contract_value"`
+			ContractUnitCurr string `json:"contract_unit_currency"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {

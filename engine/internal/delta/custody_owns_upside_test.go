@@ -1,6 +1,7 @@
 package delta
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -123,6 +124,14 @@ func TestOnOpen_RejectsFeeToxicPremium(t *testing.T) {
 func TestOnOpen_OneLivePositionPerStrategy(t *testing.T) {
 	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
 	expiry := time.Now().Add(8 * time.Hour)
+
+	// Wire a no-op open handler so the first trade STAYS "OPEN". Without one the
+	// submit goroutine marks it FAILED, and the guard then correctly permits a
+	// retry — a failed order is not a live position. That is the right production
+	// behaviour, so the test has to supply a succeeding handler to exercise the
+	// guard at all; previously it only passed because OnOpen held the write lock
+	// across the whole function and hid the interleaving.
+	b.SetInstitutionalOpenHandler(func(context.Context, OpenSignal, string) error { return nil })
 
 	b.OnOpen(pricedSignal("paper-1", "s7", 7, expiry))
 	b.OnOpen(pricedSignal("paper-2", "s7", 7, expiry))

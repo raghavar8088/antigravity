@@ -9,9 +9,9 @@ import (
 // Buying the wrong option type = the wrong trade, so pin the direction logic.
 func TestResolveLiveOptionSide(t *testing.T) {
 	cases := []struct {
-		name              string
-		sigType           string
-		buying, nativeBuy bool
+		name               string
+		sigType            string
+		buying, nativeBuy  bool
 		wantType, wantSide string
 	}{
 		// Native buy source (the option BUYING engine): buy the exact type.

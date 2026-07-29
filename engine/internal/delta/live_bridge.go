@@ -454,15 +454,11 @@ func (b *Bridge) GateEnforced() bool {
 	return b.enforceGate
 }
 
-// liveEligibilityLocked runs the injected evidence test. A missing test is
-// treated as NOT eligible: an unwired gate must fail closed, never open.
-// Caller holds b.mu.
-func (b *Bridge) liveEligibilityLocked(name string) (bool, string) {
-	if b.liveEligibility == nil {
-		return false, "eligibility provider not wired"
-	}
-	return b.liveEligibility(name)
-}
+// NOTE: there is deliberately no `liveEligibilityLocked` helper. The injected
+// eligibility test calls back into the bridge (LiveStrategyRecord takes
+// b.mu.RLock), so it must NEVER be invoked while holding b.mu — Go's RWMutex is
+// not reentrant and doing so deadlocks the bridge permanently. OnOpen reads the
+// callback under a read lock, releases, and only then calls it.
 
 // StrategyRecord is the real-fill track record for one strategy, computed from
 // closed live trades only. This is what the go-live gate is supposed to read;
@@ -606,15 +602,30 @@ func resolveLiveOptionSide(sigType string, buying, nativeBuy bool) (optType, sid
 // In selling mode: sells the option (requires large margin).
 // In buying mode: buys the opposite option type (cheap premium, fits small balance).
 func (b *Bridge) OnOpen(sig OpenSignal) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	// Pre-flight under a READ lock, released before the injected eligibility test
+	// runs. That test reads the bridge's own trade history via LiveStrategyRecord,
+	// which takes b.mu.RLock — and Go's RWMutex is not reentrant. Running it while
+	// holding b.mu.Lock deadlocked the bridge permanently on the first live
+	// signal: every later read (positions, account, state) blocked forever, so the
+	// control plane returned 502 while /health still answered in milliseconds.
+	//
+	// Nothing here mutates, so a read lock is sufficient. The gap between this
+	// snapshot and the write lock below is benign: an order that races a disarm is
+	// still stopped downstream by the risk gate and the kill switch, which are
+	// checked at submission, not here.
+	b.mu.RLock()
+	enabled, configured := b.enabled, b.configured
+	allowed := b.strategyAllowedLocked(sig.StrategyName)
+	enforceGate := b.enforceGate
+	eligibilityFn := b.liveEligibility
+	b.mu.RUnlock()
 
-	if !b.enabled || !b.configured {
+	if !enabled || !configured {
 		return
 	}
 
 	// Live allow-list: only explicitly enabled strategies may place live orders.
-	if !b.strategyAllowedLocked(sig.StrategyName) {
+	if !allowed {
 		log.Printf("[DELTA BRIDGE] ⏭️  skip live open — strategy %q not in live allow-list", sig.StrategyName)
 		return
 	}
@@ -626,8 +637,15 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 	// placed real orders. Enforcement is off by default — a desk with no real
 	// track record would halt entirely — and is flipped on via
 	// LIVE_ENGINE_ENFORCE_GATE once a record exists to gate on.
-	if eligible, reason := b.liveEligibilityLocked(sig.StrategyName); !eligible {
-		if b.enforceGate {
+	//
+	// A nil test means "unknown", which is treated as not eligible so a missing
+	// wiring cannot silently open the gate.
+	eligible, reason := false, "no eligibility test wired"
+	if eligibilityFn != nil {
+		eligible, reason = eligibilityFn(sig.StrategyName)
+	}
+	if !eligible {
+		if enforceGate {
 			log.Printf("[DELTA BRIDGE] ⛔ BLOCK live open %q — go-live gate: %s", sig.StrategyName, reason)
 			return
 		}
@@ -642,6 +660,15 @@ func (b *Bridge) OnOpen(sig OpenSignal) {
 	// contracts, so the ratio cancels — which is why one contract prices it.
 	if econ := EvaluateEntryEconomics(sig.PremiumPerBTC, sig.BTCPrice, 1, LiveTakeProfitPct); !econ.Acceptable {
 		log.Printf("[DELTA BRIDGE] ⏭️  skip live open %q — %s", sig.StrategyName, econ.Reason)
+		return
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	// Re-check the effector under the write lock: the pre-flight snapshot above is
+	// deliberately lock-free, so a disarm in between must still be honoured here.
+	if !b.enabled || !b.configured {
 		return
 	}
 
