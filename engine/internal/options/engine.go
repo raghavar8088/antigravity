@@ -75,6 +75,14 @@ type Engine struct {
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration // trading loop interval; BTC paper uses a short interval
+
+	// chainPricer, when set, prices against the REAL Delta chain instead of the
+	// synthetic Black-Scholes model: only listed strikes, live marks, real
+	// spread. nil keeps the model, so the two can be compared.
+	chainPricer ChainPricer
+	// chainSkips counts signals the venue could not fill. Not a fault counter —
+	// a skip says the strategy needs strikes this exchange does not list.
+	chainSkips chainSkipCounters
 }
 
 // NewEngine initialises the options engine with the full strategy library.
@@ -810,6 +818,29 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
+	// Real-chain resolution. The model above produced a DESIRED strike; the venue
+	// decides whether that trade exists. Snap onto a listed contract and take its
+	// live mark, or skip — substituting a distant contract would record a result
+	// for a trade this strategy never asked for.
+	contractSymbol := ""
+	if e.chainPricer != nil {
+		q, err := e.chainPricer.ResolveEntry(string(def.Type), strike, expiry)
+		if err != nil {
+			e.chainSkips.noContract.Add(1)
+			return nil
+		}
+		if q.PremiumPerBTC <= 0 {
+			e.chainSkips.noMark.Add(1)
+			return nil
+		}
+		// Trade what the venue lists, not what the model wanted.
+		contractSymbol = q.Symbol
+		strike = q.Strike
+		expiry = q.Expiry
+		pr.Premium = q.PremiumPerBTC
+		e.chainSkips.filled.Add(1)
+	}
+
 	// Size by contracts like the selling desk so both desks take the same BTC
 	// exposure per ticket. A fixed dollar ticket divided by the premium bought
 	// enormous quantities of cheap far-OTM options, so a routine -50% move on a
@@ -853,6 +884,10 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		CostBasis:      costBasis,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
+		// Empty when pricing off the model; set to the venue contract when
+		// pricing off the real chain, so mark-to-market re-prices the same
+		// instrument that was entered.
+		ContractSymbol: contractSymbol,
 		IV:             iv,
 		Delta:          pr.Delta,
 	}
@@ -860,9 +895,28 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 
 func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
 	result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
-	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
 	pos.IV = iv
+
+	// A position entered on the real chain must be re-priced on the real chain.
+	// Falling back to the model would mark a venue entry against a model exit
+	// and book the difference as P&L that never existed.
+	//
+	// The model price is assigned ONLY on the model path. Assigning it first and
+	// overwriting on success looks equivalent but is not: when the venue has no
+	// quote, the position would silently take a model mark instead of holding
+	// its last real one.
+	//
+	// Greeks stay model-derived — they are display-only here.
+	onVenue := e.chainPricer != nil && pos.ContractSymbol != ""
+	if !onVenue {
+		pos.CurrentPremium = result.Premium
+	} else if mark, ok := e.chainPricer.MarkFor(pos.ContractSymbol); ok && mark > 0 {
+		pos.CurrentPremium = mark
+	}
+	// Venue position with no live quote: CurrentPremium is left untouched, so it
+	// holds its last real mark. A missing quote is missing information, not a
+	// new valuation.
 
 	// Long option: profit when mark-to-market premium rises vs entry.
 	pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity

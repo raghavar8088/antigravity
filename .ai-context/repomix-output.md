@@ -1075,9 +1075,11 @@ The content is organized as follows:
   omsv3/strategy_aggregate.go
   omsv3/system_aggregate.go
   omsv3/system_projection.go
+  optionchain/adapters.go
   optionchain/cache_test.go
   optionchain/cache.go
   optionchain/chain_live_test.go
+  options_selling/chain_pricer.go
   options_selling/chain_profile.go
   options_selling/chain.go
   options_selling/controls.go
@@ -1089,6 +1091,8 @@ The content is organized as follows:
   options_selling/signals.go
   options_selling/strategies.go
   options_selling/types.go
+  options/chain_pricer_test.go
+  options/chain_pricer.go
   options/chain_profile.go
   options/chain.go
   options/controls.go

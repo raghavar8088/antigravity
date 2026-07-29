@@ -52,9 +52,9 @@ const (
 
 	// Delta Exchange realistic retail position limits
 	// Base quantity for retail: 100-500 contracts depending on account tier
-	DELTA_BASE_QUANTITY        = 200  // 200 contracts base (retail tier)
-	DELTA_MAX_QUANTITY         = 500  // 500 contracts max (capped for retail)
-	DELTA_MIN_QUANTITY         = 50   // minimum 50 contracts
+	DELTA_BASE_QUANTITY = 200 // 200 contracts base (retail tier)
+	DELTA_MAX_QUANTITY  = 500 // 500 contracts max (capped for retail)
+	DELTA_MIN_QUANTITY  = 50  // minimum 50 contracts
 
 	// Round-trip fee on notional (conservative for short options)
 	ROUND_TRIP_FEE_PCT = 0.0010 // 0.10%
@@ -70,14 +70,14 @@ const (
 	// Daily loss limit: halt new opens after 3% of day-start balance (like buyer module)
 	sellerDailyLossLimitPct = 0.03
 
-	optionLossStreakPenalty       = 0.10
-	optionAvgPnLBoost             = 0.22
-	optionAvgPnLPenalty           = 0.12
+	optionLossStreakPenalty = 0.10
+	optionAvgPnLBoost       = 0.22
+	optionAvgPnLPenalty     = 0.12
 
 	// ── Upgrade: Dynamic Cooldown Multipliers ──
 	cooldownWinMultiplier       = 0.50
 	cooldownLossMultiplier      = 2.00
-	cooldownStreakWinMultiplier  = 0.33
+	cooldownStreakWinMultiplier = 0.33
 
 	// ── Upgrade: Theta-Decay Acceleration Exit ──
 	thetaAccelPhase1Progress = 0.50

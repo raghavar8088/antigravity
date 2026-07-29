@@ -69,6 +69,13 @@ type Engine struct {
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration
+
+	// chainPricer, when set, prices against the REAL Delta chain instead of the
+	// synthetic Black-Scholes model. nil keeps the model, so the two can be
+	// compared rather than swapped on faith.
+	chainPricer ChainPricer
+	// chainSkips counts signals the venue could not fill.
+	chainSkips chainSkipCounters
 }
 
 func NewEngine() *Engine {
@@ -736,6 +743,35 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
+	// Real-chain resolution. The model produced a DESIRED strike; the venue
+	// decides whether that trade exists. Snap onto a listed contract or skip —
+	// substituting a distant contract would record a result for a trade this
+	// strategy never asked for.
+	contractSymbol := ""
+	if e.chainPricer != nil {
+		q, err := e.chainPricer.ResolveEntry(string(def.Type), strike, expiry)
+		if err != nil {
+			e.chainSkips.noContract.Add(1)
+			return nil
+		}
+		if q.PremiumPerBTC <= 0 {
+			e.chainSkips.noMark.Add(1)
+			return nil
+		}
+		contractSymbol = q.Symbol
+		strike = q.Strike
+		expiry = q.Expiry
+		// A seller RECEIVES the bid, not the mark. Booking the mark credits
+		// half the spread that never arrives — on the 1.46% spreads measured on
+		// this chain that is a systematic overstatement of every short's edge.
+		if q.Bid > 0 {
+			pr.Premium = q.Bid
+		} else {
+			pr.Premium = q.PremiumPerBTC
+		}
+		e.chainSkips.filled.Add(1)
+	}
+
 	// Delta Exchange realistic retail sizing: fixed quantity with multipliers
 	// Not inverse-premium (which created absurd sizes for cheap options)
 	baseQty := float64(DELTA_BASE_QUANTITY)
@@ -781,6 +817,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		CostBasis:      positionUSD,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
+		ContractSymbol: contractSymbol,
 		IV:             iv,
 		Delta:          pr.Delta,
 	}
@@ -789,9 +826,31 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
 	// Use ask price for exit valuation (what you'd pay to buy back)
 	result := PriceOptionForExit(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
-	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
 	pos.IV = iv
+
+	// A short entered on the real chain must be re-priced on the real chain, and
+	// specifically at the ASK: closing a short means BUYING the contract back.
+	// Marking it at mid understates the cost of every exit by half the spread —
+	// on the 1.46% spreads measured on this chain, a systematic flattering of
+	// exactly the number the promotion gate reads.
+	//
+	// The model price is assigned ONLY on the model path. Assigning it first and
+	// overwriting on success would mean an unquoted venue contract silently
+	// takes a model mark instead of holding its last real one.
+	onVenue := e.chainPricer != nil && pos.ContractSymbol != ""
+	if !onVenue {
+		pos.CurrentPremium = result.Premium
+	} else if q, ok := e.chainPricer.QuoteFor(pos.ContractSymbol); ok {
+		switch {
+		case q.Ask > 0:
+			pos.CurrentPremium = q.Ask
+		case q.PremiumPerBTC > 0:
+			pos.CurrentPremium = q.PremiumPerBTC
+		}
+	}
+	// Venue short with no live quote: CurrentPremium is left untouched, holding
+	// its last real mark. Missing quote is missing information, not a valuation.
 
 	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
 	// Gross PnL only - fees deducted once at close

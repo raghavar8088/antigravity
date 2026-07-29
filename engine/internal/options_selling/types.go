@@ -55,6 +55,10 @@ type OptionPosition struct {
 	PeakGainPct    float64    `json:"peakGainPct"`
 	IV             float64    `json:"iv"`
 	Delta          float64    `json:"delta"`
+	// ContractSymbol is the venue contract this short actually holds, set when
+	// the desk prices against the real chain. Mark-to-market must re-price the
+	// SAME contract that was sold.
+	ContractSymbol string `json:"contractSymbol,omitempty"`
 }
 
 // OptionTrade is a completed option trade

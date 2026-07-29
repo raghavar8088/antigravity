@@ -32,15 +32,15 @@ type MarketProfile struct {
 
 var defaultOptionsMarketProfile = MarketProfile{
 	Name:      "BTC option scalper",
-	DefaultIV: 0.62,  // realised vol has compressed from 0.68 baseline
+	DefaultIV: 0.62, // realised vol has compressed from 0.68 baseline
 	MinIV:     0.20,
-	MaxIV:     2.50,  // crypto tail-risk spikes can exceed 2.2×
+	MaxIV:     2.50, // crypto tail-risk spikes can exceed 2.2×
 	ChainConfig: ChainConfig{
 		WeeklyExpiryWeekday: time.Friday,
 		ExpiryHourUTC:       8,
 		WeeklyCount:         4,
 		StrikeIncrement:     500,
-		NumStrikes:          22,  // wider chain coverage at higher spot
+		NumStrikes:          22, // wider chain coverage at higher spot
 		FallbackSpot:        95000,
 		SmileFactor:         2.5,
 		SkewFactor:          0.28, // slightly more put skew at higher prices
