@@ -1026,6 +1026,10 @@ The content is organized as follows:
   marketdata/historical_fetcher.go
   marketdata/historical_loader.go
   marketdata/macro_feed.go
+  marketdata/sharedfeed/binance_fallback.go
+  marketdata/sharedfeed/feed_test.go
+  marketdata/sharedfeed/feed.go
+  marketdata/sharedfeed/live_integration_test.go
   marketdata/warmup.go
   ml/prescorer.go
   mongopersist/boot.go
