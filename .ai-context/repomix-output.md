@@ -857,6 +857,7 @@ The content is organized as follows:
   delta/adoption_scope_test.go
   delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
+  delta/chain_list.go
   delta/client.go
   delta/close_lookup_test.go
   delta/custody_owns_upside_test.go
@@ -1074,6 +1075,9 @@ The content is organized as follows:
   omsv3/strategy_aggregate.go
   omsv3/system_aggregate.go
   omsv3/system_projection.go
+  optionchain/cache_test.go
+  optionchain/cache.go
+  optionchain/chain_live_test.go
   options_selling/chain_profile.go
   options_selling/chain.go
   options_selling/controls.go
