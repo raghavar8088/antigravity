@@ -1091,6 +1091,7 @@ The content is organized as follows:
   options_selling/chain.go
   options_selling/controls.go
   options_selling/engine.go
+  options_selling/hunt_mode.go
   options_selling/market_profile.go
   options_selling/pricer.go
   options_selling/reset_capital_test.go
@@ -1105,6 +1106,8 @@ The content is organized as follows:
   options/controls.go
   options/engine_test.go
   options/engine.go
+  options/hunt_mode_test.go
+  options/hunt_mode.go
   options/market_profile.go
   options/pricer.go
   options/reset_capital_test.go
@@ -1379,6 +1382,8 @@ The content is organized as follows:
   strategy/scalpers/family3_orderflow.go
   strategy/scalpers/family4_ml_proxy.go
   strategy/scalpers/family5_derivatives_macro.go
+  strategy/scalpers/hunt_pack_test.go
+  strategy/scalpers/hunt_pack.go
   strategy/scalpers/hw_strategies_v10.go
   strategy/scalpers/hw_strategies_v11.go
   strategy/scalpers/hw_strategies_v12.go

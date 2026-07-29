@@ -104,6 +104,14 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 
 	now := time.Now().UTC()
 	startingBalance := getInitialOptionsBalanceUSD()
+	// Hunt mode funds every strategy its own stake; the desk balance must
+	// cover all of them at once or they compete for one pot and the
+	// leaderboard measures arrival order rather than edge.
+	if huntModeEnabled() {
+		if hb := huntDeskBalance(len(states)); hb > startingBalance {
+			startingBalance = hb
+		}
+	}
 	engine := &Engine{
 		states:          states,
 		marketProfile:   profile,

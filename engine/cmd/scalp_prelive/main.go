@@ -832,16 +832,22 @@ func main() {
 	}
 
 	d := &desk{
-		entries:     scalers.BuildScalp100(),
+		// Every registered scalp strategy, not just the Scalp100 pack. 51 of the
+		// 151 that exist here (17 Delta20 + 34 Curated) were built and never
+		// run, so the hunt could not have found them however good they were.
+		entries:     scalers.BuildHuntPack(),
 		combos:      map[string]*comboState{},
 		tradesF:     tradesF,
 		stateDir:    *stateDir,
 		started:     time.Now().UTC(),
 		notionalUSD: defaultNotionalUSD,
 	}
-	log.Printf("Scalp100 pack: %d strategies", len(d.entries))
-	if len(d.entries) != 100 {
-		log.Fatalf("pack size is %d, expected exactly 100", len(d.entries))
+	log.Printf("hunt pack: %d strategies x %d symbols", len(d.entries), 8)
+	// Guard against an empty or accidentally-truncated pack rather than pinning
+	// an exact count: the pack is meant to grow as strategies are registered,
+	// and a hard 100 would fail the build every time one was added.
+	if len(d.entries) < 100 {
+		log.Fatalf("hunt pack has only %d strategies; expected at least the 100-strategy Scalp100 baseline", len(d.entries))
 	}
 	log.Println(gateDesc)
 	d.load()
