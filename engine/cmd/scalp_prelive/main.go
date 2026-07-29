@@ -3,9 +3,14 @@
 // experiment on explicit user instruction).
 //
 // What it does:
-//   - Polls Binance public 1m klines for the 8 major symbols, evaluates the
+//   - Reads 1m bars for the 8 major symbols from the SHARED market-data feed
+//     (Delta Exchange primary, Binance fallback) and evaluates the
 //     100-strategy Scalp100 pack (25 M1X + 66 M1 + 9 M1XB) on every CLOSED
 //     1m bar per symbol — 800 independent paper streams.
+//   - Delta is primary because the Live Engine executes on Delta: a strategy
+//     scored on another venue's prices is scored on a book it will never
+//     trade. The feed polls once per symbol and serves all 800 streams, so
+//     upstream request volume tracks instruments, not strategies.
 //   - Models execution IDENTICALLY to the S1 backtest harness, maker mode:
 //     post-only limit at signal close, fills only if a later bar trades
 //     through the level within 3 bars (missed fills counted), TP rests as a
@@ -29,6 +34,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -45,6 +51,7 @@ import (
 	"sync"
 	"time"
 
+	"antigravity-engine/internal/marketdata/sharedfeed"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
@@ -164,56 +171,37 @@ type desk struct {
 	// notionalUSD is the per-trade notional. Guarded by mu; re-basable via
 	// /scalp/reset so the desk can be restarted on a different size.
 	notionalUSD float64
+
+	// feed is the shared market-data store. The desk never fetches candles
+	// itself: one poller per (symbol, resolution) serves all 800 streams, so
+	// upstream request volume tracks instruments rather than strategies.
+	feed *sharedfeed.Feed
+
+	// dataSource records which venue the last accepted bars came from. Guarded
+	// by mu. Surfaced on /scalp/health because a desk silently running on
+	// fallback prices is measuring a book it will not execute on.
+	dataSource sharedfeed.Source
+}
+
+// noteSource records the venue that produced the bars just consumed, and logs
+// the transition when it changes so a fallback is visible in the log, not just
+// in an API field nobody reads.
+func (d *desk) noteSource(s sharedfeed.Source) {
+	if s == "" {
+		return
+	}
+	d.mu.Lock()
+	prev := d.dataSource
+	d.dataSource = s
+	d.mu.Unlock()
+	if prev != "" && prev != s {
+		log.Printf("[SCALP] ⚠️  market data source changed %s -> %s", prev, s)
+	}
 }
 
 func comboKey(strategy, symbol string) string { return strategy + "|" + symbol }
 
-// ── Binance fetch ────────────────────────────────────────────────────────────
-
-var httpClient = &http.Client{Timeout: 30 * time.Second}
-
-func fetchKlines(sym string, startMs int64, limit int) ([]scalers.Candle, error) {
-	url := fmt.Sprintf("https://api.binance.com/api/v3/klines?symbol=%s&interval=1m&limit=%d", sym, limit)
-	if startMs > 0 {
-		url += fmt.Sprintf("&startTime=%d", startMs)
-	}
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("binance %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
-	}
-	var raw [][]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC()
-	out := make([]scalers.Candle, 0, len(raw))
-	for _, r := range raw {
-		if len(r) < 7 {
-			continue
-		}
-		openMs := int64(r[0].(float64))
-		open := time.UnixMilli(openMs).UTC()
-		if open.Add(time.Minute).After(now) {
-			continue // in-progress bar
-		}
-		pf := func(i int) float64 {
-			f, _ := strconv.ParseFloat(r[i].(string), 64)
-			return f
-		}
-		out = append(out, scalers.Candle{
-			OpenTime: open, Open: pf(1), High: pf(2), Low: pf(3), Close: pf(4), Volume: pf(5),
-		})
-	}
-	return out, nil
-}
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 func min(a, b int) int {
 	if a < b {
@@ -401,14 +389,35 @@ func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, v)) }
 
 func (d *desk) poll() {
 	for _, ss := range d.symbols {
-		var startMs int64
-		if n := len(ss.bars); n > 0 {
-			startMs = ss.bars[n-1].OpenTime.Add(time.Minute).UnixMilli()
-		}
-		fresh, err := fetchKlines(ss.sym, startMs, 1000)
-		if err != nil {
-			log.Printf("poll %s: %v", ss.sym, err)
+		// Read from the shared feed instead of fetching per symbol.
+		//
+		// The desk runs 800 streams (100 strategies x 8 symbols). Fetching here
+		// would tie request volume to the desk's own loop; the shared feed polls
+		// each (symbol, resolution) once and serves every reader from stored
+		// bars, so upstream load tracks INSTRUMENTS, not strategies. Delta is the
+		// source — the Live Engine executes on Delta, so a strategy scored on
+		// another venue's prices is scored on a book it will never trade — with
+		// Binance as fallback when Delta rate-limits or fails.
+		snap := d.feed.Get(ss.sym, "1m")
+		if len(snap.Bars) == 0 {
+			if snap.LastErr != "" {
+				log.Printf("poll %s: feed has no bars (%s)", ss.sym, snap.LastErr)
+			}
 			continue
+		}
+		if snap.Stale {
+			log.Printf("poll %s: feed STALE (last update %s) — skipping, not trading a frozen book",
+				ss.sym, snap.UpdatedAt.Format(time.RFC3339))
+			continue
+		}
+		d.noteSource(snap.Source)
+
+		fresh := make([]scalers.Candle, 0, len(snap.Bars))
+		for _, b := range snap.Bars {
+			fresh = append(fresh, scalers.Candle{
+				OpenTime: b.OpenTime, Open: b.Open, High: b.High,
+				Low: b.Low, Close: b.Close, Volume: b.Volume,
+			})
 		}
 		d.mu.Lock()
 		for _, b := range fresh {
@@ -444,7 +453,17 @@ func (d *desk) poll() {
 type snapshot struct {
 	SavedAt time.Time              `json:"saved_at"`
 	Combos  map[string]*comboState `json:"combos"`
+	// DataVenue records which market the stored record was earned on. A record
+	// built on Binance prices is not comparable to one built on Delta prices —
+	// different book, different spread, different fills — so a venue change
+	// discards the old statistics instead of silently averaging two experiments
+	// into one leaderboard. Empty means "pre-versioning", i.e. Binance era.
+	DataVenue string `json:"data_venue,omitempty"`
 }
+
+// currentDataVenue is the venue this build measures on. Changing it invalidates
+// every persisted combo record by design.
+const currentDataVenue = "delta"
 
 func (d *desk) save() {
 	d.mu.Lock()
@@ -453,7 +472,7 @@ func (d *desk) save() {
 		cs.GrossWExp, cs.GrossLExp = cs.GrossW, cs.GrossL
 		cs.EqExp, cs.PeakExp, cs.MaxDDExp = cs.Eq, cs.Peak, cs.MaxDD
 	}
-	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos}
+	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos, DataVenue: currentDataVenue}
 	data, _ := json.Marshal(snap)
 	d.mu.Unlock()
 	tmp := filepath.Join(d.stateDir, "snapshot.json.tmp")
@@ -472,6 +491,22 @@ func (d *desk) load() {
 	if json.Unmarshal(data, &snap) != nil {
 		return
 	}
+
+	// Venue cutover: a record earned on Binance prices cannot be carried into a
+	// Delta-priced experiment. Different book, different spread, different
+	// fills — merging them would produce a leaderboard where a stream's
+	// statistics come from two different markets, and no amount of later
+	// trading would separate them again. Discard and start clean.
+	if snap.DataVenue != currentDataVenue {
+		was := snap.DataVenue
+		if was == "" {
+			was = "binance (pre-versioning)"
+		}
+		log.Printf("[SCALP] venue changed %s -> %s: discarding %d stored combo record(s); the live record restarts on %s prices",
+			was, currentDataVenue, len(snap.Combos), currentDataVenue)
+		return
+	}
+
 	for k, cs := range snap.Combos {
 		cs.N, cs.Wins, cs.Missed = cs.NExp, cs.WinsExp, cs.MissedExp
 		cs.GrossW, cs.GrossL = cs.GrossWExp, cs.GrossLExp
@@ -549,10 +584,36 @@ func (d *desk) serve(port int) {
 				last[ss.sym] = ss.bars[n-1].OpenTime.Format(time.RFC3339)
 			}
 		}
+		// Feed health is read outside d.mu — the feed has its own lock, and
+		// calling into it while holding d.mu invites the lock-ordering problem
+		// that already deadlocked one desk in this codebase.
+		src := string(d.dataSource)
+		d.mu.Unlock()
+		feedHealth := []map[string]interface{}{}
+		stale := 0
+		if d.feed != nil {
+			for _, h := range d.feed.Health() {
+				if h.Stale {
+					stale++
+				}
+				feedHealth = append(feedHealth, map[string]interface{}{
+					"symbol": h.Symbol, "source": string(h.Source), "bars": len(h.Bars),
+					"stale": h.Stale, "updated_at": h.UpdatedAt, "last_error": h.LastErr,
+				})
+			}
+		}
+		d.mu.Lock() // re-taken so the deferred Unlock stays balanced
+
 		writeJSON(w, map[string]interface{}{
 			"ok": true, "uptime_min": int(time.Since(d.started).Minutes()),
 			"bars_processed": d.barsSeen, "strategies": len(d.entries),
 			"streams": len(d.entries) * len(d.symbols), "last_bar": last,
+			// Which venue the record is actually being earned on. If this reads
+			// "binance" the desk is measuring a book the Live Engine does not
+			// execute on, and the numbers are not promotion evidence.
+			"data_venue":  src,
+			"stale_pairs": stale,
+			"feed":        feedHealth,
 		})
 	})
 	http.HandleFunc("/scalp/stats", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -580,7 +641,7 @@ func (d *desk) serve(port int) {
 			"open_positions": open, "pending_orders": pend,
 			"net_pnl_usd_at_1000_notional": math.Round(net*d.notionalUSD*100) / 100,
 			"trades_per_symbol":            perSym,
-			"gate":                        gateDesc,
+			"gate":                         gateDesc,
 		})
 	}))
 	http.HandleFunc("/scalp/leaderboard", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -755,7 +816,11 @@ func (d *desk) serve(port int) {
 func main() {
 	port := flag.Int("port", 8093, "HTTP port")
 	stateDir := flag.String("state", "data/scalp_prelive", "state directory")
-	symbolsCSV := flag.String("symbols", "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT", "symbols")
+	// Delta symbol naming (BTCUSD, not BTCUSDT). Delta is the venue the Live
+	// Engine executes on, so the desk measures strategies on Delta's own book;
+	// the shared feed translates to Binance's USDT naming only when it has to
+	// fall back. All eight are confirmed live perpetuals on Delta India.
+	symbolsCSV := flag.String("symbols", "BTCUSD,ETHUSD,SOLUSD,BNBUSD,XRPUSD,DOGEUSD,ADAUSD,AVAXUSD", "symbols")
 	flag.Parse()
 
 	if err := os.MkdirAll(*stateDir, 0o755); err != nil {
@@ -785,26 +850,61 @@ func main() {
 		d.symbols = append(d.symbols, &symbolState{sym: strings.TrimSpace(s)})
 	}
 
-	// bootstrap ~75h of 1m context per symbol (need 72 closed 1h bars)
+	// One shared feed for the whole desk: 8 pollers serve all 800 streams.
+	// Backfill covers the ~75h of 1m context the strategies need (72 closed 1h
+	// bars), so the feed itself does the bootstrap that used to be a per-symbol
+	// paginated fetch loop here.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	d.feed = sharedfeed.New(sharedfeed.Config{
+		Poll:       time.Minute,
+		Backfill:   75 * time.Hour,
+		MaxBars:    6000,
+		StaleAfter: 5 * time.Minute,
+		Primary:    sharedfeed.DeltaFetcher,
+		Fallback:   sharedfeed.BinanceFetcher,
+	})
+	pairs := make([]sharedfeed.Pair, 0, len(d.symbols))
 	for _, ss := range d.symbols {
-		startMs := time.Now().UTC().Add(-75 * time.Hour).UnixMilli()
-		for len(ss.bars) < 4500 {
-			page, err := fetchKlines(ss.sym, startMs, 1000)
-			if err != nil {
-				log.Printf("bootstrap %s: %v (retrying)", ss.sym, err)
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			if len(page) == 0 {
+		pairs = append(pairs, sharedfeed.Pair{Symbol: ss.sym, Resolution: "1m"})
+	}
+	d.feed.Start(ctx, pairs)
+
+	// Wait for the backfill before evaluating anything. Trading a strategy on a
+	// half-filled indicator window produces garbage that then pollutes its
+	// permanent live record.
+	log.Printf("waiting for shared feed backfill on %d symbol(s)...", len(pairs))
+	for _, ss := range d.symbols {
+		deadline := time.Now().Add(3 * time.Minute)
+		for time.Now().Before(deadline) {
+			if snap := d.feed.Get(ss.sym, "1m"); len(snap.Bars) >= 200 {
 				break
 			}
-			ss.bars = append(ss.bars, page...)
-			startMs = page[len(page)-1].OpenTime.Add(time.Minute).UnixMilli()
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 		}
-		// bootstrap bars are history, not live signals: mark processed
+
+		// Seed the symbol's own window from the feed. This has to happen here:
+		// poll() only appends bars NEWER than the last one it holds, so without
+		// a seed the desk would start from an empty window and take three days
+		// to accumulate the 1h context its strategies need.
+		snap := d.feed.Get(ss.sym, "1m")
+		for _, b := range snap.Bars {
+			ss.bars = append(ss.bars, scalers.Candle{
+				OpenTime: b.OpenTime, Open: b.Open, High: b.High,
+				Low: b.Low, Close: b.Close, Volume: b.Volume,
+			})
+		}
+		if len(ss.bars) == 0 {
+			log.Printf("bootstrap %s: NO BARS — feed unavailable (%s); this symbol will idle until data arrives",
+				ss.sym, snap.LastErr)
+			continue
+		}
+		// Bootstrap bars are history, not live signals: mark them processed so
+		// the desk does not fire 4,500 backdated entries on its first tick.
 		ss.barIdx = int64(len(ss.bars))
-		log.Printf("bootstrap %s: %d bars (-> %s)", ss.sym, len(ss.bars),
+		d.noteSource(snap.Source)
+		log.Printf("bootstrap %s: %d bars from %s (-> %s)", ss.sym, len(ss.bars), snap.Source,
 			ss.bars[len(ss.bars)-1].OpenTime.Format("15:04"))
 	}
 

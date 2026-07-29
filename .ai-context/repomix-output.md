@@ -1687,6 +1687,7 @@ The content is organized as follows:
   pre_live/mongo.go
   run_backtest/main.go
   scalp_prelive/main.go
+  scalp_prelive/venue_test.go
   seed_db/main.go
   sep_evidence/analytics.go
   sep_evidence/datasource.go
