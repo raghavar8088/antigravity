@@ -27,6 +27,7 @@ import (
 	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/calibration"
 	tconfig "antigravity-engine/internal/config"
+	"antigravity-engine/internal/cryptofno"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/derivatives"
@@ -1500,9 +1501,18 @@ func main() {
 	// One cache serves BOTH desks (~100 strategies): two upstream requests per
 	// refresh regardless of strategy count. Enabled by default; set
 	// OPTIONS_REAL_CHAIN=false to fall back to the model for an A/B comparison.
+	var cryptoFnoChain *optionchain.FnoChain
 	if deltaBridge.Client() != nil && parseEnvBoolDefault("OPTIONS_REAL_CHAIN", true) {
 		chainCache := optionchain.New(deltaBridge.Client(), "BTC", time.Minute, 5*time.Minute)
 		chainCache.Start(ctx)
+		// Spot comes from the engine's own BTC price rather than the chain, which
+		// carries no underlying price of its own.
+		cryptoFnoChain = optionchain.ForCryptoFno(chainCache, func(u string) float64 {
+			if u == "BTC" {
+				return optionsEngine.LastPrice()
+			}
+			return 0
+		})
 		optionsEngine.SetChainPricer(optionchain.ForBuying(chainCache, optionchain.DefaultTolerance))
 		optionsSellingEngine.SetChainPricer(optionchain.ForSelling(chainCache, optionchain.DefaultTolerance))
 		log.Printf("[OPTIONS] real Delta chain pricing ENABLED for both desks (synthetic chain disabled)")
@@ -1519,6 +1529,26 @@ func main() {
 		})
 	} else {
 		log.Printf("[OPTIONS] real chain pricing OFF — desks remain on the synthetic Black-Scholes chain")
+	}
+
+	// ── Crypto F&O paper desk ────────────────────────────────────────────────
+	//
+	// Named accounts with their own capital, Groww-style multi-leg baskets off
+	// the live Delta chain, and portfolio margin that gives credit for hedges.
+	// Delta publishes no basket-margin endpoint (POST /v2/orders/margins is 404),
+	// so the hedge benefit is computed locally by revaluing the whole basket
+	// across a stressed price grid — see internal/cryptofno.
+	//
+	// It reads the SAME chain cache as the options desks, so it adds no upstream
+	// requests. Paper only: no order ever reaches the broker from this desk.
+	if cryptoFnoChain != nil {
+		fnoBook := cryptofno.NewBook()
+		fnoSvc := cryptofno.NewService(fnoBook, cryptoFnoChain, 0.0005)
+		http.Handle("/api/crypto-fno/", fnoSvc.Handler())
+		log.Printf("[CRYPTO F&O] desk wired — $%.0f default account, hedge-aware portfolio margin",
+			cryptofno.DefaultAccountCapitalUSD)
+	} else {
+		log.Printf("[CRYPTO F&O] desk NOT wired — no live Delta chain available")
 	}
 
 	// Strategy hunt leaderboard: every strategy on its own $1,000 account,

@@ -102,3 +102,15 @@ func (e *Engine) UsingRealChain() bool {
 
 // ChainSkips reports how many signals the venue could not fill.
 func (e *Engine) ChainSkips() ChainSkipStats { return e.chainSkips.snapshot() }
+
+// LastPrice is the engine's most recent underlying price.
+//
+// Exposed for the crypto F&O desk, which must price a basket against spot: the
+// option chain carries strikes and premiums but no underlying price, and
+// margining a basket without spot would be guessing at the very number the
+// scenario scan is centred on.
+func (e *Engine) LastPrice() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastPrice
+}

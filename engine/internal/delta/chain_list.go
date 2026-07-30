@@ -103,6 +103,11 @@ type TickerMark struct {
 	MarkPerBTC float64
 	Bid        float64
 	Ask        float64
+	// IV is the mark implied volatility Delta publishes under `quotes.mark_iv`.
+	// The F&O margin engine needs it to revalue a leg under stress; without it a
+	// leg falls back to intrinsic value, which understates a long option's worth
+	// and so overstates the margin a hedged basket needs.
+	IV float64
 }
 
 // ListOptionTickers fetches marks for every live option in one request.
@@ -136,6 +141,7 @@ func (c *Client) ListOptionTickers(ctx context.Context, underlying string) (map[
 			Quotes                struct {
 				BestBid flexNum `json:"best_bid"`
 				BestAsk flexNum `json:"best_ask"`
+				MarkIV  flexNum `json:"mark_iv"`
 			} `json:"quotes"`
 		} `json:"result"`
 	}
@@ -159,6 +165,7 @@ func (c *Client) ListOptionTickers(ctx context.Context, underlying string) (map[
 			MarkPerBTC: mark,
 			Bid:        float64(tk.Quotes.BestBid),
 			Ask:        float64(tk.Quotes.BestAsk),
+			IV:         float64(tk.Quotes.MarkIV),
 		}
 	}
 	return out, nil
