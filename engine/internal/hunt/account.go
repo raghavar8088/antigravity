@@ -98,6 +98,17 @@ type Account struct {
 // the half-split are computed on the real sequence rather than on whatever
 // order the caller happened to supply.
 func BuildAccounts(desk string, trades []Trade, startingCapital float64) []Account {
+	return BuildAccountsWithRoster(desk, trades, nil, startingCapital)
+}
+
+// BuildAccountsWithRoster derives accounts and ALSO emits a funded, zero-trade
+// account for every roster entry that has not closed a trade yet.
+//
+// Deriving accounts from trades alone made a freshly funded strategy invisible
+// until its first close — the strategies an operator most wants to see waiting
+// at the line. It also understated the hunt: 100 strategies at $1,000 is
+// $100,000 deployed whether or not they have traded.
+func BuildAccountsWithRoster(desk string, trades []Trade, roster []RosterEntry, startingCapital float64) []Account {
 	if startingCapital <= 0 {
 		startingCapital = DefaultStartingCapital
 	}
@@ -107,11 +118,28 @@ func BuildAccounts(desk string, trades []Trade, startingCapital float64) []Accou
 		byKey[t.Key()] = append(byKey[t.Key()], t)
 	}
 
-	out := make([]Account, 0, len(byKey))
+	out := make([]Account, 0, len(byKey)+len(roster))
 	for key, ts := range byKey {
 		sort.Slice(ts, func(i, j int) bool { return ts[i].ClosedAt.Before(ts[j].ClosedAt) })
 		out = append(out, buildOne(desk, key, ts, startingCapital))
 	}
+
+	// Funded but not yet traded: full stake, zero everything else. Shown rather
+	// than hidden so the roster and the leaderboard agree on how many strategies
+	// are running.
+	for _, r := range roster {
+		if _, traded := byKey[r.Key()]; traded {
+			continue
+		}
+		out = append(out, Account{
+			Key: r.Key(), Desk: desk,
+			Strategy:        r.Strategy,
+			Symbol:          r.Symbol,
+			StartingCapital: startingCapital,
+			Capital:         startingCapital,
+		})
+	}
+
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
 }

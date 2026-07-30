@@ -50,6 +50,21 @@ func (d BuyingDesk) HuntTrades() []Trade {
 	return out
 }
 
+// Roster lists every strategy the buying desk runs, so a funded strategy that
+// has not closed a trade yet still appears — with its full stake and zero
+// trades — rather than being invisible until its first close.
+func (d BuyingDesk) Roster() []RosterEntry {
+	if d.Engine == nil {
+		return nil
+	}
+	sts := d.Engine.StrategyStatuses()
+	out := make([]RosterEntry, 0, len(sts))
+	for _, s := range sts {
+		out = append(out, RosterEntry{Strategy: s.Name})
+	}
+	return out
+}
+
 // SellingDesk adapts the option-selling engine.
 type SellingDesk struct {
 	Engine  *options_selling.Engine
@@ -87,11 +102,25 @@ func (d SellingDesk) HuntTrades() []Trade {
 	return out
 }
 
+// Roster lists every strategy the selling desk runs.
+func (d SellingDesk) Roster() []RosterEntry {
+	if d.Engine == nil {
+		return nil
+	}
+	sts := d.Engine.StrategyStatuses()
+	out := make([]RosterEntry, 0, len(sts))
+	for _, s := range sts {
+		out = append(out, RosterEntry{Strategy: s.Name})
+	}
+	return out
+}
+
 // ScalpDesk adapts the scalp desk, which reports trades over HTTP because it
 // runs as a separate process. The caller supplies the already-fetched trades.
 type ScalpDesk struct {
-	Trades  []Trade
-	Capital float64
+	Trades        []Trade
+	RosterEntries []RosterEntry
+	Capital       float64
 }
 
 func (d ScalpDesk) DeskName() string { return "scalp" }
@@ -104,6 +133,11 @@ func (d ScalpDesk) StartingCapital() float64 {
 }
 
 func (d ScalpDesk) HuntTrades() []Trade { return d.Trades }
+
+// Roster is supplied by the caller because the scalp desk runs out of process;
+// it is strategy x symbol, so 151 strategies across 8 symbols is 1,208 funded
+// accounts.
+func (d ScalpDesk) Roster() []RosterEntry { return d.RosterEntries }
 
 // grossMinusNet derives the fee from the two figures the desks already report.
 // Never negative: a net above gross means the desk's fee model credited

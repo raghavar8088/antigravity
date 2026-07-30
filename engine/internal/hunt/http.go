@@ -25,6 +25,29 @@ type DeskSource interface {
 	HuntTrades() []Trade
 	// StartingCapital is the per-strategy stake for this desk.
 	StartingCapital() float64
+	// Roster returns EVERY strategy key the desk runs, including ones that have
+	// not closed a trade yet.
+	//
+	// Without this the hunt would only show strategies that had already traded,
+	// so a freshly funded strategy would be invisible until its first close —
+	// exactly the strategies an operator most wants to see waiting at the line.
+	// It also makes the funded total honest: 100 strategies at $1,000 is
+	// $100,000 deployed whether or not they have traded yet.
+	Roster() []RosterEntry
+}
+
+// RosterEntry is one funded strategy, trades or not.
+type RosterEntry struct {
+	Strategy string
+	Symbol   string
+}
+
+// Key matches Trade.Key so roster entries and trades join correctly.
+func (r RosterEntry) Key() string {
+	if r.Symbol == "" {
+		return r.Strategy
+	}
+	return r.Strategy + "|" + r.Symbol
 }
 
 // Service assembles the hunt view across desks.
@@ -57,7 +80,7 @@ func (s *Service) Accounts() []Account {
 
 	var all []Account
 	for _, src := range srcs {
-		all = append(all, BuildAccounts(src.DeskName(), src.HuntTrades(), src.StartingCapital())...)
+		all = append(all, BuildAccountsWithRoster(src.DeskName(), src.HuntTrades(), src.Roster(), src.StartingCapital())...)
 	}
 	return all
 }

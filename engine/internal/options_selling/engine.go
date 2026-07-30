@@ -1126,6 +1126,23 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// StrategyStatuses returns every strategy's current status. Mirrors the buying
+// desk's accessor so the hunt can enumerate the full roster — including
+// strategies that have not closed a trade yet, which would otherwise be
+// invisible until their first close.
+func (e *Engine) StrategyStatuses() []StrategyStatus {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]StrategyStatus, len(e.states))
+	for i, s := range e.states {
+		out[i] = s.stats
+		if out[i].StrategyID == 0 {
+			out[i].StrategyID = s.def.ID
+		}
+	}
+	return out
+}
+
 func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
