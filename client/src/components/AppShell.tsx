@@ -70,6 +70,9 @@ const ic = {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Sits directly below Live Engine: it is the paper counterpart to that desk —
+  // same Delta chain, same margin reality, no real money.
+  { href: "/crypto-fno", label: "Crypto F&O", icon: ic.layers },
   { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
   { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
   { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },
