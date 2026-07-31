@@ -1,11 +1,6 @@
 package scalpers
 
-import (
-	"log"
-	"os"
-	"strconv"
-	"strings"
-)
+import "log"
 
 // BuildHuntPack returns EVERY scalp strategy registered in this application,
 // de-duplicated by name.
@@ -53,27 +48,23 @@ func BuildHuntPack() []RegistryEntry {
 	log.Printf("[HUNT PACK] %d unique strategies across %d packs (%d duplicate name(s) dropped)",
 		len(out), len(packs), dupes)
 
-	// Every strategy also runs as its mirror: same entries, opposite side. The
-	// desk's execution profile supplies the swapped stop/target distances.
-	// Disable with ANTI_STRATEGIES=false.
-	if antiStrategiesEnabled() {
-		withAnti := WithAntiPack(out)
-		log.Printf("[HUNT PACK] + %d anti-strategies = %d total streams per symbol",
-			len(withAnti)-len(out), len(withAnti))
-		return withAnti
-	}
+	// Mirrors are deliberately NOT added here.
+	//
+	// They were, briefly, as signal wrappers that inverted each Evaluate() and
+	// posted their own order. Under this desk's post-only fill model that does
+	// not mirror anything: the original posts a limit on one side and the mirror
+	// posts one on the other, and
+	//
+	//	filled := (long && bar.Low <= limit) || (!long && bar.High >= limit)
+	//
+	// means they fill on OPPOSITE conditions. Price cannot do both on a bar, so
+	// the pair almost never both traded — 35 of 53 traded streams had no partner
+	// — and the mirror only ever filled when price moved toward its limit. That
+	// is a selection bias dressed as an inverse, and it put four 100%-win-rate
+	// rows at the top of the board.
+	//
+	// A mirror must inherit the original's FILL, not compete for its own. The
+	// desk creates it in processBar the moment an original fills, at the same
+	// price on the same bar. See mirrorOf().
 	return out
-}
-
-// antiStrategiesEnabled reports whether mirrors should run. Defaults ON.
-func antiStrategiesEnabled() bool {
-	raw := strings.TrimSpace(os.Getenv("ANTI_STRATEGIES"))
-	if raw == "" {
-		return true
-	}
-	v, err := strconv.ParseBool(raw)
-	if err != nil {
-		return true
-	}
-	return v
 }

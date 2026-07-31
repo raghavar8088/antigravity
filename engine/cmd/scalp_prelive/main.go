@@ -211,6 +211,18 @@ type desk struct {
 	// by mu. Surfaced on /scalp/health because a desk silently running on
 	// fallback prices is measuring a book it will not execute on.
 	dataSource sharedfeed.Source
+
+	// mirrorOpens counts inverse positions opened from an original's fill;
+	// mirrorSkips counts the times one could not be opened because the mirror was
+	// still holding the previous trade. Guarded by mu.
+	//
+	// mirrorSkips is the honesty check on this whole mechanism: it should stay at
+	// zero, and a non-zero value means some pairs are no longer exact inverses, so
+	// their combined P&L stops being readable as "-2x fees". Cheaper to count than
+	// to rediscover from the trade log, which is how the previous, broken mirrors
+	// went unnoticed.
+	mirrorOpens int64
+	mirrorSkips int64
 }
 
 // noteSource records the venue that produced the bars just consumed, and logs
@@ -364,6 +376,11 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 		if cs.Pos != nil {
 			d.managePosition(cs, e.Name, ss.sym, bar, barIdx)
 		}
+		// 1b. manage this strategy's mirror, if it holds one. Mirrors never
+		// evaluate signals or place pendings — they exist only as the inverse of
+		// a fill the original already took — so they are advanced here rather
+		// than in their own pass over d.entries.
+		d.manageMirror(e.Name, ss.sym, bar, barIdx)
 		// 2. pending fill / expiry (fills only on bars AFTER placement)
 		if cs.Pos == nil && cs.Pend != nil {
 			p := cs.Pend
@@ -383,8 +400,26 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 					cs.Pos = &position{Dir: p.Dir, Entry: p.Limit, SL: sl, TP: tp,
 						EntryBar: barIdx, EntryTime: bar.OpenTime, Profile: p.Profile}
 					cs.Pend = nil
-					// same-bar exit check, exactly like the harness manage loop
+
+					// Open the mirror on the SAME fill, before the exit check.
+					//
+					// The mirror inherits this fill rather than posting an order
+					// of its own. Posting its own is what broke the previous
+					// attempt: a post-only limit on the opposite side fills on the
+					// opposite price condition, so the pair almost never both
+					// traded and the mirror only ever filled when price moved its
+					// way. Inheriting the fill makes the pair exact by
+					// construction — same bar, same entry, opposite side, stop and
+					// target distances swapped.
+					d.openMirror(e.Name, ss.sym, cs.Pos, barIdx, bar)
+
+					// same-bar exit check, exactly like the harness manage loop.
+					// The mirror gets the same treatment on the same bar: giving
+					// the original a same-bar exit and not the mirror would let a
+					// pair that opened together close a bar apart, at prices that
+					// no longer negate.
 					d.managePosition(cs, e.Name, ss.sym, bar, barIdx)
+					d.manageMirror(e.Name, ss.sym, bar, barIdx)
 				}
 			}
 		}
@@ -489,11 +524,29 @@ type snapshot struct {
 	// discards the old statistics instead of silently averaging two experiments
 	// into one leaderboard. Empty means "pre-versioning", i.e. Binance era.
 	DataVenue string `json:"data_venue,omitempty"`
+	// MirrorModel records how the ANTI_ records were produced. Empty means the
+	// original signal-inverting mirrors, whose fills were selection-biased.
+	MirrorModel string `json:"mirror_model,omitempty"`
 }
 
 // currentDataVenue is the venue this build measures on. Changing it invalidates
 // every persisted combo record by design.
 const currentDataVenue = "delta"
+
+// currentMirrorModel names how ANTI_ records were produced. Changing it discards
+// the stored mirror records — and only those.
+//
+// "signal" mirrors were separate registry entries that inverted the signal and
+// posted their own post-only limit. They filled on the opposite price condition
+// from their original, so they rarely traded as a pair and the ones that did
+// trade were selected for having started in their favour. Their statistics
+// describe that selection, not the originals they are named after.
+//
+// The originals' records are NOT affected: under the old scheme the mirrors were
+// independent streams and never changed how an original filled. So a model
+// change drops the ANTI_ combos and leaves everything else standing, rather than
+// resetting the whole desk and throwing away progress toward the 200-trade gate.
+const currentMirrorModel = "fill-inherited"
 
 func (d *desk) save() {
 	d.mu.Lock()
@@ -502,7 +555,8 @@ func (d *desk) save() {
 		cs.GrossWExp, cs.GrossLExp = cs.GrossW, cs.GrossL
 		cs.EqExp, cs.PeakExp, cs.MaxDDExp = cs.Eq, cs.Peak, cs.MaxDD
 	}
-	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos, DataVenue: currentDataVenue}
+	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos,
+		DataVenue: currentDataVenue, MirrorModel: currentMirrorModel}
 	data, _ := json.Marshal(snap)
 	d.mu.Unlock()
 	tmp := filepath.Join(d.stateDir, "snapshot.json.tmp")
@@ -537,7 +591,20 @@ func (d *desk) load() {
 		return
 	}
 
+	// Mirror-model cutover: drop the ANTI_ records built by the old
+	// signal-inverting mirrors, and only those. Their trades came from a fill
+	// model that could not pair them with their originals, so keeping them would
+	// mix two incompatible mechanisms under one name. The originals were never
+	// touched by that bug, so their records — and their progress toward the
+	// 200-trade gate — survive the change.
+	dropMirrors := snap.MirrorModel != currentMirrorModel
+	dropped := 0
+
 	for k, cs := range snap.Combos {
+		if dropMirrors && scalers.IsAntiStrategy(strings.SplitN(k, "|", 2)[0]) {
+			dropped++
+			continue
+		}
 		cs.N, cs.Wins, cs.Missed = cs.NExp, cs.WinsExp, cs.MissedExp
 		cs.GrossW, cs.GrossL = cs.GrossWExp, cs.GrossLExp
 		cs.Eq, cs.Peak, cs.MaxDD = cs.EqExp, cs.PeakExp, cs.MaxDDExp
@@ -550,7 +617,15 @@ func (d *desk) load() {
 		cs.CooldownUntil = 0
 		d.combos[k] = cs
 	}
-	log.Printf("restored %d combo states from snapshot", len(snap.Combos))
+	if dropped > 0 {
+		was := snap.MirrorModel
+		if was == "" {
+			was = "signal-inverted (unpaired fills)"
+		}
+		log.Printf("[SCALP] mirror model changed %s -> %s: discarded %d ANTI_ record(s); mirrors restart, originals keep theirs",
+			was, currentMirrorModel, dropped)
+	}
+	log.Printf("restored %d combo states from snapshot", len(snap.Combos)-dropped)
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -636,14 +711,22 @@ func (d *desk) serve(port int) {
 
 		writeJSON(w, map[string]interface{}{
 			"ok": true, "uptime_min": int(time.Since(d.started).Minutes()),
-			"bars_processed": d.barsSeen, "strategies": len(d.entries),
-			"streams": len(d.entries) * len(d.symbols), "last_bar": last,
+			"bars_processed": d.barsSeen, "strategies": len(d.streamNames()),
+			"streams": len(d.streamNames()) * len(d.symbols), "last_bar": last,
+			// Signal-emitting strategies, excluding the mirrors that ride their
+			// fills. strategies-minus-originals is the mirror count.
+			"originals": len(d.entries),
 			// Which venue the record is actually being earned on. If this reads
 			// "binance" the desk is measuring a book the Live Engine does not
 			// execute on, and the numbers are not promotion evidence.
 			"data_venue":  src,
 			"stale_pairs": stale,
 			"feed":        feedHealth,
+			// Mirror pairing. mirror_skips must stay 0: any other value means a
+			// pair drifted out of step and its two halves are no longer exact
+			// inverses of each other.
+			"mirror_opens": d.mirrorOpens,
+			"mirror_skips": d.mirrorSkips,
 		})
 	})
 	http.HandleFunc("/scalp/stats", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -695,18 +778,23 @@ func (d *desk) serve(port int) {
 		// stream has closed something, so minutes after a restart the board
 		// showed seven rows and looked like a seven-strategy desk. A strategy
 		// waiting for its first setup is a strategy an operator needs to see.
-		rows := make([]lbRow, 0, len(d.entries)*len(d.symbols))
-		for _, e := range d.entries {
+		// Mirrors are not registry entries — they have no Evaluate() and never
+		// place an order — so enumerating d.entries alone would leave half the
+		// desk off its own leaderboard. streamNames() is the roster of what
+		// actually runs.
+		names := d.streamNames()
+		rows := make([]lbRow, 0, len(names)*len(d.symbols))
+		for _, name := range names {
 			for _, ss := range d.symbols {
-				key := comboKey(e.Name, ss.sym)
+				key := comboKey(name, ss.sym)
 				cs, traded := d.combos[key]
 				if !traded || cs.N == 0 {
 					// Funded and running, no closed trade yet. Zeroed rather
 					// than omitted, so the row count matches the stream count.
-					rows = append(rows, lbRow{Strategy: e.Name, Symbol: ss.sym})
+					rows = append(rows, lbRow{Strategy: name, Symbol: ss.sym})
 					continue
 				}
-				parts := []string{e.Name, ss.sym}
+				parts := []string{name, ss.sym}
 				pf := 0.0
 				if cs.GrossL > 0 {
 					pf = math.Round(cs.GrossW/cs.GrossL*100) / 100
@@ -893,7 +981,8 @@ func main() {
 		started:     time.Now().UTC(),
 		notionalUSD: defaultNotionalUSD,
 	}
-	log.Printf("hunt pack: %d strategies x %d symbols", len(d.entries), 8)
+	log.Printf("hunt pack: %d signal strategies + %d mirrors = %d streams/symbol",
+		len(d.entries), len(d.streamNames())-len(d.entries), len(d.streamNames()))
 	// Guard against an empty or accidentally-truncated pack rather than pinning
 	// an exact count: the pack is meant to grow as strategies are registered,
 	// and a hard 100 would fail the build every time one was added.
@@ -971,8 +1060,9 @@ func main() {
 	signal.Notify(sig, os.Interrupt)
 	pollT := time.NewTicker(15 * time.Second)
 	saveT := time.NewTicker(5 * time.Minute)
-	log.Printf("desk live: %d strategies x %d symbols = %d paper streams",
-		len(d.entries), len(d.symbols), len(d.entries)*len(d.symbols))
+	log.Printf("desk live: %d strategies (%d signal + %d mirror) x %d symbols = %d paper streams",
+		len(d.streamNames()), len(d.entries), len(d.streamNames())-len(d.entries),
+		len(d.symbols), len(d.streamNames())*len(d.symbols))
 	for {
 		select {
 		case <-pollT.C:
@@ -986,4 +1076,139 @@ func main() {
 			return
 		}
 	}
+}
+
+// ── fill-time mirroring ──────────────────────────────────────────────────────
+//
+// An anti-strategy is the exact inverse of its original's REALISED trade, not a
+// separate strategy that happens to trade the other way.
+//
+// The distinction is not cosmetic. The first attempt inverted each strategy's
+// signal and let the mirror post its own post-only limit. Under this desk's fill
+// rule —
+//
+//	filled := (long && bar.Low <= limit) || (!long && bar.High >= limit)
+//
+// — a buy limit and a sell limit at the same price fill on opposite conditions.
+// Price cannot satisfy both on one bar, so the two halves almost never traded
+// together (35 of 53 traded streams had no partner) and the mirror filled only
+// when price moved toward its limit. That is a selection bias, and it produced
+// four 100%-win-rate rows at the top of the leaderboard that meant nothing.
+//
+// Inheriting the fill removes the choice entirely: if the original traded, the
+// mirror traded, on the same bar at the same price. Their P&L then sums to
+// exactly minus the fees both paid, which is the property that makes the pair
+// worth reading.
+
+// mirrorOf returns the mirror's strategy name, or "" if the given name is itself
+// a mirror (mirrors are not mirrored).
+func mirrorOf(name string) string {
+	if scalers.IsAntiStrategy(name) {
+		return ""
+	}
+	return scalers.AntiPrefix + name
+}
+
+// openMirror creates the inverse position for a fill the original just took.
+//
+// Caller holds d.mu and has already set orig.
+func (d *desk) openMirror(strategy, symbol string, orig *position, barIdx int64, bar scalers.Candle) {
+	if !antiEnabled || orig == nil {
+		return
+	}
+	mk := mirrorOf(strategy)
+	if mk == "" {
+		return
+	}
+
+	key := comboKey(mk, symbol)
+	mcs := d.combos[key]
+	if mcs == nil {
+		mcs = &comboState{Eq: 1, Peak: 1}
+		d.combos[key] = mcs
+	}
+	if mcs.Pos != nil {
+		// Should not happen: a pair opens on one bar with mirrored exits, so it
+		// closes on one bar too, and manageMirror runs before this. Skipping keeps
+		// the one-position-per-stream invariant the original obeys — stacking
+		// would give the mirror leverage its source never had — but a skip means
+		// the pair has drifted out of step, so it is counted and surfaced on
+		// /scalp/health rather than swallowed.
+		d.mirrorSkips++
+		return
+	}
+
+	// Distances are measured from the SHARED entry, then swapped: the mirror's
+	// target sits where the original's stop is, and vice versa. That is what
+	// makes every outcome of one the negation of the other.
+	slDist := math.Abs(orig.Entry - orig.SL)
+	tpDist := math.Abs(orig.TP - orig.Entry)
+
+	dir := "SHORT"
+	if orig.Dir == "SHORT" {
+		dir = "LONG"
+	}
+
+	var sl, tp float64
+	if dir == "LONG" {
+		// Mirror stop where the original targets; mirror target where it stops.
+		sl, tp = orig.Entry-tpDist, orig.Entry+slDist
+	} else {
+		sl, tp = orig.Entry+tpDist, orig.Entry-slDist
+	}
+
+	mcs.Pos = &position{
+		Dir: dir, Entry: orig.Entry, SL: sl, TP: tp,
+		EntryBar: barIdx, EntryTime: bar.OpenTime, Profile: orig.Profile,
+	}
+	mcs.Pend = nil
+	d.mirrorOpens++
+}
+
+// manageMirror advances a strategy's mirror by one bar, if it holds a position.
+//
+// Caller holds d.mu.
+func (d *desk) manageMirror(strategy, symbol string, bar scalers.Candle, barIdx int64) {
+	mk := mirrorOf(strategy)
+	if mk == "" {
+		return
+	}
+	if mcs := d.combos[comboKey(mk, symbol)]; mcs != nil && mcs.Pos != nil {
+		d.managePosition(mcs, mk, symbol, bar, barIdx)
+	}
+}
+
+// antiEnabled is resolved once at boot. Reading the environment on every fill
+// would let a mid-session change desynchronise a pair — mirroring some fills and
+// not others, which is worse than mirroring none.
+var antiEnabled = func() bool {
+	raw := strings.TrimSpace(os.Getenv("ANTI_STRATEGIES"))
+	if raw == "" {
+		return true
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return v
+}()
+
+// streamNames is the roster of strategy names the desk keeps accounts for:
+// every registry entry, each followed by its mirror.
+//
+// Mirrors are not registry entries. They have no Evaluate(), place no orders and
+// exist only as the inverse of a fill an original already took, so anything that
+// enumerates the desk by walking d.entries — the leaderboard, the stream count —
+// would report half of it. This is the single place that knows the difference.
+//
+// Caller holds d.mu (or is running before serve()).
+func (d *desk) streamNames() []string {
+	out := make([]string, 0, len(d.entries)*2)
+	for _, e := range d.entries {
+		out = append(out, e.Name)
+		if mk := mirrorOf(e.Name); mk != "" && antiEnabled {
+			out = append(out, mk)
+		}
+	}
+	return out
 }

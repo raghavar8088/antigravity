@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3,4,5],"files":1,"symbols":32,"top_files":[{"file":"engine/cmd/scalp_prelive/main.go","symbols":32}]}}
+{"engine-cmd":{"communities":[0,1,2,3,4,5,6,8],"files":2,"symbols":62,"top_files":[{"file":"engine/cmd/scalp_prelive/main.go","symbols":35},{"file":"engine/cmd/scalp_prelive/mirror_test.go","symbols":27}]},"engine-strategy":{"communities":[0,7],"files":2,"symbols":4,"top_files":[{"file":"engine/internal/strategy/scalpers/anti_strategy.go","symbols":2},{"file":"engine/internal/strategy/scalpers/hunt_pack.go","symbols":2}]}}
