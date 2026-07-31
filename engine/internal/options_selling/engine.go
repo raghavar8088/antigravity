@@ -355,6 +355,20 @@ func (e *Engine) ResetAccountWith(startingBalance float64) PersistedState {
 
 	if startingBalance <= 0 {
 		startingBalance = initialSellingBalanceUSD()
+		// Apply the SAME hunt-mode funding floor the constructor uses.
+		//
+		// Without this a reset silently refunded the desk to the bare configured
+		// default — $100 against a hundred-odd strategies each wanting a $1,000
+		// stake. The desk does not fail visibly at that balance; it just cannot
+		// open most of its positions, so the leaderboard starts measuring which
+		// strategy signalled FIRST rather than which has an edge, which is the
+		// exact failure hunt mode exists to prevent. Every reset quietly
+		// re-introduced it.
+		if huntModeEnabled() {
+			if hb := huntDeskBalance(len(e.states)); hb > startingBalance {
+				startingBalance = hb
+			}
+		}
 	}
 	e.trades = nil
 	e.balance = startingBalance

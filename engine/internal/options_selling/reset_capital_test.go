@@ -20,16 +20,36 @@ func TestResetAccountWith_UsesRequestedCapital(t *testing.T) {
 	}
 }
 
-func TestResetAccountWith_NonPositiveFallsBackToDefault(t *testing.T) {
+// A missing or nonsensical capital must fall back to the desk's CONFIGURED size,
+// never to something arbitrary.
+//
+// With hunt mode on — the default, and how this desk actually runs — that size
+// is the hunt floor: every strategy funded with its own stake. Falling back to
+// the bare env default left the desk unable to open most of its positions, so
+// the leaderboard measured which strategy signalled first rather than which had
+// an edge.
+func TestResetAccountWith_NonPositiveFallsBackToTheDesksConfiguredSize(t *testing.T) {
+	t.Setenv("OPTIONS_HUNT_MODE", "true")
 	e := NewEngine()
-	want := initialSellingBalanceUSD()
+	want := huntDeskBalance(len(e.states))
 	for _, v := range []float64{0, -1} {
 		if got := e.ResetAccountWith(v).Balance; got != want {
-			t.Errorf("ResetAccountWith(%v) = %v, want env default %v", v, got, want)
+			t.Errorf("ResetAccountWith(%v) = %v, want the hunt-funded size %v", v, got, want)
 		}
 	}
 	if got := e.ResetAccount().Balance; got != want {
 		t.Errorf("ResetAccount() = %v, want %v", got, want)
+	}
+}
+
+// With hunt mode OFF the rotating roster shares one pot, so the bare configured
+// default is correct and the floor must not inflate it.
+func TestResetAccountWith_HuntModeOffUsesTheBareDefault(t *testing.T) {
+	t.Setenv("OPTIONS_HUNT_MODE", "false")
+	t.Setenv("INITIAL_OPTIONS_BALANCE_USD", "2500")
+	e := NewEngine()
+	if got := e.ResetAccountWith(0).Balance; got != 2500 {
+		t.Errorf("ResetAccountWith(0) = %v with hunt mode off, want the env default 2500", got)
 	}
 }
 
