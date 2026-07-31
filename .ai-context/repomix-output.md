@@ -1036,6 +1036,10 @@ The content is organized as follows:
   marketdata/coinbase.go
   marketdata/db_writer.go
   marketdata/delta_history.go
+  marketdata/delta_klines_test.go
+  marketdata/delta_klines.go
+  marketdata/delta_ticks_test.go
+  marketdata/delta_ticks.go
   marketdata/delta.go
   marketdata/deribit_dvol.go
   marketdata/historical_fetcher_test.go
@@ -1706,6 +1710,7 @@ The content is organized as follows:
   antigravity/liveengine_result_test.go
   antigravity/liveengine_wiring.go
   antigravity/main.go
+  antigravity/tickfeed.go
   backtest/main.go
   btc_qualify_25/main.go
   btc_signal_probe/main.go

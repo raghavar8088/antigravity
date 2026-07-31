@@ -530,16 +530,21 @@ func main() {
 	var reconciliationComplete atomic.Bool // set to true after ReconcileOnRestart completes
 
 	// ═══════════════════════════════════════════════════
-	// 1. WebSocket Live Stream (Coinbase)
+	// 1. WebSocket Live Stream (Delta Exchange)
 	// ═══════════════════════════════════════════════════
-	coinbaseClient := marketdata.NewCoinbaseClient()
+	//
+	// This engine EXECUTES on Delta — the Live Engine buys Delta options, and
+	// the options desks price against the Delta chain. The tick feed was
+	// Coinbase spot (BTC-USD), so 600 strategies were scored on one venue's
+	// trades while the orders went to another's book. Coinbase BTC-USD is spot;
+	// Delta BTCUSD is a perpetual with its own basis and microstructure, and a
+	// strategy tuned on the first is not evidence about the second.
+	//
+	// Set MARKET_DATA_VENUE=coinbase to pin the old feed for an A/B comparison.
+	// Whatever is chosen is logged, because a desk quietly running on the wrong
+	// venue looks identical to one running correctly.
+	tickFeed := newLiveTickFeed(ctx)
 	deltaProbeClient = marketdata.NewDeltaTickerClient()
-	go func() {
-		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
-		if err != nil {
-			log.Fatalf("Fatal error connecting to Coinbase: %v", err)
-		}
-	}()
 
 	// ═══════════════════════════════════════════════════
 	// 2. Build curated strategies (full BTC Equity roster; no silent truncation)
@@ -938,7 +943,7 @@ func main() {
 	// 10. Multi-Strategy Orchestrator
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
-		coinbaseClient,
+		tickFeed,
 		allStrategies,
 		riskEngine,
 		paperExecute,
@@ -1042,7 +1047,7 @@ func main() {
 	}
 	orchestrator.SetKillSwitch(ksSvc)
 	orchestrator.SetEventLedger(ksLedger)
-	execWatchdog := trading.NewExecutionWatchdog(coinbaseClient, ksSvc)
+	execWatchdog := trading.NewExecutionWatchdog(tickFeed, ksSvc)
 	orchestrator.SetExecutionWatchdog(execWatchdog)
 	go safeGo("ExecutionWatchdog", func() { execWatchdog.Run(ctx) })
 	ksExecutor.SetOrchestrator(orchestrator)
@@ -1426,39 +1431,58 @@ func main() {
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
-	// Upgrade 6: Binance kline WebSocket feed for live 15m/1h candles.
-	// Falls back to 5m synthesis automatically on disconnect.
-	klineClient := marketdata.NewBinanceKlineClient([]string{"15m", "1h"})
-	go safeGo("BinanceKlines", func() {
-		if err := klineClient.Start(
-			ctx,
-			func(c marketdata.Candle) {
+	// Live 15m/1h candles from Delta.
+	//
+	// These were Binance kline sockets. With the tick stream on Delta, leaving
+	// them on Binance would be worse than either venue alone: a strategy would
+	// evaluate a Delta-derived 1m series against Binance-derived 15m and 1h
+	// bars, so every cross-timeframe check — a pullback measured against the
+	// higher-timeframe trend, a breakout confirmed on 1h — would straddle two
+	// different instruments. Falls back to 5m synthesis on failure, as before.
+	klineClient := marketdata.NewDeltaKlineFeed(liveTickSymbol(liveTickVenue()), []string{"15m", "1h"})
+	go safeGo("DeltaKlines", func() {
+		klineClient.Start(ctx, func(res string, c marketdata.Candle) {
+			switch res {
+			case "15m":
 				orchestrator.Push15mKlineCandle(c)
 				orchestrator.SetKlineFeedActive("15m", true)
-			},
-			func(c marketdata.Candle) {
+			case "1h":
 				orchestrator.Push1hKlineCandle(c)
 				orchestrator.SetKlineFeedActive("1h", true)
-			},
-		); err != nil {
-			log.Printf("[KLINES] BinanceKlineClient stopped: %v", err)
-		}
+			}
+		})
 		orchestrator.SetKlineFeedActive("15m", false)
 		orchestrator.SetKlineFeedActive("1h", false)
 	})
 
-	// Upgrade 2: Binance aggTrade WebSocket feed for real CVD (taker-side
-	// classification) instead of the price-direction proxy. Falls back to
-	// the proxy automatically on disconnect via SetAggTradeFeedActive(false).
-	aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
-		orchestrator.PushAggTrade(t)
-	})
-	go safeGo("BinanceAggTrade", func() {
-		if err := aggTradeClient.Start(ctx); err != nil {
-			log.Printf("[AGGTRADE] feed error: %v", err)
-		}
-		orchestrator.SetAggTradeFeedActive(false)
-	})
+	// Real CVD from taker-side classification, now on Delta's own trades.
+	//
+	// This read a Binance aggTrade socket, so order flow was measured on a
+	// different book from the one being traded — and CVD is precisely a claim
+	// about who is lifting whose offers on a particular venue, which makes it
+	// the least defensible place to substitute another exchange.
+	//
+	// The Delta tick feed already classifies every trade by taker side, so no
+	// second connection is needed. When the feed is Coinbase (the A/B pin), the
+	// old Binance aggTrade socket is used, because Coinbase matches carry no
+	// usable taker classification here.
+	if dtc, ok := tickFeed.(*marketdata.DeltaTickClient); ok {
+		dtc.SetAggTradeHook(func(t marketdata.AggTrade) {
+			orchestrator.PushAggTrade(t)
+			orchestrator.SetAggTradeFeedActive(true)
+		})
+		log.Printf("[AGGTRADE] CVD sourced from the Delta trade stream")
+	} else {
+		aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
+			orchestrator.PushAggTrade(t)
+		})
+		go safeGo("BinanceAggTrade", func() {
+			if err := aggTradeClient.Start(ctx); err != nil {
+				log.Printf("[AGGTRADE] feed error: %v", err)
+			}
+			orchestrator.SetAggTradeFeedActive(false)
+		})
+	}
 
 	// ── Reconciliation Authority v2 ───────────────────────────────────────────
 	// Compares ledger OMS projections against:
@@ -2921,7 +2945,7 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[RAIG] HTTP shutdown warning: %v", err)
 	}
-	coinbaseClient.Close()
+	tickFeed.Close()
 	if dbStore != nil {
 		dbStore.Close()
 	}
