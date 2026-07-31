@@ -1702,6 +1702,7 @@ The content is organized as follows:
   validation/production/gate.go
 
 [cmd]/
+  antigravity/liveengine_allowlist_test.go
   antigravity/liveengine_result_test.go
   antigravity/liveengine_wiring.go
   antigravity/main.go

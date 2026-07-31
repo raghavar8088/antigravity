@@ -20,12 +20,36 @@ import (
 // defaultLiveStrategyNames is the owner-selected set of BUYING strategies allowed
 // to place live orders. Overridable via LIVE_ENGINE_STRATEGIES (comma-separated)
 // and adjustable at runtime via the Live Engine roster API.
+//
+// PERMISSION, NOT ENDORSEMENT. Being on this list only means an order from this
+// strategy is not rejected outright; whether it has EARNED real capital is the
+// eligibility gate's question (SetLiveEligibility below), and that gate is
+// currently not enforced. So on today's configuration this list alone decides
+// what trades with real money.
+//
+// What the real record says, as of 2026-07-31 — three of these have actually
+// filled on Delta, and all three lost:
+//
+//	Intraday_PutBuy_RSIOverboughtExtreme_150m   6 fills / 1d   exp -$0.019  PF 0.04
+//	Swing_CallBuy_OverextensionFadeDown_600m    5 fills / 1d   exp -$0.018  PF 0.27
+//	Swing_PutBuy_OverextensionFadeUp_600m       5 fills / 2d   exp -$0.013  PF 0.03
+//
+// The first of those is the top strategy on the paper leaderboard by a factor of
+// twelve (+$2,181 on a $1,000 paper account). Paper rank and real outcome point
+// opposite ways on the same strategies, which is worth remembering before this
+// list is extended again on paper P&L alone.
 var defaultLiveStrategyNames = []string{
 	"Intraday_PutBuy_RSIOverboughtExtreme_150m",
 	"Swing_CallBuy_OverextensionFadeDown_600m",
 	"Swing_PutBuy_OverextensionFadeUp_600m",
 	"Intraday_PutBuy_SharpReversalDown_150m",
 	"Intraday_CallBuy_CapitulationRecovery_180m",
+	// Added 2026-07-31 at the owner's direction, from the paper leaderboard.
+	// None has a real fill yet; each is unproven rather than disproven.
+	"Swing_PutBuy_BreakdownTrendBear_960m",
+	"Intraday_CallBuy_TripleBull_180m",
+	"Swing_PutBuy_ATRExpandBear_720m",
+	"Intraday_PutBuy_BreakdownTrendBear_240m",
 }
 
 // parseEnvBoolDefault reads a boolean env var, falling back to def when unset or
@@ -42,6 +66,38 @@ func parseEnvBoolDefault(key string, def bool) bool {
 		return def
 	}
 	return v
+}
+
+// reportUnknownAllowListNames logs any allow-listed name that matches no
+// registered buying strategy.
+//
+// The allow-list is a list of long hand-typed strings compared by equality, so a
+// typo does not fail — it silently permits a strategy that does not exist, and
+// the operator sees a longer roster while nothing changes. That is the same
+// shape as the go-live gate that sat wired to hardcoded zeros: a control that
+// reads as configured and does nothing. Logged rather than fatal, because
+// refusing to boot the whole engine over one stale name would be a worse
+// failure than trading the remaining valid ones.
+func reportUnknownAllowListNames(allow []string, buyEngine *options.Engine) {
+	if buyEngine == nil || len(allow) == 0 {
+		return
+	}
+	known := map[string]bool{}
+	for _, s := range buyEngine.StrategyStatuses() {
+		known[s.Name] = true
+	}
+	unknown := make([]string, 0, len(allow))
+	for _, n := range allow {
+		if !known[n] {
+			unknown = append(unknown, n)
+		}
+	}
+	if len(unknown) == 0 {
+		log.Printf("[LIVE ENGINE] allow-list: %d strategies, all resolved", len(allow))
+		return
+	}
+	log.Printf("[LIVE ENGINE] ⚠️  allow-list has %d name(s) matching NO registered strategy — they permit nothing: %s",
+		len(unknown), strings.Join(unknown, ", "))
 }
 
 func defaultLiveStrategies() []string {
@@ -75,7 +131,9 @@ func wireLiveEngine(
 	// sells. Gated to the per-strategy allow-list below.
 	bridge.SetBuyingMode(true)
 	bridge.SetNativeBuyMode(true)
-	bridge.SetLiveAllowList(defaultLiveStrategies())
+	allow := defaultLiveStrategies()
+	bridge.SetLiveAllowList(allow)
+	reportUnknownAllowListNames(allow, buyEngine)
 
 	// Connect the go-live gate to the order path. The allow-list says a strategy
 	// is PERMITTED; this says it has EARNED it. Both must hold once enforcement is
