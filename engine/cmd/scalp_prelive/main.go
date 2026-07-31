@@ -688,27 +688,48 @@ func (d *desk) serve(port int) {
 			Missed   int     `json:"missed"`
 			GatePass bool    `json:"gate_pass"`
 		}
-		var rows []lbRow
-		for key, cs := range d.combos {
-			if cs.N == 0 {
-				continue
+		// EVERY stream appears, including ones that have not traded yet.
+		//
+		// Building the board only from combos with trades hid the vast majority
+		// of the desk: 2,416 streams run, but a combo state exists only once a
+		// stream has closed something, so minutes after a restart the board
+		// showed seven rows and looked like a seven-strategy desk. A strategy
+		// waiting for its first setup is a strategy an operator needs to see.
+		rows := make([]lbRow, 0, len(d.entries)*len(d.symbols))
+		for _, e := range d.entries {
+			for _, ss := range d.symbols {
+				key := comboKey(e.Name, ss.sym)
+				cs, traded := d.combos[key]
+				if !traded || cs.N == 0 {
+					// Funded and running, no closed trade yet. Zeroed rather
+					// than omitted, so the row count matches the stream count.
+					rows = append(rows, lbRow{Strategy: e.Name, Symbol: ss.sym})
+					continue
+				}
+				parts := []string{e.Name, ss.sym}
+				pf := 0.0
+				if cs.GrossL > 0 {
+					pf = math.Round(cs.GrossW/cs.GrossL*100) / 100
+				} else if cs.GrossW > 0 {
+					pf = 999
+				}
+				rows = append(rows, lbRow{
+					Strategy: parts[0], Symbol: parts[1], N: cs.N,
+					WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
+					PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
+					MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
+					GatePass: d.gatePass(cs),
+				})
 			}
-			parts := strings.SplitN(key, "|", 2)
-			pf := 0.0
-			if cs.GrossL > 0 {
-				pf = math.Round(cs.GrossW/cs.GrossL*100) / 100
-			} else if cs.GrossW > 0 {
-				pf = 999
-			}
-			rows = append(rows, lbRow{
-				Strategy: parts[0], Symbol: parts[1], N: cs.N,
-				WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
-				PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
-				MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
-				GatePass: d.gatePass(cs),
-			})
 		}
-		sort.Slice(rows, func(i, j int) bool { return rows[i].NetUSD > rows[j].NetUSD })
+		// Traded streams first, best net at the top; untraded ones fall to the
+		// bottom rather than being scattered through the ranking at zero.
+		sort.Slice(rows, func(i, j int) bool {
+			if (rows[i].N > 0) != (rows[j].N > 0) {
+				return rows[i].N > 0
+			}
+			return rows[i].NetUSD > rows[j].NetUSD
+		})
 		writeJSON(w, map[string]interface{}{"gate": gateDesc, "rows": rows})
 	}))
 	http.HandleFunc("/scalp/trades", gated(func(w http.ResponseWriter, r *http.Request) {
