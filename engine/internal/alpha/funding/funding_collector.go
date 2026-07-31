@@ -28,6 +28,8 @@ func NewCollector() *Collector {
 
 func (c *Collector) Fetch(ctx context.Context, exchange, symbol string) (FundingSnapshot, error) {
 	switch strings.ToLower(exchange) {
+	case "delta":
+		return c.fetchDelta(ctx, symbol)
 	case "binance":
 		return c.fetchBinance(ctx, symbol)
 	case "bybit":

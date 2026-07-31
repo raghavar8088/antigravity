@@ -583,32 +583,34 @@ func main() {
 
 	// ═══════════════════════════════════════════════════
 	// 2b. Funding Alpha — live collection loop
-	// Fetches BTC perpetual funding rates from Binance every 8 hours and
+	// Fetches the BTC perpetual funding rate from DELTA every 8 hours and
 	// injects snapshots directly into every InstitutionalAlphaScalper so
 	// the FundingMeanReversion and Confluence modules have live data.
+	//
+	// This read Binance and Bybit, so those strategies reasoned about the
+	// leverage imbalance in books this engine does not trade. Funding is the
+	// payment tying ONE perpetual to spot; another venue's is a different number
+	// about a different crowd. The second (Bybit) snapshot is dropped for the
+	// same reason rather than kept as corroboration.
 	// ═══════════════════════════════════════════════════
 	go safeGo("FundingCollector", func() {
 		collector := funding.NewCollector()
 		collect := func() {
 			cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			snap, err := collector.Fetch(cctx, "binance", "BTCUSDT")
+			snap, err := collector.Fetch(cctx, "delta", "BTCUSD")
 			if err != nil {
 				log.Printf("[FUNDING] collection error: %v", err)
 				return
 			}
-			snap2, _ := collector.Fetch(cctx, "bybit", "BTCUSDT")
 			for _, entry := range allStrategies {
 				if inj, ok := entry.Strategy.(interface {
 					InjectFunding(funding.FundingSnapshot)
 				}); ok {
 					inj.InjectFunding(snap)
-					if snap2.Exchange != "" {
-						inj.InjectFunding(snap2)
-					}
 				}
 			}
-			log.Printf("[FUNDING] collected rate=%.6f (Binance BTCUSDT)", snap.FundingRate)
+			log.Printf("[FUNDING] collected rate=%.6f (Delta %s)", snap.FundingRate, snap.Symbol)
 		}
 		collect() // immediate on startup
 		ticker := time.NewTicker(8 * time.Hour)
@@ -1254,22 +1256,47 @@ func main() {
 	oiFetcher := derivatives.NewOIFetcher()
 	go fundingFetcher.StartPolling(ctx, 15*time.Minute)
 	go oiFetcher.StartPolling(ctx, 15*time.Minute)
-	log.Println("[DEPS] Funding rate + OI fetchers polling every 15m")
+	log.Println("[DEPS] Delta funding rate + OI fetchers polling every 15m")
 
-	// Wiring 6b: Deribit BTC DVOL volatility index (used by S10-S13 vol family)
+	// Wiring 6b: BTC implied-volatility index from Delta's own option chain
+	// (used by the S10-S13 vol family). Previously Deribit DVOL — a different
+	// venue's options, and so a different volatility from the one the options
+	// desks here actually quote against.
 	dvolHolder := marketdata.NewDeribitDVOLHolder()
 	dvolHolder.StartPolling(ctx)
-	log.Println("[DEPS] Deribit BTC DVOL feed polling every 5m")
+	log.Println("[DEPS] Delta BTC 30d ATM implied-vol index polling every 5m")
 
-	// Wiring 6c: Binance BTC perpetual liquidation feed (used by S14)
-	liquidationHolder := marketdata.NewBinanceLiquidationHolder()
-	liquidationHolder.StartStreaming(ctx)
-	log.Println("[DEPS] Binance BTC liquidation feed streaming (!forceOrder@arr)")
+	// Wiring 6c: liquidation feed — DISABLED, because Delta does not publish one.
+	//
+	// Subscribing to "liquidations" on Delta's socket is refused outright:
+	// {"error":"subscription forbidden on this invalid channel"}. The feed was a
+	// Binance forceOrder stream, and there is no Delta equivalent to move it to.
+	//
+	// Rather than keep reading another exchange's forced sells, the feed is left
+	// nil, which the orchestrator handles by suppressing the strategies that
+	// need it (see LoopDeps.LiquidationHolder). That costs four strategies —
+	// Liquidation_Cascade_Fade, Liquidation_Cascade_Reversal,
+	// Liquidation_Hunt_Long and Liquidation_Hunt_Short — and the reasoning is
+	// that a strategy which cannot be MEASURED on Delta data cannot honestly be
+	// promoted to trading with Delta money. Feeding them Binance prints would
+	// not have made them evaluable; it would only have hidden that it hadn't.
+	//
+	// Set LIQUIDATION_FEED=binance to restore the old cross-venue feed.
+	var liquidationHolder *marketdata.BinanceLiquidationHolder
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("LIQUIDATION_FEED")), "binance") {
+		liquidationHolder = marketdata.NewBinanceLiquidationHolder()
+		liquidationHolder.StartStreaming(ctx)
+		log.Println("[DEPS] ⚠️  liquidation feed streaming from BINANCE — a venue this engine does not trade")
+	} else {
+		log.Println("[DEPS] liquidation feed OFF — Delta publishes none; 4 liquidation strategies are suppressed")
+	}
 
-	// Wiring 6d: Binance BTC perpetual mark price (used by S16 basis calc)
-	perpPriceHolder := marketdata.NewBinancePerpPriceHolder()
+	// Wiring 6d: Delta BTCUSD perpetual mark price (used by S16 basis calc).
+	// Delta's ticker carries mark AND spot, so both sides of the basis
+	// subtraction now come from the same book.
+	perpPriceHolder := marketdata.NewDeltaPerpPriceHolder()
 	perpPriceHolder.StartPolling(ctx)
-	log.Println("[DEPS] Binance BTC perp mark price feed polling every 30s")
+	log.Println("[DEPS] Delta BTC perp mark price polling every 30s")
 
 	// Wiring 6e: Macro cross-asset feed — Nasdaq futures proxy + DXY (used by S18-S21 macro family)
 	macroFeedHolder := marketdata.NewMacroFeedHolder()
@@ -1283,7 +1310,7 @@ func main() {
 			log.Printf("[DEPTH] subscriber exited: %v", err)
 		}
 	})
-	log.Println("[DEPS] L2 depth subscriber connecting to Binance BTCUSDT@depth20")
+	log.Println("[DEPS] L2 depth subscriber connecting to Delta BTCUSD l2_orderbook")
 
 	// Wiring 8: BTC ETF flow fetcher (daily, via Python yfinance script)
 	pythonPath := os.Getenv("PYTHON_PATH")

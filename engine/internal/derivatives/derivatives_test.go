@@ -42,10 +42,10 @@ func TestFundingFetcher_ParsesResponse(t *testing.T) {
 
 func TestFundingClassification_AllBands(t *testing.T) {
 	tests := []struct {
-		rate         float64
-		wantLabel    string
-		wantSignal   string
-		wantScore    float64
+		rate       float64
+		wantLabel  string
+		wantSignal string
+		wantScore  float64
 	}{
 		{-0.0006, "EXTREME_NEGATIVE", "SQUEEZE_SETUP", 3.0},
 		{-0.0002, "NEGATIVE", "NEUTRAL", 1.0},
@@ -83,11 +83,20 @@ func TestOIClassification_AllStates(t *testing.T) {
 	}
 }
 
-func TestOIFetcher_ParsesMockResponse(t *testing.T) {
+// Open interest now comes from Delta, whose envelope nests the value under
+// "result" and names it "oi" — not a flat "openInterest". Decoding the old shape
+// against the new payload yields an empty string and, without the explicit
+// emptiness check in doFetch, an OI of zero: a claim that nobody holds a
+// position at all.
+func TestOIFetcher_ParsesDeltaTickerShape(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"symbol":       "BTCUSDT",
-			"openInterest": "12345.678",
+			"success": true,
+			"result": map[string]interface{}{
+				"symbol":       "BTCUSD",
+				"oi":           "1349.4730",
+				"oi_value_usd": "85103570.1139",
+			},
 		})
 	}))
 	defer srv.Close()
@@ -100,16 +109,24 @@ func TestOIFetcher_ParsesMockResponse(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	var row binanceOIResponse
+	var row deltaOIResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&row))
-	assert.Equal(t, "12345.678", row.OpenInterest)
+	assert.True(t, row.Success)
+	assert.Equal(t, "1349.4730", row.Result.OpenInterest)
+}
+
+// A payload with no OI must be rejected rather than read as zero.
+func TestOIFetcher_MissingOpenInterestIsRejected(t *testing.T) {
+	var row deltaOIResponse
+	require.NoError(t, json.Unmarshal([]byte(`{"success":true,"result":{"symbol":"BTCUSD"}}`), &row))
+	assert.Empty(t, row.Result.OpenInterest, "an absent OI must stay empty so doFetch can error on it")
 }
 
 // ── score tests ───────────────────────────────────────────────────────────────
 
 func TestComputeDerivativesScore_Clamping(t *testing.T) {
 	// Extreme negative funding + aggressive shorts = total < -3, should clamp
-	funding := FundingData{Rate: -0.0006} // score +3 (squeeze = bullish)
+	funding := FundingData{Rate: -0.0006}                 // score +3 (squeeze = bullish)
 	oi := OIData{Trend: "RISING", PriceDirection: "DOWN"} // score -2 (aggressive shorts)
 	score := ComputeDerivativesScore(funding, oi)
 	assert.GreaterOrEqual(t, score.TotalScore, -3.0)

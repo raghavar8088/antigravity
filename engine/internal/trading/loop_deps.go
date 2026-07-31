@@ -44,8 +44,8 @@ type LoopDeps struct {
 	LiquidationHolder *marketdata.BinanceLiquidationHolder
 	// PerpPriceHolder is optional (nil = S16 Perp_Spot_Basis_Momentum is
 	// suppressed). Polled in the background by
-	// BinancePerpPriceHolder.StartPolling.
-	PerpPriceHolder *marketdata.BinancePerpPriceHolder
+	// DeltaPerpPriceHolder.StartPolling.
+	PerpPriceHolder *marketdata.DeltaPerpPriceHolder
 	// MacroFeedHolder is optional (nil = S18-S21 macro family strategies
 	// degrade to NoSignal/reduced confidence). Polled in the background by
 	// MacroFeedHolder.StartPolling (Nasdaq futures proxy + DXY).

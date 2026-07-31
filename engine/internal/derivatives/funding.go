@@ -11,21 +11,37 @@ import (
 	"time"
 )
 
+// Funding comes from Delta, the venue this engine executes on.
+//
+// It used to come from Binance. A perpetual's funding rate is a property of ONE
+// contract on ONE exchange — it is the payment that ties that specific contract
+// to spot — so reading Binance's while trading Delta's describes a cost this
+// account never pays and a positioning imbalance in a book it never touches.
+//
+// THE UNIT DIFFERS, AND SILENTLY. Binance publishes funding as a DECIMAL
+// (0.000096 = 0.0096% per 8h). Delta publishes the same economic rate as a
+// PERCENT (0.01 = 0.01% per 8h). Everything downstream here expects the decimal
+// — classifyFunding multiplies by 100 to get percent, and the scalper
+// thresholds are documented in raw decimals (S8 at +/-0.0003). Passing Delta's
+// number through unconverted inflates it a HUNDREDFOLD: a perfectly ordinary
+// 0.01% funding rate reads as 1%, every strategy sees EXTREME_POSITIVE /
+// OVERLEVERAGED_LONGS permanently, and nothing errors.
 const (
-	fundingEndpoint = "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=1"
+	// One ticker call carries funding, mark, spot and open interest.
+	fundingEndpoint = "https://api.india.delta.exchange/v2/tickers/BTCUSD"
 	fundingCacheTTL = 15 * time.Minute
 	httpTimeout     = 15 * time.Second
 	maxRetries      = 3
 )
 
-// FundingFetcher polls the Binance futures funding rate endpoint and caches
-// the result for 15 minutes to respect rate limits.
+// FundingFetcher polls Delta's ticker for the BTCUSD perpetual funding rate and
+// caches the result for 15 minutes to respect rate limits.
 type FundingFetcher struct {
-	client  *http.Client
-	cache   *FundingData
+	client   *http.Client
+	cache    *FundingData
 	cachedAt time.Time
 	cacheTTL time.Duration
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 }
 
 // NewFundingFetcher creates a FundingFetcher with a 15-second HTTP timeout.
@@ -36,7 +52,7 @@ func NewFundingFetcher() *FundingFetcher {
 	}
 }
 
-// Fetch fetches the latest funding rate from Binance. Results are cached.
+// Fetch fetches the latest funding rate from Delta. Results are cached.
 func (f *FundingFetcher) Fetch(ctx context.Context) (*FundingData, error) {
 	f.mu.RLock()
 	if f.cache != nil && time.Since(f.cachedAt) < f.cacheTTL {
@@ -127,10 +143,24 @@ func (f *FundingFetcher) StartPolling(ctx context.Context, interval time.Duratio
 
 // ── internals ─────────────────────────────────────────────────────────────────
 
-type binanceFundingRow struct {
-	Symbol      string `json:"symbol"`
-	FundingRate string `json:"fundingRate"`
+// deltaTickerEnvelope is Delta's /v2/tickers/<symbol> response. Numeric fields
+// arrive as quoted strings.
+type deltaTickerEnvelope struct {
+	Success bool `json:"success"`
+	Result  struct {
+		Symbol      string `json:"symbol"`
+		FundingRate string `json:"funding_rate"`
+	} `json:"result"`
 }
+
+// deltaFundingPercentToDecimal converts Delta's percent-quoted funding rate into
+// the decimal every consumer in this repo expects.
+//
+// Kept as a named function rather than an inline /100 so the conversion is
+// visible at the call site and testable on its own. It is the single most
+// dangerous line in this file: omitting it does not fail, it just multiplies
+// every funding reading by a hundred.
+func deltaFundingPercentToDecimal(pct float64) float64 { return pct / 100 }
 
 func (f *FundingFetcher) doFetch(ctx context.Context) (*FundingData, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fundingEndpoint, nil)
@@ -151,25 +181,32 @@ func (f *FundingFetcher) doFetch(ctx context.Context) (*FundingData, error) {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 
-	var rows []binanceFundingRow
-	if err := json.Unmarshal(body, &rows); err != nil {
+	var env deltaTickerEnvelope
+	if err := json.Unmarshal(body, &env); err != nil {
 		return nil, fmt.Errorf("decode JSON: %w", err)
 	}
-	if len(rows) == 0 {
-		return nil, fmt.Errorf("empty funding rate response")
+	if !env.Success || env.Result.FundingRate == "" {
+		return nil, fmt.Errorf("delta ticker returned no funding rate")
 	}
 
-	var rate float64
-	_, parseErr := fmt.Sscanf(rows[0].FundingRate, "%f", &rate)
+	var pct float64
+	_, parseErr := fmt.Sscanf(env.Result.FundingRate, "%f", &pct)
 	if parseErr != nil {
-		return nil, fmt.Errorf("parse rate %q: %w", rows[0].FundingRate, parseErr)
+		return nil, fmt.Errorf("parse rate %q: %w", env.Result.FundingRate, parseErr)
 	}
+	// Percent -> decimal. See deltaFundingPercentToDecimal.
+	rate := deltaFundingPercentToDecimal(pct)
 
 	label, signal, score := classifyFunding(rate)
 	_ = score // used by score.go
 
+	symbol := env.Result.Symbol
+	if symbol == "" {
+		symbol = "BTCUSD"
+	}
+
 	return &FundingData{
-		Symbol:         "BTCUSDT",
+		Symbol:         symbol,
 		Rate:           rate,
 		AnnualisedRate: rate * 3 * 365,
 		Label:          label,

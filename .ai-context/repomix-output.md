@@ -752,6 +752,8 @@ The content is organized as follows:
   alpha/delta/delta_engine.go
   alpha/funding/funding_cache.go
   alpha/funding/funding_collector.go
+  alpha/funding/funding_delta_test.go
+  alpha/funding/funding_delta.go
   alpha/funding/funding_engine.go
   alpha/fvg/fvg_detector.go
   alpha/liquidations/liquidations_engine.go
@@ -884,6 +886,7 @@ The content is organized as follows:
   delta/monitor_interval_test.go
   delta/trade_status_test.go
   derivatives/derivatives_test.go
+  derivatives/funding_delta_test.go
   derivatives/funding.go
   derivatives/oi.go
   derivatives/score.go
@@ -1029,19 +1032,20 @@ The content is organized as follows:
   marketdata/binance_aggtrade.go
   marketdata/binance_klines.go
   marketdata/binance_liquidations.go
-  marketdata/binance_perp_price.go
   marketdata/candle_test.go
   marketdata/candle.go
   marketdata/client.go
   marketdata/coinbase.go
   marketdata/db_writer.go
   marketdata/delta_history.go
+  marketdata/delta_iv_index_test.go
+  marketdata/delta_iv_index.go
   marketdata/delta_klines_test.go
   marketdata/delta_klines.go
+  marketdata/delta_perp_price.go
   marketdata/delta_ticks_test.go
   marketdata/delta_ticks.go
   marketdata/delta.go
-  marketdata/deribit_dvol.go
   marketdata/historical_fetcher_test.go
   marketdata/historical_fetcher.go
   marketdata/historical_loader.go
@@ -1137,6 +1141,7 @@ The content is organized as follows:
   options/strategies.go
   options/types.go
   orderbook/analysis.go
+  orderbook/depth_delta_test.go
   orderbook/depth.go
   orderbook/orderbook_test.go
   orderbook/types.go

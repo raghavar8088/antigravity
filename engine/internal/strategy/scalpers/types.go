@@ -141,7 +141,7 @@ type MarketContext struct {
 
 	// PerpSpotBasis — Binance BTCUSDT perpetual mark price vs Coinbase spot
 	// (ctx.Price), for S16's basis-momentum signal. Populated from
-	// BinancePerpPriceHolder. PerpPrice is 0 if the feed has never populated.
+	// DeltaPerpPriceHolder. PerpPrice is 0 if the feed has never populated.
 	PerpPrice          float64
 	PerpPricePopulated bool
 	PerpPriceHealthy   bool
