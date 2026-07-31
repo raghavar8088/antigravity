@@ -2,12 +2,22 @@ package options
 
 import "testing"
 
-// A mirror must be an exact inverse: same entries, opposite side, exits swapped.
-// Getting only half of that produces a strategy that looks like a hedge and is
-// not one — swapping the exits alone leaves a long as a long, and flipping the
-// side alone leaves the risk/reward pointing the wrong way.
+// An anti-strategy must be an exact P&L inverse of its original.
+//
+// It was not. Mirrors were built by flipping the option TYPE — a long CALL's
+// mirror was a long PUT — with the exits swapped. Both halves stayed LONG
+// PREMIUM, and a long call and a long put share the sign of theta and vega: both
+// decay as time passes, both gain when volatility rises. In a flat market BOTH
+// lose. The pair's combined P&L was not "minus fees" but "minus fees minus two
+// lots of decay", and it broke worst in exactly the quiet conditions where most
+// of these strategies trade.
+//
+// The inverse of buying a contract is SELLING THAT SAME CONTRACT. So the def is
+// now a copy of its original — same type, same exits, same entries — and the
+// inversion lives on the position (OptionPosition.ShortPremium), created at
+// fill time by openMirrorLocked.
 
-func TestBuildAntiStrategies_MirrorsEveryStrategy(t *testing.T) {
+func TestBuildAntiStrategies_MirrorsTheSameContract(t *testing.T) {
 	defs := buildAllStrategies()
 	anti := BuildAntiStrategies(defs)
 
@@ -19,17 +29,21 @@ func TestBuildAntiStrategies_MirrorsEveryStrategy(t *testing.T) {
 		if a.Name != AntiPrefix+o.Name {
 			t.Errorf("mirror %d named %q, want %q", i, a.Name, AntiPrefix+o.Name)
 		}
-		if a.Type == o.Type {
-			t.Errorf("%s has the same option type as its original — it would not invert P&L", a.Name)
+		// The type must MATCH. Flipping it is the bug this replaced: it produced
+		// two long-premium positions instead of two sides of one contract.
+		if a.Type != o.Type {
+			t.Errorf("%s is a %s but mirrors a %s — it must sell the SAME contract, "+
+				"or the pair shares theta/vega sign instead of cancelling", a.Name, a.Type, o.Type)
 		}
-		if a.TakeProfitPct != o.StopLossPct {
-			t.Errorf("%s TP %.4f != original SL %.4f", a.Name, a.TakeProfitPct, o.StopLossPct)
+		// Exits are inherited at close time, so the def must not advertise
+		// different ones.
+		if a.TakeProfitPct != o.TakeProfitPct || a.StopLossPct != o.StopLossPct {
+			t.Errorf("%s carries exits %.2f/%.2f against the original's %.2f/%.2f; a mirror runs no exit policy of its own",
+				a.Name, a.TakeProfitPct, a.StopLossPct, o.TakeProfitPct, o.StopLossPct)
 		}
-		if a.StopLossPct != o.TakeProfitPct {
-			t.Errorf("%s SL %.4f != original TP %.4f", a.Name, a.StopLossPct, o.TakeProfitPct)
-		}
-		// Same entries, or the two are not comparable and the mirror is just
-		// another strategy wearing a related name.
+		// Same entries and the same contract selection, or the two are not
+		// comparable and the mirror is just another strategy wearing a related
+		// name.
 		if a.Signal != o.Signal {
 			t.Errorf("%s trades signal %q, original trades %q", a.Name, a.Signal, o.Signal)
 		}
@@ -72,8 +86,10 @@ func TestValidateAntiPairing_AcceptsGeneratedSet(t *testing.T) {
 	}
 }
 
-// The validator must actually catch a half-built mirror, or it is decoration.
-func TestValidateAntiPairing_CatchesSameSideMirror(t *testing.T) {
+// The validator must reject the OLD construction, which is what it used to
+// require. A differently-typed mirror is two long-premium positions, not an
+// inverse.
+func TestValidateAntiPairing_RejectsAFlippedType(t *testing.T) {
 	base := StrategyDef{
 		ID: 1, Name: "S1", Type: Call, TakeProfitPct: 0.5, StopLossPct: 0.35,
 		Signal: "sig", ExpiryMinutes: 150,
@@ -81,23 +97,37 @@ func TestValidateAntiPairing_CatchesSameSideMirror(t *testing.T) {
 	broken := base
 	broken.ID = 10001
 	broken.Name = AntiPrefix + "S1"
-	broken.TakeProfitPct, broken.StopLossPct = base.StopLossPct, base.TakeProfitPct
-	// Side NOT flipped — the exact half-fix that produces a fake hedge.
+	broken.Type = Put // the old, wrong construction
 
 	if err := ValidateAntiPairing([]StrategyDef{base, broken}); err == nil {
-		t.Fatal("a same-side mirror passed validation; it would not invert P&L")
+		t.Fatal("a put mirroring a call passed validation; both are long premium and lose together in a flat market")
 	}
 }
 
-func TestValidateAntiPairing_CatchesUnswappedExits(t *testing.T) {
+// Swapped exits are equally wrong now: the mirror inherits its original's exit
+// and runs none of its own, so advertising different percentages describes a
+// policy that does not exist.
+func TestValidateAntiPairing_RejectsSwappedExits(t *testing.T) {
 	base := StrategyDef{ID: 1, Name: "S1", Type: Call, TakeProfitPct: 0.5, StopLossPct: 0.35, Signal: "sig"}
 	broken := base
 	broken.ID = 10001
 	broken.Name = AntiPrefix + "S1"
-	broken.Type = Put // side flipped, exits left alone
+	broken.TakeProfitPct, broken.StopLossPct = base.StopLossPct, base.TakeProfitPct
 
 	if err := ValidateAntiPairing([]StrategyDef{base, broken}); err == nil {
-		t.Fatal("a mirror with unswapped exits passed validation")
+		t.Fatal("a mirror advertising swapped exits passed validation")
+	}
+}
+
+func TestValidateAntiPairing_RejectsADifferentSignal(t *testing.T) {
+	base := StrategyDef{ID: 1, Name: "S1", Type: Call, TakeProfitPct: 0.5, StopLossPct: 0.35, Signal: "sig"}
+	broken := base
+	broken.ID = 10001
+	broken.Name = AntiPrefix + "S1"
+	broken.Signal = "other"
+
+	if err := ValidateAntiPairing([]StrategyDef{base, broken}); err == nil {
+		t.Fatal("a mirror riding a different entry signal passed validation")
 	}
 }
 
@@ -143,5 +173,14 @@ func TestOriginalName_RoundTrips(t *testing.T) {
 	}
 	if got := OriginalName("Foo"); got != "Foo" {
 		t.Errorf("a non-mirror name must pass through unchanged, got %q", got)
+	}
+}
+
+func TestMirrorNameFor_DoesNotMirrorMirrors(t *testing.T) {
+	if got := mirrorNameFor("Foo"); got != AntiPrefix+"Foo" {
+		t.Errorf("mirrorNameFor(Foo) = %q", got)
+	}
+	if got := mirrorNameFor(AntiPrefix + "Foo"); got != "" {
+		t.Errorf("mirrorNameFor(ANTI_Foo) = %q, want empty", got)
 	}
 }

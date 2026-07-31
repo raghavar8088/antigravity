@@ -11,24 +11,35 @@ import (
 //
 // # What makes a mirror
 //
-// Swapping the stop and target ALONE does not invert a result — a long with a
-// wider stop and tighter target is still a long, and still loses when price
-// falls. Inversion needs both halves:
+// The exact inverse of "buy this contract at premium P" is "SELL THIS SAME
+// CONTRACT at premium P". Same strike, same expiry, same option type, opposite
+// side. Every tick then moves the two by equal and opposite amounts.
 //
-//  1. the side flips (a CALL buyer's mirror is a PUT buyer, which profits from
-//     the move the CALL was hurt by), and
-//  2. the stop and target distances swap.
+// This originally flipped the option TYPE instead — a long CALL's mirror was a
+// long PUT — and swapped the exits. Both halves stayed LONG PREMIUM, which is
+// not an inverse at all: a long call and a long put share the sign of theta and
+// vega, so both decay as time passes and both gain when volatility rises. In a
+// flat market BOTH lose. The pair's combined P&L was not "minus fees" but
+// "minus fees minus two lots of decay", and it failed worst in exactly the quiet
+// conditions where most of these strategies trade.
 //
-// Together they mirror exactly. Take a long CALL entered at premium P with
-// TP +50% and SL -35%:
+// # Where the mirror now lives
 //
-//	original hits its STOP  -> loses 35%
-//	mirror   hits its TARGET-> gains 35%   (mirror TP = original SL)
-//	original hits its TARGET-> gains 50%
-//	mirror   hits its STOP  -> loses 50%   (mirror SL = original TP)
+// Not here. A mirror makes no decisions, so it is no longer a strategy that
+// evaluates signals and picks contracts: the desk opens it in
+// openMirrorLocked() the moment an original fills, on the original's own
+// contract, and closes it when the original closes at the same premium. See
+// anti_mirror.go.
 //
-// Every outcome of one is the negation of the other, which is precisely the
-// "if the existing one loses, this one gains" behaviour requested.
+// What remains in this file is the accounting shell — a StrategyDef per mirror
+// so it has a name, an ID, a stake and a row on the leaderboard — plus the
+// naming contract the desk, the UI and the promotion gate all have to agree on.
+//
+// The def is a COPY of its original, deliberately including the option type and
+// the exits. The type must match because the mirror trades that same contract.
+// The exits are inherited from the original at close time and are never read
+// from here; leaving them swapped would suggest a policy the mirror does not
+// have.
 //
 // # The part that decides whether this actually earns
 //
@@ -40,13 +51,8 @@ import (
 //
 // A mirrored pair always loses two lots of fees. So an anti-strategy is
 // profitable only when its original has a genuinely NEGATIVE GROSS edge — not
-// merely a negative net. A strategy that earns before costs and loses after
-// them has a mirror that loses before costs and loses even harder after.
-//
-// This desk already records gross and net separately, so which originals
-// qualify is measurable rather than assumed. Anti-strategies are run to find
-// that out, and the promotion gate reads net, so a mirror that only looks good
-// gross cannot be promoted.
+// merely a negative net. A strategy that earns before costs and loses after them
+// has a mirror that loses before costs and loses even harder after.
 
 // AntiPrefix marks a mirrored strategy. Kept as a constant so the UI, the hunt
 // leaderboard and the promotion gate all agree on what an anti-strategy is.
@@ -63,16 +69,6 @@ func OriginalName(name string) string {
 		return name
 	}
 	return name[len(AntiPrefix):]
-}
-
-// invertType flips CALL to PUT and back. This is what makes the mirror gain
-// where the original loses; without it, swapping the exits only changes the
-// risk/reward on the same directional bet.
-func invertType(t OptionType) OptionType {
-	if t == Call {
-		return Put
-	}
-	return Call
 }
 
 // BuildAntiStrategies returns one mirror per input strategy.
@@ -93,11 +89,14 @@ func BuildAntiStrategies(defs []StrategyDef) []StrategyDef {
 		// IDs must not collide with the originals. Offsetting by a fixed block
 		// keeps the mapping obvious in logs and in the leaderboard.
 		anti.ID = d.ID + AntiIDOffset
-		anti.Type = invertType(d.Type)
-		// The swap that completes the mirror.
-		anti.TakeProfitPct = d.StopLossPct
-		anti.StopLossPct = d.TakeProfitPct
-		anti.Category = d.Category
+		// Type is NOT flipped: the mirror sells the SAME contract the original
+		// bought. Flipping it produced a long put against a long call — two
+		// positions with the same theta and vega sign, which lose together in a
+		// flat market instead of cancelling.
+		//
+		// The exits are NOT swapped either. The mirror inherits its original's
+		// exit at close time (see closeMirrorLocked); carrying swapped
+		// percentages here would advertise a policy it does not run.
 		out = append(out, anti)
 	}
 	return out
@@ -131,7 +130,19 @@ func WithAntiStrategies(defs []StrategyDef) []StrategyDef {
 	return out
 }
 
-// ValidateAntiPairing checks that every mirror is a true inverse of its source.
+// ValidateAntiPairing checks that every mirror still matches its original.
+//
+// The rules changed when the mirror stopped being a differently-typed strategy
+// and became a short of the SAME contract. What has to hold now is that the two
+// defs describe one instrument: same option type, same strike and expiry
+// selection, same entry signal. The inversion itself is a property of the
+// POSITION (OptionPosition.ShortPremium), not of the def, so there is nothing
+// about direction to assert here.
+//
+// This previously required the OPPOSITE type and SWAPPED exits, and would now
+// reject every correctly-built mirror. That is worth stating plainly: the
+// validator enforced the bug.
+//
 // Returned as an error rather than a panic so a bad pairing surfaces in tests
 // and at boot instead of corrupting a live leaderboard silently.
 func ValidateAntiPairing(all []StrategyDef) error {
@@ -147,23 +158,21 @@ func ValidateAntiPairing(all []StrategyDef) error {
 		if !ok {
 			return fmt.Errorf("anti strategy %q has no original", d.Name)
 		}
-		if d.Type == orig.Type {
-			return fmt.Errorf("%q has the same option type as its original — it would not mirror, only re-risk", d.Name)
+		if d.Type != orig.Type {
+			return fmt.Errorf("%q is a %s but its original is a %s — a mirror SELLS the same contract, "+
+				"so a different type makes two positions with the same theta and vega sign rather than an inverse",
+				d.Name, d.Type, orig.Type)
 		}
-		if d.TakeProfitPct != orig.StopLossPct {
-			return fmt.Errorf("%q take-profit %.4f should equal the original's stop %.4f",
-				d.Name, d.TakeProfitPct, orig.StopLossPct)
-		}
-		if d.StopLossPct != orig.TakeProfitPct {
-			return fmt.Errorf("%q stop %.4f should equal the original's take-profit %.4f",
-				d.Name, d.StopLossPct, orig.TakeProfitPct)
+		if d.TakeProfitPct != orig.TakeProfitPct || d.StopLossPct != orig.StopLossPct {
+			return fmt.Errorf("%q carries different exits from its original; a mirror inherits its original's exit at close time and runs none of its own",
+				d.Name)
 		}
 		if d.Signal != orig.Signal {
-			return fmt.Errorf("%q uses signal %q, not the original's %q — a mirror must trade at the same moments",
+			return fmt.Errorf("%q uses signal %q, not the original's %q — a mirror must ride the same entries",
 				d.Name, d.Signal, orig.Signal)
 		}
 		if d.ExpiryMinutes != orig.ExpiryMinutes || d.StrikePctOTM != orig.StrikePctOTM {
-			return fmt.Errorf("%q does not match its original's strike/expiry selection", d.Name)
+			return fmt.Errorf("%q does not match its original's strike/expiry selection, so the two are not the same contract", d.Name)
 		}
 	}
 	return nil

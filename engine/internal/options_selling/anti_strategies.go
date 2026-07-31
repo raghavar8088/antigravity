@@ -93,10 +93,14 @@ func BuildAntiStrategies(defs []StrategyDef) []StrategyDef {
 		// IDs must not collide with the originals. Offsetting by a fixed block
 		// keeps the mapping obvious in logs and in the leaderboard.
 		anti.ID = d.ID + AntiIDOffset
-		anti.Type = invertType(d.Type)
-		// The swap that completes the mirror.
-		anti.TakeProfitPct = d.StopLossPct
-		anti.StopLossPct = d.TakeProfitPct
+		// Type is NOT flipped: the mirror BUYS the same contract the original
+		// sold. Flipping it produced a short put against a short call — two
+		// positions with the same theta and vega sign, which WIN together in a
+		// flat market instead of cancelling.
+		//
+		// The exits are NOT swapped either. The mirror inherits its original's
+		// exit at close time (see closeMirrorLocked); carrying swapped
+		// percentages here would advertise a policy it does not run.
 		anti.Category = d.Category
 		out = append(out, anti)
 	}
@@ -147,16 +151,14 @@ func ValidateAntiPairing(all []StrategyDef) error {
 		if !ok {
 			return fmt.Errorf("anti strategy %q has no original", d.Name)
 		}
-		if d.Type == orig.Type {
-			return fmt.Errorf("%q has the same option type as its original — it would not mirror, only re-risk", d.Name)
+		if d.Type != orig.Type {
+			return fmt.Errorf("%q is a %s but its original is a %s — a mirror BUYS the same contract, "+
+				"so a different type makes two positions with the same theta and vega sign rather than an inverse",
+				d.Name, d.Type, orig.Type)
 		}
-		if d.TakeProfitPct != orig.StopLossPct {
-			return fmt.Errorf("%q take-profit %.4f should equal the original's stop %.4f",
-				d.Name, d.TakeProfitPct, orig.StopLossPct)
-		}
-		if d.StopLossPct != orig.TakeProfitPct {
-			return fmt.Errorf("%q stop %.4f should equal the original's take-profit %.4f",
-				d.Name, d.StopLossPct, orig.TakeProfitPct)
+		if d.TakeProfitPct != orig.TakeProfitPct || d.StopLossPct != orig.StopLossPct {
+			return fmt.Errorf("%q carries different exits from its original; a mirror inherits its original's exit at close time and runs none of its own",
+				d.Name)
 		}
 		if d.Signal != orig.Signal {
 			return fmt.Errorf("%q uses signal %q, not the original's %q — a mirror must trade at the same moments",

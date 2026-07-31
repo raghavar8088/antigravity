@@ -57,6 +57,11 @@ type Engine struct {
 	// one, and once in the table it is indistinguishable from a real one.
 	feedGate
 
+	// mirrorOpens / mirrorSkips track fill-time anti-strategy mirroring.
+	// mirrorSkips must stay zero; see anti_mirror.go. Guarded by mu.
+	mirrorOpens int64
+	mirrorSkips int64
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
@@ -606,6 +611,14 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 			e.refreshStrategyPresentationLocked(s, now)
 			return
 		}
+		// A mirror never opens on its own signal. It exists only as the inverse
+		// of a fill its original already took, and openMirrorLocked creates it
+		// there. Letting it evaluate would make it a separate strategy that
+		// merely shares a name with the thing it is supposed to negate.
+		if IsAnti(s.def.Name) {
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -702,6 +715,10 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	// Tally entries taken on the fallback venue. Those trades are real, but they
 	// were priced on a book the Live Engine does not execute against.
 	e.noteOpen(PrimaryVenue)
+	// Buy the SAME contract for this strategy's mirror, at the same premium.
+	// Inheriting the fill is what makes the pair an exact inverse rather than
+	// two loosely related bets. See anti_mirror.go.
+	e.openMirrorLocked(s, pos, now)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
@@ -894,7 +911,22 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 
 	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
 	// Gross PnL only - fees deducted once at close
-	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	// Short (the desk's norm): profit when the premium falls.
+	// Long (an anti-strategy mirror): profit when it rises. The sign is the
+	// whole point — it is what makes the pair's P&L cancel.
+	if pos.LongPremium {
+		pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	} else {
+		pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	}
+
+	// A mirror runs NO exit policy of its own. The rules below are short-premium
+	// rules, and a long-side reinterpretation would close the two halves at
+	// different premiums on different ticks — exactly what stops them being an
+	// inverse. The mirror is closed by closeMirrorLocked when its original goes.
+	if pos.LongPremium {
+		return ""
+	}
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -956,11 +988,20 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
+	// Close this strategy's mirror on the same tick at the same premium, before
+	// the original's own bookkeeping runs. A mirror left open after its original
+	// has gone is no longer an inverse of anything.
+	e.closeMirrorLocked(s, reason, now)
+
 	// Realized PnL for a short option: premium collected minus buy-back cost, less
 	// the round-trip fee taken at open. No artificial floor — a far-OTM short only
 	// ever risks and earns the premium at stake, so both wins and losses are the
 	// true cents-scale amounts, not a fixed $2.
 	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	if pos.LongPremium {
+		// The mirror bought the contract: its gross is the negation.
+		grossPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	}
 	entryFees := pos.EntryPremium * pos.Quantity * ROUND_TRIP_FEE_PCT
 	netPnL := grossPnL - entryFees
 

@@ -62,6 +62,11 @@ type Engine struct {
 	// one, and once in the table it is indistinguishable from a real one.
 	feedGate
 
+	// mirrorOpens / mirrorSkips track fill-time anti-strategy mirroring.
+	// mirrorSkips must stay zero; see anti_mirror.go. Guarded by mu.
+	mirrorOpens int64
+	mirrorSkips int64
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
@@ -661,6 +666,14 @@ func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalConte
 			e.refreshStrategyPresentationLocked(s, now)
 			return
 		}
+		// A mirror never opens on its own signal. It exists only as the inverse
+		// of a fill its original already took, and openMirrorLocked creates it
+		// there. Letting it evaluate would make it a separate strategy that
+		// merely shares a name with the thing it is supposed to negate.
+		if IsAnti(s.def.Name) {
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -773,6 +786,10 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	// were priced on a book the Live Engine does not execute against, so a
 	// strategy qualified largely on them was qualified on the wrong market.
 	e.noteOpen(PrimaryVenue)
+	// Sell the SAME contract for this strategy's mirror, at the same premium.
+	// Inheriting the fill is what makes the pair an exact inverse rather than
+	// two loosely related bets. See anti_mirror.go.
+	e.openMirrorLocked(s, pos, now)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
@@ -959,7 +976,22 @@ func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitP
 	// new valuation.
 
 	// Long option: profit when mark-to-market premium rises vs entry.
-	pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	// Short (an anti-strategy mirror): profit when it falls. The sign is the
+	// whole point — it is what makes the pair's P&L cancel.
+	if pos.ShortPremium {
+		pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	} else {
+		pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	}
+
+	// A mirror runs NO exit policy of its own. The rules below are long-premium
+	// rules — trailing stops on gains, theta-bleed cutoffs, thesis breaks — and
+	// a short-side reinterpretation would close the two halves at different
+	// premiums on different ticks, which is exactly what stops them being an
+	// inverse. The mirror is closed by closeMirrorLocked when its original goes.
+	if pos.ShortPremium {
+		return ""
+	}
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -1018,14 +1050,35 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
+	// Close this strategy's mirror on the same tick at the same premium, before
+	// the original's own bookkeeping runs. A mirror left open after its original
+	// has gone is no longer an inverse of anything.
+	e.closeMirrorLocked(s, reason, now)
+
 	netPnL := pos.UnrealizedPnL
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
+		if pos.ShortPremium {
+			returnPct = -returnPct
+		}
+	}
+	// UnrealizedPnL is only refreshed by mark-to-market, which a mirror skips
+	// once it has returned early. Recompute from the settling premium so the
+	// booked P&L is the one both halves actually settled on.
+	if pos.ShortPremium {
+		netPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 	}
 
-	// Sell to close long: receive current option value.
-	e.balance += pos.CurrentPremium * pos.Quantity
+	// Long: sell to close, receive the current option value.
+	// Short (mirror): buy to close, pay it. The premium was credited at open, so
+	// the two legs net to (entry - current) x qty — exactly minus the original's
+	// gross, which is the property the pair exists to have.
+	if pos.ShortPremium {
+		e.balance -= pos.CurrentPremium * pos.Quantity
+	} else {
+		e.balance += pos.CurrentPremium * pos.Quantity
+	}
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
