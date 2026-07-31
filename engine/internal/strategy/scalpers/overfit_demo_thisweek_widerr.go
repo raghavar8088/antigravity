@@ -37,8 +37,10 @@ func wideRRLong(atr1h, price float64) (sl, tp, slDist float64) {
 // ── W1: Donchian(20) 4h breakdown, wide R:R Short — fit to catch 07-08's drop
 type BigDownBreakWideRRShort struct{}
 
-func (s *BigDownBreakWideRRShort) Name() string           { return "Big_Down_Break_Wide_RR_Short_CURVEFIT_DEMO" }
-func (s *BigDownBreakWideRRShort) ValidRegimes() []Regime { return []Regime{RegimeTrending, RegimeVolatile} }
+func (s *BigDownBreakWideRRShort) Name() string { return "Big_Down_Break_Wide_RR_Short_CURVEFIT_DEMO" }
+func (s *BigDownBreakWideRRShort) ValidRegimes() []Regime {
+	return []Regime{RegimeTrending, RegimeVolatile}
+}
 func (s *BigDownBreakWideRRShort) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 	n4h := len(ctx.Candles4h)
@@ -62,8 +64,10 @@ func (s *BigDownBreakWideRRShort) Evaluate(ctx MarketContext) Signal {
 // ── W2: Donchian(20) 4h breakout, wide R:R Long — fit to catch 07-10's rally
 type BigUpBreakWideRRLong struct{}
 
-func (s *BigUpBreakWideRRLong) Name() string           { return "Big_Up_Break_Wide_RR_Long_CURVEFIT_DEMO" }
-func (s *BigUpBreakWideRRLong) ValidRegimes() []Regime { return []Regime{RegimeTrending, RegimeVolatile} }
+func (s *BigUpBreakWideRRLong) Name() string { return "Big_Up_Break_Wide_RR_Long_CURVEFIT_DEMO" }
+func (s *BigUpBreakWideRRLong) ValidRegimes() []Regime {
+	return []Regime{RegimeTrending, RegimeVolatile}
+}
 func (s *BigUpBreakWideRRLong) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
 	n4h := len(ctx.Candles4h)

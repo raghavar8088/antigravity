@@ -111,5 +111,14 @@ func buildAllStrategies() []StrategyDef {
 
 // BuildStrategies returns the full 50-strategy BTC option-selling roster.
 func BuildStrategies() []StrategyDef {
-	return buildAllStrategies()
+	defs := buildAllStrategies()
+	// Every strategy also runs as its mirror: same signal and strike selection,
+	// opposite side, stop and target swapped. The pair answers a question the
+	// original alone cannot — whether a losing strategy loses because its edge is
+	// genuinely negative (mirror wins) or because fees eat a positive edge
+	// (mirror loses too, since both sides pay). Disable with ANTI_STRATEGIES=false.
+	if !antiStrategiesEnabled() {
+		return defs
+	}
+	return WithAntiStrategies(defs)
 }

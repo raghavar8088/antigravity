@@ -40,7 +40,7 @@ func (s *VWAPInstitutionalFade) Evaluate(ctx MarketContext) Signal {
 	// ctx.Candles5m last bar volume × 12 approximates current-hour rate.
 	last5m := ctx.Candles5m[len(ctx.Candles5m)-1]
 	avgVol24h := AvgVolume(ctx.Candles5m, len(ctx.Candles5m)) // avg per 5m bar
-	currentVolProjected := last5m.Volume * 12                  // project to 1h equivalent
+	currentVolProjected := last5m.Volume * 12                 // project to 1h equivalent
 	avgVol24hHourly := avgVol24h * 12
 	if avgVol24hHourly > 0 && currentVolProjected < avgVol24hHourly*0.5 {
 		return NoSignal(name)

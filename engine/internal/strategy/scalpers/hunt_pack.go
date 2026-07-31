@@ -1,6 +1,11 @@
 package scalpers
 
-import "log"
+import (
+	"log"
+	"os"
+	"strconv"
+	"strings"
+)
 
 // BuildHuntPack returns EVERY scalp strategy registered in this application,
 // de-duplicated by name.
@@ -47,5 +52,28 @@ func BuildHuntPack() []RegistryEntry {
 
 	log.Printf("[HUNT PACK] %d unique strategies across %d packs (%d duplicate name(s) dropped)",
 		len(out), len(packs), dupes)
+
+	// Every strategy also runs as its mirror: same entries, opposite side. The
+	// desk's execution profile supplies the swapped stop/target distances.
+	// Disable with ANTI_STRATEGIES=false.
+	if antiStrategiesEnabled() {
+		withAnti := WithAntiPack(out)
+		log.Printf("[HUNT PACK] + %d anti-strategies = %d total streams per symbol",
+			len(withAnti)-len(out), len(withAnti))
+		return withAnti
+	}
 	return out
+}
+
+// antiStrategiesEnabled reports whether mirrors should run. Defaults ON.
+func antiStrategiesEnabled() bool {
+	raw := strings.TrimSpace(os.Getenv("ANTI_STRATEGIES"))
+	if raw == "" {
+		return true
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return v
 }

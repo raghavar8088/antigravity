@@ -8,16 +8,21 @@ import (
 // S41 — Cointegration Spread BTC/ETH
 //
 // Research:   Engle & Granger (1987) cointegration theory; crypto stat-arb
-//             literature 2018-2024 (BTC/ETH pair trading on the cointegrated
-//             ratio spread).
+//
+//	literature 2018-2024 (BTC/ETH pair trading on the cointegrated
+//	ratio spread).
+//
 // Regime:     RANGING only
 // Timeframes: 1h (rolling ratio mean/stdev window)
 // Logic:      Computes the BTC/ETH price ratio and z-scores it against its
-//             own rolling mean/stdev, fading >=2.0 std dev deviations back
-//             toward the mean ratio.
+//
+//	own rolling mean/stdev, fading >=2.0 std dev deviations back
+//	toward the mean ratio.
+//
 // Edge:       Trades the statistical relationship between two correlated
-//             assets rather than directional price action — historically a
-//             lower-correlation-to-market-beta edge.
+//
+//	assets rather than directional price action — historically a
+//	lower-correlation-to-market-beta edge.
 //
 // DATA-FEED DEPENDENCY: requires ctx.ETHPrice. ETHPricePopulated must be true
 // or this strategy returns NoSignal — see types.go: "ETHPrice... NOT YET

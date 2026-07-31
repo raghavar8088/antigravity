@@ -21,12 +21,12 @@ var walkForwardWindow = wfEnvInt("WALKFORWARD_MIN_TRADES", 30)
 // row (not just one) before a strategy reaches ACTIVE — a single lucky
 // 30-trade window is too small a sample to trust on its own.
 var (
-	walkForwardWinRateThreshold    = wfEnvFloat("WALKFORWARD_WIN_RATE_THRESHOLD", 0.48)
-	walkForwardSharpeThreshold     = wfEnvFloat("WALKFORWARD_SHARPE_THRESHOLD", 0.60)
-	walkForwardMaxDrawdown         = wfEnvFloat("WALKFORWARD_MAX_DRAWDOWN", 0.20) // reserved: this validator does not yet track drawdown
-	walkForwardConsecutiveWindows  = wfEnvInt("WALKFORWARD_CONSECUTIVE_WINDOWS", 2)
-	walkForwardFastDemoteSharpe    = 0.20
-	walkForwardFastDemoteWinRate   = 0.30
+	walkForwardWinRateThreshold   = wfEnvFloat("WALKFORWARD_WIN_RATE_THRESHOLD", 0.48)
+	walkForwardSharpeThreshold    = wfEnvFloat("WALKFORWARD_SHARPE_THRESHOLD", 0.60)
+	walkForwardMaxDrawdown        = wfEnvFloat("WALKFORWARD_MAX_DRAWDOWN", 0.20) // reserved: this validator does not yet track drawdown
+	walkForwardConsecutiveWindows = wfEnvInt("WALKFORWARD_CONSECUTIVE_WINDOWS", 2)
+	walkForwardFastDemoteSharpe   = 0.20
+	walkForwardFastDemoteWinRate  = 0.30
 )
 
 // RefreshWalkForwardThresholdsFromRegistry re-reads the win-rate and Sharpe
@@ -87,8 +87,8 @@ type WalkForwardSummary struct {
 	Sharpe                float64        `json:"sharpe"`
 	WinRate               float64        `json:"win_rate"`
 	Trades                int            `json:"trades"`
-	AvgWinPct             float64        `json:"avg_win_pct"`  // mean PnLPct of winning trades
-	AvgLossPct            float64        `json:"avg_loss_pct"` // mean abs(PnLPct) of losing trades
+	AvgWinPct             float64        `json:"avg_win_pct"`              // mean PnLPct of winning trades
+	AvgLossPct            float64        `json:"avg_loss_pct"`             // mean abs(PnLPct) of losing trades
 	WindowCount           int            `json:"window_count"`             // completed 30-trade windows
 	ConsecutivePassCount  int            `json:"consecutive_pass_count"`   // consecutive windows clearing the promotion bar
 	TradesInCurrentWindow int            `json:"trades_in_current_window"` // progress toward the next window boundary

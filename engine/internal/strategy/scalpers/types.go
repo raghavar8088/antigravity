@@ -182,30 +182,30 @@ type MarketContext struct {
 	// Order-flow microstructure extensions beyond CVD (S50-S59). All populated
 	// from the same aggTrade stream already driving CVD; 0/false until the
 	// feed has observed enough trades.
-	TradeCountPerMin1m    float64 // trade count in the most recent 1m window
-	TradeCountAvg20m      float64 // trailing 20-minute average trade count per minute
-	LastTradeSizeRatio    float64 // size of the most recent trade vs trailing 100-trade average
-	AggressorBuyRatio100  float64 // rolling 100-trade aggressive-buy fraction (0..1)
-	EffectiveSpread       float64 // best ask - best bid, current
-	EffectiveSpreadAvg    float64 // trailing rolling average effective spread
+	TradeCountPerMin1m      float64 // trade count in the most recent 1m window
+	TradeCountAvg20m        float64 // trailing 20-minute average trade count per minute
+	LastTradeSizeRatio      float64 // size of the most recent trade vs trailing 100-trade average
+	AggressorBuyRatio100    float64 // rolling 100-trade aggressive-buy fraction (0..1)
+	EffectiveSpread         float64 // best ask - best bid, current
+	EffectiveSpreadAvg      float64 // trailing rolling average effective spread
 	MicrostructurePopulated bool
 
 	// Binance positioning feeds (S73, S74).
-	TopTraderLongShortRatio   float64   // GET /futures/data/topLongShortAccountRatio
-	TopTraderLSRatioHistory   []float64 // last 3 readings (15m cadence), newest last
-	TakerBuySellRatio         float64   // GET /futures/data/takerlongshortRatio
-	TakerBuySellRatioHistory  []float64 // last 3 readings (5m cadence), newest last
-	PositioningFeedPopulated  bool
-	PositioningFeedHealthy    bool
+	TopTraderLongShortRatio  float64   // GET /futures/data/topLongShortAccountRatio
+	TopTraderLSRatioHistory  []float64 // last 3 readings (15m cadence), newest last
+	TakerBuySellRatio        float64   // GET /futures/data/takerlongshortRatio
+	TakerBuySellRatioHistory []float64 // last 3 readings (5m cadence), newest last
+	PositioningFeedPopulated bool
+	PositioningFeedHealthy   bool
 
 	// Sentiment / on-chain / macro proxies (S76-S79).
-	FearGreedIndex          float64   // alternative.me Fear & Greed, 0-100
-	FearGreedHistory        []float64 // last 5 daily readings, newest last
-	FearGreedPopulated      bool
+	FearGreedIndex              float64   // alternative.me Fear & Greed, 0-100
+	FearGreedHistory            []float64 // last 5 daily readings, newest last
+	FearGreedPopulated          bool
 	StablecoinSupplyChange7dPct float64 // proxy/feed: 7d stablecoin supply rate of change
 	StablecoinSupplyPopulated   bool
 	HashRateTrend30dPct         float64 // proxy/feed: 30d miner hash-rate rate of change
-	HashRatePopulated            bool
+	HashRatePopulated           bool
 }
 
 // Signal is the output of a strategy evaluation

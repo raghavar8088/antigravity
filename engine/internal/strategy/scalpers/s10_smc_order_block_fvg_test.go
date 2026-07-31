@@ -317,9 +317,9 @@ func TestSMCOrderBlockFVG_ConfidenceNotBoostedWithoutConfirmation(t *testing.T) 
 		Regime:     RegimeTrending,
 		Price:      price,
 		Candles15m: c15,
-		CVD:        5, // still > 0 so the base CVD gate passes
+		CVD:        5,                     // still > 0 so the base CVD gate passes
 		CVDHistory: []float64{30, 20, 10}, // NOT rising 3-bar → no CVD boost
-		OrderBook:  OrderBookSnapshot{}, // unpopulated → no imbalance boost
+		OrderBook:  OrderBookSnapshot{},   // unpopulated → no imbalance boost
 	}
 
 	sig := s.Evaluate(ctx)

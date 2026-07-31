@@ -369,8 +369,8 @@ func (s *D20Donchian) Evaluate(ctx MarketContext) Signal {
 		return NoSignal(name)
 	}
 	n := len(c)
-	ch := Donchian(c[:n-1], 20)   // prior channel (excludes breakout bar)
-	chp := Donchian(c[:n-2], 20)  // channel one bar earlier
+	ch := Donchian(c[:n-1], 20)  // prior channel (excludes breakout bar)
+	chp := Donchian(c[:n-2], 20) // channel one bar earlier
 	cl, cp := c[n-1].Close, c[n-2].Close
 	if cp <= chp.Upper && cl > ch.Upper {
 		return d20Signal(name, DirectionLong, 0.71, ctx,

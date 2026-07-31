@@ -1095,6 +1095,7 @@ The content is organized as follows:
   optionchain/cache.go
   optionchain/chain_live_test.go
   optionchain/cryptofno_adapter.go
+  options_selling/anti_strategies.go
   options_selling/chain_pricer.go
   options_selling/chain_profile.go
   options_selling/chain.go
@@ -1108,6 +1109,8 @@ The content is organized as follows:
   options_selling/signals.go
   options_selling/strategies.go
   options_selling/types.go
+  options/anti_strategies_test.go
+  options/anti_strategies.go
   options/chain_pricer_test.go
   options/chain_pricer.go
   options/chain_profile.go
@@ -1382,6 +1385,7 @@ The content is organized as follows:
   strategy/moving_average_crossover.go
   strategy/phase22c_alpha_test.go
   strategy/registry.go
+  strategy/scalpers/anti_strategy.go
   strategy/scalpers/curated_expansion_pack.go
   strategy/scalpers/curated_registry.go
   strategy/scalpers/delta20_pack.go

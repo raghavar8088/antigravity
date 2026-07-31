@@ -11,8 +11,9 @@ import (
 // code deploy. Default phase is 1 (only phase-1 strategies trade live).
 //
 // To advance the rollout, bump the env var, e.g.:
-//   STRATEGY_ROLLOUT_PHASE=2   (enables phase 1 + phase 2 strategies)
-//   STRATEGY_ROLLOUT_PHASE=4   (enables phase 1-4, i.e. all of S10-S29)
+//
+//	STRATEGY_ROLLOUT_PHASE=2   (enables phase 1 + phase 2 strategies)
+//	STRATEGY_ROLLOUT_PHASE=4   (enables phase 1-4, i.e. all of S10-S29)
 //
 // IMPORTANT — SHADOW MODE (not silence): a strategy whose assigned phase is
 // > current STRATEGY_ROLLOUT_PHASE still runs its full Evaluate() logic on
@@ -85,7 +86,7 @@ type phaseGatedStrategy struct {
 	phase int
 }
 
-func (p *phaseGatedStrategy) Name() string          { return p.inner.Name() }
+func (p *phaseGatedStrategy) Name() string           { return p.inner.Name() }
 func (p *phaseGatedStrategy) ValidRegimes() []Regime { return p.inner.ValidRegimes() }
 
 func (p *phaseGatedStrategy) Evaluate(ctx MarketContext) Signal {
@@ -121,7 +122,7 @@ type shadowOverrideStrategy struct {
 	inner Strategy
 }
 
-func (s *shadowOverrideStrategy) Name() string          { return s.inner.Name() }
+func (s *shadowOverrideStrategy) Name() string           { return s.inner.Name() }
 func (s *shadowOverrideStrategy) ValidRegimes() []Regime { return s.inner.ValidRegimes() }
 
 func (s *shadowOverrideStrategy) Evaluate(ctx MarketContext) Signal {

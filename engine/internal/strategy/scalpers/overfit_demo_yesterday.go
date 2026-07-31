@@ -13,8 +13,10 @@ import "fmt"
 // no other filters, as requested ("keep it simple, don't overengineer").
 type YesterdayFitRSIShort struct{}
 
-func (s *YesterdayFitRSIShort) Name() string           { return "Yesterday_Fit_RSI_Short_CURVEFIT_DEMO" }
-func (s *YesterdayFitRSIShort) ValidRegimes() []Regime { return []Regime{RegimeTrending, RegimeRanging, RegimeVolatile} }
+func (s *YesterdayFitRSIShort) Name() string { return "Yesterday_Fit_RSI_Short_CURVEFIT_DEMO" }
+func (s *YesterdayFitRSIShort) ValidRegimes() []Regime {
+	return []Regime{RegimeTrending, RegimeRanging, RegimeVolatile}
+}
 
 func (s *YesterdayFitRSIShort) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
