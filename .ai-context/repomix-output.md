@@ -1105,6 +1105,8 @@ The content is organized as follows:
   options_selling/chain.go
   options_selling/controls.go
   options_selling/engine.go
+  options_selling/feed_gate_test.go
+  options_selling/feed_gate.go
   options_selling/hunt_mode.go
   options_selling/market_profile.go
   options_selling/pricer.go
@@ -1122,6 +1124,8 @@ The content is organized as follows:
   options/controls.go
   options/engine_test.go
   options/engine.go
+  options/feed_gate_test.go
+  options/feed_gate.go
   options/hunt_mode_test.go
   options/hunt_mode.go
   options/market_profile.go

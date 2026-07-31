@@ -51,6 +51,12 @@ type strategyState struct {
 
 // Engine is the fully autonomous BTC option SELLING engine.
 type Engine struct {
+	// feedGate refuses new entries when no real venue price is available. This
+	// desk selects strategies for real money, so a trade recorded against a
+	// price the market never printed is not a weak data point — it is a false
+	// one, and once in the table it is indistinguishable from a real one.
+	feedGate
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
@@ -577,6 +583,15 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 	}
 
 	if s.position == nil && s.shadowPosition == nil {
+		// No new exposure without a real market price. Open positions above are
+		// still managed either way: abandoning custody of a live position is
+		// worse than marking it against the last real quote, whereas opening a
+		// new one on a price nobody quoted has no upside at all.
+		if !e.FeedLive() {
+			e.noteBlockedOpen()
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -670,6 +685,9 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	pos.MarginBlocked = marginRequired
 
 	s.position = pos
+	// Tally entries taken on the fallback venue. Those trades are real, but they
+	// were priced on a book the Live Engine does not execute against.
+	e.noteOpen(PrimaryVenue)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++

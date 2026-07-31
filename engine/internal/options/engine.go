@@ -56,6 +56,12 @@ type strategyState struct {
 // mark-to-market premium rises. Optimized for small-book risk (tight daily stop,
 // limited concurrency, conservatively scaled tickets).
 type Engine struct {
+	// feedGate refuses new entries when no real venue price is available. This
+	// desk selects strategies for real money, so a trade recorded against a
+	// price the market never printed is not a weak data point — it is a false
+	// one, and once in the table it is indistinguishable from a real one.
+	feedGate
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
@@ -631,8 +637,16 @@ func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalConte
 			e.closeShadowPositionLocked(s, exitReason, now)
 		}
 	}
-	// Block new opens when daily loss limit is breached.
+	// Block new opens when the daily loss limit is breached, or when no real
+	// market price is available. Open positions above are still managed either
+	// way: abandoning custody of a live position is worse than marking it
+	// against the last real quote.
 	if !dailyHalt && s.position == nil && s.shadowPosition == nil {
+		if !e.FeedLive() {
+			e.noteBlockedOpen()
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -741,6 +755,10 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 
 	e.balance -= pos.CostBasis
 	s.position = pos
+	// Tally entries taken on the fallback venue. Those trades are real, but they
+	// were priced on a book the Live Engine does not execute against, so a
+	// strategy qualified largely on them was qualified on the wrong market.
+	e.noteOpen(PrimaryVenue)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++

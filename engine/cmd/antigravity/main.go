@@ -1549,6 +1549,18 @@ func main() {
 				"takenAt": takenAt, "stale": chainCache.Stale(), "lastError": lastErr,
 				"buyingSkips":  optionsEngine.ChainSkips(),
 				"sellingSkips": optionsSellingEngine.ChainSkips(),
+				// Data provenance. These are what make the leaderboard readable
+				// as evidence: which venue priced the entries, how many were
+				// refused for want of a real quote, and how many were taken on
+				// the backup venue rather than the one the Live Engine trades.
+				"buying": map[string]any{
+					"feedLive": optionsEngine.FeedLive(), "feedSource": optionsEngine.FeedSource(),
+					"blockedOpens": optionsEngine.BlockedOpens(), "opensOnFallback": optionsEngine.OpensOnFallback(),
+				},
+				"selling": map[string]any{
+					"feedLive": optionsSellingEngine.FeedLive(), "feedSource": optionsSellingEngine.FeedSource(),
+					"blockedOpens": optionsSellingEngine.BlockedOpens(), "opensOnFallback": optionsSellingEngine.OpensOnFallback(),
+				},
 			})
 		})
 	} else {
@@ -1759,22 +1771,39 @@ func main() {
 				}
 				p := lastBTCPrice
 				src := lastGoodSource
+
+				// A synthetic spot must never reach the desks.
+				//
+				// It used to: when Delta AND Binance both failed, a hardcoded
+				// constant was substituted and both desks kept opening, marking
+				// and closing positions against a number no venue ever quoted.
+				// Those trades landed in the same table used to pick strategies
+				// for real money, and nothing downstream could tell them apart
+				// from real ones.
+				//
+				// Now the price is simply not published. The desks hold their
+				// last real quote for managing open positions — custody has to
+				// keep working — and their feed gate refuses new entries until a
+				// real venue comes back.
 				if p <= 0 {
-					p = options.PaperBTCFallbackSpot()
-					src = "synthetic"
 					syntheticSpotLogged.Do(func() {
-						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until Delta/Binance feed is available", p)
+						log.Printf("[OPTIONS FEED] no real BTC spot from Delta or Binance — desks will manage open positions and open nothing new")
 					})
+					optionsEngine.SetFeedStatus(false, options.SyntheticSource)
+					optionsSellingEngine.SetFeedStatus(false, options_selling.SyntheticSource)
+					publishOptionsEngineBTCSpot("unavailable", 0, "NONE")
+					continue
 				}
+
 				tickerDisp := symDefault
 				if src == "binance" {
 					tickerDisp = "BTCUSDT"
-				} else if src == "synthetic" {
-					tickerDisp = "PAPER"
 				}
 				publishOptionsEngineBTCSpot(src, p, tickerDisp)
 				optionsEngine.UpdatePrice(p)
 				optionsSellingEngine.UpdatePrice(p)
+				optionsEngine.SetFeedStatus(true, src)
+				optionsSellingEngine.SetFeedStatus(true, src)
 			}
 		}
 	})
