@@ -693,3 +693,31 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "..."
 }
+
+// SetProductLeverage sets the account's leverage for one product.
+//
+// This is NOT settable on an order. PlaceOrderRequest carries a `leverage`
+// field, which Delta ignores; the account-level per-product setting is what
+// actually governs margin, and it is changed here.
+//
+// Getting this wrong is how a stop becomes unreachable. ADAUSD ships at
+// default_leverage 100 with maintenance_margin 0.5%, so a position is
+// liquidated once it moves 0.5% against entry. The scalp desk's stops sit at
+// 0.35%-0.98%, so most of them sit OUTSIDE that — the venue closed the position
+// before the strategy's own risk management ever acted, and booked it as a
+// liquidation.
+func (c *Client) SetProductLeverage(ctx context.Context, productID int, leverage int) error {
+	if productID <= 0 || leverage <= 0 {
+		return fmt.Errorf("delta: product %d / leverage %d is not settable", productID, leverage)
+	}
+	body := []byte(fmt.Sprintf(`{"leverage":"%d"}`, leverage))
+	path := fmt.Sprintf("/v2/products/%d/orders/leverage", productID)
+	data, status, err := c.doRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return fmt.Errorf("set leverage: %w", err)
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("set leverage: status %d: %s", status, truncate(string(data), 200))
+	}
+	return nil
+}

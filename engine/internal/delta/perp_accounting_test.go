@@ -162,3 +162,50 @@ func TestPerpAccounting_ReconcilerCatchesTheDriftItMissed(t *testing.T) {
 		t.Error("a half-cent difference was reported as drift")
 	}
 }
+
+// THE LIQUIDATION. Two positions were force-closed by Delta at EXACTLY 0.500%
+// adverse while their own stops sat at 0.93% and 0.98%. ADAUSD ships at
+// default_leverage 100 with maintenance_margin 0.5%, so the liquidation price
+// sat INSIDE the stop — the venue closed every losing trade before the
+// strategy's risk management could act.
+func TestPerpAccounting_DefaultLeverageMakesStopsUnreachable(t *testing.T) {
+	// The account default that caused it.
+	if d := LiquidationDistanceFraction(100, 0.5); math.Abs(d-0.005) > 1e-9 {
+		t.Fatalf("at 100x the liquidation distance is %.4f, want the 0.500%% observed", d)
+	}
+	// A real trade from that day: short 664 ADAUSD @ 0.17290, stop 0.17451.
+	if StopIsReachable(0.17290, 0.17451, 100, 0.5) {
+		t.Error("a 0.93% stop was judged reachable at 100x, where liquidation is 0.5% away")
+	}
+	// And the fix.
+	if !StopIsReachable(0.17290, 0.17451, PerpLeverage, 0.5) {
+		t.Errorf("the same stop is still unreachable at %dx; leverage is not low enough", PerpLeverage)
+	}
+}
+
+// The configured leverage must leave the widest stop this desk uses a wide
+// margin, not a marginal one.
+func TestPerpAccounting_ConfiguredLeverageClearsTheWidestStop(t *testing.T) {
+	const widestStopFrac = 0.0098 // the runner profile's ~0.98%
+	liq := LiquidationDistanceFraction(PerpLeverage, perpMaintenanceMarginPctForTest)
+	if liq < widestStopFrac*liquidationSafetyFactor {
+		t.Fatalf("liquidation at %.2f%% leaves no room for a %.2f%% stop at %dx safety",
+			liq*100, widestStopFrac*100, int(liquidationSafetyFactor))
+	}
+}
+
+const perpMaintenanceMarginPctForTest = 0.5
+
+// A malformed input must refuse rather than permit.
+func TestPerpAccounting_StopReachabilityFailsClosed(t *testing.T) {
+	for _, tc := range []struct {
+		entry, stop float64
+		lev         int
+	}{
+		{0, 0.17, 10}, {0.17, 0, 10}, {0.17, 0.169, 0},
+	} {
+		if StopIsReachable(tc.entry, tc.stop, tc.lev, 0.5) {
+			t.Errorf("entry=%v stop=%v lev=%v was permitted", tc.entry, tc.stop, tc.lev)
+		}
+	}
+}

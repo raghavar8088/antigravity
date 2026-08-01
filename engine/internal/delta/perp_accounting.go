@@ -136,3 +136,72 @@ func ReconcilePerpPnL(bridgeNet, venueNet float64, trades int) PerpReconciliatio
 		Trades:       trades,
 	}
 }
+
+// ── liquidation-distance guard ───────────────────────────────────────────────
+//
+// The defect this prevents: on 2026-08-01 two positions were force-closed by
+// Delta at EXACTLY 0.500% adverse, while the strategies' own stops sat at 0.93%
+// and 0.98%. ADAUSD ships at default_leverage 100 with maintenance_margin 0.5%,
+// so the liquidation price sat INSIDE the stop. The venue closed every losing
+// trade before the strategy's risk management could act, and the desk recorded
+// one of them as a routine external close worth $0.00.
+//
+// A stop that cannot be reached is not a stop. It is a number on a screen.
+
+// PerpLeverage is the account leverage this desk sets per product.
+//
+// 10x puts the liquidation distance around 9-10% of entry, which is ten to
+// thirty times wider than the 0.35%-0.98% stops these strategies use — so the
+// STRATEGY decides the exit, not the venue. The cost is margin: 10% of notional
+// instead of 1%. On the 3x aggregate cap that is ~30% of a $100 account, which
+// the risk config was already sized to allow.
+const PerpLeverage = 10
+
+// liquidationSafetyFactor is how much room the liquidation distance must have
+// beyond the stop. 2x, so an adverse gap that overshoots the stop still resolves
+// as a stop rather than a liquidation.
+const liquidationSafetyFactor = 2.0
+
+// ErrStopBeyondLiquidation means the venue would liquidate before the strategy's
+// stop is reached, so the trade cannot be risk-managed as designed.
+var ErrStopBeyondLiquidation = errStopBeyondLiquidation{}
+
+type errStopBeyondLiquidation struct{}
+
+func (errStopBeyondLiquidation) Error() string {
+	return "delta: stop sits beyond the liquidation distance — the venue would close the position first"
+}
+
+// LiquidationDistanceFraction is how far price may move against a position
+// before the venue liquidates it, as a fraction of entry.
+//
+// Approximated as (initial margin - maintenance margin) at the configured
+// leverage. At 10x with a 0.5% maintenance requirement that is ~9.5%.
+func LiquidationDistanceFraction(leverage int, maintenanceMarginPct float64) float64 {
+	if leverage <= 0 {
+		return 0
+	}
+	initial := 1.0 / float64(leverage)
+	d := initial - maintenanceMarginPct/100
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
+// StopIsReachable reports whether a stop can be hit before liquidation.
+//
+// Called before an order is placed. Refusing here is deliberate: a trade whose
+// stop the venue will pre-empt is not the trade the strategy was measured on,
+// and taking it produces a record of liquidations dressed as stop-outs.
+func StopIsReachable(entry, stop float64, leverage int, maintenanceMarginPct float64) bool {
+	if entry <= 0 || stop <= 0 {
+		return false
+	}
+	stopFrac := math.Abs(entry-stop) / entry
+	liq := LiquidationDistanceFraction(leverage, maintenanceMarginPct)
+	if liq <= 0 {
+		return false
+	}
+	return stopFrac*liquidationSafetyFactor <= liq
+}

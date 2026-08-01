@@ -119,6 +119,43 @@ func NewPerpBridge(client *Client, reg *PerpRegistry, equityUSD float64) *PerpBr
 	}
 }
 
+// perpMaintenanceMarginPct is Delta's maintenance requirement on these
+// perpetuals, as a percentage of notional. Read from the product definition
+// (ADAUSD: maintenance_margin 0.5), and the number that put the liquidation
+// price 0.5% from entry at the account's default leverage.
+const perpMaintenanceMarginPct = 0.5
+
+// EnsureLeverage sets the account's per-product leverage for every symbol this
+// bridge may trade.
+//
+// This must happen BEFORE arming. Delta ignores the leverage field on an order
+// and uses the account setting, which ships at 100x — putting the liquidation
+// price inside every one of this desk's stops. Failing to set it is not a
+// degraded mode; it is a desk whose risk management the venue overrides.
+func (b *PerpBridge) EnsureLeverage(ctx context.Context, symbols []string) error {
+	if b.client == nil {
+		return fmt.Errorf("perp bridge: no client")
+	}
+	var firstErr error
+	for _, sym := range symbols {
+		p, ok := b.reg.Lookup(sym)
+		if !ok {
+			continue
+		}
+		if err := b.client.SetProductLeverage(ctx, p.ProductID, PerpLeverage); err != nil {
+			log.Printf("[PERP LIVE] ⚠️  could not set %s leverage to %dx: %v — its stops may sit beyond the liquidation distance",
+				sym, PerpLeverage, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		log.Printf("[PERP LIVE] %s leverage set to %dx (liquidation ~%.1f%% adverse; stops are 0.35-1%%)",
+			sym, PerpLeverage, LiquidationDistanceFraction(PerpLeverage, perpMaintenanceMarginPct)*100)
+	}
+	return firstErr
+}
+
 // AllowList exposes the gate so the operator can set it.
 func (b *PerpBridge) AllowList() *PerpAllowList { return b.allow }
 
@@ -218,6 +255,20 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		return nil
 	}
 
+	// A stop the venue would pre-empt is not a stop.
+	//
+	// At the account's default 100x leverage, ADAUSD liquidates 0.5% adverse,
+	// while these strategies stop at 0.35%-0.98%. Two positions were force-closed
+	// at exactly 0.500% before their own stops were reached. Refusing here means
+	// the STRATEGY decides the exit; taking the trade anyway produces a record of
+	// liquidations dressed as stop-outs.
+	if !StopIsReachable(plan.LimitPrice, plan.StopPrice, PerpLeverage, perpMaintenanceMarginPct) {
+		b.noteError(ErrStopBeyondLiquidation.Error())
+		log.Printf("[PERP LIVE] ⏭️  skip %s %s — stop %.6f is beyond the liquidation distance at %dx",
+			strategy, plan.Symbol, plan.StopPrice, PerpLeverage)
+		return nil
+	}
+
 	res, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
 		ProductID: plan.ProductID,
 		Size:      plan.Contracts,
@@ -225,7 +276,10 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		OrderType: TypeMarket,
 		// Explicit leverage so the margin this position consumes is predictable
 		// rather than whatever the account happens to be set to.
-		Leverage: cfg.LeverageForOrder,
+		// Delta IGNORES leverage on the order; the per-product account setting
+		// governs margin and is applied by EnsureLeverage at startup. Sent
+		// anyway for the audit trail, not relied upon.
+		Leverage: PerpLeverage,
 		// Market entry, deliberately. The paper desk models a post-only maker
 		// fill and only counts trades that actually filled; a resting limit here
 		// would leave the live account holding orders the paper desk has already

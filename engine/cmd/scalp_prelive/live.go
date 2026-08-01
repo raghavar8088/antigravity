@@ -115,6 +115,18 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	// Persist the open book alongside the desk's own state, on the mounted
 	// volume, so custody survives a restart instead of stranding funded
 	// positions with no stop, target or time stop.
+	// Set the account's per-product leverage BEFORE anything can trade.
+	//
+	// Delta ships these products at 100x, which puts the liquidation price 0.5%
+	// from entry — inside every one of this desk's 0.35%-0.98% stops. Two
+	// positions were force-closed at exactly 0.500% before their own stops were
+	// reached. Without this the venue, not the strategy, decides every exit.
+	lctx, lcancel := context.WithTimeout(ctx, 30*time.Second)
+	if err := b.EnsureLeverage(lctx, scalpLiveSymbols()); err != nil {
+		log.Printf("[SCALP LIVE] ⚠️  leverage not fully applied (%v) — affected symbols will be refused by the stop-reachability guard", err)
+	}
+	lcancel()
+
 	b.SetStateDir(liveStateDir())
 	rctx, rcancel := context.WithTimeout(ctx, 45*time.Second)
 	if err := b.Restore(rctx); err != nil {
