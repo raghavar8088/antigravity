@@ -1,1 +1,1 @@
-{"client-api":{"communities":[1],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/api/scalp/[...path]/route.ts","symbols":9}]},"other":{"communities":[0,2],"files":1,"symbols":17,"top_files":[{"file":"client/src/app/live-engine/page.tsx","symbols":17}]}}
+{"other":{"communities":[0,1],"files":1,"symbols":18,"top_files":[{"file":"client/src/app/live-engine/page.tsx","symbols":18}]}}

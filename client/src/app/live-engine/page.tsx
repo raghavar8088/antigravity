@@ -146,6 +146,30 @@ type AuditEntry = { at: string; actor: string; action: string; reason?: string; 
  * on what the account actually kept, which is the only number that justifies
  * leaving it enabled.
  */
+/**
+ * A live position on the shared Delta wallet, from either desk.
+ *
+ * Live Positions previously listed only this engine's option positions. That was
+ * correct for the engine and WRONG for the page: the scalp bridge's perpetuals
+ * are real money on the same wallet, and the page reported "0 open" while Delta
+ * showed two. Hiding another desk's position is a worse failure than
+ * misattributing it — the first is invisible, the second at least prompts a
+ * question.
+ */
+type UnifiedPosition = {
+  desk: "options" | "scalp";
+  symbol: string;
+  side: string;
+  size: number;
+  entryPrice: number;
+  markPrice: number;
+  unrealizedPnl: number;
+  marginUsd: number;
+  stopPrice?: number;
+  targetPrice?: number;
+  strategy: string;
+};
+
 /** One real perpetual trade from the scalp desk's live arm. */
 type PerpTrade = {
   strategy: string;
@@ -153,6 +177,8 @@ type PerpTrade = {
   side: string;
   contracts: number;
   entryPrice: number;
+  stopPrice?: number;
+  targetPrice?: number;
   exitPrice?: number;
   realisedPnl?: number;
   exitReason?: string;
@@ -305,43 +331,88 @@ export default function LiveEnginePage() {
 
   const armed = state?.armed ?? false;
 
-  const positionColumns: DeskColumn<Position>[] = useMemo(
+  /** Every live position on the wallet, whichever desk opened it. */
+  const allPositions: UnifiedPosition[] = useMemo(() => {
+    const out: UnifiedPosition[] = positions.map((p) => ({
+      desk: "options" as const,
+      symbol: p.symbol,
+      side: p.side,
+      size: p.size,
+      entryPrice: p.entryPrice,
+      markPrice: p.markPrice,
+      unrealizedPnl: p.unrealizedPnl,
+      marginUsd: p.marginUsd,
+      stopPrice: p.stopLossPrice,
+      targetPrice: p.takeProfitPrice,
+      strategy: p.strategy,
+    }));
+    for (const t of perp?.openPositions ?? []) {
+      out.push({
+        desk: "scalp",
+        symbol: t.symbol,
+        side: t.side,
+        size: t.contracts,
+        entryPrice: t.entryPrice,
+        // The perp bridge reports its marks on its own endpoint; the page shows
+        // entry until a close, rather than inventing a mark it was not given.
+        markPrice: t.entryPrice,
+        unrealizedPnl: 0,
+        marginUsd: 0,
+        stopPrice: t.stopPrice,
+        targetPrice: t.targetPrice,
+        strategy: t.strategy,
+      });
+    }
+    return out;
+  }, [positions, perp]);
+
+  const unifiedPositionColumns: DeskColumn<UnifiedPosition>[] = useMemo(
     () => [
+      {
+        id: "desk",
+        header: "Desk",
+        cell: (p) => (
+          <DeskChip tone={p.desk === "scalp" ? "warning" : "default"}>
+            {p.desk === "scalp" ? "PERP" : "OPTION"}
+          </DeskChip>
+        ),
+      },
       { id: "sym", header: "Symbol", cell: (p) => p.symbol },
-      { id: "side", header: "Side", cell: (p) => <DeskChip tone={p.side.toUpperCase() === "BUY" ? "success" : "default"}>{p.side}</DeskChip> },
-      { id: "size", align: "right", header: "Size", cell: (p) => p.size },
-      { id: "entry", align: "right", header: "Entry", cell: (p) => p.entryPrice.toFixed(2) },
-      {
-        id: "tp",
-        align: "right",
-        header: "TP (+80%)",
-        cell: (p) => (
-          <span title="Premium level that triggers the take-profit close, and the USD gain if touched">
-            {p.takeProfitPrice ? p.takeProfitPrice.toFixed(2) : "—"}
-            <span className="desk-pnl-positive" style={{ marginLeft: 6 }}>
-              {p.takeProfitUsd ? fmtUSD(p.takeProfitUsd) : ""}
-            </span>
-          </span>
-        ),
-      },
-      {
-        id: "sl",
-        align: "right",
-        header: "SL (−50%)",
-        cell: (p) => (
-          <span title="Premium level that triggers the stop-loss close, and the USD loss if touched">
-            {p.stopLossPrice ? p.stopLossPrice.toFixed(2) : "—"}
-            <span className="desk-pnl-negative" style={{ marginLeft: 6 }}>
-              {p.stopLossUsd ? fmtUSD(p.stopLossUsd) : ""}
-            </span>
-          </span>
-        ),
-      },
-      { id: "mark", align: "right", header: "Mark", cell: (p) => p.markPrice.toFixed(2) },
-      { id: "upnl", align: "right", header: "Unrealized", cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span> },
-      { id: "margin", align: "right", header: "Margin", cell: (p) => fmtUSD(p.marginUsd) },
-      { id: "liq", align: "right", header: "Liquidation", cell: (p) => <span style={{ color: "var(--desk-on-surface-variant)" }}>{p.liquidationPrice}</span> },
       { id: "strat", header: "Strategy", cell: (p) => p.strategy || "—" },
+      {
+        id: "side",
+        header: "Side",
+        cell: (p) => (
+          <DeskChip tone={p.side.toUpperCase() === "BUY" || p.side.toUpperCase() === "LONG" ? "success" : "default"}>
+            {p.side}
+          </DeskChip>
+        ),
+      },
+      { id: "size", align: "right", header: "Size", cell: (p) => p.size },
+      { id: "entry", align: "right", header: "Entry", cell: (p) => p.entryPrice },
+      {
+        id: "stop",
+        align: "right",
+        header: "Stop",
+        cell: (p) => (p.stopPrice ? p.stopPrice : "—"),
+      },
+      {
+        id: "target",
+        align: "right",
+        header: "Target",
+        cell: (p) => (p.targetPrice ? p.targetPrice : "—"),
+      },
+      {
+        id: "upnl",
+        align: "right",
+        header: "Unrealized",
+        cell: (p) =>
+          p.desk === "scalp" ? (
+            <span style={{ color: "var(--desk-on-surface-variant)" }}>see desk</span>
+          ) : (
+            <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span>
+          ),
+      },
     ],
     [],
   );
@@ -828,7 +899,7 @@ export default function LiveEnginePage() {
           </DeskBanner>
         ) : (
           <DeskCard>
-            <DeskSectionHeader title="Reconciliation" subtitle={recon ? `${ageLabel(recon.asOf)}` : "—"} />
+            <DeskSectionHeader title="Reconciliation (options engine)" subtitle={recon ? `${ageLabel(recon.asOf)}` : "—"} />
             <div className="desk-metrics-row">
               <DeskMetricTile compact label="Engine open" value={recon?.enginePositions ?? "—"} />
               <DeskMetricTile compact label="Delta positions" value={recon?.deltaPositions ?? "—"} />
@@ -839,11 +910,18 @@ export default function LiveEnginePage() {
 
         {/* SECTION 3 — Live positions */}
         <DeskCard padding="md">
-          <DeskSectionHeader title="Live Positions" subtitle={`${positions.length} open`} />
+          <DeskSectionHeader
+            title="Live Positions"
+            subtitle={
+              allPositions.length
+                ? `${allPositions.length} open on the Delta wallet · ${positions.length} option, ${allPositions.length - positions.length} perpetual`
+                : "0 open"
+            }
+          />
           <DeskDataTable
-            columns={positionColumns}
-            rows={positions}
-            getRowKey={(p, i) => `${p.symbol}-${i}`}
+            columns={unifiedPositionColumns}
+            rows={allPositions}
+            getRowKey={(p, i) => `${p.desk}-${p.symbol}-${i}`}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live positions.</span>}
           />
