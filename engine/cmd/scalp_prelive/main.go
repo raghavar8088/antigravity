@@ -223,6 +223,10 @@ type desk struct {
 	// went unnoticed.
 	mirrorOpens int64
 	mirrorSkips int64
+
+	// live is the optional real-money arm. nil means paper-only, which is the
+	// default and the state this desk shipped in for its whole life.
+	live *liveDesk
 }
 
 // noteSource records the venue that produced the bars just consumed, and logs
@@ -412,6 +416,12 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 					// construction — same bar, same entry, opposite side, stop and
 					// target distances swapped.
 					d.openMirror(e.Name, ss.sym, cs.Pos, barIdx, bar)
+
+					// Real money, if and only if this stream is allow-listed and
+					// the bridge is armed. Paper accounting above is unaffected
+					// either way, so the leaderboard stays a clean measurement
+					// rather than a mixture of paper and live outcomes.
+					d.live.onPaperFill(e.Name, ss.sym, cs.Pos)
 
 					// same-bar exit check, exactly like the harness manage loop.
 					// The mirror gets the same treatment on the same bar: giving
@@ -946,6 +956,7 @@ func (d *desk) serve(port int) {
 		})
 	})))
 
+	d.live.registerHTTP(gated, postOnly, writeJSON)
 	log.Printf("scalp_prelive HTTP on :%d (/scalp/health /scalp/stats /scalp/leaderboard /scalp/trades /scalp/reset /scalp/clear-trades)", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
@@ -1002,6 +1013,13 @@ func main() {
 	// paginated fetch loop here.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Optional live arm. Returns nil (paper-only) unless SCALP_LIVE_ENABLED is
+	// true AND Delta credentials are present AND the product registry loaded.
+	// Built here rather than at desk construction because it needs the process
+	// context: its monitor and product-refresh loops must stop with the desk.
+	d.live = newLiveDesk(ctx)
+	d.live.reportUnknown(d.streamNames())
 
 	d.feed = sharedfeed.New(sharedfeed.Config{
 		Poll:       time.Minute,

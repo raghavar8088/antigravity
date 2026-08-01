@@ -884,6 +884,8 @@ The content is organized as follows:
   delta/live_position_custody_test.go
   delta/live_position_custody.go
   delta/monitor_interval_test.go
+  delta/perp_bridge_test.go
+  delta/perp_bridge.go
   delta/perp_products_test.go
   delta/perp_products.go
   delta/perp_roster_test.go
@@ -1744,6 +1746,8 @@ The content is organized as follows:
   pre_live/main.go
   pre_live/mongo.go
   run_backtest/main.go
+  scalp_prelive/live_test.go
+  scalp_prelive/live.go
   scalp_prelive/main.go
   scalp_prelive/mirror_test.go
   scalp_prelive/profile_test.go
