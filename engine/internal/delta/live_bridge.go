@@ -141,6 +141,22 @@ type Bridge struct {
 	// names — the Live Engine's per-strategy allow-list. nil = allow all (legacy);
 	// non-nil (even empty) = only the listed strategies may place live orders.
 	liveAllow map[string]bool
+
+	// optionsTradingEnabled is the MASTER switch for real-money option orders.
+	//
+	// It is deliberately separate from `enabled` (the Delta Engine toggle) and
+	// from liveAllow (which strategies are permitted). Those two answer "is the
+	// engine on" and "is this strategy allowed"; this answers "should this desk
+	// be trading options at all", and the owner is the only one who sets it.
+	//
+	// FALSE BY DEFAULT, and not reachable from the UI. Turning the Delta Engine
+	// on must not resume option trading on its own: the engine gets armed for
+	// the account-level reads and controls it shares with the perpetual desk,
+	// and an operator doing that is not thereby asking for option orders.
+	//
+	// The zero value is therefore the safe one — a Bridge that is constructed
+	// and never configured trades nothing.
+	optionsTradingEnabled bool
 }
 
 // NewBridge creates a Bridge. If Delta keys are not set it starts in a disabled/unconfigured state.
@@ -538,13 +554,48 @@ func (b *Bridge) LiveStrategyRecord(name string) StrategyRecord {
 	return rec
 }
 
-// strategyAllowedLocked reports whether a strategy may place a live order. nil
-// allow-list = allow all (legacy); non-nil = only listed. Caller holds b.mu.
+// strategyAllowedLocked reports whether a strategy may place a live order.
+//
+// The master options switch is checked FIRST and independently of the
+// allow-list. Gating on the allow-list alone was not enough: the list is
+// editable at runtime through the roster API, so a strategy added there would
+// have resumed real option trading without anyone deciding to. The master
+// switch cannot be reached that way — only configuration sets it.
+//
+// nil allow-list = allow all (legacy); non-nil = only listed. Caller holds b.mu.
 func (b *Bridge) strategyAllowedLocked(name string) bool {
+	if !b.optionsTradingEnabled {
+		return false
+	}
 	if b.liveAllow == nil {
 		return true
 	}
 	return b.liveAllow[name]
+}
+
+// SetOptionsTradingEnabled sets the master switch for real-money option orders.
+//
+// Called once from wiring with the owner's configured value. There is no HTTP
+// path to it by design — re-enabling option trading is a deliberate change to
+// the deployment, not a toggle someone can hit by accident while looking at a
+// different desk.
+func (b *Bridge) SetOptionsTradingEnabled(v bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.optionsTradingEnabled = v
+	if v {
+		log.Printf("[DELTA BRIDGE] option trading ENABLED by configuration")
+	} else {
+		log.Printf("[DELTA BRIDGE] option trading DISABLED — no option order will be placed, " +
+			"even with the Delta Engine armed")
+	}
+}
+
+// OptionsTradingEnabled reports the master switch, for status surfaces.
+func (b *Bridge) OptionsTradingEnabled() bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.optionsTradingEnabled
 }
 
 // SetEnabled enables or disables live order mirroring.

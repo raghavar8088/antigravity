@@ -43,6 +43,8 @@ type LiveState = {
   killSwitchActive: boolean;
   killSwitchReason?: string;
   killSwitchControllable?: boolean;
+  /** Master switch for real-money OPTION orders. Configuration-only. */
+  optionsTradingEnabled?: boolean;
 };
 
 type Account = {
@@ -931,6 +933,11 @@ export default function LiveEnginePage() {
           <DeskSectionHeader
             title="Control"
             subtitle="OPTIONS engine only. Places real orders immediately; auto-disarm is one-way. The scalp perpetual desk is armed separately above."
+            actions={
+              <DeskChip tone={state?.optionsTradingEnabled ? "success" : "default"} style={{ fontWeight: 700 }}>
+                {state?.optionsTradingEnabled ? "OPTION TRADING ON" : "OPTION TRADING OFF"}
+              </DeskChip>
+            }
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", padding: "0 4px 8px" }}>
             {/* Delta Engine — green on, red off. Toggling on goes live at once. */}
@@ -956,6 +963,15 @@ export default function LiveEnginePage() {
                   ? `live orders enabled · ${ageLabel(state?.armedAt)}`
                   : "off — no live orders will be placed"}
               </span>
+              {/* An armed engine with the master switch off places nothing. Saying
+                  so here is the whole fix: the previous page showed only "live
+                  orders enabled", which was true of the engine and false of the
+                  desk. */}
+              {armed && state?.optionsTradingEnabled === false && (
+                <span className="desk-label-md" style={{ color: "var(--desk-warning, var(--desk-on-surface-variant))", fontWeight: 600 }}>
+                  option trading is OFF by configuration — no option order will be placed
+                </span>
+              )}
             </div>
 
             {/* Kill switch — red on (halted), green off (trading allowed). */}

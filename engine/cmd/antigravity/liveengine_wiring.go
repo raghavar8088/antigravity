@@ -131,9 +131,28 @@ func wireLiveEngine(
 	// sells. Gated to the per-strategy allow-list below.
 	bridge.SetBuyingMode(true)
 	bridge.SetNativeBuyMode(true)
+	// MASTER SWITCH for real-money option orders — off unless configuration says
+	// otherwise.
+	//
+	// Arming the Delta Engine is not consent to trade options. The engine is
+	// shared: it backs the account reads, the kill switch and the reconciler that
+	// the perpetual desk's operator also relies on, so it gets turned on for
+	// reasons that have nothing to do with options. Before this gate, doing so
+	// silently resumed live option buying by the nine strategies below.
+	//
+	// Set LIVE_ENGINE_OPTIONS_ENABLED=true to allow it. Unset or malformed means
+	// no — parseEnvBoolDefault logs the bad value and falls back to the default,
+	// so a typo here cannot start spending money, and does not do it quietly.
+	optionsOn := parseEnvBoolDefault("LIVE_ENGINE_OPTIONS_ENABLED", false)
+	bridge.SetOptionsTradingEnabled(optionsOn)
+
 	allow := defaultLiveStrategies()
 	bridge.SetLiveAllowList(allow)
 	reportUnknownAllowListNames(allow, buyEngine)
+	if !optionsOn {
+		log.Printf("[LIVE ENGINE] %d option strateg(ies) are allow-listed but the master "+
+			"options switch is OFF — none can place an order", len(allow))
+	}
 
 	// Connect the go-live gate to the order path. The allow-list says a strategy
 	// is PERMITTED; this says it has EARNED it. Both must hold once enforcement is
@@ -169,6 +188,9 @@ func wireLiveEngine(
 		IsConfigured:       bridge.IsConfigured,
 		KillSwitchActive:   ks.IsActive,
 		KillSwitchReason:   ks.Reason,
+		// So the page reports the master options switch instead of showing an
+		// armed engine that quietly places nothing.
+		OptionsTradingEnabled: bridge.OptionsTradingEnabled,
 		SetKillSwitch: func(ctx context.Context, active bool, actor, reason string) error {
 			if active {
 				return ks.Trigger(ctx, killswitchpkg.Activation{

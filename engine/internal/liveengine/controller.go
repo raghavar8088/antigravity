@@ -109,6 +109,8 @@ type Hooks struct {
 	KillSwitchActive func() bool
 	// KillSwitchReason describes why the kill switch is active (empty when clear).
 	KillSwitchReason func() string
+	// OptionsTradingEnabled reports the master options switch for display.
+	OptionsTradingEnabled func() bool
 	// SetKillSwitch activates (halt) or releases (resume) the institutional kill
 	// switch on the operator's behalf. Optional; when nil the UI toggle is
 	// unavailable and the switch must be driven from the admin surface.
@@ -450,6 +452,11 @@ type StateSnapshot struct {
 	KillSwitchReason      string    `json:"killSwitchReason,omitempty"`
 	// KillSwitchControllable is true when the UI may toggle the kill switch.
 	KillSwitchControllable bool `json:"killSwitchControllable"`
+	// OptionsTradingEnabled is the master switch for real-money OPTION orders,
+	// set only by configuration. Reported so the page cannot show an armed
+	// engine while silently placing no orders — the state that made an operator
+	// believe the desk was trading for 112 minutes.
+	OptionsTradingEnabled bool `json:"optionsTradingEnabled"`
 }
 
 // Snapshot returns the current state for display.
@@ -468,6 +475,10 @@ func (c *Controller) Snapshot() StateSnapshot {
 	if kill && c.hooks.KillSwitchReason != nil {
 		killReason = c.hooks.KillSwitchReason()
 	}
+	optionsOn := false
+	if c.hooks.OptionsTradingEnabled != nil {
+		optionsOn = c.hooks.OptionsTradingEnabled()
+	}
 	return StateSnapshot{
 		State:                  c.state,
 		Armed:                  c.state == StateArmed,
@@ -484,6 +495,7 @@ func (c *Controller) Snapshot() StateSnapshot {
 		KillSwitchActive:       kill,
 		KillSwitchReason:       killReason,
 		KillSwitchControllable: c.hooks.SetKillSwitch != nil,
+		OptionsTradingEnabled:  optionsOn,
 	}
 }
 

@@ -35,7 +35,7 @@ func runOnOpen(b *Bridge, sig OpenSignal) bool {
 
 // The eligibility callback re-enters the bridge, exactly as the real wiring does.
 func TestOnOpen_EligibilityCallbackMayReadBridge(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 	b.SetLiveAllowList([]string{"s1"})
 
 	called := false
@@ -61,7 +61,7 @@ func TestOnOpen_EligibilityCallbackMayReadBridge(t *testing.T) {
 // After OnOpen returns, the bridge must still be readable — a leaked lock would
 // only show up on the next read, which is how this presented in production.
 func TestOnOpen_BridgeStaysReadableAfterOpen(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 	b.SetLiveAllowList([]string{"s1"})
 	b.SetLiveEligibility(func(name string) (bool, string) {
 		_ = b.LiveStrategyRecord(name)
@@ -88,7 +88,7 @@ func TestOnOpen_BridgeStaysReadableAfterOpen(t *testing.T) {
 
 // A blocking gate must also return cleanly, not deadlock on the way out.
 func TestOnOpen_EnforcedGateBlockWithoutDeadlock(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 	b.SetLiveAllowList([]string{"s1"})
 	b.SetGateEnforcement(true)
 	b.SetLiveEligibility(func(name string) (bool, string) {
@@ -106,7 +106,7 @@ func TestOnOpen_EnforcedGateBlockWithoutDeadlock(t *testing.T) {
 
 // With no eligibility test wired the gate must fail closed, and still not hang.
 func TestOnOpen_UnwiredGateFailsClosed(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 	b.SetLiveAllowList([]string{"s1"})
 	b.SetGateEnforcement(true)
 

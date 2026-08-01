@@ -91,7 +91,7 @@ func pricedSignal(paperID, strategy string, strategyID int, expiry time.Time) Op
 // Entries inside the expiry floor lose by construction: they cannot reach +80%
 // before near_expiry_30min force-closes them. Live went 0-for-3 on these.
 func TestOnOpen_RejectsEntryTooCloseToExpiry(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 
 	b.OnOpen(pricedSignal("paper-late", "any", 0, time.Now().Add(45*time.Minute)))
 	if len(b.trades) != 0 {
@@ -107,7 +107,7 @@ func TestOnOpen_RejectsEntryTooCloseToExpiry(t *testing.T) {
 // The entry-economics guard is an independent reason to decline: an option too
 // cheap to round-trip profitably is refused even when every other gate passes.
 func TestOnOpen_RejectsFeeToxicPremium(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 
 	sig := pricedSignal("paper-cheap", "any", 0, time.Now().Add(6*time.Hour))
 	sig.PremiumPerBTC = testCheapQuote // what the desk was actually buying
@@ -122,7 +122,7 @@ func TestOnOpen_RejectsFeeToxicPremium(t *testing.T) {
 // a fresh paper position while the live leg still runs. Without this guard that
 // would stack a second real position on the same strategy.
 func TestOnOpen_OneLivePositionPerStrategy(t *testing.T) {
-	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true}
+	b := &Bridge{openByPaperID: map[string]string{}, configured: true, enabled: true, buyingMode: true, optionsTradingEnabled: true}
 	expiry := time.Now().Add(8 * time.Hour)
 
 	// Wire a no-op open handler so the first trade STAYS "OPEN". Without one the
