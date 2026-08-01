@@ -170,6 +170,12 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	cfg := b.cfg
 	_, alreadyOpen := b.open[perpKey(strategy, symbol)]
 	openCount := len(b.open)
+	// Notional already committed. The aggregate cap is measured against this, so
+	// a book at its ceiling stops adding rather than stacking per-order caps.
+	openNotional := 0.0
+	for _, t := range b.open {
+		openNotional += t.NotionalUSD
+	}
 	b.mu.RUnlock()
 
 	if alreadyOpen {
@@ -181,7 +187,7 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		return nil
 	}
 
-	plan, err := PlanPerpOrder(b.reg, cfg, symbol, long, entry, stop, target, openCount)
+	plan, err := PlanPerpOrder(b.reg, cfg, symbol, long, entry, stop, target, openCount, openNotional)
 	if err != nil {
 		// Capacity and sub-contract refusals are routine; log them quietly once
 		// rather than treating a normal skip as a failure.
@@ -194,6 +200,9 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		Size:      plan.Contracts,
 		Side:      plan.Side,
 		OrderType: TypeMarket,
+		// Explicit leverage so the margin this position consumes is predictable
+		// rather than whatever the account happens to be set to.
+		Leverage: cfg.LeverageForOrder,
 		// Market entry, deliberately. The paper desk models a post-only maker
 		// fill and only counts trades that actually filled; a resting limit here
 		// would leave the live account holding orders the paper desk has already

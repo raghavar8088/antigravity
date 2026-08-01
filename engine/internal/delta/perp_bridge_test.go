@@ -136,7 +136,7 @@ func TestPerpExitReason_LevelsAreMutuallyExclusiveOnASingleMark(t *testing.T) {
 func TestPerpExitReason_MisorderedPositionsCannotBePlanned(t *testing.T) {
 	reg := registryFrom(t, realPerpTickers)
 	cfg := DefaultPerpRiskConfig(100)
-	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.18, 0.175, 0); err == nil {
+	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.18, 0.175, 0, 0); err == nil {
 		t.Fatal("a long with its stop above entry was planned; its stop and target would overlap")
 	}
 }

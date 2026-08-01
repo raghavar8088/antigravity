@@ -25,7 +25,7 @@ func TestPlanPerpOrder_SizesFromRiskNotFromAFixedNotional(t *testing.T) {
 	stop := entry * (1 - 0.0035) // the scalp desk's 0.35% stop
 	target := entry * (1 + 0.0070)
 
-	plan, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, entry, stop, target, 0)
+	plan, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, entry, stop, target, 0, 0)
 	if err != nil {
 		t.Fatalf("PlanPerpOrder: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestPlanPerpOrder_CapsLeverageWhenTheStopIsTight(t *testing.T) {
 
 	entry := 63083.98754328
 	stop := entry * (1 - 0.0005) // 0.05% stop: 2% risk would imply 40x
-	plan, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, entry, stop, entry*1.001, 0)
+	plan, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, entry, stop, entry*1.001, 0, 0)
 	if err != nil {
 		t.Fatalf("PlanPerpOrder: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestPlanPerpOrder_RefusesBeyondTheConcurrencyCap(t *testing.T) {
 	reg := riskTestRegistry(t)
 	cfg := DefaultPerpRiskConfig(100)
 
-	_, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.169, 0.172, cfg.MaxConcurrentPositions)
+	_, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.169, 0.172, cfg.MaxConcurrentPositions, 0)
 	if !errors.Is(err, ErrTooManyPositions) {
 		t.Fatalf("at the cap the planner gave %v, want ErrTooManyPositions", err)
 	}
@@ -82,10 +82,10 @@ func TestPlanPerpOrder_RejectsAStopOnTheWrongSide(t *testing.T) {
 	reg := riskTestRegistry(t)
 	cfg := DefaultPerpRiskConfig(100)
 
-	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.18, 0.19, 0); err == nil {
+	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, 0.17, 0.18, 0.19, 0, 0); err == nil {
 		t.Error("a LONG with its stop above entry was accepted")
 	}
-	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", false, 0.17, 0.16, 0.15, 0); err == nil {
+	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", false, 0.17, 0.16, 0.15, 0, 0); err == nil {
 		t.Error("a SHORT with its stop below entry was accepted")
 	}
 }
@@ -98,7 +98,7 @@ func TestPlanPerpOrder_SkipsRatherThanRoundingUp(t *testing.T) {
 	cfg := DefaultPerpRiskConfig(1) // $1 account: one BTCUSD contract is ~$63
 
 	entry := 63083.98754328
-	_, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, entry, entry*0.9965, entry*1.007, 0)
+	_, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, entry, entry*0.9965, entry*1.007, 0, 0)
 	if !errors.Is(err, ErrRiskTooSmall) {
 		t.Fatalf("a sub-contract order gave %v, want ErrRiskTooSmall", err)
 	}
@@ -110,7 +110,7 @@ func TestPlanPerpOrder_HandlesShorts(t *testing.T) {
 	cfg := DefaultPerpRiskConfig(100)
 
 	entry := 579.25787832
-	plan, err := PlanPerpOrder(reg, cfg, "BNBUSD", false, entry, entry*1.0035, entry*0.993, 0)
+	plan, err := PlanPerpOrder(reg, cfg, "BNBUSD", false, entry, entry*1.0035, entry*0.993, 0, 0)
 	if err != nil {
 		t.Fatalf("PlanPerpOrder: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestPlanPerpOrder_SnapsPricesToTheVenueTick(t *testing.T) {
 	cfg := DefaultPerpRiskConfig(100)
 
 	// BTCUSD tick is 0.5.
-	plan, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, 63083.98754328, 62863.19, 63525.57, 0)
+	plan, err := PlanPerpOrder(reg, cfg, "BTCUSD", true, 63083.98754328, 62863.19, 63525.57, 0, 0)
 	if err != nil {
 		t.Fatalf("PlanPerpOrder: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestPlanPerpOrder_SnapsPricesToTheVenueTick(t *testing.T) {
 // An unfunded account must size nothing at all.
 func TestPlanPerpOrder_RefusesWithNoEquity(t *testing.T) {
 	reg := riskTestRegistry(t)
-	if _, err := PlanPerpOrder(reg, DefaultPerpRiskConfig(0), "ADAUSD", true, 0.17, 0.169, 0.172, 0); err == nil {
+	if _, err := PlanPerpOrder(reg, DefaultPerpRiskConfig(0), "ADAUSD", true, 0.17, 0.169, 0.172, 0, 0); err == nil {
 		t.Fatal("sized an order against zero equity")
 	}
 }
@@ -168,5 +168,52 @@ func TestDefaultPerpRiskConfig_IsConservativeForASmallAccount(t *testing.T) {
 	worst := cfg.RiskPerTradeFraction * float64(cfg.MaxConcurrentPositions) * 100
 	if worst > 10 {
 		t.Errorf("all positions stopping together costs %.0f%% of the account", worst)
+	}
+}
+
+// The per-order leverage cap alone is misleading: three positions at the
+// per-order ceiling is three times that ceiling on one account. On a $116 wallet
+// shared with the options engine, a 15x book was never fundable — and the
+// resulting margin rejections would have read as an infrastructure fault rather
+// than as a risk config that could not work.
+func TestPlanPerpOrder_CapsAggregateExposureAcrossOpenPositions(t *testing.T) {
+	reg := riskTestRegistry(t)
+	cfg := DefaultPerpRiskConfig(100)
+	ceiling := cfg.EquityUSD * cfg.MaxAggregateLeverage
+
+	entry := 0.17258828
+	stop := entry * (1 - 0.0035)
+
+	// A book already at half the ceiling may only add the remaining half.
+	plan, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, entry, stop, entry*1.007, 1, ceiling/2)
+	if err != nil {
+		t.Fatalf("PlanPerpOrder: %v", err)
+	}
+	if plan.NotionalUSD > ceiling/2+0.01 {
+		t.Errorf("added $%.2f on top of a $%.2f book against a $%.2f ceiling",
+			plan.NotionalUSD, ceiling/2, ceiling)
+	}
+
+	// A book AT the ceiling adds nothing at all.
+	if _, err := PlanPerpOrder(reg, cfg, "ADAUSD", true, entry, stop, entry*1.007, 1, ceiling); !errors.Is(err, ErrAggregateExposureReached) {
+		t.Fatalf("at the ceiling the planner gave %v, want ErrAggregateExposureReached", err)
+	}
+}
+
+// The whole book must fit inside the account with room for the options engine,
+// which shares this wallet.
+func TestDefaultPerpRiskConfig_BookFitsTheAccount(t *testing.T) {
+	cfg := DefaultPerpRiskConfig(100)
+	if cfg.MaxAggregateLeverage > cfg.MaxLeverage {
+		t.Errorf("aggregate cap %.0fx exceeds the per-order cap %.0fx, so it never binds",
+			cfg.MaxAggregateLeverage, cfg.MaxLeverage)
+	}
+	// Margin the full book would consume at the venue leverage actually sent.
+	if cfg.LeverageForOrder <= 0 {
+		t.Fatal("no explicit order leverage: margin per position would be whatever the account is set to")
+	}
+	marginPct := cfg.MaxAggregateLeverage / float64(cfg.LeverageForOrder) * 100
+	if marginPct > 50 {
+		t.Errorf("a full book consumes %.0f%% of equity as margin, leaving too little for the options engine that shares this wallet", marginPct)
 	}
 }

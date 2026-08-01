@@ -46,6 +46,17 @@ type PerpRiskConfig struct {
 	MaxConcurrentPositions int
 	// MaxNotionalUSD is a hard per-order ceiling, independent of the above.
 	MaxNotionalUSD float64
+	// MaxAggregateLeverage caps notional across ALL open positions at once.
+	//
+	// Without it the per-order cap is misleading: 3 concurrent positions at 5x
+	// each is 15x on the account, which on $116 is $1,750 of notional needing
+	// far more margin than exists. The orders would simply be rejected — but a
+	// margin rejection reads as an infrastructure problem, not as a risk config
+	// that was never fundable.
+	MaxAggregateLeverage float64
+	// LeverageForOrder is sent to the venue so the margin each position consumes
+	// is predictable rather than whatever the account happens to be set to.
+	LeverageForOrder int
 }
 
 // DefaultPerpRiskConfig is the posture for a $100 live account.
@@ -56,11 +67,19 @@ type PerpRiskConfig struct {
 // answers nothing.
 func DefaultPerpRiskConfig(equityUSD float64) PerpRiskConfig {
 	return PerpRiskConfig{
-		EquityUSD:              equityUSD,
-		RiskPerTradeFraction:   0.02,
-		MaxLeverage:            5.0,
+		EquityUSD:            equityUSD,
+		RiskPerTradeFraction: 0.02,
+		MaxLeverage:          3.0,
+		// Three positions at 3x each would be 9x aggregate; the aggregate cap is
+		// what actually binds, and it is set so the whole book fits inside the
+		// account with room for the options engine, which shares this wallet.
+		MaxAggregateLeverage:   3.0,
 		MaxConcurrentPositions: 3,
-		MaxNotionalUSD:         equityUSD * 5.0,
+		MaxNotionalUSD:         equityUSD * 3.0,
+		// 10x on the order keeps margin at a tenth of notional, so a 3x book
+		// consumes ~30% of equity as margin rather than all of it. The 0.35%
+		// stop sits far inside the liquidation distance this implies.
+		LeverageForOrder: 10,
 	}
 }
 
@@ -86,6 +105,10 @@ type PerpOrderPlan struct {
 // "$2 risk" becomes a $12 risk on a cheap account.
 var ErrRiskTooSmall = fmt.Errorf("delta: risk-sized order is below one contract")
 
+// ErrAggregateExposureReached means the book is already at its total leverage
+// ceiling, so no further position can be funded regardless of its own size.
+var ErrAggregateExposureReached = fmt.Errorf("delta: aggregate perpetual exposure ceiling reached")
+
 // ErrTooManyPositions means the concurrency cap is reached.
 var ErrTooManyPositions = fmt.Errorf("delta: max concurrent perpetual positions reached")
 
@@ -102,6 +125,7 @@ func PlanPerpOrder(
 	long bool,
 	entry, stop, target float64,
 	openPositions int,
+	openNotionalUSD float64,
 ) (PerpOrderPlan, error) {
 	if cfg.EquityUSD <= 0 {
 		return PerpOrderPlan{}, fmt.Errorf("delta: account equity is %.2f — nothing to size against", cfg.EquityUSD)
@@ -136,6 +160,18 @@ func PlanPerpOrder(
 	}
 	if cfg.MaxNotionalUSD > 0 && notional > cfg.MaxNotionalUSD {
 		notional = cfg.MaxNotionalUSD
+	}
+	// AGGREGATE cap. What is already open counts against the same account, so
+	// the room left is the book's ceiling minus the book.
+	if cfg.MaxAggregateLeverage > 0 {
+		room := cfg.EquityUSD*cfg.MaxAggregateLeverage - openNotionalUSD
+		if room <= 0 {
+			return PerpOrderPlan{}, fmt.Errorf("%w: $%.2f already open against a $%.2f book ceiling",
+				ErrAggregateExposureReached, openNotionalUSD, cfg.EquityUSD*cfg.MaxAggregateLeverage)
+		}
+		if notional > room {
+			notional = room
+		}
 	}
 
 	contracts, prod, err := reg.SizeContracts(symbol, notional, entry)
