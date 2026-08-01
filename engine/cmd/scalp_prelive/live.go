@@ -110,10 +110,30 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 	log.Printf("[SCALP LIVE] configured: $%.2f account, %d strategies, %d products known — DISARMED until armed explicitly",
 		equity, b.AllowList().Count(), reg.Count())
 
+	// Persist the open book alongside the desk's own state, on the mounted
+	// volume, so custody survives a restart instead of stranding funded
+	// positions with no stop, target or time stop.
+	b.SetStateDir(liveStateDir())
+	rctx, rcancel := context.WithTimeout(ctx, 45*time.Second)
+	if err := b.Restore(rctx); err != nil {
+		log.Printf("[SCALP LIVE] custody restore incomplete: %v", err)
+	}
+	rcancel()
+
 	d := &liveDesk{bridge: b, reg: reg}
 	go d.refreshLoop(ctx)
 	go b.Monitor(ctx, 15*time.Second)
 	return d
+}
+
+// liveStateDir is where the live position book lives. It defaults to the desk's
+// own state directory, which is a mounted volume in production — a path inside
+// the container would be destroyed by the very restart this is meant to survive.
+func liveStateDir() string {
+	if d := strings.TrimSpace(os.Getenv("SCALP_LIVE_STATE_DIR")); d != "" {
+		return d
+	}
+	return "/app/data/scalp_prelive"
 }
 
 // refreshLoop keeps the product registry fresh. A stale registry refuses to

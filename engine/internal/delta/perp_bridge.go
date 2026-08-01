@@ -90,6 +90,10 @@ type PerpBridge struct {
 	submitted atomic.Int64
 	rejected  atomic.Int64
 	closes    atomic.Int64
+
+	// stateDir is where the open book is persisted. Empty = memory only, which
+	// strands every open position on restart. See perp_persistence.go.
+	stateDir string
 }
 
 // NewPerpBridge builds a bridge. It starts DISARMED and permits nothing until
@@ -251,6 +255,9 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 
 	b.mu.Lock()
 	b.open[perpKey(strategy, symbol)] = t
+	// Persist BEFORE returning: a crash between the fill and the next write
+	// leaves the position funded and unknown to the next process.
+	b.persistLocked()
 	b.mu.Unlock()
 	b.submitted.Add(1)
 
@@ -423,6 +430,7 @@ func (b *PerpBridge) finish(t *PerpLiveTrade, exit float64, reason string) {
 	if len(b.history) > 500 {
 		b.history = b.history[len(b.history)-500:]
 	}
+	b.persistLocked()
 	b.mu.Unlock()
 	b.closes.Add(1)
 

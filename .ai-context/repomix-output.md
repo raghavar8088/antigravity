@@ -886,6 +886,8 @@ The content is organized as follows:
   delta/monitor_interval_test.go
   delta/perp_bridge_test.go
   delta/perp_bridge.go
+  delta/perp_persistence_test.go
+  delta/perp_persistence.go
   delta/perp_products_test.go
   delta/perp_products.go
   delta/perp_roster_test.go
