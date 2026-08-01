@@ -348,6 +348,46 @@ export default function LiveEnginePage() {
     [refresh],
   );
 
+  const [perpBusy, setPerpBusy] = useState<boolean>(false);
+
+  /**
+   * Arm or disarm the PERPETUAL desk.
+   *
+   * Separate from `mutate` because it is a separate engine on a separate
+   * process: `mutate` drives the options bridge in cmd/antigravity, this drives
+   * the perp bridge in cmd/scalp_prelive. They share one Delta wallet and
+   * nothing else — one being armed says nothing about the other.
+   */
+  const perpMutate = useCallback(
+    async (action: "arm" | "disarm") => {
+      setPerpBusy(true);
+      try {
+        const res = await fetch(`/api/scalp/scalp/live/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // The engine's field is `confirm`, not `confirmation` — a mismatch
+          // here fails every arm with a 400 that looks like a permissions
+          // problem. Checked against the handler rather than assumed.
+          body: JSON.stringify(
+            action === "arm"
+              ? { confirm: "ARM LIVE TRADING", actor: "ui" }
+              : { actor: "ui" },
+          ),
+        });
+        if (!res.ok) {
+          setError(`perp ${action} failed (HTTP ${res.status})`);
+          return;
+        }
+        await refresh();
+      } catch {
+        setError(`perp ${action} failed`);
+      } finally {
+        setPerpBusy(false);
+      }
+    },
+    [refresh],
+  );
+
   const armed = state?.armed ?? false;
 
   /** Every live position on the wallet, whichever desk opened it. */
@@ -836,11 +876,61 @@ export default function LiveEnginePage() {
           </span>
         </DeskBanner>
 
+        {/* SECTION 1a — Perpetual desk control.
+
+            This desk is armed independently of the options engine above. The
+            page previously showed its positions and P&L with no way to turn it
+            on, so the options toggle read as if it governed everything. */}
+        <DeskCard>
+          <DeskSectionHeader
+            title="Scalp Perpetual Desk"
+            subtitle="Separate engine, separate arm — the Delta Engine toggle above does NOT control it."
+            actions={
+              <DeskChip tone={perp?.armed ? "success" : "default"} style={{ fontWeight: 700 }}>
+                {perp?.armed ? "ARMED" : "DISARMED"}
+              </DeskChip>
+            }
+          />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", padding: "0 4px 8px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <DeskSwitch
+                id="perp-arm-toggle"
+                checked={perp?.armed ?? false}
+                disabled={perpBusy || !perp}
+                ariaLabel="Scalp perpetual desk"
+                label={perp?.armed ? "Perp desk armed" : "Perp desk disarmed"}
+                onColor="var(--desk-success)"
+                offColor="var(--desk-error)"
+                onChange={(next) => void perpMutate(next ? "arm" : "disarm")}
+              />
+              <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+                {perp?.armed
+                  ? `${perp.strategies.length} scalp strategies can place real orders`
+                  : "off — scalp strategies fill on paper only"}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="desk-label-md" style={{ color: "var(--desk-on-surface-variant)" }}>
+                Equity / risk per trade
+              </span>
+              <span className="desk-mono desk-body-md" style={{ fontWeight: 600 }}>
+                {perp ? `$${perp.equityUsd.toFixed(0)} · $${perp.riskPerTradeUsd.toFixed(2)}` : "—"}
+              </span>
+            </div>
+          </div>
+          <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 780, color: "var(--desk-on-surface-variant)" }}>
+            Arming does not back-fill positions already open on paper — a live order tracks a fill at the moment it
+            happens, so only NEW signals are routed. Max 3 concurrent perps regardless of how many strategies signal.
+            <strong> This arm does not survive a restart:</strong> it is held in memory so a crash loop can never
+            re-arm itself unattended. Disarming stops new orders; open positions keep their stop, target and time stop.
+          </p>
+        </DeskCard>
+
         {/* SECTION 1 — Arm / Disarm / Close All */}
         <DeskCard>
           <DeskSectionHeader
             title="Control"
-            subtitle="Delta Engine on places real orders immediately. Auto-disarm is one-way."
+            subtitle="OPTIONS engine only. Places real orders immediately; auto-disarm is one-way. The scalp perpetual desk is armed separately above."
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center", padding: "0 4px 8px" }}>
             {/* Delta Engine — green on, red off. Toggling on goes live at once. */}

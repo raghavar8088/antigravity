@@ -60,9 +60,10 @@ const ALLOWED_PATHS = [
   // so a leaderboard that showed only one of them would report half the real
   // exposure while looking complete.
   //
-  // Reads only — arm, disarm and close-all are deliberately NOT proxied. Those
-  // spend money and stay behind the desk's own token and typed confirmation
-  // rather than becoming reachable from a browser session.
+  // Reads, plus arm/disarm below. close-all stays off the proxy: flattening
+  // positions is not needed from here, because the bridge's custody loop keeps
+  // managing TP/SL/TTL on open positions even while disarmed — disarming stops
+  // NEW orders without abandoning the ones already funded.
   "/scalp/live/stats",
   "/scalp/live/trades",
   "/scalp/live/reconcile",
@@ -73,7 +74,24 @@ const ALLOWED_PATHS = [
  * never be hit by a GET and a read path can never be POSTed to. Paper only —
  * these clear simulated statistics; the upstream binary has no order routing.
  */
-const MUTATION_PATHS = ["/scalp/reset", "/scalp/clear-trades"];
+const MUTATION_PATHS = [
+  "/scalp/reset",
+  "/scalp/clear-trades",
+  // Arming the PERPETUAL desk.
+  //
+  // These were held back so real money stayed behind the desk's own token. The
+  // cost of that turned out to be worse than the risk it avoided: the Live
+  // Engine page showed the perp desk's positions, trades and leaderboard but
+  // had no control for it, while the one visible toggle armed the OPTIONS
+  // engine. An operator turned that toggle on and reasonably believed the
+  // scalp strategies were live. They were not, for 105 minutes.
+  //
+  // A control that exists nowhere is not a safety measure — it is a page that
+  // misreports its own state. Both still require a valid session cookie, and
+  // the proxy injects the desk token server-side.
+  "/scalp/live/arm",
+  "/scalp/live/disarm",
+];
 
 function isAllowed(pathname: string): boolean {
   const clean = pathname.replace(/\/+$/, "").toLowerCase();
