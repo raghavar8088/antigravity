@@ -321,3 +321,47 @@ func TestPerpExitReason_NoTTLMeansNoTimeExit(t *testing.T) {
 		t.Errorf("a trade with no ExpiresAt exited %q", got)
 	}
 }
+
+// The custody loop already reads the venue's marks to decide exits. Publishing
+// them is what lets the page show a real number instead of a placeholder — and
+// it must be the SAME figure custody acts on, or the screen and the risk engine
+// disagree about the position.
+func TestPerpBridge_PublishesMarkAndUnrealisedPnL(t *testing.T) {
+	b := bridgeFixture(t)
+	tr := &PerpLiveTrade{
+		Strategy: "ANTI_M1_VWAP_Doji_Short", Symbol: "ADAUSD", ProductID: 16614,
+		Side: "buy", Contracts: 1000, EntryPrice: 0.17, Status: "OPEN",
+	}
+	b.open[perpKey(tr.Strategy, tr.Symbol)] = tr
+
+	b.markLive(tr, 0.18)
+
+	if tr.MarkPrice != 0.18 {
+		t.Errorf("mark %v, want 0.18", tr.MarkPrice)
+	}
+	// +0.01 x 1000 contracts x 1.0 ADA = $10. A BTC contract value would give
+	// $0.01 — the same thousandfold trap as sizing.
+	if tr.UnrealizedPnL < 9.99 || tr.UnrealizedPnL > 10.01 {
+		t.Errorf("unrealised $%.4f, want ~$10", tr.UnrealizedPnL)
+	}
+}
+
+// A short's unrealised P&L must have the opposite sign, or the page reports a
+// winning position as losing.
+func TestPerpBridge_UnrealisedPnLIsSignedBySide(t *testing.T) {
+	b := bridgeFixture(t)
+	tr := &PerpLiveTrade{
+		Strategy: "M1X_Squeeze_Break_Short", Symbol: "BNBUSD", ProductID: 15042,
+		Side: "sell", Contracts: 10, EntryPrice: 580, Status: "OPEN",
+	}
+	b.open[perpKey(tr.Strategy, tr.Symbol)] = tr
+
+	b.markLive(tr, 570) // a short gains when price falls
+	if tr.UnrealizedPnL <= 0 {
+		t.Errorf("a short that fell 10 shows $%.4f; it should be a gain", tr.UnrealizedPnL)
+	}
+	b.markLive(tr, 590)
+	if tr.UnrealizedPnL >= 0 {
+		t.Errorf("a short that rose 10 shows $%.4f; it should be a loss", tr.UnrealizedPnL)
+	}
+}

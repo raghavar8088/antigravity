@@ -177,6 +177,8 @@ type PerpTrade = {
   side: string;
   contracts: number;
   entryPrice: number;
+  markPrice?: number;
+  unrealizedPnl?: number;
   stopPrice?: number;
   targetPrice?: number;
   exitPrice?: number;
@@ -221,6 +223,21 @@ function fmtUSD(v: number | undefined): string {
   const dp = abs > 0 && abs < 1 ? 4 : 2;
   return `${v < 0 ? "-" : ""}$${abs.toFixed(dp)}`;
 }
+/**
+ * Render a price at a sensible precision.
+ *
+ * These come off Delta as float64 and print as 0.17512000000000003 — 17
+ * significant figures of representation noise on an instrument whose tick is
+ * 0.0001. Cheap perpetuals need more decimals than BTC, so the precision scales
+ * with magnitude rather than being fixed.
+ */
+function fmtPrice(v: number | undefined): string {
+  if (v === undefined || Number.isNaN(v) || v === 0) return "—";
+  const abs = Math.abs(v);
+  const dp = abs >= 1000 ? 1 : abs >= 1 ? 3 : 5;
+  return v.toFixed(dp);
+}
+
 function pnlTone(v: number): string {
   return v > 0 ? "desk-pnl-positive" : v < 0 ? "desk-pnl-negative" : "desk-pnl-neutral";
 }
@@ -380,29 +397,25 @@ export default function LiveEnginePage() {
         ),
       },
       { id: "size", align: "right", header: "Size", cell: (p) => p.size },
-      { id: "entry", align: "right", header: "Entry", cell: (p) => p.entryPrice },
+      { id: "mark", align: "right", header: "Mark", cell: (p) => fmtPrice(p.markPrice) },
+      { id: "entry", align: "right", header: "Entry", cell: (p) => fmtPrice(p.entryPrice) },
       {
         id: "stop",
         align: "right",
         header: "Stop",
-        cell: (p) => (p.stopPrice ? p.stopPrice : "—"),
+        cell: (p) => (p.stopPrice ? fmtPrice(p.stopPrice) : "—"),
       },
       {
         id: "target",
         align: "right",
         header: "Target",
-        cell: (p) => (p.targetPrice ? p.targetPrice : "—"),
+        cell: (p) => (p.targetPrice ? fmtPrice(p.targetPrice) : "—"),
       },
       {
         id: "upnl",
         align: "right",
         header: "Unrealized",
-        cell: (p) =>
-          p.desk === "scalp" ? (
-            <span style={{ color: "var(--desk-on-surface-variant)" }}>see desk</span>
-          ) : (
-            <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span>
-          ),
+        cell: (p) => <span className={pnlTone(p.unrealizedPnl)}>{fmtUSD(p.unrealizedPnl)}</span>,
       },
     ],
     [],

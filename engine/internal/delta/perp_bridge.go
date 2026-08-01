@@ -56,11 +56,17 @@ type PerpLiveTrade struct {
 	// closed hours earlier, still open and still funded.
 	ExpiresAt time.Time `json:"expiresAt"`
 
-	EntryPrice  float64   `json:"entryPrice"`
-	NotionalUSD float64   `json:"notionalUsd"`
-	RiskUSD     float64   `json:"riskUsd"`
-	OpenedAt    time.Time `json:"openedAt"`
-	OrderID     string    `json:"orderId"`
+	EntryPrice float64 `json:"entryPrice"`
+	// MarkPrice and UnrealizedPnL are refreshed by the custody loop, which
+	// already reads the venue's marks to decide exits. Publishing them costs
+	// nothing and is the difference between a page that shows a real number and
+	// one that shows a placeholder.
+	MarkPrice     float64   `json:"markPrice"`
+	UnrealizedPnL float64   `json:"unrealizedPnl"`
+	NotionalUSD   float64   `json:"notionalUsd"`
+	RiskUSD       float64   `json:"riskUsd"`
+	OpenedAt      time.Time `json:"openedAt"`
+	OrderID       string    `json:"orderId"`
 
 	ClosedAt    *time.Time `json:"closedAt,omitempty"`
 	ExitPrice   float64    `json:"exitPrice,omitempty"`
@@ -327,6 +333,12 @@ func (b *PerpBridge) checkExits(ctx context.Context) {
 
 	for _, t := range snapshot {
 		mark, ok := marks[t.ProductID]
+		if ok && mark > 0 {
+			// Mark to the venue's own price before deciding anything. The same
+			// figure drives the exit test below, so what the page shows is
+			// exactly what custody is acting on.
+			b.markLive(t, mark)
+		}
 		if !ok || mark <= 0 {
 			// The venue no longer reports this position. It was closed by
 			// something other than this bridge — liquidation, a manual close, or
@@ -340,6 +352,24 @@ func (b *PerpBridge) checkExits(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// markLive refreshes a position's mark and unrealised P&L from the venue.
+func (b *PerpBridge) markLive(t *PerpLiveTrade, mark float64) {
+	cv := 0.0
+	if p, ok := b.reg.Lookup(t.Symbol); ok {
+		cv = p.ContractValue
+	}
+	dir := 1.0
+	if !t.long() {
+		dir = -1.0
+	}
+	b.mu.Lock()
+	t.MarkPrice = mark
+	// Contract value, not a BTC constant: on ADAUSD (1.0) a BTC assumption would
+	// understate the P&L a thousandfold, the same trap as sizing.
+	t.UnrealizedPnL = (mark - t.EntryPrice) * dir * float64(t.Contracts) * cv
+	b.mu.Unlock()
 }
 
 // perpExitReason decides whether a position has reached an exit.
