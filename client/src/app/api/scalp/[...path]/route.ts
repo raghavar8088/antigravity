@@ -52,6 +52,17 @@ const ALLOWED_PATHS = [
   "/scalp/stats",
   "/scalp/leaderboard",
   "/scalp/trades",
+  // Read-only views of the desk's REAL-MONEY perpetual arm. The Live Engine
+  // page needs these: both it and the scalp bridge spend from one Delta wallet,
+  // so a leaderboard that showed only one of them would report half the real
+  // exposure while looking complete.
+  //
+  // Reads only — arm, disarm and close-all are deliberately NOT proxied. Those
+  // spend money and stay behind the desk's own token and typed confirmation
+  // rather than becoming reachable from a browser session.
+  "/scalp/live/stats",
+  "/scalp/live/trades",
+  "/scalp/live/reconcile",
 ];
 
 /**

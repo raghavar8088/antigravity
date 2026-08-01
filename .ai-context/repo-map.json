@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3],"files":1,"symbols":28,"top_files":[{"file":"engine/cmd/antigravity/liveengine_wiring.go","symbols":28}]}}
+{"client-api":{"communities":[1],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/api/scalp/[...path]/route.ts","symbols":9}]},"other":{"communities":[0,2],"files":1,"symbols":17,"top_files":[{"file":"client/src/app/live-engine/page.tsx","symbols":17}]}}

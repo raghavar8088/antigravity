@@ -146,7 +146,34 @@ type AuditEntry = { at: string; actor: string; action: string; reason?: string; 
  * on what the account actually kept, which is the only number that justifies
  * leaving it enabled.
  */
+/** One real perpetual trade from the scalp desk's live arm. */
+type PerpTrade = {
+  strategy: string;
+  symbol: string;
+  side: string;
+  contracts: number;
+  entryPrice: number;
+  exitPrice?: number;
+  realisedPnl?: number;
+  exitReason?: string;
+  status: string;
+};
+
+type PerpStats = {
+  armed: boolean;
+  equityUsd: number;
+  riskPerTradeUsd: number;
+  strategies: string[];
+  openPositions: PerpTrade[];
+  submitted: number;
+  rejected: number;
+  closed: number;
+  realisedPnlUsd: number;
+};
+
 type LeaderRow = {
+  /** Which live desk this strategy trades on. Both spend the same wallet. */
+  desk: "options" | "scalp";
   strategy: string;
   trades: number;
   wins: number;
@@ -188,6 +215,8 @@ export default function LiveEnginePage() {
   const [daily, setDaily] = useState<DailyPnl[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [roster, setRoster] = useState<Eligibility[]>([]);
+  const [perp, setPerp] = useState<PerpStats | null>(null);
+  const [perpTrades, setPerpTrades] = useState<PerpTrade[]>([]);
   const [recon, setRecon] = useState<Recon | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [error, setError] = useState<string>("");
@@ -200,7 +229,7 @@ export default function LiveEnginePage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, ac, po, cp, dp, or, ro, rc, au] = await Promise.all([
+      const [st, ac, po, cp, dp, or, ro, ps, pt, rc, au] = await Promise.all([
         fetch("/api/live-engine/state", { cache: "no-store" }),
         fetch("/api/live-engine/account", { cache: "no-store" }),
         fetch("/api/live-engine/positions", { cache: "no-store" }),
@@ -208,6 +237,11 @@ export default function LiveEnginePage() {
         fetch("/api/live-engine/daily-pnl", { cache: "no-store" }),
         fetch("/api/live-engine/orders", { cache: "no-store" }),
         fetch("/api/live-engine/roster", { cache: "no-store" }),
+        // The scalp desk's real-money perpetual arm. Same Delta wallet,
+        // different desk — a board showing only options would report half
+        // the live exposure while looking complete.
+        fetch("/api/scalp/scalp/live/stats", { cache: "no-store" }),
+        fetch("/api/scalp/scalp/live/trades", { cache: "no-store" }),
         fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
         fetch("/api/live-engine/audit", { cache: "no-store" }),
       ]);
@@ -222,6 +256,11 @@ export default function LiveEnginePage() {
       if (dp.ok) setDaily((await dp.json()) as DailyPnl[]);
       if (or.ok) setOrders((await or.json()) as Order[]);
       if (ro.ok) setRoster((await ro.json()) as Eligibility[]);
+      if (ps.ok) {
+        const body = (await ps.json()) as { enabled?: boolean; stats?: PerpStats };
+        setPerp(body.enabled ? (body.stats ?? null) : null);
+      }
+      if (pt.ok) setPerpTrades(((await pt.json()) as PerpTrade[]) ?? []);
       if (rc.ok) setRecon(await rc.json());
       if (au.ok) setAudit(((await au.json()) as { entries: AuditEntry[] }).entries ?? []);
       setError("");
@@ -437,6 +476,7 @@ export default function LiveEnginePage() {
     const blank = (name: string): LeaderRow => {
       const e = roster.find((r) => r.strategy === name);
       return {
+        desk: "options" as const,
         strategy: name,
         trades: 0,
         wins: 0,
@@ -468,6 +508,48 @@ export default function LiveEnginePage() {
       byStrategy.set(name, row);
     }
 
+    // ── the scalp desk's perpetual arm ────────────────────────────────────
+    //
+    // A different desk, the same Delta wallet. Showing only the options engine
+    // here would report half the account's real exposure while looking
+    // complete — which is precisely the confusion that made a scalp perp
+    // appear as an unexplained "Delta reports 1 position" mismatch.
+    if (perp) {
+      const perpRows = new Map<string, LeaderRow>();
+      const blankPerp = (name: string): LeaderRow => ({
+        desk: "scalp",
+        strategy: name,
+        trades: 0,
+        wins: 0,
+        winRatePct: 0,
+        grossUsd: 0,
+        feesUsd: 0,
+        netUsd: 0,
+        feeDragPct: 0,
+        allowed: true,
+        // The scalp desk's promotion gate passes none of these; the bridge
+        // trades them on owner instruction, not on a gate verdict.
+        live: false,
+        reason: "scalp perpetual — owner-selected, gate not passed",
+      });
+
+      for (const name of perp.strategies ?? []) perpRows.set(name, blankPerp(name));
+      for (const t of perpTrades) {
+        if (t.status !== "CLOSED") continue;
+        const row = perpRows.get(t.strategy) ?? blankPerp(t.strategy);
+        row.trades += 1;
+        const net = t.realisedPnl ?? 0;
+        if (net > 0) row.wins += 1;
+        // The perpetual bridge books P&L net; it does not split out fees, so
+        // gross is reported as net rather than invented.
+        row.netUsd += net;
+        row.grossUsd += net;
+        perpRows.set(t.strategy, row);
+      }
+      // Positions still open are not counted — this board is realised results.
+      for (const [k, v] of perpRows) byStrategy.set("scalp:" + k, v);
+    }
+
     const rows = Array.from(byStrategy.values()).map((r) => ({
       ...r,
       winRatePct: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
@@ -483,10 +565,19 @@ export default function LiveEnginePage() {
       return a.netUsd - b.netUsd;
     });
     return rows;
-  }, [closed, roster]);
+  }, [closed, roster, perp, perpTrades]);
 
   const leaderColumns: DeskColumn<LeaderRow>[] = useMemo(
     () => [
+      {
+        id: "desk",
+        header: "Desk",
+        cell: (r) => (
+          <DeskChip tone={r.desk === "scalp" ? "warning" : "default"}>
+            {r.desk === "scalp" ? "PERP" : "OPTION"}
+          </DeskChip>
+        ),
+      },
       { id: "strat", header: "Strategy", cell: (r) => r.strategy },
       { id: "trades", header: "Fills", align: "right", cell: (r) => r.trades || "—" },
       {
@@ -767,13 +858,13 @@ export default function LiveEnginePage() {
                 ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} enabled strategies have filled · realized ${fmtUSD(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
-                : "every enabled strategy, ranked once it has real fills"
+                : "every enabled strategy on both live desks, ranked once it has real fills"
             }
           />
           <DeskDataTable
             columns={leaderColumns}
             rows={leaderRows}
-            getRowKey={(r) => r.strategy}
+            getRowKey={(r) => `${r.desk}-${r.strategy}`}
             stickyHeader
             empty={
               <span style={{ color: "var(--desk-on-surface-variant)" }}>
