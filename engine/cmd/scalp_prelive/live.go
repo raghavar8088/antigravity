@@ -65,8 +65,10 @@ func scalpLiveEquityUSD() float64 {
 func scalpLiveSymbols() []string {
 	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_SYMBOLS"))
 	if raw == "" {
-		// The two symbols the selected strategies were leading on.
-		return []string{"ADAUSD", "BNBUSD"}
+		// The symbols the selected strategies lead on. AVAXUSD joined when two
+		// AVAX streams were selected; Delta lists it (product 14830, contract
+		// value 1.0 like ADA), so sizing resolves from the registry as normal.
+		return []string{"ADAUSD", "BNBUSD", "AVAXUSD"}
 	}
 	out := []string{}
 	for _, p := range strings.Split(raw, ",") {

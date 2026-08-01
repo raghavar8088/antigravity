@@ -240,8 +240,11 @@ func TestPerpBridge_StatsReportTheRiskPosture(t *testing.T) {
 	if s.RiskPerTrade > 2.01 {
 		t.Errorf("risk per trade $%.2f on a $100 account", s.RiskPerTrade)
 	}
-	if len(s.Strategies) != 8 {
-		t.Errorf("%d strategies on the allow-list, want the owner's 8", len(s.Strategies))
+	// The roster grows as the owner selects more; what matters is that Stats
+	// reports exactly what ScalpLiveStrategies ships, with nothing lost or
+	// invented between the two.
+	if len(s.Strategies) != len(ScalpLiveStrategies()) {
+		t.Errorf("Stats reports %d strategies, allow-list ships %d", len(s.Strategies), len(ScalpLiveStrategies()))
 	}
 	if s.Armed {
 		t.Error("stats report armed on a fresh bridge")

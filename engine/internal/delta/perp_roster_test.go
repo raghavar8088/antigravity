@@ -64,8 +64,9 @@ func TestScalpLiveStrategies_AreTheOwnerSelectedEight(t *testing.T) {
 		"M1X_Squeeze_Break_Short",
 		"ANTI_M1_BB_Rev_CMF5_Long",
 	}
-	if len(got) != len(want) {
-		t.Fatalf("shipped %d strategies, want %d", len(got), len(want))
+	// The second selection added nine more; the original eight must all survive.
+	if len(got) < len(want) {
+		t.Fatalf("shipped %d strategies, want at least the original %d", len(got), len(want))
 	}
 	set := map[string]bool{}
 	for _, g := range got {

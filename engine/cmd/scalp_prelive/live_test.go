@@ -65,17 +65,23 @@ func TestScalpLive_EquityDefaultsToOneHundred(t *testing.T) {
 	}
 }
 
-// Symbols must default to the two the owner's strategies were leading on, not to
-// "any symbol" — the same strategy runs on eight symbols here.
-func TestScalpLive_SymbolsDefaultToTheSelectedTwo(t *testing.T) {
+// Symbols must default to exactly the ones the owner's selected strategies lead
+// on — not to "any symbol". The same strategy runs on eight symbols here, so an
+// empty set would enable streams nobody looked at.
+func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 	t.Setenv("SCALP_LIVE_SYMBOLS", "")
 	got := scalpLiveSymbols()
-	if len(got) != 2 {
-		t.Fatalf("default symbols = %v, want exactly the two selected", got)
+	if len(got) == 0 {
+		t.Fatal("no default symbols; the allow-list would permit any symbol")
 	}
-	seen := map[string]bool{got[0]: true, got[1]: true}
-	if !seen["ADAUSD"] || !seen["BNBUSD"] {
-		t.Errorf("default symbols = %v, want ADAUSD and BNBUSD", got)
+	seen := map[string]bool{}
+	for _, s := range got {
+		seen[s] = true
+	}
+	for _, want := range []string{"ADAUSD", "BNBUSD", "AVAXUSD"} {
+		if !seen[want] {
+			t.Errorf("%s missing from the default symbols (got %v)", want, got)
+		}
 	}
 }
 

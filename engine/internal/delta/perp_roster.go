@@ -13,16 +13,16 @@ import (
 // account. Overridable with SCALP_LIVE_STRATEGIES (comma-separated).
 //
 // PERMISSION, NOT ENDORSEMENT — and the distinction is unusually stark here.
-// The desk's own promotion gate passes NONE of these: at the time they were
-// chosen the leaderboard read "0 of 2416 streams pass", every one of the eight
-// had between 2 and 12 closed trades, and their PF of 999 is the code's sentinel
-// for "no losing trade yet" rather than a profit factor. The desk as a whole was
-// -$14,808 over 7,192 trades at a 35.6% win rate, so eight 100%-win rows out of
-// 2,416 streams is what variance produces, not evidence of edge.
+// The desk's own promotion gate passes NONE of these. When they were chosen the
+// leaderboard read "0 of 2416 streams pass", each had between 2 and 31 closed
+// trades, and a PF of 999 on several is the code's sentinel for "no losing trade
+// yet" rather than a profit factor. The desk as a whole was -$14,808 over 7,192
+// trades at a 35.6% win rate, so a screenful of 100%-win rows out of 2,416
+// streams is what variance produces, not evidence of edge.
 //
-// Six of the eight are ANTI_ mirrors, whose P&L is by construction their
+// Nearly all of them are ANTI_ mirrors, whose P&L is by construction their
 // original's negated minus fees. Trading one live is a bet that its original has
-// a persistent negative GROSS edge — a claim eleven trades cannot support.
+// a persistent negative GROSS edge — a claim a dozen trades cannot support.
 //
 // None of that makes this list wrong to have; it is the owner's capital and an
 // explicit instruction. It does mean the account is sized so being wrong is
@@ -37,6 +37,18 @@ var defaultScalpLiveStrategies = []string{
 	"ANTI_M1X_VWAP_TrendPull_Long",
 	"M1X_Squeeze_Break_Short",
 	"ANTI_M1_BB_Rev_CMF5_Long",
+	// Added 2026-08-01, second selection from the same leaderboard. Trade counts
+	// 7-31, so the caveat above applies unchanged: these are the right tail of
+	// 2,416 streams, not a qualified set.
+	"ANTI_M1_DoubleTop_20bp_Short",
+	"ANTI_D20_VWAP_Reversion",
+	"ANTI_M1_RSI2_5_95_T50_Short",
+	"ANTI_M1_DoubleBottom_10bp_Long",
+	"ANTI_M1_HMA21_Flip_Long",
+	"ANTI_M1_HMA21_Flip_Short",
+	"ANTI_M1_Break_D30_T20_Long",
+	"ANTI_M1_NR7_Expand_T50_Long",
+	"ANTI_M1_InsideBar_V20_Long",
 }
 
 // ScalpLiveStrategies is the effective allow-list.
