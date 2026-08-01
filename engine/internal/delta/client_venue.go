@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Venue-truth reads.
@@ -25,8 +26,8 @@ import (
 // comparable to the entire edge. A desk that reports gross as net does not
 // shade its result; it inverts it.
 type Fill struct {
-	ID         int64   `json:"id"`
-	OrderID    int64   `json:"orderId"`
+	ID         string  `json:"id"`
+	OrderID    string  `json:"orderId"`
 	Symbol     string  `json:"symbol"`
 	Side       string  `json:"side"`
 	Size       float64 `json:"size"`
@@ -71,6 +72,24 @@ type LedgerEntry struct {
 	CreatedAt   string  `json:"createdAt"`
 }
 
+// flexStr holds an identifier that Delta returns as either a quoted string or
+// a bare number — and on /v2/fills, as a UUID.
+//
+// flexNum was the wrong tool here: it assumed every id was numeric, so a UUID
+// failed the parse and the whole fills call returned zero rows. An identifier is
+// an opaque token, not a quantity; treating it as text is what it always was.
+type flexStr string
+
+func (v *flexStr) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "null" || s == "" {
+		*v = ""
+		return nil
+	}
+	*v = flexStr(strings.Trim(s, `"`))
+	return nil
+}
+
 func parseF(s string) float64 {
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
@@ -94,8 +113,8 @@ func (c *Client) GetFills(ctx context.Context, limit int) ([]Fill, error) {
 			// Delta returns these QUOTED on this endpoint and bare on others.
 			// flexNum takes either; a fixed int64 failed the whole call on the
 			// first row and reported zero fills, which reads as "no trading".
-			ID        flexNum `json:"id"`
-			OrderID   flexNum `json:"order_id"`
+			ID        flexStr `json:"id"`
+			OrderID   flexStr `json:"order_id"`
 			Size      flexNum `json:"size"`
 			Price     string  `json:"price"`
 			Role      string  `json:"role"`
@@ -113,7 +132,7 @@ func (c *Client) GetFills(ctx context.Context, limit int) ([]Fill, error) {
 	out := make([]Fill, 0, len(resp.Result))
 	for _, f := range resp.Result {
 		out = append(out, Fill{
-			ID: int64(f.ID), OrderID: int64(f.OrderID), Symbol: f.Product.Symbol,
+			ID: string(f.ID), OrderID: string(f.OrderID), Symbol: f.Product.Symbol,
 			Side: f.Side, Size: float64(f.Size), Price: parseF(f.Price),
 			Role: f.Role, Commission: parseF(f.Comm), CreatedAt: f.CreatedAt,
 		})

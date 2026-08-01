@@ -299,8 +299,9 @@ type VenueHistoricalOrder = {
   createdAt: string;
 };
 type VenueFill = {
-  id: number;
-  orderId: number;
+  /** A UUID on this endpoint, not a number. */
+  id: string;
+  orderId: string;
   symbol: string;
   side: string;
   size: number;
@@ -1478,7 +1479,7 @@ export default function LiveEnginePage() {
                 },
               ]}
               rows={venue?.fills ?? []}
-              getRowKey={(r: VenueFill) => String(r.id)}
+              getRowKey={(r: VenueFill) => r.id}
               minWidth={860}
               empty={<DeskEmptyStateInline text="No fills returned." />}
             />
