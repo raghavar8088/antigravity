@@ -96,6 +96,27 @@ function segButtonStyle(active: boolean, tone: "primary" | "success" | "error" =
   return { background: bg, color, borderRadius: "var(--desk-radius-chip)", padding: "6px 12px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid var(--desk-outline)", cursor: "pointer" } as const;
 }
 
+/**
+ * One open PAPER position on the desk.
+ *
+ * `live` marks the streams that are also on the real-money allow-list — the
+ * only ones whose paper position predicts a live order. The desk runs 2,416
+ * streams and holds a few hundred positions at once, so showing all of them
+ * buries the handful that carry money.
+ */
+type OpenPos = {
+  strategy: string;
+  symbol: string;
+  dir: string;
+  entry: number;
+  sl: number;
+  tp: number;
+  profile: string;
+  openedAt: string;
+  heldMin: number;
+  live: boolean;
+};
+
 export default function ScalpDeskPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -113,14 +134,21 @@ export default function ScalpDeskPage() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [showAllTrades, setShowAllTrades] = useState<boolean>(false);
+  const [positions, setPositions] = useState<OpenPos[]>([]);
+  // Default to the live-enabled streams only: this section exists to answer
+  // "what is exposed right now", and the other ~330 paper positions are noise
+  // against that question. Toggleable rather than hard-filtered — the data is
+  // still there for anyone who wants it.
+  const [liveOnly, setLiveOnly] = useState<boolean>(true);
 
   const refresh = useCallback(async () => {
     try {
-      const [h, s, lb, tr] = await Promise.all([
+      const [h, s, lb, tr, po] = await Promise.all([
         fetch("/api/scalp/scalp/health", { cache: "no-store" }),
         fetch("/api/scalp/scalp/stats", { cache: "no-store" }),
         fetch("/api/scalp/scalp/leaderboard", { cache: "no-store" }),
         fetch(`/api/scalp/scalp/trades?n=${showAllTrades ? 5000 : 50}`, { cache: "no-store" }),
+        fetch("/api/scalp/scalp/positions", { cache: "no-store" }),
       ]);
       if (!h.ok || !s.ok || !lb.ok || !tr.ok) {
         const bad = [h, s, lb, tr].find((r) => !r.ok);
@@ -131,6 +159,9 @@ export default function ScalpDeskPage() {
       setStats(await s.json());
       setRows(((await lb.json()) as { rows: LbRow[] }).rows ?? []);
       setTrades((await tr.json()) as Trade[]);
+      // Positions are additive: an older engine without this endpoint should
+      // leave the rest of the page working rather than blanking it.
+      setPositions(po.ok ? (((await po.json()) as { rows: OpenPos[] }).rows ?? []) : []);
       setError("");
       setUpdatedAt(new Date().toLocaleTimeString());
     } catch {
@@ -189,6 +220,53 @@ export default function ScalpDeskPage() {
       ? (100 * stats.trades) / (stats.trades + stats.missed_fills)
       : null;
   const engineStatus: DeskEngineStatus = !health ? "syncing" : health.ok ? "live" : "degraded";
+
+  const livePositions = useMemo(() => positions.filter((p) => p.live), [positions]);
+  const shownPositions = liveOnly ? livePositions : positions;
+
+  const positionColumns: DeskColumn<OpenPos>[] = [
+    {
+      id: "strategy",
+      header: "Strategy",
+      cell: (p) => (
+        <span className="desk-body-md" style={{ fontWeight: 600 }}>
+          {p.strategy}
+        </span>
+      ),
+    },
+    { id: "symbol", header: "Symbol", cell: (p) => p.symbol.replace("USDT", "") },
+    {
+      id: "dir",
+      header: "Side",
+      cell: (p) => (
+        <DeskChip tone={p.dir?.toUpperCase() === "LONG" ? "success" : "danger"}>{(p.dir || "?").toUpperCase()}</DeskChip>
+      ),
+    },
+    { id: "entry", align: "right", header: "Entry", cell: (p) => fmtPrice(p.entry) },
+    { id: "sl", align: "right", header: "Stop", cell: (p) => fmtPrice(p.sl) },
+    { id: "tp", align: "right", header: "Target", cell: (p) => fmtPrice(p.tp) },
+    { id: "profile", header: "Profile", cell: (p) => p.profile || "—" },
+    {
+      id: "held",
+      align: "right",
+      header: "Held",
+      // Held time matters more than it looks: 91% of this desk's exits are the
+      // time stop, so age is the best single predictor of how a position ends.
+      cell: (p) => `${p.heldMin}m`,
+    },
+    {
+      id: "live",
+      header: "Route",
+      cell: (p) =>
+        p.live ? (
+          <DeskChip tone="primary" style={{ fontWeight: 700 }}>
+            LIVE
+          </DeskChip>
+        ) : (
+          <span style={{ color: "var(--desk-on-surface-variant)" }}>paper</span>
+        ),
+    },
+  ];
 
   const leaderboardColumns: DeskColumn<LbRow>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
@@ -307,6 +385,55 @@ export default function ScalpDeskPage() {
             Pre-registered before the first live trade: all 100 strategies failed offline qualification (0/400), so
             with 800 streams a few days of trading is expected to produce lucky leaders by variance alone. Leaderboard
             position alone never justifies real money — only gate survivors earn a go-live discussion.
+          </p>
+        </DeskCard>
+
+        {/* Open positions — live-routed streams first */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Open Positions"
+            actions={
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                  {livePositions.length} live-routed · {positions.length} total
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLiveOnly((v) => !v)}
+                  className="desk-label-md"
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 10px",
+                    borderRadius: 6,
+                    border: "1px solid var(--desk-outline)",
+                    background: liveOnly ? "var(--desk-primary)" : "transparent",
+                    color: liveOnly ? "var(--desk-on-primary)" : "var(--desk-on-surface-variant)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {liveOnly ? "Live strategies only" : "All streams"}
+                </button>
+              </div>
+            }
+          />
+          {shownPositions.length === 0 ? (
+            <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
+              {liveOnly
+                ? "None of the live-routed strategies hold a position right now."
+                : "No open positions."}
+            </p>
+          ) : (
+            <DeskDataTable
+              columns={positionColumns}
+              rows={shownPositions}
+              getRowKey={(p) => `${p.strategy}|${p.symbol}`}
+              minWidth={860}
+            />
+          )}
+          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
+            These are PAPER positions. A row marked LIVE means that stream is also on the real-money allow-list, so a
+            fill here places a real order too — it does not mean this particular position is funded. Live exposure is on
+            the Live Engine page.
           </p>
         </DeskCard>
 

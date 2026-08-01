@@ -51,6 +51,7 @@ import (
 	"sync"
 	"time"
 
+	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/marketdata/sharedfeed"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
@@ -830,6 +831,86 @@ func (d *desk) serve(port int) {
 		})
 		writeJSON(w, map[string]interface{}{"gate": gateDesc, "rows": rows})
 	}))
+	// /scalp/positions — open PAPER positions, with the live-enabled ones marked.
+	//
+	// The desk runs 2,416 streams and holds a few hundred positions at any
+	// moment. Almost none of them matter to an operator watching real money:
+	// only the streams on the live allow-list can reach the venue, and those are
+	// the ones whose paper position predicts a live one.
+	//
+	// So each row carries `live`, and the UI shows the live-enabled ones by
+	// default. The rest are still returned rather than dropped — a filter the
+	// caller can widen is honest; a server that silently omits data is not.
+	http.HandleFunc("/scalp/positions", gated(func(w http.ResponseWriter, r *http.Request) {
+		liveNames := map[string]bool{}
+		for _, n := range delta.ScalpLiveStrategies() {
+			liveNames[n] = true
+		}
+		liveSyms := map[string]bool{}
+		for _, sy := range scalpLiveSymbols() {
+			liveSyms[strings.ToUpper(sy)] = true
+		}
+
+		type row struct {
+			Strategy string    `json:"strategy"`
+			Symbol   string    `json:"symbol"`
+			Dir      string    `json:"dir"`
+			Entry    float64   `json:"entry"`
+			SL       float64   `json:"sl"`
+			TP       float64   `json:"tp"`
+			Profile  string    `json:"profile"`
+			OpenedAt time.Time `json:"openedAt"`
+			HeldMin  int64     `json:"heldMin"`
+			// Live is true when this exact (strategy, symbol) stream is on the
+			// live allow-list — i.e. a fill here would also place a real order.
+			Live bool `json:"live"`
+		}
+
+		d.mu.Lock()
+		defer d.mu.Unlock()
+
+		out := make([]row, 0, 64)
+		liveOpen := 0
+		for key, cs := range d.combos {
+			if cs.Pos == nil {
+				continue
+			}
+			parts := strings.SplitN(key, "|", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			strat, sym := parts[0], parts[1]
+			isLive := liveNames[strat] && (len(liveSyms) == 0 || liveSyms[strings.ToUpper(sym)])
+			if isLive {
+				liveOpen++
+			}
+			held := int64(0)
+			if !cs.Pos.EntryTime.IsZero() {
+				held = int64(time.Since(cs.Pos.EntryTime).Minutes())
+			}
+			out = append(out, row{
+				Strategy: strat, Symbol: sym, Dir: cs.Pos.Dir,
+				Entry: cs.Pos.Entry, SL: cs.Pos.SL, TP: cs.Pos.TP,
+				Profile: cs.Pos.Profile, OpenedAt: cs.Pos.EntryTime,
+				HeldMin: held, Live: isLive,
+			})
+		}
+		// Live-enabled first, then longest held — the ones closest to their time
+		// stop are the ones about to resolve.
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Live != out[j].Live {
+				return out[i].Live
+			}
+			return out[i].HeldMin > out[j].HeldMin
+		})
+
+		writeJSON(w, map[string]interface{}{
+			"open":      len(out),
+			"live_open": liveOpen,
+			"rows":      out,
+		})
+	}))
+
 	http.HandleFunc("/scalp/trades", gated(func(w http.ResponseWriter, r *http.Request) {
 		n := 50
 		if q := r.URL.Query().Get("n"); q != "" {

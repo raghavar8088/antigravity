@@ -52,6 +52,9 @@ const ALLOWED_PATHS = [
   "/scalp/stats",
   "/scalp/leaderboard",
   "/scalp/trades",
+  // Open paper positions. Each row is flagged `live`, so the desk page can
+  // show the streams that can actually reach the venue rather than all ~330.
+  "/scalp/positions",
   // Read-only views of the desk's REAL-MONEY perpetual arm. The Live Engine
   // page needs these: both it and the scalp bridge spend from one Delta wallet,
   // so a leaderboard that showed only one of them would report half the real
