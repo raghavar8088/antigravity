@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
@@ -103,5 +104,36 @@ func TestScalpLive_MirrorFillsReachTheLivePath(t *testing.T) {
 	if !found {
 		t.Fatalf("the mirror's fill never reached the live path (offered: %v) — every ANTI_ strategy on the "+
 			"live allow-list would be unable to trade, silently", offered)
+	}
+}
+
+// The live bridge must inherit the SAME holding-period cap the paper desk uses
+// for that strategy's profile, or the two records diverge on the exit that
+// accounts for 91% of them.
+func TestScalpLive_ProfileTTLMatchesTheDesk(t *testing.T) {
+	for name, cfg := range profiles {
+		want := time.Duration(cfg.TTLBars) * time.Minute
+		if got := profileTTL(name); got != want {
+			t.Errorf("profile %q TTL = %s, desk uses %d bars (%s)", name, got, cfg.TTLBars, want)
+		}
+	}
+}
+
+// An unknown profile must not mean "hold forever". Falling back to no cap would
+// leave a live position open indefinitely on a desk whose median trade is
+// closed by the clock.
+func TestScalpLive_UnknownProfileStillGetsATimeStop(t *testing.T) {
+	got := profileTTL("no-such-profile")
+	if got <= 0 {
+		t.Fatal("an unknown profile got no time stop; the position would hold indefinitely")
+	}
+	longest := time.Duration(0)
+	for _, c := range profiles {
+		if d := time.Duration(c.TTLBars) * time.Minute; d > longest {
+			longest = d
+		}
+	}
+	if got != longest {
+		t.Errorf("unknown profile TTL = %s, want the longest configured cap %s", got, longest)
 	}
 }

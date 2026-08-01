@@ -24,7 +24,7 @@ func TestPerpBridge_StartsDisarmed(t *testing.T) {
 	if b.IsArmed() {
 		t.Fatal("bridge armed itself")
 	}
-	got := b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712)
+	got := b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712, time.Hour)
 	if got != nil {
 		t.Fatal("a disarmed bridge placed an order")
 	}
@@ -56,15 +56,15 @@ func TestPerpBridge_OnlyAllowListedStreamsTrade(t *testing.T) {
 	ctx := context.Background()
 
 	// Not on the list.
-	if b.OnPaperOpen(ctx, "Some_Unlisted_Strategy", "ADAUSD", true, 0.17, 0.1694, 0.1712) != nil {
+	if b.OnPaperOpen(ctx, "Some_Unlisted_Strategy", "ADAUSD", true, 0.17, 0.1694, 0.1712, time.Hour) != nil {
 		t.Error("an unlisted strategy placed an order")
 	}
 	// On the list but a symbol nobody selected.
-	if b.OnPaperOpen(ctx, "ANTI_M1_DoubleTop_10bp_Short", "BTCUSD", true, 63000, 62779, 63441) != nil {
+	if b.OnPaperOpen(ctx, "ANTI_M1_DoubleTop_10bp_Short", "BTCUSD", true, 63000, 62779, 63441, time.Hour) != nil {
 		t.Error("a listed strategy traded a symbol that was never selected")
 	}
 	// The ORIGINAL of a selected mirror is a different, opposite bet.
-	if b.OnPaperOpen(ctx, "M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712) != nil {
+	if b.OnPaperOpen(ctx, "M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712, time.Hour) != nil {
 		t.Error("the original traded when only its ANTI_ mirror was selected")
 	}
 }
@@ -76,7 +76,7 @@ func TestPerpBridge_KillSwitchBlocksNewOrders(t *testing.T) {
 	active := true
 	b.SetKillSwitch(func() bool { return active })
 
-	if b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712) != nil {
+	if b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712, time.Hour) != nil {
 		t.Fatal("an order was placed with the kill switch active")
 	}
 }
@@ -87,13 +87,13 @@ func TestPerpBridge_KillSwitchBlocksNewOrders(t *testing.T) {
 func TestPerpExitReason_LongAndShort(t *testing.T) {
 	long := &PerpLiveTrade{Side: "buy", EntryPrice: 100, StopPrice: 99, TargetPrice: 102}
 	for mark, want := range map[float64]string{98: "SL", 99: "SL", 100: "", 101: "", 102: "TP", 103: "TP"} {
-		if got := perpExitReason(long, mark); got != want {
+		if got := perpExitReason(long, mark, time.Now()); got != want {
 			t.Errorf("long at mark %.0f gave %q, want %q", mark, got, want)
 		}
 	}
 	short := &PerpLiveTrade{Side: "sell", EntryPrice: 100, StopPrice: 101, TargetPrice: 98}
 	for mark, want := range map[float64]string{102: "SL", 101: "SL", 100: "", 99: "", 98: "TP", 97: "TP"} {
-		if got := perpExitReason(short, mark); got != want {
+		if got := perpExitReason(short, mark, time.Now()); got != want {
 			t.Errorf("short at mark %.0f gave %q, want %q", mark, got, want)
 		}
 	}
@@ -117,7 +117,7 @@ func TestPerpExitReason_LevelsAreMutuallyExclusiveOnASingleMark(t *testing.T) {
 			if hitStop && hitTarget {
 				t.Fatalf("%s at mark %.2f satisfies BOTH stop and target — the levels are misordered", tr.Side, mark)
 			}
-			reason := perpExitReason(tr, mark)
+			reason := perpExitReason(tr, mark, time.Now())
 			switch {
 			case hitStop && reason != "SL":
 				t.Errorf("%s at %.2f should stop out, got %q", tr.Side, mark, reason)
@@ -208,7 +208,7 @@ func TestPerpBridge_OnePositionPerStream(t *testing.T) {
 	_ = b.Arm("test", "unit")
 	b.open[perpKey("ANTI_M1_DoubleTop_10bp_Short", "ADAUSD")] = &PerpLiveTrade{Status: "OPEN"}
 
-	if b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712) != nil {
+	if b.OnPaperOpen(context.Background(), "ANTI_M1_DoubleTop_10bp_Short", "ADAUSD", true, 0.17, 0.1694, 0.1712, time.Hour) != nil {
 		t.Fatal("a second position was opened on a stream that already holds one")
 	}
 }
@@ -272,5 +272,49 @@ func TestPerpBridge_MonitorStopsWithContext(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Monitor did not stop when its context was cancelled")
+	}
+}
+
+// THE TIME STOP. Over 500 measured paper trades the scalp desk exited 456 of
+// them (91.2%) on time, 30 on the stop and 14 on the target. A live bridge with
+// only a stop and a target reproduces under 9% of the desk's behaviour and holds
+// the other 91% indefinitely — positions the paper record shows as closed hours
+// earlier, still open and still funded.
+func TestPerpExitReason_ClosesOnTheTimeStop(t *testing.T) {
+	opened := time.Now().UTC().Add(-90 * time.Minute)
+	tr := &PerpLiveTrade{
+		Side: "buy", EntryPrice: 100, StopPrice: 99, TargetPrice: 102,
+		OpenedAt: opened, ExpiresAt: opened.Add(60 * time.Minute),
+	}
+	// Price is between the levels: without a time stop this holds forever.
+	if got := perpExitReason(tr, 100.5, opened.Add(59*time.Minute)); got != "" {
+		t.Errorf("exited %q before the TTL elapsed", got)
+	}
+	if got := perpExitReason(tr, 100.5, opened.Add(61*time.Minute)); got != "TTL" {
+		t.Fatalf("past its TTL the position gave %q, want TTL — it would otherwise hold indefinitely", got)
+	}
+}
+
+// A price exit must win over the time stop when both are true on one tick: the
+// position exited because it reached a real level, not because the clock ran out.
+func TestPerpExitReason_PriceExitBeatsTheTimeStop(t *testing.T) {
+	opened := time.Now().UTC().Add(-2 * time.Hour)
+	tr := &PerpLiveTrade{
+		Side: "buy", EntryPrice: 100, StopPrice: 99, TargetPrice: 102,
+		OpenedAt: opened, ExpiresAt: opened.Add(time.Minute),
+	}
+	if got := perpExitReason(tr, 98, time.Now()); got != "SL" {
+		t.Errorf("stopped-out AND expired gave %q, want SL", got)
+	}
+	if got := perpExitReason(tr, 103, time.Now()); got != "TP" {
+		t.Errorf("targeted AND expired gave %q, want TP", got)
+	}
+}
+
+// A trade with no TTL set must never expire spuriously.
+func TestPerpExitReason_NoTTLMeansNoTimeExit(t *testing.T) {
+	tr := &PerpLiveTrade{Side: "buy", EntryPrice: 100, StopPrice: 99, TargetPrice: 102}
+	if got := perpExitReason(tr, 100.5, time.Now().Add(1000*time.Hour)); got != "" {
+		t.Errorf("a trade with no ExpiresAt exited %q", got)
 	}
 }

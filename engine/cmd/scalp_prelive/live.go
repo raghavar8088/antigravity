@@ -142,7 +142,31 @@ func (d *liveDesk) refreshLoop(ctx context.Context) {
 var liveFillHook = func(d *liveDesk, strategy, symbol string, pos *position) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	d.bridge.OnPaperOpen(ctx, strategy, symbol, pos.Dir == "LONG", pos.Entry, pos.SL, pos.TP)
+	d.bridge.OnPaperOpen(ctx, strategy, symbol, pos.Dir == "LONG", pos.Entry, pos.SL, pos.TP,
+		profileTTL(pos.Profile))
+}
+
+// profileTTL is the holding-period cap this strategy's execution profile uses,
+// as a duration. Bars are one minute on this desk.
+//
+// It is passed to the live bridge because the time stop is not a fallback here —
+// over 500 measured paper trades it accounted for 456 of the exits (91.2%),
+// against 30 stops and 14 targets. A live position without it reproduces under
+// 9% of the desk's behaviour and holds the rest indefinitely.
+func profileTTL(profile string) time.Duration {
+	cfg, ok := profiles[profile]
+	if !ok || cfg.TTLBars <= 0 {
+		// An unknown profile must not mean "hold forever". Fall back to the
+		// longest configured cap rather than to no cap at all.
+		longest := 0
+		for _, c := range profiles {
+			if c.TTLBars > longest {
+				longest = c.TTLBars
+			}
+		}
+		return time.Duration(longest) * time.Minute
+	}
+	return time.Duration(cfg.TTLBars) * time.Minute
 }
 
 // onPaperFill mirrors a paper entry into a real order. Safe on a nil receiver.

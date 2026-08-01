@@ -47,6 +47,14 @@ type PerpLiveTrade struct {
 	// reasons that do not apply to a real fill.
 	StopPrice   float64 `json:"stopPrice"`
 	TargetPrice float64 `json:"targetPrice"`
+	// ExpiresAt is the TIME STOP, and it is not a detail.
+	//
+	// Over 500 measured paper trades the scalp desk exited 456 of them (91.2%)
+	// on time, 30 on the stop and 14 on the target. A live bridge with only a
+	// stop and a target therefore reproduces under 9% of the desk's behaviour
+	// and holds the other 91% indefinitely — positions the paper record shows as
+	// closed hours earlier, still open and still funded.
+	ExpiresAt time.Time `json:"expiresAt"`
 
 	EntryPrice  float64   `json:"entryPrice"`
 	NotionalUSD float64   `json:"notionalUsd"`
@@ -158,7 +166,7 @@ func perpKey(strategy, symbol string) string { return strategy + "|" + symbol }
 //
 // Returns nil when the signal was deliberately not traded (not allow-listed,
 // disarmed, capped) — those are the normal case, not errors.
-func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, long bool, entry, stop, target float64) *PerpLiveTrade {
+func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, long bool, entry, stop, target float64, ttl time.Duration) *PerpLiveTrade {
 	if !b.IsArmed() || b.client == nil {
 		return nil
 	}
@@ -237,15 +245,22 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		OrderID:     res.OrderID,
 		Status:      "OPEN",
 	}
+	if ttl > 0 {
+		t.ExpiresAt = t.OpenedAt.Add(ttl)
+	}
 
 	b.mu.Lock()
 	b.open[perpKey(strategy, symbol)] = t
 	b.mu.Unlock()
 	b.submitted.Add(1)
 
-	log.Printf("[PERP LIVE] ✅ %s %s %s %d contracts @ %.6f | stop %.6f target %.6f | $%.2f notional, $%.2f at risk",
+	ttlLabel := "none"
+	if !t.ExpiresAt.IsZero() {
+		ttlLabel = ttl.String()
+	}
+	log.Printf("[PERP LIVE] ✅ %s %s %s %d contracts @ %.6f | stop %.6f target %.6f ttl %s | $%.2f notional, $%.2f at risk",
 		plan.Side, plan.Symbol, strategy, plan.Contracts, fill, plan.StopPrice, plan.TargetPrice,
-		plan.NotionalUSD, plan.RiskUSD)
+		ttlLabel, plan.NotionalUSD, plan.RiskUSD)
 	return t
 }
 
@@ -312,7 +327,7 @@ func (b *PerpBridge) checkExits(ctx context.Context) {
 			b.finish(t, t.EntryPrice, "CLOSED_EXTERNALLY")
 			continue
 		}
-		if reason := perpExitReason(t, mark); reason != "" {
+		if reason := perpExitReason(t, mark, time.Now().UTC()); reason != "" {
 			if err := b.closePosition(ctx, t, mark, reason); err != nil {
 				log.Printf("[PERP LIVE] close failed for %s %s: %v", t.Strategy, t.Symbol, err)
 			}
@@ -324,7 +339,22 @@ func (b *PerpBridge) checkExits(ctx context.Context) {
 //
 // Stop is checked BEFORE target, the same conservative precedence the paper desk
 // uses: when a single mark could satisfy both, assume the adverse one happened.
-func perpExitReason(t *PerpLiveTrade, mark float64) string {
+func perpExitReason(t *PerpLiveTrade, mark float64, now time.Time) string {
+	// Stop and target first: a position that reached a real level exited for
+	// that reason, not for running out of time on the same tick.
+	if r := perpPriceExit(t, mark); r != "" {
+		return r
+	}
+	// The time stop. Checked last so it never masks a price exit, but checked —
+	// it is how 9 in 10 of these trades end on the paper desk.
+	if !t.ExpiresAt.IsZero() && !now.Before(t.ExpiresAt) {
+		return "TTL"
+	}
+	return ""
+}
+
+// perpPriceExit reports a stop or target hit at the given mark.
+func perpPriceExit(t *PerpLiveTrade, mark float64) string {
 	if t.long() {
 		switch {
 		case t.StopPrice > 0 && mark <= t.StopPrice:
