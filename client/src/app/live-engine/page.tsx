@@ -368,15 +368,6 @@ export default function LiveEnginePage() {
 
   const unifiedPositionColumns: DeskColumn<UnifiedPosition>[] = useMemo(
     () => [
-      {
-        id: "desk",
-        header: "Desk",
-        cell: (p) => (
-          <DeskChip tone={p.desk === "scalp" ? "warning" : "default"}>
-            {p.desk === "scalp" ? "PERP" : "OPTION"}
-          </DeskChip>
-        ),
-      },
       { id: "sym", header: "Symbol", cell: (p) => p.symbol },
       { id: "strat", header: "Strategy", cell: (p) => p.strategy || "—" },
       {
@@ -544,40 +535,16 @@ export default function LiveEnginePage() {
   const leaderRows: LeaderRow[] = useMemo(() => {
     const byStrategy = new Map<string, LeaderRow>();
 
-    const blank = (name: string): LeaderRow => {
-      const e = roster.find((r) => r.strategy === name);
-      return {
-        desk: "options" as const,
-        strategy: name,
-        trades: 0,
-        wins: 0,
-        winRatePct: 0,
-        grossUsd: 0,
-        feesUsd: 0,
-        netUsd: 0,
-        feeDragPct: 0,
-        allowed: e?.allowed ?? false,
-        live: e?.live ?? false,
-        reason: e?.reason ?? "",
-      };
-    };
-
-    // Every allow-listed strategy appears, traded or not.
-    for (const e of roster) {
-      if (e.allowed) byStrategy.set(e.strategy, blank(e.strategy));
-    }
-
-    for (const c of closed) {
-      const name = c.strategy || "(unattributed)";
-      const row = byStrategy.get(name) ?? blank(name);
-      row.trades += 1;
-      const net = c.realizedPnl || 0;
-      if (net > 0) row.wins += 1;
-      row.netUsd += net;
-      row.grossUsd += c.grossPnl ?? net;
-      row.feesUsd += c.feesUsd ?? 0;
-      byStrategy.set(name, row);
-    }
+    // Option strategies are deliberately NOT on this board.
+    //
+    // Their results have not been hidden — the options engine's fills remain in
+    // Closed Positions, and any open option still appears in Live Positions with
+    // an OPTION desk tag. This board is the perpetual strategy board, which is
+    // what it is being read for.
+    //
+    // That distinction matters: removing a desk from the ONLY place it appeared
+    // would recreate the blind spot that let two funded perpetuals sit
+    // unaccounted for earlier today.
 
     // ── the scalp desk's perpetual arm ────────────────────────────────────
     //
@@ -636,7 +603,7 @@ export default function LiveEnginePage() {
       return a.netUsd - b.netUsd;
     });
     return rows;
-  }, [closed, roster, perp, perpTrades]);
+  }, [perp, perpTrades]);
 
   const leaderColumns: DeskColumn<LeaderRow>[] = useMemo(
     () => [
@@ -933,16 +900,16 @@ export default function LiveEnginePage() {
             title="Strategy Leaderboard"
             subtitle={
               leaderRows.some((r) => r.trades > 0)
-                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} enabled strategies have filled · realized ${fmtUSD(
+                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} perpetual strategies have filled · realized ${fmtUSD(
                     leaderRows.reduce((s, r) => s + r.netUsd, 0),
                   )}`
-                : "every enabled strategy on both live desks, ranked once it has real fills"
+                : "every strategy enabled on the perpetual desk, ranked once it has real fills"
             }
           />
           <DeskDataTable
             columns={leaderColumns}
             rows={leaderRows}
-            getRowKey={(r) => `${r.desk}-${r.strategy}`}
+            getRowKey={(r) => r.strategy}
             stickyHeader
             empty={
               <span style={{ color: "var(--desk-on-surface-variant)" }}>
