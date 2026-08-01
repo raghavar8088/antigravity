@@ -91,14 +91,17 @@ func (c *Client) GetFills(ctx context.Context, limit int) ([]Fill, error) {
 	}
 	var resp struct {
 		Result []struct {
-			ID        int64  `json:"id"`
-			OrderID   int64  `json:"order_id"`
-			Size      int64  `json:"size"`
-			Price     string `json:"price"`
-			Role      string `json:"role"`
-			Side      string `json:"side"`
-			Comm      string `json:"commission"`
-			CreatedAt string `json:"created_at"`
+			// Delta returns these QUOTED on this endpoint and bare on others.
+			// flexNum takes either; a fixed int64 failed the whole call on the
+			// first row and reported zero fills, which reads as "no trading".
+			ID        flexNum `json:"id"`
+			OrderID   flexNum `json:"order_id"`
+			Size      flexNum `json:"size"`
+			Price     string  `json:"price"`
+			Role      string  `json:"role"`
+			Side      string  `json:"side"`
+			Comm      string  `json:"commission"`
+			CreatedAt string  `json:"created_at"`
 			Product   struct {
 				Symbol string `json:"symbol"`
 			} `json:"product"`
@@ -110,7 +113,7 @@ func (c *Client) GetFills(ctx context.Context, limit int) ([]Fill, error) {
 	out := make([]Fill, 0, len(resp.Result))
 	for _, f := range resp.Result {
 		out = append(out, Fill{
-			ID: f.ID, OrderID: f.OrderID, Symbol: f.Product.Symbol,
+			ID: int64(f.ID), OrderID: int64(f.OrderID), Symbol: f.Product.Symbol,
 			Side: f.Side, Size: float64(f.Size), Price: parseF(f.Price),
 			Role: f.Role, Commission: parseF(f.Comm), CreatedAt: f.CreatedAt,
 		})
@@ -133,19 +136,19 @@ func (c *Client) GetOrderHistory(ctx context.Context, limit int) ([]HistoricalOr
 	}
 	var resp struct {
 		Result []struct {
-			ID            int64  `json:"id"`
-			Side          string `json:"side"`
-			Size          int64  `json:"size"`
-			UnfilledSize  int64  `json:"unfilled_size"`
-			AvgFillPrice  string `json:"average_fill_price"`
-			LimitPrice    string `json:"limit_price"`
-			OrderType     string `json:"order_type"`
-			State         string `json:"state"`
-			ReduceOnly    bool   `json:"reduce_only"`
-			CancelReason  string `json:"cancellation_reason"`
-			CreatedAt     string `json:"created_at"`
-			PaidComm      string `json:"paid_commission"`
-			ClientOrderID string `json:"client_order_id"`
+			ID            flexNum `json:"id"`
+			Side          string  `json:"side"`
+			Size          flexNum `json:"size"`
+			UnfilledSize  flexNum `json:"unfilled_size"`
+			AvgFillPrice  string  `json:"average_fill_price"`
+			LimitPrice    string  `json:"limit_price"`
+			OrderType     string  `json:"order_type"`
+			State         string  `json:"state"`
+			ReduceOnly    bool    `json:"reduce_only"`
+			CancelReason  string  `json:"cancellation_reason"`
+			CreatedAt     string  `json:"created_at"`
+			PaidComm      string  `json:"paid_commission"`
+			ClientOrderID string  `json:"client_order_id"`
 			Product       struct {
 				Symbol string `json:"symbol"`
 			} `json:"product"`
@@ -157,7 +160,7 @@ func (c *Client) GetOrderHistory(ctx context.Context, limit int) ([]HistoricalOr
 	out := make([]HistoricalOrder, 0, len(resp.Result))
 	for _, o := range resp.Result {
 		out = append(out, HistoricalOrder{
-			ID: o.ID, Symbol: o.Product.Symbol, Side: o.Side,
+			ID: int64(o.ID), Symbol: o.Product.Symbol, Side: o.Side,
 			Size: float64(o.Size), UnfilledSize: float64(o.UnfilledSize),
 			AvgFillPrice: parseF(o.AvgFillPrice), LimitPrice: parseF(o.LimitPrice),
 			OrderType: o.OrderType, State: o.State, ReduceOnly: o.ReduceOnly,
@@ -183,12 +186,12 @@ func (c *Client) GetLedger(ctx context.Context, limit int) ([]LedgerEntry, error
 	}
 	var resp struct {
 		Result []struct {
-			ID        int64  `json:"id"`
-			Type      string `json:"transaction_type"`
-			Amount    string `json:"amount"`
-			Balance   string `json:"balance"`
-			ProductID int    `json:"product_id"`
-			CreatedAt string `json:"created_at"`
+			ID        flexNum `json:"id"`
+			Type      string  `json:"transaction_type"`
+			Amount    string  `json:"amount"`
+			Balance   string  `json:"balance"`
+			ProductID int     `json:"product_id"`
+			CreatedAt string  `json:"created_at"`
 			Asset     struct {
 				Symbol string `json:"symbol"`
 			} `json:"asset"`
@@ -203,7 +206,7 @@ func (c *Client) GetLedger(ctx context.Context, limit int) ([]LedgerEntry, error
 	out := make([]LedgerEntry, 0, len(resp.Result))
 	for _, e := range resp.Result {
 		out = append(out, LedgerEntry{
-			ID: e.ID, Type: e.Type, Amount: parseF(e.Amount), Balance: parseF(e.Balance),
+			ID: int64(e.ID), Type: e.Type, Amount: parseF(e.Amount), Balance: parseF(e.Balance),
 			Asset: e.Asset.Symbol, ProductID: e.ProductID, ProductName: e.Meta.Symbol,
 			CreatedAt: e.CreatedAt,
 		})

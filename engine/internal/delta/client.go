@@ -428,30 +428,44 @@ func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
 	if status != http.StatusOK {
 		return nil, fmt.Errorf("open orders request failed (HTTP %d)", status)
 	}
+	// `result` is a bare ARRAY here, not the {data: [...]} envelope used
+	// elsewhere in the v2 API. The previous shape parsed nothing and returned an
+	// error on every call, so this endpoint had been reporting "no open orders"
+	// by failing rather than by looking — indistinguishable from the truth on a
+	// desk that is usually flat.
+	//
+	// Numeric fields come back sometimes quoted, sometimes not, and `id` is a
+	// STRING in some responses. flexNum absorbs both rather than making the whole
+	// call fail on one field's representation.
 	var resp struct {
 		Success bool `json:"success"`
-		Result  struct {
-			Data []struct {
-				ID         int64  `json:"id"`
-				Symbol     string `json:"symbol"`
-				Side       string `json:"side"`
-				Size       string `json:"size"`
-				LimitPrice string `json:"limit_price"`
-				State      string `json:"state"`
-				CreatedAt  string `json:"created_at"`
-			} `json:"data"`
+		Result  []struct {
+			ID         flexNum `json:"id"`
+			Symbol     string  `json:"symbol"`
+			Side       string  `json:"side"`
+			Size       flexNum `json:"size"`
+			LimitPrice flexNum `json:"limit_price"`
+			State      string  `json:"state"`
+			CreatedAt  string  `json:"created_at"`
+			Product    struct {
+				Symbol string `json:"symbol"`
+			} `json:"product"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return nil, err
 	}
 	var orders []OpenOrder
-	for _, o := range resp.Result.Data {
-		size, _ := strconv.ParseFloat(o.Size, 64)
-		price, _ := strconv.ParseFloat(o.LimitPrice, 64)
+	for _, o := range resp.Result {
+		size := float64(o.Size)
+		price := float64(o.LimitPrice)
+		symbol := o.Symbol
+		if symbol == "" {
+			symbol = o.Product.Symbol
+		}
 		orders = append(orders, OpenOrder{
-			OrderID:   strconv.FormatInt(o.ID, 10),
-			Symbol:    o.Symbol,
+			OrderID:   strconv.FormatInt(int64(o.ID), 10),
+			Symbol:    symbol,
 			Side:      o.Side,
 			Size:      size,
 			Price:     price,
