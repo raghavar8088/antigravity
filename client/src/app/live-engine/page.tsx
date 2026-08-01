@@ -370,10 +370,11 @@ export default function LiveEnginePage() {
         side: t.side,
         size: t.contracts,
         entryPrice: t.entryPrice,
-        // The perp bridge reports its marks on its own endpoint; the page shows
-        // entry until a close, rather than inventing a mark it was not given.
-        markPrice: t.entryPrice,
-        unrealizedPnl: 0,
+        // The venue's own mark, from the SAME custody read that decides this
+        // position's exits — so the screen and the risk engine cannot disagree
+        // about where the position stands.
+        markPrice: t.markPrice ?? t.entryPrice,
+        unrealizedPnl: t.unrealizedPnl ?? 0,
         marginUsd: 0,
         stopPrice: t.stopPrice,
         targetPrice: t.targetPrice,
