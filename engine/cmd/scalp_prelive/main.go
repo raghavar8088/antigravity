@@ -861,6 +861,13 @@ func (d *desk) serve(port int) {
 			Profile  string    `json:"profile"`
 			OpenedAt time.Time `json:"openedAt"`
 			HeldMin  int64     `json:"heldMin"`
+			// Mark is the last closed 1m bar for the symbol, and PnL is stated at
+			// the desk's standard $1,000 notional — the same basis as
+			// net_pnl_usd_at_1000_notional on /scalp/stats, so an open position and
+			// a closed one can be read on one scale.
+			Mark      float64 `json:"mark"`
+			PnLPct    float64 `json:"pnlPct"`
+			PnLAt1000 float64 `json:"pnlAt1000"`
 			// Live is true when this exact (strategy, symbol) stream is on the
 			// live allow-list — i.e. a fill here would also place a real order.
 			Live bool `json:"live"`
@@ -868,6 +875,15 @@ func (d *desk) serve(port int) {
 
 		d.mu.Lock()
 		defer d.mu.Unlock()
+
+		// Last closed bar per symbol. A position with no mark reports 0 rather
+		// than a stale entry-equals-mark zero, which would read as flat.
+		marks := make(map[string]float64, len(d.symbols))
+		for _, ss := range d.symbols {
+			if n := len(ss.bars); n > 0 {
+				marks[ss.sym] = ss.bars[n-1].Close
+			}
+		}
 
 		out := make([]row, 0, 64)
 		liveOpen := 0
@@ -888,11 +904,22 @@ func (d *desk) serve(port int) {
 			if !cs.Pos.EntryTime.IsZero() {
 				held = int64(time.Since(cs.Pos.EntryTime).Minutes())
 			}
+			mark := marks[sym]
+			pnlPct, pnl1000 := 0.0, 0.0
+			if mark > 0 && cs.Pos.Entry > 0 {
+				dir := 1.0
+				if cs.Pos.Dir == "SHORT" {
+					dir = -1.0
+				}
+				pnlPct = (mark - cs.Pos.Entry) / cs.Pos.Entry * dir * 100
+				pnl1000 = pnlPct / 100 * 1000
+			}
 			out = append(out, row{
 				Strategy: strat, Symbol: sym, Dir: cs.Pos.Dir,
 				Entry: cs.Pos.Entry, SL: cs.Pos.SL, TP: cs.Pos.TP,
 				Profile: cs.Pos.Profile, OpenedAt: cs.Pos.EntryTime,
 				HeldMin: held, Live: isLive,
+				Mark: mark, PnLPct: pnlPct, PnLAt1000: pnl1000,
 			})
 		}
 		// Live-enabled first, then longest held — the ones closest to their time
@@ -904,10 +931,21 @@ func (d *desk) serve(port int) {
 			return out[i].HeldMin > out[j].HeldMin
 		})
 
+		// The live ROSTER, not just the strategies that happen to hold a position
+		// right now. A leaderboard built from open positions alone would silently
+		// omit every live strategy that is currently flat — which is most of them,
+		// most of the time.
+		roster := make([]string, 0, len(liveNames))
+		for n := range liveNames {
+			roster = append(roster, n)
+		}
+		sort.Strings(roster)
+
 		writeJSON(w, map[string]interface{}{
-			"open":      len(out),
-			"live_open": liveOpen,
-			"rows":      out,
+			"open":            len(out),
+			"live_open":       liveOpen,
+			"live_strategies": roster,
+			"rows":            out,
 		})
 	}))
 

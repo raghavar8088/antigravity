@@ -115,6 +115,11 @@ type OpenPos = {
   openedAt: string;
   heldMin: number;
   live: boolean;
+  /** Last closed 1m bar. 0 when the symbol has no bar yet. */
+  mark: number;
+  pnlPct: number;
+  /** Stated at $1,000 notional — the same basis as the desk's closed P&L. */
+  pnlAt1000: number;
 };
 
 export default function ScalpDeskPage() {
@@ -140,6 +145,9 @@ export default function ScalpDeskPage() {
   // against that question. Toggleable rather than hard-filtered — the data is
   // still there for anyone who wants it.
   const [liveOnly, setLiveOnly] = useState<boolean>(true);
+  // The live allow-list itself, so the leaderboard covers strategies that are
+  // currently FLAT — which is most of them, most of the time.
+  const [liveRoster, setLiveRoster] = useState<string[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -161,7 +169,13 @@ export default function ScalpDeskPage() {
       setTrades((await tr.json()) as Trade[]);
       // Positions are additive: an older engine without this endpoint should
       // leave the rest of the page working rather than blanking it.
-      setPositions(po.ok ? (((await po.json()) as { rows: OpenPos[] }).rows ?? []) : []);
+      if (po.ok) {
+        const body = (await po.json()) as { rows?: OpenPos[]; live_strategies?: string[] };
+        setPositions(body.rows ?? []);
+        setLiveRoster(body.live_strategies ?? []);
+      } else {
+        setPositions([]);
+      }
       setError("");
       setUpdatedAt(new Date().toLocaleTimeString());
     } catch {
@@ -224,6 +238,27 @@ export default function ScalpDeskPage() {
   const livePositions = useMemo(() => positions.filter((p) => p.live), [positions]);
   const shownPositions = liveOnly ? livePositions : positions;
 
+  const openPnl = useMemo(
+    () => shownPositions.reduce((a, p) => a + (p.mark > 0 ? p.pnlAt1000 : 0), 0),
+    [shownPositions],
+  );
+
+  /**
+   * Leaderboard restricted to the streams that can reach the venue.
+   *
+   * The full leaderboard ranks 2,416 streams, and with that many a few days of
+   * trading produces lucky leaders by variance alone — which is why the gate
+   * exists. This table answers a narrower and more useful question: how are the
+   * strategies that are ACTUALLY routing real orders performing on paper?
+   *
+   * Derived from the same rows, so it cannot disagree with the table below it.
+   */
+  const liveStrategyNames = useMemo(() => new Set(liveRoster), [liveRoster]);
+  const liveRows = useMemo(
+    () => rows.filter((r) => liveStrategyNames.has(r.strategy)).sort((a, b) => b.net_usd - a.net_usd),
+    [rows, liveStrategyNames],
+  );
+
   const positionColumns: DeskColumn<OpenPos>[] = [
     {
       id: "strategy",
@@ -245,6 +280,38 @@ export default function ScalpDeskPage() {
     { id: "entry", align: "right", header: "Entry", cell: (p) => fmtPrice(p.entry) },
     { id: "sl", align: "right", header: "Stop", cell: (p) => fmtPrice(p.sl) },
     { id: "tp", align: "right", header: "Target", cell: (p) => fmtPrice(p.tp) },
+    {
+      id: "mark",
+      align: "right",
+      header: "Mark",
+      cell: (p) => (p.mark > 0 ? fmtPrice(p.mark) : "—"),
+    },
+    {
+      id: "upnl",
+      align: "right",
+      header: "Unreal. P&L",
+      // At $1,000 notional, matching the desk's closed-trade basis so an open
+      // and a closed position can be read on one scale.
+      cell: (p) =>
+        p.mark > 0 ? (
+          <span className={pnlToneClass(p.pnlAt1000)} style={{ fontWeight: 600 }}>
+            {fmtUSD(p.pnlAt1000)}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "upnlpct",
+      align: "right",
+      header: "%",
+      cell: (p) =>
+        p.mark > 0 ? (
+          <span className={pnlToneClass(p.pnlPct)}>{`${p.pnlPct >= 0 ? "+" : ""}${p.pnlPct.toFixed(2)}%`}</span>
+        ) : (
+          "—"
+        ),
+    },
     { id: "profile", header: "Profile", cell: (p) => p.profile || "—" },
     {
       id: "held",
@@ -397,6 +464,12 @@ export default function ScalpDeskPage() {
                 <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                   {livePositions.length} live-routed · {positions.length} total
                 </span>
+                <span
+                  className={`desk-mono desk-label-md ${pnlToneClass(openPnl)}`}
+                  style={{ fontWeight: 700 }}
+                >
+                  open {fmtUSD(openPnl)}
+                </span>
                 <button
                   type="button"
                   onClick={() => setLiveOnly((v) => !v)}
@@ -427,13 +500,42 @@ export default function ScalpDeskPage() {
               columns={positionColumns}
               rows={shownPositions}
               getRowKey={(p) => `${p.strategy}|${p.symbol}`}
-              minWidth={860}
+              minWidth={1120}
             />
           )}
           <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 760, color: "var(--desk-on-surface-variant)" }}>
             These are PAPER positions. A row marked LIVE means that stream is also on the real-money allow-list, so a
             fill here places a real order too — it does not mean this particular position is funded. Live exposure is on
             the Live Engine page.
+          </p>
+        </DeskCard>
+
+        {/* Live-routed leaderboard — the streams that spend real money */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Live Strategy Leaderboard"
+            subtitle="Paper performance of only the streams on the real-money allow-list."
+            actions={
+              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                {liveRows.length} live-routed streams
+              </span>
+            }
+          />
+          {liveRows.length === 0 ? (
+            <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
+              No closed trades yet on the live-routed streams.
+            </p>
+          ) : (
+            <DeskDataTable
+              columns={leaderboardColumns}
+              rows={liveRows}
+              getRowKey={(r) => `live-${r.strategy}|${r.symbol}`}
+              minWidth={860}
+            />
+          )}
+          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 780, color: "var(--desk-on-surface-variant)" }}>
+            Still PAPER results — these strategies route real orders, but the numbers here are the desk&apos;s simulated
+            fills, not the venue&apos;s. Real P&amp;L, with real fees, is on the Live Engine page.
           </p>
         </DeskCard>
 
