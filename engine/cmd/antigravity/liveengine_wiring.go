@@ -711,9 +711,18 @@ func liveEngineAutoDisarmMonitor(ctx context.Context, ctrl *liveengine.Controlle
 				ctrl.OnPriceFeedLost("delta positions unreachable: " + err.Error())
 				continue
 			}
+			// OPTIONS ONLY, for the same reason the reconciliation card filters:
+			// the scalp bridge's perpetuals live on this wallet and are not this
+			// engine's to account for.
+			//
+			// The card was filtered and this was not, so the UI read MATCHED
+			// while the audit log filled with RECON_MISMATCH — 38 of them in
+			// twenty minutes. Two views of one fact disagreeing is worse than
+			// either being wrong alone: it makes the log untrustworthy on the
+			// page where the log is the record.
 			deltaOpen := 0
 			for _, p := range positions {
-				if p.Size != 0 {
+				if p.Size != 0 && delta.IsOptionSymbol(p.Symbol) {
 					deltaOpen++
 				}
 			}

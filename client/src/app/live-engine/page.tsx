@@ -182,6 +182,8 @@ type PerpTrade = {
   stopPrice?: number;
   targetPrice?: number;
   exitPrice?: number;
+  openedAt?: string;
+  closedAt?: string;
   realisedPnl?: number;
   exitReason?: string;
   status: string;
@@ -470,6 +472,47 @@ export default function LiveEnginePage() {
     ],
     [],
   );
+
+  /**
+   * Closed trades from BOTH live desks, newest first.
+   *
+   * This listed only the options engine's closes, so the perpetual desk's real
+   * fills — the ones actually being traded now — were absent from the page that
+   * exists to show them. The options rows are days old and the perp rows are
+   * minutes old, so ordering by close time puts the current desk on top without
+   * hiding the older record.
+   */
+  const allClosed: ClosedPosition[] = useMemo(() => {
+    const rows: ClosedPosition[] = [...closed];
+    for (const t of perpTrades) {
+      if (t.status !== "CLOSED") continue;
+      rows.push({
+        id: `perp-${t.strategy}-${t.symbol}-${t.closedAt ?? ""}`,
+        strategy: t.strategy,
+        // A perpetual has no option type; the column renders "—" rather than
+        // borrowing CALL/PUT, which would misdescribe the instrument.
+        optionType: "",
+        symbol: t.symbol,
+        contracts: t.contracts,
+        entryPrice: t.entryPrice,
+        exitPrice: t.exitPrice ?? 0,
+        realizedPnl: t.realisedPnl ?? 0,
+        // The perp bridge books net and does not split fees out, so gross is
+        // reported as net rather than fabricating a split.
+        grossPnl: t.realisedPnl ?? 0,
+        feesUsd: undefined,
+        exitReason: t.exitReason ?? "",
+        openedAt: t.openedAt ?? "",
+        closedAt: t.closedAt,
+      } as ClosedPosition);
+    }
+    rows.sort((a, b) => {
+      const at = a.closedAt ? Date.parse(a.closedAt) : 0;
+      const bt = b.closedAt ? Date.parse(b.closedAt) : 0;
+      return bt - at;
+    });
+    return rows;
+  }, [closed, perpTrades]);
 
   const closedColumns: DeskColumn<ClosedPosition>[] = useMemo(
     () => [
@@ -945,12 +988,14 @@ export default function LiveEnginePage() {
           <DeskSectionHeader
             title="Closed Positions"
             subtitle={
-              closed.length
-                ? `${closed.length} closed · realized ${fmtUSD(closed.reduce((s, c) => s + (c.realizedPnl || 0), 0))}`
-                : "closed by take-profit, stop-loss or expiry"
+              allClosed.length
+                ? `${allClosed.length} closed across both desks · realized ${fmtUSD(
+                    allClosed.reduce((s, c) => s + (c.realizedPnl || 0), 0),
+                  )}`
+                : "closed by take-profit, stop-loss, time stop or expiry"
             }
             actions={
-              closed.length > 100 ? (
+              allClosed.length > 100 ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                     {showAllClosed ? `all ${closed.length}` : `last 100 of ${closed.length}`}
@@ -964,7 +1009,7 @@ export default function LiveEnginePage() {
           />
           <DeskDataTable
             columns={closedColumns}
-            rows={showAllClosed ? closed : closed.slice(0, 100)}
+            rows={showAllClosed ? allClosed : allClosed.slice(0, 100)}
             getRowKey={(c) => c.id}
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No closed positions yet.</span>}
