@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3,4,5,6],"files":3,"symbols":60,"top_files":[{"file":"engine/cmd/scalp_prelive/main.go","symbols":37},{"file":"engine/cmd/scalp_prelive/live.go","symbols":15},{"file":"engine/cmd/scalp_prelive/live_test.go","symbols":8}]}}
+{"engine-cmd":{"communities":[0,1,2,3],"files":1,"symbols":28,"top_files":[{"file":"engine/cmd/antigravity/liveengine_wiring.go","symbols":28}]}}

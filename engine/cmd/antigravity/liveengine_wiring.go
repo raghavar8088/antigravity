@@ -276,7 +276,17 @@ func liveEngineAccountProvider(bridge *delta.Bridge, ctrl *liveengine.Controller
 		positions, _ := client.GetPositions(ctx)
 		marginUsed, openRisk := 0.0, 0.0
 		for _, p := range positions {
+			// Margin is genuinely shared: it is the wallet's, whichever desk
+			// consumed it, and the operator needs to see the true figure.
 			marginUsed += p.Margin
+			// Open risk is NOT shared. It is labelled "premium at risk (long)"
+			// and computed with the OPTION contract size, so including a
+			// perpetual held by the scalp bridge both attributes another desk's
+			// exposure here and values it with the wrong contract size — 0.001
+			// for an ADAUSD contract that is 1.0.
+			if !delta.IsOptionSymbol(p.Symbol) {
+				continue
+			}
 			// Long options: max loss is the premium paid (mark × size), not margin.
 			openRisk += p.MarkPrice * p.Size * delta.DeltaContractSizeBTC
 		}
@@ -326,6 +336,12 @@ func liveEnginePositionsProvider(bridge *delta.Bridge) func(context.Context) ([]
 			}
 		}
 		for _, p := range positions {
+			// Options only — a perpetual held by the scalp bridge is not this
+			// engine's position, and ExitLevelsFor would compute option-premium
+			// stop/target levels for it (a -50%-of-entry "stop" on a perp).
+			if !delta.IsOptionSymbol(p.Symbol) {
+				continue
+			}
 			contracts := int(p.Size)
 			if contracts < 0 {
 				contracts = -contracts
@@ -616,9 +632,20 @@ func liveEngineReconciliationProvider(bridge *delta.Bridge) func(context.Context
 		if err != nil {
 			return liveengine.ReconciliationView{EnginePositions: engineOpen, AsOf: now, Error: err.Error()}, nil
 		}
+		// Count only OPTION positions.
+		//
+		// One Delta wallet now backs two desks: this options engine and the scalp
+		// perpetual bridge. GetPositions returns both, so counting everything
+		// made a perpetual opened by the OTHER desk read as "Delta reports 1
+		// position, engine shows 0" — a mismatch banner on a real-money page for
+		// a position this engine correctly does not own, and could not adopt
+		// (adoption is already option-filtered).
+		//
+		// A reconciliation alarm that fires when nothing is wrong is worse than
+		// none: it trains the operator to ignore the one that matters.
 		deltaOpen := 0
 		for _, p := range positions {
-			if p.Size != 0 {
+			if p.Size != 0 && delta.IsOptionSymbol(p.Symbol) {
 				deltaOpen++
 			}
 		}
