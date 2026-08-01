@@ -1,6 +1,7 @@
 // Pre-Live Trade Engine — Backtested-Qualified Strategies
 //
-// Consumes real market data (Coinbase price feed, Binance klines/aggTrades) but
+// Consumes real market data (Delta Exchange trade stream + candles — the venue
+// this desk clones its trades to; Binance retained as a declared fallback) but
 // executes on a PAPER account (execution.NewPaperClient) — no real broker orders
 // are sent from this process. It is a validation harness: it trades the honest
 // OOS-confirmed whitelist (see pre_live_registry.go) and records a paper track
@@ -74,15 +75,63 @@ func warmupCandles(orch *trading.Orchestrator) {
 			hours = parsed
 		}
 	}
-	fetcher := marketdata.NewBinanceHistoricalFetcher(os.TempDir())
-	endMs := time.Now().UnixMilli()
-	startMs := endMs - int64(time.Duration(hours)*time.Hour/time.Millisecond)
-	candles, err := fetcher.FetchKlines("BTCUSDT", "1h", startMs, endMs)
-	if err != nil {
-		log.Printf("[PRE-LIVE] warmup fetch failed (will wait for live 1h bars): %v", err)
-		return
+	// PRE_LIVE_WARMUP_SYMBOL is still read and is still written in Binance
+	// notation on the running containers (BTCUSDT, ETHUSDT); DeltaSymbolFor
+	// translates it.
+	//
+	// Warmup comes from Delta now, for the same reason the tick feed does: these
+	// candles seed the indicator buffers the strategies evaluate against, so
+	// warming on Binance and then trading Delta puts a venue discontinuity
+	// directly inside every indicator's window. Binance stays as the declared
+	// fallback — a desk that cannot warm up at all is worse than one warmed on a
+	// correlated venue — and which one was used is logged either way.
+	warmupSymbol := os.Getenv("PRE_LIVE_WARMUP_SYMBOL")
+	if warmupSymbol == "" {
+		warmupSymbol = "BTCUSDT"
 	}
-	for _, c := range candles {
+	end := time.Now().UTC()
+	start := end.Add(-time.Duration(hours) * time.Hour)
+
+	type warmBar struct {
+		OpenTime, CloseTime            time.Time
+		Open, High, Low, Close, Volume float64
+	}
+	var bars []warmBar
+	source := "delta"
+
+	deltaSym := marketdata.DeltaSymbolFor(warmupSymbol)
+	dc, derr := marketdata.FetchDeltaHistoricalCandles(deltaSym, "1h", start, end)
+	if derr == nil && len(dc) > 0 {
+		for _, c := range dc {
+			bars = append(bars, warmBar{
+				OpenTime: c.OpenTime, CloseTime: c.OpenTime.Add(time.Hour),
+				Open: c.Open, High: c.High, Low: c.Low, Close: c.Close,
+				// Delta reports candle volume in CONTRACTS; Binance klines report
+				// it in BTC. Unscaled, the venue switch would multiply every
+				// volume reading by a thousand at the moment the feed changed,
+				// and volume-spike strategies would read a change of units as the
+				// largest surge in the instrument's history.
+				Volume: c.Volume * marketdata.DeltaContractValueBTC,
+			})
+		}
+	} else {
+		log.Printf("[PRE-LIVE] Delta warmup unavailable for %s (%v) — falling back to Binance klines", deltaSym, derr)
+		source = "binance"
+		fetcher := marketdata.NewBinanceHistoricalFetcher(os.TempDir())
+		candles, err := fetcher.FetchKlines(warmupSymbol, "1h", start.UnixMilli(), end.UnixMilli())
+		if err != nil {
+			log.Printf("[PRE-LIVE] warmup fetch failed (will wait for live 1h bars): %v", err)
+			return
+		}
+		for _, c := range candles {
+			bars = append(bars, warmBar{
+				OpenTime: c.OpenTime, CloseTime: c.CloseTime,
+				Open: c.Open, High: c.High, Low: c.Low, Close: c.Close, Volume: c.Volume,
+			})
+		}
+	}
+
+	for _, c := range bars {
 		orch.Push1hKlineCandle(marketdata.Candle{
 			OpenTime:  c.OpenTime,
 			CloseTime: c.CloseTime,
@@ -93,7 +142,8 @@ func warmupCandles(orch *trading.Orchestrator) {
 			Volume:    c.Volume,
 		})
 	}
-	log.Printf("[PRE-LIVE] warmup complete: pushed %d 1h candles → ~%d synthetic 4h candles ready", len(candles), len(candles)/4)
+	log.Printf("[PRE-LIVE] warmup complete: pushed %d 1h candles from %s → ~%d synthetic 4h candles ready",
+		len(bars), strings.ToUpper(source), len(bars)/4)
 }
 
 func main() {
@@ -154,12 +204,38 @@ func main() {
 	defer cancel()
 
 	// ── 1. Market data feeds ─────────────────────────────────────────────────
-	coinbase := marketdata.NewCoinbaseClient()
+	//
+	// This desk clones its trades to Delta Exchange (see the LIVE ENGINE section
+	// below), so its signals must come from Delta's book. They came from
+	// Coinbase spot instead — a different instrument with its own basis and
+	// microstructure — which meant every strategy here was qualified on prices
+	// it would never execute against.
+	//
+	// PRE_LIVE_FEED_SYMBOL is still read, and is still written in Coinbase
+	// notation on the running containers (BTC-USD, ETH-USD). DeltaSymbolFor
+	// translates it: Delta lists no product called "BTC-USD", and subscribing to
+	// a symbol that does not exist yields no error and no ticks — the desk would
+	// simply believe the market had gone quiet. Translating means the existing
+	// deployment configs keep working untouched.
+	feedSymbol := os.Getenv("PRE_LIVE_FEED_SYMBOL")
+	if feedSymbol == "" {
+		feedSymbol = "BTC-USD"
+	}
+	deltaSymbol := marketdata.DeltaSymbolFor(feedSymbol)
+	if deltaSymbol != feedSymbol {
+		log.Printf("[PRE-LIVE] feed symbol %q translated to Delta notation %q", feedSymbol, deltaSymbol)
+	}
+
+	feed := marketdata.NewDeltaTickClient()
 	go func() {
-		if err := coinbase.Connect(ctx, []string{"BTC-USD"}); err != nil {
-			log.Fatalf("[PRE-LIVE] Coinbase feed error: %v", err)
+		if err := feed.Connect(ctx, []string{deltaSymbol}); err != nil {
+			// Not fatal: Connect only validates arguments and starts the
+			// reconnect loop. Killing the process on a transient socket problem
+			// would stop a desk that may be mirroring live positions.
+			log.Printf("[PRE-LIVE] Delta feed could not start: %v", err)
 		}
 	}()
+	log.Printf("[PRE-LIVE] tick feed: DELTA %s (the venue this desk clones trades to)", deltaSymbol)
 
 	// ── 2. Load qualified strategies (no shadow overlay, no winners filter) ──
 	qualified := strategy.BuildPreLiveStrategies()
@@ -245,7 +321,7 @@ func main() {
 	candleAgg := marketdata.NewCandleAggregator()
 
 	// ── 5. Orchestrator ──────────────────────────────────────────────────────
-	orch := trading.NewOrchestrator(coinbase, qualified, riskEngine, exec, agg, posMgr, tracker, journal, candleAgg)
+	orch := trading.NewOrchestrator(feed, qualified, riskEngine, exec, agg, posMgr, tracker, journal, candleAgg)
 
 	// ── 6. LoopDeps (required minimal set) ───────────────────────────────────
 	dataValidator := dataquality.NewValidator()
@@ -376,36 +452,43 @@ func main() {
 		liveMirror.OnPaperClose(*pos, string(reason), exitPrice)
 	})
 
-	// ── 7. Binance kline feed for 15m/1h candles ─────────────────────────────
-	klineClient := marketdata.NewBinanceKlineClient([]string{"15m", "1h"})
+	// ── 7. Delta kline feed for 15m/1h candles ───────────────────────────────
+	//
+	// These were Binance klines. Once the tick stream moved to Delta, leaving
+	// them there would have been worse than either venue alone: the same
+	// strategy would evaluate a Delta-derived 1m series against Binance-derived
+	// 15m and 1h bars, so every cross-timeframe comparison — a pullback measured
+	// against the higher-timeframe trend, a breakout confirmed on 1h — would
+	// straddle two different instruments.
+	klineClient := marketdata.NewDeltaKlineFeed(deltaSymbol, []string{"15m", "1h"})
 	go func() {
-		if err := klineClient.Start(
-			ctx,
-			func(c marketdata.Candle) {
+		klineClient.Start(ctx, func(res string, c marketdata.Candle) {
+			switch res {
+			case "15m":
 				orch.Push15mKlineCandle(c)
 				orch.SetKlineFeedActive("15m", true)
-			},
-			func(c marketdata.Candle) {
+			case "1h":
 				orch.Push1hKlineCandle(c)
 				orch.SetKlineFeedActive("1h", true)
-			},
-		); err != nil {
-			log.Printf("[PRE-LIVE] kline feed stopped: %v", err)
-		}
+			}
+		})
 		orch.SetKlineFeedActive("15m", false)
 		orch.SetKlineFeedActive("1h", false)
 	}()
 
-	// ── 8. Binance aggTrade feed for CVD ─────────────────────────────────────
-	aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
+	// ── 8. CVD from Delta's own trade stream ─────────────────────────────────
+	//
+	// CVD came from a Binance aggTrade socket, so order flow was measured on a
+	// different book from the one being traded. CVD is precisely a statement
+	// about who is lifting whose offers on a given venue — taking it from
+	// elsewhere is the one place the substitution is least defensible.
+	//
+	// The Delta feed already classifies every trade by taker side, so this needs
+	// no second connection: the same socket that drives the ticks drives CVD.
+	feed.SetAggTradeHook(func(t marketdata.AggTrade) {
 		orch.PushAggTrade(t)
+		orch.SetAggTradeFeedActive(true)
 	})
-	go func() {
-		if err := aggTradeClient.Start(ctx); err != nil {
-			log.Printf("[PRE-LIVE] aggTrade feed error: %v", err)
-		}
-		orch.SetAggTradeFeedActive(false)
-	}()
 
 	// ── 9. Pre-warm 4h candles then start trading loop ───────────────────────
 	// Fetch 200 historical 1h bars so 4h synthetic candles are ready immediately.
@@ -635,15 +718,15 @@ func main() {
 				winRate = float64(s.Wins) / float64(s.TotalTrades) * 100
 			}
 			rows = append(rows, map[string]interface{}{
-				"name":          name,
-				"category":      e.Category,
-				"timeframe":     e.Timeframe,
-				"trades":        s.TotalTrades,
-				"wins":          s.Wins,
-				"losses":        s.Losses,
-				"winRate":       winRate,
-				"pnl":           s.TotalPnL,
-				"signalsFired":  s.SignalsFired,
+				"name":         name,
+				"category":     e.Category,
+				"timeframe":    e.Timeframe,
+				"trades":       s.TotalTrades,
+				"wins":         s.Wins,
+				"losses":       s.Losses,
+				"winRate":      winRate,
+				"pnl":          s.TotalPnL,
+				"signalsFired": s.SignalsFired,
 			})
 		}
 		json.NewEncoder(w).Encode(rows) //nolint:errcheck

@@ -58,6 +58,7 @@ The content is organized as follows:
   app/api/cron/mock-trading-executor/route.ts
   app/api/cron/mock-trading-tick/route.ts
   app/api/cron/policy-snapshot/route.ts
+  app/api/crypto-fno/[...path]/route.ts
   app/api/delta/account/route.ts
   app/api/delta/mirror/route.ts
   app/api/delta/myip/route.ts
@@ -83,6 +84,7 @@ The content is organized as follows:
   app/api/killswitch/resume/route.ts
   app/api/killswitch/status/route.ts
   app/api/killswitch/trigger/route.ts
+  app/api/live-engine/[...path]/route.ts
   app/api/mock-trading/account/latest/route.ts
   app/api/mock-trading/account/route.ts
   app/api/mock-trading/analytics/correlation/route.ts
@@ -149,9 +151,11 @@ The content is organized as follows:
   app/auth/callback/route.ts
   app/btc-future-trading/page.tsx
   app/btc-pre-live/page.tsx
+  app/crypto-fno/page.tsx
   app/favicon.ico
   app/globals.css
   app/layout.tsx
+  app/live-engine/page.tsx
   app/login/page.tsx
   app/mobile/page.tsx
   app/mock-trading/error.tsx
@@ -212,6 +216,7 @@ The content is organized as follows:
   components/DashboardHeader.tsx
   components/DeltaLiveScalper.tsx
   components/DeltaSpotBuy.tsx
+  components/desk/DeskAdminControls.tsx
   components/desk/DeskHeroStrip.tsx
   components/desk/DeskModuleChrome.tsx
   components/desk/DeskThemeToggle.tsx
@@ -747,6 +752,8 @@ The content is organized as follows:
   alpha/delta/delta_engine.go
   alpha/funding/funding_cache.go
   alpha/funding/funding_collector.go
+  alpha/funding/funding_delta_test.go
+  alpha/funding/funding_delta.go
   alpha/funding/funding_engine.go
   alpha/fvg/fvg_detector.go
   alpha/liquidations/liquidations_engine.go
@@ -848,16 +855,50 @@ The content is organized as follows:
   config/registry.go
   config/strictness_test.go
   config/strictness.go
+  cryptofno/account.go
+  cryptofno/book_test.go
+  cryptofno/http.go
+  cryptofno/margin_test.go
+  cryptofno/margin.go
+  cryptofno/position.go
   dataquality/types.go
   dataquality/validator_test.go
   dataquality/validator.go
+  delta/adoption_scope_test.go
   delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
+  delta/chain_list.go
   delta/client.go
+  delta/close_lookup_test.go
+  delta/custody_owns_upside_test.go
+  delta/eligibility_deadlock_test.go
   delta/execution_guard_test.go
   delta/execution_guard.go
+  delta/exit_levels_test.go
+  delta/fees_test.go
+  delta/fees.go
+  delta/flexnum_test.go
+  delta/live_bridge_test.go
   delta/live_bridge.go
+  delta/live_exit_policy_test.go
+  delta/live_position_custody_test.go
+  delta/live_position_custody.go
+  delta/monitor_interval_test.go
+  delta/perp_accounting_test.go
+  delta/perp_accounting.go
+  delta/perp_bridge_test.go
+  delta/perp_bridge.go
+  delta/perp_persistence_test.go
+  delta/perp_persistence.go
+  delta/perp_products_test.go
+  delta/perp_products.go
+  delta/perp_roster_test.go
+  delta/perp_roster.go
+  delta/perp_sizing_test.go
+  delta/perp_sizing.go
+  delta/trade_status_test.go
   derivatives/derivatives_test.go
+  derivatives/funding_delta_test.go
   derivatives/funding.go
   derivatives/oi.go
   derivatives/score.go
@@ -937,6 +978,13 @@ The content is organized as follows:
   ha/recovery_engine.go
   ha/redis_failover.go
   ha/vault_recovery.go
+  hunt/account.go
+  hunt/desk_adapters.go
+  hunt/gate.go
+  hunt/http.go
+  hunt/hunt_test.go
+  hunt/promotion_test.go
+  hunt/promotion.go
   integration/e2e_test.go
   integration/mocks/mock_ai_client.go
   integration/mocks/mock_broker.go
@@ -976,6 +1024,16 @@ The content is organized as follows:
   live/live_test.go
   live/orphan_detector.go
   live/parity_checker.go
+  liveengine/arm_heartbeat_test.go
+  liveengine/arm_persistence_test.go
+  liveengine/arm_persistence.go
+  liveengine/controller_test.go
+  liveengine/controller.go
+  liveengine/http_test.go
+  liveengine/http.go
+  liveengine/recon_no_halt_test.go
+  liveengine/roster_test.go
+  liveengine/roster.go
   livemirror/mirror_test.go
   livemirror/mirror.go
   logger/logger.go
@@ -986,19 +1044,28 @@ The content is organized as follows:
   marketdata/binance_aggtrade.go
   marketdata/binance_klines.go
   marketdata/binance_liquidations.go
-  marketdata/binance_perp_price.go
   marketdata/candle_test.go
   marketdata/candle.go
   marketdata/client.go
   marketdata/coinbase.go
   marketdata/db_writer.go
   marketdata/delta_history.go
+  marketdata/delta_iv_index_test.go
+  marketdata/delta_iv_index.go
+  marketdata/delta_klines_test.go
+  marketdata/delta_klines.go
+  marketdata/delta_perp_price.go
+  marketdata/delta_ticks_test.go
+  marketdata/delta_ticks.go
   marketdata/delta.go
-  marketdata/deribit_dvol.go
   marketdata/historical_fetcher_test.go
   marketdata/historical_fetcher.go
   marketdata/historical_loader.go
   marketdata/macro_feed.go
+  marketdata/sharedfeed/binance_fallback.go
+  marketdata/sharedfeed/feed_test.go
+  marketdata/sharedfeed/feed.go
+  marketdata/sharedfeed/live_integration_test.go
   marketdata/warmup.go
   ml/prescorer.go
   mongopersist/boot.go
@@ -1043,29 +1110,54 @@ The content is organized as follows:
   omsv3/strategy_aggregate.go
   omsv3/system_aggregate.go
   omsv3/system_projection.go
+  optionchain/adapters.go
+  optionchain/cache_test.go
+  optionchain/cache.go
+  optionchain/chain_live_test.go
+  optionchain/cryptofno_adapter.go
+  options_selling/anti_mirror_test.go
+  options_selling/anti_mirror.go
+  options_selling/anti_strategies.go
+  options_selling/chain_pricer.go
   options_selling/chain_profile.go
   options_selling/chain.go
   options_selling/controls.go
   options_selling/engine.go
+  options_selling/feed_gate_test.go
+  options_selling/feed_gate.go
+  options_selling/hunt_mode.go
   options_selling/market_profile.go
   options_selling/pricer.go
+  options_selling/reset_capital_test.go
   options_selling/roster.go
   options_selling/signals.go
   options_selling/strategies.go
   options_selling/types.go
+  options/anti_mirror_test.go
+  options/anti_mirror.go
+  options/anti_strategies_test.go
+  options/anti_strategies.go
+  options/chain_pricer_test.go
+  options/chain_pricer.go
   options/chain_profile.go
   options/chain.go
   options/controls.go
   options/engine_test.go
   options/engine.go
+  options/feed_gate_test.go
+  options/feed_gate.go
+  options/hunt_mode_test.go
+  options/hunt_mode.go
   options/market_profile.go
   options/pricer.go
+  options/reset_capital_test.go
   options/roster.go
   options/signals.go
   options/strategies_test.go
   options/strategies.go
   options/types.go
   orderbook/analysis.go
+  orderbook/depth_delta_test.go
   orderbook/depth.go
   orderbook/orderbook_test.go
   orderbook/types.go
@@ -1143,6 +1235,7 @@ The content is organized as follows:
   reconciliationv2/events.go
   reconciliationv2/exchange_adapter_test.go
   reconciliationv2/exchange_adapter.go
+  reconciliationv2/ghost_option_test.go
   reconciliationv2/killswitch_hook_test.go
   reconciliationv2/killswitch_hook.go
   reconciliationv2/ledger_oms_reader_test.go
@@ -1224,6 +1317,7 @@ The content is organized as follows:
   risk/v2/dynamic_sizing.go
   risk/v2/engine_test.go
   risk/v2/engine.go
+  risk/v2/execution_floor_scope_test.go
   risk/v2/exposure.go
   risk/v2/family_risk.go
   risk/v2/forecast.go
@@ -1320,6 +1414,7 @@ The content is organized as follows:
   strategy/moving_average_crossover.go
   strategy/phase22c_alpha_test.go
   strategy/registry.go
+  strategy/scalpers/anti_strategy.go
   strategy/scalpers/curated_expansion_pack.go
   strategy/scalpers/curated_registry.go
   strategy/scalpers/delta20_pack.go
@@ -1329,6 +1424,8 @@ The content is organized as follows:
   strategy/scalpers/family3_orderflow.go
   strategy/scalpers/family4_ml_proxy.go
   strategy/scalpers/family5_derivatives_macro.go
+  strategy/scalpers/hunt_pack_test.go
+  strategy/scalpers/hunt_pack.go
   strategy/scalpers/hw_strategies_v10.go
   strategy/scalpers/hw_strategies_v11.go
   strategy/scalpers/hw_strategies_v12.go
@@ -1502,6 +1599,7 @@ The content is organized as follows:
   trading/meta_label_test.go
   trading/meta_label.go
   trading/paperpersist_hooks.go
+  trading/presubmit_assert_test.go
   trading/scalers_eval.go
   trading/signal_flow_metrics.go
   trading/signal_scoring.go
@@ -1633,7 +1731,11 @@ The content is organized as follows:
   validation/production/gate.go
 
 [cmd]/
+  antigravity/liveengine_allowlist_test.go
+  antigravity/liveengine_result_test.go
+  antigravity/liveengine_wiring.go
   antigravity/main.go
+  antigravity/tickfeed.go
   backtest/main.go
   btc_qualify_25/main.go
   btc_signal_probe/main.go
@@ -1648,7 +1750,12 @@ The content is organized as follows:
   pre_live/main.go
   pre_live/mongo.go
   run_backtest/main.go
+  scalp_prelive/live_test.go
+  scalp_prelive/live.go
   scalp_prelive/main.go
+  scalp_prelive/mirror_test.go
+  scalp_prelive/profile_test.go
+  scalp_prelive/venue_test.go
   seed_db/main.go
   sep_evidence/analytics.go
   sep_evidence/datasource.go

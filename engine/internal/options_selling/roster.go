@@ -162,7 +162,9 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 		return
 	}
 
-	activeSet := make(map[string]bool, optionMaxActiveStrategies)
+	maxActive := e.maxActiveStrategies()
+	maxPerCategory := e.maxStrategiesPerCategory()
+	activeSet := make(map[string]bool, maxActive)
 	categoryCounts := make(map[string]int)
 	candidates := make([]rosterCandidate, 0, len(e.states))
 
@@ -211,13 +213,13 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 			if activeSet[s.def.Name] {
 				continue
 			}
-			if len(activeSet) >= optionMaxActiveStrategies {
+			if len(activeSet) >= maxActive {
 				return
 			}
 			if !s.disabledUntil.IsZero() && now.Before(s.disabledUntil) {
 				continue
 			}
-			if enforceCategoryCap && categoryCounts[s.def.Category] >= optionMaxStrategiesPerCategory {
+			if enforceCategoryCap && categoryCounts[s.def.Category] >= maxPerCategory {
 				continue
 			}
 			activeSet[s.def.Name] = true
@@ -226,7 +228,7 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 	}
 
 	trySelect(true)
-	if len(activeSet) < optionMaxActiveStrategies {
+	if len(activeSet) < maxActive {
 		trySelect(false)
 	}
 
@@ -256,7 +258,9 @@ func (e *Engine) refreshRosterLocked(regime string, now time.Time) {
 
 		switch next {
 		case StrategyRosterActive:
-			s.stats.AllocationUSD = s.def.PositionUSD
+			// The hunt funds every strategy with its own stake, so the UI shows
+			// that stake rather than the per-ticket size.
+			s.stats.AllocationUSD = HuntStakePerStrategy
 			s.stats.SizeMultiplier = liveSizeMultiplierFor(s)
 			if s.stats.DisableReason == "Rotated out of live roster" {
 				s.stats.DisableReason = ""

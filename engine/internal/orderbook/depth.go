@@ -13,15 +13,34 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// L2 depth comes from Delta, the venue this engine executes on.
+//
+// It was Binance BTCUSDT@depth20. Of every feed in this application, the order
+// book is the one where substituting another exchange makes least sense: a
+// bid wall, a spread, a depth imbalance are facts about the resting orders in
+// ONE book. Binance's walls are not the walls this account's orders will hit,
+// and the liquidity conclusions drawn from them did not describe the market
+// being traded at all.
+//
+// DELTA QUOTES SIZE IN CONTRACTS, like everywhere else in its API. One BTCUSD
+// contract is 0.001 BTC, so an unscaled book reports a thousandfold more
+// liquidity than exists — and every wall-detection and depth-imbalance
+// threshold tuned on BTC quantities would stop firing entirely.
 const (
-	depthWSURL       = "wss://stream.binance.com:9443/ws/btcusdt@depth20@1000ms"
-	maxReconnects    = 5
-	reconnectBase    = 1 * time.Second
-	analyzeInterval  = 2 * time.Minute
+	// Delta India public market-data socket. No auth: depth is public, and this
+	// subscriber never sends credentials.
+	depthWSURL  = "wss://socket.india.delta.exchange"
+	depthSymbol = "BTCUSD"
+	// BTC per contract. Delta publishes contract_value on its ticker; this is
+	// BTCUSD's listed value and matches marketdata.DeltaContractValueBTC.
+	depthContractValueBTC = 0.001
+	maxReconnects         = 5
+	reconnectBase         = 1 * time.Second
+	analyzeInterval       = 2 * time.Minute
 )
 
-// DepthSubscriber connects to the Binance depth WebSocket and maintains a
-// live top-20 order book. It recomputes analysis every 2 minutes and on demand.
+// DepthSubscriber connects to Delta's l2_orderbook WebSocket and maintains a
+// live order book. It recomputes analysis every 2 minutes and on demand.
 type DepthSubscriber struct {
 	conn          *websocket.Conn
 	book          OrderBook
@@ -56,6 +75,22 @@ func (d *DepthSubscriber) Connect(ctx context.Context) error {
 		}
 
 		conn, _, err := websocket.DefaultDialer.DialContext(ctx, depthWSURL, nil)
+		if err == nil {
+			// Delta requires an explicit subscribe; Binance encoded the stream
+			// in the URL. Without this the socket connects and stays silent.
+			sub := map[string]any{
+				"type": "subscribe",
+				"payload": map[string]any{
+					"channels": []map[string]any{
+						{"name": "l2_orderbook", "symbols": []string{depthSymbol}},
+					},
+				},
+			}
+			if werr := conn.WriteJSON(sub); werr != nil {
+				conn.Close()
+				err = fmt.Errorf("subscribe: %w", werr)
+			}
+		}
 		if err != nil {
 			attempts++
 			if attempts > d.reconnectMax {
@@ -111,9 +146,21 @@ func (d *DepthSubscriber) SetCurrentPrice(price float64) {
 
 // ── internals ─────────────────────────────────────────────────────────────────
 
+// deltaDepthLevel is one side of Delta's l2_orderbook. limit_price is a quoted
+// string; size is a NUMBER OF CONTRACTS. "depth" is the cumulative total and is
+// deliberately ignored — the analysis wants per-level quantity.
+type deltaDepthLevel struct {
+	LimitPrice string  `json:"limit_price"`
+	Size       float64 `json:"size"`
+}
+
+// depthMessage is Delta's l2_orderbook payload. Note "buy"/"sell", not
+// "bids"/"asks": decoding the Binance names against this schema yields two empty
+// slices and an order book that is silently, permanently flat.
 type depthMessage struct {
-	Bids [][]string `json:"bids"` // [["price", "qty"], ...]
-	Asks [][]string `json:"asks"`
+	Type string            `json:"type"`
+	Buy  []deltaDepthLevel `json:"buy"`
+	Sell []deltaDepthLevel `json:"sell"`
 }
 
 func (d *DepthSubscriber) readLoop(ctx context.Context, conn *websocket.Conn, analyseTicker *time.Ticker) error {
@@ -156,8 +203,16 @@ func (d *DepthSubscriber) processMessage(msg []byte) {
 		return
 	}
 
-	bids := parseLevels(dm.Bids)
-	asks := parseLevels(dm.Asks)
+	// Ignore the subscribe acknowledgement and anything else on the socket.
+	if dm.Type != "" && dm.Type != "l2_orderbook" && dm.Type != "l2_updates" {
+		return
+	}
+	if len(dm.Buy) == 0 && len(dm.Sell) == 0 {
+		return
+	}
+
+	bids := parseDeltaLevels(dm.Buy)
+	asks := parseDeltaLevels(dm.Sell)
 
 	// Sort bids descending, asks ascending.
 	sort.Slice(bids, func(i, j int) bool { return bids[i].Price > bids[j].Price })
@@ -165,7 +220,7 @@ func (d *DepthSubscriber) processMessage(msg []byte) {
 
 	d.mu.Lock()
 	d.book = OrderBook{
-		Symbol:    "BTCUSDT",
+		Symbol:    depthSymbol,
 		Bids:      bids,
 		Asks:      asks,
 		UpdatedAt: time.Now().UTC(),
@@ -206,18 +261,20 @@ func (d *DepthSubscriber) runAnalysis() {
 	)
 }
 
-func parseLevels(raw [][]string) []PriceLevel {
-	levels := make([]PriceLevel, 0, len(raw))
-	for _, row := range raw {
-		if len(row) < 2 {
+// parseDeltaLevels converts Delta's depth levels into the engine's PriceLevel,
+// scaling size from contracts to BTC.
+//
+// The scaling is the whole point: unscaled, a 4,433-contract bid reads as 4,433
+// BTC rather than 4.433, so every wall threshold and depth-imbalance bound
+// calibrated on BTC quantities becomes meaningless.
+func parseDeltaLevels(levels []deltaDepthLevel) []PriceLevel {
+	out := make([]PriceLevel, 0, len(levels))
+	for _, l := range levels {
+		price, err := strconv.ParseFloat(l.LimitPrice, 64)
+		if err != nil || price <= 0 || l.Size <= 0 {
 			continue
 		}
-		p, err1 := strconv.ParseFloat(row[0], 64)
-		q, err2 := strconv.ParseFloat(row[1], 64)
-		if err1 != nil || err2 != nil {
-			continue
-		}
-		levels = append(levels, PriceLevel{Price: p, Quantity: q})
+		out = append(out, PriceLevel{Price: price, Quantity: l.Size * depthContractValueBTC})
 	}
-	return levels
+	return out
 }

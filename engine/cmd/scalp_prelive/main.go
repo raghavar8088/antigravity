@@ -3,22 +3,29 @@
 // experiment on explicit user instruction).
 //
 // What it does:
-//   - Polls Binance public 1m klines for the 8 major symbols, evaluates the
+//   - Reads 1m bars for the 8 major symbols from the SHARED market-data feed
+//     (Delta Exchange primary, Binance fallback) and evaluates the
 //     100-strategy Scalp100 pack (25 M1X + 66 M1 + 9 M1XB) on every CLOSED
 //     1m bar per symbol — 800 independent paper streams.
+//   - Delta is primary because the Live Engine executes on Delta: a strategy
+//     scored on another venue's prices is scored on a book it will never
+//     trade. The feed polls once per symbol and serves all 800 streams, so
+//     upstream request volume tracks instruments, not strategies.
 //   - Models execution IDENTICALLY to the S1 backtest harness, maker mode:
 //     post-only limit at signal close, fills only if a later bar trades
 //     through the level within 3 bars (missed fills counted), TP rests as a
 //     maker limit, SL/time-stop exits pay taker + stop slippage, SL wins
 //     intrabar ties, per-strategy exit profiles (scalp/revert/runner),
-//     5-bar cooldown. Paper only: $100 notional per trade, no order routing,
-//     no API keys, no real-money code path in this binary.
+//     5-bar cooldown. Paper only: $1,000 notional per trade, no order
+//     routing, no API keys, no real-money code path in this binary.
 //
 // PRE-REGISTERED PROMOTION GATE (set before the first live trade; the only
 // route out of paper): a strategy×symbol stream qualifies for a go-live
 // DISCUSSION only when its LIVE record shows
-//     trades >= 200  AND  PF >= 1.2  AND  maxDD <= 25%
-//     AND net > 0 in BOTH calendar halves of its live window.
+//
+//	trades >= 200  AND  PF >= 1.2  AND  maxDD <= 25%
+//	AND net > 0 in BOTH calendar halves of its live window.
+//
 // Rationale: all 100 strategies failed offline qualification on all 8
 // symbols (0/400). Under the null hypothesis (no edge), with 800 streams a
 // few days of trading is EXPECTED to produce dozens of profitable-looking
@@ -27,6 +34,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -43,22 +51,56 @@ import (
 	"sync"
 	"time"
 
+	"antigravity-engine/internal/marketdata/sharedfeed"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
-// ── execution profiles (EXACT copies of the S1 harness numbers) ──────────────
-
+// ── execution profiles ────────────────────────────────────────────────────────
+//
+// SL/TP are ATR-scaled distances clamped into a [Min,Max] band expressed as a
+// fraction of price (see clamp() below) — the floor guarantees a minimum
+// stop/target width regardless of how quiet the market is; the ceiling lets a
+// genuinely volatile bar widen it further. At defaultNotionalUSD, the floor
+// of each band is the dollar risk/reward actually requested for this desk:
+// SL floor ≈ -$10 on every profile (never tighter — the old 0.15%-0.20% floor
+// let normal 1m noise stop trades out before the setup had room to work), TP
+// floor scales with the profile's holding-period ambition for a real 1:2 /
+// 1:3 / 1:5 reward-to-risk instead of the old ~1:1.4-2.6 on pocket-change
+// distances: scalp $20, revert $30, runner $50.
 type profileCfg struct {
-	SLATR, TPATR           float64
-	SLMin, SLMax           float64
-	TPMin, TPMax           float64
-	TTLBars                int
+	SLATR, TPATR float64
+	SLMin, SLMax float64
+	TPMin, TPMax float64
+	TTLBars      int
 }
 
+// Bands are sized so the dollar stop/target are meaningful AND the price move
+// is actually reachable inside the holding period. Those two constraints pull
+// against each other, and getting the balance wrong is how a scalp desk turns
+// into a time-stop machine.
+//
+// Measured over 500 live trades on the previous 1.00%/2.00% bands:
+//
+//	TTL  456 (91.2%)  avg  -$0.33   <- 9 in 10 trades never reached either level
+//	SL    30 ( 6.0%)  avg -$10.91
+//	TP    14 ( 2.8%)  avg +$23.89
+//	abs move: median 0.288%, p90 1.090%
+//
+// The stop sat at 1.00% while the median move was 0.288%: only about a tenth of
+// trades travelled far enough to resolve, so the desk's P&L was decided by the
+// time-stop rather than by its own risk levels. Widening further would make that
+// worse, and simply tightening the percentage would drop the dollar stop below
+// the $10 the desk is meant to risk.
+//
+// So the bands come DOWN to where price actually goes, and the notional goes UP
+// to keep the dollars where they belong: SL ~0.35% (inside the median-to-p90
+// range, so it resolves often) at $3,000 notional is a ~$10.50 stop, with
+// targets at a genuine 1:2 / 1:3 / 1:5 against it.
 var profiles = map[string]profileCfg{
-	"scalp":  {2.5, 3.5, 0.0015, 0.0045, 0.0025, 0.0065, 45},
-	"revert": {3.0, 2.0, 0.0020, 0.0050, 0.0018, 0.0040, 30},
-	"runner": {2.5, 6.0, 0.0015, 0.0045, 0.0040, 0.0120, 90},
+	// name     SLATR TPATR  SLMin   SLMax   TPMin   TPMax   TTLBars
+	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0070, 0.0120, 60},  // SL $10.5-18, TP $21-36 (1:2)
+	"revert": {3.0, 2.0, 0.0035, 0.0060, 0.0105, 0.0180, 45},  // SL $10.5-18, TP $31.5-54 (1:3)
+	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0175, 0.0300, 120}, // SL $10.5-18, TP $52.5-90 (1:5)
 }
 
 const (
@@ -67,8 +109,21 @@ const (
 	stopSlip     = 0.0002
 	fillWindow   = 3
 	cooldownBars = 5
-	notionalUSD  = 100.0
 )
+
+// defaultNotionalUSD is the per-trade notional the desk starts on. It moved from
+// a const to a desk field so the desk can be re-based via /scalp/reset without a
+// redeploy — every read and write happens under d.mu. Raised 100 -> 1,000 so the
+// profile SL/TP bands above translate into real dollars instead of dimes.
+// Raised 1,000 -> 3,000 so a REACHABLE price move is still a meaningful dollar
+// risk. At $1,000 a $10 stop needs a 1.00% move, which the measured distribution
+// (median 0.288%) almost never delivers inside the holding period; at $3,000 the
+// same $10.50 stop needs only 0.35%, which resolves regularly.
+//
+// This is leverage against the hunt's $1,000 per-strategy account — roughly 1%
+// of the account risked per trade, which is the point: the desk should be able
+// to lose $10 on a bad trade rather than 30 cents on a timeout.
+const defaultNotionalUSD = 3000.0
 
 // ── state ────────────────────────────────────────────────────────────────────
 
@@ -92,11 +147,11 @@ type pending struct {
 }
 
 type comboState struct {
-	N      int `json:"-"`
-	Wins   int `json:"-"`
-	Missed int `json:"-"`
-	GrossW, GrossL float64 `json:"-"`
-	NetSum         float64 `json:"net_sum"`
+	N               int                `json:"-"`
+	Wins            int                `json:"-"`
+	Missed          int                `json:"-"`
+	GrossW, GrossL  float64            `json:"-"`
+	NetSum          float64            `json:"net_sum"`
 	Eq, Peak, MaxDD float64            `json:"-"`
 	DayNet          map[string]float64 `json:"day_net"`
 	Pos             *position          `json:"pos,omitempty"`
@@ -143,56 +198,56 @@ type desk struct {
 	stateDir string
 	started  time.Time
 	barsSeen int64
+	// notionalUSD is the per-trade notional. Guarded by mu; re-basable via
+	// /scalp/reset so the desk can be restarted on a different size.
+	notionalUSD float64
+
+	// feed is the shared market-data store. The desk never fetches candles
+	// itself: one poller per (symbol, resolution) serves all 800 streams, so
+	// upstream request volume tracks instruments rather than strategies.
+	feed *sharedfeed.Feed
+
+	// dataSource records which venue the last accepted bars came from. Guarded
+	// by mu. Surfaced on /scalp/health because a desk silently running on
+	// fallback prices is measuring a book it will not execute on.
+	dataSource sharedfeed.Source
+
+	// mirrorOpens counts inverse positions opened from an original's fill;
+	// mirrorSkips counts the times one could not be opened because the mirror was
+	// still holding the previous trade. Guarded by mu.
+	//
+	// mirrorSkips is the honesty check on this whole mechanism: it should stay at
+	// zero, and a non-zero value means some pairs are no longer exact inverses, so
+	// their combined P&L stops being readable as "-2x fees". Cheaper to count than
+	// to rediscover from the trade log, which is how the previous, broken mirrors
+	// went unnoticed.
+	mirrorOpens int64
+	mirrorSkips int64
+
+	// live is the optional real-money arm. nil means paper-only, which is the
+	// default and the state this desk shipped in for its whole life.
+	live *liveDesk
+}
+
+// noteSource records the venue that produced the bars just consumed, and logs
+// the transition when it changes so a fallback is visible in the log, not just
+// in an API field nobody reads.
+func (d *desk) noteSource(s sharedfeed.Source) {
+	if s == "" {
+		return
+	}
+	d.mu.Lock()
+	prev := d.dataSource
+	d.dataSource = s
+	d.mu.Unlock()
+	if prev != "" && prev != s {
+		log.Printf("[SCALP] ⚠️  market data source changed %s -> %s", prev, s)
+	}
 }
 
 func comboKey(strategy, symbol string) string { return strategy + "|" + symbol }
 
-// ── Binance fetch ────────────────────────────────────────────────────────────
-
-var httpClient = &http.Client{Timeout: 30 * time.Second}
-
-func fetchKlines(sym string, startMs int64, limit int) ([]scalers.Candle, error) {
-	url := fmt.Sprintf("https://api.binance.com/api/v3/klines?symbol=%s&interval=1m&limit=%d", sym, limit)
-	if startMs > 0 {
-		url += fmt.Sprintf("&startTime=%d", startMs)
-	}
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("binance %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
-	}
-	var raw [][]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC()
-	out := make([]scalers.Candle, 0, len(raw))
-	for _, r := range raw {
-		if len(r) < 7 {
-			continue
-		}
-		openMs := int64(r[0].(float64))
-		open := time.UnixMilli(openMs).UTC()
-		if open.Add(time.Minute).After(now) {
-			continue // in-progress bar
-		}
-		pf := func(i int) float64 {
-			f, _ := strconv.ParseFloat(r[i].(string), 64)
-			return f
-		}
-		out = append(out, scalers.Candle{
-			OpenTime: open, Open: pf(1), High: pf(2), Low: pf(3), Close: pf(4), Volume: pf(5),
-		})
-	}
-	return out, nil
-}
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 func min(a, b int) int {
 	if a < b {
@@ -272,7 +327,7 @@ func (d *desk) closeTrade(cs *comboState, strategy, symbol string, pos *position
 	ct := closedTrade{
 		Time: bar.OpenTime.Add(time.Minute), Symbol: symbol, Strategy: strategy,
 		Dir: pos.Dir, Entry: pos.Entry, Exit: exitPx, Reason: reason,
-		RetNet: net, PnlUSD: notionalUSD * net, Profile: pos.Profile,
+		RetNet: net, PnlUSD: d.notionalUSD * net, Profile: pos.Profile,
 		HoldMin: barIdx - pos.EntryBar,
 	}
 	d.recent = append(d.recent, ct)
@@ -325,6 +380,11 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 		if cs.Pos != nil {
 			d.managePosition(cs, e.Name, ss.sym, bar, barIdx)
 		}
+		// 1b. manage this strategy's mirror, if it holds one. Mirrors never
+		// evaluate signals or place pendings — they exist only as the inverse of
+		// a fill the original already took — so they are advanced here rather
+		// than in their own pass over d.entries.
+		d.manageMirror(e.Name, ss.sym, bar, barIdx)
 		// 2. pending fill / expiry (fills only on bars AFTER placement)
 		if cs.Pos == nil && cs.Pend != nil {
 			p := cs.Pend
@@ -344,8 +404,32 @@ func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scaler
 					cs.Pos = &position{Dir: p.Dir, Entry: p.Limit, SL: sl, TP: tp,
 						EntryBar: barIdx, EntryTime: bar.OpenTime, Profile: p.Profile}
 					cs.Pend = nil
-					// same-bar exit check, exactly like the harness manage loop
+
+					// Open the mirror on the SAME fill, before the exit check.
+					//
+					// The mirror inherits this fill rather than posting an order
+					// of its own. Posting its own is what broke the previous
+					// attempt: a post-only limit on the opposite side fills on the
+					// opposite price condition, so the pair almost never both
+					// traded and the mirror only ever filled when price moved its
+					// way. Inheriting the fill makes the pair exact by
+					// construction — same bar, same entry, opposite side, stop and
+					// target distances swapped.
+					d.openMirror(e.Name, ss.sym, cs.Pos, barIdx, bar)
+
+					// Real money, if and only if this stream is allow-listed and
+					// the bridge is armed. Paper accounting above is unaffected
+					// either way, so the leaderboard stays a clean measurement
+					// rather than a mixture of paper and live outcomes.
+					d.live.onPaperFill(e.Name, ss.sym, cs.Pos)
+
+					// same-bar exit check, exactly like the harness manage loop.
+					// The mirror gets the same treatment on the same bar: giving
+					// the original a same-bar exit and not the mirror would let a
+					// pair that opened together close a bar apart, at prices that
+					// no longer negate.
 					d.managePosition(cs, e.Name, ss.sym, bar, barIdx)
+					d.manageMirror(e.Name, ss.sym, bar, barIdx)
 				}
 			}
 		}
@@ -380,14 +464,35 @@ func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(hi, v)) }
 
 func (d *desk) poll() {
 	for _, ss := range d.symbols {
-		var startMs int64
-		if n := len(ss.bars); n > 0 {
-			startMs = ss.bars[n-1].OpenTime.Add(time.Minute).UnixMilli()
-		}
-		fresh, err := fetchKlines(ss.sym, startMs, 1000)
-		if err != nil {
-			log.Printf("poll %s: %v", ss.sym, err)
+		// Read from the shared feed instead of fetching per symbol.
+		//
+		// The desk runs 800 streams (100 strategies x 8 symbols). Fetching here
+		// would tie request volume to the desk's own loop; the shared feed polls
+		// each (symbol, resolution) once and serves every reader from stored
+		// bars, so upstream load tracks INSTRUMENTS, not strategies. Delta is the
+		// source — the Live Engine executes on Delta, so a strategy scored on
+		// another venue's prices is scored on a book it will never trade — with
+		// Binance as fallback when Delta rate-limits or fails.
+		snap := d.feed.Get(ss.sym, "1m")
+		if len(snap.Bars) == 0 {
+			if snap.LastErr != "" {
+				log.Printf("poll %s: feed has no bars (%s)", ss.sym, snap.LastErr)
+			}
 			continue
+		}
+		if snap.Stale {
+			log.Printf("poll %s: feed STALE (last update %s) — skipping, not trading a frozen book",
+				ss.sym, snap.UpdatedAt.Format(time.RFC3339))
+			continue
+		}
+		d.noteSource(snap.Source)
+
+		fresh := make([]scalers.Candle, 0, len(snap.Bars))
+		for _, b := range snap.Bars {
+			fresh = append(fresh, scalers.Candle{
+				OpenTime: b.OpenTime, Open: b.Open, High: b.High,
+				Low: b.Low, Close: b.Close, Volume: b.Volume,
+			})
 		}
 		d.mu.Lock()
 		for _, b := range fresh {
@@ -423,7 +528,35 @@ func (d *desk) poll() {
 type snapshot struct {
 	SavedAt time.Time              `json:"saved_at"`
 	Combos  map[string]*comboState `json:"combos"`
+	// DataVenue records which market the stored record was earned on. A record
+	// built on Binance prices is not comparable to one built on Delta prices —
+	// different book, different spread, different fills — so a venue change
+	// discards the old statistics instead of silently averaging two experiments
+	// into one leaderboard. Empty means "pre-versioning", i.e. Binance era.
+	DataVenue string `json:"data_venue,omitempty"`
+	// MirrorModel records how the ANTI_ records were produced. Empty means the
+	// original signal-inverting mirrors, whose fills were selection-biased.
+	MirrorModel string `json:"mirror_model,omitempty"`
 }
+
+// currentDataVenue is the venue this build measures on. Changing it invalidates
+// every persisted combo record by design.
+const currentDataVenue = "delta"
+
+// currentMirrorModel names how ANTI_ records were produced. Changing it discards
+// the stored mirror records — and only those.
+//
+// "signal" mirrors were separate registry entries that inverted the signal and
+// posted their own post-only limit. They filled on the opposite price condition
+// from their original, so they rarely traded as a pair and the ones that did
+// trade were selected for having started in their favour. Their statistics
+// describe that selection, not the originals they are named after.
+//
+// The originals' records are NOT affected: under the old scheme the mirrors were
+// independent streams and never changed how an original filled. So a model
+// change drops the ANTI_ combos and leaves everything else standing, rather than
+// resetting the whole desk and throwing away progress toward the 200-trade gate.
+const currentMirrorModel = "fill-inherited"
 
 func (d *desk) save() {
 	d.mu.Lock()
@@ -432,7 +565,8 @@ func (d *desk) save() {
 		cs.GrossWExp, cs.GrossLExp = cs.GrossW, cs.GrossL
 		cs.EqExp, cs.PeakExp, cs.MaxDDExp = cs.Eq, cs.Peak, cs.MaxDD
 	}
-	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos}
+	snap := snapshot{SavedAt: time.Now().UTC(), Combos: d.combos,
+		DataVenue: currentDataVenue, MirrorModel: currentMirrorModel}
 	data, _ := json.Marshal(snap)
 	d.mu.Unlock()
 	tmp := filepath.Join(d.stateDir, "snapshot.json.tmp")
@@ -451,7 +585,36 @@ func (d *desk) load() {
 	if json.Unmarshal(data, &snap) != nil {
 		return
 	}
+
+	// Venue cutover: a record earned on Binance prices cannot be carried into a
+	// Delta-priced experiment. Different book, different spread, different
+	// fills — merging them would produce a leaderboard where a stream's
+	// statistics come from two different markets, and no amount of later
+	// trading would separate them again. Discard and start clean.
+	if snap.DataVenue != currentDataVenue {
+		was := snap.DataVenue
+		if was == "" {
+			was = "binance (pre-versioning)"
+		}
+		log.Printf("[SCALP] venue changed %s -> %s: discarding %d stored combo record(s); the live record restarts on %s prices",
+			was, currentDataVenue, len(snap.Combos), currentDataVenue)
+		return
+	}
+
+	// Mirror-model cutover: drop the ANTI_ records built by the old
+	// signal-inverting mirrors, and only those. Their trades came from a fill
+	// model that could not pair them with their originals, so keeping them would
+	// mix two incompatible mechanisms under one name. The originals were never
+	// touched by that bug, so their records — and their progress toward the
+	// 200-trade gate — survive the change.
+	dropMirrors := snap.MirrorModel != currentMirrorModel
+	dropped := 0
+
 	for k, cs := range snap.Combos {
+		if dropMirrors && scalers.IsAntiStrategy(strings.SplitN(k, "|", 2)[0]) {
+			dropped++
+			continue
+		}
 		cs.N, cs.Wins, cs.Missed = cs.NExp, cs.WinsExp, cs.MissedExp
 		cs.GrossW, cs.GrossL = cs.GrossWExp, cs.GrossLExp
 		cs.Eq, cs.Peak, cs.MaxDD = cs.EqExp, cs.PeakExp, cs.MaxDDExp
@@ -464,7 +627,15 @@ func (d *desk) load() {
 		cs.CooldownUntil = 0
 		d.combos[k] = cs
 	}
-	log.Printf("restored %d combo states from snapshot", len(snap.Combos))
+	if dropped > 0 {
+		was := snap.MirrorModel
+		if was == "" {
+			was = "signal-inverted (unpaired fills)"
+		}
+		log.Printf("[SCALP] mirror model changed %s -> %s: discarded %d ANTI_ record(s); mirrors restart, originals keep theirs",
+			was, currentMirrorModel, dropped)
+	}
+	log.Printf("restored %d combo states from snapshot", len(snap.Combos)-dropped)
 }
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
@@ -528,10 +699,44 @@ func (d *desk) serve(port int) {
 				last[ss.sym] = ss.bars[n-1].OpenTime.Format(time.RFC3339)
 			}
 		}
+		// Feed health is read outside d.mu — the feed has its own lock, and
+		// calling into it while holding d.mu invites the lock-ordering problem
+		// that already deadlocked one desk in this codebase.
+		src := string(d.dataSource)
+		d.mu.Unlock()
+		feedHealth := []map[string]interface{}{}
+		stale := 0
+		if d.feed != nil {
+			for _, h := range d.feed.Health() {
+				if h.Stale {
+					stale++
+				}
+				feedHealth = append(feedHealth, map[string]interface{}{
+					"symbol": h.Symbol, "source": string(h.Source), "bars": len(h.Bars),
+					"stale": h.Stale, "updated_at": h.UpdatedAt, "last_error": h.LastErr,
+				})
+			}
+		}
+		d.mu.Lock() // re-taken so the deferred Unlock stays balanced
+
 		writeJSON(w, map[string]interface{}{
 			"ok": true, "uptime_min": int(time.Since(d.started).Minutes()),
-			"bars_processed": d.barsSeen, "strategies": len(d.entries),
-			"streams": len(d.entries) * len(d.symbols), "last_bar": last,
+			"bars_processed": d.barsSeen, "strategies": len(d.streamNames()),
+			"streams": len(d.streamNames()) * len(d.symbols), "last_bar": last,
+			// Signal-emitting strategies, excluding the mirrors that ride their
+			// fills. strategies-minus-originals is the mirror count.
+			"originals": len(d.entries),
+			// Which venue the record is actually being earned on. If this reads
+			// "binance" the desk is measuring a book the Live Engine does not
+			// execute on, and the numbers are not promotion evidence.
+			"data_venue":  src,
+			"stale_pairs": stale,
+			"feed":        feedHealth,
+			// Mirror pairing. mirror_skips must stay 0: any other value means a
+			// pair drifted out of step and its two halves are no longer exact
+			// inverses of each other.
+			"mirror_opens": d.mirrorOpens,
+			"mirror_skips": d.mirrorSkips,
 		})
 	})
 	http.HandleFunc("/scalp/stats", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -557,9 +762,9 @@ func (d *desk) serve(port int) {
 		writeJSON(w, map[string]interface{}{
 			"trades": n, "wins": wins, "missed_fills": missed,
 			"open_positions": open, "pending_orders": pend,
-			"net_pnl_usd_at_100_notional": math.Round(net*notionalUSD*100) / 100,
-			"trades_per_symbol": perSym,
-			"gate": gateDesc,
+			"net_pnl_usd_at_1000_notional": math.Round(net*d.notionalUSD*100) / 100,
+			"trades_per_symbol":            perSym,
+			"gate":                         gateDesc,
 		})
 	}))
 	http.HandleFunc("/scalp/leaderboard", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -576,27 +781,53 @@ func (d *desk) serve(port int) {
 			Missed   int     `json:"missed"`
 			GatePass bool    `json:"gate_pass"`
 		}
-		var rows []lbRow
-		for key, cs := range d.combos {
-			if cs.N == 0 {
-				continue
+		// EVERY stream appears, including ones that have not traded yet.
+		//
+		// Building the board only from combos with trades hid the vast majority
+		// of the desk: 2,416 streams run, but a combo state exists only once a
+		// stream has closed something, so minutes after a restart the board
+		// showed seven rows and looked like a seven-strategy desk. A strategy
+		// waiting for its first setup is a strategy an operator needs to see.
+		// Mirrors are not registry entries — they have no Evaluate() and never
+		// place an order — so enumerating d.entries alone would leave half the
+		// desk off its own leaderboard. streamNames() is the roster of what
+		// actually runs.
+		names := d.streamNames()
+		rows := make([]lbRow, 0, len(names)*len(d.symbols))
+		for _, name := range names {
+			for _, ss := range d.symbols {
+				key := comboKey(name, ss.sym)
+				cs, traded := d.combos[key]
+				if !traded || cs.N == 0 {
+					// Funded and running, no closed trade yet. Zeroed rather
+					// than omitted, so the row count matches the stream count.
+					rows = append(rows, lbRow{Strategy: name, Symbol: ss.sym})
+					continue
+				}
+				parts := []string{name, ss.sym}
+				pf := 0.0
+				if cs.GrossL > 0 {
+					pf = math.Round(cs.GrossW/cs.GrossL*100) / 100
+				} else if cs.GrossW > 0 {
+					pf = 999
+				}
+				rows = append(rows, lbRow{
+					Strategy: parts[0], Symbol: parts[1], N: cs.N,
+					WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
+					PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
+					MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
+					GatePass: d.gatePass(cs),
+				})
 			}
-			parts := strings.SplitN(key, "|", 2)
-			pf := 0.0
-			if cs.GrossL > 0 {
-				pf = math.Round(cs.GrossW/cs.GrossL*100) / 100
-			} else if cs.GrossW > 0 {
-				pf = 999
-			}
-			rows = append(rows, lbRow{
-				Strategy: parts[0], Symbol: parts[1], N: cs.N,
-				WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
-				PF:      pf, NetUSD: math.Round(cs.NetSum*notionalUSD*100) / 100,
-				MaxDD:   math.Round(cs.MaxDD * 10000) / 100, Missed: cs.Missed,
-				GatePass: d.gatePass(cs),
-			})
 		}
-		sort.Slice(rows, func(i, j int) bool { return rows[i].NetUSD > rows[j].NetUSD })
+		// Traded streams first, best net at the top; untraded ones fall to the
+		// bottom rather than being scattered through the ranking at zero.
+		sort.Slice(rows, func(i, j int) bool {
+			if (rows[i].N > 0) != (rows[j].N > 0) {
+				return rows[i].N > 0
+			}
+			return rows[i].NetUSD > rows[j].NetUSD
+		})
 		writeJSON(w, map[string]interface{}{"gate": gateDesc, "rows": rows})
 	}))
 	http.HandleFunc("/scalp/trades", gated(func(w http.ResponseWriter, r *http.Request) {
@@ -614,7 +845,119 @@ func (d *desk) serve(port int) {
 		}
 		writeJSON(w, d.recent[start:])
 	}))
-	log.Printf("scalp_prelive HTTP on :%d (/scalp/health /scalp/stats /scalp/leaderboard /scalp/trades)", port)
+	// ── mutations ────────────────────────────────────────────────────────────
+	// Both are token-gated like every other non-health endpoint, and POST-only so
+	// a stray GET (a crawler, a prefetch, a mistyped URL) can never wipe the desk.
+	// This binary is paper-only — it holds no keys and has no order routing — so
+	// these reset paper statistics and nothing else.
+
+	// requestedCapital reads an optional {"initialCapital": N} body. A bad or
+	// absent body means "keep the current notional" rather than failing the reset.
+	requestedCapital := func(r *http.Request) float64 {
+		if r.Body == nil {
+			return 0
+		}
+		var body struct {
+			InitialCapital float64 `json:"initialCapital"`
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body) != nil {
+			return 0
+		}
+		if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+			return 0
+		}
+		return body.InitialCapital
+	}
+
+	// truncateTradesLocked empties trades.jsonl. Caller holds d.mu.
+	truncateTradesLocked := func() error {
+		if d.tradesF == nil {
+			return nil
+		}
+		if err := d.tradesF.Truncate(0); err != nil {
+			return err
+		}
+		_, err := d.tradesF.Seek(0, 0)
+		return err
+	}
+
+	postOnly := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				http.Error(w, `{"error":"POST only"}`, http.StatusMethodNotAllowed)
+				return
+			}
+			h(w, r)
+		}
+	}
+
+	// /scalp/reset — full re-base: every stream back to zero, optionally on a new
+	// per-trade notional. Open positions and pending orders are dropped too,
+	// because keeping them would carry P&L priced at the OLD notional into the
+	// new account and quietly corrupt the very numbers the reset exists to clear.
+	http.HandleFunc("/scalp/reset", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		capital := requestedCapital(r)
+
+		d.mu.Lock()
+		if capital > 0 {
+			d.notionalUSD = capital
+		}
+		cleared := len(d.combos)
+		d.combos = map[string]*comboState{}
+		d.recent = nil
+		d.barsSeen = 0
+		d.started = time.Now().UTC()
+		truncErr := truncateTradesLocked()
+		notional := d.notionalUSD
+		d.mu.Unlock()
+
+		// Persist the cleared state so a restart cannot restore the old snapshot.
+		d.save()
+
+		if truncErr != nil {
+			log.Printf("[SCALP] reset: trades.jsonl truncate failed: %v", truncErr)
+		}
+		log.Printf("[SCALP] desk reset — %d combo states cleared, notional now $%.2f", cleared, notional)
+		writeJSON(w, map[string]interface{}{
+			"status":         "reset",
+			"streams_reset":  cleared,
+			"notional_usd":   notional,
+			"trades_cleared": truncErr == nil,
+		})
+	})))
+
+	// /scalp/clear-trades — wipe the trade record and the statistics derived from
+	// it, but leave open positions and pendings running. Same split the options
+	// desks already use: clear-history forgets the past, reset restarts the account.
+	http.HandleFunc("/scalp/clear-trades", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		d.mu.Lock()
+		n := len(d.recent)
+		d.recent = nil
+		for _, cs := range d.combos {
+			cs.N, cs.Wins, cs.Missed = 0, 0, 0
+			cs.GrossW, cs.GrossL, cs.NetSum = 0, 0, 0
+			cs.Eq, cs.Peak, cs.MaxDD = 1, 1, 0
+			cs.DayNet = map[string]float64{}
+			// Pos / Pend deliberately preserved — this clears history, not state.
+		}
+		truncErr := truncateTradesLocked()
+		d.mu.Unlock()
+
+		d.save()
+
+		if truncErr != nil {
+			log.Printf("[SCALP] clear-trades: trades.jsonl truncate failed: %v", truncErr)
+		}
+		log.Printf("[SCALP] trade history cleared (%d recent records); open positions kept", n)
+		writeJSON(w, map[string]interface{}{
+			"status":         "cleared",
+			"recent_cleared": n,
+			"trades_cleared": truncErr == nil,
+		})
+	})))
+
+	d.live.registerHTTP(gated, postOnly, writeJSON)
+	log.Printf("scalp_prelive HTTP on :%d (/scalp/health /scalp/stats /scalp/leaderboard /scalp/trades /scalp/reset /scalp/clear-trades)", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 
@@ -623,7 +966,11 @@ func (d *desk) serve(port int) {
 func main() {
 	port := flag.Int("port", 8093, "HTTP port")
 	stateDir := flag.String("state", "data/scalp_prelive", "state directory")
-	symbolsCSV := flag.String("symbols", "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT,DOGEUSDT,ADAUSDT,AVAXUSDT", "symbols")
+	// Delta symbol naming (BTCUSD, not BTCUSDT). Delta is the venue the Live
+	// Engine executes on, so the desk measures strategies on Delta's own book;
+	// the shared feed translates to Binance's USDT naming only when it has to
+	// fall back. All eight are confirmed live perpetuals on Delta India.
+	symbolsCSV := flag.String("symbols", "BTCUSD,ETHUSD,SOLUSD,BNBUSD,XRPUSD,DOGEUSD,ADAUSD,AVAXUSD", "symbols")
 	flag.Parse()
 
 	if err := os.MkdirAll(*stateDir, 0o755); err != nil {
@@ -635,15 +982,23 @@ func main() {
 	}
 
 	d := &desk{
-		entries:  scalers.BuildScalp100(),
-		combos:   map[string]*comboState{},
-		tradesF:  tradesF,
-		stateDir: *stateDir,
-		started:  time.Now().UTC(),
+		// Every registered scalp strategy, not just the Scalp100 pack. 51 of the
+		// 151 that exist here (17 Delta20 + 34 Curated) were built and never
+		// run, so the hunt could not have found them however good they were.
+		entries:     scalers.BuildHuntPack(),
+		combos:      map[string]*comboState{},
+		tradesF:     tradesF,
+		stateDir:    *stateDir,
+		started:     time.Now().UTC(),
+		notionalUSD: defaultNotionalUSD,
 	}
-	log.Printf("Scalp100 pack: %d strategies", len(d.entries))
-	if len(d.entries) != 100 {
-		log.Fatalf("pack size is %d, expected exactly 100", len(d.entries))
+	log.Printf("hunt pack: %d signal strategies + %d mirrors = %d streams/symbol",
+		len(d.entries), len(d.streamNames())-len(d.entries), len(d.streamNames()))
+	// Guard against an empty or accidentally-truncated pack rather than pinning
+	// an exact count: the pack is meant to grow as strategies are registered,
+	// and a hard 100 would fail the build every time one was added.
+	if len(d.entries) < 100 {
+		log.Fatalf("hunt pack has only %d strategies; expected at least the 100-strategy Scalp100 baseline", len(d.entries))
 	}
 	log.Println(gateDesc)
 	d.load()
@@ -652,26 +1007,68 @@ func main() {
 		d.symbols = append(d.symbols, &symbolState{sym: strings.TrimSpace(s)})
 	}
 
-	// bootstrap ~75h of 1m context per symbol (need 72 closed 1h bars)
+	// One shared feed for the whole desk: 8 pollers serve all 800 streams.
+	// Backfill covers the ~75h of 1m context the strategies need (72 closed 1h
+	// bars), so the feed itself does the bootstrap that used to be a per-symbol
+	// paginated fetch loop here.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Optional live arm. Returns nil (paper-only) unless SCALP_LIVE_ENABLED is
+	// true AND Delta credentials are present AND the product registry loaded.
+	// Built here rather than at desk construction because it needs the process
+	// context: its monitor and product-refresh loops must stop with the desk.
+	d.live = newLiveDesk(ctx)
+	d.live.reportUnknown(d.streamNames())
+
+	d.feed = sharedfeed.New(sharedfeed.Config{
+		Poll:       time.Minute,
+		Backfill:   75 * time.Hour,
+		MaxBars:    6000,
+		StaleAfter: 5 * time.Minute,
+		Primary:    sharedfeed.DeltaFetcher,
+		Fallback:   sharedfeed.BinanceFetcher,
+	})
+	pairs := make([]sharedfeed.Pair, 0, len(d.symbols))
 	for _, ss := range d.symbols {
-		startMs := time.Now().UTC().Add(-75 * time.Hour).UnixMilli()
-		for len(ss.bars) < 4500 {
-			page, err := fetchKlines(ss.sym, startMs, 1000)
-			if err != nil {
-				log.Printf("bootstrap %s: %v (retrying)", ss.sym, err)
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			if len(page) == 0 {
+		pairs = append(pairs, sharedfeed.Pair{Symbol: ss.sym, Resolution: "1m"})
+	}
+	d.feed.Start(ctx, pairs)
+
+	// Wait for the backfill before evaluating anything. Trading a strategy on a
+	// half-filled indicator window produces garbage that then pollutes its
+	// permanent live record.
+	log.Printf("waiting for shared feed backfill on %d symbol(s)...", len(pairs))
+	for _, ss := range d.symbols {
+		deadline := time.Now().Add(3 * time.Minute)
+		for time.Now().Before(deadline) {
+			if snap := d.feed.Get(ss.sym, "1m"); len(snap.Bars) >= 200 {
 				break
 			}
-			ss.bars = append(ss.bars, page...)
-			startMs = page[len(page)-1].OpenTime.Add(time.Minute).UnixMilli()
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 		}
-		// bootstrap bars are history, not live signals: mark processed
+
+		// Seed the symbol's own window from the feed. This has to happen here:
+		// poll() only appends bars NEWER than the last one it holds, so without
+		// a seed the desk would start from an empty window and take three days
+		// to accumulate the 1h context its strategies need.
+		snap := d.feed.Get(ss.sym, "1m")
+		for _, b := range snap.Bars {
+			ss.bars = append(ss.bars, scalers.Candle{
+				OpenTime: b.OpenTime, Open: b.Open, High: b.High,
+				Low: b.Low, Close: b.Close, Volume: b.Volume,
+			})
+		}
+		if len(ss.bars) == 0 {
+			log.Printf("bootstrap %s: NO BARS — feed unavailable (%s); this symbol will idle until data arrives",
+				ss.sym, snap.LastErr)
+			continue
+		}
+		// Bootstrap bars are history, not live signals: mark them processed so
+		// the desk does not fire 4,500 backdated entries on its first tick.
 		ss.barIdx = int64(len(ss.bars))
-		log.Printf("bootstrap %s: %d bars (-> %s)", ss.sym, len(ss.bars),
+		d.noteSource(snap.Source)
+		log.Printf("bootstrap %s: %d bars from %s (-> %s)", ss.sym, len(ss.bars), snap.Source,
 			ss.bars[len(ss.bars)-1].OpenTime.Format("15:04"))
 	}
 
@@ -681,8 +1078,9 @@ func main() {
 	signal.Notify(sig, os.Interrupt)
 	pollT := time.NewTicker(15 * time.Second)
 	saveT := time.NewTicker(5 * time.Minute)
-	log.Printf("desk live: %d strategies x %d symbols = %d paper streams",
-		len(d.entries), len(d.symbols), len(d.entries)*len(d.symbols))
+	log.Printf("desk live: %d strategies (%d signal + %d mirror) x %d symbols = %d paper streams",
+		len(d.streamNames()), len(d.entries), len(d.streamNames())-len(d.entries),
+		len(d.symbols), len(d.streamNames())*len(d.symbols))
 	for {
 		select {
 		case <-pollT.C:
@@ -696,4 +1094,149 @@ func main() {
 			return
 		}
 	}
+}
+
+// ── fill-time mirroring ──────────────────────────────────────────────────────
+//
+// An anti-strategy is the exact inverse of its original's REALISED trade, not a
+// separate strategy that happens to trade the other way.
+//
+// The distinction is not cosmetic. The first attempt inverted each strategy's
+// signal and let the mirror post its own post-only limit. Under this desk's fill
+// rule —
+//
+//	filled := (long && bar.Low <= limit) || (!long && bar.High >= limit)
+//
+// — a buy limit and a sell limit at the same price fill on opposite conditions.
+// Price cannot satisfy both on one bar, so the two halves almost never traded
+// together (35 of 53 traded streams had no partner) and the mirror filled only
+// when price moved toward its limit. That is a selection bias, and it produced
+// four 100%-win-rate rows at the top of the leaderboard that meant nothing.
+//
+// Inheriting the fill removes the choice entirely: if the original traded, the
+// mirror traded, on the same bar at the same price. Their P&L then sums to
+// exactly minus the fees both paid, which is the property that makes the pair
+// worth reading.
+
+// mirrorOf returns the mirror's strategy name, or "" if the given name is itself
+// a mirror (mirrors are not mirrored).
+func mirrorOf(name string) string {
+	if scalers.IsAntiStrategy(name) {
+		return ""
+	}
+	return scalers.AntiPrefix + name
+}
+
+// openMirror creates the inverse position for a fill the original just took.
+//
+// Caller holds d.mu and has already set orig.
+func (d *desk) openMirror(strategy, symbol string, orig *position, barIdx int64, bar scalers.Candle) {
+	if !antiEnabled || orig == nil {
+		return
+	}
+	mk := mirrorOf(strategy)
+	if mk == "" {
+		return
+	}
+
+	key := comboKey(mk, symbol)
+	mcs := d.combos[key]
+	if mcs == nil {
+		mcs = &comboState{Eq: 1, Peak: 1}
+		d.combos[key] = mcs
+	}
+	if mcs.Pos != nil {
+		// Should not happen: a pair opens on one bar with mirrored exits, so it
+		// closes on one bar too, and manageMirror runs before this. Skipping keeps
+		// the one-position-per-stream invariant the original obeys — stacking
+		// would give the mirror leverage its source never had — but a skip means
+		// the pair has drifted out of step, so it is counted and surfaced on
+		// /scalp/health rather than swallowed.
+		d.mirrorSkips++
+		return
+	}
+
+	// Distances are measured from the SHARED entry, then swapped: the mirror's
+	// target sits where the original's stop is, and vice versa. That is what
+	// makes every outcome of one the negation of the other.
+	slDist := math.Abs(orig.Entry - orig.SL)
+	tpDist := math.Abs(orig.TP - orig.Entry)
+
+	dir := "SHORT"
+	if orig.Dir == "SHORT" {
+		dir = "LONG"
+	}
+
+	var sl, tp float64
+	if dir == "LONG" {
+		// Mirror stop where the original targets; mirror target where it stops.
+		sl, tp = orig.Entry-tpDist, orig.Entry+slDist
+	} else {
+		sl, tp = orig.Entry+tpDist, orig.Entry-slDist
+	}
+
+	mcs.Pos = &position{
+		Dir: dir, Entry: orig.Entry, SL: sl, TP: tp,
+		EntryBar: barIdx, EntryTime: bar.OpenTime, Profile: orig.Profile,
+	}
+	mcs.Pend = nil
+	d.mirrorOpens++
+
+	// The mirror is a tradeable stream in its own right, so it must reach the
+	// live bridge too.
+	//
+	// Missing this made six of the eight allow-listed live strategies
+	// structurally unable to place an order: they are all ANTI_ mirrors, and the
+	// only live hook was on the ORIGINAL's fill path. The bridge was armed, the
+	// allow-list resolved, the desk traded — and those six could never have
+	// produced a live order however long they ran. Nothing would have errored.
+	d.live.onPaperFill(mk, symbol, mcs.Pos)
+}
+
+// manageMirror advances a strategy's mirror by one bar, if it holds a position.
+//
+// Caller holds d.mu.
+func (d *desk) manageMirror(strategy, symbol string, bar scalers.Candle, barIdx int64) {
+	mk := mirrorOf(strategy)
+	if mk == "" {
+		return
+	}
+	if mcs := d.combos[comboKey(mk, symbol)]; mcs != nil && mcs.Pos != nil {
+		d.managePosition(mcs, mk, symbol, bar, barIdx)
+	}
+}
+
+// antiEnabled is resolved once at boot. Reading the environment on every fill
+// would let a mid-session change desynchronise a pair — mirroring some fills and
+// not others, which is worse than mirroring none.
+var antiEnabled = func() bool {
+	raw := strings.TrimSpace(os.Getenv("ANTI_STRATEGIES"))
+	if raw == "" {
+		return true
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return true
+	}
+	return v
+}()
+
+// streamNames is the roster of strategy names the desk keeps accounts for:
+// every registry entry, each followed by its mirror.
+//
+// Mirrors are not registry entries. They have no Evaluate(), place no orders and
+// exist only as the inverse of a fill an original already took, so anything that
+// enumerates the desk by walking d.entries — the leaderboard, the stream count —
+// would report half of it. This is the single place that knows the difference.
+//
+// Caller holds d.mu (or is running before serve()).
+func (d *desk) streamNames() []string {
+	out := make([]string, 0, len(d.entries)*2)
+	for _, e := range d.entries {
+		out = append(out, e.Name)
+		if mk := mirrorOf(e.Name); mk != "" && antiEnabled {
+			out = append(out, mk)
+		}
+	}
+	return out
 }

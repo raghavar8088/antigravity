@@ -24,7 +24,7 @@ import (
 // endpoint, not a published/guaranteed API. It can be rate-limited or
 // blocked without notice. We poll at a slow cadence (10 min) to minimize
 // exposure, and degrade gracefully (keep last good value, IsHealthy()=false
-// on failure) exactly like DeribitDVOLHolder/BinancePerpPriceHolder so
+// on failure) exactly like DeribitDVOLHolder/DeltaPerpPriceHolder so
 // macro-dependent strategies never crash and simply skip/reduce confidence
 // when the feed is down.
 //

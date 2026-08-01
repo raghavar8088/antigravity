@@ -1,0 +1,1 @@
+[{"id":"DLT-0003","paperTradeId":"paper-3","strategyId":0,"strategyName":"","optionType":"","strike":66000,"expiryTime":"0001-01-01T00:00:00Z","side":"","deltaOrderId":"998877","deltaSymbol":"C-BTC-66000-070826","productId":42,"contracts":1,"fillPrice":2.33,"premiumUsd":0,"status":"OPEN","openedAt":"0001-01-01T00:00:00Z","entryFeeUsd":0.00023300000000000003,"peakMarkPrice":2.33}]

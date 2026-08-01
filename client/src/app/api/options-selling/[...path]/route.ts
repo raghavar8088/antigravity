@@ -50,9 +50,25 @@ const ALLOWED_PATHS = [
   "/api/options-selling/stats",
 ];
 
+/**
+ * Paper-desk mutations reachable by POST. Kept as its own exact-match list so a
+ * mutation can never be reached by a GET, and a read path can never be POSTed
+ * to. This desk is paper-only — these reset simulated balances and statistics,
+ * and there is no order-routing or real-money path behind them.
+ */
+const MUTATION_PATHS = [
+  "/api/options-selling/reset",
+  "/api/options-selling/clear-history",
+];
+
 function isAllowed(pathname: string): boolean {
   const clean = pathname.replace(/\/+$/, "").toLowerCase();
   return ALLOWED_PATHS.some((p) => clean === p || clean.startsWith(p + "/"));
+}
+
+function isMutation(pathname: string): boolean {
+  const clean = pathname.replace(/\/+$/, "").toLowerCase();
+  return MUTATION_PATHS.includes(clean);
 }
 
 function upstreamBase(): string {
@@ -92,6 +108,47 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
     const upstream = await fetch(target, {
       method: "GET",
       headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
+    });
+    const out = new Headers(upstream.headers);
+    out.delete("transfer-encoding");
+    return new NextResponse(upstream.body, { status: upstream.status, headers: out });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "proxy failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 502 });
+  }
+}
+
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextResponse> {
+  const { path } = await ctx.params;
+  const pathname = path?.length ? `/api/options-selling/${path.join("/")}` : "/api/options-selling";
+
+  if (!isMutation(pathname)) {
+    return NextResponse.json(
+      { ok: false, error: `${pathname} is not a POST endpoint on the options-selling proxy` },
+      { status: 403 },
+    );
+  }
+
+  const cookieStore = await cookies();
+  const session = cookieStore.get("raig_session")?.value ?? "";
+  if (!(await verifySessionToken(session))) {
+    return NextResponse.json({ ok: false, error: "Valid session required" }, { status: 401 });
+  }
+
+  const target = `${upstreamBase()}${pathname}`;
+  try {
+    const headers = new Headers();
+    headers.set("X-Service-Name", "vercel-proxy");
+    headers.set("X-Service-Timestamp", String(Date.now()));
+    headers.set("Authorization", `Bearer ${session}`);
+    headers.set("Content-Type", "application/json");
+    const body = await req.text();
+    const upstream = await fetch(target, {
+      method: "POST",
+      headers,
+      body: body || "{}",
       cache: "no-store",
       signal: AbortSignal.timeout(30_000),
     });

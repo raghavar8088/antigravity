@@ -9,9 +9,11 @@ import (
 // S28 — Macro Calendar Vol Positioning
 //
 // Regime:     RANGING (pre-event behavior), VOLATILE (post-event behavior) —
-//             both are returned from ValidRegimes() since this strategy
-//             internally branches behavior based on time-to-event rather than
-//             being gated to a single regime.
+//
+//	both are returned from ValidRegimes() since this strategy
+//	internally branches behavior based on time-to-event rather than
+//	being gated to a single regime.
+//
 // Timeframes: 1h/15m + hardcoded macro calendar (see macroCalendarEvents below)
 //
 // Background: FOMC rate decisions and CPI prints are well-documented

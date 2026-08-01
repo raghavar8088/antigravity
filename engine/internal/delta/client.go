@@ -2,8 +2,9 @@
 // It is used to mirror paper-traded BTC option SELL signals to real live orders.
 //
 // Required environment variables:
-//   DELTA_API_KEY    — your Delta Exchange API key
-//   DELTA_API_SECRET — your Delta Exchange API secret
+//
+//	DELTA_API_KEY    — your Delta Exchange API key
+//	DELTA_API_SECRET — your Delta Exchange API secret
 //
 // Set DELTA_TESTNET=true to point at the testnet (https://testnet-api.india.delta.exchange).
 package delta
@@ -49,15 +50,15 @@ const (
 // PlaceOrderRequest mirrors Delta Exchange POST /v2/orders payload.
 type PlaceOrderRequest struct {
 	ProductID            int       `json:"product_id"`
-	Size                 int       `json:"size"`        // number of contracts
-	Side                 OrderSide `json:"side"`        // "buy" or "sell"
+	Size                 int       `json:"size"` // number of contracts
+	Side                 OrderSide `json:"side"` // "buy" or "sell"
 	OrderType            OrderType `json:"order_type"`
 	Leverage             int       `json:"leverage,omitempty"` // e.g. 10 for 10x leverage
 	LimitPrice           string    `json:"limit_price,omitempty"`
 	TimeInForce          string    `json:"time_in_force,omitempty"` // "gtc", "ioc", "fok"
 	PostOnly             bool      `json:"post_only,omitempty"`
 	ReduceOnly           bool      `json:"reduce_only,omitempty"`            // required for closing positions
-	CancelOrdersAccepted string   `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
+	CancelOrdersAccepted string    `json:"cancel_orders_accepted,omitempty"` // "true" to cancel conflicting open orders
 }
 
 // PlaceOrderResult is a simplified view of Delta's order response.
@@ -203,13 +204,13 @@ func (c *Client) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (PlaceOr
 	var resp struct {
 		Success bool `json:"success"`
 		Result  struct {
-			ID        int64   `json:"id"`
-			Symbol    string  `json:"symbol"`
-			Side      string  `json:"side"`
-			Size      float64 `json:"size"`
-			LimitPrice string `json:"limit_price"`
-			AvgPrice  string  `json:"average_fill_price"`
-			State     string  `json:"state"`
+			ID         int64   `json:"id"`
+			Symbol     string  `json:"symbol"`
+			Side       string  `json:"side"`
+			Size       float64 `json:"size"`
+			LimitPrice string  `json:"limit_price"`
+			AvgPrice   string  `json:"average_fill_price"`
+			State      string  `json:"state"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
@@ -341,14 +342,19 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			Symbol        string `json:"symbol"`
-			ProductID     int    `json:"product_id"`
-			Size          string `json:"size"`
-			EntryPrice    string `json:"entry_price"`
-			MarkPrice     string `json:"mark_price"`
-			UnrealisedPnl string `json:"unrealised_pnl"`
-			RealisedPnl   string `json:"realised_pnl"`
-			Margin        string `json:"margin"`
+			// /v2/positions/margined returns the instrument as product_symbol;
+			// `symbol` is often absent. Reading only `symbol` left it empty, which
+			// blanked the positions UI and made option positions unadoptable
+			// (custody could not recognise them as options).
+			ProductSymbol string  `json:"product_symbol"`
+			Symbol        string  `json:"symbol"`
+			ProductID     int     `json:"product_id"`
+			Size          flexNum `json:"size"`
+			EntryPrice    flexNum `json:"entry_price"`
+			MarkPrice     flexNum `json:"mark_price"`
+			UnrealisedPnl flexNum `json:"unrealised_pnl"`
+			RealisedPnl   flexNum `json:"realised_pnl"`
+			Margin        flexNum `json:"margin"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
@@ -356,32 +362,50 @@ func (c *Client) GetPositions(ctx context.Context) ([]LivePosition, error) {
 	}
 	var positions []LivePosition
 	for _, p := range resp.Result {
-		size, _ := strconv.ParseFloat(p.Size, 64)
+		size := float64(p.Size)
 		if size == 0 {
 			continue
 		}
-		entry, _ := strconv.ParseFloat(p.EntryPrice, 64)
-		mark, _ := strconv.ParseFloat(p.MarkPrice, 64)
-		upnl, _ := strconv.ParseFloat(p.UnrealisedPnl, 64)
-		rpnl, _ := strconv.ParseFloat(p.RealisedPnl, 64)
-		margin, _ := strconv.ParseFloat(p.Margin, 64)
 		side := "LONG"
 		if size < 0 {
 			side = "SHORT"
 		}
+		symbol := p.ProductSymbol
+		if symbol == "" {
+			symbol = p.Symbol
+		}
 		positions = append(positions, LivePosition{
-			Symbol:        p.Symbol,
+			Symbol:        symbol,
 			ProductID:     p.ProductID,
 			Size:          size,
-			EntryPrice:    entry,
-			MarkPrice:     mark,
-			UnrealisedPnl: upnl,
-			RealisedPnl:   rpnl,
-			Margin:        margin,
+			EntryPrice:    float64(p.EntryPrice),
+			MarkPrice:     float64(p.MarkPrice),
+			UnrealisedPnl: float64(p.UnrealisedPnl),
+			RealisedPnl:   float64(p.RealisedPnl),
+			Margin:        float64(p.Margin),
 			Side:          side,
 		})
 	}
 	return positions, nil
+}
+
+// flexNum unmarshals a JSON number OR a quoted numeric string. Delta's
+// /v2/positions/margined returns option `size` as a number while prices come as
+// strings; this tolerates both so a real option position never fails to parse.
+type flexNum float64
+
+func (n *flexNum) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(strings.TrimSpace(string(b)), `"`)
+	if s == "" || s == "null" {
+		*n = 0
+		return nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return err
+	}
+	*n = flexNum(f)
+	return nil
 }
 
 // OpenOrder is an active order on Delta Exchange.
@@ -408,13 +432,13 @@ func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
 		Success bool `json:"success"`
 		Result  struct {
 			Data []struct {
-				ID        int64  `json:"id"`
-				Symbol    string `json:"symbol"`
-				Side      string `json:"side"`
-				Size      string `json:"size"`
+				ID         int64  `json:"id"`
+				Symbol     string `json:"symbol"`
+				Side       string `json:"side"`
+				Size       string `json:"size"`
 				LimitPrice string `json:"limit_price"`
-				State     string `json:"state"`
-				CreatedAt string `json:"created_at"`
+				State      string `json:"state"`
+				CreatedAt  string `json:"created_at"`
 			} `json:"data"`
 		} `json:"result"`
 	}
@@ -441,7 +465,9 @@ func (c *Client) GetOpenOrders(ctx context.Context) ([]OpenOrder, error) {
 // FindOptionProduct searches Delta product list for a BTC option matching the given
 // strike, expiry (rounded to nearest weekly Friday), and option type ("call"/"put").
 func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry time.Time, optionType string) (OptionContractInfo, error) {
-	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?contract_types=put_options,call_options&page_size=200", nil)
+	// states=live is essential: without it the list includes expired/settled
+	// contracts, and ordering one returns HTTP 400 invalid_contract.
+	data, status, err := c.doRequest(ctx, http.MethodGet, "/v2/products?contract_types=put_options,call_options&states=live&page_size=500", nil)
 	if err != nil {
 		return OptionContractInfo{}, err
 	}
@@ -452,10 +478,11 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			ID           int    `json:"id"`
-			Symbol       string `json:"symbol"`
-			ContractType string `json:"contract_type"`
-			StrikePrice  string `json:"strike_price"`
+			ID             int    `json:"id"`
+			Symbol         string `json:"symbol"`
+			ContractType   string `json:"contract_type"`
+			State          string `json:"state"`
+			StrikePrice    string `json:"strike_price"`
 			SettlementTime string `json:"settlement_time"`
 		} `json:"result"`
 	}
@@ -468,32 +495,113 @@ func (c *Client) FindOptionProduct(ctx context.Context, strike float64, expiry t
 		targetType = "put_options"
 	}
 
-	// Find closest strike within 0.5% and nearest expiry within 4 hours
+	// Pick the live contract closest to the requested strike, preferring the
+	// nearest expiry at or after the requested one. Expiry was previously ignored
+	// entirely (despite the doc comment), so a far or stale contract could win.
 	bestID := 0
 	bestSymbol := ""
 	bestStrikeDiff := 1e18
+	bestExpiryGap := time.Duration(1<<62 - 1)
+	now := time.Now().UTC()
 
 	for _, p := range resp.Result {
 		if p.ContractType != targetType {
+			continue
+		}
+		if p.State != "" && !strings.EqualFold(p.State, "live") {
 			continue
 		}
 		s, err := strconv.ParseFloat(p.StrikePrice, 64)
 		if err != nil {
 			continue
 		}
+		// Settlement must be in the future; an already-settled contract is untradeable.
+		settle, perr := time.Parse(time.RFC3339, p.SettlementTime)
+		if perr == nil {
+			if !settle.After(now) {
+				continue
+			}
+		}
+		gap := time.Duration(0)
+		if perr == nil && !expiry.IsZero() {
+			gap = settle.Sub(expiry)
+			if gap < 0 {
+				gap = -gap
+			}
+		}
+
 		diff := abs(s - strike)
-		if diff < bestStrikeDiff {
+		// Strike proximity first, then closeness to the requested expiry.
+		if diff < bestStrikeDiff || (diff == bestStrikeDiff && gap < bestExpiryGap) {
 			bestStrikeDiff = diff
+			bestExpiryGap = gap
 			bestID = p.ID
 			bestSymbol = p.Symbol
 		}
 	}
 
 	if bestID == 0 {
-		return OptionContractInfo{}, fmt.Errorf("no matching %s option found near strike %.0f", optionType, strike)
+		return OptionContractInfo{}, fmt.Errorf("no live %s option found near strike %.0f", optionType, strike)
 	}
 
 	return OptionContractInfo{ProductID: bestID, Symbol: bestSymbol}, nil
+}
+
+// OptionContractSizeBTC is the underlying per Delta BTC option contract,
+// confirmed from the live product spec (contract_value = 0.001 BTC). A per-lot
+// USD premium is the option's USD-per-BTC mark price times this.
+const OptionContractSizeBTC = 0.001
+
+func deltaTickerBaseURL() string {
+	if IsTestnet() {
+		return "https://testnet-api.india.delta.exchange"
+	}
+	return "https://api.india.delta.exchange"
+}
+
+// OptionMarkPricePerBTC returns the option's mark price in USD per unit of
+// underlying (per BTC), from the public ticker endpoint. Confirmed against a
+// deep-ITM intrinsic check: for a call, mark ≈ (spot-strike) + time value in
+// USD/BTC, so the per-contract USD premium is mark × OptionContractSizeBTC.
+// Public data — no signing required.
+func (c *Client) OptionMarkPricePerBTC(ctx context.Context, symbol string) (float64, error) {
+	url := deltaTickerBaseURL() + "/v2/tickers/" + symbol
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("delta ticker %s: HTTP %d", symbol, resp.StatusCode)
+	}
+	var out struct {
+		Result struct {
+			MarkPrice json.Number `json:"mark_price"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return 0, err
+	}
+	mark, err := out.Result.MarkPrice.Float64()
+	if err != nil || mark <= 0 {
+		return 0, fmt.Errorf("delta ticker %s: no usable mark price", symbol)
+	}
+	return mark, nil
+}
+
+// OptionPremiumPerContractUSD returns the USD premium to buy one contract of the
+// given option symbol: mark(USD/BTC) × contract size(0.001 BTC).
+func (c *Client) OptionPremiumPerContractUSD(ctx context.Context, symbol string) (float64, error) {
+	mark, err := c.OptionMarkPricePerBTC(ctx, symbol)
+	if err != nil {
+		return 0, err
+	}
+	return mark * OptionContractSizeBTC, nil
 }
 
 // FindProductBySymbol looks up a product by its exact symbol (e.g. "C-BTC-76000-290426").
@@ -544,10 +652,10 @@ func (c *Client) FindPerpProduct(ctx context.Context, symbol string) (PerpProduc
 	var resp struct {
 		Success bool `json:"success"`
 		Result  []struct {
-			ID                int    `json:"id"`
-			Symbol            string `json:"symbol"`
-			ContractValue     string `json:"contract_value"`
-			ContractUnitCurr  string `json:"contract_unit_currency"`
+			ID               int    `json:"id"`
+			Symbol           string `json:"symbol"`
+			ContractValue    string `json:"contract_value"`
+			ContractUnitCurr string `json:"contract_unit_currency"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(data, &resp); err != nil {
@@ -584,4 +692,32 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// SetProductLeverage sets the account's leverage for one product.
+//
+// This is NOT settable on an order. PlaceOrderRequest carries a `leverage`
+// field, which Delta ignores; the account-level per-product setting is what
+// actually governs margin, and it is changed here.
+//
+// Getting this wrong is how a stop becomes unreachable. ADAUSD ships at
+// default_leverage 100 with maintenance_margin 0.5%, so a position is
+// liquidated once it moves 0.5% against entry. The scalp desk's stops sit at
+// 0.35%-0.98%, so most of them sit OUTSIDE that — the venue closed the position
+// before the strategy's own risk management ever acted, and booked it as a
+// liquidation.
+func (c *Client) SetProductLeverage(ctx context.Context, productID int, leverage int) error {
+	if productID <= 0 || leverage <= 0 {
+		return fmt.Errorf("delta: product %d / leverage %d is not settable", productID, leverage)
+	}
+	body := []byte(fmt.Sprintf(`{"leverage":"%d"}`, leverage))
+	path := fmt.Sprintf("/v2/products/%d/orders/leverage", productID)
+	data, status, err := c.doRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return fmt.Errorf("set leverage: %w", err)
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("set leverage: status %d: %s", status, truncate(string(data), 200))
+	}
+	return nil
 }

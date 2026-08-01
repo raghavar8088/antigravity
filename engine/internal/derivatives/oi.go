@@ -11,22 +11,35 @@ import (
 	"time"
 )
 
+// Open interest comes from Delta, the venue this engine executes on.
+//
+// It was Binance's BTCUSDT OI. Open interest is a count of the contracts
+// outstanding in ONE book — it is the size of the position the participants of
+// that specific market are carrying. Binance's OI says nothing about how
+// crowded Delta's book is, and OI-divergence signals built on it were reading
+// another exchange's crowd.
+//
+// Delta reports OI in BTC on its ticker ("oi": "1349.4730"), alongside
+// oi_value_usd. Binance's openInterest was also in BTC, so unlike funding,
+// depth and volume there is no unit conversion here — but that is worth stating
+// rather than leaving a reader to assume it, since every other Delta field in
+// this codebase needed one.
 const (
-	oiEndpoint   = "https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"
+	oiEndpoint     = "https://api.india.delta.exchange/v2/tickers/BTCUSD"
 	oiPollInterval = time.Hour
 )
 
-// OIFetcher polls Binance open interest and classifies the market state by
-// comparing the current OI to the value from 1 hour ago.
+// OIFetcher polls Delta's BTCUSD open interest and classifies the market state
+// by comparing the current OI to the value from 1 hour ago.
 type OIFetcher struct {
-	client    *http.Client
-	cache     *OIData
-	mu        sync.RWMutex
+	client *http.Client
+	cache  *OIData
+	mu     sync.RWMutex
 
-	lastOI        float64
-	lastOIAt      time.Time
-	lastPriceDir  string
-	prevPrice     float64
+	lastOI       float64
+	lastOIAt     time.Time
+	lastPriceDir string
+	prevPrice    float64
 }
 
 // NewOIFetcher creates an OIFetcher with a 15-second HTTP timeout.
@@ -171,8 +184,13 @@ func (f *OIFetcher) StartPolling(ctx context.Context, interval time.Duration) {
 
 // ── internals ─────────────────────────────────────────────────────────────────
 
-type binanceOIResponse struct {
-	OpenInterest string `json:"openInterest"`
+// deltaOIResponse is Delta's ticker envelope. "oi" is open interest in BTC,
+// quoted as a string like every other numeric field Delta returns.
+type deltaOIResponse struct {
+	Success bool `json:"success"`
+	Result  struct {
+		OpenInterest string `json:"oi"`
+	} `json:"result"`
 }
 
 func (f *OIFetcher) doFetch(ctx context.Context) (float64, error) {
@@ -194,14 +212,19 @@ func (f *OIFetcher) doFetch(ctx context.Context) (float64, error) {
 		return 0, fmt.Errorf("read body: %w", err)
 	}
 
-	var row binanceOIResponse
+	var row deltaOIResponse
 	if err := json.Unmarshal(body, &row); err != nil {
 		return 0, fmt.Errorf("decode JSON: %w", err)
 	}
+	if !row.Success || row.Result.OpenInterest == "" {
+		// Absent OI must be an error, not zero. Zero open interest would mean
+		// nobody holds a position at all, which is a real and dramatic claim.
+		return 0, fmt.Errorf("delta ticker carried no open interest")
+	}
 
 	var oi float64
-	if _, err := fmt.Sscanf(row.OpenInterest, "%f", &oi); err != nil {
-		return 0, fmt.Errorf("parse OI %q: %w", row.OpenInterest, err)
+	if _, err := fmt.Sscanf(row.Result.OpenInterest, "%f", &oi); err != nil {
+		return 0, fmt.Errorf("parse OI %q: %w", row.Result.OpenInterest, err)
 	}
 	return oi, nil
 }

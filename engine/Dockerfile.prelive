@@ -8,9 +8,10 @@ COPY go.mod ./
 COPY cmd/pre_live ./cmd/pre_live
 COPY internal ./internal
 COPY data/backtest_results.json ./data/backtest_results.json
-# BTC Pre-Live whitelist (Phase 2 qualification output). Only read when
-# PRE_LIVE_WHITELIST_FILE points at it — the default instance ignores it.
+# Pre-Live whitelists (qualification outputs). Only read when
+# PRE_LIVE_WHITELIST_FILE points at one — the default instance ignores them.
 COPY data/btc_prelive_whitelist.json ./data/btc_prelive_whitelist.json
+COPY data/eth_prelive_whitelist.json ./data/eth_prelive_whitelist.json
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -mod=mod \
@@ -25,6 +26,7 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /bin/pre_live /app/pre_live
 COPY --from=builder /app/data/backtest_results.json /app/data/backtest_results.json
 COPY --from=builder /app/data/btc_prelive_whitelist.json /app/data/btc_prelive_whitelist.json
+COPY --from=builder /app/data/eth_prelive_whitelist.json /app/data/eth_prelive_whitelist.json
 
 USER 10001:10001
 

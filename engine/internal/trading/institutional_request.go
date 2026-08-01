@@ -8,6 +8,7 @@ import (
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/executiongateway"
+	"antigravity-engine/internal/liveengine"
 	"antigravity-engine/internal/strategy"
 )
 
@@ -177,12 +178,29 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 		var captured delta.PlaceOrderResult
 		var productID int
 		var contracts int
-		fillFn := func(c context.Context, _ strategy.Signal, _ string) (execution.FillResult, error) {
-			info, err := bridge.Client().FindOptionProduct(c, open.Strike, open.ExpiryTime, open.OptionType)
-			if err != nil {
-				return execution.FillResult{}, err
-			}
+		var premiumPerContractUSD float64
+		var optionSymbol string
+
+		// Resolve the option product and its real per-contract premium up front so
+		// the post-gate budget assertion can price the order. The premium unit is
+		// confirmed from Delta's live spec: USD/contract = mark(USD/BTC) × 0.001.
+		if info, rerr := bridge.Client().FindOptionProduct(ctx, open.Strike, open.ExpiryTime, open.OptionType); rerr == nil {
 			productID = info.ProductID
+			optionSymbol = info.Symbol
+			if p, perr := bridge.Client().OptionPremiumPerContractUSD(ctx, info.Symbol); perr == nil {
+				premiumPerContractUSD = p
+			}
+		}
+
+		fillFn := func(c context.Context, _ strategy.Signal, _ string) (execution.FillResult, error) {
+			if productID == 0 {
+				info, err := bridge.Client().FindOptionProduct(c, open.Strike, open.ExpiryTime, open.OptionType)
+				if err != nil {
+					return execution.FillResult{}, err
+				}
+				productID = info.ProductID
+				optionSymbol = info.Symbol
+			}
 			contracts = int(open.PremiumUSD / 100)
 			if contracts < 1 {
 				contracts = 1
@@ -201,10 +219,47 @@ func (o *Orchestrator) WireDeltaBridge(bridge *delta.Bridge) {
 			if err != nil {
 				return execution.FillResult{}, err
 			}
+			// Delta's order response often omits the instrument, which left the
+			// trade record with no symbol and broke strategy attribution in the
+			// positions view. Fall back to the product we resolved.
+			if result.Symbol == "" {
+				result.Symbol = optionSymbol
+			}
 			captured = result
 			return execution.FillResult{ExecPrice: result.Price, OrderMode: execution.OrderModeMarket}, nil
 		}
-		if _, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, open.StrategyName, price, execution.OrderModeMarket, fillFn); err != nil {
+		var pathOpts []InstitutionalPathOpts
+		if bridge.IsBuyingMode() {
+			// Live-money buys carry the budget backstop at the post-gate choke
+			// point, priced with the real per-contract premium. If the quote was
+			// unavailable (premiumPerContractUSD == 0), AssertBuyWithinBudget fails
+			// closed — the buy is rejected rather than sized blind.
+			premium := premiumPerContractUSD
+			pathOpts = append(pathOpts, InstitutionalPathOpts{
+				// A long option buy is 1 exchange contract (0.001 BTC), not a
+				// BTC-denominated futures position, so the 0.01 BTC execution floor
+				// does not apply. Size stays bounded by the fixed contract count and
+				// the budget assertion below.
+				FixedContractInstrument: true,
+				PreSubmitAssert: func() error {
+					bal, werr := bridge.Client().GetWallet(ctx)
+					if werr != nil {
+						return werr
+					}
+					// Apply the Live Engine capital ceiling to the SIZING basis.
+					// It was previously only applied in the account view, so the
+					// risk budget was computed from the full wallet — equity above
+					// the ceiling silently increased position size and pushed the
+					// account into a larger sizing tier. Capital above the ceiling
+					// is not tradeable, so it must not size trades either.
+					if bal > liveengine.MaxTradableUSD {
+						bal = liveengine.MaxTradableUSD
+					}
+					return delta.AssertBuyWithinBudget(bal, premium, 1)
+				},
+			})
+		}
+		if _, err := o.executeThroughInstitutionalPathWithFill(ctx, sig, open.StrategyName, price, execution.OrderModeMarket, fillFn, pathOpts...); err != nil {
 			return err
 		}
 		bridge.UpdateTradeAfterFill(tradeID, captured, productID, contracts, open.Strike, open.ExpiryTime)

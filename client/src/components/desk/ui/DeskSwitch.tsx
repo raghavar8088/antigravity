@@ -9,9 +9,23 @@ type DeskSwitchProps = {
   disabled?: boolean;
   id?: string;
   ariaLabel?: string;
+  /** Track colour when on/off. Defaults keep the standard primary/neutral look;
+   *  state-critical switches (engine live, kill switch) pass explicit colours so
+   *  the state reads at a glance. */
+  onColor?: string;
+  offColor?: string;
 };
 
-export function DeskSwitch({ checked, onChange, label, disabled = false, id, ariaLabel }: DeskSwitchProps) {
+export function DeskSwitch({
+  checked,
+  onChange,
+  label,
+  disabled = false,
+  id,
+  ariaLabel,
+  onColor,
+  offColor,
+}: DeskSwitchProps) {
   const switchId = id ?? `desk-switch-${(label || ariaLabel || "toggle").replace(/\s+/g, "-").toLowerCase()}`;
   return (
     <label
@@ -48,7 +62,9 @@ export function DeskSwitch({ checked, onChange, label, disabled = false, id, ari
           border: "none",
           padding: 0,
           cursor: disabled ? "not-allowed" : "pointer",
-          background: checked ? "var(--desk-primary)" : "var(--desk-surface-container-high)",
+          background: checked
+            ? (onColor ?? "var(--desk-primary)")
+            : (offColor ?? "var(--desk-surface-container-high)"),
           transition: "background 0.2s ease",
         }}
       >
@@ -61,7 +77,7 @@ export function DeskSwitch({ checked, onChange, label, disabled = false, id, ari
             width: 24,
             height: 24,
             borderRadius: "50%",
-            background: checked ? "var(--desk-on-primary)" : "var(--desk-outline)",
+            background: checked || offColor ? "var(--desk-on-primary)" : "var(--desk-outline)",
             boxShadow: "var(--desk-elevation-1)",
             transition: "left 0.2s ease",
           }}

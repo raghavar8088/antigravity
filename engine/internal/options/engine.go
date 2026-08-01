@@ -3,6 +3,7 @@ package options
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -51,19 +52,29 @@ type strategyState struct {
 	disabledUntil     time.Time
 }
 
-
 // Engine is the BTC long-options (buy) paper desk: pays premium, profits when
 // mark-to-market premium rises. Optimized for small-book risk (tight daily stop,
 // limited concurrency, conservatively scaled tickets).
 type Engine struct {
+	// feedGate refuses new entries when no real venue price is available. This
+	// desk selects strategies for real money, so a trade recorded against a
+	// price the market never printed is not a weak data point — it is a false
+	// one, and once in the table it is indistinguishable from a real one.
+	feedGate
+
+	// mirrorOpens / mirrorSkips track fill-time anti-strategy mirroring.
+	// mirrorSkips must stay zero; see anti_mirror.go. Guarded by mu.
+	mirrorOpens int64
+	mirrorSkips int64
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
 	marketProfile    MarketProfile
 	balance          float64
-	peakBalance      float64   // highest balance ever reached — used for drawdown calc
-	dayStartBalance  float64   // balance at the beginning of the current UTC day
-	dayStartDate     int       // UTC day number (unix-day) when dayStartBalance was set
+	peakBalance      float64 // highest balance ever reached — used for drawdown calc
+	dayStartBalance  float64 // balance at the beginning of the current UTC day
+	dayStartDate     int     // UTC day number (unix-day) when dayStartBalance was set
 	lastPrice        float64
 	priceHist        []float64 // raw tick prices (for current price + IV)
 	minuteBars       []float64 // 1-minute sampled prices (for indicators)
@@ -72,9 +83,17 @@ type Engine struct {
 	lastRosterEval   time.Time
 	lastRosterRegime string
 	persistHook      func(PersistedState)
-	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
+	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration // trading loop interval; BTC paper uses a short interval
+
+	// chainPricer, when set, prices against the REAL Delta chain instead of the
+	// synthetic Black-Scholes model: only listed strikes, live marks, real
+	// spread. nil keeps the model, so the two can be compared.
+	chainPricer ChainPricer
+	// chainSkips counts signals the venue could not fill. Not a fault counter —
+	// a skip says the strategy needs strikes this exchange does not list.
+	chainSkips chainSkipCounters
 }
 
 // NewEngine initialises the options engine with the full strategy library.
@@ -96,6 +115,14 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 
 	now := time.Now().UTC()
 	startingBalance := getInitialOptionsBalanceUSD()
+	// Hunt mode funds every strategy its own stake; the desk balance must
+	// cover all of them at once or they compete for one pot and the
+	// leaderboard measures arrival order rather than edge.
+	if huntModeEnabled() {
+		if hb := huntDeskBalance(len(states)); hb > startingBalance {
+			startingBalance = hb
+		}
+	}
 	engine := &Engine{
 		states:          states,
 		marketProfile:   profile,
@@ -126,7 +153,7 @@ func (e *Engine) SetStateSaveHook(fn func(PersistedState)) {
 
 // SetOnOpenHook registers a callback fired every time a live long position is opened.
 // Called with: posID, strategyID, strategyName, optionType, strike, expiry, premiumUSD, btcSpot.
-func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)) {
+func (e *Engine) SetOnOpenHook(fn func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onOpenHook = fn
@@ -304,13 +331,38 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
-// ResetAccount wipes the options account in memory and returns the new snapshot.
+// ResetAccount wipes the options account in memory and returns the new snapshot,
+// restoring the environment-configured starting balance.
 func (e *Engine) ResetAccount() PersistedState {
+	return e.ResetAccountWith(0)
+}
+
+// ResetAccountWith wipes the account and restarts it on a caller-chosen starting
+// balance, so the desk can be re-based without a redeploy. A non-positive value
+// falls back to the environment default, which keeps ResetAccount's old
+// behaviour exactly.
+func (e *Engine) ResetAccountWith(startingBalance float64) PersistedState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	now := time.Now().UTC()
-	startingBalance := getInitialOptionsBalanceUSD()
+	if startingBalance <= 0 {
+		startingBalance = getInitialOptionsBalanceUSD()
+		// Apply the SAME hunt-mode funding floor the constructor uses.
+		//
+		// Without this a reset silently refunded the desk to the bare
+		// configured default — $100 against a hundred-odd strategies each
+		// wanting a $1,000 stake. The desk does not fail visibly at that
+		// balance; it just cannot open most of its positions, so the
+		// leaderboard starts measuring which strategy signalled FIRST rather
+		// than which has an edge, which is the exact failure hunt mode exists
+		// to prevent. Every reset quietly re-introduced it.
+		if huntModeEnabled() {
+			if hb := huntDeskBalance(len(e.states)); hb > startingBalance {
+				startingBalance = hb
+			}
+		}
+	}
 	e.trades = nil
 	e.balance = startingBalance
 	e.peakBalance = startingBalance
@@ -589,7 +641,6 @@ func (e *Engine) tick() {
 	}
 }
 
-
 func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalContext, regime string, iv float64, now time.Time, openCount *int, dailyHalt bool) {
 	// Always manage open positions (mark-to-market + close on TP/SL/expiry).
 	if s.position != nil {
@@ -605,8 +656,24 @@ func (e *Engine) manageStrategyRuntimeWithHalt(s *strategyState, ctx SignalConte
 			e.closeShadowPositionLocked(s, exitReason, now)
 		}
 	}
-	// Block new opens when daily loss limit is breached.
+	// Block new opens when the daily loss limit is breached, or when no real
+	// market price is available. Open positions above are still managed either
+	// way: abandoning custody of a live position is worse than marking it
+	// against the last real quote.
 	if !dailyHalt && s.position == nil && s.shadowPosition == nil {
+		if !e.FeedLive() {
+			e.noteBlockedOpen()
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
+		// A mirror never opens on its own signal. It exists only as the inverse
+		// of a fill its original already took, and openMirrorLocked creates it
+		// there. Letting it evaluate would make it a separate strategy that
+		// merely shares a name with the thing it is supposed to negate.
+		if IsAnti(s.def.Name) {
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -715,6 +782,14 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 
 	e.balance -= pos.CostBasis
 	s.position = pos
+	// Tally entries taken on the fallback venue. Those trades are real, but they
+	// were priced on a book the Live Engine does not execute against, so a
+	// strategy qualified largely on them was qualified on the wrong market.
+	e.noteOpen(PrimaryVenue)
+	// Sell the SAME contract for this strategy's mirror, at the same premium.
+	// Inheriting the fill is what makes the pair an exact inverse rather than
+	// two loosely related bets. See anti_mirror.go.
+	e.openMirrorLocked(s, pos, now)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
@@ -732,7 +807,11 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 		strike := pos.Strike
 		expiry := pos.ExpiryTime
 		premium := pos.CostBasis
-		go hook(posID, stratID, stratName, optType, strike, expiry, premium, e.lastPrice)
+		// The quoted premium (USD per BTC) travels alongside the cash cost basis.
+		// Fees are charged against underlying notional, so only the quote — read
+		// against spot — reveals whether Delta's 10%-of-premium cap is binding.
+		premiumPerBTC := pos.EntryPremium
+		go hook(posID, stratID, stratName, optType, strike, expiry, premium, premiumPerBTC, e.lastPrice)
 	}
 }
 
@@ -796,6 +875,29 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
+	// Real-chain resolution. The model above produced a DESIRED strike; the venue
+	// decides whether that trade exists. Snap onto a listed contract and take its
+	// live mark, or skip — substituting a distant contract would record a result
+	// for a trade this strategy never asked for.
+	contractSymbol := ""
+	if e.chainPricer != nil {
+		q, err := e.chainPricer.ResolveEntry(string(def.Type), strike, expiry)
+		if err != nil {
+			e.chainSkips.noContract.Add(1)
+			return nil
+		}
+		if q.PremiumPerBTC <= 0 {
+			e.chainSkips.noMark.Add(1)
+			return nil
+		}
+		// Trade what the venue lists, not what the model wanted.
+		contractSymbol = q.Symbol
+		strike = q.Strike
+		expiry = q.Expiry
+		pr.Premium = q.PremiumPerBTC
+		e.chainSkips.filled.Add(1)
+	}
+
 	// Size by contracts like the selling desk so both desks take the same BTC
 	// exposure per ticket. A fixed dollar ticket divided by the premium bought
 	// enormous quantities of cheap far-OTM options, so a routine -50% move on a
@@ -839,6 +941,10 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		CostBasis:      costBasis,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
+		// Empty when pricing off the model; set to the venue contract when
+		// pricing off the real chain, so mark-to-market re-prices the same
+		// instrument that was entered.
+		ContractSymbol: contractSymbol,
 		IV:             iv,
 		Delta:          pr.Delta,
 	}
@@ -846,12 +952,46 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 
 func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
 	result := PriceOption(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
-	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
 	pos.IV = iv
 
+	// A position entered on the real chain must be re-priced on the real chain.
+	// Falling back to the model would mark a venue entry against a model exit
+	// and book the difference as P&L that never existed.
+	//
+	// The model price is assigned ONLY on the model path. Assigning it first and
+	// overwriting on success looks equivalent but is not: when the venue has no
+	// quote, the position would silently take a model mark instead of holding
+	// its last real one.
+	//
+	// Greeks stay model-derived — they are display-only here.
+	onVenue := e.chainPricer != nil && pos.ContractSymbol != ""
+	if !onVenue {
+		pos.CurrentPremium = result.Premium
+	} else if mark, ok := e.chainPricer.MarkFor(pos.ContractSymbol); ok && mark > 0 {
+		pos.CurrentPremium = mark
+	}
+	// Venue position with no live quote: CurrentPremium is left untouched, so it
+	// holds its last real mark. A missing quote is missing information, not a
+	// new valuation.
+
 	// Long option: profit when mark-to-market premium rises vs entry.
-	pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	// Short (an anti-strategy mirror): profit when it falls. The sign is the
+	// whole point — it is what makes the pair's P&L cancel.
+	if pos.ShortPremium {
+		pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	} else {
+		pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	}
+
+	// A mirror runs NO exit policy of its own. The rules below are long-premium
+	// rules — trailing stops on gains, theta-bleed cutoffs, thesis breaks — and
+	// a short-side reinterpretation would close the two halves at different
+	// premiums on different ticks, which is exactly what stops them being an
+	// inverse. The mirror is closed by closeMirrorLocked when its original goes.
+	if pos.ShortPremium {
+		return ""
+	}
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -910,14 +1050,35 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
+	// Close this strategy's mirror on the same tick at the same premium, before
+	// the original's own bookkeeping runs. A mirror left open after its original
+	// has gone is no longer an inverse of anything.
+	e.closeMirrorLocked(s, reason, now)
+
 	netPnL := pos.UnrealizedPnL
 	returnPct := 0.0
 	if pos.EntryPremium > 0 {
 		returnPct = (pos.CurrentPremium - pos.EntryPremium) / pos.EntryPremium * 100
+		if pos.ShortPremium {
+			returnPct = -returnPct
+		}
+	}
+	// UnrealizedPnL is only refreshed by mark-to-market, which a mirror skips
+	// once it has returned early. Recompute from the settling premium so the
+	// booked P&L is the one both halves actually settled on.
+	if pos.ShortPremium {
+		netPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
 	}
 
-	// Sell to close long: receive current option value.
-	e.balance += pos.CurrentPremium * pos.Quantity
+	// Long: sell to close, receive the current option value.
+	// Short (mirror): buy to close, pay it. The premium was credited at open, so
+	// the two legs net to (entry - current) x qty — exactly minus the original's
+	// gross, which is the property the pair exists to have.
+	if pos.ShortPremium {
+		e.balance -= pos.CurrentPremium * pos.Quantity
+	} else {
+		e.balance += pos.CurrentPremium * pos.Quantity
+	}
 
 	e.trades = append(e.trades, OptionTrade{
 		ID:            pos.ID,
@@ -1108,14 +1269,11 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
-	setCORSOptions(w)
-	if r.Method == http.MethodOptions {
-		return
-	}
+// StrategyStatuses returns a snapshot of every strategy's runtime status. Used
+// by the Live Engine roster provider to evaluate live eligibility in-process.
+func (e *Engine) StrategyStatuses() []StrategyStatus {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-
 	statuses := make([]StrategyStatus, len(e.states))
 	for i, s := range e.states {
 		statuses[i] = s.stats
@@ -1123,7 +1281,15 @@ func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 			statuses[i].StrategyID = s.def.ID
 		}
 	}
-	json.NewEncoder(w).Encode(statuses)
+	return statuses
+}
+
+func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
+	setCORSOptions(w)
+	if r.Method == http.MethodOptions {
+		return
+	}
+	json.NewEncoder(w).Encode(e.StrategyStatuses())
 }
 
 func (e *Engine) HandleStats(w http.ResponseWriter, r *http.Request) {
@@ -1186,9 +1352,34 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	e.ResetAccount()
-	log.Printf("[OPTIONS] Options account reset to $%.2f", getInitialOptionsBalanceUSD())
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	// Optional body: {"initialCapital": 5000}. Absent, malformed or non-positive
+	// falls back to the environment default, so an empty POST behaves as before.
+	capital := parseRequestedCapital(r)
+	snap := e.ResetAccountWith(capital)
+	log.Printf("[OPTIONS] Options account reset to $%.2f", snap.Balance)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "reset",
+		"balance": snap.Balance,
+	})
+}
+
+// parseRequestedCapital reads an optional starting balance from the request body.
+// It never fails the request: a bad body means "use the default", because a reset
+// that errors out is worse than a reset that uses the configured balance.
+func parseRequestedCapital(r *http.Request) float64 {
+	if r.Body == nil {
+		return 0
+	}
+	var body struct {
+		InitialCapital float64 `json:"initialCapital"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+		return 0
+	}
+	if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+		return 0
+	}
+	return body.InitialCapital
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {

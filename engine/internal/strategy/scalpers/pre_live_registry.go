@@ -13,13 +13,14 @@ import (
 // ─── Whitelist realigned to the honest backtest pipeline: 2026-07-07 ──────────
 // The previous 42-name list (rebuilt 2026-07-02) was built with the OLD
 // backtest metrics that the 2026-07-05 honesty audit invalidated:
-//   • Sharpe annualisation treated per-trade returns as 15m bars (×√35040),
+//   - Sharpe annualisation treated per-trade returns as 15m bars (×√35040),
 //     inflating Sharpe by ~20-40× — that is why the old comments below showed
 //     Sharpe 16-76 for scalpers whose HONEST Sharpe is ~1.0-2.5.
-//   • Cost model used maker fees (2+2 bps) instead of the taker fees (4 bps/leg,
+//   - Cost model used maker fees (2+2 bps) instead of the taker fees (4 bps/leg,
 //     8 bps round trip) the engine actually pays on market orders.
-//   • Single-window fit (2023-01 → 2024-12) with no out-of-sample confirmation,
+//   - Single-window fit (2023-01 → 2024-12) with no out-of-sample confirmation,
 //     so 87 near-clone *_Short variants curve-fit the same window.
+//
 // Running that list — even on paper — produced a misleading validation signal.
 //
 // This list now matches the LIVE trade-engine whitelist (see

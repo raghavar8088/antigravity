@@ -60,10 +60,19 @@ const ic = {
       <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" />
     </svg>
   ),
+  live: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 2v8" /><path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+    </svg>
+  ),
 };
 
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
+  { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Sits directly below Live Engine: it is the paper counterpart to that desk —
+  // same Delta chain, same margin reality, no real money.
+  { href: "/crypto-fno", label: "Crypto F&O", icon: ic.layers },
   { href: "/btc-pre-live", label: "BTC Pre-Live Engine", icon: ic.trend },
   { href: "/scalp-desk", label: "Crypto Scalp Desk", icon: ic.bolt },
   { href: "/options-selling-desk", label: "Crypto Options Selling", icon: ic.shield },
@@ -81,7 +90,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/scalp/scalp/leaderboard", label: "Leaderboard JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/scalp/scalp/trades?n=100", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/scalp/scalp/trades?n=100", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/scalp/scalp/health", label: "Engine Health JSON", icon: ic.code, external: true },
     ],
   },
@@ -90,7 +99,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/options-selling/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-selling/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/options-selling/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-selling/trades", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/options-selling/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },
@@ -99,7 +108,7 @@ const API_GROUPS: NavSection[] = [
     items: [
       { href: "/api/options-buying/strategies", label: "Strategies JSON", icon: ic.code, external: true },
       { href: "/api/options-buying/stats", label: "Desk Totals JSON", icon: ic.code, external: true },
-      { href: "/api/options-buying/trades", label: "Recent Trades JSON", icon: ic.code, external: true },
+      { href: "/api/options-buying/trades", label: "Trade History JSON", icon: ic.code, external: true },
       { href: "/api/options-buying/positions", label: "Open Positions JSON", icon: ic.code, external: true },
     ],
   },

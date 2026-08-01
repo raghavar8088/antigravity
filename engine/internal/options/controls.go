@@ -64,7 +64,7 @@ const (
 	// Winners get shorter cooldowns (strike while hot), losers get longer ones.
 	cooldownWinMultiplier       = 0.50 // halve cooldown after a win
 	cooldownLossMultiplier      = 2.00 // double cooldown after a loss
-	cooldownStreakWinMultiplier  = 0.33 // 2+ consecutive wins → 1/3 cooldown
+	cooldownStreakWinMultiplier = 0.33 // 2+ consecutive wins → 1/3 cooldown
 
 	// ── Upgrade: Theta-Decay Acceleration Exit ──
 	// Selling strategies benefit from accelerating theta in late life.
@@ -97,6 +97,7 @@ func newStrategyStatus(def StrategyDef) StrategyStatus {
 		HasShadowPosition: false,
 	}
 }
+
 // optionTradeAllocationUSD is the nominal per-strategy ticket. Like the selling
 // desk it only sets the ratio that drives the size multiplier — real exposure is
 // the contract count below.

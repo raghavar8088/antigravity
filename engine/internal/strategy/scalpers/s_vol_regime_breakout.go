@@ -22,7 +22,7 @@ import "fmt"
 // (RV is always computable from candles already in MarketContext).
 
 const (
-	volBreakoutLookback   = 20 // rolling window for "own high" breakout check
+	volBreakoutLookback   = 20  // rolling window for "own high" breakout check
 	volBreakoutStrongBody = 0.6 // candle body must be >= 60% of its range to count as "strong"
 )
 

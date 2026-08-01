@@ -513,8 +513,10 @@ func (s *BBSqueezeBreakoutShort) Evaluate(ctx MarketContext) Signal {
 
 type FundingExtremeContrarianLong struct{}
 
-func (s *FundingExtremeContrarianLong) Name() string           { return "Funding_Extreme_Contrarian_Long" }
-func (s *FundingExtremeContrarianLong) ValidRegimes() []Regime { return []Regime{RegimeTrending, RegimeRanging} }
+func (s *FundingExtremeContrarianLong) Name() string { return "Funding_Extreme_Contrarian_Long" }
+func (s *FundingExtremeContrarianLong) ValidRegimes() []Regime {
+	return []Regime{RegimeTrending, RegimeRanging}
+}
 
 func (s *FundingExtremeContrarianLong) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()
@@ -573,8 +575,10 @@ func (s *FundingExtremeContrarianLong) Evaluate(ctx MarketContext) Signal {
 
 type FundingExtremeContrarianShort struct{}
 
-func (s *FundingExtremeContrarianShort) Name() string           { return "Funding_Extreme_Contrarian_Short" }
-func (s *FundingExtremeContrarianShort) ValidRegimes() []Regime { return []Regime{RegimeTrending, RegimeRanging} }
+func (s *FundingExtremeContrarianShort) Name() string { return "Funding_Extreme_Contrarian_Short" }
+func (s *FundingExtremeContrarianShort) ValidRegimes() []Regime {
+	return []Regime{RegimeTrending, RegimeRanging}
+}
 
 func (s *FundingExtremeContrarianShort) Evaluate(ctx MarketContext) Signal {
 	name := s.Name()

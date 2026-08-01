@@ -22,10 +22,10 @@ const (
 )
 
 type OpeningRangeBreakout struct {
-	orHigh    float64
-	orLow     float64
-	orBuilt   bool
-	orDate    time.Time // UTC date the OR was built for
+	orHigh  float64
+	orLow   float64
+	orBuilt bool
+	orDate  time.Time // UTC date the OR was built for
 }
 
 func (s *OpeningRangeBreakout) Name() string { return "Opening_Range_Breakout" }

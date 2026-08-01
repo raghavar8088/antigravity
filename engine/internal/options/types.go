@@ -54,6 +54,16 @@ type OptionPosition struct {
 	PeakGainPct    float64    `json:"peakGainPct"`
 	IV             float64    `json:"iv"`
 	Delta          float64    `json:"delta"`
+	// ShortPremium marks a position that SOLD the contract rather than bought
+	// it. Only anti-strategy mirrors are short on this desk: the exact inverse
+	// of buying a contract is selling that same contract, not buying a
+	// different one. See anti_mirror.go.
+	ShortPremium bool `json:"shortPremium,omitempty"`
+	// ContractSymbol is the venue contract this position actually holds, set
+	// when the desk prices against the real chain. Mark-to-market must price the
+	// SAME contract that was entered; without this the desk could enter a listed
+	// strike and then re-price a model strike, inventing P&L from the gap.
+	ContractSymbol string `json:"contractSymbol,omitempty"`
 }
 
 // OptionTrade is a completed option trade

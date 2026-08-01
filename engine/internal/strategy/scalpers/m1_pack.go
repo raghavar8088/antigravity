@@ -414,9 +414,9 @@ func m1FamDoubleExtreme() []m1Def {
 func m1FamMicroBreakout() []m1Def {
 	var defs []m1Def
 	for _, v := range []struct {
-		tag            string
-		look, trendN   int
-		volMult        float64
+		tag          string
+		look, trendN int
+		volMult      float64
 	}{{"D30_T20", 30, 20, 1.3}, {"D60_T50", 60, 50, 1.5}} {
 		v := v
 		defs = append(defs,
@@ -528,8 +528,8 @@ func m1FamVWAPDoji() []m1Def {
 func m1FamBurst() []m1Def {
 	var defs []m1Def
 	for _, v := range []struct {
-		tag  string
-		k    int
+		tag string
+		k   int
 	}{{"K4", 4}, {"K6", 6}} {
 		v := v
 		defs = append(defs,
@@ -581,9 +581,9 @@ func m1FamBurst() []m1Def {
 func m1FamRSI2() []m1Def {
 	var defs []m1Def
 	for _, v := range []struct {
-		tag      string
-		lo, hi   float64
-		trendN   int
+		tag    string
+		lo, hi float64
+		trendN int
 	}{{"5_95_T50", 5, 95, 50}, {"10_90_T20", 10, 90, 20}} {
 		v := v
 		defs = append(defs,

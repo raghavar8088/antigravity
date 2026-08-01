@@ -24,8 +24,10 @@ import (
 	"antigravity-engine/internal/ai"
 	"antigravity-engine/internal/aiscoring"
 	"antigravity-engine/internal/alpha/funding"
+	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/calibration"
 	tconfig "antigravity-engine/internal/config"
+	"antigravity-engine/internal/cryptofno"
 	"antigravity-engine/internal/dataquality"
 	"antigravity-engine/internal/delta"
 	"antigravity-engine/internal/derivatives"
@@ -35,6 +37,7 @@ import (
 	"antigravity-engine/internal/execution"
 	"antigravity-engine/internal/executiongateway"
 	"antigravity-engine/internal/gateway"
+	"antigravity-engine/internal/hunt"
 	killswitchpkg "antigravity-engine/internal/killswitch"
 	"antigravity-engine/internal/learning"
 	"antigravity-engine/internal/ledger"
@@ -44,11 +47,11 @@ import (
 	"antigravity-engine/internal/mongopersist"
 	"antigravity-engine/internal/observability"
 	_ "antigravity-engine/internal/observability" // registers Prometheus metrics at import time
+	"antigravity-engine/internal/optionchain"
 	"antigravity-engine/internal/options"
 	"antigravity-engine/internal/options_selling"
 	"antigravity-engine/internal/orderbook"
 	"antigravity-engine/internal/paperpersist"
-	btpkg "antigravity-engine/internal/backtest"
 	"antigravity-engine/internal/persistence"
 	pmspkg "antigravity-engine/internal/pms"
 	"antigravity-engine/internal/positions"
@@ -527,16 +530,21 @@ func main() {
 	var reconciliationComplete atomic.Bool // set to true after ReconcileOnRestart completes
 
 	// ═══════════════════════════════════════════════════
-	// 1. WebSocket Live Stream (Coinbase)
+	// 1. WebSocket Live Stream (Delta Exchange)
 	// ═══════════════════════════════════════════════════
-	coinbaseClient := marketdata.NewCoinbaseClient()
+	//
+	// This engine EXECUTES on Delta — the Live Engine buys Delta options, and
+	// the options desks price against the Delta chain. The tick feed was
+	// Coinbase spot (BTC-USD), so 600 strategies were scored on one venue's
+	// trades while the orders went to another's book. Coinbase BTC-USD is spot;
+	// Delta BTCUSD is a perpetual with its own basis and microstructure, and a
+	// strategy tuned on the first is not evidence about the second.
+	//
+	// Set MARKET_DATA_VENUE=coinbase to pin the old feed for an A/B comparison.
+	// Whatever is chosen is logged, because a desk quietly running on the wrong
+	// venue looks identical to one running correctly.
+	tickFeed := newLiveTickFeed(ctx)
 	deltaProbeClient = marketdata.NewDeltaTickerClient()
-	go func() {
-		err := coinbaseClient.Connect(ctx, []string{"BTC-USD"})
-		if err != nil {
-			log.Fatalf("Fatal error connecting to Coinbase: %v", err)
-		}
-	}()
 
 	// ═══════════════════════════════════════════════════
 	// 2. Build curated strategies (full BTC Equity roster; no silent truncation)
@@ -575,32 +583,34 @@ func main() {
 
 	// ═══════════════════════════════════════════════════
 	// 2b. Funding Alpha — live collection loop
-	// Fetches BTC perpetual funding rates from Binance every 8 hours and
+	// Fetches the BTC perpetual funding rate from DELTA every 8 hours and
 	// injects snapshots directly into every InstitutionalAlphaScalper so
 	// the FundingMeanReversion and Confluence modules have live data.
+	//
+	// This read Binance and Bybit, so those strategies reasoned about the
+	// leverage imbalance in books this engine does not trade. Funding is the
+	// payment tying ONE perpetual to spot; another venue's is a different number
+	// about a different crowd. The second (Bybit) snapshot is dropped for the
+	// same reason rather than kept as corroboration.
 	// ═══════════════════════════════════════════════════
 	go safeGo("FundingCollector", func() {
 		collector := funding.NewCollector()
 		collect := func() {
 			cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
-			snap, err := collector.Fetch(cctx, "binance", "BTCUSDT")
+			snap, err := collector.Fetch(cctx, "delta", "BTCUSD")
 			if err != nil {
 				log.Printf("[FUNDING] collection error: %v", err)
 				return
 			}
-			snap2, _ := collector.Fetch(cctx, "bybit", "BTCUSDT")
 			for _, entry := range allStrategies {
 				if inj, ok := entry.Strategy.(interface {
 					InjectFunding(funding.FundingSnapshot)
 				}); ok {
 					inj.InjectFunding(snap)
-					if snap2.Exchange != "" {
-						inj.InjectFunding(snap2)
-					}
 				}
 			}
-			log.Printf("[FUNDING] collected rate=%.6f (Binance BTCUSDT)", snap.FundingRate)
+			log.Printf("[FUNDING] collected rate=%.6f (Delta %s)", snap.FundingRate, snap.Symbol)
 		}
 		collect() // immediate on startup
 		ticker := time.NewTicker(8 * time.Hour)
@@ -935,7 +945,7 @@ func main() {
 	// 10. Multi-Strategy Orchestrator
 	// ═══════════════════════════════════════════════════
 	orchestrator := trading.NewOrchestrator(
-		coinbaseClient,
+		tickFeed,
 		allStrategies,
 		riskEngine,
 		paperExecute,
@@ -1012,7 +1022,20 @@ func main() {
 		})
 		log.Println("[KILL SWITCH] Reconciler wired — OMS_DESYNC auto-release validates trade reconciliation")
 	}
-	wasHalted := ksSvc.RestoreStateOnStartup(ctx)
+	// Bound the ledger replay. RestoreStateOnStartup reads every risk event for
+	// the account, and on a degraded shared-tier Mongo that read can hang
+	// indefinitely — which wedged the whole boot before the HTTP server ever
+	// started listening, so the engine looked "Up" while serving nothing.
+	//
+	// The error path already degrades to "start normally", so a timeout changes
+	// only how long we wait, not what happens on failure. Note that failure is
+	// fail-OPEN on the kill switch: an unreadable ledger means a prior halt is
+	// not restored. That is pre-existing behaviour, and it is preferable to an
+	// engine that cannot boot at all, but it is why the timeout is generous
+	// rather than aggressive.
+	ksRestoreCtx, ksRestoreCancel := context.WithTimeout(ctx, 30*time.Second)
+	wasHalted := ksSvc.RestoreStateOnStartup(ksRestoreCtx)
+	ksRestoreCancel()
 	if !ksSvc.IsEnabled() {
 		log.Println("[KILL SWITCH] DISABLED — trading will not halt. Set KILL_SWITCH_ENABLED=true on engine to re-arm.")
 		if err := ksSvc.DisableAndRelease(ctx); err != nil {
@@ -1026,7 +1049,7 @@ func main() {
 	}
 	orchestrator.SetKillSwitch(ksSvc)
 	orchestrator.SetEventLedger(ksLedger)
-	execWatchdog := trading.NewExecutionWatchdog(coinbaseClient, ksSvc)
+	execWatchdog := trading.NewExecutionWatchdog(tickFeed, ksSvc)
 	orchestrator.SetExecutionWatchdog(execWatchdog)
 	go safeGo("ExecutionWatchdog", func() { execWatchdog.Run(ctx) })
 	ksExecutor.SetOrchestrator(orchestrator)
@@ -1233,22 +1256,47 @@ func main() {
 	oiFetcher := derivatives.NewOIFetcher()
 	go fundingFetcher.StartPolling(ctx, 15*time.Minute)
 	go oiFetcher.StartPolling(ctx, 15*time.Minute)
-	log.Println("[DEPS] Funding rate + OI fetchers polling every 15m")
+	log.Println("[DEPS] Delta funding rate + OI fetchers polling every 15m")
 
-	// Wiring 6b: Deribit BTC DVOL volatility index (used by S10-S13 vol family)
+	// Wiring 6b: BTC implied-volatility index from Delta's own option chain
+	// (used by the S10-S13 vol family). Previously Deribit DVOL — a different
+	// venue's options, and so a different volatility from the one the options
+	// desks here actually quote against.
 	dvolHolder := marketdata.NewDeribitDVOLHolder()
 	dvolHolder.StartPolling(ctx)
-	log.Println("[DEPS] Deribit BTC DVOL feed polling every 5m")
+	log.Println("[DEPS] Delta BTC 30d ATM implied-vol index polling every 5m")
 
-	// Wiring 6c: Binance BTC perpetual liquidation feed (used by S14)
-	liquidationHolder := marketdata.NewBinanceLiquidationHolder()
-	liquidationHolder.StartStreaming(ctx)
-	log.Println("[DEPS] Binance BTC liquidation feed streaming (!forceOrder@arr)")
+	// Wiring 6c: liquidation feed — DISABLED, because Delta does not publish one.
+	//
+	// Subscribing to "liquidations" on Delta's socket is refused outright:
+	// {"error":"subscription forbidden on this invalid channel"}. The feed was a
+	// Binance forceOrder stream, and there is no Delta equivalent to move it to.
+	//
+	// Rather than keep reading another exchange's forced sells, the feed is left
+	// nil, which the orchestrator handles by suppressing the strategies that
+	// need it (see LoopDeps.LiquidationHolder). That costs four strategies —
+	// Liquidation_Cascade_Fade, Liquidation_Cascade_Reversal,
+	// Liquidation_Hunt_Long and Liquidation_Hunt_Short — and the reasoning is
+	// that a strategy which cannot be MEASURED on Delta data cannot honestly be
+	// promoted to trading with Delta money. Feeding them Binance prints would
+	// not have made them evaluable; it would only have hidden that it hadn't.
+	//
+	// Set LIQUIDATION_FEED=binance to restore the old cross-venue feed.
+	var liquidationHolder *marketdata.BinanceLiquidationHolder
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("LIQUIDATION_FEED")), "binance") {
+		liquidationHolder = marketdata.NewBinanceLiquidationHolder()
+		liquidationHolder.StartStreaming(ctx)
+		log.Println("[DEPS] ⚠️  liquidation feed streaming from BINANCE — a venue this engine does not trade")
+	} else {
+		log.Println("[DEPS] liquidation feed OFF — Delta publishes none; 4 liquidation strategies are suppressed")
+	}
 
-	// Wiring 6d: Binance BTC perpetual mark price (used by S16 basis calc)
-	perpPriceHolder := marketdata.NewBinancePerpPriceHolder()
+	// Wiring 6d: Delta BTCUSD perpetual mark price (used by S16 basis calc).
+	// Delta's ticker carries mark AND spot, so both sides of the basis
+	// subtraction now come from the same book.
+	perpPriceHolder := marketdata.NewDeltaPerpPriceHolder()
 	perpPriceHolder.StartPolling(ctx)
-	log.Println("[DEPS] Binance BTC perp mark price feed polling every 30s")
+	log.Println("[DEPS] Delta BTC perp mark price polling every 30s")
 
 	// Wiring 6e: Macro cross-asset feed — Nasdaq futures proxy + DXY (used by S18-S21 macro family)
 	macroFeedHolder := marketdata.NewMacroFeedHolder()
@@ -1262,7 +1310,7 @@ func main() {
 			log.Printf("[DEPTH] subscriber exited: %v", err)
 		}
 	})
-	log.Println("[DEPS] L2 depth subscriber connecting to Binance BTCUSDT@depth20")
+	log.Println("[DEPS] L2 depth subscriber connecting to Delta BTCUSD l2_orderbook")
 
 	// Wiring 8: BTC ETF flow fetcher (daily, via Python yfinance script)
 	pythonPath := os.Getenv("PYTHON_PATH")
@@ -1410,39 +1458,58 @@ func main() {
 	// Start the orchestrator with panic recovery
 	go safeGo("Orchestrator", func() { orchestrator.Run(ctx) })
 
-	// Upgrade 6: Binance kline WebSocket feed for live 15m/1h candles.
-	// Falls back to 5m synthesis automatically on disconnect.
-	klineClient := marketdata.NewBinanceKlineClient([]string{"15m", "1h"})
-	go safeGo("BinanceKlines", func() {
-		if err := klineClient.Start(
-			ctx,
-			func(c marketdata.Candle) {
+	// Live 15m/1h candles from Delta.
+	//
+	// These were Binance kline sockets. With the tick stream on Delta, leaving
+	// them on Binance would be worse than either venue alone: a strategy would
+	// evaluate a Delta-derived 1m series against Binance-derived 15m and 1h
+	// bars, so every cross-timeframe check — a pullback measured against the
+	// higher-timeframe trend, a breakout confirmed on 1h — would straddle two
+	// different instruments. Falls back to 5m synthesis on failure, as before.
+	klineClient := marketdata.NewDeltaKlineFeed(liveTickSymbol(liveTickVenue()), []string{"15m", "1h"})
+	go safeGo("DeltaKlines", func() {
+		klineClient.Start(ctx, func(res string, c marketdata.Candle) {
+			switch res {
+			case "15m":
 				orchestrator.Push15mKlineCandle(c)
 				orchestrator.SetKlineFeedActive("15m", true)
-			},
-			func(c marketdata.Candle) {
+			case "1h":
 				orchestrator.Push1hKlineCandle(c)
 				orchestrator.SetKlineFeedActive("1h", true)
-			},
-		); err != nil {
-			log.Printf("[KLINES] BinanceKlineClient stopped: %v", err)
-		}
+			}
+		})
 		orchestrator.SetKlineFeedActive("15m", false)
 		orchestrator.SetKlineFeedActive("1h", false)
 	})
 
-	// Upgrade 2: Binance aggTrade WebSocket feed for real CVD (taker-side
-	// classification) instead of the price-direction proxy. Falls back to
-	// the proxy automatically on disconnect via SetAggTradeFeedActive(false).
-	aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
-		orchestrator.PushAggTrade(t)
-	})
-	go safeGo("BinanceAggTrade", func() {
-		if err := aggTradeClient.Start(ctx); err != nil {
-			log.Printf("[AGGTRADE] feed error: %v", err)
-		}
-		orchestrator.SetAggTradeFeedActive(false)
-	})
+	// Real CVD from taker-side classification, now on Delta's own trades.
+	//
+	// This read a Binance aggTrade socket, so order flow was measured on a
+	// different book from the one being traded — and CVD is precisely a claim
+	// about who is lifting whose offers on a particular venue, which makes it
+	// the least defensible place to substitute another exchange.
+	//
+	// The Delta tick feed already classifies every trade by taker side, so no
+	// second connection is needed. When the feed is Coinbase (the A/B pin), the
+	// old Binance aggTrade socket is used, because Coinbase matches carry no
+	// usable taker classification here.
+	if dtc, ok := tickFeed.(*marketdata.DeltaTickClient); ok {
+		dtc.SetAggTradeHook(func(t marketdata.AggTrade) {
+			orchestrator.PushAggTrade(t)
+			orchestrator.SetAggTradeFeedActive(true)
+		})
+		log.Printf("[AGGTRADE] CVD sourced from the Delta trade stream")
+	} else {
+		aggTradeClient := marketdata.NewBinanceAggTradeClient("btcusdt", func(t marketdata.AggTrade) {
+			orchestrator.PushAggTrade(t)
+		})
+		go safeGo("BinanceAggTrade", func() {
+			if err := aggTradeClient.Start(ctx); err != nil {
+				log.Printf("[AGGTRADE] feed error: %v", err)
+			}
+			orchestrator.SetAggTradeFeedActive(false)
+		})
+	}
 
 	// ── Reconciliation Authority v2 ───────────────────────────────────────────
 	// Compares ledger OMS projections against:
@@ -1473,27 +1540,139 @@ func main() {
 	// Delta Exchange live bridge — mirrors BTC option signals to Delta when enabled.
 	// StartMonitor polls live positions every 5 min and auto-closes at profit/stop targets.
 	deltaBridge := delta.NewBridge()
+
+	// ── Strategy hunt: real Delta pricing for both option desks ───────────────
+	//
+	// Both desks priced against a synthetic Black-Scholes chain that could quote
+	// any strike at any expiry with no spread. Delta lists ~457 live BTC
+	// contracts and nothing else, and quotes a real bid/ask. Pricing against the
+	// venue is what makes a paper result transferable to the Live Engine, which
+	// executes on that same book.
+	//
+	// One cache serves BOTH desks (~100 strategies): two upstream requests per
+	// refresh regardless of strategy count. Enabled by default; set
+	// OPTIONS_REAL_CHAIN=false to fall back to the model for an A/B comparison.
+	var cryptoFnoChain *optionchain.FnoChain
+	if deltaBridge.Client() != nil && parseEnvBoolDefault("OPTIONS_REAL_CHAIN", true) {
+		chainCache := optionchain.New(deltaBridge.Client(), "BTC", time.Minute, 5*time.Minute)
+		chainCache.Start(ctx)
+		// Spot comes from the engine's own BTC price rather than the chain, which
+		// carries no underlying price of its own.
+		cryptoFnoChain = optionchain.ForCryptoFno(chainCache, func(u string) float64 {
+			if u == "BTC" {
+				return optionsEngine.LastPrice()
+			}
+			return 0
+		})
+		optionsEngine.SetChainPricer(optionchain.ForBuying(chainCache, optionchain.DefaultTolerance))
+		optionsSellingEngine.SetChainPricer(optionchain.ForSelling(chainCache, optionchain.DefaultTolerance))
+		log.Printf("[OPTIONS] real Delta chain pricing ENABLED for both desks (synthetic chain disabled)")
+
+		http.HandleFunc("/api/options/chain-health", func(w http.ResponseWriter, r *http.Request) {
+			contracts, quoted, takenAt, lastErr := chainCache.Stats()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"contracts": contracts, "quoted": quoted,
+				"takenAt": takenAt, "stale": chainCache.Stale(), "lastError": lastErr,
+				"buyingSkips":  optionsEngine.ChainSkips(),
+				"sellingSkips": optionsSellingEngine.ChainSkips(),
+				// Data provenance. These are what make the leaderboard readable
+				// as evidence: which venue priced the entries, how many were
+				// refused for want of a real quote, and how many were taken on
+				// the backup venue rather than the one the Live Engine trades.
+				"buying": map[string]any{
+					"feedLive": optionsEngine.FeedLive(), "feedSource": optionsEngine.FeedSource(),
+					"blockedOpens": optionsEngine.BlockedOpens(), "opensOnFallback": optionsEngine.OpensOnFallback(),
+				},
+				"selling": map[string]any{
+					"feedLive": optionsSellingEngine.FeedLive(), "feedSource": optionsSellingEngine.FeedSource(),
+					"blockedOpens": optionsSellingEngine.BlockedOpens(), "opensOnFallback": optionsSellingEngine.OpensOnFallback(),
+				},
+			})
+		})
+	} else {
+		log.Printf("[OPTIONS] real chain pricing OFF — desks remain on the synthetic Black-Scholes chain")
+	}
+
+	// ── Crypto F&O paper desk ────────────────────────────────────────────────
+	//
+	// Named accounts with their own capital, Groww-style multi-leg baskets off
+	// the live Delta chain, and portfolio margin that gives credit for hedges.
+	// Delta publishes no basket-margin endpoint (POST /v2/orders/margins is 404),
+	// so the hedge benefit is computed locally by revaluing the whole basket
+	// across a stressed price grid — see internal/cryptofno.
+	//
+	// It reads the SAME chain cache as the options desks, so it adds no upstream
+	// requests. Paper only: no order ever reaches the broker from this desk.
+	if cryptoFnoChain != nil {
+		fnoBook := cryptofno.NewBook()
+		fnoSvc := cryptofno.NewService(fnoBook, cryptoFnoChain, 0.0005)
+		http.Handle("/api/crypto-fno/", fnoSvc.Handler())
+		log.Printf("[CRYPTO F&O] desk wired — $%.0f default account, hedge-aware portfolio margin",
+			cryptofno.DefaultAccountCapitalUSD)
+	} else {
+		log.Printf("[CRYPTO F&O] desk NOT wired — no live Delta chain available")
+	}
+
+	// Strategy hunt leaderboard: every strategy on its own $1,000 account,
+	// ranked by growth, with the PRE-REGISTERED gate deciding eligibility.
+	// Read-only — nothing here moves capital.
+	huntSvc := hunt.NewService(hunt.DefaultGate,
+		hunt.BuyingDesk{Engine: optionsEngine, Capital: hunt.DefaultStartingCapital},
+		hunt.SellingDesk{Engine: optionsSellingEngine, Capital: hunt.DefaultStartingCapital},
+	)
+	http.Handle("/api/hunt/", huntSvc.Handler())
+	log.Printf("[HUNT] leaderboard wired — $%.0f per strategy, gate: >=%d trades, >=%.0fd, PF>=%.1f net",
+		hunt.DefaultStartingCapital, hunt.DefaultGate.MinTrades, hunt.DefaultGate.MinDays, hunt.DefaultGate.MinPF)
 	orchestrator.WireDeltaBridge(deltaBridge)
+	// Custody: reload positions this app opened before the restart, then adopt any
+	// untracked real option position on the exchange. A position the app opened
+	// stays the app's responsibility until SL/TP/expiry closes it — it must never
+	// be orphaned by a restart or a disarm.
+	deltaBridge.RestoreTrades()
+	go func() {
+		adoptCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		if n, err := deltaBridge.AdoptUntrackedPositions(adoptCtx); err != nil {
+			log.Printf("[DELTA BRIDGE] custody: adoption sweep failed: %v", err)
+		} else if n > 0 {
+			log.Printf("[DELTA BRIDGE] custody: adopted %d untracked live position(s) into SL/TP management", n)
+		}
+	}()
 	deltaBridge.StartMonitor(ctx)
-	optionsSellingEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64) {
+
+	// Live Engine control plane (real-money option BUYING module). Ships DISARMED
+	// with a $100 server-enforced ceiling; arming is a human action only.
+	wireLiveEngine(ctx, deltaBridge, ksSvc, optionsEngine)
+	// LIVE ENGINE is buying-only: real orders are mirrored from the BUYING engine
+	// (long calls/puts, bounded risk), NOT the selling engine (naked shorts). The
+	// bridge is forced to buying+native mode and gated by a per-strategy allow-list
+	// in wireLiveEngine. The selling desk stays paper-only — it no longer feeds
+	// live orders.
+	optionsEngine.SetOnOpenHook(func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD, premiumPerBTC, btcSpot float64) {
 		deltaBridge.OnOpen(delta.OpenSignal{
-			PaperTradeID: posID,
-			StrategyID:   stratID,
-			StrategyName: stratName,
-			OptionType:   optType,
-			Strike:       strike,
-			ExpiryTime:   expiry,
-			PremiumUSD:   premiumUSD,
-			BTCPrice:     btcSpot,
+			PaperTradeID:  posID,
+			StrategyID:    stratID,
+			StrategyName:  stratName,
+			OptionType:    optType,
+			Strike:        strike,
+			ExpiryTime:    expiry,
+			PremiumUSD:    premiumUSD,
+			PremiumPerBTC: premiumPerBTC,
+			BTCPrice:      btcSpot,
 		})
 	})
-	optionsSellingEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
+	optionsEngine.SetOnCloseHook(func(posID string, stratID int, optType string, strike float64, exitReason string) {
+		// Mark the source: this exit is the STRATEGY's decision, measured on the
+		// synthetic paper chain, not the real position's own risk levels. The two
+		// can disagree — a paper "SL" has closed a real leg that was in profit —
+		// so labelling it plainly avoids reading a strategy exit as a real stop.
 		deltaBridge.OnClose(delta.CloseSignal{
 			PaperTradeID: posID,
 			StrategyID:   stratID,
 			OptionType:   optType,
 			Strike:       strike,
-			ExitReason:   exitReason,
+			ExitReason:   "strategy_" + exitReason,
 		})
 	})
 	var btcBuy persistence.OptionsBuyPaperPersistence
@@ -1619,22 +1798,39 @@ func main() {
 				}
 				p := lastBTCPrice
 				src := lastGoodSource
+
+				// A synthetic spot must never reach the desks.
+				//
+				// It used to: when Delta AND Binance both failed, a hardcoded
+				// constant was substituted and both desks kept opening, marking
+				// and closing positions against a number no venue ever quoted.
+				// Those trades landed in the same table used to pick strategies
+				// for real money, and nothing downstream could tell them apart
+				// from real ones.
+				//
+				// Now the price is simply not published. The desks hold their
+				// last real quote for managing open positions — custody has to
+				// keep working — and their feed gate refuses new entries until a
+				// real venue comes back.
 				if p <= 0 {
-					p = options.PaperBTCFallbackSpot()
-					src = "synthetic"
 					syntheticSpotLogged.Do(func() {
-						log.Printf("[OPTIONS FEED] using synthetic BTC spot %.0f until Delta/Binance feed is available", p)
+						log.Printf("[OPTIONS FEED] no real BTC spot from Delta or Binance — desks will manage open positions and open nothing new")
 					})
+					optionsEngine.SetFeedStatus(false, options.SyntheticSource)
+					optionsSellingEngine.SetFeedStatus(false, options_selling.SyntheticSource)
+					publishOptionsEngineBTCSpot("unavailable", 0, "NONE")
+					continue
 				}
+
 				tickerDisp := symDefault
 				if src == "binance" {
 					tickerDisp = "BTCUSDT"
-				} else if src == "synthetic" {
-					tickerDisp = "PAPER"
 				}
 				publishOptionsEngineBTCSpot(src, p, tickerDisp)
 				optionsEngine.UpdatePrice(p)
 				optionsSellingEngine.UpdatePrice(p)
+				optionsEngine.SetFeedStatus(true, src)
+				optionsSellingEngine.SetFeedStatus(true, src)
 			}
 		}
 	})
@@ -2805,7 +3001,7 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("[RAIG] HTTP shutdown warning: %v", err)
 	}
-	coinbaseClient.Close()
+	tickFeed.Close()
 	if dbStore != nil {
 		dbStore.Close()
 	}

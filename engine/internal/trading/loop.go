@@ -598,6 +598,27 @@ type brokerFillFunc func(ctx context.Context, sig strategy.Signal, clientOrderID
 type InstitutionalPathOpts struct {
 	// EmergencyFlatten skips PMS and sizing gates but still records OMS/ledger events.
 	EmergencyFlatten bool
+	// PreSubmitAssert, when set, runs at the single post-gate choke point right
+	// before the broker fill — after provenance is stamped and after the risk
+	// gate. It is the enforced home of AssertBuyWithinBudget: an order whose
+	// assertion fails is rejected and never reaches the broker. Returning an
+	// error here aborts the submit.
+	PreSubmitAssert func() error
+
+	// FixedContractInstrument marks an order whose size is a fixed number of
+	// exchange contracts, not a BTC-denominated futures position — currently only
+	// the Live Engine's long-option buys (1 contract = 0.001 BTC).
+	//
+	// It skips ONLY riskv2.EnforceExecutionFloor, which asserts a minimum
+	// 0.01 BTC (~$650) futures position. Applying that to a $0.10 option purchase
+	// is a category error: it rejects every legitimate order without bounding any
+	// real risk. Size on this path is bounded independently and more tightly by
+	// the fixed 1-contract quantity, AssertBuyWithinBudget (premium must fit the
+	// risk budget), the $100 server-enforced ceiling and the daily-loss breaker.
+	//
+	// Every other control still runs: kill switch, PMS portfolio gate, the
+	// pre-trade risk pipeline, provenance, ledger/OMS events and reconciliation.
+	FixedContractInstrument bool
 }
 
 func (o *Orchestrator) executeThroughInstitutionalPath(ctx context.Context, sig strategy.Signal, strategyName string, currentPrice float64, mode execution.OrderMode) (execution.FillResult, error) {
@@ -723,7 +744,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 			RiskApproved:   true,
 			Reason:         "emergency_flatten",
 		})
-		return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, 1.0, "emergency_flatten")
+		return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, 1.0, "emergency_flatten", nil)
 	}
 
 	// P2-C: authoritative strategy metadata with live family for concentration checks.
@@ -894,13 +915,19 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	}
 
 	// Risk V2 sizing floor — authoritative rejection via sizing.go (P1-A).
+	// Skipped only for fixed-contract instruments (Live Engine option buys),
+	// where a 0.01 BTC futures floor does not apply — see FixedContractInstrument.
 	rec := riskDecision.RiskDecision.RecommendedSizeBTC
-	if _, err := riskv2.EnforceExecutionFloor(
-		strategyName,
-		rec,
-		riskDecision.RiskDecision.Kelly.SelectedFraction,
-		riskDecision.RiskDecision.DynamicSizing.Multiplier,
-	); err != nil {
+	floorErr := error(nil)
+	if !pathOpts.FixedContractInstrument {
+		_, floorErr = riskv2.EnforceExecutionFloor(
+			strategyName,
+			rec,
+			riskDecision.RiskDecision.Kelly.SelectedFraction,
+			riskDecision.RiskDecision.DynamicSizing.Multiplier,
+		)
+	}
+	if err := floorErr; err != nil {
 		rejReason := err.Error()
 		logDecisionFunnel(
 			strategyName, stratCategory, string(stratMeta.Family), o.lastRegime,
@@ -938,7 +965,7 @@ func (o *Orchestrator) executeThroughInstitutionalPathWithFill(ctx context.Conte
 	}
 	sig.TargetSize = rec
 	orderPayload.Quantity = rec
-	return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, riskDecision.RiskDecision.Kelly.SelectedFraction, "institutional_path")
+	return o.submitInstitutionalOrder(ctx, sig, strategyName, clientOrderID, orderPayload, appendOrderEvent, fillFn, riskDecision.RiskDecision.Kelly.SelectedFraction, "institutional_path", pathOpts.PreSubmitAssert)
 }
 
 func (o *Orchestrator) submitInstitutionalOrder(
@@ -951,6 +978,7 @@ func (o *Orchestrator) submitInstitutionalOrder(
 	fillFn brokerFillFunc,
 	kellyFraction float64,
 	source string,
+	preSubmitAssert func() error,
 ) (execution.FillResult, error) {
 	if _, err := appendOrderEvent(ledger.EventRiskApproved, orderPayload); err != nil {
 		return execution.FillResult{}, err
@@ -976,6 +1004,18 @@ func (o *Orchestrator) submitInstitutionalOrder(
 	ackPayload.ExchangeOrderID = "paper-" + clientOrderID
 	if _, err := appendOrderEvent(ledger.EventOrderAcked, ackPayload); err != nil {
 		return execution.FillResult{}, err
+	}
+
+	// Server-side budget backstop, at the same single post-gate choke point where
+	// provenance is stamped: an order whose assertion fails is rejected here and
+	// never reaches the broker. A backstop only backstops if it cannot be skipped.
+	if preSubmitAssert != nil {
+		if assertErr := preSubmitAssert(); assertErr != nil {
+			if _, nerr := appendOrderEvent(ledger.EventOrderRejected, orderPayload); nerr != nil {
+				return execution.FillResult{}, nerr
+			}
+			return execution.FillResult{}, fmt.Errorf("pre-submit assertion failed: %w", assertErr)
+		}
 	}
 
 	// Stamp risk-gate provenance onto the context at this single choke point,

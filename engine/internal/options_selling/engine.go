@@ -3,6 +3,7 @@ package options_selling
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -50,6 +51,17 @@ type strategyState struct {
 
 // Engine is the fully autonomous BTC option SELLING engine.
 type Engine struct {
+	// feedGate refuses new entries when no real venue price is available. This
+	// desk selects strategies for real money, so a trade recorded against a
+	// price the market never printed is not a weak data point — it is a false
+	// one, and once in the table it is indistinguishable from a real one.
+	feedGate
+
+	// mirrorOpens / mirrorSkips track fill-time anti-strategy mirroring.
+	// mirrorSkips must stay zero; see anti_mirror.go. Guarded by mu.
+	mirrorOpens int64
+	mirrorSkips int64
+
 	mu               sync.RWMutex
 	states           []*strategyState
 	trades           []OptionTrade
@@ -68,6 +80,13 @@ type Engine struct {
 	onOpenHook       func(posID string, stratID int, stratName string, optType string, strike float64, expiry time.Time, premiumUSD float64, btcSpot float64)
 	onCloseHook      func(posID string, stratID int, optType string, strike float64, exitReason string)
 	tickEvery        time.Duration
+
+	// chainPricer, when set, prices against the REAL Delta chain instead of the
+	// synthetic Black-Scholes model. nil keeps the model, so the two can be
+	// compared rather than swapped on faith.
+	chainPricer ChainPricer
+	// chainSkips counts signals the venue could not fill.
+	chainSkips chainSkipCounters
 }
 
 func NewEngine() *Engine {
@@ -91,6 +110,14 @@ func newEngineWithProfile(profile MarketProfile) *Engine {
 
 	now := time.Now().UTC()
 	startingBalance := initialSellingBalanceUSD()
+	// Hunt mode funds every strategy its own stake; the desk balance must
+	// cover all of them at once or they compete for one pot and the
+	// leaderboard measures arrival order rather than edge.
+	if huntModeEnabled() {
+		if hb := huntDeskBalance(len(states)); hb > startingBalance {
+			startingBalance = hb
+		}
+	}
 	engine := &Engine{
 		states:          states,
 		marketProfile:   profile,
@@ -318,12 +345,38 @@ func (e *Engine) RestoreState(state PersistedState) {
 	e.refreshRosterLocked(classifyMarketRegime(e.minuteBars), now.UTC())
 }
 
+// ResetAccount wipes the selling account and restores the environment-configured
+// starting balance.
 func (e *Engine) ResetAccount() PersistedState {
+	return e.ResetAccountWith(0)
+}
+
+// ResetAccountWith wipes the account and restarts it on a caller-chosen starting
+// balance, so the desk can be re-based without a redeploy. A non-positive value
+// falls back to the environment default, preserving ResetAccount's behaviour.
+func (e *Engine) ResetAccountWith(startingBalance float64) PersistedState {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if startingBalance <= 0 {
+		startingBalance = initialSellingBalanceUSD()
+		// Apply the SAME hunt-mode funding floor the constructor uses.
+		//
+		// Without this a reset silently refunded the desk to the bare configured
+		// default — $100 against a hundred-odd strategies each wanting a $1,000
+		// stake. The desk does not fail visibly at that balance; it just cannot
+		// open most of its positions, so the leaderboard starts measuring which
+		// strategy signalled FIRST rather than which has an edge, which is the
+		// exact failure hunt mode exists to prevent. Every reset quietly
+		// re-introduced it.
+		if huntModeEnabled() {
+			if hb := huntDeskBalance(len(e.states)); hb > startingBalance {
+				startingBalance = hb
+			}
+		}
+	}
 	e.trades = nil
-	e.balance = initialSellingBalanceUSD()
+	e.balance = startingBalance
 	e.lastPrice = 0
 	e.priceHist = nil
 	e.minuteBars = nil
@@ -549,6 +602,23 @@ func (e *Engine) manageStrategyRuntime(s *strategyState, ctx SignalContext, regi
 	}
 
 	if s.position == nil && s.shadowPosition == nil {
+		// No new exposure without a real market price. Open positions above are
+		// still managed either way: abandoning custody of a live position is
+		// worse than marking it against the last real quote, whereas opening a
+		// new one on a price nobody quoted has no upside at all.
+		if !e.FeedLive() {
+			e.noteBlockedOpen()
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
+		// A mirror never opens on its own signal. It exists only as the inverse
+		// of a fill its original already took, and openMirrorLocked creates it
+		// there. Letting it evaluate would make it a separate strategy that
+		// merely shares a name with the thing it is supposed to negate.
+		if IsAnti(s.def.Name) {
+			e.refreshStrategyPresentationLocked(s, now)
+			return
+		}
 		switch s.stats.RosterState {
 		case StrategyRosterActive:
 			e.maybeOpenLivePositionLocked(s, ctx, regime, iv, now, openCount)
@@ -642,6 +712,13 @@ func (e *Engine) maybeOpenLivePositionLocked(s *strategyState, ctx SignalContext
 	pos.MarginBlocked = marginRequired
 
 	s.position = pos
+	// Tally entries taken on the fallback venue. Those trades are real, but they
+	// were priced on a book the Live Engine does not execute against.
+	e.noteOpen(PrimaryVenue)
+	// Buy the SAME contract for this strategy's mirror, at the same premium.
+	// Inheriting the fill is what makes the pair an exact inverse rather than
+	// two loosely related bets. See anti_mirror.go.
+	e.openMirrorLocked(s, pos, now)
 	s.stats.HasPosition = true
 	s.stats.Status = optionStatusInPosition
 	*openCount++
@@ -723,6 +800,35 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		return nil
 	}
 
+	// Real-chain resolution. The model produced a DESIRED strike; the venue
+	// decides whether that trade exists. Snap onto a listed contract or skip —
+	// substituting a distant contract would record a result for a trade this
+	// strategy never asked for.
+	contractSymbol := ""
+	if e.chainPricer != nil {
+		q, err := e.chainPricer.ResolveEntry(string(def.Type), strike, expiry)
+		if err != nil {
+			e.chainSkips.noContract.Add(1)
+			return nil
+		}
+		if q.PremiumPerBTC <= 0 {
+			e.chainSkips.noMark.Add(1)
+			return nil
+		}
+		contractSymbol = q.Symbol
+		strike = q.Strike
+		expiry = q.Expiry
+		// A seller RECEIVES the bid, not the mark. Booking the mark credits
+		// half the spread that never arrives — on the 1.46% spreads measured on
+		// this chain that is a systematic overstatement of every short's edge.
+		if q.Bid > 0 {
+			pr.Premium = q.Bid
+		} else {
+			pr.Premium = q.PremiumPerBTC
+		}
+		e.chainSkips.filled.Add(1)
+	}
+
 	// Delta Exchange realistic retail sizing: fixed quantity with multipliers
 	// Not inverse-premium (which created absurd sizes for cheap options)
 	baseQty := float64(DELTA_BASE_QUANTITY)
@@ -768,6 +874,7 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 		CostBasis:      positionUSD,
 		EntryBTCPrice:  e.lastPrice,
 		EntryTime:      now,
+		ContractSymbol: contractSymbol,
 		IV:             iv,
 		Delta:          pr.Delta,
 	}
@@ -776,13 +883,50 @@ func (e *Engine) newOptionPositionLocked(def StrategyDef, positionUSD, iv float6
 func (e *Engine) markToMarketPositionLocked(pos *OptionPosition, iv, takeProfitPct, stopLossPct float64, now time.Time) string {
 	// Use ask price for exit valuation (what you'd pay to buy back)
 	result := PriceOptionForExit(e.lastPrice, pos.Strike, pos.ExpiryTime, iv, pos.OptionType)
-	pos.CurrentPremium = result.Premium
 	pos.Delta = result.Delta
 	pos.IV = iv
 
+	// A short entered on the real chain must be re-priced on the real chain, and
+	// specifically at the ASK: closing a short means BUYING the contract back.
+	// Marking it at mid understates the cost of every exit by half the spread —
+	// on the 1.46% spreads measured on this chain, a systematic flattering of
+	// exactly the number the promotion gate reads.
+	//
+	// The model price is assigned ONLY on the model path. Assigning it first and
+	// overwriting on success would mean an unquoted venue contract silently
+	// takes a model mark instead of holding its last real one.
+	onVenue := e.chainPricer != nil && pos.ContractSymbol != ""
+	if !onVenue {
+		pos.CurrentPremium = result.Premium
+	} else if q, ok := e.chainPricer.QuoteFor(pos.ContractSymbol); ok {
+		switch {
+		case q.Ask > 0:
+			pos.CurrentPremium = q.Ask
+		case q.PremiumPerBTC > 0:
+			pos.CurrentPremium = q.PremiumPerBTC
+		}
+	}
+	// Venue short with no live quote: CurrentPremium is left untouched, holding
+	// its last real mark. Missing quote is missing information, not a valuation.
+
 	// SELLING PnL logic: Profit = EntryPremium - CurrentPremium
 	// Gross PnL only - fees deducted once at close
-	pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	// Short (the desk's norm): profit when the premium falls.
+	// Long (an anti-strategy mirror): profit when it rises. The sign is the
+	// whole point — it is what makes the pair's P&L cancel.
+	if pos.LongPremium {
+		pos.UnrealizedPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	} else {
+		pos.UnrealizedPnL = (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	}
+
+	// A mirror runs NO exit policy of its own. The rules below are short-premium
+	// rules, and a long-side reinterpretation would close the two halves at
+	// different premiums on different ticks — exactly what stops them being an
+	// inverse. The mirror is closed by closeMirrorLocked when its original goes.
+	if pos.LongPremium {
+		return ""
+	}
 
 	gainPct := 0.0
 	if pos.EntryPremium > 0 {
@@ -844,11 +988,20 @@ func (e *Engine) closePositionLocked(s *strategyState, reason string, now time.T
 		return
 	}
 
+	// Close this strategy's mirror on the same tick at the same premium, before
+	// the original's own bookkeeping runs. A mirror left open after its original
+	// has gone is no longer an inverse of anything.
+	e.closeMirrorLocked(s, reason, now)
+
 	// Realized PnL for a short option: premium collected minus buy-back cost, less
 	// the round-trip fee taken at open. No artificial floor — a far-OTM short only
 	// ever risks and earns the premium at stake, so both wins and losses are the
 	// true cents-scale amounts, not a fixed $2.
 	grossPnL := (pos.EntryPremium - pos.CurrentPremium) * pos.Quantity
+	if pos.LongPremium {
+		// The mirror bought the contract: its gross is the negation.
+		grossPnL = (pos.CurrentPremium - pos.EntryPremium) * pos.Quantity
+	}
 	entryFees := pos.EntryPremium * pos.Quantity * ROUND_TRIP_FEE_PCT
 	netPnL := grossPnL - entryFees
 
@@ -1046,6 +1199,23 @@ func (e *Engine) HandleTrades(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+// StrategyStatuses returns every strategy's current status. Mirrors the buying
+// desk's accessor so the hunt can enumerate the full roster — including
+// strategies that have not closed a trade yet, which would otherwise be
+// invisible until their first close.
+func (e *Engine) StrategyStatuses() []StrategyStatus {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]StrategyStatus, len(e.states))
+	for i, s := range e.states {
+		out[i] = s.stats
+		if out[i].StrategyID == 0 {
+			out[i].StrategyID = s.def.ID
+		}
+	}
+	return out
+}
+
 func (e *Engine) HandleStrategies(w http.ResponseWriter, r *http.Request) {
 	setCORSOptions(w)
 	if r.Method == http.MethodOptions {
@@ -1124,8 +1294,33 @@ func (e *Engine) HandleReset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	e.ResetAccount()
-	json.NewEncoder(w).Encode(map[string]string{"status": "reset"})
+	// Optional body: {"initialCapital": 5000}. Absent, malformed or non-positive
+	// falls back to the environment default, so an empty POST behaves as before.
+	snap := e.ResetAccountWith(parseRequestedCapital(r))
+	log.Printf("[OPTIONS-SELL] account reset to $%.2f", snap.Balance)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "reset",
+		"balance": snap.Balance,
+	})
+}
+
+// parseRequestedCapital reads an optional starting balance from the request body.
+// It never fails the request: a bad body means "use the default", because a reset
+// that errors out is worse than a reset that uses the configured balance.
+func parseRequestedCapital(r *http.Request) float64 {
+	if r.Body == nil {
+		return 0
+	}
+	var body struct {
+		InitialCapital float64 `json:"initialCapital"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&body); err != nil {
+		return 0
+	}
+	if body.InitialCapital <= 0 || math.IsNaN(body.InitialCapital) || math.IsInf(body.InitialCapital, 0) {
+		return 0
+	}
+	return body.InitialCapital
 }
 
 func (e *Engine) HandleClearHistory(w http.ResponseWriter, r *http.Request) {

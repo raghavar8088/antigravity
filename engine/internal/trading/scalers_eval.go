@@ -125,7 +125,7 @@ type ScalerBundle struct {
 	liqPopulated, liqHealthy      bool
 
 	// Binance BTC perpetual mark price vs Coinbase spot (populated from
-	// BinancePerpPriceHolder in the main update loop) — feeds S16.
+	// DeltaPerpPriceHolder in the main update loop) — feeds S16.
 	perpPrice          float64
 	perpPricePopulated bool
 	perpPriceHealthy   bool
