@@ -133,15 +133,39 @@ func (d *liveDesk) refreshLoop(ctx context.Context) {
 	}
 }
 
-// onPaperFill mirrors a paper entry into a real order. Safe on a nil receiver.
-func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
-	if d == nil || pos == nil {
-		return
-	}
+// liveFillHook is the seam between the paper desk and real money.
+//
+// It exists as a variable so a test can prove that a given fill path reaches the
+// live bridge at all. That is not a hypothetical concern: the ANTI_ mirrors were
+// silently unable to trade because their fill path never called it, and no test
+// could observe the omission without this.
+var liveFillHook = func(d *liveDesk, strategy, symbol string, pos *position) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	d.bridge.OnPaperOpen(ctx, strategy, symbol, pos.Dir == "LONG", pos.Entry, pos.SL, pos.TP)
 }
+
+// onPaperFill mirrors a paper entry into a real order. Safe on a nil receiver.
+func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
+	if pos == nil {
+		return
+	}
+	if d == nil {
+		// Paper-only, but still announce the stream so tests (and any future
+		// observer) can see which fills WOULD have been offered to the bridge.
+		if observeFill != nil {
+			observeFill(strategy, symbol, pos)
+		}
+		return
+	}
+	if observeFill != nil {
+		observeFill(strategy, symbol, pos)
+	}
+	liveFillHook(d, strategy, symbol, pos)
+}
+
+// observeFill, when set, receives every fill offered to the live path. Test-only.
+var observeFill func(strategy, symbol string, pos *position)
 
 // reportUnknown logs allow-listed names the desk does not actually run.
 func (d *liveDesk) reportUnknown(names []string) {

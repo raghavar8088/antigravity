@@ -1181,6 +1181,16 @@ func (d *desk) openMirror(strategy, symbol string, orig *position, barIdx int64,
 	}
 	mcs.Pend = nil
 	d.mirrorOpens++
+
+	// The mirror is a tradeable stream in its own right, so it must reach the
+	// live bridge too.
+	//
+	// Missing this made six of the eight allow-listed live strategies
+	// structurally unable to place an order: they are all ANTI_ mirrors, and the
+	// only live hook was on the ORIGINAL's fill path. The bridge was armed, the
+	// allow-list resolved, the desk traded — and those six could never have
+	// produced a live order however long they ran. Nothing would have errored.
+	d.live.onPaperFill(mk, symbol, mcs.Pos)
 }
 
 // manageMirror advances a strategy's mirror by one bar, if it holds a position.

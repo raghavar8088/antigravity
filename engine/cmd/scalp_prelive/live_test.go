@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	scalers "antigravity-engine/internal/strategy/scalpers"
+)
+
+// scalpTestCandle is a minimal bar for exercising the fill path.
+func scalpTestCandle() scalers.Candle { return scalers.Candle{} }
 
 // The desk shipped paper-only — "no order routing, no API keys, no real-money
 // code path in this binary". That is now conditional, so the conditions
@@ -68,5 +75,33 @@ func TestScalpLive_SymbolsDefaultToTheSelectedTwo(t *testing.T) {
 	seen := map[string]bool{got[0]: true, got[1]: true}
 	if !seen["ADAUSD"] || !seen["BNBUSD"] {
 		t.Errorf("default symbols = %v, want ADAUSD and BNBUSD", got)
+	}
+}
+
+// Six of the eight strategies selected for live trading are ANTI_ mirrors. The
+// only live hook was on the ORIGINAL's fill path, so those six were
+// structurally unable to place an order — the bridge armed, the allow-list
+// resolved, the desk traded, and nothing errored. This pins that a mirror's
+// fill reaches the live path too.
+func TestScalpLive_MirrorFillsReachTheLivePath(t *testing.T) {
+	var offered []string
+	observeFill = func(strategy, symbol string, pos *position) { offered = append(offered, strategy) }
+	t.Cleanup(func() { observeFill = nil })
+
+	d := &desk{combos: map[string]*comboState{}}
+	pos := &position{Dir: "LONG", Entry: 0.17, SL: 0.169, TP: 0.172, Profile: "scalp"}
+	d.combos[comboKey("TEST_Strat", "ADAUSD")] = &comboState{Eq: 1, Peak: 1, Pos: pos}
+
+	d.openMirror("TEST_Strat", "ADAUSD", pos, 1, scalpTestCandle())
+
+	found := false
+	for _, n := range offered {
+		if n == "ANTI_TEST_Strat" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the mirror's fill never reached the live path (offered: %v) — every ANTI_ strategy on the "+
+			"live allow-list would be unable to trade, silently", offered)
 	}
 }
