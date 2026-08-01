@@ -240,6 +240,9 @@ func wireLiveEngine(
 	})
 
 	handler := liveengine.NewHandler(ctrl, data, liveEngineAuthorizer)
+	// Registered BEFORE the catch-all so the venue reader is not swallowed by
+	// the controller's action switch. This one talks to Delta, not to us.
+	http.HandleFunc("/api/live-engine/venue", serveLiveEngineVenue(bridge))
 	http.Handle("/api/live-engine/", handler)
 
 	go liveEngineAutoDisarmMonitor(ctx, ctrl, bridge, ks)

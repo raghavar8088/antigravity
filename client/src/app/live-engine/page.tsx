@@ -254,6 +254,90 @@ function ageLabel(iso?: string): string {
   return `${Math.round(s / 60)}m ago`;
 }
 
+/**
+ * The account exactly as DELTA reports it.
+ *
+ * Every other section of this page is the engine's own read model. That is the
+ * arrangement the 2026-08-01 audit found unfalsifiable: the bridge reported
+ * +$0.9424 for a day the venue recorded as -$3.5405, and stats, trades and the
+ * leaderboard all agreed with each other because all three were computed from
+ * the same wrong numbers.
+ *
+ * Nothing below is derived, filtered by strategy, or attributed to a desk.
+ * Where it disagrees with the rest of the page, this is right.
+ */
+type VenueBalance = { asset: string; balance: number; availableBalance: number };
+type VenuePosition = {
+  symbol: string;
+  size: number;
+  entryPrice: number;
+  margin: number;
+  liquidationPrice?: string;
+  unrealizedPnl?: number;
+};
+type VenueOpenOrder = {
+  orderId: string;
+  symbol: string;
+  side: string;
+  size: number;
+  price: number;
+  state: string;
+  createdAt: string;
+};
+type VenueHistoricalOrder = {
+  id: number;
+  symbol: string;
+  side: string;
+  size: number;
+  unfilledSize: number;
+  avgFillPrice: number;
+  orderType: string;
+  state: string;
+  reduceOnly: boolean;
+  cancelReason?: string;
+  paidCommission: number;
+  createdAt: string;
+};
+type VenueFill = {
+  id: number;
+  orderId: number;
+  symbol: string;
+  side: string;
+  size: number;
+  price: number;
+  role: string;
+  commission: number;
+  createdAt: string;
+};
+type VenueLedger = {
+  id: number;
+  type: string;
+  amount: number;
+  balance: number;
+  asset: string;
+  productName?: string;
+  createdAt: string;
+};
+type VenuePayload = {
+  asOf: string;
+  balances?: VenueBalance[];
+  positions?: VenuePosition[];
+  openOrders?: VenueOpenOrder[];
+  orderHistory?: VenueHistoricalOrder[];
+  fills?: VenueFill[];
+  ledger?: VenueLedger[];
+  /** Per-section failures. An empty table and a broken table look identical. */
+  errors?: Record<string, string>;
+};
+
+function DeskEmptyStateInline({ text }: { text: string }) {
+  return (
+    <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
+      {text}
+    </p>
+  );
+}
+
 export default function LiveEnginePage() {
   const [state, setState] = useState<LiveState | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
@@ -276,7 +360,7 @@ export default function LiveEnginePage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, ac, po, cp, dp, or, ro, ps, pt, rc, au] = await Promise.all([
+      const [st, ac, po, cp, dp, or, ro, ps, pt, rc, vn, au] = await Promise.all([
         fetch("/api/live-engine/state", { cache: "no-store" }),
         fetch("/api/live-engine/account", { cache: "no-store" }),
         fetch("/api/live-engine/positions", { cache: "no-store" }),
@@ -290,6 +374,7 @@ export default function LiveEnginePage() {
         fetch("/api/scalp/scalp/live/stats", { cache: "no-store" }),
         fetch("/api/scalp/scalp/live/trades", { cache: "no-store" }),
         fetch("/api/live-engine/reconciliation", { cache: "no-store" }),
+        fetch("/api/live-engine/venue", { cache: "no-store" }),
         fetch("/api/live-engine/audit", { cache: "no-store" }),
       ]);
       if (!st.ok) {
@@ -309,6 +394,10 @@ export default function LiveEnginePage() {
       }
       if (pt.ok) setPerpTrades(((await pt.json()) as PerpTrade[]) ?? []);
       if (rc.ok) setRecon(await rc.json());
+      // Venue truth is additive: if Delta is unreachable the rest of the page
+      // must keep working, and the section says so rather than showing empty
+      // tables that read as "nothing happened".
+      if (vn.ok) setVenue((await vn.json()) as VenuePayload);
       if (au.ok) setAudit(((await au.json()) as { entries: AuditEntry[] }).entries ?? []);
       setError("");
     } catch {
@@ -351,6 +440,8 @@ export default function LiveEnginePage() {
   );
 
   const [perpBusy, setPerpBusy] = useState<boolean>(false);
+  const [venue, setVenue] = useState<VenuePayload | null>(null);
+  const [venueTab, setVenueTab] = useState<string>("positions");
 
   /**
    * Arm or disarm the PERPETUAL desk.
@@ -1191,6 +1282,238 @@ export default function LiveEnginePage() {
             Per-contract cost against the strategy&apos;s real selected premium is populated from live Delta quotes at the
             testnet stage — the fee % of premium, not the account size, is the live-edge question.
           </p>
+        </DeskCard>
+
+        {/* SECTION 6b — DELTA EXCHANGE, verbatim.
+
+            Six private endpoints, unfiltered. This is the control the audit
+            found missing: every other surface here is the engine checking its
+            own arithmetic. */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Delta Exchange — Venue Truth"
+            subtitle="Straight from the exchange. Not filtered by strategy or desk; where this disagrees with the sections above, this is correct."
+            actions={
+              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                {venue ? ageLabel(venue.asOf) : "—"}
+              </span>
+            }
+          />
+
+          {venue?.errors && (
+            <div
+              className="desk-body-md"
+              style={{
+                margin: "0 0 12px",
+                padding: "8px 12px",
+                borderRadius: 6,
+                border: "1px solid var(--desk-error)",
+                color: "var(--desk-error)",
+              }}
+            >
+              {Object.entries(venue.errors).map(([k, v]) => (
+                <div key={k}>
+                  <strong>{k}</strong>: {v}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Balances read as tiles rather than a table — there are one or two
+              assets and they are the headline number, not a list. */}
+          <div className="desk-metrics-row" style={{ marginBottom: 16 }}>
+            {(venue?.balances ?? []).map((b) => (
+              <DeskMetricTile
+                key={b.asset}
+                compact
+                label={`${b.asset} balance`}
+                value={fmtUSD(b.balance)}
+                sub={`available ${fmtUSD(b.availableBalance)}`}
+              />
+            ))}
+            {!venue?.balances?.length && (
+              <DeskMetricTile compact label="Wallet" value="—" sub="no balance returned" />
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {[
+              ["positions", `Positions (${venue?.positions?.length ?? 0})`],
+              ["openOrders", `Open Orders (${venue?.openOrders?.length ?? 0})`],
+              ["history", `Order History (${venue?.orderHistory?.length ?? 0})`],
+              ["fills", `Fills (${venue?.fills?.length ?? 0})`],
+              ["ledger", `Ledger (${venue?.ledger?.length ?? 0})`],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setVenueTab(id)}
+                className="desk-label-md"
+                style={{
+                  cursor: "pointer",
+                  padding: "5px 12px",
+                  borderRadius: 6,
+                  border: "1px solid var(--desk-outline)",
+                  background: venueTab === id ? "var(--desk-primary)" : "transparent",
+                  color: venueTab === id ? "var(--desk-on-primary)" : "var(--desk-on-surface-variant)",
+                  fontWeight: 600,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {venueTab === "positions" && (
+            <DeskDataTable
+              columns={[
+                { id: "symbol", header: "Symbol", cell: (r: VenuePosition) => r.symbol },
+                { id: "size", align: "right", header: "Size", cell: (r: VenuePosition) => r.size },
+                { id: "entry", align: "right", header: "Entry", cell: (r: VenuePosition) => fmtPrice(r.entryPrice) },
+                {
+                  id: "upnl",
+                  align: "right",
+                  header: "Unrealized",
+                  cell: (r: VenuePosition) => (
+                    <span className={pnlTone(r.unrealizedPnl ?? 0)}>{fmtUSD(r.unrealizedPnl)}</span>
+                  ),
+                },
+                { id: "margin", align: "right", header: "Margin", cell: (r: VenuePosition) => fmtUSD(r.margin) },
+                {
+                  id: "liq",
+                  align: "right",
+                  header: "Liquidation",
+                  cell: (r: VenuePosition) => r.liquidationPrice || "—",
+                },
+              ]}
+              rows={venue?.positions ?? []}
+              getRowKey={(r: VenuePosition, i: number) => `${r.symbol}-${i}`}
+              minWidth={760}
+              empty={<DeskEmptyStateInline text="Delta reports no open positions." />}
+            />
+          )}
+
+          {venueTab === "openOrders" && (
+            <DeskDataTable
+              columns={[
+                { id: "id", header: "Order", cell: (r: VenueOpenOrder) => r.orderId },
+                { id: "symbol", header: "Symbol", cell: (r: VenueOpenOrder) => r.symbol },
+                { id: "side", header: "Side", cell: (r: VenueOpenOrder) => r.side?.toUpperCase() },
+                { id: "size", align: "right", header: "Size", cell: (r: VenueOpenOrder) => r.size },
+                { id: "price", align: "right", header: "Price", cell: (r: VenueOpenOrder) => fmtPrice(r.price) },
+                { id: "state", header: "State", cell: (r: VenueOpenOrder) => r.state },
+                { id: "at", header: "Placed", cell: (r: VenueOpenOrder) => r.createdAt?.slice(0, 19).replace("T", " ") },
+              ]}
+              rows={venue?.openOrders ?? []}
+              getRowKey={(r: VenueOpenOrder) => r.orderId}
+              minWidth={820}
+              empty={<DeskEmptyStateInline text="No resting orders on the venue." />}
+            />
+          )}
+
+          {venueTab === "history" && (
+            <DeskDataTable
+              columns={[
+                { id: "at", header: "Time", cell: (r: VenueHistoricalOrder) => r.createdAt?.slice(0, 19).replace("T", " ") },
+                { id: "symbol", header: "Symbol", cell: (r: VenueHistoricalOrder) => r.symbol },
+                { id: "side", header: "Side", cell: (r: VenueHistoricalOrder) => r.side?.toUpperCase() },
+                { id: "size", align: "right", header: "Size", cell: (r: VenueHistoricalOrder) => r.size },
+                {
+                  id: "fill",
+                  align: "right",
+                  header: "Avg Fill",
+                  cell: (r: VenueHistoricalOrder) => fmtPrice(r.avgFillPrice),
+                },
+                { id: "type", header: "Type", cell: (r: VenueHistoricalOrder) => r.orderType },
+                {
+                  id: "state",
+                  header: "State",
+                  cell: (r: VenueHistoricalOrder) => (
+                    <DeskChip tone={r.state === "closed" ? "success" : r.state === "cancelled" ? "danger" : "default"}>
+                      {r.state}
+                    </DeskChip>
+                  ),
+                },
+                {
+                  id: "fee",
+                  align: "right",
+                  header: "Fee",
+                  cell: (r: VenueHistoricalOrder) => fmtUSD(r.paidCommission),
+                },
+                {
+                  // The venue's own reason, which the engine's log cannot know.
+                  id: "why",
+                  header: "Reason",
+                  cell: (r: VenueHistoricalOrder) => r.cancelReason || (r.reduceOnly ? "reduce-only" : "—"),
+                },
+              ]}
+              rows={venue?.orderHistory ?? []}
+              getRowKey={(r: VenueHistoricalOrder) => String(r.id)}
+              minWidth={980}
+              empty={<DeskEmptyStateInline text="No order history returned." />}
+            />
+          )}
+
+          {venueTab === "fills" && (
+            <DeskDataTable
+              columns={[
+                { id: "at", header: "Time", cell: (r: VenueFill) => r.createdAt?.slice(0, 19).replace("T", " ") },
+                { id: "symbol", header: "Symbol", cell: (r: VenueFill) => r.symbol },
+                { id: "side", header: "Side", cell: (r: VenueFill) => r.side?.toUpperCase() },
+                { id: "size", align: "right", header: "Size", cell: (r: VenueFill) => r.size },
+                { id: "price", align: "right", header: "Fill Price", cell: (r: VenueFill) => fmtPrice(r.price) },
+                {
+                  id: "role",
+                  header: "Role",
+                  // Taker vs maker is the difference between paying 0.059% and
+                  // earning a rebate. The bridge places taker orders only, so
+                  // anything else here is a finding.
+                  cell: (r: VenueFill) => <DeskChip tone={r.role === "taker" ? "default" : "success"}>{r.role}</DeskChip>,
+                },
+                {
+                  id: "fee",
+                  align: "right",
+                  header: "Commission",
+                  cell: (r: VenueFill) => <span className="desk-pnl-negative">{fmtUSD(r.commission)}</span>,
+                },
+              ]}
+              rows={venue?.fills ?? []}
+              getRowKey={(r: VenueFill) => String(r.id)}
+              minWidth={860}
+              empty={<DeskEmptyStateInline text="No fills returned." />}
+            />
+          )}
+
+          {venueTab === "ledger" && (
+            <DeskDataTable
+              columns={[
+                { id: "at", header: "Time", cell: (r: VenueLedger) => r.createdAt?.slice(0, 19).replace("T", " ") },
+                {
+                  id: "type",
+                  header: "Type",
+                  // FUNDING is the reason this tab exists. Perp funding is
+                  // charged every 8h on any position held across the window and
+                  // appears in NO other endpoint — not fills, not P&L.
+                  cell: (r: VenueLedger) => (
+                    <DeskChip tone={r.type?.includes("funding") ? "primary" : "default"}>{r.type}</DeskChip>
+                  ),
+                },
+                { id: "product", header: "Product", cell: (r: VenueLedger) => r.productName || "—" },
+                {
+                  id: "amount",
+                  align: "right",
+                  header: "Amount",
+                  cell: (r: VenueLedger) => <span className={pnlTone(r.amount)}>{fmtUSD(r.amount)}</span>,
+                },
+                { id: "balance", align: "right", header: "Balance After", cell: (r: VenueLedger) => fmtUSD(r.balance) },
+                { id: "asset", header: "Asset", cell: (r: VenueLedger) => r.asset },
+              ]}
+              rows={venue?.ledger ?? []}
+              getRowKey={(r: VenueLedger) => String(r.id)}
+              minWidth={820}
+              empty={<DeskEmptyStateInline text="No wallet transactions returned." />}
+            />
+          )}
         </DeskCard>
 
         {/* SECTION 7 — Audit log */}

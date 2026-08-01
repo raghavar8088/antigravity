@@ -868,6 +868,7 @@ The content is organized as follows:
   delta/bridge_buy_sizing_test.go
   delta/bridge_buy_sizing.go
   delta/chain_list.go
+  delta/client_venue.go
   delta/client.go
   delta/close_lookup_test.go
   delta/custody_owns_upside_test.go
@@ -1733,6 +1734,7 @@ The content is organized as follows:
 [cmd]/
   antigravity/liveengine_allowlist_test.go
   antigravity/liveengine_result_test.go
+  antigravity/liveengine_venue.go
   antigravity/liveengine_wiring.go
   antigravity/main.go
   antigravity/tickfeed.go
