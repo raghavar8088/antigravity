@@ -150,13 +150,23 @@ func (b *PerpBridge) Restore(ctx context.Context) error {
 	known := map[int]bool{}
 	for _, t := range st.Open {
 		if _, live := venue[t.ProductID]; !live {
-			// Closed while we were down. Book it at its entry rather than
-			// inventing an exit price we never saw.
+			// Closed while we were down, at a price this process never saw.
+			//
+			// This used to book the ENTRY price, producing exactly $0.00 — which
+			// reads identically to a flat trade. One position that took this path
+			// was a LIQUIDATION at -$0.8632, recorded as nothing.
+			//
+			// Not inventing a price was right; concluding the trade was therefore
+			// flat was not. It is marked UNRECONCILED with a zeroed result and a
+			// preserved entry fee, so it shows as an open question rather than a
+			// settled zero, and the venue reconciler can correct it.
 			t.Status = "CLOSED"
 			now := time.Now().UTC()
 			t.ClosedAt = &now
-			t.ExitPrice = t.EntryPrice
-			t.ExitReason = "CLOSED_WHILE_DOWN"
+			t.ExitPrice = 0
+			t.GrossPnL = 0
+			t.RealisedPnL = 0
+			t.ExitReason = ExitReasonUnreconciled
 			b.history = append(b.history, *t)
 			vanished++
 			continue

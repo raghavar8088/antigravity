@@ -68,12 +68,17 @@ type PerpLiveTrade struct {
 	OpenedAt      time.Time `json:"openedAt"`
 	OrderID       string    `json:"orderId"`
 
-	ClosedAt    *time.Time `json:"closedAt,omitempty"`
-	ExitPrice   float64    `json:"exitPrice,omitempty"`
-	ExitReason  string     `json:"exitReason,omitempty"`
-	RealisedPnL float64    `json:"realisedPnl,omitempty"`
-	Status      string     `json:"status"` // OPEN | CLOSED | REJECTED
-	Failure     string     `json:"failure,omitempty"`
+	ClosedAt   *time.Time `json:"closedAt,omitempty"`
+	ExitPrice  float64    `json:"exitPrice,omitempty"`
+	ExitReason string     `json:"exitReason,omitempty"`
+	// Gross, fees and net are reported SEPARATELY. Collapsing them into one
+	// number is how a desk looks profitable gross while shrinking net — and
+	// fees here are comparable to the entire per-trade edge.
+	GrossPnL    float64 `json:"grossPnl,omitempty"`
+	FeesUSD     float64 `json:"feesUsd,omitempty"`
+	RealisedPnL float64 `json:"realisedPnl,omitempty"`
+	Status      string  `json:"status"` // OPEN | CLOSED | REJECTED
+	Failure     string  `json:"failure,omitempty"`
 }
 
 func (t PerpLiveTrade) long() bool { return t.Side == "buy" }
@@ -259,6 +264,13 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		t.ExpiresAt = t.OpenedAt.Add(ttl)
 	}
 
+	// The entry fee is charged now and is part of this trade's cost whatever
+	// happens next. Recording it at open means an UNRECONCILED close still
+	// reports the fee that was definitely paid.
+	if p, ok := b.reg.Lookup(plan.Symbol); ok {
+		t.FeesUSD = PerpFeeUSD(fill, plan.Contracts, p.ContractValue)
+	}
+
 	b.mu.Lock()
 	b.open[perpKey(strategy, symbol)] = t
 	// Persist BEFORE returning: a crash between the fill and the next write
@@ -416,7 +428,7 @@ func (b *PerpBridge) closePosition(ctx context.Context, t *PerpLiveTrade, mark f
 	if !t.long() {
 		side = "buy"
 	}
-	_, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
+	res, err := b.client.PlaceOrder(ctx, PlaceOrderRequest{
 		ProductID: t.ProductID,
 		Size:      t.Contracts,
 		Side:      side,
@@ -432,7 +444,23 @@ func (b *PerpBridge) closePosition(ctx context.Context, t *PerpLiveTrade, mark f
 		b.noteError(err.Error())
 		return err
 	}
-	b.finish(t, mark, reason)
+
+	// Book the FILL, not the mark that triggered this.
+	//
+	// The order is market/ioc and fills wherever the book is; `mark` is only the
+	// price that made the exit decision. Booking the mark recorded a
+	// 1,099-contract ADAUSD close at 0.17263 that actually filled at 0.17290 —
+	// turning a booked +$0.0751 into a real -$0.1395. A sign flip, not a
+	// rounding error.
+	fill := res.Price
+	if fill <= 0 {
+		// The venue accepted the order but did not report a price. Marking the
+		// trade rather than silently substituting `mark` keeps the uncertainty
+		// visible; the reconciler will correct it against the venue.
+		fill = mark
+		reason = reason + "_" + ExitReasonUnreconciled
+	}
+	b.finish(t, fill, reason)
 	return nil
 }
 
@@ -447,13 +475,20 @@ func (b *PerpBridge) finish(t *PerpLiveTrade, exit float64, reason string) {
 	if p, ok := b.reg.Lookup(t.Symbol); ok {
 		cv = p.ContractValue
 	}
-	pnl := (exit - t.EntryPrice) * dir * float64(t.Contracts) * cv
+	// Gross, both fee legs, and net — computed from the prices actually filled.
+	// The previous version reported gross and called it realised, hiding
+	// $1.9086 of fees in a single day on a $110 account.
+	res := ComputePerpResult(t.EntryPrice, exit, t.Contracts, cv, t.long())
+	pnl := res.Net
+	_ = dir
 
 	b.mu.Lock()
 	delete(b.open, perpKey(t.Strategy, t.Symbol))
 	t.ClosedAt = &now
 	t.ExitPrice = exit
 	t.ExitReason = reason
+	t.GrossPnL = res.Gross
+	t.FeesUSD = res.EntryFee + res.ExitFee
 	t.RealisedPnL = pnl
 	t.Status = "CLOSED"
 	b.history = append(b.history, *t)
@@ -468,8 +503,8 @@ func (b *PerpBridge) finish(t *PerpLiveTrade, exit float64, reason string) {
 	if pnl < 0 {
 		symbol = "❌"
 	}
-	log.Printf("[PERP LIVE] %s CLOSE %s %s %s @ %.6f | %s | PnL $%.4f",
-		symbol, t.Side, t.Symbol, t.Strategy, exit, reason, pnl)
+	log.Printf("[PERP LIVE] %s CLOSE %s %s %s @ %.6f | %s | gross $%+.4f fees $%.4f net $%+.4f",
+		symbol, t.Side, t.Symbol, t.Strategy, exit, reason, res.Gross, res.EntryFee+res.ExitFee, pnl)
 }
 
 // CloseAll flattens every position this bridge owns.

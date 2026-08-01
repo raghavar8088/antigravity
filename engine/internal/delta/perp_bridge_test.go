@@ -180,8 +180,19 @@ func TestPerpBridge_RealisedPnLUsesTheSymbolsContractValue(t *testing.T) {
 	if len(h) != 1 {
 		t.Fatalf("history has %d entries", len(h))
 	}
-	if got := h[0].RealisedPnL; got < 9.99 || got > 10.01 {
-		t.Errorf("realised P&L $%.4f, want ~$10 — a 0.001 contract value would give $0.01", got)
+	// GROSS is the contract-value check: +0.01 x 1000 x 1.0 ADA = $10.
+	// A BTC contract value would give $0.01 — the thousandfold sizing trap.
+	if got := h[0].GrossPnL; got < 9.99 || got > 10.01 {
+		t.Errorf("gross $%.4f, want ~$10 — a 0.001 contract value would give $0.01", got)
+	}
+	// REALISED is net of both fee legs and must therefore be strictly smaller.
+	// It reporting exactly gross is what hid $1.9086 of fees in one day.
+	if h[0].FeesUSD <= 0 {
+		t.Error("no fees booked on a closed trade")
+	}
+	if h[0].RealisedPnL >= h[0].GrossPnL {
+		t.Errorf("realised $%.4f is not below gross $%.4f; fees were not subtracted",
+			h[0].RealisedPnL, h[0].GrossPnL)
 	}
 }
 
@@ -340,7 +351,8 @@ func TestPerpBridge_PublishesMarkAndUnrealisedPnL(t *testing.T) {
 		t.Errorf("mark %v, want 0.18", tr.MarkPrice)
 	}
 	// +0.01 x 1000 contracts x 1.0 ADA = $10. A BTC contract value would give
-	// $0.01 — the same thousandfold trap as sizing.
+	// $0.01 — the same thousandfold trap as sizing. Unrealised is quoted GROSS,
+	// since the exit fee is not owed until the position is actually closed.
 	if tr.UnrealizedPnL < 9.99 || tr.UnrealizedPnL > 10.01 {
 		t.Errorf("unrealised $%.4f, want ~$10", tr.UnrealizedPnL)
 	}

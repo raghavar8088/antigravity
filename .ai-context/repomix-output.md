@@ -884,6 +884,8 @@ The content is organized as follows:
   delta/live_position_custody_test.go
   delta/live_position_custody.go
   delta/monitor_interval_test.go
+  delta/perp_accounting_test.go
+  delta/perp_accounting.go
   delta/perp_bridge_test.go
   delta/perp_bridge.go
   delta/perp_persistence_test.go
