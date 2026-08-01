@@ -884,6 +884,8 @@ The content is organized as follows:
   delta/live_position_custody_test.go
   delta/live_position_custody.go
   delta/monitor_interval_test.go
+  delta/perp_products_test.go
+  delta/perp_products.go
   delta/trade_status_test.go
   derivatives/derivatives_test.go
   derivatives/funding_delta_test.go
