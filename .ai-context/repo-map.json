@@ -1,1 +1,1 @@
-{"engine-delta":{"communities":[0,1,2,3],"files":2,"symbols":32,"top_files":[{"file":"engine/internal/delta/perp_products.go","symbols":19},{"file":"engine/internal/delta/perp_products_test.go","symbols":13}]}}
+{"engine-delta":{"communities":[0,1,2,3,4,5],"files":4,"symbols":37,"top_files":[{"file":"engine/internal/delta/perp_sizing_test.go","symbols":12},{"file":"engine/internal/delta/perp_roster.go","symbols":9},{"file":"engine/internal/delta/perp_roster_test.go","symbols":8},{"file":"engine/internal/delta/perp_sizing.go","symbols":8}]}}
