@@ -138,6 +138,29 @@ type Recon = {
 
 type AuditEntry = { at: string; actor: string; action: string; reason?: string; detail?: string };
 
+/**
+ * One row of the live strategy leaderboard.
+ *
+ * Built from CLOSED live positions — real fills, real fees — not from the paper
+ * desks. The paper leaderboards rank a strategy on model premiums; this ranks it
+ * on what the account actually kept, which is the only number that justifies
+ * leaving it enabled.
+ */
+type LeaderRow = {
+  strategy: string;
+  trades: number;
+  wins: number;
+  winRatePct: number;
+  grossUsd: number;
+  feesUsd: number;
+  netUsd: number;
+  /** Fees as a share of gross profit — the figure that decided the options desk. */
+  feeDragPct: number;
+  allowed: boolean;
+  live: boolean;
+  reason: string;
+};
+
 function fmtUSD(v: number | undefined): string {
   if (v === undefined || Number.isNaN(v)) return "—";
   const abs = Math.abs(v);
@@ -401,6 +424,124 @@ export default function LiveEnginePage() {
     [],
   );
 
+  /**
+   * Aggregate closed live trades per strategy.
+   *
+   * A strategy with no closed trade yet still gets a row, because "enabled and
+   * has never filled" is a materially different state from "enabled and losing",
+   * and omitting it makes the first look like the second never happened.
+   */
+  const leaderRows: LeaderRow[] = useMemo(() => {
+    const byStrategy = new Map<string, LeaderRow>();
+
+    const blank = (name: string): LeaderRow => {
+      const e = roster.find((r) => r.strategy === name);
+      return {
+        strategy: name,
+        trades: 0,
+        wins: 0,
+        winRatePct: 0,
+        grossUsd: 0,
+        feesUsd: 0,
+        netUsd: 0,
+        feeDragPct: 0,
+        allowed: e?.allowed ?? false,
+        live: e?.live ?? false,
+        reason: e?.reason ?? "",
+      };
+    };
+
+    // Every allow-listed strategy appears, traded or not.
+    for (const e of roster) {
+      if (e.allowed) byStrategy.set(e.strategy, blank(e.strategy));
+    }
+
+    for (const c of closed) {
+      const name = c.strategy || "(unattributed)";
+      const row = byStrategy.get(name) ?? blank(name);
+      row.trades += 1;
+      const net = c.realizedPnl || 0;
+      if (net > 0) row.wins += 1;
+      row.netUsd += net;
+      row.grossUsd += c.grossPnl ?? net;
+      row.feesUsd += c.feesUsd ?? 0;
+      byStrategy.set(name, row);
+    }
+
+    const rows = Array.from(byStrategy.values()).map((r) => ({
+      ...r,
+      winRatePct: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
+      // Against GROSS PROFIT, not against turnover: a desk can look cheap on
+      // turnover while fees eat most of what it made.
+      feeDragPct: r.grossUsd > 0 ? (r.feesUsd / r.grossUsd) * 100 : 0,
+    }));
+
+    // Traded strategies first, worst-to-best by net so losses are not buried
+    // below a scroll; untraded rows last.
+    rows.sort((a, b) => {
+      if ((a.trades > 0) !== (b.trades > 0)) return a.trades > 0 ? -1 : 1;
+      return a.netUsd - b.netUsd;
+    });
+    return rows;
+  }, [closed, roster]);
+
+  const leaderColumns: DeskColumn<LeaderRow>[] = useMemo(
+    () => [
+      { id: "strat", header: "Strategy", cell: (r) => r.strategy },
+      { id: "trades", header: "Fills", align: "right", cell: (r) => r.trades || "—" },
+      {
+        id: "wr",
+        header: "WR %",
+        align: "right",
+        cell: (r) => (r.trades > 0 ? r.winRatePct.toFixed(1) : "—"),
+      },
+      {
+        id: "gross",
+        header: "Gross $",
+        align: "right",
+        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.grossUsd)}>{fmtUSD(r.grossUsd)}</span> : "—"),
+      },
+      {
+        id: "fees",
+        header: "Fees $",
+        align: "right",
+        cell: (r) => (r.trades > 0 ? fmtUSD(r.feesUsd) : "—"),
+      },
+      {
+        id: "net",
+        header: "Net $",
+        align: "right",
+        cell: (r) => (r.trades > 0 ? <span className={pnlTone(r.netUsd)}>{fmtUSD(r.netUsd)}</span> : "—"),
+      },
+      {
+        id: "drag",
+        header: "Fee drag",
+        align: "right",
+        // Share of GROSS PROFIT eaten by fees. This is the number that showed the
+        // options desk was unviable on cheap contracts, so it is on the board
+        // rather than buried in a detail view.
+        cell: (r) =>
+          r.trades > 0 && r.grossUsd > 0 ? (
+            <span className={r.feeDragPct > 30 ? "desk-pnl-negative" : undefined} title="fees as a share of gross profit">
+              {r.feeDragPct.toFixed(0)}%
+            </span>
+          ) : (
+            "—"
+          ),
+      },
+      {
+        id: "gate",
+        header: "Gate",
+        cell: (r) => (
+          <DeskChip tone={r.live ? "success" : "default"} title={r.reason}>
+            {r.live ? "PASSED" : "not passed"}
+          </DeskChip>
+        ),
+      },
+    ],
+    [],
+  );
+
   const rosterColumns: DeskColumn<Eligibility>[] = useMemo(
     () => [
       { id: "strat", header: "Strategy", cell: (e) => e.strategy },
@@ -615,6 +756,38 @@ export default function LiveEnginePage() {
             stickyHeader
             empty={<span style={{ color: "var(--desk-on-surface-variant)" }}>No live positions.</span>}
           />
+        </DeskCard>
+
+        {/* Strategy leaderboard — REAL fills only, ranked worst net first */}
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Strategy Leaderboard"
+            subtitle={
+              leaderRows.some((r) => r.trades > 0)
+                ? `${leaderRows.filter((r) => r.trades > 0).length} of ${leaderRows.length} enabled strategies have filled · realized ${fmtUSD(
+                    leaderRows.reduce((s, r) => s + r.netUsd, 0),
+                  )}`
+                : "every enabled strategy, ranked once it has real fills"
+            }
+          />
+          <DeskDataTable
+            columns={leaderColumns}
+            rows={leaderRows}
+            getRowKey={(r) => r.strategy}
+            stickyHeader
+            empty={
+              <span style={{ color: "var(--desk-on-surface-variant)" }}>
+                No strategies enabled yet.
+              </span>
+            }
+          />
+          <p style={{ marginTop: 12, fontSize: 12, color: "var(--desk-on-surface-variant)" }}>
+            Built from CLOSED live positions — real fills, real fees. This is not the paper desks&rsquo;
+            leaderboard: those rank strategies on model premiums, and a strategy topping one has repeatedly
+            not been the same strategy that earns here. Ranked worst net first so losses are not buried
+            below a scroll. &ldquo;Gate&rdquo; is the pre-registered go-live bar, which permission to trade
+            does not imply.
+          </p>
         </DeskCard>
 
         {/* Closed positions — what SL/TP/expiry actually took off, and its result */}
