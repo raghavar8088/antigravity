@@ -42,6 +42,11 @@ type Health = { ok: boolean; uptime_min: number; bars_processed: number; strateg
 type LbRow = {
   strategy: string; symbol: string; n: number; wr_pct: number; pf: number;
   net_usd: number; max_dd_pct: number; missed: number; gate_pass: boolean;
+  /** The same record on the LIVE desk's terms: $100 account, taker fees. */
+  live_net_usd: number;
+  live_roi_pct: number;
+  live_fees_usd: number;
+  live_fee_drag_pct: number;
 };
 type Trade = {
   time: string; symbol: string; strategy: string; dir: string; entry: number; exit: number;
@@ -255,9 +260,85 @@ export default function ScalpDeskPage() {
    */
   const liveStrategyNames = useMemo(() => new Set(liveRoster), [liveRoster]);
   const liveRows = useMemo(
-    () => rows.filter((r) => liveStrategyNames.has(r.strategy)).sort((a, b) => b.net_usd - a.net_usd),
+    () =>
+      rows
+        .filter((r) => liveStrategyNames.has(r.strategy))
+        // Ranked by the $100 taker result, not the paper one. Sorting by paper
+        // net would put the same strategies on top that the paper board already
+        // flatters — the habit this table exists to break.
+        .sort((a, b) => (b.live_net_usd ?? 0) - (a.live_net_usd ?? 0)),
     [rows, liveStrategyNames],
   );
+
+  /**
+   * Columns for the live-routed board.
+   *
+   * Deliberately NOT the paper leaderboard's columns. That board reports $1,000
+   * notional with maker fees; this reports the $100 account the desk actually
+   * runs, with taker fees both legs. Both are shown — the gap between them is
+   * what a promotion decision turns on.
+   */
+  const liveLbColumns: DeskColumn<LbRow>[] = [
+    { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
+    { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
+    { id: "n", align: "right", header: "Trades", cell: (r) => r.n },
+    { id: "wr", align: "right", header: "WR %", cell: (r) => r.wr_pct.toFixed(1) },
+    {
+      id: "livenet",
+      align: "right",
+      header: "Net on $100",
+      cell: (r) => (
+        <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
+          {fmtUSD(r.live_net_usd ?? 0)}
+        </span>
+      ),
+    },
+    {
+      id: "roi",
+      align: "right",
+      header: "ROI %",
+      cell: (r) => (
+        <span className={pnlToneClass(r.live_roi_pct ?? 0)}>
+          {`${(r.live_roi_pct ?? 0) >= 0 ? "+" : ""}${(r.live_roi_pct ?? 0).toFixed(1)}%`}
+        </span>
+      ),
+    },
+    {
+      id: "fees",
+      align: "right",
+      header: "Taker Fees",
+      cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
+    },
+    {
+      id: "drag",
+      align: "right",
+      header: "Fee Drag",
+      // Above 100% means it earns less than it costs to trade.
+      cell: (r) => (
+        <span className={(r.live_fee_drag_pct ?? 0) >= 100 ? "desk-pnl-negative" : undefined}>
+          {`${(r.live_fee_drag_pct ?? 0).toFixed(0)}%`}
+        </span>
+      ),
+    },
+    {
+      id: "paper",
+      align: "right",
+      header: "Paper $1k",
+      cell: (r) => (
+        <span className={pnlToneClass(r.net_usd)} style={{ opacity: 0.6 }}>{fmtUSD(r.net_usd)}</span>
+      ),
+    },
+    {
+      id: "verdict",
+      header: "Qualified",
+      cell: (r) =>
+        (r.live_net_usd ?? 0) > 0 ? (
+          <DeskChip tone="success" style={{ fontWeight: 700 }}>YES</DeskChip>
+        ) : (
+          <DeskChip tone="danger">NO</DeskChip>
+        ),
+    },
+  ];
 
   const positionColumns: DeskColumn<OpenPos>[] = [
     {
@@ -514,7 +595,7 @@ export default function ScalpDeskPage() {
         <DeskCard padding="md">
           <DeskSectionHeader
             title="Live Strategy Leaderboard"
-            subtitle="Paper performance of only the streams on the real-money allow-list."
+            subtitle="Each strategy on its OWN $100 account at 3x notional, with Delta taker fees both legs — the terms the live desk actually trades on."
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                 {liveRows.length} live-routed streams
@@ -527,15 +608,19 @@ export default function ScalpDeskPage() {
             </p>
           ) : (
             <DeskDataTable
-              columns={leaderboardColumns}
+              columns={liveLbColumns}
               rows={liveRows}
               getRowKey={(r) => `live-${r.strategy}|${r.symbol}`}
               minWidth={860}
             />
           )}
           <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 780, color: "var(--desk-on-surface-variant)" }}>
-            Still PAPER results — these strategies route real orders, but the numbers here are the desk&apos;s simulated
-            fills, not the venue&apos;s. Real P&amp;L, with real fees, is on the Live Engine page.
+            <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x
+            notional, Delta&apos;s taker fee of 0.059% per side. <strong>Paper $1k</strong> is the old headline —
+            $1,000 notional with maker fees — shown alongside because the gap between the two is the whole point. A
+            taker round trip costs 0.118% of notional, which is larger than the average move most of these strategies
+            target, so a high paper rank does not survive the restatement. Qualified = positive on the $100 column.
+            That, not paper rank, is what earns a place in the Live Engine.
           </p>
         </DeskCard>
 

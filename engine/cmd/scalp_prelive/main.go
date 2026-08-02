@@ -153,6 +153,7 @@ type comboState struct {
 	Missed          int                `json:"-"`
 	GrossW, GrossL  float64            `json:"-"`
 	NetSum          float64            `json:"net_sum"`
+	FeeSum          float64            `json:"fee_sum"`
 	Eq, Peak, MaxDD float64            `json:"-"`
 	DayNet          map[string]float64 `json:"day_net"`
 	Pos             *position          `json:"pos,omitempty"`
@@ -293,6 +294,73 @@ func tail(c []scalers.Candle, n int) []scalers.Candle {
 	return c[len(c)-n:]
 }
 
+// ── $100 live-account simulation ─────────────────────────────────────────────
+//
+// The leaderboard's headline P&L is stated at $1,000 notional per trade with
+// MAKER fees, because that is how the paper desk fills. Neither matches the
+// money: the live perpetual desk runs a $100 account and takes liquidity on
+// both legs.
+//
+// That gap is not cosmetic. These strategies target a few basis points, and a
+// taker round trip costs 0.118% of notional — frequently more than the entire
+// move. A strategy can rank near the top of the paper board and still be
+// structurally unable to pay its own costs, which is exactly what the first
+// real fills showed. So the promotion question is answered here, on live terms,
+// rather than inferred from a board built on different ones.
+
+// liveSimEquityUSD is the account each strategy is simulated on — the same $100
+// the live desk actually runs.
+const liveSimEquityUSD = 100.0
+
+// liveSimNotionalUSD is the position size per trade.
+//
+// The live risk config caps aggregate exposure at 3x equity, and a single
+// strategy holds one position at a time, so 3x is what one strategy can reach.
+const liveSimNotionalUSD = liveSimEquityUSD * 3
+
+// liveSimTakerRoundTrip is both legs at Delta's taker rate including GST
+// (0.059% per side), taken from the venue's own order log rather than docs.
+const liveSimTakerRoundTrip = 0.00059 * 2
+
+// liveSimResult is one strategy's record restated on live terms.
+type liveSimResult struct {
+	GrossUSD float64
+	FeesUSD  float64
+	NetUSD   float64
+	ROIPct   float64
+	// FeeDragPct is fees as a share of gross PROFIT. Above 100 means the
+	// strategy earns less than it pays to trade.
+	FeeDragPct float64
+}
+
+// simulateLiveAccount restates a stream's paper record as a $100 taker account.
+func simulateLiveAccount(cs *comboState) liveSimResult {
+	if cs == nil || cs.N == 0 {
+		return liveSimResult{}
+	}
+	// Recover gross by adding back the maker fees the desk charged, then charge
+	// taker fees instead. Both legs, every trade.
+	grossFrac := cs.NetSum + cs.FeeSum
+	gross := grossFrac * liveSimNotionalUSD
+	fees := float64(cs.N) * liveSimNotionalUSD * liveSimTakerRoundTrip
+	net := gross - fees
+	drag := 0.0
+	if gross > 0 {
+		drag = fees / gross * 100
+	} else if fees > 0 {
+		// No gross profit to pay from. Reported as fully drag rather than as a
+		// divide-by-zero blank, which would read as "no fee problem".
+		drag = 100
+	}
+	return liveSimResult{
+		GrossUSD:   math.Round(gross*100) / 100,
+		FeesUSD:    math.Round(fees*100) / 100,
+		NetUSD:     math.Round(net*100) / 100,
+		ROIPct:     math.Round(net/liveSimEquityUSD*10000) / 100,
+		FeeDragPct: math.Round(drag*10) / 10,
+	}
+}
+
 // ── trade lifecycle ──────────────────────────────────────────────────────────
 
 func (d *desk) closeTrade(cs *comboState, strategy, symbol string, pos *position, exitPx float64, exitFee float64, reason string, bar scalers.Candle, barIdx int64) {
@@ -310,6 +378,14 @@ func (d *desk) closeTrade(cs *comboState, strategy, symbol string, pos *position
 		cs.GrossL += -net
 	}
 	cs.NetSum += net
+	// The fees THIS desk charged, kept so gross is recoverable.
+	//
+	// Without it only the net return survives, and the desk's net is a MAKER
+	// net — it models post-only entries. The live path is taker on both legs.
+	// Comparing a maker-fee paper result against a taker-fee live result is the
+	// single biggest reason a paper leader disappoints with real money, and
+	// nothing on this desk could measure the gap.
+	cs.FeeSum += entryFee + exitFee
 	if cs.Eq == 0 {
 		cs.Eq, cs.Peak = 1, 1
 	}
@@ -777,10 +853,18 @@ func (d *desk) serve(port int) {
 			N        int     `json:"n"`
 			WinRate  float64 `json:"wr_pct"`
 			PF       float64 `json:"pf"`
-			NetUSD   float64 `json:"net_usd"`
-			MaxDD    float64 `json:"max_dd_pct"`
-			Missed   int     `json:"missed"`
-			GatePass bool    `json:"gate_pass"`
+			// The same record restated on the live desk's terms: a $100 account,
+			// 3x notional, taker fees both legs. This is the number a go-live
+			// decision should be made on; NetUSD above is $1,000 notional with
+			// maker fees and flatters every strategy on this board.
+			LiveNetUSD  float64 `json:"live_net_usd"`
+			LiveROIPct  float64 `json:"live_roi_pct"`
+			LiveFeesUSD float64 `json:"live_fees_usd"`
+			LiveDragPct float64 `json:"live_fee_drag_pct"`
+			NetUSD      float64 `json:"net_usd"`
+			MaxDD       float64 `json:"max_dd_pct"`
+			Missed      int     `json:"missed"`
+			GatePass    bool    `json:"gate_pass"`
 		}
 		// EVERY stream appears, including ones that have not traded yet.
 		//
@@ -812,12 +896,17 @@ func (d *desk) serve(port int) {
 				} else if cs.GrossW > 0 {
 					pf = 999
 				}
+				sim := simulateLiveAccount(cs)
 				rows = append(rows, lbRow{
 					Strategy: parts[0], Symbol: parts[1], N: cs.N,
 					WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
 					PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
 					MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
-					GatePass: d.gatePass(cs),
+					GatePass:    d.gatePass(cs),
+					LiveNetUSD:  sim.NetUSD,
+					LiveROIPct:  sim.ROIPct,
+					LiveFeesUSD: sim.FeesUSD,
+					LiveDragPct: sim.FeeDragPct,
 				})
 			}
 		}

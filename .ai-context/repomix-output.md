@@ -1754,6 +1754,7 @@ The content is organized as follows:
   run_backtest/main.go
   scalp_prelive/live_test.go
   scalp_prelive/live.go
+  scalp_prelive/livesim_test.go
   scalp_prelive/main.go
   scalp_prelive/mirror_test.go
   scalp_prelive/profile_test.go
