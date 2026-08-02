@@ -514,12 +514,32 @@ export default function ScalpDeskPage() {
   const leaderboardColumns: DeskColumn<LbRow>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
+    {
+      id: "capital",
+      align: "right",
+      header: "Capital",
+      // What $100 on this stream alone would be worth, on live terms.
+      //
+      // The Net $ column further right is $1,000 notional with MAKER fees —
+      // the paper desk's own basis. It is not what this stream would have made
+      // with money, and the two differ by more than a factor of ten. Showing
+      // only the flattering one on the board people actually read is how a
+      // strategy gets promoted on a number that was never about money.
+      cell: (r) => {
+        const cap = 100 + (r.live_net_usd ?? 0);
+        return (
+          <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
+            {r.n > 0 ? `$${cap.toFixed(2)}` : "—"}
+          </span>
+        );
+      },
+    },
     { id: "n", align: "right", header: <SortableHeader label="Trades" k="n" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.n },
     { id: "wr", align: "right", header: <SortableHeader label="WR %" k="wr_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.wr_pct.toFixed(1) },
     { id: "pf", align: "right", header: <SortableHeader label="PF" k="pf" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.pf.toFixed(2) },
     {
       id: "net", align: "right",
-      header: <SortableHeader label="Net $" k="net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
+      header: <SortableHeader label="Net $1k paper" k="net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => <span className={pnlToneClass(r.net_usd)} style={{ fontWeight: 600 }}>{fmtUSD(r.net_usd)}</span>,
     },
     { id: "dd", align: "right", header: <SortableHeader label="Max DD %" k="max_dd_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.max_dd_pct.toFixed(1) },
