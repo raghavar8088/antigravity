@@ -123,7 +123,7 @@ type OpenPos = {
   /** Last closed 1m bar. 0 when the symbol has no bar yet. */
   mark: number;
   pnlPct: number;
-  /** Stated at $1,000 notional — the same basis as the desk's closed P&L. */
+  /** On the desk's $100-account basis — the same as its closed P&L. */
   pnlAt1000: number;
 };
 
@@ -418,7 +418,7 @@ export default function ScalpDeskPage() {
     {
       id: "paper",
       align: "right",
-      header: "Paper $1k",
+      header: "Paper (maker)",
       cell: (r) => (
         <span className={pnlToneClass(r.net_usd)} style={{ opacity: 0.6 }}>{fmtUSD(r.net_usd)}</span>
       ),
@@ -466,8 +466,8 @@ export default function ScalpDeskPage() {
       id: "upnl",
       align: "right",
       header: "Unreal. P&L",
-      // At $1,000 notional, matching the desk's closed-trade basis so an open
-      // and a closed position can be read on one scale.
+      // On the same $100-account basis as the desk's closed trades, so an open
+      // and a closed position read on one scale.
       cell: (p) =>
         p.mark > 0 ? (
           <span className={pnlToneClass(p.pnlAt1000)} style={{ fontWeight: 600 }}>
@@ -520,7 +520,7 @@ export default function ScalpDeskPage() {
       header: "Capital",
       // What $100 on this stream alone would be worth, on live terms.
       //
-      // The Net $ column further right is $1,000 notional with MAKER fees —
+      // The Net $ column further right is the same $100 basis but with MAKER fees —
       // the paper desk's own basis. It is not what this stream would have made
       // with money, and the two differ by more than a factor of ten. Showing
       // only the flattering one on the board people actually read is how a
@@ -539,7 +539,7 @@ export default function ScalpDeskPage() {
     { id: "pf", align: "right", header: <SortableHeader label="PF" k="pf" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.pf.toFixed(2) },
     {
       id: "net", align: "right",
-      header: <SortableHeader label="Net $1k paper" k="net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
+      header: <SortableHeader label="Net $ (paper)" k="net_usd" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />,
       cell: (r) => <span className={pnlToneClass(r.net_usd)} style={{ fontWeight: 600 }}>{fmtUSD(r.net_usd)}</span>,
     },
     { id: "dd", align: "right", header: <SortableHeader label="Max DD %" k="max_dd_pct" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />, cell: (r) => r.max_dd_pct.toFixed(1) },
@@ -597,7 +597,7 @@ export default function ScalpDeskPage() {
             label="Net P&L"
             value={stats ? fmtUSD(stats.net_pnl_usd_at_1000_notional) : "—"}
             valueClassName={stats ? pnlToneClass(stats.net_pnl_usd_at_1000_notional) : undefined}
-            sub="$1,000 notional per trade"
+            sub="each strategy on its own $100 account"
             highlight
           />
           <DeskMetricTile
@@ -782,8 +782,7 @@ export default function ScalpDeskPage() {
             <br />
             <br />
             <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x
-            notional, Delta&apos;s taker fee of 0.059% per side. <strong>Paper $1k</strong> is the old headline —
-            $1,000 notional with maker fees — shown alongside because the gap between the two is the whole point. A
+            notional, Delta&apos;s taker fee of 0.059% per side. <strong>Paper</strong> is the desk's own figure — same $100 basis, but with the MAKER fees the paper desk models — shown alongside because the gap between the two is the whole point. A
             taker round trip costs 0.118% of notional, which is larger than the average move most of these strategies
             target, so a high paper rank does not survive the restatement. Qualified = positive on the $100 column.
             That, not paper rank, is what earns a place in the Live Engine.
@@ -905,7 +904,7 @@ export default function ScalpDeskPage() {
         />
 
         <p className="desk-label-md" style={{ textAlign: "center", fontWeight: 400, paddingBottom: 8 }}>
-          Paper trading only · $1,000 notional per trade · SL floor -$10, TP floor $20/$30/$50 by profile
+          Paper trading only · $100 account per strategy (3x notional) · SL floor -$10, TP floor $20/$30/$50 by profile
           (scalp/revert/runner, ~1:2 to 1:5 reward-to-risk) · maker post-only fill model with missed fills counted ·
           state persists on the engine host
         </p>

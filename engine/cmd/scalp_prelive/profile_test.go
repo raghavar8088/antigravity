@@ -17,19 +17,56 @@ const (
 	measuredP90MovePct    = 1.090
 )
 
-// Every profile must risk more than $10 and target more than $10.
-func TestProfiles_DollarLevelsExceedTenDollars(t *testing.T) {
+// Every profile must risk a MEANINGFUL share of the account — and not too much.
+//
+// This asserted an absolute ">= $10" stop, which was right when the desk ran a
+// $3,000 notional against a nominal $1,000-per-strategy account: $10 was ~1% of
+// equity. Each strategy now runs a real $100 account, and holding the $10
+// literal would demand 10% of equity on a single scalp — the opposite of what
+// the test was protecting. The intent was "the level must matter", so it is
+// stated against equity, where it survives any re-basing of the notional.
+//
+// The upper bound is new and is the half the old assertion could not express: a
+// stop can fail by being too large just as easily as by being decorative.
+const (
+	minStopFractionOfEquity = 0.01 // >= 1% of the account, or the level is noise
+	maxStopFractionOfEquity = 0.05 // <= 5%, or one bad trade dominates the record
+)
+
+func TestProfiles_RiskIsMeaningfulShareOfAccount(t *testing.T) {
 	for name, p := range profiles {
 		slMin := p.SLMin * defaultNotionalUSD
+		slMax := p.SLMax * defaultNotionalUSD
 		tpMin := p.TPMin * defaultNotionalUSD
 
-		if slMin < 10 {
-			t.Errorf("%s: minimum stop is $%.2f at $%.0f notional, want >= $10",
-				name, slMin, defaultNotionalUSD)
+		if got := slMin / liveSimEquityUSD; got < minStopFractionOfEquity {
+			t.Errorf("%s: minimum stop risks %.2f%% of the $%.0f account ($%.2f) — below %.0f%%, the level is decorative",
+				name, got*100, liveSimEquityUSD, slMin, minStopFractionOfEquity*100)
 		}
-		if tpMin < 10 {
-			t.Errorf("%s: minimum target is $%.2f at $%.0f notional, want >= $10",
-				name, tpMin, defaultNotionalUSD)
+		if got := slMax / liveSimEquityUSD; got > maxStopFractionOfEquity {
+			t.Errorf("%s: maximum stop risks %.2f%% of the $%.0f account ($%.2f) — above %.0f%%, one trade dominates",
+				name, got*100, liveSimEquityUSD, slMax, maxStopFractionOfEquity*100)
+		}
+		// A target below the stop is a negative-expectancy profile whatever the
+		// win rate says.
+		if tpMin <= slMin {
+			t.Errorf("%s: minimum target $%.2f does not exceed minimum stop $%.2f", name, tpMin, slMin)
+		}
+	}
+}
+
+// The round-trip taker fee must not eat the smallest target.
+//
+// This is the test the desk most needed and never had: at $300 notional a taker
+// round trip is $0.354, and the tightest scalp target is $2.10. That ratio -
+// not the win rate - is what decides whether a strategy can pay for itself.
+func TestProfiles_SmallestTargetClearsTheRoundTripFee(t *testing.T) {
+	fee := defaultNotionalUSD * liveSimTakerRoundTrip
+	for name, p := range profiles {
+		tpMin := p.TPMin * defaultNotionalUSD
+		if tpMin <= fee*2 {
+			t.Errorf("%s: smallest target $%.2f is under 2x the $%.3f round-trip fee — "+
+				"the profile cannot clear its own costs", name, tpMin, fee)
 		}
 	}
 }

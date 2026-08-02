@@ -99,9 +99,9 @@ type profileCfg struct {
 // targets at a genuine 1:2 / 1:3 / 1:5 against it.
 var profiles = map[string]profileCfg{
 	// name     SLATR TPATR  SLMin   SLMax   TPMin   TPMax   TTLBars
-	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0070, 0.0120, 60},  // SL $10.5-18, TP $21-36 (1:2)
-	"revert": {3.0, 2.0, 0.0035, 0.0060, 0.0105, 0.0180, 45},  // SL $10.5-18, TP $31.5-54 (1:3)
-	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0175, 0.0300, 120}, // SL $10.5-18, TP $52.5-90 (1:5)
+	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0070, 0.0120, 60},  // SL $1.05-1.80, TP $2.10-3.60 (1:2)
+	"revert": {3.0, 2.0, 0.0035, 0.0060, 0.0105, 0.0180, 45},  // SL $1.05-1.80, TP $3.15-5.40 (1:3)
+	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0175, 0.0300, 120}, // SL $1.05-1.80, TP $5.25-9.00 (1:5)
 }
 
 const (
@@ -112,19 +112,24 @@ const (
 	cooldownBars = 5
 )
 
-// defaultNotionalUSD is the per-trade notional the desk starts on. It moved from
-// a const to a desk field so the desk can be re-based via /scalp/reset without a
-// redeploy — every read and write happens under d.mu. Raised 100 -> 1,000 so the
-// profile SL/TP bands above translate into real dollars instead of dimes.
-// Raised 1,000 -> 3,000 so a REACHABLE price move is still a meaningful dollar
-// risk. At $1,000 a $10 stop needs a 1.00% move, which the measured distribution
-// (median 0.288%) almost never delivers inside the holding period; at $3,000 the
-// same $10.50 stop needs only 0.35%, which resolves regularly.
+// defaultNotionalUSD is the per-trade notional the desk starts on.
 //
-// This is leverage against the hunt's $1,000 per-strategy account — roughly 1%
-// of the account risked per trade, which is the point: the desk should be able
-// to lose $10 on a bad trade rather than 30 cents on a timeout.
-const defaultNotionalUSD = 3000.0
+// EVERY strategy runs its own separate $100 account, and this is what $100 can
+// put behind one trade: 3x, the aggregate leverage cap the live perpetual desk
+// enforces. One strategy holds one position at a time, so 3x is the whole of it.
+//
+// It was 3,000 — a number chosen so the profile SL/TP bands landed on
+// comfortable-looking dollar figures ($10 stops, $20-50 targets). That made the
+// desk report tens of dollars per trade on an account that does not exist. The
+// live desk has $100. A strategy earning "+$43.53" here would have made $3.65.
+//
+// Re-basing costs nothing in behaviour: the SL/TP bands above are PRICE
+// FRACTIONS (0.0035, 0.0060, ...), not dollars, so every stop, target and exit
+// fires at exactly the same price it did before. Only the dollars change, from
+// a fictional account to the real one. At $300 the same 0.35% stop is $1.05.
+//
+// Re-basable at runtime via /scalp/reset — every read and write is under d.mu.
+const defaultNotionalUSD = liveSimNotionalUSD
 
 // ── state ────────────────────────────────────────────────────────────────────
 
@@ -839,7 +844,11 @@ func (d *desk) serve(port int) {
 		writeJSON(w, map[string]interface{}{
 			"trades": n, "wins": wins, "missed_fills": missed,
 			"open_positions": open, "pending_orders": pend,
+			// Kept under its historical key so existing consumers do not break, but the
+			// basis is now the $100 account. capital_usd below is the honest name.
 			"net_pnl_usd_at_1000_notional": math.Round(net*d.notionalUSD*100) / 100,
+			"notional_usd":                 d.notionalUSD,
+			"account_equity_usd":           liveSimEquityUSD,
 			"trades_per_symbol":            perSym,
 			"gate":                         gateDesc,
 		})
@@ -857,6 +866,8 @@ func (d *desk) serve(port int) {
 			// 3x notional, taker fees both legs. This is the number a go-live
 			// decision should be made on; NetUSD above is $1,000 notional with
 			// maker fees and flatters every strategy on this board.
+			// CapitalUSD is what this strategy's own $100 account is worth now.
+			CapitalUSD  float64 `json:"capital_usd"`
 			LiveNetUSD  float64 `json:"live_net_usd"`
 			LiveROIPct  float64 `json:"live_roi_pct"`
 			LiveFeesUSD float64 `json:"live_fees_usd"`
@@ -903,6 +914,7 @@ func (d *desk) serve(port int) {
 					PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
 					MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
 					GatePass:    d.gatePass(cs),
+					CapitalUSD:  math.Round((liveSimEquityUSD+sim.NetUSD)*100) / 100,
 					LiveNetUSD:  sim.NetUSD,
 					LiveROIPct:  sim.ROIPct,
 					LiveFeesUSD: sim.FeesUSD,
