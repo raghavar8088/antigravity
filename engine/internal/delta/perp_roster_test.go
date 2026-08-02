@@ -1,6 +1,9 @@
 package delta
 
-import "testing"
+import (
+	"sort"
+	"testing"
+)
 
 // The allow-list is the only thing between a paper scalp signal and real money
 // on a $100 account.
@@ -52,29 +55,56 @@ func TestPerpAllowList_GatesOnSymbolToo(t *testing.T) {
 }
 
 // The eight names the owner selected must actually be the shipped default.
-func TestScalpLiveStrategies_AreTheOwnerSelectedEight(t *testing.T) {
-	got := ScalpLiveStrategies()
+// The live roster is an OWNER DECISION, pinned exactly.
+//
+// Not "at least these" — exactly these. The previous version asserted only that
+// the original eight survived, so the list could grow without anyone deciding
+// to and the test would still pass. A roster that can drift upward silently is
+// the one control here that spends money.
+//
+// Replaced 2026-08-02: the earlier selection was made on the desk's old basis
+// ($3,000 notional, maker fees). These are the streams that survive restatement
+// onto a real $100 account with taker fees.
+func TestScalpLiveStrategies_MatchTheOwnerSelectionExactly(t *testing.T) {
 	want := []string{
-		"ANTI_M1_DoubleTop_10bp_Short",
+		"ANTI_D20_VWAP_Reversion",
+		"ANTI_M1_Break_D30_T20_Long",
 		"ANTI_M1_Break_D60_T50_Long",
+		"ANTI_M1_DoubleBottom_10bp_Long",
+		"ANTI_M1_DoubleTop_10bp_Short",
+		"ANTI_M1_DoubleTop_20bp_Short",
+		"ANTI_M1_HMA21_Flip_Long",
+		"ANTI_M1_HMA21_Flip_Short",
+		"ANTI_M1_InsideBar_V20_Long",
 		"ANTI_M1_VWAP_Doji_Short",
+	}
+	got := append([]string(nil), ScalpLiveStrategies()...)
+	sort.Strings(got)
+
+	if len(got) != len(want) {
+		t.Fatalf("live scalp roster has %d strategies, the owner selected %d: got %v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("roster[%d] = %q, want %q — the live allow-list drifted from the owner's selection", i, got[i], want[i])
+		}
+	}
+
+	// The strategies dropped in this revision must stay dropped. Each was
+	// selected under the old basis and is not on the restated list.
+	for _, gone := range []string{
 		"ANTI_D20_EMA_Cross_9_21",
 		"Historical_Vol_Percentile_Breakout",
 		"ANTI_M1X_VWAP_TrendPull_Long",
 		"M1X_Squeeze_Break_Short",
 		"ANTI_M1_BB_Rev_CMF5_Long",
-	}
-	// The second selection added nine more; the original eight must all survive.
-	if len(got) < len(want) {
-		t.Fatalf("shipped %d strategies, want at least the original %d", len(got), len(want))
-	}
-	set := map[string]bool{}
-	for _, g := range got {
-		set[g] = true
-	}
-	for _, w := range want {
-		if !set[w] {
-			t.Errorf("%q is missing from the live scalp allow-list", w)
+		"ANTI_M1_RSI2_5_95_T50_Short",
+		"ANTI_M1_NR7_Expand_T50_Long",
+	} {
+		for _, g := range got {
+			if g == gone {
+				t.Errorf("%q was removed from the live roster but is back on it", gone)
+			}
 		}
 	}
 }

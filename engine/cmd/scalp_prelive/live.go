@@ -65,10 +65,14 @@ func scalpLiveEquityUSD() float64 {
 func scalpLiveSymbols() []string {
 	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_SYMBOLS"))
 	if raw == "" {
-		// The symbols the selected strategies lead on. AVAXUSD joined when two
-		// AVAX streams were selected; Delta lists it (product 14830, contract
-		// value 1.0 like ADA), so sizing resolves from the registry as normal.
-		return []string{"ADAUSD", "BNBUSD", "AVAXUSD"}
+		// The symbols the selected streams actually qualified on.
+		//
+		// BNBUSD was dropped 2026-08-02: every qualifying row in the current
+		// selection is ADAUSD or AVAXUSD, and the BNBUSD variants of the same
+		// strategies were negative on the $100 basis. Leaving BNBUSD listed
+		// would have quietly enabled ten streams nobody chose - the allow-list
+		// gates on strategy AND symbol precisely so that cannot happen.
+		return []string{"ADAUSD", "AVAXUSD"}
 	}
 	out := []string{}
 	for _, p := range strings.Split(raw, ",") {

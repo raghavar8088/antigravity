@@ -78,10 +78,21 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 	for _, s := range got {
 		seen[s] = true
 	}
-	for _, want := range []string{"ADAUSD", "BNBUSD", "AVAXUSD"} {
+	for _, want := range []string{"ADAUSD", "AVAXUSD"} {
 		if !seen[want] {
 			t.Errorf("%s missing from the default symbols (got %v)", want, got)
 		}
+	}
+	// BNBUSD was dropped 2026-08-02 — every qualifying stream is ADA or AVAX,
+	// and the BNBUSD variants of the same strategies were negative on the $100
+	// basis. Asserted absent, not merely unlisted: the allow-list gates on
+	// symbol as well as strategy, so re-adding it here would silently enable
+	// ten streams nobody selected.
+	if seen["BNBUSD"] {
+		t.Error("BNBUSD is back in the default symbols; it was deselected on the $100 restatement")
+	}
+	if len(got) != 2 {
+		t.Errorf("default symbols = %v, want exactly ADAUSD and AVAXUSD", got)
 	}
 }
 

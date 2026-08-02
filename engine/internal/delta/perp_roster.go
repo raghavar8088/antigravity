@@ -29,26 +29,27 @@ import (
 // survivable, and it means this comment exists so nobody later reads the list as
 // though it were qualified.
 var defaultScalpLiveStrategies = []string{
-	"ANTI_M1_DoubleTop_10bp_Short",
+	// Replaced 2026-08-02 at the owner's direction, from the Live Strategy
+	// Leaderboard restated on a real $100 account with taker fees. The seven
+	// strategies dropped here were selected under the OLD basis - $3,000
+	// notional, maker fees - which reported tens of dollars per trade on an
+	// account that did not exist.
+	//
+	// Every name below is positive on the $100 column. That is a necessary
+	// condition, not a sufficient one: trade counts run 2-11 against a gate that
+	// asks for 200, and none is past 76% of it. With 2,416 streams running, this
+	// is the right tail of a distribution, not a qualified set. Nothing here has
+	// earned real money yet - it has only stopped being disqualified by fees.
 	"ANTI_M1_Break_D60_T50_Long",
-	"ANTI_M1_VWAP_Doji_Short",
-	"ANTI_D20_EMA_Cross_9_21",
-	"Historical_Vol_Percentile_Breakout",
-	"ANTI_M1X_VWAP_TrendPull_Long",
-	"M1X_Squeeze_Break_Short",
-	"ANTI_M1_BB_Rev_CMF5_Long",
-	// Added 2026-08-01, second selection from the same leaderboard. Trade counts
-	// 7-31, so the caveat above applies unchanged: these are the right tail of
-	// 2,416 streams, not a qualified set.
-	"ANTI_M1_DoubleTop_20bp_Short",
-	"ANTI_D20_VWAP_Reversion",
-	"ANTI_M1_RSI2_5_95_T50_Short",
-	"ANTI_M1_DoubleBottom_10bp_Long",
-	"ANTI_M1_HMA21_Flip_Long",
-	"ANTI_M1_HMA21_Flip_Short",
-	"ANTI_M1_Break_D30_T20_Long",
-	"ANTI_M1_NR7_Expand_T50_Long",
 	"ANTI_M1_InsideBar_V20_Long",
+	"ANTI_D20_VWAP_Reversion",
+	"ANTI_M1_DoubleTop_10bp_Short",
+	"ANTI_M1_Break_D30_T20_Long",
+	"ANTI_M1_HMA21_Flip_Short",
+	"ANTI_M1_DoubleBottom_10bp_Long",
+	"ANTI_M1_DoubleTop_20bp_Short",
+	"ANTI_M1_HMA21_Flip_Long",
+	"ANTI_M1_VWAP_Doji_Short",
 }
 
 // ScalpLiveStrategies is the effective allow-list.
