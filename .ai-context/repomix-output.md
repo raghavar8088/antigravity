@@ -893,6 +893,7 @@ The content is organized as follows:
   delta/perp_persistence.go
   delta/perp_products_test.go
   delta/perp_products.go
+  delta/perp_reconcile_test.go
   delta/perp_roster_test.go
   delta/perp_roster.go
   delta/perp_sizing_test.go

@@ -589,32 +589,93 @@ func (b *PerpBridge) CloseAll(ctx context.Context) (int, error) {
 //
 // A mismatch means one of them is wrong about real money, so it is surfaced
 // rather than silently corrected.
-func (b *PerpBridge) Reconcile(ctx context.Context) (engineOpen, venueOpen int, err error) {
+// perpNetByProduct sums the bridge's SIGNED contracts per product.
+//
+// Pure so it can be tested without a venue: the netting arithmetic is the part
+// that was wrong, not the HTTP call.
+func perpNetByProduct(open map[string]*PerpLiveTrade) map[int]int {
+	out := make(map[int]int, len(open))
+	for _, t := range open {
+		n := t.Contracts
+		if !t.long() {
+			n = -n
+		}
+		out[t.ProductID] += n
+	}
+	return out
+}
+
+// perpNetMismatches returns the products where the two books disagree.
+//
+// Checks the UNION of both sides on purpose: a position the bridge has
+// forgotten must be as loud as one it invented, and iterating only the bridge's
+// own products would miss the first — which is the dangerous one.
+func perpNetMismatches(mine, venue map[int]int) []int {
+	products := make(map[int]bool, len(mine)+len(venue))
+	for id := range mine {
+		products[id] = true
+	}
+	for id := range venue {
+		products[id] = true
+	}
+	var bad []int
+	for id := range products {
+		if mine[id] != venue[id] {
+			bad = append(bad, id)
+		}
+	}
+	sort.Ints(bad)
+	return bad
+}
+
+// Reconcile compares the bridge's book against the venue by NET SIZE PER
+// SYMBOL, not by position count.
+//
+// Counting positions is invalid here and produced a permanent false alarm.
+// Delta NETS every order on a symbol into one position; the bridge tracks a
+// position per strategy. Two strategies on ADAUSD - one long 1,511 contracts,
+// one short 75 - are two rows here and ONE row of 1,436 there. Both are
+// correct. The old check called that a mismatch and logged a warning every
+// cycle.
+//
+// That is worse than no check. A control that fires during normal operation
+// teaches its operator to ignore it, and this is the control meant to catch the
+// case that actually matters: real contracts on the venue that this process has
+// forgotten about. During the 2026-08-01 audit it fired 38 times in 20 minutes
+// and every one was noise.
+//
+// Net size is the invariant that survives netting: whatever the bridge believes
+// it is holding on a symbol must equal what Delta holds on that symbol.
+func (b *PerpBridge) Reconcile(ctx context.Context) (engineOpen, venueOpen int, matched bool, err error) {
 	b.mu.RLock()
 	engineOpen = len(b.open)
-	mine := make(map[int]bool, len(b.open))
-	for _, t := range b.open {
-		mine[t.ProductID] = true
-	}
+	mineNet := perpNetByProduct(b.open)
 	b.mu.RUnlock()
 
 	if b.client == nil {
-		return engineOpen, 0, fmt.Errorf("perp bridge: no Delta client")
+		return engineOpen, 0, false, fmt.Errorf("perp bridge: no Delta client")
 	}
 	positions, err := b.client.GetPositions(ctx)
 	if err != nil {
-		return engineOpen, 0, err
+		return engineOpen, 0, false, err
 	}
+
+	venueNet := make(map[int]int, len(positions))
 	for _, p := range positions {
-		if p.Size != 0 && mine[p.ProductID] {
+		if p.Size != 0 {
+			venueNet[p.ProductID] += int(p.Size)
+		}
+		if p.Size != 0 && mineNet[p.ProductID] != 0 {
 			venueOpen++
 		}
 	}
-	if engineOpen != venueOpen {
-		log.Printf("[PERP LIVE] ⚠️  reconciliation mismatch: bridge holds %d, Delta reports %d",
-			engineOpen, venueOpen)
+
+	bad := perpNetMismatches(mineNet, venueNet)
+	for _, id := range bad {
+		log.Printf("[PERP LIVE] ⚠️  reconciliation mismatch on product %d: bridge net %d contracts, Delta net %d",
+			id, mineNet[id], venueNet[id])
 	}
-	return engineOpen, venueOpen, nil
+	return engineOpen, venueOpen, len(bad) == 0, nil
 }
 
 func (b *PerpBridge) noteError(msg string) {

@@ -324,8 +324,12 @@ func (d *liveDesk) registerHTTP(
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 		defer cancel()
-		mine, venue, err := d.bridge.Reconcile(ctx)
-		resp := map[string]any{"bridgePositions": mine, "deltaPositions": venue, "matched": mine == venue}
+		// matched comes from NET SIZE agreement, not from equal counts. Delta
+		// nets by symbol, so two bridge positions on one symbol are legitimately
+		// one venue row — comparing counts reported a mismatch during normal
+		// operation and trained the operator to ignore the alarm.
+		mine, venue, matched, err := d.bridge.Reconcile(ctx)
+		resp := map[string]any{"bridgePositions": mine, "deltaPositions": venue, "matched": matched}
 		if err != nil {
 			resp["error"] = err.Error()
 		}
