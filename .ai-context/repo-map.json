@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[3,4,5,8],"files":1,"symbols":15,"top_files":[{"file":"engine/cmd/scalp_prelive/live.go","symbols":15}]},"engine-delta":{"communities":[0,1,2,3,6,7,8,9,10],"files":2,"symbols":46,"top_files":[{"file":"engine/internal/delta/perp_bridge.go","symbols":40},{"file":"engine/internal/delta/perp_reconcile_test.go","symbols":6}]}}
+{"engine-delta":{"communities":[0,1,2,3,4,5],"files":2,"symbols":76,"top_files":[{"file":"engine/internal/delta/perp_bridge.go","symbols":42},{"file":"engine/internal/delta/client.go","symbols":34}]}}

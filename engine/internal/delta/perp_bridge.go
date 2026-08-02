@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -95,8 +96,12 @@ type PerpBridge struct {
 	history   []PerpLiveTrade
 	lastError string
 
-	armed     atomic.Bool
-	killCheck func() bool
+	armed atomic.Bool
+	// fundingUSD is the venue's settled funding total, refreshed from the
+	// ledger by the custody loop. atomic.Value so Stats() need not take a lock
+	// against the poller.
+	fundingUSD atomic.Value
+	killCheck  func() bool
 
 	submitted atomic.Int64
 	rejected  atomic.Int64
@@ -110,13 +115,40 @@ type PerpBridge struct {
 // NewPerpBridge builds a bridge. It starts DISARMED and permits nothing until
 // both an allow-list and an arm are provided.
 func NewPerpBridge(client *Client, reg *PerpRegistry, equityUSD float64) *PerpBridge {
-	return &PerpBridge{
+	b := &PerpBridge{
 		client: client,
 		reg:    reg,
 		allow:  NewPerpAllowList(),
 		cfg:    DefaultPerpRiskConfig(equityUSD),
 		open:   map[string]*PerpLiveTrade{},
 	}
+	// Seeded so Stats() never type-asserts a nil before the first refresh — an
+	// unmeasured funding total must read as 0 through a defined path, not panic.
+	b.fundingUSD.Store(0.0)
+	return b
+}
+
+// RefreshFunding reads settled funding from the venue ledger.
+//
+// Called by the custody loop, which runs whether or not the bridge is armed:
+// funding accrues on any position that exists, and a disarmed bridge can still
+// be holding one.
+func (b *PerpBridge) RefreshFunding(ctx context.Context) error {
+	if b.client == nil {
+		return fmt.Errorf("perp bridge: no Delta client")
+	}
+	entries, err := b.client.GetLedger(ctx, 200)
+	if err != nil {
+		return err
+	}
+	total := 0.0
+	for _, e := range entries {
+		if strings.Contains(strings.ToLower(e.Type), "funding") {
+			total += e.Amount
+		}
+	}
+	b.fundingUSD.Store(total)
+	return nil
 }
 
 // perpMaintenanceMarginPct is Delta's maintenance requirement on these
@@ -353,10 +385,24 @@ func (b *PerpBridge) Monitor(ctx context.Context, every time.Duration) {
 	}
 	t := time.NewTicker(every)
 	defer t.Stop()
+	// Funding settles every 8h, so polling it on the exit cadence would be
+	// wasteful; once a minute is far more than enough to keep the figure honest.
+	fund := time.NewTicker(60 * time.Second)
+	defer fund.Stop()
+	if err := b.RefreshFunding(ctx); err != nil {
+		log.Printf("[PERP LIVE] funding read failed at start: %v", err)
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-fund.C:
+			// A failure leaves the LAST known total in place rather than
+			// resetting to zero. Zero is a claim that no funding was paid; a
+			// stale figure is at least a measured one.
+			if err := b.RefreshFunding(ctx); err != nil {
+				b.noteError("funding read: " + err.Error())
+			}
 		case <-t.C:
 			b.checkExits(ctx)
 		}
@@ -697,8 +743,23 @@ type PerpBridgeStats struct {
 	Rejected      int64           `json:"rejected"`
 	Closed        int64           `json:"closed"`
 	RealisedPnL   float64         `json:"realisedPnlUsd"`
-	LastError     string          `json:"lastError,omitempty"`
-	ProductsKnown int             `json:"productsKnown"`
+	// FundingUSD is perpetual funding settled on this account, taken from the
+	// venue ledger.
+	//
+	// It appears in NO other source — not in fills, not in trade P&L — because
+	// funding is charged against the POSITION every eight hours, not against a
+	// trade. A desk that reports only realised trade P&L is silently omitting a
+	// recurring cash flow on every position held across a window, and reporting
+	// zero for a number that is simply unmeasured is the same failure the
+	// 2026-08-01 audit was about.
+	//
+	// Account-level, not per-strategy: Delta nets positions by symbol, so
+	// funding on a symbol cannot be attributed to one of several strategies
+	// holding it. Stated at the level where it is true.
+	FundingUSD      float64 `json:"fundingUsd"`
+	NetAfterFunding float64 `json:"netAfterFundingUsd"`
+	LastError       string  `json:"lastError,omitempty"`
+	ProductsKnown   int     `json:"productsKnown"`
 }
 
 // Stats snapshots the bridge.
@@ -719,20 +780,24 @@ func (b *PerpBridge) Stats() PerpBridgeStats {
 	strategies := b.allow.Strategies()
 	sort.Strings(strategies)
 
+	funding := b.fundingUSD.Load().(float64)
+
 	return PerpBridgeStats{
-		Armed:         b.armed.Load(),
-		EquityUSD:     b.cfg.EquityUSD,
-		RiskPerTrade:  b.cfg.EquityUSD * b.cfg.RiskPerTradeFraction,
-		MaxLeverage:   b.cfg.MaxLeverage,
-		MaxConcurrent: b.cfg.MaxConcurrentPositions,
-		Strategies:    strategies,
-		OpenPositions: open,
-		Submitted:     b.submitted.Load(),
-		Rejected:      b.rejected.Load(),
-		Closed:        b.closes.Load(),
-		RealisedPnL:   pnl,
-		LastError:     b.lastError,
-		ProductsKnown: b.reg.Count(),
+		Armed:           b.armed.Load(),
+		EquityUSD:       b.cfg.EquityUSD,
+		RiskPerTrade:    b.cfg.EquityUSD * b.cfg.RiskPerTradeFraction,
+		MaxLeverage:     b.cfg.MaxLeverage,
+		MaxConcurrent:   b.cfg.MaxConcurrentPositions,
+		Strategies:      strategies,
+		OpenPositions:   open,
+		Submitted:       b.submitted.Load(),
+		Rejected:        b.rejected.Load(),
+		Closed:          b.closes.Load(),
+		RealisedPnL:     pnl,
+		FundingUSD:      funding,
+		NetAfterFunding: pnl + funding,
+		LastError:       b.lastError,
+		ProductsKnown:   b.reg.Count(),
 	}
 }
 

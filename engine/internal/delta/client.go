@@ -173,7 +173,15 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyBytes [
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	// A zero-value Client has no httpClient, and calling Do on nil panics rather
+	// than returning an error. Every other failure on this path is recoverable
+	// and reported; this one took down the process. Defaulting here means a
+	// Client built as &Client{} degrades to a normal request error instead.
+	hc := c.httpClient
+	if hc == nil {
+		hc = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("execute request: %w", err)
 	}
