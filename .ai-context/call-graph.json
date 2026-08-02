@@ -1,1 +1,1 @@
-{"engine/cmd/scalp_prelive/livesim_test.go::TestLiveSim_AWiderEdgeSurvives()":["engine/cmd/scalp_prelive/main.go::simulateLiveAccount()"],"engine/cmd/scalp_prelive/livesim_test.go::TestLiveSim_FeesInvertASmallEdgeStrategy()":["engine/cmd/scalp_prelive/main.go::simulateLiveAccount()"],"engine/cmd/scalp_prelive/livesim_test.go::TestLiveSim_LosingStrategyStillReportsDrag()":["engine/cmd/scalp_prelive/main.go::simulateLiveAccount()"],"engine/cmd/scalp_prelive/livesim_test.go::TestLiveSim_NoTradesReportsNothing()":["engine/cmd/scalp_prelive/main.go::simulateLiveAccount()"]}
+{}

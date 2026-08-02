@@ -278,6 +278,41 @@ export default function ScalpDeskPage() {
    * runs, with taker fees both legs. Both are shown — the gap between them is
    * what a promotion decision turns on.
    */
+  /**
+   * ONE $100 portfolio spread across the live-routed streams.
+   *
+   * The leaderboard column gives every stream its own $100 account, which is
+   * the right way to COMPARE strategies but is not a portfolio: 136 streams on
+   * $100 each is $13,600 of capital. Summing that column would report the
+   * return on thirteen thousand dollars as if it were the return on one
+   * hundred, and it would be the most flattering number on the page.
+   *
+   * An equal-weight portfolio gives each stream $100/N. P&L scales linearly
+   * with size, so each stream contributes its own figure divided by N — which
+   * makes the portfolio return the MEAN of the per-strategy returns, not their
+   * sum. That single division is the whole difference between a real number and
+   * a fantasy.
+   */
+  const portfolio = useMemo(() => {
+    const traded = liveRows.filter((r) => r.n > 0);
+    const n = traded.length;
+    if (n === 0) {
+      return { n: 0, net: 0, fees: 0, roi: 0, value: 100, perStrategy: 0, trades: 0, winners: 0 };
+    }
+    const net = traded.reduce((a, r) => a + (r.live_net_usd ?? 0), 0) / n;
+    const fees = traded.reduce((a, r) => a + (r.live_fees_usd ?? 0), 0) / n;
+    return {
+      n,
+      net,
+      fees,
+      roi: net,
+      value: 100 + net,
+      perStrategy: 100 / n,
+      trades: traded.reduce((a, r) => a + r.n, 0),
+      winners: traded.filter((r) => (r.live_net_usd ?? 0) > 0).length,
+    };
+  }, [liveRows]);
+
   const liveLbColumns: DeskColumn<LbRow>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
@@ -602,6 +637,44 @@ export default function ScalpDeskPage() {
               </span>
             }
           />
+          {/* One $100 portfolio, equal-weight across the traded streams. */}
+          <div className="desk-metrics-row" style={{ marginBottom: 16 }}>
+            <DeskMetricTile
+              label="Portfolio Value"
+              value={`$${portfolio.value.toFixed(2)}`}
+              valueClassName={pnlToneClass(portfolio.net)}
+              sub={`started at $100.00`}
+              highlight
+            />
+            <DeskMetricTile
+              compact
+              label="Net P&L"
+              value={fmtUSD(portfolio.net)}
+              valueClassName={pnlToneClass(portfolio.net)}
+              sub={`${portfolio.roi >= 0 ? "+" : ""}${portfolio.roi.toFixed(2)}% return`}
+            />
+            <DeskMetricTile
+              compact
+              label="Allocation"
+              value={portfolio.n ? `$${portfolio.perStrategy.toFixed(2)}` : "—"}
+              sub={`each, across ${portfolio.n} streams`}
+            />
+            <DeskMetricTile
+              compact
+              label="Taker Fees Paid"
+              value={fmtUSD(-portfolio.fees)}
+              valueClassName="desk-pnl-negative"
+              sub={`over ${portfolio.trades} trades`}
+            />
+            <DeskMetricTile
+              compact
+              label="Streams Positive"
+              value={portfolio.n ? `${portfolio.winners} / ${portfolio.n}` : "—"}
+              valueClassName={portfolio.winners > portfolio.n / 2 ? "desk-pnl-positive" : undefined}
+              sub="net > 0 on live terms"
+            />
+          </div>
+
           {liveRows.length === 0 ? (
             <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "8px 0 0" }}>
               No closed trades yet on the live-routed streams.
@@ -615,6 +688,12 @@ export default function ScalpDeskPage() {
             />
           )}
           <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 780, color: "var(--desk-on-surface-variant)" }}>
+            The tiles above are ONE $100 portfolio split equally across the traded streams — each gets
+            ${portfolio.perStrategy.toFixed(2)}, so the portfolio return is the AVERAGE of the per-strategy returns,
+            not their sum. Summing the column below would be the return on ${(portfolio.n * 100).toLocaleString()} of
+            capital reported as if it were $100.
+            <br />
+            <br />
             <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x
             notional, Delta&apos;s taker fee of 0.059% per side. <strong>Paper $1k</strong> is the old headline —
             $1,000 notional with maker fees — shown alongside because the gap between the two is the whole point. A
