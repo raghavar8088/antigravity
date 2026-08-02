@@ -313,9 +313,69 @@ export default function ScalpDeskPage() {
     };
   }, [liveRows]);
 
+  /**
+   * How close a stream is to the pre-registered go-live gate, as a percentage.
+   *
+   * The gate is >=200 trades AND PF >= 1.2 AND maxDD <= 25% AND net positive.
+   * Progress is the mean of the four, each capped at 100% so a strategy cannot
+   * offset a missing sample with a flattering profit factor — which is exactly
+   * the trade a single lucky trade would otherwise make for it.
+   *
+   * The trade-count term dominates on purpose. With 2,416 streams running, a
+   * few days produces lucky leaders by variance alone, and sample size is the
+   * only one of the four that variance cannot fake.
+   *
+   * The gate's fourth real condition - net positive in BOTH calendar halves of
+   * the live window - is not computable from a leaderboard row, so this is
+   * progress toward the gate, not a verdict on it. gate_pass from the engine
+   * remains the verdict.
+   */
+  const qualPct = (r: LbRow): number => {
+    if (!r.n) return 0;
+    const trades = Math.min(r.n / 200, 1);
+    const pf = Math.min((r.pf || 0) / 1.2, 1);
+    const dd = r.max_dd_pct <= 25 ? 1 : Math.max(0, 25 / r.max_dd_pct);
+    const net = (r.live_net_usd ?? 0) > 0 ? 1 : 0;
+    return ((trades + pf + dd + net) / 4) * 100;
+  };
+
   const liveLbColumns: DeskColumn<LbRow>[] = [
     { id: "strategy", header: "Strategy", cell: (r) => <span className="desk-body-md" style={{ fontWeight: 600 }}>{r.strategy}</span> },
     { id: "symbol", header: "Symbol", cell: (r) => r.symbol.replace("USDT", "") },
+    {
+      id: "capital",
+      align: "right",
+      header: "Capital",
+      // What $100 given to THIS strategy alone is worth now, on live terms.
+      // Stated as a balance rather than a P&L because a balance is the thing an
+      // operator actually checks, and $95.40 is harder to misread than -$4.60.
+      cell: (r) => {
+        const cap = 100 + (r.live_net_usd ?? 0);
+        return (
+          <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
+            {`$${cap.toFixed(2)}`}
+          </span>
+        );
+      },
+    },
+    {
+      id: "qual",
+      align: "right",
+      header: "Qualified %",
+      // Progress toward the go-live gate, not a verdict. Dominated by the trade
+      // count, which is the only gate term variance cannot fake.
+      cell: (r) => {
+        const q = qualPct(r);
+        return (
+          <span
+            className={q >= 100 ? "desk-pnl-positive" : undefined}
+            style={{ fontWeight: q >= 100 ? 700 : 400, opacity: q < 40 ? 0.7 : 1 }}
+          >
+            {`${q.toFixed(0)}%`}
+          </span>
+        );
+      },
+    },
     { id: "n", align: "right", header: "Trades", cell: (r) => r.n },
     { id: "wr", align: "right", header: "WR %", cell: (r) => r.wr_pct.toFixed(1) },
     {
@@ -692,6 +752,13 @@ export default function ScalpDeskPage() {
             ${portfolio.perStrategy.toFixed(2)}, so the portfolio return is the AVERAGE of the per-strategy returns,
             not their sum. Summing the column below would be the return on ${(portfolio.n * 100).toLocaleString()} of
             capital reported as if it were $100.
+            <br />
+            <br />
+            <strong>Capital</strong> is what $100 given to that strategy <em>alone</em> would be worth now — not a
+            slice of the portfolio above. <strong>Qualified %</strong> is progress toward the pre-registered gate
+            (≥200 trades, PF ≥ 1.2, max DD ≤ 25%, net positive), averaged across the four and capped so a lucky profit
+            factor cannot substitute for a missing sample. It is progress, not a verdict: the gate&apos;s
+            both-halves-positive condition is not computable from a single row.
             <br />
             <br />
             <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x
