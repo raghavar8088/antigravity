@@ -43,6 +43,7 @@ type LbRow = {
   strategy: string; symbol: string; n: number; wr_pct: number; pf: number;
   net_usd: number; max_dd_pct: number; missed: number; gate_pass: boolean;
   /** The same record on the LIVE desk's terms: $100 account, taker fees. */
+  live_gross_usd: number;
   live_net_usd: number;
   live_roi_pct: number;
   live_fees_usd: number;
@@ -379,9 +380,27 @@ export default function ScalpDeskPage() {
     { id: "n", align: "right", header: "Trades", cell: (r) => r.n },
     { id: "wr", align: "right", header: "WR %", cell: (r) => r.wr_pct.toFixed(1) },
     {
+      // Ordered Gross -> Taker Fees -> Net so the row reads as the equation it
+      // is. Showing net beside fees with no gross gives no way to tell whether
+      // the subtraction already happened, and a reader who assumes it did not
+      // will deduct the fees a second time.
+      id: "gross",
+      align: "right",
+      header: "Gross",
+      cell: (r) => (
+        <span className={pnlToneClass(r.live_gross_usd ?? 0)}>{fmtUSD(r.live_gross_usd ?? 0)}</span>
+      ),
+    },
+    {
+      id: "fees",
+      align: "right",
+      header: "− Taker Fees",
+      cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
+    },
+    {
       id: "livenet",
       align: "right",
-      header: "Net on $100",
+      header: "= Net on $100",
       cell: (r) => (
         <span className={pnlToneClass(r.live_net_usd ?? 0)} style={{ fontWeight: 700 }}>
           {fmtUSD(r.live_net_usd ?? 0)}
@@ -397,12 +416,6 @@ export default function ScalpDeskPage() {
           {`${(r.live_roi_pct ?? 0) >= 0 ? "+" : ""}${(r.live_roi_pct ?? 0).toFixed(1)}%`}
         </span>
       ),
-    },
-    {
-      id: "fees",
-      align: "right",
-      header: "Taker Fees",
-      cell: (r) => <span className="desk-pnl-negative">{fmtUSD(-(r.live_fees_usd ?? 0))}</span>,
     },
     {
       id: "drag",
@@ -779,6 +792,10 @@ export default function ScalpDeskPage() {
             (≥200 trades, PF ≥ 1.2, max DD ≤ 25%, net positive), averaged across the four and capped so a lucky profit
             factor cannot substitute for a missing sample. It is progress, not a verdict: the gate&apos;s
             both-halves-positive condition is not computable from a single row.
+            <br />
+            <br />
+            <strong>Gross − Taker Fees = Net on $100</strong>, read left to right. Net is ALREADY after fees; the
+            gross column is there so you can see what was taken rather than having to trust that it was.
             <br />
             <br />
             <strong>Net on $100</strong> restates each strategy&apos;s record on live terms: a $100 account, 3x

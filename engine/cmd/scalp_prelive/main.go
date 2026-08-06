@@ -867,15 +867,22 @@ func (d *desk) serve(port int) {
 			// decision should be made on; NetUSD above is $1,000 notional with
 			// maker fees and flatters every strategy on this board.
 			// CapitalUSD is what this strategy's own $100 account is worth now.
-			CapitalUSD  float64 `json:"capital_usd"`
-			LiveNetUSD  float64 `json:"live_net_usd"`
-			LiveROIPct  float64 `json:"live_roi_pct"`
-			LiveFeesUSD float64 `json:"live_fees_usd"`
-			LiveDragPct float64 `json:"live_fee_drag_pct"`
-			NetUSD      float64 `json:"net_usd"`
-			MaxDD       float64 `json:"max_dd_pct"`
-			Missed      int     `json:"missed"`
-			GatePass    bool    `json:"gate_pass"`
+			CapitalUSD float64 `json:"capital_usd"`
+			// LiveGrossUSD is the result BEFORE fees.
+			//
+			// Reported alongside net and fees so the subtraction is visible
+			// rather than assumed. Net and fees shown side by side, with no
+			// gross, gives no way to tell whether the fees were already taken
+			// out — and a reader who assumes they weren't will double-count them.
+			LiveGrossUSD float64 `json:"live_gross_usd"`
+			LiveNetUSD   float64 `json:"live_net_usd"`
+			LiveROIPct   float64 `json:"live_roi_pct"`
+			LiveFeesUSD  float64 `json:"live_fees_usd"`
+			LiveDragPct  float64 `json:"live_fee_drag_pct"`
+			NetUSD       float64 `json:"net_usd"`
+			MaxDD        float64 `json:"max_dd_pct"`
+			Missed       int     `json:"missed"`
+			GatePass     bool    `json:"gate_pass"`
 		}
 		// EVERY stream appears, including ones that have not traded yet.
 		//
@@ -913,12 +920,13 @@ func (d *desk) serve(port int) {
 					WinRate: math.Round(10000*float64(cs.Wins)/float64(cs.N)) / 100,
 					PF:      pf, NetUSD: math.Round(cs.NetSum*d.notionalUSD*100) / 100,
 					MaxDD: math.Round(cs.MaxDD*10000) / 100, Missed: cs.Missed,
-					GatePass:    d.gatePass(cs),
-					CapitalUSD:  math.Round((liveSimEquityUSD+sim.NetUSD)*100) / 100,
-					LiveNetUSD:  sim.NetUSD,
-					LiveROIPct:  sim.ROIPct,
-					LiveFeesUSD: sim.FeesUSD,
-					LiveDragPct: sim.FeeDragPct,
+					GatePass:     d.gatePass(cs),
+					CapitalUSD:   math.Round((liveSimEquityUSD+sim.NetUSD)*100) / 100,
+					LiveGrossUSD: sim.GrossUSD,
+					LiveNetUSD:   sim.NetUSD,
+					LiveROIPct:   sim.ROIPct,
+					LiveFeesUSD:  sim.FeesUSD,
+					LiveDragPct:  sim.FeeDragPct,
 				})
 			}
 		}
