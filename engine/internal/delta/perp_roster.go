@@ -28,31 +28,72 @@ import (
 // explicit instruction. It does mean the account is sized so being wrong is
 // survivable, and it means this comment exists so nobody later reads the list as
 // though it were qualified.
-var defaultScalpLiveStrategies = []string{
-	// Replaced 2026-08-02 at the owner's direction, from the Live Strategy
-	// Leaderboard restated on a real $100 account with taker fees. The seven
-	// strategies dropped here were selected under the OLD basis - $3,000
-	// notional, maker fees - which reported tens of dollars per trade on an
-	// account that did not exist.
-	//
-	// Every name below is positive on the $100 column. That is a necessary
-	// condition, not a sufficient one: trade counts run 2-11 against a gate that
-	// asks for 200, and none is past 76% of it. With 2,416 streams running, this
-	// is the right tail of a distribution, not a qualified set. Nothing here has
-	// earned real money yet - it has only stopped being disqualified by fees.
-	"ANTI_M1_Break_D60_T50_Long",
-	"ANTI_M1_InsideBar_V20_Long",
-	"ANTI_D20_VWAP_Reversion",
-	"ANTI_M1_DoubleTop_10bp_Short",
-	"ANTI_M1_Break_D30_T20_Long",
-	"ANTI_M1_HMA21_Flip_Short",
-	"ANTI_M1_DoubleBottom_10bp_Long",
-	"ANTI_M1_DoubleTop_20bp_Short",
-	"ANTI_M1_HMA21_Flip_Long",
-	"ANTI_M1_VWAP_Doji_Short",
+// defaultScalpLiveStreams is the owner's selection, as exact (strategy, symbol)
+// STREAMS rather than two lists that get multiplied together.
+//
+// Replaced 2026-08-07. The previous roster of 10 names across ADAUSD/AVAXUSD
+// formed 20 streams; the owner had chosen 14 rows. This selection is three
+// rows, and three streams is what it enables.
+//
+// Selected off the Live Strategy Leaderboard on live terms — a $100 account at
+// 3x with taker fees both legs. Their records at selection:
+//
+//	ANTI_M1_DoubleBottom_10bp_Long ADAUSD   61 trades  gross +34.87  fees 21.59  net +13.28
+//	ANTI_M1_Break_D30_T20_Long     AVAXUSD  34 trades  gross +22.58  fees 12.04  net +10.54
+//	ANTI_M1_Break_D60_T50_Long     AVAXUSD  19 trades  gross +15.45  fees  6.73  net  +8.72
+//
+// Fee drag 44-62%: roughly half of every dollar earned goes to the venue. That
+// is the best ratio on the board and still means the edge must be twice the
+// cost to be worth anything.
+//
+// NOT qualified. The gate asks for 200 trades per stream and these have 19-61,
+// selected from the right tail of 2,416 streams on in-sample data. Being on
+// this list is permission, not evidence.
+var defaultScalpLiveStreams = []PerpStream{
+	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "ADAUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAXUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
 }
 
-// ScalpLiveStrategies is the effective allow-list.
+// ScalpLiveStreams is the effective stream allow-list.
+//
+// SCALP_LIVE_STREAMS overrides it, as comma-separated strategy:SYMBOL pairs.
+// A malformed entry is skipped with a log rather than silently widening the
+// list — the failure mode to avoid is an unparsed entry becoming "allow all".
+func ScalpLiveStreams() []PerpStream {
+	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_STREAMS"))
+	if raw == "" {
+		return defaultScalpLiveStreams
+	}
+	out := make([]PerpStream, 0, 8)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		bits := strings.SplitN(part, ":", 2)
+		if len(bits) != 2 || strings.TrimSpace(bits[0]) == "" || strings.TrimSpace(bits[1]) == "" {
+			log.Printf("[PERP LIVE] SCALP_LIVE_STREAMS: skipping malformed entry %q (want strategy:SYMBOL)", part)
+			continue
+		}
+		out = append(out, PerpStream{
+			Strategy: strings.TrimSpace(bits[0]),
+			Symbol:   strings.ToUpper(strings.TrimSpace(bits[1])),
+		})
+	}
+	if len(out) == 0 {
+		log.Printf("[PERP LIVE] SCALP_LIVE_STREAMS parsed to nothing — falling back to the built-in selection")
+		return defaultScalpLiveStreams
+	}
+	return out
+}
+
+// ScalpLiveStrategies is the distinct strategy names in the live selection,
+// for display and for the SCALP_LIVE_STRATEGIES override.
+//
+// Derived from the streams so the two can never disagree. It is NOT the gate —
+// the gate is the exact pair; a name here says only that some stream using it
+// is permitted.
 func ScalpLiveStrategies() []string {
 	if raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_STRATEGIES")); raw != "" {
 		out := make([]string, 0, 8)
@@ -65,7 +106,15 @@ func ScalpLiveStrategies() []string {
 			return out
 		}
 	}
-	return defaultScalpLiveStrategies
+	seen := map[string]bool{}
+	out := make([]string, 0, 8)
+	for _, st := range ScalpLiveStreams() {
+		if !seen[st.Strategy] {
+			seen[st.Strategy] = true
+			out = append(out, st.Strategy)
+		}
+	}
+	return out
 }
 
 // PerpAllowList gates which (strategy, symbol) streams may reach the venue.
@@ -82,11 +131,58 @@ type PerpAllowList struct {
 	// strategy is not a safe default for a live account.
 	byStrategy map[string]bool
 	symbols    map[string]bool
+	// pairs, when non-nil, pins the exact (strategy, symbol) STREAMS permitted.
+	//
+	// Set() takes two independent lists and forms their cross product, which is
+	// not what an operator selecting rows off a leaderboard means. Choosing
+	// three rows — DoubleBottom on ADAUSD, and two Breaks on AVAXUSD — enabled
+	// six streams under the cross product, three of which nobody picked.
+	//
+	// The doc comment on this type already claimed "only the pairing that was
+	// actually selected should trade". This makes that true.
+	pairs map[string]bool
+}
+
+// PerpStream is one (strategy, symbol) pair — the unit an operator actually
+// selects, and the unit that reaches the venue.
+type PerpStream struct {
+	Strategy string
+	Symbol   string
+}
+
+func perpStreamKey(strategy, symbol string) string {
+	return strings.TrimSpace(strategy) + "|" + strings.ToUpper(strings.TrimSpace(symbol))
 }
 
 // NewPerpAllowList starts closed: nothing is permitted until Set is called.
 func NewPerpAllowList() *PerpAllowList {
 	return &PerpAllowList{}
+}
+
+// SetPairs pins the exact streams permitted, replacing any previous list.
+//
+// Preferred over Set: it cannot enable a pairing that was not chosen. Set
+// remains for callers that genuinely mean "these strategies on these symbols".
+func (a *PerpAllowList) SetPairs(streams []PerpStream) {
+	pm := make(map[string]bool, len(streams))
+	sm := make(map[string]bool, len(streams))
+	ym := make(map[string]bool, len(streams))
+	for _, st := range streams {
+		strat := strings.TrimSpace(st.Strategy)
+		sym := strings.ToUpper(strings.TrimSpace(st.Symbol))
+		if strat == "" || sym == "" {
+			continue
+		}
+		pm[perpStreamKey(strat, sym)] = true
+		sm[strat] = true
+		ym[sym] = true
+	}
+	a.mu.Lock()
+	a.pairs = pm
+	a.byStrategy = sm
+	a.symbols = ym
+	a.mu.Unlock()
+	log.Printf("[PERP LIVE] allow-list: %d exact stream(s) permitted", len(pm))
 }
 
 // Set replaces the allow-list.
@@ -104,6 +200,10 @@ func (a *PerpAllowList) Set(strategies, symbols []string) {
 		}
 	}
 	a.mu.Lock()
+	// Clear any pinned pairs: this call means "these strategies on these
+	// symbols", and leaving a previous pair map in place would silently keep
+	// enforcing a narrower list than the caller just asked for.
+	a.pairs = nil
 	a.byStrategy = sm
 	a.symbols = ym
 	a.mu.Unlock()
@@ -120,6 +220,10 @@ func (a *PerpAllowList) Allowed(strategy, symbol string) bool {
 	defer a.mu.RUnlock()
 	if len(a.byStrategy) == 0 {
 		return false
+	}
+	// Exact streams win when pinned — no cross product, no inference.
+	if a.pairs != nil {
+		return a.pairs[perpStreamKey(strategy, symbol)]
 	}
 	if !a.byStrategy[strategy] {
 		return false

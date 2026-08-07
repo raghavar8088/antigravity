@@ -955,9 +955,13 @@ func (d *desk) serve(port int) {
 		for _, n := range delta.ScalpLiveStrategies() {
 			liveNames[n] = true
 		}
-		liveSyms := map[string]bool{}
-		for _, sy := range scalpLiveSymbols() {
-			liveSyms[strings.ToUpper(sy)] = true
+		// Exact streams, matching the venue allow-list. Flagging on strategy AND
+		// symbol independently marks the cross product live, so the page would
+		// show six live-routed rows where only three can reach Delta — a UI that
+		// overstates real exposure.
+		livePairs := map[string]bool{}
+		for _, st := range delta.ScalpLiveStreams() {
+			livePairs[st.Strategy+"|"+strings.ToUpper(st.Symbol)] = true
 		}
 
 		type row struct {
@@ -1005,7 +1009,7 @@ func (d *desk) serve(port int) {
 				continue
 			}
 			strat, sym := parts[0], parts[1]
-			isLive := liveNames[strat] && (len(liveSyms) == 0 || liveSyms[strings.ToUpper(sym)])
+			isLive := livePairs[strat+"|"+strings.ToUpper(sym)]
 			if isLive {
 				liveOpen++
 			}

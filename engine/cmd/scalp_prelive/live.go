@@ -62,22 +62,33 @@ func scalpLiveEquityUSD() float64 {
 // scalpLiveSymbols is the symbol half of the allow-list. Empty means "any symbol
 // the allow-listed strategies trade", which is broader than the owner selected,
 // so it is set explicitly by default.
+// scalpLiveSymbols is the distinct symbols in the live stream selection.
+//
+// Derived from the streams rather than configured separately, so leverage is
+// set on exactly the products that can be traded and no others. Keeping a
+// second list meant the two could disagree — and the way they disagreed was by
+// permitting more than was chosen.
+//
+// SCALP_LIVE_SYMBOLS still overrides, for operating a subset without a redeploy.
 func scalpLiveSymbols() []string {
-	raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_SYMBOLS"))
-	if raw == "" {
-		// The symbols the selected streams actually qualified on.
-		//
-		// BNBUSD was dropped 2026-08-02: every qualifying row in the current
-		// selection is ADAUSD or AVAXUSD, and the BNBUSD variants of the same
-		// strategies were negative on the $100 basis. Leaving BNBUSD listed
-		// would have quietly enabled ten streams nobody chose - the allow-list
-		// gates on strategy AND symbol precisely so that cannot happen.
-		return []string{"ADAUSD", "AVAXUSD"}
+	if raw := strings.TrimSpace(os.Getenv("SCALP_LIVE_SYMBOLS")); raw != "" {
+		out := []string{}
+		for _, p := range strings.Split(raw, ",") {
+			if s := strings.TrimSpace(p); s != "" {
+				out = append(out, strings.ToUpper(s))
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
 	}
+	seen := map[string]bool{}
 	out := []string{}
-	for _, p := range strings.Split(raw, ",") {
-		if s := strings.TrimSpace(p); s != "" {
-			out = append(out, s)
+	for _, st := range delta.ScalpLiveStreams() {
+		sym := strings.ToUpper(strings.TrimSpace(st.Symbol))
+		if sym != "" && !seen[sym] {
+			seen[sym] = true
+			out = append(out, sym)
 		}
 	}
 	return out
@@ -111,7 +122,11 @@ func newLiveDesk(ctx context.Context) *liveDesk {
 
 	equity := scalpLiveEquityUSD()
 	b := delta.NewPerpBridge(client, reg, equity)
-	b.AllowList().Set(delta.ScalpLiveStrategies(), scalpLiveSymbols())
+	// Exact streams, not strategies x symbols. The cross product enabled
+	// pairings the operator never selected — three chosen rows became six live
+	// streams — and the allow-list is the last thing between a paper signal and
+	// real money.
+	b.AllowList().SetPairs(delta.ScalpLiveStreams())
 
 	log.Printf("[SCALP LIVE] configured: $%.2f account, %d strategies, %d products known — DISARMED until armed explicitly",
 		equity, b.AllowList().Count(), reg.Count())

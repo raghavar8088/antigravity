@@ -1,9 +1,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"antigravity-engine/internal/delta"
 	scalers "antigravity-engine/internal/strategy/scalpers"
 )
 
@@ -82,6 +84,15 @@ func TestScalpLive_SymbolsDefaultToTheSelectedSet(t *testing.T) {
 		if !seen[want] {
 			t.Errorf("%s missing from the default symbols (got %v)", want, got)
 		}
+	}
+	// Derived from the stream selection, so the two can never disagree — and
+	// the way they used to disagree was by permitting more than was chosen.
+	fromStreams := map[string]bool{}
+	for _, st := range delta.ScalpLiveStreams() {
+		fromStreams[strings.ToUpper(st.Symbol)] = true
+	}
+	if len(seen) != len(fromStreams) {
+		t.Errorf("symbols %v do not match the live streams %v", got, fromStreams)
 	}
 	// BNBUSD was dropped 2026-08-02 — every qualifying stream is ADA or AVAX,
 	// and the BNBUSD variants of the same strategies were negative on the $100
