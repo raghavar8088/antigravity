@@ -1759,6 +1759,8 @@ The content is organized as follows:
   scalp_prelive/main.go
   scalp_prelive/mirror_test.go
   scalp_prelive/profile_test.go
+  scalp_prelive/symbols_test.go
+  scalp_prelive/symbols.go
   scalp_prelive/venue_test.go
   seed_db/main.go
   sep_evidence/analytics.go

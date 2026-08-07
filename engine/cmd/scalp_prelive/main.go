@@ -1202,7 +1202,10 @@ func main() {
 	// Engine executes on, so the desk measures strategies on Delta's own book;
 	// the shared feed translates to Binance's USDT naming only when it has to
 	// fall back. All eight are confirmed live perpetuals on Delta India.
-	symbolsCSV := flag.String("symbols", "BTCUSD,ETHUSD,SOLUSD,BNBUSD,XRPUSD,DOGEUSD,ADAUSD,AVAXUSD", "symbols")
+	// "auto" discovers every perpetual future from Delta; a CSV keeps the old
+	// explicit behaviour. SCALP_MIN_TURNOVER_USD sets a liquidity floor and
+	// SCALP_MAX_SYMBOLS caps the count, most liquid first.
+	symbolsCSV := flag.String("symbols", defaultSymbolsCSV, "symbols, or \"auto\" to discover every Delta perpetual")
 	flag.Parse()
 
 	if err := os.MkdirAll(*stateDir, 0o755); err != nil {
@@ -1235,9 +1238,16 @@ func main() {
 	log.Println(gateDesc)
 	d.load()
 
-	for _, s := range strings.Split(*symbolsCSV, ",") {
-		d.symbols = append(d.symbols, &symbolState{sym: strings.TrimSpace(s)})
+	for _, s := range resolveSymbols(*symbolsCSV) {
+		d.symbols = append(d.symbols, &symbolState{sym: s})
 	}
+	// The stream count is streams/symbol x symbols, and it is the number that
+	// decides how much variance this desk manufactures. At 302 streams/symbol,
+	// 220 symbols is ~66,000 streams — every one of which can produce a lucky
+	// leader. Logged loudly because the promotion gate has to be read against
+	// it: the more streams, the longer the right tail of noise.
+	log.Printf("[SCALP] universe: %d symbols x %d streams = %d total streams",
+		len(d.symbols), len(d.streamNames()), len(d.symbols)*len(d.streamNames()))
 
 	// One shared feed for the whole desk: 8 pollers serve all 800 streams.
 	// Backfill covers the ~75h of 1m context the strategies need (72 closed 1h
