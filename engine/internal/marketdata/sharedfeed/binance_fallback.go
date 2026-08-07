@@ -3,11 +3,14 @@ package sharedfeed
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,6 +23,34 @@ import (
 // up in the UI rather than passing as Delta data.
 
 var binanceHTTP = &http.Client{Timeout: 30 * time.Second}
+
+// ErrNotOnBinance means Binance does not list this contract at all.
+//
+// Distinct from a transient failure because the remedy is different: a timeout
+// is worth retrying, a delisting is not. Delta lists 220 perpetuals and Binance
+// does not carry ~18 of them, so without this the fallback re-requests a symbol
+// that can never resolve, on every poll, forever — 18 guaranteed-400 HTTP calls
+// per cycle, and 18 error lines that train the reader to ignore feed errors.
+var ErrNotOnBinance = errors.New("sharedfeed: contract is not listed on Binance")
+
+// binanceUnlisted remembers contracts Binance has told us it does not have.
+//
+// Permanent-negative cache. Binance answers -1121 "Invalid symbol", which is a
+// statement about the exchange's listings rather than about this request, so it
+// is worth remembering. Cleared only by a restart, which is the right cadence:
+// a newly-listed pair is not urgent, and never retrying beats hammering.
+var binanceUnlisted sync.Map
+
+// binanceCode extracts Binance's numeric error code from an error body.
+func binanceCode(body string) int {
+	var e struct {
+		Code int `json:"code"`
+	}
+	if json.Unmarshal([]byte(body), &e) != nil {
+		return 0
+	}
+	return e.Code
+}
 
 // binanceSymbol maps a Delta symbol to its Binance equivalent.
 //
@@ -62,6 +93,12 @@ func BinanceFetcher(ctx context.Context, symbol, resolution string, from, to tim
 	}
 	sym := binanceSymbol(symbol)
 
+	// Already known absent — fail immediately rather than spending a request to
+	// be told the same thing again.
+	if _, gone := binanceUnlisted.Load(sym); gone {
+		return nil, fmt.Errorf("%w: %s", ErrNotOnBinance, sym)
+	}
+
 	url := fmt.Sprintf(
 		"https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&startTime=%d&endTime=%d&limit=1000",
 		sym, interval, from.UnixMilli(), to.UnixMilli(),
@@ -82,6 +119,14 @@ func BinanceFetcher(ctx context.Context, symbol, resolution string, from, to tim
 		return nil, fmt.Errorf("binance klines read: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
+		// -1121 is "Invalid symbol": a fact about Binance's listings, not about
+		// this request. Recorded so the desk stops asking.
+		if binanceCode(string(body)) == -1121 {
+			if _, seen := binanceUnlisted.LoadOrStore(sym, true); !seen {
+				log.Printf("[sharedfeed] %s is not listed on Binance — fallback disabled for it (Delta remains primary)", sym)
+			}
+			return nil, fmt.Errorf("%w: %s", ErrNotOnBinance, sym)
+		}
 		return nil, fmt.Errorf("binance klines %s: HTTP %d: %s", sym, resp.StatusCode, truncate(string(body), 200))
 	}
 

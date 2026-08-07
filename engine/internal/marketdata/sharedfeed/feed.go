@@ -214,28 +214,39 @@ func (f *Feed) refresh(ctx context.Context, p Pair) {
 }
 
 func (f *Feed) fetchWithFallback(ctx context.Context, p Pair, from, to time.Time) ([]Bar, Source, error) {
+	// Held across the fallback so both failures can be reported together.
+	var primaryErr error
 	if f.cfg.Primary != nil {
 		bars, err := f.cfg.Primary(ctx, p.Symbol, p.Resolution, from, to)
+		primaryErr = err
 		if err == nil && len(bars) > 0 {
 			return bars, SourceDelta, nil
 		}
+		if err == nil {
+			primaryErr = fmt.Errorf("primary returned no bars")
+		}
 		if f.cfg.Fallback == nil {
-			if err == nil {
-				err = fmt.Errorf("primary returned no bars")
-			}
-			return nil, SourceNone, err
+			return nil, SourceNone, primaryErr
 		}
 		// Rate limits and outages are exactly why the fallback exists. Log the
 		// switch loudly: a desk quietly trading a different venue's prices than
 		// the one it will execute on is a silent correctness problem.
 		log.Printf("[SHAREDFEED] %s %s: delta unavailable (%v) — falling back to binance",
-			p.Symbol, p.Resolution, err)
+			p.Symbol, p.Resolution, primaryErr)
 	}
 	if f.cfg.Fallback == nil {
 		return nil, SourceNone, fmt.Errorf("no fetcher configured")
 	}
 	bars, err := f.cfg.Fallback(ctx, p.Symbol, p.Resolution, from, to)
 	if err != nil {
+		// Report BOTH. Returning only the fallback's error pointed the operator
+		// at the wrong venue: the health endpoint showed "binance klines
+		// 1000FLOKIUSDT: HTTP 400" for a Delta-primary symbol, which reads as a
+		// Binance outage when the actual failure was Delta and Binance simply
+		// does not list the contract.
+		if primaryErr != nil {
+			return nil, SourceNone, fmt.Errorf("delta: %w; fallback: %v", primaryErr, err)
+		}
 		return nil, SourceNone, err
 	}
 	return bars, SourceBinance, nil
