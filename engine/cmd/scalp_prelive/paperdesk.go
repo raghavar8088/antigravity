@@ -56,6 +56,16 @@ type paperPos struct {
 	Contracts float64   `json:"contracts"`
 	OpenedAt  time.Time `json:"openedAt"`
 	ExpiresAt time.Time `json:"expiresAt,omitempty"`
+	// Mark is the last real Delta price seen for this symbol. Carried on the
+	// position so an open trade can report what it is worth right now — an open
+	// position with no P&L tells an operator nothing about whether it is
+	// working.
+	Mark float64 `json:"mark"`
+	// UnrealisedUSD is the result if it closed at Mark, NET of the round-trip
+	// taker fee. Gross would flatter it by exactly the amount that has decided
+	// every result on this desk.
+	UnrealisedUSD float64 `json:"unrealisedUsd"`
+	UnrealisedPct float64 `json:"unrealisedPct"`
 }
 
 // paperAccount is one strategy's CONTRIBUTION to the shared account.
@@ -130,6 +140,28 @@ func newLivePaperDesk() *livePaperDesk {
 }
 
 func paperKey(strategy, symbol string) string { return strategy + "|" + symbol }
+
+// paperUnrealised is what a position is worth at `mark`, net of the round-trip
+// taker fee it will pay to close.
+//
+// Net rather than gross on purpose. Fees are 0.118% of notional round trip and
+// most of these strategies target moves smaller than that, so a gross
+// unrealised figure would show a winner where the close books a loss — which is
+// exactly the discrepancy this desk was built to stop reproducing.
+func paperUnrealised(p *paperPos, mark float64) (usd, pct float64) {
+	if p == nil || mark <= 0 || p.Entry <= 0 {
+		return 0, 0
+	}
+	dir := 1.0
+	if p.Dir == "SHORT" {
+		dir = -1.0
+	}
+	gross := (mark - p.Entry) * dir * p.Contracts
+	fees := (p.Entry + mark) * p.Contracts * delta.PerpTakerFeeRate
+	usd = gross - fees
+	pct = (mark - p.Entry) / p.Entry * dir * 100
+	return usd, pct
+}
 
 // openNotionalLocked is the capital already deployed. Caller holds d.mu.
 func (d *livePaperDesk) openNotionalLocked() float64 {
@@ -220,6 +252,11 @@ func (d *livePaperDesk) onBar(symbol string, high, low, close float64) {
 		if p.Symbol != symbol {
 			continue
 		}
+		// Mark first, so a position that survives this bar still reports a
+		// current value rather than a stale one from its entry.
+		p.Mark = close
+		p.UnrealisedUSD, p.UnrealisedPct = paperUnrealised(p, close)
+
 		long := p.Dir == "LONG"
 		// The extreme that can hurt, and the one that can help.
 		adverse, favourable := low, high

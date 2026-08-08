@@ -55,6 +55,10 @@ type PaperOpen = {
   target: number;
   contracts: number;
   openedAt: string;
+  mark: number;
+  /** NET of the round-trip taker fee it will pay to close. */
+  unrealisedUsd: number;
+  unrealisedPct: number;
 };
 type PaperTrade = {
   strategy: string;
@@ -75,6 +79,7 @@ type PaperDesk = {
   netUsd: number;
   roiPct: number;
   openNotionalUsd: number;
+  openUnrealisedUsd: number;
   maxNotionalUsd: number;
   maxConcurrent: number;
   maxLeverage: number;
@@ -111,7 +116,6 @@ function ageLabel(iso?: string): string {
 
 export default function LiveEnginePaperDeskPage() {
   const [paper, setPaper] = useState<PaperDesk | null>(null);
-  const [tab, setTab] = useState<string>("accounts");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [updatedAt, setUpdatedAt] = useState<string>("");
@@ -229,6 +233,36 @@ export default function LiveEnginePaperDeskPage() {
       },
     },
     { id: "notional", align: "right", header: "Size", cell: (r) => fmtUSD(r.entry * r.contracts) },
+    { id: "mark", align: "right", header: "Mark", cell: (r) => (r.mark > 0 ? fmtPrice(r.mark) : "—") },
+    {
+      id: "upnl",
+      align: "right",
+      header: "Unrealised",
+      // NET of the round-trip fee it will pay to close. A gross figure would
+      // show a winner where the close books a loss — most of these strategies
+      // target moves smaller than the 0.118% it costs to trade.
+      cell: (r) =>
+        r.mark > 0 ? (
+          <span className={pnlTone(r.unrealisedUsd)} style={{ fontWeight: 700 }}>
+            {fmtUSD(r.unrealisedUsd)}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "upct",
+      align: "right",
+      header: "Move %",
+      cell: (r) =>
+        r.mark > 0 ? (
+          <span className={pnlTone(r.unrealisedPct)}>
+            {`${r.unrealisedPct >= 0 ? "+" : ""}${r.unrealisedPct.toFixed(3)}%`}
+          </span>
+        ) : (
+          "—"
+        ),
+    },
     { id: "at", header: "Opened", cell: (r) => ageLabel(r.openedAt) },
   ];
 
@@ -336,6 +370,13 @@ export default function LiveEnginePaperDeskPage() {
             />
             <DeskMetricTile
               compact
+              label="Open P&L"
+              value={paper ? fmtUSD(paper.openUnrealisedUsd) : "—"}
+              valueClassName={paper ? pnlTone(paper.openUnrealisedUsd) : undefined}
+              sub="unrealised, net of exit fee"
+            />
+            <DeskMetricTile
+              compact
               label="Trades"
               value={trades ? String(trades) : "—"}
               sub={trades ? `win rate ${((100 * wins) / trades).toFixed(1)}%` : "waiting for signals"}
@@ -356,85 +397,94 @@ export default function LiveEnginePaperDeskPage() {
           </p>
         </DeskCard>
 
+        {/* Three sections, not three tabs.
+            A tab hides two thirds of the picture, and the three answer
+            different questions: which strategies are worth funding, what is
+            exposed right now, and what actually happened. An operator checking
+            a live desk wants all three without clicking. */}
         <DeskCard padding="md">
           <DeskSectionHeader
-            title="Strategies"
+            title="Strategy Leaderboard"
+            subtitle="Each strategy's contribution to the shared $100 — gross, minus taker fees, equals net."
             actions={
-              <div style={{ display: "flex", gap: 8 }}>
-                {[
-                  ["accounts", `Strategies (${accts.length})`],
-                  ["open", `Open (${paper?.openPositions?.length ?? 0})`],
-                  ["trades", `Closed (${paper?.recentTrades?.length ?? 0})`],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className="desk-label-md"
-                    style={{
-                      cursor: "pointer",
-                      padding: "5px 12px",
-                      borderRadius: 6,
-                      border: "1px solid var(--desk-outline)",
-                      background: tab === id ? "var(--desk-primary)" : "transparent",
-                      color: tab === id ? "var(--desk-on-primary)" : "var(--desk-on-surface-variant)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                {accts.length} strateg{accts.length === 1 ? "y" : "ies"}
+              </span>
+            }
+          />
+          <DeskDataTable
+            columns={accountColumns}
+            rows={accts}
+            getRowKey={(r) => r.strategy}
+            minWidth={980}
+            empty={
+              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
+                No strategy has traded yet. Rows appear on the first paper fill.
+              </p>
+            }
+          />
+          <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
+            &ldquo;Worth real money?&rdquo; is a question, not a verdict. Positive net is necessary and nowhere near
+            sufficient: the pre-registered gate wants 200 trades per stream, and a profit over 30 is still mostly noise.
+            A taker round trip costs {((paper?.feeRatePerSide ?? 0.00059) * 200).toFixed(3)}% of notional — larger than
+            the move most of these strategies target.
+          </p>
+        </DeskCard>
+
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Open Positions"
+            subtitle="Marked against the latest real Delta price. Unrealised is NET of the fee the exit will pay."
+            actions={
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                  {paper?.openPositions?.length ?? 0} open · {fmtUSD(paper?.openNotionalUsd)} deployed
+                </span>
+                <span
+                  className={`desk-mono desk-label-md ${pnlTone(paper?.openUnrealisedUsd ?? 0)}`}
+                  style={{ fontWeight: 700 }}
+                >
+                  {fmtUSD(paper?.openUnrealisedUsd)}
+                </span>
               </div>
             }
           />
-
-          {tab === "accounts" && (
-            <DeskDataTable
-              columns={accountColumns}
-              rows={accts}
-              getRowKey={(r) => r.strategy}
-              minWidth={980}
-              empty={
-                <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                  No strategy has traded yet. Rows appear on the first paper fill.
-                </p>
-              }
-            />
-          )}
-          {tab === "open" && (
-            <DeskDataTable
-              columns={openColumns}
-              rows={paper?.openPositions ?? []}
-              getRowKey={(r) => `${r.strategy}|${r.symbol}`}
-              minWidth={1000}
-              empty={
-                <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                  No open paper positions.
-                </p>
-              }
-            />
-          )}
-          {tab === "trades" && (
-            <DeskDataTable
-              columns={tradeColumns}
-              rows={paper?.recentTrades ?? []}
-              getRowKey={(r, i) => `${r.strategy}-${r.closedAt}-${i}`}
-              minWidth={1100}
-              empty={
-                <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
-                  No closed paper trades yet.
-                </p>
-              }
-            />
-          )}
-
-          <p className="desk-body-md" style={{ marginTop: 14, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            &ldquo;Worth real money?&rdquo; is a question, not a verdict. Positive net is necessary and nowhere near
-            sufficient: the pre-registered gate wants 200 trades per stream, and a profit over 30 is still mostly noise.
-            Fee drag is the number to watch — a taker round trip costs {((paper?.feeRatePerSide ?? 0.00059) * 200).toFixed(3)}
-            % of notional, which is larger than the move most of these strategies target.
-          </p>
+          <DeskDataTable
+            columns={openColumns}
+            rows={paper?.openPositions ?? []}
+            getRowKey={(r) => `${r.strategy}|${r.symbol}`}
+            minWidth={1200}
+            empty={
+              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
+                No open paper positions.
+              </p>
+            }
+          />
         </DeskCard>
+
+        <DeskCard padding="md">
+          <DeskSectionHeader
+            title="Closed Trades"
+            subtitle="Every paper round trip, newest first — with the exit that closed it and the fee it paid."
+            actions={
+              <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
+                {paper?.recentTrades?.length ?? 0} closed
+              </span>
+            }
+          />
+          <DeskDataTable
+            columns={tradeColumns}
+            rows={paper?.recentTrades ?? []}
+            getRowKey={(r, i) => `${r.strategy}-${r.closedAt}-${i}`}
+            minWidth={1100}
+            empty={
+              <p className="desk-body-md" style={{ color: "var(--desk-on-surface-variant)", margin: "10px 2px" }}>
+                No closed paper trades yet.
+              </p>
+            }
+          />
+        </DeskCard>
+
       </main>
     </div>
   );
