@@ -67,6 +67,11 @@ const ALLOWED_PATHS = [
   "/scalp/live/stats",
   "/scalp/live/trades",
   "/scalp/live/reconcile",
+  // The Live Engine Paper Desk: the promoted strategies on $100 of paper money
+  // against real Delta prices and real taker fees. Read-only here — its reset
+  // stays behind the desk token, because clearing the record that decides what
+  // gets real capital should not be one click from a browser session.
+  "/scalp/live/paper",
 ];
 
 /**
