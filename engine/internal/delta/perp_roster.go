@@ -55,6 +55,63 @@ var defaultScalpLiveStreams = []PerpStream{
 	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "AVAXUSD"},
 }
 
+// defaultScalpPaperStreams are CANDIDATES: they paper-trade on the Live Engine
+// Paper Desk but cannot reach the venue.
+//
+// A separate tier on purpose. Adding a stream to the live roster is a decision
+// to spend money on it; adding it here is a decision to WATCH it on live terms
+// first. Collapsing the two would mean every candidate a leaderboard suggested
+// went straight to real capital — which is how the previous roster was built,
+// and it lost $13.91 over 27 fills.
+//
+// Selected 2026-08-09 from the scalp leaderboard restated on live terms. Every
+// one has 1-4 trades, so none is evidence of anything yet; that is precisely
+// why they belong on paper rather than on the wallet.
+var defaultScalpPaperStreams = []PerpStream{
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "MOVEUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "MOVEUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "LIGHTUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "LIGHTUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "XAIUSD"},
+	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "1000SATSUSD"},
+	{Strategy: "ANTI_M1_Break_D60_T50_Long", Symbol: "1000SATSUSD"},
+	{Strategy: "ANTI_M1_DoubleBottom_10bp_Long", Symbol: "1000SATSUSD"},
+}
+
+// ScalpPaperStreams is everything the Live Engine Paper Desk trades: the live
+// roster plus the candidates.
+//
+// The live streams are included so the paper desk stays a faithful mirror of
+// what real money is doing — that comparison is the module's whole purpose, and
+// dropping them to make room for candidates would destroy it.
+func ScalpPaperStreams() []PerpStream {
+	live := ScalpLiveStreams()
+	out := make([]PerpStream, 0, len(live)+len(defaultScalpPaperStreams))
+	seen := map[string]bool{}
+	for _, st := range append(append([]PerpStream{}, live...), defaultScalpPaperStreams...) {
+		k := perpStreamKey(st.Strategy, st.Symbol)
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, st)
+		}
+	}
+	return out
+}
+
+// PerpStreamPaperPermitted reports whether a stream may PAPER trade.
+//
+// Deliberately wider than PerpStreamPermitted, which gates the venue. A stream
+// passing this and failing that is the normal state of a candidate.
+func PerpStreamPaperPermitted(strategy, symbol string) bool {
+	key := perpStreamKey(strategy, symbol)
+	for _, st := range ScalpPaperStreams() {
+		if perpStreamKey(st.Strategy, st.Symbol) == key {
+			return true
+		}
+	}
+	return false
+}
+
 // ScalpLiveStreams is the effective stream allow-list.
 //
 // SCALP_LIVE_STREAMS overrides it, as comma-separated strategy:SYMBOL pairs.

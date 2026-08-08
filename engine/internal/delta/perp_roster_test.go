@@ -186,3 +186,58 @@ func TestPerpAllowList_ReportsNamesThatMatchNoRunningStrategy(t *testing.T) {
 		t.Error("reported an unknown name when both resolve")
 	}
 }
+
+// Paper candidates must NOT reach the venue.
+//
+// Adding a stream to the live roster is a decision to spend money on it; adding
+// it as a candidate is a decision to watch it on live terms first. Collapsing
+// the two is how the previous roster was built, and it lost $13.91 over 27
+// fills on strategies with single-digit trade counts.
+func TestPerpPaperCandidates_TradeOnPaperButNotOnTheVenue(t *testing.T) {
+	candidates := defaultScalpPaperStreams
+	if len(candidates) == 0 {
+		t.Fatal("no candidates configured; this test would pass vacuously")
+	}
+	for _, c := range candidates {
+		if !PerpStreamPaperPermitted(c.Strategy, c.Symbol) {
+			t.Errorf("candidate %v cannot paper trade", c)
+		}
+		if PerpStreamPermitted(c.Strategy, c.Symbol) {
+			t.Errorf("candidate %v reached the VENUE gate — a candidate must not spend money", c)
+		}
+	}
+}
+
+// The live roster must still paper trade, or the desk stops mirroring what real
+// money is doing — which is the module's entire purpose.
+func TestPerpPaperCandidates_LiveStreamsStillPaperTrade(t *testing.T) {
+	for _, live := range ScalpLiveStreams() {
+		if !PerpStreamPaperPermitted(live.Strategy, live.Symbol) {
+			t.Errorf("live stream %v is missing from the paper desk; the mirror is incomplete", live)
+		}
+	}
+	// And the paper set is the union, with no duplicates.
+	seen := map[string]bool{}
+	for _, st := range ScalpPaperStreams() {
+		k := perpStreamKey(st.Strategy, st.Symbol)
+		if seen[k] {
+			t.Errorf("%v appears twice in the paper set", st)
+		}
+		seen[k] = true
+	}
+	if want := len(ScalpLiveStreams()) + len(defaultScalpPaperStreams); len(seen) > want {
+		t.Errorf("paper set has %d streams, more than live+candidates (%d)", len(seen), want)
+	}
+}
+
+// A stream on neither list must be refused by both gates.
+func TestPerpPaperCandidates_UnknownStreamIsRefusedEverywhere(t *testing.T) {
+	if PerpStreamPaperPermitted("Not_A_Strategy", "ADAUSD") {
+		t.Error("an unlisted strategy was permitted onto the paper desk")
+	}
+	// A candidate strategy on a symbol it was NOT selected for must also fail —
+	// the pairing is the gate, not the name.
+	if PerpStreamPaperPermitted("ANTI_M1_Break_D30_T20_Long", "NOTASYMBOLUSD") {
+		t.Error("a candidate was permitted on a symbol it was not selected for")
+	}
+}

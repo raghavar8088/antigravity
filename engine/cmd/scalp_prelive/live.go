@@ -231,7 +231,9 @@ func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
 	// venue allow-list actually permits — this desk answers a question about the
 	// PROMOTED strategies, so widening it to every stream would make it the
 	// scalp leaderboard again.
-	if delta.PerpStreamPermitted(strategy, symbol) {
+	// PAPER gate, deliberately wider than the venue gate below. A candidate
+	// paper-trades here for a while before anyone decides it deserves money.
+	if delta.PerpStreamPaperPermitted(strategy, symbol) {
 		livePaper.onSignal(strategy, symbol, pos.Dir, pos.Entry, pos.SL, pos.TP, profileTTL(pos.Profile))
 	}
 	if d == nil {

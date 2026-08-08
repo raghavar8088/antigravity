@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3,4],"files":1,"symbols":20,"top_files":[{"file":"engine/cmd/scalp_prelive/paperdesk.go","symbols":20}]}}
+{"engine-cmd":{"communities":[3,4,6,7],"files":1,"symbols":18,"top_files":[{"file":"engine/cmd/scalp_prelive/live.go","symbols":18}]},"engine-delta":{"communities":[0,1,2,5],"files":2,"symbols":30,"top_files":[{"file":"engine/internal/delta/perp_roster.go","symbols":17},{"file":"engine/internal/delta/perp_roster_test.go","symbols":13}]}}
