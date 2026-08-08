@@ -58,39 +58,59 @@ type paperPos struct {
 	ExpiresAt time.Time `json:"expiresAt,omitempty"`
 }
 
-// paperAccount is one strategy's own $100.
+// paperAccount is one strategy's CONTRIBUTION to the shared account.
 //
-// Per strategy, not one shared pot: promotion is a per-strategy decision, and a
-// shared balance would let one strategy's win fund another's loss and hide both.
+// There is one $100, not $100 each. Per-strategy accounts made the desk look
+// like several small portfolios and quietly multiplied the capital: ten
+// strategies meant $1,000 deployed while reporting per-strategy returns as if
+// each were the whole. The live bridge has one wallet, one aggregate leverage
+// cap and one concurrency cap, so the paper mirror must too.
+//
+// NetUSD is what this strategy added to or took from the shared balance. It is
+// still tracked per strategy because promotion is a per-strategy decision — but
+// the balance those decisions spend from is single.
 type paperAccount struct {
 	Strategy string  `json:"strategy"`
-	Equity   float64 `json:"equityUsd"`
 	Trades   int     `json:"trades"`
 	Wins     int     `json:"wins"`
 	GrossUSD float64 `json:"grossUsd"`
 	FeesUSD  float64 `json:"feesUsd"`
 	NetUSD   float64 `json:"netUsd"`
+	// ShareOfEquityPct is this strategy's net as a share of the STARTING
+	// balance, so a row can be read against the $100 without implying it owned
+	// $100 of its own.
+	ShareOfEquityPct float64 `json:"shareOfEquityPct"`
 }
 
 // livePaperDesk mirrors every live-routed signal onto paper.
 type livePaperDesk struct {
-	mu       sync.Mutex
+	mu sync.Mutex
+	// equity is THE account. One balance, shared by every strategy, exactly as
+	// the live bridge shares one Delta wallet.
+	equity   float64
 	accounts map[string]*paperAccount
 	open     map[string]*paperPos
 	closed   []paperTrade
 	started  time.Time
 }
 
-// livePaperStartingEquity is what each strategy begins with - the same $100 the
-// live desk runs, so a result here transfers without rescaling.
+// livePaperStartingEquity is the whole account - the same $100 the live desk
+// runs, so a result here transfers without rescaling.
 const livePaperStartingEquity = 100.0
 
-// livePaperNotional is the position size: 3x equity, the live risk config's
-// aggregate cap, and one strategy holds one position at a time.
-const livePaperNotional = livePaperStartingEquity * 3
+// livePaperMaxLeverage is the AGGREGATE cap across all open positions, matching
+// PerpRiskConfig.MaxAggregateLeverage on the live bridge.
+const livePaperMaxLeverage = 3.0
+
+// livePaperMaxConcurrent matches the bridge's MaxConcurrentPositions. Three
+// positions sharing a 3x cap is ~1x notional each — which is what the live desk
+// actually deploys, and materially less than the 3x a per-strategy account
+// implied.
+const livePaperMaxConcurrent = 3
 
 func newLivePaperDesk() *livePaperDesk {
 	return &livePaperDesk{
+		equity:   livePaperStartingEquity,
 		accounts: map[string]*paperAccount{},
 		open:     map[string]*paperPos{},
 		started:  time.Now().UTC(),
@@ -98,6 +118,15 @@ func newLivePaperDesk() *livePaperDesk {
 }
 
 func paperKey(strategy, symbol string) string { return strategy + "|" + symbol }
+
+// openNotionalLocked is the capital already deployed. Caller holds d.mu.
+func (d *livePaperDesk) openNotionalLocked() float64 {
+	total := 0.0
+	for _, p := range d.open {
+		total += p.Entry * p.Contracts
+	}
+	return total
+}
 
 // onSignal opens a paper position for a live-routed stream.
 //
@@ -117,13 +146,28 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 		// the paper desk leverage the real one is not allowed to take.
 		return
 	}
+	// Concurrency cap, matching the bridge. Refusing here is the same refusal
+	// the live desk makes; without it the paper record would contain trades the
+	// real desk would never have taken.
+	if len(d.open) >= livePaperMaxConcurrent {
+		return
+	}
+	// Aggregate leverage cap across everything already open. One wallet means
+	// one budget: a fourth idea cannot be funded by pretending the first three
+	// were free.
+	budget := d.equity*livePaperMaxLeverage - d.openNotionalLocked()
+	perPosition := d.equity * livePaperMaxLeverage / livePaperMaxConcurrent
+	notional := math.Min(budget, perPosition)
+	if notional <= 0 {
+		return
+	}
 	if _, ok := d.accounts[strategy]; !ok {
-		d.accounts[strategy] = &paperAccount{Strategy: strategy, Equity: livePaperStartingEquity}
+		d.accounts[strategy] = &paperAccount{Strategy: strategy}
 	}
 	p := &paperPos{
 		Strategy: strategy, Symbol: symbol, Dir: dir,
 		Entry: entry, Stop: stop, Target: target,
-		Contracts: livePaperNotional / entry,
+		Contracts: notional / entry,
 		OpenedAt:  time.Now().UTC(),
 	}
 	if ttl > 0 {
@@ -193,7 +237,7 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 
 	acct := d.accounts[p.Strategy]
 	if acct == nil {
-		acct = &paperAccount{Strategy: p.Strategy, Equity: livePaperStartingEquity}
+		acct = &paperAccount{Strategy: p.Strategy}
 		d.accounts[p.Strategy] = acct
 	}
 	acct.Trades++
@@ -203,7 +247,11 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 	acct.GrossUSD += gross
 	acct.FeesUSD += fees
 	acct.NetUSD += net
-	acct.Equity = livePaperStartingEquity + acct.NetUSD
+
+	// The SHARED balance moves. Every strategy spends from and returns to this
+	// one number, so a win here really does fund the next position elsewhere —
+	// which is what the live wallet does.
+	d.equity += net
 
 	d.closed = append(d.closed, paperTrade{
 		Strategy: p.Strategy, Symbol: p.Symbol, Dir: p.Dir,
@@ -220,7 +268,7 @@ func (d *livePaperDesk) closeLocked(k string, p *paperPos, exit float64, reason 
 	delete(d.open, k)
 
 	log.Printf("[LIVE PAPER] %s %s %s CLOSE @ %.6f | %s | gross $%+.4f fees $%.4f net $%+.4f | equity $%.2f",
-		p.Strategy, p.Symbol, p.Dir, exit, reason, gross, fees, net, acct.Equity)
+		p.Strategy, p.Symbol, p.Dir, exit, reason, gross, fees, net, d.equity)
 }
 
 // reset clears every account and trade.
@@ -231,6 +279,7 @@ func (d *livePaperDesk) reset() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	n := len(d.closed)
+	d.equity = livePaperStartingEquity
 	d.accounts = map[string]*paperAccount{}
 	d.open = map[string]*paperPos{}
 	d.closed = nil
@@ -246,10 +295,10 @@ func (d *livePaperDesk) snapshot() map[string]any {
 	accts := make([]paperAccount, 0, len(d.accounts))
 	for _, a := range d.accounts {
 		c := *a
-		c.Equity = math.Round(c.Equity*100) / 100
 		c.NetUSD = math.Round(c.NetUSD*100) / 100
 		c.GrossUSD = math.Round(c.GrossUSD*100) / 100
 		c.FeesUSD = math.Round(c.FeesUSD*100) / 100
+		c.ShareOfEquityPct = math.Round(c.NetUSD/livePaperStartingEquity*10000) / 100
 		accts = append(accts, c)
 	}
 	sort.Slice(accts, func(i, j int) bool { return accts[i].NetUSD > accts[j].NetUSD })
@@ -272,12 +321,19 @@ func (d *livePaperDesk) snapshot() map[string]any {
 
 	return map[string]any{
 		"startingEquityUsd": livePaperStartingEquity,
-		"notionalUsd":       livePaperNotional,
-		"feeRatePerSide":    delta.PerpTakerFeeRate,
-		"accounts":          accts,
-		"openPositions":     open,
-		"recentTrades":      out,
-		"uptimeMin":         int64(time.Since(d.started).Minutes()),
+		// ONE balance for the whole desk, not one per strategy.
+		"equityUsd":       math.Round(d.equity*100) / 100,
+		"netUsd":          math.Round((d.equity-livePaperStartingEquity)*100) / 100,
+		"roiPct":          math.Round((d.equity-livePaperStartingEquity)/livePaperStartingEquity*10000) / 100,
+		"openNotionalUsd": math.Round(d.openNotionalLocked()*100) / 100,
+		"maxNotionalUsd":  math.Round(d.equity*livePaperMaxLeverage*100) / 100,
+		"maxConcurrent":   livePaperMaxConcurrent,
+		"maxLeverage":     livePaperMaxLeverage,
+		"feeRatePerSide":  delta.PerpTakerFeeRate,
+		"accounts":        accts,
+		"openPositions":   open,
+		"recentTrades":    out,
+		"uptimeMin":       int64(time.Since(d.started).Minutes()),
 	}
 }
 

@@ -24,7 +24,7 @@ func TestLivePaper_ChargesTakerOnBothLegs(t *testing.T) {
 		t.Fatalf("expected one closed trade, got %d", len(d.closed))
 	}
 	tr := d.closed[0]
-	contracts := livePaperNotional / 0.2000
+	contracts := d.closed[0].Contracts
 	wantFees := (0.2000 + 0.2021) * contracts * delta.PerpTakerFeeRate
 
 	if math.Abs(tr.FeesUSD-wantFees) > 1e-9 {
@@ -38,9 +38,13 @@ func TestLivePaper_ChargesTakerOnBothLegs(t *testing.T) {
 	}
 }
 
-// Each strategy gets its OWN $100. A shared pot would let one strategy's win
-// fund another's loss and hide both, and promotion is a per-strategy decision.
-func TestLivePaper_AccountsAreSeparatePerStrategy(t *testing.T) {
+// ONE $100 for the whole desk, not $100 each.
+//
+// Per-strategy accounts quietly multiplied the capital: ten strategies meant
+// $1,000 deployed while every row reported a return as if it owned the whole
+// $100. The live bridge has one wallet, one aggregate leverage cap and one
+// concurrency cap, so the paper mirror must have the same.
+func TestLivePaper_OneSharedBalanceNotOnePerStrategy(t *testing.T) {
 	d := newLivePaperDesk()
 	d.onSignal("WINNER", "ADAUSD", "LONG", 0.2000, 0.1993, 0.2021, time.Hour)
 	d.onSignal("LOSER", "AVAXUSD", "LONG", 6.500, 6.4772, 6.5683, time.Hour)
@@ -50,17 +54,59 @@ func TestLivePaper_AccountsAreSeparatePerStrategy(t *testing.T) {
 	snap := d.snapshot()
 	accts := snap["accounts"].([]paperAccount)
 	if len(accts) != 2 {
-		t.Fatalf("expected 2 accounts, got %d", len(accts))
+		t.Fatalf("expected 2 strategy rows, got %d", len(accts))
 	}
+
+	// The desk reports ONE equity, and it is the sum of every contribution.
+	sum := 0.0
 	for _, a := range accts {
-		if a.Equity == livePaperStartingEquity {
-			t.Errorf("%s equity unchanged at $%.2f after a closed trade", a.Strategy, a.Equity)
+		sum += a.NetUSD
+	}
+	equity := snap["equityUsd"].(float64)
+	if math.Abs(equity-(livePaperStartingEquity+sum)) > 0.011 {
+		t.Errorf("desk equity $%.2f != $100 + summed contributions $%.2f — the balance is not shared",
+			equity, sum)
+	}
+	if equity == livePaperStartingEquity {
+		t.Error("equity unchanged after a win and a loss closed")
+	}
+}
+
+// Capital is finite. A fourth idea cannot be funded by pretending the first
+// three were free — the live bridge refuses, so this must too.
+func TestLivePaper_RespectsConcurrencyAndLeverageCaps(t *testing.T) {
+	d := newLivePaperDesk()
+	for i, sym := range []string{"AUSD", "BUSD", "CUSD", "DUSD", "EUSD"} {
+		d.onSignal("S", sym, "LONG", 100, 99, 103, time.Hour)
+		if want := i + 1; len(d.open) != want && want <= livePaperMaxConcurrent {
+			t.Errorf("after %d signals the desk holds %d positions", want, len(d.open))
 		}
-		// Neither account may be affected by the other's result.
-		if math.Abs(a.Equity-(livePaperStartingEquity+a.NetUSD)) > 0.011 {
-			t.Errorf("%s equity $%.2f != $100 + net $%.2f — the accounts are not independent",
-				a.Strategy, a.Equity, a.NetUSD)
-		}
+	}
+	if len(d.open) > livePaperMaxConcurrent {
+		t.Errorf("desk holds %d positions, cap is %d", len(d.open), livePaperMaxConcurrent)
+	}
+	// And total deployed capital must respect the aggregate cap.
+	if got, cap := d.openNotionalLocked(), livePaperStartingEquity*livePaperMaxLeverage; got > cap+0.01 {
+		t.Errorf("deployed $%.2f against a $%.2f aggregate cap", got, cap)
+	}
+}
+
+// Sizing must shrink with a drawdown. A desk that keeps deploying $300 after
+// losing half its balance is running leverage it did not choose.
+func TestLivePaper_SizeFollowsTheSharedBalance(t *testing.T) {
+	d := newLivePaperDesk()
+	d.onSignal("S", "ADAUSD", "LONG", 100, 99, 103, time.Hour)
+	first := d.open[paperKey("S", "ADAUSD")].Contracts * 100
+
+	// Take a large loss, then size again.
+	d.equity = 50
+	d.onBar("ADAUSD", 103, 99, 99) // stop out, clears the position
+	d.equity = 50                  // hold the drawdown steady for the assertion
+	d.onSignal("S", "ADAUSD", "LONG", 100, 99, 103, time.Hour)
+	second := d.open[paperKey("S", "ADAUSD")].Contracts * 100
+
+	if second >= first {
+		t.Errorf("notional after a 50%% drawdown was $%.2f, not below the original $%.2f", second, first)
 	}
 }
 
@@ -122,6 +168,9 @@ func TestLivePaper_ResetClearsAccountsAndOpenPositions(t *testing.T) {
 
 	if n := d.reset(); n != 1 {
 		t.Errorf("reset reported %d cleared trades, want 1", n)
+	}
+	if d.equity != livePaperStartingEquity {
+		t.Errorf("equity after reset $%.2f, want $%.2f", d.equity, livePaperStartingEquity)
 	}
 	if len(d.accounts) != 0 || len(d.open) != 0 || len(d.closed) != 0 {
 		t.Errorf("after reset: %d accounts, %d open, %d closed — all must be zero",

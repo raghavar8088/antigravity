@@ -356,7 +356,8 @@ function DeskEmptyStateInline({ text }: { text: string }) {
  */
 type PaperAccount = {
   strategy: string;
-  equityUsd: number;
+  /** This strategy's contribution to the SHARED balance, not its own account. */
+  shareOfEquityPct: number;
   trades: number;
   wins: number;
   grossUsd: number;
@@ -388,7 +389,14 @@ type PaperTrade = {
 };
 type PaperDesk = {
   startingEquityUsd: number;
-  notionalUsd: number;
+  /** ONE balance for the whole desk. */
+  equityUsd: number;
+  netUsd: number;
+  roiPct: number;
+  openNotionalUsd: number;
+  maxNotionalUsd: number;
+  maxConcurrent: number;
+  maxLeverage: number;
   feeRatePerSide: number;
   accounts?: PaperAccount[];
   openPositions?: PaperOpen[];
@@ -1358,9 +1366,9 @@ export default function LiveEnginePage() {
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                 {paper
-                  ? `$${paper.startingEquityUsd.toFixed(0)}/strategy · ${paper.notionalUsd.toFixed(0)} notional · ${(
-                      paper.feeRatePerSide * 100
-                    ).toFixed(3)}%/side`
+                  ? `$${paper.startingEquityUsd.toFixed(0)} shared · max ${paper.maxLeverage}× / ${
+                      paper.maxConcurrent
+                    } concurrent · ${(paper.feeRatePerSide * 100).toFixed(3)}%/side`
                   : "—"}
               </span>
             }
@@ -1376,18 +1384,26 @@ export default function LiveEnginePage() {
             return (
               <div className="desk-metrics-row" style={{ marginBottom: 16 }}>
                 <DeskMetricTile
-                  label="Combined Equity"
-                  value={accts.length ? fmtUSD(accts.reduce((a, x) => a + x.equityUsd, 0)) : "—"}
-                  valueClassName={accts.length ? pnlTone(net) : undefined}
-                  sub={accts.length ? `${accts.length} × $100 funded` : "no strategy has traded yet"}
+                  label="Account Balance"
+                  value={paper ? `$${paper.equityUsd.toFixed(2)}` : "—"}
+                  valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
+                  sub={`one shared $${paper?.startingEquityUsd.toFixed(0) ?? 100} · ${
+                    accts.length || 0
+                  } strategies drawing from it`}
                   highlight
                 />
                 <DeskMetricTile
                   compact
                   label="Net P&L"
-                  value={accts.length ? fmtUSD(net) : "—"}
-                  valueClassName={accts.length ? pnlTone(net) : undefined}
-                  sub={`gross ${fmtUSD(gross)}`}
+                  value={paper ? fmtUSD(paper.netUsd) : "—"}
+                  valueClassName={paper ? pnlTone(paper.netUsd) : undefined}
+                  sub={paper ? `${paper.roiPct >= 0 ? "+" : ""}${paper.roiPct.toFixed(2)}% · gross ${fmtUSD(gross)}` : "—"}
+                />
+                <DeskMetricTile
+                  compact
+                  label="Deployed"
+                  value={paper ? fmtUSD(paper.openNotionalUsd) : "—"}
+                  sub={paper ? `of ${fmtUSD(paper.maxNotionalUsd)} max (${paper.maxLeverage}× the balance)` : "—"}
                 />
                 <DeskMetricTile
                   compact
@@ -1451,13 +1467,16 @@ export default function LiveEnginePage() {
                   ),
                 },
                 {
-                  id: "equity",
+                  id: "share",
                   align: "right",
-                  header: "Equity",
-                  // A balance, not a P&L. $95.40 is harder to misread than -$4.60.
+                  header: "Share of Balance",
+                  // A CONTRIBUTION, not a balance. There is one $100 and these
+                  // rows say what each strategy added to or took from it;
+                  // showing a per-strategy equity implied ten accounts and ten
+                  // times the capital.
                   cell: (r: PaperAccount) => (
                     <span className={pnlTone(r.netUsd)} style={{ fontWeight: 700 }}>
-                      {`$${r.equityUsd.toFixed(2)}`}
+                      {`${r.shareOfEquityPct >= 0 ? "+" : ""}${r.shareOfEquityPct.toFixed(2)}%`}
                     </span>
                   ),
                 },
@@ -1602,8 +1621,11 @@ export default function LiveEnginePage() {
           )}
 
           <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            Every variable here matches the live bridge except one: <strong>execution</strong>. Same $100, same 3×
-            notional, same Delta prices, same 0.059% taker fee on both legs, same strategies, same levels. So where this
+            Every variable here matches the live bridge except one: <strong>execution</strong>. <strong>One shared
+            $100</strong> — not $100 each — with the same 3× aggregate cap and 3-position limit the bridge enforces,
+            the same Delta prices, the same 0.059% taker fee on both legs, the same strategies and the same levels. A
+            strategy&apos;s row shows what it contributed to that single balance, so a win here really does fund the
+            next position elsewhere. So where this
             desk and the real record disagree, the difference is slippage, latency and partial fills — not a modelling
             choice.
             <br />
