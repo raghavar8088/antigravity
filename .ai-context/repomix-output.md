@@ -155,6 +155,7 @@ The content is organized as follows:
   app/favicon.ico
   app/globals.css
   app/layout.tsx
+  app/live-engine-paper/page.tsx
   app/live-engine/page.tsx
   app/login/page.tsx
   app/mobile/page.tsx

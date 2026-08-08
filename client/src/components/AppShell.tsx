@@ -70,6 +70,11 @@ const ic = {
 const PRIMARY_NAV: NavItem[] = [
   { href: "/terminal", label: "Command Center", icon: ic.monitor },
   { href: "/live-engine", label: "Live Engine", icon: ic.live },
+  // Directly below the Live Engine because it answers the question that page
+  // cannot: the Live Engine shows what real capital is doing, this shows
+  // whether those same strategies deserve it. Same allow-list, same Delta
+  // prices, same taker fees, same margin rules — paper money only.
+  { href: "/live-engine-paper", label: "Live Engine Paper Desk", icon: ic.trend },
   // Sits directly below Live Engine: it is the paper counterpart to that desk —
   // same Delta chain, same margin reality, no real money.
   { href: "/crypto-fno", label: "Crypto F&O", icon: ic.layers },

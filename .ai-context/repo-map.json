@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[0,1,2,3],"files":1,"symbols":18,"top_files":[{"file":"engine/cmd/scalp_prelive/paperdesk.go","symbols":18}]}}
+{"client-components":{"communities":[0],"files":1,"symbols":12,"top_files":[{"file":"client/src/components/AppShell.tsx","symbols":12}]},"other":{"communities":[1],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/live-engine-paper/page.tsx","symbols":9}]}}
