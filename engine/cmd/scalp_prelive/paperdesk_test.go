@@ -213,3 +213,63 @@ func TestLivePaper_IntrabarStopIsNotMissed(t *testing.T) {
 		t.Errorf("a stop-out booked %+.4f; it must be a loss", d.closed[0].NetUSD)
 	}
 }
+
+// The paper desk must obey the SAME margin rules as the real account.
+//
+// It had neither: no liquidation and no stop-reachability refusal. So it would
+// take trades the bridge declines, and could never be force-closed the way the
+// venue force-closed two real positions on 2026-08-01. Both are divergences
+// that have nothing to do with execution, which is the one difference this desk
+// is supposed to isolate.
+func TestLivePaper_RefusesAStopBeyondLiquidation(t *testing.T) {
+	d := newLivePaperDesk()
+	// A stop 20% away, against a ~9.5% liquidation distance at 10x. The venue
+	// would close this long before the stop, so the bridge refuses it.
+	d.onSignal("S", "ADAUSD", "LONG", 100, 80, 160, time.Hour)
+	if len(d.open) != 0 {
+		t.Error("a trade whose stop sits beyond liquidation was accepted; the live bridge refuses it")
+	}
+	// A normal 0.7% stop must still be accepted, or the guard blocks everything.
+	d.onSignal("S", "ADAUSD", "LONG", 100, 99.3, 102.1, time.Hour)
+	if len(d.open) != 1 {
+		t.Error("a reachable 0.7% stop was refused")
+	}
+}
+
+// Liquidation must be checked BEFORE the strategy's own levels: the venue does
+// not wait its turn.
+func TestLivePaper_LiquidationOutranksTheStop(t *testing.T) {
+	d := newLivePaperDesk()
+	d.onSignal("S", "ADAUSD", "LONG", 100, 99.3, 102.1, time.Hour)
+
+	// A crash straight through both the stop and the liquidation price.
+	d.onBar("ADAUSD", 100, 85, 85)
+
+	if len(d.closed) != 1 {
+		t.Fatalf("expected one close, got %d", len(d.closed))
+	}
+	if got := d.closed[0].Reason; got != delta.ExitReasonLiquidated {
+		t.Errorf("exit %q; a move past the liquidation price must book as %q, not as an ordinary stop",
+			got, delta.ExitReasonLiquidated)
+	}
+	// And it must hurt more than the stop would have.
+	if d.closed[0].NetUSD >= 0 {
+		t.Errorf("a liquidation booked %+.4f", d.closed[0].NetUSD)
+	}
+}
+
+// In normal operation liquidation must NEVER fire — stops are 0.7% and the
+// liquidation distance is ~9.5%. If this starts failing, the margin setting or
+// the stop distances have drifted into each other.
+func TestLivePaper_NormalStopOutIsNotALiquidation(t *testing.T) {
+	d := newLivePaperDesk()
+	d.onSignal("S", "ADAUSD", "LONG", 100, 99.3, 102.1, time.Hour)
+	d.onBar("ADAUSD", 100.2, 99.2, 99.5) // pierces the stop, nowhere near liquidation
+
+	if len(d.closed) != 1 {
+		t.Fatalf("expected one close, got %d", len(d.closed))
+	}
+	if got := d.closed[0].Reason; got != "SL" {
+		t.Errorf("exit %q; a routine 0.8%% adverse move must be a stop, not %q", got, got)
+	}
+}

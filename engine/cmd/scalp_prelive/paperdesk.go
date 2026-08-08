@@ -108,6 +108,18 @@ const livePaperMaxLeverage = 3.0
 // implied.
 const livePaperMaxConcurrent = 3
 
+// livePaperProductLeverage is the leverage SET ON THE PRODUCT at Delta, which
+// decides how much margin the venue holds and therefore how far away it will
+// force-close the position. Matches delta.PerpLeverage.
+//
+// Distinct from livePaperMaxLeverage, which limits SIZE. Ten times is about
+// where the liquidation price sits; three times is about how much is bought.
+const livePaperProductLeverage = delta.PerpLeverage
+
+// livePaperMaintenanceMarginPct is Delta's maintenance requirement, the other
+// half of the liquidation distance. At 10x this leaves ~9.5%.
+const livePaperMaintenanceMarginPct = 0.5
+
 func newLivePaperDesk() *livePaperDesk {
 	return &livePaperDesk{
 		equity:   livePaperStartingEquity,
@@ -146,6 +158,15 @@ func (d *livePaperDesk) onSignal(strategy, symbol, dir string, entry, stop, targ
 		// the paper desk leverage the real one is not allowed to take.
 		return
 	}
+	// The bridge refuses a trade whose stop sits BEYOND the liquidation price -
+	// the venue would close the position before the strategy's own risk
+	// management could act. Without the same refusal here, the paper record
+	// would contain trades the real desk declines, and the two would disagree
+	// for a reason that has nothing to do with execution.
+	if !delta.StopIsReachable(entry, stop, livePaperProductLeverage, livePaperMaintenanceMarginPct) {
+		return
+	}
+
 	// Concurrency cap, matching the bridge. Refusing here is the same refusal
 	// the live desk makes; without it the paper record would contain trades the
 	// real desk would never have taken.
@@ -206,9 +227,23 @@ func (d *livePaperDesk) onBar(symbol string, high, low, close float64) {
 			adverse, favourable = high, low
 		}
 
+		// The venue force-closes before anything the strategy wants, so this is
+		// checked FIRST. It should never fire while stops are 0.7% and
+		// liquidation is ~9.5% away — but "should never" is exactly the
+		// assumption that let two real positions get liquidated inside their own
+		// stops, and a paper desk that cannot represent the event cannot warn
+		// about it either.
+		liqFrac := delta.LiquidationDistanceFraction(livePaperProductLeverage, livePaperMaintenanceMarginPct)
+		liq := p.Entry * (1 - liqFrac)
+		if !long {
+			liq = p.Entry * (1 + liqFrac)
+		}
+
 		reason := ""
 		exit := close
 		switch {
+		case long && adverse <= liq, !long && adverse >= liq:
+			reason, exit = delta.ExitReasonLiquidated, liq
 		case long && adverse <= p.Stop, !long && adverse >= p.Stop:
 			reason, exit = "SL", p.Stop
 		case long && favourable >= p.Target, !long && favourable <= p.Target:
