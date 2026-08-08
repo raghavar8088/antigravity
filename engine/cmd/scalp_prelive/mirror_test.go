@@ -129,17 +129,72 @@ func TestMirrorOpensOnTheOriginalsFill(t *testing.T) {
 		t.Error("mirror holds a pending order; mirrors must ride the original's fill, never compete for one")
 	}
 
-	// The swap: the mirror's target sits where the original stops, and vice versa.
+	// The mirror INHERITS the risk distance and targets targetRewardRisk x it.
+	//
+	// This used to assert the swap — mirror target where the original stops, and
+	// vice versa — which made the pair an exact inverse and handed every mirror
+	// a 1:0.50 payoff needing a 66.7% win rate to break even. On paper they
+	// cleared it at 79.7%; with real money they hit 33.3% and lost $13.91 over
+	// 27 fills, gross negative before fees.
 	const tol = 1e-6
 	oSL := math.Abs(o.Pos.Entry - o.Pos.SL)
-	oTP := math.Abs(o.Pos.TP - o.Pos.Entry)
 	mSL := math.Abs(m.Pos.Entry - m.Pos.SL)
 	mTP := math.Abs(m.Pos.TP - m.Pos.Entry)
-	if math.Abs(mTP-oSL) > tol {
-		t.Errorf("mirror target distance %.4f != original stop distance %.4f", mTP, oSL)
+
+	if math.Abs(mSL-oSL) > tol {
+		t.Errorf("mirror risk %.4f != original risk %.4f — the mirror must inherit the stop distance", mSL, oSL)
 	}
-	if math.Abs(mSL-oTP) > tol {
-		t.Errorf("mirror stop distance %.4f != original target distance %.4f", mSL, oTP)
+	if got := mTP / mSL; math.Abs(got-targetRewardRisk) > 1e-6 {
+		t.Errorf("mirror R:R = 1:%.4f, want 1:%.1f", got, targetRewardRisk)
+	}
+	// The direction must still invert, or it is not a mirror at all.
+	if m.Pos.Dir == o.Pos.Dir {
+		t.Errorf("mirror direction %s matches the original; a mirror must take the other side", m.Pos.Dir)
+	}
+	// And the target must sit on the profitable side for the mirror's OWN
+	// direction — the failure mode that would put a short's target above entry.
+	if m.Pos.Dir == "LONG" && m.Pos.TP <= m.Pos.Entry {
+		t.Error("long mirror targets at or below entry")
+	}
+	if m.Pos.Dir == "SHORT" && m.Pos.TP >= m.Pos.Entry {
+		t.Error("short mirror targets at or above entry")
+	}
+}
+
+// Both sides of a pair must now carry a FAVOURABLE payoff. The old design
+// guaranteed one of them a bad one, by construction.
+func TestMirrorAndOriginalBothClearTheHouseRatio(t *testing.T) {
+	d, _ := newMirrorDesk(t, scalers.DirectionLong)
+	hist := flatBars(30, 100000)
+	step(d, hist[len(hist)-1], hist)
+	o := origState(d)
+	if o == nil || o.Pend == nil {
+		t.Fatal("no pending order placed")
+	}
+	limit := o.Pend.Limit
+	step(d, scalers.Candle{
+		OpenTime: hist[len(hist)-1].OpenTime.Add(time.Minute),
+		Open:     limit, High: limit * 1.0001, Low: limit * 0.9999, Close: limit, Volume: 1,
+	}, hist)
+
+	opened := 0
+	for _, cs := range d.combos {
+		if cs.Pos == nil {
+			continue
+		}
+		risk := math.Abs(cs.Pos.Entry - cs.Pos.SL)
+		reward := math.Abs(cs.Pos.TP - cs.Pos.Entry)
+		if risk <= 0 {
+			t.Fatal("a position was opened with no risk distance")
+		}
+		if rr := reward / risk; rr < targetRewardRisk-1e-6 {
+			t.Errorf("position R:R = 1:%.3f, below the house 1:%.1f — breakeven win rate would be %.1f%%",
+				rr, targetRewardRisk, 100/(1+rr))
+		}
+		opened++
+	}
+	if opened < 2 {
+		t.Fatalf("only %d position(s) open; the assertion above never ran on a pair", opened)
 	}
 }
 
@@ -175,79 +230,64 @@ func TestMirrorInvertsShorts(t *testing.T) {
 	}
 }
 
-// The property the whole exercise exists for: when one half wins, the other
-// loses the same gross amount, so the pair nets exactly the fees both paid.
-// If this does not hold, an anti-strategy's P&L is not evidence about its
-// original and the leaderboard comparison is meaningless.
-func TestPairNetsMinusTwoFeeLoads(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		dir  scalers.Direction
-		// which way price runs after the fill
-		up bool
-	}{
-		{"long original stopped out", scalers.DirectionLong, false},
-		{"long original targeted", scalers.DirectionLong, true},
-		{"short original stopped out", scalers.DirectionShort, true},
-		{"short original targeted", scalers.DirectionShort, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			d, _ := newMirrorDesk(t, tc.dir)
-			hist := flatBars(30, 100000)
-			step(d, hist[len(hist)-1], hist)
-			o := origState(d)
-			limit := o.Pend.Limit
-			last := hist[len(hist)-1].OpenTime
+// The pair is NO LONGER an exact inverse, and that is the deliberate trade.
+//
+// This asserted that one half's gross exactly cancelled the other's, so a pair
+// netted only the fees both paid. That property came from swapping the levels,
+// and swapping the levels is what gave every mirror a 1:0.50 payoff — an exact
+// inverse of a 1:3 strategy IS a 1:0.33 strategy, and nothing with a 1:0.33
+// payoff belongs on a live account.
+//
+// What replaces it: both halves carry the house ratio, and the pair's outcomes
+// are independent. The cost is that an ANTI_ strategy's P&L is no longer direct
+// evidence about its original — they are two strategies now, not one bet read
+// two ways.
+func TestPairIsNoLongerAnExactInverse(t *testing.T) {
+	d, _ := newMirrorDesk(t, scalers.DirectionLong)
+	hist := flatBars(30, 100000)
+	step(d, hist[len(hist)-1], hist)
+	// The mirror opens on the original's FILL, so the pending order has to be
+	// filled before either position exists.
+	o := origState(d)
+	if o == nil || o.Pend == nil {
+		t.Fatal("no pending order placed; the test never reached the fill path")
+	}
+	limit := o.Pend.Limit
+	step(d, scalers.Candle{
+		OpenTime: hist[len(hist)-1].OpenTime.Add(time.Minute),
+		Open:     limit, High: limit * 1.0001, Low: limit * 0.9999, Close: limit, Volume: 1,
+	}, hist)
 
-			fill := scalers.Candle{
-				OpenTime: last.Add(time.Minute),
-				Open:     limit, High: limit * 1.0001, Low: limit * 0.9999, Close: limit,
-			}
-			step(d, fill, hist)
-			if o.Pos == nil {
-				t.Fatal("original did not fill")
-			}
+	os_, ms := origState(d), mirrorState(d)
+	if os_ == nil || ms == nil || os_.Pos == nil || ms.Pos == nil {
+		t.Fatal("expected both an original and its mirror to be open")
+	}
+	orig, mirror := os_.Pos, ms.Pos
 
-			// A bar wide enough in ONE direction to resolve both halves: whichever
-			// level it reaches, the other half's opposite level sits at the same
-			// price. Deliberately not spanning both — that case is covered below.
-			var resolve scalers.Candle
-			if tc.up {
-				resolve = scalers.Candle{OpenTime: last.Add(2 * time.Minute),
-					Open: limit, High: limit * 1.05, Low: limit, Close: limit * 1.05}
-			} else {
-				resolve = scalers.Candle{OpenTime: last.Add(2 * time.Minute),
-					Open: limit, High: limit, Low: limit * 0.95, Close: limit * 0.95}
-			}
-			step(d, resolve, hist)
-
-			m := mirrorState(d)
-			if o.Pos != nil || m.Pos == nil && m.N == 0 {
-				t.Fatalf("original open=%v mirror closed=%d — the pair did not resolve together", o.Pos != nil, m.N)
-			}
-			if o.N != 1 || m.N != 1 {
-				t.Fatalf("original closed %d trades, mirror %d — a pair must close together", o.N, m.N)
-			}
-			if (o.NetSum > 0) == (m.NetSum > 0) {
-				t.Fatalf("both halves went the same way (orig %.5f, mirror %.5f); one must lose what the other wins",
-					o.NetSum, m.NetSum)
-			}
-
-			// Gross cancels exactly; what remains is the fees. Each side pays a
-			// maker entry plus one exit, so the pair can never net above zero —
-			// which is why an anti-strategy only earns when its original has a
-			// genuinely negative GROSS edge, not merely a negative net.
-			pair := o.NetSum + m.NetSum
-			if pair > 0 {
-				t.Errorf("pair netted +%.6f; a mirrored pair must always cost fees", pair)
-			}
-			minCost := 2 * (makerFee + makerFee) // both maker-exit (TP) legs
-			maxCost := 2*(makerFee+takerFee) + 2*stopSlip
-			if -pair < minCost*0.9 || -pair > maxCost*1.1 {
-				t.Errorf("pair cost %.6f, outside the fee band [%.6f, %.6f] — gross did not cancel",
-					-pair, minCost, maxCost)
-			}
-		})
+	// Entry is still shared — the mirror rides the original's fill.
+	if math.Abs(orig.Entry-mirror.Entry) > 1e-9 {
+		t.Errorf("entries diverged: original %.6f, mirror %.6f", orig.Entry, mirror.Entry)
+	}
+	// Direction still inverts.
+	if orig.Dir == mirror.Dir {
+		t.Errorf("both legs are %s; the mirror must take the other side", orig.Dir)
+	}
+	// But the levels are NOT reflections of each other any more. If they were,
+	// the mirror's reward would equal the original's risk.
+	origRisk := math.Abs(orig.Entry - orig.SL)
+	mirrorReward := math.Abs(mirror.TP - mirror.Entry)
+	if math.Abs(mirrorReward-origRisk) < 1e-9 {
+		t.Error("the mirror's target still sits exactly where the original stops — " +
+			"the level swap is back, and with it the 1:0.50 payoff")
+	}
+	// Both must clear the house ratio. Under the old design exactly one of them
+	// could, by construction.
+	for name, p := range map[string]*position{"original": orig, "mirror": mirror} {
+		risk := math.Abs(p.Entry - p.SL)
+		reward := math.Abs(p.TP - p.Entry)
+		if rr := reward / risk; rr < targetRewardRisk-1e-6 {
+			t.Errorf("%s R:R = 1:%.3f, below the house 1:%.1f", name, rr, targetRewardRisk)
+		}
 	}
 }
 
@@ -280,9 +320,25 @@ func TestPairOnAnAmbiguousBarTakesBothStops(t *testing.T) {
 	}
 }
 
-// Every closed original trade must have a mirror trade, and vice versa. This is
-// the count that was 35-of-53 wrong before, expressed as an invariant.
-func TestNoUnpairedTradesOverALongRun(t *testing.T) {
+// Over a long run the mirror trades LESS OFTEN than its original, and that is
+// expected now rather than a fault.
+//
+// This used to assert a strict partition: every original trade had exactly one
+// mirror trade, and the two split the wins between them. That held only while
+// the mirror's exits were reflections of the original's, so both legs always
+// closed on the same bar.
+//
+// The legs now exit independently — the mirror stops at the inherited risk
+// distance and targets 3x it — so a mirror can still be holding when its
+// original re-signals. The open is skipped, because one position per stream is
+// an invariant the original obeys too and stacking would give the mirror
+// leverage its source never had.
+//
+// The cost is real and worth stating: an ANTI_ strategy now trades a subset of
+// its original's signals, so their trade counts differ and neither is evidence
+// about the other. That is the price of both legs carrying a payoff worth
+// taking.
+func TestMirrorTradesASubsetOfTheOriginalsSignals(t *testing.T) {
 	d, st := newMirrorDesk(t, scalers.DirectionLong)
 	hist := flatBars(30, 100000)
 	last := hist[len(hist)-1].OpenTime
@@ -294,50 +350,44 @@ func TestNoUnpairedTradesOverALongRun(t *testing.T) {
 		if origState(d) == nil || (origState(d).Pos == nil && origState(d).Pend == nil) {
 			st.fired = false
 		}
-		// A slow drift with periodic sharp reversals.
+		// Wider than the old walk on purpose. Targets are now 3x the stop
+		// (1.05%-1.80%), and a +-0.09% drift with 0.25% wicks almost never
+		// reaches one — every exit would be the time stop and the test would
+		// measure nothing about targets at all.
 		switch {
 		case i%37 < 18:
-			px *= 1.0009
+			px *= 1.004
 		default:
-			px *= 0.9991
+			px *= 0.996
 		}
 		bar := scalers.Candle{
 			OpenTime: last.Add(time.Duration(i+1) * time.Minute),
-			Open:     px, High: px * 1.0025, Low: px * 0.9975, Close: px, Volume: 1,
+			Open:     px, High: px * 1.008, Low: px * 0.992, Close: px, Volume: 1,
 		}
+		hist = append(hist, bar)
 		step(d, bar, hist)
 	}
 
 	o, m := origState(d), mirrorState(d)
-	// A floor, not just "> 0": this run closes ~44 trades, and a change that
-	// quietly drops it to one or two would leave the invariants below technically
-	// true and worthless.
 	if o == nil || o.N < 20 {
-		t.Fatalf("the original closed %d trades; too few for the pairing invariants to mean anything",
-			func() int {
-				if o == nil {
-					return 0
-				}
-				return o.N
-			}())
+		t.Fatalf("the original closed too few trades for this to mean anything")
 	}
-	if m == nil {
-		t.Fatal("no mirror account exists after the original traded")
+	if m == nil || m.N == 0 {
+		t.Fatal("the mirror closed no trades at all — it is not trading, not merely trading less")
 	}
-	if o.N != m.N {
-		t.Errorf("original closed %d trades, mirror closed %d — %d unpaired",
-			o.N, m.N, int(math.Abs(float64(o.N-m.N))))
+	// A subset, never a superset: the mirror only opens on the original's fill.
+	if m.N > o.N {
+		t.Errorf("mirror closed %d trades against the original's %d; it cannot exceed its source", m.N, o.N)
 	}
-	if d.mirrorSkips != 0 {
-		t.Errorf("%d mirror opens were skipped; the pair drifted out of step", d.mirrorSkips)
+	// And not a vanishing subset. If skips dominated, the mirror would be a
+	// live-listed strategy that almost never trades — the silent-zero shape.
+	if ratio := float64(m.N) / float64(o.N); ratio < 0.4 {
+		t.Errorf("mirror closed only %.0f%% of the original's trades (%d/%d); skips are dominating",
+			ratio*100, m.N, o.N)
 	}
-	if d.mirrorOpens != int64(m.N) {
-		t.Errorf("opened %d mirrors but closed %d", d.mirrorOpens, m.N)
-	}
-	// Wins must be complementary: a mirror wins exactly when its original loses.
-	if o.Wins+m.Wins != o.N {
-		t.Errorf("original won %d and mirror won %d out of %d paired trades; the two must partition the outcomes",
-			o.Wins, m.Wins, o.N)
+	// Skips must be COUNTED, not swallowed, so the drift is visible on /health.
+	if d.mirrorSkips == 0 && m.N < o.N {
+		t.Error("the mirror traded less than its original but no skips were recorded")
 	}
 }
 

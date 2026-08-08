@@ -99,7 +99,7 @@ type profileCfg struct {
 // targets at a genuine 1:2 / 1:3 / 1:5 against it.
 var profiles = map[string]profileCfg{
 	// name     SLATR TPATR  SLMin   SLMax   TPMin   TPMax   TTLBars
-	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0070, 0.0120, 60},  // SL $1.05-1.80, TP $2.10-3.60 (1:2)
+	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0105, 0.0180, 60},  // SL $1.05-1.80, TP $3.15-5.40 (1:3)
 	"revert": {3.0, 2.0, 0.0035, 0.0060, 0.0105, 0.0180, 45},  // SL $1.05-1.80, TP $3.15-5.40 (1:3)
 	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0175, 0.0300, 120}, // SL $1.05-1.80, TP $5.25-9.00 (1:5)
 }
@@ -298,6 +298,14 @@ func tail(c []scalers.Candle, n int) []scalers.Candle {
 	}
 	return c[len(c)-n:]
 }
+
+// targetRewardRisk is the house reward-to-risk ratio, applied everywhere a
+// target is derived from a stop.
+//
+// 1:3 means a strategy needs only a 25% win rate to break even before costs,
+// against the 66.7% the mirrors previously needed. The profile table above is
+// set to the same ratio, so originals and mirrors agree.
+const targetRewardRisk = 3.0
 
 // ── $100 live-account simulation ─────────────────────────────────────────────
 //
@@ -1398,23 +1406,38 @@ func (d *desk) openMirror(strategy, symbol string, orig *position, barIdx int64,
 		return
 	}
 
-	// Distances are measured from the SHARED entry, then swapped: the mirror's
-	// target sits where the original's stop is, and vice versa. That is what
-	// makes every outcome of one the negation of the other.
+	// Risk distance is inherited; REWARD is set by the house ratio.
+	//
+	// This used to swap the two — the mirror's target sat where the original's
+	// stop was, and vice versa — which made every outcome of one the exact
+	// negation of the other. Elegant, and it handed every mirror an inverted
+	// payoff: risking 0.700% to win 0.350%, R:R 1:0.50, which needs a 66.7% win
+	// rate merely to break even.
+	//
+	// The forensic finding of 2026-08-08: on paper the mirrors cleared that bar
+	// at 79.7% and looked profitable; with real money they hit 33.3% and lost
+	// -$13.91 over 27 fills, gross negative before a single fee. They were never
+	// robust, only sitting just above a very high breakeven.
+	//
+	// The mirror is no longer an exact inverse of its original — a pair's
+	// outcomes no longer sum to zero — and that is the deliberate trade. An
+	// exact inverse of a 1:3 strategy is a 1:0.33 strategy, and nothing with a
+	// 1:0.33 payoff belongs on a live account.
 	slDist := math.Abs(orig.Entry - orig.SL)
-	tpDist := math.Abs(orig.TP - orig.Entry)
+	tpDist := slDist * targetRewardRisk
 
 	dir := "SHORT"
 	if orig.Dir == "SHORT" {
 		dir = "LONG"
 	}
 
+	// Stop at the inherited risk distance, target at targetRewardRisk x that —
+	// in the MIRROR's own direction.
 	var sl, tp float64
 	if dir == "LONG" {
-		// Mirror stop where the original targets; mirror target where it stops.
-		sl, tp = orig.Entry-tpDist, orig.Entry+slDist
+		sl, tp = orig.Entry-slDist, orig.Entry+tpDist
 	} else {
-		sl, tp = orig.Entry+tpDist, orig.Entry-slDist
+		sl, tp = orig.Entry+slDist, orig.Entry-tpDist
 	}
 
 	mcs.Pos = &position{

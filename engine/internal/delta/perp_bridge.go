@@ -330,6 +330,30 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 	if fill <= 0 {
 		fill = plan.LimitPrice
 	}
+
+	// Levels are recomputed from the ACTUAL FILL, not from the paper entry the
+	// plan was built on.
+	//
+	// The plan's stop and target are distances measured from the paper desk's
+	// entry. The live order is a market order and fills wherever the book is, so
+	// inheriting those absolute prices leaves the distances wrong from the first
+	// second — and wrong asymmetrically, since a fill that slipped against the
+	// position moves the target closer and the stop further away. It produced
+	// take-profits at a 0.05% move on a 0.350% target: five "wins" that were
+	// losses after fees.
+	// Named distinctly from the `stop`/`target` PARAMETERS, which are the paper
+	// desk's levels. Shadowing them here would make the two indistinguishable at
+	// a glance, and the whole point is that they are different numbers.
+	fillStop, fillTarget := perpLevelsFromFill(fill, plan)
+	if err := b.attachBrackets(ctx, plan, fillStop, fillTarget); err != nil {
+		// The position is open and unprotected. Log loudly rather than pretend:
+		// the Monitor still manages it, which is the behaviour that produced the
+		// overshoot, so this is a degraded state and must read as one.
+		log.Printf("[PERP LIVE] ⚠️  %s %s: venue brackets NOT attached (%v) — falling back to the 15s monitor",
+			strategy, plan.Symbol, err)
+		b.noteError("brackets: " + err.Error())
+	}
+
 	t := &PerpLiveTrade{
 		ID:          fmt.Sprintf("perp-%d-%s", time.Now().UnixNano(), plan.Symbol),
 		Strategy:    strategy,
@@ -337,8 +361,8 @@ func (b *PerpBridge) OnPaperOpen(ctx context.Context, strategy, symbol string, l
 		ProductID:   plan.ProductID,
 		Side:        plan.Side,
 		Contracts:   plan.Contracts,
-		StopPrice:   plan.StopPrice,
-		TargetPrice: plan.TargetPrice,
+		StopPrice:   fillStop,
+		TargetPrice: fillTarget,
 		EntryPrice:  fill,
 		NotionalUSD: plan.NotionalUSD,
 		RiskUSD:     plan.RiskUSD,
