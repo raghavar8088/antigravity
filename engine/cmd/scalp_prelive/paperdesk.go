@@ -163,6 +163,16 @@ func paperUnrealised(p *paperPos, mark float64) (usd, pct float64) {
 	return usd, pct
 }
 
+// openUnrealisedLocked is the mark-to-market of every open position, net of
+// the fee each will pay to close. Caller holds d.mu.
+func (d *livePaperDesk) openUnrealisedLocked() float64 {
+	total := 0.0
+	for _, p := range d.open {
+		total += p.UnrealisedUSD
+	}
+	return total
+}
+
 // openNotionalLocked is the capital already deployed. Caller holds d.mu.
 func (d *livePaperDesk) openNotionalLocked() float64 {
 	total := 0.0
@@ -398,9 +408,13 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		"netUsd":          math.Round((d.equity-livePaperStartingEquity)*100) / 100,
 		"roiPct":          math.Round((d.equity-livePaperStartingEquity)/livePaperStartingEquity*10000) / 100,
 		"openNotionalUsd": math.Round(d.openNotionalLocked()*100) / 100,
-		"maxNotionalUsd":  math.Round(d.equity*livePaperMaxLeverage*100) / 100,
-		"maxConcurrent":   livePaperMaxConcurrent,
-		"maxLeverage":     livePaperMaxLeverage,
+		// Unrealised across every open position, NET of the exit fee each will
+		// pay. Summed here rather than in the UI so the page and the API cannot
+		// disagree about what is exposed.
+		"openUnrealisedUsd": math.Round(d.openUnrealisedLocked()*100) / 100,
+		"maxNotionalUsd":    math.Round(d.equity*livePaperMaxLeverage*100) / 100,
+		"maxConcurrent":     livePaperMaxConcurrent,
+		"maxLeverage":       livePaperMaxLeverage,
 		// The VENUE-side settings, distinct from the size caps above. These are
 		// what decide where Delta force-closes a position, and they are reported
 		// so the page can show that the paper desk plays by the same margin

@@ -1,1 +1,1 @@
-{"engine-cmd":{"communities":[1,2,3],"files":1,"symbols":19,"top_files":[{"file":"engine/cmd/scalp_prelive/paperdesk.go","symbols":19}]},"other":{"communities":[0],"files":1,"symbols":9,"top_files":[{"file":"client/src/app/live-engine-paper/page.tsx","symbols":9}]}}
+{"engine-cmd":{"communities":[0,1,2,3,4],"files":1,"symbols":20,"top_files":[{"file":"engine/cmd/scalp_prelive/paperdesk.go","symbols":20}]}}
