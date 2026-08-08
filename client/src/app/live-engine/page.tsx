@@ -397,6 +397,9 @@ type PaperDesk = {
   maxNotionalUsd: number;
   maxConcurrent: number;
   maxLeverage: number;
+  /** Leverage SET ON THE PRODUCT at Delta — decides where liquidation sits, not size. */
+  productLeverage: number;
+  liquidationDistPct: number;
   feeRatePerSide: number;
   accounts?: PaperAccount[];
   openPositions?: PaperOpen[];
@@ -1366,9 +1369,11 @@ export default function LiveEnginePage() {
             actions={
               <span className="desk-mono desk-label-md" style={{ fontWeight: 400 }}>
                 {paper
-                  ? `$${paper.startingEquityUsd.toFixed(0)} shared · max ${paper.maxLeverage}× / ${
+                  ? `$${paper.startingEquityUsd.toFixed(0)} shared · size ${paper.maxLeverage}× / ${
                       paper.maxConcurrent
-                    } concurrent · ${(paper.feeRatePerSide * 100).toFixed(3)}%/side`
+                    } concurrent · margin ${paper.productLeverage}× (liq ${paper.liquidationDistPct.toFixed(
+                      1,
+                    )}%) · ${(paper.feeRatePerSide * 100).toFixed(3)}%/side`
                   : "—"}
               </span>
             }
@@ -1621,7 +1626,16 @@ export default function LiveEnginePage() {
           )}
 
           <p className="desk-body-md" style={{ marginTop: 12, maxWidth: 820, color: "var(--desk-on-surface-variant)" }}>
-            Every variable here matches the live bridge except one: <strong>execution</strong>. <strong>One shared
+            Two different leverage numbers apply, as on the real account:{" "}
+            <strong>{paper?.maxLeverage ?? 3}× limits SIZE</strong> (up to $
+            {((paper?.startingEquityUsd ?? 100) * (paper?.maxLeverage ?? 3)).toFixed(0)} of positions), while{" "}
+            <strong>{paper?.productLeverage ?? 10}× is the margin setting</strong> — it decides how much cash Delta
+            freezes and therefore how far a price must move before the venue force-closes you (
+            {paper?.liquidationDistPct?.toFixed(1) ?? "9.5"}%). Stops sit around 0.7%, so the strategy closes the trade,
+            not the venue. This desk refuses a trade whose stop sits past that line, exactly as the bridge does.
+            <br />
+            <br />
+            Every other variable matches the live bridge except one: <strong>execution</strong>. <strong>One shared
             $100</strong> — not $100 each — with the same 3× aggregate cap and 3-position limit the bridge enforces,
             the same Delta prices, the same 0.059% taker fee on both legs, the same strategies and the same levels. A
             strategy&apos;s row shows what it contributed to that single balance, so a win here really does fund the
