@@ -364,11 +364,17 @@ func (d *livePaperDesk) snapshot() map[string]any {
 		"maxNotionalUsd":  math.Round(d.equity*livePaperMaxLeverage*100) / 100,
 		"maxConcurrent":   livePaperMaxConcurrent,
 		"maxLeverage":     livePaperMaxLeverage,
-		"feeRatePerSide":  delta.PerpTakerFeeRate,
-		"accounts":        accts,
-		"openPositions":   open,
-		"recentTrades":    out,
-		"uptimeMin":       int64(time.Since(d.started).Minutes()),
+		// The VENUE-side settings, distinct from the size caps above. These are
+		// what decide where Delta force-closes a position, and they are reported
+		// so the page can show that the paper desk plays by the same margin
+		// rules the real account does.
+		"productLeverage":    livePaperProductLeverage,
+		"liquidationDistPct": math.Round(delta.LiquidationDistanceFraction(livePaperProductLeverage, livePaperMaintenanceMarginPct)*10000) / 100,
+		"feeRatePerSide":     delta.PerpTakerFeeRate,
+		"accounts":           accts,
+		"openPositions":      open,
+		"recentTrades":       out,
+		"uptimeMin":          int64(time.Since(d.started).Minutes()),
 	}
 }
 
