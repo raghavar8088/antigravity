@@ -227,6 +227,13 @@ func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
 	if pos == nil {
 		return
 	}
+	// Mirror onto the Live Engine Paper Desk first, and only for streams the
+	// venue allow-list actually permits — this desk answers a question about the
+	// PROMOTED strategies, so widening it to every stream would make it the
+	// scalp leaderboard again.
+	if delta.PerpStreamPermitted(strategy, symbol) {
+		livePaper.onSignal(strategy, symbol, pos.Dir, pos.Entry, pos.SL, pos.TP, profileTTL(pos.Profile))
+	}
 	if d == nil {
 		// Paper-only, but still announce the stream so tests (and any future
 		// observer) can see which fills WOULD have been offered to the bridge.
@@ -240,6 +247,14 @@ func (d *liveDesk) onPaperFill(strategy, symbol string, pos *position) {
 	}
 	liveFillHook(d, strategy, symbol, pos)
 }
+
+// livePaper is the Live Engine Paper Desk.
+//
+// Package-level, and fed BEFORE the nil check on the live bridge, so it records
+// the same signals whether or not real trading is configured or armed. A paper
+// record that only exists while the bridge is armed cannot answer "should this
+// be armed" - the question it exists for.
+var livePaper = newLivePaperDesk()
 
 // observeFill, when set, receives every fill offered to the live path. Test-only.
 var observeFill func(strategy, symbol string, pos *position)
@@ -263,6 +278,15 @@ func (d *liveDesk) registerHTTP(
 	postOnly func(http.HandlerFunc) http.HandlerFunc,
 	writeJSON func(http.ResponseWriter, interface{}),
 ) {
+	// The Live Engine Paper Desk. Read-only except for a reset, which is needed
+	// whenever the rules change underneath the record.
+	http.HandleFunc("/scalp/live/paper", gated(func(w http.ResponseWriter, r *http.Request) {
+		livePaper.serve(w, r)
+	}))
+	http.HandleFunc("/scalp/live/paper/reset", gated(postOnly(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"status": "reset", "trades_cleared": livePaper.reset()})
+	})))
+
 	http.HandleFunc("/scalp/live/stats", gated(func(w http.ResponseWriter, r *http.Request) {
 		if d == nil {
 			writeJSON(w, map[string]any{"enabled": false, "reason": "live trading not configured"})

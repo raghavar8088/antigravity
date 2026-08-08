@@ -60,12 +60,28 @@ func TestLiveSim_AWiderEdgeSurvives(t *testing.T) {
 	}
 }
 
-// Taker must always cost more than the maker fees the desk modelled, otherwise
-// the restatement is not doing anything.
-func TestLiveSim_TakerCostsMoreThanTheDeskModelled(t *testing.T) {
-	if liveSimTakerRoundTrip <= 2*makerFee {
-		t.Fatalf("taker round trip %.5f is not above the desk's maker round trip %.5f — "+
-			"the whole point is that live fills cost more", liveSimTakerRoundTrip, 2*makerFee)
+// The desk and the live path now charge the SAME fee, and that is the point.
+//
+// This asserted taker > the desk's maker round trip, because the desk modelled
+// a maker entry at 0.02% while the live bridge paid taker on both legs. The
+// restatement existed to close that gap. The gap is now closed at the source:
+// the paper desk charges Delta's real 0.059% per side, both legs, so a paper
+// result and a live result are quoted on the same terms.
+//
+// simulateLiveAccount is therefore a NO-OP on fees and stays only as a
+// consistency check — if the two ever diverge again, this fails.
+func TestLiveSim_DeskAndLivePathChargeTheSameFee(t *testing.T) {
+	if 2*makerFee != liveSimTakerRoundTrip {
+		t.Errorf("desk round trip %.5f != live round trip %.5f — the paper desk is measuring a cost the venue does not charge",
+			2*makerFee, liveSimTakerRoundTrip)
+	}
+	if makerFee != takerFee {
+		t.Errorf("maker %.5f and taker %.5f differ; the desk places no maker orders, so a split rate is fiction",
+			makerFee, takerFee)
+	}
+	// And it must be the venue's real number, not a rounder one.
+	if makerFee != 0.00059 {
+		t.Errorf("fee rate %.5f, want Delta's 0.059%% (0.05%% + 18%% GST)", makerFee)
 	}
 }
 

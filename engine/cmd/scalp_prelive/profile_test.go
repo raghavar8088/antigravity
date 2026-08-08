@@ -105,8 +105,8 @@ func TestProfiles_TargetIsReachableWithinObservedMoves(t *testing.T) {
 // Reward-to-risk must be at least 1:2 on every profile. The old bands produced
 // roughly 1:2 in percentage terms but resolved so rarely that realised R:R was
 // set by timeouts, not by the levels.
-func TestProfiles_RewardToRiskAtLeastTwo(t *testing.T) {
-	want := map[string]float64{"scalp": 2.0, "revert": 3.0, "runner": 5.0}
+func TestProfiles_RewardToRiskIsTheHouseRatio(t *testing.T) {
+	want := map[string]float64{"scalp": 2.0, "revert": 3.0, "runner": 3.0}
 	for name, p := range profiles {
 		rr := p.TPMin / p.SLMin
 		if rr < 1.99 {

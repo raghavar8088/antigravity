@@ -117,6 +117,21 @@ func ScalpLiveStrategies() []string {
 	return out
 }
 
+// PerpStreamPermitted reports whether a stream is on the live selection.
+//
+// Reads the configured selection rather than a live bridge instance, so callers
+// that exist whether or not trading is configured — the Live Engine Paper Desk —
+// get the same answer the venue gate would give.
+func PerpStreamPermitted(strategy, symbol string) bool {
+	key := perpStreamKey(strategy, symbol)
+	for _, st := range ScalpLiveStreams() {
+		if perpStreamKey(st.Strategy, st.Symbol) == key {
+			return true
+		}
+	}
+	return false
+}
+
 // PerpAllowList gates which (strategy, symbol) streams may reach the venue.
 //
 // Symbol matters as much as strategy. The same strategy runs on eight symbols on

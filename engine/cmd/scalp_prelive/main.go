@@ -101,12 +101,24 @@ var profiles = map[string]profileCfg{
 	// name     SLATR TPATR  SLMin   SLMax   TPMin   TPMax   TTLBars
 	"scalp":  {2.5, 3.5, 0.0035, 0.0060, 0.0105, 0.0180, 60},  // SL $1.05-1.80, TP $3.15-5.40 (1:3)
 	"revert": {3.0, 2.0, 0.0035, 0.0060, 0.0105, 0.0180, 45},  // SL $1.05-1.80, TP $3.15-5.40 (1:3)
-	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0175, 0.0300, 120}, // SL $1.05-1.80, TP $5.25-9.00 (1:5)
+	"runner": {2.5, 6.0, 0.0035, 0.0060, 0.0105, 0.0180, 120}, // SL $1.05-1.80, TP $3.15-5.40 (1:3)
 }
 
 const (
-	makerFee     = 0.0002
-	takerFee     = 0.0005
+	// Delta India's real fee schedule, both legs, GST included.
+	//
+	// The desk modelled a MAKER entry (0.02%) and charged taker only on stops
+	// and timeouts. That is not what the live bridge does: it places market/ioc
+	// orders and pays taker on entry AND exit. The 2026-08-08 forensic found
+	// paper showing 79.7% wins and +$37 gross on streams that lost real money,
+	// and a fee model cheaper than reality is one of the reasons paper flattered
+	// them. A desk whose job is to decide what gets real capital must charge
+	// what real capital is charged.
+	//
+	// 0.05% base + 18% GST = 0.059% per side, derived from the venue's own order
+	// log rather than documentation. Same constant the live bridge uses.
+	makerFee     = 0.00059
+	takerFee     = 0.00059
 	stopSlip     = 0.0002
 	fillWindow   = 3
 	cooldownBars = 5
@@ -381,7 +393,9 @@ func (d *desk) closeTrade(cs *comboState, strategy, symbol string, pos *position
 	if pos.Dir == "SHORT" {
 		gross = -gross
 	}
-	entryFee := makerFee // this desk models maker entries only
+	// Taker on entry too. The live path takes liquidity on both legs, and a
+	// paper desk that assumes a maker entry is measuring a trade nobody places.
+	entryFee := takerFee
 	net := gross - entryFee - exitFee
 	cs.N++
 	if net > 0 {
@@ -450,7 +464,7 @@ func (d *desk) managePosition(cs *comboState, strategy, symbol string, bar scale
 		}
 		d.closeTrade(cs, strategy, symbol, pos, px, takerFee, "SL", bar, barIdx)
 	case tpHit:
-		d.closeTrade(cs, strategy, symbol, pos, pos.TP, makerFee, "TP", bar, barIdx)
+		d.closeTrade(cs, strategy, symbol, pos, pos.TP, takerFee, "TP", bar, barIdx)
 	case barIdx-pos.EntryBar >= int64(cfg.TTLBars):
 		d.closeTrade(cs, strategy, symbol, pos, bar.Close, takerFee, "TTL", bar, barIdx)
 	}
@@ -459,6 +473,13 @@ func (d *desk) managePosition(cs *comboState, strategy, symbol string, bar scale
 // processBar advances one symbol by one closed 1m bar.
 func (d *desk) processBar(ss *symbolState, ctx scalers.MarketContext, bar scalers.Candle) {
 	barIdx := ss.barIdx
+	// Advance the Live Engine Paper Desk on the same real Delta price this desk
+	// just received. Its positions exit on the venue's prices, not on a model.
+	//
+	// Done BEFORE the strategy loop so a position opened on this bar cannot also
+	// be closed by it — an entry and exit on one price is a round trip that pays
+	// two fees for no move, and it would flatter nothing but the trade count.
+	livePaper.onBar(ss.sym, bar.High, bar.Low, bar.Close)
 	for _, e := range d.entries {
 		key := comboKey(e.Name, ss.sym)
 		cs := d.combos[key]
