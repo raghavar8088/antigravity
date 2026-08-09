@@ -138,7 +138,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<NextResponse
   try {
     const headers = new Headers();
     const apiToken =
-      process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.SCALP_DEMO_FALLBACK_TOKEN?.trim();
+      process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.BTC_PRE_LIVE_API_TOKEN?.trim();
     if (apiToken) headers.set("X-API-Token", apiToken);
 
     const upstream = await fetch(target, {
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   try {
     const headers = new Headers();
     const apiToken =
-      process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.SCALP_DEMO_FALLBACK_TOKEN?.trim();
+      process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.BTC_PRE_LIVE_API_TOKEN?.trim();
     if (apiToken) headers.set("X-API-Token", apiToken);
     headers.set("Content-Type", "application/json");
 

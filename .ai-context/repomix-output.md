@@ -1778,6 +1778,7 @@ The content is organized as follows:
   scalp_prelive/paperpersist.go
   scalp_prelive/profile_test.go
   scalp_prelive/symbols_test.go
+  scalp_prelive/symbols_venue_test.go
   scalp_prelive/symbols.go
   scalp_prelive/venue_test.go
   seed_db/main.go

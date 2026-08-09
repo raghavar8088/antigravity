@@ -22,6 +22,31 @@ import (
 // Discovery is from the venue rather than a hardcoded list, so a contract Delta
 // adds or delists does not require a redeploy to appear or disappear.
 
+// perpUniverseBaseURL is the venue the symbol universe is read from.
+//
+// This was hardcoded to the production host, which meant -symbols auto always
+// resolved the LIVE universe no matter how the process was configured. The demo
+// desk booted against demo credentials and then loaded 89 live symbols, none of
+// which exist on that venue — every bar fetch failed and every stream was dead
+// on arrival.
+//
+// The subtler hazard is that product IDs are venue-specific. A process holding
+// one venue's credentials while resolving another venue's products can send a
+// well-formed order for the wrong instrument, and nothing in the request looks
+// wrong. Resolution must follow the same host the client trades on.
+func perpUniverseBaseURL() string {
+	if v := strings.TrimSpace(os.Getenv("DELTA_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	if v := strings.TrimSpace(os.Getenv("DELTA_API_BASE_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("DELTA_TESTNET")), "true") {
+		return "https://cdn-ind.testnet.deltaex.org"
+	}
+	return "https://api.india.delta.exchange"
+}
+
 // deltaPerpUniverse fetches every live perpetual future, newest liquidity first.
 //
 // minTurnoverUSD filters on 24h turnover. It exists because the tail is very
@@ -32,7 +57,7 @@ import (
 // are excluded rather than traded and quietly mis-measured.
 func deltaPerpUniverse(ctx context.Context, minTurnoverUSD float64) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"https://api.india.delta.exchange/v2/tickers?contract_types=perpetual_futures", nil)
+		perpUniverseBaseURL()+"/v2/tickers?contract_types=perpetual_futures", nil)
 	if err != nil {
 		return nil, err
 	}

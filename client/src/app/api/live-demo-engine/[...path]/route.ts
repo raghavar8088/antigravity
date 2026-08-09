@@ -29,7 +29,7 @@ function demoEngineBase(): string {
 }
 
 function demoToken(): string {
-  return process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.SCALP_DEMO_FALLBACK_TOKEN?.trim() ?? "";
+  return process.env.SCALP_DEMO_API_TOKEN?.trim() ?? process.env.BTC_PRE_LIVE_API_TOKEN?.trim() ?? "";
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

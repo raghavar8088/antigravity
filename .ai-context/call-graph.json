@@ -1,1 +1,1 @@
-{}
+{"engine/cmd/scalp_prelive/symbols_venue_test.go::TestPerpUniverseBaseURL_FollowsTheConfiguredVenue()":["engine/cmd/scalp_prelive/symbols.go::perpUniverseBaseURL()"],"engine/cmd/scalp_prelive/symbols_venue_test.go::TestPerpUniverseBaseURL_TestnetNeverResolvesProduction()":["engine/cmd/scalp_prelive/symbols.go::perpUniverseBaseURL()"]}
