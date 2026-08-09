@@ -1787,6 +1787,8 @@ The content is organized as follows:
   api-index.md
   architecture-improvements.md
   architecture-overview.md
+  archive/2026-07_options_engine_custody_raw.json
+  archive/README.md
   cleanup-report.md
   coding-standards.md
   dependency-map.md

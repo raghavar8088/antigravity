@@ -1,1 +1,1 @@
-{"engine/internal/delta/perp_monitor_test.go":[{"community":0,"kind":"function","location":"L16","name":"TestPerpExitReason_MonitorStandsDownWhenBracketed()"},{"community":0,"kind":"type","location":"L16","name":"T"},{"community":0,"kind":"function","location":"L55","name":"TestPerpExitReason_TimeStopSurvivesBracketing()"},{"community":0,"kind":"function","location":"L76","name":"TestPerpExitReason_UnbracketedKeepsFullCoverage()"}]}
+{}
