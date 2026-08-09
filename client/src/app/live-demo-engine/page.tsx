@@ -1025,36 +1025,31 @@ export default function LiveEnginePage() {
       {
         id: "switch",
         header: "Live",
+        // The same DeskSwitch used for the desk arm, not a coloured pill.
+        //
+        // The pill was clickable but read as a status label, so the control
+        // looked like output. On a real-money desk the difference between
+        // "this is how it is" and "click to change it" has to be obvious at a
+        // glance, and matching the arm toggle means the affordance is already
+        // familiar.
+        //
         // Governs ENTRY only. A strategy switched off opens nothing from the
-        // next signal; anything it already holds keeps its stop and target and
-        // is closed by the normal exit path. Flattening is close-all, which is
-        // deliberately a separate and louder action than a row toggle.
+        // next signal; whatever it already holds keeps its stop and target and
+        // exits normally. Flattening is close-all, deliberately louder.
         cell: (r) => (
-          <button
-            type="button"
+          <DeskSwitch
+            id={`strategy-switch-${r.strategy}`}
+            checked={r.enabled}
             disabled={busy}
-            onClick={() => toggleStrategy(r.strategy, !r.enabled)}
-            title={
-              r.enabled
-                ? "Trading. Click to switch off — it will open no new positions; any it already holds keep their stop and target."
-                : "Switched off. Click to let it open new positions again."
-            }
-            style={{
-              cursor: busy ? "wait" : "pointer",
-              border: "1px solid",
-              borderColor: r.enabled ? "var(--desk-success)" : "var(--desk-outline)",
-              background: r.enabled ? "var(--desk-success)" : "transparent",
-              color: r.enabled ? "#fff" : "var(--desk-on-surface-variant)",
-              borderRadius: 999,
-              padding: "2px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              minWidth: 52,
-            }}
-          >
-            {r.enabled ? "ON" : "OFF"}
-          </button>
+            ariaLabel={`${r.strategy} live trading`}
+            // Short label so a 31-row table stays readable; the strategy name
+            // is already the row, and ariaLabel carries the full context for
+            // screen readers.
+            label={r.enabled ? "on" : "off"}
+            onColor="var(--desk-success)"
+            offColor="var(--desk-error)"
+            onChange={(next) => void toggleStrategy(r.strategy, next)}
+          />
         ),
       },
       {

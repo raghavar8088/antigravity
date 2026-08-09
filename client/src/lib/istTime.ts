@@ -19,6 +19,9 @@
  *     UTC honestly.
  *   - It renders identically on server and client, so no hydration mismatch.
  *
+ * Times render on a 12-hour clock with AM/PM, matching how the operator reads
+ * a clock anywhere else on their machine.
+ *
  * Storage and wire formats stay UTC. This module is display only.
  */
 
@@ -27,7 +30,7 @@ const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 /** Label to append wherever a rendered time could be mistaken for UTC. */
 export const IST_LABEL = "IST";
 
-type Parts = { y: string; mo: string; d: string; h: string; mi: string; s: string };
+type Parts = { y: string; mo: string; d: string; h: string; mi: string; s: string; ap: string };
 
 /**
  * Shift the instant by +05:30, then read it back with the UTC getters. Reading
@@ -40,38 +43,51 @@ function istParts(input: string | number | Date | null | undefined): Parts | nul
   if (Number.isNaN(t.getTime())) return null;
   const s = new Date(t.getTime() + IST_OFFSET_MS);
   const p2 = (n: number) => String(n).padStart(2, "0");
+  const h24 = s.getUTCHours();
+  // 12-hour clock: midnight and noon are both 12, not 0.
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return {
     y: String(s.getUTCFullYear()),
     mo: p2(s.getUTCMonth() + 1),
     d: p2(s.getUTCDate()),
-    h: p2(s.getUTCHours()),
+    // Padded, even though a wall clock writes 1:05 PM. These render in dense
+    // monospace tables where a ragged hour column costs more legibility than
+    // the leading zero does.
+    h: p2(h12),
     mi: p2(s.getUTCMinutes()),
     s: p2(s.getUTCSeconds()),
+    ap: h24 < 12 ? "AM" : "PM",
   };
 }
 
-/** "MM-DD HH:mm" — the compact form for dense trade tables. */
+/** "MM-DD hh:mm AM/PM" — the compact form for dense trade tables. */
 export function fmtIST(input: string | number | Date | null | undefined, fallback = "—"): string {
   const p = istParts(input);
-  return p ? `${p.mo}-${p.d} ${p.h}:${p.mi}` : fallback;
+  return p ? `${p.mo}-${p.d} ${p.h}:${p.mi} ${p.ap}` : fallback;
 }
 
-/** "MM-DD HH:mm:ss" — where the second matters, such as audit trails. */
+/** "MM-DD hh:mm:ss AM/PM" — where the second matters, such as audit trails. */
 export function fmtISTSeconds(input: string | number | Date | null | undefined, fallback = "—"): string {
   const p = istParts(input);
-  return p ? `${p.mo}-${p.d} ${p.h}:${p.mi}:${p.s}` : fallback;
+  return p ? `${p.mo}-${p.d} ${p.h}:${p.mi}:${p.s} ${p.ap}` : fallback;
 }
 
-/** "HH:mm:ss" — clock only, for "updated at" style captions. */
+/** "hh:mm AM/PM" — clock to the minute, where seconds are noise. */
+export function fmtISTClockShort(input: string | number | Date | null | undefined, fallback = "—"): string {
+  const p = istParts(input);
+  return p ? `${p.h}:${p.mi} ${p.ap}` : fallback;
+}
+
+/** "hh:mm:ss AM/PM" — clock only, for "updated at" style captions. */
 export function fmtISTClock(input: string | number | Date | null | undefined, fallback = "—"): string {
   const p = istParts(input);
-  return p ? `${p.h}:${p.mi}:${p.s}` : fallback;
+  return p ? `${p.h}:${p.mi}:${p.s} ${p.ap}` : fallback;
 }
 
-/** "YYYY-MM-DD HH:mm:ss" — the unambiguous long form. */
+/** "YYYY-MM-DD hh:mm:ss AM/PM" — the unambiguous long form. */
 export function fmtISTFull(input: string | number | Date | null | undefined, fallback = "—"): string {
   const p = istParts(input);
-  return p ? `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi}:${p.s}` : fallback;
+  return p ? `${p.y}-${p.mo}-${p.d} ${p.h}:${p.mi}:${p.s} ${p.ap}` : fallback;
 }
 
 /**

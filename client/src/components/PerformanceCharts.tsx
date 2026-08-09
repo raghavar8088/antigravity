@@ -1,5 +1,7 @@
 "use client";
 
+import { fmtISTClock } from "@/lib/istTime";
+
 type PricePoint = {
   time: number;
   price: number;
@@ -67,7 +69,7 @@ function buildAreaPath(points: ChartPoint[]): string {
 }
 
 function formatTimeLabel(timeMs: number): string {
-  return new Date(timeMs).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return fmtISTClock(timeMs);
 }
 
 function renderLineChart(

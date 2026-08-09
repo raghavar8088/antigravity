@@ -8,6 +8,7 @@ import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Select, Switch, TextField } from "@/components/ui/FormControls";
 import { StatusChip } from "@/components/ui/StatusChip";
+import { fmtISTClock } from "@/lib/istTime";
 
 type EventType =
   | "FILL" | "SIGNAL" | "POSITION_OPEN" | "POSITION_CLOSE"
@@ -90,7 +91,7 @@ export default function EventCenter() {
       header: "Time",
       sortable: true,
       sortValue: (r) => r.ts,
-      cell: (r) => new Date(r.ts).toLocaleTimeString("en-US", { hour12: false }),
+      cell: (r) => fmtISTClock(r.ts),
       width: "90px",
     },
     {

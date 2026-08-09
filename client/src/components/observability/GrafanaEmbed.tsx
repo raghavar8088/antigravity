@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { GaugeBar } from "@/components/ui/GaugeBar";
+import { fmtISTClock } from "@/lib/istTime";
 
 interface NativeMetrics {
   engineUptimeS?: number;
@@ -137,7 +138,7 @@ export function GrafanaEmbed({ height = 600 }: { height?: number }) {
             {(metrics.recentErrors ?? []).slice(0, 20).map((e, i) => (
               <div key={i} className="flex items-start gap-2 border-b border-[rgba(239,68,68,0.1)] pb-1">
                 <span className="text-[var(--color-text-muted)] whitespace-nowrap">
-                  {new Date(e.timestamp).toLocaleTimeString("en-IN", { hour12: false })}
+                  {fmtISTClock(e.timestamp)}
                 </span>
                 <span className="text-[var(--color-caution)]">{e.path}</span>
                 <span className="text-[var(--color-loss)]">{e.message}</span>

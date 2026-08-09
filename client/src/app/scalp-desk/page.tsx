@@ -28,7 +28,7 @@ import {
   type DeskEngineStatus,
 } from "@/components/desk/ui";
 import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
-import { fmtIST } from "@/lib/istTime";
+import { fmtIST, fmtISTClock } from "@/lib/istTime";
 
 type Stats = {
   trades: number;
@@ -230,7 +230,7 @@ export default function ScalpDeskPage() {
         setPositions([]);
       }
       setError("");
-      setUpdatedAt(new Date().toLocaleTimeString());
+      setUpdatedAt(fmtISTClock(Date.now()));
     } catch {
       setError("desk unreachable");
     } finally {

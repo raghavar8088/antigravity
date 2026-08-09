@@ -35,7 +35,7 @@ import {
   type DeskColumn,
   type DeskEngineStatus,
 } from "@/components/desk/ui";
-import { fmtIST } from "@/lib/istTime";
+import { fmtIST, fmtISTClock } from "@/lib/istTime";
 
 type PaperAccount = {
   strategy: string;
@@ -439,7 +439,7 @@ export default function LiveEnginePaperDeskPage() {
       const body = (await r.json()) as { accounts?: PaperDesk[] };
       setBooks(body.accounts ?? []);
       setError("");
-      setUpdatedAt(new Date().toLocaleTimeString());
+      setUpdatedAt(fmtISTClock(Date.now()));
     } catch {
       setError("desk unreachable");
     } finally {

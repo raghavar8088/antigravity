@@ -28,7 +28,7 @@ import {
   type DeskEngineStatus,
 } from "@/components/desk/ui";
 import { DeskAdminControls } from "@/components/desk/DeskAdminControls";
-import { fmtIST } from "@/lib/istTime";
+import { fmtIST, fmtISTClock } from "@/lib/istTime";
 
 type StrategyStatus = {
   strategyId: number;
@@ -185,7 +185,7 @@ export default function OptionsBuyingDeskPage() {
       setPositions((await p.json()) as OptionPosition[]);
       setTrades((await tr.json()) as OptionTrade[]);
       setError("");
-      setUpdatedAt(new Date().toLocaleTimeString());
+      setUpdatedAt(fmtISTClock(Date.now()));
     } catch {
       setError("desk unreachable");
     } finally {

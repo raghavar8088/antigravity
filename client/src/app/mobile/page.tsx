@@ -16,6 +16,7 @@ import { PnlValue } from "@/components/ui/PnlValue";
 import { GaugeBar } from "@/components/ui/GaugeBar";
 import { cn } from "@/components/ui/cn";
 import type { RiskSummary } from "@/types/trading";
+import { fmtISTClock } from "@/lib/istTime";
 
 export default function MobileEmergencyPage() {
   const { status: ks, trigger, resume, loading: ksLoading } = useKillSwitch();
@@ -71,7 +72,7 @@ export default function MobileEmergencyPage() {
         </div>
         <div className="text-[13px] text-[var(--color-text-secondary)] mt-1">
           {ks.active
-            ? `All strategies halted · ${ks.triggeredAt ? new Date(ks.triggeredAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false }) + " IST" : ""}`
+            ? `All strategies halted · ${ks.triggeredAt ? fmtISTClock(ks.triggeredAt) + " IST" : ""}`
             : ks.activeStrategies > 0
             ? `${ks.activeStrategies} strategies active`
             : "Waiting for engine data…"}

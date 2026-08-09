@@ -5,6 +5,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { useKillSwitch } from "@/hooks/useKillSwitch";
 import { cn } from "@/components/ui/cn";
+import { fmtISTClock } from "@/lib/istTime";
 
 export function KillSwitchPanel() {
   const { status, loading, trigger, resume } = useKillSwitch();
@@ -56,7 +57,7 @@ export function KillSwitchPanel() {
               ) : null}
               {status.triggeredAt ? (
                 <span className="font-mono tnum text-[var(--color-text-muted)]">
-                  · {new Date(status.triggeredAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })} IST
+                  · {fmtISTClock(status.triggeredAt)} IST
                 </span>
               ) : null}
             </>
