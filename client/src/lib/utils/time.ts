@@ -3,6 +3,8 @@
  * Robust date parsing and formatting to prevent "Invalid Date" errors.
  */
 
+import { fmtISTClock } from "@/lib/istTime";
+
 export function safeFormatDate(input: string | number | Date | null | undefined): string {
   if (!input) return "—";
   
@@ -18,12 +20,7 @@ export function formatShortTime(input: string | number | Date | null | undefined
   const date = new Date(input);
   if (isNaN(date.getTime())) return "—";
   
-  return date.toLocaleTimeString([], { 
-    hour: "2-digit", 
-    minute: "2-digit", 
-    second: "2-digit",
-    hour12: false
-  });
+  return fmtISTClock(date);
 }
 
 export function formatShortDate(input: string | number | Date | null | undefined): string {

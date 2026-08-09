@@ -4,6 +4,8 @@
  * (avoids hydration mismatches from system locale differences).
  */
 
+import { fmtISTClockShort } from "@/lib/istTime";
+
 const LOCALE = "en-US";
 
 export function formatDeskUsd(
@@ -61,9 +63,9 @@ export function formatDeskContracts(n: number): string {
   return n.toLocaleString(LOCALE, { maximumFractionDigits: 0 });
 }
 
-/** HH:MM time extracted from an ISO-8601 string. */
+/** "hh:mm AM/PM" IST time extracted from an ISO-8601 string. */
 export function formatShortTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hour12: false });
+  return fmtISTClockShort(iso);
 }
 
 /** "Mon D" short date from an ISO-8601 string. */

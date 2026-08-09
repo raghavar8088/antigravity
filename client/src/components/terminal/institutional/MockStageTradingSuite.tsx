@@ -17,6 +17,7 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { SkeletonBlock } from "@/components/ui/EmptyState";
 import { TerminalCard } from "./TerminalCard";
 import { MockTradingConfigurationPanel } from "./MockTradingConfigurationPanel";
+import { fmtISTClock } from "@/lib/istTime";
 
 const TRADE_ENGINE_TITLE = "Trade Engine";
 
@@ -323,13 +324,7 @@ function formatSignalTime(timestamp: string | null) {
   if (!timestamp) return "— UTC";
   const parsed = Date.parse(timestamp);
   if (!Number.isFinite(parsed)) return `${timestamp} UTC`;
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  }).format(parsed) + " UTC";
+  return fmtISTClock(parsed) + " IST";
 }
 
 function buildEquitySparklineValues(
