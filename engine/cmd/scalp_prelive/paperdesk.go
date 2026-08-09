@@ -108,9 +108,9 @@ type paperAccount struct {
 
 // livePaperDesk mirrors every live-routed signal onto paper.
 type livePaperDesk struct {
-	// account is which book this is. Two independent $100 books run side by
-	// side; a winner in one must never fund a position in the other, or the
-	// better hypothesis subsidises the worse and hides it.
+	// account is which book this is. Independent $100 books run side by side;
+	// a winner in one must never fund a position in another, or the better
+	// hypothesis subsidises the worse and hides it.
 	account string
 	mu      sync.Mutex
 	// equity is THE account. One balance, shared by every strategy, exactly as

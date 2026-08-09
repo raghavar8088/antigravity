@@ -151,7 +151,7 @@ var defaultScalpPaperStreams = []PerpStream{
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
 }
 
-// PaperAccount01 and PaperAccount02 are the two independent paper books.
+// The independent paper books. Each starts at its own $100.
 //
 // Separate accounts, not one list with a tag. Each starts at its own $100 and
 // spends from its own balance, so a winner in one cannot fund a position in the
@@ -163,11 +163,12 @@ const (
 	PaperAccount02 = "02"
 	PaperAccount03 = "03"
 	PaperAccount04 = "04"
+	PaperAccount05 = "05"
 )
 
 // PaperAccountIDs is every book, in display order.
 func PaperAccountIDs() []string {
-	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04}
+	return []string{PaperAccount01, PaperAccount02, PaperAccount03, PaperAccount04, PaperAccount05}
 }
 
 // defaultScalpPaperStreams02 is Account 02's watch list.
@@ -318,11 +319,76 @@ var defaultScalpPaperStreams04 = []PerpStream{
 	{Strategy: "ANTI_M1_Break_D30_T20_Long", Symbol: "AVAAIUSD"},
 }
 
+// defaultScalpPaperStreams05 is Account 05's watch list.
+//
+// Added 2026-08-09 from the scalp sweep leaderboard, taken in leaderboard order
+// — the 30 highest-capital streams on that board.
+//
+// Read the trade counts before reading the returns. Only five of these thirty
+// cleared the sweep's own qualification bar; the rest are single-digit and
+// low-double-digit samples where a +35% return is one or two lucky fills. The
+// board sorts on ending capital, which puts n=7 above n=62 whenever the small
+// sample got lucky — so the ordering here is emphatically not a ranking of
+// merit, and this book exists to find out which of them survives contact with
+// three concurrent slots and a real fee.
+//
+// Fee drag is the number that decides most of these. The qualified rows carry
+// 30-43% fee drag: ANTI_Recurrence_Quantification_Signal turned $80 gross into
+// $54 net on COOKIEUSD, and its TSTUSD twin gave up 43% of gross. A stream that
+// hands the venue two fifths of its edge needs that edge to be durable, and
+// thirty streams competing for three slots is precisely the constraint that
+// tells us whether it is.
+//
+// Four symbols here (XANUSD, BMTUSD, ARCUSD, BANKUSD) appear in no other book.
+// The desk discovers its universe from Delta above a $50k turnover floor, so
+// these streams go quiet if that turnover dries up rather than failing loudly.
+var defaultScalpPaperStreams05 = []PerpStream{
+	// Cleared the sweep's qualification bar (n >= 32).
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "BLESSUSD"},
+	{Strategy: "ANTI_Recurrence_Quantification_Signal", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_RSI2_10_90_T20_Short", Symbol: "TSTUSD"},
+	// Did not qualify — sample too small to mean anything yet.
+	{Strategy: "ANTI_D20_BB_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_RSI_Div_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_D20_RSI_Reversion", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_RSI2_5_95_T50_Long", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_HMA21_Flip_Short", Symbol: "XANUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V20_Long", Symbol: "LABUSD"},
+	{Strategy: "ANTI_M1_InsideBar_V12_Short", Symbol: "LABUSD"},
+	{Strategy: "M1_VWAP_Rev_40bp_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_D20_MACD_Cross", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "BMTUSD"},
+	{Strategy: "ANTI_D20_HeikinAshi_Flip", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_70bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "ANTI_M1_NR7_Expand_T50_Long", Symbol: "BANKUSD"},
+	{Strategy: "ANTI_M1_MACD_Align_Short", Symbol: "MUBARAKUSD"},
+	{Strategy: "ANTI_M1_HMA34_Flip_Short", Symbol: "TSTUSD"},
+	{Strategy: "ANTI_M1_VWAP_Rev_40bp_Short", Symbol: "COOKIEUSD"},
+	{Strategy: "M1_VWAP_Rev_70bp_Short", Symbol: "LABUSD"},
+	{Strategy: "ANTI_Ornstein_Uhlenbeck_Reversion", Symbol: "ARCUSD"},
+	{Strategy: "ANTI_M1X_VWAP_TrendPull_Long", Symbol: "XANUSD"},
+}
+
 // ScalpPaperStreamsFor returns one account's watch list.
 //
 // Account 01 carries the LIVE roster plus its candidates, so it stays a faithful
-// mirror of what real money is doing. Account 02 is candidates only — nothing in
-// it can reach the venue, whatever it shows.
+// mirror of what real money is doing.
+//
+// Book membership never grants venue access, in either direction. Whether a
+// stream can place a real order is decided solely by the live roster via
+// PerpStreamPermitted, so adding a stream to any book here spends nothing. The
+// converse matters more when reading the UI: a book may well contain streams
+// that ARE live — Account 05 overlaps the live roster on 10 of its 30 — and
+// those rows carry the LIVE chip because of the live roster, not because of the
+// book they appear in.
 func ScalpPaperStreamsFor(account string) []PerpStream {
 	var src []PerpStream
 	switch account {
@@ -332,6 +398,8 @@ func ScalpPaperStreamsFor(account string) []PerpStream {
 		src = defaultScalpPaperStreams03
 	case PaperAccount04:
 		src = defaultScalpPaperStreams04
+	case PaperAccount05:
+		src = defaultScalpPaperStreams05
 	}
 	if src != nil {
 		out := make([]PerpStream, 0, len(src))

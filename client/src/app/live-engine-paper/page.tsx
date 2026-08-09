@@ -81,7 +81,7 @@ type PaperTrade = {
   live: boolean;
 };
 type PaperDesk = {
-  /** Which book this is — "01" or "02". Two independent $100 accounts. */
+  /** Which book this is — "01".."05". Each is an independent $100 account. */
   account: string;
   startingEquityUsd: number;
   equityUsd: number;
@@ -479,7 +479,7 @@ export default function LiveEnginePaperDeskPage() {
             </DeskChip>
           </div>
           <p className="desk-body-md" style={{ marginTop: 6, maxWidth: 800, color: "var(--desk-on-surface-variant)" }}>
-            Two independent books, each starting at $100, against real Delta prices with Delta&apos;s real taker fee
+            Independent books, each starting at its own $100, against real Delta prices with Delta&apos;s real taker fee
             on both legs. They are separate accounts, not one list split in two: a winner in one cannot fund a position
             in the other, so the better set cannot subsidise the worse and hide it. Shown one at a time — there is no
             combined balance, because no such account exists. Rows marked <strong>LIVE</strong>
